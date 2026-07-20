@@ -158,6 +158,51 @@ test('engine streams contract events and returns a chat result without Electron'
   assert.deepEqual(events.map((event) => event.payload.phase), ['waiting', 'idle']);
 });
 
+test('engine drops a leading assistant greeting so the provider sees a user-first history', async () => {
+  const { engine, calls } = makeEngine([assistantText('Antwort')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        { role: 'assistant', content: 'Wir sind im Ordner „x". Was möchtest du tun?' },
+        { role: 'user', content: 'Liste die Dateien.' },
+      ],
+    },
+  });
+
+  assert.equal(calls[0].messages[0].role, 'user');
+  assert.equal(calls[0].messages[0].content, 'Liste die Dateien.');
+});
+
+test('engine sends no system message when no baseSystemPrompt is configured', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Hi' }],
+      workspaceRoot: '/tmp/weyouze-project',
+    },
+  });
+
+  assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+});
+
+test('engine prepends baseSystemPrompt verbatim as the system message', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    preferences: { async read() { return { baseSystemPrompt: '  Sei knapp.  ' }; } },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  assert.equal(calls[0].messages[0].role, 'system');
+  assert.equal(calls[0].messages[0].content, 'Sei knapp.');
+});
+
 test('engine validates provider configuration before streaming', async () => {
   const { engine, calls } = makeEngine([assistantText('unused')], {
     llm: makeLlmPort([assistantText('unused')], {

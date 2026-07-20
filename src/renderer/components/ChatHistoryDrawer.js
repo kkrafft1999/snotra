@@ -11,6 +11,7 @@ export function initChatHistoryDrawer({
   onInputChanged,
   setChatTokenUsage,
   resetChatTokenUsage,
+  seedGreetingIfWorkspace,
   onNewChatStarted,
 }) {
   const chatHistoryDrawer = document.getElementById('chat-history-drawer');
@@ -113,6 +114,7 @@ export function initChatHistoryDrawer({
       appStore.currentChatId = crypto.randomUUID();
       appStore.currentChatWorkspace = appStore.rootPath || null;
       appStore.chatMessages = [];
+      seedGreetingIfWorkspace?.(appStore.currentChatWorkspace);
       resetChatTokenUsage?.();
       onInputChanged();
       await api.setActiveChatId(appStore.currentChatWorkspace, null);

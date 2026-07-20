@@ -117,6 +117,25 @@ function finalizeAllToolLines(wrap) {
   wrap?.querySelectorAll('.chat-tool-line--running').forEach(setToolLineDone);
 }
 
+function folderNameFromPath(p) {
+  if (typeof p !== 'string' || !p) return '';
+  const parts = p.split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : p;
+}
+
+// Begrüßung als erste, rein anzeigende Assistant-Nachricht (greeting: true).
+// Sie wird weder ans Modell geschickt noch persistiert — die App setzt keinen
+// eigenen System-Prompt mehr, der Einstieg passiert über diese Nachricht.
+function buildGreetingMessage(workspaceRoot) {
+  if (!workspaceRoot) return null;
+  const name = folderNameFromPath(workspaceRoot);
+  return {
+    role: 'assistant',
+    greeting: true,
+    content: `Wir sind im Ordner **„${name}"**. Was möchtest du tun?`,
+  };
+}
+
 export function initChatStream({
   api,
   appStore,
@@ -350,13 +369,19 @@ export function initChatStream({
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
 
+  function seedGreetingIfWorkspace(workspaceRoot) {
+    const greeting = buildGreetingMessage(workspaceRoot);
+    if (greeting) appStore.chatMessages.push(greeting);
+  }
+
   async function persistCurrentChat() {
-    if (!appStore.currentChatId || appStore.chatMessages.length === 0) return;
+    const persistable = appStore.chatMessages.filter((m) => !m.greeting);
+    if (!appStore.currentChatId || persistable.length === 0) return;
     await api.upsertChatSession({
       id: appStore.currentChatId,
       workspaceRoot: appStore.currentChatWorkspace,
       updatedAt: Date.now(),
-      messages: appStore.chatMessages,
+      messages: persistable,
       tokenUsage: appStore.chatTokenUsage,
     });
     await api.setActiveChatId(appStore.currentChatWorkspace, appStore.currentChatId);
@@ -387,6 +412,7 @@ export function initChatStream({
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = workspaceRoot || null;
     appStore.chatMessages = [];
+    seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     chatInput.value = '';
     onInputChanged();
@@ -401,6 +427,7 @@ export function initChatStream({
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = appStore.rootPath || null;
     appStore.chatMessages = [];
+    seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     chatInput.value = '';
     onInputChanged();
@@ -449,7 +476,9 @@ export function initChatStream({
     appStore.chatInFlight = true;
     syncChatSendButton();
 
-    const payload = appStore.chatMessages.map(({ role, content }) => ({ role, content }));
+    const payload = appStore.chatMessages
+      .filter((m) => !m.greeting)
+      .map(({ role, content }) => ({ role, content }));
     appStore.chatMessages.push({
       role: 'assistant',
       content: '',
@@ -688,6 +717,7 @@ export function initChatStream({
     persistCurrentChat,
     loadChatForWorkspace,
     startNewChat,
+    seedGreetingIfWorkspace,
     sendChatMessage,
     syncChatSendButton,
     resetChatTokenUsage,

@@ -117,6 +117,7 @@ const chatHistory = initChatHistoryDrawer({
   onInputChanged: syncChatInputHeight,
   setChatTokenUsage: (usage) => chatStream.setChatTokenUsage(usage),
   resetChatTokenUsage: () => chatStream.resetChatTokenUsage(),
+  seedGreetingIfWorkspace: (workspaceRoot) => chatStream.seedGreetingIfWorkspace(workspaceRoot),
   onNewChatStarted: async () => {
     await chatStream.startNewChat();
     modelPicker.updateChatChrome();

@@ -538,9 +538,10 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
   assert.equal(tools.some((t) => t.function.name === 'write_file_text'), false);
   assert.equal(tools.some((t) => t.function.name === 'list_directory'), true);
 
-  const sentSystemMessage = res.rawExchanges[0].messages[0];
-  assert.equal(sentSystemMessage.role, 'system');
-  assert.doesNotMatch(sentSystemMessage.content, /write_file_text/);
+  // Ohne gesetzten baseSystemPrompt schickt die App keinen eigenen System-Prompt —
+  // die Konversation beginnt direkt mit der User-Nachricht.
+  const firstMessage = res.rawExchanges[0].messages[0];
+  assert.equal(firstMessage.role, 'user');
 });
 
 test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is true', async () => {
@@ -560,6 +561,33 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
   const tools = calls[0].tools;
   assert.ok(tools.some((t) => t.function.name === 'write_file_text'));
 
-  const sentSystemMessage = res.rawExchanges[0].messages[0];
-  assert.match(sentSystemMessage.content, /write_file_text/);
+  // Auch mit Schreibrecht bleibt der System-Prompt ohne baseSystemPrompt leer.
+  const firstMessage = res.rawExchanges[0].messages[0];
+  assert.equal(firstMessage.role, 'user');
+});
+
+test('CHAT_SEND sends no system prompt by default and forwards baseSystemPrompt verbatim', async () => {
+  const empty = makeScriptedProvider([assistantText('ok')]);
+  const emptyHandlers = setupChatHandlers({
+    provider: empty.provider,
+    storage: makeStorage({ readUIPrefs: async () => ({}) }),
+  });
+  const emptyRes = await emptyHandlers.sendHandler(makeFakeEvent().event, {
+    messages: [{ role: 'user', content: 'Hallo' }],
+    workspaceRoot: '/tmp/weyouze-test-project',
+  });
+  assert.equal(emptyRes.rawExchanges[0].messages.some((m) => m.role === 'system'), false);
+
+  const configured = makeScriptedProvider([assistantText('ok')]);
+  const configuredHandlers = setupChatHandlers({
+    provider: configured.provider,
+    storage: makeStorage({ readUIPrefs: async () => ({ baseSystemPrompt: 'Sei knapp und freundlich.' }) }),
+  });
+  const configuredRes = await configuredHandlers.sendHandler(makeFakeEvent().event, {
+    messages: [{ role: 'user', content: 'Hallo' }],
+    workspaceRoot: '/tmp/weyouze-test-project',
+  });
+  const systemMessage = configuredRes.rawExchanges[0].messages[0];
+  assert.equal(systemMessage.role, 'system');
+  assert.equal(systemMessage.content, 'Sei knapp und freundlich.');
 });

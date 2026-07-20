@@ -27,20 +27,6 @@ const CHAT_ENGINE_EVENTS = Object.freeze({
   TOOL_LINE: 'tool-line',
 });
 
-function workspaceSystemPrompt(workspaceRoot, selectedRelPath, selectedIsDirectory, basename, toolsPrompt) {
-  const name = basename(workspaceRoot);
-  let prompt = `Du hilfst beim Durchsuchen des in der App geöffneten Ordners („${name}“).`;
-  if (toolsPrompt) prompt += `\n\n${toolsPrompt}`;
-  prompt += `\n\nAntworte auf Deutsch, sachlich und knapp.`;
-  if (selectedRelPath) {
-    const kind = selectedIsDirectory ? 'Ordner' : 'Datei';
-    prompt +=
-      `\n\nDer Nutzer hat gerade folgende ${kind} im Baum ausgewählt: „${selectedRelPath}“. ` +
-      `Beziehe dich bei Fragen ohne expliziten Pfad auf diese Auswahl.`;
-  }
-  return prompt;
-}
-
 function resolveAppLocale(uiPrefs) {
   return uiPrefs?.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
 }
@@ -226,45 +212,26 @@ function createChatEngine({
       const sendBundle = await llm.prepareSendBundle(target);
 
       const workspaceRoot = workspacePaths.resolveRoot(payload?.workspaceRoot);
-      let selectedRelPath = null;
-      let selectedIsDirectory = false;
-      if (workspaceRoot) {
-        const selection = workspacePaths.resolveSelection(
-          workspaceRoot,
-          payload?.selectedPath,
-          payload?.selectedIsDirectory
-        );
-        if (selection) {
-          selectedRelPath = selection.relativePath;
-          selectedIsDirectory = selection.isDirectory;
-        }
-      }
 
       const uiPrefs = await preferences.read();
       const appLocale = resolveAppLocale(uiPrefs);
-      const extraSystem = typeof uiPrefs.baseSystemPrompt === 'string' ? uiPrefs.baseSystemPrompt.trim() : '';
+      const systemPrompt = typeof uiPrefs.baseSystemPrompt === 'string' ? uiPrefs.baseSystemPrompt.trim() : '';
       const allowWrite = uiPrefs.allowWorkspaceWrite === true;
       const disabledNames = Array.isArray(uiPrefs.disabledTools) ? uiPrefs.disabledTools : [];
       const toolOptions = { allowWrite, disabledNames };
-      const workspaceSystem = workspaceRoot
-        ? workspaceSystemPrompt(
-            workspaceRoot,
-            selectedRelPath,
-            selectedIsDirectory,
-            workspacePaths.basename.bind(workspacePaths),
-            tools.buildSystemPrompt(toolOptions)
-          )
-        : '';
-      const combinedSystem = extraSystem && workspaceSystem
-        ? `${extraSystem}\n\n${workspaceSystem}`
-        : extraSystem || workspaceSystem;
 
       const apiMessages = [];
-      if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
+      if (systemPrompt) apiMessages.push({ role: 'system', content: systemPrompt });
       const historyCharLimit = resolveHistoryCharLimit(uiPrefs);
       const historyRows = messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
         .map((message) => ({ role: message.role, content: message.content ?? '' }));
+      // Die App-Begrüßung steht als Assistant-Nachricht am Chat-Anfang; einige
+      // Provider (Anthropic, Google) verlangen, dass die Konversation mit einer
+      // User-Nachricht beginnt.
+      while (historyRows.length > 0 && historyRows[0].role !== 'user') {
+        historyRows.shift();
+      }
       const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       apiMessages.push(...windowedHistory);
 
