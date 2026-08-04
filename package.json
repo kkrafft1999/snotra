@@ -55,7 +55,7 @@
     "@fontsource/inter": "^5.2.8",
     "dompurify": "^3.4.11",
     "marked": "^17.0.5",
-    "undici": "^7.28.0"
+    "undici": "^7.29.0"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
