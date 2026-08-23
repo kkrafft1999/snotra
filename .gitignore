@@ -49,3 +49,12 @@ Thumbs.db
 .claude/*
 !.claude/skills/
 !.claude/skills/**
+
+# Antigravity: geteilte Skills/Rules unter .agents/ versionieren;
+# sonstige Agent-/Cache-Daten lokal ignorieren
+.agents/*
+!.agents/skills/
+!.agents/skills/**
+!.agents/rules/
+!.agents/rules/**
+
