@@ -116,10 +116,10 @@ summary:focus-visible,
 }
 
 /* ── Titlebar / Header ──
- * Phase 5 D: 44 px Hoehe (war 38), zweizeiliges Branding (Mono-Eyebrow //
- * WEYOUZE darueber, "Anything" in Inter Bold darunter). Layout bleibt
- * Drag-Region kompatibel — die Brand-Container sind selbst Drag, die
- * Buttons rechts sind --webkit-app-region: no-drag.
+ * 44 px Hoehe, einzeilige Wordmark "Snotra AI" in Inter Bold (bis v1.0.4
+ * zweizeilig mit Mono-Eyebrow). Layout bleibt Drag-Region kompatibel — der
+ * Brand-Container ist selbst Drag, die Buttons rechts sind
+ * -webkit-app-region: no-drag.
  */
 #titlebar {
   display: flex;
@@ -139,31 +139,17 @@ summary:focus-visible,
 
 .titlebar-brand {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  line-height: 1.1;
+  align-items: center;
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
 
-.titlebar-eyebrow {
-  display: inline-flex;
-  align-items: baseline;
-  column-gap: 0.2em;
-  font-family: var(--ds-font-mono);
-  font-size: 10px;
-  letter-spacing: normal;
-  color: var(--ds-blue);
-  text-transform: none;
-}
-
 #app-brand {
   font-family: var(--ds-font-ui);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: var(--ds-font-weight-bold);
   color: var(--text-primary);
-  letter-spacing: 0.1px;
+  letter-spacing: -0.1px;
   white-space: nowrap;
 }
 
