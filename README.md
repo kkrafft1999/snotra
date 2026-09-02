@@ -73,11 +73,19 @@ Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du
 | ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
 | `maxToolRounds`    | Maximale Tool-Runden pro Chat-Anfrage (auch in der App einstellbar)         | 14        | 1 – 500          |
 | `historyCharLimit` | Zeichen-Budget für den an den Provider gesendeten Chat-Verlauf (siehe unten)| 200 000   | 4 000 – 2 000 000 |
-| `allowWorkspaceWrite` | Schaltet das Tool `write_file_text` frei (Einstellungen › Tools); ohne diese Option kann das Modell Dateien nur lesen | `false` | – |
+| `allowWorkspaceWrite` | Schaltet die Schreib-Tools `write_file_text`, `edit_file` und `apply_patch` frei (Einstellungen › Tools); ohne diese Option kann das Modell Dateien nur lesen | `false` | – |
 
 **Verlaufs-Trimming (`historyCharLimit`):** Damit lange Sessions nicht ins Token-Limit des Providers laufen, wird der Verlauf pro Anfrage budgetiert (Heuristik: 1 Token ≈ 4 Zeichen). Ältere Nachrichten jenseits des Budgets werden weggelassen, und große Tool-Ausgaben früherer Tool-Runden (z. B. gelesene Dateien) werden auf einen Platzhalter gekürzt. Die aktuelle Frage, alle User-Nachrichten im Fenster und die Tool-Ausgaben der jüngsten Runde bleiben immer vollständig erhalten.
 
-**Schreibzugriff (`write_file_text`):** Standardmäßig kann das Modell im Workspace nur lesen. Wird `allowWorkspaceWrite` aktiviert, kommt zusätzlich `write_file_text` zum Einsatz — das Modell kann damit Textdateien im geöffneten Projektordner anlegen oder komplett überschreiben (max. 2 MB, fehlende Zwischenordner werden automatisch erzeugt). Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt.
+**Schreibzugriff:** Standardmäßig kann das Modell im Workspace nur lesen. Wird `allowWorkspaceWrite` aktiviert, kommen drei Schreib-Tools hinzu (max. 2 MB pro Datei):
+
+| Tool | Wofür |
+| ---- | ----- |
+| `write_file_text` | Textdatei anlegen oder komplett überschreiben; fehlende Zwischenordner werden automatisch erzeugt |
+| `edit_file` | Eine gezielte Ersetzung in einer bestehenden Datei (`old_string` → `new_string`), ohne die ganze Datei neu zu schreiben |
+| `apply_patch` | Mehrere zusammenhängende Änderungen in einem Aufruf — als Liste von Ersetzungen in einer Datei oder als unified diff über mehrere Dateien. Alles oder nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. Dateien anlegen, löschen oder umbenennen kann das Tool nicht |
+
+Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt.
 
 ## Projektstruktur
 
@@ -111,7 +119,7 @@ Details zur Schichtenarchitektur: [`docs/architecture.md`](./docs/architecture.m
 
 - API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
 - Der Workspace-Zugriff der Tools ist auf den jeweils geöffneten Projektordner beschränkt.
-- Schreibzugriff (`write_file_text`) ist standardmäßig **deaktiviert** und muss bewusst unter Einstellungen › Tools aktiviert werden.
+- Schreibzugriff (`write_file_text`, `edit_file`, `apply_patch`) ist standardmäßig **deaktiviert** und muss bewusst unter Einstellungen › Tools aktiviert werden.
 - Trotzdem gilt: lass das Modell nichts in Ordnern arbeiten, in denen sensible Daten liegen, denen du nicht traust.
 
 ## Lizenz

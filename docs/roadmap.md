@@ -30,8 +30,11 @@ wieder entfernt.
   listen, im Projekt arbeiten)
 - 🔌 Mehrere LLM-Provider: OpenAI, Anthropic, Google (Gemini), Ollama (lokal)
 - 🔐 API-Keys lokal & verschlüsselt über Electrons `safeStorage`
-- 🧰 Tool-Use-Loop mit eingebauten Workspace-Tools (`list_directory`,
-  `read_file_text`, optional `write_file_text`, …)
+- 🧰 Tool-Use-Loop mit eingebauten Workspace-Tools: lesen und suchen
+  (`list_directory`, `list_directory_tree`, `read_file_text`,
+  `read_file_lines`, `search_in_files`, `find_files`, `stat_path`,
+  `outline_file`), optional schreiben (`write_file_text`, `edit_file`,
+  `apply_patch`)
 - 🔔 Update-Notifier (Stufe 1) über GitHub Releases
 - 🖥️ Builds für macOS (Apple Silicon) und Windows über Electron Forge
 - 📜 Gemeinsame **Contract-Schicht** (`src/shared/contracts/`): versionierte
