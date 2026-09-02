@@ -538,10 +538,11 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
   assert.equal(tools.some((t) => t.function.name === 'write_file_text'), false);
   assert.equal(tools.some((t) => t.function.name === 'list_directory'), true);
 
-  // Ohne gesetzten baseSystemPrompt schickt die App keinen eigenen System-Prompt —
-  // die Konversation beginnt direkt mit der User-Nachricht.
-  const firstMessage = res.rawExchanges[0].messages[0];
-  assert.equal(firstMessage.role, 'user');
+  // Der Workspace-Kontext nennt nur die freigeschalteten Tools.
+  const systemMessage = res.rawExchanges[0].messages[0];
+  assert.equal(systemMessage.role, 'system');
+  assert.match(systemMessage.content, /list_directory/);
+  assert.doesNotMatch(systemMessage.content, /write_file_text/);
 });
 
 test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is true', async () => {
@@ -561,20 +562,22 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
   const tools = calls[0].tools;
   assert.ok(tools.some((t) => t.function.name === 'write_file_text'));
 
-  // Auch mit Schreibrecht bleibt der System-Prompt ohne baseSystemPrompt leer.
-  const firstMessage = res.rawExchanges[0].messages[0];
-  assert.equal(firstMessage.role, 'user');
+  // Mit Schreibrecht stehen die Schreib-Tools auch im Workspace-Kontext.
+  const systemMessage = res.rawExchanges[0].messages[0];
+  assert.equal(systemMessage.role, 'system');
+  assert.match(systemMessage.content, /write_file_text/);
 });
 
-test('CHAT_SEND sends no system prompt by default and forwards baseSystemPrompt verbatim', async () => {
+test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPrompt in front', async () => {
   const empty = makeScriptedProvider([assistantText('ok')]);
   const emptyHandlers = setupChatHandlers({
     provider: empty.provider,
     storage: makeStorage({ readUIPrefs: async () => ({}) }),
   });
+  // Ohne geöffneten Ordner und ohne baseSystemPrompt beginnt die Konversation
+  // direkt mit der User-Nachricht.
   const emptyRes = await emptyHandlers.sendHandler(makeFakeEvent().event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/weyouze-test-project',
   });
   assert.equal(emptyRes.rawExchanges[0].messages.some((m) => m.role === 'system'), false);
 
@@ -589,5 +592,6 @@ test('CHAT_SEND sends no system prompt by default and forwards baseSystemPrompt 
   });
   const systemMessage = configuredRes.rawExchanges[0].messages[0];
   assert.equal(systemMessage.role, 'system');
-  assert.equal(systemMessage.content, 'Sei knapp und freundlich.');
+  assert.ok(systemMessage.content.startsWith('Sei knapp und freundlich.\n\n'));
+  assert.match(systemMessage.content, /geöffneten Ordner „weyouze-test-project“/);
 });

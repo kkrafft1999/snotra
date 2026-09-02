@@ -72,6 +72,24 @@ function resolveToolRoundLimit(uiPrefs, mainDefault) {
   return Math.min(MAX_CAP, Math.max(MIN, value));
 }
 
+/**
+ * Sachkontext zum geöffneten Ordner: welcher Ordner offen ist, welche Tools
+ * bereitstehen und was im Baum ausgewählt ist. Bewusst ohne Ton- oder
+ * Sprachvorgaben — die bleiben dem Prompt des Nutzers überlassen.
+ */
+function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, selectedIsDirectory }) {
+  const parts = [`Du arbeitest im in der App geöffneten Ordner „${folderName}“.`];
+  if (toolsPrompt) parts.push(toolsPrompt);
+  if (selectedRelPath) {
+    const kind = selectedIsDirectory ? 'folgenden Ordner' : 'folgende Datei';
+    parts.push(
+      `Der Nutzer hat gerade ${kind} im Baum ausgewählt: „${selectedRelPath}“. ` +
+        `Beziehe dich bei Fragen ohne expliziten Pfad auf diese Auswahl.`
+    );
+  }
+  return parts.join('\n\n');
+}
+
 function parseToolArguments(rawArguments) {
   try {
     return JSON.parse(rawArguments || '{}');
@@ -212,6 +230,13 @@ function createChatEngine({
       const sendBundle = await llm.prepareSendBundle(target);
 
       const workspaceRoot = workspacePaths.resolveRoot(payload?.workspaceRoot);
+      const selection = workspaceRoot
+        ? workspacePaths.resolveSelection(
+            workspaceRoot,
+            payload?.selectedPath,
+            payload?.selectedIsDirectory
+          )
+        : null;
 
       const uiPrefs = await preferences.read();
       const appLocale = resolveAppLocale(uiPrefs);
@@ -219,9 +244,25 @@ function createChatEngine({
       const allowWrite = uiPrefs.allowWorkspaceWrite === true;
       const disabledNames = Array.isArray(uiPrefs.disabledTools) ? uiPrefs.disabledTools : [];
       const toolOptions = { allowWrite, disabledNames };
+      // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
+      // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
+      // könne keine Dateien lesen oder schreiben.
+      const workspaceSystem = workspaceRoot
+        ? buildWorkspaceSystemPrompt({
+            folderName: workspacePaths.basename(workspaceRoot),
+            toolsPrompt: tools.buildSystemPrompt(toolOptions),
+            selectedRelPath: selection?.relativePath || null,
+            selectedIsDirectory: selection?.isDirectory === true,
+          })
+        : '';
+      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang.
+      const combinedSystem =
+        systemPrompt && workspaceSystem
+          ? `${systemPrompt}\n\n${workspaceSystem}`
+          : systemPrompt || workspaceSystem;
 
       const apiMessages = [];
-      if (systemPrompt) apiMessages.push({ role: 'system', content: systemPrompt });
+      if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
       const historyCharLimit = resolveHistoryCharLimit(uiPrefs);
       const historyRows = messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')

@@ -175,7 +175,18 @@ test('engine drops a leading assistant greeting so the provider sees a user-firs
   assert.equal(calls[0].messages[0].content, 'Liste die Dateien.');
 });
 
-test('engine sends no system message when no baseSystemPrompt is configured', async () => {
+test('engine sends no system message without baseSystemPrompt and without workspace', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+});
+
+test('engine describes the open folder and the available tools', async () => {
   const { engine, calls } = makeEngine([assistantText('ok')]);
 
   await engine.send({
@@ -186,7 +197,61 @@ test('engine sends no system message when no baseSystemPrompt is configured', as
     },
   });
 
-  assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system, 'System-Nachricht mit Workspace-Kontext erwartet');
+  assert.match(system.content, /geöffneten Ordner „weyouze-project“/);
+  assert.match(system.content, /Tools: list_directory/);
+  assert.doesNotMatch(system.content, /ausgewählt/);
+});
+
+test('engine names the selected entry in the system message', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Was steht da?' }],
+      workspaceRoot: '/tmp/weyouze-project',
+      selectedPath: 'src/app.js',
+      selectedIsDirectory: false,
+    },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.match(system.content, /folgende Datei im Baum ausgewählt: „src\/app\.js“/);
+
+  const { engine: dirEngine, calls: dirCalls } = makeEngine([assistantText('ok')]);
+  await dirEngine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Was liegt da?' }],
+      workspaceRoot: '/tmp/weyouze-project',
+      selectedPath: 'src',
+      selectedIsDirectory: true,
+    },
+  });
+  assert.match(
+    dirCalls[0].messages.find((m) => m.role === 'system').content,
+    /folgenden Ordner im Baum ausgewählt: „src“/
+  );
+});
+
+test('engine keeps baseSystemPrompt in front of the workspace context', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    preferences: { async read() { return { baseSystemPrompt: 'Sei knapp.' }; } },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Hi' }],
+      workspaceRoot: '/tmp/weyouze-project',
+    },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system.content.startsWith('Sei knapp.\n\n'));
+  assert.match(system.content, /geöffneten Ordner „weyouze-project“/);
 });
 
 test('engine prepends baseSystemPrompt verbatim as the system message', async () => {
