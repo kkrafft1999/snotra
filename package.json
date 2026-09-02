@@ -1,6 +1,6 @@
 {
   "name": "weyouze",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "src/main/index.js",
   "productName": "Weyouze Anything",
   "scripts": {
