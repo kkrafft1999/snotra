@@ -97,6 +97,15 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Pfad geprüft' : 'Pfad wird geprüft …';
   }
+  if (toolName === 'outline_file') {
+    const pathLabel = formatRelativePathForLabel(args?.relative_path);
+    if (pathLabel) {
+      return isDone
+        ? `Gliederung von ${pathLabel} ermittelt`
+        : `Gliederung von ${pathLabel} wird ermittelt …`;
+    }
+    return isDone ? 'Gliederung ermittelt' : 'Gliederung wird ermittelt …';
+  }
   if (toolName === 'debug_wait') {
     return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
   }

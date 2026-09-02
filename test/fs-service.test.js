@@ -1035,6 +1035,313 @@ test('stat_path skips the line count for binary and oversized files', async (t) 
   assert.match(oversized.line_count_skipped, /zu groß/);
 });
 
+async function makeOutlineFixture(t, files) {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  for (const [name, lines] of Object.entries(files)) {
+    await fs.writeFile(path.join(tmpRoot, name), lines.length ? `${lines.join('\n')}\n` : '', 'utf8');
+  }
+  return tmpRoot;
+}
+
+async function outlineOf(registry, tmpRoot, args) {
+  return JSON.parse(await registry.execute('outline_file', args, { workspaceRoot: tmpRoot }));
+}
+
+test('outline_file returns markdown headings with line numbers through the registry', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, {
+    'doc.md': [
+      '---', // 1: Front-Matter
+      'title: Test',
+      '---',
+      '# Titel', // 4
+      'Text.',
+      '## Abschnitt A ##', // 6: schließende Rauten
+      '```bash',
+      '# kein Heading', // 8: im Code-Fence
+      '```',
+      'Setext Eins', // 10
+      '===',
+      '### Tief', // 12
+      'Setext Zwei', // 13
+      '---',
+      '',
+      '---', // 16: Trennlinie nach Leerzeile
+      '#hashtag', // 17: kein Leerzeichen → keine Überschrift
+      '- Liste',
+      '---', // 19: nach Listenzeile
+    ],
+  });
+
+  const out = await outlineOf(registry, tmpRoot, { relative_path: 'doc.md' });
+
+  assert.equal(out.error, undefined);
+  assert.equal(out.format, 'markdown');
+  assert.equal(out.line_count, 19);
+  assert.equal(out.total_entries, 5);
+  assert.equal(out.truncated, false);
+  assert.equal(out.content, undefined);
+  assert.deepEqual(out.entries, [
+    { line: 4, level: 1, kind: 'heading', text: 'Titel' },
+    { line: 6, level: 2, kind: 'heading', text: 'Abschnitt A' },
+    { line: 10, level: 1, kind: 'heading', text: 'Setext Eins' },
+    { line: 12, level: 3, kind: 'heading', text: 'Tief' },
+    { line: 13, level: 2, kind: 'heading', text: 'Setext Zwei' },
+  ]);
+});
+
+test('outline_file extracts JavaScript and Python signatures with nesting levels', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, {
+    'app.js': [
+      'import fs from "fs";',
+      'export function outer(a, b) {', // 2
+      '  if (a) {',
+      '    return foo(bar);',
+      '  }',
+      '}',
+      'const arrow = async (x) => {', // 7
+      '  return x;',
+      '};',
+      'export default class Widget extends Base {', // 10
+      '  constructor(props) {', // 11
+      '    super(props);',
+      '  }',
+      '  static async load(id) {', // 14
+      '    while (id) {',
+      '    }',
+      '  }',
+      '  get value() {', // 18
+      '    return 1;',
+      '  }',
+      '}',
+      'export default defineConfig({',
+      'describe("x", () => {',
+      'module.exports = { outer };',
+    ],
+    'main.py': [
+      'class Greeter(Base):', // 1
+      '    def __init__(self):', // 2
+      '        self.x = 1',
+      '    async def run(self):', // 4
+      '        pass',
+      'def main():', // 6
+      '    print("hi")',
+    ],
+  });
+
+  const js = await outlineOf(registry, tmpRoot, { relative_path: 'app.js' });
+  assert.equal(js.format, 'code');
+  assert.deepEqual(
+    js.entries.map((e) => [e.line, e.level, e.kind, e.name]),
+    [
+      [2, 1, 'function', 'outer'],
+      [7, 1, 'function', 'arrow'],
+      [10, 1, 'class', 'Widget'],
+      [11, 2, 'function', 'constructor'],
+      [14, 2, 'function', 'load'],
+      [18, 2, 'function', 'value'],
+    ]
+  );
+  // Signaturtext ohne öffnende Klammer am Zeilenende.
+  assert.equal(js.entries[0].text, 'export function outer(a, b)');
+  assert.equal(js.entries[2].text, 'export default class Widget extends Base');
+
+  const py = await outlineOf(registry, tmpRoot, { relative_path: 'main.py' });
+  assert.deepEqual(
+    py.entries.map((e) => [e.line, e.level, e.kind, e.name]),
+    [
+      [1, 1, 'class', 'Greeter'],
+      [2, 2, 'function', '__init__'],
+      [4, 2, 'function', 'run'],
+      [6, 1, 'function', 'main'],
+    ]
+  );
+  assert.equal(py.entries[1].text, 'def __init__(self):');
+});
+
+test('outline_file recognizes generic signatures across languages', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, {
+    'main.go': [
+      'package main',
+      'type Server struct {',
+      'func (s *Server) Start() error {',
+      'func main() {',
+      '\tgo func() {',
+    ],
+    'lib.rs': [
+      'pub struct Config {',
+      'impl Config {',
+      '    pub fn new() -> Self {',
+      '        let x = build();',
+      'mod tests {',
+    ],
+    'App.java': [
+      'public class App {',
+      '    private static final Logger LOG = LoggerFactory.getLogger(App.class);',
+      '    public static void main(String[] args) {',
+      '        } else if (args.length > 0) {',
+      '    public App(int x) {',
+      '    public String name() { return name; }',
+    ],
+    'util.c': [
+      '#include <stdio.h>',
+      'static int helper(int a) {',
+      'int main(void) {',
+      '    return helper(1);',
+      'char *dup(const char *s) {',
+    ],
+    'run.sh': ['#!/bin/sh', 'usage() {', 'if [ -z "$1" ]; then', 'main "$@"'],
+  });
+
+  const pick = (out) => out.entries.map((e) => [e.line, e.level, e.kind, e.name]);
+  assert.deepEqual(pick(await outlineOf(registry, tmpRoot, { relative_path: 'main.go' })), [
+    [2, 1, 'type', 'Server'],
+    [3, 1, 'function', 'Start'],
+    [4, 1, 'function', 'main'],
+  ]);
+  const rs = await outlineOf(registry, tmpRoot, { relative_path: 'lib.rs' });
+  assert.deepEqual(pick(rs), [
+    [1, 1, 'struct', 'Config'],
+    [2, 1, 'impl', undefined],
+    [3, 2, 'function', 'new'],
+    [5, 1, 'mod', 'tests'],
+  ]);
+  assert.equal(rs.entries[1].text, 'impl Config');
+  assert.deepEqual(pick(await outlineOf(registry, tmpRoot, { relative_path: 'App.java' })), [
+    [1, 1, 'class', 'App'],
+    [3, 2, 'function', 'main'],
+    [5, 2, 'function', 'App'],
+    [6, 2, 'function', 'name'],
+  ]);
+  assert.deepEqual(pick(await outlineOf(registry, tmpRoot, { relative_path: 'util.c' })), [
+    [2, 1, 'function', 'helper'],
+    [3, 1, 'function', 'main'],
+    [5, 1, 'function', 'dup'],
+  ]);
+  assert.deepEqual(pick(await outlineOf(registry, tmpRoot, { relative_path: 'run.sh' })), [
+    [2, 1, 'function', 'usage'],
+  ]);
+});
+
+test('outline_file honors max_depth and max_entries and reports truncation', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, {
+    'doc.md': ['# A', '## A1', '### A1a', '# B', '## B1'],
+  });
+
+  const shallow = await outlineOf(registry, tmpRoot, { relative_path: 'doc.md', max_depth: 1 });
+  assert.deepEqual(
+    shallow.entries.map((e) => e.text),
+    ['A', 'B']
+  );
+  assert.equal(shallow.total_entries, 2);
+  assert.equal(shallow.truncated, false);
+
+  const capped = await outlineOf(registry, tmpRoot, { relative_path: 'doc.md', max_entries: 2 });
+  assert.equal(capped.entries.length, 2);
+  assert.equal(capped.total_entries, 5);
+  assert.equal(capped.truncated, true);
+
+  const both = await outlineOf(registry, tmpRoot, {
+    relative_path: 'doc.md',
+    max_depth: 2,
+    max_entries: 3,
+  });
+  assert.deepEqual(
+    both.entries.map((e) => e.text),
+    ['A', 'A1', 'B']
+  );
+  assert.equal(both.total_entries, 4);
+  assert.equal(both.truncated, true);
+});
+
+test('outline_file reports files without structure with an empty list and a hint', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, {
+    'notes.txt': ['Nur Fließtext.', 'Noch eine Zeile (mit Klammern).'],
+    'leer.md': [],
+  });
+
+  const txt = await outlineOf(registry, tmpRoot, { relative_path: 'notes.txt' });
+  assert.equal(txt.error, undefined);
+  assert.deepEqual(txt.entries, []);
+  assert.equal(txt.total_entries, 0);
+  assert.match(txt.hint, /Keine Signaturen/);
+
+  const md = await outlineOf(registry, tmpRoot, { relative_path: 'leer.md' });
+  assert.equal(md.line_count, 0);
+  assert.deepEqual(md.entries, []);
+  assert.match(md.hint, /Keine Überschriften/);
+});
+
+test('outline_file validates arguments and respects workspace bounds', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeOutlineFixture(t, { 'a.md': ['# A'] });
+  await fs.mkdir(path.join(tmpRoot, 'sub'));
+
+  assert.match((await outlineOf(registry, tmpRoot, {})).error, /relative_path/);
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'sub' })).error, /Ordner/);
+  assert.match(
+    (await outlineOf(registry, tmpRoot, { relative_path: '../outside.md' })).error,
+    /außerhalb/
+  );
+  assert.match(
+    (await outlineOf(registry, tmpRoot, { relative_path: 'a.md', max_depth: 0 })).error,
+    /max_depth/
+  );
+  assert.match(
+    (await outlineOf(registry, tmpRoot, { relative_path: 'a.md', max_depth: 'x' })).error,
+    /Ganzzahl/
+  );
+  assert.match(
+    (await outlineOf(registry, tmpRoot, { relative_path: 'fehlt.md' })).error,
+    /ENOENT|no such file/i
+  );
+});
+
+test('outline_file rejects binary and oversized files', async (t) => {
+  const svc = createFsService({
+    fs,
+    path,
+    maxReadFileBytes: 8,
+    maxWriteFileBytes: 1024,
+  });
+  const registry = makeToolRegistry(svc);
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tmpRoot, 'bin.md'), Buffer.from([0x23, 0x00, 0x42]));
+  await fs.writeFile(path.join(tmpRoot, 'gross.md'), '# mehr als acht Bytes\n', 'utf8');
+
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'bin.md' })).error, /Binärdatei/);
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'gross.md' })).error, /zu groß/);
+});
+
+test('outline_file rejects a symlink to a file outside the workspace', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const workspace = path.join(tmpRoot, 'workspace');
+  const outside = path.join(tmpRoot, 'outside');
+  await fs.mkdir(workspace);
+  await fs.mkdir(outside);
+  const secret = path.join(outside, 'secret.md');
+  await fs.writeFile(secret, '# Geheim\n', 'utf8');
+  const linked = await createSymlinkOrSkip(
+    t,
+    secret,
+    path.join(workspace, 'secret-link.md'),
+    process.platform === 'win32' ? 'file' : undefined
+  );
+  if (!linked) return;
+
+  const out = await outlineOf(registry, workspace, { relative_path: 'secret-link.md' });
+  assert.match(out.error, /außerhalb/);
+  assert.equal(out.entries, undefined);
+});
+
 async function makeLinesFixture(t, lineCount = 10) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
   t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));

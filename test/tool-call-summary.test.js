@@ -93,6 +93,16 @@ test('summarizeToolCall formats workspace tools with start and done labels', () 
   );
   assert.equal(summarizeToolCall('stat_path', {}, 'start'), 'Pfad wird geprüft …');
   assert.equal(summarizeToolCall('stat_path', {}, 'done'), 'Pfad geprüft');
+  assert.equal(
+    summarizeToolCall('outline_file', { relative_path: 'docs/konzept.md' }, 'start'),
+    'Gliederung von docs/konzept.md wird ermittelt …'
+  );
+  assert.equal(
+    summarizeToolCall('outline_file', { relative_path: 'docs/konzept.md' }, 'done'),
+    'Gliederung von docs/konzept.md ermittelt'
+  );
+  assert.equal(summarizeToolCall('outline_file', {}, 'start'), 'Gliederung wird ermittelt …');
+  assert.equal(summarizeToolCall('outline_file', {}, 'done'), 'Gliederung ermittelt');
   assert.equal(summarizeToolCall('debug_wait', {}, 'start'), 'Warte 5 Sekunden …');
   assert.equal(summarizeToolCall('debug_wait', {}, 'done'), '5 Sekunden gewartet');
   assert.equal(summarizeToolCall('debug_wait', { duration_seconds: 1.2 }, 'start'), 'Warte 1,2 Sekunden …');

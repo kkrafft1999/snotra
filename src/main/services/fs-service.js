@@ -13,6 +13,12 @@ const SEARCH_DEFAULT_MAX_SCANNED_FILES = 5000;
 
 const FIND_DEFAULT_MAX_RESULTS = 100;
 const FIND_MAX_RESULTS = 500;
+const OUTLINE_DEFAULT_MAX_ENTRIES = 200;
+const OUTLINE_MAX_ENTRIES = 1000;
+const OUTLINE_MAX_TEXT_CHARS = 200;
+const OUTLINE_MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdown', '.mkd', '.mdx', '.mdc']);
+const OUTLINE_JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx']);
+
 
 function escapeRegExpLiteral(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -199,6 +205,179 @@ function isBinaryBuffer(buf) {
 function clipSearchLine(line) {
   if (line.length <= SEARCH_MAX_LINE_CHARS) return line;
   return `${line.slice(0, SEARCH_MAX_LINE_CHARS)}…`;
+}
+
+function clipOutlineText(text) {
+  const t = text.trim();
+  return t.length <= OUTLINE_MAX_TEXT_CHARS ? t : `${t.slice(0, OUTLINE_MAX_TEXT_CHARS)}…`;
+}
+
+/** Markdown-Gliederung: ATX- (#) und Setext-Überschriften (===/---), ohne Code-Fences und Front-Matter. */
+function extractMarkdownOutline(lines) {
+  const entries = [];
+  let i = 0;
+  if (lines.length && /^---\s*$/.test(lines[0])) {
+    const end = lines.findIndex((line, idx) => idx > 0 && /^(?:---|\.\.\.)\s*$/.test(line));
+    if (end > 0) i = end + 1;
+  }
+  let fenceClose = null;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (fenceClose) {
+      if (fenceClose.test(line)) fenceClose = null;
+      continue;
+    }
+    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      fenceClose = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}\\s*$`);
+      continue;
+    }
+    const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/.exec(line);
+    if (atx) {
+      const text = (atx[2] || '').replace(/[ \t]+#+$/, '').trim();
+      if (text) {
+        entries.push({ line: i + 1, level: atx[1].length, kind: 'heading', text: clipOutlineText(text) });
+      }
+      continue;
+    }
+    const setext = /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+    if (!setext || i === 0) continue;
+    const prev = lines[i - 1];
+    const prevText = prev.trim();
+    const prevIsHeading = entries.length > 0 && entries[entries.length - 1].line === i;
+    // Kein Setext-Titel nach Leerzeile (Trennlinie), Listen-/Zitat-/Tabellenzeilen oder eingerücktem Code.
+    if (
+      !prevText ||
+      prevIsHeading ||
+      /^(?: {4,}|\t)/.test(prev) ||
+      /^(?:[-*+>|#]|=+$|\d+[.)]\s)/.test(prevText)
+    ) {
+      continue;
+    }
+    entries.push({
+      line: i,
+      level: setext[1][0] === '=' ? 1 : 2,
+      kind: 'heading',
+      text: clipOutlineText(prevText),
+    });
+  }
+  return entries;
+}
+
+/** Zeilenanfänge, die trotz Klammer-Optik keine Signaturen sind (Kontrollfluss, Aufrufe, Importe). */
+const CODE_NON_SIGNATURE_START =
+  /^(?:if|else|elif|for|foreach|while|do|switch|case|catch|try|finally|return|new|throw|await|yield|typeof|delete|with|goto|sizeof|import|from|using|package|require|match|when|unless|until|begin|end|loop|print|echo|assert|super|this|self|go|defer)\b/;
+
+/** Schlüsselwörter, die als "Name" gefangen wurden, sind keine Signatur (z. B. "go func() {"). */
+const CODE_RESERVED_NAMES = /^(?:function|func|fun|fn|def|lambda|class|struct|enum|interface|type|return|if|else|while|for|switch|catch|do|try)$/;
+
+/** Generische Signatur-Heuristiken; Reihenfolge = Priorität. kind 'keyword' nimmt das Schlüsselwort aus Gruppe 1. */
+const CODE_SIGNATURE_PATTERNS = [
+  // JS/TS/PHP: function foo(  ·  export default async function* foo(
+  {
+    kind: 'function',
+    re: /^(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)?\s*\(/,
+  },
+  // Python/Ruby: def foo(  ·  async def foo(  ·  def self.foo
+  { kind: 'function', re: /^(?:async\s+)?def\s+(?:self\.)?([A-Za-z_]\w*[?!=]?)/ },
+  // Klassenartige Deklarationen; kind = Schlüsselwort (class, interface, enum, struct, …)
+  {
+    kind: 'keyword',
+    re: /^(?:export\s+(?:default\s+)?)?(?:(?:public|private|protected|internal|abstract|static|final|sealed|data|open|partial|declare|pub(?:\([^)]*\))?)\s+)*(class|interface|enum|struct|trait|record|protocol|module|namespace|object|union|extension|mod)\s+([A-Za-z_$][\w$.]*)/,
+  },
+  // Rust: impl<T> Foo for Bar
+  { kind: 'impl', re: /^(?:unsafe\s+)?impl\b/ },
+  // Go/TS/Rust: type Foo struct  ·  export type Props = …
+  { kind: 'type', re: /^(?:export\s+)?(?:pub(?:\([^)]*\))?\s+)?type\s+([A-Za-z_$][\w$]*)/ },
+  // Go/Kotlin/Swift: func (s *Server) Start(  ·  override fun onCreate(  ·  func viewDidLoad(
+  {
+    kind: 'function',
+    re: /^(?:(?:public|private|protected|internal|fileprivate|open|override|static|class|suspend|inline|operator|infix|mutating|final|tailrec|external)\s+)*(?:fun|func)\s+(?:\([^)]*\)\s*)?(?:<[^>]*>\s*)?(?:[A-Za-z_][\w.<>?]*\.)?([A-Za-z_]\w*)\s*[(<]/,
+  },
+  // Rust: pub async fn foo(
+  {
+    kind: 'function',
+    re: /^(?:pub(?:\([^)]*\))?\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]*"\s+)?fn\s+([A-Za-z_]\w*)/,
+  },
+  // JS/TS: const foo = (a, b) =>  ·  export const bar = async function
+  {
+    kind: 'function',
+    re: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+?)?=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+?)?=>|[A-Za-z_$][\w$]*\s*=>)/,
+  },
+  // Java/C#/PHP/C mit Modifier: public static void main(  ·  public function foo(  ·  static int helper(
+  {
+    kind: 'function',
+    re: /^(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async|synchronized|native|default|unsafe|extern|inline|constexpr|open|suspend|fileprivate|mutating|convenience|required|readonly)\s+)+(?:[A-Za-z_][\w<>\[\],.?:]*\s+)?([A-Za-z_]\w*)\s*\(/,
+  },
+  // C/C++/Java ohne Modifier, Block in derselben Zeile: int main(void) {  ·  char *name(int a) {
+  {
+    kind: 'function',
+    re: /^(?:[A-Za-z_][\w<>\[\],.:*&?]*\s+)+\*?((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\([^()]*\)\s*(?:const\s*)?(?:throws\s+[\w.,\s]+)?\{$/,
+  },
+  // Shell/JS/C: foo() {
+  { kind: 'function', re: /^(?:function\s+)?([A-Za-z_][\w-]*)\s*\(\s*\)\s*\{$/ },
+];
+
+/** Nur JS/TS: Methoden-Kurzform in Klassen sowie Objekt-Eigenschaften mit Funktionswert. */
+const JS_SIGNATURE_PATTERNS = [
+  // constructor(props) {  ·  static async load(id) {  ·  get value(): number {  ·  #secret() {
+  {
+    kind: 'function',
+    re: /^(?:(?:static|async|get|set|public|private|protected|readonly|override|abstract)\s+)*\*?(#?[A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\([^()]*\)\s*(?::\s*[^{]+)?\{$/,
+  },
+  // onClick: (e) => {  ·  render: function () {
+  {
+    kind: 'function',
+    re: /^(#?[A-Za-z_$][\w$]*)\s*:\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+?)?=>)/,
+  },
+];
+
+function measureIndentColumns(line) {
+  let columns = 0;
+  for (const ch of line) {
+    if (ch === ' ') columns += 1;
+    else if (ch === '\t') columns += 4;
+    else break;
+  }
+  return columns;
+}
+
+/** Generische Code-Gliederung: Signaturzeilen per Regex; Ebene = Rang der Einrücktiefe (1 = am weitesten links). */
+function extractCodeOutline(lines, { isJavaScript = false } = {}) {
+  const patterns = isJavaScript
+    ? [...CODE_SIGNATURE_PATTERNS, ...JS_SIGNATURE_PATTERNS]
+    : CODE_SIGNATURE_PATTERNS;
+  const found = [];
+  const indents = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+    if (!trimmed || CODE_NON_SIGNATURE_START.test(trimmed)) continue;
+    for (const { kind, re } of patterns) {
+      const m = re.exec(trimmed);
+      if (!m) continue;
+      const indent = measureIndentColumns(raw);
+      indents.add(indent);
+      const entry = {
+        line: i + 1,
+        indent,
+        kind: kind === 'keyword' ? m[1] : kind,
+        text: clipOutlineText(trimmed.replace(/\s*\{$/, '')),
+      };
+      const name = kind === 'keyword' ? m[2] : m[1];
+      if (name && CODE_RESERVED_NAMES.test(name)) continue;
+      if (name) entry.name = name;
+      found.push(entry);
+      break;
+    }
+  }
+  const ranks = new Map([...indents].sort((a, b) => a - b).map((indent, idx) => [indent, idx + 1]));
+  return found.map(({ indent, line, kind, name, text }) => {
+    const entry = { line, level: ranks.get(indent), kind };
+    if (name) entry.name = name;
+    entry.text = text;
+    return entry;
+  });
 }
 
 function createFsService({
@@ -804,6 +983,66 @@ function createFsService({
     return JSON.stringify(result);
   }
 
+  async function runOutlineFileTool(args, workspaceRoot) {
+    const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
+    if (!rel) {
+      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+    }
+    const depth = readIntegerArg(args, 'max_depth');
+    if (depth.error) return JSON.stringify({ error: depth.error });
+    if (depth.value !== undefined && depth.value < 1) {
+      return JSON.stringify({ error: 'max_depth muss mindestens 1 sein.' });
+    }
+    let maxEntries = Number.isFinite(args.max_entries)
+      ? Math.floor(args.max_entries)
+      : OUTLINE_DEFAULT_MAX_ENTRIES;
+    maxEntries = Math.min(Math.max(1, maxEntries), OUTLINE_MAX_ENTRIES);
+    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    if (error) return JSON.stringify({ error });
+    let buf;
+    try {
+      const st = await fs.stat(absPath);
+      if (st.isDirectory()) {
+        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+      }
+      if (st.size > MAX_READ_FILE_BYTES) {
+        return JSON.stringify({
+          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+        });
+      }
+      buf = await fs.readFile(absPath);
+    } catch (e) {
+      return JSON.stringify({ error: e.message });
+    }
+    if (isBinaryBuffer(buf)) {
+      return JSON.stringify({ error: 'Binärdatei — keine Gliederung möglich.' });
+    }
+    const ext = path.extname(rel).toLowerCase();
+    const isMarkdown = OUTLINE_MARKDOWN_EXTENSIONS.has(ext);
+    const lines = splitFileLines(buf.toString('utf8').replace(/^\uFEFF/, ''));
+    let entries = isMarkdown
+      ? extractMarkdownOutline(lines)
+      : extractCodeOutline(lines, { isJavaScript: OUTLINE_JS_EXTENSIONS.has(ext) });
+    if (depth.value !== undefined) {
+      entries = entries.filter((entry) => entry.level <= depth.value);
+    }
+    const total = entries.length;
+    const result = {
+      relative_path: rel,
+      format: isMarkdown ? 'markdown' : 'code',
+      line_count: lines.length,
+      total_entries: total,
+      entries: entries.slice(0, maxEntries),
+      truncated: total > maxEntries,
+    };
+    if (total === 0) {
+      result.hint = isMarkdown
+        ? 'Keine Überschriften gefunden.'
+        : 'Keine Signaturen erkannt (generische Heuristik für Funktionen, Klassen, Typen). Ggf. read_file_lines nutzen.';
+    }
+    return JSON.stringify(result);
+  }
+
   async function readDirectory(dirPath) {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const items = await Promise.all(
@@ -896,6 +1135,7 @@ function createFsService({
     runSearchInFilesTool,
     runFindFilesTool,
     runStatPathTool,
+    runOutlineFileTool,
     readDirectory,
     moveItem,
     readFilePreview,

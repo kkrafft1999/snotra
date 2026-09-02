@@ -158,6 +158,7 @@ test('workspace registry declares all built-in tools and filters write consisten
     runSearchInFilesTool() {},
     runFindFilesTool() {},
     runStatPathTool() {},
+    runOutlineFileTool() {},
   };
   const registry = createWorkspaceToolRegistry({ fsService });
 
@@ -169,6 +170,7 @@ test('workspace registry declares all built-in tools and filters write consisten
     'search_in_files',
     'find_files',
     'stat_path',
+    'outline_file',
     'debug_wait',
   ]);
   assert.doesNotMatch(registry.buildSystemPrompt(), /write_file_text/);
@@ -183,6 +185,7 @@ test('workspace registry declares all built-in tools and filters write consisten
     'search_in_files',
     'find_files',
     'stat_path',
+    'outline_file',
     'debug_wait',
     'write_file_text',
     'edit_file',

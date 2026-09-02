@@ -325,6 +325,38 @@ function createWorkspaceToolRegistry({ fsService }) {
         fsService.runStatPathTool(args, workspaceRoot),
     },
     {
+      name: 'outline_file',
+      description:
+        'Liefert die Gliederung einer Datei im Projektordner mit Zeilennummern, ohne den Inhalt zu lesen: ' +
+        'bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
+        '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines ' +
+        'gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
+      promptDescription:
+        'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
+      parameters: {
+        type: 'object',
+        properties: {
+          relative_path: {
+            type: 'string',
+            description: 'Relativer Pfad zur Datei, z. B. "docs/konzept.md" oder "src/app.js".',
+          },
+          max_depth: {
+            type: 'integer',
+            description:
+              'Nur Einträge bis zu dieser Ebene liefern (1 = nur oberste Ebene). Standard: alle Ebenen.',
+          },
+          max_entries: {
+            type: 'integer',
+            description:
+              'Maximale Anzahl Einträge (Standard 200, höchstens 1000); darüber wird truncated=true gemeldet.',
+          },
+        },
+        required: ['relative_path'],
+      },
+      handler: (args, { workspaceRoot }) =>
+        fsService.runOutlineFileTool(args, workspaceRoot),
+    },
+    {
       name: 'debug_wait',
       description:
         'Nur zum UI-Test: wartet eine konfigurierbare Zeit und liefert danach OK zurück. Kein Dateizugriff.',
