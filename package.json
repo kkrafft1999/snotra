@@ -7,7 +7,7 @@
     "sync-vendor": "node scripts/sync-renderer-vendor.js",
     "postinstall": "node scripts/sync-renderer-vendor.js",
     "pretest": "node scripts/sync-renderer-vendor.js",
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.js\"",
     "start": "npm run sync-vendor && unset ELECTRON_RUN_AS_NODE && electron .",
     "package": "npm run sync-vendor && electron-forge package --arch arm64 --platform darwin",
     "package:win": "npm run sync-vendor && electron-forge package --platform win32 --arch x64",
@@ -49,7 +49,7 @@
   "license": "Apache-2.0",
   "description": "Weyouze Anything – workspace-aware AI assistant on top of a file explorer.",
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -70,5 +70,11 @@
     "lodash": "^4.18.1",
     "picomatch": "^2.3.2",
     "tmp": "^0.2.6"
+  },
+  "allowScripts": {
+    "electron": true,
+    "esbuild": true,
+    "fs-xattr": true,
+    "macos-alias": true
   }
 }

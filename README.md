@@ -31,7 +31,7 @@ Den aktuellen Stand, was gerade in Arbeit ist und was als Nächstes geplant ist,
 
 ## Voraussetzungen
 
-- **Node.js** ≥ 18 (empfohlen: aktuelle LTS)
+- **Node.js** ≥ 24 (Active LTS, siehe `.nvmrc`; mit nvm: `nvm use`)
 - **npm** (kommt mit Node)
 - macOS oder Windows
 - Optional: API-Key für OpenAI / Anthropic / Google bzw. ein lokales [Ollama](https://ollama.com/)
