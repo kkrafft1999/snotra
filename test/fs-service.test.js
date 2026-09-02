@@ -1868,6 +1868,458 @@ test('edit_file enforces read and write size limits', async (t) => {
   assert.equal(await fs.readFile(path.join(tmpRoot, 'klein.txt'), 'utf8'), 'kurz\n');
 });
 
+async function makePatchFixture(t, files) {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  for (const [name, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(tmpRoot, name), content, 'utf8');
+  }
+  return tmpRoot;
+}
+
+function makePatchRunner(tmpRoot, registry = makeToolRegistry()) {
+  return async (args) =>
+    JSON.parse(
+      await registry.execute('apply_patch', args, { workspaceRoot: tmpRoot, allowWrite: true })
+    );
+}
+
+/** Baut einen unified diff aus Zeilen — mit abschließendem Umbruch wie echte Werkzeuge. */
+function diff(...lines) {
+  return `${lines.join('\n')}\n`;
+}
+
+test('apply_patch applies a list of edits in order through the registry', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\nzwei\ndrei\nvier\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    relative_path: 'a.js',
+    edits: [
+      { old_string: 'zwei', new_string: 'ZWEI' },
+      { old_string: 'vier', new_string: 'VIER' },
+      { old_string: 'e', new_string: 'E', replace_all: true },
+    ],
+  });
+  assert.equal(out.error, undefined);
+  assert.equal(out.mode, 'edits');
+  assert.equal(out.relative_path, 'a.js');
+  assert.equal(out.edits_applied, 3);
+  assert.equal(out.replacements, 4);
+  assert.equal(out.first_changed_line, 1);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'Eins\nZWEI\ndrEi\nVIER\n');
+});
+
+test('apply_patch edits see the result of earlier steps', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'alpha\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    relative_path: 'a.js',
+    edits: [
+      { old_string: 'alpha', new_string: 'beta' },
+      { old_string: 'beta', new_string: 'gamma' },
+    ],
+  });
+  assert.equal(out.replacements, 2);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'gamma\n');
+});
+
+test('apply_patch leaves the file untouched when one edit fails', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'foo\nbar\nfoo\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const missing = await run({
+    relative_path: 'a.js',
+    edits: [
+      { old_string: 'bar', new_string: 'baz' },
+      { old_string: 'gibtEsNicht', new_string: 'x' },
+    ],
+  });
+  assert.match(missing.error, /^edits\[1\]: old_string wurde nicht gefunden/);
+
+  const ambiguous = await run({
+    relative_path: 'a.js',
+    edits: [{ old_string: 'foo', new_string: 'x' }],
+  });
+  assert.match(ambiguous.error, /^edits\[0\]: old_string ist nicht eindeutig \(2 Treffer\)/);
+
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'foo\nbar\nfoo\n');
+});
+
+test('apply_patch validates the edits list', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins zwei\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  assert.match((await run({ edits: [{ old_string: 'eins', new_string: 'x' }] })).error, /relative_path/);
+  assert.match((await run({ relative_path: 'a.js', edits: [] })).error, /nicht leere Liste/);
+  assert.match((await run({ relative_path: 'a.js', edits: ['nope'] })).error, /edits\[0\] muss ein Objekt/);
+  assert.match((await run({ relative_path: 'a.js', edits: [{ new_string: 'x' }] })).error, /edits\[0\]\.old_string/);
+  assert.match((await run({ relative_path: 'a.js', edits: [{ old_string: '', new_string: 'x' }] })).error, /edits\[0\]\.old_string/);
+  assert.match((await run({ relative_path: 'a.js', edits: [{ old_string: 'eins' }] })).error, /edits\[0\]\.new_string/);
+  assert.match(
+    (await run({ relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'eins' }] })).error,
+    /edits\[0\]: old_string und new_string müssen sich unterscheiden/
+  );
+
+  const tooMany = await run({
+    relative_path: 'a.js',
+    edits: Array.from({ length: 51 }, (_, i) => ({ old_string: `x${i}`, new_string: `y${i}` })),
+  });
+  assert.match(tooMany.error, /Zu viele Schritte in edits \(51 > 50\)/);
+
+  const deleted = await run({ relative_path: 'a.js', edits: [{ old_string: ' zwei', new_string: '' }] });
+  assert.equal(deleted.replacements, 1);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\n');
+});
+
+test('apply_patch requires either edits or patch', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  assert.match((await run({ relative_path: 'a.js' })).error, /edits .* oder patch/);
+  assert.match(
+    (await run({ relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'x' }], patch: 'egal' })).error,
+    /nicht beides/
+  );
+  assert.match((await run({ patch: '   ' })).error, /patch \(unified diff als Text\) ist erforderlich/);
+});
+
+test('apply_patch is disabled unless allowWrite is set', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\n' });
+
+  const out = JSON.parse(
+    await registry.execute(
+      'apply_patch',
+      { relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'zwei' }] },
+      { workspaceRoot: tmpRoot }
+    )
+  );
+  assert.match(out.error, /Schreibzugriff/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\n');
+});
+
+test('apply_patch applies a unified diff with several hunks across files', async (t) => {
+  const tmpRoot = await makePatchFixture(t, {
+    'a.js': 'eins\nzwei\ndrei\nvier\nfuenf\n',
+    'b.js': 'alpha\nbeta\n',
+  });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    patch: diff(
+      'diff --git a/a.js b/a.js',
+      'index 1234567..89abcde 100644',
+      '--- a/a.js\t2026-09-02 10:00:00',
+      '+++ b/a.js\t2026-09-02 10:01:00',
+      '@@ -1,3 +1,4 @@',
+      ' eins',
+      '-zwei',
+      '+zwei-neu',
+      '+zwei-extra',
+      ' drei',
+      '@@ -4,2 +5,2 @@',
+      '-vier',
+      '+vier-neu',
+      ' fuenf',
+      '--- a/b.js',
+      '+++ b/b.js',
+      '@@ -1,2 +1,2 @@',
+      '-alpha',
+      '+ALPHA',
+      ' beta'
+    ),
+  });
+  assert.equal(out.error, undefined);
+  assert.equal(out.mode, 'unified_diff');
+  assert.equal(out.files_changed, 2);
+  assert.equal(out.hunks_applied, 3);
+  assert.deepEqual(
+    out.files.map((file) => [file.relative_path, file.hunks_applied]),
+    [['a.js', 2], ['b.js', 1]]
+  );
+  // Ohne Versatz bleibt line_offsets weg — das Ergebnis soll knapp bleiben.
+  assert.equal(out.files[0].line_offsets, undefined);
+  assert.equal(
+    await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'),
+    'eins\nzwei-neu\nzwei-extra\ndrei\nvier-neu\nfuenf\n'
+  );
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'ALPHA\nbeta\n');
+});
+
+test('apply_patch tolerates shifted line numbers and reports the offset', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'neu1\nneu2\nalpha\nbeta\ngamma\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    patch: diff('--- a.js', '+++ a.js', '@@ -1,3 +1,3 @@', ' alpha', '-beta', '+BETA', ' gamma'),
+  });
+  assert.equal(out.error, undefined);
+  assert.deepEqual(out.files[0].line_offsets, [2]);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'neu1\nneu2\nalpha\nBETA\ngamma\n');
+});
+
+test('apply_patch inserts a pure addition hunk and appends at the end', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\nzwei\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const prepended = await run({
+    patch: diff('--- a.js', '+++ a.js', '@@ -0,0 +1,1 @@', '+kopf'),
+  });
+  assert.equal(prepended.error, undefined);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'kopf\neins\nzwei\n');
+
+  const appended = await run({
+    patch: diff('--- a.js', '+++ a.js', '@@ -3,1 +3,2 @@', ' zwei', '+fuss'),
+  });
+  assert.equal(appended.error, undefined);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'kopf\neins\nzwei\nfuss\n');
+});
+
+test('apply_patch preserves CRLF line endings and a missing final newline', async (t) => {
+  const tmpRoot = await makePatchFixture(t, {
+    'crlf.txt': 'x1\r\nx2\r\nx3\r\n',
+    'ohne.txt': 'a\nb\nc',
+    'mit.txt': 'a\nb\nc\n',
+  });
+  const run = makePatchRunner(tmpRoot);
+
+  assert.equal(
+    (await run({ patch: diff('--- crlf.txt', '+++ crlf.txt', '@@ -1,3 +1,3 @@', ' x1', '-x2', '+X2', ' x3') })).error,
+    undefined
+  );
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'crlf.txt'), 'utf8'), 'x1\r\nX2\r\nx3\r\n');
+
+  assert.equal(
+    (await run({
+      patch: diff(
+        '--- ohne.txt',
+        '+++ ohne.txt',
+        '@@ -1,3 +1,3 @@',
+        ' a',
+        '-b',
+        '+B',
+        ' c',
+        '\\ No newline at end of file'
+      ),
+    })).error,
+    undefined
+  );
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'ohne.txt'), 'utf8'), 'a\nB\nc');
+
+  // Marker nur auf der neuen Seite: der abschließende Umbruch fällt weg.
+  assert.equal(
+    (await run({
+      patch: diff('--- mit.txt', '+++ mit.txt', '@@ -3,1 +3,1 @@', '-c', '+c-neu', '\\ No newline at end of file'),
+    })).error,
+    undefined
+  );
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'mit.txt'), 'utf8'), 'a\nb\nc-neu');
+});
+
+test('apply_patch handles removed lines that look like a file header', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'kopf\n-- signatur\nfuss\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    patch: diff('--- a.txt', '+++ a.txt', '@@ -1,3 +1,3 @@', ' kopf', '--- signatur', '+++ signatur', ' fuss'),
+  });
+  assert.equal(out.error, undefined);
+  assert.equal(out.files_changed, 1);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'kopf\n++ signatur\nfuss\n');
+});
+
+test('apply_patch writes nothing when a hunk does not apply', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\nzwei\n', 'b.js': 'alpha\nbeta\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    patch: diff(
+      '--- a.js',
+      '+++ a.js',
+      '@@ -1,1 +1,1 @@',
+      '-eins',
+      '+EINS',
+      '--- b.js',
+      '+++ b.js',
+      '@@ -1,1 +1,1 @@',
+      '-gibtEsNicht',
+      '+x'
+    ),
+  });
+  assert.match(out.error, /Hunk 1 von 1 lässt sich nicht auf "b\.js" anwenden: der Kontext passt nicht/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\nzwei\n');
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'alpha\nbeta\n');
+});
+
+test('apply_patch rejects malformed patches with an explanatory error', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'eins\nzwei\ndrei\n' });
+  const run = makePatchRunner(tmpRoot);
+  const errorFor = async (patch) => (await run({ patch })).error;
+
+  assert.match(await errorFor('einfach nur Text\n'), /Unerwartete Zeile 1 im Patch/);
+  assert.match(
+    await errorFor(diff('diff --git a/a.txt b/a.txt', 'index 1234567..89abcde 100644')),
+    /enthält keinen Dateikopf/
+  );
+  assert.match(await errorFor(diff('--- a.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')), /fehlt die zugehörige "\+\+\+ "-Zeile/);
+  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt')), /enthält der Patch keinen Hunk/);
+  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt', '@@ kaputt @@', ' eins')), /Hunk-Kopf in Zeile 3 ist ungültig/);
+  assert.match(
+    await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,5 +1,5 @@', ' eins', '-zwei', '+ZWEI')),
+    /ist unvollständig: erwartet 5 alte und 5 neue Zeilen, gefunden 2 und 2/
+  );
+  assert.match(
+    await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,2 +1,2 @@', ' eins', '?zwei')),
+    /Unerwartete Zeile 5 im Hunk/
+  );
+  assert.match(
+    await errorFor(diff('--- /dev/null', '+++ b/neu.txt', '@@ -0,0 +1,1 @@', '+hallo')),
+    /legt "neu\.txt" neu an .* write_file_text/
+  );
+  assert.match(
+    await errorFor(diff('--- a/a.txt', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-eins')),
+    /löscht "a\.txt" — Dateien löschen kann apply_patch nicht/
+  );
+  assert.match(
+    await errorFor(diff('--- a/a.txt', '+++ b/neu.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')),
+    /benennt "a\.txt" in "neu\.txt" um/
+  );
+  assert.match(await errorFor(diff('Binary files a/bild.png and b/bild.png differ')), /Binär-Patches/);
+  assert.match(
+    await errorFor(
+      diff(
+        '--- a.txt',
+        '+++ a.txt',
+        '@@ -1,1 +1,1 @@',
+        '-eins',
+        '+EINS',
+        '--- a.txt',
+        '+++ a.txt',
+        '@@ -3,1 +3,1 @@',
+        '-drei',
+        '+DREI'
+      )
+    ),
+    /"a\.txt" kommt mehrfach im Patch vor/
+  );
+
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\nzwei\ndrei\n');
+});
+
+test('apply_patch reports a relative_path that the patch does not touch', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'eins\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    relative_path: 'andere.txt',
+    patch: diff('--- a.txt', '+++ a.txt', '@@ -1,1 +1,1 @@', '-eins', '+EINS'),
+  });
+  assert.match(out.error, /relative_path \("andere\.txt"\) kommt im Patch nicht vor.*a\.txt/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\n');
+});
+
+test('apply_patch respects workspace bounds, folders and missing files', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'eins\n' });
+  await fs.mkdir(path.join(tmpRoot, 'ordner'));
+  const run = makePatchRunner(tmpRoot);
+
+  assert.match(
+    (await run({ relative_path: '../outside.txt', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
+    /außerhalb/
+  );
+  assert.match(
+    (await run({ relative_path: '.', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
+    /Ordner/
+  );
+  assert.match(
+    (await run({ patch: diff('--- ../outside.txt', '+++ ../outside.txt', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
+    /außerhalb/
+  );
+  assert.match(
+    (await run({ patch: diff('--- ordner', '+++ ordner', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
+    /Pfad ist ein Ordner, keine Datei/
+  );
+  assert.match(
+    (await run({ patch: diff('--- fehlt.txt', '+++ fehlt.txt', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
+    /"fehlt\.txt" existiert nicht/
+  );
+});
+
+test('apply_patch rejects a symlink to a file outside the workspace', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const workspace = path.join(tmpRoot, 'workspace');
+  const outside = path.join(tmpRoot, 'outside');
+  await fs.mkdir(workspace);
+  await fs.mkdir(outside);
+  const secret = path.join(outside, 'secret.txt');
+  await fs.writeFile(secret, 'geheim\n', 'utf8');
+  const linked = await createSymlinkOrSkip(
+    t,
+    secret,
+    path.join(workspace, 'secret-link.txt'),
+    process.platform === 'win32' ? 'file' : undefined
+  );
+  if (!linked) return;
+  const run = makePatchRunner(workspace, registry);
+
+  assert.match(
+    (await run({ relative_path: 'secret-link.txt', edits: [{ old_string: 'geheim', new_string: 'offen' }] })).error,
+    /außerhalb/
+  );
+  assert.match(
+    (await run({
+      patch: diff('--- secret-link.txt', '+++ secret-link.txt', '@@ -1,1 +1,1 @@', '-geheim', '+offen'),
+    })).error,
+    /außerhalb/
+  );
+  assert.equal(await fs.readFile(secret, 'utf8'), 'geheim\n');
+});
+
+test('apply_patch enforces read, write and patch size limits', async (t) => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(2048), 'utf8');
+  await fs.writeFile(path.join(tmpRoot, 'klein.txt'), 'kurz\n', 'utf8');
+
+  const strictWrite = makePatchRunner(
+    tmpRoot,
+    createWorkspaceToolRegistry({
+      fsService: createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 16 }),
+    })
+  );
+  assert.match(
+    (await strictWrite({ relative_path: 'gross.txt', edits: [{ old_string: 'x', new_string: 'y' }] })).error,
+    /Datei zu groß/
+  );
+  assert.match(
+    (await strictWrite({ relative_path: 'klein.txt', edits: [{ old_string: 'kurz', new_string: 'k'.repeat(64) }] })).error,
+    /Inhalt zu groß/
+  );
+  assert.match(
+    (await strictWrite({
+      patch: diff('--- klein.txt', '+++ klein.txt', '@@ -1,1 +1,1 @@', '-kurz', '+lang'),
+    })).error,
+    /Patch zu groß/
+  );
+
+  const strictRead = makePatchRunner(
+    tmpRoot,
+    createWorkspaceToolRegistry({
+      fsService: createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 1024 * 1024 }),
+    })
+  );
+  assert.match(
+    (await strictRead({ patch: diff('--- gross.txt', '+++ gross.txt', '@@ -1,1 +1,1 @@', '-x', '+y') })).error,
+    /"gross\.txt": Datei zu groß/
+  );
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'klein.txt'), 'utf8'), 'kurz\n');
+  assert.equal((await fs.readFile(path.join(tmpRoot, 'gross.txt'), 'utf8')).length, 2048);
+});
+
 test('containsPath accepts the root itself and children, rejects siblings and traversal', () => {
   const path = require('path');
   const fs = require('fs/promises');

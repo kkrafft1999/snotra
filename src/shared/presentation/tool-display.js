@@ -74,6 +74,13 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Datei geändert' : 'Datei wird geändert …';
   }
+  if (toolName === 'apply_patch') {
+    const pathLabel = formatRelativePathForLabel(args?.relative_path);
+    if (pathLabel) {
+      return isDone ? `Datei ${pathLabel} gepatcht` : `Datei ${pathLabel} wird gepatcht …`;
+    }
+    return isDone ? 'Patch angewendet' : 'Patch wird angewendet …';
+  }
   if (toolName === 'search_in_files') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     if (raw) {

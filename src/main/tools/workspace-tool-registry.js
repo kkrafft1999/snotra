@@ -477,6 +477,69 @@ function createWorkspaceToolRegistry({ fsService }) {
       handler: (args, { workspaceRoot }) =>
         fsService.runEditFileTool(args, workspaceRoot),
     },
+    {
+      name: 'apply_patch',
+      description:
+        'Ändert bestehende Textdateien (UTF-8, nur innerhalb des Projektordners) mit mehreren ' +
+        'zusammenhängenden Änderungen in einem Aufruf — entweder als Liste von Ersetzungen ' +
+        '(edits, alle in derselben Datei, in dieser Reihenfolge angewendet) oder als unified diff ' +
+        '(patch, auch über mehrere Dateien hinweg). Alles oder nichts: schlägt ein Schritt bzw. ein ' +
+        'Hunk fehl, bleibt jede betroffene Datei unverändert. Für eine einzelne Ersetzung ist ' +
+        'edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann ' +
+        'apply_patch nicht. Maximale Dateigröße: 2 MB.',
+      promptDescription:
+        'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
+      parameters: {
+        type: 'object',
+        properties: {
+          relative_path: {
+            type: 'string',
+            description:
+              'Relativer Pfad zur Datei, z. B. "src/app.js". Im edits-Modus erforderlich; ' +
+              'im patch-Modus überflüssig, weil die Pfade in den "+++"-Kopfzeilen des Diffs stehen.',
+          },
+          edits: {
+            type: 'array',
+            description:
+              'Ersetzungen in relative_path, der Reihe nach angewendet (höchstens 50). ' +
+              'Jeder Schritt sieht das Ergebnis der vorherigen. Nicht mit patch kombinierbar.',
+            items: {
+              type: 'object',
+              properties: {
+                old_string: {
+                  type: 'string',
+                  description:
+                    'Exakter zu ersetzender Text; muss zum Zeitpunkt dieses Schritts eindeutig ' +
+                    'vorkommen — bei Bedarf umgebende Zeilen mit aufnehmen.',
+                },
+                new_string: {
+                  type: 'string',
+                  description: 'Neuer Text; ein leerer String löscht die Textstelle.',
+                },
+                replace_all: {
+                  type: 'boolean',
+                  description:
+                    'true, um in diesem Schritt alle Vorkommen zu ersetzen ' +
+                    '(Standard false = genau ein eindeutiger Treffer erforderlich).',
+                },
+              },
+              required: ['old_string', 'new_string'],
+            },
+          },
+          patch: {
+            type: 'string',
+            description:
+              'Unified diff als Text: je Datei "--- alt" und "+++ neu" (a//b/-Präfixe erlaubt), ' +
+              'darunter Hunks "@@ -alteZeile,anzahl +neueZeile,anzahl @@" mit Rumpfzeilen, die mit ' +
+              '" " (unverändert), "-" (entfernt) oder "+" (neu) beginnen. Die Zeilennummern dürfen ' +
+              'leicht verschoben sein, der Kontext muss exakt passen. Nicht mit edits kombinierbar.',
+          },
+        },
+      },
+      requiresWrite: true,
+      handler: (args, { workspaceRoot }) =>
+        fsService.runApplyPatchTool(args, workspaceRoot),
+    },
   ]);
 }
 
