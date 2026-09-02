@@ -1,5 +1,5 @@
 ---
-description: Task-Management-Konventionen für Weyouze — wo Aufgaben erfasst werden (GitHub Issues + docs/roadmap.md + docs/task.md) und wie auf Fragen wie "Was steht an?" geantwortet wird. Immer anwenden, unabhängig vom bearbeiteten Dateityp.
+description: Task-Management-Konventionen für Snotra AI — wo Aufgaben erfasst werden (GitHub Issues + docs/roadmap.md + docs/task.md) und wie auf Fragen wie "Was steht an?" geantwortet wird. Immer anwenden, unabhängig vom bearbeiteten Dateityp.
 alwaysApply: true
 ---
 
@@ -8,12 +8,12 @@ alwaysApply: true
 Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe PR #16):
 
 - **Konkrete, abarbeitbare Aufgaben** (Bugs, einzelne Features, Tasks) werden als
-  **GitHub Issues** erfasst — https://github.com/kkrafft1999/weyouze/issues.
+  **GitHub Issues** erfasst — https://github.com/kkrafft1999/snotra/issues.
   Vorlagen: `.github/ISSUE_TEMPLATE/bug_report.yml` (🐛) und
   `.github/ISSUE_TEMPLATE/feature_request.yml` (💡).
 - Der **Fortschritt** einzelner Issues wird in einem **GitHub Project**
   (Kanban-Board: Backlog → To do → In Progress → Done) verfolgt —
-  https://github.com/kkrafft1999/weyouze/projects.
+  https://github.com/kkrafft1999/snotra/projects.
 - Die **grobe Richtung / der Fahrplan** (was ist umgesetzt, was ist als
   Nächstes geplant, was sind spätere Ideen) steht in
   [`docs/roadmap.md`](../../docs/roadmap.md). Diese Datei wird nur bei
@@ -33,7 +33,7 @@ Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe
   ein GitHub Issue sind, aber (noch) nicht als Issue angelegt wurden.
 - **Regelmäßig synchronisieren**: Vor größeren Antworten zum Thema
   Aufgaben/Backlog mit den GitHub Issues abgleichen (`gh issue list
-  --repo kkrafft1999/weyouze --state all`).
+  --repo kkrafft1999/snotra --state all`).
 - **Sobald ein Eintrag als GitHub Issue existiert**, wird der Eintrag aus
   `docs/task.md` **entfernt** — das Issue ist danach die einzige Quelle der
   Wahrheit, keine Duplikate pflegen.
@@ -50,7 +50,7 @@ Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe
 
 1. **GitHub Issues abfragen** (offene Tasks), z. B. mit dem `gh` CLI (read-only):
    ```sh
-   gh issue list --repo kkrafft1999/weyouze --state open
+   gh issue list --repo kkrafft1999/snotra --state open
    ```
 2. **`docs/task.md` lesen** für Aufgaben, die schon formuliert, aber noch
    nicht als Issue angelegt sind.

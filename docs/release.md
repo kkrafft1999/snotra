@@ -14,7 +14,7 @@ sie an.
 - Das Repo muss **öffentlich** sein, sonst kann die unsignierte App die
   Releases-API nicht ohne Token lesen:
   ```sh
-  gh repo edit kkrafft1999/weyouze --visibility public
+  gh repo edit kkrafft1999/snotra --visibility public
   ```
 - `gh` muss authentifiziert sein (`gh auth status`).
 
@@ -45,7 +45,7 @@ npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (zum Zip
 Die Artefakte landen unter `out/`. Der Vergleich der App nutzt **nur den
 Release-Tag**, nicht die Dateinamen — die Asset-Namen sind also frei wählbar,
 sollten aber Version und Plattform enthalten, z. B.
-`Weyouze-Anything-1.1.0-mac-arm64.dmg`.
+`Snotra-AI-1.1.0-mac-arm64.dmg`.
 
 ## Release veröffentlichen
 
@@ -55,7 +55,7 @@ git push origin main --tags
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "Was ist neu …" \
-  "out/make/Weyouze Anything.dmg#Weyouze Anything (macOS, Apple Silicon)"
+  "out/make/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
 
 Weitere Assets (z. B. das Windows-ZIP) als zusätzliche Pfade anhängen. Der Text
@@ -68,7 +68,10 @@ aus `--notes` erscheint als Release-Body und steht der App im Banner als
 
 ## Was die App prüft
 
-- Endpoint: `GET https://api.github.com/repos/kkrafft1999/weyouze/releases/latest`
+- Endpoint: `GET https://api.github.com/repos/kkrafft1999/snotra/releases/latest`
+- Installationen bis v1.0.4 fragen noch `kkrafft1999/weyouze` ab; GitHub leitet
+  per 301 auf das umbenannte Repo um. Den alten Repo-Namen deshalb **nie
+  wiederverwenden**, sonst bricht der Update-Hinweis alter Versionen.
 - Vergleich: `tag_name` (ohne führendes `v`) gegen `app.getVersion()` via SemVer.
 - **Drafts** werden ignoriert; **Prereleases** werden als solche markiert.
 - Mit *Überspringen* gemerkte Versionen melden sich beim Auto-Check nicht mehr,

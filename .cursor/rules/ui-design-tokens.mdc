@@ -1,5 +1,5 @@
 ---
-description: UI-Design-Tokens für Weyouze — doubleSlash Mono-Blue Design-System (Tokens, Komponenten, Refactor-Regeln). Anwenden bei UI-Refactors, neuen Komponenten und Renderer-CSS.
+description: UI-Design-Tokens für Snotra AI — doubleSlash Mono-Blue Design-System (Tokens, Komponenten, Refactor-Regeln). Anwenden bei UI-Refactors, neuen Komponenten und Renderer-CSS.
 globs:
   - "renderer/**/*.{css,html,js}"
   - "**/*.tsx"
@@ -15,7 +15,7 @@ alwaysApply: false
 
 # UI-Design-Tokens (doubleSlash Mono-Blue)
 
-Du arbeitest im doubleSlash Mono-Blue System für Weyouze. Halte dich strikt an die hier definierten Tokens, Komponenten-Specs und Workflow-Regeln. Funktionalität, State, Routing und Datenfluss bleiben bei Refactors unverändert — du veränderst ausschließlich UI-Tokens, Styles und Layout-Patterns.
+Du arbeitest im doubleSlash Mono-Blue System für Snotra AI. Halte dich strikt an die hier definierten Tokens, Komponenten-Specs und Workflow-Regeln. Funktionalität, State, Routing und Datenfluss bleiben bei Refactors unverändert — du veränderst ausschließlich UI-Tokens, Styles und Layout-Patterns.
 
 ## Token-Architektur
 

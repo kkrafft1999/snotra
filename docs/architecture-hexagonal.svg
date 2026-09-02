@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1740 1280" width="1740" height="1280" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Weyouze Anything — Hexagonale Architektur (Ports &amp; Adapters)</title>
+  <title id="title">Snotra AI — Hexagonale Architektur (Ports &amp; Adapters)</title>
   <desc id="desc">Hexagonales Architekturdiagramm: Anwendungs-Kern (src/application/chat) in der Mitte, treibender Adapter links, getriebene Core- und Infrastruktur-Adapter rechts, Anwendungs-Ports am Hexagon-Rand, Infrastruktur-Ports dahinter, externe Systeme außen. Stand: Roadmap-Etappen 1–5 abgeschlossen.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -41,7 +41,7 @@
 
   <rect x="0" y="0" width="1740" height="1280" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Weyouze Anything — Hexagonale Architektur (Ports &amp; Adapters)</text>
+  <text class="t-title" x="30" y="44">Snotra AI — Hexagonale Architektur (Ports &amp; Adapters)</text>
   <text class="t-sub" x="31" y="70">Kern src/application/chat · Anwendungs-Ports am Hexagon · Core-Adapter + Infrastruktur-Ports/Adapter rechts · Contracts/Presentation/Runtime getrennt (keine Ports)</text>
 
   <!-- Legend -->

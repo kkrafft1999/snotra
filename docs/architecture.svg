@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title description">
-  <title id="title">Funktionale Architektur von Weyouze Anything</title>
+  <title id="title">Funktionale Architektur von Snotra AI</title>
   <desc id="description">Statisches Architekturdiagramm der neun funktionalen Module und ihrer gerichteten Beziehungen.</desc>
 
   <defs>
@@ -67,7 +67,7 @@
   <rect class="canvas" width="1600" height="980"/>
 
   <text class="page-title" x="64" y="58">Funktionale Architektur</text>
-  <text class="page-subtitle" x="64" y="88">Weyouze Anything &#183; Module und ihre direkten Beziehungen</text>
+  <text class="page-subtitle" x="64" y="88">Snotra AI &#183; Module und ihre direkten Beziehungen</text>
 
   <!-- Relationships are drawn before modules so boxes remain visually clear. -->
   <path class="flow" d="M 390 248 C 445 248, 445 220, 500 220"/>

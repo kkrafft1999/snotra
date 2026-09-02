@@ -1,17 +1,17 @@
 # Roadmap
 
-Grober Fahrplan für `Weyouze Anything`, das künftig **Snotra** heißt (siehe
-[#54](https://github.com/kkrafft1999/weyouze/issues/54)). Diese Datei ersetzt
+Grober Fahrplan für `Snotra AI` (bis v1.0.4 „Weyouze Anything“, siehe
+[#54](https://github.com/kkrafft1999/snotra/issues/54)). Diese Datei ersetzt
 den bisherigen Abschnitt „Aktueller Stand“ im README als Ort für die **große
 Linie**.
 
-> **Stand: 2026-09-02, Release v1.0.4.**
+> **Stand: 2026-09-02, Release v1.1.0.**
 
 Für **konkrete, abarbeitbare Aufgaben** (Bugs, einzelne Features, Aufgaben)
-werden [GitHub Issues](https://github.com/kkrafft1999/weyouze/issues)
+werden [GitHub Issues](https://github.com/kkrafft1999/snotra/issues)
 verwendet — dafür gibt es Vorlagen für 🐛 Bugs und 💡 Feature-Ideen. Der
 Status einzelner Issues lässt sich im zugehörigen
-[GitHub Project](https://github.com/kkrafft1999/weyouze/projects) als
+[GitHub Project](https://github.com/kkrafft1999/snotra/projects) als
 Kanban-Board verfolgen (Spalten: *Backlog* → *To do* → *In Progress* → *Done*).
 
 Die **Schichtenarchitektur** (Ports, Adapter, Composition Root) ist in
@@ -42,19 +42,19 @@ wieder entfernt.
   Tool-Liste, markierter Pfad) und macht keine Ton- oder Sprachvorgaben mehr
 - 🛡️ Workspace-Zugriff auf den geöffneten Ordner begrenzt; Symlinks nach
   außen werden abgewiesen
-  ([#24](https://github.com/kkrafft1999/weyouze/pull/24))
+  ([#24](https://github.com/kkrafft1999/snotra/pull/24))
 
 ### Tools
 
 - 🧰 **Tool-Use-Loop mit erweiterbarer Tool-Registry**
-  ([#17](https://github.com/kkrafft1999/weyouze/issues/17)): Workspace-Tools
+  ([#17](https://github.com/kkrafft1999/snotra/issues/17)): Workspace-Tools
   sind aus dem Kern in `src/main/tools/workspace-tool-registry.js`
   ausgelagert und werden dort registriert; neue Tools brauchen Handler,
   Registrierung, Anzeige-Zeile und Tests, aber keinen Eingriff in den
   Chat-Kern
 - 📚 **Token-effizientes Datei-Toolset** (T1–T8,
-  [#35](https://github.com/kkrafft1999/weyouze/issues/35)–[#41](https://github.com/kkrafft1999/weyouze/issues/41),
-  [#43](https://github.com/kkrafft1999/weyouze/issues/43)): das Modell greift
+  [#35](https://github.com/kkrafft1999/snotra/issues/35)–[#41](https://github.com/kkrafft1999/snotra/issues/41),
+  [#43](https://github.com/kkrafft1999/snotra/issues/43)): das Modell greift
   gezielt statt im Volltext auf lokale Dateien zu.
   Lesen und suchen: `list_directory`, `list_directory_tree`,
   `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`,
@@ -97,35 +97,36 @@ wieder entfernt.
   an (`.github/workflows/release.yml`), die beide Builds baut und das
   GitHub-Release veröffentlicht; der `release`-Skill (für Claude Code unter
   `.claude/skills/`, für Antigravity unter `.agents/skills/`) bündelt
-  Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.0.4
+  Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.1.0
 - 🔔 Update-Notifier (Stufe 1) über GitHub Releases
 - ⬆️ **Node 24 überall**
-  ([#53](https://github.com/kkrafft1999/weyouze/issues/53), v1.0.4): lokal,
+  ([#53](https://github.com/kkrafft1999/snotra/issues/53), v1.0.4): lokal,
   in der Release-Pipeline und bei den GitHub-Actions (alle auf ihren
   `node24`-Majors) auf Node 24 Active LTS; `engines.node >=24`, `.nvmrc`
   und `allowScripts` für npm 11. Der Release-Lauf zu v1.0.4 kam ohne
   Node-20-Warnung durch
+- 🏷️ **Umbenennung zu Snotra AI**
+  ([#54](https://github.com/kkrafft1999/snotra/issues/54), v1.1.0): App,
+  Repo (`kkrafft1999/snotra`), npm-Paket und Release-Artefakte
+  (`Snotra-AI-<version>-…`) tragen den neuen Namen, die Wordmark ist
+  einzeilig, die Bundle-ID `dev.snotra-ai.app`. Beim ersten Start werden
+  Einstellungen, Verlauf und Ordner-Historie aus dem alten `userData`-Ordner
+  „Weyouze Anything“ kopiert (der bleibt als Backup). Unter macOS hängt der
+  `safeStorage`-Schlüssel am App-Namen: API-Keys müssen einmal neu
+  eingegeben werden (UI zeigt „Key neu eingeben“), ein nicht mehr lesbarer
+  Chat-Verlauf wird gesichert statt überschrieben. Alte Installationen
+  finden Updates über GitHubs Redirect vom alten Repo-Namen
 
 ## 🚧 Jetzt / als Nächstes
 
-- 🏷️ **Umbenennung zu Snotra**
-  ([#54](https://github.com/kkrafft1999/weyouze/issues/54)): App, Repo,
-  npm-Paket und Release-Artefakte heißen künftig Snotra, die Website läuft
-  unter `snotra-ai.dev`; „Weyouze Anything“ samt Aussprache-Erklärung und
-  Wordmark entfällt. Fallstricke: `userData`-Pfad und `safeStorage`-Schlüssel
-  hängen am App-Namen, bestehende Installationen brauchen eine Migration
-  oder einen dokumentierten Neueintrag der API-Keys. Schreibweise/Claim und
-  der Repo- bzw. Paketname (`snotra` oder `snotra-ai`) sind noch
-  festzulegen; das erste Release unter neuem Namen ist als 2.0.0
-  vorgeschlagen
 - 🧩 **Skill-Konzept (MVP)**
-  ([#18](https://github.com/kkrafft1999/weyouze/issues/18)): Kern der
+  ([#18](https://github.com/kkrafft1999/snotra/issues/18)): Kern der
   Plattform-Vision. Ein Skill = Prompt/Arbeitsweise + Menge erlaubter Tools
   + optional Ablauf, als Konfiguration in einem `skills/`-Ordner, beim Start
   geladen und in den Einstellungen auswählbar. Baut auf Tool-Registry und
   Tool-Häkchen auf; dynamisches Nachladen zur Laufzeit ist Ausbaustufe
 - 📎 **Dateien im Chat per `@` referenzieren**
-  ([#52](https://github.com/kkrafft1999/weyouze/issues/52)): Autocomplete
+  ([#52](https://github.com/kkrafft1999/snotra/issues/52)): Autocomplete
   über die Workspace-Dateien wie in Claude Code oder Cursor. Eingefügt wird
   der relative Pfad; das Modell liest die Datei bei Bedarf selbst über die
   Lese-Tools, statt dass Inhalte automatisch eingebettet werden
@@ -136,17 +137,17 @@ wieder entfernt.
   dedizierten Anwendung bündeln (z. B. HR-, IT-, Büro-Profile aus der
   README-Vision); setzt das Skill-Konzept voraus
 - 📄 **Dokument-Extraktion** (T9,
-  [#42](https://github.com/kkrafft1999/weyouze/issues/42)): Read-only-Tool
+  [#42](https://github.com/kkrafft1999/snotra/issues/42)): Read-only-Tool
   `extract_document_text` für PDF/DOCX/XLSX, möglichst abschnittsweise statt
   Volltext. Bewusst zurückgestellt: bringt schwere Dependencies mit und
   sprengt den Rahmen der reinen Datei-Durchforstung
 - 🌐 **Website unter `snotra-ai.dev`**
-  ([#21](https://github.com/kkrafft1999/weyouze/issues/21)): Landingpage mit
+  ([#21](https://github.com/kkrafft1999/snotra/issues/21)): Landingpage mit
   Produktvorstellung, Screenshots und Download-Links auf die aktuellen
-  GitHub-Releases; setzt die Umbenennung
-  ([#54](https://github.com/kkrafft1999/weyouze/issues/54)) voraus
+  GitHub-Releases; die Umbenennung
+  ([#54](https://github.com/kkrafft1999/snotra/issues/54)) ist erledigt
 - 🔏 **Code-Signing** für macOS/Windows-Builds
-  ([#19](https://github.com/kkrafft1999/weyouze/issues/19)): Developer-ID
+  ([#19](https://github.com/kkrafft1999/snotra/issues/19)): Developer-ID
   plus Notarisierung bzw. Windows-Zertifikat in der Release-Pipeline, damit
   Gatekeeper- und SmartScreen-Warnungen entfallen
 - 🏗️ **Umstieg auf Electron Forge 8**, sobald es stabil ist (derzeit nur
@@ -157,7 +158,7 @@ wieder entfernt.
 
 ## Workflow-Hinweise
 
-- Neue Idee / Bug → als [Issue](https://github.com/kkrafft1999/weyouze/issues/new/choose)
+- Neue Idee / Bug → als [Issue](https://github.com/kkrafft1999/snotra/issues/new/choose)
   anlegen (Template wählen).
 - Größere Themen aus dieser Roadmap werden bei Bedarf in mehrere Issues
   aufgeteilt, sobald sie konkret angegangen werden.

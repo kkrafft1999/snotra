@@ -1,10 +1,10 @@
-# Weyouze Anything
+# Snotra AI
 
-> **WeUseAnything** – eine Electron-basierte Plattform, die per **Skills** und **Tools** zu Use-Case-spezifischen KI-Anwendungen ausgebaut werden kann.
+> Eine Electron-basierte Plattform, die per **Skills** und **Tools** zu Use-Case-spezifischen KI-Anwendungen ausgebaut werden kann.
 
 ## Vision
 
-`Weyouze Anything` (gesprochen: *"We Use Anything"*) ist bewusst **kein** fertig zugeschnittenes Produkt, sondern eine **Plattform**:
+`Snotra AI` ist bewusst **kein** fertig zugeschnittenes Produkt, sondern eine **Plattform**:
 
 - Die Electron-App liefert das Fundament: Fenster, Datei-Explorer, Chat-UI, Provider-Anbindung, sicheres Speichern von Keys, Tool-Use-Loop.
 - Darauf aufgesetzt werden **Skills** (vorgefertigte Arbeitsweisen, Prompts, Abläufe) und **Tools** (konkrete Aktionen, die das Modell ausführen kann) – **dynamisch oder per Konfiguration**.
@@ -14,13 +14,13 @@
   - 🖥️ **IT:** Runbooks, Incident-Begleitung, Doku-Pflege
   - 👩‍💻 **Software-Engineering:** projektbezogene Code- und Repo-Assistenz
 
-Der Name betont den Plattform-Charakter: *"Wir nutzen alles"* – jedes Modell, jeden Workspace, jeden Skill, jedes Tool.
+Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der Klugheit und Besonnenheit. Er steht für einen Assistenten, der den Kontext seines Workspace kennt und überlegt handelt. Bis Version 1.0.4 hieß das Projekt „Weyouze Anything“.
 
 > Status: **persönliches Hobby- / Experimentier-Projekt.** Schnittstellen, UI und Konfiguration können sich jederzeit ändern.
 
 ## Aktueller Stand & Roadmap
 
-Den aktuellen Stand, was gerade in Arbeit ist und was als Nächstes geplant ist, gibt es in [`docs/roadmap.md`](./docs/roadmap.md). Konkrete Aufgaben (Bugs, einzelne Features) werden als [GitHub Issues](https://github.com/kkrafft1999/weyouze/issues) getrackt, der Fortschritt im zugehörigen [GitHub Project](https://github.com/kkrafft1999/weyouze/projects) (Kanban-Board).
+Den aktuellen Stand, was gerade in Arbeit ist und was als Nächstes geplant ist, gibt es in [`docs/roadmap.md`](./docs/roadmap.md). Konkrete Aufgaben (Bugs, einzelne Features) werden als [GitHub Issues](https://github.com/kkrafft1999/snotra/issues) getrackt, der Fortschritt im zugehörigen [GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban-Board).
 
 ## Tech-Stack
 
@@ -40,8 +40,8 @@ Den aktuellen Stand, was gerade in Arbeit ist und was als Nächstes geplant ist,
 
 ```bash
 # Repository klonen
-git clone git@github.com:<dein-user>/weyouze.git
-cd weyouze
+git clone git@github.com:<dein-user>/snotra.git
+cd snotra
 
 # Abhängigkeiten installieren
 npm install
@@ -67,13 +67,15 @@ Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen)
 
 ## Konfiguration
 
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen**. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
+Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen**. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
 
 | Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
 | ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
 | `maxToolRounds`    | Maximale Tool-Runden pro Chat-Anfrage (auch in der App einstellbar)         | 14        | 1 – 500          |
 | `historyCharLimit` | Zeichen-Budget für den an den Provider gesendeten Chat-Verlauf (siehe unten)| 200 000   | 4 000 – 2 000 000 |
 | `allowWorkspaceWrite` | Schaltet die Schreib-Tools `write_file_text`, `edit_file` und `apply_patch` frei (Einstellungen › Tools); ohne diese Option kann das Modell Dateien nur lesen | `false` | – |
+
+**Umstieg von „Weyouze Anything“ (bis v1.0.4):** Beim ersten Start kopiert Snotra AI Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben.
 
 **Verlaufs-Trimming (`historyCharLimit`):** Damit lange Sessions nicht ins Token-Limit des Providers laufen, wird der Verlauf pro Anfrage budgetiert (Heuristik: 1 Token ≈ 4 Zeichen). Ältere Nachrichten jenseits des Budgets werden weggelassen, und große Tool-Ausgaben früherer Tool-Runden (z. B. gelesene Dateien) werden auf einen Platzhalter gekürzt. Die aktuelle Frage, alle User-Nachrichten im Fenster und die Tool-Ausgaben der jüngsten Runde bleiben immer vollständig erhalten.
 

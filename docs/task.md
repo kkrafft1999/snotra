@@ -1,7 +1,7 @@
 # Task-Inbox
 
 Diese Datei ist eine **Zwischenablage** für konkrete Aufgaben, die noch
-**nicht** als [GitHub Issue](https://github.com/kkrafft1999/weyouze/issues)
+**nicht** als [GitHub Issue](https://github.com/kkrafft1999/snotra/issues)
 existieren — z. B. weil in der aktuellen Arbeitsumgebung nur lesender
 `gh`-Zugriff besteht und Issues nicht direkt per CLI angelegt werden können.
 
@@ -21,7 +21,7 @@ existieren — z. B. weil in der aktuellen Arbeitsumgebung nur lesender
    GitHub Issues abgleichen, z. B.:
 
    ```sh
-   gh issue list --repo kkrafft1999/weyouze --state all
+   gh issue list --repo kkrafft1999/snotra --state all
    ```
 
 3. **Sobald aus einem Eintrag ein GitHub Issue geworden ist** (von einer

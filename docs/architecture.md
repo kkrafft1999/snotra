@@ -1,6 +1,6 @@
 # Architektur
 
-Kurzüberblick zur Schichten- und Port/Adapter-Struktur von Weyouze Anything
+Kurzüberblick zur Schichten- und Port/Adapter-Struktur von Snotra AI
 nach Abschluss der fünf Roadmap-Etappen (Stand 2026-07-12). Diagramme:
 [`architecture-layers.svg`](./architecture-layers.svg),
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
@@ -72,7 +72,9 @@ Electron-Bootstrap:
    Preferences-Adapter → `createChatEngine`)
 4. Registriert IPC-Handler mit injizierten Abhängigkeiten
 
-`src/main/index.js` ruft nur `createApplication()` auf — keine verstreute
+`src/main/index.js` ruft vor `createApplication()` nur die einmalige
+userData-Migration auf (`services/userdata-migration.js`, Übernahme aus dem
+Ordner der Vorgänger-Identität „Weyouze Anything“) — keine verstreute
 Verdrahtung in den Handlern.
 
 ## Renderer: was verschoben wurde, was bleibt

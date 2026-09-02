@@ -1,13 +1,13 @@
 ---
 name: release
 description: >-
-  Erstellt ein neues Release von Weyouze Anything: bumpt die Version in
+  Erstellt ein neues Release von Snotra AI: bumpt die Version in
   package.json, legt den Git-Tag vX.Y.Z an und pusht ihn, womit die
   GitHub-Actions-Pipeline (.github/workflows/release.yml) macOS- und
   Windows-Builds baut und das Release veröffentlicht. Auslösen bei Sätzen wie
   "erstelle ein Release", "erstell ein neues Release", "Release erstellen",
   "mach ein Release", "neues Release", "release this", "cut a release",
-  "Version veröffentlichen". Nur in diesem Repo (weyouze) sinnvoll.
+  "Version veröffentlichen". Nur in diesem Repo (snotra) sinnvoll.
 ---
 
 # Release erstellen

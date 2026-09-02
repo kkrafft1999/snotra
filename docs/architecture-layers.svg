@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1540" width="1440" height="1540" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Weyouze Anything — Architektur: Schichten (UI · Anwendungs-Core · Infrastruktur)</title>
+  <title id="title">Snotra AI — Architektur: Schichten (UI · Anwendungs-Core · Infrastruktur)</title>
   <desc id="desc">Geschichtetes Architekturdiagramm: reine Präsentation (Renderer) mit normalisierten View-Daten, UI-/Electron-/Node-freier Anwendungs-Core (src/application/chat) mit Anwendungs-Ports, Infrastruktur (src/main) mit Infrastruktur-Ports, Adaptern und Composition-Root. Verbunden über Preload-Bridge und getrennte Shared-Schichten (contracts, presentation, runtime).</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -47,7 +47,7 @@
 
   <rect x="0" y="0" width="1440" height="1540" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Weyouze Anything — Architekturüberblick</text>
+  <text class="t-title" x="30" y="44">Snotra AI — Architekturüberblick</text>
   <text class="t-sub" x="31" y="70">Reine Präsentation (Renderer) · Anwendungs-Core (src/application/chat) · Infrastruktur (src/main/ports + Adapter) · getrennte Shared-Schichten (contracts · presentation · runtime)</text>
 
   <g>
