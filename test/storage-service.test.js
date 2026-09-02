@@ -439,3 +439,74 @@ test('readChatHistoryStore falls back to plaintext when encryption unavailable',
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+// --- Unlesbarer Chat-Verlauf: Quarantaene statt Ueberschreiben (#54) ---
+
+async function makeTmpDir(t, prefix) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+async function quarantineFiles(dir) {
+  return (await fs.readdir(dir)).filter((n) => n.startsWith('chat-history.json.undecryptable-')).sort();
+}
+
+test('an undecryptable encrypted chat history is quarantined, not overwritten', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const storage = makeStorageWithEncryption(tmpDir);
+  const original = JSON.stringify({ encrypted: true, payload: Buffer.from('garbage-from-other-key').toString('base64') });
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), original, 'utf8');
+
+  const store = await storage.readChatHistoryStore();
+  assert.deepEqual(store.sessions ?? [], [], 'leerer Store');
+
+  const quarantined = await quarantineFiles(tmpDir);
+  assert.equal(quarantined.length, 1, 'genau eine Quarantaene-Datei');
+  assert.equal(await fs.readFile(path.join(tmpDir, quarantined[0]), 'utf8'), original, 'Originalbytes erhalten');
+  assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null, 'Original verschoben');
+
+  await storage.writeChatHistoryStore(store);
+  const fresh = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8'));
+  assert.equal(fresh.encrypted, true, 'neue Datei ist verschluesselt');
+  assert.equal(await fs.readFile(path.join(tmpDir, quarantined[0]), 'utf8'), original, 'Quarantaene unveraendert');
+});
+
+test('parallel reads of an unreadable history create exactly one quarantine file', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const storage = makeStorageWithEncryption(tmpDir);
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), JSON.stringify({ encrypted: true, payload: 'AAAA' }), 'utf8');
+
+  const stores = await Promise.all([1, 2, 3].map(() => storage.readChatHistoryStore()));
+  assert.equal(stores.length, 3);
+  assert.equal((await quarantineFiles(tmpDir)).length, 1);
+});
+
+test('corrupt plaintext history is quarantined as well', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const storage = makeStorage(tmpDir);
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), '{ this is not json', 'utf8');
+
+  await storage.readChatHistoryStore();
+  assert.equal((await quarantineFiles(tmpDir)).length, 1);
+  assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null);
+});
+
+test('reading an unreadable history inside the history lock resolves and quarantines (no deadlock)', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const storage = makeStorageWithEncryption(tmpDir);
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), JSON.stringify({ encrypted: true, payload: 'AAAA' }), 'utf8');
+
+  const store = await storage.withChatHistoryLock(() => storage.readChatHistoryStore({ skipMigration: true }));
+  assert.deepEqual(store.sessions ?? [], []);
+  assert.equal((await quarantineFiles(tmpDir)).length, 1);
+});
+
+test('a missing history file produces an empty store and no quarantine', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const storage = makeStorageWithEncryption(tmpDir);
+
+  const store = await storage.readChatHistoryStore();
+  assert.deepEqual(store.sessions ?? [], []);
+  assert.deepEqual(await quarantineFiles(tmpDir), []);
+});

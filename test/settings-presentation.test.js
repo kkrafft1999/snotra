@@ -109,3 +109,33 @@ test('buildPresetView respects connection draft overrides', () => {
   assert.match(view.sublabel, /draft\.local/);
   assert.match(view.sublabel, /TLS insecure/);
 });
+
+test('a stored but undecryptable API key marks provider and presets as not configured', () => {
+  const build = (apiKeyDecryptable) => presentation.buildLlmStateDto({
+    encryptionAvailable: true,
+    config: {
+      version: 3,
+      activeProvider: 'openai',
+      activePresetId: 'p1',
+      presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true }],
+      providers: { openai: { apiKeyEnc: 'abc', model: 'gpt-4o-mini' } },
+    },
+    chatTarget: { providerId: 'openai', model: 'gpt-4o-mini' },
+    apiKeyDecryptable,
+  });
+
+  const broken = build({ openai: false });
+  const brokenProvider = broken.providers.find((p) => p.id === 'openai');
+  assert.equal(brokenProvider.hasKey, true, 'Key ist gespeichert');
+  assert.equal(brokenProvider.keyUnreadable, true);
+  assert.equal(brokenProvider.configured, false);
+  assert.equal(broken.presets.find((p) => p.id === 'p1').configured, false);
+
+  const fine = build({ openai: true });
+  const fineProvider = fine.providers.find((p) => p.id === 'openai');
+  assert.equal(fineProvider.keyUnreadable, false);
+  assert.equal(fineProvider.configured, true);
+
+  const legacyCaller = build(undefined);
+  assert.equal(legacyCaller.providers.find((p) => p.id === 'openai').configured, true, 'ohne Map wie bisher');
+});

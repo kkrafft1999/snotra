@@ -167,6 +167,9 @@ export function initChatModelPicker({
       if (!appStore.llmState.encryptionAvailable) {
         chatHint.textContent =
           'Verschlüsselter Speicher ist nicht verfügbar. Ein API-Key kann hier nicht sicher gespeichert werden.';
+      } else if (active?.keyUnreadable) {
+        chatHint.textContent =
+          'Der gespeicherte API-Key ist nach der Umbenennung zu Snotra AI nicht mehr lesbar. Bitte in den Einstellungen neu eingeben.';
       } else {
         chatHint.textContent = 'Konfiguriere ein Sprachmodell über das Zahnrad, um zu chatten.';
       }

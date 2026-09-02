@@ -234,6 +234,7 @@ export function initSettingsModal(deps) {
       const tags = [];
       if (p.isActiveChatProvider) tags.push('aktiv');
       if (p.configured) tags.push('konfiguriert');
+      if (p.keyUnreadable) tags.push('Key neu eingeben');
       opt.textContent = tags.length ? `${p.name} – ${tags.join(', ')}` : p.name;
       selectProvider.appendChild(opt);
     }
@@ -339,6 +340,8 @@ export function initSettingsModal(deps) {
     if (form.showApiKey) {
       if (draft.removeApiKey && pv.hasKey) {
         lines.push('Key wird beim Speichern entfernt');
+      } else if (pv.keyUnreadable && !draft.apiKey) {
+        lines.push('Gespeicherter API-Key kann nicht mehr entschlüsselt werden (z. B. nach der Umbenennung der App in Snotra AI). Bitte den Key neu eingeben.');
       } else if (pv.hasKey && !draft.apiKey) {
         lines.push('Key gespeichert');
       } else if (draft.apiKey) {

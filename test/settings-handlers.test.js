@@ -431,3 +431,53 @@ test('getLLMState returns normalized preset and provider view DTOs', async (t) =
   assert.equal(state.providers.find((p) => p.id === 'openai').configured, true);
   assert.equal(state.providers.find((p) => p.id === 'openai').fields, undefined);
 });
+
+// --- Gespeicherter, aber nicht entschluesselbarer Key (#54) ---
+
+async function seedUnreadableOpenAiKey(storage) {
+  await storage.updateLLMConfig(async (config) => {
+    config.providers = {
+      openai: {
+        // Ciphertext eines fremden Schluessels: decryptString wirft.
+        apiKeyEnc: Buffer.from('garbage-from-other-key', 'utf8').toString('base64'),
+        model: 'gpt-4o',
+      },
+    };
+    config.presets = [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }];
+    config.activePresetId = 'p1';
+    config.activeProvider = 'openai';
+    return config;
+  });
+}
+
+test('getLLMState reports a stored but undecryptable key as not configured', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedUnreadableOpenAiKey(storage);
+
+  const state = await ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE);
+  const openai = state.providers.find((p) => p.id === 'openai');
+  assert.equal(openai.hasKey, true);
+  assert.equal(openai.keyUnreadable, true);
+  assert.equal(openai.configured, false);
+  assert.equal(state.presets.find((p) => p.id === 'p1').configured, false);
+});
+
+test('setActivePreset refuses a provider whose stored key cannot be decrypted', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedUnreadableOpenAiKey(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, 'p1');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /noch nicht konfiguriert/);
+});
+
+test('commitSettings treats an undecryptable key as incomplete access', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedUnreadableOpenAiKey(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+  });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /unvollständig/);
+});

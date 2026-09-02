@@ -8,7 +8,8 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-ch
 const workspaceState = require('./workspace-state');
 const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
-const { APP_NAME } = require('./app-identity');
+const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
+const { createUserDataMigration } = require('./services/userdata-migration');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
 // "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
@@ -113,6 +114,16 @@ function buildApplicationMenu() {
 
 app.whenReady().then(async () => {
   registerMediaCapturePermissions();
+
+  // Einmalige Uebernahme der Daten aus dem userData-Ordner des alten
+  // App-Namens. Muss VOR createApplication laufen: readLLMConfig legt beim
+  // ersten Lesen sofort eine Default-Konfiguration an, das Ziel gaelte dann
+  // als bereits benutzt. Wirft nie, blockiert den Start nie.
+  await createUserDataMigration({ fs, path, log: console }).migrateLegacyUserData({
+    sourceDir: path.join(app.getPath('appData'), LEGACY_APP_NAME),
+    targetDir: app.getPath('userData'),
+    meta: { appVersion: app.getVersion(), platform: process.platform },
+  });
 
   application = createApplication({
     app,

@@ -25,6 +25,7 @@ function createStorageService({
   maxChatSessions,
   maxFolderHistory,
   defaultProviderId,
+  log = console,
 }) {
   const LLM_CONFIG_FILENAME = 'llm-config.json';
   const LEGACY_OPENAI_CONFIG_FILENAME = 'openai-config.json';
@@ -412,30 +413,58 @@ function createStorageService({
   }
 
   async function loadChatHistoryStoreFromDisk() {
+    let raw;
     try {
-      const raw = await fs.readFile(getChatHistoryPath(), 'utf8');
+      raw = await fs.readFile(getChatHistoryPath(), 'utf8');
+    } catch {
+      // Keine Datei (Erststart) oder nicht lesbar: leer starten, nichts zu retten.
+      return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false };
+    }
+
+    // Ab hier existiert eine Datei. Laesst sie sich nicht interpretieren
+    // (kaputtes JSON, fremder safeStorage-Schluessel z. B. nach der
+    // Umbenennung der App, Verschluesselung hier nicht verfuegbar), darf sie
+    // NICHT stillschweigend ueberschrieben werden: unreadable = true, der
+    // Aufrufer stellt sie in Quarantaene (quarantineUnreadableChatHistory).
+    let wasEncrypted = false;
+    try {
       let data = JSON.parse(raw);
       if (!data || typeof data !== 'object') {
-        return { store: defaultChatHistoryStore(), wasEncrypted: false };
+        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
       }
-
-      let wasEncrypted = false;
       if (data.encrypted === true && typeof data.payload === 'string') {
         wasEncrypted = true;
         const decrypted = decryptIfPossible(data.payload);
-        if (!decrypted) return { store: defaultChatHistoryStore(), wasEncrypted: true };
-        try {
-          data = JSON.parse(decrypted);
-        } catch {
-          return { store: defaultChatHistoryStore(), wasEncrypted: true };
-        }
+        if (!decrypted) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
+        data = JSON.parse(decrypted);
       }
-
       const store = parseChatHistoryStoreData(data);
-      if (!store) return { store: defaultChatHistoryStore(), wasEncrypted };
-      return { store, wasEncrypted };
+      if (!store) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
+      return { store, wasEncrypted, unreadable: false };
     } catch {
-      return { store: defaultChatHistoryStore(), wasEncrypted: false };
+      return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
+    }
+  }
+
+  // Unlesbaren Verlauf beiseitelegen statt beim naechsten Write zu zerstoeren.
+  // Bewusst ohne withChatHistoryLock: die Handler halten den Lock bereits,
+  // wenn sie mit skipMigration lesen; ein verschachtelter Lock wuerde
+  // deadlocken. rename ist atomar, ein parallel lesender Zweiter scheitert
+  // harmlos mit ENOENT.
+  async function quarantineUnreadableChatHistory() {
+    const source = getChatHistoryPath();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const target = `${source}.undecryptable-${stamp}`;
+    try {
+      await fs.rename(source, target);
+      if (typeof log?.warn === 'function') {
+        log.warn(`[chat-history] Verlauf nicht lesbar, gesichert als ${target}`);
+      }
+    } catch (err) {
+      if (err && err.code === 'ENOENT') return;
+      if (typeof log?.warn === 'function') {
+        log.warn(`[chat-history] Verlauf nicht lesbar, Sicherung fehlgeschlagen: ${err?.message || err}`);
+      }
     }
   }
 
@@ -446,11 +475,19 @@ function createStorageService({
   }
 
   async function readChatHistoryStore({ skipMigration = false } = {}) {
-    const { store, wasEncrypted } = await loadChatHistoryStoreFromDisk();
+    const { store, wasEncrypted, unreadable } = await loadChatHistoryStoreFromDisk();
+    if (unreadable) {
+      await quarantineUnreadableChatHistory();
+      return defaultChatHistoryStore();
+    }
     if (skipMigration) return store;
     if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
       return withChatHistoryLock(async () => {
         const fresh = await loadChatHistoryStoreFromDisk();
+        if (fresh.unreadable) {
+          await quarantineUnreadableChatHistory();
+          return defaultChatHistoryStore();
+        }
         await migrateChatHistoryToEncryptedIfNeeded(fresh.store, fresh.wasEncrypted);
         return fresh.store;
       });

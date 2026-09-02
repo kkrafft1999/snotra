@@ -30,10 +30,20 @@ function registerSettingsHandlers({
     const presetsWire = Array.isArray(config.presets)
       ? config.presets.map((row) => llmConfigStore.normalizePresetEntry(row)).filter(Boolean)
       : [];
+    // Gespeichert heisst nicht lesbar: nach einem Wechsel des App-Namens
+    // (safeStorage-Schluessel haengt daran) oder des Benutzerkontos passt der
+    // Schluessel nicht mehr. Die Praesentation zeigt das als keyUnreadable.
+    const apiKeyDecryptable = {};
+    for (const [providerId, entry] of Object.entries(config.providers || {})) {
+      if (entry && entry.apiKeyEnc) {
+        apiKeyDecryptable[providerId] = canDecryptApiKeyEnc(safeStorage, entry.apiKeyEnc);
+      }
+    }
     return presentationService.buildLlmStateDto({
       encryptionAvailable,
       config: { ...config, presets: presetsWire },
       chatTarget,
+      apiKeyDecryptable,
     });
   });
 
@@ -56,12 +66,7 @@ function registerSettingsHandlers({
       }
       const meta = providerCatalog.getProvider(preset.providerId);
       const entry = (config.providers && config.providers[preset.providerId]) || {};
-      const configured = meta.fields?.apiKey
-        ? !!entry.apiKeyEnc
-        : meta.fields?.baseUrl
-          ? !!(entry.baseUrl || meta.defaultBaseUrl)
-          : true;
-      if (!configured) {
+      if (!isProviderConfigured({ safeStorage }, meta, entry)) {
         validationError = createSettingsError('Anbieter ist noch nicht konfiguriert.');
         return config;
       }
@@ -131,7 +136,7 @@ function registerSettingsHandlers({
       for (const pr of presets) {
         const meta = providerCatalog.getProvider(pr.providerId);
         const entry = (draft.providers && draft.providers[pr.providerId]) || {};
-        if (!isProviderConfigured(meta, entry)) {
+        if (!isProviderConfigured({ safeStorage }, meta, entry)) {
           validationError = createSettingsError(
             `Zugang für „${meta.name}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
           );
@@ -246,15 +251,29 @@ function cloneLlmConfig(config) {
   return JSON.parse(JSON.stringify(config));
 }
 
-function isProviderConfigured(meta, entry) {
+// Prueft, ob ein gespeicherter Key mit dem aktuellen safeStorage-Schluessel
+// lesbar ist. Das Ergebnis wird sofort verworfen; nur die Entscheidbarkeit
+// zaehlt.
+function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
+  if (!apiKeyEnc || typeof safeStorage?.decryptString !== 'function') return false;
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  try {
+    const plain = safeStorage.decryptString(Buffer.from(apiKeyEnc, 'base64'));
+    return typeof plain === 'string' && plain.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isProviderConfigured({ safeStorage }, meta, entry) {
   const baseUrlEff = meta.fields?.baseUrl
     ? (entry.baseUrl || meta.defaultBaseUrl || '')
     : '';
   return meta.fields?.apiKey
-    ? !!entry.apiKeyEnc
+    ? canDecryptApiKeyEnc(safeStorage, entry.apiKeyEnc)
     : meta.fields?.baseUrl
       ? !!String(baseUrlEff).trim()
       : true;
 }
 
-module.exports = { registerSettingsHandlers, mergeProviderPatchIntoConfigImpl };
+module.exports = { registerSettingsHandlers, mergeProviderPatchIntoConfigImpl, canDecryptApiKeyEnc };
