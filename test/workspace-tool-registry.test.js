@@ -160,6 +160,7 @@ test('workspace registry declares all built-in tools and filters write consisten
     runStatPathTool() {},
     runOutlineFileTool() {},
     runListDirectoryTreeTool() {},
+    runApplyPatchTool() {},
   };
   const registry = createWorkspaceToolRegistry({ fsService });
 
@@ -192,6 +193,7 @@ test('workspace registry declares all built-in tools and filters write consisten
     'debug_wait',
     'write_file_text',
     'edit_file',
+    'apply_patch',
   ]);
   assert.match(registry.buildSystemPrompt({ allowWrite: true }), /write_file_text/);
 });

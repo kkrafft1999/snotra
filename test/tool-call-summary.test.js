@@ -60,6 +60,17 @@ test('summarizeToolCall formats workspace tools with start and done labels', () 
   assert.equal(summarizeToolCall('edit_file', {}, 'start'), 'Datei wird geändert …');
   assert.equal(summarizeToolCall('edit_file', {}, 'done'), 'Datei geändert');
   assert.equal(
+    summarizeToolCall('apply_patch', { relative_path: 'src/app.js' }, 'start'),
+    'Datei src/app.js wird gepatcht …'
+  );
+  assert.equal(
+    summarizeToolCall('apply_patch', { relative_path: 'src/app.js' }, 'done'),
+    'Datei src/app.js gepatcht'
+  );
+  // Im patch-Modus stehen die Pfade im Diff, nicht in den Argumenten.
+  assert.equal(summarizeToolCall('apply_patch', { patch: '--- a\n' }, 'start'), 'Patch wird angewendet …');
+  assert.equal(summarizeToolCall('apply_patch', {}, 'done'), 'Patch angewendet');
+  assert.equal(
     summarizeToolCall('search_in_files', { query: 'createFsService' }, 'start'),
     'Suche nach „createFsService“ …'
   );

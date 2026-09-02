@@ -19,6 +19,26 @@ const OUTLINE_MAX_TEXT_CHARS = 200;
 const OUTLINE_MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdown', '.mkd', '.mdx', '.mdc']);
 const OUTLINE_JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx']);
 
+const PATCH_MAX_EDITS = 50;
+const PATCH_MAX_FILES = 20;
+const PATCH_MAX_HUNKS = 200;
+const PATCH_MAX_MESSAGE_LINE_CHARS = 120;
+/** Zeilen eines unified diff, die vor dem Dateikopf stehen dürfen und übersprungen werden. */
+const PATCH_PRELUDE_PREFIXES = [
+  'diff ',
+  'index ',
+  'new file mode',
+  'deleted file mode',
+  'old mode ',
+  'new mode ',
+  'similarity index ',
+  'dissimilarity index ',
+  'rename from ',
+  'rename to ',
+  'copy from ',
+  'copy to ',
+];
+
 const TREE_DEFAULT_MAX_DEPTH = 3;
 const TREE_MAX_DEPTH = 10;
 const TREE_DEFAULT_MAX_ENTRIES = 200;
@@ -385,6 +405,346 @@ function extractCodeOutline(lines, { isJavaScript = false } = {}) {
   });
 }
 
+function clipPatchLine(line) {
+  const text = String(line ?? '');
+  if (text.length <= PATCH_MAX_MESSAGE_LINE_CHARS) return text;
+  return `${text.slice(0, PATCH_MAX_MESSAGE_LINE_CHARS - 1)}…`;
+}
+
+/**
+ * Wendet mehrere Ersetzungen der Reihe nach auf einen Text an. Jeder Schritt sieht
+ * das Ergebnis der vorherigen Schritte; der erste Fehler bricht ab, ohne dass der
+ * Aufrufer etwas geschrieben hat (alles oder nichts).
+ */
+function applyEditsToText(text, edits) {
+  let current = text;
+  let replacements = 0;
+  let firstChangedIndex = -1;
+
+  for (let i = 0; i < edits.length; i += 1) {
+    const edit = edits[i];
+    const label = `edits[${i}]`;
+    if (!edit || typeof edit !== 'object' || Array.isArray(edit)) {
+      return { error: `${label} muss ein Objekt mit old_string und new_string sein.` };
+    }
+    if (typeof edit.old_string !== 'string' || !edit.old_string.length) {
+      return { error: `${label}.old_string (nicht leerer Text) ist erforderlich.` };
+    }
+    if (typeof edit.new_string !== 'string') {
+      return { error: `${label}.new_string (Text, darf leer sein) ist erforderlich.` };
+    }
+    if (edit.old_string === edit.new_string) {
+      return { error: `${label}: old_string und new_string müssen sich unterscheiden.` };
+    }
+
+    const firstIndex = current.indexOf(edit.old_string);
+    if (firstIndex === -1) {
+      return {
+        error:
+          `${label}: old_string wurde nicht gefunden — der Text muss exakt übereinstimmen ` +
+          `(inklusive Einrückung und Zeilenumbrüchen) und darf nicht von einem früheren Schritt verändert worden sein.`,
+      };
+    }
+    let count = 0;
+    for (
+      let idx = firstIndex;
+      idx !== -1;
+      idx = current.indexOf(edit.old_string, idx + edit.old_string.length)
+    ) {
+      count += 1;
+    }
+    if (count > 1 && edit.replace_all !== true) {
+      return {
+        error: `${label}: old_string ist nicht eindeutig (${count} Treffer). Mehr umgebenden Kontext angeben oder replace_all=true setzen.`,
+      };
+    }
+
+    current =
+      edit.replace_all === true
+        ? current.split(edit.old_string).join(edit.new_string)
+        : current.slice(0, firstIndex) +
+          edit.new_string +
+          current.slice(firstIndex + edit.old_string.length);
+    replacements += edit.replace_all === true ? count : 1;
+    if (firstChangedIndex === -1 || firstIndex < firstChangedIndex) firstChangedIndex = firstIndex;
+  }
+
+  return { text: current, replacements, firstChangedIndex };
+}
+
+/** Vorherrschendes Zeilenende eines Textes — CRLF-Dateien sollen CRLF bleiben. */
+function detectLineEnding(text) {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/** Zerlegt Dateitext für die Patch-Anwendung in Zeilen ohne Zeilenendezeichen. */
+function splitTextForPatch(text) {
+  const eol = detectLineEnding(text);
+  if (text === '') return { lines: [], endsWithNewline: false, eol };
+  const lines = text.split(/\r\n|\r|\n/);
+  const endsWithNewline = lines[lines.length - 1] === '';
+  if (endsWithNewline) lines.pop();
+  return { lines, endsWithNewline, eol };
+}
+
+function joinPatchLines(lines, endsWithNewline, eol) {
+  if (!lines.length) return '';
+  return lines.join(eol) + (endsWithNewline ? eol : '');
+}
+
+/** `\ No newline at end of file` gewinnt über den Ausgangszustand der Datei. */
+function resolveTrailingNewline(hunks, originalEndsWithNewline) {
+  if (hunks.some((hunk) => hunk.noNewlineNew)) return false;
+  if (hunks.some((hunk) => hunk.noNewlineOld)) return true;
+  return originalEndsWithNewline;
+}
+
+/** Entfernt Zeitstempel und den üblichen a//b/-Präfix aus einem Diff-Dateikopf. */
+function normalizeDiffPath(raw) {
+  let value = String(raw ?? '').split('\t')[0].replace(/\s+$/, '');
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    value = value.slice(1, -1);
+  }
+  if (value === '/dev/null') return value;
+  return value.replace(/^[ab]\//, '').replace(/^\.\//, '');
+}
+
+/**
+ * Liest einen Hunk ab dem Kopf `@@ -alt,anzahl +neu,anzahl @@`. Die Zeilenzahlen im
+ * Kopf bestimmen, wie viele Rumpfzeilen gelesen werden — nur so ist eine entfernte
+ * Zeile, die selbst mit "---" beginnt, nicht vom nächsten Dateikopf zu unterscheiden.
+ */
+function parseUnifiedDiffHunk(rawLines, headerIndex) {
+  const header = rawLines[headerIndex];
+  const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(header);
+  if (!match) {
+    return {
+      error:
+        `Hunk-Kopf in Zeile ${headerIndex + 1} ist ungültig: "${clipPatchLine(header)}". ` +
+        `Erwartet wird "@@ -alteZeile,anzahl +neueZeile,anzahl @@".`,
+    };
+  }
+  const oldStart = Number(match[1]);
+  const oldCount = match[2] === undefined ? 1 : Number(match[2]);
+  const newCount = match[4] === undefined ? 1 : Number(match[4]);
+
+  const oldLines = [];
+  const newLines = [];
+  const hunk = {
+    header,
+    oldStart,
+    oldCount,
+    oldLines,
+    newLines,
+    noNewlineOld: false,
+    noNewlineNew: false,
+  };
+  let lastSide = null;
+  let i = headerIndex + 1;
+
+  const markNoNewline = () => {
+    if (lastSide === 'old' || lastSide === 'both') hunk.noNewlineOld = true;
+    if (lastSide === 'new' || lastSide === 'both') hunk.noNewlineNew = true;
+  };
+
+  while (i < rawLines.length && (oldLines.length < oldCount || newLines.length < newCount)) {
+    const body = rawLines[i];
+    // Eine leere Zeile ist eine unveränderte Leerzeile, deren führendes Leerzeichen
+    // unterwegs verloren gegangen ist — verbreitet und harmlos.
+    const marker = body === '' ? ' ' : body[0];
+    const content = body === '' ? '' : body.slice(1);
+    if (marker === '\\') {
+      markNoNewline();
+    } else if (marker === ' ') {
+      oldLines.push(content);
+      newLines.push(content);
+      lastSide = 'both';
+    } else if (marker === '-') {
+      oldLines.push(content);
+      lastSide = 'old';
+    } else if (marker === '+') {
+      newLines.push(content);
+      lastSide = 'new';
+    } else {
+      return {
+        error:
+          `Unerwartete Zeile ${i + 1} im Hunk "${clipPatchLine(header)}": "${clipPatchLine(body)}". ` +
+          `Hunk-Zeilen beginnen mit " " (unverändert), "-" (entfernt), "+" (neu) oder "\\".`,
+      };
+    }
+    i += 1;
+  }
+
+  if (oldLines.length !== oldCount || newLines.length !== newCount) {
+    return {
+      error:
+        `Hunk "${clipPatchLine(header)}" ist unvollständig: erwartet ${oldCount} alte und ${newCount} neue Zeilen, ` +
+        `gefunden ${oldLines.length} und ${newLines.length}.`,
+    };
+  }
+
+  while (i < rawLines.length && rawLines[i].startsWith('\\')) {
+    markNoNewline();
+    i += 1;
+  }
+  return { hunk, nextIndex: i };
+}
+
+/**
+ * Zerlegt einen unified diff in Dateiabschnitte mit Hunks. Unterstützt werden
+ * Änderungen an bestehenden Textdateien; Anlegen, Löschen, Umbenennen und
+ * Binär-Patches werden mit einem erklärenden Fehler abgelehnt.
+ */
+function parseUnifiedDiff(text) {
+  const rawLines = text.split(/\r?\n/).map((line) => line.replace(/\r$/, ''));
+  if (rawLines.length && rawLines[rawLines.length - 1] === '') rawLines.pop();
+
+  const files = [];
+  let totalHunks = 0;
+  let i = 0;
+
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) {
+      return {
+        error: 'Binär-Patches werden nicht unterstützt — apply_patch verarbeitet nur Text-Diffs.',
+      };
+    }
+    if (line === '' || PATCH_PRELUDE_PREFIXES.some((prefix) => line.startsWith(prefix))) {
+      i += 1;
+      continue;
+    }
+    if (!line.startsWith('--- ')) {
+      return {
+        error:
+          `Unerwartete Zeile ${i + 1} im Patch: "${clipPatchLine(line)}". ` +
+          `Erwartet wird ein Dateikopf ("--- …" gefolgt von "+++ …") oder ein Hunk ("@@ …").`,
+      };
+    }
+    const oldPath = normalizeDiffPath(line.slice(4));
+    i += 1;
+    if (i >= rawLines.length || !rawLines[i].startsWith('+++ ')) {
+      return { error: `Nach dem "--- "-Kopf in Zeile ${i} fehlt die zugehörige "+++ "-Zeile.` };
+    }
+    const newPath = normalizeDiffPath(rawLines[i].slice(4));
+    i += 1;
+
+    if (oldPath === '/dev/null') {
+      return {
+        error:
+          `Der Patch legt "${newPath}" neu an — apply_patch ändert nur bestehende Dateien. ` +
+          `Neue Dateien mit write_file_text erstellen.`,
+      };
+    }
+    if (newPath === '/dev/null') {
+      return { error: `Der Patch löscht "${oldPath}" — Dateien löschen kann apply_patch nicht.` };
+    }
+    if (oldPath !== newPath) {
+      return {
+        error: `Der Patch benennt "${oldPath}" in "${newPath}" um — Umbenennungen unterstützt apply_patch nicht.`,
+      };
+    }
+    if (files.some((file) => file.relativePath === newPath)) {
+      return {
+        error: `"${newPath}" kommt mehrfach im Patch vor — alle Hunks einer Datei in einem Dateiabschnitt zusammenfassen.`,
+      };
+    }
+
+    const hunks = [];
+    while (i < rawLines.length && rawLines[i].startsWith('@@')) {
+      const parsed = parseUnifiedDiffHunk(rawLines, i);
+      if (parsed.error) return { error: parsed.error };
+      hunks.push(parsed.hunk);
+      totalHunks += 1;
+      if (totalHunks > PATCH_MAX_HUNKS) {
+        return {
+          error: `Zu viele Hunks im Patch (mehr als ${PATCH_MAX_HUNKS}). Bitte auf mehrere Aufrufe verteilen.`,
+        };
+      }
+      i = parsed.nextIndex;
+    }
+    if (!hunks.length) {
+      return { error: `Für "${newPath}" enthält der Patch keinen Hunk ("@@ …").` };
+    }
+
+    files.push({ relativePath: newPath, hunks });
+    if (files.length > PATCH_MAX_FILES) {
+      return {
+        error: `Zu viele Dateien im Patch (mehr als ${PATCH_MAX_FILES}). Bitte auf mehrere Aufrufe verteilen.`,
+      };
+    }
+  }
+
+  if (!files.length) {
+    return { error: 'Der Patch enthält keinen Dateikopf ("--- …" gefolgt von "+++ …").' };
+  }
+  return { files };
+}
+
+/**
+ * Sucht die Stelle, an der die alten Zeilen eines Hunks exakt stehen: zuerst an der
+ * im Kopf genannten Position, dann in wachsendem Abstand darum herum (Offset-Toleranz
+ * wie bei `patch`). Nie vor dem Ende des vorherigen Hunks.
+ */
+function findHunkIndex(lines, oldLines, expected, minIndex) {
+  if (!oldLines.length) {
+    if (expected > lines.length) {
+      return {
+        error:
+          `die Einfügeposition (Zeile ${expected + 1}) liegt hinter dem Dateiende — ` +
+          `die Datei hat ${lines.length} Zeilen.`,
+      };
+    }
+    return { index: Math.min(Math.max(expected, minIndex), lines.length) };
+  }
+  const maxIndex = lines.length - oldLines.length;
+  if (maxIndex < minIndex) {
+    return {
+      error: `die Datei hat ab Zeile ${minIndex + 1} weniger Zeilen als der Hunk erwartet (${oldLines.length}).`,
+    };
+  }
+  const matches = (index) => oldLines.every((line, k) => lines[index + k] === line);
+  const start = Math.min(Math.max(expected, minIndex), maxIndex);
+  if (matches(start)) return { index: start };
+  for (let distance = 1; distance <= lines.length; distance += 1) {
+    const before = start - distance;
+    if (before >= minIndex && matches(before)) return { index: before };
+    const after = start + distance;
+    if (after <= maxIndex && matches(after)) return { index: after };
+  }
+  return {
+    error:
+      `der Kontext passt nicht (erwartet ab Zeile ${expected + 1}, gesucht wurde "${clipPatchLine(oldLines[0])}"). ` +
+      `Datei erneut lesen und den Patch auf dem aktuellen Stand erzeugen.`,
+  };
+}
+
+/** Wendet alle Hunks einer Datei auf ihre Zeilen an — der erste Fehlschlag bricht ab. */
+function applyHunksToLines(lines, hunks, relativePath) {
+  const result = lines.slice();
+  const offsets = [];
+  let offset = 0;
+  let minIndex = 0;
+
+  for (let h = 0; h < hunks.length; h += 1) {
+    const hunk = hunks[h];
+    const declared = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
+    const expected = declared + offset;
+    const found = findHunkIndex(result, hunk.oldLines, expected, minIndex);
+    if (found.error) {
+      return {
+        error: `Hunk ${h + 1} von ${hunks.length} lässt sich nicht auf "${relativePath}" anwenden: ${found.error}`,
+      };
+    }
+    result.splice(found.index, hunk.oldLines.length, ...hunk.newLines);
+    offsets.push(found.index - expected);
+    offset += found.index - expected + (hunk.newLines.length - hunk.oldLines.length);
+    minIndex = found.index + hunk.newLines.length;
+  }
+
+  return { lines: result, offsets };
+}
+
 function createFsService({
   fs,
   path,
@@ -702,6 +1062,202 @@ function createFsService({
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
+  }
+
+  /**
+   * apply_patch, Modus `edits`: mehrere Ersetzungen in einer Datei. Erst wenn alle
+   * Schritte durchlaufen, wird einmal geschrieben — schlägt einer fehl, bleibt die
+   * Datei unverändert.
+   */
+  async function runApplyEditsMode(args, workspaceRoot) {
+    const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
+    if (!rel) {
+      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+    }
+    if (!Array.isArray(args.edits) || args.edits.length === 0) {
+      return JSON.stringify({ error: 'edits muss eine nicht leere Liste von Ersetzungen sein.' });
+    }
+    if (args.edits.length > PATCH_MAX_EDITS) {
+      return JSON.stringify({
+        error: `Zu viele Schritte in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Bitte auf mehrere Aufrufe verteilen.`,
+      });
+    }
+    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    if (error) return JSON.stringify({ error });
+    try {
+      const st = await fs.stat(absPath);
+      if (st.isDirectory()) {
+        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+      }
+      if (st.size > MAX_READ_FILE_BYTES) {
+        return JSON.stringify({
+          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+        });
+      }
+      const text = (await fs.readFile(absPath)).toString('utf8');
+      const applied = applyEditsToText(text, args.edits);
+      if (applied.error) return JSON.stringify({ error: applied.error });
+      const byteLength = Buffer.byteLength(applied.text, 'utf8');
+      if (byteLength > MAX_WRITE_FILE_BYTES) {
+        return JSON.stringify({
+          error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+        });
+      }
+      await fs.writeFile(absPath, applied.text, 'utf8');
+      return JSON.stringify({
+        mode: 'edits',
+        relative_path: rel,
+        edits_applied: args.edits.length,
+        replacements: applied.replacements,
+        first_changed_line: text.slice(0, applied.firstChangedIndex).split(/\r\n|\r|\n/).length,
+        bytes_written: byteLength,
+      });
+    } catch (e) {
+      return JSON.stringify({ error: e.message });
+    }
+  }
+
+  /** Stellt nach einem fehlgeschlagenen Schreibvorgang die Ausgangsinhalte wieder her. */
+  async function rollbackPatchedFiles(written) {
+    const failed = [];
+    for (const entry of written) {
+      try {
+        await fs.writeFile(entry.absPath, entry.original, 'utf8');
+      } catch {
+        failed.push(entry.relativePath);
+      }
+    }
+    return failed;
+  }
+
+  /**
+   * apply_patch, Modus `patch`: ein unified diff über eine oder mehrere Dateien.
+   * Phase 1 prüft alles und berechnet die neuen Inhalte im Speicher, Phase 2
+   * schreibt sie; scheitert ein Schreibvorgang, werden die bereits geschriebenen
+   * Dateien auf ihren Ausgangsinhalt zurückgesetzt.
+   */
+  async function runApplyDiffMode(args, workspaceRoot) {
+    if (typeof args.patch !== 'string' || !args.patch.trim()) {
+      return JSON.stringify({ error: 'patch (unified diff als Text) ist erforderlich.' });
+    }
+    if (Buffer.byteLength(args.patch, 'utf8') > MAX_WRITE_FILE_BYTES) {
+      return JSON.stringify({
+        error: `Patch zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+      });
+    }
+    const parsed = parseUnifiedDiff(args.patch);
+    if (parsed.error) return JSON.stringify({ error: parsed.error });
+
+    const relArg = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
+    if (relArg && !parsed.files.some((file) => file.relativePath === relArg)) {
+      return JSON.stringify({
+        error:
+          `relative_path ("${relArg}") kommt im Patch nicht vor. Im patch-Modus stehen die Pfade in den ` +
+          `"+++"-Kopfzeilen: ${parsed.files.map((file) => file.relativePath).join(', ')}.`,
+      });
+    }
+
+    const planned = [];
+    for (const file of parsed.files) {
+      const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath);
+      if (resolved.error) {
+        return JSON.stringify({ error: `"${file.relativePath}": ${resolved.error}` });
+      }
+      let st;
+      try {
+        st = await fs.stat(resolved.absPath);
+      } catch {
+        return JSON.stringify({
+          error:
+            `"${file.relativePath}" existiert nicht — apply_patch ändert nur bestehende Dateien. ` +
+            `Neue Dateien mit write_file_text erstellen.`,
+        });
+      }
+      if (st.isDirectory()) {
+        return JSON.stringify({ error: `"${file.relativePath}": Pfad ist ein Ordner, keine Datei.` });
+      }
+      if (st.size > MAX_READ_FILE_BYTES) {
+        return JSON.stringify({
+          error: `"${file.relativePath}": Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+        });
+      }
+      let original;
+      try {
+        original = (await fs.readFile(resolved.absPath)).toString('utf8');
+      } catch (e) {
+        return JSON.stringify({ error: `"${file.relativePath}": ${e.message}` });
+      }
+      const source = splitTextForPatch(original);
+      const applied = applyHunksToLines(source.lines, file.hunks, file.relativePath);
+      if (applied.error) return JSON.stringify({ error: applied.error });
+      const updated = joinPatchLines(
+        applied.lines,
+        resolveTrailingNewline(file.hunks, source.endsWithNewline),
+        source.eol
+      );
+      const byteLength = Buffer.byteLength(updated, 'utf8');
+      if (byteLength > MAX_WRITE_FILE_BYTES) {
+        return JSON.stringify({
+          error: `"${file.relativePath}": Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+        });
+      }
+      planned.push({
+        relativePath: file.relativePath,
+        absPath: resolved.absPath,
+        original,
+        updated,
+        byteLength,
+        hunks: file.hunks.length,
+        offsets: applied.offsets,
+      });
+    }
+
+    const written = [];
+    for (const entry of planned) {
+      try {
+        await fs.writeFile(entry.absPath, entry.updated, 'utf8');
+        written.push(entry);
+      } catch (e) {
+        const failed = await rollbackPatchedFiles(written);
+        let note = written.length
+          ? ' Die bereits geschriebenen Dateien wurden zurückgesetzt.'
+          : ' Es wurde nichts geändert.';
+        if (failed.length) {
+          note = ` Achtung: Rücknahme unvollständig — nicht zurückgesetzt: ${failed.join(', ')}.`;
+        }
+        return JSON.stringify({ error: `"${entry.relativePath}": ${e.message}.${note}` });
+      }
+    }
+
+    return JSON.stringify({
+      mode: 'unified_diff',
+      files_changed: planned.length,
+      hunks_applied: planned.reduce((sum, entry) => sum + entry.hunks, 0),
+      files: planned.map((entry) => ({
+        relative_path: entry.relativePath,
+        hunks_applied: entry.hunks,
+        // Nur melden, wenn ein Hunk versetzt zur Kopfzeile gegriffen hat.
+        ...(entry.offsets.some((value) => value !== 0) ? { line_offsets: entry.offsets } : {}),
+        bytes_written: entry.byteLength,
+      })),
+    });
+  }
+
+  async function runApplyPatchTool(args, workspaceRoot) {
+    const hasEdits = args.edits !== undefined && args.edits !== null;
+    const hasPatch = args.patch !== undefined && args.patch !== null;
+    if (hasEdits && hasPatch) {
+      return JSON.stringify({
+        error:
+          'Entweder edits (mehrere Ersetzungen in einer Datei) oder patch (unified diff) angeben — nicht beides.',
+      });
+    }
+    if (!hasEdits && !hasPatch) {
+      return JSON.stringify({
+        error: 'edits (Liste von Ersetzungen) oder patch (unified diff als Text) ist erforderlich.',
+      });
+    }
+    return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
   }
 
   async function loadGitignoreMatcher(root) {
@@ -1209,6 +1765,7 @@ function createFsService({
     runReadFileLinesTool,
     runWriteFileTextTool,
     runEditFileTool,
+    runApplyPatchTool,
     runSearchInFilesTool,
     runFindFilesTool,
     runStatPathTool,
