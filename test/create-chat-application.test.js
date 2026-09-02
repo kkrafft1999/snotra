@@ -66,7 +66,7 @@ test('createChatApplication wires provider rounds and tools end-to-end', async (
     sessionId: 'e2e-1',
     payload: {
       messages: [{ role: 'user', content: 'Liste' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 

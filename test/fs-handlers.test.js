@@ -23,7 +23,7 @@ async function createSymlinkOrSkip(t, target, linkPath, type) {
 }
 
 async function setup(t) {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const workspace = path.join(tmpDir, 'workspace');
   const outside = path.join(tmpDir, 'outside');

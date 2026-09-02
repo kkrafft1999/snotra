@@ -181,13 +181,13 @@ test('engine describes the open folder and the available tools', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Hi' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'System-Nachricht mit Workspace-Kontext erwartet');
-  assert.match(system.content, /geöffneten Ordner „weyouze-project“/);
+  assert.match(system.content, /geöffneten Ordner „snotra-project“/);
   assert.match(system.content, /Tools: list_directory/);
   assert.doesNotMatch(system.content, /ausgewählt/);
 });
@@ -199,7 +199,7 @@ test('engine names the selected entry in the system message', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Was steht da?' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
       selectedPath: 'src/app.js',
       selectedIsDirectory: false,
     },
@@ -213,7 +213,7 @@ test('engine names the selected entry in the system message', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Was liegt da?' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
       selectedPath: 'src',
       selectedIsDirectory: true,
     },
@@ -233,13 +233,13 @@ test('engine keeps baseSystemPrompt in front of the workspace context', async ()
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Hi' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system.content.startsWith('Sei knapp.\n\n'));
-  assert.match(system.content, /geöffneten Ordner „weyouze-project“/);
+  assert.match(system.content, /geöffneten Ordner „snotra-project“/);
 });
 
 test('engine prepends baseSystemPrompt verbatim as the system message', async () => {
@@ -331,7 +331,7 @@ test('engine reuses per-send bundle across tool rounds', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Hi' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
@@ -353,7 +353,7 @@ test('engine runs the tool loop and emits tool events through its event sink', a
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Was liegt hier?' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
     onEvent: (event) => events.push(event),
   });
@@ -403,7 +403,7 @@ test('engine preserves debug_wait metadata in its tool trace', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Warte' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
@@ -421,7 +421,7 @@ test('engine stops at its configured tool-round limit', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Liste endlos' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
@@ -471,7 +471,7 @@ test('engine passes the write preference to its tool registry', async () => {
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Hi' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
@@ -502,7 +502,7 @@ test('engine passes disabled tools to registry and execution context', async () 
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Liste' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 
@@ -526,7 +526,7 @@ test('engine preserves start display lines on tool trace when aborted during exe
     sessionId: 'renderer-1',
     payload: {
       messages: [{ role: 'user', content: 'Liste' }],
-      workspaceRoot: '/tmp/weyouze-project',
+      workspaceRoot: '/tmp/snotra-project',
     },
   });
 

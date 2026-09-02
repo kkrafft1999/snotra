@@ -263,7 +263,7 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'Was liegt hier?' }],
-    workspaceRoot: '/tmp/weyouze-project',
+    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.content, 'Im Ordner liegen 3 Dateien.');
@@ -273,7 +273,7 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
   assert.equal(toolRegistry.calls.length, 1);
   assert.equal(toolRegistry.calls[0].toolName, 'list_directory');
   assert.deepEqual(toolRegistry.calls[0].args, { relative_path: '.' });
-  assert.equal(toolRegistry.calls[0].context.workspaceRoot, path.resolve('/tmp/weyouze-project'));
+  assert.equal(toolRegistry.calls[0].context.workspaceRoot, path.resolve('/tmp/snotra-project'));
 
   // Zweite Runde muss die Tool-Antwort als 'tool'-Message an den Provider senden.
   const secondRoundMessages = calls[1].messages;
@@ -305,7 +305,7 @@ test('CHAT_SEND emits a workspace fileWritten progress event after write_file_te
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'Schreib eine Datei' }],
-    workspaceRoot: '/tmp/weyouze-project',
+    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.content, 'Geschrieben.');
@@ -353,7 +353,7 @@ test('CHAT_SEND attaches the clamped debug_wait duration to the tool trace entry
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'warte kurz' }],
-    workspaceRoot: '/tmp/weyouze-project',
+    workspaceRoot: '/tmp/snotra-project',
   });
 
   // duration_seconds: 0.1 liegt unter dem Minimum (500ms) und wird geclampt.
@@ -370,7 +370,7 @@ test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhaust
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'ls endlos' }],
-    workspaceRoot: '/tmp/weyouze-project',
+    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.code, 'TOOL_LIMIT');
@@ -437,7 +437,7 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
 
   await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/weyouze-test-project',
+    workspaceRoot: '/tmp/snotra-test-project',
   });
 
   const tools = calls[0].tools;
@@ -463,7 +463,7 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
 
   await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/weyouze-test-project',
+    workspaceRoot: '/tmp/snotra-test-project',
   });
 
   const tools = calls[0].tools;
@@ -495,10 +495,10 @@ test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPro
   });
   await configuredHandlers.sendHandler(makeFakeEvent().event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/weyouze-test-project',
+    workspaceRoot: '/tmp/snotra-test-project',
   });
   const systemMessage = configured.calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
   assert.ok(systemMessage.content.startsWith('Sei knapp und freundlich.\n\n'));
-  assert.match(systemMessage.content, /geöffneten Ordner „weyouze-test-project“/);
+  assert.match(systemMessage.content, /geöffneten Ordner „snotra-test-project“/);
 });

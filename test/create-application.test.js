@@ -38,7 +38,7 @@ function makeProvidersModule(disposeTracker) {
 
 function makeApplication(t, { getMainWindow, updates } = {}) {
   return async () => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-app-'));
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-'));
     t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
     const disposed = { called: false };
     const ipcMain = createMockIpcMain();

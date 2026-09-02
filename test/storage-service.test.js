@@ -184,7 +184,7 @@ test('normalizeSessionForStore defaults missing tokenUsage to zero', () => {
 });
 
 test('writeJsonAtomic keeps previous file on interrupted write simulation', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
   await storage.writeUIPrefs({ contentPaneVisible: true, appLocale: 'de' });
 
@@ -211,7 +211,7 @@ test('writeJsonAtomic keeps previous file on interrupted write simulation', asyn
 });
 
 test('withChatHistoryLock serializes concurrent upserts', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
 
   await Promise.all([
@@ -246,7 +246,7 @@ test('withChatHistoryLock serializes concurrent upserts', async () => {
 });
 
 test('writeChatHistoryStore encrypts when safeStorage available', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorageWithEncryption(tmpDir);
   const store = {
     version: 2,
@@ -277,7 +277,7 @@ test('writeChatHistoryStore encrypts when safeStorage available', async () => {
 });
 
 test('readChatHistoryStore migrates plaintext to encrypted on read', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const plaintext = {
     version: 2,
     activeByWorkspace: {},
@@ -307,7 +307,7 @@ test('readChatHistoryStore migrates plaintext to encrypted on read', async () =>
 });
 
 test('parallel readChatHistoryStore migrates plaintext once under encryption', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const plaintext = {
     version: 2,
     activeByWorkspace: { __none__: 's1' },
@@ -359,7 +359,7 @@ test('parallel readChatHistoryStore migrates plaintext once under encryption', a
 });
 
 test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
 
   await storage.writeUIPrefs({
@@ -396,7 +396,7 @@ test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async (
 });
 
 test('readUIPrefs defaults allowWorkspaceWrite to false and round-trips true', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
 
   let prefs = await storage.readUIPrefs();
@@ -413,7 +413,7 @@ test('readUIPrefs defaults allowWorkspaceWrite to false and round-trips true', a
 });
 
 test('readChatHistoryStore falls back to plaintext when encryption unavailable', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-storage-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
   const store = {
     version: 2,

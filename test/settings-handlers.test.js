@@ -146,7 +146,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
 }
 
 async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog } = {}) {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-settings-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const safeStorage = {
     isEncryptionAvailable: () => encryptionAvailable,

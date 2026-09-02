@@ -17,7 +17,7 @@ const mockProviders = {
 };
 
 async function setup(t, { maxChatSessions = 3 } = {}) {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-chathist-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
