@@ -5,7 +5,7 @@ Grober Fahrplan für `Weyouze Anything`, das künftig **Snotra** heißt (siehe
 den bisherigen Abschnitt „Aktueller Stand“ im README als Ort für die **große
 Linie**.
 
-> **Stand: 2026-09-02, Release v1.0.3.**
+> **Stand: 2026-09-02, Release v1.0.4.**
 
 Für **konkrete, abarbeitbare Aufgaben** (Bugs, einzelne Features, Aufgaben)
 werden [GitHub Issues](https://github.com/kkrafft1999/weyouze/issues)
@@ -97,26 +97,27 @@ wieder entfernt.
   an (`.github/workflows/release.yml`), die beide Builds baut und das
   GitHub-Release veröffentlicht; der `release`-Skill (für Claude Code unter
   `.claude/skills/`, für Antigravity unter `.agents/skills/`) bündelt
-  Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.0.3
+  Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.0.4
 - 🔔 Update-Notifier (Stufe 1) über GitHub Releases
+- ⬆️ **Node 24 überall**
+  ([#53](https://github.com/kkrafft1999/weyouze/issues/53), v1.0.4): lokal,
+  in der Release-Pipeline und bei den GitHub-Actions (alle auf ihren
+  `node24`-Majors) auf Node 24 Active LTS; `engines.node >=24`, `.nvmrc`
+  und `allowScripts` für npm 11. Der Release-Lauf zu v1.0.4 kam ohne
+  Node-20-Warnung durch
 
 ## 🚧 Jetzt / als Nächstes
 
-- ⬆️ **Node 24 überall**
-  ([#53](https://github.com/kkrafft1999/weyouze/issues/53), Priorität hoch):
-  Node 20 ist seit April 2026 End of Life. Lokal, in der Release-Pipeline
-  und bei den GitHub-Actions auf Node 24 (Active LTS) wechseln,
-  `engines.node` und `.nvmrc` nachziehen
 - 🏷️ **Umbenennung zu Snotra**
   ([#54](https://github.com/kkrafft1999/weyouze/issues/54)): App, Repo,
   npm-Paket und Release-Artefakte heißen künftig Snotra, die Website läuft
   unter `snotra-ai.dev`; „Weyouze Anything“ samt Aussprache-Erklärung und
-  Wordmark entfällt. Erst nach Node 24, weil beide Themen `release.yml`
-  anfassen. Fallstricke: `userData`-Pfad und `safeStorage`-Schlüssel hängen
-  am App-Namen, bestehende Installationen brauchen eine Migration oder einen
-  dokumentierten Neueintrag der API-Keys. Schreibweise/Claim und der Repo-
-  bzw. Paketname (`snotra` oder `snotra-ai`) sind noch festzulegen; das
-  erste Release unter neuem Namen ist als 2.0.0 vorgeschlagen
+  Wordmark entfällt. Fallstricke: `userData`-Pfad und `safeStorage`-Schlüssel
+  hängen am App-Namen, bestehende Installationen brauchen eine Migration
+  oder einen dokumentierten Neueintrag der API-Keys. Schreibweise/Claim und
+  der Repo- bzw. Paketname (`snotra` oder `snotra-ai`) sind noch
+  festzulegen; das erste Release unter neuem Namen ist als 2.0.0
+  vorgeschlagen
 - 🧩 **Skill-Konzept (MVP)**
   ([#18](https://github.com/kkrafft1999/weyouze/issues/18)): Kern der
   Plattform-Vision. Ein Skill = Prompt/Arbeitsweise + Menge erlaubter Tools
