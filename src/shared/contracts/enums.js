@@ -34,6 +34,8 @@ const CHAT_PHASES = Object.freeze({
 
 // Zustand einer Tool-Zeile (chat:tool-line, phase).
 const TOOL_LINE_PHASES = Object.freeze({
+  /** Das Modell streamt den Aufruf noch (Argumente ggf. unvollständig); Tool noch nicht ausgeführt. */
+  PENDING: 'pending',
   START: 'start',
   DONE: 'done',
 });

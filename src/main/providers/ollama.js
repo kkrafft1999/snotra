@@ -1,5 +1,5 @@
 const { Agent } = require('undici');
-const { iterStreamLines, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage } = require('./stream-helpers');
+const { iterStreamLines, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://localhost:11434';
 
@@ -169,6 +169,11 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
             if (!name) continue;
             const args = tc.function?.arguments;
             const argStr = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+            notifyToolCallStart(callbacks, {
+              index: collectedToolCalls.length,
+              name,
+              args: typeof args === 'string' ? safeJsonParse(args, {}) : (args ?? {}),
+            });
             collectedToolCalls.push({
               id: `ocall_${collectedToolCalls.length}_${Date.now().toString(36)}`,
               type: 'function',

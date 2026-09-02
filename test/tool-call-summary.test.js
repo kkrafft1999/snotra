@@ -162,3 +162,16 @@ test('formatToolDisplayLine uses main-supplied waitMs for debug_wait', () => {
     '1 Sekunde gewartet'
   );
 });
+
+test('summarizeToolCall nutzt für die Phase pending die Start-Formulierung', () => {
+  assert.equal(summarizeToolCall('write_file_text', {}, 'pending'), 'Datei wird geschrieben …');
+  assert.equal(
+    summarizeToolCall('write_file_text', { relative_path: 'docs/neu.md' }, 'pending'),
+    'Datei docs/neu.md wird geschrieben …'
+  );
+  assert.equal(summarizeToolCall('edit_file', { relative_path: 'src/app.js' }, 'pending'), 'Datei src/app.js wird geändert …');
+  assert.equal(
+    formatToolDisplayLine({ tool: 'search_in_files', args: { query: 'TODO' } }, 'pending'),
+    'Suche nach „TODO“ …'
+  );
+});

@@ -34,6 +34,11 @@ function formatPauseDurationLabel(ms, phase, locale = APP_LOCALES.DE) {
   return `Warte ${label} ${unit} …`;
 }
 
+/**
+ * Anzeige-Zeile für einen Tool-Aufruf. phase 'pending' (Aufruf wird noch vom
+ * Modell gestreamt) nutzt bewusst dieselbe Formulierung wie 'start' — für den
+ * Nutzer ist „Datei X wird geschrieben …“ ab dem ersten Token zutreffend.
+ */
 function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES.DE) {
   const isDone = phase === 'done';
   if (toolName === 'list_directory') {

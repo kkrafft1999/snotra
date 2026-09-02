@@ -87,7 +87,7 @@ Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du
 | `edit_file` | Eine gezielte Ersetzung in einer bestehenden Datei (`old_string` → `new_string`), ohne die ganze Datei neu zu schreiben |
 | `apply_patch` | Mehrere zusammenhängende Änderungen in einem Aufruf — als Liste von Ersetzungen in einer Datei oder als unified diff über mehrere Dateien. Alles oder nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. Dateien anlegen, löschen oder umbenennen kann das Tool nicht |
 
-Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt.
+Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt. Im Chat erscheint die Tool-Zeile (z. B. „Datei docs/neu.md wird geschrieben …“) bereits, während das Modell den Inhalt noch erzeugt — nicht erst nach dem eigentlichen Schreibvorgang.
 
 ## Projektstruktur
 

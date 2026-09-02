@@ -83,6 +83,12 @@ test('streamChatRound assembles streamed tool_use input and maps tool_use to too
     },
   ]);
   assert.ok(sink.markGeneratingCalls >= 1);
+  // Der gestreamte Aufruf wird sofort gemeldet — Grundlage für die vorläufige Tool-Zeile.
+  assert.deepEqual(sink.toolCallStarts, [{ index: 0, name: 'list_directory' }]);
+  assert.deepEqual(sink.toolCallArgumentDeltas, [
+    { index: 0, delta: '{"relative_' },
+    { index: 0, delta: 'path":"."}' },
+  ]);
 });
 
 test('streamChatRound falls back to "{}" for unparseable streamed tool input', async (t) => {

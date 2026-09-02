@@ -73,6 +73,8 @@ test('streamChatRound collects tool calls and reports the tool_calls finish reas
   assert.deepEqual(JSON.parse(res.message.tool_calls[0].function.arguments), { relative_path: '.' });
   assert.ok(res.message.tool_calls[0].id.startsWith('ocall_'));
   assert.equal(sink.markGeneratingCalls, 1);
+  // Ollama liefert den Aufruf komplett — die Meldung trägt die Argumente direkt.
+  assert.deepEqual(sink.toolCallStarts, [{ index: 0, name: 'list_directory', args: { relative_path: '.' } }]);
 });
 
 test('streamChatRound sends the translated tools payload', async (t) => {

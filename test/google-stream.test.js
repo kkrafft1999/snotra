@@ -25,7 +25,7 @@ const noopCallbacks = {
   onMarkGenerating() {},
 };
 
-async function streamWithMockedFetch(payloads) {
+async function streamWithMockedFetch(payloads, callbacks = noopCallbacks) {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => sseResponse(payloads);
   try {
@@ -34,7 +34,7 @@ async function streamWithMockedFetch(payloads) {
       model: 'gemini-2.0-flash',
       messages: [{ role: 'user', content: 'Hi' }],
       tools: undefined,
-      callbacks: noopCallbacks,
+      callbacks,
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -56,6 +56,7 @@ test('google streamChatRound returns error on MALFORMED_FUNCTION_CALL', async ()
 });
 
 test('google streamChatRound maps function calls to tool_calls', async () => {
+  const toolCallStarts = [];
   const result = await streamWithMockedFetch([
     {
       candidates: [{
@@ -63,9 +64,11 @@ test('google streamChatRound maps function calls to tool_calls', async () => {
         finishReason: 'STOP',
       }],
     },
-  ]);
+  ], { ...noopCallbacks, onToolCallStart: (call) => toolCallStarts.push(call) });
 
   assert.equal(result.error, undefined);
+  // Google liefert den Aufruf komplett — die Meldung trägt die Argumente direkt.
+  assert.deepEqual(toolCallStarts, [{ index: 0, name: 'list_directory', args: { relative_path: '.' } }]);
   assert.equal(result.message.tool_calls.length, 1);
   assert.equal(result.message.tool_calls[0].function.name, 'list_directory');
 });

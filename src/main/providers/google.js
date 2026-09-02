@@ -1,4 +1,4 @@
-const { iterSseEvents, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage } = require('./stream-helpers');
+const { iterSseEvents, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -201,6 +201,11 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
         } else if (p.functionCall) {
           callbacks.onMarkGenerating();
           const fc = p.functionCall;
+          notifyToolCallStart(callbacks, {
+            index: collectedToolCalls.length,
+            name: String(fc.name || ''),
+            args: fc.args && typeof fc.args === 'object' ? fc.args : {},
+          });
           collectedToolCalls.push({
             id: `gcall_${collectedToolCalls.length}_${Date.now().toString(36)}`,
             type: 'function',

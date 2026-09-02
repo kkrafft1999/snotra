@@ -51,7 +51,9 @@ test('streamChatRound accumulates text deltas and usage from the SSE stream', as
 test('streamChatRound collects function calls and reports tool_calls finish reason', async (t) => {
   mockFetch(t, () =>
     sseResponse([
-      sse('response.output_item.added', { item: { type: 'function_call' } }),
+      sse('response.output_item.added', { output_index: 0, item: { type: 'function_call', name: 'list_directory' } }),
+      sse('response.function_call_arguments.delta', { output_index: 0, delta: '{"relative_' }),
+      sse('response.function_call_arguments.delta', { output_index: 0, delta: 'path":"."}' }),
       sse('response.output_item.done', {
         item: { type: 'function_call', call_id: 'call_1', name: 'list_directory', arguments: '{"relative_path":"."}' },
       }),
@@ -77,6 +79,11 @@ test('streamChatRound collects function calls and reports tool_calls finish reas
     },
   ]);
   assert.equal(sink.markGeneratingCalls, 1);
+  assert.deepEqual(sink.toolCallStarts, [{ index: 0, name: 'list_directory' }]);
+  assert.deepEqual(sink.toolCallArgumentDeltas, [
+    { index: 0, delta: '{"relative_' },
+    { index: 0, delta: 'path":"."}' },
+  ]);
 });
 
 test('streamChatRound translates history with tool calls into Responses input items', async (t) => {

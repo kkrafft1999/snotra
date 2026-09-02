@@ -37,8 +37,10 @@ test('enums are frozen and carry the wire values used at the IPC boundary', () =
   assert.equal(CHAT_PHASES.IDLE, 'idle');
   assert.equal(CHAT_PHASES.WAITING, 'waiting');
   assert.equal(CHAT_PHASES.GENERATING, 'generating');
+  assert.equal(TOOL_LINE_PHASES.PENDING, 'pending');
   assert.equal(TOOL_LINE_PHASES.START, 'start');
   assert.equal(TOOL_LINE_PHASES.DONE, 'done');
+  assert.equal(isToolLinePhase('pending'), true);
   assert.equal(CHAT_PROGRESS_TYPES.PHASE, 'phase');
   assert.equal(CHAT_PROGRESS_TYPES.REASONING, 'reasoning');
 });

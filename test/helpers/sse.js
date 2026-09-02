@@ -43,10 +43,14 @@ function mockFetch(t, impl) {
 function collectCallbacks() {
   const textDeltas = [];
   const reasoningDeltas = [];
+  const toolCallStarts = [];
+  const toolCallArgumentDeltas = [];
   let markGeneratingCalls = 0;
   return {
     textDeltas,
     reasoningDeltas,
+    toolCallStarts,
+    toolCallArgumentDeltas,
     get markGeneratingCalls() {
       return markGeneratingCalls;
     },
@@ -56,6 +60,8 @@ function collectCallbacks() {
       onMarkGenerating: () => {
         markGeneratingCalls++;
       },
+      onToolCallStart: (call) => toolCallStarts.push(call),
+      onToolCallArgumentsDelta: (delta) => toolCallArgumentDeltas.push(delta),
     },
   };
 }

@@ -1,6 +1,7 @@
 'use strict';
 
 const { isAbortError, createChatAbortError } = require('../../shared/runtime/abort');
+const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage } = require('../../shared/contracts/usage');
 const {
   CHAT_ERROR_CODES,
@@ -92,16 +93,33 @@ function createChatEngine({
     return createCancelledChatResult({ content, toolTrace, usage });
   }
 
-  function makeStreamCallbacks(onEvent) {
+  // Argumente, die in der Tool-Zeile erscheinen (Pfad, Suchbegriff, Muster).
+  const PENDING_LABEL_ARGUMENT_KEYS = ['relative_path', 'query', 'pattern'];
+  // Nur der Anfang der Argumente wird nach Label-Werten durchsucht — der
+  // Dateiinhalt von write_file_text kann bis zu 2 MB groß werden.
+  const PENDING_ARGUMENT_SCAN_LIMIT = 8192;
+
+  /**
+   * Stream-Callbacks für den LLM-Port. Neben Text/Reasoning melden die Provider
+   * hier auch Tool-Aufrufe, die das Modell gerade streamt; daraus entsteht die
+   * vorläufige Tool-Zeile (Phase 'pending'), noch bevor das Tool ausgeführt wird.
+   */
+  function makeStreamCallbacks(onEvent, { onToolCallPending } = {}) {
     let started = false;
+    /** Gerade gestreamte Tool-Aufrufe: Provider-Index → Zwischenstand. */
+    let pendingCalls = new Map();
     const markGenerating = () => {
       if (started) return;
       started = true;
       emitPhase(onEvent, CHAT_PHASES.GENERATING);
     };
+    const notifyPending = (pending) => {
+      if (typeof onToolCallPending === 'function') onToolCallPending(pending);
+    };
     return {
       reset() {
         started = false;
+        pendingCalls = new Map();
       },
       onMarkGenerating: markGenerating,
       onTextDelta(text) {
@@ -113,6 +131,39 @@ function createChatEngine({
         if (!text) return;
         markGenerating();
         emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createReasoningEvent(text));
+      },
+      onToolCallStart({ index, name, args } = {}) {
+        markGenerating();
+        const key = index ?? pendingCalls.size;
+        if (pendingCalls.has(key)) return;
+        const complete = !!args && typeof args === 'object';
+        const pending = {
+          callIndex: pendingCalls.size,
+          tool: typeof name === 'string' && name ? name : 'tool',
+          args: complete ? { ...args } : {},
+          partialArguments: '',
+          labelResolved: complete,
+        };
+        pendingCalls.set(key, pending);
+        notifyPending(pending);
+      },
+      onToolCallArgumentsDelta({ index, delta } = {}) {
+        if (typeof delta !== 'string' || !delta) return;
+        markGenerating();
+        const pending = pendingCalls.get(index);
+        if (!pending || pending.labelResolved) return;
+        pending.partialArguments += delta;
+        let changed = false;
+        for (const key of PENDING_LABEL_ARGUMENT_KEYS) {
+          const value = extractStringFromPartialJson(pending.partialArguments, key);
+          if (value === null) continue;
+          pending.args[key] = value;
+          changed = true;
+        }
+        if (changed || pending.partialArguments.length > PENDING_ARGUMENT_SCAN_LIMIT) {
+          pending.labelResolved = true;
+        }
+        if (changed) notifyPending(pending);
       },
     };
   }
@@ -201,13 +252,25 @@ function createChatEngine({
       apiMessages.push(...windowedHistory);
 
       const toolDefs = workspaceRoot ? tools.getTools(toolOptions) : undefined;
-      const callbacks = makeStreamCallbacks(onEvent);
       const toolRoundLimit = resolveToolRoundLimit(uiPrefs, maxToolRounds);
-      const emitToolLine = (phase, entry) => {
+      const emitToolLine = (phase, entry, extra = {}) => {
         const line = tools.formatDisplayLine(entry, phase, appLocale);
         entry.line = line;
-        emit(onEvent, CHAT_ENGINE_EVENTS.TOOL_LINE, createToolLineEvent(phase, { ...entry, line }));
+        emit(onEvent, CHAT_ENGINE_EVENTS.TOOL_LINE, createToolLineEvent(phase, { ...entry, ...extra, line }));
       };
+      // Tool-Zeile schon, während das Modell den Aufruf streamt: Beim Schreiben
+      // einer Datei entsteht der Inhalt im Stream, die Ausführung selbst dauert
+      // nur Millisekunden — ohne diese Phase sähe man nur das fertige Ergebnis.
+      const callbacks = makeStreamCallbacks(onEvent, {
+        onToolCallPending(pending) {
+          const entry = tools.buildTraceEntry(
+            pending.tool,
+            { ...pending.args },
+            workspaceRoot ? undefined : { noWorkspace: true }
+          );
+          emitToolLine(TOOL_LINE_PHASES.PENDING, entry, { callIndex: pending.callIndex });
+        },
+      });
       const emitProgressPayloads = (progressEvents) => {
         if (!Array.isArray(progressEvents)) return;
         for (const payload of progressEvents) {
@@ -264,7 +327,8 @@ function createChatEngine({
           });
         }
 
-        for (const toolCall of toolCalls) {
+        for (let callIndex = 0; callIndex < toolCalls.length; callIndex += 1) {
+          const toolCall = toolCalls[callIndex];
           if (abortSignal.aborted) {
             return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
           }
@@ -276,10 +340,10 @@ function createChatEngine({
             workspaceRoot ? undefined : { noWorkspace: true }
           );
           toolTrace.push(entry);
-          emitToolLine(TOOL_LINE_PHASES.START, entry);
+          emitToolLine(TOOL_LINE_PHASES.START, entry, { callIndex });
 
           if (!workspaceRoot) {
-            emitToolLine(TOOL_LINE_PHASES.DONE, entry);
+            emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
             apiMessages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -299,7 +363,7 @@ function createChatEngine({
             }
             throw error;
           }
-          emitToolLine(TOOL_LINE_PHASES.DONE, entry);
+          emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
           apiMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: output });
         }
       }

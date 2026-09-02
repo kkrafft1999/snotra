@@ -1,4 +1,4 @@
-const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage } = require('./stream-helpers');
+const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -200,6 +200,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
             type: 'tool_use',
             toolCall: { id: cb.id, name: cb.name, args: '' },
           });
+          notifyToolCallStart(callbacks, { index: idx, name: cb.name || '' });
         } else if (cb.type === 'thinking') {
           blocks.set(idx, { type: 'thinking', text: '' });
         }
@@ -216,6 +217,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           if (block.toolCall) {
             block.toolCall.args += d.partial_json;
             callbacks.onMarkGenerating();
+            notifyToolCallArgumentsDelta(callbacks, { index: idx, delta: d.partial_json });
           }
         } else if (d.type === 'thinking_delta' && typeof d.thinking === 'string') {
           block.text = (block.text || '') + d.thinking;

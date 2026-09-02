@@ -22,18 +22,28 @@ function createToolCheckIcon() {
   return svg;
 }
 
-function buildToolLine(text, state /* 'running' | 'done' */) {
+const TOOL_LINE_STATE_CLASS = {
+  pending: 'chat-tool-line--pending',
+  running: 'chat-tool-line--running',
+  done: 'chat-tool-line--done',
+};
+
+// state 'pending': Das Modell streamt den Aufruf noch (Argumente unvollständig),
+// das Tool ist noch nicht gelaufen. Optisch wie 'running', damit z. B. beim
+// Schreiben einer Datei sofort sichtbar ist, dass etwas passiert.
+function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex) {
   const row = document.createElement('div');
   row.className = 'chat-tool-line';
-  row.classList.add(state === 'running' ? 'chat-tool-line--running' : 'chat-tool-line--done');
+  row.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
   row.setAttribute('role', 'status');
+  if (Number.isInteger(callIndex)) row.dataset.callIndex = String(callIndex);
 
   const textEl = document.createElement('span');
   textEl.className = 'chat-tool-line-text';
   textEl.textContent = text;
   row.appendChild(textEl);
 
-  if (state === 'running') {
+  if (state === 'running' || state === 'pending') {
     row.setAttribute('aria-busy', 'true');
     row.setAttribute('aria-label', `Läuft: ${text}`);
   } else {
@@ -79,6 +89,30 @@ function setToolLineDone(row, doneText) {
   }
 }
 
+function setToolLineText(row, text) {
+  const textEl = row?.querySelector('.chat-tool-line-text');
+  if (!textEl || !text) return;
+  textEl.textContent = text;
+  row.setAttribute('aria-label', `Läuft: ${text}`);
+}
+
+/** Vorläufige Zeile (Aufruf gestreamt) wird zur laufenden Zeile (Tool wird ausgeführt). */
+function promoteToolLineToRunning(row, text) {
+  if (!row) return;
+  row.classList.remove('chat-tool-line--pending');
+  row.classList.add('chat-tool-line--running');
+  setToolLineText(row, text);
+}
+
+function findPendingToolLine(linesEl, callIndex, fallbackToFirst = false) {
+  if (!linesEl) return null;
+  const byIndex = Number.isInteger(callIndex)
+    ? linesEl.querySelector(`.chat-tool-line--pending[data-call-index="${callIndex}"]`)
+    : null;
+  if (byIndex || !fallbackToFirst) return byIndex;
+  return linesEl.querySelector('.chat-tool-line--pending');
+}
+
 function syncToolLogLayout(wrap) {
   if (!wrap) return;
   const count = wrap.querySelectorAll('.chat-tool-line').length;
@@ -114,7 +148,11 @@ function formatChatTokenUsage(total) {
 }
 
 function finalizeAllToolLines(wrap) {
-  wrap?.querySelectorAll('.chat-tool-line--running').forEach(setToolLineDone);
+  if (!wrap) return;
+  // Vorläufige Zeilen ohne Start-Ereignis: Das Tool ist nie gelaufen (Abbruch/Fehler).
+  wrap.querySelectorAll('.chat-tool-line--pending').forEach((row) => row.remove());
+  wrap.querySelectorAll('.chat-tool-line--running').forEach(setToolLineDone);
+  syncToolLogLayout(wrap);
 }
 
 function folderNameFromPath(p) {
@@ -179,7 +217,7 @@ export function initChatStream({
     btnChatSend.innerHTML = inFlight ? CHAT_STOP_ICON_HTML : CHAT_SEND_ICON_HTML;
   }
 
-  function buildToolLog(trace, state /* 'running' | 'done' */) {
+  function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines) {
     const log = document.createElement('div');
     log.className = 'chat-tool-log';
     log.classList.add(state === 'running' ? 'chat-tool-log--running' : 'chat-tool-log--done');
@@ -198,8 +236,13 @@ export function initChatStream({
           state === 'running' && i === trace.length - 1 ? 'running' : 'done';
         lines.appendChild(buildToolLine(text, lineState));
       }
-      syncToolLogLayout(log);
     }
+    if (state === 'running' && Array.isArray(pendingLines)) {
+      for (const pending of pendingLines) {
+        lines.appendChild(buildToolLine(pending.line, 'pending', pending.callIndex));
+      }
+    }
+    syncToolLogLayout(log);
     return log;
   }
 
@@ -228,6 +271,7 @@ export function initChatStream({
   }
 
   function finalizeStreamingAssistantBubble(bubble, message) {
+    delete message.pendingToolLines;
     bubble.querySelector('.chat-phase')?.remove();
     bubble.querySelector('.chat-reasoning-stream')?.remove();
 
@@ -323,7 +367,7 @@ export function initChatStream({
           }
           li.appendChild(reasoningEl);
 
-          li.appendChild(buildToolLog(m.toolTrace, 'running'));
+          li.appendChild(buildToolLog(m.toolTrace, 'running', m.pendingToolLines));
 
           const stream = document.createElement('div');
           stream.className = 'chat-md-streaming chat-md';
@@ -471,6 +515,7 @@ export function initChatStream({
       role: 'assistant',
       content: '',
       toolTrace: [],
+      pendingToolLines: [],
       reasoningText: '',
       streaming: true,
       phase: 'waiting',
@@ -513,19 +558,28 @@ export function initChatStream({
                   ? payload.line
                   : '';
             if (!line) return;
+            const callIndex = Number.isInteger(payload?.callIndex) ? payload.callIndex : null;
+            if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
+            if (!Array.isArray(last.pendingToolLines)) last.pendingToolLines = [];
+
+            // Zustand im Store: toolTrace = ausgeführte Tools (wird persistiert),
+            // pendingToolLines = vom Modell noch gestreamte Aufrufe (nur Anzeige).
+            if (phase === 'pending') {
+              const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
+              if (existing) existing.line = line;
+              else last.pendingToolLines.push({ callIndex, line });
+            } else if (phase === 'start') {
+              const pendingPos = last.pendingToolLines.findIndex((p) => p.callIndex === callIndex);
+              if (pendingPos >= 0) last.pendingToolLines.splice(pendingPos, 1);
+              else if (last.pendingToolLines.length > 0) last.pendingToolLines.shift();
+              last.toolTrace.push(line);
+            } else if (phase === 'done') {
+              if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = line;
+              else last.toolTrace.push(line);
+            }
 
             const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
             if (!wrap) {
-              if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
-              if (phase === 'start') {
-                last.toolTrace.push(line);
-              } else if (phase === 'done') {
-                if (last.toolTrace.length > 0) {
-                  last.toolTrace[last.toolTrace.length - 1] = line;
-                } else {
-                  last.toolTrace.push(line);
-                }
-              }
               renderChatMessages();
               return;
             }
@@ -537,20 +591,22 @@ export function initChatStream({
               wrap.appendChild(linesEl);
             }
 
-            if (phase === 'done') {
+            if (phase === 'pending') {
+              // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
+              const row = findPendingToolLine(linesEl, callIndex);
+              if (row) setToolLineText(row, line);
+              else linesEl.appendChild(buildToolLine(line, 'pending', callIndex));
+            } else if (phase === 'done') {
               const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
-              const target = runningRows[runningRows.length - 1];
-              setToolLineDone(target, line);
-              if (target && Array.isArray(last.toolTrace) && last.toolTrace.length > 0) {
-                last.toolTrace[last.toolTrace.length - 1] = line;
-              }
+              setToolLineDone(runningRows[runningRows.length - 1], line);
             } else {
-              if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
-              last.toolTrace.push(line);
               linesEl.querySelectorAll('.chat-tool-line--running').forEach((row) => {
                 setToolLineDone(row);
               });
-              linesEl.appendChild(buildToolLine(line, 'running'));
+              // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
+              const pendingRow = findPendingToolLine(linesEl, callIndex, true);
+              if (pendingRow) promoteToolLineToRunning(pendingRow, line);
+              else linesEl.appendChild(buildToolLine(line, 'running', callIndex));
             }
 
             syncToolLogLayout(wrap);

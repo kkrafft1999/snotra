@@ -1,4 +1,4 @@
-const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage } = require('./stream-helpers');
+const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://127.0.0.1:8080/v1';
 
@@ -88,9 +88,21 @@ function applyToolCallDelta(toolCalls, deltaToolCall) {
   if (deltaToolCall.id) target.id = deltaToolCall.id;
   if (deltaToolCall.type) target.type = deltaToolCall.type;
   if (deltaToolCall.function?.name) target.function.name += deltaToolCall.function.name;
-  if (typeof deltaToolCall.function?.arguments === 'string') {
-    target.function.arguments += deltaToolCall.function.arguments;
+  const argumentsDelta =
+    typeof deltaToolCall.function?.arguments === 'string' ? deltaToolCall.function.arguments : '';
+  if (argumentsDelta) target.function.arguments += argumentsDelta;
+  return { index, target, argumentsDelta };
+}
+
+// Der Name kann in Stücken kommen; erst wenn Argumente eintreffen, ist er komplett.
+// Deshalb wird der Aufruf beim ersten Argument-Stück gemeldet, nicht beim Namen.
+function announceToolCallDelta(callbacks, announced, { index, target, argumentsDelta }) {
+  if (!argumentsDelta || !target.function.name) return;
+  if (!announced.has(index)) {
+    announced.add(index);
+    notifyToolCallStart(callbacks, { index, name: target.function.name });
   }
+  notifyToolCallArgumentsDelta(callbacks, { index, delta: argumentsDelta });
 }
 
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
@@ -129,6 +141,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let content = '';
   const toolCalls = [];
+  const announcedToolCalls = new Set();
   let finishReason = null;
   let streamError = null;
   let usage = null;
@@ -160,7 +173,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
       if (Array.isArray(delta.tool_calls)) {
         callbacks.onMarkGenerating();
-        for (const tc of delta.tool_calls) applyToolCallDelta(toolCalls, tc);
+        for (const tc of delta.tool_calls) {
+          announceToolCallDelta(callbacks, announcedToolCalls, applyToolCallDelta(toolCalls, tc));
+        }
       }
 
       if (choice.finish_reason) {

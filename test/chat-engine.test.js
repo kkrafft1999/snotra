@@ -574,3 +574,130 @@ test('engine turns provider failures into the existing error DTO', async () => {
     usage: null,
   });
 });
+
+test('engine emits pending tool lines while the model still streams a tool call', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const rounds = [
+    assistantToolCall('call_1', 'write_file_text', { relative_path: 'docs/neu.md', content: 'Hallo' }),
+    assistantText('Datei geschrieben.'),
+  ];
+  const { engine } = makeEngine((params, index) => {
+    if (index === 0) {
+      // Provider meldet den gestreamten Aufruf: erst der Name, dann die Argumente stückweise.
+      params.callbacks.onToolCallStart({ index: 0, name: 'write_file_text' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: '{"relative_path":"docs/' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: 'neu.md","content":"Hal' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: 'lo"}' });
+    }
+    return rounds[Math.min(index, rounds.length - 1)];
+  }, { tools });
+  const events = [];
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Schreib docs/neu.md' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(result.content, 'Datei geschrieben.');
+  const toolEvents = events
+    .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE)
+    .map((event) => [event.payload.phase, event.payload.callIndex, event.payload.line]);
+  assert.deepEqual(toolEvents, [
+    [TOOL_LINE_PHASES.PENDING, 0, 'Datei wird geschrieben …'],
+    [TOOL_LINE_PHASES.PENDING, 0, 'Datei docs/neu.md wird geschrieben …'],
+    [TOOL_LINE_PHASES.START, 0, 'Datei docs/neu.md wird geschrieben …'],
+    [TOOL_LINE_PHASES.DONE, 0, 'Datei docs/neu.md geschrieben'],
+  ]);
+  // Vorläufige Zeilen landen nicht im Trace, der persistiert wird.
+  assert.equal(result.toolTrace.length, 1);
+  assert.equal(result.toolTrace[0].line, 'Datei docs/neu.md geschrieben');
+  assert.equal(result.toolTrace[0].callIndex, undefined);
+});
+
+test('engine pending tool lines: complete arguments, repeated starts and parallel calls', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const rounds = [
+    {
+      message: {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          { id: 'c1', type: 'function', function: { name: 'read_file_text', arguments: '{"relative_path":"a.js"}' } },
+          { id: 'c2', type: 'function', function: { name: 'search_in_files', arguments: '{"query":"TODO"}' } },
+        ],
+      },
+      finishReason: 'tool_calls',
+      usage: null,
+    },
+    assistantText('Fertig.'),
+  ];
+  const { engine } = makeEngine((params, index) => {
+    if (index === 0) {
+      // Provider mit kompletten Aufrufen (Google/Ollama): Argumente direkt dabei.
+      params.callbacks.onToolCallStart({ index: 0, name: 'read_file_text', args: { relative_path: 'a.js' } });
+      params.callbacks.onToolCallStart({ index: 0, name: 'read_file_text', args: { relative_path: 'a.js' } });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: '{"relative_path":"ignoriert"}' });
+      params.callbacks.onToolCallStart({ index: 7, name: 'search_in_files' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 7, delta: '{"query":"TODO"}' });
+    }
+    return rounds[Math.min(index, rounds.length - 1)];
+  }, { tools });
+  const events = [];
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: (event) => events.push(event),
+  });
+
+  const toolEvents = events
+    .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE)
+    .map((event) => [event.payload.phase, event.payload.callIndex, event.payload.line]);
+  assert.deepEqual(toolEvents, [
+    [TOOL_LINE_PHASES.PENDING, 0, 'Datei a.js wird gelesen …'],
+    [TOOL_LINE_PHASES.PENDING, 1, 'Dateien werden durchsucht …'],
+    [TOOL_LINE_PHASES.PENDING, 1, 'Suche nach „TODO“ …'],
+    [TOOL_LINE_PHASES.START, 0, 'Datei a.js wird gelesen …'],
+    [TOOL_LINE_PHASES.DONE, 0, 'Datei a.js gelesen'],
+    [TOOL_LINE_PHASES.START, 1, 'Suche nach „TODO“ …'],
+    [TOOL_LINE_PHASES.DONE, 1, 'Nach „TODO“ gesucht'],
+  ]);
+});
+
+test('engine resets pending tool calls between rounds', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const rounds = [
+    assistantToolCall('c1', 'list_directory', { relative_path: 'src' }),
+    assistantToolCall('c2', 'list_directory', { relative_path: 'docs' }),
+    assistantText('Fertig.'),
+  ];
+  const { engine } = makeEngine((params, index) => {
+    if (index < 2) {
+      params.callbacks.onToolCallStart({ index: 0, name: 'list_directory' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: JSON.stringify({ relative_path: index === 0 ? 'src' : 'docs' }) });
+    }
+    return rounds[Math.min(index, rounds.length - 1)];
+  }, { tools });
+  const events = [];
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: (event) => events.push(event),
+  });
+
+  const pendingLines = events
+    .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE && event.payload.phase === TOOL_LINE_PHASES.PENDING)
+    .map((event) => [event.payload.callIndex, event.payload.line]);
+  // Ohne Reset würde der Aufruf der zweiten Runde als „bereits gemeldet“ verschluckt.
+  assert.deepEqual(pendingLines, [
+    [0, 'Projektordner wird durchsucht …'],
+    [0, 'Ordner src wird durchsucht …'],
+    [0, 'Projektordner wird durchsucht …'],
+    [0, 'Ordner docs wird durchsucht …'],
+  ]);
+});

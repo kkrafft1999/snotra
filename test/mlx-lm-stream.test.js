@@ -93,6 +93,12 @@ test('streamChatRound assembles tool calls from split deltas', async (t) => {
     },
   ]);
   assert.ok(sink.markGeneratingCalls >= 1);
+  // Gemeldet wird erst mit dem ersten Argument-Stück — dann ist der gestückelte Name komplett.
+  assert.deepEqual(sink.toolCallStarts, [{ index: 0, name: 'read_file_text' }]);
+  assert.deepEqual(sink.toolCallArgumentDeltas, [
+    { index: 0, delta: '{"relative_' },
+    { index: 0, delta: 'path":"a.txt"}' },
+  ]);
 });
 
 test('streamChatRound synthesizes ids for tool-call deltas without one and drops nameless calls', async (t) => {

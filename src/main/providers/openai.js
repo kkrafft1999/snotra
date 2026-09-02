@@ -1,4 +1,4 @@
-const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage } = require('./stream-helpers');
+const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'https://api.openai.com/v1';
 
@@ -168,7 +168,17 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       }
 
       if (ev === 'response.output_item.added') {
-        if (json.item?.type === 'function_call') callbacks.onMarkGenerating();
+        if (json.item?.type === 'function_call') {
+          callbacks.onMarkGenerating();
+          notifyToolCallStart(callbacks, { index: json.output_index, name: json.item.name || '' });
+        }
+        continue;
+      }
+
+      if (ev === 'response.function_call_arguments.delta') {
+        if (typeof json.delta === 'string' && json.delta) {
+          notifyToolCallArgumentsDelta(callbacks, { index: json.output_index, delta: json.delta });
+        }
         continue;
       }
 

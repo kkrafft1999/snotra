@@ -91,6 +91,17 @@ function cancelledChatRound(message) {
   return { cancelled: true, message };
 }
 
+// Optionale Stream-Callbacks für Tool-Aufrufe, die das Modell gerade streamt.
+// Damit erscheint die Tool-Zeile im Chat schon, während z. B. der Dateiinhalt
+// noch generiert wird — nicht erst nach der Ausführung.
+function notifyToolCallStart(callbacks, call) {
+  if (typeof callbacks?.onToolCallStart === 'function') callbacks.onToolCallStart(call);
+}
+
+function notifyToolCallArgumentsDelta(callbacks, delta) {
+  if (typeof callbacks?.onToolCallArgumentsDelta === 'function') callbacks.onToolCallArgumentsDelta(delta);
+}
+
 module.exports = {
   iterStreamLines,
   iterSseEvents,
@@ -102,6 +113,8 @@ module.exports = {
   bindAbortSignalToReader,
   abortIfRequested,
   cancelledChatRound,
+  notifyToolCallStart,
+  notifyToolCallArgumentsDelta,
   createEmptyUsage,
   normalizeUsage,
   mergeUsage,
