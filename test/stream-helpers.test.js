@@ -128,21 +128,6 @@ test('iterSseEvents resets the event name after each dispatch', async () => {
   ]);
 });
 
-test('iterSseEvents forwards every raw line to the onRawLine hook', async () => {
-  const raw = [];
-  const out = [];
-  for await (const evt of iterSseEvents(
-    readerFromChunks(['event: x\r\ndata: y\r\n\r\n']),
-    undefined,
-    (line) => raw.push(line)
-  )) {
-    out.push(evt);
-  }
-  assert.deepEqual(out, [{ event: 'x', data: 'y' }]);
-  // CRLF wird vor onRawLine entfernt; auch die Leerzeile (Event-Trenner) kommt durch.
-  assert.deepEqual(raw, ['event: x', 'data: y', '']);
-});
-
 test('iterSseEvents stops with an AbortError when the signal fires mid-stream', async () => {
   const controller = new AbortController();
   const chunks = ['data: one\n\n', 'data: two\n\n'];

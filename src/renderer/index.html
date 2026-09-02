@@ -180,13 +180,6 @@
             </span>
           </div>
           <div class="chat-header-actions">
-            <button type="button" id="btn-raw-log" class="chat-action-with-badge" title="RAW-LLM-Protokoll" aria-label="RAW-LLM-Protokoll öffnen" aria-haspopup="dialog" aria-controls="modal-raw-log">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="9 7 4 12 9 17"/>
-                <polyline points="15 7 20 12 15 17"/>
-              </svg>
-              <span id="raw-log-badge" class="chat-action-badge hidden" aria-hidden="true">0</span>
-            </button>
             <button type="button" id="btn-chat-history" title="Verlauf" aria-label="Chat-Verlauf oeffnen" aria-expanded="false" aria-controls="chat-history-drawer">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10"/>
@@ -463,40 +456,6 @@
     </div>
   </div>
 </div>
-
-  <div id="modal-raw-log" class="modal modal-raw-log-root hidden" aria-hidden="true">
-    <div class="modal-backdrop" id="modal-raw-log-backdrop"></div>
-    <div
-      class="modal-dialog raw-log-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-raw-log-title"
-      aria-describedby="modal-raw-log-desc">
-      <header class="settings-dialog__header">
-        <div>
-          <h2 id="modal-raw-log-title" class="settings-dialog__title">RAW-LLM-Protokoll</h2>
-          <p id="modal-raw-log-desc" class="settings-dialog__subtitle">
-            Rohe Requests und Antworten dieser Sitzung. <span id="raw-log-count">0 Aufrufe</span>
-          </p>
-        </div>
-        <button type="button" id="btn-raw-log-close" class="settings-dialog__icon-close" aria-label="Protokoll schließen">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </header>
-      <div class="raw-log-dialog__body">
-        <p id="raw-log-empty" class="raw-log-empty hidden">Noch keine LLM-Aufrufe in dieser Sitzung.</p>
-        <div id="raw-log-list" class="raw-log-list"></div>
-      </div>
-      <footer class="settings-dialog__footer modal-dialog__footer">
-        <p class="raw-log-hint">Secrets (API-Keys, Auth-Header) sind maskiert. Nicht persistiert — beim Chat-Wechsel geleert.</p>
-        <div class="modal-actions">
-          <button type="button" id="btn-raw-log-footer-close" class="btn-secondary">Schließen</button>
-        </div>
-      </footer>
-    </div>
-  </div>
 
   <script src="vendor/marked.umd.js"></script>
   <script src="vendor/purify.min.js"></script>

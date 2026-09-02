@@ -45,7 +45,6 @@
  *   tools?: Array,
  *   callbacks: LlmStreamCallbacks,
  *   abortSignal: AbortSignal,
- *   recorder?: import('./raw-exchange-port').RoundRecorder,
  *   sendBundle?: LlmSendBundle,
  * }) => Promise<LlmRoundResult>} streamRound
  * @property {(err: unknown) => string} formatRoundError

@@ -94,7 +94,6 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     tools,
     callbacks,
     abortSignal,
-    recorder,
     sendBundle,
   }) {
     const provider = providerRuntime.getProvider(target.providerId);
@@ -115,7 +114,6 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
       tools,
       callbacks,
       abortSignal,
-      recorder,
     });
   }
 

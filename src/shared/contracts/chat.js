@@ -20,24 +20,23 @@ const {
 // --- Ergebnis-DTOs (Rückgabe von CHAT_SEND) --------------------------------
 
 /** Erfolgreiches Chat-Ergebnis (Modell hat geantwortet, keine Tools mehr offen). */
-function createChatResult({ content = '', toolTrace = [], usage = null, rawExchanges = [] } = {}) {
-  return { content, toolTrace, usage, rawExchanges };
+function createChatResult({ content = '', toolTrace = [], usage = null } = {}) {
+  return { content, toolTrace, usage };
 }
 
 /** Vom Nutzer bzw. per AbortSignal abgebrochenes Chat-Ergebnis. */
-function createCancelledChatResult({ content = '', toolTrace = [], usage = null, rawExchanges = [] } = {}) {
-  return { cancelled: true, content, toolTrace, usage, rawExchanges };
+function createCancelledChatResult({ content = '', toolTrace = [], usage = null } = {}) {
+  return { cancelled: true, content, toolTrace, usage };
 }
 
 /**
- * Fehler-Ergebnis. usage/rawExchanges werden nur aufgenommen, wenn sie
+ * Fehler-Ergebnis. usage wird nur aufgenommen, wenn es
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  */
-function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage, rawExchanges } = {}) {
+function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage } = {}) {
   const result = { error, code };
   if (usage !== undefined) result.usage = usage;
-  if (rawExchanges !== undefined) result.rawExchanges = rawExchanges;
   return result;
 }
 

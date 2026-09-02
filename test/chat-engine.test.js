@@ -6,16 +6,6 @@ const { formatToolDisplayLine } = require('../src/shared/presentation/tool-displ
 const { TOOL_LINE_PHASES } = require('../src/shared/contracts/enums');
 const { sleepAbortable } = require('../src/shared/runtime/abort');
 
-function makeMockRecorder() {
-  return {
-    request() {},
-    onRawLine() {},
-    toExchange(meta) {
-      return { ...meta, request: null, responseRaw: '' };
-    },
-  };
-}
-
 function makeToolPort(execute) {
   const calls = [];
   return {
@@ -128,7 +118,6 @@ function makeEngine(results, {
       tools: tools || makeToolPort(),
       preferences: preferences || { async read() { return {}; } },
       workspacePaths: workspacePaths || makeWorkspacePaths(),
-      rawExchange: { createRoundRecorder: makeMockRecorder },
       maxToolRounds,
       clock: () => 1234,
     }),
@@ -149,7 +138,6 @@ test('engine streams contract events and returns a chat result without Electron'
 
   assert.equal(result.content, 'Hallo!');
   assert.deepEqual(result.usage, { prompt: 10, completion: 2, total: 12 });
-  assert.equal(result.rawExchanges[0].ts, 1234);
   assert.equal(calls.length, 1);
   assert.deepEqual(events.map((event) => event.type), [
     CHAT_ENGINE_EVENTS.PROGRESS,
@@ -373,7 +361,6 @@ test('engine runs the tool loop and emits tool events through its event sink', a
   assert.equal(result.content, 'Im Ordner liegt README.md.');
   assert.equal(tools.calls.length, 1);
   assert.deepEqual(tools.calls[0].args, { relative_path: '.' });
-  assert.equal(result.rawExchanges.length, 2);
   assert.equal(calls[1].messages.find((message) => message.role === 'tool').tool_call_id, 'call_1');
   const toolEvents = events.filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE);
   assert.deepEqual(toolEvents.map((event) => event.payload.phase), ['start', 'done']);
@@ -439,7 +426,6 @@ test('engine stops at its configured tool-round limit', async () => {
   });
 
   assert.equal(result.code, 'TOOL_LIMIT', result.error);
-  assert.equal(result.rawExchanges.length, 3);
 });
 
 test('engine emits delta and reasoning events from provider callbacks', async () => {
@@ -586,19 +572,5 @@ test('engine turns provider failures into the existing error DTO', async () => {
     error: 'Kontingent erschöpft',
     code: 'RATE_LIMIT',
     usage: null,
-    rawExchanges: result.rawExchanges,
   });
-  assert.equal(result.rawExchanges.length, 1);
-});
-
-test('engine explain keeps tools and raw recording out of the provider call', async () => {
-  const { engine, calls } = makeEngine([assistantText('Erklärung.')]);
-
-  const result = await engine.explain({
-    payload: { messages: [{ role: 'user', content: 'Erkläre das Protokoll.' }] },
-  });
-
-  assert.deepEqual(result, { content: 'Erklärung.' });
-  assert.equal(calls[0].tools, undefined);
-  assert.equal(calls[0].recorder, undefined);
 });

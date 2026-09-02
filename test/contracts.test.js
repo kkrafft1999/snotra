@@ -24,7 +24,6 @@ const {
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
-  attachRawLogTurn,
 } = contracts;
 
 test('CONTRACT_VERSION is a positive integer', () => {
@@ -77,29 +76,27 @@ test('resolveDebugWaitMs clamps to the shared bounds', () => {
 });
 
 test('createChatResult / createCancelledChatResult produce the stable success shapes', () => {
-  assert.deepEqual(createChatResult({ content: 'hi', toolTrace: [], usage: null, rawExchanges: [] }), {
+  assert.deepEqual(createChatResult({ content: 'hi', toolTrace: [], usage: null }), {
     content: 'hi',
     toolTrace: [],
     usage: null,
-    rawExchanges: [],
   });
   assert.deepEqual(createCancelledChatResult({ content: 'partial' }), {
     cancelled: true,
     content: 'partial',
     toolTrace: [],
     usage: null,
-    rawExchanges: [],
   });
 });
 
-test('createChatErrorResult omits usage/rawExchanges unless provided', () => {
+test('createChatErrorResult omits usage unless provided', () => {
   assert.deepEqual(createChatErrorResult({ error: 'x', code: CHAT_ERROR_CODES.INVALID }), {
     error: 'x',
     code: 'INVALID',
   });
   assert.deepEqual(
-    createChatErrorResult({ error: 'y', code: CHAT_ERROR_CODES.TOOL_LIMIT, usage: null, rawExchanges: [] }),
-    { error: 'y', code: 'TOOL_LIMIT', usage: null, rawExchanges: [] }
+    createChatErrorResult({ error: 'y', code: CHAT_ERROR_CODES.TOOL_LIMIT, usage: null }),
+    { error: 'y', code: 'TOOL_LIMIT', usage: null }
   );
   // Default-Code ist INVALID.
   assert.equal(createChatErrorResult({ error: 'z' }).code, 'INVALID');
@@ -128,14 +125,4 @@ test('event factories match the push payload shapes', () => {
 test('contracts aggregate exports settings helpers', () => {
   assert.equal(typeof contracts.normalizePresetWire, 'function');
   assert.equal(typeof contracts.formatPresetSublabelFromView, 'function');
-});
-
-test('attachRawLogTurn adds rawLogTurn without mutating rawExchanges', () => {
-  const rawExchanges = [{ model: 'm' }];
-  const result = { content: 'ok', rawExchanges };
-  const rawLogTurn = { userText: 'Hi', exchangeCount: 1 };
-  const out = attachRawLogTurn(result, rawLogTurn);
-  assert.equal(out.rawExchanges, rawExchanges);
-  assert.equal(out.rawLogTurn, rawLogTurn);
-  assert.equal(out.content, 'ok');
 });

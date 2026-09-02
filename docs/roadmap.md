@@ -43,20 +43,20 @@ wieder entfernt.
   (generiertes ESM-Bundle)
 - 🏗️ **Saubere, frontend-unabhängige Anwendungsarchitektur** (fünf Etappen):
   1. **Stabile Verträge:** `src/shared/contracts/` inkl. Settings-DTOs
-     (`settings.js`) und RAW-Log-View-Modelle (`raw-log.js`)
+     (`settings.js`)
   2. **Anwendungs-Core:** Chat-Orchestrierung in `src/application/chat/`
      (`chat-engine.js`, `chat-history-trim.js`); dünne Re-Exports unter
      `src/main/chat-engine.js` für bestehende Importe
   3. **Provider und Tools über Ports:** Anwendungs-Ports unter
      `src/application/ports/`; Adapter in `src/main/adapters/` (LLM, Tools,
-     Preferences, Workspace-Pfade, RAW-Aufzeichnung)
+     Preferences, Workspace-Pfade)
   4. **Infrastruktur abgrenzen:** Infrastruktur-Ports unter `src/main/ports/`;
      austauschbare Adapter für Storage, Dateisystem, Speech, Updates und
      Provider-Katalog; Verdrahtung in `src/main/composition/`
   5. **Frontend als Präsentationsschicht:** Renderer erhält normalisierte
-     Settings-, Tool-, RAW-Log- und Verlaufs-Daten; provider-/tool-spezifische
+     Settings-, Tool- und Verlaufs-Daten; provider-/tool-spezifische
      Semantik liegt in Main (`settings-presentation-service`,
-     `raw-log-presentation-service`, `chat-history-normalization`) und
+     `chat-history-normalization`) und
      `src/shared/presentation/` — der Renderer behält nur DOM- und
      lokale Formatierung (z. B. Markdown, Zeitstempel)
 

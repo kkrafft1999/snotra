@@ -175,7 +175,6 @@ function setupChatHandlers({
   });
   return {
     sendHandler: ipcMain.handlers.get(REQ.CHAT_SEND),
-    explainHandler: ipcMain.handlers.get(REQ.CHAT_EXPLAIN),
     abortHandler: ipcMain.onHandlers.get(REQ.CHAT_ABORT),
     toolRegistry,
     chatEngine,
@@ -248,14 +247,7 @@ test('CHAT_SEND returns the final assistant text when no tools are called', asyn
   assert.equal(res.content, 'Hallo!');
   assert.deepEqual(res.toolTrace, []);
   assert.deepEqual(res.usage, { prompt: 10, completion: 2, total: 12 });
-  assert.equal(res.rawExchanges.length, 1);
-  assert.ok(res.rawLogTurn, 'CHAT_SEND must additively return rawLogTurn');
-  assert.equal(res.rawLogTurn.userText, 'Hi');
-  assert.equal(res.rawLogTurn.exchangeCount, 1);
-  assert.ok(res.rawLogTurn.contextStack);
-  assert.equal(res.rawLogTurn.rounds.length, 1);
-  assert.equal(res.rawLogTurn.exchanges, undefined, 'rawExchanges must not be duplicated in rawLogTurn');
-  assert.ok(Array.isArray(res.rawExchanges));
+  assert.equal(res.rawExchanges, undefined, 'CHAT_SEND no longer returns raw exchanges');
 });
 
 test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up answer', async () => {
@@ -277,7 +269,6 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
   assert.equal(res.content, 'Im Ordner liegen 3 Dateien.');
   assert.equal(res.toolTrace.length, 1);
   assert.equal(res.toolTrace[0].tool, 'list_directory');
-  assert.equal(res.rawExchanges.length, 2);
 
   assert.equal(toolRegistry.calls.length, 1);
   assert.equal(toolRegistry.calls[0].toolName, 'list_directory');
@@ -384,7 +375,6 @@ test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhaust
 
   assert.equal(res.code, 'TOOL_LIMIT');
   assert.match(res.error, /Zu viele Tool-Runden/);
-  assert.equal(res.rawExchanges.length, 2);
 });
 
 test('CHAT_SEND surfaces a provider error mid-loop and stops further rounds', async () => {
@@ -436,89 +426,6 @@ test('CHAT_ABORT cancels an in-flight CHAT_SEND for the same sender', async () =
   assert.equal(res.cancelled, true);
 });
 
-test('CHAT_EXPLAIN returns the provider content without recording tools or a raw log', async () => {
-  const { provider, calls } = makeScriptedProvider([assistantText('Erklärung des Ablaufs.')]);
-  const storage = makeStorage();
-  const ipcMain = makeIpcMain();
-  const chatEngine = buildTestChatEngine({
-    provider,
-    storage,
-    toolRegistry: makeToolRegistryStub(),
-  });
-  registerChatHandlers({
-    ipcMain,
-    chatEngine,
-    REQ,
-    PUSH,
-  });
-
-  const res = await ipcMain.handlers.get(REQ.CHAT_EXPLAIN)(null, {
-    messages: [{ role: 'user', content: 'Erkläre das RAW-Protokoll.' }],
-  });
-
-  assert.equal(res.content, 'Erklärung des Ablaufs.');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].tools, undefined);
-  assert.equal(calls[0].recorder, undefined);
-});
-
-test('CHAT_EXPLAIN rejects an empty messages payload', async () => {
-  const { provider } = makeScriptedProvider([assistantText('unused')]);
-  const { explainHandler } = setupChatHandlers({ provider });
-
-  const res = await explainHandler(null, { messages: [] });
-  assert.deepEqual(res, { error: 'Keine Nachrichten übergeben.', code: 'INVALID' });
-});
-
-test('CHAT_EXPLAIN builds the explanation prompt on main from slim semantic payload', async () => {
-  const { provider, calls } = makeScriptedProvider([assistantText('Erklärung fertig.')]);
-  const { sendHandler, explainHandler } = setupChatHandlers({ provider });
-  const { event } = makeFakeEvent();
-
-  const sendRes = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Was passiert hier?' }],
-  });
-  assert.ok(sendRes.rawLogTurn);
-  assert.ok(sendRes.rawExchanges?.length);
-
-  const explainRes = await explainHandler(null, {
-    userText: sendRes.rawLogTurn.userText,
-    exchanges: sendRes.rawExchanges,
-  });
-  assert.equal(explainRes.content, 'Erklärung fertig.');
-  assert.equal(calls.length, 2);
-  assert.match(calls[1].messages[0].content, /Ursprüngliche Anfrage des Nutzers/);
-  assert.match(calls[1].messages[0].content, /Was passiert hier\?/);
-  assert.equal(calls[1].tools, undefined);
-  assert.equal(calls[1].recorder, undefined);
-});
-
-test('CHAT_EXPLAIN still accepts prior rawLogTurn payload with embedded exchanges', async () => {
-  const { provider, calls } = makeScriptedProvider([assistantText('Compat ok.')]);
-  const { explainHandler } = setupChatHandlers({ provider });
-
-  const exchanges = [
-    {
-      model: 'test-model',
-      messages: [{ role: 'user', content: 'Alt' }],
-      response: { text: 'ok', toolCalls: [] },
-    },
-  ];
-  const res = await explainHandler(null, {
-    rawLogTurn: { userText: 'Alt', exchanges },
-  });
-  assert.equal(res.content, 'Compat ok.');
-  assert.match(calls[0].messages[0].content, /Ursprüngliche Anfrage des Nutzers/);
-});
-
-test('CHAT_EXPLAIN surfaces provider errors with their code', async () => {
-  const { provider } = makeScriptedProvider([{ error: 'Ungültiges Modell', code: 'INVALID_MODEL' }]);
-  const { explainHandler } = setupChatHandlers({ provider });
-
-  const res = await explainHandler(null, { messages: [{ role: 'user', content: 'Hi' }] });
-  assert.deepEqual(res, { error: 'Ungültiges Modell', code: 'INVALID_MODEL' });
-});
-
 test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is false', async () => {
   const { provider, calls } = makeScriptedProvider([assistantText('ok')]);
   const storage = makeStorage({ readUIPrefs: async () => ({ allowWorkspaceWrite: false }) });
@@ -528,7 +435,7 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
   });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, {
+  await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
     workspaceRoot: '/tmp/weyouze-test-project',
   });
@@ -539,7 +446,7 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
   assert.equal(tools.some((t) => t.function.name === 'list_directory'), true);
 
   // Der Workspace-Kontext nennt nur die freigeschalteten Tools.
-  const systemMessage = res.rawExchanges[0].messages[0];
+  const systemMessage = calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
   assert.match(systemMessage.content, /list_directory/);
   assert.doesNotMatch(systemMessage.content, /write_file_text/);
@@ -554,7 +461,7 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
   });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, {
+  await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
     workspaceRoot: '/tmp/weyouze-test-project',
   });
@@ -563,7 +470,7 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
   assert.ok(tools.some((t) => t.function.name === 'write_file_text'));
 
   // Mit Schreibrecht stehen die Schreib-Tools auch im Workspace-Kontext.
-  const systemMessage = res.rawExchanges[0].messages[0];
+  const systemMessage = calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
   assert.match(systemMessage.content, /write_file_text/);
 });
@@ -576,21 +483,21 @@ test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPro
   });
   // Ohne geöffneten Ordner und ohne baseSystemPrompt beginnt die Konversation
   // direkt mit der User-Nachricht.
-  const emptyRes = await emptyHandlers.sendHandler(makeFakeEvent().event, {
+  await emptyHandlers.sendHandler(makeFakeEvent().event, {
     messages: [{ role: 'user', content: 'Hallo' }],
   });
-  assert.equal(emptyRes.rawExchanges[0].messages.some((m) => m.role === 'system'), false);
+  assert.equal(empty.calls[0].messages.some((m) => m.role === 'system'), false);
 
   const configured = makeScriptedProvider([assistantText('ok')]);
   const configuredHandlers = setupChatHandlers({
     provider: configured.provider,
     storage: makeStorage({ readUIPrefs: async () => ({ baseSystemPrompt: 'Sei knapp und freundlich.' }) }),
   });
-  const configuredRes = await configuredHandlers.sendHandler(makeFakeEvent().event, {
+  await configuredHandlers.sendHandler(makeFakeEvent().event, {
     messages: [{ role: 'user', content: 'Hallo' }],
     workspaceRoot: '/tmp/weyouze-test-project',
   });
-  const systemMessage = configuredRes.rawExchanges[0].messages[0];
+  const systemMessage = configured.calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
   assert.ok(systemMessage.content.startsWith('Sei knapp und freundlich.\n\n'));
   assert.match(systemMessage.content, /geöffneten Ordner „weyouze-test-project“/);

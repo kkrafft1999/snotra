@@ -19,22 +19,17 @@ function assistantText(content) {
   return { message: { role: 'assistant', content }, finishReason: 'stop', usage: null };
 }
 
-test('createChatApplication wires raw recorder through provider rounds end-to-end', async () => {
+test('createChatApplication wires provider rounds and tools end-to-end', async () => {
   let round = 0;
+  const calls = [];
   const provider = {
     id: 'test',
     name: 'Test',
     defaultModel: 'test-model',
     fields: {},
-    async streamChatRound({ recorder, callbacks }) {
-      recorder?.request({
-        url: 'https://example.test/v1/chat',
-        method: 'POST',
-        headers: { Authorization: 'Bearer sk-test' },
-        body: { model: 'test-model', stream: true },
-      });
-      recorder?.onRawLine('data: {"delta":"hi"}');
-      callbacks?.onTextDelta('hi');
+    async streamChatRound(args) {
+      calls.push(args);
+      args.callbacks?.onTextDelta('hi');
       round += 1;
       if (round === 1) {
         return assistantToolCall('call_1', 'list_directory', { relative_path: '.' });
@@ -76,9 +71,9 @@ test('createChatApplication wires raw recorder through provider rounds end-to-en
   });
 
   assert.equal(result.content, 'done');
-  assert.equal(result.rawExchanges.length, 2);
-  assert.equal(result.rawExchanges[0].request.method, 'POST');
-  assert.match(result.rawExchanges[0].request.url, /example\.test/);
-  assert.match(result.rawExchanges[0].responseRaw, /data:/);
-  assert.equal(result.rawExchanges[0].request.headers.Authorization, '***redigiert***');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].model, 'test-model');
+  assert.equal(calls[0].config.apiKey, 'sk-test');
+  assert.equal(calls[1].messages.find((m) => m.role === 'tool').tool_call_id, 'call_1');
+  assert.equal(result.rawExchanges, undefined);
 });

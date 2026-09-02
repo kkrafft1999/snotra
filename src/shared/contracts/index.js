@@ -57,7 +57,6 @@ const {
   isChatPhase,
   isToolLinePhase,
 } = require('./chat');
-const { attachRawLogTurn } = require('./raw-log');
 
 module.exports = {
   CONTRACT_VERSION,
@@ -106,5 +105,4 @@ module.exports = {
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
-  attachRawLogTurn,
 };

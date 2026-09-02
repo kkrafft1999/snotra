@@ -50,7 +50,6 @@ bestehende Importe stabil bleiben.
 - `tool-port` — Tool-Registry und Ausführung
 - `chat-preferences-port` — UI-Prefs, System-Prompt, Tool-Runden-Limit
 - `workspace-path-port` — Pfad-Helfer (z. B. `basename`)
-- `raw-exchange-port` — RAW-Protokoll-Aufzeichnung je Runde
 
 **Infrastruktur-Ports** (`src/main/ports/`) — von Adaptern implementiert,
 über Composition injiziert:
@@ -83,7 +82,6 @@ Verdrahtung in den Handlern.
 - Provider-/Preset-Formularsemantik → `settings-presentation-service` +
   `shared/contracts/settings.js`
 - Tool-Anzeigezeilen → `shared/presentation/tool-display.js` (über Tool-Port-Adapter)
-- RAW-Log-View-Model → `raw-log-presentation-service` + `shared/contracts/raw-log.js`
 - Verlaufs-Normalisierung (Titel, Sanitisierung, Usage) →
   `chat-history-normalization.js`
 
@@ -106,7 +104,7 @@ dupliziert.
 | `test/infrastructure-boundaries.test.js` | Storage/Credentials ohne Provider-Registry-Leaks |
 | `test/adapter-port-shapes.test.js` | Port-Adapter exponieren nur erlaubte Methoden |
 | `test/contracts*.test.js` | Wire-Enums und Settings-DTOs an der IPC-Grenze |
-| `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalisierte Anzeige-Daten für Settings, RAW-Log, Verlauf |
+| `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalisierte Anzeige-Daten für Settings, Verlauf |
 
 ## Weitere funktionale Module (noch offen)
 

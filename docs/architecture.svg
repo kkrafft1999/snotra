@@ -122,7 +122,7 @@
   <text class="eyebrow" x="90" y="218">INTERAKTION</text>
   <text class="heading" x="90" y="255">Benutzeroberfl&#228;che</text>
   <text class="description" x="90" y="292">
-    <tspan x="90" dy="0">Chat und RAW-Protokoll</tspan>
+    <tspan x="90" dy="0">Chat mit Tool-Aufrufen</tspan>
     <tspan x="90" dy="28">Workspace-Explorer</tspan>
     <tspan x="90" dy="28">Einstellungen und Verlauf</tspan>
     <tspan x="90" dy="28">Spracheingabe und Updates</tspan>

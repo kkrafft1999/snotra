@@ -22,9 +22,6 @@ export const appStore = {
   chatSendSeq: 0,
   chatAbortedSendSeq: 0,
   chatTokenUsage: { prompt: 0, completion: 0, total: 0 },
-  // RAW-LLM-Protokoll der aktuellen Sitzung (nicht persistiert). Einträge paaren
-  // ein schlankes RawLogTurn-View-Modell lokal mit rawExchanges.
-  rawLlmLog: [],
   currentChatId: '',
   currentChatWorkspace: null,
   lastFocusBeforeModal: null,

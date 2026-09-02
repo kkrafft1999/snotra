@@ -81,8 +81,6 @@
     <text class="chip tt-ui" x="159" y="218">ChatHistoryDrawer</text><text class="chipsub" x="159" y="233">Sitzungsverlauf</text>
     <rect class="ui" x="282"  y="200" width="218" height="42" rx="8"/>
     <text class="chip tt-ui" x="391" y="218">SettingsModal</text><text class="chipsub" x="391" y="233">Einstellungen</text>
-    <rect class="ui" x="514"  y="200" width="218" height="42" rx="8"/>
-    <text class="chip tt-ui" x="623" y="218">RawLogModal</text><text class="chipsub" x="623" y="233">RAW-LLM-Protokoll</text>
     <rect class="ui" x="746"  y="200" width="218" height="42" rx="8"/>
     <text class="chip tt-ui" x="855" y="218">UpdateBanner</text><text class="chipsub" x="855" y="233">Update-Hinweis</text>
     <rect class="ui" x="978"  y="200" width="218" height="42" rx="8"/>
@@ -91,7 +89,7 @@
 
   <rect x="50" y="252" width="1148" height="58" rx="8" fill="#f8fbff" stroke="#2f6db3" stroke-width="1" stroke-dasharray="4 3"/>
   <text x="62" y="272" font-size="11" font-weight="700" fill="#1c4b82">Normalisierte View-Daten vom Main (kein Provider-Wire, keine Tool-Namen-Logik, kein Cross-Round-Parsing)</text>
-  <text x="62" y="290" font-size="10.5" fill="#475569">Settings-Formular · Tool-Zeilen (entry.line) · RAW-Log-View-Model · Chat-Verlauf (Titel, Usage, Sanitisierung)</text>
+  <text x="62" y="290" font-size="10.5" fill="#475569">Settings-Formular · Tool-Zeilen (entry.line) · Chat-Verlauf (Titel, Usage, Sanitisierung)</text>
   <text x="62" y="306" font-size="10.5" fill="#475569">Legitim im Renderer: DOM/Markdown (marked+DOMPurify) · lokale Zeit/a11y · Anzeige vorgefertigter DTO-Felder — nur window.electronAPI + Contracts</text>
 
   <!-- ============ PRELOAD BRIDGE ============ -->
@@ -147,7 +145,7 @@
   <rect class="core" x="62" y="700" width="430" height="168" rx="12"/>
   <text x="277" y="726" text-anchor="middle" font-size="15" font-weight="700" class="tt-core">Chat-Orchestrierung &amp; Tool-Loop</text>
   <text class="note" x="78" y="752" fill="#204b3d">• chat-engine.js — Runden-/Tool-Schleife, System-Prompt,</text>
-  <text class="note" x="90" y="768" fill="#204b3d">Usage-Aggregation, RAW-Protokoll, Abbruch</text>
+  <text class="note" x="90" y="768" fill="#204b3d">Usage-Aggregation, Abbruch</text>
   <text class="note" x="78" y="788" fill="#204b3d">• chat-history-trim.js — Kontextfenster (Trim)</text>
   <text class="note" x="78" y="808" fill="#204b3d">• API: send() · explain() · abort()</text>
   <rect x="78" y="822" width="398" height="42" rx="8" fill="#eaf7f0" stroke="#0e7a5b" stroke-width="1" stroke-dasharray="4 3"/>
@@ -164,8 +162,6 @@
     <text class="chip tt-core" x="825" y="754">ChatPrefsPort</text><text class="chipsub" x="825" y="769">UI-Prefs lesen</text>
     <rect class="port" x="894" y="734" width="118" height="44" rx="7"/>
     <text class="chip tt-core" x="953" y="754">WorkspacePath</text><text class="chipsub" x="953" y="769">Pfad-Auflösung</text>
-    <rect class="port" x="1022" y="734" width="118" height="44" rx="7"/>
-    <text class="chip tt-core" x="1081" y="754">RawExchange</text><text class="chipsub" x="1081" y="769">RAW-Recorder</text>
   </g>
   <rect x="510" y="788" width="630" height="72" rx="8" fill="#f4fbf8" stroke="#0e7a5b" stroke-width="1" stroke-dasharray="4 3"/>
   <text x="522" y="808" font-size="11" font-weight="700" fill="#0b5b44">Roadmap Etappen 1–5 ✓ (Stand 2026-07-12)</text>
@@ -180,7 +176,6 @@
     <rect class="hand" x="278" y="926" width="210" height="32" rx="7"/><text class="chip tt-hand" x="383" y="947">workspace-tool-adapter</text>
     <rect class="hand" x="498" y="926" width="210" height="32" rx="7"/><text class="chip tt-hand" x="603" y="947">chat-preferences-adapter</text>
     <rect class="hand" x="718" y="926" width="210" height="32" rx="7"/><text class="chip tt-hand" x="823" y="947">workspace-path-adapter</text>
-    <rect class="hand" x="938" y="926" width="210" height="32" rx="7"/><text class="chip tt-hand" x="1043" y="947">raw-exchange-adapter</text>
   </g>
 
   <line class="flow" x1="620" y1="882" x2="620" y2="893" marker-end="url(#ah)" marker-start="url(#ah)"/>
@@ -221,7 +216,6 @@
     <rect class="svc" x="58"  y="1146" width="168" height="30" rx="6"/><text class="chip tt-svc" x="142" y="1166">speech-adapter</text>
     <rect class="svc" x="236" y="1146" width="168" height="30" rx="6"/><text class="chip tt-svc" x="320" y="1166">update-adapter</text>
     <rect class="contract" x="414" y="1146" width="220" height="30" rx="6"/><text class="chip tt-contract" x="524" y="1166">settings-presentation-service</text>
-    <rect class="contract" x="644" y="1146" width="220" height="30" rx="6"/><text class="chip tt-contract" x="754" y="1166">raw-log-presentation-service</text>
     <rect class="contract" x="874" y="1146" width="220" height="30" rx="6"/><text class="chip tt-contract" x="984" y="1166">chat-history-normalization</text>
   </g>
 
@@ -260,7 +254,6 @@
     <rect class="svc" x="678" y="1322" width="118" height="26" rx="6"/><text class="chip tt-svc" x="737" y="1340">workspace-state</text>
     <rect class="svc" x="806" y="1322" width="118" height="26" rx="6"/><text class="chip tt-svc" x="865" y="1340">permissions</text>
     <rect class="svc" x="934" y="1322" width="118" height="26" rx="6"/><text class="chip tt-svc" x="993" y="1340">window</text>
-    <rect class="svc" x="1062" y="1322" width="108" height="26" rx="6"/><text class="chip tt-svc" x="1116" y="1340">llm-raw-log</text>
   </g>
 
   <line class="flow" x1="163" y1="958" x2="163" y2="977" marker-end="url(#ah)" stroke-dasharray="5 4"/>
@@ -290,7 +283,7 @@
   <rect class="contract" x="1240" y="158" width="154" height="72" rx="8"/>
   <text class="btitle tt-contract" x="1317" y="180" text-anchor="middle">contracts/</text>
   <text class="chipsub" x="1317" y="197" fill="#8a5a12">DTOs · Events · Enums</text>
-  <text class="chipsub" x="1317" y="211" fill="#8a5a12">chat · settings · raw-log · usage</text>
+  <text class="chipsub" x="1317" y="211" fill="#8a5a12">chat · settings · usage</text>
   <text class="chipsub" x="1317" y="225" fill="#8a5a12">llm-target · debug-wait</text>
 
   <rect class="contract" x="1240" y="240" width="154" height="52" rx="8" fill="#fdf6e3"/>

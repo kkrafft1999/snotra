@@ -6,7 +6,6 @@ import { initWhisperRecorder } from './voice/WhisperRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
-import { initRawLogModal } from './components/RawLogModal.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
 
@@ -94,8 +93,6 @@ const voice = initWhisperRecorder({
   onInputChanged: syncChatInputHeight,
 });
 
-const rawLogModal = initRawLogModal({ api, appStore });
-
 const chatStream = initChatStream({
   api,
   appStore,
@@ -103,7 +100,6 @@ const chatStream = initChatStream({
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
-  onRawLogChanged: () => rawLogModal.syncBadge(),
   onWorkspaceFileWritten: (relativePath) => fileTree.notifyExternalFileWrite(relativePath),
 });
 

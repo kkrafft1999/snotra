@@ -93,7 +93,7 @@ function applyToolCallDelta(toolCalls, deltaToolCall) {
   }
 }
 
-async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal, recorder }) {
+async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const body = {
     model,
     messages: translateMessagesToChatCompletions(messages),
@@ -109,7 +109,6 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const base = baseUrlOf(config);
   const url = `${base}/chat/completions`;
   const headers = { 'Content-Type': 'application/json' };
-  recorder?.request({ url, method: 'POST', headers, body });
   let res;
   try {
     res = await fetch(url, {
@@ -135,7 +134,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   let usage = null;
 
   try {
-    for await (const evt of iterSseEvents(reader, abortSignal, recorder?.onRawLine)) {
+    for await (const evt of iterSseEvents(reader, abortSignal)) {
       abortIfRequested(abortSignal);
       const data = evt.data;
       if (!data || data === '[DONE]') continue;

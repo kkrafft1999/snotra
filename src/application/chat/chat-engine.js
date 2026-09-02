@@ -31,36 +31,6 @@ function resolveAppLocale(uiPrefs) {
   return uiPrefs?.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
 }
 
-function summarizeToolCall(toolCall) {
-  return {
-    id: toolCall?.id || null,
-    name: toolCall?.function?.name || null,
-    arguments: typeof toolCall?.function?.arguments === 'string' ? toolCall.function.arguments : '',
-  };
-}
-
-function snapshotMessages(apiMessages) {
-  return apiMessages.map((message) => {
-    const row = {
-      role: message.role,
-      content: typeof message.content === 'string' ? message.content : message.content == null ? '' : String(message.content),
-    };
-    if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
-      row.tool_calls = message.tool_calls.map(summarizeToolCall);
-    }
-    if (message.tool_call_id) row.tool_call_id = message.tool_call_id;
-    return row;
-  });
-}
-
-function parseResponseMessage(message) {
-  if (!message) return null;
-  return {
-    text: typeof message.content === 'string' ? message.content : '',
-    toolCalls: Array.isArray(message.tool_calls) ? message.tool_calls.map(summarizeToolCall) : [],
-  };
-}
-
 function resolveToolRoundLimit(uiPrefs, mainDefault) {
   const MIN = 1;
   const MAX_CAP = 500;
@@ -103,7 +73,6 @@ function createChatEngine({
   tools,
   preferences,
   workspacePaths,
-  rawExchange,
   maxToolRounds,
   clock = () => Date.now(),
 }) {
@@ -118,9 +87,9 @@ function createChatEngine({
     emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPhaseEvent(phase));
   }
 
-  function returnCancelledChat(onEvent, toolTrace, content = '', usage = null, rawExchanges = []) {
+  function returnCancelledChat(onEvent, toolTrace, content = '', usage = null) {
     emitPhase(onEvent, CHAT_PHASES.IDLE);
-    return createCancelledChatResult({ content, toolTrace, usage, rawExchanges });
+    return createCancelledChatResult({ content, toolTrace, usage });
   }
 
   function makeStreamCallbacks(onEvent) {
@@ -161,50 +130,6 @@ function createChatEngine({
     if (controller && !controller.signal.aborted) controller.abort(createChatAbortError());
   }
 
-  async function explain({ payload }) {
-    const messages = payload?.messages;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return createChatErrorResult({ error: 'Keine Nachrichten übergeben.', code: CHAT_ERROR_CODES.INVALID });
-    }
-
-    try {
-      const resolved = await resolveTarget(false);
-      if (resolved.error) return resolved.error;
-      const { target } = resolved;
-
-      const apiMessages = messages
-        .filter((message) => message.role === 'user' || message.role === 'assistant')
-        .map((message) => ({ role: message.role, content: message.content ?? '' }));
-      if (apiMessages.length === 0) {
-        return createChatErrorResult({ error: 'Keine gültigen Nachrichten.', code: CHAT_ERROR_CODES.INVALID });
-      }
-
-      const explainBundle = await llm.prepareSendBundle(target);
-      const streamed = await llm.streamRound({
-        target,
-        sendBundle: explainBundle,
-        messages: apiMessages,
-        tools: undefined,
-        callbacks: {
-          reset() {},
-          onMarkGenerating() {},
-          onTextDelta() {},
-          onReasoningDelta() {},
-        },
-        abortSignal: new AbortController().signal,
-      });
-      if (streamed.error) {
-        return createChatErrorResult({ error: streamed.error, code: streamed.code || CHAT_ERROR_CODES.API });
-      }
-      return { content: streamed.message?.content ?? '' };
-    } catch (error) {
-      return createChatErrorResult({
-        error: llm.formatRoundError(error),
-        code: CHAT_ERROR_CODES.NETWORK,
-      });
-    }
-  }
-
   async function send({ sessionId, payload, onEvent }) {
     const abortController = new AbortController();
     const abortSignal = abortController.signal;
@@ -215,7 +140,6 @@ function createChatEngine({
     activeChatAborts.set(sessionId, abortController);
 
     const toolTrace = [];
-    const rawExchanges = [];
     let requestUsage = null;
 
     try {
@@ -295,15 +219,13 @@ function createChatEngine({
 
       for (let round = 0; round < toolRoundLimit; round += 1) {
         if (abortSignal.aborted) {
-          return returnCancelledChat(onEvent, toolTrace, '', requestUsage, rawExchanges);
+          return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
         }
 
         emitPhase(onEvent, CHAT_PHASES.WAITING);
         callbacks.reset();
         truncateStaleToolOutputs(apiMessages, historyCharLimit);
 
-        const recorder = rawExchange.createRoundRecorder();
-        const sentMessages = snapshotMessages(apiMessages);
         const streamed = await llm.streamRound({
           target,
           sendBundle,
@@ -311,25 +233,11 @@ function createChatEngine({
           tools: toolDefs,
           callbacks,
           abortSignal,
-          recorder,
         });
-
-        rawExchanges.push(recorder.toExchange({
-          providerId: target.providerId,
-          model: sendBundle.model,
-          round,
-          ts: clock(),
-          finishReason: streamed.finishReason,
-          cancelled: !!streamed.cancelled,
-          error: streamed.error || null,
-          usage: streamed.usage || null,
-          messages: sentMessages,
-          response: parseResponseMessage(streamed.message),
-        }));
         requestUsage = mergeUsage(requestUsage, streamed.usage);
 
         if (streamed.cancelled) {
-          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, rawExchanges);
+          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage);
         }
         if (streamed.error) {
           emitPhase(onEvent, CHAT_PHASES.IDLE);
@@ -337,7 +245,6 @@ function createChatEngine({
             error: streamed.error,
             code: streamed.code || CHAT_ERROR_CODES.API,
             usage: requestUsage,
-            rawExchanges,
           });
         }
 
@@ -354,13 +261,12 @@ function createChatEngine({
             content: assistantMessage.content ?? '',
             toolTrace,
             usage: requestUsage,
-            rawExchanges,
           });
         }
 
         for (const toolCall of toolCalls) {
           if (abortSignal.aborted) {
-            return returnCancelledChat(onEvent, toolTrace, '', requestUsage, rawExchanges);
+            return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
           }
           const toolName = toolCall.function?.name || 'tool';
           const args = parseToolArguments(toolCall.function?.arguments);
@@ -389,7 +295,7 @@ function createChatEngine({
             emitProgressPayloads(execution.progressEvents);
           } catch (error) {
             if (isAbortError(error)) {
-              return returnCancelledChat(onEvent, toolTrace, '', requestUsage, rawExchanges);
+              return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
             }
             throw error;
           }
@@ -405,24 +311,22 @@ function createChatEngine({
           'Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
         code: CHAT_ERROR_CODES.TOOL_LIMIT,
         usage: requestUsage,
-        rawExchanges,
       });
     } catch (error) {
       if (isAbortError(error)) {
-        return returnCancelledChat(onEvent, toolTrace, '', requestUsage, rawExchanges);
+        return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
       }
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
         error: llm.formatRoundError(error),
         code: CHAT_ERROR_CODES.NETWORK,
-        rawExchanges,
       });
     } finally {
       if (activeChatAborts.get(sessionId) === abortController) activeChatAborts.delete(sessionId);
     }
   }
 
-  return { send, explain, abort };
+  return { send, abort };
 }
 
 module.exports = {

@@ -108,7 +108,7 @@ function translateToolsToOllama(tools) {
   }));
 }
 
-async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal, recorder }) {
+async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const base = baseUrlOf(config);
   const url = `${base}/api/chat`;
   const body = {
@@ -120,7 +120,6 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (tooling) body.tools = tooling;
 
   const headers = { 'Content-Type': 'application/json' };
-  recorder?.request({ url, method: 'POST', headers, body });
   let res;
   try {
     res = await fetch(url, {
@@ -147,7 +146,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   let usage = null;
 
   try {
-    for await (const line of iterStreamLines(reader, abortSignal, recorder?.onRawLine)) {
+    for await (const line of iterStreamLines(reader, abortSignal)) {
       abortIfRequested(abortSignal);
       const trimmed = line.trim();
       if (!trimmed) continue;

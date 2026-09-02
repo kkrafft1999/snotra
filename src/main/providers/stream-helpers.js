@@ -11,9 +11,7 @@ const {
 } = require('../../shared/runtime/abort');
 const { describeFetchError } = require('../../shared/runtime/fetch-errors');
 
-// onRawLine (optional) erhaelt jede rohe Stream-Zeile, bevor sie geyieldet
-// wird — genutzt vom RAW-LLM-Protokoll, das hier alle Provider zentral abgreift.
-async function* iterStreamLines(reader, abortSignal, onRawLine) {
+async function* iterStreamLines(reader, abortSignal) {
   const decoder = new TextDecoder();
   let carry = '';
   while (true) {
@@ -32,7 +30,6 @@ async function* iterStreamLines(reader, abortSignal, onRawLine) {
     carry = lines.pop() ?? '';
     for (const raw of lines) {
       const line = raw.replace(/\r$/, '');
-      if (onRawLine) onRawLine(line);
       yield line;
     }
   }
@@ -40,15 +37,14 @@ async function* iterStreamLines(reader, abortSignal, onRawLine) {
   carry += decoder.decode();
   if (carry) {
     const line = carry.replace(/\r$/, '');
-    if (onRawLine) onRawLine(line);
     yield line;
   }
 }
 
-async function* iterSseEvents(reader, abortSignal, onRawLine) {
+async function* iterSseEvents(reader, abortSignal) {
   let currentEvent = null;
   let dataLines = [];
-  for await (const line of iterStreamLines(reader, abortSignal, onRawLine)) {
+  for await (const line of iterStreamLines(reader, abortSignal)) {
     if (line === '') {
       if (dataLines.length > 0) {
         yield { event: currentEvent, data: dataLines.join('\n') };
