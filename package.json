@@ -1,8 +1,8 @@
 {
-  "name": "weyouze",
+  "name": "snotra",
   "version": "1.0.4",
   "main": "src/main/index.js",
-  "productName": "Weyouze Anything",
+  "productName": "Snotra AI",
   "scripts": {
     "sync-vendor": "node scripts/sync-renderer-vendor.js",
     "postinstall": "node scripts/sync-renderer-vendor.js",
@@ -16,8 +16,10 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "name": "Weyouze Anything",
-        "executableName": "Weyouze Anything",
+        "name": "Snotra AI",
+        "executableName": "Snotra AI",
+        "appBundleId": "dev.snotra-ai.app",
+        "appCategoryType": "public.app-category.productivity",
         "icon": "./icon",
         "asar": true,
         "ignore": [
@@ -32,7 +34,7 @@
           "name": "@electron-forge/maker-dmg",
           "config": {
             "format": "ULFO",
-            "name": "Weyouze Anything"
+            "name": "Snotra AI"
           }
         },
         {
@@ -47,7 +49,7 @@
   "keywords": [],
   "author": "Konrad Krafft",
   "license": "Apache-2.0",
-  "description": "Weyouze Anything – workspace-aware AI assistant on top of a file explorer.",
+  "description": "Snotra AI – workspace-aware AI assistant on top of a file explorer, extensible with skills and tools.",
   "engines": {
     "node": ">=24"
   },

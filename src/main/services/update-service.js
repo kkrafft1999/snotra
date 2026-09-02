@@ -7,7 +7,7 @@
 // nicht code-signiert ist.
 
 const GITHUB_API = 'https://api.github.com';
-const DEFAULT_REPO = 'kkrafft1999/weyouze';
+const DEFAULT_REPO = 'kkrafft1999/snotra';
 const REQUEST_TIMEOUT_MS = 8000;
 
 /**
@@ -79,7 +79,7 @@ function isNewerVersion(latest, current) {
  * @param {object} deps
  * @param {object} deps.app            Electron-app (fuer getVersion).
  * @param {object} deps.storage        storage-service (fuer ignoredUpdateVersion).
- * @param {string} [deps.repo]         "owner/name"; default kkrafft1999/weyouze.
+ * @param {string} [deps.repo]         "owner/name"; default kkrafft1999/snotra.
  * @param {function} [deps.fetchImpl]  Override fuer Tests; default globaler fetch.
  */
 function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = {}) {
@@ -102,7 +102,7 @@ function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = 
         signal: controller.signal,
         headers: {
           Accept: 'application/vnd.github+json',
-          'User-Agent': 'Weyouze-Anything-Updater',
+          'User-Agent': 'Snotra-AI-Updater',
           'X-GitHub-Api-Version': '2022-11-28',
         },
       });

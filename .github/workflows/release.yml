@@ -45,7 +45,7 @@ jobs:
             fi
             echo "::endgroup::"
             echo "make-Versuch $i fehlgeschlagen; raeume vor Retry auf"
-            for vol in "/Volumes/Weyouze Anything"*; do
+            for vol in "/Volumes/Snotra AI"*; do
               [ -d "$vol" ] && hdiutil detach "$vol" -force || true
             done
             rm -rf out/make || true
@@ -58,7 +58,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
           dmg="$(ls out/make/*.dmg | head -1)"
-          cp "$dmg" "dist/Weyouze-Anything-${version}-mac-arm64.dmg"
+          cp "$dmg" "dist/Snotra-AI-${version}-mac-arm64.dmg"
       - uses: actions/upload-artifact@v7
         with:
           name: macos
@@ -83,7 +83,7 @@ jobs:
           $dir = (Get-ChildItem -Path out -Directory -Filter '*-win32-x64' | Select-Object -First 1).FullName
           if (-not $dir) { throw 'Kein *-win32-x64 Package-Verzeichnis gefunden.' }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path "$dir/*" -DestinationPath "dist/Weyouze-Anything-$version-win-x64.zip"
+          Compress-Archive -Path "$dir/*" -DestinationPath "dist/Snotra-AI-$version-win-x64.zip"
       - uses: actions/upload-artifact@v7
         with:
           name: windows

@@ -8,16 +8,17 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-ch
 const workspaceState = require('./workspace-state');
 const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
+const { APP_NAME } = require('./app-identity');
 
-// macOS: damit in der Menue-Bar ueber dem Bildschirm "Weyouze Anything" statt
-// "Electron" erscheint (zumindest in den Submenus: "Ueber Weyouze Anything",
-// "Weyouze Anything beenden" usw.). Im Packaged-Build kommt der Name aus dem
+// macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
+// "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
+// "Snotra AI beenden" usw.). Im Packaged-Build kommt der Name aus dem
 // productName in package.json -> Info.plist; im Dev-Mode liest macOS den
 // FETTEN App-Title links neben dem Apfel allerdings aus dem Bundle der
 // laufenden node_modules/electron/dist/Electron.app, daher kann dort trotz
 // app.setName() weiterhin "Electron" stehen. Das ist ein bekanntes macOS-
 // Limit, kein Bug der App.
-app.setName('Weyouze Anything');
+app.setName(APP_NAME);
 
 const DEFAULT_PROVIDER = 'openai';
 
@@ -94,7 +95,7 @@ function buildApplicationMenu() {
       { type: 'separator' },
       {
         label: 'Projekt auf GitHub',
-        click: () => shell.openExternal('https://github.com/kkrafft1999/weyouze'),
+        click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),
       },
     ],
   };

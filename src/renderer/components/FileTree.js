@@ -151,7 +151,7 @@ export function initFileTree(deps) {
     appStore.rootPath = folderPath;
     const name = folderPath.split('/').pop() || folderPath;
     projectName.textContent = name;
-    document.title = 'Weyouze Anything';
+    document.title = 'Snotra AI';
 
     treeContainer.innerHTML = '';
     showWelcome();

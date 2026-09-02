@@ -127,3 +127,19 @@ test('checkForUpdate ignores a draft release', async () => {
   const res = await svc.checkForUpdate();
   assert.equal(res.updateAvailable, false);
 });
+
+test('checkForUpdate targets the Snotra repo with a Snotra User-Agent by default', async () => {
+  const calls = [];
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    fetchImpl: async (url, opts) => {
+      calls.push({ url, opts });
+      return jsonResponse({ tag_name: 'v1.0.0', html_url: 'https://example.test/r', published_at: '2026-06-01T00:00:00Z', body: '' });
+    },
+  });
+  await svc.checkForUpdate();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://api.github.com/repos/kkrafft1999/snotra/releases/latest');
+  assert.match(calls[0].opts.headers['User-Agent'], /^Snotra-AI-/);
+});
