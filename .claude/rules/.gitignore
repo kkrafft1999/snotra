@@ -1,0 +1,3 @@
+# Optionale lokale Referenz-Mockups — Regelwerk sind die .md-Dateien
+*.html
+.DS_Store

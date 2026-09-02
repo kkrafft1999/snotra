@@ -1,8 +1,3 @@
----
-description: Entscheidungs-Workflow für Snotra AI — bei Fragen/Problemen zuerst Optionen vorschlagen statt direkt umzusetzen. Der Nutzer entscheidet immer. Immer anwenden, unabhängig vom bearbeiteten Dateityp.
-alwaysApply: true
----
-
 # Entscheidungs-Workflow: Vorschlagen statt sofort umsetzen
 
 Konvention vom 2026-07-01 (siehe Konversation zu PR #16).
@@ -39,4 +34,4 @@ dann:
 
 Diese Regel betrifft *Entscheidungsfindung im Gespräch*. Die Konvention, wo
 Aufgaben/Tasks landen (GitHub Issues, `docs/roadmap.md`), steht separat in
-[`task-management.mdc`](./task-management.mdc).
+[`task-management.md`](./task-management.md).

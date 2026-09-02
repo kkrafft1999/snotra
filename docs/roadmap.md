@@ -95,9 +95,8 @@ wieder entfernt.
 - 🖥️ Builds für macOS (Apple Silicon) und Windows über Electron Forge
 - 🚀 **Release-Pipeline:** ein Tag `vX.Y.Z` stößt die GitHub-Actions-Pipeline
   an (`.github/workflows/release.yml`), die beide Builds baut und das
-  GitHub-Release veröffentlicht; der `release`-Skill (für Claude Code unter
-  `.claude/skills/`, für Antigravity unter `.agents/skills/`) bündelt
-  Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.1.0
+  GitHub-Release veröffentlicht; der `release`-Skill
+  (`.claude/skills/release/`) bündelt Versions-Bump, Tag und Push. Bisher: v1.0.0 bis v1.1.0
 - 🔔 Update-Notifier (Stufe 1) über GitHub Releases
 - ⬆️ **Node 24 überall**
   ([#53](https://github.com/kkrafft1999/snotra/issues/53), v1.0.4): lokal,

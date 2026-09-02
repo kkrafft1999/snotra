@@ -1,8 +1,3 @@
----
-description: Task-Management-Konventionen für Snotra AI — wo Aufgaben erfasst werden (GitHub Issues + docs/roadmap.md + docs/task.md) und wie auf Fragen wie "Was steht an?" geantwortet wird. Immer anwenden, unabhängig vom bearbeiteten Dateityp.
-alwaysApply: true
----
-
 # Task-Management
 
 Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe PR #16):

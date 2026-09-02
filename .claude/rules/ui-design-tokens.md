@@ -1,16 +1,13 @@
 ---
-description: UI-Design-Tokens für Snotra AI — doubleSlash Mono-Blue Design-System (Tokens, Komponenten, Refactor-Regeln). Anwenden bei UI-Refactors, neuen Komponenten und Renderer-CSS.
-globs:
-  - "renderer/**/*.{css,html,js}"
-  - "**/*.tsx"
-  - "**/*.jsx"
-  - "**/*.vue"
-  - "**/*.svelte"
+# Nur bei Arbeit an Renderer-/Style-Dateien laden. `paths` ist der
+# dokumentierte Key; `globs` zusätzlich, weil laut anthropics/claude-code#17204
+# in manchen Versionen nur `globs` greift. Unbekannte Keys werden ignoriert.
+paths:
+  - "src/renderer/**/*.html"
+  - "src/renderer/**/*.js"
   - "**/*.css"
   - "**/*.scss"
-  - "**/tailwind.config.*"
-  - "**/theme.*"
-alwaysApply: false
+globs: "src/renderer/**/*.html, src/renderer/**/*.js, **/*.css, **/*.scss"
 ---
 
 # UI-Design-Tokens (doubleSlash Mono-Blue)

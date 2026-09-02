@@ -38,23 +38,10 @@ Thumbs.db
 *.swp
 *.swo
 
-# Cursor: Projektregeln unter .cursor/rules/ versionieren;
-# übrige Agent-/Cache-Daten (z. B. .cursor/projects) lokal ignorieren
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
-
-# Claude Code: geteilte Skills unter .claude/skills/ versionieren;
+# Claude Code: geteilte Skills (.claude/skills/) und Regeln (.claude/rules/) versionieren;
 # persoenliche Settings/Caches (settings*.json u. a.) lokal ignorieren
 .claude/*
 !.claude/skills/
 !.claude/skills/**
-
-# Antigravity: geteilte Skills/Rules unter .agents/ versionieren;
-# sonstige Agent-/Cache-Daten lokal ignorieren
-.agents/*
-!.agents/skills/
-!.agents/skills/**
-!.agents/rules/
-!.agents/rules/**
-
+!.claude/rules/
+!.claude/rules/**
