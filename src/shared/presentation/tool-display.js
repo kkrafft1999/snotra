@@ -106,6 +106,13 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Gliederung ermittelt' : 'Gliederung wird ermittelt …';
   }
+  if (toolName === 'list_directory_tree') {
+    const pathLabel = formatRelativePathForLabel(args?.relative_path);
+    if (pathLabel) {
+      return isDone ? `Ordnerbaum ${pathLabel} gelesen` : `Ordnerbaum ${pathLabel} wird gelesen …`;
+    }
+    return isDone ? 'Ordnerbaum gelesen' : 'Ordnerbaum wird gelesen …';
+  }
   if (toolName === 'debug_wait') {
     return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
   }

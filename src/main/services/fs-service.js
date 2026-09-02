@@ -19,6 +19,11 @@ const OUTLINE_MAX_TEXT_CHARS = 200;
 const OUTLINE_MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdown', '.mkd', '.mdx', '.mdc']);
 const OUTLINE_JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx']);
 
+const TREE_DEFAULT_MAX_DEPTH = 3;
+const TREE_MAX_DEPTH = 10;
+const TREE_DEFAULT_MAX_ENTRIES = 200;
+const TREE_MAX_ENTRIES = 1000;
+
 
 function escapeRegExpLiteral(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -699,6 +704,46 @@ function createFsService({
     }
   }
 
+  async function loadGitignoreMatcher(root) {
+    try {
+      const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
+      return createGitignoreMatcher(gitignore);
+    } catch {
+      return null; // keine lesbare .gitignore — nichts auszuschließen
+    }
+  }
+
+  /**
+   * Liest einen Ordner mit den gemeinsamen Regeln von search_in_files, find_files und
+   * list_directory_tree: .git und (ohne includeHidden) Punkt-Einträge überspringen,
+   * .gitignore des Projektroots anwenden, Symlinks nicht verfolgen (an Dirents weder
+   * isFile noch isDirectory). Sortiert Dateien vor Ordnern, dann nach Name.
+   */
+  async function readWorkspaceEntries(dirAbs, { root, includeHidden, isIgnored }) {
+    let dirents;
+    try {
+      dirents = await fs.readdir(dirAbs, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const entries = [];
+    for (const dirent of dirents) {
+      if (dirent.name === '.git') continue;
+      if (!includeHidden && dirent.name.startsWith('.')) continue;
+      const isDirectory = dirent.isDirectory();
+      if (!isDirectory && !dirent.isFile()) continue;
+      const absPath = path.join(dirAbs, dirent.name);
+      const relPath = path.relative(root, absPath).split(path.sep).join('/');
+      if (isIgnored && isIgnored(relPath, isDirectory)) continue;
+      entries.push({ name: dirent.name, absPath, relPath, isDirectory });
+    }
+    entries.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? 1 : -1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+    return entries;
+  }
+
   async function runSearchInFilesTool(args, workspaceRoot) {
     const query = typeof args.query === 'string' ? args.query : '';
     if (!query) {
@@ -736,13 +781,7 @@ function createFsService({
     if (error) return JSON.stringify({ error });
 
     const root = path.resolve(workspaceRoot);
-    let isIgnored = null;
-    try {
-      const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
-      isIgnored = createGitignoreMatcher(gitignore);
-    } catch {
-      // keine lesbare .gitignore — nichts auszuschließen
-    }
+    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
 
     const state = {
       matches: [],
@@ -787,40 +826,21 @@ function createFsService({
     }
 
     async function walk(dirAbs) {
-      let entries;
-      try {
-        entries = await fs.readdir(dirAbs, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      entries.sort((a, b) => {
-        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? 1 : -1;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
-      for (const entry of entries) {
+      for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
         if (state.matchLimitReached || state.scanLimitReached) return;
-        if (entry.name === '.git') continue;
-        if (!includeHidden && entry.name.startsWith('.')) continue;
-        const entryAbs = path.join(dirAbs, entry.name);
-        const relEntry = toRelPosix(entryAbs);
-        if (entry.isDirectory()) {
-          if (isIgnored && isIgnored(relEntry, true)) continue;
-          if (exclude && exclude.regex.test(relEntry)) continue;
-          await walk(entryAbs);
-        } else if (entry.isFile()) {
-          // Symlinks sind an Dirents weder isFile noch isDirectory und werden
-          // bewusst übersprungen (kein Verfolgen aus dem Workspace hinaus).
-          if (isIgnored && isIgnored(relEntry, false)) continue;
-          if (exclude && exclude.regex.test(relEntry)) continue;
-          if (include && !include.regex.test(relEntry)) continue;
-          let st;
-          try {
-            st = await fs.stat(entryAbs);
-          } catch {
-            continue;
-          }
-          await scanFile(entryAbs, st.size);
+        if (exclude && exclude.regex.test(entry.relPath)) continue;
+        if (entry.isDirectory) {
+          await walk(entry.absPath);
+          continue;
         }
+        if (include && !include.regex.test(entry.relPath)) continue;
+        let st;
+        try {
+          st = await fs.stat(entry.absPath);
+        } catch {
+          continue;
+        }
+        await scanFile(entry.absPath, st.size);
       }
     }
 
@@ -862,13 +882,7 @@ function createFsService({
     if (error) return JSON.stringify({ error });
 
     const root = path.resolve(workspaceRoot);
-    let isIgnored = null;
-    try {
-      const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
-      isIgnored = createGitignoreMatcher(gitignore);
-    } catch {
-      // keine lesbare .gitignore — nichts auszuschließen
-    }
+    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
 
     const state = {
       results: [],
@@ -876,8 +890,6 @@ function createFsService({
       matchLimitReached: false,
       scanLimitReached: false,
     };
-    const toRelPosix = (abs) => path.relative(root, abs).split(path.sep).join('/');
-
     function addMatch(relEntry, isDirectory) {
       if (glob.dirOnly && !isDirectory) return;
       if (!glob.regex.test(relEntry)) return;
@@ -886,38 +898,16 @@ function createFsService({
     }
 
     async function walk(dirAbs) {
-      let entries;
-      try {
-        entries = await fs.readdir(dirAbs, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      entries.sort((a, b) => {
-        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? 1 : -1;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
-      for (const entry of entries) {
+      for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
         if (state.matchLimitReached || state.scanLimitReached) return;
-        if (entry.name === '.git') continue;
-        if (!includeHidden && entry.name.startsWith('.')) continue;
         if (state.entriesVisited >= MAX_SEARCH_SCANNED_FILES) {
           state.scanLimitReached = true;
           return;
         }
         state.entriesVisited += 1;
-        const entryAbs = path.join(dirAbs, entry.name);
-        const relEntry = toRelPosix(entryAbs);
-        if (entry.isDirectory()) {
-          if (isIgnored && isIgnored(relEntry, true)) continue;
-          addMatch(relEntry, true);
-          if (state.matchLimitReached) return;
-          await walk(entryAbs);
-        } else if (entry.isFile()) {
-          // Symlinks sind an Dirents weder isFile noch isDirectory und werden
-          // bewusst übersprungen (kein Verfolgen aus dem Workspace hinaus).
-          if (isIgnored && isIgnored(relEntry, false)) continue;
-          addMatch(relEntry, false);
-        }
+        addMatch(entry.relPath, entry.isDirectory);
+        if (state.matchLimitReached) return;
+        if (entry.isDirectory) await walk(entry.absPath);
       }
     }
 
@@ -1043,6 +1033,93 @@ function createFsService({
     return JSON.stringify(result);
   }
 
+  async function runListDirectoryTreeTool(args, workspaceRoot) {
+    const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
+    const depth = readIntegerArg(args, 'max_depth');
+    if (depth.error) return JSON.stringify({ error: depth.error });
+    let maxDepth = depth.value === undefined ? TREE_DEFAULT_MAX_DEPTH : depth.value;
+    if (maxDepth < 1) return JSON.stringify({ error: 'max_depth muss mindestens 1 sein.' });
+    maxDepth = Math.min(maxDepth, TREE_MAX_DEPTH);
+    let maxEntries = Number.isFinite(args.max_entries)
+      ? Math.floor(args.max_entries)
+      : TREE_DEFAULT_MAX_ENTRIES;
+    maxEntries = Math.min(Math.max(1, maxEntries), TREE_MAX_ENTRIES);
+    const includeHidden = args.include_hidden === true;
+
+    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    if (error) return JSON.stringify({ error });
+    try {
+      const st = await fs.stat(absPath);
+      if (!st.isDirectory()) {
+        return JSON.stringify({ error: 'Pfad ist kein Ordner.' });
+      }
+    } catch (e) {
+      return JSON.stringify({ error: e.message });
+    }
+    const root = path.resolve(workspaceRoot);
+    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
+
+    // Breitensuche mit Gesamtbudget: obere Ebenen werden zuerst vollständig, tiefe zuletzt.
+    // hidden = direkte Einträge eines Ordners, die wegen max_depth oder max_entries fehlen.
+    const rootNode = { name: rel || '.', isDirectory: true, absPath, children: [], hidden: 0 };
+    const queue = [{ node: rootNode, depth: 0 }];
+    let shown = 0;
+    let hiddenTotal = 0;
+    let truncated = false;
+    while (queue.length) {
+      const { node, depth } = queue.shift();
+      const entries = await readWorkspaceEntries(node.absPath, walkOptions);
+      if (depth >= maxDepth) {
+        node.hidden = entries.length;
+        hiddenTotal += entries.length;
+        continue;
+      }
+      for (const entry of entries) {
+        if (shown >= maxEntries) {
+          node.hidden += 1;
+          hiddenTotal += 1;
+          truncated = true;
+          continue;
+        }
+        shown += 1;
+        const child = {
+          name: entry.name,
+          isDirectory: entry.isDirectory,
+          absPath: entry.absPath,
+          children: [],
+          hidden: 0,
+        };
+        node.children.push(child);
+        if (entry.isDirectory) queue.push({ node: child, depth: depth + 1 });
+      }
+    }
+
+    const lines = [];
+    const label = (node) =>
+      `${node.name}${node.isDirectory ? '/' : ''}${node.hidden > 0 ? ` [+${node.hidden}]` : ''}`;
+    function render(node, indent) {
+      const ordered = [...node.children].sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+      for (const child of ordered) {
+        lines.push(`${indent}${label(child)}`);
+        if (child.isDirectory) render(child, `${indent}  `);
+      }
+    }
+    lines.push(label(rootNode));
+    render(rootNode, '  ');
+
+    return JSON.stringify({
+      relative_path: rel || '.',
+      max_depth: maxDepth,
+      entries_shown: shown,
+      entries_hidden: hiddenTotal,
+      truncated,
+      tree: lines.join('\n'),
+    });
+  }
+
   async function readDirectory(dirPath) {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const items = await Promise.all(
@@ -1136,6 +1213,7 @@ function createFsService({
     runFindFilesTool,
     runStatPathTool,
     runOutlineFileTool,
+    runListDirectoryTreeTool,
     readDirectory,
     moveItem,
     readFilePreview,

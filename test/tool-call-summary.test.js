@@ -103,6 +103,16 @@ test('summarizeToolCall formats workspace tools with start and done labels', () 
   );
   assert.equal(summarizeToolCall('outline_file', {}, 'start'), 'Gliederung wird ermittelt …');
   assert.equal(summarizeToolCall('outline_file', {}, 'done'), 'Gliederung ermittelt');
+  assert.equal(
+    summarizeToolCall('list_directory_tree', { relative_path: 'src' }, 'start'),
+    'Ordnerbaum src wird gelesen …'
+  );
+  assert.equal(
+    summarizeToolCall('list_directory_tree', { relative_path: 'src' }, 'done'),
+    'Ordnerbaum src gelesen'
+  );
+  assert.equal(summarizeToolCall('list_directory_tree', {}, 'start'), 'Ordnerbaum wird gelesen …');
+  assert.equal(summarizeToolCall('list_directory_tree', {}, 'done'), 'Ordnerbaum gelesen');
   assert.equal(summarizeToolCall('debug_wait', {}, 'start'), 'Warte 5 Sekunden …');
   assert.equal(summarizeToolCall('debug_wait', {}, 'done'), '5 Sekunden gewartet');
   assert.equal(summarizeToolCall('debug_wait', { duration_seconds: 1.2 }, 'start'), 'Warte 1,2 Sekunden …');

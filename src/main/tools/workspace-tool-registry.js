@@ -357,6 +357,44 @@ function createWorkspaceToolRegistry({ fsService }) {
         fsService.runOutlineFileTool(args, workspaceRoot),
     },
     {
+      name: 'list_directory_tree',
+      description:
+        'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler ' +
+        'list_directory-Runden. Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner ' +
+        'heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, ' +
+        'damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, ' +
+        'Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
+      promptDescription:
+        'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
+      parameters: {
+        type: 'object',
+        properties: {
+          relative_path: {
+            type: 'string',
+            description:
+              'Startordner relativ zum Projektroot; leer oder "." für das gesamte Projekt.',
+          },
+          max_depth: {
+            type: 'integer',
+            description:
+              'Maximale Tiefe (1 = nur direkte Einträge; Standard 3, Obergrenze 10). Tiefere Ordner erscheinen mit [+N].',
+          },
+          max_entries: {
+            type: 'integer',
+            description:
+              'Maximale Anzahl angezeigter Einträge insgesamt (Standard 200, Obergrenze 1000); darüber truncated=true.',
+          },
+          include_hidden: {
+            type: 'boolean',
+            description:
+              'true, um auch versteckte Einträge (Punkt-Präfix) zu zeigen (Standard false; .git bleibt immer ausgenommen).',
+          },
+        },
+      },
+      handler: (args, { workspaceRoot }) =>
+        fsService.runListDirectoryTreeTool(args, workspaceRoot),
+    },
+    {
       name: 'debug_wait',
       description:
         'Nur zum UI-Test: wartet eine konfigurierbare Zeit und liefert danach OK zurück. Kein Dateizugriff.',

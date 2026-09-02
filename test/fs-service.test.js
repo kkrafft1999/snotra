@@ -1342,6 +1342,155 @@ test('outline_file rejects a symlink to a file outside the workspace', async (t)
   assert.equal(out.entries, undefined);
 });
 
+async function makeTreeFixture(t) {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const dirs = ['src/main/deep', 'src/shared', 'docs', 'empty', '.hidden', '.git', 'node_modules'];
+  for (const dir of dirs) await fs.mkdir(path.join(tmpRoot, dir), { recursive: true });
+  const files = {
+    'README.md': '# x',
+    'package.json': '{}',
+    '.gitignore': 'node_modules/\n',
+    'src/main/app.js': 'x',
+    'src/main/deep/x.js': 'x',
+    'src/shared/util.js': 'x',
+    'docs/guide.md': 'x',
+    '.hidden/h.txt': 'x',
+    '.git/config': 'x',
+    'node_modules/mod.js': 'x',
+  };
+  for (const [rel, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(tmpRoot, rel), content, 'utf8');
+  }
+  return tmpRoot;
+}
+
+async function treeOf(registry, tmpRoot, args = {}) {
+  return JSON.parse(
+    await registry.execute('list_directory_tree', args, { workspaceRoot: tmpRoot })
+  );
+}
+
+test('list_directory_tree renders a compact tree with directories first through the registry', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeTreeFixture(t);
+
+  const out = await treeOf(registry, tmpRoot);
+
+  assert.equal(out.error, undefined);
+  assert.equal(out.relative_path, '.');
+  assert.equal(out.max_depth, 3);
+  assert.equal(out.entries_shown, 11);
+  assert.equal(out.entries_hidden, 1);
+  assert.equal(out.truncated, false);
+  assert.equal(
+    out.tree,
+    [
+      './',
+      '  docs/',
+      '    guide.md',
+      '  empty/',
+      '  src/',
+      '    main/',
+      '      deep/ [+1]',
+      '      app.js',
+      '    shared/',
+      '      util.js',
+      '  package.json',
+      '  README.md',
+    ].join('\n')
+  );
+});
+
+test('list_directory_tree collapses deeper folders with [+N] according to max_depth', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeTreeFixture(t);
+
+  const shallow = await treeOf(registry, tmpRoot, { max_depth: 1 });
+  assert.equal(shallow.entries_shown, 5);
+  assert.equal(shallow.entries_hidden, 3);
+  assert.equal(shallow.truncated, false);
+  assert.equal(
+    shallow.tree,
+    ['./', '  docs/ [+1]', '  empty/', '  src/ [+2]', '  package.json', '  README.md'].join('\n')
+  );
+
+  const sub = await treeOf(registry, tmpRoot, { relative_path: 'src', max_depth: 1 });
+  assert.equal(sub.relative_path, 'src');
+  assert.equal(sub.tree, ['src/', '  main/ [+2]', '  shared/ [+1]'].join('\n'));
+
+  // Obergrenze für max_depth wird stillschweigend angewendet.
+  const deep = await treeOf(registry, tmpRoot, { max_depth: 99 });
+  assert.equal(deep.max_depth, 10);
+  assert.equal(deep.entries_hidden, 0);
+  assert.match(deep.tree, /\n {8}x\.js$/m);
+});
+
+test('list_directory_tree spends max_entries breadth-first and reports truncation', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeTreeFixture(t);
+
+  const out = await treeOf(registry, tmpRoot, { max_entries: 3 });
+
+  assert.equal(out.entries_shown, 3);
+  assert.equal(out.entries_hidden, 3);
+  assert.equal(out.truncated, true);
+  // Oberste Ebene zuerst (Dateien vor Ordnern), tiefere Ebenen nur noch als Zähler.
+  assert.equal(out.tree, ['./ [+2]', '  docs/ [+1]', '  package.json', '  README.md'].join('\n'));
+});
+
+test('list_directory_tree skips hidden entries, .gitignore matches and .git; include_hidden shows dotfiles', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeTreeFixture(t);
+
+  const plain = await treeOf(registry, tmpRoot);
+  const plainLines = plain.tree.split('\n');
+  assert.ok(!plainLines.includes('  .hidden/'));
+  assert.ok(!plainLines.includes('  .gitignore'));
+  assert.ok(!plain.tree.includes('node_modules'));
+
+  const hidden = await treeOf(registry, tmpRoot, { include_hidden: true });
+  const lines = hidden.tree.split('\n');
+  assert.ok(lines.includes('  .hidden/'));
+  assert.ok(lines.includes('    h.txt'));
+  assert.ok(lines.includes('  .gitignore'));
+  assert.ok(!lines.includes('  .git/'));
+  assert.ok(!hidden.tree.includes('node_modules'));
+});
+
+test('list_directory_tree validates arguments and respects workspace bounds', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await makeTreeFixture(t);
+
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: 'README.md' })).error, /kein Ordner/);
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: '../x' })).error, /außerhalb/);
+  assert.match((await treeOf(registry, tmpRoot, { max_depth: 0 })).error, /max_depth/);
+  assert.match((await treeOf(registry, tmpRoot, { max_depth: 'x' })).error, /Ganzzahl/);
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: 'fehlt' })).error, /ENOENT|no such file/i);
+});
+
+test('list_directory_tree does not follow symlinks out of the workspace', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const workspace = path.join(tmpRoot, 'workspace');
+  const outside = path.join(tmpRoot, 'outside');
+  await fs.mkdir(workspace);
+  await fs.mkdir(outside);
+  await fs.writeFile(path.join(outside, 'secret.txt'), 'x', 'utf8');
+  const linked = await createSymlinkOrSkip(
+    t,
+    outside,
+    path.join(workspace, 'outside-link'),
+    process.platform === 'win32' ? 'junction' : 'dir'
+  );
+  if (!linked) return;
+
+  const out = await treeOf(registry, workspace);
+  assert.equal(out.tree, './');
+  assert.equal(out.entries_shown, 0);
+});
+
 async function makeLinesFixture(t, lineCount = 10) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'weyouze-fs-'));
   t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
