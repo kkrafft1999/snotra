@@ -221,9 +221,9 @@ summary:focus-visible,
 
 .folder-history-item {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 12px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
   font-size: 13px;
   font-weight: 400;
   text-transform: none;
@@ -232,13 +232,59 @@ summary:focus-visible,
   cursor: pointer;
   border: none;
   background: transparent;
-  width: 100%;
   text-align: left;
   font-family: var(--font-ui);
 }
 
-.folder-history-item:hover {
+.folder-history-item:hover,
+.folder-history-item:focus-visible {
   background: var(--bg-hover);
+}
+
+.folder-history-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Entfernen-Aktion (Issue #57, Mülleimer wie im Chat-Verlauf): erst bei Hover bzw. Fokus in der Zeile
+ * sichtbar, damit das Menü ruhig bleibt. focus-within deckt Tastatur ab. */
+.folder-history-item-remove {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+  opacity: 0;
+  transition:
+    opacity var(--ds-motion-fast),
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease;
+}
+
+.folder-history-item:hover .folder-history-item-remove,
+.folder-history-item:focus-within .folder-history-item-remove {
+  opacity: 1;
+}
+
+.folder-history-item-remove:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.folder-history-item-remove:active {
+  transform: scale(0.97);
 }
 
 .folder-history-item .folder-history-name {
@@ -1842,6 +1888,7 @@ select.modal-input {
   #btn-toggle-content-pane:active,
   #tree-header #btn-open-folder:active,
   #tree-header #btn-folder-history:active,
+  .folder-history-item-remove:active,
   #btn-chat-history:active,
   #btn-chat-new:active,
   #btn-chat-settings:active,

@@ -510,3 +510,45 @@ test('a missing history file produces an empty store and no quarantine', async (
   assert.deepEqual(store.sessions ?? [], []);
   assert.deepEqual(await quarantineFiles(tmpDir), []);
 });
+
+test('folder history: removeFolderFromHistory drops exactly one entry and keeps order', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const storage = makeStorage(tmpDir);
+
+  const dirs = {};
+  for (const n of ['a', 'b', 'c']) {
+    dirs[n] = path.join(tmpDir, `ws-${n}`);
+    await fs.mkdir(dirs[n]);
+    await storage.persistLastFolder(dirs[n]);
+  }
+  assert.deepEqual(await storage.getValidatedFolderHistory(), [dirs.c, dirs.b, dirs.a]);
+
+  assert.equal(await storage.removeFolderFromHistory(dirs.b), true);
+  assert.deepEqual(await storage.getValidatedFolderHistory(), [dirs.c, dirs.a]);
+
+  // Unbekannter Pfad, leerer und nicht-string Input sind No-ops.
+  assert.equal(await storage.removeFolderFromHistory(path.join(tmpDir, 'nope')), false);
+  assert.equal(await storage.removeFolderFromHistory(''), false);
+  assert.equal(await storage.removeFolderFromHistory(null), false);
+  assert.deepEqual(await storage.getValidatedFolderHistory(), [dirs.c, dirs.a]);
+
+  // Nicht-normalisierte Schreibweise (trailing slash, ".") trifft trotzdem.
+  assert.equal(await storage.removeFolderFromHistory(`${dirs.c}/./`), true);
+  assert.deepEqual(await storage.getValidatedFolderHistory(), [dirs.a]);
+});
+
+test('folder history: removing an entry leaves the folder and last-folder.json untouched', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const storage = makeStorage(tmpDir);
+
+  const ws = path.join(tmpDir, 'ws');
+  await fs.mkdir(ws);
+  await storage.persistLastFolder(ws);
+
+  assert.equal(await storage.removeFolderFromHistory(ws), true);
+  assert.deepEqual(await storage.getValidatedFolderHistory(), []);
+  assert.equal(await storage.getValidatedLastFolder(), ws);
+  assert.ok((await fs.stat(ws)).isDirectory());
+});

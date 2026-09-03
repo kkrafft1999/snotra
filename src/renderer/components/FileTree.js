@@ -185,28 +185,98 @@ export function initFileTree(deps) {
       return;
     }
     for (const p of paths) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'folder-history-item';
-      btn.setAttribute('role', 'menuitem');
-      btn.title = p;
+      const displayName = p.split('/').pop() || p;
+
+      // Kein <button> mehr: Der Entfernen-Button (Issue #57) läge sonst in
+      // einem Button verschachtelt (ungültiges HTML). Stattdessen eine Zeile
+      // mit role=menuitem und Tastatur-Handling wie im ChatHistoryDrawer.
+      const row = document.createElement('div');
+      row.className = 'folder-history-item';
+      row.setAttribute('role', 'menuitem');
+      row.tabIndex = 0;
+      row.title = p;
+      row.dataset.path = p;
+
+      const main = document.createElement('span');
+      main.className = 'folder-history-item-main';
 
       const name = document.createElement('span');
       name.className = 'folder-history-name';
-      name.textContent = p.split('/').pop() || p;
+      name.textContent = displayName;
 
       const sub = document.createElement('span');
       sub.className = 'folder-history-path';
       sub.textContent = p;
 
-      btn.appendChild(name);
-      btn.appendChild(sub);
-      btn.addEventListener('click', () => {
+      main.appendChild(name);
+      main.appendChild(sub);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'folder-history-item-remove';
+      remove.title = 'Aus Verlauf entfernen';
+      remove.setAttribute('aria-label', `${displayName} aus Verlauf entfernen`);
+      remove.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
+      row.appendChild(main);
+      row.appendChild(remove);
+
+      const openThis = () => {
         closeFolderHistoryMenu();
         if (p !== appStore.rootPath) openProject(p);
+      };
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.folder-history-item-remove')) return;
+        openThis();
       });
-      folderHistoryMenu.appendChild(btn);
+      row.addEventListener('keydown', (e) => {
+        if (e.target !== row) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openThis();
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          removeFolderFromHistory(p, row);
+        }
+      });
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeFolderFromHistory(p, row);
+      });
+      folderHistoryMenu.appendChild(row);
     }
+  }
+
+  /**
+   * Entfernt einen Eintrag aus „Zuletzt geöffnete Ordner“ (Issue #57), ohne
+   * den Ordner zu öffnen. Das Menü bleibt offen, damit man mehrere Einträge
+   * nacheinander wegräumen kann; der Fokus wandert auf den Nachbareintrag.
+   */
+  async function removeFolderFromHistory(folderPath, row) {
+    const neighbour = row?.nextElementSibling || row?.previousElementSibling || null;
+    const neighbourPath = neighbour?.dataset?.path || null;
+
+    let paths = null;
+    try {
+      const res = await api.removeFolderFromHistory(folderPath);
+      if (Array.isArray(res?.paths)) paths = res.paths;
+    } catch {
+      /* Fallback: unten komplett neu laden */
+    }
+    if (paths) {
+      renderFolderHistory(paths);
+      renderWelcomeRecent(paths);
+    } else {
+      await refreshFolderHistory();
+      refreshWelcomeRecent();
+    }
+
+    // Nach dem Re-Render existieren die alten Knoten nicht mehr — den
+    // Nachbarn über seinen Pfad wiederfinden, sonst ersten Eintrag bzw. Button.
+    const items = [...folderHistoryMenu.querySelectorAll('.folder-history-item')];
+    const target = items.find((el) => el.dataset.path === neighbourPath) || items[0] || btnFolderHistory;
+    target.focus();
   }
 
   function openFolderHistoryMenu() {

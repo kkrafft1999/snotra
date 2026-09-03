@@ -481,3 +481,26 @@ test('commitSettings treats an undecryptable key as incomplete access', async (t
   assert.equal(res.ok, false);
   assert.match(res.error, /unvollständig/);
 });
+
+test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
+  const { ipcMain } = await setupHandlers(t);
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-'));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const a = path.join(base, 'a');
+  const b = path.join(base, 'b');
+  await fs.mkdir(a);
+  await fs.mkdir(b);
+  await ipcMain.invoke(REQ.SETTINGS_SET_LAST_FOLDER, a);
+  await ipcMain.invoke(REQ.SETTINGS_SET_LAST_FOLDER, b);
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_FOLDER_HISTORY), { paths: [b, a] });
+
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, a), { ok: true, paths: [b] });
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_FOLDER_HISTORY), { paths: [b] });
+
+  // Unbekannter Eintrag: ok=false, Liste unverändert.
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, a), { ok: false, paths: [b] });
+
+  // Der aktuell geöffnete Ordner darf aus dem Verlauf, bleibt aber last folder.
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, b), { ok: true, paths: [] });
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_LAST_FOLDER), { folderPath: b });
+});

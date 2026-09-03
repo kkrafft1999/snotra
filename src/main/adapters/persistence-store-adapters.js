@@ -36,6 +36,7 @@ function createWorkspaceFolderStorePort(storage) {
     getValidatedLastFolder: (...args) => storage.getValidatedLastFolder(...args),
     persistLastFolder: (...args) => storage.persistLastFolder(...args),
     getValidatedFolderHistory: (...args) => storage.getValidatedFolderHistory(...args),
+    removeFolderFromHistory: (...args) => storage.removeFolderFromHistory(...args),
   };
 }
 
