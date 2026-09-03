@@ -136,6 +136,8 @@ app.whenReady().then(async () => {
     providersModule: providers,
     workspaceState,
     getMainWindow,
+    Menu,
+    shell,
     REQ,
     PUSH,
     LIMITS,

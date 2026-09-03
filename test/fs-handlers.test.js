@@ -39,16 +39,22 @@ async function setup(t) {
     getActiveWorkspaceRoot: () => activeWorkspaceRoot,
   });
   const ipcMain = createMockIpcMain();
+  const popups = [];
+  const mainWindow = { id: 'main' };
   registerFsHandlers({
     ipcMain,
     filesystem,
     REQ,
+    fileContextMenu: { popup: (absPath, win) => popups.push({ absPath, win }) },
+    getMainWindow: () => mainWindow,
   });
   return {
     ipcMain,
     fsService,
     workspace,
     outside,
+    popups,
+    mainWindow,
     setWorkspace(root) {
       activeWorkspaceRoot = root;
     },
@@ -254,4 +260,37 @@ test('moveItem denies symlinked sources and destinations outside the workspace',
   );
   assert.match(toSymlink.error, /außerhalb/);
   assert.equal(await fs.readFile(path.join(workspace, 'inside.txt'), 'utf8'), 'inside');
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: Datei im Workspace öffnet das Menü am Hauptfenster (#58)', async (t) => {
+  const { ipcMain, workspace, popups, mainWindow } = await setup(t);
+  const target = path.join(workspace, 'inside.txt');
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, target);
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(popups, [{ absPath: target, win: mainWindow }]);
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: Pfad außerhalb des Workspace wird abgelehnt (#58)', async (t) => {
+  const { ipcMain, outside, popups } = await setup(t);
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(outside, 'secret.txt'));
+  assert.match(result.error, /außerhalb/);
+  assert.deepEqual(popups, []);
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: Symlink aus dem Workspace heraus wird abgelehnt (#58)', async (t) => {
+  const { ipcMain, workspace, outside, popups } = await setup(t);
+  const link = path.join(workspace, 'escape.txt');
+  if (!(await createSymlinkOrSkip(t, path.join(outside, 'secret.txt'), link, 'file'))) return;
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, link);
+  assert.match(result.error, /außerhalb/);
+  assert.deepEqual(popups, []);
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: ohne Menü-Service kommt ein Fehler statt einer Exception (#58)', async (t) => {
+  const { fsService, workspace } = await setup(t);
+  const ipcMain = createMockIpcMain();
+  const filesystem = createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot: () => workspace });
+  registerFsHandlers({ ipcMain, filesystem, REQ });
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(workspace, 'inside.txt'));
+  assert.match(result.error, /nicht verfügbar/);
 });

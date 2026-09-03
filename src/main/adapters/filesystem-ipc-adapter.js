@@ -44,6 +44,11 @@ function createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot }) {
         return { entries: [], truncated: false, error: err.message };
       }
     },
+    // Nur Pfadprüfung, keine Dateizugriffe: der Aufrufer (z. B. Kontextmenü)
+    // arbeitet danach mit dem bereinigten absoluten Pfad weiter.
+    async resolveWorkspacePath(filePath) {
+      return boundPath(filePath);
+    },
     async readFilePreview(filePath) {
       const { absPath, error } = await boundPath(filePath);
       if (error) return { error };
