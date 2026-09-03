@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLastFolder: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LAST_FOLDER),
   setLastFolder: (folderPath) => ipcRenderer.invoke(REQ.SETTINGS_SET_LAST_FOLDER, folderPath),
   getFolderHistory: () => ipcRenderer.invoke(REQ.SETTINGS_GET_FOLDER_HISTORY),
+  removeFolderFromHistory: (folderPath) =>
+    ipcRenderer.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, folderPath),
   getUIPrefs: () => ipcRenderer.invoke(REQ.SETTINGS_GET_UI_PREFS),
   setUIPrefs: (partial) => ipcRenderer.invoke(REQ.SETTINGS_SET_UI_PREFS, partial),
   getToolCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_TOOL_CATALOG),

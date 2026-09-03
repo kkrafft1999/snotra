@@ -549,6 +549,22 @@ function createStorageService({
     await writeFolderHistory(trimmed);
   }
 
+  /**
+   * Entfernt einen Eintrag bewusst aus dem Verlauf (Issue #57). Fasst weder
+   * den Ordner auf der Platte noch last-folder.json an. Liefert true, wenn
+   * tatsächlich ein Eintrag entfernt wurde.
+   */
+  async function removeFolderFromHistory(folderPath) {
+    const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
+    if (!raw) return false;
+    const resolved = path.resolve(raw);
+    const list = await readFolderHistoryRaw();
+    const filtered = list.filter((p) => p !== resolved && p !== raw);
+    if (filtered.length === list.length) return false;
+    await writeFolderHistory(filtered);
+    return true;
+  }
+
   async function getValidatedFolderHistory() {
     const list = await readFolderHistoryRaw();
     const out = [];
@@ -604,6 +620,7 @@ function createStorageService({
     withChatHistoryLock,
     persistLastFolder,
     getValidatedFolderHistory,
+    removeFolderFromHistory,
     sessionMatchesWorkspace,
   };
 }

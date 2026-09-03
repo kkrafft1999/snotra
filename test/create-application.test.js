@@ -93,6 +93,7 @@ test('createApplication registers IPC handlers and disposes provider runtime', a
   const { app, ipcMain, disposed } = build;
 
   assert.ok(ipcMain.handlers.has(REQ.SETTINGS_GET_UI_PREFS));
+  assert.ok(ipcMain.handlers.has(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY));
   assert.ok(ipcMain.handlers.has(REQ.CHAT_HISTORY_GET));
   assert.ok(ipcMain.handlers.has(REQ.FS_READ_DIRECTORY));
   assert.ok(ipcMain.handlers.has(REQ.WHISPER_TRANSCRIBE));

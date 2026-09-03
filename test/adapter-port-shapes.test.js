@@ -35,6 +35,7 @@ const WORKSPACE_FOLDER_STORE_KEYS = [
   'getValidatedFolderHistory',
   'getValidatedLastFolder',
   'persistLastFolder',
+  'removeFolderFromHistory',
 ];
 
 const PROVIDER_SECRETS_KEYS = ['getEffectiveProviderConfig'];
@@ -63,6 +64,7 @@ function makeStorageStub() {
     getValidatedLastFolder: async () => null,
     persistLastFolder: async () => {},
     getValidatedFolderHistory: async () => [],
+    removeFolderFromHistory: async () => false,
     leakInternalMethod: async () => 'must-not-forward',
   };
 }

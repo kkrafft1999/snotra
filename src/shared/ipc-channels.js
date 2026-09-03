@@ -27,6 +27,8 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_LAST_FOLDER: 'settings:getLastFolder',
   SETTINGS_SET_LAST_FOLDER: 'settings:setLastFolder',
   SETTINGS_GET_FOLDER_HISTORY: 'settings:getFolderHistory',
+  /** Einzelnen Eintrag aus „Zuletzt geöffnete Ordner“ entfernen (Issue #57). */
+  SETTINGS_REMOVE_FOLDER_FROM_HISTORY: 'settings:removeFolderFromHistory',
   SETTINGS_GET_UI_PREFS: 'settings:getUIPrefs',
   SETTINGS_SET_UI_PREFS: 'settings:setUIPrefs',
   SETTINGS_GET_TOOL_CATALOG: 'settings:getToolCatalog',

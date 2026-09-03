@@ -199,6 +199,14 @@ function registerSettingsHandlers({
     return { paths };
   });
 
+  // Liefert die bereinigte Liste gleich mit, damit der Renderer Menü und
+  // Welcome-Chips ohne zweiten Roundtrip neu zeichnen kann.
+  ipcMain.handle(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, async (_event, folderPath) => {
+    const removed = await workspaceFolderStore.removeFolderFromHistory(folderPath);
+    const paths = await workspaceFolderStore.getValidatedFolderHistory();
+    return { ok: removed === true, paths };
+  });
+
   ipcMain.handle(REQ.SETTINGS_GET_UI_PREFS, async () => uiPrefsStore.readUIPrefs());
 
   ipcMain.handle(REQ.SETTINGS_GET_TOOL_CATALOG, async () => ({
