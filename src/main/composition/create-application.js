@@ -24,6 +24,7 @@ const { createSpeechAdapter } = require('../adapters/speech-adapter');
 const { createUpdateAdapter } = require('../adapters/update-adapter');
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
+const { createFileContextMenu } = require('../services/file-context-menu');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerSettingsHandlers } = require('../ipc/settings-handlers');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
@@ -42,6 +43,8 @@ function createApplication({
   providersModule,
   workspaceState,
   getMainWindow,
+  Menu = null,
+  shell = null,
   REQ,
   PUSH,
   LIMITS,
@@ -113,7 +116,8 @@ function createApplication({
   });
 
   registerDialogHandlers({ ipcMain, dialog, getMainWindow, REQ });
-  registerFsHandlers({ ipcMain, filesystem, REQ });
+  const fileContextMenu = Menu && shell ? createFileContextMenu({ Menu, shell }) : null;
+  registerFsHandlers({ ipcMain, filesystem, REQ, fileContextMenu, getMainWindow });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({
     ipcMain,

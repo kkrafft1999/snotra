@@ -321,6 +321,9 @@ export function initFileTree(deps) {
     }
   });
 
+  // Ordner und leere Fläche haben (noch) kein Kontextmenü, siehe Issue #58.
+  treeContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+
   treeContainer.addEventListener('dragover', (e) => {
     if (!appStore.rootPath || !dragSourcePath) return;
     const overItem = e.target.closest('.tree-item');
@@ -419,8 +422,32 @@ export function initFileTree(deps) {
 
         row.addEventListener('click', () => toggleFolder(row, childContainer, item.path, depth + 1));
       } else {
-        row.addEventListener('click', () => selectFile(row, item));
+        row.addEventListener('click', (e) => {
+          // ⌘-Klick (macOS) bzw. Ctrl-Klick (Windows/Linux) als Alternative zum Rechtsklick.
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            void openFileContextMenu(item);
+            return;
+          }
+          selectFile(row, item);
+        });
+        row.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void openFileContextMenu(item);
+        });
       }
+    }
+  }
+
+  // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen).
+  // Das Menü selbst baut der Main-Prozess, hier wird nur der Pfad übergeben.
+  async function openFileContextMenu(item) {
+    try {
+      const result = await api.showFileContextMenu(item.path);
+      if (result?.error) console.warn('Kontextmenü abgelehnt:', result.error);
+    } catch (err) {
+      console.warn('Kontextmenü fehlgeschlagen:', err?.message ?? err);
     }
   }
 

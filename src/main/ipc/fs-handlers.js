@@ -1,4 +1,4 @@
-function registerFsHandlers({ ipcMain, filesystem, REQ }) {
+function registerFsHandlers({ ipcMain, filesystem, REQ, fileContextMenu = null, getMainWindow = () => null }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath) =>
     filesystem.readDirectory(dirPath));
 
@@ -10,6 +10,16 @@ function registerFsHandlers({ ipcMain, filesystem, REQ }) {
 
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async () =>
     filesystem.listWorkspacePaths());
+
+  // Issue #58: Kontextmenü im Dateibaum. Der Pfad wird wie bei allen fs-Kanälen
+  // gegen den aktiven Workspace geprüft, bevor er an die Shell geht.
+  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath) => {
+    if (!fileContextMenu) return { error: 'Kontextmenü nicht verfügbar.' };
+    const { absPath, error } = await filesystem.resolveWorkspacePath(filePath);
+    if (error) return { error };
+    fileContextMenu.popup(absPath, getMainWindow());
+    return { ok: true };
+  });
 }
 
 module.exports = { registerFsHandlers };
