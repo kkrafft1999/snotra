@@ -5,6 +5,7 @@ const { createProviderLlmAdapter } = require('../adapters/provider-llm-adapter')
 const { createChatPreferencesAdapter } = require('../adapters/chat-preferences-adapter');
 const { createNodeWorkspacePathAdapter } = require('../adapters/workspace-path-adapter');
 const { createWorkspaceToolAdapter } = require('../adapters/workspace-tool-adapter');
+const { createSkillsAdapter } = require('../adapters/skills-adapter');
 
 function createChatApplication({
   llmConfigStore,
@@ -12,6 +13,7 @@ function createChatApplication({
   providerSecrets,
   uiPrefsStore,
   toolRegistry,
+  skillsService,
   path,
   maxToolRounds,
 }) {
@@ -19,16 +21,18 @@ function createChatApplication({
   const tools = createWorkspaceToolAdapter(toolRegistry);
   const preferences = createChatPreferencesAdapter({ uiPrefsStore });
   const workspacePaths = createNodeWorkspacePathAdapter({ path });
+  const skills = skillsService ? createSkillsAdapter(skillsService) : null;
 
   const engine = createChatEngine({
     llm,
     tools,
     preferences,
     workspacePaths,
+    skills,
     maxToolRounds,
   });
 
-  return { engine, llm, tools, preferences, workspacePaths };
+  return { engine, llm, tools, preferences, workspacePaths, skills };
 }
 
 module.exports = {

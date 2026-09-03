@@ -188,3 +188,57 @@ test('runUpdateCheck manual mode always pushes even when up to date', async (t) 
   assert.equal(sent[0].payload.manual, true);
   assert.equal(sent[0].payload.updateAvailable, false);
 });
+
+test('createApplication wires the skill catalog channels', async (t) => {
+  const { ipcMain } = await makeApplication(t)();
+
+  // Ohne app.getAppPath() (Test-Fake) gibt es keine System-Skills, der Kanal
+  // muss trotzdem antworten statt zu fehlen.
+  const catalog = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, null);
+  assert.ok(Array.isArray(catalog.skills));
+  const reloaded = await ipcMain.invoke(REQ.SETTINGS_RELOAD_SKILLS, null);
+  assert.ok(Array.isArray(reloaded.skills));
+});
+
+test('createApplication findet System-Skills unter app.getAppPath()/system-skills', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-skills-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const skillDir = path.join(tmpDir, 'system-skills', 'demo-system-skill');
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.writeFile(
+    path.join(skillDir, 'SKILL.md'),
+    '---\nname: demo-system-skill\ndescription: Test\n---\nAnweisung.\n',
+    'utf8'
+  );
+
+  const ipcMain = createMockIpcMain();
+  createApplication({
+    app: { getPath: () => tmpDir, getVersion: () => '9.9.9', getAppPath: () => tmpDir },
+    ipcMain,
+    dialog: {},
+    safeStorage: { isEncryptionAvailable: () => false },
+    fs,
+    path,
+    os: { homedir: () => path.join(tmpDir, 'kein-home') },
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }),
+    providersModule: makeProvidersModule({ called: false }),
+    workspaceState: { getActiveWorkspaceRoot: () => null, setActiveWorkspaceRoot: () => {} },
+    getMainWindow: () => null,
+    REQ,
+    PUSH,
+    LIMITS: {
+      MAX_CHAT_SESSIONS: 5,
+      MAX_FOLDER_HISTORY: 3,
+      MAX_READ_FILE_BYTES: 1024,
+      MAX_WRITE_FILE_BYTES: 1024,
+      MAX_TOOL_ROUNDS: 3,
+    },
+    defaultProviderId: 'openai',
+  });
+
+  const catalog = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, null);
+  assert.deepEqual(
+    catalog.skills.map((skill) => [skill.name, skill.source, skill.status]),
+    [['demo-system-skill', 'system', 'active']]
+  );
+});

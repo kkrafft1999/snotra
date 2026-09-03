@@ -8,6 +8,7 @@ const {
 } = require('../src/main/adapters/persistence-store-adapters');
 const { createProviderSecretsPort } = require('../src/main/adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../src/main/adapters/credential-adapter');
+const { createSkillsAdapter } = require('../src/main/adapters/skills-adapter');
 
 const LLM_CONFIG_STORE_KEYS = [
   'normalizePresetEntry',
@@ -41,6 +42,8 @@ const WORKSPACE_FOLDER_STORE_KEYS = [
 const PROVIDER_SECRETS_KEYS = ['getEffectiveProviderConfig'];
 
 const CREDENTIAL_PORT_KEYS = ['getApiKey'];
+
+const SKILL_PORT_KEYS = ['getActiveSkills'];
 
 function makeStorageStub() {
   return {
@@ -94,4 +97,21 @@ test('credential adapter exposes only getApiKey and uses provider secrets', asyn
   assert.deepEqual(Object.keys(credentials).sort(), CREDENTIAL_PORT_KEYS.sort());
   assert.equal(await credentials.getApiKey('openai'), 'sk-test');
   assert.equal(seenProviderId, 'openai');
+});
+
+test('skills adapter exposes only the skill port surface', () => {
+  const calls = [];
+  const adapter = createSkillsAdapter({
+    listCatalog: async () => ({ skills: [] }),
+    reload: () => calls.push('reload'),
+    getActiveSkills: async (options) => {
+      calls.push(options);
+      return [];
+    },
+  });
+
+  assert.deepEqual(Object.keys(adapter).sort(), SKILL_PORT_KEYS);
+  return adapter.getActiveSkills({ workspaceRoot: null, activeSkills: ['x'] }).then(() => {
+    assert.deepEqual(calls, [{ workspaceRoot: null, activeSkills: ['x'] }]);
+  });
 });

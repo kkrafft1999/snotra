@@ -50,6 +50,7 @@ bestehende Importe stabil bleiben.
 - `tool-port` — Tool-Registry und Ausführung
 - `chat-preferences-port` — UI-Prefs, System-Prompt, Tool-Runden-Limit
 - `workspace-path-port` — Pfad-Helfer (z. B. `basename`)
+- `skill-port` — Bodies der eingeschalteten Skills für den Systemprompt
 
 **Infrastruktur-Ports** (`src/main/ports/`) — von Adaptern implementiert,
 über Composition injiziert:
@@ -60,6 +61,14 @@ bestehende Importe stabil bleiben.
 - Laufzeit: `provider-runtime-port`, `provider-catalog-port`,
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
+
+Der **Skill-Service** (`services/skills-service.js`) scannt die fünf
+Skill-Quellen — die eingebauten System-Skills aus `system-skills/` im
+App-Bundle sowie `.agents/skills/` und `.claude/skills/` in Workspace und
+Home — und wird über `adapters/skills-adapter.js` als schmaler `skill-port`
+in die Chat-Engine gereicht. Das Parsen des Frontmatters liegt als reine
+Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
+`shared/contracts/skills.js`.
 
 ## Composition root
 
@@ -108,8 +117,12 @@ dupliziert.
 | `test/contracts*.test.js` | Wire-Enums und Settings-DTOs an der IPC-Grenze |
 | `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalisierte Anzeige-Daten für Settings, Verlauf |
 
-## Weitere funktionale Module (noch offen)
+## Weitere funktionale Module
 
-Skills, erweiterte Tool-Sets und Use-Case-Profile sind **nicht** Teil der
-abgeschlossenen Architektur-Etappen — sie bauen auf dieser Struktur auf, sind
-aber in [`roadmap.md`](./roadmap.md) weiterhin als nächste Schritte geführt.
+Das Skill-System ([#18](https://github.com/kkrafft1999/snotra/issues/18)) ist
+auf dieser Struktur aufgesetzt: Discovery und Parsing im Main-Service, Auswahl
+und Systemprompt-Zusammenbau im Core, Katalog und Umschalter über die
+bestehenden Settings-Kanäle. Erweiterte Tool-Sets und Use-Case-Profile sind
+**nicht** Teil der abgeschlossenen Architektur-Etappen — sie bauen ebenfalls
+darauf auf und sind in [`roadmap.md`](./roadmap.md) als nächste Schritte
+geführt.

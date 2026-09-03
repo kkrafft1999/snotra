@@ -259,6 +259,10 @@
             Tools
             <span class="settings-nav-item__desc">Werkzeuge fürs Sprachmodell</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
+            Skills
+            <span class="settings-nav-item__desc">Arbeitsweisen für das Sprachmodell</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
             Allgemein
             <span class="settings-nav-item__desc">Texte, Prompts, Verhalten</span>
@@ -315,6 +319,28 @@
                   Option kann die KI Dateien nur lesen.
                 </p>
               </div>
+            </div>
+          </section>
+
+          <section class="settings-panel" id="panel-settings-skills" role="tabpanel" aria-labelledby="tab-settings-skills" hidden>
+            <p class="settings-form-hint">
+              Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten soll.
+              Angehakte Skills werden dem Modell als Teil des System-Prompts mitgegeben.
+              <strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv.
+              <strong>Ordner-Skills</strong> liest Snotra aus <code lang="en">.agents/skills</code> und
+              <code lang="en">.claude/skills</code> im geöffneten Ordner und im Benutzerverzeichnis — sie sind
+              fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.
+            </p>
+            <div class="settings-tools-card">
+              <div class="settings-panel-models__head">
+                <h3 class="settings-subsection-title" id="heading-skill-catalog">Verfügbare Skills</h3>
+                <button type="button" id="btn-reload-skills" class="btn-secondary">Skills neu laden</button>
+              </div>
+              <ul id="settings-skill-list" class="settings-tool-list" aria-labelledby="heading-skill-catalog"></ul>
+              <p id="settings-skill-list-empty" class="settings-empty-hint hidden">
+                Keine Skills gefunden.
+              </p>
+              <p id="settings-skill-limit-hint" class="modal-hint hidden"></p>
             </div>
           </section>
 

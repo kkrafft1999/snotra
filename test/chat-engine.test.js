@@ -107,6 +107,7 @@ function makeEngine(results, {
   tools,
   preferences,
   workspacePaths,
+  skills,
   maxToolRounds = 3,
 } = {}) {
   const llmPort = llm || makeLlmPort(results);
@@ -118,6 +119,7 @@ function makeEngine(results, {
       tools: tools || makeToolPort(),
       preferences: preferences || { async read() { return {}; } },
       workspacePaths: workspacePaths || makeWorkspacePaths(),
+      skills: skills || null,
       maxToolRounds,
       clock: () => 1234,
     }),
@@ -703,4 +705,89 @@ test('engine resets pending tool calls between rounds', async () => {
     [0, 'Projektordner wird durchsucht …'],
     [0, 'Ordner docs wird durchsucht …'],
   ]);
+});
+
+test('engine injects the bodies of active skills into the system message', async () => {
+  const skillCalls = [];
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    preferences: { async read() { return { activeSkills: ['snotra-capabilities'] }; } },
+    skills: {
+      async getActiveSkills(options) {
+        skillCalls.push(options);
+        return [
+          {
+            name: 'snotra-capabilities',
+            description: 'Auskunft über die App',
+            source: 'system',
+            path: '/app/system-skills/snotra-capabilities',
+            body: 'Snotra hat keine Shell.',
+          },
+        ];
+      },
+    },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Was kannst du?' }] },
+  });
+
+  assert.deepEqual(skillCalls, [{ workspaceRoot: null, activeSkills: ['snotra-capabilities'] }]);
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system, 'Skills gelten auch ohne geöffneten Ordner');
+  assert.match(system.content, /## Skill: snotra-capabilities/);
+  assert.match(system.content, /Snotra hat keine Shell\./);
+});
+
+test('engine orders user prompt, skills and workspace context', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    preferences: { async read() { return { baseSystemPrompt: 'Sei knapp.' }; } },
+    skills: {
+      async getActiveSkills() {
+        return [{ name: 'demo', description: 'd', source: 'system', path: '/x', body: 'Regel A.' }];
+      },
+    },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  const promptAt = system.content.indexOf('Sei knapp.');
+  const skillAt = system.content.indexOf('## Skill: demo');
+  const workspaceAt = system.content.indexOf('geöffneten Ordner');
+  assert.ok(promptAt === 0 && promptAt < skillAt && skillAt < workspaceAt, system.content);
+});
+
+test('engine keeps answering when the skill port fails', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    skills: {
+      async getActiveSkills() {
+        throw new Error('Skill-Verzeichnis kaputt');
+      },
+    },
+  });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  assert.equal(result.content, 'ok');
+  assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+});
+
+test('engine leaves the system message untouched when no skill is active', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    skills: { async getActiveSkills() { return []; } },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
 });

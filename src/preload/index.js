@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUIPrefs: () => ipcRenderer.invoke(REQ.SETTINGS_GET_UI_PREFS),
   setUIPrefs: (partial) => ipcRenderer.invoke(REQ.SETTINGS_SET_UI_PREFS, partial),
   getToolCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_TOOL_CATALOG),
+  getSkillCatalog: (workspaceRoot) =>
+    ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, workspaceRoot ?? null),
+  reloadSkills: (workspaceRoot) => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS, workspaceRoot ?? null),
   getChatHistory: (workspaceRoot) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET, workspaceRoot ?? null),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),

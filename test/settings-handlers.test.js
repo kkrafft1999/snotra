@@ -145,7 +145,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog } = {}) {
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const safeStorage = {
@@ -198,8 +198,9 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     setActiveWorkspaceRoot: () => {},
     presentation,
     toolCatalog,
+    skillCatalog,
   });
-  return { ipcMain, storage, llmConfigStore };
+  return { ipcMain, storage, llmConfigStore, uiPrefsStore };
 }
 
 test('getToolCatalog returns the registry catalog, or an empty list without one', async (t) => {
@@ -503,4 +504,52 @@ test('removeFolderFromHistory drops one entry and returns the remaining list', a
   // Der aktuell geöffnete Ordner darf aus dem Verlauf, bleibt aber last folder.
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, b), { ok: true, paths: [] });
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_LAST_FOLDER), { folderPath: b });
+});
+
+test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch', async (t) => {
+  const calls = [];
+  const { ipcMain } = await setupHandlers(t, {
+    skillCatalog: {
+      listCatalog: async (options) => {
+        calls.push(options);
+        return { skills: [{ name: 'snotra-capabilities', source: 'system', status: 'active' }] };
+      },
+      reload: () => calls.push('reload'),
+    },
+  });
+
+  const result = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, '/tmp/ws');
+  assert.equal(result.skills[0].name, 'snotra-capabilities');
+  assert.deepEqual(calls, [{ workspaceRoot: '/tmp/ws', activeSkills: null }]);
+
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['snotra-capabilities'] });
+  await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, null);
+  assert.deepEqual(calls[1], { workspaceRoot: null, activeSkills: ['snotra-capabilities'] });
+});
+
+test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (t) => {
+  const calls = [];
+  const { ipcMain } = await setupHandlers(t, {
+    skillCatalog: {
+      listCatalog: async () => ({ skills: [] }),
+      reload: () => calls.push('reload'),
+    },
+  });
+
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_RELOAD_SKILLS, null), { skills: [] });
+  assert.deepEqual(calls, ['reload']);
+});
+
+test('ohne Skill-Service liefern beide Kanäle eine leere Liste', async (t) => {
+  const { ipcMain } = await setupHandlers(t);
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, null), { skills: [] });
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_RELOAD_SKILLS, null), { skills: [] });
+});
+
+test('activeSkills überleben den Weg durch setUIPrefs', async (t) => {
+  const { ipcMain } = await setupHandlers(t);
+  const saved = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['a', 'a', 'b'] });
+  assert.deepEqual(saved.activeSkills, ['a', 'b']);
+  const reread = await ipcMain.invoke(REQ.SETTINGS_GET_UI_PREFS);
+  assert.deepEqual(reread.activeSkills, ['a', 'b']);
 });
