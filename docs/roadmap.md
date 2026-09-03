@@ -126,10 +126,13 @@ wieder entfernt.
 
 - 🧩 **Skill-Konzept (MVP)**
   ([#18](https://github.com/kkrafft1999/snotra/issues/18)): Kern der
-  Plattform-Vision. Ein Skill = Prompt/Arbeitsweise + Menge erlaubter Tools
-  + optional Ablauf, als Konfiguration in einem `skills/`-Ordner, beim Start
-  geladen und in den Einstellungen auswählbar. Baut auf Tool-Registry und
-  Tool-Häkchen auf; dynamisches Nachladen zur Laufzeit ist Ausbaustufe
+  Plattform-Vision. Skills im Agent-Skills-Format (`SKILL.md` mit
+  Frontmatter, agentskills.io) werden aus `.agents/skills/` und
+  `.claude/skills/` gelesen, jeweils im Workspace und global unter `~`;
+  vorhandene Claude-Code-Skills sind damit direkt nutzbar, ein eigener
+  Snotra-Ordner entfällt. Beim Start nur Name/Beschreibung, der Body erst
+  beim Aktivieren in den Einstellungen. `allowed-tools` wird ignoriert, die
+  Tool-Häkchen bleiben maßgeblich; dynamisches Nachladen ist Ausbaustufe
 
 ## 💡 Später / Ideen
 
