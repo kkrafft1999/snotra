@@ -47,6 +47,19 @@ Release-Tag**, nicht die Dateinamen — die Asset-Namen sind also frei wählbar,
 sollten aber Version und Plattform enthalten, z. B.
 `Snotra-AI-1.1.0-mac-arm64.dmg`.
 
+### App-Icon
+
+`icon.icns` (macOS) und `icon.ico` (Windows) sind eingecheckt und werden von
+der Pipeline **nicht** neu gebaut. Quelle sind die SVGs in `assets/icon/`
+(`icon-macos.svg` mit Apple-Icon-Raster und Schatten, `icon-windows.svg`
+vollflächig). Nach einer Änderung daran einmal lokal erzeugen — braucht
+`rsvg-convert` (`brew install librsvg`) und `iconutil` (Xcode Command Line
+Tools):
+
+```sh
+node scripts/build-icons.js
+```
+
 ## Release veröffentlichen
 
 ```sh

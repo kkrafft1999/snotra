@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Snotra AI App-Icon, macOS-Layout: 824-px-Squircle im 1024-px-Raster (Apple-Icon-Grid) mit Schatten.
+     Quelle fuer icon.icns, Build: node scripts/build-icons.js -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1188B4"/>
+      <stop offset="1" stop-color="#00658A"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <rect x="100" y="112" width="824" height="824" rx="186" fill="#000" opacity="0.28" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <!-- Eule: Weisheitssymbol fuer Snotra, Goettin der Klugheit -->
+  <g id="owl">
+    <path d="M292 262 L390 352 Q512 306 634 352 L732 262 V576 A220 220 0 0 1 292 576 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="20" stroke-linejoin="round"/>
+    <circle cx="428" cy="480" r="74" fill="#00658A"/>
+    <circle cx="596" cy="480" r="74" fill="#00658A"/>
+    <circle cx="448" cy="460" r="22" fill="#FFFFFF"/>
+    <circle cx="616" cy="460" r="22" fill="#FFFFFF"/>
+    <path d="M482 566 H542 L512 616 Z" fill="#00658A" stroke="#00658A" stroke-width="16" stroke-linejoin="round"/>
+  </g>
+</svg>
