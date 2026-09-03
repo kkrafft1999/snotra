@@ -109,9 +109,10 @@ Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschrän
 │   ├── renderer/        UI (HTML, CSS, JS) — reine Präsentationsschicht
 │   └── shared/          Contracts, IPC-Kanäle, gemeinsame Presentation-Helfer
 ├── test/                Tests (node:test), inkl. Architektur-Grenzwächter
-├── scripts/             Build-Helfer (z. B. Vendor-Sync für den Renderer)
+├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
 ├── docs/                Roadmap, Architektur (`architecture.md`, SVG-Diagramme)
-├── icon.icns / icon.ico App-Icons für macOS / Windows
+├── assets/icon/         SVG-Quellen des App-Icons (macOS- und Windows-Layout)
+├── icon.icns / icon.ico App-Icons für macOS / Windows, erzeugt per `node scripts/build-icons.js`
 └── package.json
 ```
 
