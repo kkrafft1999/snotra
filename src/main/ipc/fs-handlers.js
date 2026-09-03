@@ -1,4 +1,4 @@
-function registerFsHandlers({ ipcMain, filesystem, REQ, fileContextMenu = null, getMainWindow = () => null }) {
+function registerFsHandlers({ ipcMain, filesystem, REQ, PUSH = null, fileContextMenu = null, getMainWindow = () => null }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath) =>
     filesystem.readDirectory(dirPath));
 
@@ -17,7 +17,15 @@ function registerFsHandlers({ ipcMain, filesystem, REQ, fileContextMenu = null, 
     if (!fileContextMenu) return { error: 'Kontextmenü nicht verfügbar.' };
     const { absPath, error } = await filesystem.resolveWorkspacePath(filePath);
     if (error) return { error };
-    fileContextMenu.popup(absPath, getMainWindow());
+    const win = getMainWindow();
+    fileContextMenu.popup(absPath, win, {
+      // Nach dem Löschen (Papierkorb) den Baum im Renderer nachziehen.
+      onDeleted: (deletedPath) => {
+        if (PUSH && win && !win.isDestroyed()) {
+          win.webContents.send(PUSH.FS_ITEM_DELETED, { path: deletedPath });
+        }
+      },
+    });
     return { ok: true };
   });
 }

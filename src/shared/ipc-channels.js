@@ -58,6 +58,8 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_TOOL_LINE: 'chat:tool-line',
   CHAT_PROGRESS: 'chat:progress',
   UPDATE_AVAILABLE: 'update:available',
+  /** Main hat eine Datei aus dem Workspace gelöscht (Kontextmenü, Issue #59); Renderer aktualisiert den Baum. */
+  FS_ITEM_DELETED: 'fs:item-deleted',
 });
 
 module.exports = {

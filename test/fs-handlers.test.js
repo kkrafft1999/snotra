@@ -6,7 +6,7 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-ipc-adapter');
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
-const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
+const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 
 async function createSymlinkOrSkip(t, target, linkPath, type) {
@@ -40,12 +40,18 @@ async function setup(t) {
   });
   const ipcMain = createMockIpcMain();
   const popups = [];
-  const mainWindow = { id: 'main' };
+  const pushed = [];
+  const mainWindow = {
+    id: 'main',
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => pushed.push({ channel, payload }) },
+  };
   registerFsHandlers({
     ipcMain,
     filesystem,
     REQ,
-    fileContextMenu: { popup: (absPath, win) => popups.push({ absPath, win }) },
+    PUSH,
+    fileContextMenu: { popup: (absPath, win, opts) => popups.push({ absPath, win, opts }) },
     getMainWindow: () => mainWindow,
   });
   return {
@@ -54,6 +60,7 @@ async function setup(t) {
     workspace,
     outside,
     popups,
+    pushed,
     mainWindow,
     setWorkspace(root) {
       activeWorkspaceRoot = root;
@@ -267,7 +274,17 @@ test('FS_SHOW_FILE_CONTEXT_MENU: Datei im Workspace öffnet das Menü am Hauptfe
   const target = path.join(workspace, 'inside.txt');
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, target);
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(popups, [{ absPath: target, win: mainWindow }]);
+  assert.equal(popups.length, 1);
+  assert.equal(popups[0].absPath, target);
+  assert.equal(popups[0].win, mainWindow);
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: onDeleted pusht FS_ITEM_DELETED an den Renderer (#59)', async (t) => {
+  const { ipcMain, workspace, popups, pushed } = await setup(t);
+  const target = path.join(workspace, 'inside.txt');
+  await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, target);
+  popups[0].opts.onDeleted(target);
+  assert.deepEqual(pushed, [{ channel: PUSH.FS_ITEM_DELETED, payload: { path: target } }]);
 });
 
 test('FS_SHOW_FILE_CONTEXT_MENU: Pfad außerhalb des Workspace wird abgelehnt (#58)', async (t) => {
