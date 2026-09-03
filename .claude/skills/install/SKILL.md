@@ -16,14 +16,16 @@ installierte App. Es wird nichts committet, gepusht oder veröffentlicht.
 
 ## Schritt 1 — Pre-Flight (kurz, kein Nachfragen)
 
-1. Node 24 verwenden. Die Default-Shell hat Node 20, damit scheitern Tests
-   und ggf. der Build. Deshalb in **jedem** Bash-Aufruf den nvm-Pfad
+1. Node ≥ 24 sicherstellen (`node -v`). Normalerweise liefert die Shell
+   über nvm bereits v24. Falls nicht, den nvm-Pfad in **jedem** Bash-Aufruf
    voranstellen:
    ```sh
    export PATH="$HOME/.nvm/versions/node/v24.18.1/bin:$PATH"
    ```
    (Falls die Version nicht existiert: `ls ~/.nvm/versions/node/` und die
-   neueste v24 nehmen.)
+   neueste v24 nehmen.) Ursache einer falschen Version ist erfahrungsgemäß
+   eine absolute `export PATH=...`-Zeile in `~/.zshrc`, die ein Tool
+   eingetragen hat. Das dem Nutzer kurz melden.
 2. Läuft die App gerade? `pgrep -x "Snotra AI"`. Wenn ja, den Nutzer nicht
    fragen, sondern nach dem Kopieren darauf hinweisen, dass er die alte
    Instanz neu starten muss. Nur beenden (`osascript -e 'quit app "Snotra AI"'`),
@@ -35,7 +37,7 @@ installierte App. Es wird nichts committet, gepusht oder veröffentlicht.
 ## Schritt 2 — Bauen
 
 ```sh
-export PATH="$HOME/.nvm/versions/node/v24.18.1/bin:$PATH" && npm run package
+npm run package
 ```
 
 `npm run package` (siehe `package.json`) synchronisiert zuerst die
