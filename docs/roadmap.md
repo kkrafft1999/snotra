@@ -122,19 +122,38 @@ wieder entfernt.
   Chat-Verlauf wird gesichert statt überschrieben. Alte Installationen
   finden Updates über GitHubs Redirect vom alten Repo-Namen
 
+- 🧩 **Skill-System**
+  ([#18](https://github.com/kkrafft1999/snotra/issues/18)): Skills im
+  Agent-Skills-Format (`SKILL.md` mit Frontmatter, agentskills.io) aus fünf
+  Quellen — **System-Skills** aus `system-skills/` im App-Bundle (Teil des
+  Produkts, voreingestellt aktiv, mitgeliefert: `snotra-capabilities` für
+  Selbstauskunft der App) sowie **Ordner-Skills** aus `.agents/skills/` und
+  `.claude/skills/`, jeweils im Workspace und unter `~`. Vorhandene
+  Claude-Code-Skills sind damit direkt nutzbar, ein eigener Snotra-Ordner
+  entfällt. Namenskonflikte: erster Treffer gewinnt, der Rest wird als
+  „überdeckt“ angezeigt; ungültige Einträge mit Grund statt Scan-Abbruch.
+  Auswahl je Skill unter Einstellungen › Skills (max. 8 gleichzeitig, kein
+  Datei-Watcher, Button „Skills neu laden“); Ordner-Skills nie automatisch
+  aktiv (Prompt-Injection). `allowed-tools` wird ignoriert, die Tool-Häkchen
+  bleiben maßgeblich
+
 ## 🚧 Jetzt / als Nächstes
 
-- 🧩 **Skill-Konzept (MVP)**
-  ([#18](https://github.com/kkrafft1999/snotra/issues/18)): Kern der
-  Plattform-Vision. Skills im Agent-Skills-Format (`SKILL.md` mit
-  Frontmatter, agentskills.io) werden aus `.agents/skills/` und
-  `.claude/skills/` gelesen, jeweils im Workspace und global unter `~`;
-  vorhandene Claude-Code-Skills sind damit direkt nutzbar, ein eigener
-  Snotra-Ordner entfällt. Beim Start nur Name/Beschreibung, der Body erst
-  beim Aktivieren in den Einstellungen. `allowed-tools` wird ignoriert, die
-  Tool-Häkchen bleiben maßgeblich; dynamisches Nachladen ist Ausbaustufe
+- 📂 **Lese-Tools für Skill-Verzeichnisse öffnen** (Folgeschritt aus
+  [#18](https://github.com/kkrafft1999/snotra/issues/18)): Dateien neben der
+  `SKILL.md` (`references/`, `assets/`, `scripts/`) sind heute nur lesbar,
+  wenn der Skill im geöffneten Ordner liegt. Damit auch globale Skills unter
+  `~/.claude/skills/` vollständig funktionieren, müssten die Read-only-Tools
+  das Verzeichnis eines eingeschalteten Skills als zweite erlaubte Wurzel
+  akzeptieren — Schreib-Tools bleiben auf den Workspace beschränkt. Bewusst
+  vom MVP getrennt, weil es den Dateizugriff über den Workspace hinaus
+  erweitert
 
 ## 💡 Später / Ideen
+
+- 🎛️ **Skills gezielt aufrufen**: `/name` im Chat und Auto-Vorschlag anhand
+  der Beschreibungen, statt der Häkchen in den Einstellungen; dazu ein
+  Datei-Watcher, damit neue Skills ohne „Skills neu laden“ auftauchen
 
 - 🎯 **Use-Case-Profile**, die Plattform + Skills + Tools zu einer
   dedizierten Anwendung bündeln (z. B. HR-, IT-, Büro-Profile aus der

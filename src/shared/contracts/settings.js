@@ -8,6 +8,7 @@
 'use strict';
 
 const { APP_LOCALES, PRESET_DETAIL_STYLES, PRESET_FIELD_TYPES } = require('./enums');
+const { normalizeActiveSkills } = require('./skills');
 
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;
@@ -212,6 +213,7 @@ function normalizeUiPrefs(raw) {
   const sidebarWidth = clampSidebarWidth(data.sidebarWidth);
   const chatPanelWidth = clampChatPanelWidth(data.chatPanelWidth);
   const historyCharLimit = clampHistoryCharLimit(data.historyCharLimit);
+  const activeSkills = normalizeActiveSkills(data.activeSkills);
   const ignoredUpdateVersion = typeof data.ignoredUpdateVersion === 'string'
     ? data.ignoredUpdateVersion
     : undefined;
@@ -221,6 +223,7 @@ function normalizeUiPrefs(raw) {
     appLocale,
     allowWorkspaceWrite: data.allowWorkspaceWrite === true,
     disabledTools: normalizeDisabledTools(data.disabledTools) || [],
+    ...(activeSkills ? { activeSkills } : {}),
     ...(typeof maxToolRounds === 'number' ? { maxToolRounds } : {}),
     ...(typeof sidebarWidth === 'number' ? { sidebarWidth } : {}),
     ...(typeof chatPanelWidth === 'number' ? { chatPanelWidth } : {}),
@@ -263,6 +266,10 @@ function normalizeUiPrefsPatch(raw) {
   const disabledTools = normalizeDisabledTools(patch.disabledTools);
   if (disabledTools) {
     out.disabledTools = disabledTools;
+  }
+  const activeSkills = normalizeActiveSkills(patch.activeSkills);
+  if (activeSkills) {
+    out.activeSkills = activeSkills;
   }
   if (typeof patch.ignoredUpdateVersion === 'string') {
     out.ignoredUpdateVersion = patch.ignoredUpdateVersion;

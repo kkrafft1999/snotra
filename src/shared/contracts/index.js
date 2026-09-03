@@ -42,6 +42,17 @@ const {
   buildPresetFieldViews,
   buildProviderFormView,
 } = require('./settings');
+const {
+  SKILL_SOURCES,
+  SKILL_SOURCE_ORDER,
+  SKILL_SOURCE_LABELS,
+  SKILL_STATUS,
+  MAX_ACTIVE_SKILLS,
+  isValidSkillName,
+  normalizeActiveSkills,
+  normalizeSkillSummary,
+  normalizeSkillCatalog,
+} = require('./skills');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
@@ -87,6 +98,15 @@ module.exports = {
   formatPresetSublabelFromView,
   buildPresetFieldViews,
   buildProviderFormView,
+  SKILL_SOURCES,
+  SKILL_SOURCE_ORDER,
+  SKILL_SOURCE_LABELS,
+  SKILL_STATUS,
+  MAX_ACTIVE_SKILLS,
+  isValidSkillName,
+  normalizeActiveSkills,
+  normalizeSkillSummary,
+  normalizeSkillCatalog,
   toUsageNumber,
   createEmptyUsage,
   normalizeUsage,

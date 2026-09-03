@@ -79,11 +79,30 @@ function parseToolArguments(rawArguments) {
   }
 }
 
+/**
+ * Anweisungsteil der eingeschalteten Skills (Issue #18). Steht hinter dem
+ * Prompt des Nutzers, aber vor dem Ordnerkontext: Skills beschreiben, *wie*
+ * gearbeitet wird, der Ordnerkontext nur, *woran*.
+ */
+function buildSkillsSystemPrompt(activeSkills) {
+  if (!Array.isArray(activeSkills) || activeSkills.length === 0) return '';
+  const sections = activeSkills
+    .filter((skill) => skill && typeof skill.body === 'string' && skill.body.trim())
+    .map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
+  if (sections.length === 0) return '';
+  return [
+    'Folgende Skills sind eingeschaltet. Ihre Anweisungen gelten für diese ' +
+      'Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.',
+    ...sections,
+  ].join('\n\n');
+}
+
 function createChatEngine({
   llm,
   tools,
   preferences,
   workspacePaths,
+  skills = null,
   maxToolRounds,
   clock = () => Date.now(),
 }) {
@@ -240,11 +259,26 @@ function createChatEngine({
             selectedIsDirectory: selection?.isDirectory === true,
           })
         : '';
+      // Skills gelten unabhängig davon, ob ein Ordner offen ist — die
+      // System-Skills beschreiben die App selbst.
+      let skillsSystem = '';
+      if (skills) {
+        try {
+          const active = await skills.getActiveSkills({
+            workspaceRoot,
+            activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
+          });
+          skillsSystem = buildSkillsSystemPrompt(active);
+        } catch {
+          // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
+          skillsSystem = '';
+        }
+      }
+
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang.
-      const combinedSystem =
-        systemPrompt && workspaceSystem
-          ? `${systemPrompt}\n\n${workspaceSystem}`
-          : systemPrompt || workspaceSystem;
+      const combinedSystem = [systemPrompt, skillsSystem, workspaceSystem]
+        .filter((part) => typeof part === 'string' && part.trim())
+        .join('\n\n');
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });

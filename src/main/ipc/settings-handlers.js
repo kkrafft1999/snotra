@@ -17,6 +17,7 @@ function registerSettingsHandlers({
   setActiveWorkspaceRoot,
   presentation,
   toolCatalog,
+  skillCatalog = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -212,6 +213,24 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_GET_TOOL_CATALOG, async () => ({
     tools: typeof toolCatalog?.listCatalog === 'function' ? toolCatalog.listCatalog() : [],
   }));
+
+  async function buildSkillCatalog(workspaceRoot) {
+    if (!skillCatalog || typeof skillCatalog.listCatalog !== 'function') return { skills: [] };
+    const prefs = await uiPrefsStore.readUIPrefs();
+    return skillCatalog.listCatalog({
+      workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
+      activeSkills: Array.isArray(prefs.activeSkills) ? prefs.activeSkills : null,
+    });
+  }
+
+  ipcMain.handle(REQ.SETTINGS_GET_SKILL_CATALOG, async (_event, workspaceRoot) =>
+    buildSkillCatalog(workspaceRoot)
+  );
+
+  ipcMain.handle(REQ.SETTINGS_RELOAD_SKILLS, async (_event, workspaceRoot) => {
+    if (skillCatalog && typeof skillCatalog.reload === 'function') skillCatalog.reload();
+    return buildSkillCatalog(workspaceRoot);
+  });
 
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {
     const patch = normalizeUiPrefsPatch(partial);

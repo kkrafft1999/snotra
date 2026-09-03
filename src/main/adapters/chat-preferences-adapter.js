@@ -11,6 +11,11 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
           ? prefs.disabledTools.filter((name) => typeof name === 'string' && name.trim())
           : [],
       };
+      // Nur setzen, wenn der Nutzer die Auswahl je angefasst hat: `undefined`
+      // heißt „Voreinstellung“ (System-Skills an), `[]` heißt „nichts an“.
+      if (Array.isArray(prefs.activeSkills)) {
+        out.activeSkills = prefs.activeSkills.filter((name) => typeof name === 'string' && name.trim());
+      }
       if (typeof prefs.maxToolRounds === 'number' && Number.isFinite(prefs.maxToolRounds)) {
         out.maxToolRounds = prefs.maxToolRounds;
       }

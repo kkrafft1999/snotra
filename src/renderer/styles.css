@@ -2385,6 +2385,27 @@ select.modal-input {
   max-width: 64ch;
 }
 
+/* Skills-Panel: Gruppenüberschrift je Quelle, Pfadzeile je Skill (Issue #18). */
+.settings-skill-group {
+  margin: 14px 0 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-grey-muted);
+}
+
+.settings-skill-group:first-child {
+  margin-top: 0;
+}
+
+.settings-skill-item__path {
+  font-family: var(--ds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--ds-font-size-xs);
+  opacity: 0.75;
+  word-break: break-all;
+}
+
 .modal-field-group {
   margin-bottom: 16px;
 }

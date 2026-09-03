@@ -1,9 +1,12 @@
 'use strict';
 
+const nodeOs = require('os');
+
 const { createStorageService } = require('../services/storage-service');
 const { createFsService } = require('../services/fs-service');
 const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
+const { createSkillsService } = require('../services/skills-service');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
@@ -39,6 +42,7 @@ function createApplication({
   safeStorage,
   fs,
   path,
+  os = nodeOs,
   fetchImpl,
   providersModule,
   workspaceState,
@@ -51,6 +55,7 @@ function createApplication({
   defaultProviderId = 'openai',
   speechProviderId = 'openai',
   updates: updatesOverride,
+  systemSkillsDir,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -87,6 +92,21 @@ function createApplication({
   });
   const toolRegistry = createWorkspaceToolRegistry({ fsService });
 
+  // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
+  // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
+  const resolvedSystemSkillsDir =
+    systemSkillsDir !== undefined
+      ? systemSkillsDir
+      : typeof app?.getAppPath === 'function'
+        ? path.join(app.getAppPath(), 'system-skills')
+        : null;
+  const skillsService = createSkillsService({
+    fs,
+    path,
+    os,
+    systemSkillsDir: resolvedSystemSkillsDir,
+  });
+
   const whisperService = createWhisperService({
     fetchImpl,
     credentials,
@@ -111,6 +131,7 @@ function createApplication({
     providerSecrets,
     uiPrefsStore,
     toolRegistry,
+    skillsService,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
   });
@@ -131,6 +152,7 @@ function createApplication({
     setActiveWorkspaceRoot: workspaceState.setActiveWorkspaceRoot,
     presentation: settingsPresentation,
     toolCatalog: toolRegistry,
+    skillCatalog: skillsService,
   });
   registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ });
   registerUpdateHandlers({ ipcMain, updates, REQ });

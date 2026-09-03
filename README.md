@@ -95,6 +95,49 @@ Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du
 
 Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt. Im Chat erscheint die Tool-Zeile (z. B. „Datei docs/neu.md wird geschrieben …“) bereits, während das Modell den Inhalt noch erzeugt — nicht erst nach dem eigentlichen Schreibvorgang.
 
+## Skills
+
+Ein **Skill** ist ein Verzeichnis mit einer `SKILL.md` im
+[Agent-Skills-Format](https://agentskills.io/specification): YAML-Frontmatter
+mit `name` (muss dem Verzeichnisnamen entsprechen) und `description`, darunter
+die Anweisungen als Markdown. Eingeschaltete Skills gehen als Teil des
+System-Prompts ans Modell.
+
+**System-Skills** liegen unter `system-skills/` im App-Bundle, gehören zum
+Produkt und sind voreingestellt aktiv. Mitgeliefert wird
+`snotra-capabilities` — damit kann die App Auskunft über sich selbst geben
+(was geht, was nicht, wo etwas eingestellt wird), statt zu raten.
+
+**Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus vier Quellen, in
+dieser Reihenfolge:
+
+| # | Ebene | Pfad |
+|---|-------|------|
+| 1 | Workspace | `<ordner>/.agents/skills/*/SKILL.md` |
+| 2 | Workspace | `<ordner>/.claude/skills/*/SKILL.md` |
+| 3 | Benutzer | `~/.agents/skills/*/SKILL.md` |
+| 4 | Benutzer | `~/.claude/skills/*/SKILL.md` |
+
+Vorhandene Claude-Code-Skills sind damit direkt nutzbar; einen eigenen
+Snotra-Ordner gibt es bewusst nicht. Gibt es denselben Namen mehrfach, gewinnt
+der erste Treffer — die übrigen erscheinen in den Einstellungen als
+„überdeckt“ mit Pfad. System-Skills stehen ganz vorn und lassen sich nicht
+durch ein untergeschobenes Verzeichnis ersetzen. Ungültige Einträge (kein
+Verzeichnis, fehlende `SKILL.md`, Name ≠ Verzeichnis) werden übersprungen und
+mit Grund angezeigt, statt den Scan abzubrechen.
+
+Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
+(höchstens acht gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“
+— gescannt wird beim Öffnen eines Ordners und auf Knopfdruck, es gibt keinen
+Datei-Watcher. **Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder
+Inhalt und damit ein Prompt-Injection-Risiko, deshalb braucht jeder eine
+ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
+maßgeblich bleiben die Tool-Häkchen unter Einstellungen › Tools.
+
+Noch offen: Dateien neben der `SKILL.md` (`references/`, `assets/`,
+`scripts/`) kann das Modell nur lesen, wenn sie im geöffneten Ordner liegen —
+die Lese-Tools kennen bislang keine zweite Wurzel.
+
 ## Projektstruktur
 
 ```
@@ -114,6 +157,7 @@ Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschrän
 │   ├── preload/         sichere Bridge zwischen Main und Renderer (gebundelt)
 │   ├── renderer/        UI (HTML, CSS, JS) — reine Präsentationsschicht
 │   └── shared/          Contracts, IPC-Kanäle, gemeinsame Presentation-Helfer
+├── system-skills/       eingebaute System-Skills (je Verzeichnis eine `SKILL.md`)
 ├── test/                Tests (node:test), inkl. Architektur-Grenzwächter
 ├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
 ├── docs/                Roadmap, Architektur (`architecture.md`, SVG-Diagramme)

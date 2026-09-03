@@ -1,7 +1,15 @@
 import contracts from '../generated/contracts.js';
 
-const SETTINGS_NAV_LABELS = { models: 'Modelle', tools: 'Tools', general: 'Allgemein' };
-const { formatPresetSublabelFromView, presetIdentityKey, PRESET_DETAIL_STYLES } = contracts;
+const SETTINGS_NAV_LABELS = { models: 'Modelle', tools: 'Tools', skills: 'Skills', general: 'Allgemein' };
+const {
+  formatPresetSublabelFromView,
+  presetIdentityKey,
+  PRESET_DETAIL_STYLES,
+  SKILL_SOURCE_ORDER,
+  SKILL_SOURCE_LABELS,
+  SKILL_STATUS,
+  MAX_ACTIVE_SKILLS,
+} = contracts;
 
 let settingsDraftPresets = [];
 let settingsDraftActivePresetId = null;
@@ -9,6 +17,8 @@ let settingsCredentialDraft = {};
 let popupPresetFieldValues = {};
 let settingsToolCatalog = [];
 let settingsDisabledToolsDraft = new Set();
+let settingsSkillCatalog = [];
+let settingsActiveSkillsDraft = new Set();
 
 export function initSettingsModal(deps) {
   const {
@@ -57,6 +67,10 @@ export function initSettingsModal(deps) {
   const inputAllowWorkspaceWrite = document.getElementById('input-allow-workspace-write');
   const settingsToolList = document.getElementById('settings-tool-list');
   const settingsToolListEmpty = document.getElementById('settings-tool-list-empty');
+  const settingsSkillList = document.getElementById('settings-skill-list');
+  const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
+  const btnReloadSkills = document.getElementById('btn-reload-skills');
+  const settingsSkillLimitHint = document.getElementById('settings-skill-limit-hint');
   const modalEncryptionWarning = document.getElementById('modal-encryption-warning');
   const modalSaveError = document.getElementById('modal-save-error');
   const btnChatSettings = document.getElementById('btn-chat-settings');
@@ -475,6 +489,106 @@ export function initSettingsModal(deps) {
     }
   }
 
+  function renderSkillList() {
+    if (!settingsSkillList) return;
+    settingsSkillList.innerHTML = '';
+    settingsSkillListEmpty?.classList.toggle('hidden', settingsSkillCatalog.length > 0);
+
+    for (const source of SKILL_SOURCE_ORDER) {
+      const group = settingsSkillCatalog.filter((skill) => skill.source === source);
+      if (group.length === 0) continue;
+
+      const heading = document.createElement('li');
+      heading.className = 'settings-skill-group';
+      heading.textContent = SKILL_SOURCE_LABELS[source] || source;
+      settingsSkillList.appendChild(heading);
+
+      for (const skill of group) {
+        settingsSkillList.appendChild(renderSkillItem(skill));
+      }
+    }
+  }
+
+  function renderSkillItem(skill) {
+    const li = document.createElement('li');
+    li.className = 'settings-tool-item';
+    const usable = skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
+
+    const label = document.createElement('label');
+    label.className = 'modal-checkbox settings-tool-item__checkbox';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.skillName = skill.name;
+    input.checked = usable && settingsActiveSkillsDraft.has(skill.name);
+    input.disabled = !usable;
+
+    const main = document.createElement('span');
+    main.className = 'settings-tool-item__main';
+    const name = document.createElement('code');
+    name.className = 'settings-tool-item__name';
+    name.setAttribute('lang', 'en');
+    name.textContent = skill.name;
+    main.appendChild(name);
+
+    if (!usable) {
+      const badge = document.createElement('span');
+      badge.className = 'settings-tool-item__badge';
+      badge.textContent = skill.status === SKILL_STATUS.SHADOWED ? 'überdeckt' : 'ungültig';
+      if (skill.detail) badge.title = skill.detail;
+      main.appendChild(badge);
+    }
+
+    label.appendChild(input);
+    label.appendChild(main);
+    li.appendChild(label);
+
+    const detailText = usable ? skill.description : skill.detail || skill.description;
+    if (detailText) {
+      const desc = document.createElement('p');
+      desc.className = 'settings-tool-item__desc';
+      desc.textContent = detailText;
+      li.appendChild(desc);
+    }
+    if (skill.path) {
+      const pathEl = document.createElement('p');
+      pathEl.className = 'settings-tool-item__desc settings-skill-item__path';
+      pathEl.textContent = skill.path;
+      li.appendChild(pathEl);
+    }
+    return li;
+  }
+
+  function setSkillLimitHint(text) {
+    if (!settingsSkillLimitHint) return;
+    settingsSkillLimitHint.textContent = text;
+    settingsSkillLimitHint.classList.toggle('hidden', !text);
+  }
+
+  function adoptSkillCatalog(result) {
+    settingsSkillCatalog = Array.isArray(result?.skills) ? result.skills : [];
+    // Der Katalog kennt bereits die Voreinstellung (System-Skills an), wenn in
+    // den Prefs noch nichts gespeichert ist — daher den Entwurf daraus ableiten.
+    settingsActiveSkillsDraft = new Set(
+      settingsSkillCatalog
+        .filter((skill) => skill.status === SKILL_STATUS.ACTIVE)
+        .map((skill) => skill.name)
+    );
+    setSkillLimitHint('');
+    renderSkillList();
+  }
+
+  async function loadSkillCatalog({ reload = false } = {}) {
+    const root = appStore.rootPath || null;
+    try {
+      const call = reload ? api.reloadSkills : api.getSkillCatalog;
+      const result = typeof call === 'function' ? await call(root) : null;
+      adoptSkillCatalog(result);
+    } catch {
+      adoptSkillCatalog(null);
+    }
+  }
+
   async function loadToolCatalog() {
     try {
       const result = typeof api.getToolCatalog === 'function' ? await api.getToolCatalog() : null;
@@ -621,6 +735,7 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set();
     }
     await loadToolCatalog();
+    await loadSkillCatalog();
     renderDraftPresetList();
     renderProviderSelect();
     syncPopupProviderUI(selectProvider.value, true);
@@ -808,6 +923,7 @@ export function initSettingsModal(deps) {
           })(),
           allowWorkspaceWrite: !!inputAllowWorkspaceWrite?.checked,
           disabledTools: [...settingsDisabledToolsDraft],
+          activeSkills: [...settingsActiveSkillsDraft],
         },
       });
       if (!res?.ok) {
@@ -945,6 +1061,46 @@ export function initSettingsModal(deps) {
     if (!name) return;
     if (input.checked) settingsDisabledToolsDraft.delete(name);
     else settingsDisabledToolsDraft.add(name);
+  });
+
+  settingsSkillList?.addEventListener('change', (e) => {
+    const input = e.target.closest('input[type="checkbox"][data-skill-name]');
+    if (!input) return;
+    const name = input.dataset.skillName;
+    if (!name) return;
+    if (!input.checked) {
+      settingsActiveSkillsDraft.delete(name);
+      setSkillLimitHint('');
+      return;
+    }
+    // Beim Speichern greift dieselbe Obergrenze — lieber hier bremsen, als
+    // stillschweigend Skills zu verlieren.
+    if (settingsActiveSkillsDraft.size >= MAX_ACTIVE_SKILLS) {
+      input.checked = false;
+      setSkillLimitHint(
+        `Höchstens ${MAX_ACTIVE_SKILLS} Skills gleichzeitig — erst einen abwählen.`
+      );
+      return;
+    }
+    settingsActiveSkillsDraft.add(name);
+    setSkillLimitHint('');
+  });
+
+  btnReloadSkills?.addEventListener('click', async () => {
+    btnReloadSkills.disabled = true;
+    try {
+      // Neu gefundene Skills sollen die bisherige Auswahl nicht verlieren.
+      const previous = new Set(settingsActiveSkillsDraft);
+      await loadSkillCatalog({ reload: true });
+      for (const name of previous) {
+        if (settingsSkillCatalog.some((skill) => skill.name === name)) {
+          settingsActiveSkillsDraft.add(name);
+        }
+      }
+      renderSkillList();
+    } finally {
+      btnReloadSkills.disabled = false;
+    }
   });
 
   btnChatSettings.addEventListener('click', openSettingsModal);
