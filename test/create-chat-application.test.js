@@ -77,3 +77,91 @@ test('createChatApplication wires provider rounds and tools end-to-end', async (
   assert.equal(calls[1].messages.find((m) => m.role === 'tool').tool_call_id, 'call_1');
   assert.equal(result.rawExchanges, undefined);
 });
+
+test('createChatApplication reicht die eingeschalteten Skills bis in den Systemprompt', async () => {
+  const calls = [];
+  const skillQueries = [];
+  const provider = {
+    id: 'test',
+    name: 'Test',
+    defaultModel: 'test-model',
+    fields: {},
+    async streamChatRound(args) {
+      calls.push(args);
+      return assistantText('ok');
+    },
+  };
+
+  const { engine } = createChatApplication({
+    llmConfigStore: {
+      readLLMConfig: async () => ({}),
+      resolveChatModelTarget: () => ({ providerId: 'test', model: 'test-model' }),
+    },
+    providerRuntime: { getProvider: () => provider },
+    providerSecrets: {
+      getEffectiveProviderConfig: async () => ({ apiKey: 'sk-test', model: 'test-model' }),
+    },
+    uiPrefsStore: { readUIPrefs: async () => ({ activeSkills: ['snotra-capabilities'] }) },
+    toolRegistry: {
+      getTools: () => [],
+      buildSystemPrompt: () => '',
+      execute: async () => '{}',
+    },
+    skillsService: {
+      async getActiveSkills(options) {
+        skillQueries.push(options);
+        return [
+          {
+            name: 'snotra-capabilities',
+            description: 'Auskunft über die App',
+            source: 'system',
+            path: '/app/system-skills/snotra-capabilities',
+            body: 'Snotra hat keine Shell.',
+          },
+        ];
+      },
+    },
+    path,
+    maxToolRounds: 2,
+  });
+
+  await engine.send({
+    sessionId: 's-1',
+    payload: { messages: [{ role: 'user', content: 'Was kannst du?' }] },
+  });
+
+  assert.deepEqual(skillQueries, [{ workspaceRoot: null, activeSkills: ['snotra-capabilities'] }]);
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.match(system.content, /## Skill: snotra-capabilities/);
+  assert.match(system.content, /keine Shell/);
+});
+
+test('createChatApplication kommt ohne Skill-Service aus', async () => {
+  const { engine, skills } = createChatApplication({
+    llmConfigStore: {
+      readLLMConfig: async () => ({}),
+      resolveChatModelTarget: () => ({ providerId: 'test', model: 'test-model' }),
+    },
+    providerRuntime: {
+      getProvider: () => ({
+        id: 'test',
+        fields: {},
+        async streamChatRound() {
+          return assistantText('ok');
+        },
+      }),
+    },
+    providerSecrets: { getEffectiveProviderConfig: async () => ({ apiKey: 'k', model: 'm' }) },
+    uiPrefsStore: { readUIPrefs: async () => ({}) },
+    toolRegistry: { getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' },
+    path,
+    maxToolRounds: 2,
+  });
+
+  assert.equal(skills, null);
+  const result = await engine.send({
+    sessionId: 's-2',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+  assert.equal(result.content, 'ok');
+});
