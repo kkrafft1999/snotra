@@ -440,7 +440,24 @@ export function initFileTree(deps) {
     }
   }
 
-  // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen).
+  // Issue #59: Main hat eine Datei über das Kontextmenü in den Papierkorb gelegt.
+  // Baum nachziehen; war die Datei ausgewählt, Vorschau schließen.
+  api.onFsItemDeleted?.(({ path: deletedPath } = {}) => {
+    void handleFsItemDeleted(deletedPath);
+  });
+
+  async function handleFsItemDeleted(deletedPath) {
+    if (!appStore.rootPath || typeof deletedPath !== 'string' || !deletedPath) return;
+    if (appStore.selectedPath === deletedPath) {
+      appStore.selectedPath = null;
+      appStore.selectedIsDirectory = false;
+      appStore.activeTreeItem = null;
+      showWelcome();
+    }
+    await refreshParentOf(deletedPath);
+  }
+
+  // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen / Löschen).
   // Das Menü selbst baut der Main-Prozess, hier wird nur der Pfad übergeben.
   async function openFileContextMenu(item) {
     try {
