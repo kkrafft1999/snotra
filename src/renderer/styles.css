@@ -249,7 +249,7 @@ summary:focus-visible,
   gap: 1px;
 }
 
-/* Entfernen-Aktion (Issue #57): erst bei Hover bzw. Fokus in der Zeile
+/* Entfernen-Aktion (Issue #57, Mülleimer wie im Chat-Verlauf): erst bei Hover bzw. Fokus in der Zeile
  * sichtbar, damit das Menü ruhig bleibt. focus-within deckt Tastatur ab. */
 .folder-history-item-remove {
   flex-shrink: 0;
