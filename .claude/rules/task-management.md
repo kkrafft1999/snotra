@@ -13,11 +13,13 @@ Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe
   Nächstes geplant, was sind spätere Ideen) steht in
   [`docs/roadmap.md`](../../docs/roadmap.md). Diese Datei wird nur bei
   größeren Verschiebungen aktualisiert, nicht für jede einzelne Aufgabe.
-- Solange Aufgaben noch **nicht** als GitHub Issue existieren (z. B. weil
-  `gh` in der aktuellen Umgebung nur lesend nutzbar ist), werden sie
-  vorübergehend in [`docs/task.md`](../../docs/task.md) gesammelt — siehe
-  eigener Abschnitt „Zwischenablage `docs/task.md`“ unten (Entscheidung vom
-  2026-07-01).
+- Neue Issues werden **direkt per `gh issue create`** angelegt — `gh` ist in
+  dieser Umgebung mit Schreibzugriff eingerichtet (Token-Scope `repo`,
+  Stand 2026-09-03). Nur wenn das ausnahmsweise nicht geht (anderer Rechner,
+  fehlender Scope, kein Netz), werden Aufgaben vorübergehend in
+  [`docs/task.md`](../../docs/task.md) gesammelt — siehe eigener Abschnitt
+  „Zwischenablage `docs/task.md`“ unten (Entscheidung vom 2026-07-01,
+  Fallback-Rolle seit 2026-09-03).
 - Bewusst **kein** externes Tool (Linear/Trello/Notion/Jira) — alles bleibt
   in GitHub bzw. im Repo, da Solo-/Hobby-Projekt und bereits vollständig
   GitHub-basiert.
@@ -43,7 +45,7 @@ Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe
 
 ## Verhalten bei Fragen wie "Was steht an?", "Was ist der aktuelle Stand?", "Backlog?"
 
-1. **GitHub Issues abfragen** (offene Tasks), z. B. mit dem `gh` CLI (read-only):
+1. **GitHub Issues abfragen** (offene Tasks), z. B. mit dem `gh` CLI:
    ```sh
    gh issue list --repo kkrafft1999/snotra --state open
    ```
@@ -58,14 +60,21 @@ Für dieses Projekt gilt folgende Konvention (Entscheidung vom 2026-07-01, siehe
 
 ## Verhalten bei neuen Aufgaben/Ideen im Gespräch
 
-- Wenn der Nutzer eine **konkrete Aufgabe oder einen Bug** nennt: fertigen
-  Issue-Text (passendes Template) formulieren und als neuen Eintrag in
-  `docs/task.md` ablegen. Da `gh` in dieser Umgebung nur lesend nutzbar
-  ist, kann das Issue nicht direkt per CLI erstellt werden — zusätzlich
-  weiterhin den fertigen Issue-Text/Link zum manuellen Anlegen anbieten.
-  Sobald das Issue tatsächlich existiert (z. B. weil der Nutzer es
-  manuell angelegt hat oder ein Agent mit Schreibzugriff es erstellt hat),
-  den Eintrag aus `docs/task.md` wieder entfernen.
+- Wenn der Nutzer eine **konkrete Aufgabe oder einen Bug** nennt: Issue-Text
+  nach dem passenden Template formulieren (Abschnitte des Templates als
+  Überschriften, dazu bewährt: Ist-Zustand mit Prüfdatum, Querbezüge,
+  Definition of Done) und das Issue **direkt anlegen**:
+  ```sh
+  gh issue create --repo kkrafft1999/snotra --label enhancement \
+    --title "…" --body-file <datei>
+  ```
+  (Bugs mit `--label bug`.) Den Link danach im Gespräch nennen. Der Token hat
+  **keinen `project`-Scope** — die Zuordnung zum Kanban-Board macht der
+  Nutzer selbst; darauf hinweisen.
+- Nur wenn `gh` nicht schreiben kann (`gh auth status` zeigt keinen
+  `repo`-Scope oder der Aufruf scheitert): fertigen Issue-Text in
+  `docs/task.md` ablegen und zum manuellen Anlegen anbieten. Sobald das Issue
+  existiert, den Eintrag aus `docs/task.md` wieder entfernen.
 - Wenn der Nutzer eine **größere/grundsätzliche Idee** nennt (Epic-Level,
   passt eher zur Vision als zu einer einzelnen Aufgabe): Ergänzung in
   `docs/roadmap.md` vorschlagen statt (nur) ein Issue/Task.

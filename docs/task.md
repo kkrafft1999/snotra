@@ -2,8 +2,10 @@
 
 Diese Datei ist eine **Zwischenablage** für konkrete Aufgaben, die noch
 **nicht** als [GitHub Issue](https://github.com/kkrafft1999/snotra/issues)
-existieren — z. B. weil in der aktuellen Arbeitsumgebung nur lesender
-`gh`-Zugriff besteht und Issues nicht direkt per CLI angelegt werden können.
+existieren. Der Normalfall ist seit 2026-09-03, Issues **direkt per
+`gh issue create`** anzulegen (`gh` hat hier Schreibzugriff); diese Datei
+ist nur der Fallback, wenn das ausnahmsweise nicht geht (anderer Rechner,
+fehlender `repo`-Scope, kein Netz).
 
 > **Nicht verwechseln mit [`roadmap.md`](./roadmap.md):** Die Roadmap
 > beschreibt die grobe Richtung (Vision, große Themen, „Jetzt"/„Später").
@@ -12,9 +14,10 @@ existieren — z. B. weil in der aktuellen Arbeitsumgebung nur lesender
 
 ## Workflow
 
-1. **Neue Aufgabe** kommt im Gespräch oder bei der Arbeit auf → hier als
-   Eintrag mit fertigem Issue-Text ergänzen (Titel, Problem/Use Case,
-   Vorschlag, Label) — idealerweise direkt in der Form, die man 1:1 in ein
+1. **Neue Aufgabe** kommt im Gespräch oder bei der Arbeit auf → zuerst
+   versuchen, sie direkt als Issue anzulegen. Nur wenn `gh` nicht schreiben
+   kann: hier als Eintrag mit fertigem Issue-Text ergänzen (Titel,
+   Problem/Use Case, Vorschlag, Label) — in der Form, die man 1:1 in ein
    GitHub Issue übernehmen kann.
 2. **Regelmäßig synchronisieren**: Vor größeren Antworten zum Thema
    Aufgaben/Backlog (oder wenn explizit danach gefragt wird) mit den
