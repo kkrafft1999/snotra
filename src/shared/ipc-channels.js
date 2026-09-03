@@ -16,6 +16,8 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_READ_DIRECTORY: 'fs:readDirectory',
   FS_READ_FILE: 'fs:readFile',
   FS_MOVE_ITEM: 'fs:moveItem',
+  /** Flache Pfadliste des Workspace für die @-Vervollständigung im Chat. */
+  FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
 
   SETTINGS_GET_LLM_STATE: 'settings:getLLMState',
   SETTINGS_SET_ACTIVE_PRESET: 'settings:setActivePreset',

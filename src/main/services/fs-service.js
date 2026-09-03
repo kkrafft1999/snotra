@@ -13,6 +13,8 @@ const SEARCH_DEFAULT_MAX_SCANNED_FILES = 5000;
 
 const FIND_DEFAULT_MAX_RESULTS = 100;
 const FIND_MAX_RESULTS = 500;
+// @-Vervollständigung im Chat: Obergrenze der flachen Pfadliste pro Workspace.
+const MENTION_MAX_ENTRIES = 5000;
 const OUTLINE_DEFAULT_MAX_ENTRIES = 200;
 const OUTLINE_MAX_ENTRIES = 1000;
 const OUTLINE_MAX_TEXT_CHARS = 200;
@@ -1486,6 +1488,34 @@ function createFsService({
     });
   }
 
+  /**
+   * Flache Liste aller Dateien und Ordner des Workspace (relative POSIX-Pfade) für
+   * die @-Vervollständigung im Chat. Gleiche Ausschlussregeln wie find_files ohne
+   * include_hidden: .git, Punkt-Einträge, .gitignore-Muster des Projektroots, keine
+   * Symlinks. Breitensuche, damit beim Erreichen der Obergrenze die oberen Ebenen
+   * vollständig sind (die Liste zeigt bei leerer Eingabe die Wurzel zuerst).
+   */
+  async function listWorkspacePaths(workspaceRoot, { maxEntries = MENTION_MAX_ENTRIES } = {}) {
+    const root = path.resolve(workspaceRoot);
+    const cap = Math.max(1, Math.floor(Number(maxEntries) || MENTION_MAX_ENTRIES));
+    const walkOptions = { root, includeHidden: false, isIgnored: await loadGitignoreMatcher(root) };
+    const entries = [];
+    let truncated = false;
+    const queue = [root];
+    while (queue.length > 0 && !truncated) {
+      const dirAbs = queue.shift();
+      for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
+        if (entries.length >= cap) {
+          truncated = true;
+          break;
+        }
+        entries.push({ path: entry.relPath, kind: entry.isDirectory ? 'directory' : 'file' });
+        if (entry.isDirectory) queue.push(entry.absPath);
+      }
+    }
+    return { entries, truncated };
+  }
+
   async function runStatPathTool(args, workspaceRoot) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
@@ -1768,6 +1798,7 @@ function createFsService({
     runApplyPatchTool,
     runSearchInFilesTool,
     runFindFilesTool,
+    listWorkspacePaths,
     runStatPathTool,
     runOutlineFileTool,
     runListDirectoryTreeTool,

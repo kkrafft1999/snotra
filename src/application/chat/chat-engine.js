@@ -51,6 +51,16 @@ function resolveToolRoundLimit(uiPrefs, mainDefault) {
 function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, selectedIsDirectory }) {
   const parts = [`Du arbeitest im in der App geöffneten Ordner „${folderName}“.`];
   if (toolsPrompt) parts.push(toolsPrompt);
+  // @-Referenzen aus der Chat-Eingabe (Issue #52): nur die Konvention erklären,
+  // Inhalte werden bewusst nicht automatisch eingebettet (Token-Ziel).
+  const mentionHint =
+    'Referenzen der Form „@<Pfad>“ (z. B. „@docs/roadmap.md“) bezeichnen eine Datei oder ' +
+    'einen Ordner mit diesem Pfad relativ zur Ordnerwurzel.';
+  parts.push(
+    toolsPrompt
+      ? `${mentionHint} Ihr Inhalt wird nicht automatisch mitgeschickt — lies ihn bei Bedarf mit den Lese-Tools.`
+      : mentionHint
+  );
   if (selectedRelPath) {
     const kind = selectedIsDirectory ? 'folgenden Ordner' : 'folgende Datei';
     parts.push(

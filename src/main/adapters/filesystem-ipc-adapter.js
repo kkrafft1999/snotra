@@ -31,6 +31,19 @@ function createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot }) {
         return { error: err.message };
       }
     },
+    // Pfadliste für die @-Vervollständigung; immer relativ zum aktiven Workspace,
+    // der Renderer übergibt bewusst keinen Pfad (kein Ausbruch aus dem Root möglich).
+    async listWorkspacePaths() {
+      const workspaceRoot = getActiveWorkspaceRoot();
+      if (!workspaceRoot) {
+        return { entries: [], truncated: false, error: 'Kein Arbeitsordner geöffnet.' };
+      }
+      try {
+        return await fsService.listWorkspacePaths(workspaceRoot);
+      } catch (err) {
+        return { entries: [], truncated: false, error: err.message };
+      }
+    },
     async readFilePreview(filePath) {
       const { absPath, error } = await boundPath(filePath);
       if (error) return { error };

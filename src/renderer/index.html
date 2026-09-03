@@ -206,7 +206,8 @@
         <ol id="chat-messages" role="log" aria-label="Konversation" aria-live="polite" aria-busy="false"></ol>
         <div id="chat-hint" class="hidden"></div>
         <div id="chat-input-row">
-          <textarea id="chat-input" rows="1" placeholder="Nachricht…" autocomplete="off"></textarea>
+          <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Dateien und Ordner im Projekt"></ul>
+          <textarea id="chat-input" rows="1" placeholder="Nachricht…" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu"></textarea>
           <button type="button" id="btn-chat-mic" title="Spracheingabe" aria-pressed="false" aria-label="Spracheingabe starten">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>

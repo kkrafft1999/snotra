@@ -5,6 +5,7 @@ import { initFileTree } from './components/FileTree.js';
 import { initWhisperRecorder } from './voice/WhisperRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
+import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
@@ -93,6 +94,14 @@ const voice = initWhisperRecorder({
   onInputChanged: syncChatInputHeight,
 });
 
+// @-Vervollständigung (Issue #52); hängt sich per Capture-Listener ans Eingabefeld,
+// die Reihenfolge zu initChatStream ist daher unkritisch.
+const mentionAutocomplete = initMentionAutocomplete({
+  api,
+  appStore,
+  onInputChanged: syncChatInputHeight,
+});
+
 const chatStream = initChatStream({
   api,
   appStore,
@@ -100,7 +109,10 @@ const chatStream = initChatStream({
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
-  onWorkspaceFileWritten: (relativePath) => fileTree.notifyExternalFileWrite(relativePath),
+  onWorkspaceFileWritten: (relativePath) => {
+    mentionAutocomplete.invalidate();
+    return fileTree.notifyExternalFileWrite(relativePath);
+  },
 });
 
 const chatHistory = initChatHistoryDrawer({
@@ -139,6 +151,7 @@ const fileTree = initFileTree({
   appStore,
   onInputChanged: syncChatInputHeight,
   onWorkspaceChanged: async (folderPath) => {
+    mentionAutocomplete.invalidate();
     await chatStream.loadChatForWorkspace(folderPath);
   },
   onProjectOpened: () => modelPicker.updateChatChrome(),

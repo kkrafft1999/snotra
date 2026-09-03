@@ -46,6 +46,7 @@ async function setup(t) {
   });
   return {
     ipcMain,
+    fsService,
     workspace,
     outside,
     setWorkspace(root) {
@@ -53,6 +54,63 @@ async function setup(t) {
     },
   };
 }
+
+async function seedMentionFixture(workspace) {
+  const dirs = ['src/main', 'docs', '.hidden', '.git', 'node_modules'];
+  for (const dir of dirs) await fs.mkdir(path.join(workspace, dir), { recursive: true });
+  const files = {
+    '.gitignore': 'node_modules/\n*.log\n',
+    'debug.log': 'x',
+    'src/main/index.js': 'x',
+    'docs/guide.md': 'x',
+    '.hidden/h.txt': 'x',
+    '.git/config': 'x',
+    'node_modules/mod.js': 'x',
+  };
+  for (const [rel, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(workspace, rel), content, 'utf8');
+  }
+}
+
+test('listWorkspacePaths lists the workspace breadth-first with find_files exclusions', async (t) => {
+  const { ipcMain, workspace } = await setup(t);
+  await seedMentionFixture(workspace);
+
+  const result = await ipcMain.invoke(REQ.FS_LIST_WORKSPACE_PATHS);
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.truncated, false);
+  assert.deepEqual(result.entries, [
+    { path: 'inside.txt', kind: 'file' },
+    { path: 'docs', kind: 'directory' },
+    { path: 'src', kind: 'directory' },
+    { path: 'docs/guide.md', kind: 'file' },
+    { path: 'src/main', kind: 'directory' },
+    { path: 'src/main/index.js', kind: 'file' },
+  ]);
+  const paths = result.entries.map((e) => e.path);
+  for (const excluded of ['.hidden', '.hidden/h.txt', '.git', 'node_modules', 'debug.log', '.gitignore']) {
+    assert.ok(!paths.includes(excluded), `${excluded} darf nicht gelistet werden`);
+  }
+});
+
+test('listWorkspacePaths returns an empty list without an open workspace', async (t) => {
+  const { ipcMain, setWorkspace } = await setup(t);
+  setWorkspace(null);
+
+  const result = await ipcMain.invoke(REQ.FS_LIST_WORKSPACE_PATHS);
+  assert.deepEqual(result.entries, []);
+  assert.match(result.error, /Kein Arbeitsordner/);
+});
+
+test('listWorkspacePaths caps the list and reports truncation', async (t) => {
+  const { fsService, workspace } = await setup(t);
+  await seedMentionFixture(workspace);
+
+  const result = await fsService.listWorkspacePaths(workspace, { maxEntries: 2 });
+  assert.equal(result.truncated, true);
+  assert.deepEqual(result.entries.map((e) => e.path), ['inside.txt', 'docs']);
+});
 
 test('readDirectory lists workspace entries and denies paths outside', async (t) => {
   const { ipcMain, workspace, outside } = await setup(t);

@@ -190,6 +190,9 @@ test('engine describes the open folder and the available tools', async () => {
   assert.match(system.content, /geöffneten Ordner „snotra-project“/);
   assert.match(system.content, /Tools: list_directory/);
   assert.doesNotMatch(system.content, /ausgewählt/);
+  // @-Referenzen aus der Chat-Eingabe (#52): Konvention erklären, Inhalt nicht einbetten.
+  assert.match(system.content, /„@<Pfad>“/);
+  assert.match(system.content, /nicht automatisch mitgeschickt/);
 });
 
 test('engine names the selected entry in the system message', async () => {

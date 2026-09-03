@@ -35,6 +35,12 @@ wieder entfernt.
   zuletzt geöffneter Ordner
 - 💬 Chat mit Workspace-Kontext (Modell kann Dateien lesen, Verzeichnisse
   listen, im Projekt arbeiten)
+- 📎 **Dateien im Chat per `@` referenzieren**
+  ([#52](https://github.com/kkrafft1999/snotra/issues/52)): Autocomplete
+  über die Workspace-Dateien wie in Claude Code oder Cursor, mit den
+  Ausschlussregeln von `find_files`. Eingefügt wird der relative Pfad; das
+  Modell liest die Datei bei Bedarf selbst über die Lese-Tools, statt dass
+  Inhalte automatisch eingebettet werden
 - 🔌 Mehrere LLM-Provider: OpenAI, Anthropic, Google (Gemini), Ollama (lokal)
 - 🔐 API-Keys lokal & verschlüsselt über Electrons `safeStorage`
 - 📝 **System-Prompt frei konfigurierbar** in den Einstellungen; die App
@@ -124,11 +130,6 @@ wieder entfernt.
   + optional Ablauf, als Konfiguration in einem `skills/`-Ordner, beim Start
   geladen und in den Einstellungen auswählbar. Baut auf Tool-Registry und
   Tool-Häkchen auf; dynamisches Nachladen zur Laufzeit ist Ausbaustufe
-- 📎 **Dateien im Chat per `@` referenzieren**
-  ([#52](https://github.com/kkrafft1999/snotra/issues/52)): Autocomplete
-  über die Workspace-Dateien wie in Claude Code oder Cursor. Eingefügt wird
-  der relative Pfad; das Modell liest die Datei bei Bedarf selbst über die
-  Lese-Tools, statt dass Inhalte automatisch eingebettet werden
 
 ## 💡 Später / Ideen
 

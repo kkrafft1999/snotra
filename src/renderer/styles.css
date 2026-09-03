@@ -1318,6 +1318,7 @@ summary:focus-visible,
 }
 
 #chat-input-row {
+  position: relative; /* Bezug für die @-Vervollständigung (.chat-mention-menu) */
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -1367,6 +1368,61 @@ summary:focus-visible,
 
 /* #chat-input:focus: kein outline-Reset noetig — globales :focus greift,
  * Fokus-Ring sitzt am umgebenden #chat-input-row (siehe Phase 1 oben). */
+
+/* @-Vervollständigung (Issue #52): Liste der Workspace-Pfade über dem Textfeld,
+ * optisch wie .chat-model-menu (Container 6px, Hover-Wash --ds-blue-soft). */
+.chat-mention-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 50;
+  max-height: 264px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+}
+
+.chat-mention-menu.hidden {
+  display: none;
+}
+
+.chat-mention-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: var(--ds-touch-min);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.chat-mention-option:hover,
+.chat-mention-option[aria-selected='true'] {
+  background: var(--ds-blue-soft);
+}
+
+.chat-mention-name {
+  flex-shrink: 0;
+  font-weight: var(--ds-font-weight-medium);
+  white-space: nowrap;
+}
+
+.chat-mention-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
 
 #btn-chat-mic,
 #btn-chat-send {

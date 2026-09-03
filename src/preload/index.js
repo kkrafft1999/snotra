@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (dirPath) => ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath),
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
+  listWorkspacePaths: () => ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS),
 
   // LLM provider settings (multi-provider)
   getLLMState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LLM_STATE),
