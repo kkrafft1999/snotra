@@ -27,6 +27,8 @@ const MAX_SUMMARY_GROUPS = 3;
  * dieses Modul ohne Contract-Bundle testbar bleibt.
  */
 const GROUP_LABELS = {
+  skill: ['%d Skill-Zugriff', '%d Skill-Zugriffe'],
+  skillActive: ['%d Skill aktiv', '%d Skills aktiv'],
   read: ['%d Datei gelesen', '%d Dateien gelesen'],
   search: ['%d Suche', '%d Suchen'],
   list: ['%d Ordner aufgelistet', '%d Ordner aufgelistet'],
@@ -35,6 +37,29 @@ const GROUP_LABELS = {
   wait: ['%d Pause', '%d Pausen'],
   other: ['%d Tool-Schritt', '%d Tool-Schritte'],
 };
+
+/**
+ * Rang der Kategorien in der Zusammenfassung: kleiner ist wichtiger. Ein
+ * Skill-Zugriff oder eine geschriebene Datei sagt mehr als eine Auflistung —
+ * deshalb ordnet die Zeile nach Wichtigkeit und nicht nach Reihenfolge, und
+ * Unwichtiges fällt bei vielen Gruppen zuerst in „N weitere Schritte“.
+ * Aktive Skills sind Kontext, nicht Tätigkeit, und stehen daher hinten.
+ */
+const CATEGORY_RANK = {
+  skill: 1,
+  write: 2,
+  search: 3,
+  read: 4,
+  list: 5,
+  check: 6,
+  skillActive: 7,
+  wait: 8,
+  other: 9,
+};
+
+function categoryRank(category) {
+  return CATEGORY_RANK[category] ?? CATEGORY_RANK.other;
+}
 
 /** Persistierte Alt-Sessions enthalten fertige Strings statt Objekte. */
 export function toolLineText(entry) {
@@ -84,9 +109,11 @@ function hasKnownCategory(steps) {
   return steps.some((s) => s?.category && s.category !== 'other');
 }
 
-/** Gruppierte Zusammenfassung: bis zu drei Gruppen, der Rest wird gezählt. */
+/** Gruppierte Zusammenfassung: bis zu drei Gruppen nach Rang, Rest gezählt. */
 function summarizeGroups(steps) {
-  const groups = groupToolSteps(steps);
+  const groups = groupToolSteps(steps).sort(
+    (a, b) => categoryRank(a.category) - categoryRank(b.category)
+  );
   const shown = groups.slice(0, MAX_SUMMARY_GROUPS);
   const rest = groups
     .slice(MAX_SUMMARY_GROUPS)

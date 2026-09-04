@@ -14,6 +14,7 @@ const {
   createDeltaEvent,
   createToolLineEvent,
   createPhaseEvent,
+  createSkillsActiveEvent,
   createReasoningEvent,
 } = require('../../shared/contracts');
 const {
@@ -290,6 +291,19 @@ function createChatEngine({
           skillRoots = active
             .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
             .map((skill) => ({ name: skill.name, dir: skill.path }));
+          // Aktive Skills sichtbar machen (Issue #60): je Skill eine Zeile im
+          // Tool-Log, damit erkennbar ist, welches Wissen die Antwort hatte.
+          const activeSkillEntries = [];
+          for (const skill of active) {
+            if (!skill?.name) continue;
+            const entry = { activeSkill: true, skill: skill.name };
+            entry.line = tools.formatDisplayLine(entry, TOOL_LINE_PHASES.DONE, appLocale);
+            activeSkillEntries.push(entry);
+          }
+          if (activeSkillEntries.length > 0) {
+            toolTrace.push(...activeSkillEntries);
+            emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createSkillsActiveEvent(activeSkillEntries));
+          }
         } catch {
           // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
           skillsSystem = '';

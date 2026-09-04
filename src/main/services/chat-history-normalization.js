@@ -64,7 +64,13 @@ function toolTraceEntryForStore(entry) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';
   const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
-  return tool ? { line, tool } : line;
+  const skill = typeof entry?.skill === 'string' && entry.skill ? entry.skill : '';
+  if (!tool && !skill) return line;
+  const out = { line };
+  if (tool) out.tool = tool;
+  if (skill) out.skill = skill;
+  if (entry?.activeSkill === true) out.activeSkill = true;
+  return out;
 }
 
 function sanitizeToolTraceForStore(raw) {

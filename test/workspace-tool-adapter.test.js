@@ -68,3 +68,14 @@ test('workspace tool adapter adds display lines and debug_wait metadata via the 
     'Datei a.js gelesen'
   );
 });
+
+test('buildTraceEntry marks reads from a skill directory with the skill name', () => {
+  const adapter = createWorkspaceToolAdapter(makeRegistry());
+  const skillEntry = adapter.buildTraceEntry('read_file_text', {
+    relative_path: 'skill:ds-design/references/farben.md',
+  });
+  assert.equal(skillEntry.skill, 'ds-design');
+  // Workspace-Pfade bleiben ohne Skill-Bezug.
+  assert.equal(adapter.buildTraceEntry('read_file_text', { relative_path: 'README.md' }).skill, undefined);
+  assert.equal(adapter.buildTraceEntry('list_directory', {}).skill, undefined);
+});

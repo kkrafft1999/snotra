@@ -3,6 +3,7 @@
 const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
 const { createWorkspaceFileWrittenEvent } = require('../../shared/contracts/chat');
 const { formatToolDisplayLine } = require('../../shared/presentation/tool-display');
+const { parseSkillPath } = require('../../shared/runtime/skill-path');
 
 function createWorkspaceToolAdapter(toolRegistry) {
   return {
@@ -17,6 +18,10 @@ function createWorkspaceToolAdapter(toolRegistry) {
       if (toolName === 'debug_wait') {
         entry.waitMs = resolveDebugWaitMs(args);
       }
+      // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der
+      // Eintrag den Skill-Namen — daraus wird im Chat die Skill-Kategorie.
+      const skill = parseSkillPath(args?.relative_path);
+      if (skill) entry.skill = skill.name;
       return entry;
     },
     formatDisplayLine(entry, phase, locale) {

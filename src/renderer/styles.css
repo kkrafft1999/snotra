@@ -1112,6 +1112,13 @@ summary:focus-visible,
   padding: 2px 0;
 }
 
+/* Langer Text bricht innerhalb seiner Box um und bleibt neben dem Symbol. */
+.chat-tool-lines .chat-tool-line-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .chat-tool-lines .chat-tool-line-icon {
   width: 14px;
   height: 14px;
@@ -1125,9 +1132,9 @@ summary:focus-visible,
    und kein Häkchen mehr, das hält die Liste ruhig. */
 .chat-tool-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   font-size: var(--ds-font-size-md);
   line-height: 1.5;
@@ -1148,6 +1155,7 @@ summary:focus-visible,
 
 .chat-tool-line-icon {
   flex-shrink: 0;
+  margin-top: 2px; /* auf die erste Textzeile ausrichten (Zeilenhöhe 19–20 px) */
   width: 15px;
   height: 15px;
   stroke: currentColor;
@@ -1223,6 +1231,7 @@ summary:focus-visible,
   line-height: 1.35;
   color: var(--text-muted);
   opacity: 0.68;
+  padding-left: 21px; /* Textkante wie im Tool-Einzeiler (Symbol 15 px + 6 px Abstand) */
   margin-bottom: 6px;
   animation: chatThinkingPulse 1.35s ease-in-out infinite;
 }
