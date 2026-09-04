@@ -87,10 +87,10 @@ wieder entfernt.
   Verlauf mitgespeichert; Sessions von vorher zeigen weiter die Form
   „‹letzter Schritt› · N weitere Schritte“ ohne Symbole. Die Gruppen sind
   nach Wichtigkeit sortiert (Skill-Zugriff → geschrieben → Suche → gelesen →
-  Ordner → Pfad → aktiver Skill → Pause), Auflistungen treten also zurück.
-  Skills sind sichtbar: je aktivem Skill eine Zeile „Skill ‹name› aktiv“ am
-  Anfang (Engine-Event `chat:progress` type `skills`) und eine eigene
-  Kategorie für Lesezugriffe auf Skill-Dateien
+  Ordner → Pfad → Pause), Auflistungen treten also zurück. Lesezugriffe auf
+  Skill-Dateien haben eine eigene Kategorie mit Symbol; eine Zeile je
+  *aktivem* Skill gibt es bewusst nicht, weil bei vielen Skills die Liste
+  unübersichtlich würde
 
 ### Architektur
 

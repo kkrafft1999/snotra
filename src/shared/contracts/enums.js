@@ -46,8 +46,6 @@ const CHAT_PROGRESS_TYPES = Object.freeze({
   REASONING: 'reasoning',
   /** Semantisches Anwendungs-/Workspace-Ereignis (z. B. Datei geschrieben). */
   WORKSPACE: 'workspace',
-  /** Welche Skills für diese Antwort aktiv sind (Issue #60). */
-  SKILLS: 'skills',
 });
 
 /** Untertyp eines chat:progress-Events mit type='workspace'. */

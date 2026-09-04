@@ -65,18 +65,6 @@ function createWorkspaceFileWrittenEvent(relativePath) {
   };
 }
 
-/**
- * chat:progress mit type='skills' — je aktiver Skill ein fertiger Trace-Eintrag
- * (Issue #60). Damit erscheinen die Skills als Zeilen im Tool-Log, noch bevor
- * das Modell das erste Tool aufruft.
- */
-function createSkillsActiveEvent(entries) {
-  return {
-    type: CHAT_PROGRESS_TYPES.SKILLS,
-    entries: Array.isArray(entries) ? entries : [],
-  };
-}
-
 /** chat:progress mit type='phase'. */
 function createPhaseEvent(phase) {
   return { type: CHAT_PROGRESS_TYPES.PHASE, phase };
@@ -110,7 +98,6 @@ module.exports = {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
-  createSkillsActiveEvent,
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
