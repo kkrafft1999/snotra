@@ -105,6 +105,12 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (typeof config?.reasoningEffort === 'string' && config.reasoningEffort.trim()) {
     body.reasoning = { effort: config.reasoningEffort.trim() };
   }
+  // Zusammenfassung des Nachdenkens mitstreamen (Issue #87): macht Minuten
+  // lange Denkpausen als Zwischenschritte sichtbar. Standard aus, weil OpenAI
+  // dafür je nach Organisation eine Verifizierung verlangt.
+  if (config?.reasoningSummary === 'auto') {
+    body.reasoning = { ...(body.reasoning || {}), summary: 'auto' };
+  }
 
   const base = baseUrlOf(config);
   const url = `${base}/responses`;
@@ -263,6 +269,23 @@ module.exports = {
           { value: 'high', label: 'high' },
         ],
         formatDetail: (value) => `reasoning_effort: ${value}`,
+      },
+      {
+        key: 'reasoningSummary',
+        type: 'select',
+        label: 'Reasoning-Zusammenfassung',
+        hint:
+          'Streamt eine Zusammenfassung des Nachdenkens als Zwischenschritte (reasoning.summary). '
+          + 'Manche Organisationen müssen dafür bei OpenAI verifiziert sein; bei Fehlern auf „aus“ stellen.',
+        defaultValue: 'off',
+        affectsPresetIdentity: false,
+        detailStyle: 'mono',
+        options: [
+          { value: 'off', label: 'aus' },
+          { value: 'auto', label: 'auto' },
+        ],
+        // Nur „auto“ ist erwähnenswert; „aus“ soll das Preset-Sublabel nicht belegen.
+        formatDetail: (value) => (value === 'auto' ? 'reasoning_summary: auto' : ''),
       },
     ],
   },

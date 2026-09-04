@@ -3,9 +3,22 @@ import { markdownToSafeHtml } from '../utils/helpers.js';
 // damit Anzeige (Renderer) und Provider-Seite (Main) nicht auseinanderlaufen.
 import contracts from '../generated/contracts.js';
 // Einzeiler-Logik des kompakten Tool-Logs (Issue #60), DOM-frei und getestet.
-import { toolLineText, summarizeToolLog, THINKING_LABEL } from '../utils/tool-log-summary.js';
+import {
+  toolLineText,
+  summarizeToolLog,
+  formatElapsedLabel,
+  THINKING_LABEL,
+  THINKING_ELAPSED_MIN_MS,
+} from '../utils/tool-log-summary.js';
+// Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
+import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-debug.js';
 
 const { coerceUsage, mergeUsage, toolCategoryForEntry } = contracts;
+
+// Ein Puffer je Renderer; in den DevTools per window.__snotraToolLogDebug.serialize()
+// abrufbar, im Chat per Strg/Cmd+Shift+D in die Zwischenablage (Issue #87).
+const toolLogDebug = createToolLogDebug();
+if (typeof window !== 'undefined') window.__snotraToolLogDebug = toolLogDebug;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
 function buildToolLineStatus() {
@@ -116,9 +129,21 @@ function buildToolSummaryLine() {
   line.className = 'chat-tool-line chat-tool-summary-line chat-tool-line--done';
   line.setAttribute('role', 'status');
   line.setAttribute('aria-live', 'polite');
+  // Platzhalter-Symbol schon beim Bauen (Issue #87): So hält auch der noch
+  // nicht synchronisierte Rohzustand die Textkante und sieht nicht „leer“ aus.
+  line.dataset.iconKey = '';
+  line.insertAdjacentHTML('afterbegin', toolCategoryIconHtml('other'));
+  line.querySelector('.chat-tool-line-icon').classList.add('chat-tool-line-icon--empty');
   const textEl = document.createElement('span');
   textEl.className = 'chat-tool-line-text';
   line.appendChild(textEl);
+  // Verstrichene Denkzeit (Issue #87): tickt sekündlich, deshalb außerhalb der
+  // Live-Region-Ansage — sonst spräche der Screenreader jede Sekunde.
+  const elapsed = document.createElement('span');
+  elapsed.className = 'chat-tool-summary-elapsed';
+  elapsed.setAttribute('aria-hidden', 'true');
+  elapsed.hidden = true;
+  line.appendChild(elapsed);
   const extra = document.createElement('span');
   extra.className = 'chat-tool-summary-extra';
   extra.hidden = true;
@@ -177,6 +202,12 @@ function syncToolSummaryLine(line, summary) {
     if (extraEl.textContent !== extra) extraEl.textContent = extra;
     extraEl.hidden = !extra;
   }
+  const elapsedEl = line.querySelector('.chat-tool-summary-elapsed');
+  if (elapsedEl) {
+    const elapsed = summary.elapsed || '';
+    if (elapsedEl.textContent !== elapsed) elapsedEl.textContent = elapsed;
+    elapsedEl.hidden = !elapsed;
+  }
 
   const label = extra ? `${text} ${extra}` : text;
   if (state === 'done') {
@@ -218,9 +249,13 @@ function appendToolLine(linesEl, row) {
  * Ein einzelner Schritt bekommt kein Aufklapp-Element: Chevron aus, <summary>
  * nicht fokussierbar, ein offenes <details> wird wieder geschlossen.
  */
-function syncToolLogSummary(wrap, { thinking = false } = {}) {
+function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {}) {
   if (!wrap) return;
-  const summary = summarizeToolLog(readToolLogSteps(wrap), { thinking });
+  const summary = summarizeToolLog(readToolLogSteps(wrap), { thinking, elapsedMs });
+  // Ohne Zeitangabe im Schlüssel, sonst füllt der Sekundentakt den Puffer.
+  toolLogDebug.recordIfChanged('summary', {
+    text: summary.text, extra: summary.extra, state: summary.state, count: summary.count, thinking,
+  });
   const line = wrap.querySelector('.chat-tool-summary-line');
   if (line) syncToolSummaryLine(line, summary);
 
@@ -277,6 +312,16 @@ function isThinking(message) {
 }
 
 /**
+ * Dauer des aktuellen Nachdenkens (Issue #87). `thinkingSince` setzt der
+ * Phasenwechsel auf 'waiting' (Beginn jeder Runde) und löscht das nächste
+ * Tool-Ereignis bzw. der erste Text; nur Anzeige, wird nicht persistiert.
+ */
+function thinkingElapsedMs(message) {
+  const since = Number(message?.thinkingSince);
+  return since > 0 ? Math.max(0, Date.now() - since) : 0;
+}
+
+/**
  * Die Phasen-Zeile über dem Tool-Log erscheint nur, solange es noch keinen
  * Tool-Schritt gibt. Danach zeigt der Tool-Einzeiler das Nachdenken selbst,
  * sonst würde die Zeile bei jeder Runde ein- und ausblenden und alles
@@ -286,7 +331,11 @@ function syncPhaseLine(phaseEl, message) {
   if (!phaseEl) return;
   const show = isThinking(message) && !hasToolSteps(message);
   phaseEl.classList.toggle('hidden', !show);
-  phaseEl.textContent = show ? THINKING_LABEL : '';
+  // Auch vor dem ersten Tool-Schritt kann ein Reasoning-Modell lange nachdenken:
+  // ab fünf Sekunden steht die Dauer dahinter (Issue #87).
+  const elapsedMs = show ? thinkingElapsedMs(message) : 0;
+  const suffix = elapsedMs >= THINKING_ELAPSED_MIN_MS ? ` · ${formatElapsedLabel(elapsedMs)}` : '';
+  phaseEl.textContent = show ? `${THINKING_LABEL}${suffix}` : '';
 }
 
 const CHAT_SEND_ICON_HTML =
@@ -387,7 +436,7 @@ export function initChatStream({
     btnChatSend.innerHTML = inFlight ? CHAT_STOP_ICON_HTML : CHAT_SEND_ICON_HTML;
   }
 
-  function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines, { thinking = false } = {}) {
+  function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines, { thinking = false, elapsedMs = 0 } = {}) {
     // Kompakter Tool-Log (Issue #60): <summary> zeigt eine Zeile (aktueller
     // bzw. letzter Schritt), der Body die vollständige Liste in Ausführungsreihenfolge.
     const log = document.createElement('details');
@@ -427,7 +476,7 @@ export function initChatStream({
     log.addEventListener('toggle', () => {
       if (log.open && log.classList.contains('chat-tool-log--single')) log.open = false;
     });
-    syncToolLogSummary(log, { thinking });
+    syncToolLogSummary(log, { thinking, elapsedMs });
     return log;
   }
 
@@ -464,6 +513,7 @@ export function initChatStream({
 
   function finalizeStreamingAssistantBubble(bubble, message) {
     delete message.pendingToolLines;
+    delete message.thinkingSince;
     bubble.querySelector('.chat-phase')?.remove();
     bubble.querySelector('.chat-reasoning-stream')?.remove();
 
@@ -511,7 +561,10 @@ export function initChatStream({
     const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
     if (!bubble) return;
     syncPhaseLine(bubble.querySelector('.chat-phase'), last);
-    syncToolLogSummary(bubble.querySelector('.chat-tool-log'), { thinking: isThinking(last) });
+    syncToolLogSummary(bubble.querySelector('.chat-tool-log'), {
+      thinking: isThinking(last),
+      elapsedMs: thinkingElapsedMs(last),
+    });
     const reasoningEl = bubble.querySelector('.chat-reasoning-stream');
     if (reasoningEl) {
       reasoningEl.textContent = last.reasoningText || '';
@@ -522,6 +575,20 @@ export function initChatStream({
       }
     }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  /**
+   * Sekundentakt beim Nachdenken (Issue #87): nur die Einzeiler-Zeile
+   * nachziehen — kein Scrollen, damit der Nutzer währenddessen oben lesen kann.
+   */
+  function syncThinkingElapsed() {
+    const last = appStore.chatMessages[appStore.chatMessages.length - 1];
+    if (!last?.streaming || !isThinking(last)) return;
+    const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
+    if (!bubble) return;
+    syncPhaseLine(bubble.querySelector('.chat-phase'), last);
+    const wrap = bubble.querySelector('.chat-tool-log');
+    if (wrap) syncToolLogSummary(wrap, { thinking: true, elapsedMs: thinkingElapsedMs(last) });
   }
 
   function renderChatMessages() {
@@ -547,7 +614,10 @@ export function initChatStream({
           li.appendChild(reasoningEl);
 
           li.appendChild(
-            buildToolLog(m.toolTrace, 'running', m.pendingToolLines, { thinking: isThinking(m) })
+            buildToolLog(m.toolTrace, 'running', m.pendingToolLines, {
+              thinking: isThinking(m),
+              elapsedMs: thinkingElapsedMs(m),
+            })
           );
 
           const stream = document.createElement('div');
@@ -700,16 +770,19 @@ export function initChatStream({
       reasoningText: '',
       streaming: true,
       phase: 'waiting',
+      thinkingSince: Date.now(),
     });
     renderChatMessages();
 
     const offDelta =
       typeof api.onChatDelta === 'function'
-        ? api.onChatDelta(({ text: deltaText }) => {
+        ? api.onChatDelta((payload) => toolLogDebug.guard('chat:delta', () => {
+            const deltaText = payload?.text;
             const last = appStore.chatMessages[appStore.chatMessages.length - 1];
             if (!last || last.role !== 'assistant' || !last.streaming) return;
             const hadContent = !!(last.content && last.content.length > 0);
             last.content = (last.content || '') + (deltaText || '');
+            if (last.content) delete last.thinkingSince;
             const streamEl = chatMessagesEl.querySelector(
               '.chat-msg.assistant:last-of-type .chat-md-streaming'
             );
@@ -720,12 +793,13 @@ export function initChatStream({
             }
             // Erster Text: „denkt nach“ endet, Phasen-Zeile und Einzeiler nachziehen.
             if (!hadContent && last.content) updateStreamingChrome();
-          })
+          }))
         : () => {};
 
     const offTool =
       typeof api.onChatToolLine === 'function'
-        ? api.onChatToolLine((payload) => {
+        ? api.onChatToolLine((payload) => toolLogDebug.guard('chat:tool-line', () => {
+            toolLogDebug.record('tool-line', compactToolLinePayload(payload));
             const last = appStore.chatMessages[appStore.chatMessages.length - 1];
             if (!last || last.role !== 'assistant' || !last.streaming) return;
 
@@ -743,6 +817,9 @@ export function initChatStream({
                   : '';
             if (!line) return;
             const callIndex = Number.isInteger(payload?.callIndex) ? payload.callIndex : null;
+            // Ein Tool-Ereignis beendet die Denkpause; 'done' allein nicht — danach
+            // kommt sofort 'waiting' für die nächste Runde (Issue #87).
+            if (phase !== 'done') delete last.thinkingSince;
             if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
             if (!Array.isArray(last.pendingToolLines)) last.pendingToolLines = [];
 
@@ -810,19 +887,23 @@ export function initChatStream({
               else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
             }
 
-            syncToolLogSummary(wrap, { thinking: isThinking(last) });
+            syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
             syncPhaseLine(wrap.closest('.chat-msg')?.querySelector('.chat-phase'), last);
             chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-          })
+          }, compactToolLinePayload(payload)))
         : () => {};
 
     const offProgress =
       typeof api.onChatProgress === 'function'
-        ? api.onChatProgress((p) => {
+        ? api.onChatProgress((p) => toolLogDebug.guard('chat:progress', () => {
             const last = appStore.chatMessages[appStore.chatMessages.length - 1];
             if (!last || last.role !== 'assistant' || !last.streaming) return;
             if (p.type === 'phase' && p.phase) {
+              toolLogDebug.record('phase', { phase: p.phase });
               last.phase = p.phase;
+              // Jede Runde beginnt mit 'waiting': ab hier zählt die Denkzeit (Issue #87).
+              if (p.phase === 'waiting') last.thinkingSince = Date.now();
+              else if (p.phase === 'idle') delete last.thinkingSince;
               updateStreamingChrome();
             }
             if (p.type === 'reasoning' && p.text) {
@@ -837,8 +918,11 @@ export function initChatStream({
             ) {
               onWorkspaceFileWritten(p.relativePath);
             }
-          })
+          }, p?.type))
         : () => {};
+
+    // Sekundentakt für die Denkzeit (Issue #87); endet mit der Antwort.
+    const elapsedTicker = setInterval(syncThinkingElapsed, 1000);
 
     let result;
     try {
@@ -848,6 +932,7 @@ export function initChatStream({
         selectedIsDirectory: appStore.selectedIsDirectory,
       });
     } finally {
+      clearInterval(elapsedTicker);
       offDelta();
       offTool();
       offProgress();
@@ -931,6 +1016,40 @@ export function initChatStream({
       e.preventDefault();
       sendChatMessage();
     }
+  });
+
+  let tokenUsageNoteTimer = 0;
+  function flashTokenUsageNote(text) {
+    if (!chatTokenUsageEl) return;
+    clearTimeout(tokenUsageNoteTimer);
+    chatTokenUsageEl.textContent = text;
+    tokenUsageNoteTimer = setTimeout(() => {
+      tokenUsageNoteTimer = 0;
+      syncChatTokenUsageDisplay();
+    }, 2500);
+  }
+
+  // Diagnose-Export (Issue #87): Strg/Cmd+Shift+D kopiert den Tool-Log-Puffer
+  // (Ereignisse, Zustände der Einzeiler-Zeile, abgefangene Fehler) als JSON.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey) return;
+    if (String(e.key).toLowerCase() !== 'd') return;
+    e.preventDefault();
+    const json = toolLogDebug.serialize();
+    const toConsole = () => {
+      console.info(json);
+      toolLogDebug.record('export', { via: 'console' });
+      flashTokenUsageNote('Tool-Log-Diagnose in der Konsole');
+    };
+    // Über den Main-Prozess, weil der Permission-Handler der App
+    // navigator.clipboard im Renderer nicht zulässt.
+    const write = typeof api.writeClipboardText === 'function'
+      ? api.writeClipboardText(json).then((r) => (r?.ok ? r : Promise.reject(new Error(r?.error || 'Zwischenablage'))))
+      : Promise.reject(new Error('Zwischenablage nicht verfügbar.'));
+    write.then(() => {
+      toolLogDebug.record('export', { via: 'clipboard' });
+      flashTokenUsageNote('Tool-Log-Diagnose kopiert');
+    }, toConsole);
   });
 
   syncChatTokenUsageDisplay();

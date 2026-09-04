@@ -78,8 +78,9 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   const openaiProvider = dto.providers.find((p) => p.id === 'openai');
   assert.equal(openaiProvider.form.showApiKey, true);
   assert.equal(openaiProvider.form.apiKeyPlaceholder, 'sk-…');
-  assert.equal(openaiProvider.presetFields.length, 1);
+  assert.equal(openaiProvider.presetFields.length, 2);
   assert.equal(openaiProvider.presetFields[0].key, 'reasoningEffort');
+  assert.equal(openaiProvider.presetFields[1].key, 'reasoningSummary');
   assert.equal(openaiProvider.isActiveChatProvider, true);
   assert.equal(openaiProvider.fields, undefined);
 
