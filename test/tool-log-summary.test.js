@@ -29,6 +29,7 @@ test('leere Liste: nichts anzuzeigen, nicht aufklappbar', async () => {
     text: '',
     state: 'done',
     extra: '',
+    category: null,
     count: 0,
     expandable: false,
   });
@@ -41,6 +42,7 @@ test('ein Schritt = eine Zeile ohne Aufklappen', async () => {
     text: 'Datei README.md gelesen',
     state: 'done',
     extra: '',
+    category: null,
     count: 1,
     expandable: false,
   });
@@ -62,6 +64,7 @@ test('laufender Schritt gewinnt gegenüber erledigten, Zähler zeigt parallele L
     text: 'Datei a.js wird gelesen …',
     state: 'running',
     extra: '+2',
+    category: null,
     count: 4,
     expandable: true,
   });
@@ -85,6 +88,7 @@ test('alles erledigt: letzter Schritt plus „N weitere Schritte“', async () =
     text: 'Datei README.md gelesen',
     state: 'done',
     extra: '· 4 weitere Schritte',
+    category: null,
     count: 5,
     expandable: true,
   });
@@ -110,6 +114,7 @@ test('Nachdenken zwischen Runden: Zeile zeigt „Modell denkt nach …“ mit Sc
     text: THINKING_LABEL,
     state: 'running',
     extra: '· 3 Schritte',
+    category: null,
     count: 3,
     expandable: true,
   });
@@ -146,4 +151,89 @@ test('zwischen zwei Schritten (nichts läuft) steht der letzte erledigte Schritt
   assert.equal(out.text, 'Datei b.js gelesen');
   assert.equal(out.state, 'done');
   assert.equal(out.extra, '· 2 weitere Schritte');
+});
+
+test('formatGroupLabel dekliniert je Kategorie', async () => {
+  const { formatGroupLabel } = await load();
+  assert.equal(formatGroupLabel('read', 1), '1 Datei gelesen');
+  assert.equal(formatGroupLabel('read', 4), '4 Dateien gelesen');
+  assert.equal(formatGroupLabel('search', 1), '1 Suche');
+  assert.equal(formatGroupLabel('search', 2), '2 Suchen');
+  assert.equal(formatGroupLabel('check', 3), '3 Pfade geprüft');
+  assert.equal(formatGroupLabel('write', 1), '1 Datei geschrieben');
+  assert.equal(formatGroupLabel('unbekannt', 2), '2 Tool-Schritte');
+  assert.equal(formatGroupLabel('read', 0), '');
+});
+
+test('groupToolSteps zählt in der Reihenfolge des ersten Auftretens', async () => {
+  const { groupToolSteps } = await load();
+  const steps = [
+    { text: 'a', state: 'done', category: 'search' },
+    { text: 'b', state: 'done', category: 'read' },
+    { text: 'c', state: 'done', category: 'read' },
+    { text: 'd', state: 'done', category: 'search' },
+  ];
+  assert.deepEqual(groupToolSteps(steps), [
+    { category: 'search', count: 2 },
+    { category: 'read', count: 2 },
+  ]);
+  // Ohne Kategorie landet alles im Sammelbecken.
+  assert.deepEqual(groupToolSteps([{ text: 'x', state: 'done' }]), [{ category: 'other', count: 1 }]);
+});
+
+test('abgeschlossen mit Kategorien: gruppierte Zeile plus Symbol der ersten Gruppe', async () => {
+  const { summarizeToolLog } = await load();
+  const steps = [
+    { text: 'Ordner src durchsucht', state: 'done', category: 'list' },
+    { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
+    { text: 'Datei b.js gelesen', state: 'done', category: 'read' },
+    { text: 'Nach „foo“ gesucht', state: 'done', category: 'search' },
+  ];
+  assert.deepEqual(summarizeToolLog(steps), {
+    text: '1 Ordner aufgelistet · 2 Dateien gelesen · 1 Suche',
+    state: 'done',
+    extra: '',
+    category: 'list',
+    count: 4,
+    expandable: true,
+  });
+});
+
+test('mehr als drei Gruppen: Rest wird als „N weitere Schritte“ gezählt', async () => {
+  const { summarizeToolLog } = await load();
+  const steps = [
+    { text: 'a', state: 'done', category: 'read' },
+    { text: 'b', state: 'done', category: 'search' },
+    { text: 'c', state: 'done', category: 'list' },
+    { text: 'd', state: 'done', category: 'write' },
+    { text: 'e', state: 'done', category: 'wait' },
+  ];
+  const out = summarizeToolLog(steps);
+  assert.equal(out.text, '1 Datei gelesen · 1 Suche · 1 Ordner aufgelistet');
+  assert.equal(out.extra, '· 2 weitere Schritte');
+  assert.equal(out.category, 'read');
+});
+
+test('Alt-Sessions ohne Kategorie behalten „letzter Schritt · N weitere“', async () => {
+  const { summarizeToolLog } = await load();
+  const steps = [
+    { text: 'Ordner src durchsucht', state: 'done' },
+    { text: 'Datei README.md gelesen', state: 'done', category: 'other' },
+  ];
+  const out = summarizeToolLog(steps);
+  assert.equal(out.text, 'Datei README.md gelesen');
+  assert.equal(out.extra, '· 1 weiterer Schritt');
+  assert.equal(out.category, null);
+});
+
+test('laufender Schritt liefert seine Kategorie fürs Symbol', async () => {
+  const { summarizeToolLog } = await load();
+  const out = summarizeToolLog([
+    { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
+    { text: 'Datei b.md wird geschrieben …', state: 'running', category: 'write' },
+  ]);
+  assert.equal(out.category, 'write');
+  assert.equal(out.state, 'running');
+  // Beim Nachdenken zeigt die Zeile kein Symbol.
+  assert.equal(summarizeToolLog([{ text: 'a', state: 'done', category: 'read' }], { thinking: true }).category, null);
 });

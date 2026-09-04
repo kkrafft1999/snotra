@@ -191,3 +191,37 @@ test('normalizeTokenUsageForStore coerces partial numeric fields', () => {
     total: 13,
   });
 });
+
+test('sanitizeChatMessagesForStore keeps the tool name alongside the line', () => {
+  const stored = sanitizeChatMessagesForStore([
+    {
+      role: 'assistant',
+      content: 'ok',
+      toolTrace: [
+        { line: 'Datei a.js gelesen', tool: 'read_file_text', args: { relative_path: 'a.js' } },
+        { line: 'Ordner src durchsucht', tool: '' },
+        'Alt-Eintrag ohne Tool',
+      ],
+    },
+  ]);
+  // Nur Einträge mit Tool-Namen werden Objekte; die Argumente bleiben draußen.
+  assert.deepEqual(stored[0].toolTrace, [
+    { line: 'Datei a.js gelesen', tool: 'read_file_text' },
+    'Ordner src durchsucht',
+    'Alt-Eintrag ohne Tool',
+  ]);
+});
+
+test('normalizeLoadedMessages keeps the tool name for loaded sessions', () => {
+  const loaded = normalizeLoadedMessages([
+    {
+      role: 'assistant',
+      content: 'ok',
+      toolTrace: [{ line: 'Nach „foo“ gesucht', tool: 'search_in_files' }, 'Alt-Eintrag'],
+    },
+  ]);
+  assert.deepEqual(loaded[0].toolTrace, [
+    { line: 'Nach „foo“ gesucht', tool: 'search_in_files' },
+    'Alt-Eintrag',
+  ]);
+});

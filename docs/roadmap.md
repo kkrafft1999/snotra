@@ -79,7 +79,13 @@ wieder entfernt.
   Aufklappen; geladene Sessions verhalten sich gleich. Wartet das Modell
   zwischen zwei Tool-Runden, zeigt dieselbe Zeile „Modell denkt nach … ·
   N Schritte“ — die separate Phasen-Zeile gibt es nur noch vor dem ersten
-  Tool-Schritt, damit nichts mehr springt
+  Tool-Schritt, damit nichts mehr springt. Die Darstellung orientiert sich an
+  OpenAI Codex: Symbol je Tool-Art statt Balken und Häkchen, nach Abschluss
+  eine gruppierte Zeile („1 Ordner aufgelistet · 3 Dateien gelesen · 1 Suche“),
+  und die aufgeklappte Liste ist höhenbegrenzt, scrollt und blendet unten aus.
+  Die Tool-Art kommt aus `src/shared/contracts/tool-categories.js` und wird im
+  Verlauf mitgespeichert; Sessions von vorher zeigen weiter die Form
+  „‹letzter Schritt› · N weitere Schritte“ ohne Symbole
 
 ### Architektur
 
