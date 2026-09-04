@@ -17,6 +17,13 @@
 
 export const THINKING_LABEL = 'Modell denkt nach …';
 
+/**
+ * Ab dieser Denkdauer zeigt die Zeile die verstrichene Zeit (Issue #87). Kurze
+ * Pausen bleiben ruhig; bei Reasoning-Modellen mit großem Kontext dauert eine
+ * Runde aber leicht Minuten — dann wirkt die App ohne Zähler „hängend“.
+ */
+export const THINKING_ELAPSED_MIN_MS = 5000;
+
 /** Höchstens so viele Gruppen stehen in der Zeile, der Rest wird gezählt. */
 const MAX_SUMMARY_GROUPS = 3;
 
@@ -76,6 +83,16 @@ export function formatMoreStepsLabel(n) {
   return count === 1 ? '1 weiterer Schritt' : `${count} weitere Schritte`;
 }
 
+/** Verstrichene Zeit als m:ss, ab einer Stunde h:mm:ss. */
+export function formatElapsedLabel(ms) {
+  const total = Math.floor(Math.max(0, Number(ms) || 0) / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
+  return `${hours > 0 ? `${hours}:` : ''}${mm}:${String(seconds).padStart(2, '0')}`;
+}
+
 export function formatGroupLabel(category, n) {
   const count = Math.max(0, Math.floor(Number(n) || 0));
   if (count === 0) return '';
@@ -129,18 +146,32 @@ function summarizeGroups(steps) {
  * @param {Array<{ text: string, state: 'pending' | 'running' | 'done',
  *   category?: string }>} steps
  *   Schritte in Ausführungsreihenfolge (wie in der aufgeklappten Liste).
- * @param {{ thinking?: boolean }} [options]
+ * @param {{ thinking?: boolean, elapsedMs?: number }} [options]
  *   `thinking`: Das Modell wartet auf die nächste Runde (kein Tool läuft).
  *   Dann zeigt die Zeile „Modell denkt nach …“ statt der Zusammenfassung;
  *   ein laufender Schritt hat weiterhin Vorrang.
+ *   `elapsedMs`: Dauer des aktuellen Nachdenkens; ab THINKING_ELAPSED_MIN_MS
+ *   erscheint sie als `elapsed` (Issue #87).
  * @returns {{ text: string, state: 'pending' | 'running' | 'done', extra: string,
- *   category: string | null, count: number, expandable: boolean }}
+ *   elapsed: string, category: string | null, count: number, expandable: boolean }}
  *   `extra` ist der Zusatz hinter dem Text („+2“, „· 4 weitere Schritte“ bzw.
- *   „· 5 Schritte“ beim Nachdenken), `category` bestimmt das Symbol,
+ *   „· 5 Schritte“ beim Nachdenken), `elapsed` die verstrichene Denkzeit
+ *   („· 1:23“, sonst leer), `category` bestimmt das Symbol,
  *   `expandable` sagt, ob sich das Aufklappen lohnt (ab zwei Schritten; beim
  *   Nachdenken ab einem, weil die Zeile dann keinen Schritt zeigt).
+ *   Sicherheitsnetz: Bei vorhandenen Schritten ist `text` nie leer — im
+ *   Zweifel steht dort „N Schritte“ (Issue #87, leere Zeile im Feld gesehen).
  */
-export function summarizeToolLog(steps, { thinking = false } = {}) {
+export function summarizeToolLog(steps, options = {}) {
+  const summary = { elapsed: '', ...computeToolLogSummary(steps, options) };
+  if (summary.count > 0 && !summary.text) {
+    summary.text = formatStepCountLabel(summary.count);
+    summary.extra = '';
+  }
+  return summary;
+}
+
+function computeToolLogSummary(steps, { thinking = false, elapsedMs = 0 } = {}) {
   const list = Array.isArray(steps) ? steps : [];
   const count = list.length;
   const expandable = count >= 2;
@@ -162,10 +193,12 @@ export function summarizeToolLog(steps, { thinking = false } = {}) {
   }
 
   if (thinking) {
+    const ms = Number(elapsedMs) || 0;
     return {
       text: THINKING_LABEL,
       state: 'running',
       extra: `· ${formatStepCountLabel(count)}`,
+      elapsed: ms >= THINKING_ELAPSED_MIN_MS ? `· ${formatElapsedLabel(ms)}` : '',
       category: null,
       count,
       expandable: true,

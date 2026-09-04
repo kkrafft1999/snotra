@@ -1059,6 +1059,15 @@ summary:focus-visible,
   color: var(--text-muted);
 }
 
+/* Verstrichene Denkzeit (Issue #87): tickt im Sekundentakt, deshalb feste
+   Ziffernbreite, damit die Zeile nicht zittert; für Screenreader ausgeblendet. */
+.chat-tool-summary-elapsed {
+  flex-shrink: 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .chat-tool-chevron {
   flex-shrink: 0;
   align-self: center;

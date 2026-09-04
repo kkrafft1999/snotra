@@ -216,3 +216,39 @@ test('streamChatRound ignores malformed JSON data lines', async (t) => {
   });
   assert.equal(res.message.content, 'ok');
 });
+
+test('streamChatRound sendet reasoning.summary nur mit reasoningSummary=auto (Issue #87)', async (t) => {
+  const stream = () =>
+    sseResponse([
+      sse('response.output_text.delta', { delta: 'ok' }),
+      sse('response.completed', { response: { usage: { input_tokens: 1, output_tokens: 1 } } }),
+      'data: [DONE]\n\n',
+    ]);
+  const calls = mockFetch(t, stream);
+  const sink = collectCallbacks();
+  const messages = [{ role: 'user', content: 'Hi' }];
+
+  await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'high' },
+    model: 'gpt-5',
+    messages,
+    callbacks: sink.callbacks,
+  });
+  assert.deepEqual(JSON.parse(calls[0].options.body).reasoning, { effort: 'high' });
+
+  await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'high', reasoningSummary: 'auto' },
+    model: 'gpt-5',
+    messages,
+    callbacks: sink.callbacks,
+  });
+  assert.deepEqual(JSON.parse(calls[1].options.body).reasoning, { effort: 'high', summary: 'auto' });
+
+  await openai.streamChatRound({
+    config: { ...CONFIG, reasoningSummary: 'off' },
+    model: 'gpt-5',
+    messages,
+    callbacks: sink.callbacks,
+  });
+  assert.equal(JSON.parse(calls[2].options.body).reasoning, undefined);
+});

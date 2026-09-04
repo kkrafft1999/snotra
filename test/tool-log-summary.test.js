@@ -29,6 +29,7 @@ test('leere Liste: nichts anzuzeigen, nicht aufklappbar', async () => {
     text: '',
     state: 'done',
     extra: '',
+    elapsed: '',
     category: null,
     count: 0,
     expandable: false,
@@ -42,6 +43,7 @@ test('ein Schritt = eine Zeile ohne Aufklappen', async () => {
     text: 'Datei README.md gelesen',
     state: 'done',
     extra: '',
+    elapsed: '',
     category: null,
     count: 1,
     expandable: false,
@@ -64,6 +66,7 @@ test('laufender Schritt gewinnt gegenüber erledigten, Zähler zeigt parallele L
     text: 'Datei a.js wird gelesen …',
     state: 'running',
     extra: '+2',
+    elapsed: '',
     category: null,
     count: 4,
     expandable: true,
@@ -88,6 +91,7 @@ test('alles erledigt: letzter Schritt plus „N weitere Schritte“', async () =
     text: 'Datei README.md gelesen',
     state: 'done',
     extra: '· 4 weitere Schritte',
+    elapsed: '',
     category: null,
     count: 5,
     expandable: true,
@@ -114,6 +118,7 @@ test('Nachdenken zwischen Runden: Zeile zeigt „Modell denkt nach …“ mit Sc
     text: THINKING_LABEL,
     state: 'running',
     extra: '· 3 Schritte',
+    elapsed: '',
     category: null,
     count: 3,
     expandable: true,
@@ -194,6 +199,7 @@ test('abgeschlossen mit Kategorien: gruppierte Zeile, wichtigste Gruppe zuerst',
     text: '1 Suche · 2 Dateien gelesen · 1 Ordner aufgelistet',
     state: 'done',
     extra: '',
+    elapsed: '',
     category: 'search',
     count: 4,
     expandable: true,
@@ -256,4 +262,50 @@ test('Skill-Zugriffe stehen in der Zusammenfassung vorn', async () => {
   assert.equal(out.text, '1 Skill-Zugriff · 2 Dateien gelesen · 1 Ordner aufgelistet');
   assert.equal(out.extra, '');
   assert.equal(out.category, 'skill');
+});
+
+test('formatElapsedLabel: m:ss, ab einer Stunde h:mm:ss', async () => {
+  const { formatElapsedLabel } = await load();
+  assert.equal(formatElapsedLabel(0), '0:00');
+  assert.equal(formatElapsedLabel(4999), '0:04');
+  assert.equal(formatElapsedLabel(83000), '1:23');
+  assert.equal(formatElapsedLabel(3725000), '1:02:05');
+  assert.equal(formatElapsedLabel(-5), '0:00');
+  assert.equal(formatElapsedLabel('abc'), '0:00');
+});
+
+test('Nachdenken zeigt die verstrichene Zeit erst ab fünf Sekunden (Issue #87)', async () => {
+  const { summarizeToolLog, THINKING_ELAPSED_MIN_MS } = await load();
+  const done = [{ text: 'a', state: 'done' }, { text: 'b', state: 'done' }];
+  assert.equal(THINKING_ELAPSED_MIN_MS, 5000);
+  assert.equal(summarizeToolLog(done, { thinking: true, elapsedMs: 4900 }).elapsed, '');
+  const shown = summarizeToolLog(done, { thinking: true, elapsedMs: 5000 });
+  assert.equal(shown.elapsed, '· 0:05');
+  assert.equal(shown.extra, '· 2 Schritte');
+  assert.equal(summarizeToolLog(done, { thinking: true, elapsedMs: 83000 }).elapsed, '· 1:23');
+  // Ohne Nachdenken oder mit laufendem Schritt gibt es keine Zeitangabe.
+  assert.equal(summarizeToolLog(done, { elapsedMs: 83000 }).elapsed, '');
+  const active = [...done, { text: 'c läuft …', state: 'running' }];
+  assert.equal(summarizeToolLog(active, { thinking: true, elapsedMs: 83000 }).elapsed, '');
+});
+
+test('Sicherheitsnetz: bei vorhandenen Schritten ist die Zeile nie leer (Issue #87)', async () => {
+  const { summarizeToolLog } = await load();
+  // Laufender Schritt ohne Text (darf eigentlich nicht vorkommen).
+  const active = summarizeToolLog([
+    { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
+    { text: '', state: 'running' },
+  ]);
+  assert.equal(active.text, '2 Schritte');
+  assert.equal(active.extra, '');
+  assert.equal(active.state, 'running');
+  assert.equal(active.expandable, true);
+  // Alt-Session ohne Kategorien, letzter Schritt ohne Text.
+  const legacy = summarizeToolLog([{ text: 'a', state: 'done' }, { text: '', state: 'done' }]);
+  assert.equal(legacy.text, '2 Schritte');
+  assert.equal(legacy.extra, '');
+  // Ein einzelner leerer Schritt bleibt nicht aufklappbar, hat aber Text.
+  const single = summarizeToolLog([{ text: '', state: 'done' }]);
+  assert.equal(single.text, '1 Schritt');
+  assert.equal(single.expandable, false);
 });
