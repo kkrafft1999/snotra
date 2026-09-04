@@ -1,4 +1,8 @@
-const { contextBridge, ipcRenderer, shell, clipboard } = require('electron');
+// WICHTIG: Das Fenster laeuft mit `sandbox: true`. Ein sandboxed Preload
+// bekommt aus 'electron' nur contextBridge, crashReporter, ipcRenderer,
+// nativeImage, sharedTexture, webFrame und webUtils — `shell` und `clipboard`
+// gibt es hier nicht. Alles andere laeuft ueber IPC (Issue #64).
+const { contextBridge, ipcRenderer } = require('electron');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -74,15 +78,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
-  openExternal: (url) => {
-    try {
-      const u = new URL(url);
-      if (u.protocol === 'http:' || u.protocol === 'https:') {
-        shell.openExternal(url);
-      }
-    } catch {
-      /* ignore invalid URL */
-    }
-  },
-  writeClipboardText: (text) => clipboard.writeText(String(text ?? '')),
+  // Beides geht ueber den Main-Prozess; die Protokollpruefung sitzt dort.
+  openExternal: (url) => ipcRenderer.invoke(REQ.SHELL_OPEN_EXTERNAL, url),
+  writeClipboardText: (text) =>
+    ipcRenderer.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, String(text ?? '')),
 });

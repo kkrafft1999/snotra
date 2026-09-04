@@ -1,4 +1,4 @@
-const { app, ipcMain, dialog, safeStorage, Menu, shell } = require('electron');
+const { app, ipcMain, dialog, safeStorage, Menu, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 const providers = require('./providers');
@@ -138,6 +138,7 @@ app.whenReady().then(async () => {
     getMainWindow,
     Menu,
     shell,
+    clipboard,
     REQ,
     PUSH,
     LIMITS,
