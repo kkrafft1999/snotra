@@ -2,13 +2,10 @@ import { markdownToSafeHtml } from '../utils/helpers.js';
 // Token-Usage-Normalisierung/-Summierung aus der gemeinsamen Contract-Schicht,
 // damit Anzeige (Renderer) und Provider-Seite (Main) nicht auseinanderlaufen.
 import contracts from '../generated/contracts.js';
+// Einzeiler-Logik des kompakten Tool-Logs (Issue #60), DOM-frei und getestet.
+import { toolLineText, summarizeToolLog } from '../utils/tool-log-summary.js';
 
 const { coerceUsage, mergeUsage } = contracts;
-
-function toolLineText(entry) {
-  if (typeof entry === 'string') return entry;
-  return entry?.line ?? entry?.summary ?? entry?.text ?? '';
-}
 
 function createToolCheckIcon() {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -21,6 +18,20 @@ function createToolCheckIcon() {
   svg.appendChild(path);
   return svg;
 }
+
+function buildToolLineStatus() {
+  const status = document.createElement('span');
+  status.className = 'chat-tool-line-status';
+  const srDone = document.createElement('span');
+  srDone.className = 'sr-only';
+  srDone.textContent = 'Abgeschlossen';
+  status.appendChild(srDone);
+  status.appendChild(createToolCheckIcon());
+  return status;
+}
+
+const CHAT_TOOL_CHEVRON_HTML =
+  '<svg class="chat-tool-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
 
 const TOOL_LINE_STATE_CLASS = {
   pending: 'chat-tool-line--pending',
@@ -35,7 +46,7 @@ function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callInd
   const row = document.createElement('div');
   row.className = 'chat-tool-line';
   row.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
-  row.setAttribute('role', 'status');
+  row.setAttribute('role', 'listitem');
   if (Number.isInteger(callIndex)) row.dataset.callIndex = String(callIndex);
 
   const textEl = document.createElement('span');
@@ -48,14 +59,7 @@ function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callInd
     row.setAttribute('aria-label', `Läuft: ${text}`);
   } else {
     row.setAttribute('aria-label', `Abgeschlossen: ${text}`);
-    const status = document.createElement('span');
-    status.className = 'chat-tool-line-status';
-    const srDone = document.createElement('span');
-    srDone.className = 'sr-only';
-    srDone.textContent = 'Abgeschlossen';
-    status.appendChild(srDone);
-    status.appendChild(createToolCheckIcon());
-    row.appendChild(status);
+    row.appendChild(buildToolLineStatus());
   }
 
   return row;
@@ -72,21 +76,7 @@ function setToolLineDone(row, doneText) {
   const finalText = textEl?.textContent || doneText || '';
   if (finalText) row.setAttribute('aria-label', `Abgeschlossen: ${finalText}`);
 
-  let status = row.querySelector('.chat-tool-line-status');
-  if (!status) {
-    status = document.createElement('span');
-    status.className = 'chat-tool-line-status';
-    row.appendChild(status);
-  }
-  if (!status.querySelector('.sr-only')) {
-    const srDone = document.createElement('span');
-    srDone.className = 'sr-only';
-    srDone.textContent = 'Abgeschlossen';
-    status.insertBefore(srDone, status.firstChild);
-  }
-  if (!status.querySelector('.chat-tool-line-check')) {
-    status.appendChild(createToolCheckIcon());
-  }
+  if (!row.querySelector('.chat-tool-line-status')) row.appendChild(buildToolLineStatus());
 }
 
 function setToolLineText(row, text) {
@@ -113,10 +103,83 @@ function findPendingToolLine(linesEl, callIndex, fallbackToFirst = false) {
   return linesEl.querySelector('.chat-tool-line--pending');
 }
 
-function syncToolLogLayout(wrap) {
+/** Die Einzeiler-Zeile in der <summary>: aktueller bzw. letzter Schritt plus Zusatz. */
+function buildToolSummaryLine() {
+  const line = document.createElement('span');
+  line.className = 'chat-tool-line chat-tool-summary-line chat-tool-line--done';
+  line.setAttribute('role', 'status');
+  line.setAttribute('aria-live', 'polite');
+  const textEl = document.createElement('span');
+  textEl.className = 'chat-tool-line-text';
+  line.appendChild(textEl);
+  const extra = document.createElement('span');
+  extra.className = 'chat-tool-summary-extra';
+  extra.hidden = true;
+  line.appendChild(extra);
+  // Chevron in der Zeile statt daneben, damit er bei Umbruch mit dem Text wandert.
+  line.insertAdjacentHTML('beforeend', CHAT_TOOL_CHEVRON_HTML);
+  return line;
+}
+
+function readToolLogSteps(wrap) {
+  const rows = wrap.querySelectorAll('.chat-tool-lines > .chat-tool-line');
+  return [...rows].map((row) => ({
+    text: row.querySelector('.chat-tool-line-text')?.textContent || '',
+    state: row.classList.contains('chat-tool-line--pending')
+      ? 'pending'
+      : row.classList.contains('chat-tool-line--running')
+        ? 'running'
+        : 'done',
+  }));
+}
+
+function syncToolSummaryLine(line, summary) {
+  const { text, state, extra } = summary;
+  line.classList.remove(
+    TOOL_LINE_STATE_CLASS.pending,
+    TOOL_LINE_STATE_CLASS.running,
+    TOOL_LINE_STATE_CLASS.done
+  );
+  line.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
+
+  // Nur bei echter Änderung schreiben, damit die Live-Region nicht unnötig ansagt.
+  const textEl = line.querySelector('.chat-tool-line-text');
+  if (textEl && textEl.textContent !== text) textEl.textContent = text;
+  const extraEl = line.querySelector('.chat-tool-summary-extra');
+  if (extraEl) {
+    if (extraEl.textContent !== extra) extraEl.textContent = extra;
+    extraEl.hidden = !extra;
+  }
+
+  const label = extra ? `${text} ${extra}` : text;
+  if (state === 'done') {
+    line.removeAttribute('aria-busy');
+    line.setAttribute('aria-label', `Abgeschlossen: ${label}`);
+    if (!line.querySelector('.chat-tool-line-status')) {
+      line.insertBefore(buildToolLineStatus(), line.querySelector('.chat-tool-chevron'));
+    }
+  } else {
+    line.setAttribute('aria-busy', 'true');
+    line.setAttribute('aria-label', `Läuft: ${label}`);
+    line.querySelector('.chat-tool-line-status')?.remove();
+  }
+}
+
+/**
+ * Einzeiler und Aufklapp-Zustand aus der Schrittliste ableiten (Issue #60).
+ * Ein einzelner Schritt bekommt kein Aufklapp-Element: Chevron aus, <summary>
+ * nicht fokussierbar, ein offenes <details> wird wieder geschlossen.
+ */
+function syncToolLogSummary(wrap) {
   if (!wrap) return;
-  const count = wrap.querySelectorAll('.chat-tool-line').length;
-  wrap.classList.toggle('chat-tool-log--multi', count >= 2);
+  const summary = summarizeToolLog(readToolLogSteps(wrap));
+  const line = wrap.querySelector('.chat-tool-summary-line');
+  if (line) syncToolSummaryLine(line, summary);
+
+  wrap.classList.toggle('chat-tool-log--single', !summary.expandable);
+  const summaryEl = wrap.querySelector('.chat-tool-summary');
+  if (summaryEl) summaryEl.tabIndex = summary.expandable ? 0 : -1;
+  if (!summary.expandable && wrap.open) wrap.open = false;
 }
 
 const CHAT_SEND_ICON_HTML =
@@ -150,9 +213,9 @@ function formatChatTokenUsage(total) {
 function finalizeAllToolLines(wrap) {
   if (!wrap) return;
   // Vorläufige Zeilen ohne Start-Ereignis: Das Tool ist nie gelaufen (Abbruch/Fehler).
-  wrap.querySelectorAll('.chat-tool-line--pending').forEach((row) => row.remove());
-  wrap.querySelectorAll('.chat-tool-line--running').forEach(setToolLineDone);
-  syncToolLogLayout(wrap);
+  wrap.querySelectorAll('.chat-tool-lines > .chat-tool-line--pending').forEach((row) => row.remove());
+  wrap.querySelectorAll('.chat-tool-lines > .chat-tool-line--running').forEach(setToolLineDone);
+  syncToolLogSummary(wrap);
 }
 
 function folderNameFromPath(p) {
@@ -218,15 +281,22 @@ export function initChatStream({
   }
 
   function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines) {
-    const log = document.createElement('div');
+    // Kompakter Tool-Log (Issue #60): <summary> zeigt eine Zeile (aktueller
+    // bzw. letzter Schritt), der Body die vollständige Liste in Ausführungsreihenfolge.
+    const log = document.createElement('details');
     log.className = 'chat-tool-log';
     log.classList.add(state === 'running' ? 'chat-tool-log--running' : 'chat-tool-log--done');
-    log.setAttribute('role', 'log');
-    log.setAttribute('aria-live', 'polite');
     if (state === 'running') log.setAttribute('aria-busy', 'true');
+
+    const summaryEl = document.createElement('summary');
+    summaryEl.className = 'chat-tool-summary';
+    summaryEl.appendChild(buildToolSummaryLine());
+    log.appendChild(summaryEl);
 
     const lines = document.createElement('div');
     lines.className = 'chat-tool-lines';
+    lines.setAttribute('role', 'list');
+    lines.setAttribute('aria-label', 'Alle Tool-Schritte');
     log.appendChild(lines);
 
     if (Array.isArray(trace) && trace.length > 0) {
@@ -242,7 +312,11 @@ export function initChatStream({
         lines.appendChild(buildToolLine(pending.line, 'pending', pending.callIndex));
       }
     }
-    syncToolLogLayout(log);
+    // Ein Schritt = eine Zeile: Öffnen (Klick/Tastatur) wieder zurücknehmen.
+    log.addEventListener('toggle', () => {
+      if (log.open && log.classList.contains('chat-tool-log--single')) log.open = false;
+    });
+    syncToolLogSummary(log);
     return log;
   }
 
@@ -588,6 +662,7 @@ export function initChatStream({
             if (!linesEl) {
               linesEl = document.createElement('div');
               linesEl.className = 'chat-tool-lines';
+              linesEl.setAttribute('role', 'list');
               wrap.appendChild(linesEl);
             }
 
@@ -609,7 +684,7 @@ export function initChatStream({
               else linesEl.appendChild(buildToolLine(line, 'running', callIndex));
             }
 
-            syncToolLogLayout(wrap);
+            syncToolLogSummary(wrap);
             chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
           })
         : () => {};

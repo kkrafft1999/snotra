@@ -993,8 +993,8 @@ summary:focus-visible,
   margin-top: 2px;
 }
 
-/* Leerer Tool-Log ohne Zeilen ausblenden. */
-.chat-tool-log:not(:has(.chat-tool-line)) {
+/* Leerer Tool-Log ohne Schritte ausblenden (die Einzeiler-Zeile zählt nicht). */
+.chat-tool-log:not(:has(.chat-tool-lines > .chat-tool-line)) {
   display: none;
 }
 
@@ -1022,13 +1022,71 @@ summary:focus-visible,
   background: transparent;
 }
 
+/* ── Kompakter Tool-Log (Issue #60) ──────────────────────────────────────────
+ * <summary> trägt die Einzeiler-Zeile (aktueller bzw. letzter Schritt plus
+ * „+N“ / „· N weitere Schritte“) und einen Chevron; die vollständige Liste
+ * liegt im aufklappbaren Body. Bei genau einem Schritt (--single) gibt es
+ * nichts aufzuklappen: kein Chevron, kein Klick, kein Fokus. */
+.chat-tool-summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-tool-summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-tool-summary-extra {
+  flex-shrink: 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.chat-tool-chevron {
+  flex-shrink: 0;
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-muted);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--ds-motion-medium) ease-out;
+}
+
+.chat-tool-log[open] .chat-tool-chevron {
+  transform: rotate(90deg);
+}
+
+.chat-tool-log--single .chat-tool-summary {
+  cursor: default;
+  pointer-events: none;
+}
+
+.chat-tool-log--single .chat-tool-chevron {
+  display: none;
+}
+
+/* Aufgeklappte Liste: alle Schritte kompakt, erledigte gedimmt. */
 .chat-tool-lines {
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   background: transparent;
+}
+
+.chat-tool-lines .chat-tool-line {
+  font-size: var(--ds-font-size-sm);
+  padding: 2px 0 2px 10px;
+}
+
+.chat-tool-lines .chat-tool-line--done {
+  color: var(--text-muted);
 }
 
 .chat-tool-line {
@@ -1057,12 +1115,6 @@ summary:focus-visible,
 
 .chat-tool-line--done {
   border-left-color: var(--ds-grey-divider);
-}
-
-.chat-tool-log--multi .chat-tool-line--done {
-  font-size: var(--ds-font-size-sm);
-  color: var(--text-muted);
-  padding: 2px 0 2px 10px;
 }
 
 .chat-tool-line-text {
@@ -2916,6 +2968,9 @@ select.modal-input {
   }
   .chat-tool-log--running {
     animation: none;
+  }
+  .chat-tool-chevron {
+    transition: none;
   }
   .chat-tool-line--running .chat-tool-line-text,
   .chat-tool-line--pending .chat-tool-line-text {

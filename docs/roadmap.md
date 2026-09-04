@@ -70,6 +70,13 @@ wieder entfernt.
 - ☑️ **Tools einzeln zuschaltbar:** Einstellungen › Tools listet den Katalog
   der Registry mit Häkchen je Tool; abgewählte Tools erreichen das Modell
   weder als Definition noch im System-Prompt
+- 🧾 **Tool-Log kompakt**
+  ([#60](https://github.com/kkrafft1999/snotra/issues/60)): während des Laufs
+  steht unter „Modell denkt nach …“ nur eine sich aktualisierende Tool-Zeile
+  (bei parallelen Aufrufen mit „+N“); danach klappt der Log zu
+  „‹letzter Schritt› · N weitere Schritte“ zusammen, Klick/Enter/Space öffnet
+  die vollständige Schrittliste. Ein einzelner Schritt bleibt eine Zeile ohne
+  Aufklappen; geladene Sessions verhalten sich gleich
 
 ### Architektur
 
