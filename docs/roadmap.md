@@ -154,8 +154,22 @@ wieder entfernt.
 
 ## 🚧 Jetzt / als Nächstes
 
-_Aktuell nichts fest eingeplant — die nächsten Schritte ergeben sich aus den
-offenen [Issues](https://github.com/kkrafft1999/snotra/issues)._
+Entscheidung vom 2026-09-04: Bevor externe Tools dazukommen, bekommt Snotra
+ein Berechtigungsmodell für Tool-Aufrufe. Reihenfolge:
+
+1. **Sicherheitskonzept für Tool-Aufrufe**
+   ([#65](https://github.com/kkrafft1999/snotra/issues/65)) — Konzept-Dokument
+   `docs/sicherheitskonzept.md` nach Vorbild von Claude Code, Cursor und
+   Codex: drei Modi (Auto / Immer fragen / Intelligent), Risikoklassen statt
+   `requiresWrite`, Bestätigungsdialog im Chat, harte Grenzen, die kein Modus
+   aufhebt.
+2. **Kern-Infrastruktur umsetzen** (Folge-Issues aus #65): Risikoklassen in
+   der Tool-Registry, Modus-Schalter und Bestätigungsdialog, Erkennung
+   sensibler Dateien — getestet mit den vorhandenen Dateisystem-Tools.
+3. Erst danach **MCP-Server**
+   ([#62](https://github.com/kkrafft1999/snotra/issues/62)) und **Web-Suche**
+   ([#63](https://github.com/kkrafft1999/snotra/issues/63)), die sich an die
+   fertige Infrastruktur andocken.
 
 ## 💡 Später / Ideen
 
