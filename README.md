@@ -152,11 +152,10 @@ Die Grenzen bleiben eng gezogen:
   die Fehlermeldung nennt die tatsächlich eingeschalteten Namen.
 - **Kein Ausbruch.** `..` und Symlinks werden gegen den echten Pfad geprüft,
   genau wie beim Arbeitsordner.
-- **Erkennbar im Chat.** Jede Antwort beginnt im Tool-Log mit einer Zeile
-  „Skill ‹name› aktiv“ je eingeschaltetem Skill, und Lesezugriffe auf
-  Skill-Dateien bekommen ein eigenes Symbol samt „(Skill ‹name›)“ im Text,
-  damit sie nicht wie ein Zugriff auf das Projekt aussehen. In der
-  zugeklappten Zusammenfassung stehen Skill-Zugriffe an erster Stelle.
+- **Erkennbar im Chat.** Lesezugriffe auf Skill-Dateien bekommen im Tool-Log
+  ein eigenes Symbol samt „(Skill ‹name›)“ im Text, damit sie nicht wie ein
+  Zugriff auf das Projekt aussehen; in der zugeklappten Zusammenfassung
+  stehen Skill-Zugriffe an erster Stelle.
 
 Ohne geöffneten Ordner gibt es überhaupt keine Tools, also auch keine
 Skill-Pfade.

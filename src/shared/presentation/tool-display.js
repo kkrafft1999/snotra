@@ -144,21 +144,12 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
   return isDone ? `${name} ausgeführt` : `${name} wird ausgeführt …`;
 }
 
-/** Zeile für einen für diese Antwort aktiven Skill (Issue #60). */
-function formatActiveSkillLine(skillName) {
-  const raw = typeof skillName === 'string' ? skillName.trim() : '';
-  if (!raw) return 'Skill aktiv';
-  return `Skill ${truncateToolLabel(raw, 32)} aktiv`;
-}
-
 /**
  * Formatiert einen Tool-Trace-Eintrag zur Anzeige-Zeile.
  * Bereits formatierte Strings (persistierte Alt-Sessions) gehen unverändert durch.
  */
 function formatToolDisplayLine(entry, phase = 'start', locale = APP_LOCALES.DE) {
   if (typeof entry === 'string') return entry;
-  // Aktiver Skill ist kein Aufruf und kennt deshalb keine Phasen.
-  if (entry?.activeSkill === true) return formatActiveSkillLine(entry.skill);
   const line =
     entry?.tool === 'debug_wait' && Number.isFinite(entry?.waitMs)
       ? formatPauseDurationLabel(entry.waitMs, phase, locale)
@@ -169,6 +160,5 @@ function formatToolDisplayLine(entry, phase = 'start', locale = APP_LOCALES.DE) 
 module.exports = {
   truncateToolLabel,
   formatToolDisplayLine,
-  formatActiveSkillLine,
   summarizeToolCall,
 };

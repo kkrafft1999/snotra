@@ -69,7 +69,6 @@ function toolTraceEntryForStore(entry) {
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
-  if (entry?.activeSkill === true) out.activeSkill = true;
   return out;
 }
 

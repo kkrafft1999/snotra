@@ -5,7 +5,7 @@ import contracts from '../generated/contracts.js';
 // Einzeiler-Logik des kompakten Tool-Logs (Issue #60), DOM-frei und getestet.
 import { toolLineText, summarizeToolLog, THINKING_LABEL } from '../utils/tool-log-summary.js';
 
-const { coerceUsage, mergeUsage, toolCategoryForEntry, CHAT_PROGRESS_TYPES } = contracts;
+const { coerceUsage, mergeUsage, toolCategoryForEntry } = contracts;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
 function buildToolLineStatus() {
@@ -22,7 +22,6 @@ const CHAT_TOOL_CHEVRON_HTML =
 // hat, und ersetzt den früheren linken Balken samt Häkchen.
 const TOOL_CATEGORY_ICON_PATHS = {
   skill: '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
-  skillActive: '<path d="M8 2.2l1.5 3.6 3.6 1.5-3.6 1.5L8 12.4 6.5 8.8 2.9 7.3l3.6-1.5z"/>',
   read: '<path d="M4 1.8h4.6L12 5.2v9H4z"/><path d="M8.4 1.9v3.4h3.4"/><path d="M6 9h4M6 11.4h4"/>',
   search: '<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/>',
   list: '<path d="M2.2 4h3.9l1.2 1.6h6.5v7.4H2.2z"/>',
@@ -250,7 +249,6 @@ function toolTraceEntryForStore(entry) {
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
-  if (entry?.activeSkill === true) out.activeSkill = true;
   return out;
 }
 
@@ -258,8 +256,7 @@ function traceEntryCategory(entry) {
   if (typeof entry === 'string' || !entry) return null;
   const hasInfo =
     (typeof entry.tool === 'string' && entry.tool)
-    || (typeof entry.skill === 'string' && entry.skill)
-    || entry.activeSkill === true;
+    || (typeof entry.skill === 'string' && entry.skill);
   return hasInfo ? toolCategoryForEntry(entry) : null;
 }
 
@@ -831,16 +828,6 @@ export function initChatStream({
             if (p.type === 'reasoning' && p.text) {
               last.reasoningText = (last.reasoningText || '') + p.text;
               updateStreamingChrome();
-            }
-            // Aktive Skills erscheinen als eigene Zeilen im Tool-Log (#60).
-            if (p.type === CHAT_PROGRESS_TYPES.SKILLS && Array.isArray(p.entries)) {
-              if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
-              for (const skillEntry of p.entries) {
-                const line = toolLineText(skillEntry);
-                if (!line) continue;
-                last.toolTrace.push(toolTraceEntryForStore({ ...skillEntry, line }));
-              }
-              renderChatMessages();
             }
             if (
               p.type === 'workspace'

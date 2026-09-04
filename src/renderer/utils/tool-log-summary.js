@@ -28,7 +28,6 @@ const MAX_SUMMARY_GROUPS = 3;
  */
 const GROUP_LABELS = {
   skill: ['%d Skill-Zugriff', '%d Skill-Zugriffe'],
-  skillActive: ['%d Skill aktiv', '%d Skills aktiv'],
   read: ['%d Datei gelesen', '%d Dateien gelesen'],
   search: ['%d Suche', '%d Suchen'],
   list: ['%d Ordner aufgelistet', '%d Ordner aufgelistet'],
@@ -43,7 +42,6 @@ const GROUP_LABELS = {
  * Skill-Zugriff oder eine geschriebene Datei sagt mehr als eine Auflistung —
  * deshalb ordnet die Zeile nach Wichtigkeit und nicht nach Reihenfolge, und
  * Unwichtiges fällt bei vielen Gruppen zuerst in „N weitere Schritte“.
- * Aktive Skills sind Kontext, nicht Tätigkeit, und stehen daher hinten.
  */
 const CATEGORY_RANK = {
   skill: 1,
@@ -52,9 +50,8 @@ const CATEGORY_RANK = {
   read: 4,
   list: 5,
   check: 6,
-  skillActive: 7,
-  wait: 8,
-  other: 9,
+  wait: 7,
+  other: 8,
 };
 
 function categoryRank(category) {

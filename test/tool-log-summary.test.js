@@ -240,32 +240,20 @@ test('laufender Schritt liefert seine Kategorie fürs Symbol', async () => {
   assert.equal(summarizeToolLog([{ text: 'a', state: 'done', category: 'read' }], { thinking: true }).category, null);
 });
 
-test('Skill-Zugriffe stehen vorn, aktive Skills hinten', async () => {
+test('Skill-Zugriffe stehen in der Zusammenfassung vorn', async () => {
   const { summarizeToolLog, formatGroupLabel } = await load();
   assert.equal(formatGroupLabel('skill', 1), '1 Skill-Zugriff');
   assert.equal(formatGroupLabel('skill', 3), '3 Skill-Zugriffe');
-  assert.equal(formatGroupLabel('skillActive', 1), '1 Skill aktiv');
-  assert.equal(formatGroupLabel('skillActive', 2), '2 Skills aktiv');
 
   const steps = [
-    { text: 'Skill foo aktiv', state: 'done', category: 'skillActive' },
     { text: 'Ordner src durchsucht', state: 'done', category: 'list' },
     { text: 'Datei (Skill foo) gelesen', state: 'done', category: 'skill' },
     { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
+    { text: 'Datei b.js gelesen', state: 'done', category: 'read' },
   ];
   const out = summarizeToolLog(steps);
-  // Skill-Zugriff ist Rang 1, der aktive Skill fällt als Kontext in den Rest.
-  assert.equal(out.text, '1 Skill-Zugriff · 1 Datei gelesen · 1 Ordner aufgelistet');
-  assert.equal(out.extra, '· 1 weiterer Schritt');
+  // Skill-Zugriff ist Rang 1, obwohl er erst als zweiter Schritt lief.
+  assert.equal(out.text, '1 Skill-Zugriff · 2 Dateien gelesen · 1 Ordner aufgelistet');
+  assert.equal(out.extra, '');
   assert.equal(out.category, 'skill');
-});
-
-test('nur ein aktiver Skill: eine Zeile, nichts aufzuklappen', async () => {
-  const { summarizeToolLog } = await load();
-  const out = summarizeToolLog([
-    { text: 'Skill snotra-capabilities aktiv', state: 'done', category: 'skillActive' },
-  ]);
-  assert.equal(out.text, '1 Skill aktiv');
-  assert.equal(out.category, 'skillActive');
-  assert.equal(out.expandable, false);
 });
