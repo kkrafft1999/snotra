@@ -1100,9 +1100,11 @@ summary:focus-visible,
   scrollbar-width: thin;
 }
 
+/* Für die Maske zählt nur die Deckkraft, nicht der Farbwert — currentColor
+   hält die Regel „keine festen Farbwerte in Komponenten" ein. */
 .chat-tool-lines--fade {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - 22px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 22px), transparent);
 }
 
 .chat-tool-lines .chat-tool-line {
@@ -1153,7 +1155,6 @@ summary:focus-visible,
   stroke-width: 1.4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.75;
 }
 
 .chat-tool-line-text {
