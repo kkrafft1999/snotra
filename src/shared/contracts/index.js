@@ -55,7 +55,12 @@ const {
 } = require('./skills');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
-const { TOOL_CATEGORIES, TOOL_CATEGORY_BY_TOOL, toolCategory } = require('./tool-categories');
+const {
+  TOOL_CATEGORIES,
+  TOOL_CATEGORY_BY_TOOL,
+  toolCategory,
+  toolCategoryForEntry,
+} = require('./tool-categories');
 const {
   createChatResult,
   createCancelledChatResult,
@@ -65,6 +70,7 @@ const {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
+  createSkillsActiveEvent,
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
@@ -118,6 +124,7 @@ module.exports = {
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
   toolCategory,
+  toolCategoryForEntry,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,
@@ -126,6 +133,7 @@ module.exports = {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
+  createSkillsActiveEvent,
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,

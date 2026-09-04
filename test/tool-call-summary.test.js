@@ -191,3 +191,18 @@ test('summarizeToolCall macht Skill-Pfade als Skill erkennbar (Issue #61)', () =
     'Datei src/app.js gelesen'
   );
 });
+
+test('formatToolDisplayLine renders active skills without a phase', () => {
+  const { formatActiveSkillLine } = require('../src/shared/presentation/tool-display');
+  assert.equal(
+    formatToolDisplayLine({ activeSkill: true, skill: 'snotra-capabilities' }, 'done'),
+    'Skill snotra-capabilities aktiv'
+  );
+  // Phase spielt keine Rolle — ein aktiver Skill läuft nicht.
+  assert.equal(
+    formatToolDisplayLine({ activeSkill: true, skill: 'foo' }, 'start'),
+    'Skill foo aktiv'
+  );
+  assert.equal(formatActiveSkillLine(''), 'Skill aktiv');
+  assert.equal(formatActiveSkillLine('   '), 'Skill aktiv');
+});

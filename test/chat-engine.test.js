@@ -739,6 +739,56 @@ test('engine injects the bodies of active skills into the system message', async
   assert.match(system.content, /Snotra hat keine Shell\./);
 });
 
+test('engine reports active skills as trace lines (#60)', async () => {
+  const events = [];
+  const { engine } = makeEngine([assistantText('ok')], {
+    skills: {
+      async getActiveSkills() {
+        return [
+          { name: 'snotra-capabilities', description: 'd', source: 'system', path: '/a', body: 'A' },
+          { name: 'demo', description: 'd', source: 'workspace', path: '/b', body: 'B' },
+          // Ohne Namen taucht der Eintrag nirgends auf.
+          { name: '', description: 'd', source: 'workspace', path: '/c', body: 'C' },
+        ];
+      },
+    },
+  });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Was kannst du?' }] },
+    onEvent: (event) => events.push(event),
+  });
+
+  const skillEvents = events.filter((event) => event.payload?.type === 'skills');
+  assert.equal(skillEvents.length, 1, 'genau ein Skills-Ereignis je Antwort');
+  assert.deepEqual(
+    skillEvents[0].payload.entries.map((entry) => [entry.skill, entry.line, entry.activeSkill]),
+    [
+      ['snotra-capabilities', 'Skill snotra-capabilities aktiv', true],
+      ['demo', 'Skill demo aktiv', true],
+    ]
+  );
+  // Die Zeilen stehen auch im Ergebnis, damit sie im Verlauf erhalten bleiben.
+  assert.deepEqual(
+    result.toolTrace.map((entry) => entry.line),
+    ['Skill snotra-capabilities aktiv', 'Skill demo aktiv']
+  );
+});
+
+test('engine emits no skills event without active skills', async () => {
+  const events = [];
+  const { engine } = makeEngine([assistantText('ok')], {
+    skills: { async getActiveSkills() { return []; } },
+  });
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'hi' }] },
+    onEvent: (event) => events.push(event),
+  });
+  assert.equal(events.filter((event) => event.payload?.type === 'skills').length, 0);
+});
+
 test('engine orders user prompt, skills and workspace context', async () => {
   const { engine, calls } = makeEngine([assistantText('ok')], {
     preferences: { async read() { return { baseSystemPrompt: 'Sei knapp.' }; } },

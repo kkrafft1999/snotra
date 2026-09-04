@@ -10,6 +10,10 @@
 'use strict';
 
 const TOOL_CATEGORIES = Object.freeze({
+  /** Zugriff auf Dateien eines eingeschalteten Skills („skill:<name>/…“, #61). */
+  SKILL: 'skill',
+  /** Für diese Antwort aktiver Skill — Kontext, kein Aufruf. */
+  SKILL_ACTIVE: 'skillActive',
   READ: 'read',
   SEARCH: 'search',
   LIST: 'list',
@@ -41,4 +45,20 @@ function toolCategory(toolName) {
   return TOOL_CATEGORY_BY_TOOL[toolName] || TOOL_CATEGORIES.OTHER;
 }
 
-module.exports = { TOOL_CATEGORIES, TOOL_CATEGORY_BY_TOOL, toolCategory };
+/**
+ * Kategorie eines Trace-Eintrags. Skill-Bezug geht vor der Tool-Art: dass eine
+ * Datei aus einem Skill-Verzeichnis kommt, ist für den Nutzer wichtiger als die
+ * Frage, mit welchem Lese-Tool sie geholt wurde.
+ */
+function toolCategoryForEntry(entry) {
+  if (entry?.activeSkill === true) return TOOL_CATEGORIES.SKILL_ACTIVE;
+  if (typeof entry?.skill === 'string' && entry.skill) return TOOL_CATEGORIES.SKILL;
+  return toolCategory(entry?.tool);
+}
+
+module.exports = {
+  TOOL_CATEGORIES,
+  TOOL_CATEGORY_BY_TOOL,
+  toolCategory,
+  toolCategoryForEntry,
+};

@@ -181,7 +181,7 @@ test('groupToolSteps zählt in der Reihenfolge des ersten Auftretens', async () 
   assert.deepEqual(groupToolSteps([{ text: 'x', state: 'done' }]), [{ category: 'other', count: 1 }]);
 });
 
-test('abgeschlossen mit Kategorien: gruppierte Zeile plus Symbol der ersten Gruppe', async () => {
+test('abgeschlossen mit Kategorien: gruppierte Zeile, wichtigste Gruppe zuerst', async () => {
   const { summarizeToolLog } = await load();
   const steps = [
     { text: 'Ordner src durchsucht', state: 'done', category: 'list' },
@@ -189,11 +189,12 @@ test('abgeschlossen mit Kategorien: gruppierte Zeile plus Symbol der ersten Grup
     { text: 'Datei b.js gelesen', state: 'done', category: 'read' },
     { text: 'Nach „foo“ gesucht', state: 'done', category: 'search' },
   ];
+  // Rang statt Reihenfolge: Suche vor Lesen vor Auflisten.
   assert.deepEqual(summarizeToolLog(steps), {
-    text: '1 Ordner aufgelistet · 2 Dateien gelesen · 1 Suche',
+    text: '1 Suche · 2 Dateien gelesen · 1 Ordner aufgelistet',
     state: 'done',
     extra: '',
-    category: 'list',
+    category: 'search',
     count: 4,
     expandable: true,
   });
@@ -208,10 +209,11 @@ test('mehr als drei Gruppen: Rest wird als „N weitere Schritte“ gezählt', a
     { text: 'd', state: 'done', category: 'write' },
     { text: 'e', state: 'done', category: 'wait' },
   ];
+  // Auflistung und Pause sind die unwichtigsten und fallen in den Rest.
   const out = summarizeToolLog(steps);
-  assert.equal(out.text, '1 Datei gelesen · 1 Suche · 1 Ordner aufgelistet');
+  assert.equal(out.text, '1 Datei geschrieben · 1 Suche · 1 Datei gelesen');
   assert.equal(out.extra, '· 2 weitere Schritte');
-  assert.equal(out.category, 'read');
+  assert.equal(out.category, 'write');
 });
 
 test('Alt-Sessions ohne Kategorie behalten „letzter Schritt · N weitere“', async () => {
@@ -236,4 +238,34 @@ test('laufender Schritt liefert seine Kategorie fürs Symbol', async () => {
   assert.equal(out.state, 'running');
   // Beim Nachdenken zeigt die Zeile kein Symbol.
   assert.equal(summarizeToolLog([{ text: 'a', state: 'done', category: 'read' }], { thinking: true }).category, null);
+});
+
+test('Skill-Zugriffe stehen vorn, aktive Skills hinten', async () => {
+  const { summarizeToolLog, formatGroupLabel } = await load();
+  assert.equal(formatGroupLabel('skill', 1), '1 Skill-Zugriff');
+  assert.equal(formatGroupLabel('skill', 3), '3 Skill-Zugriffe');
+  assert.equal(formatGroupLabel('skillActive', 1), '1 Skill aktiv');
+  assert.equal(formatGroupLabel('skillActive', 2), '2 Skills aktiv');
+
+  const steps = [
+    { text: 'Skill foo aktiv', state: 'done', category: 'skillActive' },
+    { text: 'Ordner src durchsucht', state: 'done', category: 'list' },
+    { text: 'Datei (Skill foo) gelesen', state: 'done', category: 'skill' },
+    { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
+  ];
+  const out = summarizeToolLog(steps);
+  // Skill-Zugriff ist Rang 1, der aktive Skill fällt als Kontext in den Rest.
+  assert.equal(out.text, '1 Skill-Zugriff · 1 Datei gelesen · 1 Ordner aufgelistet');
+  assert.equal(out.extra, '· 1 weiterer Schritt');
+  assert.equal(out.category, 'skill');
+});
+
+test('nur ein aktiver Skill: eine Zeile, nichts aufzuklappen', async () => {
+  const { summarizeToolLog } = await load();
+  const out = summarizeToolLog([
+    { text: 'Skill snotra-capabilities aktiv', state: 'done', category: 'skillActive' },
+  ]);
+  assert.equal(out.text, '1 Skill aktiv');
+  assert.equal(out.category, 'skillActive');
+  assert.equal(out.expandable, false);
 });
