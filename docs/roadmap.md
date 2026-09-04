@@ -76,7 +76,10 @@ wieder entfernt.
   (bei parallelen Aufrufen mit „+N“); danach klappt der Log zu
   „‹letzter Schritt› · N weitere Schritte“ zusammen, Klick/Enter/Space öffnet
   die vollständige Schrittliste. Ein einzelner Schritt bleibt eine Zeile ohne
-  Aufklappen; geladene Sessions verhalten sich gleich
+  Aufklappen; geladene Sessions verhalten sich gleich. Wartet das Modell
+  zwischen zwei Tool-Runden, zeigt dieselbe Zeile „Modell denkt nach … ·
+  N Schritte“ — die separate Phasen-Zeile gibt es nur noch vor dem ersten
+  Tool-Schritt, damit nichts mehr springt
 
 ### Architektur
 
@@ -163,9 +166,13 @@ ein Berechtigungsmodell für Tool-Aufrufe. Reihenfolge:
    Codex: drei Modi (Auto / Immer fragen / Intelligent), Risikoklassen statt
    `requiresWrite`, Bestätigungsdialog im Chat, harte Grenzen, die kein Modus
    aufhebt.
-2. **Kern-Infrastruktur umsetzen** (Folge-Issues aus #65): Risikoklassen in
-   der Tool-Registry, Modus-Schalter und Bestätigungsdialog, Erkennung
-   sensibler Dateien — getestet mit den vorhandenen Dateisystem-Tools.
+2. **Kern-Infrastruktur umsetzen** in zwei Issues:
+   [#66](https://github.com/kkrafft1999/snotra/issues/66) Kern
+   (Risikoklassen in der Tool-Registry, Policy-Entscheidung, Freigabe-Schleife
+   im Tool-Loop, Persistenz) und
+   [#67](https://github.com/kkrafft1999/snotra/issues/67) UI (Modus-Wahl,
+   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — getestet
+   mit den vorhandenen Dateisystem-Tools.
 3. Erst danach **MCP-Server**
    ([#62](https://github.com/kkrafft1999/snotra/issues/62)) und **Web-Suche**
    ([#63](https://github.com/kkrafft1999/snotra/issues/63)), die sich an die
