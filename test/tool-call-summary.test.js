@@ -175,3 +175,19 @@ test('summarizeToolCall nutzt für die Phase pending die Start-Formulierung', ()
     'Suche nach „TODO“ …'
   );
 });
+
+test('summarizeToolCall macht Skill-Pfade als Skill erkennbar (Issue #61)', () => {
+  assert.equal(
+    summarizeToolCall('read_file_text', { relative_path: 'skill:demo/references/anleitung.md' }, 'start'),
+    'Datei references/anleitung.md (Skill demo) wird gelesen …'
+  );
+  assert.equal(
+    summarizeToolCall('list_directory', { relative_path: 'skill:demo' }, 'done'),
+    'Ordner Skill demo durchsucht'
+  );
+  // Ein Workspace-Pfad bleibt unverändert.
+  assert.equal(
+    summarizeToolCall('read_file_text', { relative_path: 'src/app.js' }, 'done'),
+    'Datei src/app.js gelesen'
+  );
+});

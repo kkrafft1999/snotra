@@ -134,9 +134,29 @@ Inhalt und damit ein Prompt-Injection-Risiko, deshalb braucht jeder eine
 ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
 maßgeblich bleiben die Tool-Häkchen unter Einstellungen › Tools.
 
-Noch offen: Dateien neben der `SKILL.md` (`references/`, `assets/`,
-`scripts/`) kann das Modell nur lesen, wenn sie im geöffneten Ordner liegen —
-die Lese-Tools kennen bislang keine zweite Wurzel.
+### Dateien neben der `SKILL.md`
+
+Viele Skills legen ihr eigentliches Wissen daneben ab (`references/`,
+`assets/`, `scripts/`) und verweisen aus der `SKILL.md` darauf. Das
+Verzeichnis jedes **eingeschalteten** Skills ist deshalb eine zweite
+**Lesewurzel**: Die Lese-Tools erreichen es über das Präfix
+`skill:<name>/<pfad>`, zum Beispiel `skill:meeting-protocol/references/vorlage.md`.
+Der Systemprompt nennt die Adressierung und die eingeschalteten Namen, sobald
+ein Ordner offen ist.
+
+Die Grenzen bleiben eng gezogen:
+
+- **Nur lesend.** `write_file_text`, `edit_file` und `apply_patch` bekommen die
+  Skill-Verzeichnisse gar nicht erst zu sehen und weisen `skill:`-Pfade ab.
+- **Nur eingeschaltete Skills.** Ein nicht ausgewählter Skill ist kein Pfad;
+  die Fehlermeldung nennt die tatsächlich eingeschalteten Namen.
+- **Kein Ausbruch.** `..` und Symlinks werden gegen den echten Pfad geprüft,
+  genau wie beim Arbeitsordner.
+- **Erkennbar im Chat.** Tool-Zeilen schreiben „(Skill ‹name›)“ dazu, damit
+  ein Lesezugriff nicht wie ein Zugriff auf das Projekt aussieht.
+
+Ohne geöffneten Ordner gibt es überhaupt keine Tools, also auch keine
+Skill-Pfade.
 
 ## Projektstruktur
 
@@ -171,7 +191,7 @@ Details zur Schichtenarchitektur: [`docs/architecture.md`](./docs/architecture.m
 ## Sicherheitshinweise
 
 - API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
-- Der Workspace-Zugriff der Tools ist auf den jeweils geöffneten Projektordner beschränkt.
+- Der Workspace-Zugriff der Tools ist auf den jeweils geöffneten Projektordner beschränkt. Einzige Ausnahme: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…` (siehe [Skills](#skills)); geschrieben wird dort nie.
 - Schreibzugriff (`write_file_text`, `edit_file`, `apply_patch`) ist standardmäßig **deaktiviert** und muss bewusst unter Einstellungen › Tools aktiviert werden.
 - Trotzdem gilt: lass das Modell nichts in Ordnern arbeiten, in denen sensible Daten liegen, denen du nicht traust.
 

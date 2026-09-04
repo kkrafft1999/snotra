@@ -757,8 +757,57 @@ test('engine orders user prompt, skills and workspace context', async () => {
   const system = calls[0].messages.find((m) => m.role === 'system');
   const promptAt = system.content.indexOf('Sei knapp.');
   const skillAt = system.content.indexOf('## Skill: demo');
-  const workspaceAt = system.content.indexOf('geöffneten Ordner');
+  const workspaceAt = system.content.indexOf('Du arbeitest im in der App geöffneten Ordner');
   assert.ok(promptAt === 0 && promptAt < skillAt && skillAt < workspaceAt, system.content);
+});
+
+test('engine reicht die Verzeichnisse eingeschalteter Skills an die Tools weiter', async () => {
+  const tools = makeToolPort();
+  const { engine } = makeEngine([assistantToolCall('call-1', 'read_file_text', { relative_path: 'skill:demo/x.md' }), assistantText('fertig')], {
+    tools,
+    skills: {
+      async getActiveSkills() {
+        return [
+          { name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' },
+          // Ohne Verzeichnis darf kein Eintrag entstehen.
+          { name: 'ohne-pfad', description: 'd', source: 'system', path: '', body: 'Regel B.' },
+        ];
+      },
+    },
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(tools.calls[0].context.skillRoots, [{ name: 'demo', dir: '/skills/demo' }]);
+});
+
+test('engine erklärt Skill-Pfade nur, wenn ein Ordner offen ist', async () => {
+  const skills = {
+    async getActiveSkills() {
+      return [{ name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' }];
+    },
+  };
+
+  const withFolder = makeEngine([assistantText('ok')], { skills });
+  await withFolder.engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  const withFolderSystem = withFolder.calls[0].messages.find((m) => m.role === 'system').content;
+  assert.match(withFolderSystem, /skill:demo\/references\/anleitung\.md/);
+
+  const withoutFolder = makeEngine([assistantText('ok')], { skills });
+  await withoutFolder.engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+  const withoutFolderSystem = withoutFolder.calls[0].messages.find((m) => m.role === 'system').content;
+  assert.match(withoutFolderSystem, /## Skill: demo/);
+  assert.doesNotMatch(withoutFolderSystem, /skill:demo\//);
 });
 
 test('engine keeps answering when the skill port fails', async () => {

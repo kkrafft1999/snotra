@@ -130,8 +130,8 @@ function createWorkspaceToolRegistry({ fsService }) {
           },
         },
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runListDirectoryTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'read_file_text',
@@ -154,8 +154,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runReadFileTextTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runReadFileTextTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'read_file_lines',
@@ -195,8 +195,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runReadFileLinesTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runReadFileLinesTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'search_in_files',
@@ -255,8 +255,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['query'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runSearchInFilesTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'find_files',
@@ -293,8 +293,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['pattern'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runFindFilesTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'stat_path',
@@ -321,8 +321,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runStatPathTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runStatPathTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'outline_file',
@@ -353,8 +353,8 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runOutlineFileTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runOutlineFileTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'list_directory_tree',
@@ -391,8 +391,8 @@ function createWorkspaceToolRegistry({ fsService }) {
           },
         },
       },
-      handler: (args, { workspaceRoot }) =>
-        fsService.runListDirectoryTreeTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'debug_wait',
