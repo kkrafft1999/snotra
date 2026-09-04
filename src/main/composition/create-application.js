@@ -32,6 +32,7 @@ const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerSettingsHandlers } = require('../ipc/settings-handlers');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
+const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 
@@ -49,6 +50,7 @@ function createApplication({
   getMainWindow,
   Menu = null,
   shell = null,
+  clipboard = null,
   REQ,
   PUSH,
   LIMITS,
@@ -156,6 +158,9 @@ function createApplication({
   });
   registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ });
   registerUpdateHandlers({ ipcMain, updates, REQ });
+  // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in
+  // Chat-Antworten wirkungslos — das sandboxed Preload kennt kein `shell`.
+  if (shell) registerShellHandlers({ ipcMain, shell, clipboard, REQ });
   registerChatHandlers({
     ipcMain,
     chatEngine,

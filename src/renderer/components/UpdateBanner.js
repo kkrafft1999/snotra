@@ -60,8 +60,20 @@ export function initUpdateBanner({ api }) {
 
     const actions = document.createElement('div');
     actions.className = 'update-banner-actions';
-    actions.appendChild(makeButton('Herunterladen', 'btn-primary', () => {
-      if (payload.releaseUrl) api.openExternal(payload.releaseUrl);
+    actions.appendChild(makeButton('Herunterladen', 'btn-primary', async () => {
+      if (!payload.releaseUrl) return;
+      // Der Main-Prozess oeffnet den Link; scheitert das, bleibt die Meldung
+      // stehen, statt das Banner wortlos verschwinden zu lassen (Issue #64).
+      let result;
+      try {
+        result = await api.openExternal(payload.releaseUrl);
+      } catch {
+        result = { ok: false };
+      }
+      if (result && result.ok === false) {
+        renderInfo(`Release-Seite konnte nicht geöffnet werden: ${result.error || 'unbekannter Fehler'}`);
+        return;
+      }
       hide();
     }));
     actions.appendChild(makeButton('Überspringen', 'btn-secondary', async () => {

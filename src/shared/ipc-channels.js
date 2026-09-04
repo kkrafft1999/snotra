@@ -39,6 +39,14 @@ const REQUEST_CHANNELS = Object.freeze({
   /** Skill-Verzeichnisse erneut scannen (kein Datei-Watcher im MVP). */
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
 
+  /**
+   * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:
+   * das Fenster ist sandboxed, dort gibt es im Preload kein `shell`.
+   */
+  SHELL_OPEN_EXTERNAL: 'shell:openExternal',
+  /** Text in die Zwischenablage legen — aus demselben Grund über den Main. */
+  SHELL_WRITE_CLIPBOARD_TEXT: 'shell:writeClipboardText',
+
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
   UPDATE_IGNORE_VERSION: 'update:ignoreVersion',
