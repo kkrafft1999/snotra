@@ -1,3 +1,5 @@
+const { SKILL_PATH_PREFIX, parseSkillPath } = require('../../shared/runtime/skill-path');
+
 const READ_LINES_DEFAULT_COUNT = 200;
 const READ_LINES_MAX_COUNT = 1000;
 const READ_SLICE_DEFAULT_MAX_CHARS = 32000;
@@ -767,32 +769,50 @@ function createFsService({
     return !rel.startsWith('..') && !path.isAbsolute(rel);
   }
 
-  function resolveWorkspacePath(workspaceRoot, relativePath) {
-    if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) {
-      return { error: 'Kein Arbeitsordner geöffnet.' };
+  /** Fehlertexte je Wurzelart — der Nutzer soll sehen, woran ein Pfad scheitert. */
+  const WORKSPACE_LABELS = {
+    outside: 'Pfad liegt außerhalb des Arbeitsordners.',
+    missing: 'Kein Arbeitsordner geöffnet.',
+  };
+  const SKILL_LABELS = {
+    outside: 'Pfad liegt außerhalb des Skill-Ordners.',
+    missing: 'Skill-Ordner nicht gefunden.',
+  };
+
+  function resolvePathInRoot(rootPath, relativePath, labels) {
+    if (typeof rootPath !== 'string' || !rootPath.trim()) {
+      return { error: labels.missing };
     }
-    const root = path.resolve(workspaceRoot);
+    const root = path.resolve(rootPath);
     const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
     const joined = path.resolve(root, raw.length ? raw : '.');
     if (!containsPath(root, joined)) {
-      return { error: 'Pfad liegt außerhalb des Arbeitsordners.' };
+      return { error: labels.outside };
     }
     return { absPath: joined };
   }
 
-  function assertAbsolutePathInWorkspace(workspaceRoot, absPath) {
-    if (!workspaceRoot) {
-      return { error: 'Kein Arbeitsordner geöffnet.' };
+  function resolveWorkspacePath(workspaceRoot, relativePath) {
+    return resolvePathInRoot(workspaceRoot, relativePath, WORKSPACE_LABELS);
+  }
+
+  function assertAbsolutePathInRoot(rootPath, absPath, labels) {
+    if (!rootPath) {
+      return { error: labels.missing };
     }
     const raw = typeof absPath === 'string' ? absPath.trim() : '';
     if (!raw) {
       return { error: 'Pfad ist erforderlich.' };
     }
     const resolved = path.resolve(raw);
-    if (!containsPath(workspaceRoot, resolved)) {
-      return { error: 'Pfad liegt außerhalb des Arbeitsordners.' };
+    if (!containsPath(rootPath, resolved)) {
+      return { error: labels.outside };
     }
     return { absPath: resolved };
+  }
+
+  function assertAbsolutePathInWorkspace(workspaceRoot, absPath) {
+    return assertAbsolutePathInRoot(workspaceRoot, absPath, WORKSPACE_LABELS);
   }
 
   /**
@@ -823,15 +843,15 @@ function createFsService({
     }
   }
 
-  async function assertPathAccessibleInWorkspace(workspaceRoot, absPath) {
-    const lexical = assertAbsolutePathInWorkspace(workspaceRoot, absPath);
+  async function assertPathAccessibleInRoot(rootPath, absPath, labels) {
+    const lexical = assertAbsolutePathInRoot(rootPath, absPath, labels);
     if (lexical.error) return lexical;
 
     try {
-      const realRoot = await fs.realpath(path.resolve(workspaceRoot));
+      const realRoot = await fs.realpath(path.resolve(rootPath));
       const realTarget = await resolveExistingRealPath(lexical.absPath);
       if (!containsPath(realRoot, realTarget)) {
-        return { error: 'Pfad liegt außerhalb des Arbeitsordners.' };
+        return { error: labels.outside };
       }
       return { absPath: lexical.absPath };
     } catch (e) {
@@ -839,16 +859,84 @@ function createFsService({
     }
   }
 
-  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath) {
-    const lexical = resolveWorkspacePath(workspaceRoot, relativePath);
-    if (lexical.error) return lexical;
-    return assertPathAccessibleInWorkspace(workspaceRoot, lexical.absPath);
+  async function assertPathAccessibleInWorkspace(workspaceRoot, absPath) {
+    return assertPathAccessibleInRoot(workspaceRoot, absPath, WORKSPACE_LABELS);
   }
 
-  async function runListDirectoryTool(args, workspaceRoot) {
+  /**
+   * Waehlt die Wurzel fuer einen Tool-Pfad (Issue #61). Ohne Praefix ist das
+   * der Arbeitsordner. Mit "skill:<name>/" ist es das Verzeichnis eines
+   * eingeschalteten Skills — das bekommen ausschliesslich die Lese-Tools
+   * uebergeben, Schreib-Tools erhalten nie eine `skillRoots`-Liste und
+   * scheitern deshalb strukturell an solchen Pfaden.
+   *
+   * @param {string} workspaceRoot
+   * @param {string} relativePath  Pfad wie vom Modell uebergeben.
+   * @param {Array<{name: string, dir: string}>} [skillRoots]
+   */
+  function resolveAccessRoot(workspaceRoot, relativePath, skillRoots) {
+    const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
+    const parsed = parseSkillPath(raw);
+    if (!parsed) {
+      return { root: workspaceRoot, rel: raw, prefix: '', labels: WORKSPACE_LABELS };
+    }
+    if (!Array.isArray(skillRoots)) {
+      return { error: 'Skill-Pfade (skill:…) sind nur mit den Lese-Tools möglich.' };
+    }
+    const known = skillRoots.filter((entry) => entry && entry.name && entry.dir);
+    if (known.length === 0) {
+      return { error: 'Es ist kein Skill eingeschaltet — Skill-Pfade gibt es hier nicht.' };
+    }
+    const hit = known.find((entry) => entry.name === parsed.name);
+    if (!hit) {
+      const names = known.map((entry) => entry.name).join(', ');
+      return { error: `Unbekannter Skill: „${parsed.name}“. Eingeschaltet sind: ${names}.` };
+    }
+    return {
+      root: hit.dir,
+      rel: parsed.rest,
+      prefix: `${SKILL_PATH_PREFIX}${hit.name}/`,
+      skillName: hit.name,
+      labels: SKILL_LABELS,
+    };
+  }
+
+  /**
+   * Loest einen Tool-Pfad gegen die passende Wurzel auf und prueft ihn gegen
+   * Ausbrueche (lexikalisch und ueber Realpath, inkl. Symlinks).
+   *
+   * @returns {Promise<{absPath?: string, root?: string, prefix?: string,
+   *   skillName?: string|null, error?: string}>} `root` ist die tatsaechlich
+   *   genutzte Wurzel, `prefix` das Praefix fuer daraus erzeugte relative Pfade.
+   */
+  async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
+    const chosen = resolveAccessRoot(workspaceRoot, relativePath, options.skillRoots);
+    if (chosen.error) return { error: chosen.error };
+    const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
+    if (lexical.error) return lexical;
+    const checked = await assertPathAccessibleInRoot(chosen.root, lexical.absPath, chosen.labels);
+    if (checked.error) return checked;
+    return {
+      absPath: checked.absPath,
+      root: path.resolve(chosen.root),
+      prefix: chosen.prefix,
+      skillName: chosen.skillName || null,
+    };
+  }
+
+  /**
+   * Wie `resolveToolPath`, aber ohne Skill-Wurzeln: nutzen die Schreib-Tools.
+   * Ein "skill:"-Pfad scheitert hier bewusst mit einer klaren Meldung, statt
+   * als Datei mit dem Namen „skill:…“ im Arbeitsordner zu landen.
+   */
+  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath) {
+    return resolveToolPath(workspaceRoot, relativePath);
+  }
+
+  async function runListDirectoryTool(args, workspaceRoot, options = {}) {
     const relArg = args.relative_path;
     const rel = typeof relArg === 'string' ? relArg : '';
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -872,14 +960,14 @@ function createFsService({
     }
   }
 
-  async function runReadFileTextTool(args, workspaceRoot) {
+  async function runReadFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path ist erforderlich.' });
     }
     let maxChars = Number.isFinite(args.max_characters) ? Math.floor(args.max_characters) : 32000;
     maxChars = Math.min(Math.max(1000, maxChars), 200000);
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -908,7 +996,7 @@ function createFsService({
     }
   }
 
-  async function runReadFileLinesTool(args, workspaceRoot) {
+  async function runReadFileLinesTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path ist erforderlich.' });
@@ -927,7 +1015,7 @@ function createFsService({
       if (error) return JSON.stringify({ error });
       parsed[name] = value;
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     let buf;
     try {
@@ -1302,7 +1390,7 @@ function createFsService({
     return entries;
   }
 
-  async function runSearchInFilesTool(args, workspaceRoot) {
+  async function runSearchInFilesTool(args, workspaceRoot, options = {}) {
     const query = typeof args.query === 'string' ? args.query : '';
     if (!query) {
       return JSON.stringify({ error: 'query ist erforderlich.' });
@@ -1335,10 +1423,9 @@ function createFsService({
         : null;
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
 
-    const root = path.resolve(workspaceRoot);
     const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
 
     const state = {
@@ -1348,7 +1435,9 @@ function createFsService({
       matchLimitReached: false,
       scanLimitReached: false,
     };
-    const toRelPosix = (abs) => path.relative(root, abs).split(path.sep).join('/');
+    // Erzeugte Pfade tragen die Wurzel mit: aus einem Skill-Ordner kommen sie
+    // als "skill:<name>/…" zurück und sind damit direkt wieder aufrufbar.
+    const toRelPosix = (abs) => `${prefix}${path.relative(root, abs).split(path.sep).join('/')}`;
 
     async function scanFile(fileAbs, size) {
       if (state.filesVisited >= MAX_SEARCH_SCANNED_FILES) {
@@ -1423,7 +1512,7 @@ function createFsService({
     });
   }
 
-  async function runFindFilesTool(args, workspaceRoot) {
+  async function runFindFilesTool(args, workspaceRoot, options = {}) {
     const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : '';
     if (!pattern) {
       return JSON.stringify({ error: 'pattern ist erforderlich.' });
@@ -1436,10 +1525,9 @@ function createFsService({
     const includeHidden = args.include_hidden === true;
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
 
-    const root = path.resolve(workspaceRoot);
     const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
 
     const state = {
@@ -1451,7 +1539,7 @@ function createFsService({
     function addMatch(relEntry, isDirectory) {
       if (glob.dirOnly && !isDirectory) return;
       if (!glob.regex.test(relEntry)) return;
-      state.results.push({ path: relEntry, kind: isDirectory ? 'directory' : 'file' });
+      state.results.push({ path: `${prefix}${relEntry}`, kind: isDirectory ? 'directory' : 'file' });
       if (state.results.length >= maxResults) state.matchLimitReached = true;
     }
 
@@ -1516,12 +1604,12 @@ function createFsService({
     return { entries, truncated };
   }
 
-  async function runStatPathTool(args, workspaceRoot) {
+  async function runStatPathTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path ist erforderlich ("." für das Projektroot).' });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     let st;
     try {
@@ -1559,7 +1647,7 @@ function createFsService({
     return JSON.stringify(result);
   }
 
-  async function runOutlineFileTool(args, workspaceRoot) {
+  async function runOutlineFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path ist erforderlich.' });
@@ -1573,7 +1661,7 @@ function createFsService({
       ? Math.floor(args.max_entries)
       : OUTLINE_DEFAULT_MAX_ENTRIES;
     maxEntries = Math.min(Math.max(1, maxEntries), OUTLINE_MAX_ENTRIES);
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     let buf;
     try {
@@ -1619,7 +1707,7 @@ function createFsService({
     return JSON.stringify(result);
   }
 
-  async function runListDirectoryTreeTool(args, workspaceRoot) {
+  async function runListDirectoryTreeTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const depth = readIntegerArg(args, 'max_depth');
     if (depth.error) return JSON.stringify({ error: depth.error });
@@ -1632,7 +1720,7 @@ function createFsService({
     maxEntries = Math.min(Math.max(1, maxEntries), TREE_MAX_ENTRIES);
     const includeHidden = args.include_hidden === true;
 
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -1642,7 +1730,6 @@ function createFsService({
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
-    const root = path.resolve(workspaceRoot);
     const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
 
     // Breitensuche mit Gesamtbudget: obere Ebenen werden zuerst vollständig, tiefe zuletzt.

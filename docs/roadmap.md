@@ -136,18 +136,19 @@ wieder entfernt.
   Datei-Watcher, Button „Skills neu laden“); Ordner-Skills nie automatisch
   aktiv (Prompt-Injection). `allowed-tools` wird ignoriert, die Tool-Häkchen
   bleiben maßgeblich
+- 📂 **Skill-Verzeichnisse als zweite Lesewurzel**
+  ([#61](https://github.com/kkrafft1999/snotra/issues/61), Folge aus #18):
+  Dateien neben der `SKILL.md` (`references/`, `assets/`, `scripts/`) sind
+  jetzt auch dann lesbar, wenn der Skill außerhalb des geöffneten Ordners
+  liegt — Adressierung über `skill:<name>/<pfad>`, nur für die Lese-Tools.
+  Schreib-Tools bekommen die Skill-Wurzeln gar nicht erst übergeben, `..` und
+  Symlinks werden wie beim Arbeitsordner gegen den echten Pfad geprüft, und
+  die Tool-Zeile im Chat weist den Zugriff als Skill-Lesezugriff aus
 
 ## 🚧 Jetzt / als Nächstes
 
-- 📂 **Lese-Tools für Skill-Verzeichnisse öffnen** (Folgeschritt aus
-  [#18](https://github.com/kkrafft1999/snotra/issues/18)): Dateien neben der
-  `SKILL.md` (`references/`, `assets/`, `scripts/`) sind heute nur lesbar,
-  wenn der Skill im geöffneten Ordner liegt. Damit auch globale Skills unter
-  `~/.claude/skills/` vollständig funktionieren, müssten die Read-only-Tools
-  das Verzeichnis eines eingeschalteten Skills als zweite erlaubte Wurzel
-  akzeptieren — Schreib-Tools bleiben auf den Workspace beschränkt. Bewusst
-  vom MVP getrennt, weil es den Dateizugriff über den Workspace hinaus
-  erweitert
+_Aktuell nichts fest eingeplant — die nächsten Schritte ergeben sich aus den
+offenen [Issues](https://github.com/kkrafft1999/snotra/issues)._
 
 ## 💡 Später / Ideen
 

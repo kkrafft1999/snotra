@@ -84,17 +84,32 @@ function parseToolArguments(rawArguments) {
  * Prompt des Nutzers, aber vor dem Ordnerkontext: Skills beschreiben, *wie*
  * gearbeitet wird, der Ordnerkontext nur, *woran*.
  */
-function buildSkillsSystemPrompt(activeSkills) {
+function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) {
   if (!Array.isArray(activeSkills) || activeSkills.length === 0) return '';
-  const sections = activeSkills
-    .filter((skill) => skill && typeof skill.body === 'string' && skill.body.trim())
-    .map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
-  if (sections.length === 0) return '';
-  return [
+  const usable = activeSkills.filter(
+    (skill) => skill && typeof skill.body === 'string' && skill.body.trim()
+  );
+  if (usable.length === 0) return '';
+  const sections = usable.map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
+  const intro = [
     'Folgende Skills sind eingeschaltet. Ihre Anweisungen gelten für diese ' +
       'Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.',
-    ...sections,
-  ].join('\n\n');
+  ];
+  // Ein Skill besteht oft aus mehr als der SKILL.md — verweist sie auf
+  // references/ oder assets/, muss das Modell wissen, wie es dorthin kommt
+  // (Issue #61). Ohne offenen Ordner gibt es keine Tools, dann bleibt der
+  // Hinweis weg.
+  if (toolsAvailable) {
+    const names = usable.map((skill) => skill.name).join(', ');
+    intro.push(
+      `Verweist ein Skill auf Dateien neben seiner SKILL.md (z. B. „references/…“ oder ` +
+        `„assets/…“), liest du sie mit den Lese-Tools über den Pfad ` +
+        `„skill:<name>/<pfad>“, etwa „skill:${usable[0].name}/references/anleitung.md“. ` +
+        `Eingeschaltet sind: ${names}. Geschrieben wird dort nicht — Schreib-Tools ` +
+        `gelten weiterhin nur für den Arbeitsordner.`
+    );
+  }
+  return [...intro, ...sections].join('\n\n');
 }
 
 function createChatEngine({
@@ -262,16 +277,23 @@ function createChatEngine({
       // Skills gelten unabhängig davon, ob ein Ordner offen ist — die
       // System-Skills beschreiben die App selbst.
       let skillsSystem = '';
+      // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
+      // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie.
+      let skillRoots = [];
       if (skills) {
         try {
           const active = await skills.getActiveSkills({
             workspaceRoot,
             activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
           });
-          skillsSystem = buildSkillsSystemPrompt(active);
+          skillsSystem = buildSkillsSystemPrompt(active, { toolsAvailable: Boolean(workspaceRoot) });
+          skillRoots = active
+            .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
+            .map((skill) => ({ name: skill.name, dir: skill.path }));
         } catch {
           // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
           skillsSystem = '';
+          skillRoots = [];
         }
       }
 
@@ -398,7 +420,13 @@ function createChatEngine({
 
           let output;
           try {
-            const execution = await tools.execute(toolName, args, { workspaceRoot, abortSignal, allowWrite, disabledNames });
+            const execution = await tools.execute(toolName, args, {
+              workspaceRoot,
+              skillRoots,
+              abortSignal,
+              allowWrite,
+              disabledNames,
+            });
             output = execution.output;
             emitProgressPayloads(execution.progressEvents);
           } catch (error) {

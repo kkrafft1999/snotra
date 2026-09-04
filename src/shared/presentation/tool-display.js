@@ -8,6 +8,7 @@
 
 const { resolveDebugWaitMs } = require('../contracts/debug-wait');
 const { APP_LOCALES } = require('../contracts/enums');
+const { parseSkillPath } = require('../runtime/skill-path');
 
 function truncateToolLabel(s, max = 48) {
   const t = String(s ?? '');
@@ -15,9 +16,20 @@ function truncateToolLabel(s, max = 48) {
   return `${t.slice(0, max - 1)}…`;
 }
 
+/**
+ * Pfad-Beschriftung einer Tool-Zeile. Ein Skill-Pfad („skill:name/rest“,
+ * Issue #61) wird lesbar aufgelöst, damit im Chat erkennbar bleibt, dass aus
+ * einem Skill-Verzeichnis gelesen wurde und nicht aus dem Projektordner.
+ */
 function formatRelativePathForLabel(relativePath) {
   const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
   if (!raw || raw === '.') return null;
+  const skill = parseSkillPath(raw);
+  if (skill) {
+    const name = truncateToolLabel(skill.name, 24);
+    if (!skill.rest || skill.rest === '.') return `Skill ${name}`;
+    return `${truncateToolLabel(skill.rest)} (Skill ${name})`;
+  }
   return truncateToolLabel(raw);
 }
 
