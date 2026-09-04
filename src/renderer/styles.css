@@ -1038,6 +1038,21 @@ summary:focus-visible,
   display: none;
 }
 
+/* Die Zusammenfassung bleibt immer einzeilig: bricht sie um, springt alles
+   darunter — genau das sollte weg. Zu langer Text wird beschnitten, Zähler und
+   Chevron bleiben sichtbar. */
+.chat-tool-summary .chat-tool-summary-line {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.chat-tool-summary .chat-tool-summary-line .chat-tool-line-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-tool-summary-extra {
   flex-shrink: 0;
   font-size: var(--ds-font-size-sm);
@@ -1070,7 +1085,9 @@ summary:focus-visible,
   display: none;
 }
 
-/* Aufgeklappte Liste: alle Schritte kompakt, erledigte gedimmt. */
+/* Aufgeklappte Liste: alle Schritte kompakt, erledigte gedimmt. Höhe ist
+   begrenzt, damit viele Schritte die Antwort nicht wegschieben; der Fade unten
+   erscheint nur, solange dort noch etwas folgt (Klasse aus dem Renderer). */
 .chat-tool-lines {
   margin: 4px 0 0;
   padding: 0;
@@ -1078,17 +1095,32 @@ summary:focus-visible,
   flex-direction: column;
   gap: 2px;
   background: transparent;
+  max-height: 176px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.chat-tool-lines--fade {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
 }
 
 .chat-tool-lines .chat-tool-line {
   font-size: var(--ds-font-size-sm);
-  padding: 2px 0 2px 10px;
+  padding: 2px 0;
+}
+
+.chat-tool-lines .chat-tool-line-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .chat-tool-lines .chat-tool-line--done {
   color: var(--text-muted);
 }
 
+/* Zeilen tragen vorne ein Symbol je Tool-Art (Issue #60) — kein linker Balken
+   und kein Häkchen mehr, das hält die Liste ruhig. */
 .chat-tool-line {
   display: flex;
   align-items: center;
@@ -1100,21 +1132,28 @@ summary:focus-visible,
   font-family: var(--ds-font-tool);
   color: var(--text-muted-strong);
   margin: 0;
-  padding: 4px 0 4px 12px;
+  padding: 4px 0;
   letter-spacing: -0.02em;
   border: none;
-  border-left: 4px solid var(--ds-black);
   border-radius: 0;
   background: transparent;
 }
 
-.chat-tool-line--running,
-.chat-tool-line--pending {
-  border-left-color: var(--ds-black);
+/* Platzhalter: hält die Textkante stabil, wenn es kein Symbol gibt. */
+.chat-tool-line-icon--empty {
+  visibility: hidden;
 }
 
-.chat-tool-line--done {
-  border-left-color: var(--ds-grey-divider);
+.chat-tool-line-icon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
 }
 
 .chat-tool-line-text {
@@ -1151,23 +1190,6 @@ summary:focus-visible,
   100% {
     background-position: -120% 0;
   }
-}
-
-.chat-tool-line-status {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  line-height: 1;
-}
-
-.chat-tool-line-check {
-  width: 14px;
-  height: 14px;
-  stroke: var(--ds-blue);
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 /* Hilfsklasse fuer Screenreader-only-Text. */

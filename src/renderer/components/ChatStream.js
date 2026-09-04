@@ -5,33 +5,35 @@ import contracts from '../generated/contracts.js';
 // Einzeiler-Logik des kompakten Tool-Logs (Issue #60), DOM-frei und getestet.
 import { toolLineText, summarizeToolLog, THINKING_LABEL } from '../utils/tool-log-summary.js';
 
-const { coerceUsage, mergeUsage } = contracts;
+const { coerceUsage, mergeUsage, toolCategory } = contracts;
 
-function createToolCheckIcon() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'chat-tool-line-check');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Abgeschlossen');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', 'M3 8l3 3 7-7');
-  svg.appendChild(path);
-  return svg;
-}
-
+/** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
 function buildToolLineStatus() {
   const status = document.createElement('span');
-  status.className = 'chat-tool-line-status';
-  const srDone = document.createElement('span');
-  srDone.className = 'sr-only';
-  srDone.textContent = 'Abgeschlossen';
-  status.appendChild(srDone);
-  status.appendChild(createToolCheckIcon());
+  status.className = 'chat-tool-line-status sr-only';
+  status.textContent = 'Abgeschlossen';
   return status;
 }
 
 const CHAT_TOOL_CHEVRON_HTML =
   '<svg class="chat-tool-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+
+// Symbol je Tool-Art (Issue #60): sagt auf einen Blick, was der Schritt getan
+// hat, und ersetzt den früheren linken Balken samt Häkchen.
+const TOOL_CATEGORY_ICON_PATHS = {
+  read: '<path d="M4 1.8h4.6L12 5.2v9H4z"/><path d="M8.4 1.9v3.4h3.4"/><path d="M6 9h4M6 11.4h4"/>',
+  search: '<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/>',
+  list: '<path d="M2.2 4h3.9l1.2 1.6h6.5v7.4H2.2z"/>',
+  check: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/>',
+  write: '<path d="M11.3 2.3 13.7 4.7 6.2 12.2H3.8V9.8z"/>',
+  wait: '<circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.4 1.5"/>',
+  other: '<path d="M2.4 3.4h11.2v9.2H2.4z"/><path d="M5 7l1.6 1.6L5 10.2"/>',
+};
+
+function toolCategoryIconHtml(category) {
+  const paths = TOOL_CATEGORY_ICON_PATHS[category] || TOOL_CATEGORY_ICON_PATHS.other;
+  return `<svg class="chat-tool-line-icon" viewBox="0 0 16 16" aria-hidden="true">${paths}</svg>`;
+}
 
 const TOOL_LINE_STATE_CLASS = {
   pending: 'chat-tool-line--pending',
@@ -42,12 +44,16 @@ const TOOL_LINE_STATE_CLASS = {
 // state 'pending': Das Modell streamt den Aufruf noch (Argumente unvollständig),
 // das Tool ist noch nicht gelaufen. Optisch wie 'running', damit z. B. beim
 // Schreiben einer Datei sofort sichtbar ist, dass etwas passiert.
-function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex) {
+function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex, category) {
   const row = document.createElement('div');
   row.className = 'chat-tool-line';
   row.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
   row.setAttribute('role', 'listitem');
   if (Number.isInteger(callIndex)) row.dataset.callIndex = String(callIndex);
+  if (category) {
+    row.dataset.category = category;
+    row.insertAdjacentHTML('afterbegin', toolCategoryIconHtml(category));
+  }
 
   const textEl = document.createElement('span');
   textEl.className = 'chat-tool-line-text';
@@ -125,6 +131,7 @@ function readToolLogSteps(wrap) {
   const rows = wrap.querySelectorAll('.chat-tool-lines > .chat-tool-line');
   return [...rows].map((row) => ({
     text: row.querySelector('.chat-tool-line-text')?.textContent || '',
+    category: row.dataset.category || null,
     state: row.classList.contains('chat-tool-line--pending')
       ? 'pending'
       : row.classList.contains('chat-tool-line--running')
@@ -133,8 +140,27 @@ function readToolLogSteps(wrap) {
   }));
 }
 
+/**
+ * Symbol des Einzeilers an die Kategorie anpassen. Ohne Kategorie — beim
+ * Nachdenken und bei Sessions von vor #60 — bleibt der Platz reserviert, sonst
+ * rutschte der Text bei jedem Wechsel um die Symbolbreite nach links.
+ */
+function syncToolSummaryIcon(line, category) {
+  const key = category || '';
+  if (line.dataset.iconKey === key && line.querySelector('.chat-tool-line-icon')) return;
+  line.querySelector('.chat-tool-line-icon')?.remove();
+  line.dataset.iconKey = key;
+  if (category) line.dataset.category = category;
+  else delete line.dataset.category;
+  line.insertAdjacentHTML('afterbegin', toolCategoryIconHtml(category || 'other'));
+  if (!category) {
+    line.querySelector('.chat-tool-line-icon').classList.add('chat-tool-line-icon--empty');
+  }
+}
+
 function syncToolSummaryLine(line, summary) {
   const { text, state, extra } = summary;
+  syncToolSummaryIcon(line, summary.category);
   line.classList.remove(
     TOOL_LINE_STATE_CLASS.pending,
     TOOL_LINE_STATE_CLASS.running,
@@ -158,11 +184,32 @@ function syncToolSummaryLine(line, summary) {
     if (!line.querySelector('.chat-tool-line-status')) {
       line.insertBefore(buildToolLineStatus(), line.querySelector('.chat-tool-chevron'));
     }
+    line.querySelector('.chat-tool-line-status').textContent = 'Abgeschlossen';
   } else {
     line.setAttribute('aria-busy', 'true');
     line.setAttribute('aria-label', `Läuft: ${label}`);
     line.querySelector('.chat-tool-line-status')?.remove();
   }
+}
+
+/**
+ * Die Schrittliste ist höhenbegrenzt und scrollt (Issue #60). Der Fade am
+ * unteren Rand erscheint nur, solange dort wirklich noch etwas folgt — sonst
+ * sähe die letzte Zeile dauerhaft ausgegraut aus.
+ */
+function syncToolListOverflow(linesEl) {
+  if (!linesEl) return;
+  const overflowing = linesEl.scrollHeight - linesEl.clientHeight > 1;
+  const atBottom = linesEl.scrollTop + linesEl.clientHeight >= linesEl.scrollHeight - 2;
+  linesEl.classList.toggle('chat-tool-lines--fade', overflowing && !atBottom);
+}
+
+/** Neue Schritte nachziehen, solange der Nutzer die Liste unten hat. */
+function appendToolLine(linesEl, row) {
+  const atBottom = linesEl.scrollTop + linesEl.clientHeight >= linesEl.scrollHeight - 2;
+  linesEl.appendChild(row);
+  if (atBottom) linesEl.scrollTop = linesEl.scrollHeight;
+  syncToolListOverflow(linesEl);
 }
 
 /**
@@ -176,10 +223,32 @@ function syncToolLogSummary(wrap, { thinking = false } = {}) {
   const line = wrap.querySelector('.chat-tool-summary-line');
   if (line) syncToolSummaryLine(line, summary);
 
+  syncToolListOverflow(wrap.querySelector('.chat-tool-lines'));
   wrap.classList.toggle('chat-tool-log--single', !summary.expandable);
   const summaryEl = wrap.querySelector('.chat-tool-summary');
   if (summaryEl) summaryEl.tabIndex = summary.expandable ? 0 : -1;
   if (!summary.expandable && wrap.open) wrap.open = false;
+}
+
+/**
+ * Kategorie eines Trace-Eintrags. Vor #60 gespeicherte Sessions enthalten
+ * bloße Strings ohne Tool-Namen — die bleiben ohne Symbol und lassen die
+ * Zusammenfassung auf die alte Form zurückfallen.
+ */
+/**
+ * Trace-Eintrag für Store und Verlauf: nur Anzeige-Zeile und Tool-Name. Die
+ * Argumente aus dem Engine-Ergebnis bleiben bewusst draußen (write_file_text
+ * trägt dort bis zu 2 MB Dateiinhalt).
+ */
+function toolTraceEntryForStore(entry) {
+  const line = toolLineText(entry);
+  const tool = typeof entry?.tool === 'string' ? entry.tool : '';
+  return tool ? { line, tool } : line;
+}
+
+function traceEntryCategory(entry) {
+  const tool = typeof entry?.tool === 'string' ? entry.tool : '';
+  return tool ? toolCategory(tool) : null;
 }
 
 function hasToolSteps(message) {
@@ -326,6 +395,7 @@ export function initChatStream({
     lines.className = 'chat-tool-lines';
     lines.setAttribute('role', 'list');
     lines.setAttribute('aria-label', 'Alle Tool-Schritte');
+    lines.addEventListener('scroll', () => syncToolListOverflow(lines));
     log.appendChild(lines);
 
     if (Array.isArray(trace) && trace.length > 0) {
@@ -334,12 +404,14 @@ export function initChatStream({
         // Beim Nachdenken ist die vorige Runde komplett erledigt.
         const lineState =
           state === 'running' && !thinking && i === trace.length - 1 ? 'running' : 'done';
-        lines.appendChild(buildToolLine(text, lineState));
+        lines.appendChild(buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i])));
       }
     }
     if (state === 'running' && Array.isArray(pendingLines)) {
       for (const pending of pendingLines) {
-        lines.appendChild(buildToolLine(pending.line, 'pending', pending.callIndex));
+        lines.appendChild(
+          buildToolLine(pending.line, 'pending', pending.callIndex, traceEntryCategory(pending))
+        );
       }
     }
     // Ein Schritt = eine Zeile: Öffnen (Klick/Tastatur) wieder zurücknehmen.
@@ -369,6 +441,13 @@ export function initChatStream({
 
   function finalizeStreamingToolLog(wrap) {
     finalizeAllToolLines(wrap);
+    // Zugeklappt wieder an den Anfang: wer die Liste danach öffnet, liest von
+    // oben. Eine offene Liste bleibt dort, wo der Nutzer sie hat.
+    const lines = wrap.querySelector('.chat-tool-lines');
+    if (lines && !wrap.open) {
+      lines.scrollTop = 0;
+      syncToolListOverflow(lines);
+    }
     wrap.classList.remove('chat-tool-log--running');
     wrap.classList.add('chat-tool-log--done');
     wrap.removeAttribute('aria-busy');
@@ -660,18 +739,24 @@ export function initChatStream({
 
             // Zustand im Store: toolTrace = ausgeführte Tools (wird persistiert),
             // pendingToolLines = vom Modell noch gestreamte Aufrufe (nur Anzeige).
+            // Der Tool-Name kommt mit dem Event und bleibt im Verlauf stehen —
+            // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
+            const tool = typeof payload?.tool === 'string' ? payload.tool : '';
+            const entry = tool ? { line, tool } : line;
             if (phase === 'pending') {
               const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
-              if (existing) existing.line = line;
-              else last.pendingToolLines.push({ callIndex, line });
+              if (existing) {
+                existing.line = line;
+                if (tool) existing.tool = tool;
+              } else last.pendingToolLines.push({ callIndex, line, tool: tool || undefined });
             } else if (phase === 'start') {
               const pendingPos = last.pendingToolLines.findIndex((p) => p.callIndex === callIndex);
               if (pendingPos >= 0) last.pendingToolLines.splice(pendingPos, 1);
               else if (last.pendingToolLines.length > 0) last.pendingToolLines.shift();
-              last.toolTrace.push(line);
+              last.toolTrace.push(entry);
             } else if (phase === 'done') {
-              if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = line;
-              else last.toolTrace.push(line);
+              if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
+              else last.toolTrace.push(entry);
             }
 
             const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
@@ -688,11 +773,12 @@ export function initChatStream({
               wrap.appendChild(linesEl);
             }
 
+            const category = tool ? toolCategory(tool) : null;
             if (phase === 'pending') {
               // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
               const row = findPendingToolLine(linesEl, callIndex);
               if (row) setToolLineText(row, line);
-              else linesEl.appendChild(buildToolLine(line, 'pending', callIndex));
+              else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
             } else if (phase === 'done') {
               const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
               setToolLineDone(runningRows[runningRows.length - 1], line);
@@ -703,7 +789,7 @@ export function initChatStream({
               // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
               const pendingRow = findPendingToolLine(linesEl, callIndex, true);
               if (pendingRow) promoteToolLineToRunning(pendingRow, line);
-              else linesEl.appendChild(buildToolLine(line, 'running', callIndex));
+              else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
             }
 
             syncToolLogSummary(wrap, { thinking: isThinking(last) });
@@ -764,7 +850,7 @@ export function initChatStream({
             last.content = result.content;
           }
           last.toolTrace = Array.isArray(result?.toolTrace)
-            ? result.toolTrace.map((e) => toolLineText(e))
+            ? result.toolTrace.map(toolTraceEntryForStore)
             : last.toolTrace || [];
           const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
           if (bubble) {
@@ -787,7 +873,7 @@ export function initChatStream({
       last.streaming = false;
       last.content = result.content ?? '';
       last.toolTrace = Array.isArray(result.toolTrace)
-        ? result.toolTrace.map((e) => toolLineText(e))
+        ? result.toolTrace.map(toolTraceEntryForStore)
         : last.toolTrace || [];
       const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
       if (bubble) {

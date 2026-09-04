@@ -55,6 +55,7 @@ const {
 } = require('./skills');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
+const { TOOL_CATEGORIES, TOOL_CATEGORY_BY_TOOL, toolCategory } = require('./tool-categories');
 const {
   createChatResult,
   createCancelledChatResult,
@@ -114,6 +115,9 @@ module.exports = {
   mergeUsage,
   DEBUG_WAIT,
   resolveDebugWaitMs,
+  TOOL_CATEGORIES,
+  TOOL_CATEGORY_BY_TOOL,
+  toolCategory,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,

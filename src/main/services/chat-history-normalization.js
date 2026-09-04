@@ -54,9 +54,22 @@ function toolTraceEntryToString(entry) {
   return '';
 }
 
+/**
+ * Trace-Eintrag für Speicher und Renderer. Ist der Tool-Name bekannt, bleibt
+ * er als `{ line, tool }` erhalten — daraus leitet die Anzeige Symbol und
+ * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
+ * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
+ */
+function toolTraceEntryForStore(entry) {
+  const line = toolTraceEntryToString(entry);
+  if (!line) return '';
+  const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
+  return tool ? { line, tool } : line;
+}
+
 function sanitizeToolTraceForStore(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
-  const out = raw.map(toolTraceEntryToString).filter((s) => s.length > 0);
+  const out = raw.map(toolTraceEntryForStore).filter((e) => e !== '');
   return out.length ? out : undefined;
 }
 
@@ -124,7 +137,7 @@ function normalizeLoadedMessages(raw) {
         return { role: 'user', content: messageContentForStore(m.content) };
       }
       const toolTrace = Array.isArray(m.toolTrace)
-        ? m.toolTrace.map(toolTraceEntryToString).filter((s) => s.length > 0)
+        ? m.toolTrace.map(toolTraceEntryForStore).filter((e) => e !== '')
         : [];
       return {
         role: 'assistant',
@@ -180,6 +193,7 @@ function normalizeSessionForLoad(sessionRow) {
 module.exports = {
   inferChatTitle,
   toolTraceEntryToString,
+  toolTraceEntryForStore,
   sanitizeChatMessagesForStore,
   normalizeTokenUsageForStore,
   normalizeLoadedMessages,
