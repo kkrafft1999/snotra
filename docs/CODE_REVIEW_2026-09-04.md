@@ -2,7 +2,9 @@
 
 **Datum:** 4. September 2026
 
-**Review-Basis:** `main` bei `a857f51` (`Merge branch 'feat/61-skill-read-roots'`)
+**Aktualisierte Review-Basis:** `main` bei `f7c3323` (`Merge branch 'fix/64-open-external'`)
+
+**Ursprünglicher Review-Snapshot:** `a857f51` (`Merge branch 'feat/61-skill-read-roots'`)
 
 **Projektversion:** `1.2.0`
 
@@ -12,7 +14,7 @@
 
 ## Kurzfazit
 
-Snotra AI hat eine überdurchschnittlich saubere technische Basis: Die Electron-Härtung ist weitgehend sinnvoll, die Anwendungslogik ist klar von Electron und den Providern getrennt, Dateizugriffe schützen gegen Traversal und Symlink-Ausbrüche, sensible Provider-Schlüssel werden über `safeStorage` behandelt und 472 automatisierte Tests laufen vollständig grün.
+Snotra AI hat eine überdurchschnittlich saubere technische Basis: Die Electron-Härtung ist weitgehend sinnvoll, die Anwendungslogik ist klar von Electron und den Providern getrennt, Dateizugriffe schützen gegen Traversal und Symlink-Ausbrüche, sensible Provider-Schlüssel werden über `safeStorage` behandelt und 479 automatisierte Tests laufen vollständig grün.
 
 Für eine Release-Freigabe sollten dennoch drei Punkte zuerst behoben werden:
 
@@ -20,7 +22,24 @@ Für eine Release-Freigabe sollten dennoch drei Punkte zuerst behoben werden:
 2. `search_in_files` führt modellgelieferte reguläre Ausdrücke synchron im Electron-Main-Prozess aus und ist damit für Regular-Expression-Denial-of-Service anfällig.
 3. Die Release-Pipeline baut und veröffentlicht Artefakte, ohne die vorhandenen Tests auszuführen; eine fortlaufende Pull-Request-/Push-Pipeline fehlt vollständig.
 
-Es wurden **keine kritischen**, **3 hohe**, **8 mittlere** und **4 niedrige** Findings identifiziert. „Keine kritischen Findings“ bedeutet nicht, dass kein Risiko besteht: Die beiden hohen Sicherheitsfindings können bei kompromittiertem Renderer beziehungsweise bösartigem Workspace-Inhalt außerhalb der erwarteten Grenzen wirken.
+Es wurden **keine kritischen**, **3 hohe**, **8 mittlere** und **5 niedrige** Findings identifiziert. „Keine kritischen Findings“ bedeutet nicht, dass kein Risiko besteht: Die beiden hohen Sicherheitsfindings können bei kompromittiertem Renderer beziehungsweise bösartigem Workspace-Inhalt außerhalb der erwarteten Grenzen wirken.
+
+## Nachtrag: parallel entstandene Quellcodeänderungen
+
+Während der ursprünglichen Analyse entstand parallel der Commit `9177dac` (`fix(shell): Links über den Main-Prozess öffnen statt im sandboxed Preload`), anschließend integriert durch `f7c3323`. Der Nachtrag umfasst den vollständigen Source- und Test-Diff von `a857f51` bis `f7c3323`, ausgenommen die Review-Datei selbst.
+
+**Umfang:** 7 Dateien, 222 Ergänzungen, 15 Löschungen
+
+- `src/main/ipc/shell-handlers.js` wurde neu angelegt.
+- `src/main/composition/create-application.js` und `src/main/index.js` verdrahten `shell` und `clipboard` im Main-Prozess.
+- `src/preload/index.js` importiert nur noch `contextBridge` und `ipcRenderer` und delegiert Shell-/Clipboard-Aufrufe per IPC.
+- `src/shared/ipc-channels.js` definiert die beiden neuen Kanäle zentral.
+- `src/renderer/components/UpdateBanner.js` wartet auf das Ergebnis des externen Linkaufrufs und zeigt Fehler an.
+- `test/shell-handlers.test.js` ergänzt sieben Tests für Protokollfilter, Fehlerpfade, Clipboard, Sandbox-Imports und Preload-Bundle.
+
+**Bewertung:** Die Änderung ist fachlich richtig und verbessert sowohl Funktion als auch Sicherheitsarchitektur. `shell` und `clipboard` sind im sandboxed Preload nicht verfügbar; die Verlagerung in den Main-Prozess behebt daher einen realen Funktionsfehler. Die Main-seitige Positivliste für ausschließlich HTTP und HTTPS ist sinnvoll, und Fehler werden strukturiert zurückgegeben. Die 479 Tests einschließlich der sieben neuen Fälle laufen vollständig grün.
+
+Die Änderung behebt keines der ursprünglichen P1-/P2-Findings, verschärft sie aber auch nicht. Zwei niedrige Restpunkte bleiben: `mailto:` ist weiterhin inkonsistent behandelt (SNO-15), und Chat-Links ignorieren die neu verfügbaren Fehlerresultate, während gleichzeitig eine aktuell ungenutzte Clipboard-Fähigkeit exponiert wird (SNO-16).
 
 ## Priorisierte Übersicht
 
@@ -41,6 +60,7 @@ Es wurden **keine kritischen**, **3 hohe**, **8 mittlere** und **4 niedrige** Fi
 | SNO-13 | Niedrig / P3 | Konsistenz | Das Speichern der Einstellungen ist über zwei Dateien nicht atomar |
 | SNO-14 | Niedrig / P3 | Wartbarkeit | Mehrere zentrale Module sind sehr groß; der Testlauf erzeugt eine Modulformat-Warnung |
 | SNO-15 | Niedrig / P3 | UX | `mailto:` wird als sicherer Link erzeugt, aber nicht geöffnet |
+| SNO-16 | Niedrig / P3 | IPC, UX | Chat-Linkfehler bleiben unsichtbar; ungenutzte Clipboard-Fähigkeit bleibt exponiert |
 
 ## Detaillierte Findings
 
@@ -50,7 +70,7 @@ Es wurden **keine kritischen**, **3 hohe**, **8 mittlere** und **4 niedrige** Fi
 
 **Betroffene Stellen:**
 
-- `src/preload/index.js:24-25,32-45`
+- `src/preload/index.js:28-29,36-49`
 - `src/main/ipc/settings-handlers.js:185-195`
 - `src/main/workspace-state.js:3-11`
 - `src/main/adapters/filesystem-ipc-adapter.js:3-7`
@@ -96,7 +116,7 @@ Ausdrücke mit katastrophalem Backtracking, etwa verschachtelte Quantifizierer, 
 
 Es existiert nur ein taggetriggerter Release-Workflow. Beide Build-Jobs führen `npm ci` und anschließend Packaging aus, aber nicht `npm test`. Einen Workflow für Pull Requests oder normale Pushes gibt es nicht. Damit können fehlschlagende Tests oder Architekturregeln unbemerkt bis zum Release-Tag gelangen und trotzdem veröffentlichte Binärdateien erzeugen.
 
-Das ist besonders schade, weil die vorhandenen 472 Tests schnell laufen und bereits wertvolle Architektur-, IPC-, Provider-, Storage- und Dateisystemregeln absichern.
+Das ist besonders schade, weil die vorhandenen 479 Tests schnell laufen und bereits wertvolle Architektur-, IPC-, Provider-, Storage- und Dateisystemregeln absichern.
 
 **Empfehlung:**
 
@@ -251,7 +271,7 @@ Die Modelllisten und die Whisper-Transkription verwenden `fetch` ohne Timeout od
 
 **Betroffene Stellen:** Testkonfiguration in `package.json:6-14`; Renderer unter `src/renderer/`
 
-Der experimentelle Node-Coverage-Lauf meldet sehr gute **93,97 % Zeilen-, 84,25 % Branch- und 92,59 % Funktionsabdeckung**. Diese Gesamtwerte beziehen sich jedoch nur auf Module, die der Node-Testlauf lädt. Von der Renderer-Oberfläche wird im Wesentlichen nur `mentionAutocomplete.js` importiert und vollständig gemessen.
+Der experimentelle Node-Coverage-Lauf meldet sehr gute **93,99 % Zeilen-, 84,21 % Branch- und 92,64 % Funktionsabdeckung**. Diese Gesamtwerte beziehen sich jedoch nur auf Module, die der Node-Testlauf lädt. Von der Renderer-Oberfläche wird im Wesentlichen nur `mentionAutocomplete.js` importiert und vollständig gemessen.
 
 Für zentrale Komponenten wie `FileTree.js`, `SettingsModal.js`, `ChatStream.js`, `SidebarResizer.js`, `WhisperRecorder.js` und die DOMPurify-/Markdown-Integration existieren keine automatisierten DOM-Tests. Genau dort liegen die erkannten Windows-, Accessibility-, Link- und Ressourcenprobleme. Die hohe Gesamtzahl vermittelt daher mehr End-to-End-Sicherheit, als tatsächlich vorhanden ist.
 
@@ -305,11 +325,23 @@ Das erschwert isolierte Tests und erhöht die Wahrscheinlichkeit unbeabsichtigte
 
 **Priorität:** Niedrig / P3
 
-**Betroffene Stellen:** `src/renderer/utils/helpers.js:35-62`, `src/renderer/components/ChatStream.js:707-715`, `src/preload/index.js:77-85`
+**Betroffene Stellen:** `src/renderer/utils/helpers.js:35-62`, `src/renderer/components/ChatStream.js:707-715`, `src/main/ipc/shell-handlers.js:14-35`, `src/main/window.js:35-45`
 
-Die Markdown-Sanitization erlaubt `mailto:` und versieht Links mit `target="_blank"`. Sowohl der Click-Handler als auch `openExternal` akzeptieren anschließend jedoch nur HTTP und HTTPS. Ein sichtbarer E-Mail-Link reagiert daher nicht wie erwartet.
+Die Markdown-Sanitization erlaubt `mailto:` und versieht Links mit `target="_blank"`. Der Click-Handler fängt jedoch nur HTTP(S) ab; der Window-Open-Handler und der neue Main-Prozess-Handler öffnen ebenfalls ausschließlich HTTP(S). Ein sichtbarer E-Mail-Link wird daher letztlich abgewiesen und reagiert nicht wie erwartet.
 
-**Empfehlung:** Entweder `mailto:` konsistent bis zum Main-/Preload-Handler erlauben und dort streng validieren oder es bereits beim Sanitizing entfernen beziehungsweise als nicht klickbaren Text darstellen.
+**Empfehlung:** Entweder `mailto:` konsistent bis zum Main-Handler erlauben und dort streng validieren oder es bereits beim Sanitizing entfernen beziehungsweise als nicht klickbaren Text darstellen.
+
+### SNO-16 – Chat-Linkfehler bleiben unsichtbar; Clipboard-Fähigkeit ist ungenutzt
+
+**Priorität:** Niedrig / P3
+
+**Betroffene Stellen:** `src/renderer/components/ChatStream.js:707-715`, `src/renderer/components/UpdateBanner.js:63-77`, `src/preload/index.js:81-84`, `src/main/ipc/shell-handlers.js:25-46`
+
+Der neue Main-Handler liefert bei einem fehlgeschlagenen `shell.openExternal` korrekt `{ ok: false, error }`. Das Update-Banner wartet auf dieses Ergebnis und zeigt die Fehlermeldung an. Der Chat-Click-Handler ruft dieselbe asynchrone API dagegen ohne `await`, `catch` oder Auswertung auf. Schlägt das Öffnen dort fehl, bleibt der Link für den Nutzer weiterhin scheinbar wirkungslos; bei einem abgewiesenen IPC-Promise droht zusätzlich eine unbehandelte Promise-Rejection.
+
+Außerdem wird `writeClipboardText` neu über Preload und Main exponiert, aktuell existiert im Renderer jedoch kein Aufrufer. Die Fähigkeit erweitert somit ohne gegenwärtigen Produktnutzen die IPC-Oberfläche und akzeptiert Text ohne Größenlimit.
+
+**Empfehlung:** Chat-Linkaufrufe abwarten, Fehler sichtbar melden und den Renderer-Pfad testen. Die Clipboard-API bis zu einem tatsächlichen Anwendungsfall entfernen oder dann mit klarer Größenbegrenzung, Aufruftest und dokumentiertem Zweck einführen.
 
 ## Positive Beobachtungen
 
@@ -338,7 +370,7 @@ Die Markdown-Sanitization erlaubt `mailto:` und versieht Links mit `target="_bla
 
 ### Tests und Abhängigkeiten
 
-- 472 automatisierte Tests laufen erfolgreich und schnell.
+- 479 automatisierte Tests laufen erfolgreich und schnell.
 - Die gemessene Abdeckung der tatsächlich geladenen Kernmodule ist hoch.
 - Provider-Streaming, Tool-Schleifen, Abbruchpfade, Speicherparallelität, Dateisystemgrenzen und Skill-Wurzeln sind umfangreich getestet.
 - `npm ls --depth=0` meldet einen konsistenten Dependency-Baum.
@@ -348,9 +380,9 @@ Die Markdown-Sanitization erlaubt `mailto:` und versieht Links mit `target="_bla
 
 | Prüfung | Ergebnis |
 |---|---|
-| Git-Status vor Berichtserstellung | Sauber; `main` und `origin/main` bei `a857f51` |
-| `npm test` | **472 bestanden**, 0 fehlgeschlagen, 0 übersprungen |
-| Node Test Coverage | **93,97 % Zeilen**, **84,25 % Branches**, **92,59 % Funktionen** für geladene Module |
+| Git-Status nach Einbezug der Paralleländerungen | Sauber; `main` und `origin/main` bei `f7c3323` |
+| `npm test` | **479 bestanden**, 0 fehlgeschlagen, 0 übersprungen |
+| Node Test Coverage | **93,99 % Zeilen**, **84,21 % Branches**, **92,64 % Funktionen** für geladene Module |
 | Dependency-Baum | `npm ls --depth=0` erfolgreich |
 | Secret-Pattern-Scan | Keine wahrscheinlichen produktiven Secrets gefunden |
 | Paketinspektion | ASAR vorhanden, 9,9 MB, 971 Einträge; lokale `.claude/settings.local.json` enthalten |
@@ -375,6 +407,6 @@ Beim normalen und beim Coverage-Testlauf trat nur die in SNO-14 dokumentierte No
 4. **SNO-04 und SNO-05:** Release-Berechtigungen minimieren, Actions pinnen und Packaging allowlisten.
 5. **SNO-06 und SNO-07:** Windows-Pfadmodell und Tastaturbedienung korrigieren; Renderer-Testbasis dabei aufbauen.
 6. **SNO-08 bis SNO-11:** Atomare Workspace-Writes, Ressourcen-/Netzwerkgrenzen und realistische Renderer-Coverage ergänzen.
-7. **SNO-12 bis SNO-15:** Hardening, Persistenzkonsistenz und Wartbarkeitsarbeiten einplanen.
+7. **SNO-12 bis SNO-16:** Hardening, Persistenzkonsistenz und Wartbarkeitsarbeiten einplanen.
 
 Nach Abschluss der P1-Punkte sollte ein fokussiertes Security-Re-Review der IPC-Vertrauensgrenzen, Toolausführung und Release-Pipeline erfolgen.
