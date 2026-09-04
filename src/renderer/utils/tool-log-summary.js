@@ -5,13 +5,23 @@
  *
  * Entscheidungen aus dem Issue: zugeklappt steht der letzte Schritt plus
  * „N weitere Schritte“; laufen mehrere Tools parallel, zeigt die Zeile den
- * ersten laufenden Schritt plus „+N“.
+ * ersten laufenden Schritt plus „+N“. Wartet das Modell zwischen zwei
+ * Tool-Runden, übernimmt dieselbe Zeile „Modell denkt nach …“, damit über dem
+ * Tool-Log keine eigene Phasen-Zeile mehr ein- und ausblendet.
  */
+
+export const THINKING_LABEL = 'Modell denkt nach …';
 
 /** Persistierte Alt-Sessions enthalten fertige Strings statt Objekte. */
 export function toolLineText(entry) {
   if (typeof entry === 'string') return entry;
   return entry?.line ?? entry?.summary ?? entry?.text ?? '';
+}
+
+export function formatStepCountLabel(n) {
+  const count = Math.max(0, Math.floor(Number(n) || 0));
+  if (count === 0) return '';
+  return count === 1 ? '1 Schritt' : `${count} Schritte`;
 }
 
 export function formatMoreStepsLabel(n) {
@@ -25,12 +35,18 @@ export function formatMoreStepsLabel(n) {
  *
  * @param {Array<{ text: string, state: 'pending' | 'running' | 'done' }>} steps
  *   Schritte in Ausführungsreihenfolge (wie in der aufgeklappten Liste).
+ * @param {{ thinking?: boolean }} [options]
+ *   `thinking`: Das Modell wartet auf die nächste Runde (kein Tool läuft).
+ *   Dann zeigt die Zeile „Modell denkt nach …“ statt des letzten Schritts;
+ *   ein laufender Schritt hat weiterhin Vorrang.
  * @returns {{ text: string, state: 'pending' | 'running' | 'done', extra: string,
  *   count: number, expandable: boolean }}
- *   `extra` ist der Zusatz hinter dem Text („+2“ bzw. „· 4 weitere Schritte“),
- *   `expandable` sagt, ob sich das Aufklappen lohnt (ab zwei Schritten).
+ *   `extra` ist der Zusatz hinter dem Text („+2“, „· 4 weitere Schritte“ bzw.
+ *   „· 5 Schritte“ beim Nachdenken), `expandable` sagt, ob sich das
+ *   Aufklappen lohnt (ab zwei Schritten; beim Nachdenken ab einem, weil die
+ *   Zeile dann keinen Schritt zeigt).
  */
-export function summarizeToolLog(steps) {
+export function summarizeToolLog(steps, { thinking = false } = {}) {
   const list = Array.isArray(steps) ? steps : [];
   const count = list.length;
   const expandable = count >= 2;
@@ -45,6 +61,16 @@ export function summarizeToolLog(steps) {
       extra: active.length > 1 ? `+${active.length - 1}` : '',
       count,
       expandable,
+    };
+  }
+
+  if (thinking) {
+    return {
+      text: THINKING_LABEL,
+      state: 'running',
+      extra: `· ${formatStepCountLabel(count)}`,
+      count,
+      expandable: true,
     };
   }
 

@@ -96,6 +96,46 @@ test('alles erledigt: letzter Schritt plus „N weitere Schritte“', async () =
   assert.equal(two.expandable, true);
 });
 
+test('formatStepCountLabel dekliniert korrekt', async () => {
+  const { formatStepCountLabel } = await load();
+  assert.equal(formatStepCountLabel(0), '');
+  assert.equal(formatStepCountLabel(1), '1 Schritt');
+  assert.equal(formatStepCountLabel(5), '5 Schritte');
+});
+
+test('Nachdenken zwischen Runden: Zeile zeigt „Modell denkt nach …“ mit Schrittzähler', async () => {
+  const { summarizeToolLog, THINKING_LABEL } = await load();
+  const done = ['a', 'b', 'c'].map((text) => ({ text, state: 'done' }));
+  assert.deepEqual(summarizeToolLog(done, { thinking: true }), {
+    text: THINKING_LABEL,
+    state: 'running',
+    extra: '· 3 Schritte',
+    count: 3,
+    expandable: true,
+  });
+  // Ein einzelner Schritt ist beim Nachdenken trotzdem aufklappbar — die Zeile zeigt ihn ja nicht.
+  const one = summarizeToolLog([{ text: 'Datei a.js gelesen', state: 'done' }], { thinking: true });
+  assert.equal(one.extra, '· 1 Schritt');
+  assert.equal(one.expandable, true);
+});
+
+test('Nachdenken: laufender Schritt hat Vorrang, ohne Schritte bleibt die Zeile leer', async () => {
+  const { summarizeToolLog } = await load();
+  const withActive = summarizeToolLog(
+    [
+      { text: 'Datei a.js gelesen', state: 'done' },
+      { text: 'Datei b.js wird gelesen …', state: 'running' },
+    ],
+    { thinking: true }
+  );
+  assert.equal(withActive.text, 'Datei b.js wird gelesen …');
+  assert.equal(withActive.extra, '');
+  const empty = summarizeToolLog([], { thinking: true });
+  assert.equal(empty.count, 0);
+  assert.equal(empty.text, '');
+  assert.equal(empty.expandable, false);
+});
+
 test('zwischen zwei Schritten (nichts läuft) steht der letzte erledigte Schritt', async () => {
   const { summarizeToolLog } = await load();
   const out = summarizeToolLog([
