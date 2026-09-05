@@ -91,6 +91,29 @@ test('createChatResult / createCancelledChatResult produce the stable success sh
   });
 });
 
+test('result factories carry contextUsage only when provided', () => {
+  const ctx = { prompt: 210, completion: 20, total: 230 };
+  assert.deepEqual(createChatResult({ content: 'hi', usage: null, contextUsage: ctx }), {
+    content: 'hi',
+    toolTrace: [],
+    usage: null,
+    contextUsage: ctx,
+  });
+  assert.deepEqual(createCancelledChatResult({ contextUsage: null }), {
+    cancelled: true,
+    content: '',
+    toolTrace: [],
+    usage: null,
+    contextUsage: null,
+  });
+  assert.deepEqual(
+    createChatErrorResult({ error: 'y', code: CHAT_ERROR_CODES.API, usage: ctx, contextUsage: ctx }),
+    { error: 'y', code: 'API', usage: ctx, contextUsage: ctx }
+  );
+  // Ohne Angabe bleibt die Form schlank — kein contextUsage-Schluessel.
+  assert.equal('contextUsage' in createChatResult({ content: 'x' }), false);
+});
+
 test('createChatErrorResult omits usage unless provided', () => {
   assert.deepEqual(createChatErrorResult({ error: 'x', code: CHAT_ERROR_CODES.INVALID }), {
     error: 'x',

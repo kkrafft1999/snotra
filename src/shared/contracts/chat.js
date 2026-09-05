@@ -19,24 +19,39 @@ const {
 
 // --- Ergebnis-DTOs (Rückgabe von CHAT_SEND) --------------------------------
 
+/*
+ * Zwei Usage-Felder mit unterschiedlicher Bedeutung:
+ *   usage         Summe ueber alle LLM-Runden dieses Zugs (Verbrauch).
+ *   contextUsage  Usage der letzten LLM-Runde. Deren `prompt` ist die Groesse
+ *                 des Kontextfensters, das zuletzt tatsaechlich an das Modell
+ *                 ging — das zeigt der Token-Zaehler im Composer.
+ * contextUsage wird nur aufgenommen, wenn es uebergeben wurde, damit die
+ * bestehenden Wire-Formen unveraendert bleiben.
+ */
+
 /** Erfolgreiches Chat-Ergebnis (Modell hat geantwortet, keine Tools mehr offen). */
-function createChatResult({ content = '', toolTrace = [], usage = null } = {}) {
-  return { content, toolTrace, usage };
+function createChatResult({ content = '', toolTrace = [], usage = null, contextUsage } = {}) {
+  const result = { content, toolTrace, usage };
+  if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  return result;
 }
 
 /** Vom Nutzer bzw. per AbortSignal abgebrochenes Chat-Ergebnis. */
-function createCancelledChatResult({ content = '', toolTrace = [], usage = null } = {}) {
-  return { cancelled: true, content, toolTrace, usage };
+function createCancelledChatResult({ content = '', toolTrace = [], usage = null, contextUsage } = {}) {
+  const result = { cancelled: true, content, toolTrace, usage };
+  if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  return result;
 }
 
 /**
- * Fehler-Ergebnis. usage wird nur aufgenommen, wenn es
+ * Fehler-Ergebnis. usage/contextUsage werden nur aufgenommen, wenn sie
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  */
-function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage } = {}) {
+function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage, contextUsage } = {}) {
   const result = { error, code };
   if (usage !== undefined) result.usage = usage;
+  if (contextUsage !== undefined) result.contextUsage = contextUsage;
   return result;
 }
 

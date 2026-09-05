@@ -120,6 +120,9 @@ function sanitizeChatMessagesForStore(raw) {
   return out;
 }
 
+/* tokenUsage einer Session ist die Usage der letzten LLM-Runde (deren prompt
+ * = zuletzt gesendetes Kontextfenster), keine Summe ueber den Chat. Aeltere
+ * Sessions tragen noch Summenwerte; die korrigieren sich mit dem naechsten Zug. */
 function normalizeTokenUsageForStore(raw) {
   if (!raw || typeof raw !== 'object') {
     return { prompt: 0, completion: 0, total: 0 };

@@ -13,7 +13,7 @@ import {
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-debug.js';
 
-const { coerceUsage, mergeUsage, toolCategoryForEntry } = contracts;
+const { coerceUsage, createEmptyUsage, toolCategoryForEntry } = contracts;
 
 // Ein Puffer je Renderer; in den DevTools per window.__snotraToolLogDebug.serialize()
 // abrufbar, im Chat per Strg/Cmd+Shift+D in die Zwischenablage (Issue #87).
@@ -416,15 +416,25 @@ export function initChatStream({
     setChatTokenUsage({ prompt: 0, completion: 0, total: 0 });
   }
 
+  // Der Zaehler zeigt die Groesse des Kontextfensters, das zuletzt an das
+  // Modell ging: die Prompt-Tokens der letzten LLM-Runde. Er wird pro Zug
+  // ersetzt, nicht aufaddiert — der Verbrauch ueber den Chat ist keine
+  // Kontextgroesse.
   function syncChatTokenUsageDisplay() {
     if (!chatTokenUsageEl) return;
-    const total = appStore.chatTokenUsage?.total || 0;
-    chatTokenUsageEl.textContent = formatChatTokenUsage(total);
+    const usage = appStore.chatTokenUsage || createEmptyUsage();
+    chatTokenUsageEl.textContent = formatChatTokenUsage(usage.prompt);
+    chatTokenUsageEl.title =
+      `Kontextfenster der letzten Anfrage: ${tokenCountFormatter.format(usage.prompt)} Tokens ` +
+      `(Antwort: ${tokenCountFormatter.format(usage.completion)} Tokens)`;
   }
 
   function applyUsageFromResult(result) {
-    if (!result?.usage) return;
-    appStore.chatTokenUsage = mergeUsage(appStore.chatTokenUsage, result.usage);
+    // contextUsage = letzte Runde (Kontext). Aeltere Engine-Ergebnisse ohne
+    // das Feld liefern nur die Zugsumme; die ist dann das Beste, was wir haben.
+    const usage = result?.contextUsage ?? result?.usage;
+    if (!usage) return;
+    appStore.chatTokenUsage = coerceUsage(usage);
     syncChatTokenUsageDisplay();
   }
   function syncChatSendButton() {

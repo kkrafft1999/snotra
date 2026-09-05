@@ -577,6 +577,7 @@ test('engine turns provider failures into the existing error DTO', async () => {
     error: 'Kontingent erschöpft',
     code: 'RATE_LIMIT',
     usage: null,
+    contextUsage: null,
   });
 });
 
@@ -621,6 +622,44 @@ test('engine emits pending tool lines while the model still streams a tool call'
   assert.equal(result.toolTrace.length, 1);
   assert.equal(result.toolTrace[0].line, 'Datei docs/neu.md geschrieben');
   assert.equal(result.toolTrace[0].callIndex, undefined);
+});
+
+test('engine reports usage as sum of rounds and contextUsage as the last round', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const { engine } = makeEngine([
+    { ...assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }), usage: { prompt: 100, completion: 10, total: 110 } },
+    { ...assistantToolCall('c2', 'read_file_text', { relative_path: 'b.js' }), usage: { prompt: 150, completion: 12, total: 162 } },
+    assistantText('Fertig.', { usage: { prompt: 210, completion: 20, total: 230 } }),
+  ], { tools });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: () => {},
+  });
+
+  assert.equal(result.content, 'Fertig.');
+  // usage bleibt der Verbrauch des ganzen Zugs (alle drei Runden summiert) …
+  assert.deepEqual(result.usage, { prompt: 460, completion: 42, total: 502 });
+  // … contextUsage ist nur die letzte Runde: ihr prompt ist das zuletzt
+  // gesendete Kontextfenster, nicht die Summe.
+  assert.deepEqual(result.contextUsage, { prompt: 210, completion: 20, total: 230 });
+});
+
+test('engine keeps the last complete round as contextUsage when the final round has no usage', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const { engine } = makeEngine([
+    { ...assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }), usage: { prompt: 100, completion: 10, total: 110 } },
+    assistantText('Fertig.'), // usage: null (Provider ohne Usage-Angabe)
+  ], { tools });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: () => {},
+  });
+
+  assert.deepEqual(result.contextUsage, { prompt: 100, completion: 10, total: 110 });
 });
 
 test('engine pending tool lines: complete arguments, repeated starts and parallel calls', async () => {

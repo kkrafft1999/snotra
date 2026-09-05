@@ -2,7 +2,7 @@
 
 const { isAbortError, createChatAbortError } = require('../../shared/runtime/abort');
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
-const { mergeUsage } = require('../../shared/contracts/usage');
+const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -132,9 +132,9 @@ function createChatEngine({
     emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPhaseEvent(phase));
   }
 
-  function returnCancelledChat(onEvent, toolTrace, content = '', usage = null) {
+  function returnCancelledChat(onEvent, toolTrace, content = '', usage = null, contextUsage = null) {
     emitPhase(onEvent, CHAT_PHASES.IDLE);
-    return createCancelledChatResult({ content, toolTrace, usage });
+    return createCancelledChatResult({ content, toolTrace, usage, contextUsage });
   }
 
   // Argumente, die in der Tool-Zeile erscheinen (Pfad, Suchbegriff, Muster).
@@ -235,7 +235,11 @@ function createChatEngine({
     activeChatAborts.set(sessionId, abortController);
 
     const toolTrace = [];
+    // requestUsage: Summe ueber alle Runden (Verbrauch dieses Zugs).
+    // contextUsage: Usage der letzten Runde — deren prompt ist die Groesse des
+    // Kontextfensters, das zuletzt an das Modell ging (Anzeige im Composer).
     let requestUsage = null;
+    let contextUsage = null;
 
     try {
       const messages = payload?.messages;
@@ -348,7 +352,7 @@ function createChatEngine({
 
       for (let round = 0; round < toolRoundLimit; round += 1) {
         if (abortSignal.aborted) {
-          return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
+          return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
         }
 
         emitPhase(onEvent, CHAT_PHASES.WAITING);
@@ -364,9 +368,11 @@ function createChatEngine({
           abortSignal,
         });
         requestUsage = mergeUsage(requestUsage, streamed.usage);
+        // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
+        contextUsage = normalizeUsage(streamed.usage) || contextUsage;
 
         if (streamed.cancelled) {
-          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage);
+          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, contextUsage);
         }
         if (streamed.error) {
           emitPhase(onEvent, CHAT_PHASES.IDLE);
@@ -374,6 +380,7 @@ function createChatEngine({
             error: streamed.error,
             code: streamed.code || CHAT_ERROR_CODES.API,
             usage: requestUsage,
+            contextUsage,
           });
         }
 
@@ -390,13 +397,14 @@ function createChatEngine({
             content: assistantMessage.content ?? '',
             toolTrace,
             usage: requestUsage,
+            contextUsage,
           });
         }
 
         for (let callIndex = 0; callIndex < toolCalls.length; callIndex += 1) {
           const toolCall = toolCalls[callIndex];
           if (abortSignal.aborted) {
-            return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
+            return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
           }
           const toolName = toolCall.function?.name || 'tool';
           const args = parseToolArguments(toolCall.function?.arguments);
@@ -431,7 +439,7 @@ function createChatEngine({
             emitProgressPayloads(execution.progressEvents);
           } catch (error) {
             if (isAbortError(error)) {
-              return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
+              return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
             }
             throw error;
           }
@@ -447,10 +455,11 @@ function createChatEngine({
           'Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
         code: CHAT_ERROR_CODES.TOOL_LIMIT,
         usage: requestUsage,
+            contextUsage,
       });
     } catch (error) {
       if (isAbortError(error)) {
-        return returnCancelledChat(onEvent, toolTrace, '', requestUsage);
+        return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
       }
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
