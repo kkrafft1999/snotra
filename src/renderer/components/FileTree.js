@@ -146,7 +146,18 @@ export function initFileTree(deps) {
     });
   }
 
+  /**
+   * Aktiviert den Ordner zuerst im Main-Prozess und zeichnet erst danach die
+   * Oberflaeche (Issue #68). Lehnt der Main ab — Ordner geloescht, Pfad nicht
+   * im Verlauf —, bleibt der bisherige Workspace stehen.
+   */
   async function openProject(folderPath) {
+    const activated = await api.activateFolder(folderPath);
+    if (!activated?.ok) {
+      await refreshFolderHistory();
+      await refreshWelcomeRecent();
+      return false;
+    }
     const workspaceChanged = appStore.rootPath !== folderPath;
     appStore.rootPath = folderPath;
     const name = folderPath.split('/').pop() || folderPath;
@@ -157,7 +168,6 @@ export function initFileTree(deps) {
     treeContainer.innerHTML = '';
     showWelcome();
 
-    await api.setLastFolder(folderPath);
     await loadTreeLevel(treeContainer, folderPath, 0);
     if (workspaceChanged) {
       await onWorkspaceChanged?.(folderPath, workspaceChanged);
@@ -165,6 +175,7 @@ export function initFileTree(deps) {
     refreshFolderHistory();
     refreshWelcomeRecent();
     onProjectOpened?.();
+    return true;
   }
 
   async function refreshFolderHistory() {

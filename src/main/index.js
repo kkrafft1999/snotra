@@ -147,10 +147,10 @@ app.whenReady().then(async () => {
 
   Menu.setApplicationMenu(buildApplicationMenu());
 
-  const lastFolder = await application.getValidatedLastFolder();
-  if (lastFolder) {
-    workspaceState.setActiveWorkspaceRoot(lastFolder);
-  }
+  // Der aktive Workspace wird nicht vorab gesetzt: er entsteht erst, wenn der
+  // Renderer den zuletzt geoeffneten Ordner ueber SETTINGS_ACTIVATE_FOLDER
+  // wieder aktiviert (Issue #68). So zeigt die Oberflaeche immer genau den
+  // Ordner, der auch die Vertrauensgrenze der Tools ist.
 
   createWindow();
 

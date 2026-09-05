@@ -26,7 +26,7 @@ export function initChatHistoryDrawer({
   }
 
   async function renderHistoryList() {
-    const hist = await api.getChatHistory(appStore.rootPath);
+    const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist.sessions) ? [...hist.sessions] : [];
     sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     chatHistoryList.innerHTML = '';
@@ -88,7 +88,7 @@ export function initChatHistoryDrawer({
     stopChatVoiceListening();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
-    const hist = await api.getChatHistory(appStore.rootPath);
+    const hist = await api.getChatHistory();
     const s = hist.sessions?.find((x) => x.id === id);
     if (!s || !Array.isArray(s.messages)) {
       setHistoryDrawerOpen(false);
@@ -100,7 +100,7 @@ export function initChatHistoryDrawer({
     appStore.currentChatTitle = s.title || '';
     setChatTokenUsage?.(s.tokenUsage);
     onInputChanged();
-    await api.setActiveChatId(appStore.currentChatWorkspace, id);
+    await api.setActiveChatId(id);
     renderChatMessages();
     updateChatChrome();
     setHistoryDrawerOpen(false);
@@ -119,7 +119,7 @@ export function initChatHistoryDrawer({
       seedGreetingIfWorkspace?.(appStore.currentChatWorkspace);
       resetChatTokenUsage?.();
       onInputChanged();
-      await api.setActiveChatId(appStore.currentChatWorkspace, null);
+      await api.setActiveChatId(null);
       renderChatMessages();
       updateChatChrome();
     }

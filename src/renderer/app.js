@@ -199,9 +199,10 @@ modelPicker.refreshLLMState();
     initialChatPanelWidth: uiPrefs.chatPanelWidth,
   });
   const { folderPath } = await api.getLastFolder();
-  if (folderPath) {
-    await fileTree.openProject(folderPath);
-  } else {
+  // openProject meldet false, wenn der Main-Prozess den Ordner nicht mehr
+  // aktiviert (geloescht, nicht mehr im Verlauf) — dann ohne Ordner starten.
+  const opened = folderPath ? await fileTree.openProject(folderPath) : false;
+  if (!opened) {
     await chatStream.loadChatForWorkspace(null);
     await fileTree.refreshWelcomeRecent();
     modelPicker.updateChatChrome();

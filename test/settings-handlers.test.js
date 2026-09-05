@@ -8,6 +8,7 @@ const {
   mergeProviderPatchIntoConfigImpl,
 } = require('../src/main/ipc/settings-handlers');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
 const {
   createLlmConfigStorePort,
   createUiPrefsStorePort,
@@ -186,6 +187,17 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     defaultProviderId: 'openai',
   });
   const ipcMain = createMockIpcMain();
+  // Der aktive Workspace lebt seit Issue #68 im Main-Prozess; hier steht die
+  // echte Aktivierung, damit die Verlaufspruefung mitgetestet wird.
+  let activeWorkspaceRoot = null;
+  const workspaceActivation = createWorkspaceActivation({
+    fs,
+    path,
+    workspaceFolderStore,
+    setActiveWorkspaceRoot: (root) => {
+      activeWorkspaceRoot = root;
+    },
+  });
   registerSettingsHandlers({
     ipcMain,
     safeStorage,
@@ -195,12 +207,20 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     providerCatalog,
     providerModels,
     REQ,
-    setActiveWorkspaceRoot: () => {},
+    workspaceActivation,
+    getActiveWorkspaceRoot: () => activeWorkspaceRoot,
     presentation,
     toolCatalog,
     skillCatalog,
   });
-  return { ipcMain, storage, llmConfigStore, uiPrefsStore };
+  return {
+    ipcMain,
+    storage,
+    llmConfigStore,
+    uiPrefsStore,
+    workspaceActivation,
+    getActiveWorkspaceRoot: () => activeWorkspaceRoot,
+  };
 }
 
 test('getToolCatalog returns the registry catalog, or an empty list without one', async (t) => {
@@ -229,7 +249,6 @@ test('registerSettingsHandlers requires injected presentation service', () => {
       providerCatalog: { getProvider: () => null, listProviderMeta: () => [] },
       providerModels: { listModels: async () => ({ models: [] }) },
       REQ,
-      setActiveWorkspaceRoot: () => {},
     }),
     /requires an injected settings presentation service/
   );
@@ -484,15 +503,15 @@ test('commitSettings treats an undecryptable key as incomplete access', async (t
 });
 
 test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
-  const { ipcMain } = await setupHandlers(t);
+  const { ipcMain, workspaceActivation } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-'));
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const a = path.join(base, 'a');
   const b = path.join(base, 'b');
   await fs.mkdir(a);
   await fs.mkdir(b);
-  await ipcMain.invoke(REQ.SETTINGS_SET_LAST_FOLDER, a);
-  await ipcMain.invoke(REQ.SETTINGS_SET_LAST_FOLDER, b);
+  await workspaceActivation.activateChosenFolder(a);
+  await workspaceActivation.activateChosenFolder(b);
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_FOLDER_HISTORY), { paths: [b, a] });
 
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, a), { ok: true, paths: [b] });
@@ -508,7 +527,7 @@ test('removeFolderFromHistory drops one entry and returns the remaining list', a
 
 test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch', async (t) => {
   const calls = [];
-  const { ipcMain } = await setupHandlers(t, {
+  const { ipcMain, workspaceActivation } = await setupHandlers(t, {
     skillCatalog: {
       listCatalog: async (options) => {
         calls.push(options);
@@ -518,13 +537,18 @@ test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch
     },
   });
 
-  const result = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, '/tmp/ws');
+  const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skills-'));
+  t.after(() => fs.rm(ws, { recursive: true, force: true }));
+  await workspaceActivation.activateChosenFolder(ws);
+
+  // Auch ein mitgeschickter Pfad aendert nichts: es zaehlt der aktive Root.
+  const result = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, '/tmp/fremd');
   assert.equal(result.skills[0].name, 'snotra-capabilities');
-  assert.deepEqual(calls, [{ workspaceRoot: '/tmp/ws', activeSkills: null }]);
+  assert.deepEqual(calls, [{ workspaceRoot: ws, activeSkills: null }]);
 
   await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['snotra-capabilities'] });
-  await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, null);
-  assert.deepEqual(calls[1], { workspaceRoot: null, activeSkills: ['snotra-capabilities'] });
+  await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG);
+  assert.deepEqual(calls[1], { workspaceRoot: ws, activeSkills: ['snotra-capabilities'] });
 });
 
 test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (t) => {
@@ -552,4 +576,71 @@ test('activeSkills überleben den Weg durch setUIPrefs', async (t) => {
   assert.deepEqual(saved.activeSkills, ['a', 'b']);
   const reread = await ipcMain.invoke(REQ.SETTINGS_GET_UI_PREFS);
   assert.deepEqual(reread.activeSkills, ['a', 'b']);
+});
+
+test('activateFolder nimmt nur bekannte Ordner an (#68)', async (t) => {
+  const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-activate-'));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const known = path.join(base, 'known');
+  const fremd = path.join(base, 'fremd');
+  await fs.mkdir(known);
+  await fs.mkdir(fremd);
+
+  // Nur der Dialogweg darf einen neuen Ordner in den Verlauf bringen.
+  await workspaceActivation.activateChosenFolder(known);
+  assert.equal(getActiveWorkspaceRoot(), known);
+
+  // Ein anderer Ordner nach dem Wechsel: der Root bleibt stehen.
+  for (const evil of [fremd, os.homedir(), path.parse(base).root, '', null, path.join(known, '..')]) {
+    const res = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, evil);
+    assert.equal(res.ok, false, `${evil} darf nicht aktivierbar sein`);
+    assert.equal(getActiveWorkspaceRoot(), known);
+  }
+
+  // Der bekannte Ordner laesst sich erneut aktivieren.
+  const ok = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, known);
+  assert.equal(ok.ok, true);
+  assert.equal(ok.folderPath, known);
+  assert.equal(getActiveWorkspaceRoot(), known);
+});
+
+test('activateFolder akzeptiert den letzten Ordner auch ohne Verlaufseintrag (#68)', async (t) => {
+  const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-last-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+
+  await workspaceActivation.activateChosenFolder(dir);
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, dir), {
+    ok: true,
+    paths: [],
+  });
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, dir);
+  assert.equal(res.ok, true);
+  assert.equal(getActiveWorkspaceRoot(), dir);
+});
+
+test('activateFolder lehnt einen geloeschten Ordner ab (#68)', async (t) => {
+  const { ipcMain, workspaceActivation } = await setupHandlers(t);
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gone-'));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const gone = path.join(base, 'gone');
+  await fs.mkdir(gone);
+  await workspaceActivation.activateChosenFolder(gone);
+  await fs.rm(gone, { recursive: true, force: true });
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, gone);
+  assert.equal(res.ok, false);
+});
+
+test('activateChosenFolder lehnt eine Datei ab (#68)', async (t) => {
+  const { workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-file-'));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const file = path.join(base, 'notes.md');
+  await fs.writeFile(file, 'hallo', 'utf8');
+
+  assert.equal(await workspaceActivation.activateChosenFolder(file), null);
+  assert.equal(getActiveWorkspaceRoot(), null);
 });

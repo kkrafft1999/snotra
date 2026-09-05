@@ -686,7 +686,7 @@ export function initChatStream({
       // den Titel selbst aus der ersten Frage ab.
       ...(appStore.currentChatTitle ? { title: appStore.currentChatTitle } : {}),
     });
-    await api.setActiveChatId(appStore.currentChatWorkspace, appStore.currentChatId);
+    await api.setActiveChatId(appStore.currentChatId);
   }
 
   async function loadChatForWorkspace(workspaceRoot) {
@@ -694,7 +694,7 @@ export function initChatStream({
     await persistCurrentChat();
     appStore.chatSessionId += 1;
 
-    const hist = await api.getChatHistory(workspaceRoot);
+    const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist?.sessions) ? hist.sessions : [];
     if (hist?.activeChatId) {
       const s = sessions.find((x) => x.id === hist.activeChatId);
@@ -709,7 +709,7 @@ export function initChatStream({
         renderChatMessages();
         return;
       }
-      await api.setActiveChatId(workspaceRoot, null);
+      await api.setActiveChatId(null);
     }
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = workspaceRoot || null;
@@ -734,7 +734,7 @@ export function initChatStream({
     resetChatTokenUsage();
     chatInput.value = '';
     onInputChanged();
-    await api.setActiveChatId(appStore.currentChatWorkspace, null);
+    await api.setActiveChatId(null);
     renderChatMessages();
   }
 
@@ -947,7 +947,6 @@ export function initChatStream({
     let result;
     try {
       result = await api.chat(payload, {
-        workspaceRoot: appStore.rootPath,
         selectedPath: appStore.selectedPath,
         selectedIsDirectory: appStore.selectedIsDirectory,
       });

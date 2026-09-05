@@ -1,7 +1,14 @@
-function registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ }) {
-  ipcMain.handle(REQ.CHAT_HISTORY_GET, async (_event, workspaceRoot) => {
+// Chats sind nach Workspace gebucht. Welcher Workspace gerade aktiv ist,
+// weiss der Main-Prozess (Issue #68) — der Renderer nennt ihn nicht mehr.
+function registerChatHistoryHandlers({
+  ipcMain,
+  chatHistoryStore,
+  REQ,
+  getActiveWorkspaceRoot = () => null,
+}) {
+  ipcMain.handle(REQ.CHAT_HISTORY_GET, async () => {
     const store = await chatHistoryStore.readChatHistoryStore();
-    const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(workspaceRoot);
+    const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
     const sessions = store.sessions
       .filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, wsRoot))
       .map((s) => chatHistoryStore.normalizeSessionForLoad(s))
@@ -19,10 +26,13 @@ function registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ }) {
           : null;
       const titleProvided =
         typeof sessionRow?.title === 'string' && sessionRow.title.trim().length > 0;
-      const normalized = chatHistoryStore.normalizeSessionForStore(sessionRow, {
-        existingTitle: titleProvided ? undefined : existing?.title,
-        requireMessages: true,
-      });
+      const normalized = chatHistoryStore.normalizeSessionForStore(
+        { ...(sessionRow || {}), workspaceRoot: getActiveWorkspaceRoot() },
+        {
+          existingTitle: titleProvided ? undefined : existing?.title,
+          requireMessages: true,
+        }
+      );
       if (!normalized) return { ok: false };
       const idx = store.sessions.findIndex((x) => x.id === normalized.id);
       if (idx >= 0) store.sessions[idx] = normalized;
@@ -52,11 +62,11 @@ function registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ }) {
       return { ok: true };
     }));
 
-  ipcMain.handle(REQ.CHAT_HISTORY_SET_ACTIVE, async (_event, workspaceRoot, id) =>
+  ipcMain.handle(REQ.CHAT_HISTORY_SET_ACTIVE, async (_event, id) =>
     chatHistoryStore.withChatHistoryLock(async () => {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       const wsKey = chatHistoryStore.workspaceBucketKey(
-        chatHistoryStore.normalizeWorkspaceRoot(workspaceRoot)
+        chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot())
       );
       if (id === null || id === undefined || id === '') {
         delete store.activeByWorkspace[wsKey];

@@ -1,4 +1,9 @@
-function registerDialogHandlers({ ipcMain, dialog, getMainWindow, REQ }) {
+/**
+ * Der Ordnerdialog ist der einzige Weg, auf dem ein bisher unbekannter Pfad
+ * zum aktiven Workspace wird (Issue #68): Auswahl und Aktivierung passieren
+ * in einem Main-Vorgang, der Renderer bekommt den Pfad erst danach zu sehen.
+ */
+function registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, REQ }) {
   ipcMain.handle(REQ.DIALOG_OPEN_FOLDER, async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
       title: 'Ordner auswählen',
@@ -7,7 +12,8 @@ function registerDialogHandlers({ ipcMain, dialog, getMainWindow, REQ }) {
       properties: ['openDirectory'],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
-    return result.filePaths[0];
+    if (!workspaceActivation) return result.filePaths[0];
+    return workspaceActivation.activateChosenFolder(result.filePaths[0]);
   });
 }
 
