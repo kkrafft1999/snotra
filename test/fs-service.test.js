@@ -58,11 +58,12 @@ test('assertAbsolutePathInWorkspace requires open workspace', () => {
 
 test('assertAbsolutePathInWorkspace validates absolute paths', () => {
   const svc = makeFsService();
-  const root = '/tmp/project';
+  // path.resolve, damit der Test auch unter Windows (Laufwerksbuchstabe) absolut vergleicht.
+  const root = path.resolve('/tmp/project');
   const inside = path.join(root, 'readme.md');
   assert.deepEqual(svc.assertAbsolutePathInWorkspace(root, inside), { absPath: inside });
   assert.match(
-    svc.assertAbsolutePathInWorkspace(root, '/etc/passwd').error,
+    svc.assertAbsolutePathInWorkspace(root, path.resolve('/etc/passwd')).error,
     /außerhalb/
   );
 });

@@ -41,8 +41,9 @@ function makeWorkspacePaths() {
         ? path.resolve(trimmed)
         : path.resolve(root, trimmed);
       const relativePath = path.relative(root, absolutePath);
+      const relativePosix = relativePath.split(path.sep).join('/');
       if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) return null;
-      return { relativePath: relativePath || '.', isDirectory: !!selectedIsDirectory };
+      return { relativePath: relativePosix || '.', isDirectory: !!selectedIsDirectory };
     },
     basename: (absPath) => path.basename(absPath),
   };

@@ -9,7 +9,7 @@ test('resolveSelection anchors relative paths under workspace root', () => {
   const root = '/tmp/snotra-project';
   const selection = workspacePaths.resolveSelection(root, 'src/app.js', false);
   assert.deepEqual(selection, {
-    relativePath: path.join('src', 'app.js'),
+    relativePath: 'src/app.js',
     isDirectory: false,
   });
 });
@@ -18,7 +18,7 @@ test('resolveSelection accepts absolute paths inside workspace', () => {
   const root = '/tmp/snotra-project';
   const selection = workspacePaths.resolveSelection(root, '/tmp/snotra-project/docs/readme.md', false);
   assert.deepEqual(selection, {
-    relativePath: path.join('docs', 'readme.md'),
+    relativePath: 'docs/readme.md',
     isDirectory: false,
   });
 });

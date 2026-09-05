@@ -14,8 +14,10 @@ function createNodeWorkspacePathAdapter({ path: pathMod }) {
         : pathMod.resolve(root, trimmed);
       const relativePath = pathMod.relative(root, absolutePath);
       if (relativePath.startsWith('..') || pathMod.isAbsolute(relativePath)) return null;
+      // Posix-Schreibweise wie bei Tool-Pfaden und @-Referenzen, auch unter Windows.
+      const relativePosix = relativePath.split(pathMod.sep).join('/');
       return {
-        relativePath: relativePath || '.',
+        relativePath: relativePosix || '.',
         isDirectory: !!selectedIsDirectory,
       };
     },
