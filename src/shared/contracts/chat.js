@@ -96,10 +96,13 @@ function createCancelledChatResult({ content = '', toolTrace = [], usage = null,
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  */
-function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage, contextUsage } = {}) {
+function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage, contextUsage, toolTrace } = {}) {
   const result = { error, code };
   if (usage !== undefined) result.usage = usage;
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  // Nur bei Abbruch durch verfallene Freigabe (Issue #66): die bis dahin
+  // gelaufenen Tool-Schritte bleiben im Verlauf sichtbar.
+  if (Array.isArray(toolTrace) && toolTrace.length > 0) result.toolTrace = toolTrace;
   return result;
 }
 
@@ -126,6 +129,20 @@ function createWorkspaceFileWrittenEvent(relativePath) {
     event: WORKSPACE_PROGRESS_EVENTS.FILE_WRITTEN,
     relativePath: String(relativePath ?? ''),
   };
+}
+
+/**
+ * chat:progress mit type='permission' (Issue #66). Trägt nur bereinigte
+ * Daten: Tool, Aufruf-Index, Ereignis und ggf. die Entscheidung.
+ */
+function createPermissionProgressEvent(event, { callIndex, tool, response, reason, redactedCount } = {}) {
+  const out = { type: CHAT_PROGRESS_TYPES.PERMISSION, event: String(event ?? '') };
+  if (Number.isInteger(callIndex)) out.callIndex = callIndex;
+  if (typeof tool === 'string' && tool) out.tool = tool;
+  if (typeof response === 'string' && response) out.response = response;
+  if (typeof reason === 'string' && reason) out.reason = reason;
+  if (Number.isInteger(redactedCount)) out.redactedCount = redactedCount;
+  return out;
 }
 
 /** chat:progress mit type='phase'. */
@@ -164,6 +181,7 @@ module.exports = {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
+  createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,

@@ -1,6 +1,7 @@
 'use strict';
 
 const nodeOs = require('os');
+const nodeCrypto = require('crypto');
 
 const { createStorageService } = require('../services/storage-service');
 const { createFsService } = require('../services/fs-service');
@@ -8,6 +9,10 @@ const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
+const { createToolPolicyStore } = require('../services/tool-policy-store');
+const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
+const { createSessionGrants } = require('../../application/permissions/session-grants');
+const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
@@ -36,6 +41,7 @@ const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
+const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 
 function createApplication({
   app,
@@ -45,6 +51,7 @@ function createApplication({
   fs,
   path,
   os = nodeOs,
+  crypto = nodeCrypto,
   fetchImpl,
   providersModule,
   workspaceState,
@@ -80,12 +87,33 @@ function createApplication({
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
 
+  // Tool-Berechtigungen (Issue #66): signierter Policy-Speicher, Karten-Adapter
+  // und Sitzungsfreigaben leben im Main; der Renderer stoesst nur an.
+  const toolPolicyStore = createToolPolicyStore({
+    app,
+    safeStorage,
+    fs,
+    path,
+    crypto,
+    uiPrefsPath: storage.getUIPrefsPath(),
+  });
+  const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH });
+  const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
+
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
+  // Ein Workspace-Wechsel verwirft offene Freigaben und Sitzungsfreigaben (Konzept §7).
   const workspaceActivation = createWorkspaceActivation({
     fs,
     path,
     workspaceFolderStore,
-    setActiveWorkspaceRoot: workspaceState.setActiveWorkspaceRoot,
+    setActiveWorkspaceRoot: (folderPath) => {
+      const before = workspaceState.getActiveWorkspaceRoot();
+      workspaceState.setActiveWorkspaceRoot(folderPath);
+      if (workspaceState.getActiveWorkspaceRoot() !== before) {
+        approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+        sessionGrants.clear();
+      }
+    },
   });
 
   const credentials = createCredentialAdapter({ providerSecrets });
@@ -136,6 +164,18 @@ function createApplication({
     defaultProviderId,
   });
 
+  // Eigene Provider-Schluessel duerfen die App nie ueber ein Tool verlassen
+  // (Konzept §5). Nur zum Vergleich gelesen, nie protokolliert.
+  async function readOwnSecrets() {
+    const config = await llmConfigStore.readLLMConfig();
+    const secrets = [];
+    for (const providerId of Object.keys(config?.providers || {})) {
+      const effective = await providerSecrets.getEffectiveProviderConfig(providerId);
+      if (effective?.apiKey) secrets.push(effective.apiKey);
+    }
+    return secrets;
+  }
+
   const { engine: chatEngine } = createChatApplication({
     llmConfigStore,
     providerRuntime,
@@ -145,6 +185,19 @@ function createApplication({
     skillsService,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
+    toolPolicyStore,
+    approvals,
+    sessionGrants,
+    toolAdapterDeps: {
+      fsService,
+      fs,
+      path,
+      // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
+      protectedRoots: [app.getPath('userData')],
+      trashItem: shell && typeof shell.trashItem === 'function' ? (target) => shell.trashItem(target) : null,
+      readOwnSecrets,
+      maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
+    },
   });
 
   registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, REQ });
@@ -182,6 +235,17 @@ function createApplication({
     REQ,
     PUSH,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+  });
+  registerToolPermissionHandlers({
+    ipcMain,
+    dialog,
+    getMainWindow,
+    toolPolicyStore,
+    approvals,
+    sessionGrants,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    REQ,
+    PUSH,
   });
 
   async function runUpdateCheck({ silent }) {

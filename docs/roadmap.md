@@ -179,14 +179,20 @@ ein Berechtigungsmodell für Tool-Aufrufe. Reihenfolge:
    harte Grenzen. Dies ist das Zielverhalten; die Schutzfunktionen folgen
    mit #66/#67.
 2. **Kern-Infrastruktur umsetzen** in zwei Issues:
-   [#66](https://github.com/kkrafft1999/snotra/issues/66) Kern
-   (Risikoklassen in der Tool-Registry, Policy-Entscheidung, Freigabe-Schleife
-   im Tool-Loop, Persistenz) und
+   [#66](https://github.com/kkrafft1999/snotra/issues/66) Kern — **umgesetzt
+   (2026-09-05)**: Risikoklassen in der Registry, Planer mit Zielpfaden,
+   Sensitivität und harten Grenzen, reine Policy mit Matrix und Regelvorrang,
+   Freigabe-Schleife in der Engine (Approval-Port über IPC, fail-safe ohne
+   UI), Sitzungsfreigaben, Wiederherstellungskopie beim Überschreiben,
+   signierte Policy-Datei mit native bestätigten Lockerungen, bereinigtes
+   Audit in Tool-Zeile und Verlauf. Der alte Schalter `allowWorkspaceWrite`
+   ist entfallen.
    [#67](https://github.com/kkrafft1999/snotra/issues/67) UI (Modus-Wahl,
-   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — gemäß
+   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — **offen**;
+   bis dahin lehnt die App jede Rückfrage sicher ab. Gemäß
    [Konzept und Abnahmekriterien](./sicherheitskonzept.md#11-offene-punkte-und-umsetzung),
    zu testen mit den vorhandenen Dateisystem-Tools. Die Workspace-Autorität
-   aus [#68](https://github.com/kkrafft1999/snotra/issues/68) berücksichtigen.
+   aus [#68](https://github.com/kkrafft1999/snotra/issues/68) ist berücksichtigt.
 3. Erst danach **MCP-Server**
    ([#62](https://github.com/kkrafft1999/snotra/issues/62)) und **Web-Suche**
    ([#63](https://github.com/kkrafft1999/snotra/issues/63)): beide sind vom

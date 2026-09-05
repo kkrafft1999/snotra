@@ -23,6 +23,8 @@ const CHAT_ERROR_CODES = Object.freeze({
   API: 'API',
   NETWORK: 'NETWORK',
   TOOL_LIMIT: 'TOOL_LIMIT',
+  /** Lauf endete durch verfallene Freigabe (Issue #66): kein weiterer Provider-Request. */
+  PERMISSION: 'PERMISSION',
 });
 
 // Phasen der laufenden Antwort (chat:progress, type='phase').
@@ -46,6 +48,18 @@ const CHAT_PROGRESS_TYPES = Object.freeze({
   REASONING: 'reasoning',
   /** Semantisches Anwendungs-/Workspace-Ereignis (z. B. Datei geschrieben). */
   WORKSPACE: 'workspace',
+  /** Berechtigungsereignis (Issue #66): Freigabe ausstehend, entschieden, Inhalt redigiert. */
+  PERMISSION: 'permission',
+});
+
+/** Untertyp eines chat:progress-Events mit type='permission'. */
+const PERMISSION_PROGRESS_EVENTS = Object.freeze({
+  /** Eine Freigabe-Karte wartet auf den Nutzer. */
+  AWAITING: 'awaiting',
+  /** Die Anfrage wurde beantwortet oder ist verfallen. */
+  RESOLVED: 'resolved',
+  /** Sensibler Tool-Inhalt wurde vor dem Provider-Request zurückgehalten. */
+  REDACTED: 'redacted',
 });
 
 /** Untertyp eines chat:progress-Events mit type='workspace'. */
@@ -77,6 +91,7 @@ module.exports = {
   TOOL_LINE_PHASES,
   CHAT_PROGRESS_TYPES,
   WORKSPACE_PROGRESS_EVENTS,
+  PERMISSION_PROGRESS_EVENTS,
   APP_LOCALES,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,

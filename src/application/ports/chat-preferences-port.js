@@ -5,7 +5,7 @@
 /**
  * @typedef {Object} ChatPreferences
  * @property {string} baseSystemPrompt
- * @property {boolean} allowWorkspaceWrite
+ * @property {string[]} [disabledTools] — in den Einstellungen abgewählte Tools
  * @property {number} [maxToolRounds]
  * @property {number} [historyCharLimit]
  */

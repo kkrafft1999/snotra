@@ -8,6 +8,7 @@ const {
   CHAT_PHASES,
   TOOL_LINE_PHASES,
   APP_LOCALES,
+  PERMISSION_PROGRESS_EVENTS,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,
@@ -15,13 +16,37 @@ const {
   createToolLineEvent,
   createPhaseEvent,
   createReasoningEvent,
+  createPermissionProgressEvent,
   sanitizeChatTitle,
 } = require('../../shared/contracts');
+const {
+  TOOL_RISK_CLASSES,
+  POLICY_DECISIONS,
+  APPROVAL_RESPONSES,
+  PERMISSION_DECISION_SOURCES,
+  PERMISSION_DENIAL_REASONS,
+  PERMISSION_DENIED_MESSAGES,
+  TOOL_EXECUTION_STATUSES,
+  TOOL_RESULTS_ARE_DATA_RULE,
+  DEFAULT_TOOL_PERMISSION_MODE,
+  normalizeToolPermissionMode,
+  normalizeRiskClasses,
+  createPermissionDeniedToolResult,
+  createPermissionAuditEntry,
+} = require('../../shared/contracts/tool-permissions');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
   truncateStaleToolOutputs,
 } = require('./chat-history-trim');
+const { decideToolPolicy } = require('../permissions/tool-policy');
+const { createSessionGrants } = require('../permissions/session-grants');
+const { buildApprovalRequest } = require('../permissions/approval-request');
+const {
+  createSensitiveMarker,
+  redactSensitiveToolMessages,
+  stripSensitiveMarkers,
+} = require('../permissions/sensitive-redaction');
 
 /* ── Konversationstitel ──────────────────────────────────────────────────────
  * Nach dem ersten Austausch benennt das Modell die Konversation selbst. Der
@@ -44,6 +69,9 @@ const CHAT_ENGINE_EVENTS = Object.freeze({
   TOOL_LINE: 'tool-line',
 });
 
+/** Wie oft ein Aufruf nach geändertem Plan neu bewertet wird, bevor er verfällt. */
+const MAX_PLAN_ATTEMPTS = 3;
+
 function resolveAppLocale(uiPrefs) {
   return uiPrefs?.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
 }
@@ -62,7 +90,9 @@ function resolveToolRoundLimit(uiPrefs, mainDefault) {
 /**
  * Sachkontext zum geöffneten Ordner: welcher Ordner offen ist, welche Tools
  * bereitstehen und was im Baum ausgewählt ist. Bewusst ohne Ton- oder
- * Sprachvorgaben — die bleiben dem Prompt des Nutzers überlassen.
+ * Sprachvorgaben — die bleiben dem Prompt des Nutzers überlassen. Die
+ * Prompt-Injection-Regel (Konzept §5) hängt an den Tools, nicht am Prompt des
+ * Nutzers, und lässt sich dort nicht abschalten.
  */
 function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, selectedIsDirectory }) {
   const parts = [`Du arbeitest im in der App geöffneten Ordner „${folderName}“.`];
@@ -84,12 +114,14 @@ function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, 
         `Beziehe dich bei Fragen ohne expliziten Pfad auf diese Auswahl.`
     );
   }
+  if (toolsPrompt) parts.push(TOOL_RESULTS_ARE_DATA_RULE);
   return parts.join('\n\n');
 }
 
 function parseToolArguments(rawArguments) {
   try {
-    return JSON.parse(rawArguments || '{}');
+    const parsed = JSON.parse(rawArguments || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -128,12 +160,47 @@ function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) 
   return [...intro, ...sections].join('\n\n');
 }
 
+/** Provider-Endpunkt als Bindungsschlüssel sensibler Freigaben (Konzept §4). */
+function buildProviderKey(target, sendBundle) {
+  const providerId = typeof target?.providerId === 'string' ? target.providerId : '';
+  const baseUrl = typeof sendBundle?.config?.baseUrl === 'string' ? sendBundle.config.baseUrl.trim() : '';
+  return baseUrl ? `${providerId}|${baseUrl}` : providerId;
+}
+
+function buildProviderLabel(target, sendBundle) {
+  const providerId = typeof target?.providerId === 'string' ? target.providerId : 'Provider';
+  const baseUrl = typeof sendBundle?.config?.baseUrl === 'string' ? sendBundle.config.baseUrl.trim() : '';
+  if (!baseUrl) return providerId;
+  const host = baseUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  return host ? `${providerId} (${host})` : providerId;
+}
+
+function sanitizeChatId(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  return trimmed;
+}
+
+/** Fail-safe-Stand, wenn kein Policy-Port angebunden ist: smart, keine Regeln. */
+function defaultPolicySnapshot() {
+  return {
+    mode: DEFAULT_TOOL_PERMISSION_MODE,
+    rules: [],
+    sensitivePathPatterns: [],
+    policyVersion: 'default',
+  };
+}
+
 function createChatEngine({
   llm,
   tools,
   preferences,
   workspacePaths,
   skills = null,
+  toolPolicy = null,
+  approvals = null,
+  sessionGrants = createSessionGrants(),
   maxToolRounds,
   clock = () => Date.now(),
 }) {
@@ -236,6 +303,26 @@ function createChatEngine({
     return { target };
   }
 
+  async function readPolicySnapshot() {
+    if (!toolPolicy || typeof toolPolicy.read !== 'function') return defaultPolicySnapshot();
+    try {
+      const snapshot = await toolPolicy.read();
+      return {
+        mode: normalizeToolPermissionMode(snapshot?.mode),
+        rules: Array.isArray(snapshot?.rules) ? snapshot.rules : [],
+        sensitivePathPatterns: Array.isArray(snapshot?.sensitivePathPatterns)
+          ? snapshot.sensitivePathPatterns
+          : [],
+        policyVersion: typeof snapshot?.policyVersion === 'string' ? snapshot.policyVersion : 'unknown',
+        integrity: snapshot?.integrity,
+      };
+    } catch {
+      // Fehlerhafte Sicherheitsregeln blockieren Tools, statt Sperren zu
+      // verlieren (Konzept §3): ohne lesbaren Stand gibt es keine Erlaubnis.
+      return { ...defaultPolicySnapshot(), policyVersion: 'unreadable', unreadable: true };
+    }
+  }
+
   function abort(sessionId) {
     const controller = activeChatAborts.get(sessionId);
     if (controller && !controller.signal.aborted) controller.abort(createChatAbortError());
@@ -267,6 +354,9 @@ function createChatEngine({
       if (resolved.error) return resolved.error;
       const { target } = resolved;
       const sendBundle = await llm.prepareSendBundle(target);
+      const providerKey = buildProviderKey(target, sendBundle);
+      const providerLabel = buildProviderLabel(target, sendBundle);
+      const chatId = sanitizeChatId(payload?.chatId);
 
       const workspaceRoot = workspacePaths.resolveRoot(payload?.workspaceRoot);
       const selection = workspaceRoot
@@ -280,9 +370,10 @@ function createChatEngine({
       const uiPrefs = await preferences.read();
       const appLocale = resolveAppLocale(uiPrefs);
       const systemPrompt = typeof uiPrefs.baseSystemPrompt === 'string' ? uiPrefs.baseSystemPrompt.trim() : '';
-      const allowWrite = uiPrefs.allowWorkspaceWrite === true;
       const disabledNames = Array.isArray(uiPrefs.disabledTools) ? uiPrefs.disabledTools : [];
-      const toolOptions = { allowWrite, disabledNames };
+      // Deaktivierte Tools bleiben unsichtbar und gesperrt; der Modus allein
+      // versteckt keine Tools (Konzept §8) — pro Aufruf entscheidet die Policy.
+      const toolOptions = { disabledNames };
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
       // könne keine Dateien lesen oder schreiben.
@@ -316,6 +407,7 @@ function createChatEngine({
           skillRoots = [];
         }
       }
+      const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
 
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang.
       const combinedSystem = [systemPrompt, skillsSystem, workspaceSystem]
@@ -366,6 +458,303 @@ function createChatEngine({
         }
       };
 
+      /* ── Berechtigungen (Issue #66) ─────────────────────────────────────────
+       * Pläne, die der Nutzer in diesem Lauf abgelehnt hat: identische
+       * Anfragen werden nicht erneut gestellt (Konzept §7). */
+      const deniedPlanKeys = new Set();
+
+      function buildScopeKey(policy) {
+        return JSON.stringify([chatId, workspaceRoot, policy.mode, policy.policyVersion, skillSignature]);
+      }
+
+      function permissionDenied(entry, { reason, ruleId, riskClasses, mode, targets, message }) {
+        entry.permission = createPermissionAuditEntry({
+          decision: POLICY_DECISIONS.DENY,
+          source: PERMISSION_DECISION_SOURCES.DENY,
+          reason,
+          ruleId,
+          riskClasses,
+          mode,
+          status: TOOL_EXECUTION_STATUSES.DENIED,
+          targets,
+        });
+        return {
+          content: createPermissionDeniedToolResult({ reason, ruleId, riskClasses, message }),
+          denied: true,
+          reason,
+        };
+      }
+
+      /**
+       * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
+       * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
+       */
+      async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint }) {
+        if (deniedPlanKeys.has(plan.planKey)) {
+          return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
+        }
+        if (!approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId)) {
+          return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI };
+        }
+        const request = buildApprovalRequest({
+          tool: toolName,
+          plan,
+          askClasses: verdict.askClasses,
+          mode: policy.mode,
+          providerKey,
+          providerLabel,
+          policyVersion: policy.policyVersion,
+          chatId,
+          checkpoint,
+        });
+        entry.permission = createPermissionAuditEntry({
+          decision: POLICY_DECISIONS.ASK,
+          riskClasses: plan.riskClasses,
+          mode: policy.mode,
+          status: TOOL_EXECUTION_STATUSES.AWAITING_APPROVAL,
+          targets: plan.targets,
+        });
+        emit(
+          onEvent,
+          CHAT_ENGINE_EVENTS.PROGRESS,
+          createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.AWAITING, { callIndex, tool: toolName })
+        );
+        let outcome;
+        try {
+          outcome = await approvals.requestApproval({ sessionId, request, abortSignal });
+        } catch (error) {
+          if (isAbortError(error)) throw error;
+          outcome = { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+        }
+        // Abbruch des Laufs während der Karte ist ein Abbruch, kein Verfall.
+        if (abortSignal.aborted) throw createChatAbortError();
+        emit(
+          onEvent,
+          CHAT_ENGINE_EVENTS.PROGRESS,
+          createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.RESOLVED, {
+            callIndex,
+            tool: toolName,
+            response: outcome?.invalidated ? undefined : outcome?.response,
+            reason: outcome?.invalidated ? outcome.reason || PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED : undefined,
+          })
+        );
+        if (!outcome || outcome.invalidated) {
+          return { invalidated: true, reason: outcome?.reason || PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+        }
+        if (outcome.response === APPROVAL_RESPONSES.DENY) {
+          deniedPlanKeys.add(plan.planKey);
+          return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.USER_DENIED };
+        }
+        if (outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION && request.sessionAllowed) {
+          sessionGrants.grant({
+            scopeKey: buildScopeKey(policy),
+            tool: toolName,
+            targets: plan.targets,
+            riskClasses: plan.riskClasses,
+            providerKey,
+          });
+          return { response: APPROVAL_RESPONSES.ALLOW_SESSION };
+        }
+        return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
+      }
+
+      /**
+       * Ein Tool-Aufruf von der Planung bis zur geprüften Ausgabe. Liefert die
+       * Tool-Nachricht fürs Modell; `endRun` beendet den Lauf ohne weiteren
+       * Provider-Request (verfallene Freigabe, Konzept §6).
+       */
+      async function runToolCall({ entry, callIndex, toolName, args }) {
+        const policy = await readPolicySnapshot();
+        if (policy.unreadable) {
+          return {
+            ...permissionDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.POLICY_DENIED,
+              mode: policy.mode,
+              message: 'Berechtigungsregeln nicht lesbar; Tools bleiben bis zur Korrektur blockiert.',
+            }),
+          };
+        }
+        const toolDisabled = disabledNames.includes(toolName);
+        let forcedClasses = [];
+        let lastPlanKey = null;
+
+        for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt += 1) {
+          if (abortSignal.aborted) throw createChatAbortError();
+          const plan = await tools.plan(toolName, args, {
+            workspaceRoot,
+            skillRoots,
+            sensitivePathPatterns: policy.sensitivePathPatterns,
+            forcedClasses,
+          });
+          if (!plan || plan.error) {
+            return permissionDenied(entry, {
+              reason: plan?.reason || PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
+              riskClasses: plan?.riskClasses,
+              mode: policy.mode,
+              targets: plan?.targets,
+              message: plan?.error,
+            });
+          }
+          const riskClasses = normalizeRiskClasses(plan.riskClasses);
+          const scopeKey = buildScopeKey(policy);
+          const grant = riskClasses
+            ? sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses, providerKey })
+            : null;
+          const verdict = decideToolPolicy({
+            mode: policy.mode,
+            toolName,
+            riskClasses,
+            targets: plan.targets,
+            root: workspaceRoot,
+            rules: policy.rules,
+            sessionGrant: grant,
+            toolDisabled,
+            unknownTool: plan.unknownTool === true,
+            hardLimit: plan.hardLimit || null,
+          });
+
+          if (verdict.decision === POLICY_DECISIONS.DENY) {
+            return permissionDenied(entry, {
+              reason: verdict.reason,
+              ruleId: verdict.ruleId,
+              riskClasses,
+              mode: policy.mode,
+              targets: plan.targets,
+            });
+          }
+
+          let source = verdict.source;
+          if (verdict.decision === POLICY_DECISIONS.ASK) {
+            const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
+            if (answer.invalidated) {
+              return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
+            }
+            if (answer.response === APPROVAL_RESPONSES.DENY) {
+              return permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
+            }
+            source =
+              answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
+                ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
+                : PERMISSION_DECISION_SOURCES.ALLOW_ONCE;
+            // Vor der Ausführung erneut planen: geänderte Datei, Wurzel oder
+            // Argumente machen die Karte ungültig (Konzept §6).
+            const recheck = await tools.plan(toolName, args, {
+              workspaceRoot,
+              skillRoots,
+              sensitivePathPatterns: policy.sensitivePathPatterns,
+              forcedClasses,
+            });
+            if (!recheck || recheck.error || recheck.planKey !== plan.planKey) {
+              if (lastPlanKey === (recheck?.planKey ?? null) || attempt === MAX_PLAN_ATTEMPTS - 1) {
+                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+              }
+              lastPlanKey = plan.planKey;
+              continue;
+            }
+          }
+
+          entry.permission = createPermissionAuditEntry({
+            decision: POLICY_DECISIONS.ALLOW,
+            source,
+            ruleId: verdict.ruleId,
+            riskClasses,
+            mode: policy.mode,
+            status: TOOL_EXECUTION_STATUSES.EXECUTED,
+            targets: plan.targets,
+          });
+
+          const execution = await tools.execute(toolName, args, {
+            workspaceRoot,
+            skillRoots,
+            abortSignal,
+            disabledNames,
+            approved: true,
+            plan,
+            riskClasses,
+            ownSecretsCheck: true,
+          });
+
+          if (execution?.invalidated) {
+            return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+          }
+          if (Array.isArray(execution?.reclassify) && execution.reclassify.length > 0) {
+            // Beispiel: Wiederherstellungskopie fehlgeschlagen → der Aufruf
+            // ist jetzt `delete` und läuft erneut durch die Matrix (Konzept §9).
+            const next = normalizeRiskClasses([...forcedClasses, ...execution.reclassify]) || forcedClasses;
+            if (next.length === forcedClasses.length) {
+              return permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses, mode: policy.mode, targets: plan.targets, message: execution.output });
+            }
+            forcedClasses = next;
+            continue;
+          }
+          if (execution?.hardLimit) {
+            return permissionDenied(entry, {
+              reason: execution.hardLimit.reason || PERMISSION_DENIAL_REASONS.OWN_SECRET,
+              riskClasses,
+              mode: policy.mode,
+              targets: plan.targets,
+            });
+          }
+
+          let sensitiveMarker = null;
+          if (execution?.sensitive && !riskClasses.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
+            // Zweite Prüfstelle (Konzept §4): unerwartet sensibler Inhalt bleibt
+            // im Puffer, bis die Policy ihn als read-sensitive freigibt.
+            const escalated = normalizeRiskClasses([...riskClasses, TOOL_RISK_CLASSES.READ_SENSITIVE]);
+            const escalatedPlan = { ...plan, riskClasses: escalated, planKey: `${plan.planKey}#sensitive` };
+            const escalatedGrant = sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses: escalated, providerKey });
+            const outputVerdict = decideToolPolicy({
+              mode: policy.mode,
+              toolName,
+              riskClasses: escalated,
+              targets: plan.targets,
+              root: workspaceRoot,
+              rules: policy.rules,
+              sessionGrant: escalatedGrant,
+              toolDisabled,
+            });
+            if (outputVerdict.decision === POLICY_DECISIONS.DENY) {
+              return permissionDenied(entry, { reason: outputVerdict.reason, ruleId: outputVerdict.ruleId, riskClasses: escalated, mode: policy.mode, targets: plan.targets });
+            }
+            let outputSource = outputVerdict.source;
+            if (outputVerdict.decision === POLICY_DECISIONS.ASK) {
+              const answer = await askUser({ entry, callIndex, toolName, plan: escalatedPlan, verdict: outputVerdict, policy, checkpoint: 'output' });
+              if (answer.invalidated) {
+                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses: escalated, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
+              }
+              if (answer.response === APPROVAL_RESPONSES.DENY) {
+                return permissionDenied(entry, { reason: answer.reason, riskClasses: escalated, mode: policy.mode, targets: plan.targets });
+              }
+              outputSource =
+                answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
+                  ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
+                  : PERMISSION_DECISION_SOURCES.ALLOW_ONCE;
+            }
+            entry.permission = createPermissionAuditEntry({
+              decision: POLICY_DECISIONS.ALLOW,
+              source: outputSource,
+              ruleId: outputVerdict.ruleId,
+              riskClasses: escalated,
+              mode: policy.mode,
+              status: TOOL_EXECUTION_STATUSES.EXECUTED,
+              targets: plan.targets,
+            });
+            sensitiveMarker = createSensitiveMarker({ providerKey, targets: plan.targets });
+          } else if (riskClasses.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
+            sensitiveMarker = createSensitiveMarker({ providerKey, targets: plan.targets });
+          }
+          if (sensitiveMarker) entry.permission.sensitive = true;
+
+          return {
+            content: execution.output,
+            progressEvents: execution.progressEvents,
+            sensitiveMarker,
+          };
+        }
+
+        return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, mode: policy.mode }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+      }
+
       for (let round = 0; round < toolRoundLimit; round += 1) {
         if (abortSignal.aborted) {
           return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
@@ -374,11 +763,21 @@ function createChatEngine({
         emitPhase(onEvent, CHAT_PHASES.WAITING);
         callbacks.reset();
         truncateStaleToolOutputs(apiMessages, historyCharLimit);
+        // Provider-Bindung sensibler Tool-Nachrichten (Konzept §4): fremder
+        // Endpunkt → Inhalt zurückhalten und den Nutzer darauf hinweisen.
+        const redactedCount = redactSensitiveToolMessages(apiMessages, providerKey);
+        if (redactedCount > 0) {
+          emit(
+            onEvent,
+            CHAT_ENGINE_EVENTS.PROGRESS,
+            createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.REDACTED, { redactedCount })
+          );
+        }
 
         const streamed = await llm.streamRound({
           target,
           sendBundle,
-          messages: apiMessages,
+          messages: stripSensitiveMarkers(apiMessages),
           tools: toolDefs,
           callbacks,
           abortSignal,
@@ -442,17 +841,10 @@ function createChatEngine({
             continue;
           }
 
-          let output;
+          let outcome;
           try {
-            const execution = await tools.execute(toolName, args, {
-              workspaceRoot,
-              skillRoots,
-              abortSignal,
-              allowWrite,
-              disabledNames,
-            });
-            output = execution.output;
-            emitProgressPayloads(execution.progressEvents);
+            outcome = await runToolCall({ entry, callIndex, toolName, args });
+            emitProgressPayloads(outcome.progressEvents);
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
@@ -460,7 +852,25 @@ function createChatEngine({
             throw error;
           }
           emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
-          apiMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: output });
+          const toolMessage = { role: 'tool', tool_call_id: toolCall.id, content: outcome.content };
+          if (outcome.sensitiveMarker) toolMessage.sensitiveMarker = outcome.sensitiveMarker;
+          apiMessages.push(toolMessage);
+
+          if (outcome.endRun) {
+            // Verfall beendet den Lauf ohne weiteren Provider-Request; das
+            // Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
+            emitPhase(onEvent, CHAT_PHASES.IDLE);
+            return createChatErrorResult({
+              error:
+                outcome.invalidatedReason === PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI
+                  ? 'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.'
+                  : 'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
+              code: CHAT_ERROR_CODES.PERMISSION,
+              usage: requestUsage,
+              contextUsage,
+              toolTrace,
+            });
+          }
         }
       }
 
@@ -471,7 +881,7 @@ function createChatEngine({
           'Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
         code: CHAT_ERROR_CODES.TOOL_LIMIT,
         usage: requestUsage,
-            contextUsage,
+        contextUsage,
       });
     } catch (error) {
       if (isAbortError(error)) {
@@ -556,11 +966,13 @@ function createChatEngine({
     }
   }
 
-  return { send, abort, generateTitle };
+  return { send, abort, generateTitle, sessionGrants };
 }
 
 module.exports = {
   CHAT_ENGINE_EVENTS,
+  MAX_PLAN_ATTEMPTS,
   createChatEngine,
   resolveToolRoundLimit,
+  buildProviderKey,
 };

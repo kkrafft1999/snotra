@@ -52,15 +52,38 @@ function toolTraceEntryToString(entry) {
  * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
  * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
  */
+/**
+ * Bereinigter Berechtigungs-Audit-Eintrag (Issue #66) für den Verlauf:
+ * Entscheidung, Quelle, Grund, Klassen, Modus, Status, Ziel-Pfade. Nie
+ * Argumente, Inhalte oder Vorschauen.
+ */
+function permissionAuditForStore(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = {};
+  for (const key of ['decision', 'source', 'reason', 'ruleId', 'mode', 'status']) {
+    if (typeof raw[key] === 'string' && raw[key]) out[key] = raw[key].slice(0, 64);
+  }
+  if (Array.isArray(raw.riskClasses)) {
+    out.riskClasses = raw.riskClasses.filter((c) => typeof c === 'string').slice(0, 8);
+  }
+  if (Array.isArray(raw.targets)) {
+    out.targets = raw.targets.filter((p) => typeof p === 'string').map((p) => p.slice(0, 1024)).slice(0, 50);
+  }
+  if (raw.sensitive === true) out.sensitive = true;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function toolTraceEntryForStore(entry) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';
   const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' && entry.skill ? entry.skill : '';
-  if (!tool && !skill) return line;
+  const permission = permissionAuditForStore(entry?.permission);
+  if (!tool && !skill && !permission) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (permission) out.permission = permission;
   return out;
 }
 

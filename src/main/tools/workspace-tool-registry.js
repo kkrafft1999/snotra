@@ -1,5 +1,11 @@
 const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
 const { sleepAbortable } = require('../../shared/runtime/abort');
+const {
+  TOOL_RISK_CLASSES,
+  PERMISSION_DENIAL_REASONS,
+  isToolRiskClass,
+  createPermissionDeniedToolResult,
+} = require('../../shared/contracts/tool-permissions');
 
 function toAllowedNameSet(allowedNames) {
   if (allowedNames == null) return null;
@@ -15,25 +21,33 @@ function createToolRegistry(initialDefinitions = []) {
   const definitions = new Map();
 
   function register(definition) {
-    const { name, description, parameters, handler } = definition || {};
+    const { name, description, parameters, handler, riskClass } = definition || {};
     if (!name || typeof description !== 'string' || !parameters || typeof handler !== 'function') {
       throw new TypeError('Tool benötigt name, description, parameters und handler.');
+    }
+    // Jedes Tool trägt eine validierte Mindestklasse (Konzept §2). Es gibt
+    // keinen impliziten read-Default: ohne Klasse keine Registrierung.
+    if (!isToolRiskClass(riskClass)) {
+      throw new TypeError(`Tool ${name} benötigt eine gültige riskClass.`);
     }
     if (definitions.has(name)) {
       throw new Error(`Tool bereits registriert: ${name}`);
     }
     definitions.set(name, {
       ...definition,
-      requiresWrite: definition.requiresWrite === true,
+      riskClass,
+      targets: typeof definition.targets === 'function' ? definition.targets : () => [],
     });
   }
 
-  function getAvailableDefinitions({ allowWrite = false, allowedNames, disabledNames } = {}) {
+  // Sichtbarkeit hängt nur an den Tool-Häkchen (disabledNames) bzw. einer
+  // expliziten Allowlist. Ob ein Aufruf laufen darf, entscheidet pro Aufruf
+  // die Policy in der Engine (Issue #66) — nicht mehr ein globaler Schreibschalter.
+  function getAvailableDefinitions({ allowedNames, disabledNames } = {}) {
     const allowed = toAllowedNameSet(allowedNames);
     const disabled = toDisabledNameSet(disabledNames);
     return [...definitions.values()].filter(
       (definition) =>
-        (!definition.requiresWrite || allowWrite) &&
         (!allowed || allowed.has(definition.name)) &&
         (!disabled || !disabled.has(definition.name))
     );
@@ -43,7 +57,7 @@ function createToolRegistry(initialDefinitions = []) {
     return [...definitions.values()].map((definition) => ({
       name: definition.name,
       description: definition.description,
-      requiresWrite: definition.requiresWrite === true,
+      riskClass: definition.riskClass,
     }));
   }
 
@@ -71,7 +85,7 @@ function createToolRegistry(initialDefinitions = []) {
       `Nutze für Datei-Tools nur relative Pfade zum Ordnerroot ` +
       `(z. B. "" oder "." für die Wurzel, "src/index.js" für eine Datei).`;
 
-    if (available.some((definition) => definition.requiresWrite)) {
+    if (available.some((definition) => definition.riskClass === TOOL_RISK_CLASSES.WRITE)) {
       prompt +=
         ` Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung oder neue Datei wünscht, ` +
         `und fasse danach kurz zusammen, was du geschrieben hast.`;
@@ -79,15 +93,20 @@ function createToolRegistry(initialDefinitions = []) {
     return prompt;
   }
 
+  /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
+  function getDefinition(name) {
+    return definitions.get(name) || null;
+  }
+
   async function execute(name, args, context = {}) {
     const definition = definitions.get(name);
     if (!definition) {
       return JSON.stringify({ error: `Unbekanntes Tool: ${name}` });
     }
-    if (definition.requiresWrite && context.allowWrite !== true) {
-      return JSON.stringify({
-        error: 'Schreibzugriff ist deaktiviert. Aktivierbar unter Einstellungen › Tools.',
-      });
+    // Defense in depth (Issue #66): kein Handler ohne vorherige Freigabe durch
+    // die Policy. Die Engine setzt approved erst nach allow/Nutzerfreigabe.
+    if (context.approved !== true) {
+      return createPermissionDeniedToolResult({ reason: PERMISSION_DENIAL_REASONS.NOT_APPROVED });
     }
     const allowed = toAllowedNameSet(context.allowedNames);
     if (allowed && !allowed.has(name)) {
@@ -109,6 +128,7 @@ function createToolRegistry(initialDefinitions = []) {
     getTools,
     buildSystemPrompt,
     listCatalog,
+    getDefinition,
     execute,
   };
 }
@@ -117,6 +137,8 @@ function createWorkspaceToolRegistry({ fsService }) {
   return createToolRegistry([
     {
       name: 'list_directory',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
       promptDescription: 'Listet Dateien und Unterordner im Projektordner auf.',
@@ -130,11 +152,13 @@ function createWorkspaceToolRegistry({ fsService }) {
           },
         },
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
+        fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots, sensitivity }),
     },
     {
       name: 'read_file_text',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
       description:
         'Liest den Textinhalt einer Datei als UTF-8 (nur innerhalb des Projektordners). ' +
         'Maximale Dateigröße: 2 MB — größere Dateien liefern einen Fehler.',
@@ -159,6 +183,8 @@ function createWorkspaceToolRegistry({ fsService }) {
     },
     {
       name: 'read_file_lines',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
       description:
         'Liest gezielt einen Ausschnitt einer Textdatei (UTF-8, nur innerhalb des Projektordners): ' +
         'entweder einen Zeilenbereich (start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
@@ -200,6 +226,8 @@ function createWorkspaceToolRegistry({ fsService }) {
     },
     {
       name: 'search_in_files',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck ' +
         'und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. ' +
@@ -257,11 +285,13 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['query'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
+        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots, sensitivity }),
     },
     {
       name: 'find_files',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Findet Dateien und Ordner im Projektordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
         'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
@@ -295,11 +325,13 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['pattern'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
+        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots, sensitivity }),
     },
     {
       name: 'stat_path',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path, kind: 'any', access: 'read' }],
       description:
         'Liefert Metadaten zu einem Pfad im Projektordner, ohne die Datei zu lesen: ' +
         'Existenz, Typ (Datei/Ordner), Größe in Bytes, Änderungszeitpunkt (ISO 8601) und ' +
@@ -328,6 +360,8 @@ function createWorkspaceToolRegistry({ fsService }) {
     },
     {
       name: 'outline_file',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
       description:
         'Liefert die Gliederung einer Datei im Projektordner mit Zeilennummern, ohne den Inhalt zu lesen: ' +
         'bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
@@ -360,6 +394,8 @@ function createWorkspaceToolRegistry({ fsService }) {
     },
     {
       name: 'list_directory_tree',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler ' +
         'list_directory-Runden. Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner ' +
@@ -393,11 +429,13 @@ function createWorkspaceToolRegistry({ fsService }) {
           },
         },
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
+        fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots, sensitivity }),
     },
     {
       name: 'debug_wait',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: () => [],
       description:
         'Nur zum UI-Test: wartet eine konfigurierbare Zeit und liefert danach OK zurück. Kein Dateizugriff.',
       promptDescription: 'Wartet ausschließlich für UI-Tests eine kurze Zeit.',
@@ -419,6 +457,7 @@ function createWorkspaceToolRegistry({ fsService }) {
     },
     {
       name: 'write_file_text',
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write', overwrite: true }],
       description:
         'Erstellt oder überschreibt eine Textdatei (UTF-8) innerhalb des geöffneten Projektordners. ' +
         'Fehlende Zwischenordner werden automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig. ' +
@@ -438,12 +477,13 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path', 'content'],
       },
-      requiresWrite: true,
-      handler: (args, { workspaceRoot }) =>
-        fsService.runWriteFileTextTool(args, workspaceRoot),
+      riskClass: TOOL_RISK_CLASSES.WRITE,
+      handler: (args, { workspaceRoot, recovery }) =>
+        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery }),
     },
     {
       name: 'edit_file',
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write' }],
       description:
         'Ersetzt in einer Textdatei (UTF-8, nur innerhalb des Projektordners) gezielt eine Textstelle: ' +
         'old_string wird durch new_string ersetzt, ohne die Datei komplett neu zu schreiben. ' +
@@ -475,12 +515,14 @@ function createWorkspaceToolRegistry({ fsService }) {
         },
         required: ['relative_path', 'old_string', 'new_string'],
       },
-      requiresWrite: true,
+      riskClass: TOOL_RISK_CLASSES.WRITE,
       handler: (args, { workspaceRoot }) =>
         fsService.runEditFileTool(args, workspaceRoot),
     },
     {
       name: 'apply_patch',
+      targets: (args) =>
+        fsService.listApplyPatchTargets(args).map((p) => ({ path: p, kind: 'file', access: 'write' })),
       description:
         'Ändert bestehende Textdateien (UTF-8, nur innerhalb des Projektordners) mit mehreren ' +
         'zusammenhängenden Änderungen in einem Aufruf — entweder als Liste von Ersetzungen ' +
@@ -538,7 +580,7 @@ function createWorkspaceToolRegistry({ fsService }) {
           },
         },
       },
-      requiresWrite: true,
+      riskClass: TOOL_RISK_CLASSES.WRITE,
       handler: (args, { workspaceRoot }) =>
         fsService.runApplyPatchTool(args, workspaceRoot),
     },

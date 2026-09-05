@@ -103,7 +103,10 @@ test('formatPresetSublabelFromView uses view DTO presetFields and connectionDeta
 
 test('normalizeUiPrefs and patch apply clamps', () => {
   assert.equal(normalizeUiPrefs({ appLocale: 'en' }).appLocale, 'en');
-  assert.equal(normalizeUiPrefs({ allowWorkspaceWrite: true }).allowWorkspaceWrite, true);
+  // Der Schreibschalter ist seit Issue #66 kein UI-Pref mehr: Altwerte werden
+  // verworfen, der Berechtigungsmodus lebt in der Policy-Datei.
+  assert.equal('allowWorkspaceWrite' in normalizeUiPrefs({ allowWorkspaceWrite: true }), false);
+  assert.equal('allowWorkspaceWrite' in normalizeUiPrefsPatch({ allowWorkspaceWrite: true }), false);
   const patch = normalizeUiPrefsPatch({ maxToolRounds: 9999, sidebarWidth: 50 });
   assert.equal(patch.maxToolRounds, 500);
   assert.equal(patch.sidebarWidth, 150);

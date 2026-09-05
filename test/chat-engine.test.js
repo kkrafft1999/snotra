@@ -6,12 +6,46 @@ const { formatToolDisplayLine } = require('../src/shared/presentation/tool-displ
 const { TOOL_LINE_PHASES } = require('../src/shared/contracts/enums');
 const { sleepAbortable } = require('../src/shared/runtime/abort');
 
+const WRITE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
+
+// Plan-Attrappe (Issue #66): Mindestklasse aus dem Tool-Namen, ein Dateiziel
+// aus relative_path. Tests zu Sensitivitaet oder Recovery ueberschreiben `plan`.
+function defaultPlan(toolName, args) {
+  const riskClasses = [WRITE_TOOLS.has(toolName) ? 'write' : 'read'];
+  const targets =
+    typeof args?.relative_path === 'string' && args.relative_path
+      ? [{ path: args.relative_path, kind: 'file', exists: true, version: 'v1', sensitive: false }]
+      : [];
+  return { tool: toolName, riskClasses, targets, planKey: JSON.stringify([toolName, args]) };
+}
+
+// Freigabe-Attrappe: antwortet fest oder per Callback; ohne UI (null) lehnt die Engine ab.
+function makeApprovals(answer = 'allow-once') {
+  const requests = [];
+  return {
+    requests,
+    isAvailable: () => true,
+    async requestApproval({ request }) {
+      requests.push(request);
+      const response = typeof answer === 'function' ? await answer(request, requests.length) : answer;
+      if (response && typeof response === 'object') return response;
+      return { response };
+    },
+  };
+}
+
 function makeToolPort(execute) {
   const calls = [];
+  const planCalls = [];
   return {
     calls,
+    planCalls,
     getTools: () => [{ type: 'function', function: { name: 'list_directory' } }],
     buildSystemPrompt: () => 'Tools: list_directory',
+    async plan(toolName, args, context) {
+      planCalls.push({ toolName, args, context });
+      return defaultPlan(toolName, args);
+    },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
       if (toolName === 'debug_wait') entry.waitMs = 500;
@@ -109,18 +143,25 @@ function makeEngine(results, {
   preferences,
   workspacePaths,
   skills,
+  toolPolicy,
+  approvals,
+  sessionGrants,
   maxToolRounds = 3,
 } = {}) {
   const llmPort = llm || makeLlmPort(results);
+  const toolPort = tools || makeToolPort();
   return {
     calls: llmPort.calls,
-    tools: tools || makeToolPort(),
+    tools: toolPort,
     engine: createChatEngine({
       llm: llmPort,
-      tools: tools || makeToolPort(),
+      tools: toolPort,
       preferences: preferences || { async read() { return {}; } },
       workspacePaths: workspacePaths || makeWorkspacePaths(),
       skills: skills || null,
+      toolPolicy: toolPolicy || null,
+      approvals: approvals || null,
+      sessionGrants,
       maxToolRounds,
       clock: () => 1234,
     }),
@@ -461,16 +502,17 @@ test('engine emits delta and reasoning events from provider callbacks', async ()
   ]);
 });
 
-test('engine passes the write preference to its tool registry', async () => {
+test('engine zeigt Schreib-Tools unabhaengig vom alten Schreibschalter (Issue #66)', async () => {
   const getToolsCalls = [];
   const tools = makeToolPort();
   tools.getTools = (options) => {
     getToolsCalls.push(options);
-    return [{ type: 'function', function: { name: options.allowWrite ? 'write_file_text' : 'list_directory' } }];
+    return [{ type: 'function', function: { name: 'write_file_text' } }];
   };
   const { engine, calls } = makeEngine([assistantText('ok')], {
     tools,
-    preferences: { async read() { return { allowWorkspaceWrite: true }; } },
+    // Altwert aus v1.3.1 hat keine Wirkung mehr.
+    preferences: { async read() { return { allowWorkspaceWrite: false }; } },
   });
 
   await engine.send({
@@ -481,7 +523,7 @@ test('engine passes the write preference to its tool registry', async () => {
     },
   });
 
-  assert.deepEqual(getToolsCalls, [{ allowWrite: true, disabledNames: [] }]);
+  assert.deepEqual(getToolsCalls, [{ disabledNames: [] }]);
   assert.equal(calls[0].tools[0].function.name, 'write_file_text');
 });
 
@@ -513,7 +555,7 @@ test('engine passes disabled tools to registry and execution context', async () 
   });
 
   assert.deepEqual(getToolsCalls, [
-    { allowWrite: false, disabledNames: ['debug_wait', 'search_in_files'] },
+    { disabledNames: ['debug_wait', 'search_in_files'] },
   ]);
   assert.deepEqual(tools.calls[0].context.disabledNames, ['debug_wait', 'search_in_files']);
 });
@@ -654,7 +696,7 @@ test('engine emits pending tool lines while the model still streams a tool call'
       params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: 'lo"}' });
     }
     return rounds[Math.min(index, rounds.length - 1)];
-  }, { tools });
+  }, { tools, approvals: makeApprovals('allow-once') });
   const events = [];
 
   const result = await engine.send({

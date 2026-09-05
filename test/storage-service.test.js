@@ -395,19 +395,24 @@ test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async (
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test('readUIPrefs defaults allowWorkspaceWrite to false and round-trips true', async () => {
+test('readUIPrefs verwirft den alten Schreibschalter allowWorkspaceWrite (Issue #66)', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
+  // Altdaten aus v1.3.1: der Schalter steht noch in der Datei.
+  await fs.writeFile(storage.getUIPrefsPath(), JSON.stringify({ allowWorkspaceWrite: true, appLocale: 'en' }), 'utf8');
 
   let prefs = await storage.readUIPrefs();
-  assert.equal(prefs.allowWorkspaceWrite, false);
+  assert.equal('allowWorkspaceWrite' in prefs, false);
+  assert.equal(prefs.appLocale, 'en');
 
   await storage.updateUIPrefs(async (out) => {
     out.allowWorkspaceWrite = true;
     return out;
   });
   prefs = await storage.readUIPrefs();
-  assert.equal(prefs.allowWorkspaceWrite, true);
+  assert.equal('allowWorkspaceWrite' in prefs, false);
+  const onDisk = JSON.parse(await fs.readFile(storage.getUIPrefsPath(), 'utf8'));
+  assert.equal('allowWorkspaceWrite' in onDisk, false, 'Migration entfernt den Schalter beim naechsten Schreiben');
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });

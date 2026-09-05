@@ -210,7 +210,9 @@ test('Die Registry gibt Skill-Wurzeln nur an Lese-Tools weiter', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
-  const context = { workspaceRoot: workspace, skillRoots, allowWrite: true };
+  // `approved` steht fuer die Policy-Freigabe der Engine (Issue #66); hier
+  // zaehlt nur, dass Schreib-Tools strukturell keine Skill-Wurzeln sehen.
+  const context = { workspaceRoot: workspace, skillRoots, approved: true };
 
   const read = JSON.parse(
     await registry.execute('read_file_text', { relative_path: 'skill:demo/references/anleitung.md' }, context)
