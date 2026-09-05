@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reloadSkills: (workspaceRoot) => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS, workspaceRoot ?? null),
   getChatHistory: (workspaceRoot) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET, workspaceRoot ?? null),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
+  generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),
   setActiveChatId: (workspaceRoot, id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, workspaceRoot ?? null, id),
   chat: (messages, options) =>

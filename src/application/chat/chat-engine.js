@@ -15,12 +15,28 @@ const {
   createToolLineEvent,
   createPhaseEvent,
   createReasoningEvent,
+  sanitizeChatTitle,
 } = require('../../shared/contracts');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
   truncateStaleToolOutputs,
 } = require('./chat-history-trim');
+
+/* ── Konversationstitel ──────────────────────────────────────────────────────
+ * Nach dem ersten Austausch benennt das Modell die Konversation selbst. Der
+ * Aufruf ist bewusst klein gehalten: nur die erste Frage und der Anfang der
+ * ersten Antwort, keine Tools, kein Verlauf, harte Zeitgrenze. Schlaegt er
+ * fehl, bleibt der aus der Frage abgeleitete Titel stehen. */
+const TITLE_INPUT_CHAR_LIMIT = 1200;
+const TITLE_TIMEOUT_MS = 20000;
+const TITLE_SYSTEM_PROMPT = [
+  'Du benennst Konversationen.',
+  'Gib eine knappe Ueberschrift aus, die Thema und Absicht des Gespraechs trifft.',
+  'Drei bis sechs Woerter. Dieselbe Sprache wie das Gespraech.',
+  'Keine Anfuehrungszeichen, kein Satzzeichen am Ende, keine Einleitung.',
+  'Antworte ausschliesslich mit der Ueberschrift.',
+].join(' ');
 
 const CHAT_ENGINE_EVENTS = Object.freeze({
   DELTA: 'delta',
@@ -471,7 +487,76 @@ function createChatEngine({
     }
   }
 
-  return { send, abort };
+  /** Callbacks-Attrappe: Der Titel-Aufruf soll keine Chat-Ereignisse ausloesen. */
+  function silentStreamCallbacks() {
+    const noop = () => {};
+    return {
+      reset: noop,
+      onMarkGenerating: noop,
+      onTextDelta: noop,
+      onReasoningDelta: noop,
+      onToolCallStart: noop,
+      onToolCallArgumentsDelta: noop,
+    };
+  }
+
+  function clipForTitle(content) {
+    const text = typeof content === 'string' ? content : String(content ?? '');
+    const flat = text.trim();
+    if (flat.length <= TITLE_INPUT_CHAR_LIMIT) return flat;
+    return `${flat.slice(0, TITLE_INPUT_CHAR_LIMIT)}…`;
+  }
+
+  /**
+   * Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden.
+   * Erwartet die ersten Nachrichten des Gespraechs; nutzt daraus die erste
+   * Nutzerfrage und die erste Antwort. Liefert { title } oder { error } —
+   * der Aufrufer faellt bei einem Fehler auf den abgeleiteten Titel zurueck.
+   */
+  async function generateTitle({ messages } = {}) {
+    const list = Array.isArray(messages) ? messages : [];
+    const firstUser = list.find((m) => m && m.role === 'user' && String(m.content ?? '').trim());
+    if (!firstUser) return { error: 'Keine Nutzerfrage vorhanden.', code: CHAT_ERROR_CODES.INVALID };
+    const firstAnswer = list.find(
+      (m) => m && m.role === 'assistant' && !m.greeting && String(m.content ?? '').trim()
+    );
+
+    const resolved = await resolveTarget(false);
+    if (resolved.error) return resolved.error;
+    const { target } = resolved;
+
+    const parts = [`Frage:\n${clipForTitle(firstUser.content)}`];
+    if (firstAnswer) parts.push(`Antwort:\n${clipForTitle(firstAnswer.content)}`);
+
+    const abortController = new AbortController();
+    const timer = setTimeout(() => abortController.abort(createChatAbortError()), TITLE_TIMEOUT_MS);
+    try {
+      const sendBundle = await llm.prepareSendBundle(target);
+      const round = await llm.streamRound({
+        target,
+        sendBundle,
+        messages: [
+          { role: 'system', content: TITLE_SYSTEM_PROMPT },
+          { role: 'user', content: parts.join('\n\n') },
+        ],
+        tools: [],
+        callbacks: silentStreamCallbacks(),
+        abortSignal: abortController.signal,
+      });
+      if (round?.cancelled) return { error: 'Titel-Anfrage abgebrochen.', code: CHAT_ERROR_CODES.INVALID };
+      if (round?.error) return { error: round.error, code: round.code || CHAT_ERROR_CODES.API };
+      const title = sanitizeChatTitle(round?.message?.content);
+      if (!title) return { error: 'Leere Antwort auf die Titel-Anfrage.', code: CHAT_ERROR_CODES.INVALID };
+      return { title };
+    } catch (error) {
+      if (isAbortError(error)) return { error: 'Titel-Anfrage abgebrochen.', code: CHAT_ERROR_CODES.INVALID };
+      return { error: llm.formatRoundError(error), code: CHAT_ERROR_CODES.API };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return { send, abort, generateTitle };
 }
 
 module.exports = {

@@ -57,6 +57,8 @@ const REQUEST_CHANNELS = Object.freeze({
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
 
   CHAT_SEND: 'chat:send',
+  /** Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden. */
+  CHAT_TITLE: 'chat:title',
   /** Renderer → Main (ipcRenderer.send), bricht laufenden CHAT_SEND ab. */
   CHAT_ABORT: 'chat:abort',
 

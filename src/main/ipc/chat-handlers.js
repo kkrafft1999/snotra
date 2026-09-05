@@ -24,6 +24,10 @@ function registerChatHandlers({
     engine.abort(event.sender.id);
   });
 
+  ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => {
+    return engine.generateTitle({ messages: payload?.messages });
+  });
+
   ipcMain.handle(REQ.CHAT_SEND, async (event, payload) => {
     return engine.send({
       sessionId: event.sender.id,

@@ -13,7 +13,7 @@ import {
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-debug.js';
 
-const { coerceUsage, createEmptyUsage, toolCategoryForEntry } = contracts;
+const { coerceUsage, createEmptyUsage, toolCategoryForEntry, inferChatTitle } = contracts;
 
 // Ein Puffer je Renderer; in den DevTools per window.__snotraToolLogDebug.serialize()
 // abrufbar, im Chat per Strg/Cmd+Shift+D in die Zwischenablage (Issue #87).
@@ -682,6 +682,9 @@ export function initChatStream({
       updatedAt: Date.now(),
       messages: persistable,
       tokenUsage: appStore.chatTokenUsage,
+      // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
+      // den Titel selbst aus der ersten Frage ab.
+      ...(appStore.currentChatTitle ? { title: appStore.currentChatTitle } : {}),
     });
     await api.setActiveChatId(appStore.currentChatWorkspace, appStore.currentChatId);
   }
@@ -1005,6 +1008,45 @@ export function initChatStream({
     }
     if (!skipRender) renderChatMessages();
     applyUsageFromResult(result);
+    await persistCurrentChat();
+    // Ueberschrift im Hintergrund nachziehen: Sie darf die Antwort nicht
+    // aufhalten und ihr Fehlschlag darf den Chat nicht stoeren.
+    void maybeGenerateChatTitle();
+  }
+
+  /**
+   * Laesst das Modell die Konversation benennen, sobald die erste Antwort
+   * steht. Laeuft genau einmal je Chat: Danach steht in currentChatTitle ein
+   * Titel, der nicht mehr dem aus der Frage abgeleiteten entspricht. Aeltere
+   * Chats mit abgeleitetem Titel werden beim naechsten Zug nachbenannt.
+   */
+  async function maybeGenerateChatTitle() {
+    if (!activeProviderConfigured?.()) return;
+    const messages = appStore.chatMessages.filter((m) => !m.greeting && !m.isError && !m.streaming);
+    const firstUser = messages.find((m) => m.role === 'user');
+    const firstAnswer = messages.find((m) => m.role === 'assistant');
+    if (!firstUser || !firstAnswer) return;
+
+    const current = typeof appStore.currentChatTitle === 'string' ? appStore.currentChatTitle.trim() : '';
+    if (current && current !== inferChatTitle(messages)) return;
+
+    // Chatwechsel waehrend der Anfrage darf den Titel nicht verschieben.
+    const sessionId = appStore.chatSessionId;
+    const chatId = appStore.currentChatId;
+    let result = null;
+    try {
+      result = await api.generateChatTitle([
+        { role: 'user', content: String(firstUser.content ?? '') },
+        { role: 'assistant', content: String(firstAnswer.content ?? '') },
+      ]);
+    } catch {
+      return;
+    }
+    const title = typeof result?.title === 'string' ? result.title.trim() : '';
+    if (!title) return;
+    if (appStore.chatSessionId !== sessionId || appStore.currentChatId !== chatId) return;
+    appStore.currentChatTitle = title;
+    syncChatTitle?.();
     await persistCurrentChat();
   }
 

@@ -40,6 +40,31 @@ function inferChatTitle(messages) {
   return 'Neuer Chat';
 }
 
+/**
+ * Raeumt eine Modellantwort zu einer Ueberschrift auf: erste Zeile, ohne
+ * Anfuehrungszeichen, ohne Schlusspunkt, auf eine Zeile normalisiert und auf
+ * CHAT_TITLE_MAX_LENGTH gekuerzt. Leerer String, wenn nichts uebrig bleibt —
+ * dann bleibt der Aufrufer beim abgeleiteten Titel.
+ */
+function sanitizeChatTitle(raw) {
+  if (raw == null) return '';
+  let text = String(raw).split('\n').find((line) => line.trim()) || '';
+  text = text.trim().replace(/\s+/g, ' ');
+  // Manche Modelle verpacken die Ueberschrift in Anfuehrungszeichen, stellen
+  // ein „Titel:“ voran — oder beides, in beliebiger Schachtelung. Deshalb
+  // zweimal abtragen: aussen die Zeichen, dann der Vorsatz, dann erneut.
+  const unquote = (value) => value.replace(/^["'«»„“”‚‘’]+/, '').replace(/["'«»„“”‚‘’]+$/, '').trim();
+  text = unquote(text);
+  text = text.replace(/^(?:titel|title|ueberschrift|überschrift)\s*:\s*/i, '').trim();
+  text = unquote(text);
+  text = text.replace(/[.]+$/, '').trim();
+  if (!text) return '';
+  if (text.length > CHAT_TITLE_MAX_LENGTH) {
+    return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
+  }
+  return text;
+}
+
 // --- Ergebnis-DTOs (Rückgabe von CHAT_SEND) --------------------------------
 
 /*
@@ -130,6 +155,7 @@ function isToolLinePhase(phase) {
 module.exports = {
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,
+  sanitizeChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,

@@ -65,6 +65,7 @@ const {
 const {
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,
+  sanitizeChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,
@@ -130,6 +131,7 @@ module.exports = {
   toolCategoryForEntry,
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,
+  sanitizeChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,

@@ -565,6 +565,63 @@ test('engine aborts only the targeted in-flight session', async () => {
   assert.equal(result.cancelled, true);
 });
 
+test('generateTitle asks the model once, without tools, and cleans up the answer', async () => {
+  const { engine, calls } = makeEngine([
+    assistantText('"Titel: Lesespalte auf A4 begrenzen."'),
+  ]);
+
+  const result = await engine.generateTitle({
+    messages: [
+      { role: 'assistant', content: 'Hallo!', greeting: true },
+      { role: 'user', content: 'Wie begrenze ich die Lesespalte?' },
+      { role: 'assistant', content: 'Mit einer max-width auf der Spalte.' },
+    ],
+  });
+
+  // Anfuehrungszeichen, „Titel:“-Vorsatz und Schlusspunkt sind weg.
+  assert.deepEqual(result, { title: 'Lesespalte auf A4 begrenzen' });
+  assert.equal(calls.length, 1);
+  // Ein einziger Aufruf ohne Tools, nur System-Prompt plus erster Austausch.
+  assert.deepEqual(calls[0].tools, []);
+  assert.equal(calls[0].messages.length, 2);
+  assert.equal(calls[0].messages[0].role, 'system');
+  assert.match(calls[0].messages[1].content, /Wie begrenze ich die Lesespalte\?/);
+  assert.match(calls[0].messages[1].content, /Mit einer max-width auf der Spalte\./);
+  // Der Gruss der Assistentin zaehlt nicht als erste Antwort.
+  assert.equal(calls[0].messages[1].content.includes('Hallo!'), false);
+});
+
+test('generateTitle works before the first answer and reports failures instead of throwing', async () => {
+  const onlyQuestion = makeEngine([assistantText('Offene Frage zum Composer')]);
+  const withoutAnswer = await onlyQuestion.engine.generateTitle({
+    messages: [{ role: 'user', content: 'Was fehlt noch am Composer?' }],
+  });
+  assert.deepEqual(withoutAnswer, { title: 'Offene Frage zum Composer' });
+  assert.equal(onlyQuestion.calls[0].messages[1].content.includes('Antwort:'), false);
+
+  // Ohne Nutzerfrage gibt es nichts zu benennen — und keinen Modellaufruf.
+  const empty = makeEngine([assistantText('egal')]);
+  const noQuestion = await empty.engine.generateTitle({ messages: [] });
+  assert.equal(noQuestion.title, undefined);
+  assert.ok(noQuestion.error);
+  assert.equal(empty.calls.length, 0);
+
+  // Provider-Fehler und leere Antworten werden gemeldet, nicht geworfen.
+  const failing = makeEngine([{ error: 'Kontingent erschöpft', code: 'RATE_LIMIT' }]);
+  const failed = await failing.engine.generateTitle({
+    messages: [{ role: 'user', content: 'Frage' }],
+  });
+  assert.equal(failed.title, undefined);
+  assert.equal(failed.error, 'Kontingent erschöpft');
+
+  const blank = makeEngine([assistantText('   ')]);
+  const blankResult = await blank.engine.generateTitle({
+    messages: [{ role: 'user', content: 'Frage' }],
+  });
+  assert.equal(blankResult.title, undefined);
+  assert.ok(blankResult.error);
+});
+
 test('engine turns provider failures into the existing error DTO', async () => {
   const { engine } = makeEngine([{ error: 'Kontingent erschöpft', code: 'RATE_LIMIT' }]);
 

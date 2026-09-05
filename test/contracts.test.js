@@ -112,6 +112,24 @@ test('inferChatTitle derives a short title from the first user message', () => {
   assert.equal(inferChatTitle(null), 'Neuer Chat');
 });
 
+test('sanitizeChatTitle strips model decoration and clamps the length', () => {
+  const { sanitizeChatTitle, CHAT_TITLE_MAX_LENGTH } = contracts;
+  assert.equal(sanitizeChatTitle('Lesespalte begrenzen'), 'Lesespalte begrenzen');
+  assert.equal(sanitizeChatTitle('"Lesespalte begrenzen"'), 'Lesespalte begrenzen');
+  assert.equal(sanitizeChatTitle('„Lesespalte begrenzen“'), 'Lesespalte begrenzen');
+  assert.equal(sanitizeChatTitle('Titel: Lesespalte begrenzen.'), 'Lesespalte begrenzen');
+  // Vorsatz und Anfuehrungszeichen in beliebiger Schachtelung.
+  assert.equal(sanitizeChatTitle('"Titel: Lesespalte begrenzen."'), 'Lesespalte begrenzen');
+  assert.equal(sanitizeChatTitle('Titel: "Lesespalte begrenzen"'), 'Lesespalte begrenzen');
+  // Mehrzeilige Antworten: nur die erste nicht-leere Zeile zaehlt.
+  assert.equal(sanitizeChatTitle('\n  Composer umbauen \nNoch ein Satz'), 'Composer umbauen');
+  const long = sanitizeChatTitle('w'.repeat(120));
+  assert.equal(long.length, CHAT_TITLE_MAX_LENGTH);
+  assert.ok(long.endsWith('…'));
+  assert.equal(sanitizeChatTitle('   '), '');
+  assert.equal(sanitizeChatTitle(null), '');
+});
+
 test('result factories carry contextUsage only when provided', () => {
   const ctx = { prompt: 210, completion: 20, total: 230 };
   assert.deepEqual(createChatResult({ content: 'hi', usage: null, contextUsage: ctx }), {
