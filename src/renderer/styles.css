@@ -972,13 +972,13 @@ summary:focus-visible,
   user-select: text;
 }
 
-/* User-Nachricht: leichter Blau-Wash, linker Blue-Akzent (Mono-Blue). */
+/* User-Nachricht: leichter Blau-Wash, umlaufende Divider-Border. Der frühere
+ * blaue Akzentstrich an der linken Kante ist bewusst entfernt. */
 .chat-msg.user {
   align-self: flex-end;
   background: var(--ds-chat-user-bg);
   color: var(--text-primary);
   border: 1px solid var(--ds-grey-divider);
-  border-left: 2px solid var(--ds-blue);
   margin-left: 32px;
   padding: 9px 13px;
   border-radius: 12px;
