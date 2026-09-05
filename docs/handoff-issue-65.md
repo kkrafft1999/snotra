@@ -15,8 +15,8 @@ Stand: 2026-09-05.
   Renderer mit nativer Bestätigung schutzlockernder Aktionen, HMAC-signierte
   Policy-Datei mit fail-safe, Provider-Redaktion sensibler Tool-Nachrichten im
   Verlauf, Verfall statt Zehn-Minuten-Timeout, Wiederherstellungskopie beim
-  Überschreiben. #66 entsprechend nachgeschärft; #67 nennt noch das alte
-  Timeout und den Auto-Dialog ohne nativen Main-Dialog.
+  Überschreiben. #66 und #67 entsprechend nachgeschärft (nativer Auto-Dialog,
+  Verfall statt Zeitlimit).
 - Markdown-Verarbeitung, lokale Links/Anker, alle zwölf Registry-Tools und die
   18 Matrixzellen geprüft. Keine Programmdateien geändert; daher kein App-Build
   oder Laufzeittest erforderlich. Quellen wurden am 2026-09-05 geprüft.
