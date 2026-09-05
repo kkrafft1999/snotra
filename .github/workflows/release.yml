@@ -6,6 +6,9 @@ name: Release
 #
 # Artefakte bleiben UNSIGNIERT (kein Apple Developer-ID / kein Windows-Cert):
 # macOS zeigt Gatekeeper, Windows ggf. SmartScreen. Das ist Stufe 1 by design.
+#
+# Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS +
+# Windows). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht (#70).
 
 on:
   push:
@@ -16,8 +19,15 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    name: Test-Gate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build-macos:
     name: Build macOS (arm64)
+    needs: test
     runs-on: macos-14 # Apple Silicon -> passt zu --arch arm64
     steps:
       - uses: actions/checkout@v7
@@ -66,6 +76,7 @@ jobs:
 
   build-windows:
     name: Build Windows (x64)
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7

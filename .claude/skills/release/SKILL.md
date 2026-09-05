@@ -98,4 +98,7 @@ mit dem Nutzer klären, ob Tag/Release gelöscht und nach Fix neu getaggt wird.
 - Versionierung ist Single Source of Truth in `package.json`; die Pipeline baut
   nur, sie taggt nicht.
 - Artefakte sind **unsigniert** (Gatekeeper/SmartScreen erwartbar) — Stufe 1.
+- Die Pipeline beginnt mit einem **Test-Gate** (Job `Test-Gate`, ruft
+  `ci.yml` auf: `npm test` auf macOS und Windows). Rot dort heißt: kein Build,
+  kein Release — lokal `npm test` reproduzieren, fixen, neu taggen.
 - Keine zusätzlichen Assets von Hand hochladen; das erledigt die Pipeline.

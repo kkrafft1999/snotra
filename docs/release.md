@@ -60,6 +60,32 @@ Tools):
 node scripts/build-icons.js
 ```
 
+## Pipeline und Test-Gate
+
+Zwei GitHub-Actions-Workflows unter [`.github/workflows/`](../.github/workflows/):
+
+- [`ci.yml`](../.github/workflows/ci.yml) führt bei jedem **Pull Request** und
+  jedem **Push auf `main`** die Test-Suite (`npm test`, Node 24) auf
+  **macOS und Windows** aus. Ein roter Lauf ist im PR bzw. am Commit sichtbar.
+- [`release.yml`](../.github/workflows/release.yml) startet auf einen Tag-Push
+  `vX.Y.Z`. Als erster Job läuft dieselbe Test-Suite als **Test-Gate**
+  (`ci.yml` per `workflow_call`); erst wenn beide Plattformen grün sind, bauen
+  die Build-Jobs und hängen die Artefakte an das Release. Schlägt ein Test
+  fehl, entsteht **kein** Build und **kein** Release — Ursache beheben, Tag
+  neu setzen (`git tag -d vX.Y.Z && git push origin :vX.Y.Z`, dann erneut
+  taggen und pushen).
+
+Läufe beobachten:
+
+```sh
+gh run list --workflow ci.yml --limit 5
+gh run watch
+```
+
+Optional lässt sich `main` per Branch-Protection absichern, so dass der
+Check `Tests (macos-14)` / `Tests (windows-latest)` vor dem Merge bestehen
+muss (Settings → Branches → Branch protection rules; nicht Teil des Repos).
+
 ## Release veröffentlichen
 
 ```sh
