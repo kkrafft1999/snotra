@@ -76,6 +76,10 @@ jobs:
           mkdir -p dist
           dmg="$(ls out/make/*.dmg | head -1)"
           cp "$dmg" "dist/Snotra-AI-${version}-mac-arm64.dmg"
+      # Paketinhalt gegen die Allowlist aus package.json pruefen (#72): keine
+      # .claude/, docs/, test/ usw. im ausgelieferten app.asar.
+      - name: Check package contents (allowlist)
+        run: node scripts/check-asar-contents.js
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos
@@ -95,6 +99,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run package:win
+      - name: Check package contents (allowlist)
+        run: node scripts/check-asar-contents.js
       - name: Zip package
         shell: pwsh
         run: |

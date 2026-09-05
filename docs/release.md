@@ -60,6 +60,24 @@ Tools):
 node scripts/build-icons.js
 ```
 
+## Paketinhalt (Allowlist)
+
+Das `app.asar` enthält **nur Laufzeitdateien**: `src/`, `system-skills/`,
+`node_modules/` (Production-Dependencies), `package.json` und `LICENSE`.
+Alles andere – `.claude/` (inkl. lokaler `settings.local.json`), `.github/`,
+`docs/`, `test/`, `scripts/`, Icon-Quellen, README, Lockfile, `.env*` – bleibt
+draußen (Issue #72). Quelle der Wahrheit ist die Negativ-Regex in
+[`package.json`](../package.json) → `config.forge.packagerConfig.ignore`;
+neue Laufzeitordner müssen dort in die Allowlist aufgenommen werden.
+
+Die Pipeline prüft den Inhalt nach jedem Build-Job automatisch
+(`scripts/check-asar-contents.js`, schlägt bei ausgeschlossenen oder fehlenden
+Pflichtdateien fehl). Lokal nach `npm run package`:
+
+```sh
+npm run check-package
+```
+
 ## Pipeline und Test-Gate
 
 Zwei GitHub-Actions-Workflows unter [`.github/workflows/`](../.github/workflows/):
