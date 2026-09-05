@@ -7,17 +7,20 @@ import {
   svgFile,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
+import { basenameOf, parentDirOf, depthOf, joinNative } from '../utils/nativePath.js';
 
-/** Reine Hilfen für den Dateibaum (Phase 4.6.2 — Extraktion ohne DOM). */
+/**
+ * Reine Hilfen für den Dateibaum (Phase 4.6.2 — Extraktion ohne DOM).
+ * Pfade kommen nativ aus dem Main-Prozess (Windows: Backslash), deshalb
+ * laufen alle Zerlegungen über nativePath.js statt über split('/') (#73).
+ */
 
 export function folderDepthSortKey(dirPath) {
-  return dirPath.split('/').filter(Boolean).length;
+  return depthOf(dirPath);
 }
 
 export function parentDirFromItemPath(itemPath) {
-  const parts = itemPath.split('/');
-  parts.pop();
-  return parts.join('/') || '/';
+  return parentDirOf(itemPath);
 }
 
 const QUICK_ACTION_PROMPTS = {
@@ -96,7 +99,7 @@ export function initFileTree(deps) {
 
       const name = document.createElement('span');
       name.className = 'chip-recent-name';
-      name.textContent = p.split('/').pop() || p;
+      name.textContent = basenameOf(p);
 
       const sub = document.createElement('span');
       sub.className = 'chip-recent-path';
@@ -160,7 +163,7 @@ export function initFileTree(deps) {
     }
     const workspaceChanged = appStore.rootPath !== folderPath;
     appStore.rootPath = folderPath;
-    const name = folderPath.split('/').pop() || folderPath;
+    const name = basenameOf(folderPath);
     projectName.textContent = name;
     projectName.title = folderPath;
     document.title = 'Snotra AI';
@@ -197,7 +200,7 @@ export function initFileTree(deps) {
       return;
     }
     for (const p of paths) {
-      const displayName = p.split('/').pop() || p;
+      const displayName = basenameOf(p);
 
       // Kein <button> mehr: Der Entfernen-Button (Issue #57) läge sonst in
       // einem Button verschachtelt (ungültiges HTML). Stattdessen eine Zeile
@@ -586,10 +589,7 @@ export function initFileTree(deps) {
   }
 
   async function refreshParentOf(itemPath) {
-    const parts = itemPath.split('/');
-    parts.pop();
-    const parentDir = parts.join('/') || '/';
-    await refreshFolder(parentDir);
+    await refreshFolder(parentDirOf(itemPath));
   }
 
   // Wird nach einem write_file_text-Tool-Aufruf (KI hat eine Datei angelegt/
@@ -599,8 +599,10 @@ export function initFileTree(deps) {
     if (!appStore.rootPath || typeof relativePath !== 'string') return;
     const rel = relativePath.trim().replace(/^\.\/?/, '').replace(/^\/+/, '');
     if (!rel) return;
-    const rootPath = appStore.rootPath.replace(/\/$/, '');
-    const absPath = `${rootPath}/${rel}`;
+    // Relativer POSIX-Pfad aus dem Tool + nativer Workspace-Pfad -> der
+    // Ergebnispfad muss dem Stil der Baum-Einträge entsprechen (Windows: `\`),
+    // sonst schlägt der Vergleich mit appStore.selectedPath fehl (#73).
+    const absPath = joinNative(appStore.rootPath, rel);
 
     await refreshParentOf(absPath);
 
@@ -610,7 +612,7 @@ export function initFileTree(deps) {
         welcomeEl.classList.add('hidden');
         filePreview.classList.remove('hidden');
         fileInfo.classList.add('hidden');
-        previewFilename.textContent = absPath.split('/').pop() || absPath;
+        previewFilename.textContent = basenameOf(absPath);
         previewMeta.textContent = formatSize(result.size);
         previewContent.textContent = result.content;
       }
