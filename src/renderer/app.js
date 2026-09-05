@@ -9,6 +9,10 @@ import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
+import { initToolPermissionState } from './state/tool-permissions.js';
+import { initToolModePicker } from './components/ToolModePicker.js';
+import { initToolApprovalCards } from './components/ToolApprovalCard.js';
+import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 
 const api = window.electronAPI;
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
@@ -89,6 +93,13 @@ btnToggleContentPane.addEventListener('click', async () => {
 
 const modelPicker = initChatModelPicker({ api, appStore });
 
+// Tool-Berechtigungen (Issue #67): ein geteilter Stand für Chat-Pille und
+// Einstellungen, Freigabe-Karten melden sich beim Main als Oberfläche an.
+const toolPermissions = initToolPermissionState({ api });
+initToolModePicker({ toolPermissions });
+const approvalCards = initToolApprovalCards({ api, appStore });
+const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
+
 const voice = initWhisperRecorder({
   api,
   onInputChanged: syncChatInputHeight,
@@ -114,6 +125,7 @@ const chatStream = initChatStream({
     mentionAutocomplete.invalidate();
     return fileTree.notifyExternalFileWrite(relativePath);
   },
+  approvalCards,
 });
 
 const chatHistory = initChatHistoryDrawer({
@@ -144,6 +156,7 @@ const settingsModal = initSettingsModal({
   findProviderMeta: (id) => modelPicker.findProviderMeta(id),
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onCheckUpdates: () => updateBanner.checkNow(),
+  toolPermissionsPanel,
   DEFAULT_MAX_TOOL_ROUNDS,
 });
 
@@ -183,6 +196,7 @@ if (welcomeCta) {
 btnChatNew.addEventListener('click', () => chatHistory.startNewChatWithHistory());
 
 modelPicker.refreshLLMState();
+void toolPermissions.refresh();
 
 (async () => {
   let uiPrefs = { contentPaneVisible: true, appLocale: 'de' };

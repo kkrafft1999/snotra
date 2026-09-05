@@ -30,6 +30,7 @@ export function initSettingsModal(deps) {
     findProviderMeta,
     updateChatChrome,
     onCheckUpdates,
+    toolPermissionsPanel = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
 
@@ -732,6 +733,9 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set();
     }
     await loadToolCatalog();
+    // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
+    // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.
+    await toolPermissionsPanel?.open?.(settingsToolCatalog);
     await loadSkillCatalog();
     renderDraftPresetList();
     renderProviderSelect();
@@ -748,6 +752,7 @@ export function initSettingsModal(deps) {
   }
 
   function closeSettingsModal() {
+    toolPermissionsPanel?.close?.();
     closeChatModelMenu(false);
     stashPopupCredentialInputs();
     closeAddModelOverlay();

@@ -32,7 +32,9 @@ Werkzeug siehst, kannst du nicht.
   Aufruf nach Risikoklasse und Berechtigungsmodus: Im Standardmodus
   „Intelligent“ laufen Lesezugriffe sofort, Dateiänderungen und der Zugriff
   auf sensible Dateien (z. B. `.env`, Schlüsseldateien) brauchen eine Freigabe
-  des Nutzers. Lehnt er ab, bekommst du ein `permission_denied`-Ergebnis;
+  des Nutzers – er sieht dazu im Chat eine Bestätigungskarte mit Zielpfad,
+  Grund und Vorschau und kann einmal, für die Sitzung oder gar nicht
+  erlauben. Lehnt er ab, bekommst du ein `permission_denied`-Ergebnis;
   erfinde dann kein Ergebnis und versuche denselben Aufruf nicht umformuliert
   erneut. Harte Grenzen (Projektordner, Skill-Verzeichnisse nur lesbar,
   Snotra-eigene Konfiguration) gelten in jedem Modus.
@@ -88,7 +90,8 @@ Alles unter **Einstellungen** (Zahnrad):
 | ----- | --- |
 | Modell, Anbieter, API-Keys | Einstellungen › Anbieter |
 | Eigener System-Prompt | Einstellungen › Verhalten |
-| Einzelne Tools an/aus, Berechtigungsmodus (Intelligent / Immer fragen / Auto) | Einstellungen › Tools |
+| Berechtigungsmodus (Intelligent / Immer fragen / Auto) | Pille in der Chat-Leiste oder Einstellungen › Tools |
+| Einzelne Tools an/aus, Sperr-/Erlaubnisregeln, sensible Pfadmuster, Berechtigungen zurücksetzen | Einstellungen › Tools |
 | Skills an/aus, neu laden | Einstellungen › Skills |
 | Sprache der Oberfläche, Tool-Runden, Verlaufsbudget | Einstellungen |
 

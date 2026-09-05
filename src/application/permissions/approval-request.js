@@ -10,23 +10,15 @@ const {
   TOOL_RISK_CLASSES,
   TOOL_PERMISSION_MODES,
   SESSION_GRANTABLE_CLASSES,
+  TOOL_PERMISSION_MODE_LABELS,
+  TOOL_RISK_CLASS_LABELS,
   normalizeRiskClasses,
 } = require('../../shared/contracts/tool-permissions');
 
-const MODE_LABELS = Object.freeze({
-  [TOOL_PERMISSION_MODES.SMART]: 'Intelligent',
-  [TOOL_PERMISSION_MODES.ASK_ALL]: 'Immer fragen',
-  [TOOL_PERMISSION_MODES.AUTO]: 'Auto',
-});
-
-const CLASS_LABELS = Object.freeze({
-  [TOOL_RISK_CLASSES.READ]: 'Lesen',
-  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'Sensible Daten lesen',
-  [TOOL_RISK_CLASSES.WRITE]: 'Ändern',
-  [TOOL_RISK_CLASSES.DELETE]: 'Überschreiben ohne Rückweg',
-  [TOOL_RISK_CLASSES.EXECUTE]: 'Ausführen',
-  [TOOL_RISK_CLASSES.EXTERNAL]: 'Externer Dienst',
-});
+// Anzeigenamen kommen aus den Contracts, damit Karte, Chat-Pille und
+// Einstellungen (#67) denselben Wortlaut zeigen.
+const MODE_LABELS = TOOL_PERMISSION_MODE_LABELS;
+const CLASS_LABELS = TOOL_RISK_CLASS_LABELS;
 
 function modeLabel(mode) {
   return MODE_LABELS[mode] || MODE_LABELS[TOOL_PERMISSION_MODES.SMART];

@@ -187,12 +187,18 @@ ein Berechtigungsmodell für Tool-Aufrufe. Reihenfolge:
    signierte Policy-Datei mit native bestätigten Lockerungen, bereinigtes
    Audit in Tool-Zeile und Verlauf. Der alte Schalter `allowWorkspaceWrite`
    ist entfallen.
-   [#67](https://github.com/kkrafft1999/snotra/issues/67) UI (Modus-Wahl,
-   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — **offen**;
-   bis dahin lehnt die App jede Rückfrage sicher ab. Gemäß
-   [Konzept und Abnahmekriterien](./sicherheitskonzept.md#11-offene-punkte-und-umsetzung),
-   zu testen mit den vorhandenen Dateisystem-Tools. Die Workspace-Autorität
-   aus [#68](https://github.com/kkrafft1999/snotra/issues/68) ist berücksichtigt.
+   [#67](https://github.com/kkrafft1999/snotra/issues/67) UI — **umgesetzt
+   (2026-09-05)**: Modus-Pille in der Chat-Leiste und Modus-Wahl in
+   Einstellungen › Tools (synchron, Auto nur über den nativen Dialog des
+   Main), Bestätigungskarte im Chat mit Zielen, Grund, maskierter Vorschau,
+   Provider-Hinweis und drei Aktionen samt erklärten Einschränkungen,
+   Esc/Fokus-Verhalten, Verfall- und Abbruch-Darstellung, Verwaltung von
+   Sperr-/Erlaubnisregeln und sensiblen Pfadmustern, Reset-Aktionen mit
+   Umfang, Audit-Tooltip in der Tool-Zeile; alter Schreib-Schalter aus der
+   Oberfläche entfernt. Abnahme gemäß
+   [Konzept](./sicherheitskonzept.md#11-offene-punkte-und-umsetzung) per
+   App-Smoke-Test mit gefaktem Modell (Ablehnen, Esc, einmal, Sitzung,
+   Sperre, Immer fragen, sensible Datei, Verfall, Abbruch, Verlauf).
 3. Erst danach **MCP-Server**
    ([#62](https://github.com/kkrafft1999/snotra/issues/62)) und **Web-Suche**
    ([#63](https://github.com/kkrafft1999/snotra/issues/63)): beide sind vom

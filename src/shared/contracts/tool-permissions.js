@@ -38,6 +38,23 @@ const TOOL_PERMISSION_MODES = Object.freeze({
 
 const DEFAULT_TOOL_PERMISSION_MODE = TOOL_PERMISSION_MODES.SMART;
 
+/** Anzeigenamen der Modi (Konzept §3) – gemeinsam für Karte, Chat-Pille und Einstellungen. */
+const TOOL_PERMISSION_MODE_LABELS = Object.freeze({
+  [TOOL_PERMISSION_MODES.SMART]: 'Intelligent',
+  [TOOL_PERMISSION_MODES.ASK_ALL]: 'Immer fragen',
+  [TOOL_PERMISSION_MODES.AUTO]: 'Auto',
+});
+
+/** Anzeigenamen der Risikoklassen (Konzept §2). */
+const TOOL_RISK_CLASS_LABELS = Object.freeze({
+  [TOOL_RISK_CLASSES.READ]: 'Lesen',
+  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'Sensible Daten lesen',
+  [TOOL_RISK_CLASSES.WRITE]: 'Ändern',
+  [TOOL_RISK_CLASSES.DELETE]: 'Überschreiben ohne Rückweg',
+  [TOOL_RISK_CLASSES.EXECUTE]: 'Ausführen',
+  [TOOL_RISK_CLASSES.EXTERNAL]: 'Externer Dienst',
+});
+
 /** Ergebnis der reinen Policy. */
 const POLICY_DECISIONS = Object.freeze({
   ALLOW: 'allow',
@@ -340,6 +357,9 @@ function normalizeApprovalTarget(raw) {
     out.sensitiveReason = raw.sensitiveReason.slice(0, 200);
   }
   if (typeof raw.recovery === 'string' && raw.recovery) out.recovery = raw.recovery.slice(0, 40);
+  // Gebundene Dateiversion (Konzept §6): Die Karte zeigt sie bei sensiblen
+  // Lesefreigaben, damit erkennbar ist, welcher Stand freigegeben wird.
+  if (typeof raw.version === 'string' && raw.version) out.version = raw.version.slice(0, 80);
   return out;
 }
 
@@ -440,6 +460,8 @@ module.exports = {
   TOOL_RISK_CLASSES,
   TOOL_RISK_CLASS_ORDER,
   TOOL_PERMISSION_MODES,
+  TOOL_PERMISSION_MODE_LABELS,
+  TOOL_RISK_CLASS_LABELS,
   DEFAULT_TOOL_PERMISSION_MODE,
   POLICY_DECISIONS,
   APPROVAL_RESPONSES,

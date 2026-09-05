@@ -12,6 +12,8 @@ import {
 } from '../utils/tool-log-summary.js';
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-debug.js';
+// Bereinigtes Berechtigungs-Audit je Tool-Zeile (Issue #67): Tooltip und Zustand.
+import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
 
 const { coerceUsage, createEmptyUsage, toolCategoryForEntry, inferChatTitle } = contracts;
 
@@ -58,12 +60,13 @@ const TOOL_LINE_STATE_CLASS = {
 // state 'pending': Das Modell streamt den Aufruf noch (Argumente unvollständig),
 // das Tool ist noch nicht gelaufen. Optisch wie 'running', damit z. B. beim
 // Schreiben einer Datei sofort sichtbar ist, dass etwas passiert.
-function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex, category) {
+function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex, category, permission) {
   const row = document.createElement('div');
   row.className = 'chat-tool-line';
   row.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
   row.setAttribute('role', 'listitem');
   if (Number.isInteger(callIndex)) row.dataset.callIndex = String(callIndex);
+  applyPermissionToRow(row, permission);
   if (category) {
     row.dataset.category = category;
     row.insertAdjacentHTML('afterbegin', toolCategoryIconHtml(category));
@@ -83,6 +86,19 @@ function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callInd
   }
 
   return row;
+}
+
+/**
+ * Berechtigungs-Audit an der Zeile (Issue #66/#67): Entscheidung, Klasse,
+ * Status und Grund als Tooltip, der Zustand als data-Attribut. Die Zeile
+ * selbst kommt fertig vom Main („· abgelehnt“, „· wartet auf Freigabe“).
+ */
+function applyPermissionToRow(row, permission) {
+  if (!row || !permission || typeof permission !== 'object') return;
+  const key = permissionStatusKey(permission);
+  if (key) row.dataset.permission = key;
+  const description = describePermissionAudit(permission);
+  if (description) row.title = description;
 }
 
 function setToolLineDone(row, doneText) {
@@ -280,10 +296,14 @@ function toolTraceEntryForStore(entry) {
   const line = toolLineText(entry);
   const tool = typeof entry?.tool === 'string' ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' ? entry.skill : '';
-  if (!tool && !skill) return line;
+  // Das Audit ist bereits bereinigt (nur Entscheidung, Klassen, Status,
+  // Pfade – keine Inhalte); der Main normalisiert es beim Speichern erneut.
+  const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
+  if (!tool && !skill && !permission) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (permission) out.permission = permission;
   return out;
 }
 
@@ -402,6 +422,7 @@ export function initChatStream({
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
+  approvalCards,
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
@@ -473,7 +494,9 @@ export function initChatStream({
         // Beim Nachdenken ist die vorige Runde komplett erledigt.
         const lineState =
           state === 'running' && !thinking && i === trace.length - 1 ? 'running' : 'done';
-        lines.appendChild(buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i])));
+        lines.appendChild(
+          buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i]), trace[i]?.permission)
+        );
       }
     }
     if (state === 'running' && Array.isArray(pendingLines)) {
@@ -634,10 +657,17 @@ export function initChatStream({
             })
           );
 
+          // Freigabe-Karten (Issue #67) stehen sichtbar zwischen Tool-Log und
+          // Antworttext – außerhalb des eingeklappten Logs.
+          const cardsBox = document.createElement('div');
+          cardsBox.className = 'chat-approval-cards';
+          li.appendChild(cardsBox);
+
           const stream = document.createElement('div');
           stream.className = 'chat-md-streaming chat-md';
           stream.innerHTML = markdownToSafeHtml(m.content || '');
           li.appendChild(stream);
+          approvalCards?.mount(li, m);
         } else {
           if (Array.isArray(m.toolTrace) && m.toolTrace.length > 0) {
             li.appendChild(buildToolLog(m.toolTrace, 'done'));
@@ -658,6 +688,9 @@ export function initChatStream({
           inner.className = 'chat-md';
           inner.innerHTML = markdownToSafeHtml(m.content);
           li.appendChild(inner);
+          // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
+          // bleiben an ihrer Nachricht, bis der Chat gewechselt wird.
+          approvalCards?.mount(li, m);
         }
       } else {
         li.textContent = m.content;
@@ -691,6 +724,7 @@ export function initChatStream({
 
   async function loadChatForWorkspace(workspaceRoot) {
     stopChatVoiceListening();
+    approvalCards?.reset();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
 
@@ -724,6 +758,7 @@ export function initChatStream({
 
   async function startNewChat() {
     stopChatVoiceListening();
+    approvalCards?.reset();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
     appStore.currentChatId = crypto.randomUUID();
@@ -782,7 +817,7 @@ export function initChatStream({
     const payload = appStore.chatMessages
       .filter((m) => !m.greeting)
       .map(({ role, content }) => ({ role, content }));
-    appStore.chatMessages.push({
+    const assistantMessage = {
       role: 'assistant',
       content: '',
       toolTrace: [],
@@ -791,7 +826,9 @@ export function initChatStream({
       streaming: true,
       phase: 'waiting',
       thinkingSince: Date.now(),
-    });
+    };
+    appStore.chatMessages.push(assistantMessage);
+    approvalCards?.beginRun(assistantMessage);
     renderChatMessages();
 
     const offDelta =
@@ -849,7 +886,9 @@ export function initChatStream({
             // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
             const tool = typeof payload?.tool === 'string' ? payload.tool : '';
             const skill = typeof payload?.skill === 'string' ? payload.skill : '';
-            const entry = toolTraceEntryForStore({ line, tool, skill });
+            const permission =
+              payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
+            const entry = toolTraceEntryForStore({ line, tool, skill, permission });
             if (phase === 'pending') {
               const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
               if (existing) {
@@ -896,7 +935,12 @@ export function initChatStream({
               else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
             } else if (phase === 'done') {
               const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
-              setToolLineDone(runningRows[runningRows.length - 1], line);
+              const byIndex = Number.isInteger(callIndex)
+                ? linesEl.querySelector(`.chat-tool-line--running[data-call-index="${callIndex}"]`)
+                : null;
+              const doneRow = byIndex || runningRows[runningRows.length - 1];
+              setToolLineDone(doneRow, line);
+              applyPermissionToRow(doneRow, permission);
             } else {
               linesEl.querySelectorAll('.chat-tool-line--running').forEach((row) => {
                 setToolLineDone(row);
@@ -929,6 +973,29 @@ export function initChatStream({
             if (p.type === 'reasoning' && p.text) {
               last.reasoningText = (last.reasoningText || '') + p.text;
               updateStreamingChrome();
+            }
+            if (p.type === 'permission' && p.event) {
+              toolLogDebug.record('permission', { event: p.event, callIndex: p.callIndex, response: p.response, reason: p.reason });
+              // Warten und Entscheidung an der Tool-Zeile sichtbar machen (Issue #67);
+              // das Ergebnis der Ausführung bringt später die 'done'-Zeile vom Main.
+              const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
+              const row = wrap && Number.isInteger(p.callIndex)
+                ? wrap.querySelector(`.chat-tool-line--running[data-call-index="${p.callIndex}"]`)
+                : null;
+              if (row) {
+                const textEl = row.querySelector('.chat-tool-line-text');
+                const base = row.dataset.baseText || textEl?.textContent || '';
+                if (!row.dataset.baseText) row.dataset.baseText = base;
+                if (p.event === 'awaiting') {
+                  setToolLineText(row, `${base} · wartet auf Freigabe`);
+                  row.dataset.permission = 'awaiting';
+                } else if (p.event === 'resolved') {
+                  const allowed = typeof p.response === 'string' && p.response !== 'deny';
+                  setToolLineText(row, allowed ? base : `${base} · ${p.response === 'deny' ? 'abgelehnt' : 'verfallen'}`);
+                  row.dataset.permission = allowed ? 'allowed' : p.response === 'deny' ? 'denied' : 'cancelled';
+                }
+                syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
+              }
             }
             if (
               p.type === 'workspace'
@@ -989,10 +1056,36 @@ export function initChatStream({
         appStore.chatAbortedSendSeq = 0;
       }
     } else if (result.error) {
+      let bubbleKept = false;
       if (last && last.streaming) {
-        appStore.chatMessages.pop();
+        if (Array.isArray(result.toolTrace) && result.toolTrace.length > 0) {
+          // Lauf durch verfallene Freigabe beendet (Issue #66/#67): Die bis
+          // dahin gelaufenen Schritte samt Audit und Karte bleiben sichtbar,
+          // der Fehler folgt als eigene Nachricht. Kein vollständiger
+          // Neuaufbau, sonst verschwände die Karte mit dem Verfallsgrund.
+          last.streaming = false;
+          last.phase = 'idle';
+          last.toolTrace = result.toolTrace.map(toolTraceEntryForStore);
+          if (!last.content) last.content = '';
+          const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
+          if (bubble) {
+            finalizeStreamingAssistantBubble(bubble, last);
+            bubbleKept = true;
+          }
+        } else {
+          appStore.chatMessages.pop();
+        }
       }
       appStore.chatMessages.push({ role: 'assistant', content: result.error, isError: true });
+      if (bubbleKept) {
+        const errorLi = document.createElement('li');
+        errorLi.classList.add('chat-msg', 'assistant', 'error');
+        errorLi.textContent = result.error;
+        chatMessagesEl.appendChild(errorLi);
+        syncChatBusyState();
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        skipRender = true;
+      }
     } else if (last && last.role === 'assistant' && last.streaming) {
       last.streaming = false;
       last.content = result.content ?? '';

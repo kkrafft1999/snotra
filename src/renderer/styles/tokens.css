@@ -54,6 +54,13 @@
   --ds-btn-primary-fg: var(--ds-white);
   --ds-btn-primary-active-shadow: 0 4px 14px rgba(0, 95, 128, 0.35);
 
+  /* Destructive-Button (Regelwerk: Schwarz statt Rot): Reset-Bestätigung in
+   * den Einstellungen. Dark invertiert, damit der Button auf dunklem Grund
+   * nicht verschwindet. */
+  --ds-btn-destructive-bg: var(--ds-black);
+  --ds-btn-destructive-bg-hover: var(--ds-grey-muted);
+  --ds-btn-destructive-fg: var(--ds-white);
+
   /* Kreis-Icon-Buttons (neutral): Active-Lift — kein Brand-Blau im Schatten. */
   --ds-icon-btn-active-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
   /* Overlay-Ebene (aufklappende Menues): Der einzige Ort, an dem eine Flaeche
@@ -143,6 +150,9 @@
  * Akzentfarbe" gelesen wird.
  */
 [data-theme='dark'] {
+  --ds-btn-destructive-bg: var(--ds-white);
+  --ds-btn-destructive-bg-hover: #C9C9CC;
+  --ds-btn-destructive-fg: var(--ds-black);
   --ds-grey-bg: #1A1A1B;
   --ds-grey-card: #232325;
   --ds-grey-divider: #2E2E30;

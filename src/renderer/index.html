@@ -213,6 +213,27 @@
                 </button>
                 <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Verfügbare Modelle"></ul>
               </span>
+              <span class="chat-model-picker-wrap chat-tool-mode-wrap" id="chat-tool-mode-wrap" data-mode="smart">
+                <button
+                  type="button"
+                  id="btn-chat-tool-mode"
+                  class="chat-model-pill chat-model-pill--btn chat-tool-mode-pill"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="chat-tool-mode-menu"
+                  aria-label="Berechtigungsmodus wählen"
+                  title="Tool-Berechtigungen">
+                  <svg class="chat-tool-mode-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
+                  </svg>
+                  <span id="chat-tool-mode-label">Intelligent</span>
+                  <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                    <path fill="currentColor" d="M0 0l5 6 5-6z"/>
+                  </svg>
+                </button>
+                <ul id="chat-tool-mode-menu" class="chat-model-menu chat-tool-mode-menu hidden" role="listbox" tabindex="-1" aria-label="Berechtigungsmodus"></ul>
+              </span>
+              <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
             </div>
             <div class="chat-composer-bar-end">
               <p id="chat-token-usage" class="chat-token-usage" aria-live="polite">0 Tokens</p>
@@ -305,22 +326,100 @@
                 Tool-Liste konnte nicht geladen werden.
               </p>
             </div>
-            <div class="settings-placeholder-card">
-              <h3 class="settings-placeholder-card__title">Sichere Standards</h3>
-              <p class="settings-placeholder-card__text">
-                Globale Schalter (z. B. Netzwerkzugriff für Tools, Signatur-Anforderungen) lassen sich hier bündeln.
+            <div class="settings-tools-card" id="settings-permissions-card">
+              <h3 class="settings-subsection-title" id="heading-tool-permissions">Berechtigungen</h3>
+              <p class="settings-form-hint settings-form-hint--tight">
+                Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse und Modus. Harte Grenzen
+                (Projektordner, Skill-Verzeichnisse nur lesbar, Snotra-Schlüssel) gelten in jedem Modus. Änderungen
+                hier wirken <strong>sofort</strong> und für alle Chats – unabhängig von „Übernehmen“.
               </p>
-              <div class="modal-checkbox-row">
-                <label class="modal-checkbox">
-                  <input type="checkbox" id="input-allow-workspace-write" />
-                  <span>KI darf Dateien im Projektordner erstellen und bearbeiten</span>
-                </label>
-                <p class="modal-hint">
-                  Aktiviert das Tool <code lang="en">write_file_text</code>: Das Modell kann Dateien im geöffneten
-                  Ordner anlegen oder komplett überschreiben (max. 2 MB je Datei). Standardmäßig aus — ohne diese
-                  Option kann die KI Dateien nur lesen.
+              <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
+              <p id="settings-permissions-integrity" class="modal-warning hidden" role="alert"></p>
+              <fieldset class="settings-mode-group" id="settings-tool-mode-group" aria-describedby="hint-tool-mode">
+                <legend class="settings-mode-group__legend">Modus</legend>
+              </fieldset>
+              <p id="hint-tool-mode" class="modal-hint">
+                Derselbe Modus steht in der Chat-Leiste. „Auto“ verlangt eine Bestätigung im Systemdialog; zurück zu
+                „Intelligent“ geht jederzeit ohne Rückfrage.
+              </p>
+              <p id="settings-permissions-error" class="modal-hint error hidden" role="alert"></p>
+            </div>
+
+            <div class="settings-tools-card" id="settings-rules-card">
+              <h3 class="settings-subsection-title" id="heading-tool-rules">Regeln</h3>
+              <p class="settings-form-hint settings-form-hint--tight">
+                Sperren blockieren einen Aufruf in jedem Modus und gewinnen immer. Erlaubnisse ersparen die Rückfrage im
+                Modus „Intelligent“ – dauerhaft nur für Lesen und Ändern; sensibles Lesen lässt sich nur einmal oder für
+                eine Sitzung freigeben, Überschreiben ohne Rückweg, Ausführen und externe Dienste nur einzeln.
+              </p>
+              <h4 class="settings-rules-heading">Alle Workspaces</h4>
+              <ul id="settings-rules-global" class="settings-rule-list" aria-label="Regeln für alle Workspaces"></ul>
+              <p id="settings-rules-global-empty" class="settings-empty-hint">Keine globalen Regeln.</p>
+              <h4 class="settings-rules-heading">Dieser Workspace <code id="settings-rules-workspace-name" class="settings-rules-heading__root"></code></h4>
+              <ul id="settings-rules-workspace" class="settings-rule-list" aria-label="Regeln für diesen Workspace"></ul>
+              <p id="settings-rules-workspace-empty" class="settings-empty-hint">Keine Workspace-Regeln.</p>
+              <form id="settings-rule-form" class="settings-rule-form" aria-labelledby="heading-rule-form">
+                <h4 id="heading-rule-form" class="settings-rules-heading">Regel anlegen</h4>
+                <div class="settings-rule-form__grid">
+                  <div class="settings-rule-form__field">
+                    <label for="rule-effect" class="modal-field-label eyebrow-row">Wirkung</label>
+                    <select id="rule-effect" class="modal-input"></select>
+                  </div>
+                  <div class="settings-rule-form__field">
+                    <label for="rule-scope" class="modal-field-label eyebrow-row">Geltung</label>
+                    <select id="rule-scope" class="modal-input"></select>
+                  </div>
+                  <div class="settings-rule-form__field">
+                    <label for="rule-subject-type" class="modal-field-label eyebrow-row">Gegenstand</label>
+                    <select id="rule-subject-type" class="modal-input">
+                      <option value="tool">Einzelnes Tool</option>
+                      <option value="class">Risikoklasse</option>
+                    </select>
+                  </div>
+                  <div class="settings-rule-form__field">
+                    <label for="rule-tool" class="modal-field-label eyebrow-row">Tool</label>
+                    <select id="rule-tool" class="modal-input" lang="en"></select>
+                  </div>
+                  <div class="settings-rule-form__field hidden">
+                    <label for="rule-class" class="modal-field-label eyebrow-row">Klasse</label>
+                    <select id="rule-class" class="modal-input"></select>
+                  </div>
+                  <div class="settings-rule-form__field settings-rule-form__field--wide">
+                    <label for="rule-pattern" class="modal-field-label eyebrow-row">Pfadmuster</label>
+                    <input type="text" id="rule-pattern" class="modal-input" placeholder="z. B. docs/** oder *.md – leer = alle Pfade" autocomplete="off" spellcheck="false" aria-describedby="hint-rule-pattern" />
+                  </div>
+                </div>
+                <p id="hint-rule-pattern" class="modal-hint">
+                  <code>*</code> steht für beliebige Zeichen innerhalb eines Ordners, <code>**</code> auch über Unterordner.
+                  Erlaubnisse und das Löschen von Sperren bestätigst du zusätzlich im Systemdialog.
                 </p>
+                <div class="settings-rule-form__actions">
+                  <button type="submit" id="btn-rule-add" class="btn-secondary">Regel anlegen</button>
+                </div>
+                <p id="settings-rule-error" class="modal-hint error hidden" role="alert"></p>
+              </form>
+            </div>
+
+            <div class="settings-tools-card" id="settings-sensitive-card">
+              <h3 class="settings-subsection-title" id="heading-sensitive-paths">Sensible Pfadmuster</h3>
+              <p class="settings-form-hint settings-form-hint--tight">
+                Zusätzlich zu den eingebauten Mustern (<code lang="en">.env*</code>, <code lang="en">*.pem</code>,
+                <code lang="en">*.key</code>, <code lang="en">credentials*</code>, Ordner wie <code lang="en">.ssh</code> …).
+                Gezielte Zugriffe auf Treffer brauchen eine Freigabe; breite Suchen und Listen lassen sie weg.
+              </p>
+              <ul id="settings-sensitive-list" class="settings-rule-list" aria-labelledby="heading-sensitive-paths"></ul>
+              <p id="settings-sensitive-empty" class="settings-empty-hint">Keine eigenen Muster.</p>
+              <div class="modal-row settings-sensitive-row">
+                <label class="visually-hidden" for="input-sensitive-pattern">Neues sensibles Pfadmuster</label>
+                <input type="text" id="input-sensitive-pattern" class="modal-input modal-input--grow" placeholder="z. B. personal/** oder *.kdbx" autocomplete="off" spellcheck="false" />
+                <button type="button" id="btn-sensitive-add" class="btn-secondary">Hinzufügen</button>
               </div>
+              <p id="settings-sensitive-error" class="modal-hint error hidden" role="alert"></p>
+            </div>
+
+            <div class="settings-tools-card" id="settings-reset-card">
+              <h3 class="settings-subsection-title" id="heading-permission-reset">Zurücksetzen</h3>
+              <div id="settings-reset-actions" class="settings-reset-actions" aria-labelledby="heading-permission-reset"></div>
             </div>
           </section>
 

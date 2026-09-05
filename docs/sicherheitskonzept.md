@@ -2,10 +2,10 @@
 
 Stand: 2026-09-05 · Konzept zu [#65](https://github.com/kkrafft1999/snotra/issues/65).
 Dieses Dokument legt das Zielverhalten für [#66 (Kern)](https://github.com/kkrafft1999/snotra/issues/66)
-und [#67 (UI)](https://github.com/kkrafft1999/snotra/issues/67) fest. Der Kern
-(#66) ist seit 2026-09-05 umgesetzt (Registry-Klassen, Planer, Policy,
-Freigabe-Schleife, Policy-Datei, Audit); die Oberfläche (#67) steht noch aus,
-bis dahin werden Rückfragen fail-safe abgelehnt. MCP (#62) und Web-Suche (#63)
+und [#67 (UI)](https://github.com/kkrafft1999/snotra/issues/67) fest. Beide sind
+seit 2026-09-05 umgesetzt: der Kern (#66) mit Registry-Klassen, Planer, Policy,
+Freigabe-Schleife, Policy-Datei und Audit; die Oberfläche (#67) mit Modus-Wahl,
+Bestätigungskarte und Regelverwaltung. MCP (#62) und Web-Suche (#63)
 folgen erst nach beiden Umsetzungen. „Muss“ bezeichnet eine Abnahmebedingung; offene Punkte
 stehen in Abschnitt 11. Review vom 2026-09-05 eingearbeitet: Vertrauensmodell
 für den Renderer (Abschnitt 5), Aufbau des Policy-Speichers (Abschnitt 7),
@@ -346,7 +346,7 @@ Bei Migration entfällt `allowWorkspaceWrite`; sowohl bisher `true` als auch
 nach Ihrer Freigabe. Den Modus können Sie jederzeit im Chat ändern.“ Einzelne
 Tool-Häkchen bleiben erhalten: deaktivierte Tools bleiben unsichtbar **und**
 nicht ausführbar. Sonstige Tools bleiben unabhängig vom Modus sichtbar; die
-Ausführung wird pro Aufruf geprüft. README und Selbstauskunft-Skill werden erst
+Ausführung wird pro Aufruf geprüft. README und Selbstauskunft-Skill wurden
 mit #66/#67 auf die tatsächlich verfügbare Funktion umgestellt.
 
 ## 9. Audit und künftige destruktive Aktionen

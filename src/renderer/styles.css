@@ -3144,3 +3144,532 @@ select.modal-input {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* ── Tool-Berechtigungen (Issue #67) ─────────────────────────────────────────
+ * Modus-Pille in der Chat-Leiste, Freigabe-Karte im Chat und die Verwaltung in
+ * Einstellungen › Tools. Nur Tokens aus tokens.css; keine eigenen Farbwerte. */
+
+/* Modus-Pille: UI-Schrift statt Mono, weil dort ein deutsches Wort steht. */
+.chat-model-pill.chat-tool-mode-pill {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  gap: 5px;
+}
+
+.chat-tool-mode-icon {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* „Auto“ ist der einzige Modus ohne Rückfragen – er bleibt in der Leiste
+   sichtbar hervorgehoben (aktiver Zustand wie bei Card-Items). */
+.chat-tool-mode-wrap[data-mode='auto'] .chat-tool-mode-pill {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
+.chat-tool-mode-wrap[data-mode='auto'] .chat-tool-mode-icon {
+  fill: var(--ds-blue);
+  stroke: var(--ds-blue);
+}
+
+.chat-tool-mode-menu {
+  min-width: min(340px, 84vw);
+}
+
+.chat-tool-mode-opt-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-tool-mode-opt-desc {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.chat-tool-mode-option:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
+.chat-tool-mode-status {
+  margin: 0;
+}
+
+/* Freigabe-Karte: flacher Container (6px, Divider-Border), zwischen Tool-Log
+   und Antworttext. Ein Zustand wird über Text + data-state getragen. */
+.chat-approval-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-approval-cards:empty {
+  display: none;
+}
+
+.chat-approval-card {
+  margin: 6px 0 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+  font-size: var(--ds-font-size-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.chat-approval-card:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-approval-card[data-state='allowed'],
+.chat-approval-card[data-state='denied'],
+.chat-approval-card[data-state='invalidated'],
+.chat-approval-card[data-state='cancelled'] {
+  border-color: var(--ds-grey-divider);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__title {
+  margin: 0 0 4px;
+  font-size: var(--ds-font-size-md);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-blue);
+}
+
+.chat-approval-card[data-state]:not([data-state='pending']) .chat-approval-card__title {
+  color: var(--text-muted);
+}
+
+.chat-approval-card__headline {
+  margin: 0 0 10px;
+  font-size: var(--ds-font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.chat-approval-card__code {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ds-grey-card);
+  overflow-wrap: anywhere;
+}
+
+.chat-approval-card__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+}
+
+.chat-approval-card__fact {
+  display: contents;
+}
+
+.chat-approval-card__facts dt {
+  color: var(--text-muted-strong);
+  font-weight: 500;
+}
+
+.chat-approval-card__facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-approval-card__targets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-approval-card__targets li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.chat-approval-card__target-kind,
+.chat-approval-card__target-note {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__badge {
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: var(--ds-radius-pill);
+  border: 1px solid var(--ds-blue-border);
+  color: var(--ds-blue);
+  white-space: nowrap;
+}
+
+.chat-approval-card__warning {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  font-size: var(--ds-font-size-md);
+}
+
+.chat-approval-card__preview {
+  margin: 10px 0 0;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-bg);
+}
+
+.chat-approval-card__preview > summary {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--ds-font-size-md);
+  font-weight: 500;
+  color: var(--text-muted-strong);
+  user-select: none;
+}
+
+.chat-approval-card__preview-note {
+  margin: 0;
+  padding: 0 10px 6px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__preview-text {
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  user-select: text;
+}
+
+.chat-approval-card__preview-text--clamped {
+  max-height: 220px;
+}
+
+.chat-approval-card__preview-toggle {
+  margin: 0 10px 8px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.chat-approval-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-approval-card__actions[hidden] {
+  display: none;
+}
+
+.chat-approval-card__hint,
+.chat-approval-card__status {
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__hint[hidden] {
+  display: none;
+}
+
+.chat-approval-card__result {
+  margin: 10px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-primary);
+}
+
+.chat-approval-card[data-state='denied'] .chat-approval-card__result strong,
+.chat-approval-card[data-state='invalidated'] .chat-approval-card__result strong,
+.chat-approval-card[data-state='cancelled'] .chat-approval-card__result strong {
+  color: var(--text-muted-strong);
+}
+
+/* Einstellungen › Tools › Berechtigungen */
+.settings-form-hint--tight {
+  margin-bottom: 10px;
+}
+
+.settings-permissions-migration {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
+.settings-mode-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-mode-group__legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-grey-muted);
+}
+
+/* Radio-Rows in Card-Form: einladender Hover, gewählt wie Hover (Regelwerk). */
+.settings-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition:
+    border-color var(--ds-motion-fast),
+    background var(--ds-motion-fast);
+}
+
+.settings-mode-option:hover,
+.settings-mode-option:has(input:checked) {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.settings-mode-option:has(input:focus-visible) {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-mode-option input[type='radio'] {
+  margin: 3px 0 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ds-blue);
+  flex-shrink: 0;
+}
+
+.settings-mode-option__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-mode-option__title {
+  font-weight: 600;
+  font-size: var(--ds-font-size-base);
+}
+
+.settings-mode-option__desc {
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  line-height: 1.45;
+}
+
+.settings-rules-heading {
+  margin: 12px 0 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-grey-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-rules-heading__root {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-xs);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.settings-rule-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0 4px 10px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  min-width: 0;
+}
+
+.settings-rule-item__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--ds-font-size-md);
+}
+
+.settings-rule-item__badge--deny {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.settings-rule-item__badge--allow {
+  border-color: var(--ds-blue-border);
+  color: var(--ds-blue);
+}
+
+.settings-rule-item__pattern {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.settings-rule-form {
+  margin-top: 8px;
+}
+
+.settings-rule-form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 12px;
+}
+
+.settings-rule-form__field--wide {
+  grid-column: 1 / -1;
+}
+
+.settings-rule-form__field.hidden {
+  display: none;
+}
+
+.settings-rule-form__field .modal-field-label.eyebrow-row {
+  display: block;
+}
+
+.settings-rule-form__actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-sensitive-row {
+  margin-top: 8px;
+}
+
+.settings-reset-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-reset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.settings-reset-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.settings-reset-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-reset-row__title {
+  font-weight: 600;
+  font-size: var(--ds-font-size-base);
+}
+
+.settings-reset-row__desc {
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  line-height: 1.45;
+}
+
+.settings-reset-row__controls {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Destructive: Schwarz statt Rot (Regelwerk), nur für die bestätigte Reset-Aktion. */
+.btn-destructive {
+  padding: var(--btn-padding-y) var(--btn-padding-x);
+  font-size: var(--btn-font-size);
+  font-weight: var(--btn-font-weight);
+  font-family: var(--font-ui);
+  background: var(--ds-btn-destructive-bg);
+  color: var(--ds-btn-destructive-fg);
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--btn-transition);
+}
+
+.btn-destructive:hover:not(:disabled) {
+  background: var(--ds-btn-destructive-bg-hover);
+}
+
+.btn-destructive:active:not(:disabled) {
+  transform: scale(0.97);
+}
