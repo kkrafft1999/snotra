@@ -1,0 +1,11 @@
+# Haelt die auf Commit-SHAs gepinnten GitHub Actions in .github/workflows/
+# aktuell (Issue #71). Dependabot erkennt den Versions-Kommentar hinter der
+# SHA und schlaegt neue SHA + Kommentar gemeinsam vor.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
