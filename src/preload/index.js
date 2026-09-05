@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       messages,
       selectedPath: options?.selectedPath ?? null,
       selectedIsDirectory: options?.selectedIsDirectory ?? false,
+      chatId: typeof options?.chatId === 'string' ? options.chatId : null,
     }),
   abortChat: () => ipcRenderer.send(REQ.CHAT_ABORT),
   onChatDelta: (callback) => {
@@ -78,6 +79,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ignoreUpdateVersion: (version) => ipcRenderer.invoke(REQ.UPDATE_IGNORE_VERSION, version),
   onUpdateAvailable: (callback) => {
     const channel = PUSH.UPDATE_AVAILABLE;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // Tool-Berechtigungen (Issue #66). Der Renderer liest den Stand, stoesst
+  // Aenderungen an und beantwortet Freigabe-Karten; die Entscheidung selbst
+  // trifft der Main-Prozess (Policy, native Bestaetigung fuer Auto/Allow/Deny-Loeschen).
+  getToolPermissionState: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_STATE),
+  setToolPermissionMode: (mode) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, mode),
+  addToolPermissionRule: (rule) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, rule),
+  removeToolPermissionRule: (ruleId) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_RULE, ruleId),
+  setSensitivePathPatterns: (patterns) =>
+    ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, patterns),
+  clearToolSessionGrants: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS),
+  resetWorkspaceToolRules: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES),
+  resetAllToolPermissions: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_ALL),
+  onToolPermissionsChanged: (callback) => {
+    const channel = PUSH.TOOL_PERMISSIONS_CHANGED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // Freigabe-Karten: erst nach subscribeToolApprovals() schickt der Main
+  // Anfragen; ohne Anmeldung werden Rueckfragen sicher abgelehnt.
+  subscribeToolApprovals: () => ipcRenderer.invoke(REQ.TOOL_APPROVAL_SUBSCRIBE),
+  respondToolApproval: (requestId, response) =>
+    ipcRenderer.invoke(REQ.TOOL_APPROVAL_RESPOND, { requestId, response }),
+  listPendingToolApprovals: () => ipcRenderer.invoke(REQ.TOOL_APPROVAL_LIST_PENDING),
+  onToolApprovalRequest: (callback) => {
+    const channel = PUSH.TOOL_APPROVAL_REQUEST;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onToolApprovalResolved: (callback) => {
+    const channel = PUSH.TOOL_APPROVAL_RESOLVED;
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

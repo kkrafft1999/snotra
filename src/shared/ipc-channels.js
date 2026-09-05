@@ -53,6 +53,27 @@ const REQUEST_CHANNELS = Object.freeze({
   /** Text in die Zwischenablage legen — aus demselben Grund über den Main. */
   SHELL_WRITE_CLIPBOARD_TEXT: 'shell:writeClipboardText',
 
+  /**
+   * Tool-Berechtigungen (Issue #66). Modus, Regeln und sensible Pfadmuster
+   * liegen in einer signierten Policy-Datei im Main; der Renderer liest den
+   * Stand und stoesst Aenderungen an. Schutzlockernde Aktionen (Auto,
+   * dauerhafte Erlaubnis, Sperre loeschen) bestaetigt Main nativ.
+   */
+  TOOL_PERMISSIONS_GET_STATE: 'toolPermissions:getState',
+  TOOL_PERMISSIONS_SET_MODE: 'toolPermissions:setMode',
+  TOOL_PERMISSIONS_ADD_RULE: 'toolPermissions:addRule',
+  TOOL_PERMISSIONS_REMOVE_RULE: 'toolPermissions:removeRule',
+  TOOL_PERMISSIONS_SET_SENSITIVE_PATHS: 'toolPermissions:setSensitivePaths',
+  TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS: 'toolPermissions:clearSessionGrants',
+  TOOL_PERMISSIONS_RESET_WORKSPACE_RULES: 'toolPermissions:resetWorkspaceRules',
+  TOOL_PERMISSIONS_RESET_ALL: 'toolPermissions:resetAll',
+  /** Renderer meldet sich als freigabefaehig an (Karten koennen angezeigt werden). */
+  TOOL_APPROVAL_SUBSCRIBE: 'toolApproval:subscribe',
+  /** Antwort auf eine Freigabe-Karte: nur requestId + Entscheidung. */
+  TOOL_APPROVAL_RESPOND: 'toolApproval:respond',
+  /** Offene Anfragen dieses Fensters (z. B. nach Reload). */
+  TOOL_APPROVAL_LIST_PENDING: 'toolApproval:listPending',
+
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
   UPDATE_IGNORE_VERSION: 'update:ignoreVersion',
@@ -80,6 +101,12 @@ const PUSH_CHANNELS = Object.freeze({
   UPDATE_AVAILABLE: 'update:available',
   /** Main hat eine Datei aus dem Workspace gelöscht (Kontextmenü, Issue #59); Renderer aktualisiert den Baum. */
   FS_ITEM_DELETED: 'fs:item-deleted',
+  /** Freigabe-Karte anzeigen (Issue #66); Payload ist ein ToolApprovalRequest-DTO. */
+  TOOL_APPROVAL_REQUEST: 'toolApproval:request',
+  /** Anfrage beantwortet oder verfallen; Karte schliessen. */
+  TOOL_APPROVAL_RESOLVED: 'toolApproval:resolved',
+  /** Modus, Regeln oder Muster haben sich geaendert; Anzeige aktualisieren. */
+  TOOL_PERMISSIONS_CHANGED: 'toolPermissions:changed',
 });
 
 module.exports = {

@@ -949,6 +949,8 @@ export function initChatStream({
       result = await api.chat(payload, {
         selectedPath: appStore.selectedPath,
         selectedIsDirectory: appStore.selectedIsDirectory,
+        // Geltungsbereich fuer Sitzungsfreigaben von Tool-Aufrufen (Issue #66).
+        chatId: appStore.currentChatId,
       });
     } finally {
       clearInterval(elapsedTicker);

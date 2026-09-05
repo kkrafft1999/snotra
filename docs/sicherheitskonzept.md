@@ -2,9 +2,11 @@
 
 Stand: 2026-09-05 · Konzept zu [#65](https://github.com/kkrafft1999/snotra/issues/65).
 Dieses Dokument legt das Zielverhalten für [#66 (Kern)](https://github.com/kkrafft1999/snotra/issues/66)
-und [#67 (UI)](https://github.com/kkrafft1999/snotra/issues/67) fest. Es beschreibt
-noch keine ausgelieferte Schutzfunktion. MCP (#62) und Web-Suche (#63) folgen erst
-nach beiden Umsetzungen. „Muss“ bezeichnet eine Abnahmebedingung; offene Punkte
+und [#67 (UI)](https://github.com/kkrafft1999/snotra/issues/67) fest. Der Kern
+(#66) ist seit 2026-09-05 umgesetzt (Registry-Klassen, Planer, Policy,
+Freigabe-Schleife, Policy-Datei, Audit); die Oberfläche (#67) steht noch aus,
+bis dahin werden Rückfragen fail-safe abgelehnt. MCP (#62) und Web-Suche (#63)
+folgen erst nach beiden Umsetzungen. „Muss“ bezeichnet eine Abnahmebedingung; offene Punkte
 stehen in Abschnitt 11. Review vom 2026-09-05 eingearbeitet: Vertrauensmodell
 für den Renderer (Abschnitt 5), Aufbau des Policy-Speichers (Abschnitt 7),
 Provider-Bindung im Verlauf (Abschnitt 4), Verfall statt Zeitlimit (Abschnitt 6)

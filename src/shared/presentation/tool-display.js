@@ -148,13 +148,29 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
  * Formatiert einen Tool-Trace-Eintrag zur Anzeige-Zeile.
  * Bereits formatierte Strings (persistierte Alt-Sessions) gehen unverändert durch.
  */
+/**
+ * Zusatz aus dem Berechtigungs-Audit (Issue #66): eine Ablehnung oder eine
+ * wartende Freigabe soll im Chat erkennbar sein, ohne dass der Renderer die
+ * Entscheidung selbst interpretieren muss.
+ */
+function permissionSuffix(entry, phase) {
+  const permission = entry?.permission;
+  if (!permission || typeof permission !== 'object') return '';
+  if (phase === 'done' && permission.status === 'denied') {
+    return permission.reason === 'user_denied' ? ' · abgelehnt' : ' · blockiert';
+  }
+  if (phase !== 'done' && permission.status === 'awaiting-approval') return ' · wartet auf Freigabe';
+  return '';
+}
+
 function formatToolDisplayLine(entry, phase = 'start', locale = APP_LOCALES.DE) {
   if (typeof entry === 'string') return entry;
   const line =
     entry?.tool === 'debug_wait' && Number.isFinite(entry?.waitMs)
       ? formatPauseDurationLabel(entry.waitMs, phase, locale)
       : summarizeToolCall(entry?.tool, entry?.args, phase, locale);
-  return entry?.noWorkspace ? `${line} · kein Ordner geöffnet` : line;
+  const withPermission = `${line}${permissionSuffix(entry, phase)}`;
+  return entry?.noWorkspace ? `${withPermission} · kein Ordner geöffnet` : withPermission;
 }
 
 module.exports = {

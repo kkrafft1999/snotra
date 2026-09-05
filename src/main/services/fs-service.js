@@ -945,7 +945,7 @@ function createFsService({
   async function runListDirectoryTool(args, workspaceRoot, options = {}) {
     const relArg = args.relative_path;
     const rel = typeof relArg === 'string' ? relArg : '';
-    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
+    const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -953,8 +953,20 @@ function createFsService({
         return JSON.stringify({ error: 'Pfad ist kein Ordner.' });
       }
       const entries = await fs.readdir(absPath, { withFileTypes: true });
+      // Sensible Einträge (Issue #66) werden ausgelassen und nur gezählt.
+      let omittedSensitive = 0;
+      const isSensitiveEntry = (name) => {
+        if (!options.sensitivity) return false;
+        const relEntry = path.relative(root, path.join(absPath, name)).split(path.sep).join('/');
+        return options.sensitivity.isSensitivePath(`${prefix || ''}${relEntry}`);
+      };
       const items = entries
         .filter((e) => !e.name.startsWith('.'))
+        .filter((e) => {
+          if (!isSensitiveEntry(e.name)) return true;
+          omittedSensitive += 1;
+          return false;
+        })
         .map((e) => ({
           name: e.name,
           kind: e.isDirectory() ? 'directory' : 'file',
@@ -963,7 +975,11 @@ function createFsService({
           if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
           return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         });
-      return JSON.stringify({ relative_path: rel || '.', items });
+      return JSON.stringify({
+        relative_path: rel || '.',
+        items,
+        ...(omittedSensitive > 0 ? { omitted_sensitive: omittedSensitive } : {}),
+      });
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
@@ -1053,7 +1069,39 @@ function createFsService({
     return JSON.stringify(result);
   }
 
-  async function runWriteFileTextTool(args, workspaceRoot) {
+  /**
+   * Wiederherstellungskopie vor dem Überschreiben (Issue #66, Konzept §9):
+   * Kopie der alten Fassung neben der Datei anlegen (Ursprungsname plus
+   * Zeitstempel) und per shell.trashItem in den Papierkorb verschieben.
+   * Liefert den Kopienamen oder `{ error }`; eine liegen gebliebene Kopie wird
+   * entfernt, damit kein Duplikat im Arbeitsordner zurückbleibt.
+   */
+  async function createRecoveryCopy(absPath, trashItem) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const copyName = `${path.basename(absPath)}.snotra-backup-${stamp}`;
+    const copyPath = path.join(path.dirname(absPath), copyName);
+    try {
+      await fs.copyFile(absPath, copyPath);
+    } catch (e) {
+      return { error: `Wiederherstellungskopie konnte nicht angelegt werden: ${e.message}` };
+    }
+    try {
+      await trashItem(copyPath);
+    } catch (e) {
+      await fs.unlink(copyPath).catch(() => {});
+      return { error: `Wiederherstellungskopie konnte nicht in den Papierkorb gelegt werden: ${e.message}` };
+    }
+    return { copyName };
+  }
+
+  /**
+   * @param {object} [options]
+   * @param {{ trashItem?: Function|null, allowUnrecoverable?: boolean }} [options.recovery]
+   *   Ohne `trashItem` und ohne `allowUnrecoverable` wird eine bestehende Datei
+   *   nicht überschrieben (`code: 'recovery_failed'`); der Aufruf muss dann als
+   *   `delete` erneut freigegeben werden.
+   */
+  async function runWriteFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path ist erforderlich.' });
@@ -1072,6 +1120,7 @@ function createFsService({
     if (path.resolve(absPath) === path.resolve(workspaceRoot)) {
       return JSON.stringify({ error: 'Der Projektordner selbst kann nicht als Datei beschrieben werden.' });
     }
+    const recovery = options.recovery || null;
     try {
       let existed = false;
       try {
@@ -1083,6 +1132,24 @@ function createFsService({
       } catch {
         existed = false;
       }
+      let recoveryCopy = null;
+      if (existed && recovery) {
+        if (typeof recovery.trashItem === 'function') {
+          const copy = await createRecoveryCopy(absPath, recovery.trashItem);
+          if (copy.error) {
+            if (recovery.allowUnrecoverable !== true) {
+              return JSON.stringify({ error: copy.error, code: 'recovery_failed' });
+            }
+          } else {
+            recoveryCopy = copy.copyName;
+          }
+        } else if (recovery.allowUnrecoverable !== true) {
+          return JSON.stringify({
+            error: 'Kein Papierkorb verfügbar; Überschreiben ohne Wiederherstellungskopie braucht eine eigene Freigabe.',
+            code: 'recovery_failed',
+          });
+        }
+      }
       await fs.mkdir(path.dirname(absPath), { recursive: true });
       await fs.writeFile(absPath, args.content, 'utf8');
       return JSON.stringify({
@@ -1090,6 +1157,7 @@ function createFsService({
         created: !existed,
         overwritten: existed,
         bytes_written: byteLength,
+        ...(recoveryCopy ? { recovery_copy_in_trash: recoveryCopy } : {}),
       });
     } catch (e) {
       return JSON.stringify({ error: e.message });
@@ -1342,6 +1410,27 @@ function createFsService({
     });
   }
 
+  /**
+   * Zielpfade eines apply_patch-Aufrufs, ohne etwas zu schreiben (Issue #66):
+   * im edits-Modus relative_path, im patch-Modus alle "+++"-Kopfzeilen. Der
+   * Planer prüft damit jedes Ziel vor der Ausführung. Bei nicht parsebarem
+   * Patch kommt `{ error }` zurück, damit die Ablehnung den Grund nennt.
+   */
+  function listApplyPatchTargets(args) {
+    const hasEdits = args?.edits !== undefined && args?.edits !== null;
+    const hasPatch = args?.patch !== undefined && args?.patch !== null;
+    if (hasPatch && !hasEdits) {
+      if (typeof args.patch !== 'string' || !args.patch.trim()) {
+        return { error: 'patch (unified diff als Text) ist erforderlich.' };
+      }
+      const parsed = parseUnifiedDiff(args.patch);
+      if (parsed.error) return { error: parsed.error };
+      return parsed.files.map((file) => file.relativePath);
+    }
+    const rel = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
+    return rel ? [rel] : [];
+  }
+
   async function runApplyPatchTool(args, workspaceRoot) {
     const hasEdits = args.edits !== undefined && args.edits !== null;
     const hasPatch = args.patch !== undefined && args.patch !== null;
@@ -1374,7 +1463,7 @@ function createFsService({
    * .gitignore des Projektroots anwenden, Symlinks nicht verfolgen (an Dirents weder
    * isFile noch isDirectory). Sortiert Dateien vor Ordnern, dann nach Name.
    */
-  async function readWorkspaceEntries(dirAbs, { root, includeHidden, isIgnored }) {
+  async function readWorkspaceEntries(dirAbs, { root, includeHidden, isIgnored, sensitivity, prefix = '', omitted }) {
     let dirents;
     try {
       dirents = await fs.readdir(dirAbs, { withFileTypes: true });
@@ -1390,6 +1479,13 @@ function createFsService({
       const absPath = path.join(dirAbs, dirent.name);
       const relPath = path.relative(root, absPath).split(path.sep).join('/');
       if (isIgnored && isIgnored(relPath, isDirectory)) continue;
+      // Breite Auflistungen lassen sensible Einträge weg und melden nur die
+      // Anzahl (Issue #66, Konzept §2/§4); ein gezielter Zugriff darauf
+      // durchläuft später die Policy.
+      if (sensitivity && sensitivity.isSensitivePath(`${prefix}${relPath}`)) {
+        if (omitted) omitted.count += 1;
+        continue;
+      }
       entries.push({ name: dirent.name, absPath, relPath, isDirectory });
     }
     entries.sort((a, b) => {
@@ -1440,7 +1536,15 @@ function createFsService({
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
 
-    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
+    const omitted = { count: 0 };
+    const walkOptions = {
+      root,
+      includeHidden,
+      isIgnored: await loadGitignoreMatcher(root),
+      sensitivity: options.sensitivity,
+      prefix,
+      omitted,
+    };
     const matchOptions = {
       contextLines,
       matchLineChars: SEARCH_MAX_MATCH_LINE_CHARS,
@@ -1473,6 +1577,8 @@ function createFsService({
     // Erzeugte Pfade tragen die Wurzel mit: aus einem Skill-Ordner kommen sie
     // als "skill:<name>/…" zurück und sind damit direkt wieder aufrufbar.
     const toRelPosix = (abs) => `${prefix}${path.relative(root, abs).split(path.sep).join('/')}`;
+    // Trefferzeile samt Kontext, wie sie das Modell sehen würde.
+    const matchLineText = (m) => [...(m.before || []), m.text, ...(m.after || [])].join('\n');
 
     async function scanFile(fileAbs, size) {
       if (state.filesVisited >= MAX_SEARCH_SCANNED_FILES) {
@@ -1492,6 +1598,12 @@ function createFsService({
       const relFile = toRelPosix(fileAbs);
       const found = await matchText(buf.toString('utf8'), maxResults - state.matches.length);
       for (const m of found) {
+        // Trefferzeilen mit erkennbaren Zugangsdaten werden ausgelassen statt
+        // pro Treffer erfragt (Konzept §4); die Ausgabe meldet die Auslassung.
+        if (options.sensitivity && options.sensitivity.isSensitiveLine(matchLineText(m))) {
+          omitted.count += 1;
+          continue;
+        }
         state.matches.push({ file: relFile, ...m });
       }
       if (state.matches.length >= maxResults) state.matchLimitReached = true;
@@ -1520,6 +1632,10 @@ function createFsService({
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
         await walk(absPath);
+      } else if (options.sensitivity && options.sensitivity.isSensitivePath(toRelPosix(absPath))) {
+        // Einzelne sensible Datei als Suchziel: gezielter Zugriff, den der Planer
+        // bereits als read-sensitive eingestuft hat — hier nur zur Sicherheit.
+        omitted.count += 1;
       } else {
         await scanFile(absPath, st.size);
       }
@@ -1545,6 +1661,7 @@ function createFsService({
       files_scanned: state.filesScanned,
       truncated: state.matchLimitReached,
       scan_limit_reached: state.scanLimitReached,
+      ...(omitted.count > 0 ? { omitted_sensitive: omitted.count } : {}),
     });
   }
 
@@ -1564,7 +1681,15 @@ function createFsService({
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
 
-    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
+    const omitted = { count: 0 };
+    const walkOptions = {
+      root,
+      includeHidden,
+      isIgnored: await loadGitignoreMatcher(root),
+      sensitivity: options.sensitivity,
+      prefix,
+      omitted,
+    };
 
     const state = {
       results: [],
@@ -1609,6 +1734,7 @@ function createFsService({
       results: state.results,
       truncated: state.matchLimitReached,
       scan_limit_reached: state.scanLimitReached,
+      ...(omitted.count > 0 ? { omitted_sensitive: omitted.count } : {}),
     });
   }
 
@@ -1756,7 +1882,7 @@ function createFsService({
     maxEntries = Math.min(Math.max(1, maxEntries), TREE_MAX_ENTRIES);
     const includeHidden = args.include_hidden === true;
 
-    const { absPath, root, error } = await resolveToolPath(workspaceRoot, rel, options);
+    const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -1766,7 +1892,15 @@ function createFsService({
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
-    const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
+    const omitted = { count: 0 };
+    const walkOptions = {
+      root,
+      includeHidden,
+      isIgnored: await loadGitignoreMatcher(root),
+      sensitivity: options.sensitivity,
+      prefix,
+      omitted,
+    };
 
     // Breitensuche mit Gesamtbudget: obere Ebenen werden zuerst vollständig, tiefe zuletzt.
     // hidden = direkte Einträge eines Ordners, die wegen max_depth oder max_entries fehlen.
@@ -1826,6 +1960,7 @@ function createFsService({
       entries_hidden: hiddenTotal,
       truncated,
       tree: lines.join('\n'),
+      ...(omitted.count > 0 ? { omitted_sensitive: omitted.count } : {}),
     });
   }
 
@@ -1913,6 +2048,8 @@ function createFsService({
     resolveExistingRealPath,
     assertPathAccessibleInWorkspace,
     resolveWorkspacePathForAccess,
+    resolveToolPath,
+    listApplyPatchTargets,
     runListDirectoryTool,
     runReadFileTextTool,
     runReadFileLinesTool,

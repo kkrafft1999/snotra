@@ -221,7 +221,9 @@ function normalizeUiPrefs(raw) {
     contentPaneVisible: data.contentPaneVisible !== false,
     baseSystemPrompt,
     appLocale,
-    allowWorkspaceWrite: data.allowWorkspaceWrite === true,
+    // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
+    // Berechtigungsmodell aus Issue #66 ersetzt den Schalter durch den Modus in
+    // der Policy-Datei; beide Altwerte laufen auf `smart` hinaus.
     disabledTools: normalizeDisabledTools(data.disabledTools) || [],
     ...(activeSkills ? { activeSkills } : {}),
     ...(typeof maxToolRounds === 'number' ? { maxToolRounds } : {}),
@@ -259,9 +261,6 @@ function normalizeUiPrefsPatch(raw) {
   const historyCharLimit = clampHistoryCharLimit(patch.historyCharLimit);
   if (typeof historyCharLimit === 'number') {
     out.historyCharLimit = historyCharLimit;
-  }
-  if (typeof patch.allowWorkspaceWrite === 'boolean') {
-    out.allowWorkspaceWrite = patch.allowWorkspaceWrite;
   }
   const disabledTools = normalizeDisabledTools(patch.disabledTools);
   if (disabledTools) {

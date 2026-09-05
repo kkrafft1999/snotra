@@ -40,6 +40,9 @@ function registerChatHandlers({
         workspaceRoot: getActiveWorkspaceRoot(),
         selectedPath: payload?.selectedPath ?? null,
         selectedIsDirectory: payload?.selectedIsDirectory === true,
+        // Nur ein Geltungsbereich fuer Sitzungsfreigaben (Issue #66), keine
+        // Rechtequelle: ein anderer Chat teilt keine Freigaben.
+        chatId: typeof payload?.chatId === 'string' ? payload.chatId.slice(0, 128) : null,
       },
       onEvent: (engineEvent) => forwardEvent(event.sender, engineEvent),
     });

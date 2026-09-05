@@ -10,8 +10,14 @@ function makeFsService() {
   return createFsService({ fs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 });
 }
 
+// Die Freigabe eines Aufrufs trifft seit Issue #66 die Policy in der Engine;
+// diese Tests pruefen die Tool-Logik und geben deshalb `approved` vor.
 function makeToolRegistry(fsService = makeFsService()) {
-  return createWorkspaceToolRegistry({ fsService });
+  const registry = createWorkspaceToolRegistry({ fsService });
+  return {
+    ...registry,
+    execute: (name, args, context = {}) => registry.execute(name, args, { approved: true, ...context }),
+  };
 }
 
 async function createSymlinkOrSkip(t, target, linkPath, type) {
@@ -179,7 +185,7 @@ test('debug_wait waits for the requested duration through the registry', async (
   assert.ok(elapsed >= 550);
 });
 
-test('write_file_text is disabled unless allowWrite is set', async () => {
+test('write_file_text laeuft ohne Freigabe der Policy nicht (Issue #66)', async () => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
 
@@ -187,10 +193,11 @@ test('write_file_text is disabled unless allowWrite is set', async () => {
     await registry.execute(
       'write_file_text',
       { relative_path: 'note.txt', content: 'hi' },
-      { workspaceRoot: tmpRoot }
+      { workspaceRoot: tmpRoot, approved: false }
     )
   );
-  assert.match(denied.error, /Schreibzugriff ist deaktiviert/);
+  assert.equal(denied.error, 'permission_denied');
+  assert.equal(denied.reason, 'not_approved');
   await assert.rejects(fs.access(path.join(tmpRoot, 'note.txt')));
 
   await fs.rm(tmpRoot, { recursive: true, force: true });
@@ -485,7 +492,7 @@ test('search_in_files aborts a slow regex when the worker time budget is exhaust
     maxWriteFileBytes: 1024 * 1024,
     regexSearchTimeBudgetMs: 300,
   });
-  const registry = createWorkspaceToolRegistry({ fsService: svc });
+  const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
   t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'harmlos!', 'utf8');
@@ -1737,7 +1744,7 @@ test('read_file_lines rejects oversized files and enforces the slice budget', as
   t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(32), 'utf8');
   const tooBig = JSON.parse(
-    await createWorkspaceToolRegistry({ fsService: smallRead }).execute(
+    await makeToolRegistry(smallRead).execute(
       'read_file_lines',
       { relative_path: 'gross.txt' },
       { workspaceRoot: tmpRoot }
@@ -1751,7 +1758,7 @@ test('read_file_lines rejects oversized files and enforces the slice budget', as
     maxReadFileBytes: 1024 * 1024,
     maxReadSliceChars: 20,
   });
-  const registry = createWorkspaceToolRegistry({ fsService: smallSlice });
+  const registry = makeToolRegistry(smallSlice);
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'zeile 1\nzeile 2\nzeile 3\n', 'utf8');
   const budgeted = JSON.parse(
     await registry.execute(
@@ -1816,7 +1823,7 @@ test('edit_file replaces a unique string through the registry', async (t) => {
   assert.equal(content, 'const a = 1;\nconst b = 42;\nconst c = 3;\n');
 });
 
-test('edit_file is disabled unless allowWrite is set', async (t) => {
+test('edit_file laeuft ohne Freigabe der Policy nicht (Issue #66)', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await makeEditFixture(t);
 
@@ -1824,10 +1831,10 @@ test('edit_file is disabled unless allowWrite is set', async (t) => {
     await registry.execute(
       'edit_file',
       { relative_path: 'a.js', old_string: 'const a = 1;', new_string: 'const a = 9;' },
-      { workspaceRoot: tmpRoot }
+      { workspaceRoot: tmpRoot, approved: false }
     )
   );
-  assert.match(out.error, /Schreibzugriff/);
+  assert.equal(out.error, 'permission_denied');
   const content = await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8');
   assert.match(content, /const a = 1;/);
 });
@@ -1924,7 +1931,7 @@ test('edit_file rejects a symlink to a file outside the workspace', async (t) =>
 
 test('edit_file enforces read and write size limits', async (t) => {
   const svc = createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 16 });
-  const registry = createWorkspaceToolRegistry({ fsService: svc });
+  const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
   t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(2048), 'utf8');
@@ -2067,7 +2074,7 @@ test('apply_patch requires either edits or patch', async (t) => {
   assert.match((await run({ patch: '   ' })).error, /patch \(unified diff als Text\) ist erforderlich/);
 });
 
-test('apply_patch is disabled unless allowWrite is set', async (t) => {
+test('apply_patch laeuft ohne Freigabe der Policy nicht (Issue #66)', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\n' });
 
@@ -2075,10 +2082,10 @@ test('apply_patch is disabled unless allowWrite is set', async (t) => {
     await registry.execute(
       'apply_patch',
       { relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'zwei' }] },
-      { workspaceRoot: tmpRoot }
+      { workspaceRoot: tmpRoot, approved: false }
     )
   );
-  assert.match(out.error, /Schreibzugriff/);
+  assert.equal(out.error, 'permission_denied');
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\n');
 });
 
@@ -2369,9 +2376,7 @@ test('apply_patch enforces read, write and patch size limits', async (t) => {
 
   const strictWrite = makePatchRunner(
     tmpRoot,
-    createWorkspaceToolRegistry({
-      fsService: createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 16 }),
-    })
+    makeToolRegistry(createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 16 }))
   );
   assert.match(
     (await strictWrite({ relative_path: 'gross.txt', edits: [{ old_string: 'x', new_string: 'y' }] })).error,
@@ -2390,9 +2395,7 @@ test('apply_patch enforces read, write and patch size limits', async (t) => {
 
   const strictRead = makePatchRunner(
     tmpRoot,
-    createWorkspaceToolRegistry({
-      fsService: createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 1024 * 1024 }),
-    })
+    makeToolRegistry(createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 1024 * 1024 }))
   );
   assert.match(
     (await strictRead({ patch: diff('--- gross.txt', '+++ gross.txt', '@@ -1,1 +1,1 @@', '-x', '+y') })).error,

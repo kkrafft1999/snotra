@@ -64,7 +64,6 @@ export function initSettingsModal(deps) {
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
   const selectAppLocale = document.getElementById('select-app-locale');
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
-  const inputAllowWorkspaceWrite = document.getElementById('input-allow-workspace-write');
   const settingsToolList = document.getElementById('settings-tool-list');
   const settingsToolListEmpty = document.getElementById('settings-tool-list-empty');
   const settingsSkillList = document.getElementById('settings-skill-list');
@@ -466,11 +465,11 @@ export function initSettingsModal(deps) {
       name.textContent = tool.name;
       main.appendChild(name);
 
-      if (tool.requiresWrite) {
+      if (tool.riskClass === 'write') {
         const badge = document.createElement('span');
         badge.className = 'settings-tool-item__badge';
         badge.textContent = 'Schreib-Tool';
-        badge.title = 'Läuft nur, wenn zusätzlich der Schreibzugriff unten aktiviert ist.';
+        badge.title = 'Dateiänderungen fragen im Modus „Intelligent“ vor der Ausführung nach deiner Freigabe.';
         main.appendChild(badge);
       }
 
@@ -723,7 +722,6 @@ export function initSettingsModal(deps) {
           ? up.maxToolRounds
           : DEFAULT_MAX_TOOL_ROUNDS;
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(mtr);
-      if (inputAllowWorkspaceWrite) inputAllowWorkspaceWrite.checked = up.allowWorkspaceWrite === true;
       settingsDisabledToolsDraft = new Set(
         Array.isArray(up.disabledTools) ? up.disabledTools.filter((n) => typeof n === 'string') : []
       );
@@ -731,7 +729,6 @@ export function initSettingsModal(deps) {
       inputGlobalSystemPrompt.value = '';
       selectAppLocale.value = 'de';
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(DEFAULT_MAX_TOOL_ROUNDS);
-      if (inputAllowWorkspaceWrite) inputAllowWorkspaceWrite.checked = false;
       settingsDisabledToolsDraft = new Set();
     }
     await loadToolCatalog();
@@ -921,7 +918,6 @@ export function initSettingsModal(deps) {
             const n = parseInt(inputMaxToolRounds?.value || '', 10);
             return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
           })(),
-          allowWorkspaceWrite: !!inputAllowWorkspaceWrite?.checked,
           disabledTools: [...settingsDisabledToolsDraft],
           activeSkills: [...settingsActiveSkillsDraft],
         },
