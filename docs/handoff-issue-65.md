@@ -35,4 +35,4 @@ Die Dokumentation wird lokal auf `main` gesichert und nicht automatisch gepusht.
 Wegen paralleler Arbeit am Zweig `feat/68-main-owns-workspace-root` erfolgt dies
 in einer separaten Arbeitskopie (`git worktree list` zeigt deren Ort). Die
 parallelen Programmänderungen gehören nicht zu dieser Sicherung. Issue #65
-bleibt bis zur Veröffentlichung und abschließenden Abnahme offen.
+wurde am 2026-09-05 nach Push und Review mit Abschlusskommentar geschlossen.
