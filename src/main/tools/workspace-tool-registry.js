@@ -203,7 +203,8 @@ function createWorkspaceToolRegistry({ fsService }) {
       description:
         'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck ' +
         'und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. ' +
-        'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien.',
+        'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien. ' +
+        'Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen mit einem Zeitbudget von 5 s pro Suche.',
       promptDescription:
         'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
       parameters: {
@@ -212,7 +213,8 @@ function createWorkspaceToolRegistry({ fsService }) {
           query: {
             type: 'string',
             description:
-              'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax.',
+              'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax (höchstens 256 Zeichen, ' +
+              'keine verschachtelten unbegrenzten Wiederholungen wie "(a+)+" — solche Muster werden abgelehnt).',
           },
           is_regex: {
             type: 'boolean',

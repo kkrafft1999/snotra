@@ -1,4 +1,15 @@
 const { SKILL_PATH_PREFIX, parseSkillPath } = require('../../shared/runtime/skill-path');
+const {
+  SEARCH_MAX_PATTERN_CHARS,
+  SEARCH_MAX_MATCH_LINE_CHARS,
+  collectLineMatches,
+  validateRegexPattern,
+} = require('./search-line-matcher');
+const {
+  REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
+  RegexSearchTimeoutError,
+  createRegexSearchWorker,
+} = require('./regex-search-worker');
 
 const READ_LINES_DEFAULT_COUNT = 200;
 const READ_LINES_MAX_COUNT = 1000;
@@ -229,11 +240,6 @@ function buildByteSliceResult(rel, buf, startByteArg, lengthArg, maxChars) {
 
 function isBinaryBuffer(buf) {
   return buf.subarray(0, SEARCH_BINARY_PROBE_BYTES).includes(0);
-}
-
-function clipSearchLine(line) {
-  if (line.length <= SEARCH_MAX_LINE_CHARS) return line;
-  return `${line.slice(0, SEARCH_MAX_LINE_CHARS)}…`;
 }
 
 function clipOutlineText(text) {
@@ -756,10 +762,13 @@ function createFsService({
   maxWriteFileBytes,
   maxSearchScannedFiles,
   maxReadSliceChars,
+  regexSearchTimeBudgetMs,
 }) {
   const MAX_READ_FILE_BYTES = maxReadFileBytes;
   const MAX_WRITE_FILE_BYTES = maxWriteFileBytes || maxReadFileBytes;
   const MAX_SEARCH_SCANNED_FILES = maxSearchScannedFiles || SEARCH_DEFAULT_MAX_SCANNED_FILES;
+  // Zeitbudget für modellgelieferte reguläre Ausdrücke im Worker (Issue #69).
+  const REGEX_SEARCH_TIME_BUDGET_MS = regexSearchTimeBudgetMs || REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS;
   // Budget pro Ausschnitt: Zeichen im Zeilenmodus, Bytes im Byte-Modus.
   const MAX_READ_SLICE_CHARS = maxReadSliceChars || READ_SLICE_DEFAULT_MAX_CHARS;
 
@@ -1395,12 +1404,17 @@ function createFsService({
     if (!query) {
       return JSON.stringify({ error: 'query ist erforderlich.' });
     }
+    const isRegex = args.is_regex === true;
+    const pattern = isRegex ? query : escapeRegExpLiteral(query);
+    const flags = args.case_sensitive === true ? '' : 'i';
+    if (isRegex) {
+      // Bekannte ReDoS-Muster und überlange Ausdrücke vor jeder Ausführung ablehnen.
+      const complexityError = validateRegexPattern(query, { maxChars: SEARCH_MAX_PATTERN_CHARS });
+      if (complexityError) return JSON.stringify({ error: complexityError });
+    }
     let matcher;
     try {
-      matcher = new RegExp(
-        args.is_regex === true ? query : escapeRegExpLiteral(query),
-        args.case_sensitive === true ? '' : 'i'
-      );
+      matcher = new RegExp(pattern, flags);
     } catch (e) {
       return JSON.stringify({ error: `Ungültiger regulärer Ausdruck: ${e.message}` });
     }
@@ -1427,6 +1441,27 @@ function createFsService({
     if (error) return JSON.stringify({ error });
 
     const walkOptions = { root, includeHidden, isIgnored: await loadGitignoreMatcher(root) };
+    const matchOptions = {
+      contextLines,
+      matchLineChars: SEARCH_MAX_MATCH_LINE_CHARS,
+      clipChars: SEARCH_MAX_LINE_CHARS,
+    };
+    // Wörtliche Suchen sind linear und laufen im Main-Thread. Reguläre Ausdrücke
+    // vom Modell laufen in einem Worker mit hartem Zeitbudget, damit
+    // katastrophales Backtracking die App nicht einfrieren kann (Issue #69).
+    let regexWorker = null;
+    function matchText(text, maxMatches) {
+      if (!isRegex) return collectLineMatches(text, matcher, { ...matchOptions, maxMatches });
+      if (!regexWorker) {
+        regexWorker = createRegexSearchWorker({
+          pattern,
+          flags,
+          options: matchOptions,
+          timeBudgetMs: REGEX_SEARCH_TIME_BUDGET_MS,
+        });
+      }
+      return regexWorker.search(text, maxMatches);
+    }
 
     const state = {
       matches: [],
@@ -1455,21 +1490,11 @@ function createFsService({
       if (isBinaryBuffer(buf)) return;
       state.filesScanned += 1;
       const relFile = toRelPosix(fileAbs);
-      const lines = buf.toString('utf8').split(/\r\n|\r|\n/);
-      for (let i = 0; i < lines.length; i++) {
-        if (!matcher.test(lines[i])) continue;
-        state.matches.push({
-          file: relFile,
-          line: i + 1,
-          text: clipSearchLine(lines[i]),
-          before: lines.slice(Math.max(0, i - contextLines), i).map(clipSearchLine),
-          after: lines.slice(i + 1, i + 1 + contextLines).map(clipSearchLine),
-        });
-        if (state.matches.length >= maxResults) {
-          state.matchLimitReached = true;
-          return;
-        }
+      const found = await matchText(buf.toString('utf8'), maxResults - state.matches.length);
+      for (const m of found) {
+        state.matches.push({ file: relFile, ...m });
       }
+      if (state.matches.length >= maxResults) state.matchLimitReached = true;
     }
 
     async function walk(dirAbs) {
@@ -1499,7 +1524,18 @@ function createFsService({
         await scanFile(absPath, st.size);
       }
     } catch (e) {
+      if (e instanceof RegexSearchTimeoutError) {
+        // Bisherige Treffer mitgeben — das Modell kann damit oft schon arbeiten.
+        return JSON.stringify({
+          error: e.message,
+          aborted: true,
+          matches: state.matches,
+          files_scanned: state.filesScanned,
+        });
+      }
       return JSON.stringify({ error: e.message });
+    } finally {
+      if (regexWorker) regexWorker.terminate();
     }
 
     return JSON.stringify({

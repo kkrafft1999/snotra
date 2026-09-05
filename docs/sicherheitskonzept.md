@@ -28,6 +28,10 @@ Geprüfte Ausgangsbasis: v1.3.1, Commit `1e2b50d`:
 - Der [Dateisystem-Service](../src/main/services/fs-service.js) prüft relative
   Pfade und reale Pfade einschließlich Symlinks. Aktive `skill:`-Wurzeln sind
   zusätzliche, ausschließlich lesbare Bereiche (#61).
+- `search_in_files` führt modellgelieferte reguläre Ausdrücke nicht mehr im
+  Main-Thread aus: bekannte ReDoS-Muster werden vorab abgelehnt, alles andere
+  läuft in einem `worker_threads`-Worker mit hartem Zeitbudget (#69,
+  [`regex-search-worker.js`](../src/main/services/regex-search-worker.js)).
 - UI-Löschen nutzt den Papierkorb (#59); ein Lösch-, Shell-, MCP- oder Web-Such-Tool
   ist in dieser Registry noch nicht vorhanden. Tool-Log (#60) und verschlüsselte
   Provider-Konfiguration sind vorhanden, aber kein Berechtigungs-Audit.

@@ -440,6 +440,87 @@ test('search_in_files rejects missing query and invalid regex', async (t) => {
   assert.match(invalid.error, /regulärer Ausdruck/i);
 });
 
+test('search_in_files rejects a known ReDoS pattern before scanning any file', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  // Die Zeile ist absichtlich kurz: der Test darf nie vom Muster abhängen, sondern nur von der Vorprüfung.
+  await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'aaaa', 'utf8');
+
+  const rejected = JSON.parse(
+    await registry.execute(
+      'search_in_files',
+      { query: '(a+)+!', is_regex: true },
+      { workspaceRoot: tmpRoot }
+    )
+  );
+  assert.match(rejected.error, /zu komplex/);
+  assert.equal(rejected.matches, undefined);
+
+  const tooLong = JSON.parse(
+    await registry.execute(
+      'search_in_files',
+      { query: 'a'.repeat(257), is_regex: true },
+      { workspaceRoot: tmpRoot }
+    )
+  );
+  assert.match(tooLong.error, /zu lang/);
+
+  // Wörtliche Suche nach demselben Text bleibt erlaubt — sie wird escaped und ist linear.
+  const literal = JSON.parse(
+    await registry.execute('search_in_files', { query: '(a+)+!' }, { workspaceRoot: tmpRoot })
+  );
+  assert.equal(literal.error, undefined);
+  assert.deepEqual(literal.matches, []);
+});
+
+test('search_in_files aborts a slow regex when the worker time budget is exhausted', async (t) => {
+  // Kleines Budget, damit der Test schnell bleibt; das Muster hat Sternhöhe 1 (passiert die
+  // Vorprüfung), ist aber polynomiell langsam (O(n^4)) und liefe im Main-Thread minutenlang.
+  const svc = createFsService({
+    fs,
+    path,
+    maxReadFileBytes: 1024 * 1024,
+    maxWriteFileBytes: 1024 * 1024,
+    regexSearchTimeBudgetMs: 300,
+  });
+  const registry = createWorkspaceToolRegistry({ fsService: svc });
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'harmlos!', 'utf8');
+  await fs.writeFile(path.join(tmpRoot, 'b.txt'), `${'a'.repeat(400)}\n`, 'utf8');
+
+  const started = Date.now();
+  const result = JSON.parse(
+    await registry.execute(
+      'search_in_files',
+      { query: 'a*a*a*a*!', is_regex: true },
+      { workspaceRoot: tmpRoot }
+    )
+  );
+  const elapsed = Date.now() - started;
+  assert.match(result.error, /zu langsam|Zeitbudget/);
+  assert.equal(result.aborted, true);
+  assert.deepEqual(result.matches, [{ file: 'a.txt', line: 1, text: 'harmlos!', before: [], after: [] }]);
+  assert.ok(elapsed < 5000, `Abbruch dauerte ${elapsed} ms`);
+});
+
+test('search_in_files probes only the first 10000 characters of a line', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.writeFile(path.join(tmpRoot, 'a.txt'), `${'x'.repeat(10000)}treffer\ntreffer`, 'utf8');
+
+  for (const args of [{ query: 'treffer' }, { query: 'tref+er', is_regex: true }]) {
+    const result = JSON.parse(await registry.execute('search_in_files', args, { workspaceRoot: tmpRoot }));
+    assert.deepEqual(
+      result.matches.map((m) => m.line),
+      [2],
+      `Zeile 1 (Treffer jenseits der Prüfgrenze) darf nicht gefunden werden: ${JSON.stringify(args)}`
+    );
+  }
+});
+
 test('search_in_files respects workspace bounds', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
