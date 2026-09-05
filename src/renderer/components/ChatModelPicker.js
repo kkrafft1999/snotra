@@ -1,4 +1,9 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
+// Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
+// denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
+import contracts from '../generated/contracts.js';
+
+const { inferChatTitle } = contracts;
 
 export function initChatModelPicker({
   api,
@@ -127,6 +132,24 @@ export function initChatModelPicker({
     chatLiveDot.setAttribute('aria-label', label);
   }
 
+  /**
+   * Kopfzeile: Kurztitel der Konversation statt des Ordnernamens. Ein
+   * geladener Chat bringt seinen gespeicherten Titel mit; im laufenden Chat
+   * wird er aus der ersten Nutzerfrage abgeleitet, damit die Zeile schon vor
+   * dem ersten Speichern stimmt. Der Ordner steht in der Dateiliste.
+   */
+  function syncChatTitle() {
+    if (!chatTitleEl) return;
+    const stored = typeof appStore.currentChatTitle === 'string' ? appStore.currentChatTitle.trim() : '';
+    const messages = Array.isArray(appStore.chatMessages)
+      ? appStore.chatMessages.filter((m) => !m.greeting)
+      : [];
+    const title = stored || inferChatTitle(messages);
+    chatTitleEl.textContent = title;
+    chatTitleEl.title = title;
+    chatTitleEl.removeAttribute('lang');
+  }
+
   function updateChatChrome() {
     const target = appStore.llmState.chatTarget;
     const active = target?.providerId ? findProviderView(target.providerId) : null;
@@ -135,12 +158,7 @@ export function initChatModelPicker({
       (p) => p.id === appStore.llmState.activePresetId
     );
 
-    if (chatTitleEl) {
-      chatTitleEl.textContent = appStore.rootPath
-        ? appStore.rootPath.split('/').pop() || appStore.rootPath
-        : 'Chat';
-      chatTitleEl.removeAttribute('lang');
-    }
+    syncChatTitle();
 
     if (chatModelPickerWrap && btnChatModelPicker && chatModelPillLabel) {
       if (active && target?.model && isConfigured) {
@@ -235,6 +253,7 @@ export function initChatModelPicker({
     activeProviderConfigured,
     refreshLLMState,
     updateChatChrome,
+    syncChatTitle,
     syncLiveDot,
     closeChatModelMenu,
   };

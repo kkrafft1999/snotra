@@ -17,6 +17,29 @@ const {
   WORKSPACE_PROGRESS_EVENTS,
 } = require('./enums');
 
+// --- Konversationstitel -----------------------------------------------------
+
+/** Maximale Laenge eines abgeleiteten Titels (inkl. Auslassungszeichen). */
+const CHAT_TITLE_MAX_LENGTH = 48;
+
+/**
+ * Leitet den Kurztitel einer Konversation aus ihrer ersten Nutzerfrage ab.
+ * Wird von der Verlaufs-Ablage (Main) und der Kopfzeile (Renderer) genutzt —
+ * beide muessen denselben Text zeigen, deshalb liegt die Regel hier.
+ */
+function inferChatTitle(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  const first = list.find((m) => m && m.role === 'user');
+  if (first && first.content != null && String(first.content).trim()) {
+    const text = String(first.content).trim().replace(/\s+/g, ' ');
+    if (text.length > CHAT_TITLE_MAX_LENGTH) {
+      return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
+    }
+    return text || 'Chat';
+  }
+  return 'Neuer Chat';
+}
+
 // --- Ergebnis-DTOs (Rückgabe von CHAT_SEND) --------------------------------
 
 /*
@@ -105,6 +128,8 @@ function isToolLinePhase(phase) {
 }
 
 module.exports = {
+  CHAT_TITLE_MAX_LENGTH,
+  inferChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,

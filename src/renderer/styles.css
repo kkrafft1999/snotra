@@ -673,8 +673,11 @@ summary:focus-visible,
   animation: chatPulse 0.9s ease-in-out infinite;
 }
 
+/* Seit die Kopfzeile den Konversationstitel statt des Ordnernamens zeigt,
+ * steht dort Fliesstext und kein technischer Bezeichner mehr — deshalb die
+ * UI-Schrift. Der Titel kann lang werden und kuerzt mit Ellipse. */
 #chat-title {
-  font-family: var(--ds-font-mono);
+  font-family: var(--font-ui);
   font-size: var(--ds-font-size-md);
   font-weight: var(--ds-font-weight-bold);
   letter-spacing: 0;

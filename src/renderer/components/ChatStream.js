@@ -400,6 +400,7 @@ export function initChatStream({
   stopChatVoiceListening,
   activeProviderConfigured,
   syncLiveDot,
+  syncChatTitle,
   onWorkspaceFileWritten,
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
@@ -602,6 +603,9 @@ export function initChatStream({
   }
 
   function renderChatMessages() {
+    // Der Kurztitel in der Kopfzeile leitet sich aus der ersten Nutzerfrage
+    // ab und steht deshalb erst nach dem Rendern der Nachrichten fest.
+    syncChatTitle?.();
     chatMessagesEl.innerHTML = '';
     for (const m of appStore.chatMessages) {
       const li = document.createElement('li');
@@ -695,6 +699,7 @@ export function initChatStream({
         appStore.currentChatId = s.id;
         appStore.currentChatWorkspace = workspaceRoot || null;
         appStore.chatMessages = s.messages;
+        appStore.currentChatTitle = s.title || '';
         setChatTokenUsage(s.tokenUsage);
         chatInput.value = '';
         onInputChanged();
@@ -706,6 +711,7 @@ export function initChatStream({
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = workspaceRoot || null;
     appStore.chatMessages = [];
+    appStore.currentChatTitle = '';
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     chatInput.value = '';
@@ -720,6 +726,7 @@ export function initChatStream({
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = appStore.rootPath || null;
     appStore.chatMessages = [];
+    appStore.currentChatTitle = '';
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     chatInput.value = '';

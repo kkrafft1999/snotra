@@ -109,6 +109,7 @@ const chatStream = initChatStream({
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
+  syncChatTitle: () => modelPicker.syncChatTitle(),
   onWorkspaceFileWritten: (relativePath) => {
     mentionAutocomplete.invalidate();
     return fileTree.notifyExternalFileWrite(relativePath);

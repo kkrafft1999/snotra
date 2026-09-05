@@ -24,5 +24,8 @@ export const appStore = {
   chatTokenUsage: { prompt: 0, completion: 0, total: 0 },
   currentChatId: '',
   currentChatWorkspace: null,
+  // Titel der geladenen Konversation. Leer bei einem neuen Chat — dann leitet
+  // die Kopfzeile den Titel aus der ersten Nutzerfrage ab.
+  currentChatTitle: '',
   lastFocusBeforeModal: null,
 };

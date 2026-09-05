@@ -91,6 +91,27 @@ test('createChatResult / createCancelledChatResult produce the stable success sh
   });
 });
 
+test('inferChatTitle derives a short title from the first user message', () => {
+  const { inferChatTitle, CHAT_TITLE_MAX_LENGTH } = contracts;
+  assert.equal(inferChatTitle([{ role: 'user', content: 'Wie starte ich die App?' }]), 'Wie starte ich die App?');
+  // Der Gruss der Assistentin steht vor der Frage, zaehlt aber nicht.
+  assert.equal(
+    inferChatTitle([
+      { role: 'assistant', content: 'Hallo!' },
+      { role: 'user', content: 'Zeig mir die Konfiguration' },
+    ]),
+    'Zeig mir die Konfiguration'
+  );
+  // Mehrzeilige Eingaben werden zu einer Zeile und bei Ueberlaenge gekuerzt.
+  const long = inferChatTitle([{ role: 'user', content: `${'a'.repeat(80)}\n  b` }]);
+  assert.equal(long.length, CHAT_TITLE_MAX_LENGTH);
+  assert.ok(long.endsWith('…'));
+  assert.equal(inferChatTitle([{ role: 'user', content: 'eins\n\nzwei' }]), 'eins zwei');
+  // Ohne Nutzerfrage bleibt der Platzhalter.
+  assert.equal(inferChatTitle([]), 'Neuer Chat');
+  assert.equal(inferChatTitle(null), 'Neuer Chat');
+});
+
 test('result factories carry contextUsage only when provided', () => {
   const ctx = { prompt: 210, completion: 20, total: 230 };
   assert.deepEqual(createChatResult({ content: 'hi', usage: null, contextUsage: ctx }), {

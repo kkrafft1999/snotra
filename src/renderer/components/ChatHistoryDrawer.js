@@ -97,6 +97,7 @@ export function initChatHistoryDrawer({
     appStore.currentChatId = id;
     appStore.currentChatWorkspace = s.workspaceRoot || null;
     appStore.chatMessages = s.messages;
+    appStore.currentChatTitle = s.title || '';
     setChatTokenUsage?.(s.tokenUsage);
     onInputChanged();
     await api.setActiveChatId(appStore.currentChatWorkspace, id);
@@ -114,6 +115,7 @@ export function initChatHistoryDrawer({
       appStore.currentChatId = crypto.randomUUID();
       appStore.currentChatWorkspace = appStore.rootPath || null;
       appStore.chatMessages = [];
+      appStore.currentChatTitle = '';
       seedGreetingIfWorkspace?.(appStore.currentChatWorkspace);
       resetChatTokenUsage?.();
       onInputChanged();

@@ -63,6 +63,8 @@ const {
   toolCategoryForEntry,
 } = require('./tool-categories');
 const {
+  CHAT_TITLE_MAX_LENGTH,
+  inferChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,
@@ -126,6 +128,8 @@ module.exports = {
   TOOL_CATEGORY_BY_TOOL,
   toolCategory,
   toolCategoryForEntry,
+  CHAT_TITLE_MAX_LENGTH,
+  inferChatTitle,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,

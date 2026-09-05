@@ -3,20 +3,12 @@
 /**
  * Chat-Verlauf-Normalisierung (Stage 5).
  *
- * Single source of truth für Titel-Inferenz, Message-Sanitisierung,
- * Token-Usage und die vom Renderer konsumierte Loaded-Session-Form.
+ * Single source of truth für Message-Sanitisierung, Token-Usage und die vom
+ * Renderer konsumierte Loaded-Session-Form. Die Titel-Inferenz liegt in der
+ * Contract-Schicht, weil die Kopfzeile im Renderer denselben Titel zeigt.
  */
 
-function inferChatTitle(messages) {
-  const list = Array.isArray(messages) ? messages : [];
-  const u = list.find((m) => m && m.role === 'user');
-  if (u && u.content != null && String(u.content).trim()) {
-    const t = String(u.content).trim().replace(/\s+/g, ' ');
-    if (t.length > 48) return `${t.slice(0, 47)}…`;
-    return t || 'Chat';
-  }
-  return 'Neuer Chat';
-}
+const { inferChatTitle } = require('../../shared/contracts/chat');
 
 function messageContentForStore(content) {
   if (content == null) return '';
