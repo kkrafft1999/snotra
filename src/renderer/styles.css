@@ -424,9 +424,8 @@ summary:focus-visible,
   overflow: hidden;
 }
 
-/* Phase 5 D: Tree-Header bekommt das doubleSlash Eyebrow + Titel-Pattern.
- * Vorher: einzeilig 12 px UPPERCASE. Jetzt: Mono-Eyebrow "// projekt" als
- * 10 px Mono-Eyebrow "// projekt" in Akzentblau (--accent-text / --ds-blue), darunter der Projektname als Inter 13 px Bold. Buttons
+/* Tree-Header: nur der Projektname als Inter 13 px Bold, einzeilig.
+ * Das fruehere Mono-Eyebrow "// projekt" darueber ist entfallen. Buttons
  * rechts bleiben 32×32 (Phase 1).
  */
 #tree-header {
@@ -441,35 +440,20 @@ summary:focus-visible,
   letter-spacing: 0;
 }
 
-.tree-header-titles {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-  gap: 1px;
-}
-
-.tree-header-eyebrow {
-  display: inline-flex;
-  align-items: baseline;
-  column-gap: 0.2em;
-  font-family: var(--ds-font-mono);
-  font-size: 10px;
-  letter-spacing: normal;
-  color: var(--ds-blue);
-  white-space: nowrap;
-}
-
 /* Zwei Slashes enger (system-ui Monos haben oft breite Solidus-Bearing). */
 .eyebrow-prefix {
   letter-spacing: -0.14em;
 }
 
+/* Einzeiliger Ordnername; kuerzt mit Ellipse, damit die Icons rechts
+ * (Historie, Ordner oeffnen) nie ueberschrieben werden. */
 #tree-header #project-name {
+  flex: 1;
+  min-width: 0;
   font-family: var(--ds-font-ui);
   font-size: var(--ds-font-size-md);
   font-weight: var(--ds-font-weight-bold);
+  line-height: 1.15;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
