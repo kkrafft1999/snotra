@@ -111,6 +111,11 @@
   /* User-Bubble: hoechstens zwei Drittel der Lesespalte, damit die Frage
    * auch bei langem Text als Block rechts stehen bleibt. */
   --ds-chat-user-max-width: 66.6667%;
+  /* Composer-Karte (Textfeld + Werkzeugzeile): hebt sich als eigene Flaeche
+   * vom Chat-Grund ab. Light: Weiss auf Grau; Dark: eine Stufe heller als
+   * der Chat-Grund (#2b2b2c), sonst wirkt die Karte wie ein Loch. */
+  --ds-chat-composer-bg: var(--ds-white);
+  --ds-chat-composer-border: var(--ds-grey-divider);
 
   /* ── Fokus-Ring ───────────────────────────────────────────────────────── */
   --ds-focus-ring: 2px solid var(--ds-blue);
@@ -140,6 +145,8 @@
   --ds-blue-soft: rgba(63, 184, 229, 0.08);
   --ds-blue-border: rgba(63, 184, 229, 0.30);
   --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
+  --ds-chat-composer-bg: #343436;
+  --ds-chat-composer-border: #45454A;
 
   --ds-error: #FF8080;
   --ds-error-bg: rgba(255, 128, 128, 0.12);

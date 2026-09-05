@@ -159,24 +159,6 @@
           <div class="chat-header-meta">
             <span id="chat-live-dot" class="chat-live-dot" role="img" aria-label="Verbindung aktiv"></span>
             <span id="chat-title" class="mono">Chat</span>
-            <span class="chat-meta-divider" aria-hidden="true">/</span>
-            <span class="chat-model-picker-wrap hidden" id="chat-model-picker-wrap">
-              <button
-                type="button"
-                id="btn-chat-model-picker"
-                class="chat-model-pill chat-model-pill--btn hidden"
-                lang="en"
-                aria-haspopup="listbox"
-                aria-expanded="false"
-                aria-controls="chat-model-menu"
-                aria-label="Aktives Modell wählen">
-                <span id="chat-model-pill-label">—</span>
-                <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
-                  <path fill="currentColor" d="M0 0l5 6 5-6z"/>
-                </svg>
-              </button>
-              <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Verfügbare Modelle"></ul>
-            </span>
           </div>
           <div class="chat-header-actions">
             <button type="button" id="btn-chat-history" title="Verlauf" aria-label="Chat-Verlauf oeffnen" aria-expanded="false" aria-controls="chat-history-drawer">
@@ -208,21 +190,44 @@
         <div id="chat-input-row">
           <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Dateien und Ordner im Projekt"></ul>
           <textarea id="chat-input" rows="1" placeholder="Nachricht…" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu"></textarea>
-          <button type="button" id="btn-chat-mic" title="Spracheingabe" aria-pressed="false" aria-label="Spracheingabe starten">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
-            </svg>
-          </button>
-          <button type="button" id="btn-chat-send" title="Senden" aria-label="Senden">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5 12 12 5 19 12"/>
-            </svg>
-          </button>
-          <p id="chat-voice-status" class="chat-voice-status hidden" aria-live="polite"></p>
+          <div class="chat-composer-bar" role="toolbar" aria-label="Eingabe-Werkzeuge">
+            <div class="chat-composer-bar-start">
+              <button type="button" id="btn-chat-mic" title="Spracheingabe" aria-pressed="false" aria-label="Spracheingabe starten">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+                </svg>
+              </button>
+              <p id="chat-voice-status" class="chat-voice-status hidden" aria-live="polite"></p>
+              <span class="chat-model-picker-wrap hidden" id="chat-model-picker-wrap">
+                <button
+                  type="button"
+                  id="btn-chat-model-picker"
+                  class="chat-model-pill chat-model-pill--btn hidden"
+                  lang="en"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="chat-model-menu"
+                  aria-label="Aktives Modell wählen">
+                  <span id="chat-model-pill-label">—</span>
+                  <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                    <path fill="currentColor" d="M0 0l5 6 5-6z"/>
+                  </svg>
+                </button>
+                <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Verfügbare Modelle"></ul>
+              </span>
+            </div>
+            <div class="chat-composer-bar-end">
+              <p id="chat-token-usage" class="chat-token-usage" aria-live="polite">0 Tokens</p>
+              <button type="button" id="btn-chat-send" title="Senden" aria-label="Senden">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="19" x2="12" y2="5"/>
+                  <polyline points="5 12 12 5 19 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
-        <p id="chat-token-usage" class="chat-token-usage" aria-live="polite">0 Tokens</p>
       </aside>
     </div>
   </main>

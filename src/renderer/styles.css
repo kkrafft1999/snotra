@@ -44,6 +44,10 @@
   --chat-gutter-inline: calc(
     var(--chat-gutter-outer) - var(--chat-scrollbar-w)
   );
+  /* Luft unter dem Composer bis zum Fensterrand. */
+  --chat-composer-bottom: 24px;
+  --chat-composer-bg: var(--ds-chat-composer-bg);
+  --chat-composer-border: var(--ds-chat-composer-border);
   /* Mono-Blue: keine box-shadow auf Chat-Flaechen (Regel ui-design-tokens). */
   --font-ui: var(--ds-font-ui);
   --font-mono: var(--ds-font-mono);
@@ -668,11 +672,6 @@ summary:focus-visible,
   animation: chatPulse 0.9s ease-in-out infinite;
 }
 
-.chat-meta-divider {
-  color: var(--text-muted);
-  font-size: var(--ds-font-size-md);
-}
-
 #chat-title {
   font-family: var(--ds-font-mono);
   font-size: var(--ds-font-size-md);
@@ -738,8 +737,8 @@ summary:focus-visible,
 
 .chat-model-menu {
   position: absolute;
-  left: 0;
-  top: calc(100% + 6px);
+  left: 6px;                  /* buendig mit dem Mikrofon-Button */
+  bottom: calc(100% + 8px);   /* klappt ueber der Composer-Karte auf */
   z-index: 50;
   min-width: min(260px, 80vw);
   max-height: 240px;
@@ -1491,38 +1490,73 @@ summary:focus-visible,
   background: var(--chat-output-bg);
 }
 
+/* ── Composer (Claude-Code-Muster) ──────────────────────────────────────────
+ * Eine Karte mit zwei Zeilen: oben das wachsende Textfeld, darunter eine
+ * Werkzeugzeile. Links stehen Mikrofon, Sprachstatus und Modell-Auswahl,
+ * rechts Token-Zaehler und Senden. Die Karte hebt sich als weisse Flaeche vom
+ * grauen Chat-Grund ab; der Fokus-Ring sitzt an der Karte, nicht am Textfeld.
+ * Die Klasse chat-input-row--multiline wird vom Renderer weiter gesetzt, hat
+ * im Spaltenlayout aber keine Wirkung mehr. */
 #chat-input-row {
   position: relative; /* Bezug für die @-Vervollständigung (.chat-mention-menu) */
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 6px 6px 4px;
-  margin: 8px var(--chat-gutter-outer) 12px;
-  background: var(--chat-output-bg);
-  border: 1px solid var(--ds-grey-divider);
+  flex-direction: column;
+  padding: 4px 6px 6px;
+  margin: 8px var(--chat-gutter-outer) var(--chat-composer-bottom);
+  background: var(--chat-composer-bg);
+  border: 1px solid var(--chat-composer-border);
   border-radius: 14px;
   flex-shrink: 0;
-  align-items: center;
-  transition: border-color 0.15s;
-}
-
-/* Mehrzeilig: Mic/Senden unten am wachsenden Textfeld ausrichten */
-#chat-input-row.chat-input-row--multiline {
-  align-items: flex-end;
+  transition: border-color var(--ds-motion-fast);
 }
 
 #chat-input-row:focus-within {
   border-color: var(--ds-blue);
 }
 
+.chat-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--ds-touch-min);
+}
+
+.chat-composer-bar-start,
+.chat-composer-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-composer-bar-end {
+  flex-shrink: 0;
+}
+
+/* Das Modell-Menue soll ueber der ganzen Karte aufklappen, nicht ueber dem
+ * Textfeld. Deshalb ist der Wrap hier nicht mehr der Positionsbezug —
+ * #chat-input-row (position: relative) uebernimmt das. */
+.chat-composer-bar .chat-model-picker-wrap {
+  position: static;
+}
+
+/* In der Werkzeugzeile traegt die Karte die Flaeche; die Pille bleibt
+ * randlos-transparent und bekommt erst bei Hover den Blau-Wash. */
+.chat-composer-bar .chat-model-pill.chat-model-pill--btn {
+  background: transparent;
+  border-color: var(--chat-composer-border);
+}
+
 #chat-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   min-height: 36px;
+  max-height: 40vh;
   resize: none;
   overflow: hidden;
   scrollbar-width: none;
-  padding: 9px 12px;
+  padding: 10px 10px 6px;
   font-size: 14px;
   line-height: 1.45;
   font-family: var(--font-ui);
@@ -1693,24 +1727,26 @@ summary:focus-visible,
 }
 
 .chat-voice-status {
-  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--ds-font-size-md);          /* Phase 2: 13px statt 12px */
   color: var(--text-muted-strong);            /* Phase 2: dunkler fuer < 14px */
   line-height: 1.3;
   user-select: text;
-  margin: 2px 6px 0;
+  margin: 0;
 }
 
 .chat-token-usage {
-  margin: -4px var(--chat-gutter-outer) 10px;
-  padding: 0 2px;
+  margin: 0;
+  padding: 0 6px;
   font-size: 11px;
   line-height: 1.3;
   color: var(--text-muted-strong);
-  text-align: right;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   user-select: none;
-  background: var(--chat-output-bg);
 }
 
 /* ── Settings modal (Mono-Blue: Header + Body + Footer, kein Schatten) ── */
