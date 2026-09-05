@@ -937,7 +937,7 @@ summary:focus-visible,
   padding: 4px var(--chat-gutter-x) 8px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--ds-chat-msg-gap);
   min-height: 0;
   /* Bewusst KEIN scroll-behavior: smooth.
    * Beim App-Start mit langer Chat-History wuerde der initiale
@@ -953,6 +953,15 @@ summary:focus-visible,
 
 #chat-messages > li.chat-msg {
   display: block;       /* statt list-item */
+}
+
+/* Rollenwechsel (User -> KI, KI -> User) bekommt mehr Luft als der
+ * Grundabstand aus dem Flex-`gap`: Frage und Antwort sollen als getrennte
+ * Bloecke lesbar sein. Aufeinanderfolgende Nachrichten derselben Rolle
+ * bleiben eng beieinander. */
+#chat-messages > li.chat-msg.user + li.chat-msg.assistant,
+#chat-messages > li.chat-msg.assistant + li.chat-msg.user {
+  margin-top: calc(var(--ds-chat-turn-gap) - var(--ds-chat-msg-gap));
 }
 
 .chat-msg {

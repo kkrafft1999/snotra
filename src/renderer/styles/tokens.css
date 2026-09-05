@@ -98,6 +98,13 @@
   --ds-icon-btn-row-gap: 0;
   --ds-icon-btn-cluster-pull: 5px;
 
+  /* ── Chat-Abstaende ───────────────────────────────────────────────────── */
+  /* Grundabstand zwischen zwei Nachrichten derselben Rolle. */
+  --ds-chat-msg-gap: 14px;
+  /* Abstand am Rollenwechsel (User -> KI und KI -> User): deutlich groesser,
+   * damit Frage und Antwort optisch als getrennte Bloecke lesbar sind. */
+  --ds-chat-turn-gap: 30px;
+
   /* ── Fokus-Ring ───────────────────────────────────────────────────────── */
   --ds-focus-ring: 2px solid var(--ds-blue);
   --ds-focus-offset: 2px;
