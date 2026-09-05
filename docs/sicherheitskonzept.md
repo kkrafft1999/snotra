@@ -5,7 +5,10 @@ Dieses Dokument legt das Zielverhalten für [#66 (Kern)](https://github.com/kkra
 und [#67 (UI)](https://github.com/kkrafft1999/snotra/issues/67) fest. Es beschreibt
 noch keine ausgelieferte Schutzfunktion. MCP (#62) und Web-Suche (#63) folgen erst
 nach beiden Umsetzungen. „Muss“ bezeichnet eine Abnahmebedingung; offene Punkte
-stehen in Abschnitt 11.
+stehen in Abschnitt 11. Review vom 2026-09-05 eingearbeitet: Vertrauensmodell
+für den Renderer (Abschnitt 5), Aufbau des Policy-Speichers (Abschnitt 7),
+Provider-Bindung im Verlauf (Abschnitt 4), Verfall statt Zeitlimit (Abschnitt 6)
+und Wiederherstellungskopie beim Überschreiben (Abschnitte 2 und 9).
 
 ## 1. Ziel und Ausgangslage
 
@@ -46,8 +49,8 @@ werden blockiert; es gibt keinen impliziten `read`-Default.
 | --- | --- | --- |
 | `read` | Lesen gewöhnlicher Daten oder Aktion ohne Seiteneffekt | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`; auch `debug_wait` (kein Dateizugriff) |
 | `read-sensitive` | Sensible Inhalte oder gezielter Zugriff auf einen sensiblen Pfad | Dynamische Hochstufung der Lese-Tools, auch unter `skill:` |
-| `write` | Datei erstellen oder gezielt ändern | `write_file_text` bei neuer Datei; `edit_file`, `apply_patch` |
-| `delete` | Löschen oder vollständiges Überschreiben ohne gesicherte Wiederherstellung | `write_file_text` bei bestehender Datei ohne Wiederherstellungskopie; künftiges Lösch-Tool |
+| `write` | Datei erstellen, gezielt ändern oder mit Wiederherstellungskopie überschreiben | `write_file_text` bei neuer Datei oder mit erfolgreich angelegter Wiederherstellungskopie (Abschnitt 9); `edit_file`, `apply_patch` |
+| `delete` | Löschen oder vollständiges Überschreiben ohne gesicherte Wiederherstellung | `write_file_text` bei bestehender Datei, wenn die Wiederherstellungskopie nicht angelegt werden kann; künftiges Lösch-Tool |
 | `execute` | Programm oder Skript ausführen; mögliche weitere Seiteneffekte | Reserviert für künftige Ausführungs-Tools |
 | `external` | Daten an einen zusätzlichen Dienst senden oder dort Aktionen auslösen | Künftige Web-Suche und MCP-Tools; konservative Ausgangsklasse |
 
@@ -142,6 +145,16 @@ Provider-Endpunkte. Bereits übermittelte Daten werden durch Widerruf nicht
 zurückgeholt; beim Laden alter Verläufe darf keine ungeprüfte Wiederübermittlung
 sensibler Inhalte erfolgen.
 
+Damit die Provider-Bindung wirksam ist, markiert die Engine jede Tool-Nachricht
+mit freigegebenem sensiblem Inhalt im Verlauf (`sensitive`, gebundener
+Provider-Endpunkt, Dateiversion). Vor jedem Provider-Request prüft sie diese
+Markierungen: Stimmt der Endpunkt, wird die Nachricht gesendet; sonst wird ihr
+Inhalt durch den Platzhalter „[sensibler Inhalt zurückgehalten]“ ersetzt, und der
+Nutzer sieht im Chat, dass Kontext fehlt. Eine erneute Übermittlung an den neuen
+Endpunkt verlangt eine neue `read-sensitive`-Freigabe. Beim Laden alter Verläufe
+gilt dieselbe Regel; die Redaktion ist der Standard, nicht die Rückfrage. Die
+Markierung wird mit dem Verlauf im verschlüsselten Speicher abgelegt.
+
 ## 5. Harte Grenzen und Prompt-Injection
 
 - **Dateisystem:** Nur der vom Main-Prozess autoritativ verwaltete Workspace
@@ -169,6 +182,19 @@ sensibler Inhalte erfolgen.
   liefert nur validierte Nutzerentscheidungen. Jeder nachfolgende Tool-Aufruf
   wird neu geprüft, unabhängig davon, wie überzeugend ein Tool-Text ihn fordert.
   Die Schutzregel ist vom frei konfigurierbaren System-Prompt unabhängig.
+- **Vertrauensmodell:** Main-Prozess und Application-Layer sind die
+  Vertrauensbasis. Der Renderer gilt als vertrauenswürdig für die gewöhnliche
+  Bedienung, aber nicht als Sicherheitsgrenze: Er rendert fremde Inhalte und
+  kann durch einen Fehler dabei kompromittiert werden. Deshalb bestätigt Main die
+  drei Aktionen, die den Schutz insgesamt lockern, in einem nativen Dialog
+  (`dialog.showMessageBox`) statt nur auf eine IPC-Nachricht hin: Auto
+  aktivieren, dauerhafte Allow-Regel anlegen, Deny-Regel löschen. Der Renderer
+  stößt diese Aktionen nur an. Die Bindung von Freigabe-Antworten an `requestId`,
+  Plan und Dateiversion (Abschnitt 6) schützt gegen veraltete Karten,
+  Doppelklicks, Race-Bedingungen und Programmierfehler; gegen einen vollständig
+  kompromittierten Renderer schützt sie allein nicht. Lokale Prozesse mit den
+  Rechten des Nutzers liegen außerhalb des Schutzziels; sie könnten die App
+  selbst verändern.
 
 Snotra kann nicht sicher feststellen, ob ein zulässiger Modell-Aufruf indirekt
 durch fremden Text verursacht wurde. Die Prompt-Regel unterstützt das Modell;
@@ -222,10 +248,15 @@ Doppelte, fremde, verspätete oder nach Dateiveränderung veraltete Antworten
 geben nichts frei. Erneute Prüfung vor Ausführung; bei geändertem Plan neue Karte.
 
 Während des Wartens kein betroffener Tool-Handler und kein weiterer Modell-Request.
-Timeout nach zehn Minuten, fehlender Renderer, Fenster-Schließen oder Abbruch
-verwerfen die Anfrage sicher. Timeout/fehlende UI liefern `permission_denied`
-mit eigenem Grund; ein abgebrochener Lauf bleibt beendet und startet dafür keinen
-neuen Provider-Request. Die Ablehnung bleibt im lokalen Verlauf sichtbar.
+Es gibt kein Zeitlimit: Eine offene Karte wartet, bis der Nutzer entscheidet, wie
+bei Claude Code und Cursor. Sie verfällt nur durch Ereignisse, die ihre Grundlage
+ändern: veränderte Zieldatei, Chat-, Workspace-, Modus- oder Regelwechsel,
+fehlender Renderer, Fenster-Schließen oder Abbruch des Laufs. Verfall beendet den
+Lauf mit `permission_denied` und Grund `request_invalidated`; das Ergebnis wird
+im Verlauf gespeichert, aber es startet kein weiterer Provider-Request, weil der
+Nutzer in diesem Moment typischerweise nicht zusieht. Nur eine ausdrückliche
+Ablehnung lässt das Modell mit dem Ablehnungsergebnis weiterarbeiten. Die
+Ablehnung bleibt im lokalen Verlauf sichtbar.
 Bloßer Fokus-/Fensterwechsel erlaubt nichts und lässt die Karte offen.
 Esc lehnt ab; initial kein Fokus auf „Erlauben“, kein globaler Enter-Shortcut
 zur Freigabe. Bewusst fokussierte Buttons bleiben per Tastatur bedienbar.
@@ -235,7 +266,21 @@ zur Freigabe. Bewusst fokussierte Buttons bleiben per Tastatur bedienbar.
 Modus und globale Regeln liegen im geschützten App-Speicher. Workspace-Regeln
 werden ebenfalls dort gespeichert, gebunden an die kanonische Workspace-Wurzel;
 keine automatisch vertrauenswürdige Policy-Datei im Repository. Gleichnamige
-Ordner teilen keine Freigaben. Änderungen erfolgen ausschließlich durch Nutzer-UI.
+Ordner teilen keine Freigaben. Änderungen erfolgen ausschließlich durch Nutzer-UI,
+für schutzlockernde Aktionen mit nativer Bestätigung durch Main (Abschnitt 5).
+
+„Geschützt“ heißt konkret: Modus, Regeln und sensible Pfadmuster liegen in einer
+eigenen Policy-Datei, getrennt von den UI-Einstellungen, die heute als
+Klartext-JSON in `userData` liegen. Die Regeln selbst sind nicht geheim, ihre
+Unversehrtheit ist entscheidend. Die Policy-Datei trägt deshalb eine
+Integritätsprüfung (HMAC mit einem über `safeStorage` geschützten Schlüssel), damit
+Manipulation von Beschädigung unterscheidbar ist. Schlägt die Prüfung fehl, gilt
+fail-safe: Modus `smart`, alle Allow-Regeln und Sitzungsfreigaben verworfen,
+lesbare Deny-Regeln und sensible Pfadmuster bleiben wirksam, sichtbarer Hinweis an
+den Nutzer. Ohne verfügbare `safeStorage` ist Auto nicht aktivierbar, und
+dauerhafte Allow-Regeln werden nicht gespeichert. Das schützt gegen versehentliches
+Editieren und gegen Werkzeuge, die Dateien blind ändern; ein lokaler Prozess mit
+Nutzerrechten bleibt außerhalb des Schutzziels (Abschnitt 5).
 
 Eine Regel enthält ID, `allow | deny`, exakten Tool-Namen oder eine ausdrückliche
 Risikoklasse, Wurzel, Zielpfad/-muster und Umfang. Erlaubnisse müssen alle Wirkungen
@@ -274,7 +319,8 @@ Die Chat-Leiste zeigt den aktiven Modus neben der Modell-Auswahl; Einstellungen
 für nachfolgende Aufrufe; bereits gestartete Aktionen lassen sich dadurch nicht
 rückwirkend verhindern. Offene Freigaben werden verworfen und neu bewertet.
 
-Auto wird erst nach bewusster Bestätigung aktiviert:
+Auto wird erst nach bewusster Bestätigung in einem nativen Dialog aktiviert, den
+Main öffnet (Abschnitt 5):
 
 > **Auto / Vollzugriff aktivieren?**
 >
@@ -314,9 +360,17 @@ Compliance-Nachweis.
 
 Ein künftiges Lösch-Tool nutzt grundsätzlich den Papierkorb mit sichtbarer
 Wiederherstellungsmöglichkeit. Wenn das nicht gelingt, keine automatische
-Hard-Delete-Alternative. Vor destruktivem Überschreiben soll eine gesicherte
-Wiederherstellung angeboten werden; ohne vorhandenen Rückweg bleibt es `delete`
-mit entsprechender Warnung. Git allein ist kein Backup unversionierter Inhalte.
+Hard-Delete-Alternative.
+
+Überschreiben bestehender Dateien mit `write_file_text` erhält schon in #66 einen
+Rückweg, weil Modelle Dateien häufig komplett neu schreiben und ein ständiges
+`delete`-Nachfragen die Nutzer in den Auto-Modus treiben würde: Snotra legt vor
+dem Schreiben eine Kopie der alten Fassung an und verschiebt sie mit
+`shell.trashItem` in den Betriebssystem-Papierkorb (Dateiname mit Ursprungsname
+und Zeitstempel). Gelingt das, ist der Aufruf gewöhnliches `write`, und die Karte
+nennt die Wiederherstellungsmöglichkeit. Gelingt es nicht, bleibt es `delete` mit
+entsprechender Warnung; die Matrix entscheidet dann wie gewohnt. Git allein ist
+kein Backup unversionierter Inhalte.
 
 Shell-/Exec-Tools bleiben bis zu einem eigenen Isolationskonzept nicht
 registriert. Hard-Delete, rekursives Zwangslöschen (`rm -rf` und Entsprechungen),
@@ -348,15 +402,19 @@ keine Behauptung identischer Produktmodi.
 | Web-Suchanbieter, erlaubte Ziele/Weiterleitungen und Datenumfang | In #63 entscheiden. Anfrage einschließlich Suchtext ist extern; Suchantworten sind unvertrauenswürdig. Provider-Keys bleiben im Adapter. |
 | Exakte Content-Muster, Fehlalarme und Grenzen bei großen Dateien | In #66 versionieren und testen; Mindestgruppen aus Abschnitt 4 verpflichtend. Keine breite Personendaten-/Entropie-Erkennung im ersten Schritt. |
 | Separates persistentes Audit-Journal mit Aufbewahrung/Export | Erweiterung von #66/#67 bei Bedarf; zunächst bereinigte Entscheidungen im bestehenden Chat-Verlauf. Kein unbefristetes Volltext-Logging. |
-| Wiederherstellung für Überschreiben und sichere Prozessausführung | Vor Einführung entsprechender Fähigkeiten festlegen; bestehendes Überschreiben ohne Rückweg bleibt `delete`, Shell bleibt deaktiviert. |
+| Sichere Prozessausführung und Wiederherstellung für ein künftiges Lösch-Tool | Vor Einführung entsprechender Fähigkeiten festlegen; die Wiederherstellungskopie beim Überschreiben (Abschnitt 9) ist bereits Teil von #66, Shell bleibt deaktiviert. |
 
 **#66 – Kern:** Registry-Klassen und dynamische Merkmale, vollständige Matrix und
 Regelpriorität, Pfad-/Content-Schutz einschließlich indirekter Ausgaben,
 Approval-Port und sichere Planbindung, IPC-Validierung, Migration/Persistenz,
-bereinigte Audit-Ereignisse. Workspace-Autorität aus #68 berücksichtigen. Tests
-müssen alle 18 Matrixzellen, harte Sperren in jedem Modus, `skill:`-Zugriffe,
-Such-/Ausschnitt-Leaks, Patch-Ziele, veraltete/doppelte Antworten,
-Timeout/Abbruch und Regelwiderruf abdecken. Ohne UI wird `ask` sicher abgelehnt.
+bereinigte Audit-Ereignisse, Wiederherstellungskopie beim Überschreiben,
+Verlaufsmarkierung sensibler Tool-Nachrichten mit Provider-Redaktion, signierte
+Policy-Datei und native Bestätigung schutzlockernder Aktionen. Workspace-Autorität
+aus #68 berücksichtigen. Tests müssen alle 18 Matrixzellen, harte Sperren in jedem
+Modus, `skill:`-Zugriffe, Such-/Ausschnitt-Leaks, Patch-Ziele, veraltete/doppelte
+Antworten, Verfall/Abbruch, Regelwiderruf, manipulierte Policy-Datei und
+Providerwechsel nach sensibler Freigabe abdecken. Ohne UI wird `ask` sicher
+abgelehnt.
 
 **#67 – UI:** Wortlaut aus Abschnitten 4/6/8, sichtbare synchronisierte Modus-Wahl,
 Auto-Warnung, maskierte Vorschauen, drei Aktionen mit erklärten Einschränkungen,
