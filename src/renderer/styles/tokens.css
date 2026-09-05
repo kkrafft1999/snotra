@@ -104,6 +104,13 @@
   /* Abstand am Rollenwechsel (User -> KI und KI -> User): deutlich groesser,
    * damit Frage und Antwort optisch als getrennte Bloecke lesbar sind. */
   --ds-chat-turn-gap: 30px;
+  /* Maximale Breite der Lesespalte (Nachrichten, Hinweis, Eingabezeile).
+   * 794px entspricht der Breite eines DIN-A4-Blatts (210 mm bei 96 dpi).
+   * Darueber hinaus waechst nur noch der Rand links und rechts. */
+  --ds-chat-max-width: 794px;
+  /* User-Bubble: hoechstens zwei Drittel der Lesespalte, damit die Frage
+   * auch bei langem Text als Block rechts stehen bleibt. */
+  --ds-chat-user-max-width: 66.6667%;
 
   /* ── Fokus-Ring ───────────────────────────────────────────────────────── */
   --ds-focus-ring: 2px solid var(--ds-blue);
