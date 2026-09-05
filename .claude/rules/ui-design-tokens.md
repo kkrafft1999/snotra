@@ -116,7 +116,7 @@ Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe —
 
 Du verwendest **niemals**:
 
-- Farbverläufe, dekorative Schatten auf Cards/Panels, Glows, 3D-Effekte
+- Farbverläufe, dekorative Schatten auf Cards/Panels, Glows, 3D-Effekte (Overlays siehe Ausnahme unten)
 - Mehr als eine Akzentfarbe (kein `#00A5E1`-Cyan mehr)
 - Cyan `#00A5E1` — vollständig durch `--ds-blue` ersetzt
 - Italic oder extrem leichte/schwere Display-Font-Weights (außerhalb der erlaubten Inter-Stufen)
@@ -124,7 +124,10 @@ Du verwendest **niemals**:
 - Emojis als UI-Element
 - Grüne Statusfarben — Status über Form, Position, Text
 
-**Erlaubt:** die in `tokens.css` definierten `box-shadow`-Tokens `--ds-btn-primary-active-shadow` und `--ds-icon-btn-active-shadow` ausschließlich für den **Active-Lift** bei Primary- und Icon-Buttons — keine freien Schatten-Werte in Komponenten.
+**Erlaubt:** die in `tokens.css` definierten `box-shadow`-Tokens — keine freien Schatten-Werte in Komponenten:
+
+- `--ds-btn-primary-active-shadow` und `--ds-icon-btn-active-shadow` ausschließlich für den **Active-Lift** bei Primary- und Icon-Buttons.
+- `--ds-overlay-shadow` (dazu `--ds-overlay-border`) ausschließlich für **aufklappende Overlays** — Dropdown-Menüs wie Modell-Auswahl, `@`-Vervollständigung und Ordner-Verlauf. Ein Overlay schwebt über dem Inhalt, den es verdeckt; ohne Tiefenhinweis verschwimmen seine Kanten mit dem Darunterliegenden. Das ist kein dekorativer Card-Schatten: Flache Cards, Panels und Chat-Flächen bleiben flach.
 
 ## Rote Status-Farben (Ausnahmeregel)
 

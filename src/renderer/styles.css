@@ -232,8 +232,9 @@ summary:focus-visible,
   min-width: 0;
   max-width: none;
   background: var(--bg-primary);
-  border: 1px solid var(--ds-grey-divider);
+  border: 1px solid var(--ds-overlay-border);
   border-radius: 6px;
+  box-shadow: var(--ds-overlay-shadow);
   padding: 4px 0;
   overflow: hidden;
 }
@@ -749,8 +750,9 @@ summary:focus-visible,
   padding: 6px 0;
   list-style: none;
   background: var(--bg-primary);
-  border: 1px solid var(--ds-grey-divider);
+  border: 1px solid var(--ds-overlay-border);
   border-radius: 6px;
+  box-shadow: var(--ds-overlay-shadow);
 }
 
 .chat-model-menu.hidden {
@@ -1586,8 +1588,9 @@ summary:focus-visible,
   padding: 6px 0;
   list-style: none;
   background: var(--bg-primary);
-  border: 1px solid var(--ds-grey-divider);
+  border: 1px solid var(--ds-overlay-border);
   border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-overlay-shadow);
 }
 
 .chat-mention-menu.hidden {
