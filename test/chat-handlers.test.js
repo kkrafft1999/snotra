@@ -158,6 +158,7 @@ function setupChatHandlers({
   toolRegistry = makeToolRegistryStub(),
   maxToolRounds = 5,
   providerRuntime,
+  workspaceRoot = null,
 } = {}) {
   const ipcMain = makeIpcMain();
   const chatEngine = buildTestChatEngine({
@@ -172,6 +173,8 @@ function setupChatHandlers({
     chatEngine,
     REQ,
     PUSH,
+    // Seit Issue #68 injiziert der Handler den Root, der Payload traegt ihn nicht.
+    getActiveWorkspaceRoot: () => workspaceRoot,
   });
   return {
     sendHandler: ipcMain.handlers.get(REQ.CHAT_SEND),
@@ -258,12 +261,15 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
   const toolRegistry = makeToolRegistryStub((toolName, args) =>
     JSON.stringify({ relative_path: args.relative_path, items: [] })
   );
-  const { sendHandler } = setupChatHandlers({ provider, toolRegistry });
+  const { sendHandler } = setupChatHandlers({
+    provider,
+    toolRegistry,
+    workspaceRoot: '/tmp/snotra-project',
+  });
   const { event, sent } = makeFakeEvent();
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'Was liegt hier?' }],
-    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.content, 'Im Ordner liegen 3 Dateien.');
@@ -300,12 +306,16 @@ test('CHAT_SEND emits a workspace fileWritten progress event after write_file_te
     JSON.stringify(toolName === 'write_file_text' ? { ok: true } : { ok: true })
   );
   const storage = makeStorage({ readUIPrefs: async () => ({ allowWorkspaceWrite: true }) });
-  const { sendHandler } = setupChatHandlers({ provider, toolRegistry, storage });
+  const { sendHandler } = setupChatHandlers({
+    provider,
+    toolRegistry,
+    storage,
+    workspaceRoot: '/tmp/snotra-project',
+  });
   const { event, sent } = makeFakeEvent();
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'Schreib eine Datei' }],
-    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.content, 'Geschrieben.');
@@ -348,12 +358,15 @@ test('CHAT_SEND attaches the clamped debug_wait duration to the tool trace entry
     assistantText('fertig'),
   ]);
   const toolRegistry = makeToolRegistryStub(() => JSON.stringify({ ok: true, waited_ms: 500 }));
-  const { sendHandler } = setupChatHandlers({ provider, toolRegistry });
+  const { sendHandler } = setupChatHandlers({
+    provider,
+    toolRegistry,
+    workspaceRoot: '/tmp/snotra-project',
+  });
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'warte kurz' }],
-    workspaceRoot: '/tmp/snotra-project',
   });
 
   // duration_seconds: 0.1 liegt unter dem Minimum (500ms) und wird geclampt.
@@ -365,12 +378,15 @@ test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhaust
   const { provider } = makeScriptedProvider(() =>
     assistantToolCall([toolCall(`call_${Math.random()}`, 'list_directory', { relative_path: '.' })])
   );
-  const { sendHandler } = setupChatHandlers({ provider, maxToolRounds: 2 });
+  const { sendHandler } = setupChatHandlers({
+    provider,
+    maxToolRounds: 2,
+    workspaceRoot: '/tmp/snotra-project',
+  });
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
     messages: [{ role: 'user', content: 'ls endlos' }],
-    workspaceRoot: '/tmp/snotra-project',
   });
 
   assert.equal(res.code, 'TOOL_LIMIT');
@@ -432,12 +448,12 @@ test('CHAT_SEND omits write_file_text from tools when allowWorkspaceWrite is fal
   const { sendHandler } = setupChatHandlers({
     provider,
     storage,
+    workspaceRoot: '/tmp/snotra-test-project',
   });
   const { event } = makeFakeEvent();
 
   await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/snotra-test-project',
   });
 
   const tools = calls[0].tools;
@@ -458,12 +474,12 @@ test('CHAT_SEND includes write_file_text in tools when allowWorkspaceWrite is tr
   const { sendHandler } = setupChatHandlers({
     provider,
     storage,
+    workspaceRoot: '/tmp/snotra-test-project',
   });
   const { event } = makeFakeEvent();
 
   await sendHandler(event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/snotra-test-project',
   });
 
   const tools = calls[0].tools;
@@ -492,13 +508,48 @@ test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPro
   const configuredHandlers = setupChatHandlers({
     provider: configured.provider,
     storage: makeStorage({ readUIPrefs: async () => ({ baseSystemPrompt: 'Sei knapp und freundlich.' }) }),
+    workspaceRoot: '/tmp/snotra-test-project',
   });
   await configuredHandlers.sendHandler(makeFakeEvent().event, {
     messages: [{ role: 'user', content: 'Hallo' }],
-    workspaceRoot: '/tmp/snotra-test-project',
   });
   const systemMessage = configured.calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
   assert.ok(systemMessage.content.startsWith('Sei knapp und freundlich.\n\n'));
   assert.match(systemMessage.content, /geöffneten Ordner „snotra-test-project“/);
+});
+
+test('CHAT_SEND ignoriert einen im Payload mitgeschickten Workspace-Root (#68)', async () => {
+  const { provider } = makeScriptedProvider([
+    assistantToolCall([toolCall('call_1', 'list_directory', { relative_path: '.' })]),
+    assistantText('fertig'),
+  ]);
+  const toolRegistry = makeToolRegistryStub(() => JSON.stringify({ items: [] }));
+  const { sendHandler } = setupChatHandlers({
+    provider,
+    toolRegistry,
+    workspaceRoot: '/tmp/snotra-project',
+  });
+  const { event } = makeFakeEvent();
+
+  await sendHandler(event, {
+    messages: [{ role: 'user', content: 'Was liegt hier?' }],
+    workspaceRoot: '/',
+    selectedPath: '/etc/passwd',
+  });
+
+  assert.equal(toolRegistry.calls[0].context.workspaceRoot, path.resolve('/tmp/snotra-project'));
+});
+
+test('CHAT_SEND ohne aktiven Workspace laesst die Tools ohne Wurzel (#68)', async () => {
+  const { provider, calls } = makeScriptedProvider([assistantText('ok')]);
+  const { sendHandler } = setupChatHandlers({ provider });
+  const { event } = makeFakeEvent();
+
+  await sendHandler(event, {
+    messages: [{ role: 'user', content: 'Hallo' }],
+    workspaceRoot: '/tmp/snotra-project',
+  });
+
+  assert.equal(calls[0].tools, undefined, 'ohne aktiven Root gibt es keine Workspace-Tools');
 });

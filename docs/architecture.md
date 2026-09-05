@@ -70,6 +70,31 @@ in die Chat-Engine gereicht. Das Parsen des Frontmatters liegt als reine
 Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
 `shared/contracts/skills.js`.
 
+## Workspace-Verwaltung im Main-Prozess
+
+Der **aktive Workspace** ist die Vertrauensgrenze des Dateisystems: alle
+Datei-Tools und die IPC-Dateizugriffe lösen relative Pfade gegen ihn auf. Er
+liegt deshalb ausschließlich im Main-Prozess (`main/workspace-state.js`) und
+wird nur von `services/workspace-activation.js` gesetzt (Issue
+[#68](https://github.com/kkrafft1999/snotra/issues/68)):
+
+- `activateChosenFolder` — nach einer echten Auswahl im nativen Ordnerdialog.
+  Nur dieser Weg nimmt einen bisher unbekannten Pfad an; er prüft, dass es ein
+  existierender Ordner ist, schreibt `last-folder.json` und den Verlauf und
+  aktiviert ihn. Der Dialog-Handler (`ipc/dialog-handlers.js`) liefert dem
+  Renderer erst danach den aktivierten Pfad zurück.
+- `activateKnownFolder` — für Verlaufsmenü, Welcome-Chips und die
+  Wiederherstellung beim Start (`SETTINGS_ACTIVATE_FOLDER`). Der übergebene
+  Pfad muss im erneut validierten Verlauf oder als zuletzt geöffneter Ordner
+  gespeichert sein, sonst bleibt der bisherige Root stehen.
+
+Damit kann der Renderer die Grenze nicht verschieben: Er benennt den Workspace
+in keinem Aufruf mehr. `CHAT_SEND`, Skill-Katalog und Chat-Verlauf bekommen den
+Root über `getActiveWorkspaceRoot()` im jeweiligen Handler injiziert; ein im
+Payload mitgeschickter Pfad wird verworfen. Beim Start setzt auch
+`main/index.js` nichts vorab — der Root entsteht erst mit der Aktivierung durch
+den Renderer, sodass Oberfläche und Vertrauensgrenze denselben Ordner meinen.
+
 ## Composition root
 
 `src/main/composition/create-application.js` ist der zentrale Einstieg nach dem

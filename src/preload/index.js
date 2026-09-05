@@ -26,25 +26,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listModels: (payload) => ipcRenderer.invoke(REQ.SETTINGS_LIST_MODELS, payload),
 
   getLastFolder: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LAST_FOLDER),
-  setLastFolder: (folderPath) => ipcRenderer.invoke(REQ.SETTINGS_SET_LAST_FOLDER, folderPath),
+  // Aktiviert einen bereits bekannten Ordner. Der Main-Prozess prueft gegen
+  // den gespeicherten Verlauf; neue Ordner kommen nur ueber openFolder()
+  // herein (Issue #68).
+  activateFolder: (folderPath) => ipcRenderer.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, folderPath),
   getFolderHistory: () => ipcRenderer.invoke(REQ.SETTINGS_GET_FOLDER_HISTORY),
   removeFolderFromHistory: (folderPath) =>
     ipcRenderer.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, folderPath),
   getUIPrefs: () => ipcRenderer.invoke(REQ.SETTINGS_GET_UI_PREFS),
   setUIPrefs: (partial) => ipcRenderer.invoke(REQ.SETTINGS_SET_UI_PREFS, partial),
   getToolCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_TOOL_CATALOG),
-  getSkillCatalog: (workspaceRoot) =>
-    ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, workspaceRoot ?? null),
-  reloadSkills: (workspaceRoot) => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS, workspaceRoot ?? null),
-  getChatHistory: (workspaceRoot) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET, workspaceRoot ?? null),
+  // Skill-Katalog und Chat-Verlauf haengen am aktiven Workspace. Den kennt
+  // der Main-Prozess selbst — er wird hier bewusst nicht mitgeschickt (#68).
+  getSkillCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG),
+  reloadSkills: () => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS),
+  getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),
-  setActiveChatId: (workspaceRoot, id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, workspaceRoot ?? null, id),
+  setActiveChatId: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, id),
   chat: (messages, options) =>
     ipcRenderer.invoke(REQ.CHAT_SEND, {
       messages,
-      workspaceRoot: options?.workspaceRoot ?? null,
       selectedPath: options?.selectedPath ?? null,
       selectedIsDirectory: options?.selectedIsDirectory ?? false,
     }),

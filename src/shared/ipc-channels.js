@@ -27,7 +27,13 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_LIST_MODELS: 'settings:listModels',
 
   SETTINGS_GET_LAST_FOLDER: 'settings:getLastFolder',
-  SETTINGS_SET_LAST_FOLDER: 'settings:setLastFolder',
+  /**
+   * Bereits bekannten Ordner (Verlauf oder letzter Ordner) zum aktiven
+   * Workspace machen. Nimmt bewusst KEINEN freien Pfad an — der Main-Prozess
+   * prüft gegen den gespeicherten Verlauf (Issue #68). Neue Ordner kommen
+   * ausschließlich über DIALOG_OPEN_FOLDER herein.
+   */
+  SETTINGS_ACTIVATE_FOLDER: 'settings:activateFolder',
   SETTINGS_GET_FOLDER_HISTORY: 'settings:getFolderHistory',
   /** Einzelnen Eintrag aus „Zuletzt geöffnete Ordner“ entfernen (Issue #57). */
   SETTINGS_REMOVE_FOLDER_FROM_HISTORY: 'settings:removeFolderFromHistory',

@@ -7,6 +7,7 @@ const { createFsService } = require('../services/fs-service');
 const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
+const { createWorkspaceActivation } = require('../services/workspace-activation');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
@@ -79,6 +80,14 @@ function createApplication({
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
 
+  // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
+  const workspaceActivation = createWorkspaceActivation({
+    fs,
+    path,
+    workspaceFolderStore,
+    setActiveWorkspaceRoot: workspaceState.setActiveWorkspaceRoot,
+  });
+
   const credentials = createCredentialAdapter({ providerSecrets });
   const providerModels = createProviderModelListingAdapter({ providerRuntime, providerSecrets });
 
@@ -138,7 +147,7 @@ function createApplication({
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
   });
 
-  registerDialogHandlers({ ipcMain, dialog, getMainWindow, REQ });
+  registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, REQ });
   const fileContextMenu = Menu && shell ? createFileContextMenu({ Menu, shell, dialog }) : null;
   registerFsHandlers({ ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
@@ -151,12 +160,18 @@ function createApplication({
     providerCatalog,
     providerModels,
     REQ,
-    setActiveWorkspaceRoot: workspaceState.setActiveWorkspaceRoot,
+    workspaceActivation,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     presentation: settingsPresentation,
     toolCatalog: toolRegistry,
     skillCatalog: skillsService,
   });
-  registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ });
+  registerChatHistoryHandlers({
+    ipcMain,
+    chatHistoryStore,
+    REQ,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+  });
   registerUpdateHandlers({ ipcMain, updates, REQ });
   // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in
   // Chat-Antworten wirkungslos — das sandboxed Preload kennt kein `shell`.
@@ -166,6 +181,7 @@ function createApplication({
     chatEngine,
     REQ,
     PUSH,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
 
   async function runUpdateCheck({ silent }) {

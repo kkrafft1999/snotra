@@ -579,10 +579,10 @@ export function initSettingsModal(deps) {
   }
 
   async function loadSkillCatalog({ reload = false } = {}) {
-    const root = appStore.rootPath || null;
     try {
+      // Der Workspace-Root kommt aus dem Main-Prozess (Issue #68).
       const call = reload ? api.reloadSkills : api.getSkillCatalog;
-      const result = typeof call === 'function' ? await call(root) : null;
+      const result = typeof call === 'function' ? await call() : null;
       adoptSkillCatalog(result);
     } catch {
       adoptSkillCatalog(null);

@@ -14,7 +14,8 @@ function registerSettingsHandlers({
   providerCatalog,
   providerModels,
   REQ,
-  setActiveWorkspaceRoot,
+  workspaceActivation = null,
+  getActiveWorkspaceRoot = () => null,
   presentation,
   toolCatalog,
   skillCatalog = null,
@@ -187,12 +188,14 @@ function registerSettingsHandlers({
     return { folderPath };
   });
 
-  ipcMain.handle(REQ.SETTINGS_SET_LAST_FOLDER, async (_event, folderPath) => {
-    await workspaceFolderStore.persistLastFolder(folderPath);
-    if (setActiveWorkspaceRoot) {
-      setActiveWorkspaceRoot(folderPath);
-    }
-    return createSettingsOk();
+  // Nimmt nur Ordner an, die der Main-Prozess schon kennt (Verlauf oder
+  // letzter Ordner). Ein frei uebergebener Pfad kann die Vertrauensgrenze
+  // damit nicht mehr verschieben (Issue #68).
+  ipcMain.handle(REQ.SETTINGS_ACTIVATE_FOLDER, async (_event, folderPath) => {
+    if (!workspaceActivation) return createSettingsError('Ordner konnte nicht geöffnet werden.');
+    const activated = await workspaceActivation.activateKnownFolder(folderPath);
+    if (!activated) return createSettingsError('Ordner konnte nicht geöffnet werden.');
+    return { ...createSettingsOk(), folderPath: activated };
   });
 
   ipcMain.handle(REQ.SETTINGS_GET_FOLDER_HISTORY, async () => {
@@ -214,22 +217,23 @@ function registerSettingsHandlers({
     tools: typeof toolCatalog?.listCatalog === 'function' ? toolCatalog.listCatalog() : [],
   }));
 
-  async function buildSkillCatalog(workspaceRoot) {
+  // Skill-Verzeichnisse haengen am Workspace und sind damit Teil der
+  // Vertrauensgrenze: der Root kommt aus dem Main, nicht aus dem Aufruf.
+  async function buildSkillCatalog() {
     if (!skillCatalog || typeof skillCatalog.listCatalog !== 'function') return { skills: [] };
     const prefs = await uiPrefsStore.readUIPrefs();
+    const workspaceRoot = getActiveWorkspaceRoot();
     return skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
       activeSkills: Array.isArray(prefs.activeSkills) ? prefs.activeSkills : null,
     });
   }
 
-  ipcMain.handle(REQ.SETTINGS_GET_SKILL_CATALOG, async (_event, workspaceRoot) =>
-    buildSkillCatalog(workspaceRoot)
-  );
+  ipcMain.handle(REQ.SETTINGS_GET_SKILL_CATALOG, async () => buildSkillCatalog());
 
-  ipcMain.handle(REQ.SETTINGS_RELOAD_SKILLS, async (_event, workspaceRoot) => {
+  ipcMain.handle(REQ.SETTINGS_RELOAD_SKILLS, async () => {
     if (skillCatalog && typeof skillCatalog.reload === 'function') skillCatalog.reload();
-    return buildSkillCatalog(workspaceRoot);
+    return buildSkillCatalog();
   });
 
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {

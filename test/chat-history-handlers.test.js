@@ -31,14 +31,24 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
   });
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const ipcMain = createMockIpcMain();
-  registerChatHistoryHandlers({ ipcMain, chatHistoryStore, REQ });
-  return { ipcMain, storage, tmpDir };
+  // Der aktive Workspace kommt seit Issue #68 aus dem Main-Prozess, nicht mehr
+  // als Argument der Aufrufe — im Test steuert ihn setActiveRoot.
+  let activeRoot = null;
+  registerChatHistoryHandlers({
+    ipcMain,
+    chatHistoryStore,
+    REQ,
+    getActiveWorkspaceRoot: () => activeRoot,
+  });
+  const setActiveRoot = (root) => {
+    activeRoot = root ?? null;
+  };
+  return { ipcMain, storage, tmpDir, setActiveRoot };
 }
 
-function sessionRow(id, { workspaceRoot = null, updatedAt = 1000, title = `Chat ${id}` } = {}) {
+function sessionRow(id, { updatedAt = 1000, title = `Chat ${id}` } = {}) {
   return {
     id,
-    workspaceRoot,
     title,
     updatedAt,
     messages: [{ role: 'user', content: `hello from ${id}` }],
@@ -46,18 +56,23 @@ function sessionRow(id, { workspaceRoot = null, updatedAt = 1000, title = `Chat 
 }
 
 test('upsert + get round-trips a session and respects workspace filtering', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
+  setActiveRoot(ws);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { workspaceRoot: ws }));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+
+  setActiveRoot(null);
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, 'a');
 
-  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  setActiveRoot(ws);
+  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
   assert.equal(inWs.activeChatId, 'a');
 
-  const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, null);
+  setActiveRoot(null);
+  const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(noWs.sessions.map((s) => s.id), ['b']);
   assert.equal(noWs.activeChatId, null);
 });
@@ -69,15 +84,16 @@ test('upsert rejects invalid session rows', async (t) => {
 });
 
 test('delete removes the session and its active pointer', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { workspaceRoot: ws }));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, 'a');
+  setActiveRoot(ws);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   const res = await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
   assert.equal(res.ok, true);
 
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(after.sessions, []);
   assert.equal(after.activeChatId, null);
 
@@ -85,56 +101,60 @@ test('delete removes the session and its active pointer', async (t) => {
 });
 
 test('setActive clears the pointer for empty ids', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { workspaceRoot: ws }));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, 'a');
-  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, null);
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  setActiveRoot(ws);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, null);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.equal(after.activeChatId, null);
 });
 
 test('pruning beyond MAX_CHAT_SESSIONS drops oldest sessions and their active pointers', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t, { maxChatSessions: 3 });
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 3 });
   const ws = tmpDir;
+  setActiveRoot(ws);
   for (let i = 1; i <= 4; i++) {
     await ipcMain.invoke(
       REQ.CHAT_HISTORY_UPSERT,
-      sessionRow(`s${i}`, { workspaceRoot: ws, updatedAt: i * 1000 })
+      sessionRow(`s${i}`, { updatedAt: i * 1000 })
     );
-    if (i === 1) await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, 's1');
+    if (i === 1) await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 's1');
   }
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(after.sessions.map((s) => s.id), ['s4', 's3', 's2']);
   assert.equal(after.activeChatId, null, 'active pointer to pruned s1 must be cleared');
 });
 
 test('parallel upserts of distinct sessions lose no updates', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t, { maxChatSessions: 100 });
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 100 });
   const ws = tmpDir;
+  setActiveRoot(ws);
   const ids = Array.from({ length: 20 }, (_, i) => `c${i}`);
   await Promise.all(
     ids.map((id, i) =>
-      ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow(id, { workspaceRoot: ws, updatedAt: i }))
+      ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow(id, { updatedAt: i }))
     )
   );
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(new Set(after.sessions.map((s) => s.id)), new Set(ids));
 });
 
 test('parallel upsert/delete/setActive interleaving stays consistent', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t, { maxChatSessions: 100 });
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 100 });
   const ws = tmpDir;
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep', { workspaceRoot: ws }));
+  setActiveRoot(ws);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep'));
 
   await Promise.all([
-    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('temp', { workspaceRoot: ws })),
+    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('temp')),
     ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'temp'),
-    ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, ws, 'keep'),
-    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep', { workspaceRoot: ws, title: 'Updated' })),
+    ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'keep'),
+    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep', { title: 'Updated' })),
   ]);
 
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   const keep = after.sessions.find((s) => s.id === 'keep');
   assert.ok(keep, 'session "keep" must survive the interleaving');
   assert.equal(keep.title, 'Updated');
@@ -142,28 +162,29 @@ test('parallel upsert/delete/setActive interleaving stays consistent', async (t)
 });
 
 test('repeated upserts of the same id serialize through the lock (last write wins)', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t, { maxChatSessions: 100 });
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 100 });
   const ws = tmpDir;
+  setActiveRoot(ws);
   await Promise.all(
     Array.from({ length: 10 }, (_, i) =>
       ipcMain.invoke(
         REQ.CHAT_HISTORY_UPSERT,
-        sessionRow('same', { workspaceRoot: ws, updatedAt: 1000 + i, title: `v${i}` })
+        sessionRow('same', { updatedAt: 1000 + i, title: `v${i}` })
       )
     )
   );
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.equal(after.sessions.length, 1, 'concurrent upserts of one id must not duplicate it');
   assert.equal(after.sessions[0].title, 'v9');
 });
 
 test('upsert accepts semantic live messages and GET returns normalized loaded shape', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
+  setActiveRoot(ws);
 
   const upsertRes = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
     id: 'rich',
-    workspaceRoot: ws,
     updatedAt: 5000,
     messages: [
       { role: 'user', content: 'Was steht in der Datei?' },
@@ -182,7 +203,7 @@ test('upsert accepts semantic live messages and GET returns normalized loaded sh
   });
   assert.equal(upsertRes.ok, true);
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.equal(got.sessions.length, 1);
   const session = got.sessions[0];
   assert.equal(session.title, 'Was steht in der Datei?');
@@ -195,8 +216,9 @@ test('upsert accepts semantic live messages and GET returns normalized loaded sh
 });
 
 test('GET normalizes legacy on-disk session rows', async (t) => {
-  const { ipcMain, storage, tmpDir } = await setup(t);
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
+  setActiveRoot(ws);
 
   await storage.withChatHistoryLock(async () => {
     const store = await storage.readChatHistoryStore({ skipMigration: true });
@@ -210,7 +232,7 @@ test('GET normalizes legacy on-disk session rows', async (t) => {
     await storage.writeChatHistoryStore(store);
   });
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   const legacy = got.sessions.find((s) => s.id === 'legacy');
   assert.ok(legacy);
   assert.equal(legacy.title, 'Alter Titel');
@@ -221,34 +243,34 @@ test('GET normalizes legacy on-disk session rows', async (t) => {
 });
 
 test('upsert preserves an existing stored title when the semantic payload omits title', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
+  setActiveRoot(ws);
 
   await ipcMain.invoke(
     REQ.CHAT_HISTORY_UPSERT,
-    sessionRow('keep-title', { workspaceRoot: ws, title: 'Mein gespeicherter Titel', updatedAt: 1000 })
+    sessionRow('keep-title', { title: 'Mein gespeicherter Titel', updatedAt: 1000 })
   );
 
   const upsertRes = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
     id: 'keep-title',
-    workspaceRoot: ws,
     updatedAt: 2000,
     messages: [{ role: 'user', content: 'Späterer Verlauf ohne Titel im Payload' }],
   });
   assert.equal(upsertRes.ok, true);
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   const session = got.sessions.find((s) => s.id === 'keep-title');
   assert.equal(session.title, 'Mein gespeicherter Titel');
 });
 
 test('upsert rejects a session whose sanitized messages become empty', async (t) => {
-  const { ipcMain, tmpDir } = await setup(t);
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
+  setActiveRoot(ws);
 
   const res = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
     id: 'empty',
-    workspaceRoot: ws,
     updatedAt: 1000,
     messages: [
       { role: 'user', content: '   ' },
@@ -258,6 +280,25 @@ test('upsert rejects a session whose sanitized messages become empty', async (t)
   });
   assert.deepEqual(res, { ok: false });
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.equal(got.sessions.length, 0);
+});
+
+test('Chat-Verlauf ignoriert einen vom Renderer mitgeschickten Workspace (#68)', async (t) => {
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
+  const ws = tmpDir;
+  setActiveRoot(ws);
+
+  // Manipulierte Payload: Session behauptet, zu '/' zu gehoeren.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: '/' });
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a', '/');
+
+  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, '/');
+  assert.equal(inWs.workspaceRoot, ws, 'gefiltert wird nach dem aktiven Root des Main-Prozesses');
+  assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
+  assert.equal(inWs.activeChatId, 'a');
+
+  setActiveRoot(null);
+  const elsewhere = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  assert.deepEqual(elsewhere.sessions, [], 'die Session haengt am aktiven Root, nicht am Payload');
 });

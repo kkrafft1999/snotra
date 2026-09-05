@@ -5,6 +5,7 @@ function registerChatHandlers({
   chatEngine,
   REQ,
   PUSH,
+  getActiveWorkspaceRoot = () => null,
 }) {
   const engine = chatEngine;
 
@@ -28,10 +29,18 @@ function registerChatHandlers({
     return engine.generateTitle({ messages: payload?.messages });
   });
 
+  // Der Workspace-Root kommt aus dem Main-Prozess, nicht aus dem Payload
+  // (Issue #68). Die Nutzlast wird feldweise uebernommen, damit der Renderer
+  // auch nichts anderes an der Engine vorbeischmuggeln kann.
   ipcMain.handle(REQ.CHAT_SEND, async (event, payload) => {
     return engine.send({
       sessionId: event.sender.id,
-      payload,
+      payload: {
+        messages: payload?.messages,
+        workspaceRoot: getActiveWorkspaceRoot(),
+        selectedPath: payload?.selectedPath ?? null,
+        selectedIsDirectory: payload?.selectedIsDirectory === true,
+      },
       onEvent: (engineEvent) => forwardEvent(event.sender, engineEvent),
     });
   });
