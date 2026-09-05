@@ -56,17 +56,21 @@ export function initChatModelPicker({
       const main = document.createElement('span');
       main.className = 'chat-model-menu-opt-main';
 
+      // Einzeilig: Anbieter und Modell, dahinter gedaempft der Zusatz
+      // (z. B. das Reasoning-Level). Weitere Preset-Details wie Serveradresse
+      // stehen im Einstellungsdialog, nicht in diesem Schnellwechsel-Menue.
       const t = document.createElement('span');
       t.className = 'chat-model-menu-opt-title';
       t.lang = 'en';
-      t.textContent = pr.label || '';
+      t.textContent = pr.labelBase || pr.label || '';
       main.appendChild(t);
 
-      if (pr.sublabel) {
-        const sub = document.createElement('span');
-        sub.className = 'chat-model-menu-opt-meta';
-        sub.textContent = pr.sublabel;
-        main.appendChild(sub);
+      if (pr.optionSuffix) {
+        const suffix = document.createElement('span');
+        suffix.className = 'chat-model-menu-opt-suffix';
+        suffix.lang = 'en';
+        suffix.textContent = pr.optionSuffix;
+        main.appendChild(suffix);
       }
 
       btn.appendChild(main);

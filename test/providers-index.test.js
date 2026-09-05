@@ -33,5 +33,8 @@ test('openai presetFields declare identity-affecting reasoning options', () => {
   const field = openai.presentation.presetFields[0];
   assert.equal(field.key, 'reasoningEffort');
   assert.equal(field.affectsPresetIdentity, true);
-  assert.equal(field.detailPrefix, 'reasoning_effort: ');
+  // Ohne Praefix: Der nackte Wert haengt im Chat hinter dem Modellnamen.
+  assert.equal(field.detailPrefix, '');
+  assert.equal(field.showAsSuffix, true);
+  assert.equal(field.formatDetail('high'), 'high');
 });

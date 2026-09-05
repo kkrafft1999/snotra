@@ -2,6 +2,7 @@
 
 const {
   formatPresetSublabelFromView,
+  formatPresetOptionSuffixFromView,
   buildPresetFieldViews,
   buildProviderFormView,
 } = require('../../shared/contracts/settings');
@@ -59,7 +60,11 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
 
     const connection = connectionOverrides?.[preset.providerId];
     const sublabel = formatPresetSublabelFromView(preset, providerView, connection);
-    const label = `${providerView.name} · ${preset.model || providerView.defaultModel}`;
+    // Zusatz wie das Reasoning-Level haengt hinter dem Modell, damit Chat-Menue
+    // und Pille einzeilig bleiben: „OpenAI · gpt-5 · high“.
+    const optionSuffix = formatPresetOptionSuffixFromView(preset, providerView);
+    const base = `${providerView.name} · ${preset.model || providerView.defaultModel}`;
+    const label = optionSuffix ? `${base} · ${optionSuffix}` : base;
 
     return {
       id: preset.id,
@@ -67,6 +72,8 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       model: preset.model,
       menuVisible: preset.menuVisible !== false,
       label,
+      labelBase: base,
+      optionSuffix,
       sublabel: sublabel.text,
       sublabelStyle: sublabel.style,
       configured: providerView.configured,

@@ -262,13 +262,16 @@ module.exports = {
         defaultValue: 'medium',
         affectsPresetIdentity: true,
         detailStyle: 'mono',
-        detailPrefix: 'reasoning_effort: ',
+        // Ohne Praefix: Der nackte Wert steht im Chat hinter dem Modellnamen
+        // („OpenAI · gpt-5 · high“), der API-Parametername gehoert in den Hint.
+        detailPrefix: '',
+        showAsSuffix: true,
         options: [
           { value: 'low', label: 'low' },
           { value: 'medium', label: 'medium' },
           { value: 'high', label: 'high' },
         ],
-        formatDetail: (value) => `reasoning_effort: ${value}`,
+        formatDetail: (value) => `${value}`,
       },
       {
         key: 'reasoningSummary',

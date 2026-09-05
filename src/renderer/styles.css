@@ -762,7 +762,7 @@ summary:focus-visible,
 .chat-model-menu-option {
   display: flex;
   width: 100%;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 8px 12px;
   border: none;
@@ -781,22 +781,33 @@ summary:focus-visible,
   background: var(--ds-blue-soft);
 }
 
+/* Einzeilig: Modellname und dahinter der gedaempfte Zusatz (Reasoning-Level). */
 .chat-model-menu-opt-main {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
+}
+
+.chat-model-menu-opt-suffix {
+  flex-shrink: 0;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+/* Trennpunkt wie in der Pille („OpenAI · gpt-5 · high“), aber als
+ * Dekoration im Stylesheet statt im Textinhalt. */
+.chat-model-menu-opt-suffix::before {
+  content: '·';
+  margin-right: 6px;
+  opacity: 0.55;
 }
 
 .chat-model-menu-opt-title {
   font-family: var(--font-ui);
   font-size: var(--ds-font-size-md);
   font-weight: var(--ds-font-weight-bold);
-}
-
-.chat-model-menu-opt-meta {
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
 }
 
 .chat-header-actions {

@@ -66,12 +66,19 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   assert.equal(dto.presets.length, 2);
 
   const openaiPreset = dto.presets.find((p) => p.id === 'p1');
-  assert.equal(openaiPreset.label, 'OpenAI · gpt-4o-mini');
-  assert.equal(openaiPreset.sublabel, 'reasoning_effort: medium');
+  // Das Reasoning-Level haengt hinter dem Modell, damit Chat-Pille und
+  // Chat-Menue einzeilig bleiben; labelBase/optionSuffix trennen die Teile.
+  assert.equal(openaiPreset.label, 'OpenAI · gpt-4o-mini · medium');
+  assert.equal(openaiPreset.labelBase, 'OpenAI · gpt-4o-mini');
+  assert.equal(openaiPreset.optionSuffix, 'medium');
+  assert.equal(openaiPreset.sublabel, 'medium');
   assert.equal(openaiPreset.sublabelStyle, 'mono');
   assert.equal(openaiPreset.configured, true);
 
   const ollamaPreset = dto.presets.find((p) => p.id === 'p2');
+  // Provider ohne Suffix-Feld: Label bleibt unveraendert, kein Zusatz.
+  assert.equal(ollamaPreset.optionSuffix, '');
+  assert.equal(ollamaPreset.label, ollamaPreset.labelBase);
   assert.match(ollamaPreset.sublabel, /Server: 127\.0\.0\.1:11434/);
   assert.match(ollamaPreset.sublabel, /TLS geprüft/);
 
