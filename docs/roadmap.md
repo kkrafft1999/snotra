@@ -172,22 +172,27 @@ Entscheidung vom 2026-09-04: Bevor externe Tools dazukommen, bekommt Snotra
 ein Berechtigungsmodell für Tool-Aufrufe. Reihenfolge:
 
 1. **Sicherheitskonzept für Tool-Aufrufe**
-   ([#65](https://github.com/kkrafft1999/snotra/issues/65)) — Konzept-Dokument
-   `docs/sicherheitskonzept.md` nach Vorbild von Claude Code, Cursor und
-   Codex: drei Modi (Auto / Immer fragen / Intelligent), Risikoklassen statt
-   `requiresWrite`, Bestätigungsdialog im Chat, harte Grenzen, die kein Modus
-   aufhebt.
+   ([#65](https://github.com/kkrafft1999/snotra/issues/65)) —
+   [Konzept ausgearbeitet (2026-09-05)](./sicherheitskonzept.md): drei Modi
+   (Auto / Immer fragen / Intelligent), Risikoklassen und Entscheidungsmatrix,
+   Schutz sensibler Inhalte, Bestätigungskarte, gemerkte Entscheidungen und
+   harte Grenzen. Dies ist das Zielverhalten; die Schutzfunktionen folgen
+   mit #66/#67.
 2. **Kern-Infrastruktur umsetzen** in zwei Issues:
    [#66](https://github.com/kkrafft1999/snotra/issues/66) Kern
    (Risikoklassen in der Tool-Registry, Policy-Entscheidung, Freigabe-Schleife
    im Tool-Loop, Persistenz) und
    [#67](https://github.com/kkrafft1999/snotra/issues/67) UI (Modus-Wahl,
-   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — getestet
-   mit den vorhandenen Dateisystem-Tools.
+   Bestätigungskarte im Chat, Verwaltung gemerkter Freigaben) — gemäß
+   [Konzept und Abnahmekriterien](./sicherheitskonzept.md#11-offene-punkte-und-umsetzung),
+   zu testen mit den vorhandenen Dateisystem-Tools. Die Workspace-Autorität
+   aus [#68](https://github.com/kkrafft1999/snotra/issues/68) berücksichtigen.
 3. Erst danach **MCP-Server**
    ([#62](https://github.com/kkrafft1999/snotra/issues/62)) und **Web-Suche**
-   ([#63](https://github.com/kkrafft1999/snotra/issues/63)), die sich an die
-   fertige Infrastruktur andocken.
+   ([#63](https://github.com/kkrafft1999/snotra/issues/63)): beide sind vom
+   Sicherheitskonzept und der fertig getesteten Umsetzung **von #66 und #67
+   abhängig**. MCP-Klassifizierung, Server-Isolation und Web-Netzwerkregeln
+   werden in diesen Folge-Issues konkretisiert.
 
 ## 💡 Später / Ideen
 
