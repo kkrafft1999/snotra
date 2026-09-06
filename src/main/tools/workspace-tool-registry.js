@@ -528,7 +528,9 @@ function createWorkspaceToolRegistry({ fsService }) {
         'zusammenhängenden Änderungen in einem Aufruf — entweder als Liste von Ersetzungen ' +
         '(edits, alle in derselben Datei, in dieser Reihenfolge angewendet) oder als unified diff ' +
         '(patch, auch über mehrere Dateien hinweg). Alles oder nichts: schlägt ein Schritt bzw. ein ' +
-        'Hunk fehl, bleibt jede betroffene Datei unverändert. Für eine einzelne Ersetzung ist ' +
+        'Hunk fehl, bleibt jede betroffene Datei unverändert. Jede Datei wird für sich atomar ' +
+        'ersetzt (nie halb geschrieben); über mehrere Dateien hinweg gilt das nicht — scheitert ' +
+        'ein Schreibvorgang, werden bereits geschriebene Dateien zurückgesetzt. Für eine einzelne Ersetzung ist ' +
         'edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann ' +
         'apply_patch nicht. Maximale Dateigröße: 2 MB.',
       promptDescription:

@@ -1095,6 +1095,39 @@ function createFsService({
   }
 
   /**
+   * Schreibt eine Zieldatei atomar (Issue #75): der Inhalt landet erst in einer
+   * temporären Datei im selben Ordner und wird dann per rename an die Stelle der
+   * Zieldatei gesetzt. Eine bestehende Datei ist danach entweder vollständig
+   * ersetzt oder unverändert — nie halb geschrieben (Abbruch, voller Datenträger,
+   * I/O-Fehler). Die Dateirechte (mode) einer bestehenden Datei bleiben erhalten.
+   * Schlägt ein Schritt fehl, wird die temporäre Datei wieder entfernt.
+   */
+  async function writeFileAtomic(absPath, content) {
+    let mode = null;
+    try {
+      const st = await fs.stat(absPath);
+      if (st.isDirectory()) {
+        throw new Error('Pfad ist ein Ordner, keine Datei.');
+      }
+      mode = st.mode & 0o7777;
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    }
+    const suffix = `${process.pid.toString(36)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const tmpPath = path.join(path.dirname(absPath), `.${path.basename(absPath)}.snotra-tmp-${suffix}`);
+    try {
+      await fs.writeFile(tmpPath, content, 'utf8');
+      if (mode !== null && typeof fs.chmod === 'function') {
+        await fs.chmod(tmpPath, mode);
+      }
+      await fs.rename(tmpPath, absPath);
+    } catch (e) {
+      await fs.unlink(tmpPath).catch(() => {});
+      throw e;
+    }
+  }
+
+  /**
    * @param {object} [options]
    * @param {{ trashItem?: Function|null, allowUnrecoverable?: boolean }} [options.recovery]
    *   Ohne `trashItem` und ohne `allowUnrecoverable` wird eine bestehende Datei
@@ -1151,7 +1184,7 @@ function createFsService({
         }
       }
       await fs.mkdir(path.dirname(absPath), { recursive: true });
-      await fs.writeFile(absPath, args.content, 'utf8');
+      await writeFileAtomic(absPath, args.content);
       return JSON.stringify({
         relative_path: rel,
         created: !existed,
@@ -1219,7 +1252,7 @@ function createFsService({
           error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
         });
       }
-      await fs.writeFile(absPath, updated, 'utf8');
+      await writeFileAtomic(absPath, updated);
       return JSON.stringify({
         relative_path: rel,
         replacements: args.replace_all === true ? count : 1,
@@ -1270,7 +1303,7 @@ function createFsService({
           error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
         });
       }
-      await fs.writeFile(absPath, applied.text, 'utf8');
+      await writeFileAtomic(absPath, applied.text);
       return JSON.stringify({
         mode: 'edits',
         relative_path: rel,
@@ -1289,7 +1322,7 @@ function createFsService({
     const failed = [];
     for (const entry of written) {
       try {
-        await fs.writeFile(entry.absPath, entry.original, 'utf8');
+        await writeFileAtomic(entry.absPath, entry.original);
       } catch {
         failed.push(entry.relativePath);
       }
@@ -1301,7 +1334,9 @@ function createFsService({
    * apply_patch, Modus `patch`: ein unified diff über eine oder mehrere Dateien.
    * Phase 1 prüft alles und berechnet die neuen Inhalte im Speicher, Phase 2
    * schreibt sie; scheitert ein Schreibvorgang, werden die bereits geschriebenen
-   * Dateien auf ihren Ausgangsinhalt zurückgesetzt.
+   * Dateien auf ihren Ausgangsinhalt zurückgesetzt. Atomar ist jede einzelne
+   * Datei (writeFileAtomic), nicht der Satz — ein Prozessabbruch zwischen zwei
+   * Dateien hinterlässt einen teilweise angewendeten Patch (Issue #75).
    */
   async function runApplyDiffMode(args, workspaceRoot) {
     if (typeof args.patch !== 'string' || !args.patch.trim()) {
@@ -1382,7 +1417,7 @@ function createFsService({
     const written = [];
     for (const entry of planned) {
       try {
-        await fs.writeFile(entry.absPath, entry.updated, 'utf8');
+        await writeFileAtomic(entry.absPath, entry.updated);
         written.push(entry);
       } catch (e) {
         const failed = await rollbackPatchedFiles(written);

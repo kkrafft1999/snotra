@@ -2416,3 +2416,226 @@ test('containsPath accepts the root itself and children, rejects siblings and tr
   assert.equal(svc.containsPath('/ws', '/ws-evil/file.txt'), false);
   assert.equal(svc.containsPath('/ws', '/other'), false);
 });
+
+// ---------------------------------------------------------------------------
+// Atomares Schreiben der Workspace-Schreibtools (Issue #75, Review SNO-08)
+// ---------------------------------------------------------------------------
+
+const TMP_MARKER = '.snotra-tmp-';
+const IS_WINDOWS = process.platform === 'win32';
+const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+
+/** fs-Variante, deren Schreib- bzw. Umbenennungsschritt gezielt scheitert. */
+function makeFailingFs({ failWriteOfTmp = false, failRename = false, failRenameFor = null } = {}) {
+  return {
+    ...fs,
+    writeFile: async (target, ...rest) => {
+      if (failWriteOfTmp && String(target).includes(TMP_MARKER)) {
+        throw Object.assign(new Error('ENOSPC: kein Platz auf dem Datenträger'), { code: 'ENOSPC' });
+      }
+      return fs.writeFile(target, ...rest);
+    },
+    rename: async (from, to) => {
+      const hit = failRename && (!failRenameFor || path.basename(to) === failRenameFor);
+      if (hit) {
+        throw Object.assign(new Error('EIO: Umbenennen fehlgeschlagen'), { code: 'EIO' });
+      }
+      return fs.rename(from, to);
+    },
+  };
+}
+
+function makeRegistryWithFs(fakeFs) {
+  return makeToolRegistry(
+    createFsService({ fs: fakeFs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 })
+  );
+}
+
+async function listTmpFiles(dir) {
+  return (await fs.readdir(dir)).filter((name) => name.includes(TMP_MARKER));
+}
+
+async function makeAtomicFixture(t, files) {
+  return makePatchFixture(t, files);
+}
+
+test('write_file_text leaves the original untouched when the temp write fails (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.txt': 'original' });
+  const registry = makeRegistryWithFs(makeFailingFs({ failWriteOfTmp: true }));
+
+  const out = JSON.parse(
+    await registry.execute(
+      'write_file_text',
+      { relative_path: 'a.txt', content: 'neu' },
+      { workspaceRoot: tmpRoot, allowWrite: true }
+    )
+  );
+  assert.match(out.error, /ENOSPC/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'original');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
+
+test('write_file_text leaves the original untouched and cleans up when rename fails (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.txt': 'original' });
+  const registry = makeRegistryWithFs(makeFailingFs({ failRename: true }));
+
+  const out = JSON.parse(
+    await registry.execute(
+      'write_file_text',
+      { relative_path: 'a.txt', content: 'neu' },
+      { workspaceRoot: tmpRoot, allowWrite: true }
+    )
+  );
+  assert.match(out.error, /EIO/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'original');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
+
+test('write_file_text and edit_file leave no temp files behind on success (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.txt': 'eins zwei' });
+  const registry = makeToolRegistry();
+
+  const written = JSON.parse(
+    await registry.execute(
+      'write_file_text',
+      { relative_path: 'sub/neu.txt', content: 'inhalt' },
+      { workspaceRoot: tmpRoot, allowWrite: true }
+    )
+  );
+  assert.equal(written.created, true);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'sub', 'neu.txt'), 'utf8'), 'inhalt');
+
+  const edited = JSON.parse(
+    await registry.execute(
+      'edit_file',
+      { relative_path: 'a.txt', old_string: 'zwei', new_string: 'drei' },
+      { workspaceRoot: tmpRoot, allowWrite: true }
+    )
+  );
+  assert.equal(edited.replacements, 1);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins drei');
+
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+  assert.deepEqual(await listTmpFiles(path.join(tmpRoot, 'sub')), []);
+});
+
+test('edit_file keeps the original when the temp write fails (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.txt': 'eins zwei' });
+  const registry = makeRegistryWithFs(makeFailingFs({ failWriteOfTmp: true }));
+
+  const out = JSON.parse(
+    await registry.execute(
+      'edit_file',
+      { relative_path: 'a.txt', old_string: 'zwei', new_string: 'drei' },
+      { workspaceRoot: tmpRoot, allowWrite: true }
+    )
+  );
+  assert.match(out.error, /ENOSPC/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins zwei');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
+
+test('write tools preserve the file mode of an existing file (Issue #75)', async (t) => {
+  if (IS_WINDOWS) {
+    t.skip('Unix-Dateirechte gibt es unter Windows nicht.');
+    return;
+  }
+  const tmpRoot = await makeAtomicFixture(t, { 'a.txt': 'eins zwei', 'b.txt': 'alpha' });
+  await fs.chmod(path.join(tmpRoot, 'a.txt'), 0o600);
+  await fs.chmod(path.join(tmpRoot, 'b.txt'), 0o640);
+  const registry = makeToolRegistry();
+
+  await registry.execute(
+    'write_file_text',
+    { relative_path: 'a.txt', content: 'neu' },
+    { workspaceRoot: tmpRoot, allowWrite: true }
+  );
+  await registry.execute(
+    'edit_file',
+    { relative_path: 'b.txt', old_string: 'alpha', new_string: 'beta' },
+    { workspaceRoot: tmpRoot, allowWrite: true }
+  );
+
+  assert.equal((await fs.stat(path.join(tmpRoot, 'a.txt'))).mode & 0o777, 0o600);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'neu');
+  assert.equal((await fs.stat(path.join(tmpRoot, 'b.txt'))).mode & 0o777, 0o640);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'b.txt'), 'utf8'), 'beta');
+});
+
+test('write_file_text reports missing directory permissions without touching the file (Issue #75)', async (t) => {
+  if (IS_WINDOWS || IS_ROOT) {
+    t.skip('Verzeichnisrechte greifen unter Windows bzw. als root nicht.');
+    return;
+  }
+  const tmpRoot = await makeAtomicFixture(t, {});
+  const lockedDir = path.join(tmpRoot, 'locked');
+  await fs.mkdir(lockedDir);
+  await fs.writeFile(path.join(lockedDir, 'a.txt'), 'original', 'utf8');
+  await fs.chmod(lockedDir, 0o555);
+  t.after(() => fs.chmod(lockedDir, 0o755).catch(() => {}));
+  const registry = makeToolRegistry();
+
+  const out = JSON.parse(
+    await registry.execute(
+      'write_file_text',
+      { relative_path: 'locked/a.txt', content: 'neu' },
+      { workspaceRoot: tmpRoot, allowWrite: true, recovery: { allowUnrecoverable: true } }
+    )
+  );
+  assert.match(out.error, /EACCES|EPERM/);
+  assert.equal(await fs.readFile(path.join(lockedDir, 'a.txt'), 'utf8'), 'original');
+  await fs.chmod(lockedDir, 0o755);
+  assert.deepEqual(await listTmpFiles(lockedDir), []);
+});
+
+test('apply_patch (edits) keeps the file when the temp write fails (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.js': 'eins\nzwei\n' });
+  const run = makePatchRunner(tmpRoot, makeRegistryWithFs(makeFailingFs({ failWriteOfTmp: true })));
+
+  const out = await run({ relative_path: 'a.js', edits: [{ old_string: 'zwei', new_string: 'ZWEI' }] });
+  assert.match(out.error, /ENOSPC/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\nzwei\n');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
+
+test('apply_patch (patch) rolls back already written files atomically when a later file fails (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.js': 'eins\nzwei\n', 'b.js': 'alpha\nbeta\n' });
+  // Nur das Umbenennen auf b.js scheitert; a.js wird geschrieben und muss zurückgesetzt werden.
+  const run = makePatchRunner(
+    tmpRoot,
+    makeRegistryWithFs(makeFailingFs({ failRename: true, failRenameFor: 'b.js' }))
+  );
+
+  const out = await run({
+    patch: diff(
+      '--- a.js',
+      '+++ a.js',
+      '@@ -1,1 +1,1 @@',
+      '-eins',
+      '+EINS',
+      '--- b.js',
+      '+++ b.js',
+      '@@ -1,1 +1,1 @@',
+      '-alpha',
+      '+ALPHA'
+    ),
+  });
+  assert.match(out.error, /"b\.js": EIO/);
+  assert.match(out.error, /zurückgesetzt/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\nzwei\n');
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'alpha\nbeta\n');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
+
+test('apply_patch (patch) leaves no temp files behind after a multi-file success (Issue #75)', async (t) => {
+  const tmpRoot = await makeAtomicFixture(t, { 'a.js': 'eins\n', 'b.js': 'alpha\n' });
+  const run = makePatchRunner(tmpRoot);
+
+  const out = await run({
+    patch: diff('--- a.js', '+++ a.js', '@@ -1,1 +1,1 @@', '-eins', '+EINS', '--- b.js', '+++ b.js', '@@ -1,1 +1,1 @@', '-alpha', '+ALPHA'),
+  });
+  assert.equal(out.files_changed, 2);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'EINS\n');
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'ALPHA\n');
+  assert.deepEqual(await listTmpFiles(tmpRoot), []);
+});
