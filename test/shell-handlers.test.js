@@ -101,6 +101,43 @@ test('writeClipboardText schreibt Text und meldet fehlende Zwischenablage', asyn
   assert.equal(result.ok, false);
 });
 
+// Ab Electron 44 ist `clipboard.writeText` asynchron. Ohne `await` im Handler
+// liefe die Ablehnung am try/catch vorbei: der Aufrufer bekaeme `ok: true`,
+// obwohl nichts kopiert wurde, und der Fehler landete als unhandled rejection.
+test('writeClipboardText meldet einen Fehler, wenn das Schreiben asynchron fehlschlaegt', async () => {
+  const { ipcMain } = setup({
+    clipboard: { writeText: () => Promise.reject(new Error('Zwischenablage gesperrt.')) },
+  });
+
+  const result = await ipcMain.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, 'hallo');
+  assert.deepEqual(result, { ok: false, error: 'Zwischenablage gesperrt.' });
+});
+
+// Der Handler muss auf das Promise warten, sonst kann er den Erfolg gar nicht
+// kennen. Wir loesen erst nach einem Tick auf und pruefen, dass die Antwort
+// danach kommt.
+test('writeClipboardText wartet auf das Promise von writeText', async () => {
+  let resolveWrite;
+  const written = [];
+  const { ipcMain } = setup({
+    clipboard: {
+      writeText: (t) => new Promise((resolve) => {
+        resolveWrite = () => {
+          written.push(t);
+          resolve();
+        };
+      }),
+    },
+  });
+
+  const pending = ipcMain.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, 'spaet');
+  assert.deepEqual(written, [], 'vor dem Aufloesen darf nichts geschrieben sein');
+  resolveWrite();
+
+  assert.deepEqual(await pending, { ok: true });
+  assert.deepEqual(written, ['spaet']);
+});
+
 // Regressionssperre: genau dieser Import hat den Bug verursacht. Im sandboxed
 // Preload existieren nur die hier erlaubten Member von 'electron'.
 test('das Preload importiert nur Module, die es im Sandbox-Modus gibt', () => {

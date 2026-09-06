@@ -38,7 +38,10 @@ function registerShellHandlers({ ipcMain, shell, clipboard = null, REQ }) {
   ipcMain.handle(REQ.SHELL_WRITE_CLIPBOARD_TEXT, async (_event, text) => {
     if (!clipboard) return { ok: false, error: 'Zwischenablage nicht verfügbar.' };
     try {
-      clipboard.writeText(String(text ?? ''));
+      // Ab Electron 44 liefert `writeText` ein Promise (Angleichung an die
+      // W3C-Clipboard-API). Ohne `await` liefe ein Fehler am catch vorbei und
+      // wir meldeten Erfolg, obwohl nichts in der Zwischenablage landete.
+      await clipboard.writeText(String(text ?? ''));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e?.message || 'Konnte nichts in die Zwischenablage legen.' };

@@ -200,7 +200,7 @@ function createApplication({
     },
   });
 
-  registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, REQ });
+  registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
   const fileContextMenu = Menu && shell ? createFileContextMenu({ Menu, shell, dialog }) : null;
   registerFsHandlers({ ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
