@@ -153,7 +153,7 @@ const PERMISSION_DENIED_MESSAGES = Object.freeze({
   [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]:
     'Keine Oberfläche für Freigaben verfügbar; der Aufruf wurde nicht ausgeführt.',
   [PERMISSION_DENIAL_REASONS.REPEATED_DENIAL]:
-    'Derselbe Aufruf wurde in diesem Lauf bereits abgelehnt.',
+    'Derselbe Aufruf wurde in diesem Lauf bereits abgelehnt; der Lauf wurde beendet.',
   [PERMISSION_DENIAL_REASONS.NO_WORKSPACE]: 'Kein Arbeitsordner geöffnet; Tools nicht verfügbar.',
   [PERMISSION_DENIAL_REASONS.NOT_APPROVED]: 'Tool-Aufruf ohne Freigabe; nicht ausgeführt.',
 });

@@ -262,7 +262,11 @@ Lauf mit `permission_denied` und Grund `request_invalidated`; das Ergebnis wird
 im Verlauf gespeichert, aber es startet kein weiterer Provider-Request, weil der
 Nutzer in diesem Moment typischerweise nicht zusieht. Nur eine ausdrückliche
 Ablehnung lässt das Modell mit dem Ablehnungsergebnis weiterarbeiten. Die
-Ablehnung bleibt im lokalen Verlauf sichtbar.
+Ablehnung bleibt im lokalen Verlauf sichtbar. Fordert das Modell denselben
+abgelehnten Plan im selben Lauf unverändert erneut an, gibt es keine zweite
+Karte: Der Aufruf wird mit Grund `repeated_denial` abgelehnt und der Lauf endet,
+damit Wiederholen weder eine andere Antwort noch weitere Tool-Runden erzeugt und
+der Audit-Verlauf die Ablehnung eindeutig zeigt.
 Bloßer Fokus-/Fensterwechsel erlaubt nichts und lässt die Karte offen.
 Esc lehnt ab; initial kein Fokus auf „Erlauben“, kein globaler Enter-Shortcut
 zur Freigabe. Bewusst fokussierte Buttons bleiben per Tastatur bedienbar.
@@ -285,8 +289,16 @@ fail-safe: Modus `smart`, alle Allow-Regeln und Sitzungsfreigaben verworfen,
 lesbare Deny-Regeln und sensible Pfadmuster bleiben wirksam, sichtbarer Hinweis an
 den Nutzer. Ohne verfügbare `safeStorage` ist Auto nicht aktivierbar, und
 dauerhafte Allow-Regeln werden nicht gespeichert. Das schützt gegen versehentliches
-Editieren und gegen Werkzeuge, die Dateien blind ändern; ein lokaler Prozess mit
-Nutzerrechten bleibt außerhalb des Schutzziels (Abschnitt 5).
+Editieren und gegen Werkzeuge, die Dateien blind ändern. Die Signatur sichert
+die Unversehrtheit der Datei im Ruhezustand, nicht gegen einen kompromittierten
+Main-Prozess: Wer mit Nutzerrechten läuft, kann Schlüssel und Datei gleichermaßen
+ersetzen; das liegt außerhalb des Schutzziels (Abschnitt 5). Eine Rotation des
+Signaturschlüssels ist nicht vorgesehen. Geht der Schlüssel verloren, etwa weil
+der `safeStorage`-Schlüssel nach einer Umbenennung der App nicht mehr passt,
+greift dieselbe Fail-safe-Regel: Der kalte Reset auf `smart` ohne Allow-Regeln
+ist beabsichtigt, weil ein Schlüsselverlust von einer Manipulation nicht
+unterscheidbar ist. Sitzungsfreigaben sind davon ohnehin nicht betroffen, sie
+leben nur im Speicher und enden mit dem Neustart.
 
 Eine Regel enthält ID, `allow | deny`, exakten Tool-Namen oder eine ausdrückliche
 Risikoklasse, Wurzel, Zielpfad/-muster und Umfang. Erlaubnisse müssen alle Wirkungen
@@ -314,7 +326,8 @@ Neustart, Chat-/Workspace-Wechsel, Moduswechsel, Regeländerung oder Skill-Wechs
 löschen Sitzungsfreigaben und verwerfen offene Anfragen. Bei einer Sperre wird
 nicht durch Umformulieren, Alias-Pfade oder wiederholte identische Anfragen nach
 einer Erlaubnis gesucht; ein abgelehnter Plan bleibt bis zum nächsten
-Nutzerauftrag für diesen Lauf gesperrt. „Sitzungsfreigaben löschen“,
+Nutzerauftrag gesperrt, und seine unveränderte Wiederholung beendet den Lauf
+(Abschnitt 6). „Sitzungsfreigaben löschen“,
 „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ haben
 getrennte, sichtbare Reichweiten. Letzteres setzt auch den Modus auf `smart`.
 

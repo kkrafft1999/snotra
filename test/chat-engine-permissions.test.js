@@ -193,25 +193,59 @@ test('ohne Freigabe-UI verfällt die Anfrage: kein Handler, kein weiterer Provid
   assert.equal(phases.at(-1), 'idle');
 });
 
-test('Nutzer lehnt ab: strukturiertes Ergebnis ans Modell, identischer Plan wird im Lauf nicht erneut erfragt', async () => {
+test('Nutzer lehnt ab: strukturiertes Ergebnis ans Modell, Lauf geht mit der Ablehnung weiter', async () => {
   const approvals = makeApprovals('deny');
   const tools = makeToolPort();
-  const args = { relative_path: 'a.md', content: 'x' };
   const { engine, llm } = makeEngine([
-    assistantToolCall('c1', 'write_file_text', args),
-    assistantToolCall('c2', 'write_file_text', args),
+    assistantToolCall('c1', 'write_file_text', { relative_path: 'a.md', content: 'x' }),
     assistantText('ok, dann nicht'),
   ], { tools, approvals });
   const result = await send(engine);
   assert.equal(result.content, 'ok, dann nicht');
-  assert.equal(approvals.requests.length, 1, 'zweite identische Anfrage nicht gestellt');
+  assert.equal(approvals.requests.length, 1);
   assert.equal(tools.calls.length, 0);
   const first = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
   assert.equal(first.reason, 'user_denied');
   assert.equal(first.message, 'Tool-Aufruf vom Nutzer abgelehnt');
-  const second = JSON.parse(llm.calls[2].messages.filter((m) => m.role === 'tool').at(-1).content);
-  assert.equal(second.reason, 'repeated_denial');
   assert.match(result.toolTrace[0].line, /abgelehnt/);
+});
+
+test('identischer Plan nach Ablehnung: keine zweite Karte, Lauf endet ohne weiteren Provider-Request', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort();
+  const events = [];
+  const args = { relative_path: 'a.md', content: 'x' };
+  const { engine, llm } = makeEngine([
+    assistantToolCall('c1', 'write_file_text', args),
+    assistantToolCall('c2', 'write_file_text', args),
+    assistantText('nie'),
+  ], { tools, approvals });
+  const result = await send(engine, { events });
+  assert.equal(result.code, 'PERMISSION');
+  assert.match(result.error, /bereits abgelehnten Tool-Aufruf/);
+  assert.equal(approvals.requests.length, 1, 'zweite identische Anfrage nicht gestellt');
+  assert.equal(tools.calls.length, 0);
+  assert.equal(llm.calls.length, 2, 'nach der Wiederholung kein weiterer Provider-Request');
+  assert.equal(result.toolTrace.length, 2);
+  assert.equal(result.toolTrace[0].permission.reason, 'user_denied');
+  assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
+  assert.equal(result.toolTrace[1].permission.status, 'denied');
+  const phases = events.filter((e) => e.type === CHAT_ENGINE_EVENTS.PROGRESS && e.payload.type === 'phase').map((e) => e.payload.phase);
+  assert.equal(phases.at(-1), 'idle');
+});
+
+test('geänderter Plan nach Ablehnung ist keine Wiederholung: neue Karte, Lauf geht weiter', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort();
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'write_file_text', { relative_path: 'a.md', content: 'x' }),
+    assistantToolCall('c2', 'write_file_text', { relative_path: 'b.md', content: 'x' }),
+    assistantText('gut'),
+  ], { tools, approvals });
+  const result = await send(engine);
+  assert.equal(result.content, 'gut');
+  assert.equal(approvals.requests.length, 2, 'anderes Ziel wird erneut erfragt');
+  assert.equal(tools.calls.length, 0);
 });
 
 test('Für diese Sitzung erlauben: gleiche Ziele im gleichen Chat laufen ohne Karte, anderer Chat fragt erneut', async () => {

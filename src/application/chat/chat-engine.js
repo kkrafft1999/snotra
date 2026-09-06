@@ -72,6 +72,16 @@ const CHAT_ENGINE_EVENTS = Object.freeze({
 /** Wie oft ein Aufruf nach geändertem Plan neu bewertet wird, bevor er verfällt. */
 const MAX_PLAN_ATTEMPTS = 3;
 
+/** Hinweis an den Nutzer, wenn ein Tool-Aufruf den Lauf beendet (Konzept §6). */
+const RUN_ENDED_MESSAGES = Object.freeze({
+  [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]:
+    'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.',
+  [PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]:
+    'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
+  [PERMISSION_DENIAL_REASONS.REPEATED_DENIAL]:
+    'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',
+});
+
 function resolveAppLocale(uiPrefs) {
   return uiPrefs?.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
 }
@@ -459,8 +469,10 @@ function createChatEngine({
       };
 
       /* ── Berechtigungen (Issue #66) ─────────────────────────────────────────
-       * Pläne, die der Nutzer in diesem Lauf abgelehnt hat: identische
-       * Anfragen werden nicht erneut gestellt (Konzept §7). */
+       * Pläne, die der Nutzer in diesem Lauf abgelehnt hat: eine identische
+       * Anfrage wird nicht erneut gestellt, sondern beendet den Lauf, damit
+       * das Modell die Ablehnung nicht durch Wiederholen umgehen kann
+       * (Konzept §6/§7). */
       const deniedPlanKeys = new Set();
 
       function buildScopeKey(policy) {
@@ -630,7 +642,11 @@ function createChatEngine({
               return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
             }
             if (answer.response === APPROVAL_RESPONSES.DENY) {
-              return permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
+              const denied = permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
+              if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+                return { ...denied, endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
+              }
+              return denied;
             }
             source =
               answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
@@ -857,14 +873,11 @@ function createChatEngine({
           apiMessages.push(toolMessage);
 
           if (outcome.endRun) {
-            // Verfall beendet den Lauf ohne weiteren Provider-Request; das
-            // Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
+            // Verfall oder wiederholte Ablehnung beenden den Lauf ohne weiteren
+            // Provider-Request; das Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
             emitPhase(onEvent, CHAT_PHASES.IDLE);
             return createChatErrorResult({
-              error:
-                outcome.invalidatedReason === PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI
-                  ? 'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.'
-                  : 'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
+              error: RUN_ENDED_MESSAGES[outcome.invalidatedReason] || RUN_ENDED_MESSAGES[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED],
               code: CHAT_ERROR_CODES.PERMISSION,
               usage: requestUsage,
               contextUsage,
