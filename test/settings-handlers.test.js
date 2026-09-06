@@ -146,7 +146,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog } = {}) {
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const safeStorage = {
@@ -170,7 +170,7 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage,
-    fs,
+    fs: storageFs,
     path,
     providerCatalog,
     maxChatSessions: 10,
@@ -643,4 +643,67 @@ test('activateChosenFolder lehnt eine Datei ab (#68)', async (t) => {
 
   assert.equal(await workspaceActivation.activateChosenFolder(file), null);
   assert.equal(getActiveWorkspaceRoot(), null);
+});
+
+// Issue #80: exercise failures at the atomic file replacement boundary.
+for (const failure of ['ui', 'llm', 'rollback']) {
+  test(`commitSettings handles ${failure} write failure without hiding partial saves`, async (t) => {
+    let enabled = false;
+    let llmWrites = 0;
+    const storageFs = {
+      ...fs,
+      async rename(from, to) {
+        if (enabled) {
+          if (path.basename(to) === 'llm-config.json') {
+            llmWrites += 1;
+            if (failure === 'llm' || (failure === 'rollback' && llmWrites === 2)) {
+              throw new Error('EACCES: private path must not reach the renderer');
+            }
+          }
+          if (path.basename(to) === 'ui-preferences.json') {
+            throw new Error('EACCES: private path must not reach the renderer');
+          }
+        }
+        return fs.rename(from, to);
+      },
+    };
+    const { ipcMain, storage } = await setupHandlers(t, { storageFs });
+    const original = await storage.updateLLMConfig(async (config) => {
+      config.providers = { openai: { apiKeyEnc: Buffer.from('enc:old-key').toString('base64') } };
+      return config;
+    });
+    const originalUi = await storage.updateUIPrefs(async (prefs) => ({ ...prefs, appLocale: 'de' }));
+    enabled = true;
+    const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+      presets: [{ id: 'new', providerId: 'ollama', model: 'mistral' }],
+      providerPatches: { ollama: { baseUrl: 'http://new:11434' } },
+      uiPrefs: { appLocale: 'en' },
+    });
+    assert.equal(res.ok, false);
+    assert.doesNotMatch(res.error, /private path/);
+    assert.deepEqual(await storage.readUIPrefs(), originalUi);
+    if (failure === 'rollback') {
+      assert.match(res.error, /bereits gespeichert.*Rücknahme ist fehlgeschlagen/);
+      assert.equal((await storage.readLLMConfig()).presets[0].id, 'new');
+    } else {
+      assert.deepEqual(await storage.readLLMConfig(), original);
+      assert.match(res.error, failure === 'ui' ? /zurückgenommen/ : /UI-Einstellungen wurden nicht geändert/);
+    }
+  });
+}
+
+test('commitSettings rollback preserves a newer concurrent LLM update', async (t) => {
+  const { ipcMain, storage, uiPrefsStore } = await setupHandlers(t);
+  await storage.readLLMConfig();
+  uiPrefsStore.updateUIPrefs = async () => {
+    await storage.updateLLMConfig(async (config) => ({ ...config, activePresetId: 'newer-selection' }));
+    throw new Error('UI write failed');
+  };
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'new', providerId: 'ollama', model: 'mistral' }],
+    uiPrefs: { appLocale: 'en' },
+  });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /zwischenzeitlicher Änderungen/);
+  assert.equal((await storage.readLLMConfig()).activePresetId, 'newer-selection');
 });

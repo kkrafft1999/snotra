@@ -1,3 +1,4 @@
+const { isDeepStrictEqual } = require('node:util');
 const {
   createSettingsOk,
   createSettingsError,
@@ -124,55 +125,86 @@ function registerSettingsHandlers({
     }
 
     let validationError = null;
-    await llmConfigStore.updateLLMConfig(async (config) => {
-      const draft = cloneLlmConfig(config);
+    let previousConfig;
+    let savedConfig;
+    try {
+      savedConfig = await llmConfigStore.updateLLMConfig(async (config) => {
+        previousConfig = cloneLlmConfig(config);
+        const draft = cloneLlmConfig(config);
 
-      for (const providerId of Object.keys(patches)) {
-        const res = mergeProviderPatchIntoConfig(draft, providerId, patches[providerId]);
-        if (!res.ok) {
-          validationError = res;
-          return config;
+        for (const providerId of Object.keys(patches)) {
+          const res = mergeProviderPatchIntoConfig(draft, providerId, patches[providerId]);
+          if (!res.ok) {
+            validationError = res;
+            return config;
+          }
         }
-      }
 
-      for (const pr of presets) {
-        const meta = providerCatalog.getProvider(pr.providerId);
-        const entry = (draft.providers && draft.providers[pr.providerId]) || {};
-        if (!isProviderConfigured({ safeStorage }, meta, entry)) {
-          validationError = createSettingsError(
-            `Zugang für „${meta.name}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
-          );
-          return config;
+        for (const pr of presets) {
+          const meta = providerCatalog.getProvider(pr.providerId);
+          const entry = (draft.providers && draft.providers[pr.providerId]) || {};
+          if (!isProviderConfigured({ safeStorage }, meta, entry)) {
+            validationError = createSettingsError(
+              `Zugang für „${meta.name}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
+            );
+            return config;
+          }
         }
-      }
 
-      const providerIdsInUse = new Set(presets.map((pr) => pr.providerId));
-      draft.providers = draft.providers || {};
-      for (const pid of Object.keys(draft.providers)) {
-        if (!providerIdsInUse.has(pid)) {
-          delete draft.providers[pid];
+        const providerIdsInUse = new Set(presets.map((pr) => pr.providerId));
+        draft.providers = draft.providers || {};
+        for (const pid of Object.keys(draft.providers)) {
+          if (!providerIdsInUse.has(pid)) {
+            delete draft.providers[pid];
+          }
         }
-      }
 
-      draft.version = 3;
-      draft.presets = presets;
-      draft.activePresetId = activePresetId;
-      const target = llmConfigStore.resolveChatModelTarget(draft);
-      draft.activeProvider = target.providerId;
-      const activeEntryPid = target.providerId;
-      if (activeEntryPid && providerCatalog.getProvider(activeEntryPid)) {
-        const pe = { ...(draft.providers[activeEntryPid] || {}) };
-        pe.model = target.model;
-        draft.providers[activeEntryPid] = pe;
-      }
+        draft.version = 3;
+        draft.presets = presets;
+        draft.activePresetId = activePresetId;
+        const target = llmConfigStore.resolveChatModelTarget(draft);
+        draft.activeProvider = target.providerId;
+        const activeEntryPid = target.providerId;
+        if (activeEntryPid && providerCatalog.getProvider(activeEntryPid)) {
+          const pe = { ...(draft.providers[activeEntryPid] || {}) };
+          pe.model = target.model;
+          draft.providers[activeEntryPid] = pe;
+        }
 
-      return draft;
-    });
+        return draft;
+      });
+    } catch {
+      return createSettingsError(
+        'Anbieter und Modell-Einträge konnten nicht gespeichert werden. Die UI-Einstellungen wurden nicht geändert.'
+      );
+    }
     if (validationError) return validationError;
 
     const uiPatch = normalizeUiPrefsPatch(payload?.uiPrefs);
     if (Object.keys(uiPatch).length > 0) {
-      await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+      try {
+        await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+      } catch {
+        try {
+          await llmConfigStore.updateLLMConfig(async (current) => {
+            // Compare under the store lock: never undo a newer settings save
+            // or a preset selection that arrived while the UI write was pending.
+            if (!isDeepStrictEqual(current, savedConfig)) {
+              throw new Error('LLM settings changed since this save.');
+            }
+            return previousConfig;
+          });
+        } catch {
+          return createSettingsError(
+            'UI-Einstellungen konnten nicht gespeichert werden. Anbieter und Modell-Einträge wurden bereits gespeichert; '
+            + 'ihre Rücknahme ist fehlgeschlagen oder wurde wegen zwischenzeitlicher Änderungen ausgelassen. '
+            + 'Bitte die Einstellungen erneut öffnen und prüfen.'
+          );
+        }
+        return createSettingsError(
+          'UI-Einstellungen konnten nicht gespeichert werden. Die Änderungen an Anbietern und Modell-Einträgen wurden zurückgenommen.'
+        );
+      }
     }
 
     return createSettingsOk();
