@@ -51,13 +51,16 @@ bestehende Importe stabil bleiben.
 - `chat-preferences-port` — UI-Prefs, System-Prompt, Tool-Runden-Limit
 - `workspace-path-port` — Pfad-Helfer (z. B. `basename`)
 - `skill-port` — Bodies der eingeschalteten Skills für den Systemprompt
+- `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
+  Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
+  kennt ihn nicht
 
 **Infrastruktur-Ports** (`src/main/ports/`) — von Adaptern implementiert,
 über Composition injiziert:
 
 - Storage: `llm-config-store-port`, `ui-prefs-store-port`,
   `chat-history-store-port`, `workspace-folder-store-port`,
-  `provider-secrets-port`
+  `provider-secrets-port`, `web-search-store-port`
 - Laufzeit: `provider-runtime-port`, `provider-catalog-port`,
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`

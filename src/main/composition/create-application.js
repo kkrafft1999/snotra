@@ -14,6 +14,7 @@ const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
+const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
   createProviderRuntimeAdapter,
@@ -24,6 +25,7 @@ const {
   createLlmConfigStorePort,
   createUiPrefsStorePort,
   createChatHistoryStorePort,
+  createWebSearchStorePort,
   createWorkspaceFolderStorePort,
 } = require('../adapters/persistence-store-adapters');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
@@ -86,6 +88,29 @@ function createApplication({
   const uiPrefsStore = createUiPrefsStorePort(storage);
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
+  const webSearchStore = createWebSearchStorePort(storage);
+
+  // Websuche (Issue #63). Ob ein Schluessel hinterlegt ist, muss beim Bauen der
+  // Tool-Liste synchron feststehen — deshalb ein gemerkter Stand, den nur der
+  // Start und das Speichern in den Einstellungen fortschreiben.
+  let webSearchKeyPresent = false;
+  const webSearch = createTavilyWebSearchAdapter({
+    readApiKey: () => webSearchStore.getWebSearchApiKey(),
+    hasApiKey: () => webSearchKeyPresent,
+    fetchImpl,
+  });
+  const webSearchSettings = {
+    isConfigured: () => webSearchKeyPresent,
+    async refresh() {
+      webSearchKeyPresent = await webSearchStore.hasWebSearchApiKey();
+      return webSearchKeyPresent;
+    },
+    async setApiKey(plaintext) {
+      const result = await webSearchStore.setWebSearchApiKey(plaintext);
+      await webSearchSettings.refresh();
+      return { ...result, hasApiKey: webSearchKeyPresent };
+    },
+  };
 
   // Tool-Berechtigungen (Issue #66): signierter Policy-Speicher, Karten-Adapter
   // und Sitzungsfreigaben leben im Main; der Renderer stoesst nur an.
@@ -129,7 +154,7 @@ function createApplication({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
-  const toolRegistry = createWorkspaceToolRegistry({ fsService });
+  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch });
 
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
@@ -218,6 +243,7 @@ function createApplication({
     presentation: settingsPresentation,
     toolCatalog: toolRegistry,
     skillCatalog: skillsService,
+    webSearchSettings,
   });
   registerChatHistoryHandlers({
     ipcMain,

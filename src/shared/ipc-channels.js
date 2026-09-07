@@ -41,6 +41,13 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_UI_PREFS: 'settings:getUIPrefs',
   SETTINGS_SET_UI_PREFS: 'settings:setUIPrefs',
   SETTINGS_GET_TOOL_CATALOG: 'settings:getToolCatalog',
+  /**
+   * Websuche (Issue #63): Ob ein Schluessel des Suchdienstes hinterlegt ist,
+   * und das Setzen bzw. Loeschen. Der Schluessel selbst geht nie an den
+   * Renderer zurueck — nur die Ja/Nein-Auskunft.
+   */
+  SETTINGS_GET_WEB_SEARCH_STATE: 'settings:getWebSearchState',
+  SETTINGS_SET_WEB_SEARCH_API_KEY: 'settings:setWebSearchApiKey',
   /** Skill-Katalog (System-Skills + gefundene Ordner-Skills), Issue #18. */
   SETTINGS_GET_SKILL_CATALOG: 'settings:getSkillCatalog',
   /** Skill-Verzeichnisse erneut scannen (kein Datei-Watcher im MVP). */

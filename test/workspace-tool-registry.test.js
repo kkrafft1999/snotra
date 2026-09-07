@@ -219,8 +219,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'apply_patch',
   ]);
   assert.match(registry.buildSystemPrompt(), /write_file_text/);
+  // web_search fehlt oben bewusst: ohne eingerichteten Suchdienst wird es dem
+  // Modell nicht angeboten (Issue #63). Im Katalog der Einstellungen steht es.
+  assert.equal(names.includes('web_search'), false);
 
-  // Konzept §2: acht Lesetools und debug_wait → read, drei Schreibtools → write.
+  // Konzept §2: acht Lesetools und debug_wait → read, drei Schreibtools → write,
+  // web_search → external.
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   const readTools = [
     'list_directory',
@@ -235,7 +239,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   ];
   for (const name of readTools) assert.equal(classes[name], 'read', name);
   for (const name of ['write_file_text', 'edit_file', 'apply_patch']) assert.equal(classes[name], 'write', name);
-  assert.equal(Object.keys(classes).length, 12);
+  assert.equal(classes.web_search, 'external');
+  assert.equal(Object.keys(classes).length, 13);
 });
 
 test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (Issue #66)', () => {

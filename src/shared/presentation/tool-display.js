@@ -137,6 +137,14 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Ordnerbaum gelesen' : 'Ordnerbaum wird gelesen …';
   }
+  if (toolName === 'web_search') {
+    const raw = typeof args?.query === 'string' ? args.query.trim() : '';
+    if (raw) {
+      const queryLabel = `„${truncateToolLabel(raw, 40)}“`;
+      return isDone ? `Im Internet nach ${queryLabel} gesucht` : `Suche im Internet nach ${queryLabel} …`;
+    }
+    return isDone ? 'Im Internet gesucht' : 'Suche im Internet …';
+  }
   if (toolName === 'debug_wait') {
     return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
   }

@@ -327,6 +327,26 @@
                 Tool-Liste konnte nicht geladen werden.
               </p>
             </div>
+            <div class="settings-tools-card" id="settings-web-search-card">
+              <h3 class="settings-subsection-title" id="heading-web-search">Websuche</h3>
+              <p class="settings-form-hint settings-form-hint--tight">
+                Das Tool <code>web_search</code> fragt <strong>Tavily</strong> und liefert Titel, URL und einen kurzen
+                Auszug je Treffer. Ohne Schlüssel wird das Tool dem Modell gar nicht erst angeboten. Die Suchanfrage
+                verlässt deinen Rechner — im Modus „Intelligent“ fragt Snotra deshalb vor jeder Suche nach.
+                Einen Schlüssel bekommst du kostenlos unter
+                <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a>.
+              </p>
+              <div class="modal-field-group">
+                <label for="input-web-search-key" class="modal-field-label eyebrow-row">Tavily-API-Schlüssel</label>
+                <input type="password" id="input-web-search-key" autocomplete="off" spellcheck="false" placeholder="tvly-…">
+              </div>
+              <div class="settings-web-search-actions">
+                <button type="button" id="btn-web-search-save" class="btn-primary">Schlüssel speichern</button>
+                <button type="button" id="btn-web-search-clear" class="btn-secondary">Schlüssel entfernen</button>
+              </div>
+              <p id="settings-web-search-status" class="modal-hint" role="status"></p>
+            </div>
+
             <div class="settings-tools-card" id="settings-permissions-card">
               <h3 class="settings-subsection-title" id="heading-tool-permissions">Berechtigungen</h3>
               <p class="settings-form-hint settings-form-hint--tight">

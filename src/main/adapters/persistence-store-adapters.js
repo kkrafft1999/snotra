@@ -31,6 +31,15 @@ function createChatHistoryStorePort(storage) {
   };
 }
 
+/** Schluessel des Web-Such-Dienstes (Issue #63) — eigene Datei, kein LLM-Anbieter. */
+function createWebSearchStorePort(storage) {
+  return {
+    hasWebSearchApiKey: (...args) => storage.hasWebSearchApiKey(...args),
+    getWebSearchApiKey: (...args) => storage.getWebSearchApiKey(...args),
+    setWebSearchApiKey: (...args) => storage.setWebSearchApiKey(...args),
+  };
+}
+
 function createWorkspaceFolderStorePort(storage) {
   return {
     getValidatedLastFolder: (...args) => storage.getValidatedLastFolder(...args),
@@ -44,5 +53,6 @@ module.exports = {
   createLlmConfigStorePort,
   createUiPrefsStorePort,
   createChatHistoryStorePort,
+  createWebSearchStorePort,
   createWorkspaceFolderStorePort,
 };

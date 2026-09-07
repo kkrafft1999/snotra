@@ -37,6 +37,8 @@ function createToolRegistry(initialDefinitions = []) {
       ...definition,
       riskClass,
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
+      isAvailable:
+        typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
     });
   }
 
@@ -49,7 +51,11 @@ function createToolRegistry(initialDefinitions = []) {
     return [...definitions.values()].filter(
       (definition) =>
         (!allowed || allowed.has(definition.name)) &&
-        (!disabled || !disabled.has(definition.name))
+        (!disabled || !disabled.has(definition.name)) &&
+        // Tools, die eine Konfiguration brauchen (Issue #63: Schluessel fuer
+        // die Websuche), werden dem Modell ohne sie gar nicht erst gezeigt —
+        // besser als ein Aufruf, der zur Laufzeit scheitert.
+        definition.isAvailable() === true
     );
   }
 
@@ -118,6 +124,11 @@ function createToolRegistry(initialDefinitions = []) {
         error: `Tool ist deaktiviert: ${name}. Aktivierbar unter Einstellungen › Tools.`,
       });
     }
+    if (definition.isAvailable() !== true) {
+      return JSON.stringify({
+        error: `Tool ist nicht eingerichtet: ${name}. Siehe Einstellungen › Tools.`,
+      });
+    }
     return definition.handler(args || {}, context);
   }
 
@@ -133,7 +144,7 @@ function createToolRegistry(initialDefinitions = []) {
   };
 }
 
-function createWorkspaceToolRegistry({ fsService }) {
+function createWorkspaceToolRegistry({ fsService, webSearch = null }) {
   return createToolRegistry([
     {
       name: 'list_directory',
@@ -585,6 +596,62 @@ function createWorkspaceToolRegistry({ fsService }) {
       riskClass: TOOL_RISK_CLASSES.WRITE,
       handler: (args, { workspaceRoot }) =>
         fsService.runApplyPatchTool(args, workspaceRoot),
+    },
+    {
+      name: 'web_search',
+      // Erstes Tool, das den Rechner verlaesst: Klasse 'external'. Damit fragt
+      // die Policy im Modus „Intelligent" vor jeder Suche nach (Issue #66) —
+      // die Suchanfrage selbst ist der Inhalt, der nach draussen geht.
+      riskClass: TOOL_RISK_CLASSES.EXTERNAL,
+      targets: () => [],
+      isAvailable: () => webSearch?.isConfigured() === true,
+      description:
+        'Sucht im Internet und liefert eine kompakte Trefferliste (Titel, URL, kurzer Auszug, ggf. Datum) — '
+        + 'keine ganzen Seiten. Nutze das Tool für alles, was aktueller ist als dein Wissensstand oder was du '
+        + 'belegen sollst: Versionen, Preise, Nachrichten, Fehlermeldungen, Normen. Die Suchanfrage verlässt '
+        + 'den Rechner und geht an einen externen Suchdienst.',
+      promptDescription:
+        'Sucht im Internet und liefert Titel, URL und einen kurzen Auszug je Treffer. '
+        + 'Zum Lesen einer Seite im Volltext ist es nicht gedacht.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Suchanfrage in natürlicher Sprache oder als Stichworte (höchstens 400 Zeichen).',
+          },
+          max_results: {
+            type: 'integer',
+            description: 'Maximale Anzahl Treffer (Standard 5, Obergrenze 10).',
+          },
+          language: {
+            type: 'string',
+            description:
+              'Optionaler Sprachhinweis für die Suche, z. B. "de" oder "en". Ohne Angabe entscheidet der Suchdienst.',
+          },
+        },
+        required: ['query'],
+      },
+      handler: async (args, { abortSignal } = {}) => {
+        if (!webSearch) {
+          return JSON.stringify({ error: 'Websuche ist in dieser Installation nicht verfügbar.' });
+        }
+        const result = await webSearch.search({
+          query: args?.query,
+          maxResults: args?.max_results,
+          language: args?.language,
+          abortSignal,
+        });
+        if (!result?.ok) {
+          return JSON.stringify({ error: result?.error || 'Die Suche ist fehlgeschlagen.' });
+        }
+        // Keine Treffer ist ein gueltiges Ergebnis, kein Fehler — das Modell
+        // soll die Anfrage umformulieren duerfen, statt abzubrechen.
+        const out = { query: result.query, count: result.results.length, results: result.results };
+        if (result.answer) out.answer = result.answer;
+        return JSON.stringify(out);
+      },
     },
   ]);
 }

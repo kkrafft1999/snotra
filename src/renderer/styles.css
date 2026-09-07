@@ -3757,3 +3757,15 @@ select.modal-input {
 .btn-destructive:active:not(:disabled) {
   transform: scale(0.97);
 }
+
+/* Websuche-Karte in den Tool-Einstellungen (Issue #63). */
+.settings-web-search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#settings-web-search-status:empty {
+  display: none;
+}

@@ -67,6 +67,13 @@ export function initSettingsModal(deps) {
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
   const settingsToolList = document.getElementById('settings-tool-list');
   const settingsToolListEmpty = document.getElementById('settings-tool-list-empty');
+  // Websuche (Issue #63): eigener Schluessel, wirkt sofort und haengt nicht am
+  // Entwurf, der mit „Uebernehmen" gespeichert wird.
+  const inputWebSearchKey = document.getElementById('input-web-search-key');
+  const btnWebSearchSave = document.getElementById('btn-web-search-save');
+  const btnWebSearchClear = document.getElementById('btn-web-search-clear');
+  const webSearchStatusEl = document.getElementById('settings-web-search-status');
+  let webSearchHasKey = false;
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
@@ -473,6 +480,20 @@ export function initSettingsModal(deps) {
         badge.title = 'Dateiänderungen fragen im Modus „Intelligent“ vor der Ausführung nach deiner Freigabe.';
         main.appendChild(badge);
       }
+      if (tool.riskClass === 'external') {
+        const badge = document.createElement('span');
+        badge.className = 'settings-tool-item__badge';
+        badge.textContent = 'Externer Dienst';
+        badge.title = 'Der Aufruf verlässt deinen Rechner und fragt im Modus „Intelligent“ vorher nach deiner Freigabe.';
+        main.appendChild(badge);
+      }
+      if (tool.name === 'web_search' && !webSearchHasKey) {
+        const badge = document.createElement('span');
+        badge.className = 'settings-tool-item__badge';
+        badge.textContent = 'Schlüssel fehlt';
+        badge.title = 'Ohne Tavily-Schlüssel wird das Tool dem Modell nicht angeboten (siehe „Websuche“ weiter unten).';
+        main.appendChild(badge);
+      }
 
       label.appendChild(input);
       label.appendChild(main);
@@ -598,6 +619,76 @@ export function initSettingsModal(deps) {
     }
     renderToolList();
   }
+
+  function setWebSearchStatus(text, isError = false) {
+    if (!webSearchStatusEl) return;
+    webSearchStatusEl.textContent = text || '';
+    webSearchStatusEl.classList.toggle('error', !!isError);
+  }
+
+  function syncWebSearchUI({ encryptionAvailable = true } = {}) {
+    if (!inputWebSearchKey) return;
+    inputWebSearchKey.value = '';
+    inputWebSearchKey.placeholder = webSearchHasKey ? '••••••••  (gespeichert)' : 'tvly-…';
+    if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey;
+    if (!encryptionAvailable) {
+      if (btnWebSearchSave) btnWebSearchSave.disabled = true;
+      setWebSearchStatus(
+        'Verschlüsselter Speicher ist auf diesem System nicht verfügbar — ein Schlüssel kann nicht sicher abgelegt werden.',
+        true,
+      );
+      return;
+    }
+    if (btnWebSearchSave) btnWebSearchSave.disabled = false;
+    setWebSearchStatus(
+      webSearchHasKey
+        ? 'Ein Schlüssel ist hinterlegt; web_search wird dem Modell angeboten.'
+        : 'Kein Schlüssel hinterlegt — web_search wird dem Modell nicht angeboten.',
+    );
+  }
+
+  async function loadWebSearchState() {
+    let state = null;
+    try {
+      state = typeof api.getWebSearchState === 'function' ? await api.getWebSearchState() : null;
+    } catch {
+      state = null;
+    }
+    webSearchHasKey = state?.hasApiKey === true;
+    syncWebSearchUI({ encryptionAvailable: state?.encryptionAvailable !== false });
+  }
+
+  async function saveWebSearchApiKey(value) {
+    if (typeof api.setWebSearchApiKey !== 'function') return;
+    let result = null;
+    try {
+      result = await api.setWebSearchApiKey(value);
+    } catch (e) {
+      setWebSearchStatus(e?.message || 'Der Schlüssel konnte nicht gespeichert werden.', true);
+      return;
+    }
+    if (!result?.ok) {
+      setWebSearchStatus(result?.error || 'Der Schlüssel konnte nicht gespeichert werden.', true);
+      return;
+    }
+    webSearchHasKey = result.hasApiKey === true;
+    syncWebSearchUI();
+    // Das Haekchen-Abzeichen „Schluessel fehlt" haengt am selben Zustand.
+    renderToolList();
+  }
+
+  btnWebSearchSave?.addEventListener('click', () => {
+    const value = String(inputWebSearchKey?.value ?? '').trim();
+    if (!value) {
+      setWebSearchStatus('Bitte zuerst einen Schlüssel eingeben.', true);
+      return;
+    }
+    saveWebSearchApiKey(value);
+  });
+
+  btnWebSearchClear?.addEventListener('click', () => {
+    saveWebSearchApiKey('');
+  });
 
   function activateSettingsPanel(panelKey) {
     document.querySelectorAll('.settings-panel').forEach((p) => {
@@ -741,6 +832,7 @@ export function initSettingsModal(deps) {
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(DEFAULT_MAX_TOOL_ROUNDS);
       settingsDisabledToolsDraft = new Set();
     }
+    await loadWebSearchState();
     await loadToolCatalog();
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
     // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.

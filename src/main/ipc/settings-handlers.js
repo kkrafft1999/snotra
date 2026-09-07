@@ -21,6 +21,7 @@ function registerSettingsHandlers({
   presentation,
   toolCatalog,
   skillCatalog = null,
+  webSearchSettings = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -269,6 +270,24 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_RELOAD_SKILLS, async () => {
     if (skillCatalog && typeof skillCatalog.reload === 'function') skillCatalog.reload();
     return buildSkillCatalog();
+  });
+
+  // Websuche (Issue #63). Der hinterlegte Schluessel verlaesst den Main nie —
+  // der Renderer erfaehrt nur, ob einer da ist.
+  ipcMain.handle(REQ.SETTINGS_GET_WEB_SEARCH_STATE, async () => ({
+    available: !!webSearchSettings,
+    hasApiKey: webSearchSettings ? await webSearchSettings.refresh() : false,
+    encryptionAvailable: safeStorage.isEncryptionAvailable(),
+  }));
+
+  ipcMain.handle(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, async (_event, apiKey) => {
+    if (!webSearchSettings) {
+      return createSettingsError('Websuche ist in dieser Installation nicht verfügbar.');
+    }
+    const value = typeof apiKey === 'string' ? apiKey : '';
+    const result = await webSearchSettings.setApiKey(value);
+    if (!result?.ok) return createSettingsError(result?.error || 'Schlüssel konnte nicht gespeichert werden.');
+    return { ...createSettingsOk(), hasApiKey: result.hasApiKey === true };
   });
 
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {

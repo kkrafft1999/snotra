@@ -33,6 +33,7 @@ function createStorageService({
   const FOLDER_HISTORY_FILENAME = 'folder-history.json';
   const UI_PREFS_FILENAME = 'ui-preferences.json';
   const CHAT_HISTORY_FILENAME = 'chat-history.json';
+  const WEB_SEARCH_CONFIG_FILENAME = 'web-search-config.json';
 
   const MAX_CHAT_SESSIONS = maxChatSessions;
   const MAX_FOLDER_HISTORY = maxFolderHistory;
@@ -274,6 +275,62 @@ function createStorageService({
         : (provider.defaultInsecureTls === true);
     }
     return out;
+  }
+
+  // --- Websuche (Issue #63) ------------------------------------------------
+  //
+  // Eigene Datei statt eines Eintrags in llm-config.json: der Suchdienst ist
+  // kein LLM-Anbieter und soll nicht in der Provider-Liste auftauchen. Der
+  // Schluessel liegt wie die Provider-Keys verschluesselt (safeStorage).
+
+  function getWebSearchConfigPath() {
+    return path.join(app.getPath('userData'), WEB_SEARCH_CONFIG_FILENAME);
+  }
+
+  async function readWebSearchConfig() {
+    try {
+      const raw = await fs.readFile(getWebSearchConfigPath(), 'utf8');
+      const data = JSON.parse(raw);
+      return data && typeof data === 'object' ? data : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** true, sobald ueberhaupt ein Schluessel abgelegt ist — ohne ihn zu entschluesseln. */
+  async function hasWebSearchApiKey() {
+    const config = await readWebSearchConfig();
+    return typeof config.apiKeyEnc === 'string' && config.apiKeyEnc.length > 0;
+  }
+
+  async function getWebSearchApiKey() {
+    const config = await readWebSearchConfig();
+    return decryptIfPossible(config.apiKeyEnc) || null;
+  }
+
+  /**
+   * Legt den Schluessel ab oder loescht ihn (leerer String). Ohne verfuegbare
+   * Verschluesselung wird nichts geschrieben — ein Klartext-Key auf der Platte
+   * waere schlechter als kein Key.
+   */
+  async function setWebSearchApiKey(plaintext) {
+    const value = typeof plaintext === 'string' ? plaintext.trim() : '';
+    return withFileLock(getWebSearchConfigPath(), async () => {
+      if (!value) {
+        await writeJsonAtomic(getWebSearchConfigPath(), {});
+        return { ok: true, hasApiKey: false };
+      }
+      const enc = encryptIfPossible(value);
+      if (!enc) {
+        return {
+          ok: false,
+          error: 'Verschlüsselter Speicher ist auf diesem System nicht verfügbar.',
+          hasApiKey: await hasWebSearchApiKey(),
+        };
+      }
+      await writeJsonAtomic(getWebSearchConfigPath(), { apiKeyEnc: enc });
+      return { ok: true, hasApiKey: true };
+    });
   }
 
   function getLastFolderConfigPath() {
@@ -607,6 +664,9 @@ function createStorageService({
     readUIPrefs,
     writeUIPrefs,
     updateUIPrefs,
+    hasWebSearchApiKey,
+    getWebSearchApiKey,
+    setWebSearchApiKey,
     normalizeWorkspaceRoot,
     workspaceBucketKey,
     inferChatTitle,
