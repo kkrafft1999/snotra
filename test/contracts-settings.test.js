@@ -139,3 +139,32 @@ test('createListModelsResult and settings result DTOs', () => {
   });
   assert.deepEqual(createListModelsResult({ error: 'fail' }), { error: 'fail' });
 });
+
+// Python-Ausfuehrung (Issue #86): standardmaessig aus, Pfad bereinigt.
+test('normalizeUiPrefs schaltet die Python-Ausführung standardmäßig ab', () => {
+  const { normalizeUiPrefs } = require('../src/shared/contracts/settings');
+
+  assert.equal(normalizeUiPrefs({}).pythonExecutionEnabled, false);
+  assert.equal(normalizeUiPrefs({ pythonExecutionEnabled: 'ja' }).pythonExecutionEnabled, false);
+  assert.equal(normalizeUiPrefs({ pythonExecutionEnabled: true }).pythonExecutionEnabled, true);
+  assert.equal('pythonInterpreterPath' in normalizeUiPrefs({}), false);
+  assert.equal(
+    normalizeUiPrefs({ pythonInterpreterPath: '  /opt/venv/bin/python3  ' }).pythonInterpreterPath,
+    '/opt/venv/bin/python3',
+  );
+});
+
+test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
+  const { normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+
+  // Zeilenumbrueche und Steuerzeichen haetten in einem Programmpfad nichts zu
+  // suchen und waeren beim Start ein Einfallstor.
+  assert.equal(
+    normalizeUiPrefsPatch({ pythonInterpreterPath: '/opt/venv/bin/python3\n; rm -rf /' }).pythonInterpreterPath,
+    '/opt/venv/bin/python3; rm -rf /',
+  );
+  assert.equal(normalizeUiPrefsPatch({ pythonInterpreterPath: '' }).pythonInterpreterPath, '');
+  assert.equal('pythonInterpreterPath' in normalizeUiPrefsPatch({ pythonInterpreterPath: 42 }), false);
+  assert.equal('pythonExecutionEnabled' in normalizeUiPrefsPatch({ pythonExecutionEnabled: 'ja' }), false);
+  assert.equal(normalizeUiPrefsPatch({ pythonExecutionEnabled: true }).pythonExecutionEnabled, true);
+});

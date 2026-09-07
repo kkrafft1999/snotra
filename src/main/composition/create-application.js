@@ -2,6 +2,7 @@
 
 const nodeOs = require('os');
 const nodeCrypto = require('crypto');
+const nodeChildProcess = require('child_process');
 
 const { createStorageService } = require('../services/storage-service');
 const { createFsService } = require('../services/fs-service');
@@ -15,6 +16,7 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
+const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
   createProviderRuntimeAdapter,
@@ -54,6 +56,7 @@ function createApplication({
   path,
   os = nodeOs,
   crypto = nodeCrypto,
+  childProcess = nodeChildProcess,
   fetchImpl,
   providersModule,
   workspaceState,
@@ -154,7 +157,33 @@ function createApplication({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
-  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch });
+  // Python-Ausfuehrung (Issue #86). Zwei Bedingungen muessen erfuellt sein,
+  // damit das Tool ueberhaupt auftaucht: ein gefundener Interpreter und die
+  // ausdrueckliche Einstellung — sie ist standardmaessig aus, weil
+  // ausgefuehrter Code die Workspace-Grenze umgeht.
+  let pythonExecutionEnabled = false;
+  const pythonRunnerService = createPythonRunnerService({
+    spawn: childProcess.spawn,
+    fs,
+    path,
+    os,
+    readInterpreterOverride: async () => (await uiPrefsStore.readUIPrefs()).pythonInterpreterPath || '',
+  });
+  const pythonRunner = {
+    isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
+    run: (request) => pythonRunnerService.run(request),
+  };
+  const pythonSettings = {
+    describe: () => ({ ...pythonRunnerService.describe(), enabled: pythonExecutionEnabled }),
+    async refresh() {
+      const prefs = await uiPrefsStore.readUIPrefs();
+      pythonExecutionEnabled = prefs.pythonExecutionEnabled === true;
+      await pythonRunnerService.detect();
+      return pythonSettings.describe();
+    },
+  };
+
+  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch, pythonRunner });
 
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
@@ -244,6 +273,7 @@ function createApplication({
     toolCatalog: toolRegistry,
     skillCatalog: skillsService,
     webSearchSettings,
+    pythonSettings,
   });
   registerChatHistoryHandlers({
     ipcMain,
@@ -289,6 +319,8 @@ function createApplication({
   return {
     runUpdateCheck,
     dispose,
+    /** Beim Start einmal Interpreter suchen und die Einstellung uebernehmen (Issue #86). */
+    initToolRuntimes: () => Promise.all([pythonSettings.refresh(), webSearchSettings.refresh()]),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
   };
 }

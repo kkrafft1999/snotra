@@ -53,6 +53,8 @@ const TOOL_CATEGORY_ICON_PATHS = {
   check: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/>',
   write: '<path d="M11.3 2.3 13.7 4.7 6.2 12.2H3.8V9.8z"/>',
   wait: '<circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.4 1.5"/>',
+  // Terminal-Prompt: ausgefuehrter Code (Issue #86).
+  exec: '<path d="M2.4 3.4h11.2v9.2H2.4z"/><path d="M4.8 6.4 6.8 8l-2 1.6"/><path d="M8.4 10h3"/>',
   other: '<path d="M2.4 3.4h11.2v9.2H2.4z"/><path d="M5 7l1.6 1.6L5 10.2"/>',
 };
 

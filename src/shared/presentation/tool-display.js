@@ -137,6 +137,11 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Ordnerbaum gelesen' : 'Ordnerbaum wird gelesen …';
   }
+  if (toolName === 'run_python') {
+    const lines = String(args?.code ?? '').split('\n').filter((line) => line.trim()).length;
+    const count = lines > 0 ? ` (${lines} ${lines === 1 ? 'Zeile' : 'Zeilen'})` : '';
+    return isDone ? `Python ausgeführt${count}` : `Python wird ausgeführt${count} …`;
+  }
   if (toolName === 'web_search') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     if (raw) {

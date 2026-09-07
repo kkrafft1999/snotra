@@ -41,6 +41,7 @@ const GROUP_LABELS = {
   check: ['%d Pfad geprüft', '%d Pfade geprüft'],
   write: ['%d Datei geschrieben', '%d Dateien geschrieben'],
   wait: ['%d Pause', '%d Pausen'],
+  exec: ['%d Python-Lauf', '%d Python-Läufe'],
   other: ['%d Tool-Schritt', '%d Tool-Schritte'],
 };
 
@@ -51,14 +52,17 @@ const GROUP_LABELS = {
  * Unwichtiges fällt bei vielen Gruppen zuerst in „N weitere Schritte“.
  */
 const CATEGORY_RANK = {
-  skill: 1,
-  write: 2,
-  search: 3,
-  read: 4,
-  list: 5,
-  check: 6,
-  wait: 7,
-  other: 8,
+  // Ausgefuehrter Code steht vorn: dass ueberhaupt etwas gelaufen ist, ist die
+  // wichtigste Auskunft eines Zuges (Issue #86).
+  exec: 1,
+  skill: 2,
+  write: 3,
+  search: 4,
+  read: 5,
+  list: 6,
+  check: 7,
+  wait: 8,
+  other: 9,
 };
 
 function categoryRank(category) {

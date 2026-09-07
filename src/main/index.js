@@ -154,6 +154,12 @@ app.whenReady().then(async () => {
 
   createWindow();
 
+  // Interpreter suchen und den Stand der Tool-Einstellungen uebernehmen
+  // (Issues #63, #86). Bewusst nicht abgewartet: das Fenster soll nicht auf
+  // eine Versionsabfrage warten, und vor der ersten Modellantwort ist es
+  // laengst durch.
+  void application.initToolRuntimes();
+
   // Verzoegerter Auto-Check, damit der Start nicht auf das Netzwerk wartet.
   setTimeout(() => { void application.runUpdateCheck({ silent: true }); }, 4000);
 

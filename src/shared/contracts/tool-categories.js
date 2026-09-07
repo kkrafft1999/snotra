@@ -18,6 +18,8 @@ const TOOL_CATEGORIES = Object.freeze({
   CHECK: 'check',
   WRITE: 'write',
   WAIT: 'wait',
+  /** Ausgefuehrter Code (Issue #86) — eigene Kategorie, weil er die Workspace-Grenze umgeht. */
+  EXEC: 'exec',
   /** Unbekannt — z. B. Einträge aus Sessions, die vor #60 gespeichert wurden. */
   OTHER: 'other',
 });
@@ -35,6 +37,7 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   edit_file: TOOL_CATEGORIES.WRITE,
   apply_patch: TOOL_CATEGORIES.WRITE,
   debug_wait: TOOL_CATEGORIES.WAIT,
+  run_python: TOOL_CATEGORIES.EXEC,
 });
 
 /** Kategorie eines Tools; unbekannte und fehlende Namen ergeben OTHER. */

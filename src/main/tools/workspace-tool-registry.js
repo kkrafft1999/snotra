@@ -144,7 +144,7 @@ function createToolRegistry(initialDefinitions = []) {
   };
 }
 
-function createWorkspaceToolRegistry({ fsService, webSearch = null }) {
+function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner = null }) {
   return createToolRegistry([
     {
       name: 'list_directory',
@@ -596,6 +596,82 @@ function createWorkspaceToolRegistry({ fsService, webSearch = null }) {
       riskClass: TOOL_RISK_CLASSES.WRITE,
       handler: (args, { workspaceRoot }) =>
         fsService.runApplyPatchTool(args, workspaceRoot),
+    },
+    {
+      name: 'run_python',
+      // Hoechste Stufe im Berechtigungskonzept: ausgefuehrter Code umgeht die
+      // Workspace-Grenze grundsaetzlich, weil nicht Snotra die Dateizugriffe
+      // macht, sondern der Interpreter. `execute` ist weder sitzungs- noch
+      // dauerhaft freigebbar (Konzept §6/§7) — es wird jedes Mal gefragt, und
+      // die Freigabe-Karte zeigt den vollstaendigen Quelltext.
+      riskClass: TOOL_RISK_CLASSES.EXECUTE,
+      targets: () => [],
+      isAvailable: () => pythonRunner?.isAvailable() === true,
+      description:
+        'Führt ein Python-3-Programm aus und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. '
+        + 'Arbeitsverzeichnis ist der geöffnete Projektordner, „open(\'daten.csv\')“ funktioniert also direkt. '
+        + 'Nutze das Tool, statt zu rechnen oder zu raten: Auswertungen über Dateien, Umrechnungen, '
+        + 'Datenumformung, das Prüfen von regulären Ausdrücken oder Datenformaten. '
+        + 'Jeder Aufruf ist ein frisches Skript — es gibt keinen Zustand zwischen zwei Aufrufen, '
+        + 'und nur die Standardbibliothek ist garantiert vorhanden. Kein „pip install“.',
+      promptDescription:
+        'Führt Python-3-Code aus und liefert Ausgabe und Exit-Code zurück. '
+        + 'Zum Rechnen und Prüfen benutzen, statt Ergebnisse selbst zu schätzen.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: {
+            type: 'string',
+            description:
+              'Das vollständige Programm. Ergebnisse mit print() ausgeben — der Rückgabewert '
+              + 'des letzten Ausdrucks wird nicht angezeigt.',
+          },
+          stdin: {
+            type: 'string',
+            description: 'Optionale Eingabe, die dem Programm auf der Standardeingabe zur Verfügung steht.',
+          },
+          argv: {
+            type: 'array',
+            description: 'Optionale Argumente; im Programm über sys.argv[1:] erreichbar.',
+            items: { type: 'string' },
+          },
+          timeout_ms: {
+            type: 'integer',
+            description: 'Zeitlimit in Millisekunden (Standard 10000, Obergrenze 120000).',
+          },
+        },
+        required: ['code'],
+      },
+      handler: async (args, { workspaceRoot, abortSignal } = {}) => {
+        if (!pythonRunner) {
+          return JSON.stringify({ error: 'Python-Ausführung ist in dieser Installation nicht verfügbar.' });
+        }
+        const result = await pythonRunner.run({
+          code: args?.code,
+          stdin: args?.stdin,
+          argv: args?.argv,
+          timeoutMs: args?.timeout_ms,
+          cwd: workspaceRoot || undefined,
+          abortSignal,
+        });
+        if (result?.error) return JSON.stringify({ error: result.error });
+        const out = {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exit_code: result.exitCode,
+          duration_ms: result.durationMs,
+        };
+        if (result.timedOut) {
+          out.timed_out = true;
+          out.note = 'Das Programm wurde nach Ablauf des Zeitlimits beendet.';
+        }
+        if (result.aborted) {
+          out.aborted = true;
+          out.note = 'Das Programm wurde abgebrochen.';
+        }
+        if (result.truncated) out.truncated = true;
+        return JSON.stringify(out);
+      },
     },
     {
       name: 'web_search',

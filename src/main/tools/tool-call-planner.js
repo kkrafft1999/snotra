@@ -48,6 +48,10 @@ function buildPreview(toolName, args) {
         })
         .join('\n\n');
     }
+  } else if (toolName === 'run_python') {
+    // Ohne den Quelltext waere die Freigabe eine Blankounterschrift (Issue #86).
+    kind = 'code';
+    text = typeof args?.code === 'string' ? args.code : '';
   } else {
     return null;
   }

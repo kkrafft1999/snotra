@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWebSearchState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_WEB_SEARCH_STATE),
   setWebSearchApiKey: (apiKey) =>
     ipcRenderer.invoke(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, String(apiKey ?? '')),
+  getPythonState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_PYTHON_STATE),
   getToolPermissionState: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_STATE),
   setToolPermissionMode: (mode) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, mode),
   addToolPermissionRule: (rule) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, rule),

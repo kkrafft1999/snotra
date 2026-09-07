@@ -222,6 +222,9 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // web_search fehlt oben bewusst: ohne eingerichteten Suchdienst wird es dem
   // Modell nicht angeboten (Issue #63). Im Katalog der Einstellungen steht es.
   assert.equal(names.includes('web_search'), false);
+  // run_python ebenso: ohne erlaubte und gefundene Python-Installation
+  // erreicht es das Modell nicht (Issue #86).
+  assert.equal(names.includes('run_python'), false);
 
   // Konzept §2: acht Lesetools und debug_wait → read, drei Schreibtools → write,
   // web_search → external.
@@ -240,7 +243,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   for (const name of readTools) assert.equal(classes[name], 'read', name);
   for (const name of ['write_file_text', 'edit_file', 'apply_patch']) assert.equal(classes[name], 'write', name);
   assert.equal(classes.web_search, 'external');
-  assert.equal(Object.keys(classes).length, 13);
+  assert.equal(classes.run_python, 'execute');
+  assert.equal(Object.keys(classes).length, 14);
 });
 
 test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (Issue #66)', () => {

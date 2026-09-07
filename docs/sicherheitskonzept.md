@@ -57,8 +57,8 @@ werden blockiert; es gibt keinen impliziten `read`-Default.
 | `read-sensitive` | Sensible Inhalte oder gezielter Zugriff auf einen sensiblen Pfad | Dynamische Hochstufung der Lese-Tools, auch unter `skill:` |
 | `write` | Datei erstellen, gezielt ändern oder mit Wiederherstellungskopie überschreiben | `write_file_text` bei neuer Datei oder mit erfolgreich angelegter Wiederherstellungskopie (Abschnitt 9); `edit_file`, `apply_patch` |
 | `delete` | Löschen oder vollständiges Überschreiben ohne gesicherte Wiederherstellung | `write_file_text` bei bestehender Datei, wenn die Wiederherstellungskopie nicht angelegt werden kann; künftiges Lösch-Tool |
-| `execute` | Programm oder Skript ausführen; mögliche weitere Seiteneffekte | Reserviert für künftige Ausführungs-Tools |
-| `external` | Daten an einen zusätzlichen Dienst senden oder dort Aktionen auslösen | Künftige Web-Suche und MCP-Tools; konservative Ausgangsklasse |
+| `execute` | Programm oder Skript ausführen; mögliche weitere Seiteneffekte | `run_python` (#86). Ausgeführter Code umgeht die Workspace-Grenze grundsätzlich: nicht Snotra macht die Dateizugriffe, sondern der Interpreter. Der Schutz liegt darum in der Freigabe vor jedem Lauf (Quelltext in der Karte sichtbar) und in der ausdrücklichen Einstellung, die standardmäßig aus ist — nicht in einer Sandbox. Härtere Isolation (eigener Nutzer, `sandbox-exec`, Container, WASM-Python) ist offen. |
+| `external` | Daten an einen zusätzlichen Dienst senden oder dort Aktionen auslösen | `web_search` (#63) — die Suchanfrage selbst verlässt den Rechner. Künftige MCP-Tools (#62); konservative Ausgangsklasse |
 
 Klassen sind keine einfache Zahlenrangfolge: Ein Schreib-Tool kann zusätzlich
 sensible Daten betreffen, ein externes Tool zusätzlich löschen. Solche Aufrufe

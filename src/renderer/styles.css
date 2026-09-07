@@ -3769,3 +3769,16 @@ select.modal-input {
 #settings-web-search-status:empty {
   display: none;
 }
+
+/* Python-Karte in den Tool-Einstellungen (Issue #86). */
+.settings-python-warning {
+  margin-bottom: 10px;
+}
+
+.settings-python-toggle {
+  margin-bottom: 10px;
+}
+
+#settings-python-status:empty {
+  display: none;
+}

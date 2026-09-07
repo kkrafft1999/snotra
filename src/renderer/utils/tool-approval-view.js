@@ -73,6 +73,7 @@ const PREVIEW_KIND_LABELS = Object.freeze({
   text: 'Neuer Inhalt',
   replace: 'Ersetzung (alt → neu)',
   diff: 'Patch',
+  code: 'Python-Quelltext',
 });
 
 function hasClass(classes, riskClass) {

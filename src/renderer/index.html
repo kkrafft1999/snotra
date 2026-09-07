@@ -327,6 +327,34 @@
                 Tool-Liste konnte nicht geladen werden.
               </p>
             </div>
+            <div class="settings-tools-card" id="settings-python-card">
+              <h3 class="settings-subsection-title" id="heading-python">Python ausführen</h3>
+              <p class="modal-warning settings-python-warning">
+                <strong>Achtung:</strong> Das Tool <code>run_python</code> führt Code aus, den das Sprachmodell
+                schreibt. Dieser Code läuft mit deinen Rechten und ist <strong>nicht</strong> auf den Projektordner
+                begrenzt — er kann überall lesen und schreiben, ins Netz gehen und Programme starten. Snotra zeigt
+                dir vor <em>jedem</em> Lauf den vollständigen Quelltext zur Freigabe; eine Sandbox gibt es nicht.
+                Nur einschalten, wenn dir das bewusst ist.
+              </p>
+              <label class="modal-checkbox settings-python-toggle">
+                <input type="checkbox" id="input-python-enabled">
+                <span>Python-Ausführung erlauben</span>
+              </label>
+              <div class="modal-field-group">
+                <label for="input-python-interpreter" class="modal-field-label eyebrow-row">
+                  Eigener Interpreter (optional)
+                </label>
+                <input type="text" id="input-python-interpreter" autocomplete="off" spellcheck="false"
+                  placeholder="z. B. /Users/du/venv/bin/python3">
+              </div>
+              <p class="settings-form-hint settings-form-hint--tight">
+                Leer lassen, um automatisch nach Python 3 zu suchen. Ein eigener Pfad — etwa ein venv mit
+                <code lang="en">pandas</code> — bestimmt, welche Pakete dem Modell zur Verfügung stehen.
+                Snotra installiert selbst nichts nach.
+              </p>
+              <p id="settings-python-status" class="modal-hint" role="status"></p>
+            </div>
+
             <div class="settings-tools-card" id="settings-web-search-card">
               <h3 class="settings-subsection-title" id="heading-web-search">Websuche</h3>
               <p class="settings-form-hint settings-form-hint--tight">

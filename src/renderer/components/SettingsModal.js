@@ -74,6 +74,13 @@ export function initSettingsModal(deps) {
   const btnWebSearchClear = document.getElementById('btn-web-search-clear');
   const webSearchStatusEl = document.getElementById('settings-web-search-status');
   let webSearchHasKey = false;
+  // Python-Ausfuehrung (Issue #86): Schalter und Interpreter-Pfad haengen am
+  // Entwurf und werden mit „Uebernehmen" gespeichert; der gefundene
+  // Interpreter kommt direkt vom Main.
+  const inputPythonEnabled = document.getElementById('input-python-enabled');
+  const inputPythonInterpreter = document.getElementById('input-python-interpreter');
+  const pythonStatusEl = document.getElementById('settings-python-status');
+  let pythonReady = false;
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
@@ -480,11 +487,25 @@ export function initSettingsModal(deps) {
         badge.title = 'Dateiänderungen fragen im Modus „Intelligent“ vor der Ausführung nach deiner Freigabe.';
         main.appendChild(badge);
       }
+      if (tool.riskClass === 'execute') {
+        const badge = document.createElement('span');
+        badge.className = 'settings-tool-item__badge';
+        badge.textContent = 'Führt Code aus';
+        badge.title = 'Der Code läuft mit deinen Rechten und ist nicht auf den Projektordner begrenzt. Snotra zeigt vor jedem Lauf den Quelltext zur Freigabe.';
+        main.appendChild(badge);
+      }
       if (tool.riskClass === 'external') {
         const badge = document.createElement('span');
         badge.className = 'settings-tool-item__badge';
         badge.textContent = 'Externer Dienst';
         badge.title = 'Der Aufruf verlässt deinen Rechner und fragt im Modus „Intelligent“ vorher nach deiner Freigabe.';
+        main.appendChild(badge);
+      }
+      if (tool.name === 'run_python' && !pythonReady) {
+        const badge = document.createElement('span');
+        badge.className = 'settings-tool-item__badge';
+        badge.textContent = 'Nicht eingerichtet';
+        badge.title = 'Ohne erlaubte und gefundene Python-Installation wird das Tool dem Modell nicht angeboten (siehe „Python ausführen“).';
         main.appendChild(badge);
       }
       if (tool.name === 'web_search' && !webSearchHasKey) {
@@ -645,6 +666,41 @@ export function initSettingsModal(deps) {
         ? 'Ein Schlüssel ist hinterlegt; web_search wird dem Modell angeboten.'
         : 'Kein Schlüssel hinterlegt — web_search wird dem Modell nicht angeboten.',
     );
+  }
+
+  function describePythonState(state) {
+    if (!state || state.available === false) {
+      return { text: 'Python-Ausführung ist in dieser Installation nicht verfügbar.', isError: true };
+    }
+    if (!state.found) {
+      const grund = state.error ? ` (${state.error})` : '';
+      return state.source === 'override'
+        ? { text: `Der angegebene Interpreter lässt sich nicht starten${grund}.`, isError: true }
+        : { text: `Kein Python 3 gefunden${grund}. run_python wird nicht angeboten.`, isError: true };
+    }
+    const wo = state.source === 'override' ? 'Eigener Interpreter' : 'Gefunden';
+    const version = state.version ? ` — ${state.version}` : '';
+    if (!state.enabled) {
+      return { text: `${wo}: ${state.command}${version}. Noch nicht erlaubt, run_python wird nicht angeboten.` };
+    }
+    return { text: `${wo}: ${state.command}${version}. run_python wird dem Modell angeboten.` };
+  }
+
+  function setPythonStatus({ text, isError = false }) {
+    if (!pythonStatusEl) return;
+    pythonStatusEl.textContent = text || '';
+    pythonStatusEl.classList.toggle('error', !!isError);
+  }
+
+  async function loadPythonState() {
+    let state = null;
+    try {
+      state = typeof api.getPythonState === 'function' ? await api.getPythonState() : null;
+    } catch {
+      state = null;
+    }
+    pythonReady = state?.found === true && state?.enabled === true;
+    setPythonStatus(describePythonState(state));
   }
 
   async function loadWebSearchState() {
@@ -826,12 +882,20 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set(
         Array.isArray(up.disabledTools) ? up.disabledTools.filter((n) => typeof n === 'string') : []
       );
+      if (inputPythonEnabled) inputPythonEnabled.checked = up.pythonExecutionEnabled === true;
+      if (inputPythonInterpreter) {
+        inputPythonInterpreter.value =
+          typeof up.pythonInterpreterPath === 'string' ? up.pythonInterpreterPath : '';
+      }
     } catch {
       inputGlobalSystemPrompt.value = '';
       selectAppLocale.value = 'de';
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(DEFAULT_MAX_TOOL_ROUNDS);
       settingsDisabledToolsDraft = new Set();
+      if (inputPythonEnabled) inputPythonEnabled.checked = false;
+      if (inputPythonInterpreter) inputPythonInterpreter.value = '';
     }
+    await loadPythonState();
     await loadWebSearchState();
     await loadToolCatalog();
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
@@ -1029,6 +1093,8 @@ export function initSettingsModal(deps) {
           })(),
           disabledTools: [...settingsDisabledToolsDraft],
           activeSkills: [...settingsActiveSkillsDraft],
+          pythonExecutionEnabled: inputPythonEnabled?.checked === true,
+          pythonInterpreterPath: inputPythonInterpreter?.value || '',
         },
       });
       if (!res?.ok) {

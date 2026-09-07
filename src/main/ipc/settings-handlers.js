@@ -22,6 +22,7 @@ function registerSettingsHandlers({
   toolCatalog,
   skillCatalog = null,
   webSearchSettings = null,
+  pythonSettings = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -186,6 +187,11 @@ function registerSettingsHandlers({
     if (Object.keys(uiPatch).length > 0) {
       try {
         await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+        // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
+        // und muss sofort greifen, nicht erst beim naechsten App-Start.
+        if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
+          await pythonSettings?.refresh();
+        }
       } catch {
         try {
           await llmConfigStore.updateLLMConfig(async (current) => {
@@ -290,12 +296,25 @@ function registerSettingsHandlers({
     return { ...createSettingsOk(), hasApiKey: result.hasApiKey === true };
   });
 
+  // Python-Ausfuehrung (Issue #86). Der Renderer erfaehrt, ob ein Interpreter
+  // gefunden wurde und welcher — geschaltet wird ueber die UI-Prefs.
+  ipcMain.handle(REQ.SETTINGS_GET_PYTHON_STATE, async () => {
+    if (!pythonSettings) return { found: false, enabled: false, available: false };
+    return { ...(await pythonSettings.refresh()), available: true };
+  });
+
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {
     const patch = normalizeUiPrefsPatch(partial);
     if (Object.keys(patch).length === 0) {
       return uiPrefsStore.readUIPrefs();
     }
-    return uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
+    const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
+    // Beides entscheidet ueber die Sichtbarkeit von run_python und muss
+    // sofort greifen, nicht erst beim naechsten App-Start.
+    if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {
+      await pythonSettings?.refresh();
+    }
+    return updated;
   });
 }
 

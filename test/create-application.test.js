@@ -82,10 +82,16 @@ test('createApplication exposes lifecycle API only', async (t) => {
   const build = await makeApplication(t)();
   const { app } = build;
 
-  assert.deepEqual(Object.keys(app).sort(), ['dispose', 'getValidatedLastFolder', 'runUpdateCheck'].sort());
+  assert.deepEqual(
+    Object.keys(app).sort(),
+    ['dispose', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck'].sort(),
+  );
   assert.equal(typeof app.runUpdateCheck, 'function');
   assert.equal(typeof app.dispose, 'function');
   assert.equal(typeof app.getValidatedLastFolder, 'function');
+  // Sucht beim Start den Python-Interpreter und uebernimmt den Stand der
+  // Tool-Einstellungen (Issues #63, #86).
+  assert.equal(typeof app.initToolRuntimes, 'function');
 });
 
 test('createApplication registers IPC handlers and disposes provider runtime', async (t) => {
