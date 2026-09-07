@@ -1,3 +1,4 @@
+const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { iterSseEvents, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -16,11 +17,22 @@ function isValidModelId(id) {
 }
 
 async function listModels(config) {
+  try {
+    return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
+      signal: config?.signal,
+      timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: 'API-Key fehlt.' };
   let res;
   try {
-    res = await fetch(`${API_BASE}/models?key=${encodeURIComponent(apiKey)}&pageSize=200`);
+    res = await fetch(`${API_BASE}/models?key=${encodeURIComponent(apiKey)}&pageSize=200`, { signal: config.signal });
   } catch (err) {
     return { error: describeFetchError(err, API_BASE) };
   }

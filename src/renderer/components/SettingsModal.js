@@ -684,7 +684,16 @@ export function initSettingsModal(deps) {
     syncPopupProviderUI(pid, true);
   }
 
+  let modelRequestGeneration = 0;
+  function cancelModelListing() {
+    modelRequestGeneration += 1;
+    void api.cancelModelListing?.().catch(() => {});
+    btnLoadModels.disabled = false;
+    setModelStatus('');
+  }
+
   function closeAddModelOverlay() {
+    cancelModelListing();
     stashPopupCredentialInputs();
     addModelOverlay.classList.add('hidden');
     addModelOverlay.setAttribute('aria-hidden', 'true');
@@ -766,6 +775,7 @@ export function initSettingsModal(deps) {
   }
 
   async function loadModelsForPopup() {
+    const generation = ++modelRequestGeneration;
     const providerId = selectProvider.value;
     const pv = findProviderView(providerId);
     if (!pv) return;
@@ -795,6 +805,7 @@ export function initSettingsModal(deps) {
         baseUrl: baseUrl || undefined,
         insecureTls,
       });
+      if (generation !== modelRequestGeneration) return;
       if (result?.error) {
         setModelStatus(`Fehler: ${result.error}`, true);
         return;
@@ -814,9 +825,10 @@ export function initSettingsModal(deps) {
       }
       setModelStatus(`${models.length} Modelle gefunden.`, false);
     } catch (err) {
+      if (generation !== modelRequestGeneration) return;
       setModelStatus(`Fehler: ${err.message || 'Modelle konnten nicht geladen werden.'}`, true);
     } finally {
-      btnLoadModels.disabled = false;
+      if (generation === modelRequestGeneration) btnLoadModels.disabled = false;
     }
   }
 
@@ -982,6 +994,7 @@ export function initSettingsModal(deps) {
   });
 
   selectProvider.addEventListener('change', () => {
+    cancelModelListing();
     syncPopupProviderUI(selectProvider.value);
   });
 

@@ -12,6 +12,7 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
 
       const stored = (await providerSecrets.getEffectiveProviderConfig(providerId)) || {};
       const config = {
+        signal: request.signal,
         apiKey: request.apiKey || stored.apiKey || '',
         baseUrl: request.baseUrl || stored.baseUrl || provider.defaultBaseUrl || '',
         insecureTls: typeof request.insecureTls === 'boolean'

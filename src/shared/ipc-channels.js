@@ -24,6 +24,7 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_LLM_STATE: 'settings:getLLMState',
   SETTINGS_SET_ACTIVE_PRESET: 'settings:setActivePreset',
   SETTINGS_COMMIT_SETTINGS: 'settings:commitSettings',
+  SETTINGS_CANCEL_MODELS: 'settings:cancelModels',
   SETTINGS_LIST_MODELS: 'settings:listModels',
 
   SETTINGS_GET_LAST_FOLDER: 'settings:getLastFolder',
@@ -89,6 +90,7 @@ const REQUEST_CHANNELS = Object.freeze({
   /** Renderer → Main (ipcRenderer.send), bricht laufenden CHAT_SEND ab. */
   CHAT_ABORT: 'chat:abort',
 
+  WHISPER_CANCEL: 'whisper:cancel',
   WHISPER_TRANSCRIBE: 'whisper:transcribe',
 });
 

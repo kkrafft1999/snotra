@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLLMState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LLM_STATE),
   setActivePreset: (presetId) => ipcRenderer.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, presetId),
   commitSettings: (payload) => ipcRenderer.invoke(REQ.SETTINGS_COMMIT_SETTINGS, payload),
+  cancelModelListing: () => ipcRenderer.invoke(REQ.SETTINGS_CANCEL_MODELS),
   listModels: (payload) => ipcRenderer.invoke(REQ.SETTINGS_LIST_MODELS, payload),
 
   getLastFolder: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LAST_FOLDER),
@@ -71,6 +72,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  cancelTranscription: () => ipcRenderer.invoke(REQ.WHISPER_CANCEL),
   transcribeAudio: (audioBuffer) => ipcRenderer.invoke(REQ.WHISPER_TRANSCRIBE, audioBuffer),
 
   // Self-Update (Notifier)

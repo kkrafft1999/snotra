@@ -1,3 +1,4 @@
+const { withRequestTimeout, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://127.0.0.1:8080/v1';
@@ -8,10 +9,21 @@ function baseUrlOf(config) {
 }
 
 async function listModels(config) {
+  try {
+    return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
+      signal: config?.signal,
+      timeoutMs: config?.timeoutMs ?? LOCAL_MODELS_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function listModelsRequest(config) {
   const base = baseUrlOf(config);
   let res;
   try {
-    res = await fetch(`${base}/models`);
+    res = await fetch(`${base}/models`, { signal: config.signal });
   } catch (err) {
     return { error: describeFetchError(err, base) };
   }

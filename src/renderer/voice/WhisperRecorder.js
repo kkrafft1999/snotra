@@ -8,6 +8,7 @@ export function initWhisperRecorder({
 
   // Aufnahme-State lebt komplett in diesem Component — kein anderer Code
   // liest oder schreibt ihn.
+  let generation = 0;
   let voiceRecording = false;
   let voiceTranscribing = false;
   let voiceMediaRecorder = null;
@@ -40,9 +41,16 @@ export function initWhisperRecorder({
 
   async function startVoiceRecording() {
     if (voiceRecording || voiceTranscribing) return;
+    const started = ++generation;
     try {
-      voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (started !== generation) {
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
+      voiceStream = stream;
     } catch (err) {
+      if (started !== generation) return;
       setVoiceStatus(err.name === 'NotAllowedError' ? 'Mikrofonzugriff verweigert.' : `Mikrofon: ${err.message}`);
       return;
     }
@@ -53,7 +61,7 @@ export function initWhisperRecorder({
       : 'audio/webm';
     voiceMediaRecorder = new MediaRecorder(voiceStream, { mimeType });
     voiceMediaRecorder.ondataavailable = (e) => {
-      if (e.data?.size > 0) voiceChunks.push(e.data);
+      if (started === generation && e.data?.size > 0) voiceChunks.push(e.data);
     };
     voiceMediaRecorder.onstop = () => handleVoiceStopped();
     voiceMediaRecorder.start(250);
@@ -71,6 +79,7 @@ export function initWhisperRecorder({
   }
 
   async function handleVoiceStopped() {
+    const started = generation;
     setMicUi(false);
 
     if (voiceChunks.length === 0) { setVoiceStatus(''); return; }
@@ -79,12 +88,15 @@ export function initWhisperRecorder({
     if (blob.size < 1000) { setVoiceStatus('Aufnahme zu kurz.'); return; }
 
     voiceTranscribing = true;
-    btnChatMic.disabled = true;
+    btnChatMic.title = 'Transkription abbrechen';
+    btnChatMic.setAttribute('aria-label', 'Transkription abbrechen');
     setVoiceStatus('Transkribiere…');
 
     try {
       const buf = await blob.arrayBuffer();
+      if (started !== generation) return;
       const result = await api.transcribeAudio(buf);
+      if (started !== generation) return;
       if (result.error) {
         setVoiceStatus(`Fehler: ${result.error}`);
       } else if (result.text?.trim()) {
@@ -98,14 +110,22 @@ export function initWhisperRecorder({
         setVoiceStatus('Keine Sprache erkannt.');
       }
     } catch (err) {
+      if (started !== generation) return;
       setVoiceStatus(`Fehler: ${err.message || 'Transkription fehlgeschlagen.'}`);
     } finally {
-      voiceTranscribing = false;
-      btnChatMic.disabled = false;
+      if (started === generation) {
+        voiceTranscribing = false;
+        setMicUi(false);
+      }
     }
   }
 
   function stopChatVoiceListening() {
+    generation += 1;
+    voiceChunks = [];
+    if (voiceMediaRecorder) voiceMediaRecorder.onstop = null;
+    void api.cancelTranscription?.().catch(() => {});
+    voiceTranscribing = false;
     if (voiceRecording) stopVoiceRecording();
     releaseVoiceStream();
     setMicUi(false);
@@ -114,7 +134,9 @@ export function initWhisperRecorder({
 
   btnChatMic.addEventListener('click', () => {
     if (btnChatMic.disabled) return;
-    if (voiceRecording) {
+    if (voiceTranscribing) {
+      stopChatVoiceListening();
+    } else if (voiceRecording) {
       stopVoiceRecording();
     } else {
       startVoiceRecording();

@@ -1,3 +1,4 @@
+const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'https://api.openai.com/v1';
@@ -8,12 +9,24 @@ function baseUrlOf(config) {
 }
 
 async function listModels(config) {
+  try {
+    return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
+      signal: config?.signal,
+      timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: 'API-Key fehlt.' };
   const base = baseUrlOf(config);
   let res;
   try {
     res = await fetch(`${base}/models`, {
+      signal: config.signal,
       headers: { Authorization: `Bearer ${apiKey}` },
     });
   } catch (err) {

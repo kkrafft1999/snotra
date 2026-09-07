@@ -1,3 +1,5 @@
+const { withRequestTimeout, TRANSCRIPTION_TIMEOUT_MS } = require('./request-timeout');
+
 function createWhisperService({ fetchImpl, credentials, speechProviderId = 'openai', getAppLocale }) {
   const fetchFn = fetchImpl;
 
@@ -11,6 +13,17 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
   }
 
   async function transcribeAudio(audioBuffer, options) {
+    try {
+      return await withRequestTimeout((signal) => transcribeRequest(audioBuffer, { ...options, signal }), {
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs ?? TRANSCRIPTION_TIMEOUT_MS,
+      });
+    } catch (err) {
+      return { error: err.message };
+    }
+  }
+
+  async function transcribeRequest(audioBuffer, options) {
     const apiKey = await credentials.getApiKey(speechProviderId);
     if (!apiKey) {
       return { error: 'Kein OpenAI-Key hinterlegt (Whisper benötigt einen).' };
@@ -41,6 +54,7 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
     try {
       const res = await fetchFn('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
+        signal: options.signal,
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': `multipart/form-data; boundary=${boundary}`,

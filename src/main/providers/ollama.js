@@ -1,3 +1,4 @@
+const { withRequestTimeout, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { Agent } = require('undici');
 const { iterStreamLines, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
@@ -42,11 +43,22 @@ function baseUrlOf(config) {
 }
 
 async function listModels(config) {
+  try {
+    return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
+      signal: config?.signal,
+      timeoutMs: config?.timeoutMs ?? LOCAL_MODELS_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function listModelsRequest(config) {
   const base = baseUrlOf(config);
   const url = `${base}/api/tags`;
   let res;
   try {
-    res = await fetch(url, { dispatcher: dispatcherFor(url, config) });
+    res = await fetch(url, { dispatcher: dispatcherFor(url, config), signal: config.signal });
   } catch (err) {
     return { error: describeFetchError(err, base) };
   }

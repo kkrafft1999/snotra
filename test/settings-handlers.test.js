@@ -707,3 +707,19 @@ test('commitSettings rollback preserves a newer concurrent LLM update', async (t
   assert.match(res.error, /zwischenzeitlicher Änderungen/);
   assert.equal((await storage.readLLMConfig()).activePresetId, 'newer-selection');
 });
+
+test('cancelModelListing forwards cancellation through IPC and adapter to the provider', async (t) => {
+  let notifyStarted;
+  const started = new Promise((resolve) => { notifyStarted = resolve; });
+  const { ipcMain } = await setupHandlers(t, {
+    listModelsImpl: async ({ signal }) => {
+      notifyStarted(signal);
+      return new Promise((resolve) => signal.addEventListener('abort', () => resolve({ error: 'Anfrage abgebrochen.' }), { once: true }));
+    },
+  });
+  const pending = ipcMain.invoke(REQ.SETTINGS_LIST_MODELS, { providerId: 'ollama' });
+  const signal = await started;
+  await ipcMain.invoke(REQ.SETTINGS_CANCEL_MODELS);
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(await pending, { error: 'Anfrage abgebrochen.' });
+});

@@ -1,3 +1,4 @@
+const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
@@ -13,11 +14,22 @@ function authHeaders(apiKey) {
 }
 
 async function listModels(config) {
+  try {
+    return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
+      signal: config?.signal,
+      timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
+    });
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: 'API-Key fehlt.' };
   let res;
   try {
-    res = await fetch(`${API_BASE}/models?limit=100`, { headers: authHeaders(apiKey) });
+    res = await fetch(`${API_BASE}/models?limit=100`, { headers: authHeaders(apiKey), signal: config.signal });
   } catch (err) {
     return { error: describeFetchError(err, API_BASE) };
   }

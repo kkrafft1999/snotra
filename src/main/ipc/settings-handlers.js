@@ -1,3 +1,4 @@
+const { createRequestLifecycle } = require('./request-lifecycle');
 const { isDeepStrictEqual } = require('node:util');
 const {
   createSettingsOk,
@@ -210,9 +211,11 @@ function registerSettingsHandlers({
     return createSettingsOk();
   });
 
-  ipcMain.handle(REQ.SETTINGS_LIST_MODELS, async (_event, payload) => {
+  const modelRequests = createRequestLifecycle();
+  ipcMain.handle(REQ.SETTINGS_CANCEL_MODELS, (event) => modelRequests.cancel(event.sender));
+  ipcMain.handle(REQ.SETTINGS_LIST_MODELS, async (event, payload) => {
     const req = normalizeListModelsRequest(payload);
-    return providerModels.listModels(req.providerId, req);
+    return modelRequests.run(event.sender, (signal) => providerModels.listModels(req.providerId, { ...req, signal }));
   });
 
   ipcMain.handle(REQ.SETTINGS_GET_LAST_FOLDER, async () => {
