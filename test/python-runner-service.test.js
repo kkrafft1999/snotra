@@ -16,6 +16,15 @@ const { createPythonRunnerService, interpreterCandidates, clampTimeout } =
   require('../src/main/services/python-runner-service');
 const { PYTHON_EXECUTION_LIMITS } = require('../src/application/ports/code-execution-port');
 
+/**
+ * Python gibt unter Windows CRLF aus. Fuer die Tests ist nur der Inhalt
+ * interessant, nicht das Zeilenende der Plattform — das Produkt reicht die
+ * Ausgabe bewusst unveraendert an das Modell weiter.
+ */
+function lines(text) {
+  return String(text).replace(/\r\n/g, '\n').trim().split('\n');
+}
+
 function makeService(overrides = {}) {
   return createPythonRunnerService({ spawn: childProcess.spawn, fs, path, os, ...overrides });
 }
@@ -120,8 +129,7 @@ test('run reicht stdin und argv durch', async (t) => {
     argv: ['a', 'b'],
   });
 
-  assert.equal(result.stdout.trim().split('\n')[0], 'HALLO WELT');
-  assert.equal(result.stdout.trim().split('\n')[1], 'a,b');
+  assert.deepEqual(lines(result.stdout), ['HALLO WELT', 'a,b']);
 });
 
 test('run arbeitet im übergebenen Verzeichnis', async (t) => {
@@ -132,7 +140,7 @@ test('run arbeitet im übergebenen Verzeichnis', async (t) => {
   await fs.writeFile(path.join(dir, 'daten.csv'), 'a,b\n1,2\n', 'utf8');
   try {
     const result = await service.run({ code: 'print(open("daten.csv").read().strip())', cwd: dir });
-    assert.equal(result.stdout.trim(), 'a,b\n1,2');
+    assert.deepEqual(lines(result.stdout), ['a,b', '1,2']);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
