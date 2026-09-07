@@ -8,7 +8,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { registerShellHandlers, isOpenableUrl } = require('../src/main/ipc/shell-handlers');
+const {
+  registerShellHandlers,
+  isOpenableUrl,
+  MAX_CLIPBOARD_TEXT_BYTES,
+} = require('../src/main/ipc/shell-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 
 function makeIpcMain() {
@@ -44,7 +48,7 @@ function setup({ openExternal, clipboard } = {}) {
   return { ipcMain, opened };
 }
 
-test('isOpenableUrl lässt nur http und https durch', () => {
+test('isOpenableUrl lässt nur http, https und mailto durch', () => {
   assert.equal(isOpenableUrl('https://github.com/kkrafft1999/snotra/releases'), true);
   assert.equal(isOpenableUrl('http://localhost:3000'), true);
   for (const bad of [
@@ -59,6 +63,31 @@ test('isOpenableUrl lässt nur http und https durch', () => {
   ]) {
     assert.equal(isOpenableUrl(bad), false, String(bad));
   }
+});
+
+// Issue #82: Der Markdown-Sanitizer laesst mailto-Links stehen, also muss die
+// Kette dahinter sie oeffnen — aber ohne dass sich per Zeilenumbruch ein
+// zweiter Header in die vorbereitete Mail schmuggeln laesst.
+test('isOpenableUrl erlaubt mailto, weist aber Header-Injection ab', () => {
+  assert.equal(isOpenableUrl('mailto:test@example.com'), true);
+  assert.equal(isOpenableUrl('mailto:test@example.com?subject=Hallo'), true);
+  assert.equal(isOpenableUrl('  mailto:test@example.com  '), true);
+  for (const bad of [
+    'mailto:',
+    'mailto:   ',
+    'mailto:test@example.com%0ABcc:opfer@example.com',
+    'mailto:test@example.com%0d%0aBcc:opfer@example.com',
+    'mailto:test@example.com\nBcc:opfer@example.com',
+  ]) {
+    assert.equal(isOpenableUrl(bad), false, JSON.stringify(bad));
+  }
+});
+
+test('openExternal öffnet mailto-Links über die Shell', async () => {
+  const { ipcMain, opened } = setup();
+  const url = 'mailto:test@example.com?subject=Hallo';
+  assert.deepEqual(await ipcMain.invoke(REQ.SHELL_OPEN_EXTERNAL, url), { ok: true });
+  assert.deepEqual(opened, [url]);
 });
 
 test('openExternal öffnet http- und https-Links über die Shell', async () => {
@@ -116,6 +145,31 @@ test('writeClipboardText meldet einen Fehler, wenn das Schreiben asynchron fehls
 // Der Handler muss auf das Promise warten, sonst kann er den Erfolg gar nicht
 // kennen. Wir loesen erst nach einem Tick auf und pruefen, dass die Antwort
 // danach kommt.
+// Issue #83: Der Diagnose-Export (Strg/Cmd+Shift+D) ist der einzige Aufrufer.
+// Ein unbegrenzter Kanal in die Zwischenablage bringt keinen Nutzen.
+test('writeClipboardText weist zu große Texte ab, ohne die Zwischenablage zu rufen', async () => {
+  const written = [];
+  const { ipcMain } = setup({
+    clipboard: {
+      writeText(text) {
+        written.push(text);
+      },
+    },
+  });
+  const zuGross = 'a'.repeat(MAX_CLIPBOARD_TEXT_BYTES + 1);
+  const result = await ipcMain.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, zuGross);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /zu groß/i);
+  assert.deepEqual(written, []);
+
+  const gradeNoch = 'a'.repeat(MAX_CLIPBOARD_TEXT_BYTES);
+  assert.deepEqual(
+    await ipcMain.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, gradeNoch),
+    { ok: true },
+  );
+  assert.deepEqual(written, [gradeNoch]);
+});
+
 test('writeClipboardText wartet auf das Promise von writeText', async () => {
   let resolveWrite;
   const written = [];

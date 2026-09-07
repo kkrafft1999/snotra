@@ -1,4 +1,5 @@
 import { markdownToSafeHtml } from '../utils/helpers.js';
+import { isOpenableChatLink, openChatLink } from '../chat/openChatLink.js';
 // Token-Usage-Normalisierung/-Summierung aus der gemeinsamen Contract-Schicht,
 // damit Anzeige (Renderer) und Provider-Seite (Main) nicht auseinanderlaufen.
 import contracts from '../generated/contracts.js';
@@ -1144,14 +1145,18 @@ export function initChatStream({
     await persistCurrentChat();
   }
 
+  // Links aus Modellantworten oeffnet der Main-Prozess (Issue #82/#83).
+  // Ohne Auswertung des Ergebnisses sieht ein Fehlschlag aus wie ein toter
+  // Link, darum die Rueckmeldung ueber die Statuszeile.
   chatMessagesEl.addEventListener('click', (e) => {
     const a = e.target.closest('a');
     if (!a) return;
     const href = a.getAttribute('href');
-    if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-      e.preventDefault();
-      api.openExternal(href);
-    }
+    if (!isOpenableChatLink(href)) return;
+    e.preventDefault();
+    openChatLink(api, href).then((result) => {
+      if (!result.ok) flashTokenUsageNote(result.error);
+    });
   });
 
   function onSendOrStopClick() {

@@ -1,6 +1,7 @@
 const { BrowserWindow, shell } = require('electron');
 const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
+const { isOpenableUrl } = require('./ipc/shell-handlers');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -33,14 +34,13 @@ function createWindow() {
     console.error('Preload failed:', preloadPath, error);
   });
 
+  // Dieselbe Pruefung wie der IPC-Handler, damit http/https/mailto ueberall
+  // gleich behandelt werden (Issue #82).
   window.webContents.setWindowOpenHandler(({ url }) => {
-    try {
-      const u = new URL(url);
-      if (u.protocol === 'http:' || u.protocol === 'https:') {
-        shell.openExternal(url);
-      }
-    } catch {
-      /* ignore invalid URL */
+    if (isOpenableUrl(url)) {
+      shell.openExternal(url.trim()).catch((e) => {
+        console.error('openExternal failed:', url, e);
+      });
     }
     return { action: 'deny' };
   });

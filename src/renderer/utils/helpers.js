@@ -32,7 +32,12 @@ export function formatSize(bytes) {
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-const ALLOWED_LINK_PROTOS = /^(https?|mailto):/i;
+/**
+ * Protokolle, die im Chat als Link stehen bleiben duerfen. Der Klick-Handler
+ * in ChatStream muss dieselbe Liste verwenden, sonst zeigt der Chat Links an,
+ * die nichts tun (Issue #82).
+ */
+export const ALLOWED_LINK_PROTOS = /^(https?|mailto):/i;
 let domPurifyConfigured = false;
 
 function configureDomPurify() {
