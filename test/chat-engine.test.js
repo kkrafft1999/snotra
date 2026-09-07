@@ -979,3 +979,48 @@ test('engine leaves the system message untouched when no skill is active', async
 
   assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
 });
+
+// Bild-Anhaenge (Issue #84): Der Payload aus dem Renderer ist ungeprueft, also
+// normalisiert die Engine selbst — gueltige Bilder erreichen den Provider,
+// Muell nicht.
+test('engine reicht normalisierte Bild-Anhaenge an den Provider weiter', async () => {
+  const PNG_1PX =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const { engine, calls } = makeEngine([assistantText('Sehe ich.')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        {
+          role: 'user',
+          content: 'Was ist das?',
+          attachments: [
+            { kind: 'image', mediaType: 'image/PNG', dataBase64: `data:image/png;base64,${PNG_1PX}` },
+            { kind: 'image', mediaType: 'application/pdf', dataBase64: PNG_1PX },
+          ],
+        },
+      ],
+    },
+    onEvent: () => {},
+  });
+
+  const sent = calls[0].messages.find((m) => m.role === 'user');
+  assert.equal(sent.content, 'Was ist das?');
+  assert.equal(sent.attachments.length, 1);
+  assert.equal(sent.attachments[0].mediaType, 'image/png');
+  assert.equal(sent.attachments[0].dataBase64, PNG_1PX);
+});
+
+test('engine haengt Nachrichten ohne Bild kein leeres attachments-Feld an', async () => {
+  const { engine, calls } = makeEngine([assistantText('Ok')]);
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+    onEvent: () => {},
+  });
+
+  const sent = calls[0].messages.find((m) => m.role === 'user');
+  assert.equal('attachments' in sent, false);
+});

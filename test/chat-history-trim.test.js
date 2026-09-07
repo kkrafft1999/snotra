@@ -133,3 +133,21 @@ test('truncateStaleToolOutputs does nothing within budget and leaves non-tool me
   assert.equal(truncateStaleToolOutputs(big, 4000), 0, 'user content must never be truncated');
   assert.equal(big[0].content.length, 50_000);
 });
+
+// Bild-Anhaenge (Issue #84): sie stehen nicht im Content, kosten den Anbieter
+// aber Tokens. Ohne eigenen Posten fensterte der Verlauf sie als gratis.
+test('estimateMessageChars rechnet Bild-Anhaenge mit ein', () => {
+  const { estimateMessageChars } = require('../src/application/chat/chat-history-trim');
+  const { IMAGE_ATTACHMENT_CHAR_COST } = require('../src/shared/contracts/attachments');
+  const PNG_1PX =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  const ohne = { role: 'user', content: 'Hallo' };
+  const mit = {
+    role: 'user',
+    content: 'Hallo',
+    attachments: [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }],
+  };
+
+  assert.equal(estimateMessageChars(mit) - estimateMessageChars(ohne), IMAGE_ATTACHMENT_CHAR_COST);
+});

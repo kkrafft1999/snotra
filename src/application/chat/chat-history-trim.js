@@ -3,6 +3,8 @@
 // deshalb in Zeichen gefuehrt und ist ueber ui-preferences.json
 // (historyCharLimit) konfigurierbar.
 
+const { attachmentsCharCost } = require('../../shared/contracts/attachments');
+
 const CHARS_PER_TOKEN = 4;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
@@ -33,6 +35,9 @@ function estimateMessageChars(message) {
       /* zirkulaer o. ae. — Overhead reicht */
     }
   }
+  // Bild-Anhaenge (Issue #84) stehen nicht im Content, kosten den Anbieter
+  // aber Tokens — ohne diesen Posten fensterte der Verlauf sie als gratis.
+  chars += attachmentsCharCost(message);
   if (Array.isArray(message.tool_calls)) {
     for (const tc of message.tool_calls) {
       chars += 24;

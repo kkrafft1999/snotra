@@ -1572,6 +1572,90 @@ summary:focus-visible,
 /* #chat-input:focus: kein outline-Reset noetig — globales :focus greift,
  * Fokus-Ring sitzt am umgebenden #chat-input-row (siehe Phase 1 oben). */
 
+/* Bild-Anhänge im Composer (Issue #84): Chips mit Vorschau über dem Textfeld.
+ * Die sichtbare Vorschau ist Absicht — ein Screenshot zeigt oft mehr, als man
+ * bewusst teilen will, und beim Cloud-Provider verlässt er den Rechner. */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-attachments.hidden {
+  display: none;
+}
+
+.chat-attachment-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 4px 4px 4px 4px;
+  background: var(--ds-grey-card);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+}
+
+.chat-attachment-thumb {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: calc(var(--ds-radius-md) - 3px);
+  background: var(--bg-primary);
+}
+
+.chat-attachment-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.chat-attachment-size {
+  font-size: 11px;
+  color: var(--ds-grey-strong);
+}
+
+.chat-attachment-remove {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+}
+
+/* Gesendete Nachricht: Bilder über dem Text der Nutzerfrage. */
+.chat-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-msg-attachment-img {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-grey-divider);
+}
+
 /* @-Vervollständigung (Issue #52): Liste der Workspace-Pfade über dem Textfeld,
  * optisch wie .chat-model-menu (Container 6px, Hover-Wash --ds-blue-soft). */
 .chat-mention-menu {

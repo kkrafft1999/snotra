@@ -1,5 +1,14 @@
 import { markdownToSafeHtml } from '../utils/helpers.js';
 import { isOpenableChatLink, openChatLink } from '../chat/openChatLink.js';
+// Bild-Anhaenge im Composer (Issue #84): Aufnahme aus der Zwischenablage,
+// Limits und Verkleinern.
+import {
+  imageFilesFromClipboard,
+  planAttachmentIntake,
+  prepareImageAttachment,
+  rejectionMessage,
+  toDataUrl,
+} from '../chat/imageAttachments.js';
 // Token-Usage-Normalisierung/-Summierung aus der gemeinsamen Contract-Schicht,
 // damit Anzeige (Renderer) und Provider-Seite (Main) nicht auseinanderlaufen.
 import contracts from '../generated/contracts.js';
@@ -429,6 +438,11 @@ export function initChatStream({
   const chatInput = document.getElementById('chat-input');
   const btnChatSend = document.getElementById('btn-chat-send');
   const chatTokenUsageEl = document.getElementById('chat-token-usage');
+  const chatAttachmentsEl = document.getElementById('chat-attachments');
+
+  // Anhaenge des noch nicht abgeschickten Zuges (Issue #84). Sie leben nur im
+  // Composer; mit dem Senden wandern sie an die Nachricht.
+  let pendingAttachments = [];
 
   function setChatTokenUsage(usage) {
     appStore.chatTokenUsage = coerceUsage(usage);
@@ -694,7 +708,26 @@ export function initChatStream({
           approvalCards?.mount(li, m);
         }
       } else {
-        li.textContent = m.content;
+        if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+          const gallery = document.createElement('ul');
+          gallery.className = 'chat-msg-attachments';
+          for (const attachment of m.attachments) {
+            const item = document.createElement('li');
+            const img = document.createElement('img');
+            img.className = 'chat-msg-attachment-img';
+            img.src = toDataUrl(attachment);
+            img.alt = attachment.name || 'Angehängtes Bild';
+            item.appendChild(img);
+            gallery.appendChild(item);
+          }
+          li.appendChild(gallery);
+        }
+        if (m.content) {
+          const textEl = document.createElement('div');
+          textEl.className = 'chat-msg-text';
+          textEl.textContent = m.content;
+          li.appendChild(textEl);
+        }
       }
       chatMessagesEl.appendChild(li);
     }
@@ -804,11 +837,18 @@ export function initChatStream({
     if (appStore.chatInFlight) return;
     stopChatVoiceListening();
     const text = chatInput.value.trim();
-    if (!text || !activeProviderConfigured()) return;
+    // Ein Screenshot ohne Begleitfrage ist eine gueltige Eingabe (Issue #84).
+    if ((!text && pendingAttachments.length === 0) || !activeProviderConfigured()) return;
     const sessionAtSend = appStore.chatSessionId;
     chatInput.value = '';
     onInputChanged();
-    appStore.chatMessages.push({ role: 'user', content: text });
+    const userMessage = { role: 'user', content: text };
+    if (pendingAttachments.length > 0) {
+      userMessage.attachments = pendingAttachments;
+      pendingAttachments = [];
+      renderAttachmentChips();
+    }
+    appStore.chatMessages.push(userMessage);
     renderChatMessages();
     appStore.chatSendSeq += 1;
     const sendSeq = appStore.chatSendSeq;
@@ -817,7 +857,10 @@ export function initChatStream({
 
     const payload = appStore.chatMessages
       .filter((m) => !m.greeting)
-      .map(({ role, content }) => ({ role, content }));
+      .map(({ role, content, attachments }) =>
+        (Array.isArray(attachments) && attachments.length > 0
+          ? { role, content, attachments }
+          : { role, content }));
     const assistantMessage = {
       role: 'assistant',
       content: '',
@@ -1144,6 +1187,87 @@ export function initChatStream({
     syncChatTitle?.();
     await persistCurrentChat();
   }
+
+  function formatAttachmentSize(bytes) {
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+    return `${Math.round((value / (1024 * 1024)) * 10) / 10} MB`;
+  }
+
+  function renderAttachmentChips() {
+    if (!chatAttachmentsEl) return;
+    chatAttachmentsEl.innerHTML = '';
+    chatAttachmentsEl.classList.toggle('hidden', pendingAttachments.length === 0);
+    pendingAttachments.forEach((attachment, index) => {
+      const li = document.createElement('li');
+      li.className = 'chat-attachment-chip';
+
+      const img = document.createElement('img');
+      img.className = 'chat-attachment-thumb';
+      img.src = toDataUrl(attachment);
+      img.alt = '';
+      li.appendChild(img);
+
+      const meta = document.createElement('div');
+      meta.className = 'chat-attachment-meta';
+      const name = document.createElement('span');
+      name.className = 'chat-attachment-name';
+      name.textContent = attachment.name || 'Bild';
+      const size = document.createElement('span');
+      size.className = 'chat-attachment-size';
+      size.textContent = formatAttachmentSize(attachment.bytes);
+      meta.appendChild(name);
+      meta.appendChild(size);
+      li.appendChild(meta);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'chat-attachment-remove';
+      remove.title = 'Anhang entfernen';
+      remove.setAttribute('aria-label', `Anhang ${attachment.name || 'Bild'} entfernen`);
+      remove.textContent = '\u00d7';
+      remove.addEventListener('click', () => {
+        pendingAttachments.splice(index, 1);
+        renderAttachmentChips();
+        chatInput.focus();
+      });
+      li.appendChild(remove);
+
+      chatAttachmentsEl.appendChild(li);
+    });
+  }
+
+  // Einstieg fuer Screenshots (Issue #84): Cmd/Ctrl+V. Der Text im Eingabefeld
+  // bleibt unberuehrt — nur wenn wirklich Bilder in der Zwischenablage liegen,
+  // wird das Standardverhalten unterdrueckt.
+  async function takeImageFiles(files) {
+    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length, files);
+    for (const reason of rejections) flashTokenUsageNote(rejectionMessage(reason));
+    if (accepted.length === 0) return;
+
+    for (const file of accepted) {
+      let result;
+      try {
+        result = await prepareImageAttachment(file);
+      } catch {
+        result = { ok: false, reason: '' };
+      }
+      if (!result.ok) {
+        flashTokenUsageNote(rejectionMessage(result.reason));
+        continue;
+      }
+      pendingAttachments.push(result.attachment);
+      renderAttachmentChips();
+    }
+  }
+
+  chatInput.addEventListener('paste', (e) => {
+    const files = imageFilesFromClipboard(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    takeImageFiles(files);
+  });
 
   // Links aus Modellantworten oeffnet der Main-Prozess (Issue #82/#83).
   // Ohne Auswertung des Ergebnisses sieht ein Fehlschlag aus wie ein toter

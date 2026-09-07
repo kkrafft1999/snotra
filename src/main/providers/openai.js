@@ -1,3 +1,4 @@
+const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
@@ -71,7 +72,21 @@ function translateMessagesToResponsesInput(messages) {
   const out = [];
   for (const m of messages) {
     if (m.role === 'system' || m.role === 'user') {
-      out.push({ role: m.role, content: typeof m.content === 'string' ? m.content : '' });
+      const text = typeof m.content === 'string' ? m.content : '';
+      const images = m.role === 'user' ? imageAttachmentsOf(m) : [];
+      if (images.length === 0) {
+        out.push({ role: m.role, content: text });
+        continue;
+      }
+      // Mit Bild verlangt die Responses-API getypte Teile statt eines
+      // Strings (Issue #84). Ein leerer Text-Teil entfaellt — ein Screenshot
+      // ohne Begleitfrage ist eine gueltige Eingabe.
+      const content = [];
+      if (text) content.push({ type: 'input_text', text });
+      for (const image of images) {
+        content.push({ type: 'input_image', image_url: toDataUrl(image) });
+      }
+      out.push({ role: m.role, content });
       continue;
     }
     if (m.role === 'assistant') {

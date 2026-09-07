@@ -3,6 +3,7 @@
 const { isAbortError, createChatAbortError } = require('../../shared/runtime/abort');
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
+const { normalizeAttachments } = require('../../shared/contracts/attachments');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -427,9 +428,18 @@ function createChatEngine({
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
       const historyCharLimit = resolveHistoryCharLimit(uiPrefs);
+      // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
+      // Content — und werden hier normalisiert, weil der Payload aus dem
+      // Renderer ungeprueft ist. Nachrichten ohne Anhang behalten exakt ihre
+      // bisherige Form.
       const historyRows = messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
-        .map((message) => ({ role: message.role, content: message.content ?? '' }));
+        .map((message) => {
+          const row = { role: message.role, content: message.content ?? '' };
+          const attachments = normalizeAttachments(message.attachments);
+          if (attachments.length > 0) row.attachments = attachments;
+          return row;
+        });
       // Die App-Begrüßung steht als Assistant-Nachricht am Chat-Anfang; einige
       // Provider (Anthropic, Google) verlangen, dass die Konversation mit einer
       // User-Nachricht beginnt.

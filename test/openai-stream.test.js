@@ -252,3 +252,70 @@ test('streamChatRound sendet reasoning.summary nur mit reasoningSummary=auto (Is
   });
   assert.equal(JSON.parse(calls[2].options.body).reasoning, undefined);
 });
+
+// Bild-Anhaenge (Issue #84). Mit Bild verlangt die Responses-API getypte Teile
+// statt eines Strings; ohne Bild bleibt die bisherige Form erhalten.
+const PNG_1PX =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+function imageMessage(content) {
+  return {
+    role: 'user',
+    content,
+    attachments: [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }],
+  };
+}
+
+async function bodyOf(t, messages) {
+  const calls = mockFetch(t, () => sseResponse(['data: [DONE]\n\n']));
+  await openai.streamChatRound({
+    config: CONFIG,
+    model: 'gpt-4o',
+    messages,
+    callbacks: collectCallbacks().callbacks,
+  });
+  return JSON.parse(calls[0].options.body);
+}
+
+test('streamChatRound schickt ein Bild als input_image neben dem Text', async (t) => {
+  const body = await bodyOf(t, [imageMessage('Was steht hier?')]);
+
+  assert.deepEqual(body.input, [
+    {
+      role: 'user',
+      content: [
+        { type: 'input_text', text: 'Was steht hier?' },
+        { type: 'input_image', image_url: `data:image/png;base64,${PNG_1PX}` },
+      ],
+    },
+  ]);
+});
+
+test('streamChatRound laesst den leeren Text-Teil weg, wenn nur ein Bild kommt', async (t) => {
+  const body = await bodyOf(t, [imageMessage('')]);
+
+  assert.deepEqual(body.input, [
+    {
+      role: 'user',
+      content: [{ type: 'input_image', image_url: `data:image/png;base64,${PNG_1PX}` }],
+    },
+  ]);
+});
+
+test('streamChatRound laesst Nachrichten ohne Bild unveraendert', async (t) => {
+  const body = await bodyOf(t, [{ role: 'user', content: 'Nur Text' }]);
+
+  assert.deepEqual(body.input, [{ role: 'user', content: 'Nur Text' }]);
+});
+
+test('streamChatRound uebernimmt keine Anhaenge aus System-Nachrichten', async (t) => {
+  const body = await bodyOf(t, [
+    { role: 'system', content: 'Sei knapp.', attachments: [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }] },
+    { role: 'user', content: 'Hi' },
+  ]);
+
+  assert.deepEqual(body.input, [
+    { role: 'system', content: 'Sei knapp.' },
+    { role: 'user', content: 'Hi' },
+  ]);
+});
