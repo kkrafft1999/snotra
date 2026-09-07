@@ -1,5 +1,6 @@
 const { BrowserWindow, shell } = require('electron');
 const path = require('path');
+const { createRendererNavigationHandler } = require('./permissions');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -44,11 +45,7 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
-      event.preventDefault();
-    }
-  });
+  window.webContents.on('will-navigate', createRendererNavigationHandler());
 
   window.loadFile(path.join(projectRoot, 'src', 'renderer', 'index.html'));
   return window;

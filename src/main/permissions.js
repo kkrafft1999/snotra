@@ -4,9 +4,9 @@ const { pathToFileURL } = require('url');
 const RENDERER_URL = pathToFileURL(path.resolve(__dirname, '..', 'renderer', 'index.html')).href;
 
 /**
- * Defense-in-depth: CSP and will-navigate already keep foreign origins out of the
- * window, but permission grants are additionally restricted to our own file://
- * renderer so an embedded frame or unexpected navigation never gets mic access.
+ * Single source of truth for the app renderer URL. Both navigation and permission
+ * grants use this check so another local file can never inherit the main window's
+ * privileges.
  */
 function isTrustedRendererUrl(rawUrl) {
   if (typeof rawUrl !== 'string' || rawUrl === '') {
@@ -17,6 +17,14 @@ function isTrustedRendererUrl(rawUrl) {
     rawUrl.startsWith(`${RENDERER_URL}#`) ||
     rawUrl.startsWith(`${RENDERER_URL}?`)
   );
+}
+
+function createRendererNavigationHandler() {
+  return (event, url) => {
+    if (!isTrustedRendererUrl(url)) {
+      event.preventDefault();
+    }
+  };
 }
 
 function createPermissionRequestHandler() {
@@ -47,6 +55,7 @@ function registerMediaCapturePermissions(browserSession) {
 module.exports = {
   registerMediaCapturePermissions,
   createPermissionRequestHandler,
+  createRendererNavigationHandler,
   isTrustedRendererUrl,
   RENDERER_URL,
 };

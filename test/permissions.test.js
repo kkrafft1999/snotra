@@ -2,9 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createPermissionRequestHandler,
+  createRendererNavigationHandler,
   isTrustedRendererUrl,
   RENDERER_URL,
 } = require('../src/main/permissions');
+
+function attemptNavigation(url) {
+  let prevented = false;
+  createRendererNavigationHandler()({
+    preventDefault() {
+      prevented = true;
+    },
+  }, url);
+  return { prevented };
+}
 
 function decide(permission, { requestingUrl, webContentsUrl } = {}) {
   const handler = createPermissionRequestHandler();
@@ -29,6 +40,16 @@ test('isTrustedRendererUrl rejects foreign and malformed URLs', () => {
   assert.equal(isTrustedRendererUrl(`${RENDERER_URL}.evil.html`), false);
   assert.equal(isTrustedRendererUrl(''), false);
   assert.equal(isTrustedRendererUrl(null), false);
+});
+
+test('renderer navigation allows only the app URL including query and hash', () => {
+  assert.equal(attemptNavigation(RENDERER_URL).prevented, false);
+  assert.equal(attemptNavigation(`${RENDERER_URL}?debug=1`).prevented, false);
+  assert.equal(attemptNavigation(`${RENDERER_URL}#chat`).prevented, false);
+
+  assert.equal(attemptNavigation('file:///tmp/evil.html').prevented, true);
+  assert.equal(attemptNavigation('https://example.com/').prevented, true);
+  assert.equal(attemptNavigation('not a url').prevented, true);
 });
 
 test('grants media permissions to the trusted renderer', () => {
