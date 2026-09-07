@@ -5,8 +5,6 @@ Stand: 2026-09-05.
 - [Sicherheitskonzept](./sicherheitskonzept.md) ausgearbeitet: drei Modi,
   sechs Risikoklassen, Matrix, sensible Daten, Freigaben, harte Grenzen,
   Audit und Referenzvergleich. Dies ist ein Konzept, keine neue Laufzeitfunktion.
-- [Roadmap](./roadmap.md) verlinkt das Konzept und macht #62/#63 von der
-  fertig getesteten Umsetzung von #66 und #67 abhängig.
 - [#66](https://github.com/kkrafft1999/snotra/issues/66) und
   [#67](https://github.com/kkrafft1999/snotra/issues/67) auf GitHub anhand des
   Konzepts nachgeschärft; gespeicherte Beschreibungen vollständig zurückgelesen

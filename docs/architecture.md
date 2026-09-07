@@ -149,5 +149,5 @@ auf dieser Struktur aufgesetzt: Discovery und Parsing im Main-Service, Auswahl
 und Systemprompt-Zusammenbau im Core, Katalog und Umschalter über die
 bestehenden Settings-Kanäle. Erweiterte Tool-Sets und Use-Case-Profile sind
 **nicht** Teil der abgeschlossenen Architektur-Etappen — sie bauen ebenfalls
-darauf auf und sind in [`roadmap.md`](./roadmap.md) als nächste Schritte
-geführt.
+darauf auf und werden als
+[GitHub Issues](https://github.com/kkrafft1999/snotra/issues) geführt.

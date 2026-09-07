@@ -33,5 +33,5 @@ dann:
 ## Nicht verwechseln mit Aufgabenerfassung
 
 Diese Regel betrifft *Entscheidungsfindung im Gespräch*. Die Konvention, wo
-Aufgaben/Tasks landen (GitHub Issues, `docs/roadmap.md`), steht separat in
+Aufgaben/Tasks landen (ausschließlich GitHub Issues), steht separat in
 [`task-management.md`](./task-management.md).

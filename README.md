@@ -18,9 +18,9 @@ Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der Klughe
 
 > Status: **persönliches Hobby- / Experimentier-Projekt.** Schnittstellen, UI und Konfiguration können sich jederzeit ändern.
 
-## Aktueller Stand & Roadmap
+## Aktueller Stand & Planung
 
-Den aktuellen Stand, was gerade in Arbeit ist und was als Nächstes geplant ist, gibt es in [`docs/roadmap.md`](./docs/roadmap.md). Konkrete Aufgaben (Bugs, einzelne Features) werden als [GitHub Issues](https://github.com/kkrafft1999/snotra/issues) getrackt, der Fortschritt im zugehörigen [GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban-Board).
+Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft über [GitHub Issues](https://github.com/kkrafft1999/snotra/issues). Den Fortschritt zeigt das zugehörige [GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban-Board: *Backlog* → *To do* → *In Progress* → *Done*).
 
 ## Tech-Stack
 
@@ -68,7 +68,7 @@ Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen)
 ## Chat
 
 - **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button.
-- **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rdmp` findet z. B. `docs/roadmap.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/roadmap.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
+- **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rlse` findet z. B. `docs/release.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/release.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
 - **Was das Modell davon sieht:** nur die Referenz im Text. Der System-Prompt erklärt die `@pfad`-Konvention; die Datei liest das Modell bei Bedarf selbst über die Lese-Tools, Inhalte werden nicht automatisch eingebettet (Token-Ziel).
 
 **Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (Ollama/MLX-LM) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
@@ -197,7 +197,7 @@ Skill-Pfade.
 ├── system-skills/       eingebaute System-Skills (je Verzeichnis eine `SKILL.md`)
 ├── test/                Tests (node:test), inkl. Architektur-Grenzwächter
 ├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
-├── docs/                Roadmap, Architektur (`architecture.md`, SVG-Diagramme)
+├── docs/                Architektur (`architecture.md`, SVG-Diagramme), Release, Sicherheitskonzept
 ├── assets/icon/         SVG-Quellen des App-Icons (macOS- und Windows-Layout)
 ├── icon.icns / icon.ico App-Icons für macOS / Windows, erzeugt per `node scripts/build-icons.js`
 └── package.json
