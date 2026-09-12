@@ -164,7 +164,7 @@ function createToolRegistry(initialDefinitions = []) {
   };
 }
 
-function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner = null }) {
+function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner = null, urlFetch = null }) {
   return createToolRegistry([
     {
       name: 'list_directory',
@@ -751,6 +751,55 @@ function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner
         // soll die Anfrage umformulieren duerfen, statt abzubrechen.
         const out = { query: result.query, count: result.results.length, results: result.results };
         if (result.answer) out.answer = result.answer;
+        return JSON.stringify(out);
+      },
+    },
+    {
+      name: 'fetch_url',
+      // Wie web_search eine Klasse 'external': der Abruf verlaesst den Rechner,
+      // und der gelesene Text kommt von einem Fremden (Issue #95).
+      riskClass: TOOL_RISK_CLASSES.EXTERNAL,
+      // Eine Webadresse hat keinen Bezugspunkt im Dateisystem (Issue #96).
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => urlFetch !== null,
+      description:
+        'Ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite als Markdown-nahen '
+        + 'Fliesstext, gekürzt auf die gewünschte Länge. Gedacht als Ergänzung zu web_search: dort die '
+        + 'Adresse finden, hier die Seite am Stück lesen. Lokale und private Adressen werden abgelehnt, '
+        + 'ebenso alles, was kein Text ist (PDF, Bilder, Downloads). Der Abruf verlässt den Rechner.',
+      promptDescription:
+        'Liest eine Webseite als Text. Für Inhalte, die über den kurzen Auszug aus web_search hinausgehen.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'Vollständige http- oder https-Adresse, z. B. "https://example.org/changelog".',
+          },
+          max_characters: {
+            type: 'integer',
+            description:
+              'Maximale Zeichenanzahl des zurückgegebenen Texts (Standard 20000, Obergrenze 100000).',
+          },
+        },
+        required: ['url'],
+      },
+      handler: async (args, { abortSignal } = {}) => {
+        if (!urlFetch) {
+          return JSON.stringify({ error: 'Der Seitenabruf ist in dieser Installation nicht verfügbar.' });
+        }
+        const result = await urlFetch.fetchUrl({
+          url: args?.url,
+          maxCharacters: args?.max_characters,
+          abortSignal,
+        });
+        if (!result?.ok) {
+          return JSON.stringify({ error: result?.error || 'Die Seite konnte nicht gelesen werden.' });
+        }
+        const out = { url: result.url, text: result.text };
+        if (result.title) out.title = result.title;
+        if (result.truncated) out.truncated = true;
         return JSON.stringify(out);
       },
     },

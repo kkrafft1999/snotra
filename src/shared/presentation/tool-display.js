@@ -150,6 +150,22 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Im Internet gesucht' : 'Suche im Internet …';
   }
+  if (toolName === 'fetch_url') {
+    // Der Host genuegt: die volle Adresse sprengt jede Zeile (Issue #95).
+    const raw = typeof args?.url === 'string' ? args.url.trim() : '';
+    let label = '';
+    if (raw) {
+      try {
+        label = new URL(raw).hostname || '';
+      } catch {
+        label = truncateToolLabel(raw, 40);
+      }
+    }
+    if (label) {
+      return isDone ? `Seite ${label} gelesen` : `Seite ${label} wird gelesen …`;
+    }
+    return isDone ? 'Seite gelesen' : 'Seite wird gelesen …';
+  }
   if (toolName === 'debug_wait') {
     return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
   }

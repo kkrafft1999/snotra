@@ -54,6 +54,14 @@ bestehende Importe stabil bleiben.
 - `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
   Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
   kennt ihn nicht
+- `url-fetch-port` — eine Webseite als Text lesen (Issue #95); Adressregeln,
+  Weiterleitungen und Grenzen liegen im Adapter
+  (`main/adapters/http-url-fetch-adapter.js`), die Adressprüfung selbst in
+  `shared/runtime/url-safety.js`
+
+Beide Netz-Tools sind in der Registry als `requiresWorkspace: false`
+gekennzeichnet (Issue #96): die Engine baut die Tool-Liste nicht mehr pauschal
+nur mit geöffnetem Projektordner, sondern filtert je Tool.
 
 **Infrastruktur-Ports** (`src/main/ports/`) — von Adaptern implementiert,
 über Composition injiziert:

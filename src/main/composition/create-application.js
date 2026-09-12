@@ -16,6 +16,7 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
+const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
@@ -183,7 +184,10 @@ function createApplication({
     },
   };
 
-  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch, pythonRunner });
+  // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die
+  // Adressregeln stecken im Adapter (Issue #95).
+  const urlFetch = createHttpUrlFetchAdapter();
+  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch, pythonRunner, urlFetch });
 
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.

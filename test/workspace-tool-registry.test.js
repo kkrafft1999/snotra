@@ -316,10 +316,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // run_python ebenso: ohne erlaubte und gefundene Python-Installation
   // erreicht es das Modell nicht (Issue #86).
   assert.equal(names.includes('run_python'), false);
+  // fetch_url ebenso: ohne Abruf-Adapter gibt es nichts zu lesen (Issue #95).
+  assert.equal(names.includes('fetch_url'), false);
 
   // Konzept §2: acht Lesetools → read, drei Schreibtools → write,
-  // web_search → external. debug_wait ist read, steht aber als internes
-  // Test-Tool nicht im Katalog der Einstellungen (Issue #98).
+  // web_search und fetch_url → external. debug_wait ist read, steht aber als
+  // internes Test-Tool nicht im Katalog der Einstellungen (Issue #98).
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   const readTools = [
     'list_directory',
@@ -334,20 +336,23 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   for (const name of readTools) assert.equal(classes[name], 'read', name);
   for (const name of ['write_file_text', 'edit_file', 'apply_patch']) assert.equal(classes[name], 'write', name);
   assert.equal(classes.web_search, 'external');
+  assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
   assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
-  assert.equal(Object.keys(classes).length, 13);
+  // 15 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
+  assert.equal(Object.keys(classes).length, 14);
 });
 
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {
   const registry = createWorkspaceToolRegistry({
     fsService: makeFsServiceStub(),
     webSearch: { isConfigured: () => true, search: async () => ({ ok: true, query: '', results: [] }) },
+    urlFetch: { fetchUrl: async () => ({ ok: true, url: 'https://example.org', text: '', truncated: false }) },
   });
 
   const withoutWorkspace = registry.getTools({ workspaceOpen: false }).map((tool) => tool.function.name);
-  assert.deepEqual(withoutWorkspace, ['web_search']);
+  assert.deepEqual(withoutWorkspace, ['web_search', 'fetch_url']);
 
   const withWorkspace = registry.getTools().map((tool) => tool.function.name);
   assert.ok(withWorkspace.includes('list_directory'));
