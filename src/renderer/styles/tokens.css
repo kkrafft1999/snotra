@@ -19,14 +19,31 @@
   --ds-blue: #00759E;          /* einzige Akzentfarbe (5,0:1 auf #FFF) */
   --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
   --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
-  --ds-chat-user-bg: rgba(0, 117, 158, 0.06); /* User-Bubble: ganz leichter Blau-Wash */
+  /* User-Bubble: Blau-Wash, der die Frage als eigenen Block vom Fliesstext
+   * der Antwort abhebt. 10 % ergibt dL* 5,30 gegen den Grund — deutlich
+   * lesbar, aber noch ein Wash und kein gesaettigter Block. Damit liegt
+   * Light auf derselben Wahrnehmungsstufe wie der Dark-Mode (dL* 5,54);
+   * die frueheren 6 % (dL* 3,22) waren im Vergleich zu schwach. */
+  --ds-chat-user-bg: rgba(0, 117, 158, 0.10);
   --ds-black: #000000;
   --ds-white: #FFFFFF;
 
-  /* ── Neutrale Toene (Light) ───────────────────────────────────────────── */
-  --ds-grey-bg: #F9F9F9;       /* Seitenhintergrund, Footer-BG, Icon-Btn-Hover */
-  --ds-grey-card: #F2F2F2;     /* Karten-Hintergrund, Inline-Code */
-  --ds-grey-divider: #EFEFEF;  /* Trenner, Default-Borders */
+  /* ── Neutrale Toene (Light) ───────────────────────────────────────────────
+   * Leicht kuehl getoent (R-B-Spanne 3), damit die Grauflaechen den Blau-Hue
+   * von --ds-blue aufnehmen, ohne eine zweite Farbe einzufuehren. Die drei
+   * Stufen sind aufeinander abgestimmt: Der Helligkeitsabstand Grund -> Card
+   * (dL* 2,44) und Grund -> Divider (dL* 3,48) ist derselbe wie im frueheren
+   * neutralen Satz (#F9F9F9/#F2F2F2/#EFEFEF) — geaendert wurde die Lage der
+   * ganzen Skala, nicht ihr Verhaeltnis. Wer einen Wert anfasst, muss die
+   * anderen beiden mitziehen, sonst brechen die Ebenenabstaende.
+   *
+   * Der Grund liegt bewusst dunkler als zuvor: Gegen die weisse Composer-
+   * Karte ergab #F9F9F9 nur dL* 2,07 und lag damit an der Wahrnehmungs-
+   * schwelle — die Karte war rechnerisch erhoeht, optisch aber nicht. Mit
+   * #F6F7F9 sind es dL* 2,79. */
+  --ds-grey-bg: #F6F7F9;       /* Seitenhintergrund, Footer-BG, Icon-Btn-Hover */
+  --ds-grey-card: #EFF0F2;     /* Karten-Hintergrund, Inline-Code */
+  --ds-grey-divider: #ECEDEF;  /* Trenner, Default-Borders */
   --ds-grey-muted: #6D6D6D;    /* 4,84:1 auf #FFF — Sekundaerschrift, btn-secondary-Hover */
   --ds-grey-strong: #5C5C5C;   /* 7,1:1 auf #FFF — fuer Text < 14 px */
 
