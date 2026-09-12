@@ -52,20 +52,9 @@
     'hero.note': 'Version 1.5.1 · quelloffen unter Apache 2.0 · keine Registrierung',
     'hero.appwin.aria': 'Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.',
     'hero.stage.caption': 'Die Oberfläche der App, maßgetreu in HTML nachgebaut',
-    'hero.side.aria': 'Datenblatt',
-    'hero.side.version.label': 'Version',
-    'hero.side.version.wert': '1.5.1',
-    'hero.side.lizenz.label': 'Lizenz',
-    'hero.side.lizenz.wert': 'Apache 2.0',
-    'hero.side.plattformen.label': 'Plattformen',
-    'hero.side.plattformen.wert': 'macOS · Windows · Linux',
-    'hero.side.konten.label': 'Konten',
-    'hero.side.konten.wert': '0',
-    'hero.side.telemetrie.label': 'Telemetrie',
     /* „keine“ stimmt: es gehen keine Nutzungsdaten raus. Die App fragt beim
        Start aber bei GitHub nach einer neueren Version — eine Verbindung, also
        gehoert sie an die absolute Stelle dazu. */
-    'hero.side.telemetrie.wert': 'keine (nur Versionsabfrage bei GitHub)',
 
     'app.fenster.brand': 'Snotra AI',
     'app.baum.wurzel': 'angebote',
@@ -355,17 +344,6 @@
     'hero.note': 'Version 1.5.1 · open source under Apache 2.0 · no sign-up',
     'hero.appwin.aria': 'Reconstruction of the Snotra AI window: on the left the file tree of the folder “angebote”, in the middle the preview of angebot-q3.md, on the right the chat with tool log, approval card and input field.',
     'hero.stage.caption': 'The interface, rebuilt in HTML — the app ships with a German interface',
-    'hero.side.aria': 'Fact sheet',
-    'hero.side.version.label': 'Version',
-    'hero.side.version.wert': '1.5.1',
-    'hero.side.lizenz.label': 'License',
-    'hero.side.lizenz.wert': 'Apache 2.0',
-    'hero.side.plattformen.label': 'Platforms',
-    'hero.side.plattformen.wert': 'macOS · Windows · Linux',
-    'hero.side.konten.label': 'Accounts',
-    'hero.side.konten.wert': '0',
-    'hero.side.telemetrie.label': 'Telemetry',
-    'hero.side.telemetrie.wert': 'none (only a version check at GitHub)',
 
     /* ACHTUNG, keine vergessene Arbeit: Der gesamte app.*-Block steht hier
        absichtlich auf Deutsch. Die Anwendung hat genau eine Oberflaeche, und
