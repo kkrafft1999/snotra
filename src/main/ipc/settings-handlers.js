@@ -90,18 +90,52 @@ function registerSettingsHandlers({
     return createSettingsOk();
   });
 
+  // Schreibt System-Prompt, Sprache, Tool-Auswahl und die uebrigen UI-Werte.
+  // false heisst: der Schreibversuch selbst ist fehlgeschlagen.
+  async function writeUiPrefsPatch(uiPatch) {
+    try {
+      await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+      // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
+      // und muss sofort greifen, nicht erst beim naechsten App-Start.
+      if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
+        await pythonSettings?.refresh();
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Der Modellteil ist abgelehnt, gespeichert wurde davon nichts. Die uebrigen
+  // Einstellungen haben damit nichts zu tun — der System-Prompt haengt nicht am
+  // OpenAI-Schluessel — und laufen trotzdem durch. Die Meldung sagt, was
+  // uebernommen wurde und was nicht (Issue #97).
+  async function rejectModelPart(message, uiPatch) {
+    if (Object.keys(uiPatch).length === 0) return createSettingsError(message);
+    if (!(await writeUiPrefsPatch(uiPatch))) {
+      return createSettingsError(
+        `${message} Die übrigen Einstellungen konnten ebenfalls nicht gespeichert werden.`
+      );
+    }
+    return {
+      ...createSettingsError(`${message} Die übrigen Einstellungen wurden gespeichert.`),
+      uiPrefsSaved: true,
+    };
+  }
+
   ipcMain.handle(REQ.SETTINGS_COMMIT_SETTINGS, async (_event, payload) => {
+    const uiPatch = normalizeUiPrefsPatch(payload?.uiPrefs);
     const rawPresets = Array.isArray(payload?.presets) ? payload.presets : [];
     const presets = rawPresets
       .map((row) => llmConfigStore.normalizePresetEntry(row))
       .filter(Boolean);
     if (presets.length === 0) {
-      return createSettingsError('Mindestens ein Modell-Eintrag ist erforderlich.');
+      return rejectModelPart('Mindestens ein Modell-Eintrag ist erforderlich.', uiPatch);
     }
     const seen = new Set();
     for (const p of presets) {
       if (seen.has(p.id)) {
-        return createSettingsError('Doppelte Eintrags-IDs in der Liste.');
+        return rejectModelPart('Doppelte Eintrags-IDs in der Liste.', uiPatch);
       }
       seen.add(p.id);
     }
@@ -122,7 +156,7 @@ function registerSettingsHandlers({
       const incomingKey = typeof patch?.apiKey === 'string' ? patch.apiKey.trim() : '';
       if (meta.fields?.apiKey && incomingKey) {
         if (!safeStorage.isEncryptionAvailable()) {
-          return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+          return rejectModelPart('Verschlüsselter Speicher ist nicht verfügbar.', uiPatch);
         }
       }
     }
@@ -181,38 +215,28 @@ function registerSettingsHandlers({
         'Anbieter und Modell-Einträge konnten nicht gespeichert werden. Die UI-Einstellungen wurden nicht geändert.'
       );
     }
-    if (validationError) return validationError;
+    if (validationError) return rejectModelPart(validationError.error, uiPatch);
 
-    const uiPatch = normalizeUiPrefsPatch(payload?.uiPrefs);
-    if (Object.keys(uiPatch).length > 0) {
+    if (Object.keys(uiPatch).length > 0 && !(await writeUiPrefsPatch(uiPatch))) {
       try {
-        await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
-        // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
-        // und muss sofort greifen, nicht erst beim naechsten App-Start.
-        if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
-          await pythonSettings?.refresh();
-        }
+        await llmConfigStore.updateLLMConfig(async (current) => {
+          // Compare under the store lock: never undo a newer settings save
+          // or a preset selection that arrived while the UI write was pending.
+          if (!isDeepStrictEqual(current, savedConfig)) {
+            throw new Error('LLM settings changed since this save.');
+          }
+          return previousConfig;
+        });
       } catch {
-        try {
-          await llmConfigStore.updateLLMConfig(async (current) => {
-            // Compare under the store lock: never undo a newer settings save
-            // or a preset selection that arrived while the UI write was pending.
-            if (!isDeepStrictEqual(current, savedConfig)) {
-              throw new Error('LLM settings changed since this save.');
-            }
-            return previousConfig;
-          });
-        } catch {
-          return createSettingsError(
-            'UI-Einstellungen konnten nicht gespeichert werden. Anbieter und Modell-Einträge wurden bereits gespeichert; '
-            + 'ihre Rücknahme ist fehlgeschlagen oder wurde wegen zwischenzeitlicher Änderungen ausgelassen. '
-            + 'Bitte die Einstellungen erneut öffnen und prüfen.'
-          );
-        }
         return createSettingsError(
-          'UI-Einstellungen konnten nicht gespeichert werden. Die Änderungen an Anbietern und Modell-Einträgen wurden zurückgenommen.'
+          'UI-Einstellungen konnten nicht gespeichert werden. Anbieter und Modell-Einträge wurden bereits gespeichert; '
+          + 'ihre Rücknahme ist fehlgeschlagen oder wurde wegen zwischenzeitlicher Änderungen ausgelassen. '
+          + 'Bitte die Einstellungen erneut öffnen und prüfen.'
         );
       }
+      return createSettingsError(
+        'UI-Einstellungen konnten nicht gespeichert werden. Die Änderungen an Anbietern und Modell-Einträgen wurden zurückgenommen.'
+      );
     }
 
     return createSettingsOk();

@@ -1020,7 +1020,7 @@ export function initSettingsModal(deps) {
       return presetIdentityKey(presetToWireRow(row), rowProvider) === presetIdentityKey(candidate, providerView);
     });
     if (dup) {
-      setModalError('Diese Kombination gibt es bereits in der Liste.');
+      setModelStatus('Diese Kombination gibt es bereits in der Liste.', true);
       return false;
     }
     setModalError('');
@@ -1054,13 +1054,12 @@ export function initSettingsModal(deps) {
   async function commitSettingsFromModal() {
     stashPopupCredentialInputs();
     setModalError('');
-    if (settingsDraftPresets.length === 0) {
-      setModalError('Die Präferenzliste darf nicht leer sein.');
-      return;
-    }
-    let activePresetId = settingsDraftActivePresetId || settingsDraftPresets[0].id;
+    // Eine leere Liste lehnt der Main-Prozess ab — und speichert dabei System-
+    // Prompt, Sprache und Tool-Auswahl trotzdem. Ein frueher return hier wuerde
+    // genau das wieder verhindern (Issue #97).
+    let activePresetId = settingsDraftActivePresetId || settingsDraftPresets[0]?.id || null;
     if (!settingsDraftPresets.some((p) => p.id === activePresetId)) {
-      activePresetId = settingsDraftPresets[0].id;
+      activePresetId = settingsDraftPresets[0]?.id || null;
     }
 
     const providerPatches = {};
@@ -1098,6 +1097,10 @@ export function initSettingsModal(deps) {
         },
       });
       if (!res?.ok) {
+        // Der Modellteil kann scheitern, waehrend die uebrigen Einstellungen
+        // geschrieben wurden. Die Sprache muss dann auch sofort umschalten,
+        // obwohl der Dialog mit der Meldung offen bleibt (Issue #97).
+        if (res?.uiPrefsSaved) applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
         setModalError(res?.error || 'Speichern fehlgeschlagen.');
         return;
       }

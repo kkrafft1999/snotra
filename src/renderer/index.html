@@ -311,8 +311,6 @@
             <ul id="pref-model-list" class="settings-pref-list" aria-labelledby="heading-pref-models"></ul>
 
             <p id="pref-list-empty" class="settings-empty-hint hidden">Noch keine Einträge – „Modell hinzufügen“ öffnen.</p>
-
-            <p id="modal-save-error" class="modal-save-error hidden"></p>
           </section>
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
@@ -542,13 +540,18 @@
       </div>
 
       <footer class="settings-dialog__footer modal-dialog__footer">
-        <div class="settings-version">
-          <span id="settings-version-label">Version —</span>
-          <button type="button" id="btn-check-updates" class="settings-version-link">Nach Updates suchen</button>
-        </div>
-        <div class="modal-actions">
-          <button type="button" id="btn-settings-footer-close" class="btn-secondary">Schließen</button>
-          <button type="button" id="btn-settings-save" class="btn-primary">Übernehmen</button>
+        <!-- Gehoert neben „Uebernehmen“ und nicht in einen Tab: sonst bleibt die
+             Meldung unsichtbar, sobald ein anderer Bereich offen ist (Issue #97). -->
+        <p id="modal-save-error" class="modal-save-error hidden" role="alert"></p>
+        <div class="settings-dialog__footer-row">
+          <div class="settings-version">
+            <span id="settings-version-label">Version —</span>
+            <button type="button" id="btn-check-updates" class="settings-version-link">Nach Updates suchen</button>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="btn-settings-footer-close" class="btn-secondary">Schließen</button>
+            <button type="button" id="btn-settings-save" class="btn-primary">Übernehmen</button>
+          </div>
         </div>
       </footer>
 

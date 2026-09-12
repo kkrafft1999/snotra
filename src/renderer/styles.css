@@ -2167,9 +2167,22 @@ select.modal-input {
 
 .settings-dialog__footer {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+/* Version links, Knoepfe rechts; die Fehlermeldung steht als eigene Zeile
+   darueber, damit sie die beiden nicht zusammenquetscht (Issue #97). */
+.settings-dialog__footer-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.settings-dialog__footer .modal-save-error {
+  margin-top: 0;
 }
 
 .settings-dialog__footer .modal-actions {

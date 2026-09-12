@@ -321,6 +321,62 @@ test('commitSettings does not persist provider patches when preset validation fa
   assert.equal(config.presets.some((p) => p.id === 'p1'), false);
 });
 
+// Issue #97: Der Modellteil und die uebrigen Einstellungen haengen nicht
+// zusammen. Eine abgelehnte Modell-Eingabe darf System-Prompt, Sprache,
+// Tool-Runden und Tool-Auswahl nicht mehr mit blockieren.
+test('commitSettings speichert die übrigen Einstellungen trotz unvollständigem Zugang (#97)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o' }],
+    uiPrefs: { baseSystemPrompt: 'Sei knapp.', appLocale: 'en', pythonExecutionEnabled: true },
+  });
+
+  assert.equal(res.ok, false);
+  assert.match(res.error, /unvollständig/);
+  assert.match(res.error, /übrigen Einstellungen wurden gespeichert/);
+  assert.equal(res.uiPrefsSaved, true);
+
+  const prefs = await storage.readUIPrefs();
+  assert.equal(prefs.baseSystemPrompt, 'Sei knapp.');
+  assert.equal(prefs.appLocale, 'en');
+  assert.equal(prefs.pythonExecutionEnabled, true);
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.presets.some((p) => p.id === 'p1'), false, 'der Modellteil bleibt ungespeichert');
+});
+
+test('commitSettings speichert die übrigen Einstellungen auch bei leerer Präferenzliste (#97)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [],
+    uiPrefs: { baseSystemPrompt: 'Antworte auf Deutsch.', disabledTools: ['run_python'] },
+  });
+
+  assert.equal(res.ok, false);
+  assert.match(res.error, /Mindestens ein Modell-Eintrag/);
+  assert.match(res.error, /übrigen Einstellungen wurden gespeichert/);
+  assert.equal(res.uiPrefsSaved, true);
+
+  const prefs = await storage.readUIPrefs();
+  assert.equal(prefs.baseSystemPrompt, 'Antworte auf Deutsch.');
+  assert.deepEqual(prefs.disabledTools, ['run_python']);
+});
+
+test('commitSettings meldet einen gescheiterten UI-Schreibversuch auch im Ablehnungsfall (#97)', async (t) => {
+  const { ipcMain, uiPrefsStore } = await setupHandlers(t);
+  uiPrefsStore.updateUIPrefs = async () => {
+    throw new Error('UI write failed');
+  };
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [],
+    uiPrefs: { baseSystemPrompt: 'egal' },
+  });
+
+  assert.equal(res.ok, false);
+  assert.match(res.error, /ebenfalls nicht gespeichert/);
+  assert.equal(res.uiPrefsSaved, undefined);
+});
+
 test('commitSettings persists presets, encrypts keys, prunes unused providers and writes UI prefs', async (t) => {
   const { ipcMain, storage } = await setupHandlers(t);
   await storage.updateLLMConfig(async (config) => {
