@@ -1,0 +1,61 @@
+name: Deploy Website
+
+# Veroeffentlicht die Landingpage aus website/ auf Firebase Hosting
+# (snotra-ai.dev, Issue #21). Laeuft nur, wenn sich an der Seite selbst oder an
+# der Hosting-Konfiguration etwas geaendert hat — ein Commit am App-Code loest
+# kein Deploy aus.
+#
+# Voraussetzungen, die einmalig von Hand kommen muessen:
+#   1. Firebase-Projekt anlegen und die Projekt-ID in .firebaserc eintragen.
+#   2. Service-Account-Schluessel (JSON) als Repository-Secret
+#      FIREBASE_SERVICE_ACCOUNT hinterlegen.
+#      Rolle: "Firebase Hosting Admin" genuegt.
+#   3. Domain snotra-ai.dev in der Firebase-Konsole verbinden und die dort
+#      genannten DNS-Records bei ClouDNS setzen.
+#
+# Die Installationspakete bleiben bei GitHub Releases; das Hosting liefert nur
+# die Seite aus (Spark-Plan, ~360 MB Transfer pro Tag).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+      - "firebase.json"
+      - ".firebaserc"
+      - ".github/workflows/deploy-website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Auf Firebase Hosting veroeffentlichen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Projekt-ID aus .firebaserc lesen
+        id: firebase
+        run: |
+          PROJEKT=$(node -p "require('./.firebaserc').projects.default")
+          if [ "$PROJEKT" = "FIREBASE-PROJEKT-ID-EINTRAGEN" ]; then
+            echo "::error::In .firebaserc steht noch die Platzhalter-Projekt-ID."
+            exit 1
+          fi
+          echo "projekt=$PROJEKT" >> "$GITHUB_OUTPUT"
+
+      - name: Auf Firebase Hosting deployen
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ steps.firebase.outputs.projekt }}
+          channelId: live
