@@ -2368,18 +2368,6 @@ select.modal-input {
   color: var(--text-primary);
 }
 
-.settings-pref-intro {
-  margin: 0 0 16px;
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
-  line-height: var(--ds-line-height-prose, 1.5);
-  max-width: 72ch;
-}
-
-.settings-pref-intro strong {
-  font-weight: 600;
-  color: var(--text-muted-strong);
-}
 
 .settings-pref-list {
   list-style: none;
@@ -2521,17 +2509,6 @@ select.modal-input {
   color: var(--ds-grey-muted);
 }
 
-.settings-global-hint {
-  margin: 0;
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
-  line-height: 1.45;
-}
-
-.settings-global-hint strong {
-  color: var(--text-muted-strong);
-  font-weight: 600;
-}
 
 .settings-dialog__hint-bar {
   flex-shrink: 0;
@@ -2546,6 +2523,117 @@ select.modal-input {
   color: var(--ds-grey-muted);
   line-height: var(--ds-line-height-prose, 1.5);
   max-width: 56ch;
+}
+
+/* Erklaertext als Aufklapper (Issue #104).
+ *
+ * Dasselbe Versprechen wie im Tool-Katalog: in der Ruhelage steht ein Satz,
+ * der Rest kommt auf Klick. Hier native <details>/<summary> statt Button plus
+ * aria-expanded — diese Hinweise stehen im statischen Markup und sind damit
+ * ohne eine Zeile JavaScript bedienbar und vorlesbar. */
+.settings-note {
+  margin: 0 0 14px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-muted);
+  line-height: var(--ds-line-height-prose, 1.5);
+  max-width: 72ch;
+}
+
+.settings-note--tight {
+  margin-bottom: 10px;
+}
+
+.settings-note__summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  /* Klickflaeche mindestens 32 px hoch (Regel ui-design-tokens). */
+  min-height: 32px;
+  padding: 5px 0;
+  cursor: pointer;
+  /* Das Standard-Dreieck weg, der Chevron unten ersetzt es. */
+  list-style: none;
+}
+
+.settings-note__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron wie in den Tool-Zeilen, hier aus zwei Raendern gezeichnet: der
+ * Hinweis steht im statischen HTML und soll kein SVG je Vorkommen mitbringen. */
+.settings-note__summary::before {
+  content: '';
+  flex: none;
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  margin-top: 0.42em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--ds-motion-fast, 0.15s ease);
+}
+
+.settings-note[open] > .settings-note__summary::before {
+  transform: rotate(45deg);
+}
+
+.settings-note:not(.settings-note--warning) > .settings-note__summary:hover {
+  color: var(--ds-blue);
+}
+
+.settings-note__body {
+  /* Fluchtet unter dem Kurztext, nicht unter dem Chevron. */
+  padding: 0 0 4px 13px;
+  color: var(--ds-grey-strong);
+}
+
+.settings-note__body p {
+  margin: 0 0 8px;
+}
+
+.settings-note__body p:last-child {
+  margin-bottom: 0;
+}
+
+.settings-note strong {
+  font-weight: 600;
+  color: var(--text-muted-strong);
+}
+
+.settings-note code {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+}
+
+/* Warnung: die Kernaussage bleibt in Signalfarbe sichtbar, die Begruendung
+ * darunter in Lesefarbe — roter Fliesstext liest sich schlecht. */
+.settings-note--warning > .settings-note__summary {
+  color: var(--ds-error);
+}
+
+.settings-note--warning > .settings-note__summary strong {
+  color: inherit;
+}
+
+.settings-note--warning > .settings-note__body {
+  color: var(--text-muted-strong);
+}
+
+/* Fusszeile des Dialogs: sitzt in einer eigenen Leiste, daher ohne Aussenabstand. */
+.settings-note--bar {
+  margin: 0;
+  max-width: none;
+}
+
+.settings-note--bar > .settings-note__summary {
+  min-height: 0;
+  padding: 0;
+}
+
+.settings-note--bar > .settings-note__body {
+  padding-bottom: 0;
+  padding-top: 6px;
 }
 
 .settings-placeholder-card {
@@ -2842,6 +2930,21 @@ select.modal-input {
   font-size: var(--ds-font-size-xs);
   opacity: 0.75;
   word-break: break-all;
+}
+
+/* Skill-Zeile wie eine Tool-Zeile (Issue #104): Kurztext einzeilig unter dem
+ * Namen, Beschreibung und Pfad erst nach dem Aufklappen. */
+.settings-skill-item__summary {
+  margin-left: 24px;
+  width: calc(100% - 24px);
+}
+
+.settings-skill-item__body {
+  padding-bottom: 2px;
+}
+
+.settings-skill-item__body .settings-tool-item__desc + .settings-tool-item__desc {
+  margin-top: 4px;
 }
 
 .modal-field-group {
@@ -3700,11 +3803,8 @@ select.modal-input {
   color: var(--text-muted-strong);
 }
 
-/* Einstellungen › Tools › Berechtigungen */
-.settings-form-hint--tight {
-  margin-bottom: 10px;
-}
 
+/* Einstellungen › Tools › Berechtigungen */
 .settings-permissions-migration {
   margin: 0 0 10px;
   padding: 8px 10px;
@@ -3966,9 +4066,6 @@ select.modal-input {
 }
 
 /* Python-Karte in den Tool-Einstellungen (Issue #86). */
-.settings-python-warning {
-  margin-bottom: 10px;
-}
 
 .settings-python-toggle {
   margin-bottom: 10px;

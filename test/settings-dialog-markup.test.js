@@ -30,3 +30,33 @@ test('die Speicher-Fehlermeldung wird Screenreadern angesagt (#97)', () => {
   const tag = html.slice(tagStart, html.indexOf('>', errorAt) + 1);
   assert.match(tag, /role="alert"/);
 });
+
+// Issue #104: Der Dialog zeigte ganze Absaetze, bevor man den ersten Schalter
+// sah. Erklaertext gehoert jetzt hinter einen Aufklapper — wie im Tool-Katalog.
+test('lange Erklaertexte stehen hinter einem Aufklapper mit Kurzsatz (#104)', () => {
+  const notes = html.match(/<details[^>]*class="settings-note[^"]*"/g) || [];
+  assert.ok(notes.length >= 10, `zu wenige Aufklapper gefunden: ${notes.length}`);
+
+  const summaries = html.match(/<summary class="settings-note__summary"/g) || [];
+  assert.equal(summaries.length, notes.length, 'jeder Aufklapper hat genau eine sichtbare Zeile');
+
+  const bodies = html.match(/<div class="settings-note__body">/g) || [];
+  assert.equal(bodies.length, notes.length, 'jeder Aufklapper hat genau einen Textkoerper');
+});
+
+test('die sichtbare Zeile eines Hinweises bleibt ein kurzer Satz (#104)', () => {
+  const matches = [...html.matchAll(/<summary class="settings-note__summary">([\s\S]*?)<\/summary>/g)];
+  assert.ok(matches.length > 0, 'es gibt Aufklapper mit Kurzsatz');
+  for (const [, inner] of matches) {
+    const text = inner.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    assert.ok(text.length > 0, 'die Kurzzeile ist nicht leer');
+    assert.ok(text.length <= 130, `Kurzzeile zu lang (${text.length} Zeichen): ${text}`);
+  }
+});
+
+// Issue #103: Snotra liest keine .claude-Verzeichnisse mehr — die
+// Skills-Beschreibung im Dialog darf sie nicht als Quelle nennen.
+test('der Skills-Bereich nennt .claude nicht mehr als Quelle (#103)', () => {
+  assert.equal(html.includes('.claude/skills'), false);
+  assert.ok(html.includes('.agents/skills'), 'die verbleibende Quelle steht im Dialog');
+});

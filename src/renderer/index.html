@@ -307,10 +307,15 @@
                 Modell hinzufügen
               </button>
             </div>
-            <p class="settings-pref-intro">
-              Gespeicherte Kombinationen aus Anbieter, Modell und Parametern. Der Schalter steuert, ob der Eintrag im
-              Chat im <strong>Modellmenü</strong> angeboten wird. Die Auswahl für eine Konversation triffst du dort.
-            </p>
+            <details class="settings-note">
+              <summary class="settings-note__summary"><span>Gespeicherte Kombinationen aus Anbieter, Modell und Parametern.</span></summary>
+              <div class="settings-note__body">
+                <p>
+                  Der Schalter steuert, ob der Eintrag im Chat im <strong>Modellmenü</strong> angeboten wird. Die
+                  Auswahl für eine Konversation triffst du dort.
+                </p>
+              </div>
+            </details>
 
             <ul id="pref-model-list" class="settings-pref-list" aria-labelledby="heading-pref-models"></ul>
 
@@ -318,10 +323,12 @@
           </section>
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
-            <p class="settings-form-hint">
-              Diese Tools kann das Sprachmodell im geöffneten Projektordner nutzen. Nur angehakte Tools
-              werden dem Modell angeboten — standardmäßig sind alle aktiv.
-            </p>
+            <details class="settings-note">
+              <summary class="settings-note__summary"><span>Diese Tools kann das Sprachmodell im geöffneten Projektordner nutzen.</span></summary>
+              <div class="settings-note__body">
+                <p>Nur angehakte Tools werden dem Modell angeboten — standardmäßig sind alle aktiv.</p>
+              </div>
+            </details>
             <div class="settings-tools-card">
               <h3 class="settings-subsection-title" id="heading-tool-catalog">Verfügbare Tools</h3>
               <div id="settings-tool-list" class="settings-tool-groups" role="group" aria-labelledby="heading-tool-catalog"></div>
@@ -331,13 +338,19 @@
             </div>
             <div class="settings-tools-card" id="settings-python-card">
               <h3 class="settings-subsection-title" id="heading-python">Python ausführen</h3>
-              <p class="modal-warning settings-python-warning">
-                <strong>Achtung:</strong> Das Tool <code>run_python</code> führt Code aus, den das Sprachmodell
-                schreibt. Dieser Code läuft mit deinen Rechten und ist <strong>nicht</strong> auf den Projektordner
-                begrenzt — er kann überall lesen und schreiben, ins Netz gehen und Programme starten. Snotra zeigt
-                dir vor <em>jedem</em> Lauf den vollständigen Quelltext zur Freigabe; eine Sandbox gibt es nicht.
-                Nur einschalten, wenn dir das bewusst ist.
-              </p>
+              <details class="settings-note settings-note--warning">
+                <summary class="settings-note__summary">
+                  <span><strong>Achtung:</strong> <code>run_python</code> führt Code des Sprachmodells mit deinen
+                  Rechten aus — ohne Sandbox.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Der Code ist <strong>nicht</strong> auf den Projektordner begrenzt — er kann überall lesen und
+                    schreiben, ins Netz gehen und Programme starten. Snotra zeigt dir vor <em>jedem</em> Lauf den
+                    vollständigen Quelltext zur Freigabe. Nur einschalten, wenn dir das bewusst ist.
+                  </p>
+                </div>
+              </details>
               <label class="modal-checkbox settings-python-toggle">
                 <input type="checkbox" id="input-python-enabled">
                 <span>Python-Ausführung erlauben</span>
@@ -349,23 +362,34 @@
                 <input type="text" id="input-python-interpreter" autocomplete="off" spellcheck="false"
                   placeholder="z. B. /Users/du/venv/bin/python3">
               </div>
-              <p class="settings-form-hint settings-form-hint--tight">
-                Leer lassen, um automatisch nach Python 3 zu suchen. Ein eigener Pfad — etwa ein venv mit
-                <code lang="en">pandas</code> — bestimmt, welche Pakete dem Modell zur Verfügung stehen.
-                Snotra installiert selbst nichts nach.
-              </p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span>Leer lassen, um automatisch nach Python 3 zu suchen.</span></summary>
+                <div class="settings-note__body">
+                  <p>
+                    Ein eigener Pfad — etwa ein venv mit <code lang="en">pandas</code> — bestimmt, welche Pakete dem
+                    Modell zur Verfügung stehen. Snotra installiert selbst nichts nach.
+                  </p>
+                </div>
+              </details>
               <p id="settings-python-status" class="modal-hint" role="status"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">
               <h3 class="settings-subsection-title" id="heading-web-search">Websuche</h3>
-              <p class="settings-form-hint settings-form-hint--tight">
-                Das Tool <code>web_search</code> fragt <strong>Tavily</strong> und liefert Titel, URL und einen kurzen
-                Auszug je Treffer. Ohne Schlüssel wird das Tool dem Modell gar nicht erst angeboten. Die Suchanfrage
-                verlässt deinen Rechner — im Modus „Intelligent“ fragt Snotra deshalb vor jeder Suche nach.
-                Einen Schlüssel bekommst du kostenlos unter
-                <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a>.
-              </p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span><code>web_search</code> fragt <strong>Tavily</strong> — ohne Schlüssel wird das Tool dem
+                  Modell gar nicht erst angeboten.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Geliefert werden Titel, URL und ein kurzer Auszug je Treffer. Die Suchanfrage verlässt deinen
+                    Rechner — im Modus „Intelligent“ fragt Snotra deshalb vor jeder Suche nach. Einen Schlüssel
+                    bekommst du kostenlos unter
+                    <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a>.
+                  </p>
+                </div>
+              </details>
               <div class="modal-field-group">
                 <label for="input-web-search-key" class="modal-field-label eyebrow-row">Tavily-API-Schlüssel</label>
                 <input type="password" id="input-web-search-key" autocomplete="off" spellcheck="false" placeholder="tvly-…">
@@ -379,11 +403,19 @@
           </section>
 
           <section class="settings-panel" id="panel-settings-permissions" role="tabpanel" aria-labelledby="tab-settings-permissions" hidden>
-            <p class="settings-form-hint">
-              Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse und Modus. Harte Grenzen
-              (Projektordner, Skill-Verzeichnisse nur lesbar, Snotra-Schlüssel) gelten in jedem Modus. Änderungen
-              in diesem Bereich wirken <strong>sofort</strong> und für alle Chats – unabhängig von „Übernehmen“.
-            </p>
+            <details class="settings-note">
+              <summary class="settings-note__summary">
+                <span>Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf — Änderungen hier wirken
+                <strong>sofort</strong> und für alle Chats.</span>
+              </summary>
+              <div class="settings-note__body">
+                <p>
+                  Entschieden wird nach Risikoklasse und Modus. Harte Grenzen (Projektordner, Skill-Verzeichnisse nur
+                  lesbar, Snotra-Schlüssel) gelten in jedem Modus. Anders als in den übrigen Bereichen brauchen
+                  Änderungen hier kein „Übernehmen“.
+                </p>
+              </div>
+            </details>
             <div class="settings-tools-card" id="settings-permissions-card">
               <h3 class="settings-subsection-title" id="heading-tool-permissions">Modus</h3>
               <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
@@ -391,20 +423,32 @@
               <fieldset class="settings-mode-group" id="settings-tool-mode-group" aria-describedby="hint-tool-mode">
                 <legend class="settings-mode-group__legend visually-hidden">Modus</legend>
               </fieldset>
-              <p id="hint-tool-mode" class="modal-hint">
-                Derselbe Modus steht in der Chat-Leiste. „Auto“ verlangt eine Bestätigung im Systemdialog; zurück zu
-                „Intelligent“ geht jederzeit ohne Rückfrage.
-              </p>
+              <details id="hint-tool-mode" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span>Derselbe Modus steht in der Chat-Leiste.</span></summary>
+                <div class="settings-note__body">
+                  <p>
+                    „Auto“ verlangt eine Bestätigung im Systemdialog; zurück zu „Intelligent“ geht jederzeit ohne
+                    Rückfrage.
+                  </p>
+                </div>
+              </details>
               <p id="settings-permissions-error" class="modal-hint error hidden" role="alert"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-rules-card">
               <h3 class="settings-subsection-title" id="heading-tool-rules">Regeln</h3>
-              <p class="settings-form-hint settings-form-hint--tight">
-                Sperren blockieren einen Aufruf in jedem Modus und gewinnen immer. Erlaubnisse ersparen die Rückfrage im
-                Modus „Intelligent“ – dauerhaft nur für Lesen und Ändern; sensibles Lesen lässt sich nur einmal oder für
-                eine Sitzung freigeben, Überschreiben ohne Rückweg, Ausführen und externe Dienste nur einzeln.
-              </p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span>Sperren gewinnen immer; Erlaubnisse ersparen die Rückfrage im Modus „Intelligent“.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Eine Sperre blockiert den Aufruf in jedem Modus. Dauerhaft erlauben lässt sich nur Lesen und
+                    Ändern; sensibles Lesen nur einmal oder für eine Sitzung, Überschreiben ohne Rückweg, Ausführen
+                    und externe Dienste nur einzeln.
+                  </p>
+                </div>
+              </details>
               <h4 class="settings-rules-heading">Alle Workspaces</h4>
               <ul id="settings-rules-global" class="settings-rule-list" aria-label="Regeln für alle Workspaces"></ul>
               <p id="settings-rules-global-empty" class="settings-empty-hint">Keine globalen Regeln.</p>
@@ -442,10 +486,14 @@
                     <input type="text" id="rule-pattern" class="modal-input" placeholder="z. B. docs/** oder *.md – leer = alle Pfade" autocomplete="off" spellcheck="false" aria-describedby="hint-rule-pattern" />
                   </div>
                 </div>
-                <p id="hint-rule-pattern" class="modal-hint">
-                  <code>*</code> steht für beliebige Zeichen innerhalb eines Ordners, <code>**</code> auch über Unterordner.
-                  Erlaubnisse und das Löschen von Sperren bestätigst du zusätzlich im Systemdialog.
-                </p>
+                <details id="hint-rule-pattern" class="settings-note settings-note--tight">
+                  <summary class="settings-note__summary">
+                    <span><code>*</code> gilt innerhalb eines Ordners, <code>**</code> auch über Unterordner.</span>
+                  </summary>
+                  <div class="settings-note__body">
+                    <p>Erlaubnisse und das Löschen von Sperren bestätigst du zusätzlich im Systemdialog.</p>
+                  </div>
+                </details>
                 <div class="settings-rule-form__actions">
                   <button type="submit" id="btn-rule-add" class="btn-secondary">Regel anlegen</button>
                 </div>
@@ -455,11 +503,19 @@
 
             <div class="settings-tools-card" id="settings-sensitive-card">
               <h3 class="settings-subsection-title" id="heading-sensitive-paths">Sensible Pfadmuster</h3>
-              <p class="settings-form-hint settings-form-hint--tight">
-                Zusätzlich zu den eingebauten Mustern (<code lang="en">.env*</code>, <code lang="en">*.pem</code>,
-                <code lang="en">*.key</code>, <code lang="en">credentials*</code>, Ordner wie <code lang="en">.ssh</code> …).
-                Gezielte Zugriffe auf Treffer brauchen eine Freigabe; breite Suchen und Listen lassen sie weg.
-              </p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span>Zusätzlich zu den eingebauten Mustern (<code lang="en">.env*</code>,
+                  <code lang="en">*.pem</code>, <code lang="en">*.key</code> …).</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Eingebaut sind außerdem <code lang="en">credentials*</code> und Ordner wie
+                    <code lang="en">.ssh</code>. Gezielte Zugriffe auf Treffer brauchen eine Freigabe; breite Suchen
+                    und Listen lassen sie weg.
+                  </p>
+                </div>
+              </details>
               <ul id="settings-sensitive-list" class="settings-rule-list" aria-labelledby="heading-sensitive-paths"></ul>
               <p id="settings-sensitive-empty" class="settings-empty-hint">Keine eigenen Muster.</p>
               <div class="modal-row settings-sensitive-row">
@@ -477,14 +533,21 @@
           </section>
 
           <section class="settings-panel" id="panel-settings-skills" role="tabpanel" aria-labelledby="tab-settings-skills" hidden>
-            <p class="settings-form-hint">
-              Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten soll.
-              Angehakte Skills werden dem Modell als Teil des System-Prompts mitgegeben.
-              <strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv.
-              <strong>Ordner-Skills</strong> liest Snotra aus <code lang="en">.agents/skills</code> und
-              <code lang="en">.claude/skills</code> im geöffneten Ordner und im Benutzerverzeichnis — sie sind
-              fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.
-            </p>
+            <details class="settings-note">
+              <summary class="settings-note__summary">
+                <span>Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten
+                soll — angehakte Skills stehen im System-Prompt.</span>
+              </summary>
+              <div class="settings-note__body">
+                <p>
+                  <strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv.
+                  <strong>Ordner-Skills</strong> liest Snotra ausschließlich aus
+                  <code lang="en">.agents/skills</code> — im geöffneten Ordner und im Benutzerverzeichnis.
+                  Verzeichnisse anderer Werkzeuge, etwa <code lang="en">.claude</code>, liest Snotra nicht.
+                  Ordner-Skills sind fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.
+                </p>
+              </div>
+            </details>
             <div class="settings-tools-card">
               <div class="settings-panel-models__head">
                 <h3 class="settings-subsection-title" id="heading-skill-catalog">Verfügbare Skills</h3>
@@ -506,7 +569,12 @@
               <div class="modal-field-label eyebrow-row">System-Prompt</div>
               <label class="visually-hidden" for="input-global-system-prompt">System-Prompt</label>
               <textarea id="input-global-system-prompt" class="modal-input modal-textarea" rows="5" placeholder="Optional: Rolle, Ton, feste Regeln für alle Konversationen …"></textarea>
-              <p class="modal-hint">Wird unverändert als System-Prompt an das Modell geschickt. Standardmäßig leer — die App setzt keinen eigenen System-Prompt.</p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span>Wird unverändert als System-Prompt an das Modell geschickt.</span></summary>
+                <div class="settings-note__body">
+                  <p>Standardmäßig leer — die App setzt keinen eigenen System-Prompt.</p>
+                </div>
+              </details>
             </div>
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row">UI-Sprache</div>
@@ -530,19 +598,29 @@
                 inputmode="numeric"
                 aria-describedby="hint-max-tool-rounds"
               />
-              <p id="hint-max-tool-rounds" class="modal-hint">
-                Wie oft das Modell hintereinander Datei-/Ordner-Tools aufrufen darf, bevor der Chat abbricht (Schutz vor Endlosschleifen). Standard 14, höchstens 500.
-              </p>
+              <details id="hint-max-tool-rounds" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span>Wie oft das Modell hintereinander Tools aufrufen darf, bevor der Chat abbricht.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>Schutz vor Endlosschleifen. Standard 14, höchstens 500.</p>
+                </div>
+              </details>
             </div>
           </section>
         </div>
       </div>
 
       <div class="settings-dialog__hint-bar">
-        <p class="settings-global-hint">
-          API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den Anbieter. Das gilt für alle Einstellungsbereiche.
-          Änderungen gelten erst mit <strong>Übernehmen</strong>.
-        </p>
+        <details class="settings-note settings-note--bar">
+          <summary class="settings-note__summary"><span>Änderungen gelten erst mit <strong>Übernehmen</strong>.</span></summary>
+          <div class="settings-note__body">
+            <p>
+              API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den
+              Anbieter. Das gilt für alle Einstellungsbereiche.
+            </p>
+          </div>
+        </details>
       </div>
 
       <footer class="settings-dialog__footer modal-dialog__footer">
@@ -578,10 +656,15 @@
           </button>
         </header>
         <div class="add-model-dialog__body modal-dialog__body">
-          <p class="popup-form-hint" id="add-model-intro-text">
-            Zugang und Modell gemeinsam einstellen und die Kombination mit <strong>Zur Präferenzliste hinzufügen</strong>
-            übernehmen. Server-URL und Modell teilen sich eine Zeile, wenn das Fenster breit genug ist.
-          </p>
+          <details class="settings-note settings-note--tight" id="add-model-intro-text">
+            <summary class="settings-note__summary">
+              <span>Zugang und Modell gemeinsam einstellen und mit <strong>Übernehmen</strong> in die
+              Präferenzliste legen.</span>
+            </summary>
+            <div class="settings-note__body">
+              <p>Server-URL und Modell teilen sich eine Zeile, wenn das Fenster breit genug ist.</p>
+            </div>
+          </details>
           <div class="provider-flow-card">
             <p id="popup-form-flow-lead" class="popup-form-hint popup-form-hint--tight">
               Die Anbieterwahl steuert Verbindungsfelder und Modellkatalog.

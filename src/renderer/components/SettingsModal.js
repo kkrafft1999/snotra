@@ -653,6 +653,8 @@ export function initSettingsModal(deps) {
     }
   }
 
+  let skillBodyId = 0;
+
   function renderSkillItem(skill) {
     const li = document.createElement('li');
     li.className = 'settings-tool-item';
@@ -688,18 +690,49 @@ export function initSettingsModal(deps) {
     li.appendChild(label);
 
     const detailText = usable ? skill.description : skill.detail || skill.description;
+    if (!detailText && !skill.path) return li;
+
+    // Wie im Tool-Katalog (Issue #98/#104): in der Zeile steht eine Zeile
+    // Kurztext, Beschreibung und Pfad kommen erst beim Aufklappen.
+    const bodyId = `skill-desc-${skillBodyId += 1}`;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'settings-tool-row__summary settings-skill-item__summary';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', bodyId);
+
+    const shortEl = document.createElement('span');
+    shortEl.className = 'settings-tool-row__short';
+    shortEl.textContent = detailText || skill.path;
+    toggle.appendChild(shortEl);
+    toggle.insertAdjacentHTML('beforeend', CHEVRON_ICON_HTML);
+    li.appendChild(toggle);
+
+    const body = document.createElement('div');
+    body.className = 'settings-skill-item__body';
+    body.id = bodyId;
+    body.hidden = true;
     if (detailText) {
       const desc = document.createElement('p');
       desc.className = 'settings-tool-item__desc';
       desc.textContent = detailText;
-      li.appendChild(desc);
+      body.appendChild(desc);
     }
     if (skill.path) {
       const pathEl = document.createElement('p');
       pathEl.className = 'settings-tool-item__desc settings-skill-item__path';
       pathEl.textContent = skill.path;
-      li.appendChild(pathEl);
+      body.appendChild(pathEl);
     }
+    li.appendChild(body);
+
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      body.hidden = open;
+      li.classList.toggle('settings-tool-row--open', !open);
+    });
+
     return li;
   }
 
