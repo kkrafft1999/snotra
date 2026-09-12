@@ -156,12 +156,10 @@
   --selection-bg:rgba(0,117,158,.08);
 
   /* Rahmen von Bedienelementen (Sekundaer-Button, bedienbare Pille, Sprach-
-     umschalter). --ds-grey-divider erreicht auf Weiss nur 1,17:1 und ist
+     umschalter). --ds-grey-divider erreicht auf Weiss nur 1,17:1 und liegt
      damit unter der 3:1-Schwelle aus WCAG 1.4.11 fuer die Begrenzung, die ein
-     Bedienelement erkennbar macht. Dieser Wert (3,1:1) ist der einzige Farb-
-     wert (3,1:1) steht seit dem Nachzug als --ds-grey-control-border in
-     tokens.css und wird hier nur noch aliasiert. Rein dekorative Rahmen
-     (Karten, Panels, Chips) behalten --divider. */
+     Bedienelement erkennbar macht. Dieser Wert erreicht 3,1:1. Rein
+     dekorative Rahmen (Karten, Panels, Chips) behalten --divider. */
   --ds-grey-control-border:#8A8A8E;
   --control-border:var(--ds-grey-control-border);
 
@@ -890,11 +888,6 @@ html:not(.js) .picker{pointer-events:none}
 .legal ul,.legal ol{list-style:revert;padding-left:22px;margin-bottom:12px}
 .legal li{margin-bottom:6px}
 .legal .back{display:inline-block;margin-bottom:28px;font-size:15px}
-.todo{
-  background:var(--blue-soft);border:1px dashed var(--blue-border);
-  border-radius:var(--r-container);padding:.15em .5em;color:var(--black);
-  font-family:var(--mono);font-size:.875em;
-}
 .site-footer{border-top:1px solid var(--divider);padding:32px 0;background:var(--white)}
 .footer-inner{
   display:flex;flex-wrap:wrap;gap:14px 28px;align-items:center;justify-content:space-between;

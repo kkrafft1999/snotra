@@ -478,7 +478,7 @@
     'saeule.03.demo.zeile1': 'Ran command “git log --since=1.week --oneline”',
     'saeule.03.demo.zeile2': 'Ran command “az webapp list -o table”',
     'saeule.03.demo.zeile3': 'Running command “docker compose ps” …',
-    'saeule.03.demo.caption2': '// what already works without an integration project',
+    'saeule.03.demo.caption2': '// what a single Skill reaches, with no integration project',
     'saeule.03.demo.chip.haus': 'your-company-cli',
 
     'saeule.04.wort': 'Control',
