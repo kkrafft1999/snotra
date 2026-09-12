@@ -142,6 +142,15 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     const count = lines > 0 ? ` (${lines} ${lines === 1 ? 'Zeile' : 'Zeilen'})` : '';
     return isDone ? `Python ausgeführt${count}` : `Python wird ausgeführt${count} …`;
   }
+  if (toolName === 'shell_execute') {
+    // Der Befehl selbst ist die Information — gekuerzt, damit die Zeile haelt.
+    const raw = typeof args?.command === 'string' ? args.command.trim().split('\n')[0] : '';
+    if (raw) {
+      const label = `„${truncateToolLabel(raw, 48)}“`;
+      return isDone ? `Befehl ${label} ausgeführt` : `Befehl ${label} wird ausgeführt …`;
+    }
+    return isDone ? 'Befehl ausgeführt' : 'Befehl wird ausgeführt …';
+  }
   if (toolName === 'web_search') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     if (raw) {

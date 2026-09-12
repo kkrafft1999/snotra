@@ -60,3 +60,18 @@ test('der Skills-Bereich nennt .claude nicht mehr als Quelle (#103)', () => {
   assert.equal(html.includes('.claude/skills'), false);
   assert.ok(html.includes('.agents/skills'), 'die verbleibende Quelle steht im Dialog');
 });
+
+// Issue #102: Die Shell-Ausfuehrung ist die weitreichendste Einstellung der
+// App — sie braucht einen eigenen Bereich mit sichtbarer Warnung.
+test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis (#102)', () => {
+  assert.equal(html.split('id="settings-shell-card"').length - 1, 1);
+  assert.equal(html.split('id="input-shell-enabled"').length - 1, 1);
+  assert.equal(html.split('id="settings-shell-status"').length - 1, 1);
+
+  const cardStart = html.indexOf('id="settings-shell-card"');
+  const cardEnd = html.indexOf('id="settings-web-search-card"');
+  const card = html.slice(cardStart, cardEnd);
+  assert.match(card, /settings-note--warning/, 'die Warnung ist als solche ausgezeichnet');
+  assert.match(card, /shell_execute/);
+  assert.match(card, /keine<\/strong> Projektordner-Grenze/);
+});

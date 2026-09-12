@@ -34,8 +34,10 @@ Geprüfte Ausgangsbasis: v1.3.1, Commit `1e2b50d`:
   Main-Thread aus: bekannte ReDoS-Muster werden vorab abgelehnt, alles andere
   läuft in einem `worker_threads`-Worker mit hartem Zeitbudget (#69,
   [`regex-search-worker.js`](../src/main/services/regex-search-worker.js)).
-- UI-Löschen nutzt den Papierkorb (#59); ein Lösch-, Shell-, MCP- oder Web-Such-Tool
-  ist in dieser Registry noch nicht vorhanden. Tool-Log (#60) und verschlüsselte
+- UI-Löschen nutzt den Papierkorb (#59); ein Lösch- oder MCP-Tool ist in dieser
+  Registry noch nicht vorhanden. Web-Suche/Seitenabruf (#63/#95),
+  `run_python` (#86) und `shell_execute` (#102) sind seither hinzugekommen —
+  siehe die Revision am Ende von Abschnitt 9. Tool-Log (#60) und verschlüsselte
   Provider-Konfiguration sind vorhanden, aber kein Berechtigungs-Audit.
 
 Das Konzept reduziert Risiken durch technisch erzwungene Grenzen und explizite
@@ -416,14 +418,43 @@ nennt die Wiederherstellungsmöglichkeit. Gelingt es nicht, bleibt es `delete` m
 entsprechender Warnung; die Matrix entscheidet dann wie gewohnt. Git allein ist
 kein Backup unversionierter Inhalte.
 
-Shell-/Exec-Tools bleiben bis zu einem eigenen Isolationskonzept nicht
-registriert. Hard-Delete, rekursives Zwangslöschen (`rm -rf` und Entsprechungen),
-Datenträgeroperationen und Git-History-Rewrite werden auch in Auto blockiert.
-Eine Liste verbotener Zeichenfolgen reicht nicht gegen Interpreter, Wrapper
-oder zusammengesetzte Befehle. Nötig sind technisch begrenzte Fähigkeiten und
-Betriebssystem-/Netzwerk-Isolation; unbekannte Wirkungen werden blockiert.
+### Revision: Ausführung ohne Isolation (#86/#102)
+
+Der ursprüngliche Satz lautete: „Shell-/Exec-Tools bleiben bis zu einem eigenen
+Isolationskonzept nicht registriert." Diese Reihenfolge ist mit `run_python`
+(#86) und `shell_execute` (#102) **bewusst umgekehrt** worden — nicht
+stillschweigend umgangen, sondern hier festgehalten:
+
+- **Begründung.** Eine tragfähige Isolation über macOS, Windows und Linux
+  hinweg (eigener Benutzer, `sandbox-exec`, Container, Namespaces) kostet ein
+  Vielfaches des Tools selbst und hätte die Fähigkeit auf unabsehbare Zeit
+  blockiert. Zugleich war die Fähigkeit faktisch schon da: `run_python` kann
+  über `subprocess` jedes Programm starten. Ein ehrliches `shell_execute` ist
+  sicherheitstechnisch **besser** als dieser Umweg, weil auf der Freigabekarte
+  der tatsächliche Befehl steht und nicht ein Python-Skript, das ihn versteckt.
+- **Was an die Stelle der Isolation tritt.** Die Klasse `execute` ist weder
+  sitzungsweit noch dauerhaft freigebbar (§6/§7): jeder Lauf erzeugt eine eigene
+  Karte mit vollständigem Befehl, erkannter Shell und Arbeitsverzeichnis. Beide
+  Tools sind im Lieferzustand **abgeschaltet** und werden in den Einstellungen
+  mit sichtbarer Warnung eingeschaltet. Zeitlimit, Ausgabe-Kappung und „Stop"
+  beenden den Prozessbaum, nicht nur die Shell.
+- **Restrisiko, ausdrücklich benannt.** Es gibt keine Sandbox. Ein freigegebener
+  Befehl kann alles, was der angemeldete Nutzer kann — auch außerhalb des
+  Projektordners, auch im Netz. Im Modus „Auto" läuft er ohne Rückfrage, weil
+  `execute` dort wie jede andere Klasse automatisch erlaubt ist; wer Auto
+  einschaltet, entscheidet sich bewusst dafür. Der Schutz ist der sichtbare
+  Befehl plus menschliche Freigabe, nicht eine technische Grenze.
+
+Hard-Delete, rekursives Zwangslöschen (`rm -rf` und Entsprechungen),
+Datenträgeroperationen und Git-History-Rewrite werden auch in Auto blockiert
+([`shell-command-guard.js`](../src/shared/runtime/shell-command-guard.js), im
+Planer vor der Karte und im Tool-Handler). Diese Sperre ist eine **zweite
+Verteidigungslinie, kein Schutzversprechen**: eine Liste verbotener
+Zeichenfolgen reicht nicht gegen Interpreter, Wrapper oder zusammengesetzte
+Befehle — `bash skript.sh` und `base64 -d | sh` bleiben möglich. Nötig wären
+technisch begrenzte Fähigkeiten und Betriebssystem-/Netzwerk-Isolation.
 Schreiben in automatisch ausgeführte Skripte bleibt ein Risiko gewöhnlicher
-Schreibfreigaben und muss bei einer späteren Ausführungsintegration berücksichtigt werden.
+Schreibfreigaben und wird durch die Ausführungstools zusätzlich scharf gestellt.
 
 ## 10. Abgleich mit offiziellen Referenzen
 
@@ -446,7 +477,8 @@ keine Behauptung identischer Produktmodi.
 | Web-Suchanbieter, erlaubte Ziele/Weiterleitungen und Datenumfang | In #63 entscheiden. Anfrage einschließlich Suchtext ist extern; Suchantworten sind unvertrauenswürdig. Provider-Keys bleiben im Adapter. |
 | Exakte Content-Muster, Fehlalarme und Grenzen bei großen Dateien | In #66 versionieren und testen; Mindestgruppen aus Abschnitt 4 verpflichtend. Keine breite Personendaten-/Entropie-Erkennung im ersten Schritt. |
 | Separates persistentes Audit-Journal mit Aufbewahrung/Export | Erweiterung von #66/#67 bei Bedarf; zunächst bereinigte Entscheidungen im bestehenden Chat-Verlauf. Kein unbefristetes Volltext-Logging. |
-| Sichere Prozessausführung und Wiederherstellung für ein künftiges Lösch-Tool | Vor Einführung entsprechender Fähigkeiten festlegen; die Wiederherstellungskopie beim Überschreiben (Abschnitt 9) ist bereits Teil von #66, Shell bleibt deaktiviert. |
+| Sichere Prozessausführung und Wiederherstellung für ein künftiges Lösch-Tool | Vor Einführung entsprechender Fähigkeiten festlegen; die Wiederherstellungskopie beim Überschreiben (Abschnitt 9) ist bereits Teil von #66. Die Shell ist seit #102 registriert — ohne Isolation, dafür mit Freigabe vor jedem Lauf und im Lieferzustand abgeschaltet (Revision in Abschnitt 9). |
+| Echte Isolation für `run_python` und `shell_execute` (eigener Benutzer, `sandbox-exec`, Container, Namespaces) | Offen. Eigenes Thema über drei Betriebssysteme hinweg; bis dahin gilt die Revision in Abschnitt 9: Freigabe statt Sandbox, Tools standardmäßig aus. |
 
 **#66 – Kern:** Registry-Klassen und dynamische Merkmale, vollständige Matrix und
 Regelpriorität, Pfad-/Content-Schutz einschließlich indirekter Ausgaben,

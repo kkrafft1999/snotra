@@ -23,6 +23,7 @@ function registerSettingsHandlers({
   skillCatalog = null,
   webSearchSettings = null,
   pythonSettings = null,
+  shellSettings = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -99,6 +100,9 @@ function registerSettingsHandlers({
       // und muss sofort greifen, nicht erst beim naechsten App-Start.
       if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
         await pythonSettings?.refresh();
+      }
+      if ('shellExecutionEnabled' in uiPatch) {
+        await shellSettings?.refresh();
       }
       return true;
     } catch {
@@ -327,6 +331,13 @@ function registerSettingsHandlers({
     return { ...(await pythonSettings.refresh()), available: true };
   });
 
+  // Shell-Ausfuehrung (Issue #102). Der Renderer erfaehrt, welche Shell
+  // erkannt wurde und ob sie als Login-Shell laeuft (PATH aus dem Profil).
+  ipcMain.handle(REQ.SETTINGS_GET_SHELL_STATE, async () => {
+    if (!shellSettings) return { found: false, enabled: false, available: false };
+    return { ...(await shellSettings.refresh()), available: true };
+  });
+
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {
     const patch = normalizeUiPrefsPatch(partial);
     if (Object.keys(patch).length === 0) {
@@ -337,6 +348,9 @@ function registerSettingsHandlers({
     // sofort greifen, nicht erst beim naechsten App-Start.
     if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {
       await pythonSettings?.refresh();
+    }
+    if ('shellExecutionEnabled' in patch) {
+      await shellSettings?.refresh();
     }
     return updated;
   });

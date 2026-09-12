@@ -54,6 +54,7 @@ const REQUEST_CHANNELS = Object.freeze({
    * die UI-Prefs.
    */
   SETTINGS_GET_PYTHON_STATE: 'settings:getPythonState',
+  SETTINGS_GET_SHELL_STATE: 'settings:getShellState',
   /** Skill-Katalog (System-Skills + gefundene Ordner-Skills), Issue #18. */
   SETTINGS_GET_SKILL_CATALOG: 'settings:getSkillCatalog',
   /** Skill-Verzeichnisse erneut scannen (kein Datei-Watcher im MVP). */

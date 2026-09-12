@@ -309,3 +309,19 @@ test('Sicherheitsnetz: bei vorhandenen Schritten ist die Zeile nie leer (Issue #
   assert.equal(single.text, '1 Schritt');
   assert.equal(single.expandable, false);
 });
+
+// Issue #102: Die Kategorie „exec" deckt seit shell_execute nicht mehr nur
+// Python ab — die Gruppenzeile darf das nicht mehr behaupten.
+test('ausgeführte Schritte heißen neutral „Ausführungen“ und stehen vorn', async () => {
+  const { summarizeToolLog, formatGroupLabel } = await load();
+  assert.equal(formatGroupLabel('exec', 1), '1 Ausführung');
+  assert.equal(formatGroupLabel('exec', 2), '2 Ausführungen');
+
+  const out = summarizeToolLog([
+    { text: 'Datei a.md gelesen', state: 'done', category: 'read' },
+    { text: 'Python ausgeführt (1 Zeile)', state: 'done', category: 'exec' },
+    { text: 'Befehl „git status“ ausgeführt', state: 'done', category: 'exec' },
+  ]);
+  assert.match(out.text, /^2 Ausführungen/, 'Ausgeführtes steht vor dem Gelesenen');
+  assert.doesNotMatch(out.text, /Python-L/);
+});

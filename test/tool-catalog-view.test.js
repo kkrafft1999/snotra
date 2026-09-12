@@ -98,6 +98,11 @@ test('Status-Badge nur für nicht eingerichtete Tools, nie für die Risikoklasse
     toolStatusBadge(tool('run_python', 'execute'), { pythonReady: false }).text,
     /Nicht eingerichtet/
   );
+  assert.equal(toolStatusBadge(tool('shell_execute', 'execute'), { shellReady: true }), null);
+  assert.match(
+    toolStatusBadge(tool('shell_execute', 'execute'), { shellReady: false }).title,
+    /Shell-Befehle ausführen/
+  );
   assert.equal(toolStatusBadge(tool('web_search', 'external'), { webSearchHasKey: true }), null);
   assert.match(
     toolStatusBadge(tool('web_search', 'external'), { webSearchHasKey: false }).text,

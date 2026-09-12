@@ -99,6 +99,11 @@ export function initSettingsModal(deps) {
   const inputPythonInterpreter = document.getElementById('input-python-interpreter');
   const pythonStatusEl = document.getElementById('settings-python-status');
   let pythonReady = false;
+  // Shell-Ausfuehrung (Issue #102): nur ein Schalter — welche Shell benutzt
+  // wird, erkennt der Main und meldet es hier als Status.
+  const inputShellEnabled = document.getElementById('input-shell-enabled');
+  const shellStatusEl = document.getElementById('settings-shell-status');
+  let shellReady = false;
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
@@ -554,7 +559,7 @@ export function initSettingsModal(deps) {
 
     const short = toolShortText(tool);
     const detail = toolDetailText(tool);
-    const badge = toolStatusBadge(tool, { pythonReady, webSearchHasKey });
+    const badge = toolStatusBadge(tool, { pythonReady, shellReady, webSearchHasKey });
 
     if (detail) {
       const toggle = document.createElement('button');
@@ -838,6 +843,40 @@ export function initSettingsModal(deps) {
     setPythonStatus(describePythonState(state));
   }
 
+  function describeShellState(state) {
+    if (!state || state.available === false) {
+      return { text: 'Shell-Ausführung ist in dieser Installation nicht verfügbar.', isError: true };
+    }
+    if (!state.found) {
+      const grund = state.error ? ` (${state.error})` : '';
+      return { text: `Keine Shell gefunden${grund}. shell_execute wird nicht angeboten.`, isError: true };
+    }
+    // Login-Shell heisst: dein Profil wird gelesen, Homebrew & Co. sind da.
+    const wie = state.login ? ' als Login-Shell (dein PATH aus dem Profil)' : '';
+    const wo = `Gefunden: ${state.label || state.command}${wie}`;
+    if (!state.enabled) {
+      return { text: `${wo}. Noch nicht erlaubt, shell_execute wird nicht angeboten.` };
+    }
+    return { text: `${wo}. shell_execute wird dem Modell angeboten.` };
+  }
+
+  function setShellStatus({ text, isError = false }) {
+    if (!shellStatusEl) return;
+    shellStatusEl.textContent = text || '';
+    shellStatusEl.classList.toggle('error', !!isError);
+  }
+
+  async function loadShellState() {
+    let state = null;
+    try {
+      state = typeof api.getShellState === 'function' ? await api.getShellState() : null;
+    } catch {
+      state = null;
+    }
+    shellReady = state?.found === true && state?.enabled === true;
+    setShellStatus(describeShellState(state));
+  }
+
   async function loadWebSearchState() {
     let state = null;
     try {
@@ -1022,6 +1061,7 @@ export function initSettingsModal(deps) {
         inputPythonInterpreter.value =
           typeof up.pythonInterpreterPath === 'string' ? up.pythonInterpreterPath : '';
       }
+      if (inputShellEnabled) inputShellEnabled.checked = up.shellExecutionEnabled === true;
     } catch {
       inputGlobalSystemPrompt.value = '';
       selectAppLocale.value = 'de';
@@ -1029,8 +1069,10 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set();
       if (inputPythonEnabled) inputPythonEnabled.checked = false;
       if (inputPythonInterpreter) inputPythonInterpreter.value = '';
+      if (inputShellEnabled) inputShellEnabled.checked = false;
     }
     await loadPythonState();
+    await loadShellState();
     await loadWebSearchState();
     await loadToolCatalog();
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
@@ -1229,6 +1271,7 @@ export function initSettingsModal(deps) {
           activeSkills: [...settingsActiveSkillsDraft],
           pythonExecutionEnabled: inputPythonEnabled?.checked === true,
           pythonInterpreterPath: inputPythonInterpreter?.value || '',
+          shellExecutionEnabled: inputShellEnabled?.checked === true,
         },
       });
       if (!res?.ok) {

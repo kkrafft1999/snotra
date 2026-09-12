@@ -318,6 +318,9 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(names.includes('run_python'), false);
   // fetch_url ebenso: ohne Abruf-Adapter gibt es nichts zu lesen (Issue #95).
   assert.equal(names.includes('fetch_url'), false);
+  // shell_execute ebenso: ohne erlaubte und gefundene Shell erreicht es das
+  // Modell nicht (Issue #102).
+  assert.equal(names.includes('shell_execute'), false);
 
   // Konzept §2: acht Lesetools → read, drei Schreibtools → write,
   // web_search und fetch_url → external. debug_wait ist read, steht aber als
@@ -338,10 +341,11 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.web_search, 'external');
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
+  assert.equal(classes.shell_execute, 'execute');
   assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
   assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
-  // 15 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
-  assert.equal(Object.keys(classes).length, 14);
+  // 16 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
+  assert.equal(Object.keys(classes).length, 15);
 });
 
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {

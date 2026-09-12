@@ -74,6 +74,7 @@ const PREVIEW_KIND_LABELS = Object.freeze({
   replace: 'Ersetzung (alt → neu)',
   diff: 'Patch',
   code: 'Python-Quelltext',
+  shell: 'Befehl',
 });
 
 function hasClass(classes, riskClass) {
@@ -91,6 +92,16 @@ export function approvalCardTitle(riskClasses) {
 }
 
 /**
+ * Ein Shell-Befehl hat kein Dateiziel; die Kopfzeile nennt stattdessen die
+ * Shell, mit der er liefe (Issue #102) — „Snotra möchte einen Befehl in zsh
+ * ausführen“ statt eines leeren „ausführen“.
+ */
+function shellVerb(dto) {
+  const shell = typeof dto?.preview?.shell === 'string' ? dto.preview.shell.trim() : '';
+  return shell ? `einen Befehl in ${shell} ausführen` : 'einen Befehl in der Shell ausführen';
+}
+
+/**
  * Kopfzeile „Snotra möchte ‹Ziel› ‹Verb› (‹Tool›).“ – als Teile, damit die
  * Component Pfad und Tool-Name als Code rendern kann.
  */
@@ -99,6 +110,7 @@ export function approvalHeadline(dto) {
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
   let verb = 'lesen';
   if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = 'an einen externen Dienst senden';
+  else if (dto?.tool === 'shell_execute') verb = shellVerb(dto);
   else if (hasClass(classes, TOOL_RISK_CLASSES.EXECUTE)) verb = 'ausführen';
   else if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) verb = 'ohne Rückweg überschreiben';
   else if (hasClass(classes, TOOL_RISK_CLASSES.WRITE)) {
@@ -152,6 +164,11 @@ export function sessionActionHint(dto) {
 /** Warnung beim Überschreiben (Konzept §6): mit oder ohne Rückweg. */
 export function overwriteWarning(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
+  if (dto?.tool === 'shell_execute') {
+    // Keine Workspace-Grenze: das muss auf der Karte stehen, nicht nur in den
+    // Einstellungen (Issue #102).
+    return 'Der Befehl läuft mit deinen Rechten und ist nicht auf den Projektordner begrenzt.';
+  }
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
   const existing = targets.filter((t) => t.exists === true && (t.kind === 'file' || !t.kind));
   if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) {
@@ -188,6 +205,8 @@ export function buildApprovalCardView(dto) {
     sensitive,
     providerLabel: typeof dto.providerLabel === 'string' ? dto.providerLabel : '',
     warning: overwriteWarning(dto),
+    shellLabel: '',
+    cwdLabel: '',
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: 'Einmal erlauben', enabled: true },
@@ -231,6 +250,14 @@ export function buildApprovalCardView(dto) {
         ? 'Erkannte Zugangsdaten sind in der Vorschau maskiert und bleiben es auch aufgeklappt.'
         : '',
     };
+    // Bei einem Shell-Befehl gehoert beides sichtbar auf die Karte, nicht in
+    // die Vorschau: womit er laeuft und wo (Issue #102).
+    if (typeof dto.preview.shell === 'string' && dto.preview.shell) {
+      view.shellLabel = dto.preview.shellLogin === true
+        ? `${dto.preview.shell} (Login-Shell)`
+        : dto.preview.shell;
+    }
+    if (typeof dto.preview.cwd === 'string' && dto.preview.cwd) view.cwdLabel = dto.preview.cwd;
   }
   return view;
 }

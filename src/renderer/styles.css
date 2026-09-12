@@ -4078,12 +4078,13 @@ select.modal-input {
   display: none;
 }
 
-/* Python-Karte in den Tool-Einstellungen (Issue #86). */
+/* Ausfuehrungs-Karten in den Tool-Einstellungen (Python #86, Shell #102). */
 
-.settings-python-toggle {
+.settings-exec-toggle {
   margin-bottom: 10px;
 }
 
-#settings-python-status:empty {
+#settings-python-status:empty,
+#settings-shell-status:empty {
   display: none;
 }

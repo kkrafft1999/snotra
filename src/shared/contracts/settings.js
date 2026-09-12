@@ -232,6 +232,9 @@ function normalizeUiPrefs(raw) {
   // fuehrt fremden Code aus und umgeht damit die Workspace-Grenze.
   const pythonExecutionEnabled = data.pythonExecutionEnabled === true;
   const pythonInterpreterPath = normalizeInterpreterPath(data.pythonInterpreterPath);
+  // Shell-Ausfuehrung (Issue #102) ebenso: ein Befehl kann alles, was der
+  // angemeldete Nutzer kann — das wird bewusst eingeschaltet.
+  const shellExecutionEnabled = data.shellExecutionEnabled === true;
   return {
     contentPaneVisible: data.contentPaneVisible !== false,
     baseSystemPrompt,
@@ -248,6 +251,7 @@ function normalizeUiPrefs(raw) {
     ...(typeof ignoredUpdateVersion === 'string' ? { ignoredUpdateVersion } : {}),
     pythonExecutionEnabled,
     ...(pythonInterpreterPath ? { pythonInterpreterPath } : {}),
+    shellExecutionEnabled,
   };
 }
 
@@ -295,6 +299,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.pythonInterpreterPath === 'string') {
     out.pythonInterpreterPath = normalizeInterpreterPath(patch.pythonInterpreterPath);
+  }
+  if (typeof patch.shellExecutionEnabled === 'boolean') {
+    out.shellExecutionEnabled = patch.shellExecutionEnabled;
   }
   return out;
 }

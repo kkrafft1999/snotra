@@ -14,6 +14,7 @@
  */
 
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
+const { createOutputSink } = require('./child-output-sink');
 
 /** Kandidaten in der Reihenfolge, in der wir sie ausprobieren. */
 function interpreterCandidates(platform) {
@@ -48,41 +49,6 @@ function normalizeArgv(raw) {
     out.push(value.slice(0, PYTHON_EXECUTION_LIMITS.MAX_ARGV_CHARS));
   }
   return out;
-}
-
-/**
- * Sammelt einen Ausgabestrom bis zur Obergrenze. Was darueber hinausgeht, wird
- * verworfen statt gepuffert — ein Skript, das Megabytes ausgibt, soll weder den
- * Speicher noch das Kontextfenster fluten.
- */
-function createOutputSink(maxBytes) {
-  const chunks = [];
-  let size = 0;
-  let truncated = false;
-  return {
-    push(chunk) {
-      if (size >= maxBytes) {
-        truncated = true;
-        return;
-      }
-      const room = maxBytes - size;
-      if (chunk.length > room) {
-        chunks.push(chunk.subarray(0, room));
-        size = maxBytes;
-        truncated = true;
-        return;
-      }
-      chunks.push(chunk);
-      size += chunk.length;
-    },
-    get truncated() {
-      return truncated;
-    },
-    text() {
-      const text = Buffer.concat(chunks).toString('utf8');
-      return truncated ? `${text}\n… [Ausgabe gekürzt]` : text;
-    },
-  };
 }
 
 /**

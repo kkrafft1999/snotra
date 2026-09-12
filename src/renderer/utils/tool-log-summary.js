@@ -41,7 +41,8 @@ const GROUP_LABELS = {
   check: ['%d Pfad geprüft', '%d Pfade geprüft'],
   write: ['%d Datei geschrieben', '%d Dateien geschrieben'],
   wait: ['%d Pause', '%d Pausen'],
-  exec: ['%d Python-Lauf', '%d Python-Läufe'],
+  // Seit #102 nicht mehr nur Python: die Kategorie deckt jede Ausfuehrung ab.
+  exec: ['%d Ausführung', '%d Ausführungen'],
   other: ['%d Tool-Schritt', '%d Tool-Schritte'],
 };
 
@@ -52,8 +53,8 @@ const GROUP_LABELS = {
  * Unwichtiges fällt bei vielen Gruppen zuerst in „N weitere Schritte“.
  */
 const CATEGORY_RANK = {
-  // Ausgefuehrter Code steht vorn: dass ueberhaupt etwas gelaufen ist, ist die
-  // wichtigste Auskunft eines Zuges (Issue #86).
+  // Ausgefuehrter Code und Shell-Befehle stehen vorn: dass ueberhaupt etwas
+  // gelaufen ist, ist die wichtigste Auskunft eines Zuges (#86/#102).
   exec: 1,
   skill: 2,
   write: 3,

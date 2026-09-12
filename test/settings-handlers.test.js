@@ -146,7 +146,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs } = {}) {
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const safeStorage = {
@@ -212,6 +212,7 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     presentation,
     toolCatalog,
     skillCatalog,
+    shellSettings,
   });
   return {
     ipcMain,
@@ -235,6 +236,49 @@ test('getToolCatalog returns the registry catalog, or an empty list without one'
 
   const { ipcMain: withoutCatalog } = await setupHandlers(t);
   assert.deepEqual(await withoutCatalog.invoke(REQ.SETTINGS_GET_TOOL_CATALOG), { tools: [] });
+});
+
+// Shell-Ausfuehrung (Issue #102): der Renderer erfaehrt den Stand ueber
+// einen eigenen Kanal, geschaltet wird ueber die UI-Prefs.
+test('getShellState meldet die erkannte Shell — ohne Dienst einen ehrlichen Leerstand', async (t) => {
+  const { ipcMain: ohne } = await setupHandlers(t);
+  assert.deepEqual(await ohne.invoke(REQ.SETTINGS_GET_SHELL_STATE), {
+    found: false,
+    enabled: false,
+    available: false,
+  });
+
+  let refreshes = 0;
+  const shellSettings = {
+    async refresh() {
+      refreshes += 1;
+      return { found: true, command: '/bin/zsh', label: 'zsh', login: true, enabled: true };
+    },
+  };
+  const { ipcMain } = await setupHandlers(t, { shellSettings });
+  assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_GET_SHELL_STATE), {
+    found: true,
+    command: '/bin/zsh',
+    label: 'zsh',
+    login: true,
+    enabled: true,
+    available: true,
+  });
+  assert.equal(refreshes, 1);
+});
+
+test('das Häkchen für Shell-Befehle wirkt sofort, nicht erst beim nächsten Start (#102)', async (t) => {
+  let refreshes = 0;
+  const shellSettings = { async refresh() { refreshes += 1; return { found: true, enabled: true }; } };
+  const { ipcMain, storage } = await setupHandlers(t, { shellSettings });
+
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  assert.equal((await storage.readUIPrefs()).shellExecutionEnabled, true);
+  assert.equal(refreshes, 1);
+
+  // Eine Einstellung ohne Shell-Bezug loest keine erneute Erkennung aus.
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { appLocale: 'en' });
+  assert.equal(refreshes, 1);
 });
 
 test('registerSettingsHandlers requires injected presentation service', () => {

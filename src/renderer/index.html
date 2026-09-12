@@ -351,7 +351,7 @@
                   </p>
                 </div>
               </details>
-              <label class="modal-checkbox settings-python-toggle">
+              <label class="modal-checkbox settings-exec-toggle">
                 <input type="checkbox" id="input-python-enabled">
                 <span>Python-Ausführung erlauben</span>
               </label>
@@ -372,6 +372,32 @@
                 </div>
               </details>
               <p id="settings-python-status" class="modal-hint" role="status"></p>
+            </div>
+
+            <div class="settings-tools-card" id="settings-shell-card">
+              <h3 class="settings-subsection-title" id="heading-shell">Shell-Befehle ausführen</h3>
+              <details class="settings-note settings-note--warning">
+                <summary class="settings-note__summary">
+                  <span><strong>Achtung:</strong> <code>shell_execute</code> führt Befehle des Sprachmodells mit
+                  deinen Rechten aus — ohne Sandbox.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Ein Shell-Befehl kann <strong>alles</strong>, was du selbst im Terminal kannst: überall lesen und
+                    schreiben, ins Netz gehen, Programme installieren. Es gibt <strong>keine</strong> Projektordner-Grenze.
+                    Snotra zeigt dir vor <em>jedem</em> Lauf den vollständigen Befehl, die Shell und das
+                    Arbeitsverzeichnis zur Freigabe; rekursives Zwangslöschen, Datenträgeroperationen und das
+                    Umschreiben der Git-Historie sind gesperrt. Diese Sperre ist eine zusätzliche Sicherung, kein
+                    vollständiger Schutz — im Modus „Auto“ läuft ein Befehl ohne Rückfrage. Nur einschalten, wenn dir
+                    das bewusst ist.
+                  </p>
+                </div>
+              </details>
+              <label class="modal-checkbox settings-exec-toggle">
+                <input type="checkbox" id="input-shell-enabled">
+                <span>Shell-Befehle erlauben</span>
+              </label>
+              <p id="settings-shell-status" class="modal-hint" role="status"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">

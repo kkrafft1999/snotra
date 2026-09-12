@@ -58,6 +58,20 @@ bestehende Importe stabil bleiben.
   Weiterleitungen und Grenzen liegen im Adapter
   (`main/adapters/http-url-fetch-adapter.js`), die Adressprüfung selbst in
   `shared/runtime/url-safety.js`
+- `code-execution-port` — ein Python-Programm ausführen (Issue #86);
+  Interpreter-Erkennung, Zeitlimit und Prozessbaum-Kill liegen im
+  `main/services/python-runner-service.js`
+- `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
+  ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
+  PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im
+  `main/services/shell-runner-service.js`, die gesperrten Wirkungen als reine
+  Prüfung in `shared/runtime/shell-command-guard.js`
+
+Beide Ausführungs-Ports sind bewusst gleich eng geschnitten — ein Programm
+bzw. ein Befehl rein, Ausgabe und Exit-Code raus, kein Zustand zwischen zwei
+Aufrufen — und tragen in der Registry die Klasse `execute`: keine
+Workspace-Grenze, keine Sandbox, dafür eine Freigabe vor jedem Lauf und im
+Lieferzustand abgeschaltet (siehe `docs/sicherheitskonzept.md`, Abschnitt 9).
 
 Beide Netz-Tools sind in der Registry als `requiresWorkspace: false`
 gekennzeichnet (Issue #96): die Engine baut die Tool-Liste nicht mehr pauschal

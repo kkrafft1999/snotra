@@ -1,5 +1,6 @@
 const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
 const { sleepAbortable } = require('../../shared/runtime/abort');
+const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -164,7 +165,13 @@ function createToolRegistry(initialDefinitions = []) {
   };
 }
 
-function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner = null, urlFetch = null }) {
+function createWorkspaceToolRegistry({
+  fsService,
+  webSearch = null,
+  pythonRunner = null,
+  urlFetch = null,
+  shellRunner = null,
+}) {
   return createToolRegistry([
     {
       name: 'list_directory',
@@ -691,6 +698,101 @@ function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner
         if (result.aborted) {
           out.aborted = true;
           out.note = 'Das Programm wurde abgebrochen.';
+        }
+        if (result.truncated) out.truncated = true;
+        return JSON.stringify(out);
+      },
+    },
+    {
+      name: 'shell_execute',
+      // Wie run_python die hoechste Stufe — und die weitreichendere: ein
+      // Shell-Befehl kann alles, was der angemeldete Nutzer kann, und kennt
+      // keine Workspace-Grenze. `execute` ist weder sitzungs- noch dauerhaft
+      // freigebbar (Konzept §6/§7); die Karte zeigt Befehl, Shell und
+      // Arbeitsordner (Issue #102).
+      riskClass: TOOL_RISK_CLASSES.EXECUTE,
+      targets: () => [],
+      isAvailable: () => shellRunner?.isAvailable() === true,
+      description:
+        'Führt einen Befehl in der Shell des Betriebssystems aus (macOS/Linux in der Login-Shell des '
+        + 'Nutzers, Windows in PowerShell bzw. cmd.exe) und gibt Standardausgabe, Fehlerausgabe und '
+        + 'Exit-Code zurück. Damit ist alles erreichbar, was der Nutzer im Terminal tun würde: '
+        + '„git status“, „npm run build“, „docker ps“, ein installiertes CLI-Werkzeug. '
+        + 'Arbeitsverzeichnis ist der geöffnete Projektordner oder ein Unterordner davon. '
+        + 'Ein Befehl pro Aufruf und kein Zustand zwischen zwei Aufrufen: ein „cd“ wirkt nur innerhalb '
+        + 'desselben Befehls (verkette stattdessen mit && oder setze cwd). '
+        + 'Nicht interaktiv — es gibt kein Terminal, auf eine Eingabeaufforderung zu warten läuft ins '
+        + 'Zeitlimit; nutze nicht-interaktive Schalter und gib Eingaben über stdin mit. '
+        + 'Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht '
+        + 'möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie '
+        + 'sind gesperrt. Jeder Lauf braucht die Freigabe des Nutzers.',
+      promptDescription:
+        'Führt einen Befehl in der Shell des Betriebssystems aus (git, npm, installierte CLI-Werkzeuge) '
+        + 'und liefert Ausgabe und Exit-Code zurück.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description:
+              'Die vollständige Befehlszeile, so wie sie im Terminal stünde, z. B. "git status --short". '
+              + 'Mehrere Schritte mit && verketten.',
+          },
+          cwd: {
+            type: 'string',
+            description:
+              'Optionaler Unterordner des Projektordners als Arbeitsverzeichnis, relativ angegeben '
+              + '(z. B. "frontend"). Ohne Angabe läuft der Befehl im Projektordner.',
+          },
+          stdin: {
+            type: 'string',
+            description: 'Optionale Eingabe, die dem Befehl auf der Standardeingabe zur Verfügung steht.',
+          },
+          timeout_ms: {
+            type: 'integer',
+            description: 'Zeitlimit in Millisekunden (Standard 30000, Obergrenze 300000).',
+          },
+        },
+        required: ['command'],
+      },
+      handler: async (args, { workspaceRoot, abortSignal } = {}) => {
+        if (!shellRunner) {
+          return JSON.stringify({ error: 'Shell-Ausführung ist in dieser Installation nicht verfügbar.' });
+        }
+        // Doppelt geprueft: der Planer lehnt gesperrte Wirkungen schon vor der
+        // Freigabekarte ab, hier faengt es jeden Weg ohne Planer ab.
+        const guard = checkShellCommand(args?.command);
+        if (guard.blocked) return JSON.stringify({ error: guard.reason, blocked: true });
+        const relativeCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
+        const resolved = await fsService.resolveToolPath(workspaceRoot, relativeCwd);
+        if (resolved.error) return JSON.stringify({ error: resolved.error });
+        const result = await shellRunner.run({
+          command: args?.command,
+          stdin: args?.stdin,
+          timeoutMs: args?.timeout_ms,
+          cwd: resolved.absPath,
+          abortSignal,
+        });
+        if (result?.error) {
+          return JSON.stringify(result.blocked ? { error: result.error, blocked: true } : { error: result.error });
+        }
+        const out = {
+          stdout: result.stdout,
+          stderr: result.stderr,
+          exit_code: result.exitCode,
+          duration_ms: result.durationMs,
+          // Womit der Befehl lief, gehoert ins Ergebnis: das Modell soll
+          // Syntaxfehler der falschen Shell zuordnen koennen (Issue #102).
+          shell: result.shell,
+          cwd: relativeCwd || '.',
+        };
+        if (result.timedOut) {
+          out.timed_out = true;
+          out.note = 'Der Befehl wurde nach Ablauf des Zeitlimits beendet.';
+        }
+        if (result.aborted) {
+          out.aborted = true;
+          out.note = 'Der Befehl wurde abgebrochen.';
         }
         if (result.truncated) out.truncated = true;
         return JSON.stringify(out);

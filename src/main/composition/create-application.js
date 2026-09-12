@@ -18,6 +18,7 @@ const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registr
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
+const { createShellRunnerService } = require('../services/shell-runner-service');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
   createProviderRuntimeAdapter,
@@ -184,10 +185,35 @@ function createApplication({
     },
   };
 
+  // Shell-Ausfuehrung (Issue #102). Dieselben zwei Bedingungen wie bei Python —
+  // gefundene Shell und ausdrueckliche Einstellung —, nur mit groesserer
+  // Tragweite: ein Befehl kann alles, was der angemeldete Nutzer kann.
+  let shellExecutionEnabled = false;
+  const shellRunnerService = createShellRunnerService({ spawn: childProcess.spawn, os });
+  const shellRunner = {
+    isAvailable: () => shellExecutionEnabled && shellRunnerService.isAvailable(),
+    run: (request) => shellRunnerService.run(request),
+  };
+  const shellSettings = {
+    describe: () => ({ ...shellRunnerService.describe(), enabled: shellExecutionEnabled }),
+    async refresh() {
+      const prefs = await uiPrefsStore.readUIPrefs();
+      shellExecutionEnabled = prefs.shellExecutionEnabled === true;
+      await shellRunnerService.detect();
+      return shellSettings.describe();
+    },
+  };
+
   // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die
   // Adressregeln stecken im Adapter (Issue #95).
   const urlFetch = createHttpUrlFetchAdapter();
-  const toolRegistry = createWorkspaceToolRegistry({ fsService, webSearch, pythonRunner, urlFetch });
+  const toolRegistry = createWorkspaceToolRegistry({
+    fsService,
+    webSearch,
+    pythonRunner,
+    urlFetch,
+    shellRunner,
+  });
 
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
@@ -254,6 +280,8 @@ function createApplication({
       protectedRoots: [app.getPath('userData')],
       trashItem: shell && typeof shell.trashItem === 'function' ? (target) => shell.trashItem(target) : null,
       readOwnSecrets,
+      // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
+      describeShell: () => shellRunnerService.describe(),
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
     },
   });
@@ -278,6 +306,7 @@ function createApplication({
     skillCatalog: skillsService,
     webSearchSettings,
     pythonSettings,
+    shellSettings,
   });
   registerChatHistoryHandlers({
     ipcMain,
@@ -324,7 +353,8 @@ function createApplication({
     runUpdateCheck,
     dispose,
     /** Beim Start einmal Interpreter suchen und die Einstellung uebernehmen (Issue #86). */
-    initToolRuntimes: () => Promise.all([pythonSettings.refresh(), webSearchSettings.refresh()]),
+    initToolRuntimes: () =>
+      Promise.all([pythonSettings.refresh(), shellSettings.refresh(), webSearchSettings.refresh()]),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
   };
 }

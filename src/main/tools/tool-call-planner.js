@@ -23,13 +23,15 @@ const {
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
+const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 
 const PREVIEW_MAX_CHARS = 4000;
 const RECOVERY_TRASH = 'trash';
 
-function buildPreview(toolName, args) {
+function buildPreview(toolName, args, options = {}) {
   let kind = 'text';
   let text = '';
+  let extra = null;
   if (toolName === 'write_file_text') {
     text = typeof args?.content === 'string' ? args.content : '';
   } else if (toolName === 'edit_file') {
@@ -52,6 +54,16 @@ function buildPreview(toolName, args) {
     // Ohne den Quelltext waere die Freigabe eine Blankounterschrift (Issue #86).
     kind = 'code';
     text = typeof args?.code === 'string' ? args.code : '';
+  } else if (toolName === 'shell_execute') {
+    // Der Nutzer soll sehen, *was* laeuft und *womit* (Issue #102): Befehl,
+    // erkannte Shell und Arbeitsordner gehoeren zusammen auf die Karte.
+    kind = 'shell';
+    text = typeof args?.command === 'string' ? args.command : '';
+    extra = {
+      shell: typeof options.shellLabel === 'string' ? options.shellLabel : '',
+      shellLogin: options.shellLogin === true,
+      cwd: typeof options.cwd === 'string' ? options.cwd : '',
+    };
   } else {
     return null;
   }
@@ -62,6 +74,7 @@ function buildPreview(toolName, args) {
     text: truncated ? `${masked.slice(0, PREVIEW_MAX_CHARS)}\n… [gekürzt]` : masked,
     truncated,
     masked: masked !== text,
+    ...(extra || {}),
   };
 }
 
@@ -110,8 +123,16 @@ function stableStringify(value) {
  * @param {object} deps.path
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
  * @param {boolean} [deps.canTrash]  ob eine Wiederherstellungskopie in den Papierkorb möglich ist
+ * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
  */
-function createToolCallPlanner({ fsService, fs, path, protectedRoots = [], canTrash = false }) {
+function createToolCallPlanner({
+  fsService,
+  fs,
+  path,
+  protectedRoots = [],
+  canTrash = false,
+  describeShell = null,
+}) {
   const protectedReal = new Set();
   let protectedResolved = false;
 
@@ -174,6 +195,24 @@ function createToolCallPlanner({ fsService, fs, path, protectedRoots = [], canTr
     const skillRoots = Array.isArray(context.skillRoots) ? context.skillRoots : [];
     const matcher = createSensitivePathMatcher({ userPatterns: context.sensitivePathPatterns });
     await resolveProtectedRoots();
+
+    // shell_execute (Issue #102): gesperrte Wirkungen und ein Arbeitsordner
+    // ausserhalb des Projektordners werden abgelehnt, bevor ueberhaupt eine
+    // Freigabekarte erscheint — der Nutzer soll nichts bestaetigen muessen,
+    // was ohnehin nicht laufen darf.
+    let shellCwd = '';
+    if (toolName === 'shell_execute') {
+      const guard = checkShellCommand(args?.command);
+      if (guard.blocked) {
+        return { tool: toolName, error: guard.reason, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [baseClass], targets: [] };
+      }
+      const rawCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
+      const resolvedCwd = await fsService.resolveToolPath(workspaceRoot, rawCwd);
+      if (resolvedCwd.error) {
+        return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [baseClass], targets: [] };
+      }
+      shellCwd = resolvedCwd.absPath;
+    }
 
     let descriptors;
     try {
@@ -282,7 +321,12 @@ function createToolCallPlanner({ fsService, fs, path, protectedRoots = [], canTr
     const result = { tool: toolName, riskClasses, targets, planKey };
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
-    const preview = buildPreview(toolName, args);
+    const shell = typeof describeShell === 'function' ? describeShell() : null;
+    const preview = buildPreview(toolName, args, {
+      cwd: shellCwd,
+      shellLabel: shell?.label || '',
+      shellLogin: shell?.login === true,
+    });
     if (preview) result.preview = preview;
     return result;
   }

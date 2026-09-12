@@ -27,14 +27,30 @@ const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'f
  * @param {string[]} [deps.protectedRoots]  harte Grenzen (Snotra-eigener Speicher)
  * @param {(absPath: string) => Promise<void>} [deps.trashItem]  shell.trashItem für Wiederherstellungskopien
  * @param {() => Promise<string[]>} [deps.readOwnSecrets]  konfigurierte Provider-Schlüssel (nur zum Vergleich)
+ * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
  * @param {number} [deps.maxScanBytes]
  */
 function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
-  const { fsService = null, fs = null, path = null, protectedRoots = [], trashItem = null, readOwnSecrets = null } = deps;
+  const {
+    fsService = null,
+    fs = null,
+    path = null,
+    protectedRoots = [],
+    trashItem = null,
+    readOwnSecrets = null,
+    describeShell = null,
+  } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =
     fsService && fs && path
-      ? createToolCallPlanner({ fsService, fs, path, protectedRoots, canTrash: typeof trashItem === 'function' })
+      ? createToolCallPlanner({
+          fsService,
+          fs,
+          path,
+          protectedRoots,
+          canTrash: typeof trashItem === 'function',
+          describeShell,
+        })
       : null;
 
   function buildSensitivity(patterns) {

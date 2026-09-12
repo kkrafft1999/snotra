@@ -81,12 +81,19 @@ export function toolDetailText(tool) {
  *
  * @returns {{text: string, title: string}|null}
  */
-export function toolStatusBadge(tool, { pythonReady = true, webSearchHasKey = true } = {}) {
+export function toolStatusBadge(tool, { pythonReady = true, shellReady = true, webSearchHasKey = true } = {}) {
   if (tool?.name === 'run_python' && !pythonReady) {
     return {
       text: 'Nicht eingerichtet',
       title:
         'Ohne erlaubte und gefundene Python-Installation wird das Tool dem Modell nicht angeboten (siehe „Python ausführen“).',
+    };
+  }
+  if (tool?.name === 'shell_execute' && !shellReady) {
+    return {
+      text: 'Nicht eingerichtet',
+      title:
+        'Ohne erlaubte und gefundene Shell wird das Tool dem Modell nicht angeboten (siehe „Shell-Befehle ausführen“).',
     };
   }
   if (tool?.name === 'web_search' && !webSearchHasKey) {

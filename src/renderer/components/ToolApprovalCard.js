@@ -165,7 +165,13 @@ export function initToolApprovalCards({ api, appStore }) {
 
     const facts = el('dl', 'chat-approval-card__facts');
     fact(facts, 'Wirkung', view.classText);
-    fact(facts, view.targets.length === 1 ? 'Ziel' : 'Ziele', buildTargetList(view));
+    if (view.shellLabel) fact(facts, 'Shell', view.shellLabel);
+    if (view.cwdLabel) fact(facts, 'Arbeitsordner', code(view.cwdLabel));
+    // Ein Shell-Befehl hat kein Dateiziel — die Zeile „ohne Dateiziel“ waere
+    // hier nur Rauschen neben Shell und Arbeitsordner (Issue #102).
+    if (!view.shellLabel || view.targets.length > 0) {
+      fact(facts, view.targets.length === 1 ? 'Ziel' : 'Ziele', buildTargetList(view));
+    }
     if (view.reason) fact(facts, 'Grund', view.reason);
     if (view.sensitive && view.providerLabel) fact(facts, 'Empfänger', view.providerLabel);
     if (view.scopeNote) fact(facts, 'Sitzungsumfang', view.scopeNote);

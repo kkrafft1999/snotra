@@ -154,6 +154,18 @@ test('normalizeUiPrefs schaltet die Python-Ausführung standardmäßig ab', () =
   );
 });
 
+// Shell-Ausfuehrung (Issue #102): ebenfalls standardmaessig aus.
+test('normalizeUiPrefs schaltet die Shell-Ausführung standardmäßig ab', () => {
+  const { normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+
+  assert.equal(normalizeUiPrefs({}).shellExecutionEnabled, false);
+  assert.equal(normalizeUiPrefs({ shellExecutionEnabled: 'ja' }).shellExecutionEnabled, false);
+  assert.equal(normalizeUiPrefs({ shellExecutionEnabled: true }).shellExecutionEnabled, true);
+  assert.equal('shellExecutionEnabled' in normalizeUiPrefsPatch({ shellExecutionEnabled: 'ja' }), false);
+  assert.equal(normalizeUiPrefsPatch({ shellExecutionEnabled: true }).shellExecutionEnabled, true);
+  assert.equal(normalizeUiPrefsPatch({ shellExecutionEnabled: false }).shellExecutionEnabled, false);
+});
+
 test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
   const { normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
 
