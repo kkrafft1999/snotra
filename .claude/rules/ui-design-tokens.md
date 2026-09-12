@@ -38,12 +38,24 @@ In `tokens.css` sind dies die Kanalnamen (Light-Werte in `:root`, Dark in `[data
 | `--ds-blue-border` | `rgba(0,117,158,0.25)` | Active-State Borders |
 | `--ds-black` | `#000000` | Primär-Schrift, Destructive-Aktion |
 | `--ds-white` | `#FFFFFF` | primäre Fläche |
-| `--ds-grey-bg` | `#F9F9F9` | Page-BG, Footer-BG |
-| `--ds-grey-card` | `#F2F2F2` | Code-BG, Inline-Code |
-| `--ds-grey-divider` | `#EFEFEF` | Borders, Trennlinien |
+| `--ds-grey-bg` | `#F6F7F9` | Page-BG, Footer-BG |
+| `--ds-grey-card` | `#EFF0F2` | Code-BG, Inline-Code |
+| `--ds-grey-divider` | `#ECEDEF` | Borders, Trennlinien |
 | `--ds-grey-muted` | `#6D6D6D` | Sekundär-Schrift, Metadaten (nur ≥ 14 px) |
 | `--ds-grey-strong` | `#5C5C5C` | kleinere Sekundärschrift (< 14 px) |
 | `--ds-btn-primary-*` | siehe `tokens.css` | Primary/Save/Send: BG, FG, Hover, Active-Schatten |
+
+Die drei Grautoene sind **leicht kuehl getoent** (R-B-Spanne 3), damit sie den
+Blau-Hue von `--ds-blue` aufnehmen, ohne eine zweite Farbe einzufuehren. Sie
+bilden eine abgestimmte Skala: Der Helligkeitsabstand Grund → Card betraegt
+ΔL\* 2,44, Grund → Divider ΔL\* 3,48. **Wer einen der drei Werte aendert, muss
+die anderen beiden mitziehen** — sonst brechen die Ebenenabstaende.
+
+Der Grund liegt bewusst unter reinem Off-White: Gegen die weisse Composer-Karte
+ergab das fruehere `#F9F9F9` nur ΔL\* 2,07 und lag damit an der Wahrnehmungs-
+schwelle — die Karte war rechnerisch erhoeht, optisch aber nicht. Mit `#F6F7F9`
+sind es ΔL\* 2,79. Untergrenze fuer den Grund ist `#F1F2F4`; darunter fallen
+`--ds-grey-muted` und `--ds-blue` unter 4,6:1 und verlieren jeden Kontrastpuffer.
 
 ### Typografie
 
