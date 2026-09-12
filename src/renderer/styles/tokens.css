@@ -20,11 +20,13 @@
   --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
   --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
   /* User-Bubble: Blau-Wash, der die Frage als eigenen Block vom Fliesstext
-   * der Antwort abhebt. 10 % ergibt dL* 5,30 gegen den Grund — deutlich
-   * lesbar, aber noch ein Wash und kein gesaettigter Block. Damit liegt
-   * Light auf derselben Wahrnehmungsstufe wie der Dark-Mode (dL* 5,54);
-   * die frueheren 6 % (dL* 3,22) waren im Vergleich zu schwach. */
-  --ds-chat-user-bg: rgba(0, 117, 158, 0.10);
+   * der Antwort abhebt. 8 % ergibt dL* 4,13 gegen den Grund — klar als
+   * eigene Flaeche lesbar, aber bewusst zurueckhaltend: Der Wash soll die
+   * Frage gliedern, nicht betonen. Die frueheren 6 % (dL* 3,22) waren zu
+   * schwach, 10 % (dL* 5,30) trugen zu dick auf. Light liegt damit bewusst
+   * unter dem Dark-Mode (10 %, dL* 5,54) — auf dunklem Grund wirkt derselbe
+   * Wash zurueckhaltender und braucht mehr Prozent fuer dieselbe Wirkung. */
+  --ds-chat-user-bg: rgba(0, 117, 158, 0.08);
   --ds-black: #000000;
   --ds-white: #FFFFFF;
 
