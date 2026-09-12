@@ -8,7 +8,13 @@ import {
   toolStatusBadge,
 } from '../utils/tool-catalog-view.js';
 
-const SETTINGS_NAV_LABELS = { models: 'Modelle', tools: 'Tools', skills: 'Skills', general: 'Allgemein' };
+const SETTINGS_NAV_LABELS = {
+  models: 'Modelle',
+  tools: 'Tools',
+  permissions: 'Berechtigungen',
+  skills: 'Skills',
+  general: 'Allgemein',
+};
 
 /** Aufklapp-Pfeil der Tool-Zeilen (Issue #98); dreht sich per CSS. */
 const CHEVRON_ICON_HTML =

@@ -283,6 +283,10 @@
             Tools
             <span class="settings-nav-item__desc">Werkzeuge fürs Sprachmodell</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-permissions" id="tab-settings-permissions" data-settings-panel="permissions">
+            Berechtigungen
+            <span class="settings-nav-item__desc">Wann ein Tool laufen darf</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
             Skills
             <span class="settings-nav-item__desc">Arbeitsweisen für das Sprachmodell</span>
@@ -372,18 +376,20 @@
               </div>
               <p id="settings-web-search-status" class="modal-hint" role="status"></p>
             </div>
+          </section>
 
+          <section class="settings-panel" id="panel-settings-permissions" role="tabpanel" aria-labelledby="tab-settings-permissions" hidden>
+            <p class="settings-form-hint">
+              Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse und Modus. Harte Grenzen
+              (Projektordner, Skill-Verzeichnisse nur lesbar, Snotra-Schlüssel) gelten in jedem Modus. Änderungen
+              in diesem Bereich wirken <strong>sofort</strong> und für alle Chats – unabhängig von „Übernehmen“.
+            </p>
             <div class="settings-tools-card" id="settings-permissions-card">
-              <h3 class="settings-subsection-title" id="heading-tool-permissions">Berechtigungen</h3>
-              <p class="settings-form-hint settings-form-hint--tight">
-                Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse und Modus. Harte Grenzen
-                (Projektordner, Skill-Verzeichnisse nur lesbar, Snotra-Schlüssel) gelten in jedem Modus. Änderungen
-                hier wirken <strong>sofort</strong> und für alle Chats – unabhängig von „Übernehmen“.
-              </p>
+              <h3 class="settings-subsection-title" id="heading-tool-permissions">Modus</h3>
               <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
               <p id="settings-permissions-integrity" class="modal-warning hidden" role="alert"></p>
               <fieldset class="settings-mode-group" id="settings-tool-mode-group" aria-describedby="hint-tool-mode">
-                <legend class="settings-mode-group__legend">Modus</legend>
+                <legend class="settings-mode-group__legend visually-hidden">Modus</legend>
               </fieldset>
               <p id="hint-tool-mode" class="modal-hint">
                 Derselbe Modus steht in der Chat-Leiste. „Auto“ verlangt eine Bestätigung im Systemdialog; zurück zu

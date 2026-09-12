@@ -80,7 +80,9 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   function renderMode(state) {
     modeGroup.innerHTML = '';
     const legend = document.createElement('legend');
-    legend.className = 'settings-mode-group__legend';
+    // Die Karte ist seit #99 mit „Modus" ueberschrieben; die Legend wuerde den
+    // Text doppeln, bleibt aber fuer Screenreader als Gruppenname noetig.
+    legend.className = 'settings-mode-group__legend visually-hidden';
     legend.textContent = 'Modus';
     modeGroup.appendChild(legend);
     const active = state?.mode || 'smart';
