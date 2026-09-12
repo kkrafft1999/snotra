@@ -25,7 +25,7 @@ Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft 
 ## Tech-Stack
 
 - [Electron](https://www.electronjs.org/) (Main + Renderer + Preload)
-- [Electron Forge](https://www.electronforge.io/) für Packaging & Maker (DMG / ZIP / DEB)
+- [Electron Forge](https://www.electronforge.io/) für Packaging & Maker (DMG / ZIP / DEB / AppImage)
 - Vanilla JS im Renderer + [`marked`](https://github.com/markedjs/marked) und [`DOMPurify`](https://github.com/cure53/DOMPurify) für Markdown
 - [`@fontsource/inter`](https://fontsource.org/fonts/inter) als Schriftart
 
@@ -58,7 +58,7 @@ Beim ersten Start kannst du in den Einstellungen einen Provider wählen und dein
 # macOS (Apple Silicon) – DMG + ZIP
 npm run make
 
-# Linux (x64) – DEB; braucht dpkg und fakeroot
+# Linux (x64) – DEB + AppImage; braucht dpkg, fakeroot und mksquashfs
 npm run make:linux
 
 # Nur paketieren ohne Installer
@@ -72,23 +72,32 @@ Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen)
 ### Linux installieren
 
 Die [Releases](https://github.com/kkrafft1999/snotra/releases) enthalten für
-Linux zwei Dateien:
+Linux drei Dateien:
 
 ```bash
 # Empfohlen (Debian, Ubuntu, Mint, Pop!_OS …): legt Menüeintrag und Icon an
 sudo apt install ./Snotra-AI-<version>-linux-x64.deb
 
-# Fallback für andere Distributionen
+# Distributionsunabhängig: eine Datei, kein root nötig
+chmod +x Snotra-AI-<version>-linux-x64.AppImage
+./Snotra-AI-<version>-linux-x64.AppImage
+
+# Fallback, wenn beides nicht passt
 tar -xzf Snotra-AI-<version>-linux-x64.tar.gz
 cd snotra-ai-<version>-linux-x64
 ./"Snotra AI"
 ```
 
 Das `.deb` ist der empfohlene Weg, weil es beim Paketieren das Setuid-Bit auf
-`chrome-sandbox` setzt. Im Tarball fehlt das: Auf Distributionen, die
+`chrome-sandbox` setzt und die App ins Anwendungsmenü einträgt. Das
+**AppImage** braucht keine Installation und keine root-Rechte — nach dem
+Download einmal ausführbar machen, das Ausführungsrecht überlebt den Umweg über
+den Browser nicht.
+
+Nur im **Tarball** fehlt die Sandbox-Vorbereitung: Auf Distributionen, die
 unprivilegierte User-Namespaces einschränken (u. a. Ubuntu ab 24.04), bricht der
-Start sonst mit *„The SUID sandbox helper binary was found, but is not
-configured correctly"* ab. Dann einmal nachziehen:
+Start mit *„The SUID sandbox helper binary was found, but is not configured
+correctly"* ab. Dann einmal nachziehen:
 
 ```bash
 sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox

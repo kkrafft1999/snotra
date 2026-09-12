@@ -69,6 +69,26 @@
               }
             }
           }
+        },
+        {
+          "name": "@reforged/maker-appimage",
+          "platforms": [
+            "linux"
+          ],
+          "config": {
+            "options": {
+              "bin": "Snotra AI",
+              "productName": "Snotra AI",
+              "genericName": "KI-Assistent",
+              "categories": [
+                "Utility",
+                "Development"
+              ],
+              "icon": "icon.png",
+              "compressor": "xz",
+              "runtime": "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+            }
+          }
         }
       ]
     }
@@ -92,6 +112,7 @@
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
     "@electron/asar": "^3.4.1",
+    "@reforged/maker-appimage": "^5.3.1",
     "electron": "^44.2.0",
     "esbuild": "^0.28.1"
   },

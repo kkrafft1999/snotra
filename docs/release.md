@@ -40,12 +40,20 @@ git tag vX.Y.Z
 ```sh
 npm run make            # macOS arm64  -> out/make/*.dmg + ZIP
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (zum Zippen)
-npm run make:linux      # Linux x64    -> out/make/deb/x64/*.deb + out/<productName>-linux-x64/
+npm run make:linux      # Linux x64    -> out/make/{deb,AppImage}/x64/* + out/<productName>-linux-x64/
 ```
 
-Der Linux-Lauf braucht `dpkg` und `fakeroot` — auf macOS fehlen beide, dort
-bricht Forge mit *„Cannot make for deb"* ab; `npm run package:linux` (nur
-paketieren, ohne `.deb`) funktioniert auch von macOS aus.
+Der Linux-Lauf braucht `dpkg`, `fakeroot` (deb) und `mksquashfs`
+(AppImage, Paket `squashfs-tools`) — auf macOS fehlt alles davon, dort bricht
+Forge mit *„Cannot make for …"* ab; `npm run package:linux` (nur paketieren,
+ohne Maker) funktioniert auch von macOS aus.
+
+Der AppImage-Maker lädt zur Build-Zeit den **Type-2-Runtime** von GitHub. Per
+Default zieht er ihn vom rollenden `continuous`-Tag; in
+[`package.json`](../package.json) ist stattdessen ein **datierter Release
+gepinnt**, damit nicht bei jedem Build eine andere Fremdbinärdatei im Artefakt
+landet. Ein Test wacht darüber. Zum Anheben die `runtime`-URL bewusst auf einen
+neueren Tag setzen — `continuous` ist keine gültige Option.
 
 Die Artefakte landen unter `out/`. Der Vergleich der App nutzt **nur den
 Release-Tag**, nicht die Dateinamen — die Asset-Namen sind also frei wählbar,

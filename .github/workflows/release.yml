@@ -117,11 +117,12 @@ jobs:
           name: windows
           path: dist/*
 
-  # Linux (#100): ein einziger 'make'-Lauf liefert beides — das .deb aus dem
-  # Maker und daneben das entpackte Package-Verzeichnis, das wir als Tarball
-  # anhaengen. Das .deb ist der empfohlene Weg, weil das Paketieren das
-  # Setuid-Bit auf 'chrome-sandbox' setzt (4755); im Tarball fehlt das, dort
-  # greift der SUID-Sandbox-Hinweis aus dem README.
+  # Linux (#100): ein einziger 'make'-Lauf liefert alle drei Artefakte — .deb
+  # und .AppImage aus den Makern, dazu das entpackte Package-Verzeichnis, das
+  # wir als Tarball anhaengen. Das .deb ist der empfohlene Weg, weil das
+  # Paketieren das Setuid-Bit auf 'chrome-sandbox' setzt (4755); das AppImage
+  # bringt seine eigene Sandbox-Loesung ueber den Type-2-Runtime mit. Nur im
+  # Tarball fehlt beides — dort greift der SUID-Hinweis aus dem README.
   build-linux:
     name: Build Linux (x64)
     needs: test
@@ -134,18 +135,19 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      # maker-deb ruft 'dpkg' und 'fakeroot' auf und prueft beide vorab. Auf
-      # dem Runner-Image sind sie vorhanden; der Schritt macht die Abhaengigkeit
-      # explizit, damit ein Image-Umbau den deb-Schritt nicht still kippt.
+      # maker-deb ruft 'dpkg' und 'fakeroot' auf, der AppImage-Maker
+      # 'mksquashfs'; alle drei werden von Forge vorab geprueft. Auf dem
+      # Runner-Image sind sie vorhanden; der Schritt macht die Abhaengigkeit
+      # explizit, damit ein Image-Umbau die Maker nicht still kippt.
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends dpkg fakeroot
+          sudo apt-get install -y --no-install-recommends dpkg fakeroot squashfs-tools
       - run: npm ci
       - run: npm run make:linux
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
-      - name: Collect deb and tarball
+      - name: Collect deb, AppImage and tarball
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +155,8 @@ jobs:
           mkdir -p dist
           deb="$(ls out/make/deb/x64/*.deb | head -1)"
           cp "$deb" "dist/Snotra-AI-${version}-linux-x64.deb"
+          appimage="$(ls out/make/AppImage/x64/*.AppImage | head -1)"
+          cp "$appimage" "dist/Snotra-AI-${version}-linux-x64.AppImage"
           # Bewusst tar.gz statt zip: ZIP erhaelt das Executable-Bit nicht.
           # Das Verzeichnis wird vorher umbenannt, damit im Archiv kein
           # Ordnername mit Leerzeichen landet.
