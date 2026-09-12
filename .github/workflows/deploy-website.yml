@@ -45,9 +45,11 @@ jobs:
       - name: Projekt-ID aus .firebaserc lesen
         id: firebase
         run: |
-          PROJEKT=$(node -p "require('./.firebaserc').projects.default")
-          if [ "$PROJEKT" = "FIREBASE-PROJEKT-ID-EINTRAGEN" ]; then
-            echo "::error::In .firebaserc steht noch die Platzhalter-Projekt-ID."
+          # Kein require(): .firebaserc traegt keine .json-Endung, Node liest es
+          # sonst als JavaScript und stirbt an "Unexpected token ':'".
+          PROJEKT=$(jq -r '.projects.default' .firebaserc)
+          if [ -z "$PROJEKT" ] || [ "$PROJEKT" = "null" ] || [ "$PROJEKT" = "FIREBASE-PROJEKT-ID-EINTRAGEN" ]; then
+            echo "::error::Keine brauchbare Projekt-ID in .firebaserc (gelesen: '$PROJEKT')."
             exit 1
           fi
           echo "projekt=$PROJEKT" >> "$GITHUB_OUTPUT"
