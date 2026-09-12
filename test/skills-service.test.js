@@ -190,3 +190,29 @@ test('kürzt überlange Bodies auf das Zeichenbudget', async (t) => {
   const active = await service.getActiveSkills({ activeSkills: ['lang'] });
   assert.equal(active[0].body.length, 100);
 });
+
+test('mehrzeilige Beschreibung als Block-Skalar landet vollständig im Katalog', async (t) => {
+  const root = await makeTempTree(t);
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(home, '.agents', 'skills'), 'block-skill', {
+    description: ['>-', '  Erste Zeile der Beschreibung,', '  zweite Zeile der Beschreibung.'].join('\n'),
+  });
+  const service = makeService({ home });
+
+  const { skills } = await service.listCatalog({});
+
+  assert.equal(skills[0].status, SKILL_STATUS.AVAILABLE);
+  assert.equal(skills[0].description, 'Erste Zeile der Beschreibung, zweite Zeile der Beschreibung.');
+});
+
+test('Block-Skalar ohne Inhalt zählt als fehlende description', async (t) => {
+  const root = await makeTempTree(t);
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(home, '.agents', 'skills'), 'leer-skill', { description: '>-' });
+  const service = makeService({ home });
+
+  const { skills } = await service.listCatalog({});
+
+  assert.equal(skills[0].status, SKILL_STATUS.INVALID);
+  assert.equal(skills[0].detail, 'Frontmatter ohne description');
+});
