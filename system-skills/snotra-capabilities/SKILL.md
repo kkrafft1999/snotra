@@ -71,10 +71,10 @@ Markdown). Snotra kennt zwei Arten:
 
 - **System-Skills** sind fest eingebaut, gehören zur App und sind
   voreingestellt eingeschaltet. Dieser Skill hier ist einer davon.
-- **Ordner-Skills** liest die App aus `.agents/skills/` und `.claude/skills/` —
-  im geöffneten Ordner und im Home-Verzeichnis des Nutzers. Vorhandene
-  Claude-Code-Skills sind damit direkt nutzbar. Sie sind aus
-  Sicherheitsgründen nicht automatisch aktiv, sondern werden in den
+- **Ordner-Skills** liest die App ausschließlich aus `.agents/skills/` — im
+  geöffneten Ordner und im Home-Verzeichnis des Nutzers. Verzeichnisse anderer
+  Werkzeuge, etwa `.claude/`, liest Snotra grundsätzlich nicht. Ordner-Skills
+  sind aus Sicherheitsgründen nicht automatisch aktiv, sondern werden in den
   Einstellungen einzeln eingeschaltet.
 
 Eingeschaltete Skills stehen als Anweisungen in deinem Systemprompt. Es gibt

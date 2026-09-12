@@ -73,10 +73,11 @@ nur mit geöffnetem Projektordner, sondern filtert je Tool.
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
 
-Der **Skill-Service** (`services/skills-service.js`) scannt die fünf
+Der **Skill-Service** (`services/skills-service.js`) scannt die drei
 Skill-Quellen — die eingebauten System-Skills aus `system-skills/` im
-App-Bundle sowie `.agents/skills/` und `.claude/skills/` in Workspace und
-Home — und wird über `adapters/skills-adapter.js` als schmaler `skill-port`
+App-Bundle sowie `.agents/skills/` in Workspace und Home; Verzeichnisse
+anderer Werkzeuge wie `.claude/` bleiben ungelesen — und wird über
+`adapters/skills-adapter.js` als schmaler `skill-port`
 in die Chat-Engine gereicht. Das Parsen des Frontmatters liegt als reine
 Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
 `shared/contracts/skills.js`.

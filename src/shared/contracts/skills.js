@@ -8,8 +8,8 @@
  *   App-Bundle). Sie werden nicht installiert, sind immer vorhanden und
  *   laufen ansonsten durch dieselbe Registry wie alles andere.
  * - **Ordner-Skills** liegen im Workspace oder im Home-Verzeichnis unter
- *   `.agents/skills/` bzw. `.claude/skills/` — damit sind vorhandene
- *   Claude-Code-Skills direkt nutzbar.
+ *   `.agents/skills/`. Andere Werkzeugverzeichnisse — insbesondere
+ *   `.claude/` — liest Snotra bewusst nicht (Issue #103).
  *
  * CommonJS, damit Main (require) und der Renderer (generiertes ESM-Bundle)
  * dieselben Werte sehen.
@@ -21,26 +21,20 @@ const SKILL_SOURCES = Object.freeze({
   /** Eingebaut, Teil der App — kann nicht überschrieben werden. */
   SYSTEM: 'system',
   WORKSPACE_AGENTS: 'workspace-agents',
-  WORKSPACE_CLAUDE: 'workspace-claude',
   USER_AGENTS: 'user-agents',
-  USER_CLAUDE: 'user-claude',
 });
 
 const SKILL_SOURCE_ORDER = Object.freeze([
   SKILL_SOURCES.SYSTEM,
   SKILL_SOURCES.WORKSPACE_AGENTS,
-  SKILL_SOURCES.WORKSPACE_CLAUDE,
   SKILL_SOURCES.USER_AGENTS,
-  SKILL_SOURCES.USER_CLAUDE,
 ]);
 
 /** Anzeigenamen der Quellgruppen in den Einstellungen. */
 const SKILL_SOURCE_LABELS = Object.freeze({
   [SKILL_SOURCES.SYSTEM]: 'System-Skills (eingebaut)',
   [SKILL_SOURCES.WORKSPACE_AGENTS]: 'Ordner · .agents/skills',
-  [SKILL_SOURCES.WORKSPACE_CLAUDE]: 'Ordner · .claude/skills',
   [SKILL_SOURCES.USER_AGENTS]: 'Benutzer · ~/.agents/skills',
-  [SKILL_SOURCES.USER_CLAUDE]: 'Benutzer · ~/.claude/skills',
 });
 
 const SKILL_STATUS = Object.freeze({
@@ -98,7 +92,7 @@ function normalizeSkillSummary(raw) {
   const data = raw && typeof raw === 'object' ? raw : {};
   const name = typeof data.name === 'string' ? data.name.trim() : '';
   if (!name) return null;
-  const source = isSkillSource(data.source) ? data.source : SKILL_SOURCES.USER_CLAUDE;
+  const source = isSkillSource(data.source) ? data.source : SKILL_SOURCES.USER_AGENTS;
   const status = isSkillStatus(data.status) ? data.status : SKILL_STATUS.AVAILABLE;
   return {
     name,

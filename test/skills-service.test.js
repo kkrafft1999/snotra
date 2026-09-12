@@ -20,7 +20,7 @@ async function writeSkill(baseDir, dirName, { name = dirName, description = 'Bes
   return skillDir;
 }
 
-/** Home-Verzeichnis wegzeigen, damit echte ~/.claude/skills nicht in die Tests lecken. */
+/** Home-Verzeichnis wegzeigen, damit echte ~/.agents/skills nicht in die Tests lecken. */
 function makeService({ systemSkillsDir = null, home }) {
   return createSkillsService({
     fs,
@@ -50,9 +50,7 @@ test('liest Ordner-Skills aus Workspace und Home, aber schaltet sie nicht ein', 
   const workspace = path.join(root, 'ws');
   const home = path.join(root, 'home');
   await writeSkill(path.join(workspace, '.agents', 'skills'), 'ws-agents');
-  await writeSkill(path.join(workspace, '.claude', 'skills'), 'ws-claude');
   await writeSkill(path.join(home, '.agents', 'skills'), 'home-agents');
-  await writeSkill(path.join(home, '.claude', 'skills'), 'home-claude');
   const service = makeService({ home });
 
   const { skills } = await service.listCatalog({ workspaceRoot: workspace });
@@ -61,12 +59,26 @@ test('liest Ordner-Skills aus Workspace und Home, aber schaltet sie nicht ein', 
     skills.map((skill) => [skill.name, skill.source, skill.status]),
     [
       ['ws-agents', SKILL_SOURCES.WORKSPACE_AGENTS, SKILL_STATUS.AVAILABLE],
-      ['ws-claude', SKILL_SOURCES.WORKSPACE_CLAUDE, SKILL_STATUS.AVAILABLE],
       ['home-agents', SKILL_SOURCES.USER_AGENTS, SKILL_STATUS.AVAILABLE],
-      ['home-claude', SKILL_SOURCES.USER_CLAUDE, SKILL_STATUS.AVAILABLE],
     ]
   );
   assert.deepEqual(await service.getActiveSkills({ workspaceRoot: workspace }), []);
+});
+
+// Issue #103: `.claude/` gehoert einem anderen Werkzeug. Snotra liest dort
+// grundsaetzlich nichts — weder im geoeffneten Ordner noch im Home.
+test('Skills in .claude/skills bleiben unsichtbar', async (t) => {
+  const root = await makeTempTree(t);
+  const workspace = path.join(root, 'ws');
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(workspace, '.claude', 'skills'), 'ws-claude');
+  await writeSkill(path.join(home, '.claude', 'skills'), 'home-claude');
+  const service = makeService({ home });
+
+  const { skills } = await service.listCatalog({ workspaceRoot: workspace });
+
+  assert.deepEqual(skills, []);
+  assert.deepEqual(await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['ws-claude'] }), []);
 });
 
 test('gleicher Name mehrfach: der höher priorisierte Fund gewinnt', async (t) => {
@@ -74,7 +86,7 @@ test('gleicher Name mehrfach: der höher priorisierte Fund gewinnt', async (t) =
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'ws');
   const winnerDir = await writeSkill(path.join(workspace, '.agents', 'skills'), 'doppelt', { body: 'Workspace' });
-  await writeSkill(path.join(home, '.claude', 'skills'), 'doppelt', { body: 'Home' });
+  await writeSkill(path.join(home, '.agents', 'skills'), 'doppelt', { body: 'Home' });
   const service = makeService({ home });
 
   const { skills } = await service.listCatalog({

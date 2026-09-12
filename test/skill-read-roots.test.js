@@ -30,7 +30,7 @@ async function createSymlinkOrSkip(t, target, linkPath, type) {
 
 /**
  * Legt einen Arbeitsordner und daneben — bewusst ausserhalb — einen
- * Skill-Ordner an, wie er unter ~/.claude/skills/<name>/ läge.
+ * Skill-Ordner an, wie er unter ~/.agents/skills/<name>/ läge.
  */
 async function makeFixture() {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-roots-'));

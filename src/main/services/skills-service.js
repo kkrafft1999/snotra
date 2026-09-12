@@ -3,10 +3,11 @@
 /**
  * Skill-Discovery und -Parsing (Issue #18).
  *
- * Sammelt Skills aus fünf Quellen — den eingebauten System-Skills der App und
- * je zwei Verzeichnissen im Workspace und im Home-Verzeichnis — und liefert
- * einen Katalog für die Einstellungen sowie die Bodies der eingeschalteten
- * Skills für den Systemprompt.
+ * Sammelt Skills aus drei Quellen — den eingebauten System-Skills der App,
+ * `.agents/skills` im Workspace und `~/.agents/skills` — und liefert einen
+ * Katalog für die Einstellungen sowie die Bodies der eingeschalteten Skills
+ * für den Systemprompt. Verzeichnisse anderer Werkzeuge, insbesondere
+ * `.claude/`, liest Snotra bewusst nicht (Issue #103).
  *
  * Bewusst kein Datei-Watcher: gescannt wird beim ersten Zugriff je Workspace
  * und danach nur noch auf Anforderung („Skills neu laden“).
@@ -46,12 +47,10 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     const root = typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
     if (root) {
       dirs.push({ source: SKILL_SOURCES.WORKSPACE_AGENTS, dir: path.join(root, '.agents', 'skills') });
-      dirs.push({ source: SKILL_SOURCES.WORKSPACE_CLAUDE, dir: path.join(root, '.claude', 'skills') });
     }
     const home = homeDir();
     if (home) {
       dirs.push({ source: SKILL_SOURCES.USER_AGENTS, dir: path.join(home, '.agents', 'skills') });
-      dirs.push({ source: SKILL_SOURCES.USER_CLAUDE, dir: path.join(home, '.claude', 'skills') });
     }
     return dirs;
   }

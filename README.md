@@ -169,18 +169,18 @@ Produkt und sind voreingestellt aktiv. Mitgeliefert wird
 `snotra-capabilities` — damit kann die App Auskunft über sich selbst geben
 (was geht, was nicht, wo etwas eingestellt wird), statt zu raten.
 
-**Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus vier Quellen, in
+**Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus zwei Quellen, in
 dieser Reihenfolge:
 
 | # | Ebene | Pfad |
 |---|-------|------|
 | 1 | Workspace | `<ordner>/.agents/skills/*/SKILL.md` |
-| 2 | Workspace | `<ordner>/.claude/skills/*/SKILL.md` |
-| 3 | Benutzer | `~/.agents/skills/*/SKILL.md` |
-| 4 | Benutzer | `~/.claude/skills/*/SKILL.md` |
+| 2 | Benutzer | `~/.agents/skills/*/SKILL.md` |
 
-Vorhandene Claude-Code-Skills sind damit direkt nutzbar; einen eigenen
-Snotra-Ordner gibt es bewusst nicht. Gibt es denselben Namen mehrfach, gewinnt
+`.agents/` ist der herstellerneutrale Ort für Agent-Skills; einen eigenen
+Snotra-Ordner gibt es bewusst nicht. Verzeichnisse anderer Werkzeuge —
+insbesondere `.claude/` — liest Snotra nicht, weder im geöffneten Ordner noch
+im Home-Verzeichnis. Gibt es denselben Namen mehrfach, gewinnt
 der erste Treffer — die übrigen erscheinen in den Einstellungen als
 „überdeckt“ mit Pfad. System-Skills stehen ganz vorn und lassen sich nicht
 durch ein untergeschobenes Verzeichnis ersetzen. Ungültige Einträge (kein
