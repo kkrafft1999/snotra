@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Impressum — Snotra AI</title>
+<title data-i18n="impressum.meta.title">Impressum — Snotra AI</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="icon.png" type="image/png">
 <link rel="stylesheet" href="styles.css">
@@ -13,48 +13,61 @@
   Livegang durch die echten Angaben ersetzt werden. Ohne vollstaendige Anschrift
   und erreichbare E-Mail-Adresse ist das Impressum nach § 5 DDG nicht
   ausreichend. Dieser Text ist eine Vorlage, keine Rechtsberatung.
+
+  Die Seite haengt an derselben Sprachumschaltung wie die Startseite: der Text
+  steht vollstaendig auf Deutsch im HTML, app.js tauscht ihn ueber data-i18n
+  gegen die englische Fassung. Neue Absaetze brauchen also einen Schluessel in
+  beiden Woerterbuechern (app.js).
 -->
 <body>
+<script>document.documentElement.classList.add('js');</script>
 
 <header class="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="/"><img src="icon.png" alt="" width="32" height="32"><span>Snotra&nbsp;AI</span></a>
+    <nav data-i18n-attr="aria-label:legal.nav.aria" aria-label="Seiten und Sprache">
+      <a href="/" data-i18n="legal.nav.start">Startseite</a>
+      <a href="datenschutz.html" data-i18n="fuss.datenschutz">Datenschutz</a>
+      <span class="lang" role="group" data-i18n-attr="aria-label:nav.lang.aria" aria-label="Sprache / Language">
+        <button type="button" class="lang-btn" data-lang="de" lang="de" aria-pressed="true">DE</button>
+        <button type="button" class="lang-btn" data-lang="en" lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
   </div>
 </header>
 
 <main class="legal">
   <div class="wrap">
-    <a class="back" href="/">← Zurück zur Startseite</a>
-    <h1>Impressum</h1>
+    <a class="back" href="/" data-i18n="legal.zurueck">← Zurück zur Startseite</a>
+    <h1 data-i18n="impressum.h1">Impressum</h1>
 
-    <h2>Angaben gemäß § 5 DDG</h2>
+    <h2 data-i18n="impressum.angaben.h2">Angaben gemäß § 5 DDG</h2>
     <p>
       Konrad Krafft<br>
       <span class="todo">STRASSE UND HAUSNUMMER</span><br>
       <span class="todo">PLZ UND ORT</span><br>
-      Deutschland
+      <span data-i18n="legal.land">Deutschland</span>
     </p>
 
-    <h2>Kontakt</h2>
+    <h2 data-i18n="impressum.kontakt.h2">Kontakt</h2>
     <p>
-      E-Mail: <span class="todo">KONTAKT-E-MAIL</span>
+      <span data-i18n="legal.mail.label">E-Mail:</span> <span class="todo">KONTAKT-E-MAIL</span>
     </p>
 
-    <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
-    <p>
+    <h2 data-i18n="impressum.verantwortlich.h2">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+    <p data-i18n="impressum.verantwortlich.text">
       Konrad Krafft, Anschrift wie oben
     </p>
 
-    <h2>Art des Angebots</h2>
+    <h2 data-i18n="impressum.angebot.h2">Art des Angebots</h2>
     <p>
-      Snotra AI ist ein privates, nicht kommerzielles Hobby- und Experimentier-Projekt.
-      Es wird keine entgeltliche Leistung angeboten; die Software steht quelloffen unter der
-      <a href="https://github.com/kkrafft1999/snotra/blob/main/LICENSE" rel="noopener">Apache-Lizenz 2.0</a>
-      zur Verfügung. Ein Zusammenhang mit dem Arbeitgeber des Betreibers besteht nicht.
+      <span data-i18n="impressum.angebot.teil1">Snotra AI ist ein privates, nicht kommerzielles Hobby- und Experimentier-Projekt.
+      Es wird keine entgeltliche Leistung angeboten; die Software steht quelloffen unter der</span>
+      <a href="https://github.com/kkrafft1999/snotra/blob/main/LICENSE" rel="noopener" data-i18n="legal.apache.link">Apache-Lizenz 2.0</a><span data-i18n="impressum.angebot.teil2"> zur Verfügung. Ein Zusammenhang mit dem Arbeitgeber des Betreibers besteht nicht.</span>
     </p>
 
-    <h2>Haftung für Inhalte</h2>
-    <p>
+    <h2 data-i18n="impressum.haftung.inhalte.h2">Haftung für Inhalte</h2>
+    <p data-i18n="impressum.haftung.inhalte.text">
       Als Diensteanbieter sind wir für eigene Inhalte auf diesen Seiten nach den allgemeinen
       Gesetzen verantwortlich. Wir sind als Diensteanbieter jedoch nicht verpflichtet,
       übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu
@@ -65,8 +78,8 @@
       werden wir diese Inhalte umgehend entfernen.
     </p>
 
-    <h2>Haftung für Links</h2>
-    <p>
+    <h2 data-i18n="impressum.haftung.links.h2">Haftung für Links</h2>
+    <p data-i18n="impressum.haftung.links.text">
       Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen
       Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen.
       Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber der
@@ -76,15 +89,15 @@
       Links umgehend entfernen.
     </p>
 
-    <h2>Urheberrecht</h2>
-    <p>
+    <h2 data-i18n="impressum.urheberrecht.h2">Urheberrecht</h2>
+    <p data-i18n="impressum.urheberrecht.text">
       Die Inhalte dieser Seite unterliegen dem deutschen Urheberrecht. Der Quellcode der
       Software Snotra AI steht abweichend davon unter der Apache-Lizenz 2.0 und darf im Rahmen
       dieser Lizenz genutzt, verändert und weitergegeben werden.
     </p>
 
-    <h2>Verbraucherstreitbeilegung</h2>
-    <p>
+    <h2 data-i18n="impressum.streit.h2">Verbraucherstreitbeilegung</h2>
+    <p data-i18n="impressum.streit.text">
       Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer
       Verbraucherschlichtungsstelle teilzunehmen.
     </p>
@@ -94,14 +107,15 @@
 <footer class="site-footer">
   <div class="wrap footer-inner">
     <p>© <span id="year">2026</span> Snotra AI</p>
-    <nav aria-label="Rechtliches">
-      <a href="/">Startseite</a>
-      <a href="datenschutz.html">Datenschutz</a>
-      <a href="https://github.com/kkrafft1999/snotra" rel="noopener">GitHub</a>
+    <nav data-i18n-attr="aria-label:legal.fuss.aria" aria-label="Rechtliches">
+      <a href="/" data-i18n="legal.nav.start">Startseite</a>
+      <a href="datenschutz.html" data-i18n="fuss.datenschutz">Datenschutz</a>
+      <a href="https://github.com/kkrafft1999/snotra" rel="noopener" data-i18n="fuss.github">GitHub</a>
     </nav>
   </div>
 </footer>
 
 <script>document.getElementById('year').textContent = String(new Date().getFullYear());</script>
+<script src="app.js" defer></script>
 </body>
 </html>

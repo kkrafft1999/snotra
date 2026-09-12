@@ -15,12 +15,17 @@
 (function () {
   'use strict';
 
+  /* Das Inline-Script im <head> hat .reveal versteckt und einen Not-Timer
+     gestellt, der den Inhalt nach 2,5 s auch ohne uns zeigt. Wir sind da —
+     Timer abbestellen, das Skript uebernimmt. */
+  window.clearTimeout(window.__snotraReveal);
+
   /* ======================================================================
      1. Woerterbuecher
      ====================================================================== */
   var DE = {
     'meta.title': 'Snotra AI — Software wird nicht gekauft. Sie wird beschrieben.',
-    'meta.description': 'Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, jedes CLI auf deinem Rechner wird zum Werkzeug, das Modell ist austauschbar. Kein Server, kein Konto, keine Telemetrie.',
+    'meta.description': 'Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, jedes CLI auf deinem Rechner wird zum Werkzeug, das Modell ist austauschbar. Kein eigener Server, kein Konto, keine Telemetrie.',
     'skiplink.text': 'Zum Inhalt springen',
     'nav.aria': 'Hauptnavigation',
     'nav.lang.aria': 'Sprache / Language',
@@ -33,8 +38,12 @@
     'hero.eyebrow': 'Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
     'hero.h1.zeile1': 'Software wird nicht gekauft.',
     'hero.h1.zeile2': 'Sie wird beschrieben.',
-    'hero.mission.teil1': 'Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.',
-    'hero.mission.betont': 'Kein Server, kein Konto, keine Telemetrie.',
+    /* „Die Richtung ist gesetzt“ statt einer Zusage im Praesens: shell_execute
+       steckt in keinem Release, das man heute laden kann (siehe den Badge in
+       Saeule 03). Der Satz bleibt die Ansage, die er war — er behauptet nur
+       nicht mehr, der Download koenne es bereits. */
+    'hero.mission.teil1': 'Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Die Richtung ist gesetzt: angebunden wird, was ohnehin da ist — jedes CLI auf deiner Maschine.',
+    'hero.mission.betont': 'Kein eigener Server, kein Konto, keine Telemetrie.',
     'hero.cta.primaer': 'Für macOS laden — 126 MB',
     'hero.cta.sekundaer': 'Windows & Linux',
     'hero.cta.platform.mac': 'Für macOS laden',
@@ -42,7 +51,7 @@
     'hero.cta.platform.deb': 'Für Linux laden',
     'hero.note': 'Version 1.5.1 · quelloffen unter Apache 2.0 · keine Registrierung',
     'hero.appwin.aria': 'Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.',
-    'hero.stage.caption': 'Platzhalter — echter Screenshot folgt',
+    'hero.stage.caption': 'Die Oberfläche der App, maßgetreu in HTML nachgebaut',
     'hero.side.aria': 'Datenblatt',
     'hero.side.version.label': 'Version',
     'hero.side.version.wert': '1.5.1',
@@ -53,7 +62,10 @@
     'hero.side.konten.label': 'Konten',
     'hero.side.konten.wert': '0',
     'hero.side.telemetrie.label': 'Telemetrie',
-    'hero.side.telemetrie.wert': 'keine',
+    /* „keine“ stimmt: es gehen keine Nutzungsdaten raus. Die App fragt beim
+       Start aber bei GitHub nach einer neueren Version — eine Verbindung, also
+       gehoert sie an die absolute Stelle dazu. */
+    'hero.side.telemetrie.wert': 'keine (nur Versionsabfrage bei GitHub)',
 
     'app.fenster.brand': 'Snotra AI',
     'app.baum.wurzel': 'angebote',
@@ -140,6 +152,7 @@
     'saeule.02.demo.tree.preisliste': 'preisliste.csv',
     'saeule.02.demo.filecard.pfad': '.snotra/skills/angebot/SKILL.md',
     'saeule.02.demo.filecard.badge': 'git-versioniert',
+    'saeule.02.demo.filecard.aria': 'Inhalt von SKILL.md',
     'saeule.02.demo.skill.name': 'name: angebot',
     'saeule.02.demo.skill.description': 'description: Erstellt Angebote nach Hausvorlage.\n  Verwenden, wenn ein Angebot, ein Nachtrag oder\n  eine Preisauskunft gefragt ist.',
     'saeule.02.demo.skill.h1': '# Angebot erstellen',
@@ -151,6 +164,7 @@
     'saeule.03.wort': 'Anschluss',
     'saeule.03.titel': 'Verbindet sich mit allem, was schon da ist',
     'saeule.03.absatz': 'Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — git, docker, az, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.',
+    'saeule.03.badge.shell': 'shell_execute: kommt mit der nächsten Version',
     'saeule.03.badge': 'MCP-Server in Arbeit',
     'saeule.03.demo.caption1': '// tool-log, wie er im chat läuft',
     'saeule.03.demo.summary': '3 Ausführungen · 1 Datei geschrieben',
@@ -214,7 +228,7 @@
 
     'download.label': '// download',
     'download.h2': 'Version 1.5.1 — kostenlos, quelloffen, ohne Registrierung',
-    'download.sub': 'Apache 2.0. Kein Konto, keine Telemetrie, kein Server dazwischen.',
+    'download.sub': 'Apache 2.0. Kein Konto, keine Telemetrie, kein eigener Server dazwischen — geladen wird direkt bei GitHub.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 126 MB',
     'download.mac.btn': 'DMG laden',
@@ -241,12 +255,84 @@
     'fuss.nav.aria': 'Rechtliches und Quellcode',
     'fuss.impressum': 'Impressum',
     'fuss.datenschutz': 'Datenschutz',
-    'fuss.github': 'GitHub'
+    'fuss.github': 'GitHub',
+
+    /* ---- Rechtsseiten (impressum.html, datenschutz.html) ----
+       Beide Seiten binden dieses Skript ein und haengen an derselben
+       Umschaltung wie die Startseite. Die Platzhalter (Anschrift, E-Mail)
+       stehen als <span class="todo"> im HTML und werden hier bewusst nicht
+       uebersetzt — sie sind keine Sprache, sondern eine offene Angabe. */
+    'legal.nav.aria': 'Seiten und Sprache',
+    'legal.fuss.aria': 'Rechtliches',
+    'legal.nav.start': 'Startseite',
+    'legal.zurueck': '\u2190 Zur\u00fcck zur Startseite',
+    'legal.land': 'Deutschland',
+    'legal.mail.label': 'E-Mail:',
+    'legal.apache.link': 'Apache-Lizenz 2.0',
+
+    'impressum.meta.title': 'Impressum \u2014 Snotra AI',
+    'impressum.h1': 'Impressum',
+    'impressum.angaben.h2': 'Angaben gem\u00e4\u00df \u00a7 5 DDG',
+    'impressum.kontakt.h2': 'Kontakt',
+    'impressum.verantwortlich.h2': 'Verantwortlich f\u00fcr den Inhalt nach \u00a7 18 Abs. 2 MStV',
+    'impressum.verantwortlich.text': 'Konrad Krafft, Anschrift wie oben',
+    'impressum.angebot.h2': 'Art des Angebots',
+    'impressum.angebot.teil1': 'Snotra AI ist ein privates, nicht kommerzielles Hobby- und Experimentier-Projekt. Es wird keine entgeltliche Leistung angeboten; die Software steht quelloffen unter der',
+    'impressum.angebot.teil2': ' zur Verf\u00fcgung. Ein Zusammenhang mit dem Arbeitgeber des Betreibers besteht nicht.',
+    'impressum.haftung.inhalte.h2': 'Haftung f\u00fcr Inhalte',
+    'impressum.haftung.inhalte.text': 'Als Diensteanbieter sind wir f\u00fcr eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Wir sind als Diensteanbieter jedoch nicht verpflichtet, \u00fcbermittelte oder gespeicherte fremde Informationen zu \u00fcberwachen oder nach Umst\u00e4nden zu forschen, die auf eine rechtswidrige T\u00e4tigkeit hinweisen. Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben hiervon unber\u00fchrt. Eine diesbez\u00fcgliche Haftung ist jedoch erst ab dem Zeitpunkt der Kenntnis einer konkreten Rechtsverletzung m\u00f6glich. Bei Bekanntwerden entsprechender Rechtsverletzungen werden wir diese Inhalte umgehend entfernen.',
+    'impressum.haftung.links.h2': 'Haftung f\u00fcr Links',
+    'impressum.haftung.links.text': 'Unser Angebot enth\u00e4lt Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb k\u00f6nnen wir f\u00fcr diese fremden Inhalte auch keine Gew\u00e4hr \u00fcbernehmen. F\u00fcr die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber der Seiten verantwortlich. Die verlinkten Seiten wurden zum Zeitpunkt der Verlinkung auf m\u00f6gliche Rechtsverst\u00f6\u00dfe \u00fcberpr\u00fcft; rechtswidrige Inhalte waren zum Zeitpunkt der Verlinkung nicht erkennbar. Bei Bekanntwerden von Rechtsverletzungen werden wir derartige Links umgehend entfernen.',
+    'impressum.urheberrecht.h2': 'Urheberrecht',
+    'impressum.urheberrecht.text': 'Die Inhalte dieser Seite unterliegen dem deutschen Urheberrecht. Der Quellcode der Software Snotra AI steht abweichend davon unter der Apache-Lizenz 2.0 und darf im Rahmen dieser Lizenz genutzt, ver\u00e4ndert und weitergegeben werden.',
+    'impressum.streit.h2': 'Verbraucherstreitbeilegung',
+    'impressum.streit.text': 'Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
+
+    'datenschutz.meta.title': 'Datenschutzerkl\u00e4rung \u2014 Snotra AI',
+    'datenschutz.h1': 'Datenschutzerkl\u00e4rung',
+    'datenschutz.1.h2': '1. Verantwortlicher',
+    'datenschutz.1.einleitung': 'Verantwortlich f\u00fcr die Datenverarbeitung auf dieser Website ist:',
+    'datenschutz.1.dsb': 'Ein Datenschutzbeauftragter ist nicht bestellt; die gesetzlichen Voraussetzungen daf\u00fcr liegen bei diesem privaten Angebot nicht vor.',
+    'datenschutz.2.h2': '2. Kurzfassung',
+    'datenschutz.2.teil1': 'Diese Seite ist eine reine Informationsseite. Es gibt',
+    'datenschutz.2.betont': 'keine Cookies',
+    'datenschutz.2.teil2': ', keine Analyse- oder Tracking-Dienste, keine Werbenetzwerke, kein Kontaktformular, keine Anmeldung und keine Schriftarten von fremden Servern. Es werden nur die Daten verarbeitet, die beim Abruf einer Website technisch zwangsl\u00e4ufig anfallen \u2014 sowie eine Anfrage an die GitHub-API, um die aktuelle Programmversion anzuzeigen (Abschnitt 4). Deine Sprachwahl legt der Browser lokal ab (localStorage); sie verlässt dein Gerät nicht.',
+    'datenschutz.3.h2': '3. Hosting und Server-Logfiles',
+    'datenschutz.3.teil1': 'Die Website wird bei',
+    'datenschutz.3.betont': 'Firebase Hosting',
+    'datenschutz.3.teil2': ' betrieben, einem Dienst der Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland. Beim Abruf der Seite verarbeitet der Hoster in Server-Logfiles automatisch Daten, die dein Browser \u00fcbermittelt:',
+    'datenschutz.3.liste.1': 'IP-Adresse des anfragenden Ger\u00e4ts',
+    'datenschutz.3.liste.2': 'Datum und Uhrzeit des Zugriffs',
+    'datenschutz.3.liste.3': 'Name und URL der abgerufenen Datei',
+    'datenschutz.3.liste.4': '\u00fcbertragene Datenmenge und Meldung \u00fcber den Erfolg des Abrufs',
+    'datenschutz.3.liste.5': 'Browsertyp und -version, Betriebssystem',
+    'datenschutz.3.liste.6': 'gegebenenfalls die zuvor besuchte Seite (Referrer)',
+    'datenschutz.3.rechtsgrundlage': 'Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. Das berechtigte Interesse liegt in der technisch fehlerfreien Auslieferung und der Sicherheit der Website. Eine Zusammenf\u00fchrung dieser Daten mit anderen Datenquellen findet nicht statt; eine Auswertung zu Marketingzwecken erfolgt nicht.',
+    'datenschutz.3.avv': 'Mit Google besteht ein Vertrag \u00fcber die Auftragsverarbeitung nach Art. 28 DSGVO. Eine Verarbeitung in den USA durch die Google LLC l\u00e4sst sich nicht ausschlie\u00dfen; Google st\u00fctzt solche \u00dcbermittlungen auf die Standardvertragsklauseln der EU-Kommission und ist unter dem EU-US Data Privacy Framework zertifiziert. Weitere Informationen:',
+    'datenschutz.4.h2': '4. Abruf der aktuellen Version von GitHub',
+    'datenschutz.4.teil1': 'Damit die Download-Kn\u00f6pfe immer auf die neueste Programmversion zeigen, ruft dein Browser beim \u00d6ffnen der Startseite einmalig die Schnittstelle',
+    'datenschutz.4.teil2': ' auf. Anbieter ist die GitHub B.V., Vijzelstraat 68-72, 1017 HL Amsterdam, Niederlande (Tochterunternehmen der Microsoft Corporation, USA).',
+    'datenschutz.4.ip': 'Dabei wird deine IP-Adresse an GitHub \u00fcbermittelt; ohne diese \u00dcbermittlung ist eine Verbindung technisch nicht m\u00f6glich. Es werden keine Cookies gesetzt und keine Kennungen von uns mitgegeben. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO; das berechtigte Interesse besteht darin, aktuelle und funktionierende Download-Verweise anzubieten, ohne die Seite bei jeder neuen Version neu zu ver\u00f6ffentlichen. Datenschutzerkl\u00e4rung von GitHub:',
+    'datenschutz.4.releases': 'Dasselbe gilt, wenn du einen Download startest oder einem Link ins Repository folgst: Die Installationspakete liegen bei GitHub Releases und werden von dort ausgeliefert, nicht von dieser Website.',
+    'datenschutz.5.h2': '5. Speicherdauer',
+    'datenschutz.5.text': 'Die Server-Logfiles des Hosters werden nach dessen Vorgaben automatisch gel\u00f6scht. Eigene Datenbest\u00e4nde \u00fcber Besucher legen wir nicht an.',
+    'datenschutz.6.h2': '6. Die Software selbst',
+    'datenschutz.6.teil1': 'Die Desktop-Anwendung Snotra AI sendet',
+    'datenschutz.6.betont': 'keine',
+    'datenschutz.6.teil2': ' Daten an den Betreiber dieser Website: Es gibt keine Telemetrie, keine Nutzungsstatistik und keine Registrierung. Beim Start fragt sie einmal bei GitHub nach, ob eine neuere Version vorliegt; dabei gehen keine Nutzungsdaten mit. Deine Eingaben gehen ausschlie\u00dflich an den Modellanbieter, den du in der App selbst ausw\u00e4hlst und konfigurierst (etwa OpenAI, Anthropic oder Google) \u2014 oder bei lokalen Modellen \u00fcber Ollama bzw. MLX-LM gar nicht erst aus deinem Rechner heraus. F\u00fcr die Verarbeitung durch den von dir gew\u00e4hlten Anbieter gilt dessen Datenschutzerkl\u00e4rung. API-Schl\u00fcssel werden verschl\u00fcsselt im Benutzerprofil deines Betriebssystems abgelegt.',
+    'datenschutz.7.h2': '7. Deine Rechte',
+    'datenschutz.7.text1': 'Du hast im Rahmen der gesetzlichen Voraussetzungen das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), L\u00f6schung (Art. 17), Einschr\u00e4nkung der Verarbeitung (Art. 18), Daten\u00fcbertragbarkeit (Art. 20) sowie das Recht, einer Verarbeitung auf Grundlage berechtigter Interessen zu widersprechen (Art. 21 DSGVO). Wende dich daf\u00fcr an die oben genannte Adresse.',
+    'datenschutz.7.text2': 'Au\u00dferdem steht dir ein Beschwerderecht bei einer Datenschutz-Aufsichtsbeh\u00f6rde zu (Art. 77 DSGVO), etwa bei der f\u00fcr deinen Wohnsitz zust\u00e4ndigen Landesbeh\u00f6rde.',
+    'datenschutz.8.h2': '8. Verschl\u00fcsselung',
+    'datenschutz.8.teil1': 'Diese Seite ist ausschlie\u00dflich \u00fcber HTTPS erreichbar; die Domain-Endung',
+    'datenschutz.8.teil2': ' erzwingt eine verschl\u00fcsselte Verbindung. Das Zertifikat stellt der Hoster automatisch aus.',
+    'datenschutz.9.h2': '9. \u00c4nderungen',
+    'datenschutz.9.text': 'Wird das Angebot erweitert, passen wir diese Erkl\u00e4rung an. Es gilt jeweils die hier ver\u00f6ffentlichte Fassung.'
   };
 
   var EN = {
     'meta.title': "Snotra AI — Software isn't bought. It's described.",
-    'meta.description': "Snotra AI is a desktop app that points at exactly one folder: your know-how stays a file, every CLI on your machine becomes a tool, the model is swappable. No server, no account, no telemetry.",
+    'meta.description': "Snotra AI is a desktop app that points at exactly one folder: your know-how stays a file, every CLI on your machine becomes a tool, the model is swappable. No server of ours, no account, no telemetry.",
     'skiplink.text': 'Skip to content',
     'nav.aria': 'Main navigation',
     'nav.lang.aria': 'Sprache / Language',
@@ -259,8 +345,8 @@
     'hero.eyebrow': 'Desktop app · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
     'hero.h1.zeile1': "Software isn't bought.",
     'hero.h1.zeile2': "It's described.",
-    'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, the model is swappable stock — including for one that runs locally on your own computer. What gets connected is whatever is already there: every CLI on your machine.",
-    'hero.mission.betont': 'No server, no account, no telemetry.',
+    'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, and the model is a commodity you can swap out — including for one that runs locally on your own machine. The direction is set: what gets connected is whatever is already there — every CLI on your machine.",
+    'hero.mission.betont': 'No server of ours, no account, no telemetry.',
     'hero.cta.primaer': 'Download for macOS — 126 MB',
     'hero.cta.sekundaer': 'Windows & Linux',
     'hero.cta.platform.mac': 'Download for macOS',
@@ -268,19 +354,26 @@
     'hero.cta.platform.deb': 'Download for Linux',
     'hero.note': 'Version 1.5.1 · open source under Apache 2.0 · no sign-up',
     'hero.appwin.aria': 'Reconstruction of the Snotra AI window: on the left the file tree of the folder “angebote”, in the middle the preview of angebot-q3.md, on the right the chat with tool log, approval card and input field.',
-    'hero.stage.caption': 'Placeholder — real screenshot to follow',
+    'hero.stage.caption': 'The interface, rebuilt in HTML — the app ships with a German interface',
     'hero.side.aria': 'Fact sheet',
     'hero.side.version.label': 'Version',
     'hero.side.version.wert': '1.5.1',
-    'hero.side.lizenz.label': 'Licence',
+    'hero.side.lizenz.label': 'License',
     'hero.side.lizenz.wert': 'Apache 2.0',
     'hero.side.plattformen.label': 'Platforms',
     'hero.side.plattformen.wert': 'macOS · Windows · Linux',
     'hero.side.konten.label': 'Accounts',
     'hero.side.konten.wert': '0',
     'hero.side.telemetrie.label': 'Telemetry',
-    'hero.side.telemetrie.wert': 'none',
+    'hero.side.telemetrie.wert': 'none (only a version check at GitHub)',
 
+    /* ACHTUNG, keine vergessene Arbeit: Der gesamte app.*-Block steht hier
+       absichtlich auf Deutsch. Die Anwendung hat genau eine Oberflaeche, und
+       die ist deutsch — ein uebersetztes Fenster waere eine Behauptung ueber
+       ein Produkt, das es so nicht gibt. Das Fenster traegt dafuer lang="de",
+       und die Bildunterschrift (hero.stage.caption) sagt es im englischen
+       Modus im Klartext. Wenn die App eine englische Oberflaeche bekommt,
+       werden diese Werte uebersetzt — vorher nicht. */
     'app.fenster.brand': 'Snotra AI',
     'app.baum.wurzel': 'angebote',
     'app.baum.docs': 'docs',
@@ -343,7 +436,7 @@
 
     'saeulen.label': '// four decisions',
     'saeulen.h2': 'Four decisions that determine everything else',
-    'saeulen.sub': 'No feature list. What makes Snotra Snotra is in how the software itself is cut.',
+    'saeulen.sub': 'No feature list. What makes Snotra Snotra is in how the software is put together.',
 
     'saeule.01.wort': 'Model',
     'saeule.01.titel': 'Swappable, not beholden',
@@ -352,13 +445,13 @@
     'saeule.01.demo.caption': '// model pill from the composer — clickable',
     'saeule.01.demo.menu.aria': 'Available models',
     'saeule.01.demo.tag.lokal': 'local',
-    'saeule.01.demo.hinweis': 'Five providers, one port. Two of them compute on your own machine.',
+    'saeule.01.demo.hinweis': 'Five providers, one port. Two of them run on your own machine.',
     'saeule.01.demo.hinweis.lokal': 'Runs locally: not a word leaves your computer.',
     'saeule.01.demo.hinweis.api': "Runs through the provider's API — swap it out, nothing to rebuild.",
 
     'saeule.02.wort': 'Knowledge',
     'saeule.02.titel': 'Your know-how stays a file',
-    'saeule.02.absatz': 'A Skill is a folder with a SKILL.md in the open Agent-Skills-Format. Versionable in Git, readable by humans, portable to other tools — not a database row at some vendor.',
+    'saeule.02.absatz': 'A Skill is a folder with a SKILL.md in the open Agent Skills format. Versionable in Git, readable by humans, portable to other tools — not a database row at some vendor.',
     'saeule.02.demo.caption': '// a skill, the way it sits on disk',
     'saeule.02.demo.tree.ordner': '.snotra/skills/offer/',
     'saeule.02.demo.tree.skillmd': 'SKILL.md',
@@ -366,6 +459,7 @@
     'saeule.02.demo.tree.preisliste': 'price-list.csv',
     'saeule.02.demo.filecard.pfad': '.snotra/skills/offer/SKILL.md',
     'saeule.02.demo.filecard.badge': 'git-versioned',
+    'saeule.02.demo.filecard.aria': 'Contents of SKILL.md',
     'saeule.02.demo.skill.name': 'name: offer',
     'saeule.02.demo.skill.description': 'description: Creates offers from the house template.\n  Use when an offer, a change order or\n  a price enquiry is asked for.',
     'saeule.02.demo.skill.h1': '# Create an offer',
@@ -377,6 +471,7 @@
     'saeule.03.wort': 'Connection',
     'saeule.03.titel': "Connects to everything that's already there",
     'saeule.03.absatz': "Every command-line tool on your machine becomes a tool for the model — git, docker, az, your company's own CLI. No connector, no adapter, no integration projects: a Skill describes the tool, the shell does the rest.",
+    'saeule.03.badge.shell': 'shell_execute: ships with the next release',
     'saeule.03.badge': 'MCP server in progress',
     'saeule.03.demo.caption1': '// tool log, the way it runs in the chat',
     'saeule.03.demo.summary': '3 executions · 1 file written',
@@ -390,7 +485,7 @@
     'saeule.04.titel': 'Nothing happens without you',
     'saeule.04.absatz1': 'Every call that writes, executes or reaches outside shows up as a card in the chat first: target path, full command, preview.',
     'saeule.04.absatz2': 'For execution there is deliberately no “remember for this session”.',
-    'saeule.04.badge': 'shell_execute: coming in the next version',
+    'saeule.04.badge': 'shell_execute: ships with the next release',
     'saeule.04.demo.caption': '// a real approval card — decide here',
     'saeule.04.demo.titel': 'Confirm execution',
     'saeule.04.demo.headline': 'Snotra wants to run a command in zsh (shell_execute).',
@@ -440,7 +535,7 @@
 
     'download.label': '// download',
     'download.h2': 'Version 1.5.1 — free, open source, no sign-up',
-    'download.sub': 'Apache 2.0. No account, no telemetry, no server in between.',
+    'download.sub': 'Apache 2.0. No account, no telemetry, no server of ours in between — the download comes straight from GitHub.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 126 MB',
     'download.mac.btn': 'Download DMG',
@@ -467,7 +562,79 @@
     'fuss.nav.aria': 'Legal and source code',
     'fuss.impressum': 'Legal notice',
     'fuss.datenschutz': 'Privacy',
-    'fuss.github': 'GitHub'
+    'fuss.github': 'GitHub',
+
+    /* ---- Legal pages (impressum.html, datenschutz.html) ----
+       Fully translated. The placeholders (address, contact e-mail) stay as
+       <span class="todo"> in the HTML and are deliberately not translated:
+       they are missing data, not language. German law applies to the original
+       German wording — the English version is a reading aid. */
+    'legal.nav.aria': 'Pages and language',
+    'legal.fuss.aria': 'Legal',
+    'legal.nav.start': 'Home',
+    'legal.zurueck': '\u2190 Back to the home page',
+    'legal.land': 'Germany',
+    'legal.mail.label': 'E-mail:',
+    'legal.apache.link': 'Apache License 2.0',
+
+    'impressum.meta.title': 'Legal notice \u2014 Snotra AI',
+    'impressum.h1': 'Legal notice',
+    'impressum.angaben.h2': 'Information pursuant to \u00a7 5 DDG (German Digital Services Act)',
+    'impressum.kontakt.h2': 'Contact',
+    'impressum.verantwortlich.h2': 'Responsible for the content pursuant to \u00a7 18 (2) MStV',
+    'impressum.verantwortlich.text': 'Konrad Krafft, address as above',
+    'impressum.angebot.h2': 'Nature of this offering',
+    'impressum.angebot.teil1': 'Snotra AI is a private, non-commercial hobby and experimentation project. No paid service is offered; the software is open source under the',
+    'impressum.angebot.teil2': '. There is no connection to the operator\u2019s employer.',
+    'impressum.haftung.inhalte.h2': 'Liability for content',
+    'impressum.haftung.inhalte.text': 'As a service provider we are responsible for our own content on these pages under the general laws. As a service provider we are not obliged, however, to monitor transmitted or stored third-party information or to investigate circumstances that indicate unlawful activity. Obligations to remove or block the use of information under the general laws remain unaffected. Liability in this respect is only possible from the point in time at which a concrete infringement becomes known. If we become aware of such infringements, we will remove the content in question without delay.',
+    'impressum.haftung.links.h2': 'Liability for links',
+    'impressum.haftung.links.text': 'Our offering contains links to external third-party websites over whose content we have no influence. We can therefore accept no liability for that third-party content. The respective provider or operator of the linked pages is always responsible for their content. The linked pages were checked for possible legal violations at the time of linking; unlawful content was not discernible at that time. If we become aware of infringements, we will remove such links without delay.',
+    'impressum.urheberrecht.h2': 'Copyright',
+    'impressum.urheberrecht.text': 'The content of this site is subject to German copyright law. The source code of the Snotra AI software is, by way of exception, licensed under the Apache License 2.0 and may be used, modified and redistributed within the terms of that licence.',
+    'impressum.streit.h2': 'Consumer dispute resolution',
+    'impressum.streit.text': 'We are neither willing nor obliged to take part in dispute resolution proceedings before a consumer arbitration board.',
+
+    'datenschutz.meta.title': 'Privacy policy \u2014 Snotra AI',
+    'datenschutz.h1': 'Privacy policy',
+    'datenschutz.1.h2': '1. Controller',
+    'datenschutz.1.einleitung': 'The controller for data processing on this website is:',
+    'datenschutz.1.dsb': 'No data protection officer has been appointed; the statutory conditions for that do not apply to this private offering.',
+    'datenschutz.2.h2': '2. In short',
+    'datenschutz.2.teil1': 'This site is purely informational. There are',
+    'datenschutz.2.betont': 'no cookies',
+    'datenschutz.2.teil2': ', no analytics or tracking services, no ad networks, no contact form, no sign-up and no fonts from third-party servers. The only data processed is what inevitably arises for technical reasons when a website is requested \u2014 plus one request to the GitHub API in order to show the current program version (section 4). Your language choice is kept locally by the browser (localStorage); it never leaves your device.',
+    'datenschutz.3.h2': '3. Hosting and server log files',
+    'datenschutz.3.teil1': 'The website is hosted on',
+    'datenschutz.3.betont': 'Firebase Hosting',
+    'datenschutz.3.teil2': ', a service of Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Ireland. When the page is requested, the host automatically processes data in server log files that your browser transmits:',
+    'datenschutz.3.liste.1': 'IP address of the requesting device',
+    'datenschutz.3.liste.2': 'date and time of access',
+    'datenschutz.3.liste.3': 'name and URL of the file requested',
+    'datenschutz.3.liste.4': 'volume of data transferred and notification of whether the request succeeded',
+    'datenschutz.3.liste.5': 'browser type and version, operating system',
+    'datenschutz.3.liste.6': 'where applicable, the page visited before (referrer)',
+    'datenschutz.3.rechtsgrundlage': 'The legal basis is Art. 6(1)(f) GDPR. The legitimate interest lies in delivering the website free of technical faults and keeping it secure. This data is not merged with other data sources, and it is not evaluated for marketing purposes.',
+    'datenschutz.3.avv': 'A data processing agreement pursuant to Art. 28 GDPR is in place with Google. Processing in the USA by Google LLC cannot be ruled out; Google bases such transfers on the European Commission\u2019s standard contractual clauses and is certified under the EU-US Data Privacy Framework. Further information:',
+    'datenschutz.4.h2': '4. Fetching the current version from GitHub',
+    'datenschutz.4.teil1': 'So that the download buttons always point at the latest program version, your browser calls the interface',
+    'datenschutz.4.teil2': ' once when the home page opens. The provider is GitHub B.V., Vijzelstraat 68-72, 1017 HL Amsterdam, Netherlands (a subsidiary of Microsoft Corporation, USA).',
+    'datenschutz.4.ip': 'Your IP address is transmitted to GitHub in the process; without that transmission no connection is technically possible. No cookies are set and no identifiers are passed on by us. The legal basis is Art. 6(1)(f) GDPR; the legitimate interest is to offer current, working download links without republishing the page for every new version. GitHub\u2019s privacy statement:',
+    'datenschutz.4.releases': 'The same applies when you start a download or follow a link into the repository: the installation packages are held at GitHub Releases and are delivered from there, not by this website.',
+    'datenschutz.5.h2': '5. Retention period',
+    'datenschutz.5.text': 'The host\u2019s server log files are deleted automatically according to its own rules. We do not keep any records of our own about visitors.',
+    'datenschutz.6.h2': '6. The software itself',
+    'datenschutz.6.teil1': 'The Snotra AI desktop application sends',
+    'datenschutz.6.betont': 'no',
+    'datenschutz.6.teil2': ' data to the operator of this website: there is no telemetry, no usage statistics and no registration. At launch it asks GitHub once whether a newer version exists; no usage data travels with that request. What you type goes exclusively to the model provider you select and configure in the app yourself (OpenAI, Anthropic or Google, for example) \u2014 or, with local models via Ollama or MLX-LM, never leaves your machine at all. The privacy policy of the provider you choose governs their processing. API keys are stored encrypted in your operating system\u2019s user profile.',
+    'datenschutz.7.h2': '7. Your rights',
+    'datenschutz.7.text1': 'Within the statutory conditions you have the right of access (Art. 15 GDPR), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20) and the right to object to processing based on legitimate interests (Art. 21 GDPR). Please contact the address given above.',
+    'datenschutz.7.text2': 'You also have the right to lodge a complaint with a data protection supervisory authority (Art. 77 GDPR), for instance the authority responsible for your place of residence.',
+    'datenschutz.8.h2': '8. Encryption',
+    'datenschutz.8.teil1': 'This site is available exclusively over HTTPS; the domain ending',
+    'datenschutz.8.teil2': ' enforces an encrypted connection. The certificate is issued automatically by the host.',
+    'datenschutz.9.h2': '9. Changes',
+    'datenschutz.9.text': 'If the offering is extended, we will adapt this policy. The version published here applies in each case.'
   };
 
   var DICT = { de: DE, en: EN };
@@ -514,7 +681,8 @@
   function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
   function markCode(el, tokens) {
-    var text = el.textContent;
+    var decoEl = el.querySelector(':scope > .deco');
+    var text = decoEl ? el.textContent.slice(decoEl.textContent.length) : el.textContent;
     var parts = tokens.split('|').filter(Boolean).sort(function (a, b) { return b.length - a.length; });
     if (!parts.length) return;
     var re = new RegExp('(' + parts.map(escapeRe).join('|') + ')', 'g');
@@ -525,7 +693,7 @@
       var after = text.charAt(m.index + m[0].length);
       if (/[A-Za-z0-9_]/.test(before) || /[A-Za-z0-9_]/.test(after)) continue;
       if (m.index > last) frag.appendChild(doc.createTextNode(text.slice(last, m.index)));
-      var span = doc.createElement('span');
+      var span = doc.createElement('code');
       span.className = 'inline-code';
       span.textContent = m[0];
       frag.appendChild(span);
@@ -534,7 +702,16 @@
     }
     if (!hit) return;
     if (last < text.length) frag.appendChild(doc.createTextNode(text.slice(last)));
-    el.textContent = '';
+    /* Nicht das ganze Element leeren: traegt es ein Zierzeichen (:scope >
+       .deco), wuerde das hier stillschweigend mit verschwinden. Heute faellt
+       kein Element in beide Faelle — die Absicherung steht fuer den naechsten,
+       der einem .demo-cap ein data-i18n-code gibt. */
+    var deco = el.querySelector(':scope > .deco');
+    if (deco) {
+      while (deco.nextSibling) el.removeChild(deco.nextSibling);
+    } else {
+      el.textContent = '';
+    }
     el.appendChild(frag);
   }
 
@@ -572,6 +749,11 @@
   function applyLang(lang, opts) {
     state.lang = DICT[lang] ? lang : 'de';
     doc.documentElement.lang = state.lang;
+
+    /* Das canonical-Element muss die Fassung nennen, die gerade dasteht —
+       sonst zeigt die englische Ansicht auf die deutsche URL. */
+    var can = doc.querySelector('link[rel="canonical"]');
+    if (can) can.setAttribute('href', 'https://snotra-ai.dev/' + (state.lang === 'en' ? '?lang=en' : ''));
 
     each('[data-i18n]', function (el) { setText(el, t(el.getAttribute('data-i18n'))); });
 
@@ -710,7 +892,11 @@
     applyRelease();
   }
 
-  if (window.fetch) {
+  /* Nur dort fragen, wo es etwas zu aktualisieren gibt: die Rechtsseiten
+     binden dasselbe Skript ein, haben aber keine Download-Knoepfe — und die
+     Datenschutzerklaerung sagt zu, dass der Aufruf auf der Startseite
+     passiert. Ohne diese Bedingung waere sie unwahr. */
+  if (window.fetch && doc.querySelector('[data-dl]')) {
     window.fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
       headers: { Accept: 'application/vnd.github+json' }
     }).then(function (res) {
@@ -886,6 +1072,12 @@
       } else if (ev.key === 'End') {
         ev.preventDefault(); list[list.length - 1].focus();
       } else if (ev.key === 'Tab') {
+        /* Erst den Fokus auf den Ausloeser zuruecknehmen, dann verstecken —
+           sonst rechnet der Browser den naechsten Tabstopp von einem
+           versteckten Element aus und landet auf document.body. Kein
+           preventDefault: die Standard-Tab-Aktion laeuft von der Pille aus
+           weiter (und mit Shift genauso rueckwaerts). */
+        pill.focus();
         openMenu(false);
       }
     });

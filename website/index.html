@@ -8,9 +8,9 @@
 <meta name="description" data-i18n-attr="content:meta.description" content="Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, jedes CLI auf deinem Rechner wird zum Werkzeug, das Modell ist austauschbar. Kein Server, kein Konto, keine Telemetrie.">
 <link rel="icon" href="icon.png" type="image/png">
 <link rel="canonical" href="https://snotra-ai.dev/">
-<link rel="alternate" hreflang="de" href="https://snotra-ai.dev/?lang=de">
+<link rel="alternate" hreflang="de" href="https://snotra-ai.dev/">
 <link rel="alternate" hreflang="en" href="https://snotra-ai.dev/?lang=en">
-<link rel="alternate" hreflang="x-default" href="https://snotra-ai.dev/?lang=de">
+<link rel="alternate" hreflang="x-default" href="https://snotra-ai.dev/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://snotra-ai.dev/">
 <meta property="og:site_name" content="Snotra AI">
@@ -20,7 +20,8 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<script>document.documentElement.classList.add('js');</script>
+<script>document.documentElement.classList.add('js');
+window.__snotraReveal=setTimeout(function(){document.documentElement.classList.add('no-reveal')},2500);</script>
 
 <div class="gridlines" aria-hidden="true"><div class="wrap"><div class="cells"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div></div>
 
@@ -29,7 +30,7 @@
 <header class="site-head">
   <div class="wrap head-in">
     <a class="brand" href="#main">
-      <span class="brand-mark" aria-hidden="true">//</span>
+      <img class="brand-mark" src="icon.png" alt="" width="26" height="26">
       <span class="brand-name">Snotra AI</span>
     </a>
     <nav class="head-nav" data-i18n-attr="aria-label:nav.aria" aria-label="Hauptnavigation">
@@ -52,11 +53,11 @@
   <section class="hero">
     <div class="wrap">
       <div class="hero-text">
-        <p class="metaline"><span class="deco" aria-hidden="true">//</span><span data-i18n="hero.eyebrow">Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1</span></p>
+        <p class="metaline"><span class="deco" aria-hidden="true">//</span><span data-version data-i18n="hero.eyebrow">Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1</span></p>
         <h1><span data-i18n="hero.h1.zeile1">Software wird nicht gekauft.</span><span class="line2" data-i18n="hero.h1.zeile2">Sie wird beschrieben.</span></h1>
         <div class="hero-cols">
           <div class="hero-main">
-            <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein Server, kein Konto, keine Telemetrie.</strong></p>
+            <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Die Richtung ist gesetzt: angebunden wird, was ohnehin da ist — jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein eigener Server, kein Konto, keine Telemetrie.</strong></p>
             <div class="hero-actions">
               <a class="btn btn-primary btn-lg" id="hero-cta" data-hero-cta data-size="mac" href="#download" data-i18n="hero.cta.primaer">Für macOS laden — 126 MB</a>
               <a class="btn btn-secondary btn-lg" href="#download" data-i18n="hero.cta.sekundaer">Windows &amp; Linux</a>
@@ -69,7 +70,7 @@
               <div class="row"><dt data-i18n="hero.side.lizenz.label">Lizenz</dt><dd data-i18n="hero.side.lizenz.wert">Apache 2.0</dd></div>
               <div class="row"><dt data-i18n="hero.side.plattformen.label">Plattformen</dt><dd data-i18n="hero.side.plattformen.wert">macOS · Windows · Linux</dd></div>
               <div class="row"><dt data-i18n="hero.side.konten.label">Konten</dt><dd data-i18n="hero.side.konten.wert">0</dd></div>
-              <div class="row"><dt data-i18n="hero.side.telemetrie.label">Telemetrie</dt><dd data-i18n="hero.side.telemetrie.wert">keine</dd></div>
+              <div class="row"><dt data-i18n="hero.side.telemetrie.label">Telemetrie</dt><dd data-i18n="hero.side.telemetrie.wert">keine (nur Versionsabfrage bei GitHub)</dd></div>
             </dl>
           </aside>
         </div>
@@ -82,7 +83,12 @@
            landete sonst samt Geister-Landmarken und einer Ueberschrift im
            Accessibility-Baum. Beschreibung steht in der figcaption.
            Enthaelt bewusst kein einziges fokussierbares Element. -->
-      <div class="appwin" aria-hidden="true">
+      <!-- lang="de": Die Oberflaeche der App gibt es nur auf Deutsch. Im
+           englischen Modus steht documentElement.lang auf "en" — ohne diese
+           Auszeichnung wuerden Vorlesefunktion und Auto-Uebersetzung den
+           Nachbau fuer englischen Text halten. Die Bildunterschrift sagt es
+           im englischen Modus ausserdem im Klartext. -->
+      <div class="appwin" lang="de" aria-hidden="true">
         <div class="win-title">
           <span class="win-drag"><i class="win-dot"></i><i class="win-dot"></i><i class="win-dot"></i></span>
           <span class="win-brand" data-i18n="app.fenster.brand">Snotra AI</span>
@@ -175,10 +181,10 @@
 
                 <div class="approval" data-state="pending">
                   <p class="approval-title" data-i18n="app.freigabe.titel">Änderung bestätigen</p>
-                  <p class="approval-headline"><span data-i18n="app.freigabe.headline" data-i18n-code="docs/angebot-q3.md|write_file_text">Snotra möchte <span class="inline-code">docs/angebot-q3.md</span> ändern (<span class="inline-code">write_file_text</span>).</span></p>
+                  <p class="approval-headline"><span data-i18n="app.freigabe.headline" data-i18n-code="docs/angebot-q3.md|write_file_text">Snotra möchte <code class="inline-code">docs/angebot-q3.md</code> ändern (<code class="inline-code">write_file_text</code>).</span></p>
                   <dl class="approval-facts">
                     <dt data-i18n="app.freigabe.fakt.wirkung.label">Wirkung</dt><dd data-i18n="app.freigabe.fakt.wirkung.wert">Ändern</dd>
-                    <dt data-i18n="app.freigabe.fakt.ziel.label">Ziel</dt><dd><span data-i18n="app.freigabe.fakt.ziel.wert" data-i18n-code="docs/angebot-q3.md">Datei <span class="inline-code">docs/angebot-q3.md</span></span> <span class="badge badge--blue" data-i18n="app.freigabe.fakt.ziel.badge">Stand v3</span></dd>
+                    <dt data-i18n="app.freigabe.fakt.ziel.label">Ziel</dt><dd><span data-i18n="app.freigabe.fakt.ziel.wert" data-i18n-code="docs/angebot-q3.md">Datei <code class="inline-code">docs/angebot-q3.md</code></span> <span class="badge badge--blue" data-i18n="app.freigabe.fakt.ziel.badge">Stand v3</span></dd>
                     <dt data-i18n="app.freigabe.fakt.grund.label">Grund</dt><dd data-i18n="app.freigabe.fakt.grund.wert">Offene Punkte aus dem Protokoll ergänzen</dd>
                     <dt data-i18n="app.freigabe.fakt.modus.label">Modus</dt><dd data-i18n="app.freigabe.fakt.modus.wert">Intelligent</dd>
                   </dl>
@@ -215,7 +221,7 @@
       </div>
       <figcaption class="stage-caption">
         <span class="sr-only" data-i18n="hero.appwin.aria">Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.</span>
-        <span data-i18n="hero.stage.caption">Platzhalter — echter Screenshot folgt</span>
+        <span data-i18n="hero.stage.caption">Die Oberfläche der App, maßgetreu in HTML nachgebaut</span>
       </figcaption>
     </figure>
   </section>
@@ -226,7 +232,8 @@
       <ul class="numbers-grid" role="list">
         <li class="num"><span class="v" data-count="1">1</span><span class="k" data-i18n="zahlen.01.label">Ordner im Zugriff</span></li>
         <li class="num"><span class="v" data-count="5">5</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
-        <li class="num"><span class="v" data-count="15">15</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
+        <!-- 14 = oeffentliche Tools in v1.5.1. Mit dem naechsten Release kommt shell_execute dazu -> 15. -->
+        <li class="num"><span class="v" data-count="14">14</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
         <li class="num"><span class="v v--inf" aria-hidden="true">∞</span><span class="k"><span class="sr-only" data-i18n="zahlen.04.sr">Unbegrenzt viele </span><span data-i18n="zahlen.04.label">Systeme per CLI</span></span></li>
         <li class="num"><span class="v" data-count="0">0</span><span class="k" data-i18n="zahlen.05.label">Konten</span></li>
       </ul>
@@ -237,7 +244,7 @@
   <section class="claim">
     <div class="wrap reveal">
       <div class="rule" aria-hidden="true"></div>
-      <p class="big" data-i18n="klammer.gross">Jede Abteilung ihr Werkzeug. Kein neuer Anbieter.</p>
+      <h2 class="big" data-i18n="klammer.gross">Jede Abteilung ihr Werkzeug. Kein neuer Anbieter.</h2>
       <p class="small" data-i18n="klammer.klein">Der Assistent kommt zu den Dateien, nicht die Dateien zum Assistenten.</p>
     </div>
   </section>
@@ -303,7 +310,7 @@
                 <span class="p" data-i18n="saeule.02.demo.filecard.pfad">.snotra/skills/angebot/SKILL.md</span>
                 <span class="badge" data-i18n="saeule.02.demo.filecard.badge">git-versioniert</span>
               </div>
-              <pre class="filecard-body"><span class="k">---</span>
+              <pre class="filecard-body" tabindex="0" role="group" data-i18n-attr="aria-label:saeule.02.demo.filecard.aria" aria-label="Inhalt von SKILL.md"><span class="k">---</span>
 <span data-i18n="saeule.02.demo.skill.name" data-i18n-yaml><span class="k">name:</span> angebot</span>
 <span data-i18n="saeule.02.demo.skill.description" data-i18n-yaml><span class="k">description:</span> Erstellt Angebote nach Hausvorlage.
   Verwenden, wenn ein Angebot, ein Nachtrag oder
@@ -325,8 +332,8 @@
           <div class="pillar-text">
             <p class="pillar-no">03 <span class="word" data-i18n="saeule.03.wort">Anschluss</span></p>
             <h3 data-i18n="saeule.03.titel">Verbindet sich mit allem, was schon da ist</h3>
-            <p data-i18n="saeule.03.absatz" data-i18n-code="git|docker|az">Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — <span class="inline-code">git</span>, <span class="inline-code">docker</span>, <span class="inline-code">az</span>, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.</p>
-            <p><span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
+            <p data-i18n="saeule.03.absatz" data-i18n-code="git|docker|az">Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — <code class="inline-code">git</code>, <code class="inline-code">docker</code>, <code class="inline-code">az</code>, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.</p>
+            <p class="badge-row"><span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge.shell">shell_execute: kommt mit der nächsten Version</span> <span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
           </div>
           <div class="pillar-demo">
             <p class="demo-cap" data-i18n="saeule.03.demo.caption1"><span class="deco" aria-hidden="true">//</span>tool-log, wie er im chat läuft</p>
@@ -349,10 +356,10 @@
             </div>
             <p class="demo-cap" data-i18n="saeule.03.demo.caption2"><span class="deco" aria-hidden="true">//</span>was ohne integrationsprojekt schon geht</p>
             <div class="cli-strip">
-              <span class="cli-chip on">git</span><span class="cli-chip on">docker</span><span class="cli-chip on">az</span>
-              <span class="cli-chip">kubectl</span><span class="cli-chip">psql</span><span class="cli-chip">rsync</span>
-              <span class="cli-chip">terraform</span><span class="cli-chip">pandoc</span><span class="cli-chip">ffmpeg</span>
-              <span class="cli-chip">gh</span><span class="cli-chip">jq</span><span class="cli-chip" data-i18n="saeule.03.demo.chip.haus">euer-haus-cli</span>
+              <code class="cli-chip on">git</code><code class="cli-chip on">docker</code><code class="cli-chip on">az</code>
+              <code class="cli-chip">kubectl</code><code class="cli-chip">psql</code><code class="cli-chip">rsync</code>
+              <code class="cli-chip">terraform</code><code class="cli-chip">pandoc</code><code class="cli-chip">ffmpeg</code>
+              <code class="cli-chip">gh</code><code class="cli-chip">jq</code><code class="cli-chip" data-i18n="saeule.03.demo.chip.haus">euer-haus-cli</code>
             </div>
           </div>
         </article>
@@ -370,11 +377,11 @@
             <p class="demo-cap" data-i18n="saeule.04.demo.caption"><span class="deco" aria-hidden="true">//</span>echte freigabe-karte — entscheide hier</p>
             <section class="approval" data-state="pending" data-demo="pillar">
               <h3 class="approval-title" data-i18n="saeule.04.demo.titel">Ausführung bestätigen</h3>
-              <p class="approval-headline"><span data-i18n="saeule.04.demo.headline" data-i18n-code="zsh|shell_execute">Snotra möchte einen Befehl in <span class="inline-code">zsh</span> ausführen (<span class="inline-code">shell_execute</span>).</span></p>
+              <p class="approval-headline"><span data-i18n="saeule.04.demo.headline" data-i18n-code="zsh|shell_execute">Snotra möchte einen Befehl in <code class="inline-code">zsh</code> ausführen (<code class="inline-code">shell_execute</code>).</span></p>
               <dl class="approval-facts">
                 <dt data-i18n="saeule.04.demo.fakt.wirkung.label">Wirkung</dt><dd data-i18n="saeule.04.demo.fakt.wirkung.wert">Ausführen</dd>
                 <dt data-i18n="saeule.04.demo.fakt.shell.label">Shell</dt><dd data-i18n="saeule.04.demo.fakt.shell.wert">zsh (Login-Shell)</dd>
-                <dt data-i18n="saeule.04.demo.fakt.ordner.label">Arbeitsordner</dt><dd><span class="inline-code" data-i18n="saeule.04.demo.fakt.ordner.wert">~/Projekte/angebote</span></dd>
+                <dt data-i18n="saeule.04.demo.fakt.ordner.label">Arbeitsordner</dt><dd><code class="inline-code" data-i18n="saeule.04.demo.fakt.ordner.wert">~/Projekte/angebote</code></dd>
                 <dt data-i18n="saeule.04.demo.fakt.grund.label">Grund</dt><dd data-i18n="saeule.04.demo.fakt.grund.wert">Stand der Ablage vor dem Schreiben prüfen</dd>
                 <dt data-i18n="saeule.04.demo.fakt.modus.label">Modus</dt><dd data-i18n="saeule.04.demo.fakt.modus.wert">Intelligent</dd>
               </dl>
@@ -389,7 +396,10 @@
                 <button type="button" class="btn btn-secondary" data-decision="denied" data-i18n="saeule.04.demo.btn.ablehnen">Ablehnen</button>
               </div>
               <p class="approval-hint" data-i18n="saeule.04.demo.hinweis.einzel">Für „Ausführen“ ist nur eine Einzelentscheidung möglich.</p>
-              <p class="approval-hint" data-role="status" aria-live="polite" data-i18n="saeule.04.demo.hinweis.status">Wartet auf deine Entscheidung. Esc lehnt ab.</p>
+              <!-- div statt p: renderResult haengt hier ein <p> hinein, und ein
+                   p im p ist nicht gueltig. role="status" impliziert
+                   aria-live="polite". -->
+              <div class="approval-hint" data-role="status" role="status" data-i18n="saeule.04.demo.hinweis.status">Wartet auf deine Entscheidung. Esc lehnt ab.</div>
             </section>
           </div>
         </article>
@@ -487,7 +497,7 @@
           <div class="unsigned-col">
             <h4 data-i18n="unsigniert.windows.titel">Windows</h4>
             <ol role="list">
-              <li data-i18n="unsigniert.windows.schritt1" data-i18n-code="Snotra AI.exe">ZIP entpacken, <span class="inline-code">Snotra AI.exe</span> starten.</li>
+              <li data-i18n="unsigniert.windows.schritt1" data-i18n-code="Snotra AI.exe">ZIP entpacken, <code class="inline-code">Snotra AI.exe</code> starten.</li>
               <li data-i18n="unsigniert.windows.schritt2">SmartScreen &gt; Weitere Informationen.</li>
               <li data-i18n="unsigniert.windows.schritt3">Trotzdem ausführen.</li>
             </ol>

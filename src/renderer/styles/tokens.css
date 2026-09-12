@@ -48,6 +48,11 @@
   --ds-grey-divider: #ECEDEF;  /* Trenner, Default-Borders */
   --ds-grey-muted: #6D6D6D;    /* 4,84:1 auf #FFF — Sekundaerschrift, btn-secondary-Hover */
   --ds-grey-strong: #5C5C5C;   /* 7,1:1 auf #FFF — fuer Text < 14 px */
+  /* Begrenzung von Bedienelementen (Sekundaer-Button, bedienbare Pille,
+   * Umschalter). --ds-grey-divider erreicht auf #FFF nur 1,17:1 und liegt
+   * damit unter der 3:1-Schwelle aus WCAG 1.4.11. Rein dekorative Rahmen
+   * (Karten, Panels, Chips) behalten --ds-grey-divider. */
+  --ds-grey-control-border: #8A8A8E;  /* 3,1:1 auf #FFF */
 
   /* ── Status-Tokens (rote Ausnahmeregel) ───────────────────────────────────
    * Rot ist im Mono-Blue-System NICHT als allgemeiner Akzent erlaubt. Diese
@@ -177,6 +182,7 @@
   --ds-grey-divider: #2E2E30;
   --ds-grey-muted: #A1A1A6;    /* 5,4:1 auf #1A1A1B */
   --ds-grey-strong: #C4C4C9;   /* 8,3:1 auf #1A1A1B */
+  --ds-grey-control-border: #8A8A8E;  /* 5,1:1 auf #1A1A1B */
 
   --ds-blue: #3FB8E5;          /* 6,2:1 auf #1A1A1B */
   --ds-blue-soft: rgba(63, 184, 229, 0.08);

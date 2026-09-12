@@ -108,9 +108,13 @@
   --ds-overlay-shadow:0 8px 24px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.07);
 
   /* Typografie */
-  --ds-font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --ds-font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --ds-font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --ds-font-tool:Consolas,ui-monospace,'SF Mono',Menlo,monospace;
+
+  /* Fokus-Ring */
+  --ds-focus-ring:2px solid var(--ds-blue);
+  --ds-focus-offset:2px;
 
   /* Radien, Motion, Touch */
   --ds-radius-sm:4px;                             /* Fokus-Ring */
@@ -155,10 +159,11 @@
      umschalter). --ds-grey-divider erreicht auf Weiss nur 1,17:1 und ist
      damit unter der 3:1-Schwelle aus WCAG 1.4.11 fuer die Begrenzung, die ein
      Bedienelement erkennbar macht. Dieser Wert (3,1:1) ist der einzige Farb-
-     wert der Seite ausserhalb von tokens.css und gehoert dort als
-     --ds-grey-control-border nachgezogen. Rein dekorative Rahmen (Karten,
-     Panels, Chips) behalten --divider. */
-  --control-border:#8A8A8E;
+     wert (3,1:1) steht seit dem Nachzug als --ds-grey-control-border in
+     tokens.css und wird hier nur noch aliasiert. Rein dekorative Rahmen
+     (Karten, Panels, Chips) behalten --divider. */
+  --ds-grey-control-border:#8A8A8E;
+  --control-border:var(--ds-grey-control-border);
 
   /* Raster (aus Entwurf a1) */
   --gutter:24px;
@@ -168,7 +173,6 @@
 /* ---------- Grundlagen ---------- */
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-html,body{max-width:100%}
 body{
   margin:0;position:relative;background:var(--white);color:var(--black);
   font-family:var(--ui);font-size:16px;line-height:1.6;font-weight:400;
@@ -185,7 +189,7 @@ button{font:inherit;color:inherit}
    sonst wird der Ring an Pillen und Kreis-Buttons zum 4px-Rechteck. */
 button:focus-visible,a:focus-visible,input:focus-visible,
 summary:focus-visible,[tabindex]:focus-visible{
-  outline:2px solid var(--blue);outline-offset:2px;border-radius:var(--r-focus);
+  outline:var(--ds-focus-ring);outline-offset:var(--ds-focus-offset);border-radius:var(--r-focus);
 }
 .btn:focus-visible,.icon-btn:focus-visible,.send:focus-visible,
 .pill:focus-visible,.lang-btn:focus-visible,.head-nav a:focus-visible,
@@ -259,7 +263,15 @@ summary:focus-visible,[tabindex]:focus-visible{
   padding:1px 7px;border-radius:var(--r-pill);border:1px solid var(--divider);color:var(--strong);white-space:nowrap;
 }
 .badge--blue{border-color:var(--blue-border);color:var(--blue)}
-.badge--lg{padding:3px 9px;letter-spacing:.06em}
+/* Zwei Hinweis-Badges nebeneinander: als Flex-Zeile, damit sie beim Umbruch
+   nicht aneinanderkleben. */
+.badge-row{display:flex;flex-wrap:wrap;gap:6px}
+/* Lange Hinweis-Badges duerfen umbrechen. Mit dem geerbten nowrap setzt
+   „shell_execute: kommt mit der naechsten Version“ eine Mindestbreite von
+   rund 335px und schiebt bei 320px die ganze Saeule aus dem sichtbaren
+   Bereich — wo sie von .section{overflow-x:clip} ohne Scrollbalken
+   abgeschnitten wird. */
+.badge--lg{padding:3px 9px;letter-spacing:.06em;white-space:normal}
 
 .sec-label{
   font-family:var(--mono);font-size:11px;font-weight:600;text-transform:lowercase;
@@ -277,11 +289,15 @@ code,.mono{font-family:var(--mono)}
   border-bottom:1px solid var(--divider);
 }
 .head-in{display:flex;align-items:center;gap:20px;min-height:56px}
-.brand{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:var(--black)}
+.brand{
+  display:inline-flex;align-items:center;gap:9px;min-height:var(--ds-touch-min);
+  text-decoration:none;color:var(--black);
+}
+/* Das Zeichen der App selbst (dieselbe Datei, die im Dock und im Installer
+   steht). Der Farbverlauf steckt in der Bilddatei, nicht im CSS — das „//“
+   bleibt Abschnitts-Motiv (.deco, .sec-label) und ist keine Wortmarke. */
 .brand-mark{
-  width:26px;height:26px;flex-shrink:0;border-radius:var(--r-container);
-  border:1px solid var(--blue-border);color:var(--blue);
-  display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:-.06em;
+  width:26px;height:26px;flex-shrink:0;border-radius:var(--r-container);border:none;
 }
 .brand-name{font-size:15px;font-weight:600;letter-spacing:-.1px;white-space:nowrap}
 .head-nav{margin-left:auto;display:flex;align-items:center;gap:4px}
@@ -338,7 +354,9 @@ h1 .line2{display:block;color:var(--blue)}
 .hero-side dl{border-top:1px solid var(--divider)}
 .hero-side .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--divider)}
 .hero-side dt{font-family:var(--mono);font-size:12px;color:var(--strong);letter-spacing:.02em}
-.hero-side dd{font-family:var(--mono);font-size:12px;margin:0;color:var(--black);text-align:right;white-space:nowrap}
+/* Kein nowrap: die Telemetrie-Zeile traegt den Zusatz zur Versionsabfrage
+   und muss bei 320px umbrechen duerfen, statt die Zeile aufzuspreizen. */
+.hero-side dd{font-family:var(--mono);font-size:12px;margin:0;color:var(--black);text-align:right}
 .mission{font-size:17px;line-height:1.6;color:var(--strong);max-width:62ch}
 .mission strong{font-weight:600;color:var(--black)}
 .hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
@@ -351,6 +369,14 @@ h1 .line2{display:block;color:var(--blue)}
   position:relative;overflow:hidden;background:var(--grey-bg);
   border-top:1px solid var(--divider);width:100%;
   display:flex;flex-wrap:wrap;align-items:flex-start;padding:46px 0 22px;
+}
+/* Standflaeche des Fensters: eine Lineatur aus --divider-Haarlinien im
+   28px-Raster. Das ist kein Farbverlauf und kein Schatten, sondern dieselbe
+   Trennerfarbe, wiederholt — das Fenster steht damit auf etwas, ohne dass
+   eine Flaeche abhebt. */
+.hero-stage::before{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background-image:repeating-linear-gradient(to bottom,var(--divider) 0 1px,transparent 1px 28px);
 }
 .stage-caption{
   flex:1 0 100%;position:relative;z-index:3;margin-top:14px;
@@ -484,6 +510,14 @@ h1 .line2{display:block;color:var(--blue)}
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   animation:shimmer 1.85s ease-in-out infinite;
 }
+/* Ausserhalb von .appwin ist die laufende Tool-Zeile echter, vorlesbarer
+   Seitentext (Saeule 03). Die App-Mischung (Weiss 72 %) faellt im Bandmaximum
+   auf 1,4:1 und damit unter WCAG 1.4.3 — hier bleibt das Highlight blaeulich,
+   aber dunkel genug: 5,7:1 auf --grey-bg, 6,1:1 auf Weiss. Innerhalb des
+   Fensters bleibt der App-Wert unangetastet. */
+.demo-surface--bare .tool-line--running .txt{
+  --shimmer-highlight:color-mix(in srgb,var(--strong) 45%,var(--blue) 55%);
+}
 .tool-line--settled .txt{
   animation:none;background-image:none;color:var(--strong);
   -webkit-text-fill-color:currentColor;
@@ -523,7 +557,7 @@ h1 .line2{display:block;color:var(--blue)}
 }
 .approval-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .approval-hint{margin:10px 0 0;font-size:13px;color:var(--strong)}
-.approval-result{margin:12px 0 0;font-size:13px;color:var(--strong)}
+.approval-result{margin:2px 0 0;font-size:13px;color:var(--strong)}
 .approval-result b{font-weight:600;color:var(--black)}
 .approval-replay{
   display:inline-flex;align-items:center;min-height:var(--ds-touch-min);
@@ -571,12 +605,14 @@ h1 .line2{display:block;color:var(--blue)}
 
 @media(max-width:1240px){
   .win-mid{display:none}
+  /* Der Chat uebernimmt die frei werdende Breite, sonst steht rechts im
+     Fenster bis 1060px hinunter eine leere Flaeche (bei 1100px: 416px). */
+  .win-chat{width:auto;flex:1 1 auto}
 }
 @media(max-width:1060px){
   .hero-stage{padding-inline:max(20px,calc((100% - 1220px) / 2))}
   .stage-caption{padding-inline:0}
   .appwin{width:auto;flex:1 1 auto;margin-left:0;margin-right:0}
-  .win-chat{width:auto;flex:1}
   /* Feste Hoehe faellt weg: bei 768px wurde der Chat sonst mitten in einer
      Textzeile abgeschnitten. Lieber ein hohes Fenster als ein zerschnittenes. */
   .win-body{height:auto;min-height:30rem}
@@ -612,14 +648,20 @@ h1 .line2{display:block;color:var(--blue)}
 
 /* ---------- Blaue Klammer ---------- */
 .claim{background:var(--blue);color:var(--white);padding:74px 0}
-.claim p.big{
+/* Selektor mit .claim davor, damit die h2-Basisregel nicht gewinnt:
+   (0,2,0) schlaegt (0,0,1). Die Darstellung bleibt unveraendert. */
+.claim .big{
   font-size:clamp(1.8rem,4.6vw,3.6rem);line-height:1.04;font-weight:600;letter-spacing:-.03em;
   max-width:20ch;
 }
-.claim p.small{margin-top:22px;font-size:clamp(1rem,1.6vw,1.25rem);font-weight:400;max-width:46ch;color:var(--white)}
+.claim .small{margin-top:22px;font-size:clamp(1rem,1.6vw,1.25rem);font-weight:400;max-width:46ch;color:var(--white)}
 .claim .rule{width:64px;height:2px;background:var(--white);margin-bottom:26px}
 
 /* ---------- Abschnittskoepfe ---------- */
+/* overflow-x:clip statt hidden: der negative Aussenrand von .pillar-demo darf
+   abgeschnitten werden, ohne dass ein Scroll-Container entsteht — der wuerde
+   position:sticky im Kopf ausser Kraft setzen. clip schneidet lautlos ab,
+   deshalb gehoert zu jeder Breitenaenderung eine Messung (siehe .badge--lg). */
 .section{padding:80px 0;border-bottom:1px solid var(--divider);overflow-x:clip}
 .sec-head{max-width:46ch;margin-bottom:8px}
 h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-spacing:-.028em}
@@ -670,7 +712,10 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   border-color:var(--control-border);min-height:var(--ds-touch-min);padding:6px 12px;
 }
 .overlay-menu{
-  position:absolute;top:calc(100% + 6px);left:0;z-index:20;min-width:268px;
+  position:absolute;top:calc(100% + 6px);left:0;z-index:20;
+  /* Bei 320px reicht eine feste Mindestbreite von 268px ueber den Viewport
+     hinaus und wird von .section{overflow-x:clip} abgeschnitten. */
+  min-width:min(268px,100%);max-width:calc(100vw - 40px);
   background:var(--white);border:1px solid var(--overlay-border);border-radius:var(--r-container);
   /* Der einzige Ort, an dem eine Flaeche abheben darf: ein Menue schwebt
      ueber dem Inhalt, den es verdeckt. */
@@ -683,7 +728,7 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   transition:background var(--fast);
 }
 .overlay-menu li button:hover{background:var(--blue-soft)}
-.overlay-menu .m-name{font-family:var(--mono);font-size:12px;color:var(--black)}
+.overlay-menu .m-name{font-family:var(--mono);font-size:12px;color:var(--black);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .overlay-menu .m-tag{margin-left:auto;font-size:11px;color:var(--strong)}
 .overlay-menu button[aria-checked="true"] .m-name{color:var(--blue);font-weight:600}
 
@@ -730,7 +775,9 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   padding:22px;display:flex;flex-direction:column;gap:6px;
   transition:border-color var(--fast),background var(--fast);
 }
-.dl:hover{border-color:var(--blue);background:var(--blue-soft)}
+/* Der Wash gehoert zum Knopf, nicht zur Flaeche — die Karte selbst ist nicht
+   klickbar, und ein Einladungs-Signal auf einer toten Flaeche geht ins Leere. */
+.dl:has(.btn:hover),.dl:focus-within{border-color:var(--blue);background:var(--blue-soft)}
 .dl h3{font-size:17px;font-weight:600}
 .dl .spec{font-family:var(--mono);font-size:12px;color:var(--strong)}
 .dl .btn{margin-top:14px;align-self:flex-start}
@@ -769,6 +816,9 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   :root{--cols:4}
   .gridlines .cells span:nth-child(n+5){display:none}
   .num{grid-column:span 2}
+  /* Erste Zahl jeder Zeile buendig, wie .field:nth-child(odd) — sonst haengt
+     an Zeile 2 und 3 eine Trennlinie am linken Rasterrand. */
+  .num:nth-child(odd){border-left:none;padding-left:0}
   .num:last-child{grid-column:1 / -1}
   .field,.field:nth-child(1),.field:nth-child(2){grid-column:span 2}
   .field{border-top:1px solid var(--divider);padding:24px 0 26px 16px}
@@ -781,6 +831,7 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   :root{--cols:2}
   .gridlines .cells span:nth-child(n+3){display:none}
   .num{grid-column:span 1}
+  .num:nth-child(odd){border-left:none;padding-left:0}
   .field,.field:nth-child(1),.field:nth-child(2){grid-column:1 / -1;border-left:none;padding-left:0}
   .field:nth-child(2){border-top:1px solid var(--divider)}
   .hero-main,.hero-side{grid-column:1 / -1}
@@ -789,6 +840,16 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
 /* ---------- Reveal ---------- */
 .js .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
 .js .reveal.is-in{opacity:1;transform:none}
+/* Notbremse: das Inline-Script hat .reveal versteckt, app.js hat sich aber
+   nicht gemeldet (404, Blocker, Syntaxfehler) — Inhalt sofort zeigen. */
+.no-reveal .reveal{opacity:1 !important;transform:none !important;transition:none}
+
+/* Bauteile, die ohne app.js nur Behauptungen waeren: lieber nicht zeigen, als
+   einen Zustand melden, den ein Klick nicht einloest (WCAG 4.1.2). Der
+   deutsche Text der Seite steht vollstaendig im HTML und bleibt sichtbar. */
+html:not(.js) .lang{display:none}
+html:not(.js) .approval[data-demo] .approval-actions{display:none}
+html:not(.js) .picker{pointer-events:none}
 
 @media (prefers-reduced-motion: reduce){
   /* Sicherheitsnetz zuerst, damit kuenftige Animationen nicht durchrutschen. */
@@ -813,8 +874,10 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
   border-bottom:1px solid var(--divider);
 }
 .header-inner{display:flex;align-items:center;gap:20px;min-height:56px}
-.brand img{width:32px;height:32px;border-radius:7px}
-.site-header nav{margin-left:auto;display:flex;gap:20px;flex-wrap:wrap}
+/* Nur der Kopf der Rechtsseiten: die Startseite setzt ihr Zeichen ueber
+   .brand-mark auf 26px (Kopfhoehe 56px). */
+.site-header .brand img{width:32px;height:32px;border-radius:var(--r-container)}
+.site-header nav{margin-left:auto;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .site-header nav a{color:var(--strong);text-decoration:none;font-size:13px}
 .site-header nav a:hover{color:var(--blue)}
 .legal{padding:56px 0 72px}
