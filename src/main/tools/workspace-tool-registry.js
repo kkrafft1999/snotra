@@ -59,12 +59,22 @@ function createToolRegistry(initialDefinitions = []) {
     );
   }
 
+  /**
+   * Katalog für die Einstellungen (Issue #98). Liefert neben der vollen
+   * `description` die kurze `promptDescription` als `shortDescription`: die
+   * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
+   * Interne Tools (`internal: true`, z. B. debug_wait) bleiben dem Modell
+   * erhalten, tauchen in den Einstellungen aber nicht auf.
+   */
   function listCatalog() {
-    return [...definitions.values()].map((definition) => ({
-      name: definition.name,
-      description: definition.description,
-      riskClass: definition.riskClass,
-    }));
+    return [...definitions.values()]
+      .filter((definition) => definition.internal !== true)
+      .map((definition) => ({
+        name: definition.name,
+        description: definition.description,
+        shortDescription: definition.promptDescription || definition.description,
+        riskClass: definition.riskClass,
+      }));
   }
 
   function getTools(options = {}) {
@@ -446,6 +456,9 @@ function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner
     {
       name: 'debug_wait',
       riskClass: TOOL_RISK_CLASSES.READ,
+      // Nur für UI-Tests: dem Modell weiterhin angeboten, in den
+      // Einstellungen aber ausgeblendet (Issue #98).
+      internal: true,
       targets: () => [],
       description:
         'Nur zum UI-Test: wartet eine konfigurierbare Zeit und liefert danach OK zurück. Kein Dateizugriff.',

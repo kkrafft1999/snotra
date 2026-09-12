@@ -2642,6 +2642,187 @@ select.modal-input {
   max-width: 64ch;
 }
 
+/* Einstellungen › Tools › Verfügbare Tools (Issue #98).
+ *
+ * Ein gemeinsames Grid über alle Gruppen: die Namensspalte fluchtet dadurch
+ * auch gruppenübergreifend und waechst mit dem laengsten Tool-Namen mit —
+ * wichtig, sobald MCP-Tools mit Server-Praefix dazukommen (#62). Gruppen und
+ * Zeilen reichen die Spalten per `subgrid` durch, statt `display: contents`
+ * zu nutzen, damit die Listen-Semantik fuer Screenreader erhalten bleibt. */
+.settings-tool-groups {
+  display: grid;
+  grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.settings-tool-group,
+.settings-tool-rows,
+.settings-tool-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.settings-tool-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-tool-group__head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 14px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.settings-tool-group:first-child .settings-tool-group__head {
+  margin-top: 0;
+}
+
+.settings-tool-group__title {
+  font-size: var(--ds-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ds-grey-strong);
+}
+
+.settings-tool-group__note,
+.settings-tool-group__count {
+  font-size: var(--ds-font-size-xs);
+  color: var(--ds-grey-muted);
+}
+
+.settings-tool-group__count {
+  margin-left: auto;
+}
+
+.settings-tool-group__all {
+  font: inherit;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: var(--ds-radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ds-grey-strong);
+}
+
+.settings-tool-group__all:hover {
+  border-color: var(--ds-blue);
+  color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.settings-tool-row {
+  align-items: center;
+  column-gap: 10px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.settings-tool-rows .settings-tool-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-tool-row__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Klickflaeche mindestens 32 px hoch (Regel ui-design-tokens). */
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.settings-tool-row__name {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+
+/* Kurztext samt Pfeil ist ein Button: ein grosses Klickziel, das denselben
+ * Zustand per Tastatur und fuer Screenreader traegt (aria-expanded). */
+.settings-tool-row__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tool-row__summary:hover {
+  color: var(--ds-blue);
+}
+
+.settings-tool-row__short {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-tool-row__short--plain {
+  align-self: center;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-muted);
+}
+
+.settings-tool-row__chevron {
+  flex: none;
+  transition: transform var(--ds-motion-fast, 0.15s ease);
+}
+
+.settings-tool-row--open .settings-tool-row__chevron {
+  transform: rotate(90deg);
+}
+
+.settings-tool-row__desc {
+  grid-column: 2;
+  align-self: start;
+  margin: 0;
+  padding: 0 0 11px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  line-height: var(--ds-line-height-prose, 1.5);
+  max-width: 66ch;
+}
+
+/* Schmaler Dialog: Name und Kurztext untereinander statt in zwei Spalten. */
+@media (max-width: 640px) {
+  .settings-tool-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-tool-row__desc {
+    grid-column: 1 / -1;
+    padding-left: 24px;
+  }
+
+  .settings-tool-row__summary,
+  .settings-tool-row__short--plain {
+    min-height: 0;
+    padding-bottom: 8px;
+    padding-left: 24px;
+  }
+}
+
 /* Skills-Panel: Gruppenüberschrift je Quelle, Pfadzeile je Skill (Issue #18). */
 .settings-skill-group {
   margin: 14px 0 6px;
@@ -3174,7 +3355,8 @@ select.modal-input {
   .chat-tool-log--running {
     animation: none;
   }
-  .chat-tool-chevron {
+  .chat-tool-chevron,
+  .settings-tool-row__chevron {
     transition: none;
   }
   .chat-tool-line--running .chat-tool-line-text,

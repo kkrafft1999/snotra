@@ -1,6 +1,18 @@
 import contracts from '../generated/contracts.js';
+import {
+  groupToolCatalog,
+  groupCountLabel,
+  groupToggleLabel,
+  toolShortText,
+  toolDetailText,
+  toolStatusBadge,
+} from '../utils/tool-catalog-view.js';
 
 const SETTINGS_NAV_LABELS = { models: 'Modelle', tools: 'Tools', skills: 'Skills', general: 'Allgemein' };
+
+/** Aufklapp-Pfeil der Tool-Zeilen (Issue #98); dreht sich per CSS. */
+const CHEVRON_ICON_HTML =
+  '<svg class="settings-tool-row__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
 const {
   formatPresetSublabelFromView,
   presetIdentityKey,
@@ -453,82 +465,166 @@ export function initSettingsModal(deps) {
     }
   }
 
+  /**
+   * Einstellungen › Tools › Verfügbare Tools (Issue #98).
+   *
+   * Gruppiert nach Risikoklasse; je Zeile Häkchen, Name und Kurztext. Der
+   * Volltext aus der Registry klappt auf Wunsch darunter auf — als Button mit
+   * `aria-expanded`, damit er auch per Tastatur erreichbar ist. Die Klasse
+   * steht einmal im Gruppenkopf statt als Badge in jeder Zeile.
+   */
   function renderToolList() {
     if (!settingsToolList) return;
     settingsToolList.innerHTML = '';
     const empty = settingsToolCatalog.length === 0;
     settingsToolListEmpty?.classList.toggle('hidden', !empty);
 
-    for (const tool of settingsToolCatalog) {
-      const li = document.createElement('li');
-      li.className = 'settings-tool-item';
-
-      const label = document.createElement('label');
-      label.className = 'modal-checkbox settings-tool-item__checkbox';
-
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.dataset.toolName = tool.name;
-      input.checked = !settingsDisabledToolsDraft.has(tool.name);
-
-      const main = document.createElement('span');
-      main.className = 'settings-tool-item__main';
-
-      const name = document.createElement('code');
-      name.className = 'settings-tool-item__name';
-      name.setAttribute('lang', 'en');
-      name.textContent = tool.name;
-      main.appendChild(name);
-
-      if (tool.riskClass === 'write') {
-        const badge = document.createElement('span');
-        badge.className = 'settings-tool-item__badge';
-        badge.textContent = 'Schreib-Tool';
-        badge.title = 'Dateiänderungen fragen im Modus „Intelligent“ vor der Ausführung nach deiner Freigabe.';
-        main.appendChild(badge);
-      }
-      if (tool.riskClass === 'execute') {
-        const badge = document.createElement('span');
-        badge.className = 'settings-tool-item__badge';
-        badge.textContent = 'Führt Code aus';
-        badge.title = 'Der Code läuft mit deinen Rechten und ist nicht auf den Projektordner begrenzt. Snotra zeigt vor jedem Lauf den Quelltext zur Freigabe.';
-        main.appendChild(badge);
-      }
-      if (tool.riskClass === 'external') {
-        const badge = document.createElement('span');
-        badge.className = 'settings-tool-item__badge';
-        badge.textContent = 'Externer Dienst';
-        badge.title = 'Der Aufruf verlässt deinen Rechner und fragt im Modus „Intelligent“ vorher nach deiner Freigabe.';
-        main.appendChild(badge);
-      }
-      if (tool.name === 'run_python' && !pythonReady) {
-        const badge = document.createElement('span');
-        badge.className = 'settings-tool-item__badge';
-        badge.textContent = 'Nicht eingerichtet';
-        badge.title = 'Ohne erlaubte und gefundene Python-Installation wird das Tool dem Modell nicht angeboten (siehe „Python ausführen“).';
-        main.appendChild(badge);
-      }
-      if (tool.name === 'web_search' && !webSearchHasKey) {
-        const badge = document.createElement('span');
-        badge.className = 'settings-tool-item__badge';
-        badge.textContent = 'Schlüssel fehlt';
-        badge.title = 'Ohne Tavily-Schlüssel wird das Tool dem Modell nicht angeboten (siehe „Websuche“ weiter unten).';
-        main.appendChild(badge);
-      }
-
-      label.appendChild(input);
-      label.appendChild(main);
-      li.appendChild(label);
-
-      if (tool.description) {
-        const desc = document.createElement('p');
-        desc.className = 'settings-tool-item__desc';
-        desc.textContent = tool.description;
-        li.appendChild(desc);
-      }
-
-      settingsToolList.appendChild(li);
+    for (const group of groupToolCatalog(settingsToolCatalog)) {
+      settingsToolList.appendChild(renderToolGroup(group));
     }
+    syncToolGroupHeads();
+  }
+
+  function renderToolGroup(group) {
+    const section = document.createElement('section');
+    section.className = 'settings-tool-group';
+    section.dataset.riskClass = group.riskClass;
+
+    const head = document.createElement('div');
+    head.className = 'settings-tool-group__head';
+
+    const title = document.createElement('h4');
+    title.className = 'settings-tool-group__title';
+    title.id = `heading-tool-group-${group.riskClass}`;
+    title.textContent = group.label;
+    head.appendChild(title);
+
+    if (group.note) {
+      const note = document.createElement('span');
+      note.className = 'settings-tool-group__note';
+      note.textContent = group.note;
+      head.appendChild(note);
+    }
+
+    const count = document.createElement('span');
+    count.className = 'settings-tool-group__count';
+    head.appendChild(count);
+
+    const toggleAll = document.createElement('button');
+    toggleAll.type = 'button';
+    toggleAll.className = 'settings-tool-group__all';
+    toggleAll.dataset.riskClass = group.riskClass;
+    head.appendChild(toggleAll);
+
+    section.appendChild(head);
+
+    const list = document.createElement('ul');
+    list.className = 'settings-tool-rows';
+    list.setAttribute('aria-labelledby', title.id);
+    for (const tool of group.tools) list.appendChild(renderToolRow(tool));
+    section.appendChild(list);
+    return section;
+  }
+
+  function renderToolRow(tool) {
+    const li = document.createElement('li');
+    li.className = 'settings-tool-row';
+
+    const label = document.createElement('label');
+    label.className = 'settings-tool-row__check';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.toolName = tool.name;
+    input.checked = !settingsDisabledToolsDraft.has(tool.name);
+    label.appendChild(input);
+
+    const name = document.createElement('code');
+    name.className = 'settings-tool-row__name';
+    name.setAttribute('lang', 'en');
+    name.textContent = tool.name;
+    label.appendChild(name);
+    li.appendChild(label);
+
+    const short = toolShortText(tool);
+    const detail = toolDetailText(tool);
+    const badge = toolStatusBadge(tool, { pythonReady, webSearchHasKey });
+
+    if (detail) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'settings-tool-row__summary';
+      toggle.setAttribute('aria-expanded', 'false');
+      const descId = `tool-desc-${tool.name}`;
+      toggle.setAttribute('aria-controls', descId);
+
+      const shortEl = document.createElement('span');
+      shortEl.className = 'settings-tool-row__short';
+      shortEl.textContent = short;
+      toggle.appendChild(shortEl);
+      if (badge) toggle.appendChild(toolBadgeElement(badge));
+      toggle.insertAdjacentHTML('beforeend', CHEVRON_ICON_HTML);
+      li.appendChild(toggle);
+
+      const desc = document.createElement('p');
+      desc.className = 'settings-tool-row__desc';
+      desc.id = descId;
+      desc.textContent = detail;
+      desc.hidden = true;
+      li.appendChild(desc);
+
+      toggle.addEventListener('click', () => {
+        const open = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        desc.hidden = open;
+        li.classList.toggle('settings-tool-row--open', !open);
+      });
+    } else {
+      const shortEl = document.createElement('span');
+      shortEl.className = 'settings-tool-row__short settings-tool-row__short--plain';
+      shortEl.textContent = short;
+      li.appendChild(shortEl);
+      if (badge) li.appendChild(toolBadgeElement(badge));
+    }
+
+    return li;
+  }
+
+  function toolBadgeElement({ text, title }) {
+    const badge = document.createElement('span');
+    badge.className = 'settings-tool-item__badge settings-tool-row__badge';
+    badge.textContent = text;
+    badge.title = title;
+    return badge;
+  }
+
+  /** Zähler und Schalterbeschriftung je Gruppe nach jeder Änderung angleichen. */
+  function syncToolGroupHeads() {
+    if (!settingsToolList) return;
+    for (const section of settingsToolList.querySelectorAll('.settings-tool-group')) {
+      const boxes = [...section.querySelectorAll('input[type="checkbox"][data-tool-name]')];
+      if (boxes.length === 0) continue;
+      const active = boxes.filter((box) => box.checked).length;
+      const count = section.querySelector('.settings-tool-group__count');
+      if (count) count.textContent = groupCountLabel(boxes.length, active);
+      const toggleAll = section.querySelector('.settings-tool-group__all');
+      if (toggleAll) toggleAll.textContent = groupToggleLabel(boxes.length, active);
+    }
+  }
+
+  /** „alle an/aus“ im Gruppenkopf: setzt nur den Entwurf, gespeichert wird mit „Übernehmen“. */
+  function toggleToolGroup(section) {
+    const boxes = [...section.querySelectorAll('input[type="checkbox"][data-tool-name]')];
+    if (boxes.length === 0) return;
+    const turnOn = boxes.some((box) => !box.checked);
+    for (const box of boxes) {
+      box.checked = turnOn;
+      const name = box.dataset.toolName;
+      if (!name) continue;
+      if (turnOn) settingsDisabledToolsDraft.delete(name);
+      else settingsDisabledToolsDraft.add(name);
+    }
+    syncToolGroupHeads();
   }
 
   function renderSkillList() {
@@ -1236,6 +1332,14 @@ export function initSettingsModal(deps) {
     if (!name) return;
     if (input.checked) settingsDisabledToolsDraft.delete(name);
     else settingsDisabledToolsDraft.add(name);
+    syncToolGroupHeads();
+  });
+
+  settingsToolList?.addEventListener('click', (e) => {
+    const button = e.target.closest('.settings-tool-group__all');
+    if (!button) return;
+    const section = button.closest('.settings-tool-group');
+    if (section) toggleToolGroup(section);
   });
 
   settingsSkillList?.addEventListener('change', (e) => {

@@ -121,10 +121,63 @@ test('registry lists its full catalog with risk classes independent of filters',
     definition('write', { riskClass: TOOL_RISK_CLASSES.WRITE }),
   ]);
 
+  // Der Katalog traegt beide Texte: die Einstellungen zeigen den Kurztext und
+  // klappen den Volltext auf Wunsch auf (Issue #98).
   assert.deepEqual(registry.listCatalog(), [
-    { name: 'read', description: 'Beschreibung für read', riskClass: 'read' },
-    { name: 'write', description: 'Beschreibung für write', riskClass: 'write' },
+    {
+      name: 'read',
+      description: 'Beschreibung für read',
+      shortDescription: 'Prompt für read',
+      riskClass: 'read',
+    },
+    {
+      name: 'write',
+      description: 'Beschreibung für write',
+      shortDescription: 'Prompt für write',
+      riskClass: 'write',
+    },
   ]);
+});
+
+test('catalog falls back to the full description when a tool has no short text', () => {
+  const { promptDescription, ...withoutShort } = definition('read');
+  const registry = createToolRegistry([withoutShort]);
+
+  assert.deepEqual(registry.listCatalog(), [
+    {
+      name: 'read',
+      description: 'Beschreibung für read',
+      shortDescription: 'Beschreibung für read',
+      riskClass: 'read',
+    },
+  ]);
+});
+
+test('internal tools stay available to the model but leave the settings catalog', () => {
+  const registry = createToolRegistry([
+    definition('read'),
+    { ...definition('debug_wait'), internal: true },
+  ]);
+
+  assert.deepEqual(
+    registry.listCatalog().map((entry) => entry.name),
+    ['read']
+  );
+  // Dem Modell wird das Tool weiterhin angeboten — es dient den UI-Tests.
+  assert.deepEqual(
+    registry.getTools().map((tool) => tool.function.name),
+    ['read', 'debug_wait']
+  );
+});
+
+test('debug_wait is marked internal in the workspace registry', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: {} });
+
+  assert.equal(
+    registry.listCatalog().some((entry) => entry.name === 'debug_wait'),
+    false
+  );
+  assert.equal(registry.getDefinition('debug_wait').internal, true);
 });
 
 test('registry executes handlers with request context', async () => {
@@ -226,8 +279,9 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // erreicht es das Modell nicht (Issue #86).
   assert.equal(names.includes('run_python'), false);
 
-  // Konzept §2: acht Lesetools und debug_wait → read, drei Schreibtools → write,
-  // web_search → external.
+  // Konzept §2: acht Lesetools → read, drei Schreibtools → write,
+  // web_search → external. debug_wait ist read, steht aber als internes
+  // Test-Tool nicht im Katalog der Einstellungen (Issue #98).
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   const readTools = [
     'list_directory',
@@ -238,13 +292,14 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'stat_path',
     'outline_file',
     'list_directory_tree',
-    'debug_wait',
   ];
   for (const name of readTools) assert.equal(classes[name], 'read', name);
   for (const name of ['write_file_text', 'edit_file', 'apply_patch']) assert.equal(classes[name], 'write', name);
   assert.equal(classes.web_search, 'external');
   assert.equal(classes.run_python, 'execute');
-  assert.equal(Object.keys(classes).length, 14);
+  assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
+  assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
+  assert.equal(Object.keys(classes).length, 13);
 });
 
 test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (Issue #66)', () => {
