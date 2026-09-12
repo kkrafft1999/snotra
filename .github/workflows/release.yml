@@ -182,3 +182,9 @@ jobs:
           files: dist/**/*
           fail_on_unmatched_files: true
           generate_release_notes: true
+          # Tags mit SemVer-Suffix (v1.6.0-rc.1, v1.5.1-debtest) sind Vorab-
+          # Versionen und werden als Prerelease veroeffentlicht. Die App fragt
+          # GET /releases/latest ab, und GitHub liefert dort weder Drafts noch
+          # Prereleases — ein Testbuild wird laufenden Installationen also nie
+          # als Update angeboten (src/main/services/update-service.js).
+          prerelease: ${{ contains(github.ref_name, '-') }}

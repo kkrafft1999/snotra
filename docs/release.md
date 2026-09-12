@@ -130,6 +130,14 @@ anhängen. Die Pipeline benennt sie einheitlich
 Der Text aus `--notes` erscheint als Release-Body und steht der App im Banner
 als `notes` zur Verfügung.
 
+### Vorab-Versionen
+
+Tags mit SemVer-Suffix (`v1.6.0-rc.1`, `v1.5.1-debtest`) veroeffentlicht die
+Pipeline als **Prerelease**. Das ist die Absicherung fuer Testlaeufe: Die App
+fragt `GET /releases/latest` ab, und GitHub liefert dort weder Drafts noch
+Prereleases — ein Testbuild wird laufenden Installationen also nie als Update
+angeboten. Ohne Suffix entsteht wie bisher ein regulaeres Release.
+
 > Hinweis: Solange die App **nicht code-signiert** ist, zeigt macOS beim ersten
 > Start der neuen Version den Gatekeeper-Dialog. Das ist erwartet und kein
 > Fehler des Update-Wegs. Linux braucht keine Signatur; dort ist nur der
