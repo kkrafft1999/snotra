@@ -88,20 +88,26 @@ cd snotra-ai-<version>-linux-x64
 ./"Snotra AI"
 ```
 
-Das `.deb` ist der empfohlene Weg, weil es beim Paketieren das Setuid-Bit auf
-`chrome-sandbox` setzt und die App ins Anwendungsmenü einträgt. Das
-**AppImage** braucht keine Installation und keine root-Rechte — nach dem
-Download einmal ausführbar machen, das Ausführungsrecht überlebt den Umweg über
-den Browser nicht.
+Das `.deb` ist der empfohlene Weg: Es ist die einzige Variante, in der die
+Chromium-Sandbox fertig eingerichtet ist (Setuid-Bit auf `chrome-sandbox`), und
+es trägt die App ins Anwendungsmenü ein. Das **AppImage** braucht dafür weder
+Installation noch root-Rechte — nach dem Download einmal ausführbar machen, das
+Ausführungsrecht überlebt den Umweg über den Browser nicht.
 
-Nur im **Tarball** fehlt die Sandbox-Vorbereitung: Auf Distributionen, die
-unprivilegierte User-Namespaces einschränken (u. a. Ubuntu ab 24.04), bricht der
-Start mit *„The SUID sandbox helper binary was found, but is not configured
-correctly"* ab. Dann einmal nachziehen:
+**AppImage und Tarball** verlassen sich stattdessen auf unprivilegierte
+User-Namespaces. Auf Distributionen, die diese einschränken — u. a. Ubuntu ab
+24.04 —, kann der Start fehlschlagen. Beim **Tarball** meldet sich das als
+*„The SUID sandbox helper binary was found, but is not configured correctly"*;
+dort hilft es, im entpackten Ordner einmal nachzuziehen:
 
 ```bash
+cd snotra-ai-<version>-linux-x64
 sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
 ```
+
+Beim **AppImage** führt dieser Weg nicht zum Ziel: Das Image wird
+schreibgeschützt und `nosuid` eingehängt, ein Setuid-Bit hätte darin keine
+Wirkung. Dort ist das `.deb` die Lösung.
 
 ## Chat
 
