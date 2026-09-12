@@ -101,13 +101,17 @@ function makeToolRegistryStub(impl) {
     { type: 'function', function: { name: 'list_directory' } },
     { type: 'function', function: { name: 'write_file_text' } },
   ];
+  // Beides sind Datei-Tools: ohne geoeffneten Ordner bleiben sie draussen,
+  // wie in der echten Registry (Issue #96).
+  const visible = ({ workspaceOpen = true } = {}) => (workspaceOpen === false ? [] : tools);
   return {
     calls,
-    getTools() {
-      return tools;
+    getTools(options) {
+      return visible(options);
     },
-    buildSystemPrompt() {
-      return `Tools: ${tools.map((tool) => tool.function.name).join(', ')}`;
+    buildSystemPrompt(options) {
+      const names = visible(options).map((tool) => tool.function.name);
+      return names.length > 0 ? `Tools: ${names.join(', ')}` : '';
     },
     getDefinition(name) {
       return {

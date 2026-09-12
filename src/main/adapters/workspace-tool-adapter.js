@@ -74,6 +74,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     buildSystemPrompt(options) {
       return toolRegistry.buildSystemPrompt(options);
     },
+    // Braucht das Tool einen geoeffneten Projektordner? Unbekannte Tools gelten
+    // als ordnergebunden — die Engine lehnt sie ohne Ordner ab (Issue #96).
+    requiresWorkspace(name) {
+      const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
+      return definition ? definition.requiresWorkspace !== false : true;
+    },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
       if (toolName === 'debug_wait') {

@@ -6,9 +6,10 @@ const {
 } = require('../src/main/tools/workspace-tool-registry');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 
-function definition(name, { riskClass = TOOL_RISK_CLASSES.READ } = {}) {
+function definition(name, { riskClass = TOOL_RISK_CLASSES.READ, requiresWorkspace } = {}) {
   return {
     name,
+    ...(requiresWorkspace === undefined ? {} : { requiresWorkspace }),
     description: `Beschreibung für ${name}`,
     promptDescription: `Prompt für ${name}`,
     parameters: {
@@ -113,6 +114,43 @@ test('registry filters disabled tool names from tools, prompt and execution', as
     registry.getTools({ disabledNames: [] }).map((tool) => tool.function.name),
     ['read', 'other', 'write']
   );
+});
+
+// Issue #96: Die Tool-Liste haengt nicht mehr pauschal am geoeffneten Ordner.
+test('registry zeigt ohne Workspace nur Tools ohne Ordnerbezug (#96)', () => {
+  const registry = createToolRegistry([
+    definition('read_file_text'),
+    definition('web_search', { riskClass: TOOL_RISK_CLASSES.EXTERNAL, requiresWorkspace: false }),
+  ]);
+
+  const withWorkspace = registry.getTools().map((tool) => tool.function.name);
+  assert.deepEqual(withWorkspace, ['read_file_text', 'web_search']);
+
+  const withoutWorkspace = registry.getTools({ workspaceOpen: false }).map((tool) => tool.function.name);
+  assert.deepEqual(withoutWorkspace, ['web_search'], 'Datei-Tools brauchen einen Ordner');
+});
+
+test('registry lässt den Pfad-Hinweis weg, wenn kein Datei-Tool dabei ist (#96)', () => {
+  const registry = createToolRegistry([
+    definition('read_file_text'),
+    definition('web_search', { riskClass: TOOL_RISK_CLASSES.EXTERNAL, requiresWorkspace: false }),
+  ]);
+
+  const withWorkspace = registry.buildSystemPrompt();
+  assert.match(withWorkspace, /read_file_text/);
+  assert.match(withWorkspace, /relative Pfade zum Ordnerroot/);
+
+  const withoutWorkspace = registry.buildSystemPrompt({ workspaceOpen: false });
+  assert.match(withoutWorkspace, /web_search/);
+  assert.doesNotMatch(withoutWorkspace, /read_file_text/);
+  assert.doesNotMatch(withoutWorkspace, /relative Pfade zum Ordnerroot/);
+});
+
+test('registry liefert ohne Workspace und ohne ordnerfreie Tools einen leeren Prompt (#96)', () => {
+  const registry = createToolRegistry([definition('read_file_text')]);
+
+  assert.deepEqual(registry.getTools({ workspaceOpen: false }), []);
+  assert.equal(registry.buildSystemPrompt({ workspaceOpen: false }), '');
 });
 
 test('registry lists its full catalog with risk classes independent of filters', () => {
@@ -300,6 +338,20 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
   assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
   assert.equal(Object.keys(classes).length, 13);
+});
+
+test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {
+  const registry = createWorkspaceToolRegistry({
+    fsService: makeFsServiceStub(),
+    webSearch: { isConfigured: () => true, search: async () => ({ ok: true, query: '', results: [] }) },
+  });
+
+  const withoutWorkspace = registry.getTools({ workspaceOpen: false }).map((tool) => tool.function.name);
+  assert.deepEqual(withoutWorkspace, ['web_search']);
+
+  const withWorkspace = registry.getTools().map((tool) => tool.function.name);
+  assert.ok(withWorkspace.includes('list_directory'));
+  assert.ok(withWorkspace.includes('web_search'));
 });
 
 test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (Issue #66)', () => {

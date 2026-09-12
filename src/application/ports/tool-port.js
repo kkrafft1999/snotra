@@ -72,8 +72,9 @@
 
 /**
  * @typedef {Object} ToolPort
- * @property {(options?: { disabledNames?: string[] }) => Array} getTools
- * @property {(options?: { disabledNames?: string[] }) => string} buildSystemPrompt
+ * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => Array} getTools
+ * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => string} buildSystemPrompt
+ * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
  * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry
  * @property {(entry: ToolTraceEntry, phase: string, locale?: string) => string} formatDisplayLine
  * @property {(name: string, args: object, ctx: ToolPlanContext) => Promise<ToolPlan>} plan

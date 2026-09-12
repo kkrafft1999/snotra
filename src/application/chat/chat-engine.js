@@ -129,6 +129,23 @@ function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, 
   return parts.join('\n\n');
 }
 
+/**
+ * Gegenstueck zum Ordnerkontext fuer den Fall „kein Ordner offen, aber Tools
+ * vorhanden" (Issue #96). Ohne diesen Baustein sieht das Modell nur die rohen
+ * Schemas der Tools ohne Ordnerbezug und behauptet weiter, es koenne nichts —
+ * oder es versucht Datei-Tools aufzurufen, die gar nicht in der Liste stehen.
+ */
+function buildNoWorkspaceSystemPrompt({ toolsPrompt }) {
+  if (!toolsPrompt) return '';
+  return [
+    'Es ist kein Projektordner geöffnet. Du hast deshalb keinen Zugriff auf Dateien; '
+      + 'die unten genannten Tools arbeiten ohne Ordnerbezug und stehen dir trotzdem zur Verfügung. '
+      + 'Fragt der Nutzer nach Dateien, sag, dass er dafür erst einen Ordner öffnen muss.',
+    toolsPrompt,
+    TOOL_RESULTS_ARE_DATA_RULE,
+  ].join('\n\n');
+}
+
 function parseToolArguments(rawArguments) {
   try {
     const parsed = JSON.parse(rawArguments || '{}');
@@ -384,18 +401,22 @@ function createChatEngine({
       const disabledNames = Array.isArray(uiPrefs.disabledTools) ? uiPrefs.disabledTools : [];
       // Deaktivierte Tools bleiben unsichtbar und gesperrt; der Modus allein
       // versteckt keine Tools (Konzept §8) — pro Aufruf entscheidet die Policy.
-      const toolOptions = { disabledNames };
+      // Nicht mehr „Ordner offen = Tools an": jedes Tool sagt selbst, ob es
+      // einen Ordner braucht (Issue #96).
+      const workspaceOpen = Boolean(workspaceRoot);
+      const toolOptions = { disabledNames, workspaceOpen };
+      const toolsPrompt = tools.buildSystemPrompt(toolOptions);
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
       // könne keine Dateien lesen oder schreiben.
       const workspaceSystem = workspaceRoot
         ? buildWorkspaceSystemPrompt({
             folderName: workspacePaths.basename(workspaceRoot),
-            toolsPrompt: tools.buildSystemPrompt(toolOptions),
+            toolsPrompt,
             selectedRelPath: selection?.relativePath || null,
             selectedIsDirectory: selection?.isDirectory === true,
           })
-        : '';
+        : buildNoWorkspaceSystemPrompt({ toolsPrompt });
       // Skills gelten unabhängig davon, ob ein Ordner offen ist — die
       // System-Skills beschreiben die App selbst.
       let skillsSystem = '';
@@ -449,7 +470,16 @@ function createChatEngine({
       const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       apiMessages.push(...windowedHistory);
 
-      const toolDefs = workspaceRoot ? tools.getTools(toolOptions) : undefined;
+      const availableToolDefs = tools.getTools(toolOptions);
+      // Eine leere Liste ist kein „keine Tools": manche Provider lehnen ein
+      // leeres tools-Array ab. Ohne Tools bleibt das Feld weg wie bisher.
+      const toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
+      // Ohne Ordner gilt der Zusatz „kein Ordner geöffnet" nur noch für Tools,
+      // die tatsächlich einen brauchen (Issue #96).
+      const needsWorkspace = (toolName) =>
+        typeof tools.requiresWorkspace === 'function' ? tools.requiresWorkspace(toolName) !== false : true;
+      const traceExtraFor = (toolName) =>
+        !workspaceRoot && needsWorkspace(toolName) ? { noWorkspace: true } : undefined;
       const toolRoundLimit = resolveToolRoundLimit(uiPrefs, maxToolRounds);
       const emitToolLine = (phase, entry, extra = {}) => {
         const line = tools.formatDisplayLine(entry, phase, appLocale);
@@ -464,7 +494,7 @@ function createChatEngine({
           const entry = tools.buildTraceEntry(
             pending.tool,
             { ...pending.args },
-            workspaceRoot ? undefined : { noWorkspace: true }
+            traceExtraFor(pending.tool)
           );
           emitToolLine(TOOL_LINE_PHASES.PENDING, entry, { callIndex: pending.callIndex });
         },
@@ -849,20 +879,18 @@ function createChatEngine({
           }
           const toolName = toolCall.function?.name || 'tool';
           const args = parseToolArguments(toolCall.function?.arguments);
-          const entry = tools.buildTraceEntry(
-            toolName,
-            args,
-            workspaceRoot ? undefined : { noWorkspace: true }
-          );
+          const entry = tools.buildTraceEntry(toolName, args, traceExtraFor(toolName));
           toolTrace.push(entry);
           emitToolLine(TOOL_LINE_PHASES.START, entry, { callIndex });
 
-          if (!workspaceRoot) {
+          if (!workspaceRoot && needsWorkspace(toolName)) {
             emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
             apiMessages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: JSON.stringify({ error: 'Kein Arbeitsordner geöffnet; Tools nicht verfügbar.' }),
+              content: JSON.stringify({
+                error: `Kein Arbeitsordner geöffnet; ${toolName} ist ohne Ordner nicht verfügbar.`,
+              }),
             });
             continue;
           }

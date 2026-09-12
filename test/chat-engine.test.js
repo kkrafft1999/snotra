@@ -34,14 +34,26 @@ function makeApprovals(answer = 'allow-once') {
   };
 }
 
-function makeToolPort(execute) {
+function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresWorkspace: true }] } = {}) {
   const calls = [];
   const planCalls = [];
+  // Wie die echte Registry (Issue #96): ohne geoeffneten Ordner bleiben nur die
+  // Tools ohne Ordnerbezug in Liste und Prompt.
+  const visible = ({ workspaceOpen = true, disabledNames = [] } = {}) =>
+    toolDefs.filter(
+      (def) => (workspaceOpen !== false || def.requiresWorkspace === false) && !disabledNames.includes(def.name)
+    );
   return {
     calls,
     planCalls,
-    getTools: () => [{ type: 'function', function: { name: 'list_directory' } }],
-    buildSystemPrompt: () => 'Tools: list_directory',
+    getTools: (options) =>
+      visible(options).map((def) => ({ type: 'function', function: { name: def.name } })),
+    buildSystemPrompt: (options) => {
+      const names = visible(options).map((def) => def.name);
+      return names.length > 0 ? `Tools: ${names.join(', ')}` : '';
+    },
+    requiresWorkspace: (name) =>
+      toolDefs.find((def) => def.name === name)?.requiresWorkspace !== false,
     async plan(toolName, args, context) {
       planCalls.push({ toolName, args, context });
       return defaultPlan(toolName, args);
@@ -216,6 +228,82 @@ test('engine sends no system message without baseSystemPrompt and without worksp
   });
 
   assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+});
+
+// Issue #96: Eine Internetsuche braucht keinen Projektordner. Tools ohne
+// Ordnerbezug werden deshalb auch ohne geoeffneten Ordner angeboten.
+const WORKSPACE_FREE_TOOLS = [
+  { name: 'list_directory', requiresWorkspace: true },
+  { name: 'web_search', requiresWorkspace: false },
+];
+
+test('engine bietet Tools ohne Ordnerbezug auch ohne geöffneten Ordner an (#96)', async () => {
+  const tools = makeToolPort(undefined, { toolDefs: WORKSPACE_FREE_TOOLS });
+  const { engine, calls } = makeEngine([assistantText('ok')], { tools });
+
+  await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+
+  assert.deepEqual(calls[0].tools.map((tool) => tool.function.name), ['web_search']);
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system, 'ohne Ordner, aber mit Tools gehört ein System-Prompt dazu');
+  assert.match(system.content, /Es ist kein Projektordner geöffnet/);
+  assert.match(system.content, /Tools: web_search/);
+  // Der Pfad-Hinweis der Datei-Tools hat hier nichts zu suchen.
+  assert.doesNotMatch(system.content, /geöffneten Ordner „/);
+});
+
+test('engine lässt Datei-Tools ohne Ordner unverändert draußen (#96)', async () => {
+  const tools = makeToolPort(undefined, { toolDefs: WORKSPACE_FREE_TOOLS });
+  const { engine, calls } = makeEngine([
+    assistantToolCall('call_1', 'list_directory', { relative_path: 'src' }),
+    assistantText('fertig'),
+  ], { tools });
+
+  await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Liste' }] } });
+
+  assert.equal(tools.calls.length, 0, 'ohne Ordner wird kein Datei-Tool ausgeführt');
+  const toolMessage = calls[1].messages.find((m) => m.role === 'tool');
+  assert.match(toolMessage.content, /Kein Arbeitsordner geöffnet; list_directory/);
+});
+
+test('engine führt ein Tool ohne Ordnerbezug auch ohne Ordner aus (#96)', async () => {
+  const tools = makeToolPort(
+    async () => JSON.stringify({ count: 0, results: [] }),
+    { toolDefs: WORKSPACE_FREE_TOOLS }
+  );
+  const { engine } = makeEngine([
+    assistantToolCall('call_1', 'web_search', { query: 'Snotra AI' }),
+    assistantText('fertig'),
+  ], { tools });
+
+  await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Such mal' }] } });
+
+  assert.equal(tools.calls.length, 1);
+  assert.equal(tools.calls[0].toolName, 'web_search');
+});
+
+test('engine markiert nur ordnergebundene Tools als „kein Ordner geöffnet" (#96)', async () => {
+  const tools = makeToolPort(
+    async () => JSON.stringify({ ok: true }),
+    { toolDefs: WORKSPACE_FREE_TOOLS }
+  );
+  const { engine } = makeEngine([
+    assistantToolCall('call_1', 'web_search', { query: 'x' }),
+    assistantText('fertig'),
+  ], { tools });
+  const events = [];
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Such mal' }] },
+    onEvent: (event) => events.push(event),
+  });
+
+  const toolEvents = events.filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE);
+  assert.deepEqual(toolEvents.map((event) => event.payload.phase), ['start', 'done']);
+  for (const event of toolEvents) {
+    assert.doesNotMatch(event.payload.line, /kein Ordner geöffnet/);
+  }
 });
 
 test('engine describes the open folder and the available tools', async () => {
@@ -523,7 +611,7 @@ test('engine zeigt Schreib-Tools unabhaengig vom alten Schreibschalter (Issue #6
     },
   });
 
-  assert.deepEqual(getToolsCalls, [{ disabledNames: [] }]);
+  assert.deepEqual(getToolsCalls, [{ disabledNames: [], workspaceOpen: true }]);
   assert.equal(calls[0].tools[0].function.name, 'write_file_text');
 });
 
@@ -555,7 +643,7 @@ test('engine passes disabled tools to registry and execution context', async () 
   });
 
   assert.deepEqual(getToolsCalls, [
-    { disabledNames: ['debug_wait', 'search_in_files'] },
+    { disabledNames: ['debug_wait', 'search_in_files'], workspaceOpen: true },
   ]);
   assert.deepEqual(tools.calls[0].context.disabledNames, ['debug_wait', 'search_in_files']);
 });

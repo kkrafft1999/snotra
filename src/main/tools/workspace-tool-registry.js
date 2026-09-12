@@ -36,6 +36,10 @@ function createToolRegistry(initialDefinitions = []) {
     definitions.set(name, {
       ...definition,
       riskClass,
+      // Standard true: die Datei-Tools haben ohne Ordner keinen Bezugspunkt.
+      // Tools ohne Ordnerbezug (Websuche) setzen false und werden dem Modell
+      // auch ohne geoeffneten Projektordner angeboten (Issue #96).
+      requiresWorkspace: definition.requiresWorkspace !== false,
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
@@ -45,13 +49,15 @@ function createToolRegistry(initialDefinitions = []) {
   // Sichtbarkeit hängt nur an den Tool-Häkchen (disabledNames) bzw. einer
   // expliziten Allowlist. Ob ein Aufruf laufen darf, entscheidet pro Aufruf
   // die Policy in der Engine (Issue #66) — nicht mehr ein globaler Schreibschalter.
-  function getAvailableDefinitions({ allowedNames, disabledNames } = {}) {
+  function getAvailableDefinitions({ allowedNames, disabledNames, workspaceOpen = true } = {}) {
     const allowed = toAllowedNameSet(allowedNames);
     const disabled = toDisabledNameSet(disabledNames);
     return [...definitions.values()].filter(
       (definition) =>
         (!allowed || allowed.has(definition.name)) &&
         (!disabled || !disabled.has(definition.name)) &&
+        // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96).
+        (workspaceOpen !== false || definition.requiresWorkspace === false) &&
         // Tools, die eine Konfiguration brauchen (Issue #63: Schluessel fuer
         // die Websuche), werden dem Modell ohne sie gar nicht erst gezeigt —
         // besser als ein Aufruf, der zur Laufzeit scheitert.
@@ -96,10 +102,14 @@ function createToolRegistry(initialDefinitions = []) {
       (definition) =>
         `- ${definition.name}: ${definition.promptDescription || definition.description}`
     );
-    let prompt =
-      `Du hast folgende Tools zur Verfügung:\n${toolLines.join('\n')}\n` +
-      `Nutze für Datei-Tools nur relative Pfade zum Ordnerroot ` +
-      `(z. B. "" oder "." für die Wurzel, "src/index.js" für eine Datei).`;
+    let prompt = `Du hast folgende Tools zur Verfügung:\n${toolLines.join('\n')}`;
+    // Ohne Datei-Tools waere der Pfad-Hinweis sinnlos — ohne geoeffneten Ordner
+    // stehen nur die Tools ohne Ordnerbezug in der Liste (Issue #96).
+    if (available.some((definition) => definition.requiresWorkspace !== false)) {
+      prompt +=
+        `\nNutze für Datei-Tools nur relative Pfade zum Ordnerroot ` +
+        `(z. B. "" oder "." für die Wurzel, "src/index.js" für eine Datei).`;
+    }
 
     if (available.some((definition) => definition.riskClass === TOOL_RISK_CLASSES.WRITE)) {
       prompt +=
@@ -692,6 +702,8 @@ function createWorkspaceToolRegistry({ fsService, webSearch = null, pythonRunner
       // die Policy im Modus „Intelligent" vor jeder Suche nach (Issue #66) —
       // die Suchanfrage selbst ist der Inhalt, der nach draussen geht.
       riskClass: TOOL_RISK_CLASSES.EXTERNAL,
+      // Eine Internetsuche hat keinen Bezugspunkt im Dateisystem (Issue #96).
+      requiresWorkspace: false,
       targets: () => [],
       isAvailable: () => webSearch?.isConfigured() === true,
       description:
