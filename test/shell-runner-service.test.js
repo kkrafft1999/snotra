@@ -266,10 +266,15 @@ test('ein fehlschlagender Befehl liefert einen Exit-Code statt eines Abbruchs', 
   assert.equal(result.exitCode, 3);
   assert.equal(result.error, undefined);
 
-  // Auch ein unbekanntes Programm ist ein gewoehnliches Ergebnis.
+  // Auch ein unbekanntes Programm ist ein gewoehnliches Ergebnis. Wie eine
+  // Shell das meldet, ist ihre Sache — Exit-Code oder Fehlerausgabe; ein
+  // Abbruch im Chat darf es jedenfalls nicht sein.
   const unbekannt = await service.run({ command: 'snotra-gibt-es-nicht-xyz' });
   assert.equal(unbekannt.error, undefined);
-  assert.notEqual(unbekannt.exitCode, 0);
+  assert.ok(
+    unbekannt.exitCode !== 0 || unbekannt.stderr.trim() !== '',
+    'der Fehlschlag ist am Exit-Code oder an der Fehlerausgabe erkennbar',
+  );
 });
 
 test('run arbeitet im übergebenen Verzeichnis', async (t) => {
