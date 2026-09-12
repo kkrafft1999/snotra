@@ -12,8 +12,15 @@ const fs = require('fs');
 const path = require('path');
 
 const rendererDir = path.join(__dirname, '..', 'src', 'renderer');
-const css = fs.readFileSync(path.join(rendererDir, 'styles.css'), 'utf8');
-const tokens = fs.readFileSync(path.join(rendererDir, 'styles', 'tokens.css'), 'utf8');
+
+// Zeilenenden normalisieren: Auf den Windows-Runnern steht core.autocrlf=true,
+// die Stylesheets kommen dort also mit CRLF aus dem Checkout. Die Selektoren
+// unten werden mit hartem \n gesucht — ohne diese Zeile findet indexOf()
+// nichts und der Test faellt allein unter Windows um (vgl. Issue #86).
+const read = (...p) => fs.readFileSync(path.join(rendererDir, ...p), 'utf8').replace(/\r\n/g, '\n');
+
+const css = read('styles.css');
+const tokens = read('styles', 'tokens.css');
 
 /** Deklarationen einer Regel, an ihrem Selektor gesucht. */
 function declarations(selector) {
