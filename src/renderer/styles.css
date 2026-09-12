@@ -104,6 +104,24 @@ html, body {
   user-select: none;
 }
 
+/* ── Links ───────────────────────────────────────────────────────────────────
+ * Ohne diese Grundregel erben Links das Browser-Blau (#0000EE, besucht
+ * #551A8B) — im Dunkelmodus rund 1,7:1 auf --ds-grey-bg und damit unlesbar
+ * (Issue #105). --accent-text ist der vorgesehene Alias fuer farbigen Text
+ * und traegt je Theme die einzige Akzentfarbe.
+ * `:visited` wird bewusst gleich eingefaerbt: Mono-Blue kennt nur eine
+ * Akzentfarbe, und das Violett des Browsers waere eine zweite. Unterstrichen,
+ * weil ein Link nicht allein an der Farbe erkennbar sein darf (WCAG 1.4.1). */
+a,
+a:visited {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
 /* ── Phase 1 (a11y): Globaler Fokus-Ring ─────────────────────────────────────
  * Pflicht aus docs/ui-design/doubleslash-a11y-regeln.md: jedes interaktive
  * Element bekommt einen sichtbaren Ring bei Tastatur-Navigation.
@@ -1434,11 +1452,6 @@ summary:focus-visible,
   font-size: inherit;
 }
 
-.chat-md a {
-  color: var(--accent-text);           /* Mono-Blue: --ds-blue, Kontrast sicher */
-  text-decoration: underline;
-  cursor: pointer;
-}
 
 .chat-md table {
   border-collapse: collapse;
