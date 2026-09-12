@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title data-i18n="meta.title">Snotra AI — Software wird nicht gekauft. Sie wird beschrieben.</title>
+<meta name="description" data-i18n-attr="content:meta.description" content="Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, jedes CLI auf deinem Rechner wird zum Werkzeug, das Modell ist austauschbar. Kein Server, kein Konto, keine Telemetrie.">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="canonical" href="https://snotra-ai.dev/">
+<link rel="alternate" hreflang="de" href="https://snotra-ai.dev/?lang=de">
+<link rel="alternate" hreflang="en" href="https://snotra-ai.dev/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://snotra-ai.dev/?lang=de">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://snotra-ai.dev/">
+<meta property="og:site_name" content="Snotra AI">
+<meta property="og:title" data-i18n-attr="content:meta.title" content="Snotra AI — Software wird nicht gekauft. Sie wird beschrieben.">
+<meta property="og:description" data-i18n-attr="content:meta.description" content="Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, jedes CLI auf deinem Rechner wird zum Werkzeug, das Modell ist austauschbar. Kein Server, kein Konto, keine Telemetrie.">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<script>document.documentElement.classList.add('js');</script>
+
+<div class="gridlines" aria-hidden="true"><div class="wrap"><div class="cells"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div></div>
+
+<a class="skip" href="#main" data-i18n="skiplink.text">Zum Inhalt springen</a>
+
+<header class="site-head">
+  <div class="wrap head-in">
+    <a class="brand" href="#main">
+      <span class="brand-mark" aria-hidden="true">//</span>
+      <span class="brand-name">Snotra AI</span>
+    </a>
+    <nav class="head-nav" data-i18n-attr="aria-label:nav.aria" aria-label="Hauptnavigation">
+      <a href="#entscheidungen" data-collapsible data-i18n="nav.entscheidungen">Entscheidungen</a>
+      <a href="#einsatzfelder" data-optional data-i18n="nav.einsatzfelder">Einsatzfelder</a>
+      <a href="#download" data-i18n="nav.download">Download</a>
+      <a href="https://github.com/kkrafft1999/snotra" data-optional data-i18n="nav.github">GitHub</a>
+      <span class="lang" role="group" data-i18n-attr="aria-label:nav.lang.aria" aria-label="Sprache / Language">
+        <button type="button" class="lang-btn" data-lang="de" lang="de" aria-pressed="true">DE</button>
+        <button type="button" class="lang-btn" data-lang="en" lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+    <a class="btn btn-primary head-cta" href="#download" data-i18n="nav.cta">Herunterladen</a>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+
+  <!-- ========================= HERO ========================= -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="metaline"><span class="deco" aria-hidden="true">//</span><span data-i18n="hero.eyebrow">Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1</span></p>
+        <h1><span data-i18n="hero.h1.zeile1">Software wird nicht gekauft.</span><span class="line2" data-i18n="hero.h1.zeile2">Sie wird beschrieben.</span></h1>
+        <div class="hero-cols">
+          <div class="hero-main">
+            <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein Server, kein Konto, keine Telemetrie.</strong></p>
+            <div class="hero-actions">
+              <a class="btn btn-primary btn-lg" id="hero-cta" data-hero-cta data-size="mac" href="#download" data-i18n="hero.cta.primaer">Für macOS laden — 126 MB</a>
+              <a class="btn btn-secondary btn-lg" href="#download" data-i18n="hero.cta.sekundaer">Windows &amp; Linux</a>
+            </div>
+            <p class="hero-note" data-version data-i18n="hero.note">Version 1.5.1 · quelloffen unter Apache 2.0 · keine Registrierung</p>
+          </div>
+          <aside class="hero-side" data-i18n-attr="aria-label:hero.side.aria" aria-label="Datenblatt">
+            <dl>
+              <div class="row"><dt data-i18n="hero.side.version.label">Version</dt><dd data-version data-i18n="hero.side.version.wert">1.5.1</dd></div>
+              <div class="row"><dt data-i18n="hero.side.lizenz.label">Lizenz</dt><dd data-i18n="hero.side.lizenz.wert">Apache 2.0</dd></div>
+              <div class="row"><dt data-i18n="hero.side.plattformen.label">Plattformen</dt><dd data-i18n="hero.side.plattformen.wert">macOS · Windows · Linux</dd></div>
+              <div class="row"><dt data-i18n="hero.side.konten.label">Konten</dt><dd data-i18n="hero.side.konten.wert">0</dd></div>
+              <div class="row"><dt data-i18n="hero.side.telemetrie.label">Telemetrie</dt><dd data-i18n="hero.side.telemetrie.wert">keine</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <figure class="hero-stage">
+      <!-- Nachgebautes App-Fenster (HTML/CSS). aria-hidden statt role="img":
+           role="img" kappt den Teilbaum in der Praxis nicht — die Attrappe
+           landete sonst samt Geister-Landmarken und einer Ueberschrift im
+           Accessibility-Baum. Beschreibung steht in der figcaption.
+           Enthaelt bewusst kein einziges fokussierbares Element. -->
+      <div class="appwin" aria-hidden="true">
+        <div class="win-title">
+          <span class="win-drag"><i class="win-dot"></i><i class="win-dot"></i><i class="win-dot"></i></span>
+          <span class="win-brand" data-i18n="app.fenster.brand">Snotra AI</span>
+          <span class="win-spacer"></span>
+          <span class="icon-btn-row">
+            <span class="icon-btn"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg></span>
+            <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
+          </span>
+        </div>
+
+        <div class="win-body">
+          <!-- Dateibaum -->
+          <aside class="win-side">
+            <div class="tree-head">
+              <span class="name" data-i18n="app.baum.wurzel">angebote</span>
+              <span class="icon-btn-row">
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span>
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h9A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg></span>
+              </span>
+            </div>
+            <div class="tree-body">
+              <div class="tree-item"><span class="ind" style="width:4px"></span><svg class="arw open" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><svg class="ico" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h9A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><span class="lbl" data-i18n="app.baum.docs">docs</span></div>
+              <div class="tree-item"><span class="ind" style="width:20px"></span><span class="arw" style="visibility:hidden"></span><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="lbl" data-i18n="app.baum.protokoll">protokoll.md</span></div>
+              <div class="tree-item active"><span class="ind" style="width:20px"></span><span class="arw" style="visibility:hidden"></span><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="lbl" data-i18n="app.baum.angebot">angebot-q3.md</span></div>
+              <div class="tree-item"><span class="ind" style="width:20px"></span><span class="arw" style="visibility:hidden"></span><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="lbl" data-i18n="app.baum.preise">preise.csv</span></div>
+              <div class="tree-item"><span class="ind" style="width:4px"></span><svg class="arw open" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg><svg class="ico" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h9A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg><span class="lbl" data-i18n="app.baum.skills">.snotra/skills</span></div>
+              <div class="tree-item"><span class="ind" style="width:20px"></span><span class="arw" style="visibility:hidden"></span><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="lbl" data-i18n="app.baum.skillmd">angebot/SKILL.md</span></div>
+              <div class="tree-item"><span class="ind" style="width:4px"></span><span class="arw" style="visibility:hidden"></span><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="lbl" data-i18n="app.baum.readme">README.md</span></div>
+            </div>
+          </aside>
+
+          <div class="win-divider"></div>
+
+          <!-- Mittlere Spalte -->
+          <div class="win-mid">
+            <div class="prev-head">
+              <span class="prev-name" data-i18n="app.vorschau.name">angebot-q3.md</span>
+              <span class="prev-meta" data-i18n="app.vorschau.meta">markdown · 4,1 KB</span>
+            </div>
+            <div class="prev-body"><span class="h" data-i18n="app.vorschau.h1"># Angebot Q3 — Migration &amp; Schulung</span>
+
+<span data-i18n="app.vorschau.stand">Stand: 12.09.2026</span>
+<span data-i18n="app.vorschau.ansprechpartnerin">Ansprechpartnerin: M. Ehrt-Küver</span>
+
+<span class="h" data-i18n="app.vorschau.h2.offen">## Offene Punkte</span>
+<span data-i18n="app.vorschau.offen.1">- Migrationsfenster noch nicht bestätigt</span>
+<span data-i18n="app.vorschau.offen.2">- Schulungsumfang offen (2 oder 4 Tage)</span>
+<span data-i18n="app.vorschau.offen.3">- Wartung ab Q1 statt ab Abnahme</span>
+
+<span class="h" data-i18n="app.vorschau.h2.positionen">## Positionen</span>
+<span data-i18n="app.vorschau.tabelle.kopf">| Pos | Leistung        | Tage |</span>
+|-----|-----------------|------|
+<span data-i18n="app.vorschau.tabelle.zeile1">| 1   | Migration       |   12 |</span>
+<span data-i18n="app.vorschau.tabelle.zeile2">| 2   | Schulung        |    4 |</span>
+</div>
+          </div>
+
+          <div class="win-divider"></div>
+
+          <!-- Chat-Panel -->
+          <aside class="win-chat">
+            <div class="chat-head">
+              <span class="live-dot"></span>
+              <span class="chat-title" data-i18n="app.chat.titel">Angebot Q3 überarbeiten</span>
+              <span class="icon-btn-row">
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span>
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="icon-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3H9.8l-.4 2.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.7h4.4l.4-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5A7 7 0 0 0 19 12z"/></svg></span>
+              </span>
+            </div>
+
+            <div class="chat-msgs">
+              <div class="msg user" data-i18n="app.chat.nutzernachricht">Fass die offenen Punkte aus docs/protokoll.md ins Angebot ein.</div>
+
+              <div class="msg assistant">
+                <div class="tool-log tool-log--static">
+                  <div>
+                    <span class="tool-line">
+                      <svg class="tool-ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg>
+                      <span class="txt" data-i18n="app.chat.toollog.summary">4 Dateien gelesen · 2 Suchen · 1 Datei geschrieben</span>
+                      <span class="tool-extra">0:12</span>
+                      <svg class="tool-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+                    </span>
+                  </div>
+                  <div class="tool-lines">
+                    <span class="tool-line tool-line--done"><svg class="tool-ico" viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg><span class="txt" data-i18n="app.chat.toollog.zeile1">Datei docs/protokoll.md gelesen</span></span>
+                    <span class="tool-line tool-line--running"><svg class="tool-ico" viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/><path d="M14 6l3 3"/></svg><span class="txt" data-i18n="app.chat.toollog.zeile2">Datei angebot-q3.md wird geschrieben … · wartet auf Freigabe</span></span>
+                  </div>
+                </div>
+
+                <div class="approval" data-state="pending">
+                  <p class="approval-title" data-i18n="app.freigabe.titel">Änderung bestätigen</p>
+                  <p class="approval-headline"><span data-i18n="app.freigabe.headline" data-i18n-code="docs/angebot-q3.md|write_file_text">Snotra möchte <span class="inline-code">docs/angebot-q3.md</span> ändern (<span class="inline-code">write_file_text</span>).</span></p>
+                  <dl class="approval-facts">
+                    <dt data-i18n="app.freigabe.fakt.wirkung.label">Wirkung</dt><dd data-i18n="app.freigabe.fakt.wirkung.wert">Ändern</dd>
+                    <dt data-i18n="app.freigabe.fakt.ziel.label">Ziel</dt><dd><span data-i18n="app.freigabe.fakt.ziel.wert" data-i18n-code="docs/angebot-q3.md">Datei <span class="inline-code">docs/angebot-q3.md</span></span> <span class="badge badge--blue" data-i18n="app.freigabe.fakt.ziel.badge">Stand v3</span></dd>
+                    <dt data-i18n="app.freigabe.fakt.grund.label">Grund</dt><dd data-i18n="app.freigabe.fakt.grund.wert">Offene Punkte aus dem Protokoll ergänzen</dd>
+                    <dt data-i18n="app.freigabe.fakt.modus.label">Modus</dt><dd data-i18n="app.freigabe.fakt.modus.wert">Intelligent</dd>
+                  </dl>
+                  <div class="approval-prev">
+                    <p class="approval-prev-static" data-i18n="app.freigabe.vorschau"><svg class="prev-chev deco" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>Vorschau: Ersetzung (alt → neu)</p>
+                  </div>
+                  <div class="approval-actions">
+                    <span class="btn btn-primary" data-i18n="app.freigabe.btn.einmal">Einmal erlauben</span>
+                    <span class="btn btn-secondary" data-i18n="app.freigabe.btn.sitzung">Für diese Sitzung erlauben</span>
+                    <span class="btn btn-secondary" data-i18n="app.freigabe.btn.ablehnen">Ablehnen</span>
+                  </div>
+                  <p class="approval-hint" data-i18n="app.freigabe.hinweis">Wartet auf deine Entscheidung. Esc lehnt ab.</p>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="composer">
+              <div class="composer-text ph" id="composer-demo" data-i18n="app.composer.platzhalter">Nachricht…</div>
+              <div class="composer-bar">
+                <div class="composer-bar-start">
+                  <span class="icon-btn"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg></span>
+                  <span class="pill"><span data-i18n="app.composer.modellpille">OpenAI · gpt-4o</span> <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+                  <span class="pill pill--mode" data-active="true"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg> <span data-i18n="app.composer.moduspille">Intelligent</span></span>
+                </div>
+                <div class="composer-bar-end">
+                  <span class="tokens" data-i18n="app.composer.tokens">12,4 K Tokens</span>
+                  <span class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <figcaption class="stage-caption">
+        <span class="sr-only" data-i18n="hero.appwin.aria">Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.</span>
+        <span data-i18n="hero.stage.caption">Platzhalter — echter Screenshot folgt</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ========================= ZAHLEN ========================= -->
+  <section class="numbers" data-i18n-attr="aria-label:zahlen.aria" aria-label="Snotra AI in Zahlen">
+    <div class="wrap">
+      <ul class="numbers-grid" role="list">
+        <li class="num"><span class="v" data-count="1">1</span><span class="k" data-i18n="zahlen.01.label">Ordner im Zugriff</span></li>
+        <li class="num"><span class="v" data-count="5">5</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
+        <li class="num"><span class="v" data-count="15">15</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
+        <li class="num"><span class="v v--inf" aria-hidden="true">∞</span><span class="k"><span class="sr-only" data-i18n="zahlen.04.sr">Unbegrenzt viele </span><span data-i18n="zahlen.04.label">Systeme per CLI</span></span></li>
+        <li class="num"><span class="v" data-count="0">0</span><span class="k" data-i18n="zahlen.05.label">Konten</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========================= KLAMMER ========================= -->
+  <section class="claim">
+    <div class="wrap reveal">
+      <div class="rule" aria-hidden="true"></div>
+      <p class="big" data-i18n="klammer.gross">Jede Abteilung ihr Werkzeug. Kein neuer Anbieter.</p>
+      <p class="small" data-i18n="klammer.klein">Der Assistent kommt zu den Dateien, nicht die Dateien zum Assistenten.</p>
+    </div>
+  </section>
+
+  <!-- ========================= VIER SÄULEN ========================= -->
+  <section class="section" id="entscheidungen">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="sec-label" data-i18n="saeulen.label"><span class="deco" aria-hidden="true">//</span>vier entscheidungen</p>
+        <h2 data-i18n="saeulen.h2">Vier Entscheidungen, die alles andere bestimmen</h2>
+        <p class="sec-sub" data-i18n="saeulen.sub">Keine Feature-Liste. Was Snotra ausmacht, steckt im Schnitt der Software selbst.</p>
+      </div>
+
+      <div class="pillars">
+
+        <!-- 01 MODELL -->
+        <article class="pillar reveal">
+          <div class="pillar-text">
+            <p class="pillar-no">01 <span class="word" data-i18n="saeule.01.wort">Modell</span></p>
+            <h3 data-i18n="saeule.01.titel">Austauschbar, nicht ausgeliefert</h3>
+            <p data-i18n="saeule.01.absatz1">Im Kern sitzt ein Port, kein Anbieter. OpenAI, Anthropic, Google — oder lokal über Ollama und MLX-LM, dann verlässt kein Wort deinen Rechner.</p>
+            <p data-i18n="saeule.01.absatz2">Du wettest nicht auf die Roadmap eines Konzerns.</p>
+          </div>
+          <div class="pillar-demo">
+            <p class="demo-cap" data-i18n="saeule.01.demo.caption"><span class="deco" aria-hidden="true">//</span>modell-pille aus dem composer — anklickbar</p>
+            <div class="demo-surface">
+              <div class="picker">
+                <button type="button" class="pill pill--control" id="model-pill" aria-haspopup="menu" aria-expanded="false" aria-controls="model-menu">
+                  <span id="model-pill-label">OpenAI · gpt-4o</span>
+                  <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <ul class="overlay-menu" id="model-menu" role="menu" data-i18n-attr="aria-label:saeule.01.demo.menu.aria" aria-label="Verfügbare Modelle" hidden>
+                  <li role="none"><button role="menuitemradio" aria-checked="true" type="button" data-model="OpenAI · gpt-4o"><span class="m-name">OpenAI · gpt-4o</span><span class="m-tag">API</span></button></li>
+                  <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="Anthropic · claude-opus"><span class="m-name">Anthropic · claude-opus</span><span class="m-tag">API</span></button></li>
+                  <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="Google · gemini-2.5-pro"><span class="m-name">Google · gemini-2.5-pro</span><span class="m-tag">API</span></button></li>
+                  <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="Ollama · qwen3:14b" data-local><span class="m-name">Ollama · qwen3:14b</span><span class="m-tag" data-i18n="saeule.01.demo.tag.lokal">lokal</span></button></li>
+                  <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="MLX-LM · mistral-small" data-local><span class="m-name">MLX-LM · mistral-small</span><span class="m-tag" data-i18n="saeule.01.demo.tag.lokal">lokal</span></button></li>
+                </ul>
+              </div>
+              <p class="demo-cap demo-hint" id="model-hint" data-i18n="saeule.01.demo.hinweis">Fünf Anbieter, ein Port. Zwei davon rechnen auf deinem Rechner.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- 02 WISSEN -->
+        <article class="pillar reveal">
+          <div class="pillar-text">
+            <p class="pillar-no">02 <span class="word" data-i18n="saeule.02.wort">Wissen</span></p>
+            <h3 data-i18n="saeule.02.titel">Dein Fachwissen bleibt eine Datei</h3>
+            <p data-i18n="saeule.02.absatz">Ein Skill ist ein Ordner mit einer SKILL.md im offenen Agent-Skills-Format. Versionierbar in Git, lesbar für Menschen, übertragbar auf andere Werkzeuge — kein Datenbankeintrag bei einem Anbieter.</p>
+          </div>
+          <div class="pillar-demo">
+            <p class="demo-cap" data-i18n="saeule.02.demo.caption"><span class="deco" aria-hidden="true">//</span>ein skill, wie er auf der platte liegt</p>
+            <div class="minitree" aria-hidden="true">
+              <span class="row"><svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h9A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg> <span data-i18n="saeule.02.demo.tree.ordner">.snotra/skills/angebot/</span></span>
+              <span class="row on row--in"><svg viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg> <span data-i18n="saeule.02.demo.tree.skillmd">SKILL.md</span></span>
+              <span class="row row--in"><svg viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg> <span data-i18n="saeule.02.demo.tree.vorlage">vorlage-angebot.md</span></span>
+              <span class="row row--in"><svg viewBox="0 0 24 24"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg> <span data-i18n="saeule.02.demo.tree.preisliste">preisliste.csv</span></span>
+            </div>
+            <div class="filecard">
+              <div class="filecard-head">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 3v4.5h4.5"/></svg>
+                <span class="p" data-i18n="saeule.02.demo.filecard.pfad">.snotra/skills/angebot/SKILL.md</span>
+                <span class="badge" data-i18n="saeule.02.demo.filecard.badge">git-versioniert</span>
+              </div>
+              <pre class="filecard-body"><span class="k">---</span>
+<span data-i18n="saeule.02.demo.skill.name" data-i18n-yaml><span class="k">name:</span> angebot</span>
+<span data-i18n="saeule.02.demo.skill.description" data-i18n-yaml><span class="k">description:</span> Erstellt Angebote nach Hausvorlage.
+  Verwenden, wenn ein Angebot, ein Nachtrag oder
+  eine Preisauskunft gefragt ist.</span>
+<span class="k">---</span>
+
+<span class="h" data-i18n="saeule.02.demo.skill.h1"># Angebot erstellen</span>
+
+<span data-i18n="saeule.02.demo.skill.schritt1">1. Vorlage aus `vorlage-angebot.md` lesen.</span>
+<span data-i18n="saeule.02.demo.skill.schritt2">2. Positionen aus `preisliste.csv` ziehen.</span>
+<span data-i18n="saeule.02.demo.skill.schritt3">3. Rabattstaffel ab 10 Tagen anwenden.</span>
+<span data-i18n="saeule.02.demo.skill.schritt4">4. Vor dem Schreiben Summe gegenrechnen.</span></pre>
+            </div>
+          </div>
+        </article>
+
+        <!-- 03 ANSCHLUSS -->
+        <article class="pillar reveal">
+          <div class="pillar-text">
+            <p class="pillar-no">03 <span class="word" data-i18n="saeule.03.wort">Anschluss</span></p>
+            <h3 data-i18n="saeule.03.titel">Verbindet sich mit allem, was schon da ist</h3>
+            <p data-i18n="saeule.03.absatz" data-i18n-code="git|docker|az">Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — <span class="inline-code">git</span>, <span class="inline-code">docker</span>, <span class="inline-code">az</span>, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.</p>
+            <p><span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
+          </div>
+          <div class="pillar-demo">
+            <p class="demo-cap" data-i18n="saeule.03.demo.caption1"><span class="deco" aria-hidden="true">//</span>tool-log, wie er im chat läuft</p>
+            <div class="demo-surface demo-surface--bare">
+              <details class="tool-log" open>
+                <summary>
+                  <span class="tool-line">
+                    <svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l5 5-5 5"/><path d="M12 18h8"/></svg>
+                    <span class="txt" data-i18n="saeule.03.demo.summary">3 Ausführungen · 1 Datei geschrieben</span>
+                    <span class="tool-extra">0:07</span>
+                    <svg class="tool-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                  </span>
+                </summary>
+                <div class="tool-lines">
+                  <span class="tool-line tool-line--done"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l5 5-5 5"/><path d="M12 18h8"/></svg><span class="txt" data-i18n="saeule.03.demo.zeile1">Befehl „git log --since=1.week --oneline“ ausgeführt</span></span>
+                  <span class="tool-line tool-line--done"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l5 5-5 5"/><path d="M12 18h8"/></svg><span class="txt" data-i18n="saeule.03.demo.zeile2">Befehl „az webapp list -o table“ ausgeführt</span></span>
+                  <span class="tool-line tool-line--running"><svg class="tool-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6l5 5-5 5"/><path d="M12 18h8"/></svg><span class="txt" data-i18n="saeule.03.demo.zeile3">Befehl „docker compose ps“ wird ausgeführt …</span></span>
+                </div>
+              </details>
+            </div>
+            <p class="demo-cap" data-i18n="saeule.03.demo.caption2"><span class="deco" aria-hidden="true">//</span>was ohne integrationsprojekt schon geht</p>
+            <div class="cli-strip">
+              <span class="cli-chip on">git</span><span class="cli-chip on">docker</span><span class="cli-chip on">az</span>
+              <span class="cli-chip">kubectl</span><span class="cli-chip">psql</span><span class="cli-chip">rsync</span>
+              <span class="cli-chip">terraform</span><span class="cli-chip">pandoc</span><span class="cli-chip">ffmpeg</span>
+              <span class="cli-chip">gh</span><span class="cli-chip">jq</span><span class="cli-chip" data-i18n="saeule.03.demo.chip.haus">euer-haus-cli</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- 04 KONTROLLE -->
+        <article class="pillar reveal">
+          <div class="pillar-text">
+            <p class="pillar-no">04 <span class="word" data-i18n="saeule.04.wort">Kontrolle</span></p>
+            <h3 data-i18n="saeule.04.titel">Nichts passiert ohne dich</h3>
+            <p data-i18n="saeule.04.absatz1">Jeder schreibende, ausführende oder externe Aufruf kommt vorher als Karte in den Chat: Zielpfad, vollständiger Befehl, Vorschau.</p>
+            <p data-i18n="saeule.04.absatz2">Für Ausführung gibt es bewusst kein „für diese Sitzung merken“.</p>
+            <p><span class="badge badge--blue badge--lg" data-i18n="saeule.04.badge">shell_execute: kommt mit der nächsten Version</span></p>
+          </div>
+          <div class="pillar-demo">
+            <p class="demo-cap" data-i18n="saeule.04.demo.caption"><span class="deco" aria-hidden="true">//</span>echte freigabe-karte — entscheide hier</p>
+            <section class="approval" data-state="pending" data-demo="pillar">
+              <h3 class="approval-title" data-i18n="saeule.04.demo.titel">Ausführung bestätigen</h3>
+              <p class="approval-headline"><span data-i18n="saeule.04.demo.headline" data-i18n-code="zsh|shell_execute">Snotra möchte einen Befehl in <span class="inline-code">zsh</span> ausführen (<span class="inline-code">shell_execute</span>).</span></p>
+              <dl class="approval-facts">
+                <dt data-i18n="saeule.04.demo.fakt.wirkung.label">Wirkung</dt><dd data-i18n="saeule.04.demo.fakt.wirkung.wert">Ausführen</dd>
+                <dt data-i18n="saeule.04.demo.fakt.shell.label">Shell</dt><dd data-i18n="saeule.04.demo.fakt.shell.wert">zsh (Login-Shell)</dd>
+                <dt data-i18n="saeule.04.demo.fakt.ordner.label">Arbeitsordner</dt><dd><span class="inline-code" data-i18n="saeule.04.demo.fakt.ordner.wert">~/Projekte/angebote</span></dd>
+                <dt data-i18n="saeule.04.demo.fakt.grund.label">Grund</dt><dd data-i18n="saeule.04.demo.fakt.grund.wert">Stand der Ablage vor dem Schreiben prüfen</dd>
+                <dt data-i18n="saeule.04.demo.fakt.modus.label">Modus</dt><dd data-i18n="saeule.04.demo.fakt.modus.wert">Intelligent</dd>
+              </dl>
+              <p class="approval-warn"><b data-i18n="saeule.04.demo.warn.fett">Achtung: </b><span data-i18n="saeule.04.demo.warn.text">Der Befehl läuft mit deinen Rechten und ist nicht auf den Projektordner begrenzt.</span></p>
+              <details class="approval-prev">
+                <summary><svg class="prev-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><span data-i18n="saeule.04.demo.vorschau.summary">Vorschau: Befehl</span></summary>
+                <pre class="approval-prevtext">git status --short &amp;&amp; git log -3 --oneline</pre>
+              </details>
+              <div class="approval-actions">
+                <button type="button" class="btn btn-primary" data-decision="allowed" data-i18n="saeule.04.demo.btn.einmal">Einmal erlauben</button>
+                <button type="button" class="btn btn-secondary" data-decision="session" disabled data-i18n="saeule.04.demo.btn.sitzung">Für diese Sitzung erlauben</button>
+                <button type="button" class="btn btn-secondary" data-decision="denied" data-i18n="saeule.04.demo.btn.ablehnen">Ablehnen</button>
+              </div>
+              <p class="approval-hint" data-i18n="saeule.04.demo.hinweis.einzel">Für „Ausführen“ ist nur eine Einzelentscheidung möglich.</p>
+              <p class="approval-hint" data-role="status" aria-live="polite" data-i18n="saeule.04.demo.hinweis.status">Wartet auf deine Entscheidung. Esc lehnt ab.</p>
+            </section>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= EINSATZFELDER ========================= -->
+  <section class="section" id="einsatzfelder">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="sec-label" data-i18n="einsatzfelder.label"><span class="deco" aria-hidden="true">//</span>einsatzfelder</p>
+        <h2 data-i18n="einsatzfelder.h2">Vier Abteilungen, dieselbe Werkbank</h2>
+        <p class="sec-sub" data-i18n="einsatzfelder.sub">Was die App kann, entscheidet der Ordner, auf den sie zeigt — und die Skills, die daneben liegen.</p>
+      </div>
+      <div class="fields reveal">
+        <article class="field">
+          <h3 data-i18n="einsatzfeld.buero.titel">Büro</h3>
+          <ul role="list">
+            <li data-i18n="einsatzfeld.buero.punkt1">Angebote erstellen</li>
+            <li data-i18n="einsatzfeld.buero.punkt2">Kampagnen planen</li>
+            <li data-i18n="einsatzfeld.buero.punkt3">Präsentationen vorbereiten</li>
+          </ul>
+        </article>
+        <article class="field">
+          <h3 data-i18n="einsatzfeld.hr.titel">HR</h3>
+          <ul role="list">
+            <li data-i18n="einsatzfeld.hr.punkt1">Stellenausschreibungen</li>
+            <li data-i18n="einsatzfeld.hr.punkt2">Onboarding-Pakete</li>
+            <li data-i18n="einsatzfeld.hr.punkt3">Mitarbeiterkommunikation</li>
+          </ul>
+        </article>
+        <article class="field">
+          <h3 data-i18n="einsatzfeld.it.titel">IT</h3>
+          <ul role="list">
+            <li data-i18n="einsatzfeld.it.punkt1">Runbooks</li>
+            <li data-i18n="einsatzfeld.it.punkt2">Incident-Begleitung</li>
+            <li data-i18n="einsatzfeld.it.punkt3">Doku-Pflege</li>
+          </ul>
+        </article>
+        <article class="field">
+          <h3 data-i18n="einsatzfeld.engineering.titel">Engineering</h3>
+          <ul role="list">
+            <li data-i18n="einsatzfeld.engineering.punkt1">Projektbezogene Code- und Repo-Assistenz</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= DOWNLOAD ========================= -->
+  <section class="section" id="download">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <p class="sec-label" data-i18n="download.label"><span class="deco" aria-hidden="true">//</span>download</p>
+        <h2 data-version data-i18n="download.h2">Version 1.5.1 — kostenlos, quelloffen, ohne Registrierung</h2>
+        <p class="sec-sub" data-i18n="download.sub">Apache 2.0. Kein Konto, keine Telemetrie, kein Server dazwischen.</p>
+      </div>
+
+      <div class="dl-grid reveal">
+        <article class="dl">
+          <h3 data-i18n="download.mac.titel">macOS</h3>
+          <p class="spec" data-size="mac" data-i18n="download.mac.meta">Apple Silicon (arm64) · DMG · 126 MB</p>
+          <a class="btn btn-primary" data-dl="mac" href="https://github.com/kkrafft1999/snotra/releases/latest" data-i18n="download.mac.btn">DMG laden</a>
+        </article>
+        <article class="dl">
+          <h3 data-i18n="download.windows.titel">Windows</h3>
+          <p class="spec" data-size="win" data-i18n="download.windows.meta">x64 · ZIP · 160 MB</p>
+          <a class="btn btn-primary" data-dl="win" href="https://github.com/kkrafft1999/snotra/releases/latest" data-i18n="download.windows.btn">ZIP laden</a>
+        </article>
+        <article class="dl">
+          <h3 data-i18n="download.linux.titel">Linux</h3>
+          <p class="spec" data-size="deb" data-i18n="download.linux.meta">x64 · DEB · 95 MB</p>
+          <a class="btn btn-primary" data-dl="deb" href="https://github.com/kkrafft1999/snotra/releases/latest" data-i18n="download.linux.btn">DEB laden</a>
+          <p class="alt" data-i18n="download.linux.alt">DEB empfohlen, auch AppImage und tar.gz vorhanden.</p>
+        </article>
+      </div>
+
+      <!-- BEGIN unsignierte-builds — dieser Abschnitt ist spaeter ersatzlos
+           loeschbar (Issue #19). Er haengt an nichts: keine Sprungmarke, kein
+           JS, keine Regel ausserhalb von .unsigned* verweist auf ihn. -->
+      <div class="unsigned reveal">
+        <h3 data-i18n="unsigniert.titel">Beim ersten Start warnt dein Betriebssystem</h3>
+        <p data-i18n="unsigniert.absatz">Die Builds sind noch nicht signiert — macOS und Windows halten die App deshalb für unbekannt.</p>
+        <div class="unsigned-cols">
+          <div class="unsigned-col">
+            <h4 data-i18n="unsigniert.macos.titel">macOS</h4>
+            <ol role="list">
+              <li data-i18n="unsigniert.macos.schritt1">DMG öffnen, App nach Programme ziehen.</li>
+              <li data-i18n="unsigniert.macos.schritt2">Starten, Meldung wegklicken.</li>
+              <li data-i18n="unsigniert.macos.schritt3">Systemeinstellungen &gt; Datenschutz &amp; Sicherheit &gt; Trotzdem öffnen.</li>
+            </ol>
+          </div>
+          <div class="unsigned-col">
+            <h4 data-i18n="unsigniert.windows.titel">Windows</h4>
+            <ol role="list">
+              <li data-i18n="unsigniert.windows.schritt1" data-i18n-code="Snotra AI.exe">ZIP entpacken, <span class="inline-code">Snotra AI.exe</span> starten.</li>
+              <li data-i18n="unsigniert.windows.schritt2">SmartScreen &gt; Weitere Informationen.</li>
+              <li data-i18n="unsigniert.windows.schritt3">Trotzdem ausführen.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      <!-- END unsignierte-builds -->
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-in">
+    <p data-i18n="fuss.copyright">© 2026 Snotra AI · Apache 2.0</p>
+    <nav class="foot-links" data-i18n-attr="aria-label:fuss.nav.aria" aria-label="Rechtliches und Quellcode">
+      <a href="impressum.html" data-i18n="fuss.impressum">Impressum</a>
+      <a href="datenschutz.html" data-i18n="fuss.datenschutz">Datenschutz</a>
+      <a href="https://github.com/kkrafft1999/snotra" data-i18n="fuss.github">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
