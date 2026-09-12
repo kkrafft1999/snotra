@@ -1,10 +1,11 @@
 name: CI
 
 # Fuehrt die Test-Suite (node --test) bei Pull Requests und Pushes auf main aus.
-# Laeuft auf macOS und Windows, weil einzelne Tests plattformspezifische Pfad-
-# und Packaging-Regeln pruefen. Wird ausserdem von release.yml als Test-Gate
-# vor den Build-Jobs aufgerufen (workflow_call), damit ein Release-Tag nie
-# Binaerdateien aus einem roten Stand erzeugt (Issue #70).
+# Laeuft auf macOS, Windows und Linux, weil einzelne Tests plattformspezifische
+# Pfad- und Packaging-Regeln pruefen und fuer alle drei Plattformen gebaut wird
+# (Issue #100). Wird ausserdem von release.yml als Test-Gate vor den Build-Jobs
+# aufgerufen (workflow_call), damit ein Release-Tag nie Binaerdateien aus einem
+# roten Stand erzeugt (Issue #70).
 
 on:
   pull_request:
@@ -22,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-14, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

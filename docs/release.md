@@ -40,7 +40,12 @@ git tag vX.Y.Z
 ```sh
 npm run make            # macOS arm64  -> out/make/*.dmg + ZIP
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (zum Zippen)
+npm run make:linux      # Linux x64    -> out/make/deb/x64/*.deb + out/<productName>-linux-x64/
 ```
+
+Der Linux-Lauf braucht `dpkg` und `fakeroot` — auf macOS fehlen beide, dort
+bricht Forge mit *„Cannot make for deb"* ab; `npm run package:linux` (nur
+paketieren, ohne `.deb`) funktioniert auch von macOS aus.
 
 Die Artefakte landen unter `out/`. Der Vergleich der App nutzt **nur den
 Release-Tag**, nicht die Dateinamen — die Asset-Namen sind also frei wählbar,
@@ -49,12 +54,12 @@ sollten aber Version und Plattform enthalten, z. B.
 
 ### App-Icon
 
-`icon.icns` (macOS) und `icon.ico` (Windows) sind eingecheckt und werden von
-der Pipeline **nicht** neu gebaut. Quelle sind die SVGs in `assets/icon/`
-(`icon-macos.svg` mit Apple-Icon-Raster und Schatten, `icon-windows.svg`
-vollflächig). Nach einer Änderung daran einmal lokal erzeugen — braucht
-`rsvg-convert` (`brew install librsvg`) und `iconutil` (Xcode Command Line
-Tools):
+`icon.icns` (macOS), `icon.ico` (Windows) und `icon.png` (Linux, 512 px) sind
+eingecheckt und werden von der Pipeline **nicht** neu gebaut. Quelle sind die
+SVGs in `assets/icon/` (`icon-macos.svg` mit Apple-Icon-Raster und Schatten,
+`icon-windows.svg` vollflächig — daraus entstehen `.ico` **und** `.png`). Nach
+einer Änderung daran einmal lokal erzeugen — braucht `rsvg-convert`
+(`brew install librsvg`) und `iconutil` (Xcode Command Line Tools):
 
 ```sh
 node scripts/build-icons.js
@@ -84,14 +89,16 @@ Zwei GitHub-Actions-Workflows unter [`.github/workflows/`](../.github/workflows/
 
 - [`ci.yml`](../.github/workflows/ci.yml) führt bei jedem **Pull Request** und
   jedem **Push auf `main`** die Test-Suite (`npm test`, Node 24) auf
-  **macOS und Windows** aus. Ein roter Lauf ist im PR bzw. am Commit sichtbar.
+  **macOS, Windows und Linux** aus. Ein roter Lauf ist im PR bzw. am Commit
+  sichtbar.
 - [`release.yml`](../.github/workflows/release.yml) startet auf einen Tag-Push
   `vX.Y.Z`. Als erster Job läuft dieselbe Test-Suite als **Test-Gate**
-  (`ci.yml` per `workflow_call`); erst wenn beide Plattformen grün sind, bauen
-  die Build-Jobs und hängen die Artefakte an das Release. Schlägt ein Test
-  fehl, entsteht **kein** Build und **kein** Release — Ursache beheben, Tag
-  neu setzen (`git tag -d vX.Y.Z && git push origin :vX.Y.Z`, dann erneut
-  taggen und pushen).
+  (`ci.yml` per `workflow_call`); erst wenn alle drei Plattformen grün sind,
+  bauen die Build-Jobs (`build-macos`, `build-windows`, `build-linux`) und
+  hängen die Artefakte an das Release. Schlägt ein Test fehl, entsteht **kein**
+  Build und **kein** Release — Ursache beheben, Tag neu setzen
+  (`git tag -d vX.Y.Z && git push origin :vX.Y.Z`, dann erneut taggen und
+  pushen).
 
 Läufe beobachten:
 
@@ -100,9 +107,10 @@ gh run list --workflow ci.yml --limit 5
 gh run watch
 ```
 
-Optional lässt sich `main` per Branch-Protection absichern, so dass der
-Check `Tests (macos-14)` / `Tests (windows-latest)` vor dem Merge bestehen
-muss (Settings → Branches → Branch protection rules; nicht Teil des Repos).
+Optional lässt sich `main` per Branch-Protection absichern, so dass die Checks
+`Tests (macos-14)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` vor dem
+Merge bestehen müssen (Settings → Branches → Branch protection rules; nicht
+Teil des Repos).
 
 ## Release veröffentlichen
 
@@ -115,13 +123,17 @@ gh release create vX.Y.Z \
   "out/make/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
 
-Weitere Assets (z. B. das Windows-ZIP) als zusätzliche Pfade anhängen. Der Text
-aus `--notes` erscheint als Release-Body und steht der App im Banner als
-`notes` zur Verfügung.
+Weitere Assets (Windows-ZIP, Linux-`.deb` und -`.tar.gz`) als zusätzliche Pfade
+anhängen. Die Pipeline benennt sie einheitlich
+`Snotra-AI-<version>-<mac|win|linux>-<arch>.<endung>`.
+
+Der Text aus `--notes` erscheint als Release-Body und steht der App im Banner
+als `notes` zur Verfügung.
 
 > Hinweis: Solange die App **nicht code-signiert** ist, zeigt macOS beim ersten
 > Start der neuen Version den Gatekeeper-Dialog. Das ist erwartet und kein
-> Fehler des Update-Wegs.
+> Fehler des Update-Wegs. Linux braucht keine Signatur; dort ist nur der
+> Sandbox-Hinweis zum Tarball relevant (siehe README).
 
 ## Was die App prüft
 

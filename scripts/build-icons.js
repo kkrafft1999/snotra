@@ -6,9 +6,11 @@
  *
  *   assets/icon/icon-macos.svg   -> icon.icns  (16 … 512 px, jeweils 1x und @2x)
  *   assets/icon/icon-windows.svg -> icon.ico   (16, 32, 48, 64, 128, 256 px als PNG-Einträge)
+ *   assets/icon/icon-windows.svg -> icon.png   (512 px, Linux: hicolor-Icon des .deb)
  *
- * `package.json` referenziert die Ausgaben als `"icon": "./icon"` (ohne Endung),
- * die Dateinamen dürfen sich also nicht ändern.
+ * `icon.icns`/`icon.ico` findet electron-packager über `"icon": "./icon"` (ohne
+ * Endung) selbst; `icon.png` wird vom deb-Maker explizit referenziert. Die
+ * Dateinamen dürfen sich also nicht ändern.
  *
  * Voraussetzungen (macOS): `rsvg-convert` (brew install librsvg) und `iconutil`
  * (Xcode Command Line Tools). Aufruf: `node scripts/build-icons.js`
@@ -24,6 +26,7 @@ const SRC_MAC = path.join(ROOT, 'assets', 'icon', 'icon-macos.svg');
 const SRC_WIN = path.join(ROOT, 'assets', 'icon', 'icon-windows.svg');
 const OUT_ICNS = path.join(ROOT, 'icon.icns');
 const OUT_ICO = path.join(ROOT, 'icon.ico');
+const OUT_PNG = path.join(ROOT, 'icon.png');
 
 // Apple-Iconset: [Punktgröße, Skalierung] -> Dateiname icon_<pt>x<pt>[@2x].png
 const ICONSET = [
@@ -31,6 +34,8 @@ const ICONSET = [
   [256, 1], [256, 2], [512, 1], [512, 2],
 ];
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
+// Linux: eine Groesse reicht, 512 ist die groesste uebliche hicolor-Stufe.
+const PNG_SIZE = 512;
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
@@ -93,6 +98,15 @@ function buildIco(tmpDir) {
   fs.writeFileSync(OUT_ICO, Buffer.concat([header, directory, ...images.map((img) => img.data)]));
 }
 
+/**
+ * Linux-Icon: eine einzelne PNG-Datei. Das .deb legt sie als hicolor-Icon ab
+ * (512x512/apps/snotra.png); die SVG-Quelle kommt zusätzlich als "scalable"
+ * mit ins Paket, deshalb reicht hier eine Größe.
+ */
+function buildPng() {
+  renderPng(SRC_WIN, PNG_SIZE, OUT_PNG);
+}
+
 function main() {
   for (const src of [SRC_MAC, SRC_WIN]) {
     if (!fs.existsSync(src)) throw new Error(`Quelle fehlt: ${path.relative(ROOT, src)}`);
@@ -103,6 +117,8 @@ function main() {
     console.log(`✔ ${path.relative(ROOT, OUT_ICNS)} (${ICONSET.length} Größen)`);
     buildIco(tmpDir);
     console.log(`✔ ${path.relative(ROOT, OUT_ICO)} (${ICO_SIZES.length} Größen)`);
+    buildPng();
+    console.log(`✔ ${path.relative(ROOT, OUT_PNG)} (${PNG_SIZE} px)`);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

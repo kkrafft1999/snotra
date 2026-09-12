@@ -11,7 +11,9 @@
     "start": "npm run sync-vendor && unset ELECTRON_RUN_AS_NODE && electron .",
     "package": "npm run sync-vendor && electron-forge package --arch arm64 --platform darwin",
     "package:win": "npm run sync-vendor && electron-forge package --platform win32 --arch x64",
+    "package:linux": "npm run sync-vendor && electron-forge package --platform linux --arch x64",
     "make": "npm run sync-vendor && electron-forge make --arch arm64 --platform darwin",
+    "make:linux": "npm run sync-vendor && electron-forge make --platform linux --arch x64",
     "check-package": "node scripts/check-asar-contents.js"
   },
   "config": {
@@ -44,6 +46,29 @@
           "platforms": [
             "darwin"
           ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "platforms": [
+            "linux"
+          ],
+          "config": {
+            "options": {
+              "bin": "Snotra AI",
+              "maintainer": "Konrad Krafft <konrad@doubleslash.de>",
+              "homepage": "https://github.com/kkrafft1999/snotra",
+              "description": "Workspace-bewusster KI-Assistent mit Datei-Explorer",
+              "genericName": "KI-Assistent",
+              "categories": [
+                "Utility",
+                "Development"
+              ],
+              "icon": {
+                "512x512": "icon.png",
+                "scalable": "assets/icon/icon-windows.svg"
+              }
+            }
+          }
         }
       ]
     }
@@ -63,6 +88,7 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.2",
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
     "@electron/asar": "^3.4.1",

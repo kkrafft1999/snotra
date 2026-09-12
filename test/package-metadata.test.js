@@ -18,6 +18,18 @@ test('package metadata carries the Snotra AI identity consistently', () => {
   assert.equal(dmg.config.name, pkg.productName);
 });
 
+// Der deb-Maker legt /usr/bin/snotra als Symlink auf das Binary im Paket an und
+// nimmt dafuer 'options.bin'. Weicht der Wert vom executableName ab, zeigt der
+// Symlink ins Leere und die installierte App startet nicht (Issue #100).
+test('deb maker points at the packaged executable', () => {
+  const deb = pkg.config.forge.makers.find((m) => m.name === '@electron-forge/maker-deb');
+  assert.ok(deb, 'maker-deb configured');
+  assert.deepEqual(deb.platforms, ['linux']);
+  assert.equal(deb.config.options.bin, pkg.config.forge.packagerConfig.executableName);
+  assert.match(deb.config.options.maintainer, /^.+ <.+@.+>$/);
+  assert.equal(deb.config.options.icon['512x512'], 'icon.png');
+});
+
 test('no field of package.json still carries the old product name', () => {
   assert.doesNotMatch(JSON.stringify(pkg), /weyouze/i);
 });

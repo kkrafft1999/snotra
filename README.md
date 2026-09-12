@@ -25,7 +25,7 @@ Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft 
 ## Tech-Stack
 
 - [Electron](https://www.electronjs.org/) (Main + Renderer + Preload)
-- [Electron Forge](https://www.electronforge.io/) für Packaging & Maker (DMG / ZIP)
+- [Electron Forge](https://www.electronforge.io/) für Packaging & Maker (DMG / ZIP / DEB)
 - Vanilla JS im Renderer + [`marked`](https://github.com/markedjs/marked) und [`DOMPurify`](https://github.com/cure53/DOMPurify) für Markdown
 - [`@fontsource/inter`](https://fontsource.org/fonts/inter) als Schriftart
 
@@ -33,7 +33,7 @@ Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft 
 
 - **Node.js** ≥ 24 (Active LTS, siehe `.nvmrc`; mit nvm: `nvm use`)
 - **npm** (kommt mit Node)
-- macOS oder Windows
+- macOS, Windows oder Linux
 - Optional: API-Key für OpenAI / Anthropic / Google bzw. ein lokales [Ollama](https://ollama.com/)
 
 ## Schnellstart
@@ -58,12 +58,41 @@ Beim ersten Start kannst du in den Einstellungen einen Provider wählen und dein
 # macOS (Apple Silicon) – DMG + ZIP
 npm run make
 
+# Linux (x64) – DEB; braucht dpkg und fakeroot
+npm run make:linux
+
 # Nur paketieren ohne Installer
 npm run package         # macOS arm64
 npm run package:win     # Windows x64
+npm run package:linux   # Linux x64
 ```
 
 Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen).
+
+### Linux installieren
+
+Die [Releases](https://github.com/kkrafft1999/snotra/releases) enthalten für
+Linux zwei Dateien:
+
+```bash
+# Empfohlen (Debian, Ubuntu, Mint, Pop!_OS …): legt Menüeintrag und Icon an
+sudo apt install ./Snotra-AI-<version>-linux-x64.deb
+
+# Fallback für andere Distributionen
+tar -xzf Snotra-AI-<version>-linux-x64.tar.gz
+cd snotra-ai-<version>-linux-x64
+./"Snotra AI"
+```
+
+Das `.deb` ist der empfohlene Weg, weil es beim Paketieren das Setuid-Bit auf
+`chrome-sandbox` setzt. Im Tarball fehlt das: Auf Distributionen, die
+unprivilegierte User-Namespaces einschränken (u. a. Ubuntu ab 24.04), bricht der
+Start sonst mit *„The SUID sandbox helper binary was found, but is not
+configured correctly"* ab. Dann einmal nachziehen:
+
+```bash
+sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
+```
 
 ## Chat
 
@@ -83,7 +112,7 @@ Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen)
 
 ## Konfiguration
 
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen**. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
+Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen**. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
 
 | Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
 | ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
@@ -207,7 +236,7 @@ Skill-Pfade.
 ├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
 ├── docs/                Architektur (`architecture.md`, SVG-Diagramme), Release, Sicherheitskonzept
 ├── assets/icon/         SVG-Quellen des App-Icons (macOS- und Windows-Layout)
-├── icon.icns / icon.ico App-Icons für macOS / Windows, erzeugt per `node scripts/build-icons.js`
+├── icon.icns/.ico/.png  App-Icons für macOS / Windows / Linux, erzeugt per `node scripts/build-icons.js`
 └── package.json
 ```
 

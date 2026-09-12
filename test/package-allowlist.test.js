@@ -49,6 +49,7 @@ test('allowlist drops development, documentation and local files', () => {
     '/package-lock.json',
     '/icon.icns',
     '/icon.ico',
+    '/icon.png',
     '/assets/icon/icon-macos.svg',
     '/.DS_Store',
     '/src/.DS_Store',

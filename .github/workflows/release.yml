@@ -6,9 +6,11 @@ name: Release
 #
 # Artefakte bleiben UNSIGNIERT (kein Apple Developer-ID / kein Windows-Cert):
 # macOS zeigt Gatekeeper, Windows ggf. SmartScreen. Das ist Stufe 1 by design.
+# Linux braucht keine Signatur und ist damit die reibungsloseste Plattform.
 #
-# Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS +
-# Windows). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht (#70).
+# Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
+# Windows, Linux). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht
+# (#70).
 
 on:
   push:
@@ -115,9 +117,57 @@ jobs:
           name: windows
           path: dist/*
 
+  # Linux (#100): ein einziger 'make'-Lauf liefert beides — das .deb aus dem
+  # Maker und daneben das entpackte Package-Verzeichnis, das wir als Tarball
+  # anhaengen. Das .deb ist der empfohlene Weg, weil das Paketieren das
+  # Setuid-Bit auf 'chrome-sandbox' setzt (4755); im Tarball fehlt das, dort
+  # greift der SUID-Sandbox-Hinweis aus dem README.
+  build-linux:
+    name: Build Linux (x64)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      # maker-deb ruft 'dpkg' und 'fakeroot' auf und prueft beide vorab. Auf
+      # dem Runner-Image sind sie vorhanden; der Schritt macht die Abhaengigkeit
+      # explizit, damit ein Image-Umbau den deb-Schritt nicht still kippt.
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends dpkg fakeroot
+      - run: npm ci
+      - run: npm run make:linux
+      - name: Check package contents (allowlist)
+        run: node scripts/check-asar-contents.js
+      - name: Collect deb and tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          deb="$(ls out/make/deb/x64/*.deb | head -1)"
+          cp "$deb" "dist/Snotra-AI-${version}-linux-x64.deb"
+          # Bewusst tar.gz statt zip: ZIP erhaelt das Executable-Bit nicht.
+          # Das Verzeichnis wird vorher umbenannt, damit im Archiv kein
+          # Ordnername mit Leerzeichen landet.
+          dir="$(ls -d out/*-linux-x64 | head -1)"
+          stage="snotra-ai-${version}-linux-x64"
+          mv "$dir" "out/${stage}"
+          tar -czf "dist/Snotra-AI-${version}-linux-x64.tar.gz" -C out "${stage}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          path: dist/*
+
   release:
     name: Publish release
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write # einziger Job, der ins Repo (Release-Assets) schreibt
