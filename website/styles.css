@@ -86,12 +86,19 @@
   color-scheme:light;
 
   /* Marken-Palette */
-  --ds-blue:#00759E;                              /* einzige Akzentfarbe, nur >= 14px */
-  --ds-blue-ink:#005F80;                          /* dieselbe Akzentfarbe fuer Text < 14px:
-                                                     #00759E kommt auf --ds-grey-card nur auf
-                                                     4,56:1 und faellt schon beim Einblenden
-                                                     unter die geforderten 4,5:1, diese
-                                                     Fassung auf 6,25:1 (Issue #113) */
+  --ds-blue:#00759E;                              /* einzige Akzentfarbe */
+  --ds-blue-ink:#005F80;                          /* dunklere Fassung der Akzentfarbe, nur
+                                                     fuer Text auf --ds-grey-card noetig.
+                                                     Kontrast von --ds-blue: 5,20:1 auf Weiss,
+                                                     4,86:1 auf --ds-blue-soft, 4,85:1 auf
+                                                     --ds-grey-bg — aber nur 4,56:1 auf
+                                                     --ds-grey-card, also 0,06 ueber der
+                                                     Anforderung und schon bei angeschnittener
+                                                     Deckkraft darunter. Hier 6,25:1.
+                                                     Alle Blau-Texte beider Seiten samt Hover-
+                                                     und Aktiv-Zustaenden am 2026-09-13
+                                                     durchgemessen (Issue #113): Dies war die
+                                                     einzige Stelle. */
   --ds-blue-soft:rgba(0,117,158,.05);
   --ds-blue-border:rgba(0,117,158,.25);
   --ds-chat-user-bg:rgba(0,117,158,.08);
