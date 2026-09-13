@@ -1,0 +1,103 @@
+name: Website-Performance
+
+# Misst die Ladeperformance von snotra-ai.dev (Issue #113) — von aussen, nach
+# dem Deploy. Auf der Seite selbst liegt dafuer bewusst kein Code:
+#
+#   * Lighthouse CI liefert Labordaten (reproduzierbar, schlaegt bei einer
+#     Regression an). Konfiguration: .github/lighthouserc.js
+#   * Der Chrome UX Report liefert Felddaten echter Chrome-Besucher, ohne dass
+#     auf der Seite etwas erhoben oder gespeichert wird.
+#
+# Damit bleiben die Aussagen in website/datenschutz.html ("keine Cookies, keine
+# Analyse- oder Tracking-Dienste") unveraendert gueltig. Das naheliegende
+# Firebase Performance Monitoring SDK haette eine persistente Geraete-ID in
+# IndexedDB abgelegt und damit einen Einwilligungs-Banner noetig gemacht.
+#
+# Einmalig von Hand noetig (optional, nur fuer die Felddaten):
+#   Google Cloud Console -> Projekt snotra-ai -> "Chrome UX Report API"
+#   aktivieren -> API-Schluessel erzeugen -> als Repository-Secret
+#   CRUX_API_KEY hinterlegen. Ohne das Secret laeuft der Job durch und meldet
+#   die Felddaten schlicht als uebersprungen.
+
+on:
+  # Nach jedem Deploy der Seite messen — die Live-URL traegt dann den neuen Stand.
+  workflow_run:
+    workflows: ["Deploy Website"]
+    types:
+      - completed
+  # Wochentliche Messung, damit auch ohne Aenderung ein Verlauf entsteht
+  # (und CrUX-Felddaten auftauchen, sobald genug Traffic da ist).
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-performance
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse gegen die Live-Seite
+    # Nach einem fehlgeschlagenen Deploy waere die Messung wertlos.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Bewusst drei einzelne Schritte statt "lhci autorun": Bei autorun bricht
+      # der Lauf an einem verfehlten Schwellwert ab, bevor die Reports abgelegt
+      # sind — also genau dann nicht auswertbar, wenn man sie braucht. Deshalb
+      # erst messen, dann sichern, und die Bewertung zuletzt.
+      #
+      # Version fest gepinnt: Eine neue Lighthouse-Fassung bewertet anders und
+      # wuerde den Verlauf unvergleichbar machen.
+      - name: Lighthouse messen
+        run: npx --yes @lhci/cli@0.15.1 collect --config=.github/lighthouserc.js
+
+      - name: Reports ablegen
+        if: always()
+        run: npx --yes @lhci/cli@0.15.1 upload --config=.github/lighthouserc.js
+
+      - name: Ergebnisse in die Job-Summary schreiben
+        if: always()
+        run: node scripts/lighthouse-summary.js
+
+      - name: Reports als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci-report/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Schwellwerte pruefen
+        if: always()
+        run: npx --yes @lhci/cli@0.15.1 assert --config=.github/lighthouserc.js
+
+  felddaten:
+    name: Felddaten aus dem Chrome UX Report
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: CrUX abfragen
+        env:
+          CRUX_API_KEY: ${{ secrets.CRUX_API_KEY }}
+        run: node scripts/crux-report.js
