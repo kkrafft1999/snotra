@@ -70,7 +70,10 @@ module.exports = {
       // einem oeffentlich abrufbaren Google-Bucket. Stattdessen ins Dateisystem
       // und von dort als Artefakt an den Workflow-Lauf.
       target: 'filesystem',
-      outputDir: './.lighthouseci-report',
+      // Der Ordnername traegt bewusst keinen fuehrenden Punkt:
+      // actions/upload-artifact laesst versteckte Pfade aus, ein
+      // .lighthouse-report waere stillschweigend nicht im Artefakt gelandet.
+      outputDir: './lighthouse-report',
       reportFilenamePattern: '%%PATHNAME%%-%%DATETIME%%-report.%%EXTENSION%%',
     },
   },

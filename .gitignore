@@ -48,4 +48,4 @@ Thumbs.db
 
 # Lighthouse CI (lokale Laeufe und Reports, siehe .github/workflows/website-performance.yml)
 .lighthouseci/
-.lighthouseci-report/
+lighthouse-report/

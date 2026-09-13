@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Fasst die Lighthouse-Reports aus .lighthouseci-report/manifest.json als
+// Fasst die Lighthouse-Reports aus lighthouse-report/manifest.json als
 // Markdown-Tabelle zusammen und haengt sie an die Job-Summary des Laufs
 // (Issue #113). Laeuft in .github/workflows/website-performance.yml zwischen
 // "Reports ablegen" und der Schwellwert-Pruefung, damit die Zahlen auch dann in
@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const BERICHTE = path.resolve(__dirname, '..', '.lighthouseci-report');
+const BERICHTE = path.resolve(__dirname, '..', 'lighthouse-report');
 const MANIFEST = path.join(BERICHTE, 'manifest.json');
 
 // Anzeigename je Lighthouse-Kategorie, zugleich die Spaltenreihenfolge.
