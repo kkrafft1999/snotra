@@ -355,6 +355,7 @@ function createApplication({
     chatHistoryStore,
     REQ,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
   });
   registerUpdateHandlers({ ipcMain, updates, REQ });
   // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in

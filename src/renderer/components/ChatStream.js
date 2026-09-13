@@ -425,6 +425,30 @@ function buildGreetingMessage(workspaceRoot) {
   };
 }
 
+/**
+ * Welche Konversation gehoert beim Betreten eines Ordners auf den Schirm
+ * (Issue #131)? `getChatHistory` liefert nur Sessions des aktiven Workspaces.
+ * Erste Wahl ist die gemerkte aktive Chat-ID, zweite die zuletzt gefuehrte
+ * Session. Ohne diese zweite Stufe bliebe ein Ordner leer, sobald keine aktive
+ * ID gemerkt ist — etwa nach „Neuer Chat“ ohne Eingabe oder nach dem Loeschen
+ * des aktiven Chats.
+ *
+ * DOM-frei und exportiert, weil es keinen DOM-Test-Stack gibt (#78).
+ */
+export function pickSessionToRestore(sessions, activeChatId) {
+  const usable = Array.isArray(sessions)
+    ? sessions.filter((s) => s && Array.isArray(s.messages) && s.messages.length > 0)
+    : [];
+  const active = activeChatId ? usable.find((s) => s.id === activeChatId) : null;
+  if (active) return { session: active, wasActive: true };
+  let newest = null;
+  const at = (s) => (Number.isFinite(s.updatedAt) ? s.updatedAt : 0);
+  for (const s of usable) {
+    if (!newest || at(s) > at(newest)) newest = s;
+  }
+  return { session: newest || null, wasActive: false };
+}
+
 export function initChatStream({
   api,
   appStore,
@@ -766,21 +790,22 @@ export function initChatStream({
 
     const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist?.sessions) ? hist.sessions : [];
-    if (hist?.activeChatId) {
-      const s = sessions.find((x) => x.id === hist.activeChatId);
-      if (s && Array.isArray(s.messages)) {
-        appStore.currentChatId = s.id;
-        appStore.currentChatWorkspace = workspaceRoot || null;
-        appStore.chatMessages = s.messages;
-        appStore.currentChatTitle = s.title || '';
-        setChatTokenUsage(s.tokenUsage);
-        chatInput.value = '';
-        onInputChanged();
-        renderChatMessages();
-        return;
-      }
-      await api.setActiveChatId(null);
+    const { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    if (restore) {
+      appStore.currentChatId = restore.id;
+      appStore.currentChatWorkspace = workspaceRoot || null;
+      appStore.chatMessages = restore.messages;
+      appStore.currentChatTitle = restore.title || '';
+      setChatTokenUsage(restore.tokenUsage);
+      // Die zuletzt gefuehrte Konversation wird damit auch die aktive dieses
+      // Ordners — sonst begaenne der naechste Wechsel wieder von vorn.
+      if (!wasActive) await api.setActiveChatId(restore.id);
+      chatInput.value = '';
+      onInputChanged();
+      renderChatMessages();
+      return;
     }
+    if (hist?.activeChatId) await api.setActiveChatId(null);
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = workspaceRoot || null;
     appStore.chatMessages = [];

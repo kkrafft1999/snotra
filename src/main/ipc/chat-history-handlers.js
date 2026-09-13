@@ -1,11 +1,47 @@
 // Chats sind nach Workspace gebucht. Welcher Workspace gerade aktiv ist,
 // weiss der Main-Prozess (Issue #68) — der Renderer nennt ihn nicht mehr.
+//
+// Eine Ausnahme braucht es beim Ordnerwechsel (Issue #131): der Renderer
+// sichert die laufende Konversation erst, wenn der neue Ordner im Main schon
+// aktiv ist. Wuerde jede Session stur mit dem aktiven Root gestempelt, wanderte
+// der Chat des alten Ordners in den neuen Bucket. Deshalb darf die Session den
+// Root nennen, unter dem sie gefuehrt wurde — aber nur, wenn es ein bereits
+// geoeffneter Ordner ist (`isKnownWorkspaceRoot`). Alles andere faellt auf den
+// aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 function registerChatHistoryHandlers({
   ipcMain,
   chatHistoryStore,
   REQ,
   getActiveWorkspaceRoot = () => null,
+  isKnownWorkspaceRoot = async () => false,
 }) {
+  async function resolveSessionWorkspaceRoot(sessionRow) {
+    const activeRoot = getActiveWorkspaceRoot();
+    if (!sessionRow || typeof sessionRow !== 'object' || !('workspaceRoot' in sessionRow)) {
+      return activeRoot;
+    }
+    const claimed = chatHistoryStore.normalizeWorkspaceRoot(sessionRow.workspaceRoot);
+    if (claimed === null) {
+      // Ein ausdrueckliches `null` heisst „ohne Ordner gefuehrt“ und bekommt
+      // den eigenen Bucket. Ein unbrauchbarer String ist dagegen kein Wunsch,
+      // sondern ein Fehler — der landet beim aktiven Root.
+      const raw = sessionRow.workspaceRoot;
+      return typeof raw === 'string' && raw.trim() ? activeRoot : null;
+    }
+    if (claimed === chatHistoryStore.normalizeWorkspaceRoot(activeRoot)) return activeRoot;
+    return (await isKnownWorkspaceRoot(claimed)) ? claimed : activeRoot;
+  }
+
+  // Welcher Bucket bekommt die aktive Chat-ID? Der der Session selbst — sonst
+  // schriebe das `setActiveChatId` direkt nach dem Sichern (Issue #131) die
+  // alte Konversation in den Bucket des neuen Ordners.
+  function bucketKeyForSession(store, id) {
+    const session = typeof id === 'string' ? store.sessions.find((s) => s.id === id) : null;
+    const root = session
+      ? chatHistoryStore.normalizeWorkspaceRoot(session.workspaceRoot)
+      : chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+    return chatHistoryStore.workspaceBucketKey(root);
+  }
   ipcMain.handle(REQ.CHAT_HISTORY_GET, async () => {
     const store = await chatHistoryStore.readChatHistoryStore();
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
@@ -27,7 +63,7 @@ function registerChatHistoryHandlers({
       const titleProvided =
         typeof sessionRow?.title === 'string' && sessionRow.title.trim().length > 0;
       const normalized = chatHistoryStore.normalizeSessionForStore(
-        { ...(sessionRow || {}), workspaceRoot: getActiveWorkspaceRoot() },
+        { ...(sessionRow || {}), workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow) },
         {
           existingTitle: titleProvided ? undefined : existing?.title,
           requireMessages: true,
@@ -65,9 +101,7 @@ function registerChatHistoryHandlers({
   ipcMain.handle(REQ.CHAT_HISTORY_SET_ACTIVE, async (_event, id) =>
     chatHistoryStore.withChatHistoryLock(async () => {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const wsKey = chatHistoryStore.workspaceBucketKey(
-        chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot())
-      );
+      const wsKey = bucketKeyForSession(store, id);
       if (id === null || id === undefined || id === '') {
         delete store.activeByWorkspace[wsKey];
       } else if (typeof id === 'string') {

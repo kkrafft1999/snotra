@@ -34,16 +34,23 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
   // Der aktive Workspace kommt seit Issue #68 aus dem Main-Prozess, nicht mehr
   // als Argument der Aufrufe — im Test steuert ihn setActiveRoot.
   let activeRoot = null;
+  // Issue #131: welche Ordner der Nutzer schon geoeffnet hat, entscheidet, ob
+  // eine Session den von ihr genannten Workspace behalten darf.
+  let knownRoots = new Set();
   registerChatHistoryHandlers({
     ipcMain,
     chatHistoryStore,
     REQ,
     getActiveWorkspaceRoot: () => activeRoot,
+    isKnownWorkspaceRoot: async (folderPath) => knownRoots.has(path.resolve(folderPath)),
   });
   const setActiveRoot = (root) => {
     activeRoot = root ?? null;
   };
-  return { ipcMain, storage, tmpDir, setActiveRoot };
+  const setKnownRoots = (...roots) => {
+    knownRoots = new Set(roots.map((r) => path.resolve(r)));
+  };
+  return { ipcMain, storage, tmpDir, setActiveRoot, setKnownRoots };
 }
 
 function sessionRow(id, { updatedAt = 1000, title = `Chat ${id}` } = {}) {
@@ -284,12 +291,14 @@ test('upsert rejects a session whose sanitized messages become empty', async (t)
   assert.equal(got.sessions.length, 0);
 });
 
-test('Chat-Verlauf ignoriert einen vom Renderer mitgeschickten Workspace (#68)', async (t) => {
+test('Chat-Verlauf ignoriert einen nie geoeffneten Workspace aus dem Renderer (#68)', async (t) => {
   const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
   setActiveRoot(ws);
 
-  // Manipulierte Payload: Session behauptet, zu '/' zu gehoeren.
+  // Manipulierte Payload: Session behauptet, zu '/' zu gehoeren. Seit #131 darf
+  // eine Session ihren Root zwar nennen — aber nur einen bereits geoeffneten
+  // Ordner, und '/' ist hier keiner.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: '/' });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a', '/');
 
@@ -301,4 +310,68 @@ test('Chat-Verlauf ignoriert einen vom Renderer mitgeschickten Workspace (#68)',
   setActiveRoot(null);
   const elsewhere = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
   assert.deepEqual(elsewhere.sessions, [], 'die Session haengt am aktiven Root, nicht am Payload');
+});
+
+/* Issue #131: Konversationen sind an den Ordner gebunden, in dem sie gefuehrt
+ * wurden. Der Renderer sichert den laufenden Chat erst, wenn der neue Ordner im
+ * Main bereits aktiv ist — die Session muss ihren eigenen Root trotzdem
+ * behalten, sonst wandert sie beim Wechsel mit. */
+test('Ordnerwechsel laesst die Konversation beim alten Ordner (Issue #131)', async (t) => {
+  const { ipcMain, tmpDir, setActiveRoot, setKnownRoots } = await setup(t);
+  const wsA = path.join(tmpDir, 'projekt-a');
+  const wsB = path.join(tmpDir, 'projekt-b');
+  setKnownRoots(wsA, wsB);
+
+  setActiveRoot(wsA);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: wsA });
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+
+  // Ab hier ist im Main schon Ordner B aktiv, der Renderer sichert erst jetzt.
+  setActiveRoot(wsB);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: wsA });
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+
+  const inB = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(inB.sessions.map((s) => s.id), [], 'Chat aus A darf nicht in B auftauchen');
+  assert.equal(inB.activeChatId, null, 'und auch nicht als aktiver Chat von B');
+
+  setActiveRoot(wsA);
+  const inA = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(inA.sessions.map((s) => s.id), ['a']);
+  assert.equal(inA.activeChatId, 'a');
+});
+
+test('ein unbekannter Workspace faellt auf den aktiven Ordner zurueck (Issue #68)', async (t) => {
+  const { ipcMain, tmpDir, setActiveRoot, setKnownRoots } = await setup(t);
+  const ws = path.join(tmpDir, 'projekt-a');
+  setActiveRoot(ws);
+  setKnownRoots(ws);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+    ...sessionRow('a'),
+    workspaceRoot: path.join(tmpDir, 'nie-geoeffnet'),
+  });
+
+  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
+});
+
+test('ein ausdruecklich ordnerloser Chat behaelt seinen eigenen Bucket', async (t) => {
+  const { ipcMain, tmpDir, setActiveRoot, setKnownRoots } = await setup(t);
+  const ws = path.join(tmpDir, 'projekt-a');
+  setKnownRoots(ws);
+
+  // Chat ohne Ordner gefuehrt, danach Ordner geoeffnet und erst dann gesichert.
+  setActiveRoot(ws);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: null });
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+
+  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(inWs.sessions.map((s) => s.id), []);
+  assert.equal(inWs.activeChatId, null);
+
+  setActiveRoot(null);
+  const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(noWs.sessions.map((s) => s.id), ['a']);
+  assert.equal(noWs.activeChatId, 'a');
 });

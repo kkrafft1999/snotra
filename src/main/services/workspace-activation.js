@@ -61,12 +61,24 @@ function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWo
   async function activateKnownFolder(folderPath) {
     const resolved = resolveCandidate(folderPath);
     if (!resolved) return null;
-    const known = await listKnownFolders();
-    if (!known.has(resolved)) return null;
+    if (!(await isKnownFolder(resolved))) return null;
     return activate(resolved);
   }
 
-  return { activateChosenFolder, activateKnownFolder };
+  /**
+   * Ist der Pfad ein Ordner, den der Nutzer schon einmal geoeffnet hat? Der
+   * Chat-Verlauf braucht das, um eine Konversation beim Ordnerwechsel beim
+   * *alten* Ordner zu belassen (Issue #131), ohne dafuer einen beliebigen
+   * Renderer-Pfad zu uebernehmen.
+   */
+  async function isKnownFolder(folderPath) {
+    const resolved = resolveCandidate(folderPath);
+    if (!resolved) return false;
+    const known = await listKnownFolders();
+    return known.has(resolved);
+  }
+
+  return { activateChosenFolder, activateKnownFolder, isKnownFolder };
 }
 
 module.exports = { createWorkspaceActivation };
