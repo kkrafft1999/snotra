@@ -35,7 +35,16 @@ module.exports = {
       settings: {
         // Voreinstellung ist die Mobil-Emulation mit gedrosselter Leitung —
         // das entspricht dem, was auch der Chrome UX Report als PHONE misst.
-        chromeFlags: '--no-sandbox --disable-dev-shm-usage',
+        //
+        // --force-prefers-reduced-motion schaltet die Einblend-Animation der
+        // Seite ab (styles.css: @media (prefers-reduced-motion: reduce)).
+        // Ohne das fotografiert Lighthouse mitten in der Animation und misst
+        // teiltransparenten Text: Es meldete etwa #828282 statt des echten
+        // #5C5C5C und damit 3,84:1 statt 6,69:1. Die Barrierefreiheit sprang
+        // dadurch je nach Zufall zwischen 97 und 100 — als Regressionsmelder
+        // wertlos. Gemessen wird jetzt der Endzustand, also das, was auch ein
+        // Besucher mit abgeschalteten Animationen sieht.
+        chromeFlags: '--no-sandbox --disable-dev-shm-usage --force-prefers-reduced-motion',
       },
     },
     assert: {
@@ -44,7 +53,10 @@ module.exports = {
           matchingUrlPattern: START,
           assertions: {
             'categories:performance': ['error', { minScore: 0.9 }],
-            'categories:accessibility': ['error', { minScore: 0.95 }],
+            // Voll, nicht knapp darunter: Ohne die Animation ist der Wert
+            // deterministisch, und jede neue Farbe unter 4,5:1 soll sofort
+            // auffallen statt sich in einer 0.97 zu verstecken.
+            'categories:accessibility': ['error', { minScore: 1 }],
             'categories:best-practices': ['error', { minScore: 0.95 }],
 
             // SEO wird als Einzel-Audits geprueft statt als Kategorie, weil ein
@@ -75,7 +87,7 @@ module.exports = {
             // Tiefer angesetzt als bei der Startseite: Die Rechtsseiten
             // streuten auf dem Runner zwischen 0.84 und 1.00.
             'categories:performance': ['error', { minScore: 0.75 }],
-            'categories:accessibility': ['error', { minScore: 0.95 }],
+            'categories:accessibility': ['error', { minScore: 1 }],
             'categories:best-practices': ['error', { minScore: 0.95 }],
             // Kein SEO-Schwellwert: Impressum und Datenschutz tragen bewusst
             // <meta name="robots" content="noindex">, woran sich Lighthouse
