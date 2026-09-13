@@ -14,7 +14,8 @@
     "package:linux": "npm run sync-vendor && electron-forge package --platform linux --arch x64",
     "make": "npm run sync-vendor && electron-forge make --arch arm64 --platform darwin",
     "make:linux": "npm run sync-vendor && electron-forge make --platform linux --arch x64",
-    "check-package": "node scripts/check-asar-contents.js"
+    "check-package": "node scripts/check-asar-contents.js",
+    "traffic": "node scripts/traffic-report.js"
   },
   "config": {
     "forge": {
