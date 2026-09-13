@@ -4,6 +4,7 @@ const { isAbortError, createChatAbortError } = require('../../shared/runtime/abo
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { normalizeAttachments } = require('../../shared/contracts/attachments');
+const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -156,6 +157,24 @@ function parseToolArguments(rawArguments) {
 }
 
 /**
+ * Per `/name` im Chat aufgerufene Skills (Issue #124).
+ *
+ * Gelesen wird ausschließlich, was der *Nutzer* geschrieben hat. Ein `/name`
+ * in einer Assistenz-Antwort oder einem Tool-Ergebnis zählt nicht — sonst
+ * könnte sich das Modell selbst Skills einschalten, und fremder Dateiinhalt
+ * käme über den Umweg eines Tool-Ergebnisses an die Aktivierung heran.
+ */
+function collectInvokedSkillNames(messages) {
+  if (!Array.isArray(messages)) return [];
+  const names = new Set();
+  for (const message of messages) {
+    if (!message || message.role !== 'user') continue;
+    for (const name of extractInvokedSkillNames(message.content)) names.add(name);
+  }
+  return [...names];
+}
+
+/**
  * Anweisungsteil der eingeschalteten Skills (Issue #18). Steht hinter dem
  * Prompt des Nutzers, aber vor dem Ordnerkontext: Skills beschreiben, *wie*
  * gearbeitet wird, der Ordnerkontext nur, *woran*.
@@ -171,6 +190,17 @@ function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) 
     'Folgende Skills sind eingeschaltet. Ihre Anweisungen gelten für diese ' +
       'Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.',
   ];
+  // Ohne diesen Hinweis bleibt das „/name“ in der Nachricht des Nutzers eine
+  // unerklärte Marke — das Modell soll wissen, dass es der Auslöser war und
+  // keine Frage nach einem Dateipfad (Issue #124).
+  const invokedNames = usable.filter((skill) => skill.invoked).map((skill) => skill.name);
+  if (invokedNames.length > 0) {
+    intro.push(
+      `Per „/name“ in der Nachricht aufgerufen wurden: ${invokedNames.join(', ')}. ` +
+        'Diese Schreibweise ist der Aufruf selbst und keine Angabe, die du ' +
+        'beantworten oder wiederholen musst.'
+    );
+  }
   // Ein Skill besteht oft aus mehr als der SKILL.md — verweist sie auf
   // references/ oder assets/, muss das Modell wissen, wie es dorthin kommt
   // (Issue #61). Ohne offenen Ordner gibt es keine Tools, dann bleibt der
@@ -428,6 +458,10 @@ function createChatEngine({
           const active = await skills.getActiveSkills({
             workspaceRoot,
             activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
+            // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
+            // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
+            // prägen (Issue #124).
+            invokedSkills: collectInvokedSkillNames(messages),
           });
           skillsSystem = buildSkillsSystemPrompt(active, { toolsAvailable: Boolean(workspaceRoot) });
           skillRoots = active

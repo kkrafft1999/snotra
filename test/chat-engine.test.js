@@ -959,7 +959,9 @@ test('engine injects the bodies of active skills into the system message', async
     payload: { messages: [{ role: 'user', content: 'Was kannst du?' }] },
   });
 
-  assert.deepEqual(skillCalls, [{ workspaceRoot: null, activeSkills: ['snotra-capabilities'] }]);
+  assert.deepEqual(skillCalls, [
+    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [] },
+  ]);
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'Skills gelten auch ohne geöffneten Ordner');
   assert.match(system.content, /## Skill: snotra-capabilities/);
