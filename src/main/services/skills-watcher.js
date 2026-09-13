@@ -17,9 +17,12 @@
  * - **Die Verzeichnisse fehlen meistens.** `.agents/skills` ist die Ausnahme,
  *   nicht die Regel, und `fs.watch` scheitert an einem Pfad, den es nicht
  *   gibt.
- * - **Ein verschwindendes Verzeichnis meldet sich nicht selbst.** Wird der
+ * - **Ein verschwindendes Verzeichnis meldet sich nicht brauchbar.** Wird der
  *   beobachtete Ordner gelöscht, verstummt der Watcher unter macOS still —
- *   kein Ereignis, kein Fehler (nachgemessen 2026-09-13).
+ *   kein Ereignis, kein Fehler. Unter Windows ist es das Gegenteil: Er feuert
+ *   danach endlos weiter, mit dem eigenen absoluten Pfad als Dateinamen
+ *   (beides nachgemessen 2026-09-13). Verlassen kann man sich auf keine der
+ *   beiden Varianten.
  *
  * Beides hat dieselbe Antwort: Beobachtet wird nicht nur das Skill-
  * Verzeichnis, sondern zugleich seine vorhandenen Vorfahren bis hinauf zur
@@ -37,6 +40,15 @@
 const DEFAULT_DEBOUNCE_MS = 250;
 
 /**
+ * Obergrenze für das Zusammenfassen. Ohne sie verschiebt eine ununterbrochene
+ * Ereignis-Folge die Meldung immer weiter und es kommt nie zu einer — genau
+ * das passiert unter Windows, wo ein Watcher nach dem Entfernen seines
+ * Verzeichnisses endlos weiterfeuert (nachgemessen 2026-09-13), und ebenso
+ * bei einem Build-Prozess, der dauernd in den Ordner schreibt.
+ */
+const DEFAULT_MAX_WAIT_MS = 1000;
+
+/**
  * Wie weit dürfen die Wächter aufsteigen? `.agents/skills` → `.agents` →
  * Workspace- bzw. Home-Wurzel. Weiter nicht: Darüber lägen fremde
  * Verzeichnisse, die uns nichts angehen.
@@ -49,8 +61,10 @@ function createSkillsWatcher({
   os = null,
   onChange,
   debounceMs = DEFAULT_DEBOUNCE_MS,
+  maxWaitMs = DEFAULT_MAX_WAIT_MS,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
+  nowImpl = Date.now,
   onError = null,
 }) {
   if (typeof watch !== 'function') throw new TypeError('createSkillsWatcher benötigt watch.');
@@ -61,6 +75,10 @@ function createSkillsWatcher({
   let slots = [];
   let currentRoot = null;
   let debounceTimer = null;
+  /** Zeitpunkt des ersten noch nicht gemeldeten Ereignisses. */
+  let pendingSince = null;
+  /** Hat eines der gesammelten Ereignisse einen Neuaufbau verlangt? */
+  let pendingRebuild = false;
   let closed = false;
 
   function homeDir() {
@@ -96,14 +114,28 @@ function createSkillsWatcher({
 
   function notifyLater({ rebuild }) {
     if (closed) return;
+    // Ein Neuaufbau darf nicht verloren gehen, nur weil danach noch
+    // Ereignisse eintrudeln, die für sich genommen keinen bräuchten.
+    pendingRebuild = pendingRebuild || rebuild;
+    const now = nowImpl();
+    if (pendingSince === null) pendingSince = now;
+
+    // Verlängert wird nur innerhalb des Höchstfensters. Danach läuft der
+    // bereits gesetzte Timer aus, statt immer weiter verschoben zu werden.
+    const darfVerlaengern = now - pendingSince < maxWaitMs;
+    if (debounceTimer && !darfVerlaengern) return;
     if (debounceTimer) clearTimeoutImpl(debounceTimer);
+
     debounceTimer = setTimeoutImpl(() => {
       debounceTimer = null;
+      pendingSince = null;
+      const rebuildNoetig = pendingRebuild;
+      pendingRebuild = false;
       if (closed) return;
       // Erst neu aufsetzen, dann melden: Wurde das Verzeichnis gerade
-      // angelegt, hängt der Watcher danach am richtigen Pfad, und der
-      // folgende Scan sieht den neuen Stand.
-      if (rebuild()) build(currentRoot);
+      // angelegt oder entfernt, hängt der Watcher danach am richtigen Pfad,
+      // und der folgende Scan sieht den neuen Stand.
+      if (rebuildNoetig) build(currentRoot);
       onChange();
     }, debounceMs);
   }
@@ -140,7 +172,7 @@ function createSkillsWatcher({
           if (!isTarget && !concernsUs(filename, childName)) return;
           // Oberhalb des Ziels kann sich der Pfad geändert haben — neu
           // aufbauen. Das Ziel selbst meldet nur.
-          notifyLater({ rebuild: () => !isTarget });
+          notifyLater({ rebuild: !isTarget });
         });
         if (typeof watcher.on === 'function') {
           // Manche Plattformen melden einen Fehler statt eines Ereignisses.
@@ -148,7 +180,7 @@ function createSkillsWatcher({
           // ein Absturz des Main-Prozesses.
           watcher.on('error', (error) => {
             onError?.(error, dir);
-            notifyLater({ rebuild: () => true });
+            notifyLater({ rebuild: true });
           });
         }
         slots.push({ watcher, dir, isTarget });
@@ -185,6 +217,8 @@ function createSkillsWatcher({
       clearTimeoutImpl(debounceTimer);
       debounceTimer = null;
     }
+    pendingSince = null;
+    pendingRebuild = false;
     closeSlots();
     currentRoot = null;
   }
@@ -200,5 +234,6 @@ function createSkillsWatcher({
 module.exports = {
   createSkillsWatcher,
   DEFAULT_DEBOUNCE_MS,
+  DEFAULT_MAX_WAIT_MS,
   MAX_FALLBACK_LEVELS,
 };

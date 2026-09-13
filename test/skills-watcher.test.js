@@ -52,10 +52,15 @@ function createFakeWatch(missing = []) {
   return { watch, created, appear: (dir) => absent.delete(dir), absent };
 }
 
-/** Ein einziger anstehender Timer reicht — der Dienst entprellt nur einen. */
+/**
+ * Ein einziger anstehender Timer reicht — der Dienst entprellt nur einen.
+ * Die Uhr ist mitgesteuert, damit sich das Höchstfenster prüfen lässt, ohne
+ * wirklich zu warten.
+ */
 function createFakeClock() {
   let pending = null;
   let nextId = 0;
+  let now = 1_000_000;
   return {
     setTimeoutImpl: (fn) => {
       pending = { fn, id: ++nextId };
@@ -63,6 +68,13 @@ function createFakeClock() {
     },
     clearTimeoutImpl: (handle) => {
       if (pending && pending.id === handle) pending = null;
+    },
+    nowImpl: () => now,
+    advance(ms) {
+      now += ms;
+    },
+    get pendingId() {
+      return pending?.id ?? null;
     },
     get hasPending() {
       return pending !== null;
@@ -83,9 +95,10 @@ function setup({ missing = [], onChange } = {}) {
     watch: fake.watch,
     path,
     os,
-    onChange: onChange || (() => changes.push(Date.now())),
+    onChange: onChange || (() => changes.push(clock.nowImpl())),
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
+    nowImpl: clock.nowImpl,
   });
   return { fake, clock, changes, watcher };
 }
@@ -164,6 +177,54 @@ test('viele Ereignisse münden in eine einzige Meldung', () => {
   assert.deepEqual(changes, [], 'noch nichts gemeldet');
   clock.tick();
   assert.equal(changes.length, 1, 'genau einmal');
+  watcher.close();
+});
+
+test('eine ununterbrochene Ereignis-Flut verhindert die Meldung nicht', () => {
+  // Unter Windows feuert ein Watcher nach dem Entfernen seines Verzeichnisses
+  // endlos weiter. Würde jedes Ereignis das Zeitfenster verlängern, käme es
+  // nie zu einer Meldung — genau daran scheiterte der Löschfall dort.
+  const { fake, clock, changes, watcher } = setup();
+  watcher.watchWorkspace(WS);
+  const ziel = fake.created.find((w) => w.dir === WS_SKILLS);
+
+  let verschobene = 0;
+  for (let i = 0; i < 200; i += 1) {
+    const vorher = clock.pendingId;
+    ziel.handler('rename', `flut-${i}`);
+    if (clock.pendingId !== vorher) verschobene += 1;
+    clock.advance(20); // schneller als das Höchstfenster von 1000 ms
+  }
+
+  assert.ok(clock.hasPending, 'ein Timer steht noch an');
+  assert.ok(verschobene < 200, `der Timer wurde nicht endlos verschoben (${verschobene}×)`);
+  clock.tick();
+  assert.equal(changes.length, 1, 'die Meldung kommt');
+  watcher.close();
+});
+
+test('ein nötiger Neuaufbau geht durch spätere Ereignisse nicht verloren', () => {
+  // Die Reihenfolge aus dem Windows-Lauf: Erst meldet der Wächter über dem
+  // Ziel das Verschwinden (Neuaufbau nötig), danach trudeln Ereignisse des
+  // toten Ziel-Watchers ein, die für sich genommen keinen bräuchten.
+  const { fake, clock, changes, watcher } = setup();
+  watcher.watchWorkspace(WS);
+  const wurzel = fake.created.find((w) => w.dir === WS);
+  const ziel = fake.created.find((w) => w.dir === WS_SKILLS);
+
+  fake.absent.add(WS_SKILLS);
+  fake.absent.add(path.join(WS, '.agents'));
+  wurzel.handler('change', '.agents');
+  ziel.handler('rename', 'demo');
+  ziel.handler('rename', 'demo');
+  clock.tick();
+
+  assert.equal(changes.length, 1);
+  assert.deepEqual(
+    watcher.watchedDirectories()[0],
+    { dir: WS, isTarget: false },
+    'die Kette wurde neu aufgebaut und hängt nicht am toten Verzeichnis'
+  );
   watcher.close();
 });
 
