@@ -20,6 +20,15 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
   /** Natives Kontextmenü für Datei oder Ordner im Dateibaum (Issues #58, #120). */
   FS_SHOW_FILE_CONTEXT_MENU: 'fs:showFileContextMenu',
+  /**
+   * Import von außen (Issue #101): Drop aus Finder/Explorer in den Dateibaum.
+   * Eigene Kanäle, weil hier bewusst nur das **Ziel** gegen den Workspace
+   * geprüft wird — die Quelle liegt per Definition außerhalb. `inspectImport`
+   * zählt nur (beratend für den Renderer), `importItems` bestätigt nativ und
+   * kopiert.
+   */
+  FS_INSPECT_IMPORT: 'fs:inspectImport',
+  FS_IMPORT_ITEMS: 'fs:importItems',
 
   SETTINGS_GET_LLM_STATE: 'settings:getLLMState',
   SETTINGS_SET_ACTIVE_PRESET: 'settings:setActivePreset',

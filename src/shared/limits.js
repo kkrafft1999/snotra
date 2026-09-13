@@ -13,6 +13,15 @@ const LIMITS = Object.freeze({
   MAX_IMAGE_ATTACHMENT_BYTES: 5 * 1024 * 1024,
   MAX_IMAGES_PER_MESSAGE: 4,
   MAX_IMAGE_EDGE_PX: 1568,
+  // Import per Drag & Drop von außen (Issue #101). Wie bei den Verzeichnis-
+  // grenzen aus #76 gilt: Überschreitung lehnt den **ganzen** Drop ab, statt
+  // halb zu kopieren.
+  MAX_IMPORT_ENTRIES: 2000,
+  MAX_IMPORT_TOTAL_BYTES: 200 * 1024 * 1024,
+  // Ab hier wird nativ bestätigt. Eine einzelne kleine Datei geht ohne
+  // Rückfrage durch; Ordner werden immer bestätigt (siehe fs-handlers).
+  IMPORT_CONFIRM_MIN_ENTRIES: 20,
+  IMPORT_CONFIRM_MIN_BYTES: 10 * 1024 * 1024,
 });
 
 module.exports = { LIMITS };

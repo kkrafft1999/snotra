@@ -2,7 +2,7 @@
 // bekommt aus 'electron' nur contextBridge, crashReporter, ipcRenderer,
 // nativeImage, sharedTexture, webFrame und webUtils — `shell` und `clipboard`
 // gibt es hier nicht. Alles andere laeuft ueber IPC (Issue #64).
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -10,6 +10,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (dirPath) => ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath),
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
+  // Drag & Drop von aussen (Issue #101). In Electron 44 gibt es File.path
+  // nicht mehr; webUtils.getPathForFile ist der dokumentierte Ersatz und einer
+  // der wenigen Bausteine, die ein sandboxed Preload bekommt. Ein leerer
+  // Rueckgabewert heisst „stammt nicht aus dem Dateisystem" (z. B. Drag aus
+  // dem Browser) — der Renderer verwirft solche Eintraege.
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || '';
+    } catch {
+      return '';
+    }
+  },
+  inspectImport: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_INSPECT_IMPORT, sourcePaths, destDir),
+  importItems: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_IMPORT_ITEMS, sourcePaths, destDir),
   listWorkspacePaths: () => ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS),
   showFileContextMenu: (filePath, options) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, options),
   onFsItemDeleted: (callback) => {

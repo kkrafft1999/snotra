@@ -23,6 +23,29 @@ export function parentDirFromItemPath(itemPath) {
   return parentDirOf(itemPath);
 }
 
+/**
+ * Kommt der Drag von ausserhalb der App (Finder/Explorer)? Issue #101.
+ *
+ * Zwei Bedingungen: das DataTransfer meldet Dateien **und** es laeuft kein
+ * interner Drag aus dem Baum. Ohne die zweite Bedingung wuerde ein internes
+ * Verschieben faelschlich als Import gelten. Landet #56 mit eigenem MIME-Typ,
+ * tritt dieser an die Stelle des internen Quellpfads.
+ */
+export function isExternalFileDrop(types, hasInternalSource) {
+  if (hasInternalSource) return false;
+  return Array.from(types || []).includes('Files');
+}
+
+/**
+ * Zielordner eines externen Drops: die Ordnerzeile unter dem Zeiger, sonst
+ * der Projektordner. Ohne geoeffneten Projektordner gibt es kein Ziel.
+ */
+export function importDestDirFor(rowDataset, rootPath) {
+  if (!rootPath) return null;
+  if (rowDataset && rowDataset.isDirectory === 'true' && rowDataset.path) return rowDataset.path;
+  return rootPath;
+}
+
 const QUICK_ACTION_PROMPTS = {
   analyse:
     'Erklaere mir die Struktur dieses Projekts: Welche Hauptordner gibt es, was machen sie, und wie ist der Code organisiert?',
@@ -71,6 +94,9 @@ export function initFileTree(deps) {
   let dragSourcePath = null;
   let dragSourceRow = null;
   let currentDropTarget = null;
+  // Laeuft gerade ein Import von aussen? Verhindert einen zweiten Drop,
+  // waehrend noch kopiert wird (#101).
+  let importInFlight = false;
 
   function resetDragState() {
     clearDragVisualState();
@@ -341,9 +367,16 @@ export function initFileTree(deps) {
   treeContainer.addEventListener('contextmenu', (e) => e.preventDefault());
 
   treeContainer.addEventListener('dragover', (e) => {
-    if (!appStore.rootPath || !dragSourcePath) return;
+    if (!appStore.rootPath) return;
     const overItem = e.target.closest('.tree-item');
     if (overItem && overItem.dataset.isDirectory === 'true') return;
+    if (isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath))) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      treeContainer.classList.add('drop-target-root--import');
+      return;
+    }
+    if (!dragSourcePath) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     treeContainer.classList.add('drop-target-root');
@@ -352,14 +385,25 @@ export function initFileTree(deps) {
   treeContainer.addEventListener('dragleave', (e) => {
     if (!treeContainer.contains(e.relatedTarget)) {
       treeContainer.classList.remove('drop-target-root');
+      treeContainer.classList.remove('drop-target-root--import');
     }
   });
 
   treeContainer.addEventListener('drop', async (e) => {
-    clearDragVisualState();
-    if (!appStore.rootPath || !dragSourcePath) return;
+    if (!appStore.rootPath) return;
     const overItem = e.target.closest('.tree-item');
     if (overItem && overItem.dataset.isDirectory === 'true') return;
+    if (isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath))) {
+      e.preventDefault();
+      // Die Pfade muessen **vor** dem ersten await aus dem DataTransfer
+      // geholt werden — danach ist es leer (#101).
+      const sources = externalSourcePathsFrom(e.dataTransfer);
+      clearDragVisualState();
+      await importExternalItems(sources, importDestDirFor(overItem?.dataset, appStore.rootPath));
+      return;
+    }
+    clearDragVisualState();
+    if (!dragSourcePath) return;
     e.preventDefault();
     const sourcePath = dragSourcePath;
     if (!sourcePath) return;
@@ -496,16 +540,22 @@ export function initFileTree(deps) {
   }
 
   function handleDragOver(e) {
+    const external = isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath));
+    if (external && !appStore.rootPath) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = external ? 'copy' : 'move';
   }
 
   function handleDragEnter(e) {
+    const external = isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath));
+    if (external && !appStore.rootPath) return;
     e.preventDefault();
     const row = e.currentTarget;
     if (row === dragSourceRow) return;
     clearDropTarget();
-    row.classList.add('drop-target');
+    // Eigener Zustand fuer den Import: man soll sehen, dass hier kopiert und
+    // nicht verschoben wird (#101).
+    row.classList.add(external ? 'drop-target--import' : 'drop-target');
     currentDropTarget = row;
   }
 
@@ -513,6 +563,7 @@ export function initFileTree(deps) {
     const row = e.currentTarget;
     if (!row.contains(e.relatedTarget)) {
       row.classList.remove('drop-target');
+      row.classList.remove('drop-target--import');
       if (currentDropTarget === row) currentDropTarget = null;
     }
   }
@@ -520,14 +571,17 @@ export function initFileTree(deps) {
   function clearDropTarget() {
     if (currentDropTarget) {
       currentDropTarget.classList.remove('drop-target');
+      currentDropTarget.classList.remove('drop-target--import');
       currentDropTarget = null;
     }
   }
 
   function clearDragVisualState() {
     treeContainer.classList.remove('drop-target-root');
-    for (const el of treeContainer.querySelectorAll('.tree-item.drop-target')) {
+    treeContainer.classList.remove('drop-target-root--import');
+    for (const el of treeContainer.querySelectorAll('.tree-item.drop-target, .tree-item.drop-target--import')) {
       el.classList.remove('drop-target');
+      el.classList.remove('drop-target--import');
     }
     for (const el of treeContainer.querySelectorAll('.tree-item.dragging')) {
       el.classList.remove('dragging');
@@ -578,6 +632,15 @@ export function initFileTree(deps) {
   async function handleDrop(e, destDir, dropRow, depth) {
     e.preventDefault();
     e.stopPropagation();
+
+    if (isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath))) {
+      // Synchron aus dem DataTransfer lesen, bevor irgendetwas awaitet wird.
+      const sources = externalSourcePathsFrom(e.dataTransfer);
+      clearDragVisualState();
+      await importExternalItems(sources, importDestDirFor(dropRow?.dataset, appStore.rootPath));
+      return;
+    }
+
     clearDragVisualState();
 
     const sourcePath = dragSourcePath || e.dataTransfer.getData('text/plain');
@@ -598,6 +661,59 @@ export function initFileTree(deps) {
     }
     await restoreExpandedFolders(expandedBefore);
     clearDragVisualState();
+  }
+
+  /**
+   * Uebersetzt die gedroppten Dateien in echte Pfade. Muss synchron laufen:
+   * nach dem ersten await ist das DataTransfer leer. Eintraege ohne Pfad
+   * stammen nicht aus dem Dateisystem (z. B. Drag aus dem Browser).
+   */
+  function externalSourcePathsFrom(dataTransfer) {
+    const files = Array.from(dataTransfer?.files ?? []);
+    return files.map((file) => api.getPathForFile?.(file) ?? '').filter((p) => typeof p === 'string' && p);
+  }
+
+  /**
+   * Issue #101: Dateien und Ordner von aussen uebernehmen. Der Renderer waehlt
+   * nur den Zielordner — geprueft, bestaetigt und kopiert wird im Main-Prozess,
+   * der Fehler auch selbst nativ meldet.
+   */
+  async function importExternalItems(sources, destDir) {
+    if (!appStore.rootPath || !destDir || sources.length === 0 || importInFlight) return;
+    importInFlight = true;
+    treeContainer.classList.add('import-busy');
+    try {
+      // Beratend: verbindlich prueft der Import-Kanal gleich noch einmal.
+      // Ein Drop, bei dem nichts zu kopieren waere (nur Verknuepfungen),
+      // soll keinen Dialog ausloesen.
+      const inspection = await api.inspectImport?.(sources, destDir);
+      if (inspection?.ok && inspection.dirs === 0 && inspection.files === 0) return;
+
+      const result = await api.importItems(sources, destDir);
+      if (result?.cancelled) return;
+      if (result?.error) {
+        console.warn('Uebernehmen fehlgeschlagen:', result.error);
+        return;
+      }
+      await refreshAfterImport(destDir);
+    } catch (err) {
+      console.warn('Uebernehmen fehlgeschlagen:', err?.message ?? err);
+    } finally {
+      importInFlight = false;
+      treeContainer.classList.remove('import-busy');
+    }
+  }
+
+  async function refreshAfterImport(destDir) {
+    if (destDir === appStore.rootPath) {
+      // refreshFolder stellt fuer den Root die aufgeklappten Ordner selbst wieder her.
+      await refreshFolder(destDir);
+      return;
+    }
+    const expandedBefore = collectExpandedFolderPaths();
+    await refreshFolder(destDir);
+    await restoreExpandedFolders(expandedBefore);
+    await expandFolderAtPath(destDir);
   }
 
   async function refreshParentOf(itemPath) {

@@ -160,6 +160,20 @@ const settingsModal = initSettingsModal({
   DEFAULT_MAX_TOOL_ROUNDS,
 });
 
+// Grundrauschen gegen den Chromium-Default (Issue #101): ein Drop *neben*
+// der Drop-Zone im Dateibaum darf die Datei nicht im Fenster oeffnen. Bewusst
+// nur fuer Dateien — Text irgendwohin zu ziehen (etwa in die Chat-Eingabe)
+// bleibt die normale Browser-Geste. Die Drop-Zonen im Baum rufen selbst
+// preventDefault(); dieser Handler laeuft am Dokument zuletzt und aendert
+// daran nichts. Der will-navigate-Handler im Main-Prozess (src/main/window.js)
+// bleibt das Netz darunter, ist aber nicht der eigentliche Schutz.
+const dragCarriesFiles = (e) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+for (const type of ['dragover', 'drop']) {
+  document.addEventListener(type, (e) => {
+    if (dragCarriesFiles(e)) e.preventDefault();
+  });
+}
+
 const fileTree = initFileTree({
   api,
   appStore,

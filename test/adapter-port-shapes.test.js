@@ -9,6 +9,7 @@ const {
 const { createProviderSecretsPort } = require('../src/main/adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../src/main/adapters/credential-adapter');
 const { createSkillsAdapter } = require('../src/main/adapters/skills-adapter');
+const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-ipc-adapter');
 
 const LLM_CONFIG_STORE_KEYS = [
   'normalizePresetEntry',
@@ -44,6 +45,19 @@ const PROVIDER_SECRETS_KEYS = ['getEffectiveProviderConfig'];
 const CREDENTIAL_PORT_KEYS = ['getApiKey'];
 
 const SKILL_PORT_KEYS = ['getActiveSkills'];
+
+// Die Oberfläche, die der Renderer über die fs-Kanäle erreicht. Neue Methoden
+// gehören bewusst hierher — inspectImport/importItems sind die einzigen, die
+// eine Quelle außerhalb des Workspace annehmen (Issue #101).
+const FILESYSTEM_PORT_KEYS = [
+  'readDirectory',
+  'moveItem',
+  'inspectImport',
+  'importItems',
+  'listWorkspacePaths',
+  'resolveWorkspacePath',
+  'readFilePreview',
+];
 
 function makeStorageStub() {
   return {
@@ -114,4 +128,12 @@ test('skills adapter exposes only the skill port surface', () => {
   return adapter.getActiveSkills({ workspaceRoot: null, activeSkills: ['x'] }).then(() => {
     assert.deepEqual(calls, [{ workspaceRoot: null, activeSkills: ['x'] }]);
   });
+});
+
+test('filesystem adapter exposes only the fs port surface (#101)', () => {
+  const adapter = createFilesystemIpcAdapter({
+    fsService: { leakInternalMethod: async () => 'must-not-forward' },
+    getActiveWorkspaceRoot: () => null,
+  });
+  assert.deepEqual(Object.keys(adapter).sort(), FILESYSTEM_PORT_KEYS.slice().sort());
 });

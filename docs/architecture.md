@@ -129,6 +129,33 @@ wird nur von `services/workspace-activation.js` gesetzt (Issue
   Pfad muss im erneut validierten Verlauf oder als zuletzt geöffneter Ordner
   gespeichert sein, sonst bleibt der bisherige Root stehen.
 
+### Import von außen: die eine bewusst asymmetrische Prüfung
+
+Der Drop aus Finder/Explorer in den Dateibaum (Issue
+[#101](https://github.com/kkrafft1999/snotra/issues/101)) ist der erste Weg, auf
+dem ein Pfad von **außerhalb** des Workspace Wirkung hat. Er bekommt deshalb
+eigene Kanäle statt einer Erweiterung von `fs:moveItem` — dort prüft
+`adapters/filesystem-ipc-adapter.js` Quelle *und* Ziel über `boundPath()`, und
+das soll so bleiben:
+
+- `fs:inspectImport` — zählt Ordner, Dateien und Bytes, ohne zu schreiben.
+- `fs:importItems` — bestätigt nativ und kopiert.
+
+Im Adapter läuft nur das **Ziel** über `boundPath()` (realpath-geprüft). Die
+**Quelle** wird absichtlich nicht gegen den Workspace geprüft — genau dafür gibt
+es den Kanal —, muss aber absolut sein und darf nicht auf
+`shared/runtime/sensitive-paths.js` passen; ein Treffer lehnt den Drop ab. Der
+Rest liegt in `services/fs-service.js`: `inspectImportSources` zählt rekursiv
+(Symlinks und sensible Namen werden gezählt und übersprungen, nicht verfolgt),
+`importExternalItems` kopiert mit `fs.cp` — kopiert, nicht verschoben, denn
+`fs.rename` arbeitet nur innerhalb eines Dateisystems, und die Quelle draußen zu
+löschen wäre nicht rückholbar. Das Kollisionsschema `name (2).ext` teilen sich
+beide Wege über `findFreeTargetPath`. Die Grenzen (`MAX_IMPORT_ENTRIES`,
+`MAX_IMPORT_TOTAL_BYTES`) stehen in `shared/limits.js`; eine Überschreitung
+lehnt den ganzen Drop ab, statt halb zu kopieren. Bestätigt wird in
+`ipc/fs-handlers.js` nativ über `dialog.showMessageBox` — der Renderer stößt nur
+an, siehe `docs/sicherheitskonzept.md` §5.
+
 Damit kann der Renderer die Grenze nicht verschieben: Er benennt den Workspace
 in keinem Aufruf mehr. `CHAT_SEND`, Skill-Katalog und Chat-Verlauf bekommen den
 Root über `getActiveWorkspaceRoot()` im jeweiligen Handler injiziert; ein im

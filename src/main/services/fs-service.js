@@ -5,6 +5,7 @@ const {
   collectLineMatches,
   validateRegexPattern,
 } = require('./search-line-matcher');
+const { formatBytesDe } = require('../../shared/runtime/format-bytes');
 const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
   RegexSearchTimeoutError,
@@ -2030,6 +2031,39 @@ function createFsService({
     return items;
   }
 
+  /**
+   * Freier Zielname in destDir nach dem Schema `name (2).ext`.
+   *
+   * Gemeinsam genutzt vom Verschieben im Baum und vom Import von außen
+   * (#101) — das Kollisionsschema muss für beide Wege identisch sein.
+   * `claimed` hält Namen fest, die in demselben Vorgang schon vergeben,
+   * aber noch nicht angelegt wurden (Mehrfachauswahl beim Drop).
+   */
+  async function findFreeTargetPath(destDir, baseName, claimed = null) {
+    const isTaken = async (candidate) => {
+      if (claimed && claimed.has(candidate)) return true;
+      try {
+        await fs.access(candidate);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    let targetPath = path.join(destDir, baseName);
+    if (await isTaken(targetPath)) {
+      const ext = path.extname(baseName);
+      const nameNoExt = ext ? baseName.slice(0, -ext.length) : baseName;
+      let i = 2;
+      do {
+        targetPath = path.join(destDir, `${nameNoExt} (${i})${ext}`);
+        i++;
+      } while (await isTaken(targetPath));
+    }
+    if (claimed) claimed.add(targetPath);
+    return targetPath;
+  }
+
   async function moveItem(sourcePath, destDir) {
     const srcStat = await fs.stat(sourcePath);
     const dstStat = await fs.stat(destDir);
@@ -2037,7 +2071,6 @@ function createFsService({
       return { error: 'Ziel ist kein Ordner.' };
     }
     const baseName = path.basename(sourcePath);
-    let targetPath = path.join(destDir, baseName);
 
     const srcParent = path.dirname(sourcePath);
     if (path.resolve(srcParent) === path.resolve(destDir)) {
@@ -2048,22 +2081,202 @@ function createFsService({
       return { error: 'Ordner kann nicht in sich selbst verschoben werden.' };
     }
 
-    try {
-      await fs.access(targetPath);
-      const ext = path.extname(baseName);
-      const nameNoExt = ext ? baseName.slice(0, -ext.length) : baseName;
-      let i = 2;
-      do {
-        targetPath = path.join(destDir, `${nameNoExt} (${i})${ext}`);
-        i++;
-        try { await fs.access(targetPath); } catch { break; }
-      } while (true);
-    } catch {
-      // target does not exist – good
-    }
-
+    const targetPath = await findFreeTargetPath(destDir, baseName);
     await fs.rename(sourcePath, targetPath);
     return { ok: true, newPath: targetPath };
+  }
+
+  // ── Import von außerhalb des Workspace (Issue #101) ──────────────────────
+  //
+  // Anders als moveItem nimmt dieser Weg eine Quelle **außerhalb** des
+  // Workspace an — die Prüfung der Quelle (absolut, vorhanden, nicht sensibel)
+  // macht der Adapter, die Workspace-Bindung gilt nur für das Ziel. Kopiert
+  // wird, nicht umbenannt: fs.rename arbeitet nur innerhalb eines Dateisystems,
+  // und eine Quelle außerhalb des Workspace zu löschen wäre nicht rückholbar.
+
+  function isSensitiveEntryName(entryName, isSensitiveName) {
+    return typeof isSensitiveName === 'function' && isSensitiveName(entryName);
+  }
+
+  /**
+   * Zählt rekursiv, was ein Import anfassen würde, ohne etwas zu schreiben.
+   * Symlinks werden gezählt und übersprungen, nicht verfolgt — ein Symlink im
+   * Workspace, der nach außen zeigt, wäre ein Loch in der Grenze.
+   */
+  async function countImportSource(absPath, stat, acc, isSensitiveName) {
+    if (stat.isSymbolicLink()) {
+      acc.skippedSymlinks += 1;
+      return;
+    }
+    if (stat.isFile()) {
+      acc.files += 1;
+      acc.bytes += stat.size;
+      return;
+    }
+    if (!stat.isDirectory()) {
+      // Gerät, Socket, FIFO: nichts, was in einen Projektordner gehört.
+      acc.skippedOther += 1;
+      return;
+    }
+    acc.dirs += 1;
+    const entries = await fs.readdir(absPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (isSensitiveEntryName(entry.name, isSensitiveName)) {
+        acc.skippedSensitive += 1;
+        continue;
+      }
+      const childPath = path.join(absPath, entry.name);
+      let childStat;
+      try {
+        childStat = await fs.lstat(childPath);
+      } catch {
+        continue;
+      }
+      await countImportSource(childPath, childStat, acc, isSensitiveName);
+      if (acc.dirs + acc.files > acc.maxEntries) return;
+    }
+  }
+
+  /**
+   * Prüft und zählt einen Import, ohne zu kopieren.
+   * @returns {{ error: string } | { ok: true, dirs, files, bytes, skippedSymlinks,
+   *            skippedSensitive, targets: Array<{ source, targetPath, kind }> }}
+   */
+  async function inspectImportSources(sourcePaths, destDir, options = {}) {
+    const {
+      maxEntries = Number.POSITIVE_INFINITY,
+      maxTotalBytes = Number.POSITIVE_INFINITY,
+      isSensitiveName = null,
+    } = options;
+
+    const sources = Array.isArray(sourcePaths) ? sourcePaths.filter((p) => typeof p === 'string' && p) : [];
+    if (sources.length === 0) return { error: 'Keine Quelle zum Übernehmen.' };
+
+    let dstStat;
+    try {
+      dstStat = await fs.stat(destDir);
+    } catch {
+      return { error: 'Ziel ist kein Ordner.' };
+    }
+    if (!dstStat.isDirectory()) return { error: 'Ziel ist kein Ordner.' };
+
+    const resolvedDest = path.resolve(destDir);
+    const acc = {
+      dirs: 0,
+      files: 0,
+      bytes: 0,
+      skippedSymlinks: 0,
+      skippedSensitive: 0,
+      skippedOther: 0,
+      maxEntries,
+    };
+    const targets = [];
+    const claimed = new Set();
+
+    for (const source of sources) {
+      if (!path.isAbsolute(source)) return { error: `Quelle ist kein absoluter Pfad: ${source}` };
+      const resolvedSource = path.resolve(source);
+
+      let srcStat;
+      try {
+        srcStat = await fs.lstat(resolvedSource);
+      } catch {
+        return { error: `Quelle nicht gefunden: ${source}` };
+      }
+
+      if (resolvedSource === resolvedDest) {
+        return { error: 'Ordner kann nicht in sich selbst kopiert werden.' };
+      }
+      if (path.dirname(resolvedSource) === resolvedDest) {
+        return { error: 'Quelle liegt bereits in diesem Ordner.' };
+      }
+      if (srcStat.isDirectory() && resolvedDest.startsWith(resolvedSource + path.sep)) {
+        return { error: 'Ordner kann nicht in sich selbst kopiert werden.' };
+      }
+
+      if (srcStat.isSymbolicLink()) {
+        acc.skippedSymlinks += 1;
+        continue;
+      }
+
+      await countImportSource(resolvedSource, srcStat, acc, isSensitiveName);
+      if (acc.dirs + acc.files > maxEntries) {
+        return {
+          error: `Zu viele Einträge auf einmal (Grenze: ${maxEntries}). Bitte in kleineren Teilen übernehmen.`,
+        };
+      }
+      if (acc.bytes > maxTotalBytes) {
+        return {
+          error: `Zu viele Daten auf einmal (Grenze: ${formatBytesDe(maxTotalBytes)}). Bitte in kleineren Teilen übernehmen.`,
+        };
+      }
+
+      targets.push({
+        source: resolvedSource,
+        targetPath: await findFreeTargetPath(destDir, path.basename(resolvedSource), claimed),
+        kind: srcStat.isDirectory() ? 'directory' : 'file',
+      });
+    }
+
+    return {
+      ok: true,
+      destDir: resolvedDest,
+      dirs: acc.dirs,
+      files: acc.files,
+      bytes: acc.bytes,
+      skippedSymlinks: acc.skippedSymlinks,
+      skippedSensitive: acc.skippedSensitive,
+      targets,
+    };
+  }
+
+  /**
+   * Kopiert geprüfte Quellen in den Zielordner. Prüft selbst noch einmal über
+   * inspectImportSources — der Aufrufer darf sich nicht darauf verlassen, dass
+   * zwischen Zählen und Kopieren nichts passiert ist.
+   */
+  async function importExternalItems(sourcePaths, destDir, options = {}) {
+    const inspection = await inspectImportSources(sourcePaths, destDir, options);
+    if (inspection.error) return { error: inspection.error };
+
+    const { isSensitiveName = null } = options;
+    const copied = [];
+    for (const target of inspection.targets) {
+      const filter = async (src) => {
+        if (src !== target.source && isSensitiveEntryName(path.basename(src), isSensitiveName)) return false;
+        try {
+          const st = await fs.lstat(src);
+          return !st.isSymbolicLink();
+        } catch {
+          return false;
+        }
+      };
+      try {
+        await fs.cp(target.source, target.targetPath, {
+          recursive: true,
+          errorOnExist: true,
+          force: false,
+          dereference: false,
+          filter,
+        });
+      } catch (err) {
+        return {
+          error: `Kopieren fehlgeschlagen: ${err?.message ?? String(err)}`,
+          copied,
+        };
+      }
+      copied.push(target.targetPath);
+    }
+
+    return {
+      ok: true,
+      copied,
+      dirs: inspection.dirs,
+      files: inspection.files,
+      bytes: inspection.bytes,
+      skippedSymlinks: inspection.skippedSymlinks,
+      skippedSensitive: inspection.skippedSensitive,
+    };
   }
 
   async function readFilePreview(filePath) {
@@ -2099,6 +2312,9 @@ function createFsService({
     runListDirectoryTreeTool,
     readDirectory,
     moveItem,
+    findFreeTargetPath,
+    inspectImportSources,
+    importExternalItems,
     readFilePreview,
   };
 }
