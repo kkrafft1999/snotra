@@ -7,6 +7,7 @@
  *   assets/icon/icon-macos.svg   -> icon.icns  (16 … 512 px, jeweils 1x und @2x)
  *   assets/icon/icon-windows.svg -> icon.ico   (16, 32, 48, 64, 128, 256 px als PNG-Einträge)
  *   assets/icon/icon-windows.svg -> icon.png   (512 px, Linux: hicolor-Icon des .deb)
+ *   assets/icon/icon-windows.svg -> website/favicon.ico, favicon.svg, icon.png
  *
  * `icon.icns`/`icon.ico` findet electron-packager über `"icon": "./icon"` (ohne
  * Endung) selbst; `icon.png` wird vom deb-Maker explizit referenziert. Die
@@ -27,6 +28,10 @@ const SRC_WIN = path.join(ROOT, 'assets', 'icon', 'icon-windows.svg');
 const OUT_ICNS = path.join(ROOT, 'icon.icns');
 const OUT_ICO = path.join(ROOT, 'icon.ico');
 const OUT_PNG = path.join(ROOT, 'icon.png');
+const WEB_DIR = path.join(ROOT, 'website');
+const OUT_WEB_ICO = path.join(WEB_DIR, 'favicon.ico');
+const OUT_WEB_SVG = path.join(WEB_DIR, 'favicon.svg');
+const OUT_WEB_PNG = path.join(WEB_DIR, 'icon.png');
 
 // Apple-Iconset: [Punktgröße, Skalierung] -> Dateiname icon_<pt>x<pt>[@2x].png
 const ICONSET = [
@@ -34,6 +39,9 @@ const ICONSET = [
   [256, 1], [256, 2], [512, 1], [512, 2],
 ];
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
+// Browser zeigen das Favicon nur in Tab- und Lesezeichengröße, größere Einträge
+// wären reines Transfergewicht. Moderne Browser nehmen ohnehin favicon.svg.
+const WEB_ICO_SIZES = [16, 32, 48];
 // Linux: eine Groesse reicht, 512 ist die groesste uebliche hicolor-Stufe.
 const PNG_SIZE = 512;
 
@@ -67,9 +75,9 @@ function buildIcns(tmpDir) {
  * so lag auch das bisherige icon.ico vor). Aufbau: ICONDIR (6 Byte),
  * ICONDIRENTRY je Bild (16 Byte), danach die Bilddaten.
  */
-function buildIco(tmpDir) {
-  const images = ICO_SIZES.map((size) => {
-    const pngPath = path.join(tmpDir, `win-${size}.png`);
+function buildIco(tmpDir, sizes, outPath, prefix) {
+  const images = sizes.map((size) => {
+    const pngPath = path.join(tmpDir, `${prefix}-${size}.png`);
     renderPng(SRC_WIN, size, pngPath);
     return { size, data: fs.readFileSync(pngPath) };
   });
@@ -95,7 +103,7 @@ function buildIco(tmpDir) {
     offset += data.length;
   });
 
-  fs.writeFileSync(OUT_ICO, Buffer.concat([header, directory, ...images.map((img) => img.data)]));
+  fs.writeFileSync(outPath, Buffer.concat([header, directory, ...images.map((img) => img.data)]));
 }
 
 /**
@@ -107,6 +115,18 @@ function buildPng() {
   renderPng(SRC_WIN, PNG_SIZE, OUT_PNG);
 }
 
+/**
+ * Website-Icons für Firebase Hosting: `favicon.ico` beantwortet die Anfrage, die
+ * jeder Browser ungefragt an `/favicon.ico` stellt (Issue #119), `favicon.svg`
+ * bedient moderne Browser scharf in jeder Größe, `icon.png` bleibt als
+ * og:image-Motiv der Seiten.
+ */
+function buildWebsiteIcons(tmpDir) {
+  buildIco(tmpDir, WEB_ICO_SIZES, OUT_WEB_ICO, 'web');
+  fs.copyFileSync(SRC_WIN, OUT_WEB_SVG);
+  renderPng(SRC_WIN, PNG_SIZE, OUT_WEB_PNG);
+}
+
 function main() {
   for (const src of [SRC_MAC, SRC_WIN]) {
     if (!fs.existsSync(src)) throw new Error(`Quelle fehlt: ${path.relative(ROOT, src)}`);
@@ -115,10 +135,12 @@ function main() {
   try {
     buildIcns(tmpDir);
     console.log(`✔ ${path.relative(ROOT, OUT_ICNS)} (${ICONSET.length} Größen)`);
-    buildIco(tmpDir);
+    buildIco(tmpDir, ICO_SIZES, OUT_ICO, 'win');
     console.log(`✔ ${path.relative(ROOT, OUT_ICO)} (${ICO_SIZES.length} Größen)`);
     buildPng();
     console.log(`✔ ${path.relative(ROOT, OUT_PNG)} (${PNG_SIZE} px)`);
+    buildWebsiteIcons(tmpDir);
+    console.log(`✔ ${path.relative(ROOT, OUT_WEB_ICO)} (${WEB_ICO_SIZES.length} Größen), favicon.svg, icon.png`);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

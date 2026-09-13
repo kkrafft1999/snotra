@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Snotra AI App-Icon, Windows-Layout: vollflaechig, ohne Rand und Schatten (Motiv um 1024/824 skaliert).
+     Quelle fuer icon.ico, Build: node scripts/build-icons.js -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1188B4"/>
+      <stop offset="1" stop-color="#00658A"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="180" fill="url(#bg)"/>
+  <g transform="translate(512 512) scale(1.2427) translate(-512 -512)">
+  <!-- Eule: Weisheitssymbol fuer Snotra, Goettin der Klugheit -->
+  <g id="owl">
+    <path d="M292 262 L390 352 Q512 306 634 352 L732 262 V576 A220 220 0 0 1 292 576 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="20" stroke-linejoin="round"/>
+    <circle cx="428" cy="480" r="74" fill="#00658A"/>
+    <circle cx="596" cy="480" r="74" fill="#00658A"/>
+    <circle cx="448" cy="460" r="22" fill="#FFFFFF"/>
+    <circle cx="616" cy="460" r="22" fill="#FFFFFF"/>
+    <path d="M482 566 H542 L512 616 Z" fill="#00658A" stroke="#00658A" stroke-width="16" stroke-linejoin="round"/>
+  </g>
+  </g>
+</svg>
