@@ -820,10 +820,16 @@ export function initSettingsModal(deps) {
     }
     const wo = state.source === 'override' ? 'Eigener Interpreter' : 'Gefunden';
     const version = state.version ? ` — ${state.version}` : '';
+    // Woher der PATH kam, gehoert sichtbar dazu (Issue #111): aus dem Finder
+    // gestartet faende die App sonst still einen anderen Python als im
+    // Terminal, und niemand koennte sich erklaeren, warum.
+    const woher = state.pathSource === 'login-shell'
+      ? ' (gesucht im PATH aus deinem Shell-Profil)'
+      : '';
     if (!state.enabled) {
-      return { text: `${wo}: ${state.command}${version}. Noch nicht erlaubt, run_python wird nicht angeboten.` };
+      return { text: `${wo}: ${state.command}${version}${woher}. Noch nicht erlaubt, run_python wird nicht angeboten.` };
     }
-    return { text: `${wo}: ${state.command}${version}. run_python wird dem Modell angeboten.` };
+    return { text: `${wo}: ${state.command}${version}${woher}. run_python wird dem Modell angeboten.` };
   }
 
   function setPythonStatus({ text, isError = false }) {
@@ -852,8 +858,14 @@ export function initSettingsModal(deps) {
       return { text: `Keine Shell gefunden${grund}. shell_execute wird nicht angeboten.`, isError: true };
     }
     // Login-Shell heisst: dein Profil wird gelesen, Homebrew & Co. sind da.
-    const wie = state.login ? ' als Login-Shell (dein PATH aus dem Profil)' : '';
-    const wo = `Gefunden: ${state.label || state.command}${wie}`;
+    // Interaktiv erkannt heisst zusaetzlich: auch `.zshrc` war dabei (#111).
+    const wie = state.login ? ' als Login-Shell' : '';
+    const path = state.path
+      ? state.interactive
+        ? ' — dein PATH aus dem Profil inkl. .zshrc, einmal beim Start gelesen'
+        : ' — dein PATH aus dem Profil, einmal beim Start gelesen'
+      : '';
+    const wo = `Gefunden: ${state.label || state.command}${wie}${path}`;
     if (!state.enabled) {
       return { text: `${wo}. Noch nicht erlaubt, shell_execute wird nicht angeboten.` };
     }

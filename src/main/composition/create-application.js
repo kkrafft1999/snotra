@@ -159,36 +159,13 @@ function createApplication({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
-  // Python-Ausfuehrung (Issue #86). Zwei Bedingungen muessen erfuellt sein,
-  // damit das Tool ueberhaupt auftaucht: ein gefundener Interpreter und die
-  // ausdrueckliche Einstellung — sie ist standardmaessig aus, weil
-  // ausgefuehrter Code die Workspace-Grenze umgeht.
-  let pythonExecutionEnabled = false;
-  const pythonRunnerService = createPythonRunnerService({
-    spawn: childProcess.spawn,
-    fs,
-    path,
-    os,
-    readInterpreterOverride: async () => (await uiPrefsStore.readUIPrefs()).pythonInterpreterPath || '',
-  });
-  const pythonRunner = {
-    isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
-    run: (request) => pythonRunnerService.run(request),
-  };
-  const pythonSettings = {
-    describe: () => ({ ...pythonRunnerService.describe(), enabled: pythonExecutionEnabled }),
-    async refresh() {
-      const prefs = await uiPrefsStore.readUIPrefs();
-      pythonExecutionEnabled = prefs.pythonExecutionEnabled === true;
-      await pythonRunnerService.detect();
-      return pythonSettings.describe();
-    },
-  };
-
   // Shell-Ausfuehrung (Issue #102). Dieselben zwei Bedingungen wie bei Python —
   // gefundene Shell und ausdrueckliche Einstellung —, nur mit groesserer
   // Tragweite: ein Befehl kann alles, was der angemeldete Nutzer kann.
   let shellExecutionEnabled = false;
+  // Die Erkennung laeuft unabhaengig vom Schalter: sie liest den PATH des
+  // Nutzers, den auch der Python-Runner braucht (Issue #111). Der Schalter
+  // steuert das Tool, nicht das Wissen ueber die Shell.
   const shellRunnerService = createShellRunnerService({ spawn: childProcess.spawn, os });
   const shellRunner = {
     isAvailable: () => shellExecutionEnabled && shellRunnerService.isAvailable(),
@@ -201,6 +178,36 @@ function createApplication({
       shellExecutionEnabled = prefs.shellExecutionEnabled === true;
       await shellRunnerService.detect();
       return shellSettings.describe();
+    },
+  };
+
+  // Python-Ausfuehrung (Issue #86). Zwei Bedingungen muessen erfuellt sein,
+  // damit das Tool ueberhaupt auftaucht: ein gefundener Interpreter und die
+  // ausdrueckliche Einstellung — sie ist standardmaessig aus, weil
+  // ausgefuehrter Code die Workspace-Grenze umgeht.
+  let pythonExecutionEnabled = false;
+  const pythonRunnerService = createPythonRunnerService({
+    spawn: childProcess.spawn,
+    fs,
+    path,
+    os,
+    readInterpreterOverride: async () => (await uiPrefsStore.readUIPrefs()).pythonInterpreterPath || '',
+    // PATH aus dem Shell-Profil (Issue #111). `detect()` merkt sich seinen
+    // Lauf, dieser Zugriff startet also keine zweite Login-Shell — auch nicht,
+    // wenn beide Erkennungen nebenlaeufig angestossen werden.
+    readShellPath: async () => (await shellRunnerService.detect()).path || '',
+  });
+  const pythonRunner = {
+    isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
+    run: (request) => pythonRunnerService.run(request),
+  };
+  const pythonSettings = {
+    describe: () => ({ ...pythonRunnerService.describe(), enabled: pythonExecutionEnabled }),
+    async refresh() {
+      const prefs = await uiPrefsStore.readUIPrefs();
+      pythonExecutionEnabled = prefs.pythonExecutionEnabled === true;
+      await pythonRunnerService.detect();
+      return pythonSettings.describe();
     },
   };
 

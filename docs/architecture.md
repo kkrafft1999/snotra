@@ -60,12 +60,27 @@ bestehende Importe stabil bleiben.
   `shared/runtime/url-safety.js`
 - `code-execution-port` — ein Python-Programm ausführen (Issue #86);
   Interpreter-Erkennung, Zeitlimit und Prozessbaum-Kill liegen im
-  `main/services/python-runner-service.js`
+  `main/services/python-runner-service.js`. Den PATH, mit dem gesucht und
+  ausgeführt wird, bringt der Dienst nicht selbst auf: er kommt als
+  `readShellPath` von außen herein (Issue #111)
 - `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
   ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
   PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im
   `main/services/shell-runner-service.js`, die gesperrten Wirkungen als reine
   Prüfung in `shared/runtime/shell-command-guard.js`
+
+Der Shell-Dienst ist zugleich die einzige Stelle, die eine Login-Shell startet
+(Issue #111). Seine Erkennung läuft auf POSIX interaktiv (`-ilc`), weil zsh
+`.zshrc` nur für interaktive Shells liest und die meisten PATH-Zeilen genau
+dort stehen; sie liest den PATH mit und merkt sich das Ergebnis für die
+Lebensdauer der App. Beide Ausführungs-Dienste geben diesen PATH an ihre
+Kindprozesse weiter — eine aus dem Finder gestartete Electron-App erbt sonst
+nur den kargen PATH des Fensterservers. Befehle laufen weiterhin
+nicht-interaktiv, damit Prompt-Ausgabe nicht im Ergebnis landet. Unter Windows
+entfällt der Profil-Lauf: der PATH kommt dort aus Registry und
+Benutzerumgebung. Die Komposition verdrahtet das in
+`main/composition/create-application.js` — der Shell-Dienst wird vor dem
+Python-Dienst gebaut, weil dieser seinen PATH von dort bezieht.
 
 Beide Ausführungs-Ports sind bewusst gleich eng geschnitten — ein Programm
 bzw. ein Befehl rein, Ausgabe und Exit-Code raus, kein Zustand zwischen zwei

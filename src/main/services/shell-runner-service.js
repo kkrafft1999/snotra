@@ -13,6 +13,12 @@
  * `cd`, das den naechsten Aufruf beeinflusst. Nicht interaktiv (kein TTY,
  * stdin nur als mitgegebener String) — was auf Eingabe wartet, laeuft ins
  * Zeitlimit statt zu haengen.
+ *
+ * Dieser Dienst ist zugleich die einzige Stelle, die eine Login-Shell startet
+ * (Issue #111): die Erkennung liest dabei den PATH des Nutzers mit und haelt
+ * ihn fest, damit auch der Python-Runner ihn bekommt, ohne eine zweite Shell
+ * zu starten. Die Erkennung laeuft genau einmal je App-Start — eine Shell
+ * kommt und geht nicht zur Laufzeit, und ein Profil-Lauf kostet Zeit.
  */
 
 const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
@@ -21,7 +27,34 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 
 /** Marker der Erkennung: die Shell muss ihn tatsaechlich ausgeben. */
 const PROBE_MARKER = 'snotra-shell-ok';
+/** Praefix der Zeile, in der die POSIX-Erkennung den PATH mitliefert (#111). */
+const PATH_MARKER = 'snotra-path=';
 const PROBE_COMMAND = `echo ${PROBE_MARKER}`;
+/**
+ * POSIX-Erkennung: derselbe Marker, danach der PATH. Windows bleibt bewusst
+ * beim knappen Befehl — dort kommt der PATH aus Registry und Benutzerumgebung,
+ * es gibt nichts zu reparieren (Issue #111).
+ */
+const PROBE_COMMAND_POSIX = `echo ${PROBE_MARKER}; echo "${PATH_MARKER}$PATH"`;
+
+/**
+ * Liest Marker und PATH aus der Ausgabe der Erkennung. Ein Profil darf
+ * schwatzen (MOTD, Versionshinweise, Prompt-Vorlauf), deshalb zeilenweise und
+ * die letzte PATH-Zeile — vorangehende Ausgabe ist Rauschen.
+ */
+function parseProbeOutput(text) {
+  const out = { marker: false, path: '' };
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.includes(PROBE_MARKER)) out.marker = true;
+    const at = line.indexOf(PATH_MARKER);
+    if (at >= 0) {
+      const value = line.slice(at + PATH_MARKER.length).trim();
+      if (value) out.path = value;
+    }
+  }
+  return out;
+}
 
 /**
  * Aufrufformen. `login` startet eine POSIX-Shell als Login-Shell, damit
@@ -29,8 +62,16 @@ const PROBE_COMMAND = `echo ${PROBE_MARKER}`;
  * gestartete Electron-App erbt ihn sonst nicht und saehe weder Homebrew noch
  * nvm-Node — obwohl beides im Terminal des Nutzers funktioniert. Kostet
  * Startzeit, ohne sie waere das Tool auf dem Mac aber halb blind.
+ *
+ * `login-interactive` (`-ilc`) kommt nur bei der Erkennung zum Einsatz
+ * (Issue #111): zsh liest `.zshrc` ausschliesslich fuer interaktive Shells,
+ * und genau dort stehen PATH-Zeilen bei den meisten Nutzern. Eine reine
+ * Login-Shell sieht sie nicht — deshalb war der PATH auch bei `shell_execute`
+ * unvollstaendig. Ausgefuehrt werden Befehle weiterhin nicht-interaktiv: ein
+ * `.zshrc` mit Prompt-Firlefanz wuerde sonst in jede Befehlsausgabe schreiben.
  */
 const INVOCATIONS = Object.freeze({
+  LOGIN_INTERACTIVE: 'login-interactive',
   LOGIN: 'login',
   POSIX: 'posix',
   POWERSHELL: 'powershell',
@@ -49,6 +90,7 @@ function buildShellArgs(invocation, command) {
     return ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded];
   }
   if (invocation === INVOCATIONS.CMD) return ['/d', '/s', '/c', String(command)];
+  if (invocation === INVOCATIONS.LOGIN_INTERACTIVE) return ['-ilc', String(command)];
   if (invocation === INVOCATIONS.LOGIN) return ['-lc', String(command)];
   return ['-c', String(command)];
 }
@@ -63,13 +105,22 @@ function shellLabel(command) {
  * Kandidaten in der Reihenfolge, in der wir sie ausprobieren (Issue #102).
  * macOS/Linux: die Login-Shell des Nutzers aus `$SHELL`, danach die ueblichen
  * Verdaechtigen. Windows: PowerShell 7, Windows PowerShell, zuletzt cmd.exe.
+ *
+ * Je Kandidat eine Liste von Versuchen aus `probe` (womit erkannt wird) und
+ * `run` (womit spaeter Befehle laufen). Auf POSIX faellt beides auseinander
+ * (Issue #111): erkannt wird moeglichst interaktiv, damit `.zshrc` den PATH
+ * beisteuert, ausgefuehrt wird nicht-interaktiv, damit die Ausgabe sauber
+ * bleibt. Klappt `-ilc` nicht (exotisches Profil, `sh` ohne `-i`), folgt die
+ * reine Login-Shell und zuletzt die gewoehnliche — lieber ein knapper PATH
+ * als gar keine Shell.
  */
 function shellCandidates(platform, env = {}) {
   if (platform === 'win32') {
+    const win = (invocation) => [{ probe: invocation, run: invocation }];
     return [
-      { command: 'pwsh.exe', label: 'PowerShell 7', invocations: [INVOCATIONS.POWERSHELL] },
-      { command: 'powershell.exe', label: 'Windows PowerShell', invocations: [INVOCATIONS.POWERSHELL] },
-      { command: 'cmd.exe', label: 'cmd.exe', invocations: [INVOCATIONS.CMD] },
+      { command: 'pwsh.exe', label: 'PowerShell 7', attempts: win(INVOCATIONS.POWERSHELL) },
+      { command: 'powershell.exe', label: 'Windows PowerShell', attempts: win(INVOCATIONS.POWERSHELL) },
+      { command: 'cmd.exe', label: 'cmd.exe', attempts: win(INVOCATIONS.CMD) },
     ];
   }
   const fallbacks = platform === 'darwin'
@@ -81,10 +132,24 @@ function shellCandidates(platform, env = {}) {
   for (const command of [fromEnv, ...fallbacks]) {
     if (!command || seen.has(command)) continue;
     seen.add(command);
-    // Erst als Login-Shell (PATH aus dem Profil), sonst gewoehnlich.
-    out.push({ command, label: shellLabel(command), invocations: [INVOCATIONS.LOGIN, INVOCATIONS.POSIX] });
+    out.push({
+      command,
+      label: shellLabel(command),
+      attempts: [
+        { probe: INVOCATIONS.LOGIN_INTERACTIVE, run: INVOCATIONS.LOGIN },
+        { probe: INVOCATIONS.LOGIN, run: INVOCATIONS.LOGIN },
+        { probe: INVOCATIONS.POSIX, run: INVOCATIONS.POSIX },
+      ],
+    });
   }
   return out;
+}
+
+/** Erkennungsbefehl einer Aufrufform: nur POSIX liefert den PATH mit (#111). */
+function probeCommandFor(invocation) {
+  return invocation === INVOCATIONS.POWERSHELL || invocation === INVOCATIONS.CMD
+    ? PROBE_COMMAND
+    : PROBE_COMMAND_POSIX;
 }
 
 function clampTimeout(raw) {
@@ -112,7 +177,7 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
     return new Promise((resolve) => {
       let child;
       try {
-        child = spawn(command, buildShellArgs(invocation, PROBE_COMMAND), {
+        child = spawn(command, buildShellArgs(invocation, probeCommandFor(invocation)), {
           stdio: ['ignore', 'pipe', 'pipe'],
           env,
         });
@@ -136,29 +201,36 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
         clearTimeout(timer);
         // Ein Login-Profil darf schwatzen (MOTD, Versionshinweise) — es zaehlt
         // nur, dass der Marker wirklich aus der Shell kommt.
-        if (code === 0 && out.includes(PROBE_MARKER)) resolve({ ok: true });
+        const parsed = parseProbeOutput(out);
+        if (code === 0 && parsed.marker) resolve({ ok: true, path: parsed.path });
         else resolve({ ok: false, error: err.trim().split('\n')[0] || `Beendet mit Code ${code}.` });
       });
     });
   }
 
   /**
-   * Sucht eine Shell. Scheitert die Login-Form (exotisches Profil, `-l` nicht
-   * unterstuetzt), wird dieselbe Shell gewoehnlich versucht, bevor die
-   * naechste drankommt — lieber ein knapper PATH als gar keine Shell.
+   * Sucht eine Shell und liest dabei den PATH des Nutzers mit. Scheitert ein
+   * Versuch (exotisches Profil, `-i` oder `-l` nicht unterstuetzt), kommt die
+   * naechste Aufrufform derselben Shell dran, bevor die naechste Shell
+   * probiert wird — lieber ein knapper PATH als gar keine Shell.
    */
-  async function detect() {
+  async function runDetection() {
     let firstError = '';
     for (const candidate of shellCandidates(platform, env)) {
-      for (const invocation of candidate.invocations) {
-        const result = await probe(candidate.command, invocation);
+      for (const attempt of candidate.attempts) {
+        const result = await probe(candidate.command, attempt.probe);
         if (result.ok) {
           detected = {
             found: true,
             command: candidate.command,
             label: candidate.label,
-            invocation,
-            login: invocation === INVOCATIONS.LOGIN,
+            invocation: attempt.run,
+            login: attempt.run === INVOCATIONS.LOGIN,
+            // Womit erkannt wurde, gehoert ins Ergebnis: nur die interaktive
+            // Form sieht `.zshrc`, und genau das macht den Unterschied im PATH.
+            probeInvocation: attempt.probe,
+            interactive: attempt.probe === INVOCATIONS.LOGIN_INTERACTIVE,
+            path: result.path || '',
           };
           return detected;
         }
@@ -172,6 +244,26 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
         : `Keine Shell gefunden (weder „$SHELL“ noch die üblichen Pfade)${firstError ? `: ${firstError}` : '.'}`,
     };
     return detected;
+  }
+
+  // Genau ein Profil-Lauf je App-Start (Issue #111). Die Einstellungen rufen
+  // `detect()` bei jedem Speichern, und der Python-Runner haengt sich an
+  // dasselbe Versprechen — ohne diesen Merker startete bei jedem Klick eine
+  // neue Login-Shell. An der Erkennung gibt es nichts zu aktualisieren: eine
+  // Shell kommt zur Laufzeit weder dazu noch weg.
+  let detection = null;
+  function detect() {
+    if (!detection) detection = runDetection();
+    return detection;
+  }
+
+  /**
+   * Umgebung fuer Kindprozesse: der bei der Erkennung gelesene PATH schlaegt
+   * den kargen PATH einer aus dem Finder gestarteten App (Issue #111). Ohne
+   * gelesenen PATH (Windows, gescheiterte Erkennung) bleibt alles beim Alten.
+   */
+  function childEnv() {
+    return detected.path ? { ...env, PATH: detected.path } : env;
   }
 
   /** Prozessbaum beenden — ein Befehl startet fast immer eigene Kinder. */
@@ -216,7 +308,7 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
           stdio: ['pipe', 'pipe', 'pipe'],
           // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
           detached: platform !== 'win32',
-          env,
+          env: childEnv(),
         });
       } catch (e) {
         resolve({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' });
@@ -287,6 +379,9 @@ module.exports = {
   buildShellArgs,
   shellLabel,
   clampTimeout,
+  parseProbeOutput,
+  probeCommandFor,
   INVOCATIONS,
   PROBE_MARKER,
+  PATH_MARKER,
 };

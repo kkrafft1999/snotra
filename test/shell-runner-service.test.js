@@ -19,8 +19,11 @@ const {
   shellCandidates,
   buildShellArgs,
   clampTimeout,
+  parseProbeOutput,
+  probeCommandFor,
   INVOCATIONS,
   PROBE_MARKER,
+  PATH_MARKER,
 } = require('../src/main/services/shell-runner-service');
 const { SHELL_EXECUTION_LIMITS } = require('../src/application/ports/shell-execution-port');
 
@@ -109,11 +112,41 @@ test('die Login-Shell des Nutzers aus $SHELL kommt zuerst — ohne Doppelung', (
   );
 });
 
-test('POSIX-Shells werden zuerst als Login-Shell versucht (PATH aus dem Profil)', () => {
+test('POSIX-Shells werden interaktiv erkannt, aber nicht-interaktiv ausgeführt (#111)', () => {
   const [zsh] = shellCandidates('darwin', {});
-  assert.deepEqual(zsh.invocations, [INVOCATIONS.LOGIN, INVOCATIONS.POSIX]);
+  // Erkannt wird moeglichst interaktiv — nur so liest zsh die `.zshrc`, in der
+  // die meisten ihren PATH setzen. Ausgefuehrt wird trotzdem nicht-interaktiv,
+  // sonst landet Prompt-Ausgabe in jedem Befehlsergebnis.
+  assert.deepEqual(zsh.attempts, [
+    { probe: INVOCATIONS.LOGIN_INTERACTIVE, run: INVOCATIONS.LOGIN },
+    { probe: INVOCATIONS.LOGIN, run: INVOCATIONS.LOGIN },
+    { probe: INVOCATIONS.POSIX, run: INVOCATIONS.POSIX },
+  ]);
+  assert.deepEqual(buildShellArgs(INVOCATIONS.LOGIN_INTERACTIVE, 'git status'), ['-ilc', 'git status']);
   assert.deepEqual(buildShellArgs(INVOCATIONS.LOGIN, 'git status'), ['-lc', 'git status']);
   assert.deepEqual(buildShellArgs(INVOCATIONS.POSIX, 'git status'), ['-c', 'git status']);
+});
+
+test('nur die POSIX-Erkennung fragt nach dem PATH, Windows nicht (#111)', () => {
+  assert.match(probeCommandFor(INVOCATIONS.LOGIN_INTERACTIVE), /snotra-path=\$PATH/);
+  assert.match(probeCommandFor(INVOCATIONS.POSIX), /snotra-path=\$PATH/);
+  // Unter Windows gibt es nichts zu reparieren: der PATH kommt aus der
+  // Registry, nicht aus einem Profil. Der Befehl bleibt der von #102.
+  assert.equal(probeCommandFor(INVOCATIONS.POWERSHELL), `echo ${PROBE_MARKER}`);
+  assert.equal(probeCommandFor(INVOCATIONS.CMD), `echo ${PROBE_MARKER}`);
+});
+
+test('parseProbeOutput findet den PATH auch in geschwätzigen Profilen (#111)', () => {
+  const out = parseProbeOutput(
+    ['Letzte Anmeldung: Fr 13 Sep', PROBE_MARKER, `${PATH_MARKER}/opt/homebrew/bin:/usr/bin`].join('\n'),
+  );
+  assert.equal(out.marker, true);
+  assert.equal(out.path, '/opt/homebrew/bin:/usr/bin');
+
+  // Ohne Marker gilt die Shell nicht als gefunden, auch mit PATH-Zeile.
+  assert.equal(parseProbeOutput(`${PATH_MARKER}/usr/bin`).marker, false);
+  // Eine leere PATH-Zeile ist kein PATH.
+  assert.equal(parseProbeOutput(`${PROBE_MARKER}\n${PATH_MARKER}`).path, '');
 });
 
 test('Windows bekommt den Befehl kodiert statt in Anführungszeichen', () => {
@@ -169,13 +202,13 @@ test('ohne gefundene Shell ist das Tool nicht verfügbar und läuft nicht', asyn
   assert.match((await service.run({ command: 'ls' })).error, /Keine Shell/);
 });
 
-test('scheitert die Login-Form, wird dieselbe Shell gewöhnlich versucht', async () => {
+test('scheitern die Profil-Formen, wird dieselbe Shell gewöhnlich versucht', async () => {
   const versuche = [];
   const service = createShellRunnerService({
     spawn: (command, args) => {
       versuche.push([command, args[0]]);
-      // `-l` nicht unterstuetzt: erst der gewoehnliche Aufruf klappt.
-      return fakeChild(args[0] === '-lc' ? { stderr: 'unknown option', code: 2 } : { stdout: PROBE_MARKER });
+      // Weder `-i` noch `-l` unterstuetzt: erst der gewoehnliche Aufruf klappt.
+      return fakeChild(args[0] === '-c' ? { stdout: PROBE_MARKER } : { stderr: 'unknown option', code: 2 });
     },
     os,
     platform: 'linux',
@@ -183,11 +216,97 @@ test('scheitert die Login-Form, wird dieselbe Shell gewöhnlich versucht', async
   });
   const detected = await service.detect();
 
-  assert.deepEqual(versuche, [['/bin/dash', '-lc'], ['/bin/dash', '-c']]);
+  assert.deepEqual(versuche, [['/bin/dash', '-ilc'], ['/bin/dash', '-lc'], ['/bin/dash', '-c']]);
   assert.equal(detected.found, true);
   assert.equal(detected.command, '/bin/dash');
   assert.equal(detected.login, false);
   assert.equal(detected.invocation, INVOCATIONS.POSIX);
+  // Ohne Profil-Lauf gibt es keinen PATH zu uebernehmen (Issue #111).
+  assert.equal(detected.path, '');
+});
+
+test('die interaktive Login-Shell liefert den PATH, Befehle laufen ohne -i (#111)', async () => {
+  const versuche = [];
+  const service = createShellRunnerService({
+    spawn: (command, args) => {
+      versuche.push(args[0]);
+      return fakeChild({ stdout: `${PROBE_MARKER}\n${PATH_MARKER}/opt/homebrew/bin:/usr/bin\n` });
+    },
+    os,
+    platform: 'darwin',
+    env: { SHELL: '/bin/zsh', PATH: '/usr/bin' },
+  });
+  const detected = await service.detect();
+
+  assert.deepEqual(versuche, ['-ilc'], 'genau ein Profil-Lauf');
+  assert.equal(detected.path, '/opt/homebrew/bin:/usr/bin');
+  assert.equal(detected.interactive, true);
+  assert.equal(detected.login, true);
+  // Erkannt interaktiv, ausgefuehrt nicht — sonst schreibt ein geschwaetziges
+  // `.zshrc` in jede Befehlsausgabe.
+  assert.equal(detected.invocation, INVOCATIONS.LOGIN);
+  assert.equal(detected.probeInvocation, INVOCATIONS.LOGIN_INTERACTIVE);
+});
+
+test('der gelesene PATH geht an jeden Befehl (#111)', async () => {
+  let laufEnv = null;
+  const service = createShellRunnerService({
+    spawn: (command, args, options) => {
+      if (args[0] !== '-ilc') laufEnv = options?.env;
+      return fakeChild({ stdout: `${PROBE_MARKER}\n${PATH_MARKER}/opt/homebrew/bin:/usr/bin\n` });
+    },
+    os,
+    platform: 'darwin',
+    env: { SHELL: '/bin/zsh', PATH: '/usr/bin', HOME: '/Users/test' },
+  });
+  await service.detect();
+  await service.run({ command: 'git status' });
+
+  assert.equal(laufEnv.PATH, '/opt/homebrew/bin:/usr/bin');
+  // Der Rest der Umgebung bleibt unangetastet.
+  assert.equal(laufEnv.HOME, '/Users/test');
+});
+
+test('die Erkennung startet höchstens eine Login-Shell je App-Start (#111)', async () => {
+  let laeufe = 0;
+  const service = createShellRunnerService({
+    spawn: () => {
+      laeufe += 1;
+      return fakeChild({ stdout: `${PROBE_MARKER}\n${PATH_MARKER}/opt/homebrew/bin\n` });
+    },
+    os,
+    platform: 'darwin',
+    env: { SHELL: '/bin/zsh' },
+  });
+
+  // Die Einstellungen rufen detect() bei jedem Speichern, der Python-Runner
+  // haengt sich an denselben Lauf — ein Profil-Lauf kostet Zeit.
+  const [a, b] = await Promise.all([service.detect(), service.detect()]);
+  await service.detect();
+
+  assert.equal(laeufe, 1);
+  assert.equal(a.path, '/opt/homebrew/bin');
+  assert.equal(b.path, '/opt/homebrew/bin');
+});
+
+test('unter Windows bleibt die Erkennung ohne Profil-Lauf (#111)', async () => {
+  const versuche = [];
+  const service = createShellRunnerService({
+    spawn: (command, args, options) => {
+      versuche.push({ command, args, env: options?.env });
+      return fakeChild({ stdout: PROBE_MARKER });
+    },
+    os,
+    platform: 'win32',
+    env: { PATH: 'C:\\Windows\\system32' },
+  });
+  const detected = await service.detect();
+
+  assert.equal(detected.path, '', 'kein Profil-PATH unter Windows');
+  assert.equal(detected.interactive, false);
+  // Unveraendert gegenueber #102: -NoProfile, kein -i, kein -l.
+  assert.equal(versuche[0].args[0], '-NoProfile');
+  assert.equal(versuche[0].env.PATH, 'C:\\Windows\\system32');
 });
 
 test('eine Shell, die den Marker nicht ausgibt, gilt nicht als gefunden', async () => {

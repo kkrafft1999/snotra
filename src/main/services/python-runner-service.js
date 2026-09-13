@@ -11,6 +11,13 @@
  * Erste Stufe bewusst ohne harte Isolation (eigener Nutzer, sandbox-exec,
  * Container, WASM-Python): der Schutz liegt hier in der Freigabe vor jedem
  * Lauf, nicht in einer Sandbox. Das steht so auch in README und Issue.
+ *
+ * Den PATH bringt der Dienst nicht selbst auf (Issue #111): eine aus dem
+ * Finder gestartete App erbt nur den kargen PATH des Fensterservers und faende
+ * hoechstens `/usr/bin/python3` statt des Homebrew- oder pyenv-Python aus dem
+ * Terminal. Den echten PATH liest der Shell-Runner einmal beim Start aus dem
+ * Profil; hierher kommt er als `readShellPath` herein — als Wert, nicht als
+ * Abhaengigkeit auf den Shell-Dienst.
  */
 
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
@@ -58,6 +65,7 @@ function normalizeArgv(raw) {
  * @param {typeof import('path')} deps.path
  * @param {typeof import('os')} deps.os
  * @param {() => Promise<string>} [deps.readInterpreterOverride] eigener Pfad aus den Einstellungen
+ * @param {() => Promise<string>} [deps.readShellPath] PATH aus dem Shell-Profil (Issue #111)
  * @param {string} [deps.platform]
  */
 function createPythonRunnerService({
@@ -66,19 +74,36 @@ function createPythonRunnerService({
   path,
   os,
   readInterpreterOverride = async () => '',
+  readShellPath = async () => '',
   platform = process.platform,
+  env = process.env,
   randomId = () => Math.random().toString(36).slice(2),
 }) {
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird; fortgeschrieben beim Start und beim Speichern
   // der Einstellungen.
   let detected = { found: false, error: 'Noch nicht geprüft.' };
+  // PATH aus dem Shell-Profil, bei der Erkennung ermittelt. Leer heisst:
+  // nichts zu reparieren (Windows) oder keine Shell gefunden.
+  let shellPath = '';
+
+  /**
+   * Umgebung fuer Suche und Lauf. Der Profil-PATH gilt fuer beides: sonst
+   * faende die Suche zwar den richtigen Interpreter, ein `subprocess.run`
+   * im Skript aber weiterhin nicht die Werkzeuge aus dem Terminal.
+   */
+  function childEnv(extra = {}) {
+    return { ...env, ...(shellPath ? { PATH: shellPath } : {}), ...extra };
+  }
 
   function probe(command, args) {
     return new Promise((resolve) => {
       let child;
       try {
-        child = spawn(command, [...args, '--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        child = spawn(command, [...args, '--version'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: childEnv(),
+        });
       } catch (e) {
         resolve({ ok: false, error: e?.message || 'Start fehlgeschlagen.' });
         return;
@@ -113,12 +138,16 @@ function createPythonRunnerService({
    * das Skript im falschen venv.
    */
   async function detect() {
+    // Vor der Suche, nicht waehrenddessen: die Kandidaten sind blosse
+    // Programmnamen, ueber den PATH entscheidet sich also, welcher Python
+    // ueberhaupt gefunden wird (Issue #111).
+    shellPath = String((await readShellPath()) || '').trim();
     const override = String((await readInterpreterOverride()) || '').trim();
     if (override) {
       const result = await probe(override, []);
       detected = result.ok
-        ? { found: true, command: override, args: [], version: result.version, source: 'override' }
-        : { found: false, command: override, error: result.error, source: 'override' };
+        ? { found: true, command: override, args: [], version: result.version, source: 'override', pathSource: pathSource() }
+        : { found: false, command: override, error: result.error, source: 'override', pathSource: pathSource() };
       return detected;
     }
     for (const candidate of interpreterCandidates(platform)) {
@@ -130,6 +159,7 @@ function createPythonRunnerService({
           args: candidate.args,
           version: result.version,
           source: 'auto',
+          pathSource: pathSource(),
         };
         return detected;
       }
@@ -141,8 +171,14 @@ function createPythonRunnerService({
           ? 'Kein Python 3 gefunden (weder „py -3“ noch „python“).'
           : 'Kein Python 3 gefunden (weder „python3“ noch „python“).',
       source: 'auto',
+      pathSource: pathSource(),
     };
     return detected;
+  }
+
+  /** Woher der PATH der Suche stammt — fuer den Status in den Einstellungen. */
+  function pathSource() {
+    return shellPath ? 'login-shell' : 'inherited';
   }
 
   /** Prozessbaum beenden — ein Skript kann selbst Kinder gestartet haben. */
@@ -194,7 +230,7 @@ function createPythonRunnerService({
               stdio: ['pipe', 'pipe', 'pipe'],
               // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
               detached: platform !== 'win32',
-              env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+              env: childEnv({ PYTHONIOENCODING: 'utf-8' }),
             },
           );
         } catch (e) {

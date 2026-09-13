@@ -26,8 +26,11 @@
  * @property {boolean} found
  * @property {string} [command]      Programmpfad der Shell
  * @property {string} [label]        Anzeigename („zsh", „PowerShell 7")
- * @property {string} [invocation]   Aufrufform (siehe shell-runner-service)
+ * @property {string} [invocation]   Aufrufform fuer Befehle (siehe shell-runner-service)
  * @property {boolean} [login]       POSIX-Shell als Login-Shell gestartet (PATH aus dem Profil)
+ * @property {string} [probeInvocation] Aufrufform der Erkennung (Issue #111)
+ * @property {boolean} [interactive] Erkennung lief interaktiv, `.zshrc` war also dabei
+ * @property {string} [path]         PATH aus dem Profil, einmal beim Start gelesen (#111)
  * @property {string} [error]
  *
  * @typedef {Object} ShellExecutionPort

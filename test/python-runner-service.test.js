@@ -30,7 +30,14 @@ function makeService(overrides = {}) {
 }
 
 let shared = null;
-async function ready() {
+async function ready(overrides = null) {
+  // Mit Sonderwuenschen ein eigener Dienst, sonst der gemeinsame: die
+  // Erkennung startet einen Prozess, den sich die uebrigen Tests teilen.
+  if (overrides) {
+    const service = makeService(overrides);
+    await service.detect();
+    return service.isAvailable() ? service : null;
+  }
   if (!shared) {
     shared = makeService();
     await shared.detect();
@@ -80,6 +87,104 @@ test('ein hinterlegter Interpreter, der nicht startet, fällt nicht still auf py
   const detected = await service.detect();
 
   assert.equal(detected.found, false);
+  assert.equal(detected.source, 'override');
+  assert.equal(detected.command, '/pfad/zu/venv/bin/python3');
+});
+
+// ── PATH aus dem Shell-Profil (Issue #111) ───────────────────────────────────
+//
+// Eine aus dem Finder gestartete App erbt nur den kargen PATH des
+// Fensterservers. Der Shell-Runner liest den echten PATH beim Start aus dem
+// Profil; hier kommt er als Wert herein. Attrappe statt echter Shell: geprueft
+// wird die Weitergabe, nicht das Profil des Testrechners.
+
+/** Minimaler Kindprozess, der eine Versionszeile liefert. */
+function fakePython(version = 'Python 3.12.7') {
+  const { EventEmitter } = require('events');
+  const child = new EventEmitter();
+  child.pid = 4242;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { end() {} };
+  setImmediate(() => {
+    child.stdout.emit('data', Buffer.from(`${version}\n`));
+    child.emit('close', 0);
+  });
+  return child;
+}
+
+test('die Interpreter-Suche läuft mit dem PATH aus dem Shell-Profil (#111)', async () => {
+  let sucheEnv = null;
+  const service = makeService({
+    spawn: (command, args, options) => {
+      sucheEnv = options?.env;
+      return fakePython();
+    },
+    env: { PATH: '/usr/bin:/bin', HOME: '/Users/test' },
+    readShellPath: async () => '/opt/homebrew/bin:/usr/bin:/bin',
+    platform: 'darwin',
+  });
+  const detected = await service.detect();
+
+  // Ohne das faende die Suche hoechstens /usr/bin/python3 — das System-Python
+  // ohne die Pakete des Nutzers.
+  assert.equal(sucheEnv.PATH, '/opt/homebrew/bin:/usr/bin:/bin');
+  assert.equal(sucheEnv.HOME, '/Users/test');
+  assert.equal(detected.found, true);
+  assert.equal(detected.pathSource, 'login-shell');
+});
+
+test('ohne Profil-PATH bleibt die Umgebung unverändert (#111)', async () => {
+  let sucheEnv = null;
+  const service = makeService({
+    spawn: (command, args, options) => {
+      sucheEnv = options?.env;
+      return fakePython();
+    },
+    env: { PATH: 'C:\\Windows\\system32' },
+    // Windows liefert keinen Profil-PATH — dort gibt es nichts zu reparieren.
+    readShellPath: async () => '',
+    platform: 'win32',
+  });
+  const detected = await service.detect();
+
+  assert.equal(sucheEnv.PATH, 'C:\\Windows\\system32');
+  assert.equal(detected.pathSource, 'inherited');
+});
+
+test('auch das laufende Skript bekommt den Profil-PATH (#111)', async (t) => {
+  const service = await ready({ readShellPath: async () => '/snotra-pfad:/usr/bin:/bin' });
+  if (!service) return t.skip('Kein Python 3 auf diesem Rechner.');
+
+  // Der eigentliche Punkt: ein subprocess.run() im Skript soll dieselben
+  // Werkzeuge finden wie das Terminal des Nutzers, nicht nur der Interpreter.
+  const result = await service.run({ code: 'import os; print(os.environ["PATH"])' });
+
+  assert.equal(result.exitCode, 0);
+  assert.ok(
+    lines(result.stdout)[0].startsWith('/snotra-pfad:'),
+    `PATH kam nicht im Skript an: ${result.stdout}`,
+  );
+});
+
+test('ein hinterlegter Interpreter gewinnt weiterhin über die Automatik (#111)', async () => {
+  const versuche = [];
+  const service = makeService({
+    spawn: (command, args, options) => {
+      versuche.push({ command, path: options?.env?.PATH });
+      return fakePython();
+    },
+    env: { PATH: '/usr/bin' },
+    readShellPath: async () => '/opt/homebrew/bin:/usr/bin',
+    readInterpreterOverride: async () => '/pfad/zu/venv/bin/python3',
+    platform: 'darwin',
+  });
+  const detected = await service.detect();
+
+  // Der Profil-PATH aendert nichts daran, welcher Interpreter gilt — er wird
+  // nur mitgegeben, damit das Skript die gewohnten Werkzeuge findet.
+  assert.deepEqual(versuche.map((v) => v.command), ['/pfad/zu/venv/bin/python3']);
+  assert.equal(versuche[0].path, '/opt/homebrew/bin:/usr/bin');
   assert.equal(detected.source, 'override');
   assert.equal(detected.command, '/pfad/zu/venv/bin/python3');
 });

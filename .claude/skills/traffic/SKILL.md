@@ -1,20 +1,23 @@
 ---
 name: traffic
 description: >-
-  Erstellt und deutet den Traffic-Report für snotra-ai.dev aus den
-  Firebase-Hosting-Logs: holt die Zugriffe per gcloud, trennt echte Besucher
-  von der eigenen CI, von KI-Crawlern und von Scannern und ordnet die Zahlen
-  ein. Auslösen bei Sätzen wie "wie läuft die Website", "Traffic-Report",
-  "wie viele Besucher hatte die Seite", "Zugriffszahlen", "Website-Statistik",
-  "wer war auf snotra-ai.dev", "schau mal, was auf der Seite los ist",
-  "Besucher letzte Woche". Nur in diesem Repo (snotra) sinnvoll.
+  Ruft den Traffic-Report für snotra-ai.dev aus den Firebase-Hosting-Logs ab
+  (per gcloud), gibt ihn aus und visualisiert die Zahlen als Chart — sonst
+  nichts, keine Einordnung in Prosa und keine Folgeaktionen. Auslösen bei
+  Sätzen wie "wie läuft die Website", "Traffic-Report", "wie viele Besucher
+  hatte die Seite", "Zugriffszahlen", "Website-Statistik", "wer war auf
+  snotra-ai.dev", "schau mal, was auf der Seite los ist", "Besucher letzte
+  Woche", "Traffic-Chart" oder "Diagramm zum Traffic". Nur in diesem Repo
+  (snotra) sinnvoll.
 ---
 
 # Traffic-Report für snotra-ai.dev
 
-Dieser Skill übernimmt das komplette Reporting: Daten holen, auswerten und —
-das ist der eigentliche Punkt — **einordnen**. Die nackten Zahlen sind
-irreführend, wenn man sie nicht liest wie unten beschrieben.
+Dieser Skill tut zwei Dinge: den Report ziehen und ausgeben (Schritte 1–2) und
+die Zahlen als Chart zeigen (Schritt 3). Sonst nichts — keine Einordnung der
+Zahlen in Prosa, keine Anomalie-Prüfung, kein Issue-Anlegen, keine
+Gegenrecherche auf der Live-Seite. Dafür gibt es keinen Auftrag, außer der
+Nutzer verlangt es in der jeweiligen Nachricht ausdrücklich.
 
 Die Maschine dahinter ist [`scripts/traffic-report.js`](../../../scripts/traffic-report.js),
 Hintergrund steht in Issue
@@ -53,86 +56,43 @@ häufigen Fälle:
   **private** Konto, nicht das doubleSlash-Konto. Prüfen mit `gcloud auth list`,
   wechseln mit `gcloud config set account <konto>`.
 
-Für eigene Weiterverarbeitung (Vergleiche, Diagramme) liefert
-`--json` dieselbe Auswertung maschinenlesbar.
+Gib die Ausgabe des Skripts unverändert weiter — nicht umformulieren, nicht
+einordnen, nicht kommentieren, keine Folgeaktionen ableiten. Für das Chart in
+Schritt 3 liefert `--json` dieselbe Auswertung maschinenlesbar:
 
-## Schritt 3 — Zahlen einordnen
+```sh
+node scripts/traffic-report.js --json --tage=7
+```
 
-Gib **nicht** die rohe Skriptausgabe weiter und lass sie auch nicht
-unkommentiert stehen. Fasse zusammen, was sie bedeutet. Dabei gilt:
+Eigene Zugriffe lassen sich ausblenden:
+`npm run traffic -- --eigene-ips=1.2.3.4` oder über `TRAFFIC_EIGENE_IPS`.
 
-**„Echte Besucher" ist die einzige Zahl, die zählt.** Sie ist bewusst streng:
-gezählt wird nur, wer neben der HTML-Seite auch Stylesheet, Skript oder
-Schriften nachlädt — also wirklich einen Browser benutzt.
+## Schritt 3 — Charts erstellen
 
-**„Abrufe ohne Mitladen" sind keine Besucher.** Diese Quellen holen nur das
-HTML. Das sind fast immer Bots ohne eigene Kennung; es können auch
-Wiederkehrer mit warmem Cache sein. Niemals zu den Besuchern addieren, auch
-wenn die Zahl verlockend größer ist.
+Immer, ohne dass der Nutzer danach fragen muss. Die reinen Zahlen zeigen die
+Verhältnisse nicht, genau dafür sind die Charts da.
 
-**Die eigene CI dominiert.** Jeder Lighthouse-Lauf erzeugt rund 60 Anfragen
-vom emulierten Gerät „moto g power (2022)". Ein Anteil von 40 bis 50 % ist
-normal und **kein** Traffic — nur erwähnen, wenn er auffällig abweicht.
+Zeige zwei Diagramme, beide ausschließlich aus den Zahlen des gerade
+gezogenen Reports:
 
-**KI-Crawler sind ein eigenes Signal.** ClaudeBot, GPTBot und Verwandte holen
-die Seite für Sprachmodelle. Das ist keine Reichweite bei Menschen, aber
-durchaus Sichtbarkeit. Getrennt ausweisen.
+1. **Anfragen nach Kategorie** — horizontales Balkendiagramm über alle
+   Kategorien aus dem Block „Woher die Anfragen kommen" (Echte Besucher,
+   Abrufe ohne Mitladen, KI-Crawler, Suchmaschinen, Eigene CI und Tests,
+   Zertifikats-Prüfung, Scanner, Fehlende Standarddatei). Direkt beschriftet
+   mit Anzahl und Anteil. Die Kategorien sind disjunkt und ergeben zusammen
+   den Gesamtwert.
+2. **Echte Besucher im Detail** — Sitzungen, Seitenaufrufe und die
+   aufgerufenen Seiten. Das ist die Zahl, um die es geht; sie geht im großen
+   Balkendiagramm sonst unter.
 
-**Scanner sind Rauschen.** Zugriffe auf `/.env`, `/wp-admin/…` und Ähnliches
-sind Dauerzustand jeder öffentlichen Domain. Die Entscheidung, nichts dagegen
-zu tun, ist bewusst gefallen (Firebase Hosting bietet kein WAF) — also **nicht**
-jedes Mal Alarm schlagen. Erwähnenswert nur bei einer auffälligen Häufung oder
-wenn ein Scan-Versuch **erfolgreich** war, also Status 200 statt 404.
+Regeln für beide:
 
-### Referenzwerte vom 13.09.2026 (erste Betriebsstunden)
-
-Zum Vergleich, ob eine Zahl aus dem Rahmen fällt:
-
-| Kategorie | Anteil |
-| --- | --- |
-| Eigene CI | ~48 % |
-| KI-Crawler | ~15 % |
-| Abrufe ohne Mitladen | ~10 % |
-| Scanner | ~8 % |
-| **Echte Besucher** | **~5 %** |
-
-Die Website ist frisch, das Projekt ein Hobby-Projekt: Einstellige
-Besucherzahlen pro Tag sind der Normalfall und kein Anlass zur Sorge. Rede sie
-weder schön noch schlecht — nenne sie, wie sie sind.
-
-## Schritt 4 — Auffälligkeiten melden
-
-Diese drei Blöcke im Report sind Handlungsaufforderungen, nicht Statistik:
-
-1. **„Fehlende Standarddateien"** — 404 auf `/robots.txt`, `/favicon.ico`,
-   `/sitemap.xml`. Das sind echte Lücken der eigenen Seite.
-   Bekannt und erfasst: [#116](https://github.com/kkrafft1999/snotra/issues/116).
-   Nur melden, was dort noch nicht steht.
-2. **„Serverfehler"** — jeder Status ab 500 ist ein Fehler der Auslieferung.
-   Der Block sollte leer sein. Ist er es nicht, ist das der wichtigste Punkt
-   des ganzen Reports.
-3. **Erfolgreiche Scanner-Treffer** — ein Scanner-Pfad mit Status 200 wäre
-   ernst. Prüfen mit:
-
-   ```sh
-   node scripts/traffic-report.js --json --tage=7
-   ```
-
-Kommt dabei etwas Neues heraus, das Arbeit bedeutet: **Issue anlegen**, so wie
-es [`.claude/rules/task-management.md`](../../rules/task-management.md)
-vorschreibt — keine Notiz im Repo, keine Aufgabenliste.
-
-## Grenzen, die du kennen musst
-
-- **Downloads sind ein Gesamtstand.** Die Zahlen stammen aus der GitHub-API,
-  weil die Release-Dateien nicht über Firebase laufen. GitHub liefert dafür
-  keine zeitliche Aufschlüsselung — es ist die Summe seit Veröffentlichung,
-  nicht der gewählte Zeitraum. Nie als „Downloads diese Woche" verkaufen.
-- **Sitzungen sind geschätzt.** Gleiche IP und gleicher Browser, eine Pause von
-  über 30 Minuten beginnt eine neue. Ohne Cookies geht es genauer nicht — und
-  Cookies will die Seite bewusst nicht.
-- **IP-Adressen sind personenbezogene Daten.** Sie bleiben im Log und in der
-  lokalen Auswertung. Schreibe sie nicht in Issues, Commits oder Dateien im
-  Repo. Der Report zeigt deshalb Länder, keine Adressen.
-- Eigene Zugriffe lassen sich ausblenden:
-  `npm run traffic -- --eigene-ips=1.2.3.4` oder über `TRAFFIC_EIGENE_IPS`.
+- **Echte Besucher** visuell hervorheben; die übrigen Kategorien bleiben
+  trotzdem einzeln unterscheidbar, nicht zu „Rest" zusammenfassen.
+- Den **tatsächlich abgedeckten Zeitraum** aus dem Report nennen, nicht den
+  angefragten. Ein `--tage=7`-Abruf kann wegen Log-Retention oder erst
+  kürzlich aktivierter Protokollierung deutlich weniger enthalten.
+- Nur Zahlen aus dem Report übernehmen. Keine IP-Adressen, keine erfundenen
+  Trends, keine Vergleiche mit Zeiträumen, die nicht abgefragt wurden.
+- Jedes Chart bekommt eine sichtbare Überschrift und einen Erstellungsstempel
+  mit Datum, Modell und Reasoning-Effort.
