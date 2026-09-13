@@ -1,9 +1,61 @@
 'use strict';
 
-function createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot }) {
+const path = require('path');
+const { LIMITS } = require('../../shared/limits');
+const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
+
+function createFilesystemIpcAdapter({
+  fsService,
+  getActiveWorkspaceRoot,
+  limits = LIMITS,
+  sensitivePathMatcher = createSensitivePathMatcher(),
+}) {
   async function boundPath(absPath) {
     const workspaceRoot = getActiveWorkspaceRoot();
     return fsService.assertPathAccessibleInWorkspace(workspaceRoot, absPath);
+  }
+
+  // Import von außen (Issue #101). Die Prüfung ist hier bewusst asymmetrisch:
+  // das **Ziel** läuft wie überall über boundPath(), die **Quelle** wird
+  // absichtlich nicht gegen den Workspace geprüft — genau dafür gibt es den
+  // Kanal. Stattdessen muss sie absolut sein und darf nicht nach sensiblen
+  // Zugangsdaten aussehen (.env*, *.pem, id_*, .ssh/ …, Konzept §4). Wer so
+  // eine Datei wirklich im Projekt haben will, legt sie über den Dateimanager
+  // ab; beiläufig per Drop in Modellreichweite rutschen soll sie nicht.
+  function checkImportSources(sourcePaths) {
+    const sources = Array.isArray(sourcePaths)
+      ? sourcePaths.filter((p) => typeof p === 'string' && p.trim())
+      : [];
+    if (sources.length === 0) return { error: 'Keine Quelle zum Übernehmen.' };
+    for (const source of sources) {
+      if (!path.isAbsolute(source)) {
+        return { error: `Quelle ist kein absoluter Pfad: ${source}` };
+      }
+      const verdict = sensitivePathMatcher.classifyPath(source);
+      if (verdict.sensitive) {
+        return {
+          error:
+            `„${path.basename(source)}“ sieht nach Zugangsdaten aus (Muster ${verdict.pattern}) `
+            + 'und wird nicht per Drag & Drop übernommen.',
+        };
+      }
+    }
+    return { sources };
+  }
+
+  // Grenzen und Symlink-/Geheimnis-Filter für den rekursiven Lauf im Service.
+  const importOptions = {
+    maxEntries: limits.MAX_IMPORT_ENTRIES,
+    maxTotalBytes: limits.MAX_IMPORT_TOTAL_BYTES,
+    isSensitiveName: (name) => sensitivePathMatcher.isSensitivePath(name),
+  };
+
+  async function prepareImport(sourcePaths, destDir) {
+    const checked = checkImportSources(sourcePaths);
+    if (checked.error) return { error: checked.error };
+    const dest = await boundPath(destDir);
+    if (dest.error) return { error: dest.error };
+    return { sources: checked.sources, destDir: dest.absPath };
   }
 
   return {
@@ -27,6 +79,25 @@ function createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot }) {
       if (dest.error) return { error: dest.error };
       try {
         return await fsService.moveItem(source.absPath, dest.absPath);
+      } catch (err) {
+        return { error: err.message };
+      }
+    },
+    // Zählt einen Import, ohne etwas zu schreiben (#101).
+    async inspectImport(sourcePaths, destDir) {
+      const prepared = await prepareImport(sourcePaths, destDir);
+      if (prepared.error) return { error: prepared.error };
+      try {
+        return await fsService.inspectImportSources(prepared.sources, prepared.destDir, importOptions);
+      } catch (err) {
+        return { error: err.message };
+      }
+    },
+    async importItems(sourcePaths, destDir) {
+      const prepared = await prepareImport(sourcePaths, destDir);
+      if (prepared.error) return { error: prepared.error };
+      try {
+        return await fsService.importExternalItems(prepared.sources, prepared.destDir, importOptions);
       } catch (err) {
         return { error: err.message };
       }

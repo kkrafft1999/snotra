@@ -172,6 +172,21 @@ Markierung wird mit dem Verlauf im verschlüsselten Speicher abgelegt.
   jedem Modus schreibgeschützt. Pfade, Dateizustand und Wurzel werden unmittelbar
   vor Zugriff erneut geprüft; ein Austausch während der Freigabe macht diese
   ungültig. Reine String-Präfixprüfungen reichen nicht.
+- **Import von außen (#101):** Der Drop aus Finder/Explorer in den Dateibaum
+  ist die eine Stelle, an der ein Pfad von *außerhalb* des Workspace Wirkung
+  hat. Die Prüfung ist dort bewusst asymmetrisch: das **Ziel** läuft wie überall
+  realpath-geprüft gegen den aktiven Workspace, die **Quelle** absichtlich
+  nicht — sie muss absolut sein, existieren und darf nicht auf die sensiblen
+  Muster aus Abschnitt 4 passen (`.env*`, `*.pem`, `id_*`, `.ssh/` …); ein
+  Treffer lehnt ab, statt zu warnen. Sensible Namen und Symlinks innerhalb eines
+  gezogenen Ordners werden gezählt und übersprungen, nicht mitkopiert: ein
+  Symlink im Workspace, der nach außen zeigt, wäre ein Loch in der Grenze.
+  Kopiert wird, nicht verschoben — Snotra löscht nichts außerhalb des
+  Workspace. Mengengrenzen (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`)
+  lehnen den ganzen Drop ab, statt halb zu kopieren. Der eigene Kanal
+  (`fs:inspectImport` / `fs:importItems`) existiert genau deshalb: `fs:moveItem`
+  prüft weiterhin beide Seiten, und ein Kanal, der die Quelle ungeprüft annimmt,
+  muss sichtbar ein anderer sein.
 - **Snotra-Geheimnisse und Steuerung:** Provider-Schlüssel, Auth-Speicher,
   Snotra-Konfiguration, Berechtigungsregeln und Audit-Speicher sind für Modell-Tools
   hart gesperrt, auch wenn der Nutzer einen übergeordneten Ordner öffnet.
@@ -222,7 +237,10 @@ Markierung wird mit dem Verlauf im verschlüsselten Speicher abgelegt.
   drei Aktionen, die den Schutz insgesamt lockern, in einem nativen Dialog
   (`dialog.showMessageBox`) statt nur auf eine IPC-Nachricht hin: Auto
   aktivieren, dauerhafte Allow-Regel anlegen, Deny-Regel löschen. Der Renderer
-  stößt diese Aktionen nur an. Die Bindung von Freigabe-Antworten an `requestId`,
+  stößt diese Aktionen nur an. Dasselbe Muster gilt für den Import von außen
+  (#101): Main zählt, bestätigt nativ (Ordner immer, Dateien ab Schwelle) und
+  kopiert erst danach; der Renderer wählt nur den Zielordner, und die Zahlen im
+  Dialog stammen aus Mains eigener Prüfung, nicht aus der IPC-Nachricht. Die Bindung von Freigabe-Antworten an `requestId`,
   Plan und Dateiversion (Abschnitt 6) schützt gegen veraltete Karten,
   Doppelklicks, Race-Bedingungen und Programmierfehler; gegen einen vollständig
   kompromittierten Renderer schützt sie allein nicht. Lokale Prozesse mit den

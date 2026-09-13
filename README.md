@@ -109,6 +109,15 @@ Beim **AppImage** führt dieser Weg nicht zum Ziel: Das Image wird
 schreibgeschützt und `nosuid` eingehängt, ein Setuid-Bit hätte darin keine
 Wirkung. Dort ist das `.deb` die Lösung.
 
+## Dateibaum
+
+- **Projektordner öffnen:** über den Knopf in der Seitenleiste oder die Liste der zuletzt genutzten Ordner. Alles Weitere bezieht sich immer auf diesen einen Ordner.
+- **Verschieben:** Eine Datei oder einen Ordner im Baum auf eine Ordnerzeile ziehen verschiebt den Eintrag dorthin; auf der freien Fläche unter dem Baum landet er im Projektordner. Gibt es den Namen schon, wird `name (2).ext` daraus.
+- **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick) auf eine Zeile öffnet Öffnen, „Im Finder bzw. Explorer anzeigen“ und Löschen. Gelöscht wird in den Papierkorb, nach Rückfrage.
+- **Von außen übernehmen:** Dateien und Ordner aus Finder oder Explorer lassen sich direkt in den Baum ziehen — auf eine Ordnerzeile oder auf die freie Fläche für den Projektordner. Sie werden **kopiert**, das Original bleibt liegen; Mehrfachauswahl geht, Namenskollisionen enden wie oben als `name (2).ext`.
+
+  Weil damit zum ersten Mal etwas von außerhalb des Projektordners hereinkommt, fragt Snotra vorher nach: bei Ordnern immer, bei Dateien ab 20 Stück oder 10 MB — mit Anzahl, Größe und Zielordner im Klartext, „Abbrechen“ vorbelegt. Nicht übernommen werden Dateien, die nach Zugangsdaten aussehen (`.env`, `*.pem`, `id_*`, alles unter `.ssh/` …): Was das Modell später lesen könnte, soll nicht beiläufig per Drop hereinrutschen — der Weg über den Dateimanager bleibt offen. Verknüpfungen (Symlinks) werden übersprungen, und ein Drop wird ganz abgelehnt statt halb kopiert, wenn er über 2000 Einträge oder 200 MB liegt.
+
 ## Chat
 
 - **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button.

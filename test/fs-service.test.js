@@ -2639,3 +2639,157 @@ test('apply_patch (patch) leaves no temp files behind after a multi-file success
   assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'ALPHA\n');
   assert.deepEqual(await listTmpFiles(tmpRoot), []);
 });
+
+// ── Import von außen per Drag & Drop (Issue #101) ──────────────────────────
+
+async function makeImportFixture(t) {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-import-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const workspace = path.join(tmpRoot, 'workspace');
+  const outside = path.join(tmpRoot, 'outside');
+  await fs.mkdir(workspace, { recursive: true });
+  await fs.mkdir(path.join(outside, 'bilder'), { recursive: true });
+  await fs.writeFile(path.join(outside, 'notiz.txt'), 'hallo', 'utf8');
+  await fs.writeFile(path.join(outside, 'bilder', 'a.png'), 'png', 'utf8');
+  return { tmpRoot, workspace, outside, svc: makeFsService() };
+}
+
+const sensitiveName = (name) => /^\.env|\.pem$|^id_/.test(name);
+
+test('inspectImportSources zählt Dateien und Ordner, ohne etwas zu schreiben (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+
+  const result = await svc.inspectImportSources(
+    [path.join(outside, 'notiz.txt'), path.join(outside, 'bilder')],
+    workspace
+  );
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.dirs, 1);
+  assert.equal(result.files, 2);
+  assert.equal(result.bytes, 'hallo'.length + 'png'.length);
+  assert.deepEqual(result.targets.map((entry) => entry.targetPath), [
+    path.join(workspace, 'notiz.txt'),
+    path.join(workspace, 'bilder'),
+  ]);
+  assert.deepEqual(await fs.readdir(workspace), [], 'die Prüfung darf nichts anlegen');
+});
+
+test('importExternalItems kopiert Datei und Ordner und lässt die Quelle liegen (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+
+  const result = await svc.importExternalItems(
+    [path.join(outside, 'notiz.txt'), path.join(outside, 'bilder')],
+    workspace
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(await fs.readFile(path.join(workspace, 'notiz.txt'), 'utf8'), 'hallo');
+  assert.equal(await fs.readFile(path.join(workspace, 'bilder', 'a.png'), 'utf8'), 'png');
+  assert.equal(await fs.readFile(path.join(outside, 'notiz.txt'), 'utf8'), 'hallo', 'Quelle bleibt erhalten');
+});
+
+test('importExternalItems löst Namenskollisionen wie das Verschieben auf: name (2).ext (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+  await fs.writeFile(path.join(workspace, 'notiz.txt'), 'alt', 'utf8');
+
+  const result = await svc.importExternalItems([path.join(outside, 'notiz.txt')], workspace);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.copied, [path.join(workspace, 'notiz (2).txt')]);
+  assert.equal(await fs.readFile(path.join(workspace, 'notiz.txt'), 'utf8'), 'alt');
+  assert.equal(await fs.readFile(path.join(workspace, 'notiz (2).txt'), 'utf8'), 'hallo');
+});
+
+test('importExternalItems vergibt auch innerhalb eines Drops eindeutige Namen (#101)', async (t) => {
+  const { tmpRoot, workspace, outside, svc } = await makeImportFixture(t);
+  const zweiter = path.join(tmpRoot, 'zweiter');
+  await fs.mkdir(zweiter);
+  await fs.writeFile(path.join(zweiter, 'notiz.txt'), 'zwei', 'utf8');
+
+  const result = await svc.importExternalItems(
+    [path.join(outside, 'notiz.txt'), path.join(zweiter, 'notiz.txt')],
+    workspace
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.copied, [
+    path.join(workspace, 'notiz.txt'),
+    path.join(workspace, 'notiz (2).txt'),
+  ]);
+  assert.equal(await fs.readFile(path.join(workspace, 'notiz (2).txt'), 'utf8'), 'zwei');
+});
+
+test('importExternalItems überspringt Symlinks und zählt sie (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+  const link = path.join(outside, 'bilder', 'nach-aussen');
+  if (!(await createSymlinkOrSkip(t, path.join(outside, 'notiz.txt'), link, 'file'))) return;
+
+  const result = await svc.importExternalItems([path.join(outside, 'bilder')], workspace);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skippedSymlinks, 1);
+  assert.deepEqual((await fs.readdir(path.join(workspace, 'bilder'))).sort(), ['a.png']);
+});
+
+test('importExternalItems überspringt sensible Dateien im Ordner und zählt sie (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+  await fs.writeFile(path.join(outside, 'bilder', '.env'), 'TOKEN=1', 'utf8');
+
+  const result = await svc.importExternalItems([path.join(outside, 'bilder')], workspace, {
+    isSensitiveName: sensitiveName,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skippedSensitive, 1);
+  assert.deepEqual((await fs.readdir(path.join(workspace, 'bilder'))).sort(), ['a.png']);
+});
+
+test('inspectImportSources lehnt den ganzen Drop bei Limitüberschreitung ab (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+
+  const tooMany = await svc.inspectImportSources([path.join(outside, 'bilder')], workspace, {
+    maxEntries: 1,
+  });
+  assert.match(tooMany.error, /Zu viele Einträge/);
+
+  const tooBig = await svc.importExternalItems([path.join(outside, 'notiz.txt')], workspace, {
+    maxTotalBytes: 1,
+  });
+  assert.match(tooBig.error, /Zu viele Daten/);
+  assert.deepEqual(await fs.readdir(workspace), [], 'bei Limitüberschreitung wird nichts kopiert');
+});
+
+test('importExternalItems lehnt Selbst- und Vorfahrenfälle ab (#101)', async (t) => {
+  const { workspace, svc } = await makeImportFixture(t);
+  const sub = path.join(workspace, 'unter');
+  await fs.mkdir(sub);
+
+  const intoItself = await svc.importExternalItems([workspace], sub);
+  assert.match(intoItself.error, /in sich selbst/);
+
+  const sameDir = await svc.importExternalItems([sub], workspace);
+  assert.match(sameDir.error, /liegt bereits in diesem Ordner/);
+
+  const ontoItself = await svc.importExternalItems([sub], sub);
+  assert.match(ontoItself.error, /in sich selbst/);
+});
+
+test('importExternalItems lehnt fehlende, relative und nicht-Ordner-Ziele ab (#101)', async (t) => {
+  const { workspace, outside, svc } = await makeImportFixture(t);
+  await fs.writeFile(path.join(workspace, 'datei.txt'), 'x', 'utf8');
+
+  assert.match(
+    (await svc.importExternalItems([path.join(outside, 'weg.txt')], workspace)).error,
+    /nicht gefunden/
+  );
+  assert.match(
+    (await svc.importExternalItems(['relativ/pfad.txt'], workspace)).error,
+    /kein absoluter Pfad/
+  );
+  assert.match(
+    (await svc.importExternalItems([path.join(outside, 'notiz.txt')], path.join(workspace, 'datei.txt'))).error,
+    /kein Ordner/
+  );
+  assert.match((await svc.importExternalItems([], workspace)).error, /Keine Quelle/);
+});

@@ -41,6 +41,17 @@ async function setup(t) {
   const ipcMain = createMockIpcMain();
   const popups = [];
   const pushed = [];
+  const messageBoxes = [];
+  // Antworten für dialog.showMessageBox, in Aufrufreihenfolge. Ohne Eintrag
+  // wird „Kopieren“ (Index 0) angenommen.
+  const dialogResponses = [];
+  const dialog = {
+    showMessageBox: async (...args) => {
+      const options = args.length > 1 ? args[1] : args[0];
+      messageBoxes.push(options);
+      return { response: dialogResponses.length > 0 ? dialogResponses.shift() : 0 };
+    },
+  };
   const mainWindow = {
     id: 'main',
     isDestroyed: () => false,
@@ -53,6 +64,7 @@ async function setup(t) {
     PUSH,
     fileContextMenu: { popup: (absPath, win, opts) => popups.push({ absPath, win, opts }) },
     getMainWindow: () => mainWindow,
+    dialog,
   });
   return {
     ipcMain,
@@ -62,6 +74,10 @@ async function setup(t) {
     popups,
     pushed,
     mainWindow,
+    messageBoxes,
+    answerDialogWith(...responses) {
+      dialogResponses.push(...responses);
+    },
     setWorkspace(root) {
       activeWorkspaceRoot = root;
     },
@@ -331,4 +347,139 @@ test('FS_SHOW_FILE_CONTEXT_MENU: ohne Menü-Service kommt ein Fehler statt einer
   registerFsHandlers({ ipcMain, filesystem, REQ });
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(workspace, 'inside.txt'));
   assert.match(result.error, /nicht verfügbar/);
+});
+
+// ── Import von außen per Drag & Drop (Issue #101) ──────────────────────────
+
+test('FS_IMPORT_ITEMS: einzelne kleine Datei wird ohne Rückfrage kopiert (#101)', async (t) => {
+  const { ipcMain, workspace, outside, messageBoxes } = await setup(t);
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'secret.txt')], workspace);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(messageBoxes, [], 'eine kleine Datei soll den Alltag nicht aufhalten');
+  assert.equal(await fs.readFile(path.join(workspace, 'secret.txt'), 'utf8'), 'secret');
+  assert.equal(await fs.readFile(path.join(outside, 'secret.txt'), 'utf8'), 'secret', 'Quelle bleibt liegen');
+});
+
+test('FS_IMPORT_ITEMS: ein Ordner wird immer nativ bestätigt (#101)', async (t) => {
+  const { ipcMain, workspace, outside, messageBoxes } = await setup(t);
+  await fs.mkdir(path.join(outside, 'unterlagen'));
+  await fs.writeFile(path.join(outside, 'unterlagen', 'a.txt'), 'a', 'utf8');
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'unterlagen')], workspace);
+
+  assert.equal(result.ok, true);
+  assert.equal(messageBoxes.length, 1);
+  assert.match(messageBoxes[0].message, /1 Ordner und 1 Datei .* kopieren\?/);
+  assert.equal(messageBoxes[0].defaultId, 1, '„Abbrechen“ ist Standardantwort');
+  assert.equal(messageBoxes[0].cancelId, 1, '„Abbrechen“ ist Escape-Antwort');
+  assert.equal(await fs.readFile(path.join(workspace, 'unterlagen', 'a.txt'), 'utf8'), 'a');
+});
+
+test('FS_IMPORT_ITEMS: abgelehnte Bestätigung kopiert nichts (#101)', async (t) => {
+  const { ipcMain, workspace, outside, answerDialogWith } = await setup(t);
+  await fs.mkdir(path.join(outside, 'unterlagen'));
+  await fs.writeFile(path.join(outside, 'unterlagen', 'a.txt'), 'a', 'utf8');
+  answerDialogWith(1);
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'unterlagen')], workspace);
+
+  assert.deepEqual(result, { cancelled: true });
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
+});
+
+test('FS_IMPORT_ITEMS: Ziel außerhalb des Workspace wird abgelehnt (#101)', async (t) => {
+  const { ipcMain, workspace, outside, messageBoxes } = await setup(t);
+  const elsewhere = path.join(outside, 'ziel');
+  await fs.mkdir(elsewhere);
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(workspace, 'inside.txt')], elsewhere);
+
+  assert.match(result.error, /außerhalb/);
+  assert.equal(messageBoxes[0].type, 'error', 'die Ablehnung wird nativ gemeldet');
+  assert.deepEqual(await fs.readdir(elsewhere), []);
+});
+
+test('FS_IMPORT_ITEMS: sensible Quelle wird abgelehnt, nicht nur gefiltert (#101)', async (t) => {
+  const { ipcMain, workspace, outside } = await setup(t);
+  await fs.writeFile(path.join(outside, '.env'), 'TOKEN=1', 'utf8');
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, '.env')], workspace);
+
+  assert.match(result.error, /Zugangsdaten/);
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
+});
+
+test('FS_IMPORT_ITEMS: sensible Quelle unterhalb von .ssh wird abgelehnt (#101)', async (t) => {
+  const { ipcMain, workspace, outside } = await setup(t);
+  await fs.mkdir(path.join(outside, '.ssh'));
+  await fs.writeFile(path.join(outside, '.ssh', 'config'), 'Host *', 'utf8');
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, '.ssh', 'config')], workspace);
+
+  assert.match(result.error, /Zugangsdaten/);
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
+});
+
+test('FS_IMPORT_ITEMS: sensible Datei in einem Ordner wird übersprungen, der Rest kommt an (#101)', async (t) => {
+  const { ipcMain, workspace, outside, messageBoxes } = await setup(t);
+  await fs.mkdir(path.join(outside, 'projekt'));
+  await fs.writeFile(path.join(outside, 'projekt', 'index.js'), 'x', 'utf8');
+  await fs.writeFile(path.join(outside, 'projekt', '.env'), 'TOKEN=1', 'utf8');
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'projekt')], workspace);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skippedSensitive, 1);
+  assert.match(messageBoxes[0].detail, /Zugangsdaten/);
+  assert.deepEqual(await fs.readdir(path.join(workspace, 'projekt')), ['index.js']);
+});
+
+test('FS_IMPORT_ITEMS: Limitüberschreitung lehnt den ganzen Drop ab (#101)', async (t) => {
+  const { fsService, workspace, outside } = await setup(t);
+  await fs.mkdir(path.join(outside, 'viele'));
+  for (const name of ['a', 'b', 'c']) {
+    await fs.writeFile(path.join(outside, 'viele', `${name}.txt`), name, 'utf8');
+  }
+  const ipcMain = createMockIpcMain();
+  const filesystem = createFilesystemIpcAdapter({
+    fsService,
+    getActiveWorkspaceRoot: () => workspace,
+    limits: { MAX_IMPORT_ENTRIES: 2, MAX_IMPORT_TOTAL_BYTES: 1024 },
+  });
+  registerFsHandlers({ ipcMain, filesystem, REQ, dialog: { showMessageBox: async () => ({ response: 0 }) } });
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'viele')], workspace);
+
+  assert.match(result.error, /Zu viele Einträge/);
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
+});
+
+test('FS_INSPECT_IMPORT: zählt nur und schreibt nichts (#101)', async (t) => {
+  const { ipcMain, workspace, outside, messageBoxes } = await setup(t);
+  await fs.mkdir(path.join(outside, 'unterlagen'));
+  await fs.writeFile(path.join(outside, 'unterlagen', 'a.txt'), 'a', 'utf8');
+
+  const result = await ipcMain.invoke(
+    REQ.FS_INSPECT_IMPORT,
+    [path.join(outside, 'unterlagen'), path.join(outside, 'secret.txt')],
+    workspace
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.dirs, 1);
+  assert.equal(result.files, 2);
+  assert.deepEqual(messageBoxes, [], 'die Prüfung fragt nichts');
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
+});
+
+test('FS_IMPORT_ITEMS: ohne geöffneten Arbeitsordner passiert nichts (#101)', async (t) => {
+  const { ipcMain, workspace, outside, setWorkspace } = await setup(t);
+  setWorkspace(null);
+
+  const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'secret.txt')], workspace);
+
+  assert.match(result.error, /Kein Arbeitsordner/);
+  assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
 });
