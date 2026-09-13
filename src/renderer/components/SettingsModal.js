@@ -771,6 +771,25 @@ export function initSettingsModal(deps) {
     }
   }
 
+  /**
+   * Katalog neu holen, ohne die noch nicht gespeicherten Haekchen zu
+   * verlieren — sowohl fuer „Skills neu laden“ als auch fuer die Meldung des
+   * Datei-Watchers (Issue #126).
+   *
+   * `reload` leert zusaetzlich den Scan-Cache im Main. Beim Watcher ist das
+   * schon passiert, beim Knopfdruck ist es der ganze Zweck.
+   */
+  async function refreshSkillCatalogKeepingSelection({ reload = false } = {}) {
+    const previous = new Set(settingsActiveSkillsDraft);
+    await loadSkillCatalog({ reload });
+    for (const name of previous) {
+      if (settingsSkillCatalog.some((skill) => skill.name === name)) {
+        settingsActiveSkillsDraft.add(name);
+      }
+    }
+    renderSkillList();
+  }
+
   async function loadToolCatalog() {
     try {
       const result = typeof api.getToolCatalog === 'function' ? await api.getToolCatalog() : null;
@@ -1463,17 +1482,19 @@ export function initSettingsModal(deps) {
     btnReloadSkills.disabled = true;
     try {
       // Neu gefundene Skills sollen die bisherige Auswahl nicht verlieren.
-      const previous = new Set(settingsActiveSkillsDraft);
-      await loadSkillCatalog({ reload: true });
-      for (const name of previous) {
-        if (settingsSkillCatalog.some((skill) => skill.name === name)) {
-          settingsActiveSkillsDraft.add(name);
-        }
-      }
-      renderSkillList();
+      await refreshSkillCatalogKeepingSelection({ reload: true });
     } finally {
       btnReloadSkills.disabled = false;
     }
+  });
+
+  // Der Datei-Watcher im Main hat eine Aenderung gemeldet (Issue #126). Der
+  // Scan-Cache dort ist schon verworfen; hier muss nur die angezeigte Liste
+  // nachziehen — und auch nur, solange der Dialog ueberhaupt offen ist, sonst
+  // holt ihn das naechste Oeffnen ohnehin frisch.
+  api.onSkillsChanged?.(() => {
+    if (modalSettings.classList.contains('hidden')) return;
+    void refreshSkillCatalogKeepingSelection();
   });
 
   btnChatSettings.addEventListener('click', openSettingsModal);
