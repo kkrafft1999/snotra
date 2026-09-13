@@ -1,7 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('path');
+const nodePath = require('path');
 const { createSkillsWatcher, MAX_FALLBACK_LEVELS } = require('../src/main/services/skills-watcher');
+
+/**
+ * Die Tests mit Ersatz-Watcher rechnen bewusst in POSIX-Pfaden: Geprüft wird
+ * die Logik, nicht die Pfadsyntax der Plattform. Mit dem echten `path` würde
+ * unter Windows schon `path.resolve` dazwischenfunken und einen
+ * Laufwerksbuchstaben ergänzen, den die Erwartungen hier nicht kennen. Wie
+ * sich das Ganze auf der jeweiligen Plattform wirklich verhält, prüfen die
+ * beiden Läufe gegen das echte Dateisystem am Ende der Datei.
+ */
+const path = nodePath.posix;
 
 const HOME = path.join(path.sep, 'home', 'nutzer');
 const WS = path.join(path.sep, 'projekte', 'demo');
@@ -247,17 +257,19 @@ test('der Aufstieg endet an der Workspace-Wurzel', () => {
 const fsPromises = require('fs/promises');
 const { watch } = require('fs');
 const nodeOs = require('os');
+// Ab hier gilt wieder die Pfadsyntax der laufenden Plattform.
+const realPath = nodePath;
 
 test('meldet eine echte neue SKILL.md im Unterordner', async () => {
-  const root = await fsPromises.mkdtemp(path.join(nodeOs.tmpdir(), 'snotra-watch-'));
-  const skillsDir = path.join(root, '.agents', 'skills');
+  const root = await fsPromises.mkdtemp(realPath.join(nodeOs.tmpdir(), 'snotra-watch-'));
+  const skillsDir = realPath.join(root, '.agents', 'skills');
   await fsPromises.mkdir(skillsDir, { recursive: true });
 
   let meldungen = 0;
   const watcher = createSkillsWatcher({
     watch,
-    path,
-    os: { homedir: () => path.join(root, '__kein-home__') },
+    path: realPath,
+    os: { homedir: () => realPath.join(root, '__kein-home__') },
     onChange: () => {
       meldungen += 1;
     },
@@ -266,10 +278,10 @@ test('meldet eine echte neue SKILL.md im Unterordner', async () => {
 
   try {
     watcher.watchWorkspace(root);
-    const skillDir = path.join(skillsDir, 'frisch');
+    const skillDir = realPath.join(skillsDir, 'frisch');
     await fsPromises.mkdir(skillDir);
     await fsPromises.writeFile(
-      path.join(skillDir, 'SKILL.md'),
+      realPath.join(skillDir, 'SKILL.md'),
       '---\nname: frisch\ndescription: Neu angelegt\n---\n\nHallo.\n',
       'utf8'
     );
@@ -289,16 +301,16 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
   // sieht Änderungen *darin*, verstummt unter macOS aber lautlos, wenn das
   // Verzeichnis selbst mitgelöscht wird — ohne Ereignis und ohne Fehler.
   // Gerettet wird das nur vom Wächter auf dem Vorfahren.
-  const root = await fsPromises.mkdtemp(path.join(nodeOs.tmpdir(), 'snotra-watch-rm-'));
-  const skillDir = path.join(root, '.agents', 'skills', 'verschwindet');
+  const root = await fsPromises.mkdtemp(realPath.join(nodeOs.tmpdir(), 'snotra-watch-rm-'));
+  const skillDir = realPath.join(root, '.agents', 'skills', 'verschwindet');
   await fsPromises.mkdir(skillDir, { recursive: true });
-  await fsPromises.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
+  await fsPromises.writeFile(realPath.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
 
   let meldungen = 0;
   const watcher = createSkillsWatcher({
     watch,
-    path,
-    os: { homedir: () => path.join(root, '__kein-home__') },
+    path: realPath,
+    os: { homedir: () => realPath.join(root, '__kein-home__') },
     onChange: () => {
       meldungen += 1;
     },
@@ -310,7 +322,7 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     meldungen = 0;
 
-    await fsPromises.rm(path.join(root, '.agents'), { recursive: true, force: true });
+    await fsPromises.rm(realPath.join(root, '.agents'), { recursive: true, force: true });
     for (let i = 0; i < 60 && meldungen === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
