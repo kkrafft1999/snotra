@@ -1,0 +1,19 @@
+# robots.txt für snotra-ai.dev
+#
+# Die Seite bewirbt Snotra AI und bietet den Download an — sie soll gefunden
+# werden. Deshalb ist das Crawlen vollständig erlaubt, ausdrücklich auch für
+# KI-Crawler wie ClaudeBot, GPTBot und Verwandte. Sichtbarkeit in KI-Antworten
+# ist hier erwünscht; das ist eine bewusste Entscheidung und kein Versehen
+# (Issue #116).
+#
+# Sollen KI-Crawler später doch ausgeschlossen werden, genügt je Bot ein Block:
+#
+#   User-agent: GPTBot
+#   Disallow: /
+#
+# Eine sitemap.xml gibt es bewusst nicht: Die Seite hat drei Unterseiten, die
+# alle von der Startseite aus verlinkt sind. Ein Verweis auf eine fehlende
+# Datei wäre nur ein weiterer 404.
+
+User-agent: *
+Allow: /
