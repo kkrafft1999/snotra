@@ -24,7 +24,7 @@
      1. Woerterbuecher
      ====================================================================== */
   var DE = {
-    'meta.title': 'Snotra AI — Software wird nicht gekauft. Sie wird beschrieben.',
+    'meta.title': 'Snotra AI — Fachwissen wird nicht programmiert. Es wird beschrieben.',
     'meta.description': "Snotra AI ist eine Desktop-App, die auf genau einen Ordner zeigt: Dein Fachwissen bleibt eine Datei, das Modell ist austauschbar, angebunden wird, was ohnehin da ist. Kein Server, kein Konto, keine Telemetrie. Quelloffen für macOS, Windows und Linux.",
     'skiplink.text': 'Zum Inhalt springen',
     'nav.aria': 'Hauptnavigation',
@@ -36,8 +36,8 @@
     'nav.cta': 'Herunterladen',
 
     'hero.eyebrow': 'Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
-    'hero.h1.zeile1': 'Software wird nicht gekauft.',
-    'hero.h1.zeile2': 'Sie wird beschrieben.',
+    'hero.h1.zeile1': 'Fachwissen wird nicht programmiert.',
+    'hero.h1.zeile2': 'Es wird beschrieben.',
     /* „Die Richtung ist gesetzt“ statt einer Zusage im Praesens: shell_execute
        steckt in keinem Release, das man heute laden kann (siehe den Badge in
        Saeule 03). Der Satz bleibt die Ansage, die er war — er behauptet nur
@@ -113,7 +113,7 @@
     'zahlen.04.sr': 'Unbegrenzt viele ',
     'zahlen.05.label': 'Konten',
 
-    'klammer.gross': 'Jede Abteilung ihr Werkzeug. Kein neuer Anbieter.',
+    'klammer.gross': 'Jede Abteilung ihr Werkzeug. Aus dem, was schon da ist.',
     'klammer.klein': 'Der Assistent kommt zu den Dateien, nicht die Dateien zum Assistenten.',
 
     'saeulen.label': '// vier entscheidungen',
@@ -320,7 +320,7 @@
   };
 
   var EN = {
-    'meta.title': "Snotra AI — Software isn't bought. It's described.",
+    'meta.title': "Snotra AI — Expertise isn't programmed. It's described.",
     'meta.description': "Snotra AI is a desktop app that points at exactly one folder: your know-how stays a file, the model is swappable, and what gets connected is whatever is already there. No server, no account, no telemetry. Open source for macOS, Windows and Linux.",
     'skiplink.text': 'Skip to content',
     'nav.aria': 'Main navigation',
@@ -332,7 +332,7 @@
     'nav.cta': 'Download',
 
     'hero.eyebrow': 'Desktop app · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
-    'hero.h1.zeile1': "Software isn't bought.",
+    'hero.h1.zeile1': "Expertise isn't programmed.",
     'hero.h1.zeile2': "It's described.",
     'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, and the model is a commodity you can swap out — including for one that runs locally on your own machine. The direction is set: what gets connected is whatever is already there — every CLI on your machine.",
     'hero.mission.betont': 'No server of ours, no account, no telemetry.',
@@ -409,7 +409,7 @@
     'zahlen.04.sr': 'Unlimited ',
     'zahlen.05.label': 'accounts',
 
-    'klammer.gross': 'Every department its own tool. No new vendor.',
+    'klammer.gross': "Every department its own tool. Built from what's already there.",
     'klammer.klein': 'The assistant comes to your files, not your files to the assistant.',
 
     'saeulen.label': '// four decisions',
