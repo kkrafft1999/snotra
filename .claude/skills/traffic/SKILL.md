@@ -2,21 +2,21 @@
 name: traffic
 description: >-
   Ruft den Traffic-Report für snotra-ai.dev aus den Firebase-Hosting-Logs ab
-  (per gcloud), gibt ihn aus und visualisiert die Zahlen als Chart — sonst
-  nichts, keine Einordnung in Prosa und keine Folgeaktionen. Auslösen bei
-  Sätzen wie "wie läuft die Website", "Traffic-Report", "wie viele Besucher
-  hatte die Seite", "Zugriffszahlen", "Website-Statistik", "wer war auf
-  snotra-ai.dev", "schau mal, was auf der Seite los ist", "Besucher letzte
-  Woche", "Traffic-Chart" oder "Diagramm zum Traffic". Nur in diesem Repo
-  (snotra) sinnvoll.
+  (per gcloud), gibt ihn aus und erzeugt daraus grundsätzlich einen HTML-Report
+  mit den Charts — sonst nichts, keine Einordnung in Prosa und keine
+  Folgeaktionen. Auslösen bei Sätzen wie "wie läuft die Website",
+  "Traffic-Report", "wie viele Besucher hatte die Seite", "Zugriffszahlen",
+  "Website-Statistik", "wer war auf snotra-ai.dev", "schau mal, was auf der
+  Seite los ist", "Besucher letzte Woche", "Traffic-Chart" oder "Diagramm zum
+  Traffic". Nur in diesem Repo (snotra) sinnvoll.
 ---
 
 # Traffic-Report für snotra-ai.dev
 
 Dieser Skill tut zwei Dinge: den Report ziehen und ausgeben (Schritte 1–2) und
-die Zahlen als Chart zeigen (Schritt 3). Sonst nichts — keine Einordnung der
-Zahlen in Prosa, keine Anomalie-Prüfung, kein Issue-Anlegen, keine
-Gegenrecherche auf der Live-Seite. Dafür gibt es keinen Auftrag, außer der
+daraus einen HTML-Report mit den Charts bauen (Schritt 3). Sonst nichts — keine
+Einordnung der Zahlen in Prosa, keine Anomalie-Prüfung, kein Issue-Anlegen,
+keine Gegenrecherche auf der Live-Seite. Dafür gibt es keinen Auftrag, außer der
 Nutzer verlangt es in der jeweiligen Nachricht ausdrücklich.
 
 Die Maschine dahinter ist [`scripts/traffic-report.js`](../../../scripts/traffic-report.js),
@@ -57,42 +57,77 @@ häufigen Fälle:
   wechseln mit `gcloud config set account <konto>`.
 
 Gib die Ausgabe des Skripts unverändert weiter — nicht umformulieren, nicht
-einordnen, nicht kommentieren, keine Folgeaktionen ableiten. Für das Chart in
-Schritt 3 liefert `--json` dieselbe Auswertung maschinenlesbar:
+einordnen, nicht kommentieren, keine Folgeaktionen ableiten.
+
+Für den HTML-Report in Schritt 3 dieselbe Auswertung maschinenlesbar ziehen und
+gleich wegschreiben, damit die Zahlen nicht abgetippt werden müssen:
 
 ```sh
-node scripts/traffic-report.js --json --tage=7
+mkdir -p out/traffic && node scripts/traffic-report.js --json --tage=7 > out/traffic/report.json
 ```
 
 Eigene Zugriffe lassen sich ausblenden:
 `npm run traffic -- --eigene-ips=1.2.3.4` oder über `TRAFFIC_EIGENE_IPS`.
 
-## Schritt 3 — Charts erstellen
+## Schritt 3 — HTML-Report erstellen
 
-Immer, ohne dass der Nutzer danach fragen muss. Die reinen Zahlen zeigen die
-Verhältnisse nicht, genau dafür sind die Charts da.
+**Grundsätzlich, immer, ohne dass der Nutzer danach fragen muss.** Der
+HTML-Report ist das Ergebnis dieses Skills; die Terminal-Ausgabe aus Schritt 2
+bleibt daneben stehen, ersetzt ihn aber nicht.
 
-Zeige zwei Diagramme, beide ausschließlich aus den Zahlen des gerade
-gezogenen Reports:
+### Ablageort
 
-1. **Anfragen nach Kategorie** — horizontales Balkendiagramm über alle
-   Kategorien aus dem Block „Woher die Anfragen kommen" (Echte Besucher,
-   Abrufe ohne Mitladen, KI-Crawler, Suchmaschinen, Eigene CI und Tests,
-   Zertifikats-Prüfung, Scanner, Fehlende Standarddatei). Direkt beschriftet
-   mit Anzahl und Anteil. Die Kategorien sind disjunkt und ergeben zusammen
-   den Gesamtwert.
-2. **Echte Besucher im Detail** — Sitzungen, Seitenaufrufe und die
-   aufgerufenen Seiten. Das ist die Zahl, um die es geht; sie geht im großen
+Eine einzelne, in sich geschlossene HTML-Datei:
+
+```
+out/traffic/traffic-<YYYY-MM-DD>-<tage>t.html
+```
+
+`out/` ist gitignored — der Report wird **nicht** committet. Die Datei muss
+**innerhalb des Projekts** liegen, sonst rendert der Preview-Pane sie nur
+statisch ohne JavaScript. Kein Artifact veröffentlichen: die Logdaten sind
+nichts, was nach außen gehört, außer der Nutzer bittet ausdrücklich darum.
+
+Kein externes CSS, kein CDN-Skript, keine Build-Schritte — Styles und, falls
+nötig, Skript inline. Die Charts als reines HTML/CSS oder inline-SVG aus den
+Zahlen bauen; eine Chart-Bibliothek braucht es dafür nicht.
+
+### Inhalt
+
+1. **Kopf** — Titel „Traffic-Report snotra-ai.dev", der **tatsächlich
+   abgedeckte Zeitraum** aus `zeitraum.von`/`zeitraum.bis` (nicht der
+   angefragte), Gesamtzahl der Anfragen.
+2. **Kennzahlen** — Sitzungen, Seitenaufrufe und Anfragen echter Besucher als
+   hervorgehobene Zahlen ganz oben.
+3. **Anfragen nach Kategorie** — horizontales Balkendiagramm über alle
+   Kategorien aus `kategorien` (Echte Besucher, Abrufe ohne Mitladen,
+   KI-Crawler, Suchmaschinen, Link-Vorschau, Eigene CI und Tests,
+   Zertifikats-Prüfung, Scanner und Angriffsversuche, Fehlende Standarddatei).
+   Direkt beschriftet mit Anzahl und Anteil. Die Kategorien sind disjunkt und
+   ergeben zusammen `gesamt`.
+4. **Echte Besucher im Detail** — Sitzungen, Seitenaufrufe und die
+   aufgerufenen Seiten (`besucher.seiten`), dazu Länder und externe Referrer,
+   sofern vorhanden. Das ist die Zahl, um die es geht; sie geht im großen
    Balkendiagramm sonst unter.
+5. **Verlauf pro Tag** — `proTag` als kleines Balken- oder Liniendiagramm, wenn
+   der Zeitraum mehr als einen Tag umfasst.
+6. **Weitere Tabellen**, nur wenn nicht leer: `kiBots`, `suchBots`,
+   `scannerZiele`, `fehlend`, `fehler`, `downloads`.
 
-Regeln für beide:
+### Regeln
 
 - **Echte Besucher** visuell hervorheben; die übrigen Kategorien bleiben
   trotzdem einzeln unterscheidbar, nicht zu „Rest" zusammenfassen.
-- Den **tatsächlich abgedeckten Zeitraum** aus dem Report nennen, nicht den
-  angefragten. Ein `--tage=7`-Abruf kann wegen Log-Retention oder erst
-  kürzlich aktivierter Protokollierung deutlich weniger enthalten.
 - Nur Zahlen aus dem Report übernehmen. Keine IP-Adressen, keine erfundenen
   Trends, keine Vergleiche mit Zeiträumen, die nicht abgefragt wurden.
-- Jedes Chart bekommt eine sichtbare Überschrift und einen Erstellungsstempel
-  mit Datum, Modell und Reasoning-Effort.
+- Leere Abschnitte weglassen statt mit Nullen zu füllen.
+- Hell und dunkel lesbar (`prefers-color-scheme`), Tabellen mit eigenem
+  `overflow-x: auto`, die Seite selbst scrollt nicht seitwärts.
+- Der Report trägt eine sichtbare Überschrift und einen Erstellungsstempel mit
+  Datum, Modell und Reasoning-Effort.
+
+### Zeigen
+
+Nach dem Schreiben die Datei im Browser-Pane öffnen (`preview_start` mit der
+`file://`-URL der erzeugten Datei) und den Pfad im Gespräch nennen. Keine
+Zusammenfassung des Reports hinterherschieben.
