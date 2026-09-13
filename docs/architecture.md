@@ -163,6 +163,17 @@ Payload mitgeschickter Pfad wird verworfen. Beim Start setzt auch
 `main/index.js` nichts vorab — der Root entsteht erst mit der Aktivierung durch
 den Renderer, sodass Oberfläche und Vertrauensgrenze denselben Ordner meinen.
 
+Eine einzige, eng gefasste Ausnahme hat der Chat-Verlauf (Issue #131): Eine
+Konversation gehört zu dem Ordner, in dem sie geführt wurde, der Renderer sichert
+sie beim Ordnerwechsel aber erst, wenn im Main schon der neue Root aktiv ist.
+Deshalb darf eine Session in `CHAT_HISTORY_UPSERT` ihren eigenen Root nennen —
+angenommen wird er nur, wenn `workspaceActivation.isKnownFolder()` ihn als
+bereits geöffneten Ordner bestätigt, sonst gilt wieder der aktive Root. Der
+Pfad landet damit ausschließlich als Schlüssel im Verlaufs-Bucket und öffnet
+keinen Dateizugriff; die Vertrauensgrenze bleibt `getActiveWorkspaceRoot()`.
+Welchen Bucket `CHAT_HISTORY_SET_ACTIVE` trifft, entscheidet aus demselben Grund
+die Session selbst, nicht der gerade aktive Ordner.
+
 ## Composition root
 
 `src/main/composition/create-application.js` ist der zentrale Einstieg nach dem
