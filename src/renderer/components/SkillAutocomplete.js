@@ -3,10 +3,16 @@ import contracts from '../generated/contracts.js';
 const { SKILL_STATUS, findSkillQuery, filterSkillCandidates, applySkillInvocation } = contracts;
 
 const MAX_VISIBLE_OPTIONS = 8;
-// Der Katalog wird beim ersten „/“ lazy geladen und kurz vorgehalten. Solange
-// es keinen Datei-Watcher gibt (Issue #126), sorgt die kurze Lebensdauer
-// dafür, dass ein frisch angelegter Skill von selbst auftaucht.
-const CACHE_MAX_AGE_MS = 30_000;
+/**
+ * Der Katalog wird beim ersten „/“ lazy geladen und danach vorgehalten.
+ *
+ * Dass ein neuer Skill auftaucht, besorgt seit Issue #126 der Datei-Watcher:
+ * Er meldet sich über `skills:changed`, und der Cache fällt sofort. Diese
+ * Frist ist nur noch das Sicherheitsnetz für Dateisysteme, auf denen das
+ * Betriebssystem keine Änderungen meldet — etwa Netzlaufwerke. Deshalb darf
+ * sie großzügig sein (Issue #130).
+ */
+const CACHE_MAX_AGE_MS = 5 * 60_000;
 
 /**
  * `/`-Vervollständigung für die Chat-Eingabe (Issue #124, Teil von #89):
@@ -24,7 +30,7 @@ const CACHE_MAX_AGE_MS = 30_000;
 export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
   const chatInput = document.getElementById('chat-input');
   const menu = document.getElementById('chat-skill-menu');
-  const inactive = { invalidate() {}, close() {}, isOpen: () => false };
+  const inactive = { invalidate() {}, refresh() {}, close() {}, isOpen: () => false };
   if (!chatInput || !menu || typeof api?.getSkillCatalog !== 'function') return inactive;
 
   let cache = null; // { root, skills, fetchedAt }
@@ -52,6 +58,26 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
     cache = null;
     pending = null;
     close();
+  }
+
+  /**
+   * Wie `invalidate`, schließt die Liste aber nicht, sondern füllt sie neu.
+   *
+   * Für die Meldung des Datei-Watchers (Issue #130). Die kann mitten in der
+   * Eingabe eintreffen, und dann darf die Liste dem Nutzer weder unter den
+   * Fingern zuschnappen noch veraltet stehen bleiben.
+   *
+   * Entscheidend ist `update()` statt einer Prüfung auf eine *offene* Liste:
+   * Wer „/neu“ tippt, während dieser Skill gerade angelegt wird, sieht eine
+   * geschlossene Liste — es gibt ja noch keinen Treffer. Genau der Fall soll
+   * aufgehen, sobald der Skill da ist. `update()` entscheidet selbst anhand
+   * der Eingabe und schließt, wenn gar keine Abfrage offen ist.
+   */
+  function refresh() {
+    cacheGeneration += 1;
+    cache = null;
+    pending = null;
+    void update();
   }
 
   /** Aufrufbar ist, was nutzbar ist — verdeckte und kaputte Skills nicht. */
@@ -243,5 +269,5 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
     markSelected();
   });
 
-  return { invalidate, close, isOpen };
+  return { invalidate, refresh, close, isOpen };
 }
