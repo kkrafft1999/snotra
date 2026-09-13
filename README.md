@@ -210,7 +210,8 @@ Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
 (höchstens acht gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
 Die Skill-Verzeichnisse werden **beobachtet**: Legst du einen Skill an, änderst
 seine `SKILL.md` oder installierst einen per `skill-manager`, merkt Snotra das
-von selbst — die Liste in den Einstellungen zieht nach, wenn sie offen ist.
+von selbst — die Liste in den Einstellungen und die `/`-Vervollständigung im
+Chat ziehen sofort nach, ohne dass du etwas anklicken musst.
 „Skills neu laden“ bleibt als Ausweg für die Fälle, in denen das Betriebssystem
 keine Änderung meldet — etwa auf Netzlaufwerken.
 

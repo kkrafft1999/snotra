@@ -123,6 +123,12 @@ const skillAutocomplete = initSkillAutocomplete({
   onInputChanged: syncChatInputHeight,
 });
 
+// Der Datei-Watcher im Main meldet neue, geaenderte und entfernte Skills
+// (Issue #126). Die Liste zieht dadurch sofort nach, statt auf das Ablaufen
+// ihrer Cache-Frist zu warten (Issue #130) — und bleibt dabei offen, falls
+// die Meldung mitten in der Eingabe eintrifft.
+api.onSkillsChanged?.(() => skillAutocomplete.refresh());
+
 const chatStream = initChatStream({
   api,
   appStore,
