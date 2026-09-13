@@ -1,6 +1,8 @@
 const { app, ipcMain, dialog, safeStorage, Menu, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+// Nur fuer den Skill-Watcher (Issue #126): fs/promises kennt kein watch().
+const { watch: watchFile } = require('fs');
 const providers = require('./providers');
 const { createWindow, getMainWindow } = require('./window');
 const { registerMediaCapturePermissions } = require('./permissions');
@@ -143,6 +145,7 @@ app.whenReady().then(async () => {
     PUSH,
     LIMITS,
     defaultProviderId: DEFAULT_PROVIDER,
+    watchFile,
   });
 
   Menu.setApplicationMenu(buildApplicationMenu());

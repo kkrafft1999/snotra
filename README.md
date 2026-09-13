@@ -207,11 +207,15 @@ Verzeichnis, fehlende `SKILL.md`, Name ≠ Verzeichnis) werden übersprungen und
 mit Grund angezeigt, statt den Scan abzubrechen.
 
 Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
-(höchstens acht gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“
-— gescannt wird beim Öffnen eines Ordners und auf Knopfdruck, es gibt keinen
-Datei-Watcher. **Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder
-Inhalt und damit ein Prompt-Injection-Risiko, deshalb braucht jeder eine
-ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
+(höchstens acht gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
+Die Skill-Verzeichnisse werden **beobachtet**: Legst du einen Skill an, änderst
+seine `SKILL.md` oder installierst einen per `skill-manager`, merkt Snotra das
+von selbst — die Liste in den Einstellungen zieht nach, wenn sie offen ist.
+„Skills neu laden“ bleibt als Ausweg für die Fälle, in denen das Betriebssystem
+keine Änderung meldet — etwa auf Netzlaufwerken.
+
+**Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder Inhalt und damit
+ein Prompt-Injection-Risiko, deshalb braucht jeder eine ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
 maßgeblich bleiben die Tool-Häkchen unter Einstellungen › Tools.
 
 ### Einen Skill im Chat aufrufen: `/name`

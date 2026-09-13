@@ -9,8 +9,11 @@
  * für den Systemprompt. Verzeichnisse anderer Werkzeuge, insbesondere
  * `.claude/`, liest Snotra bewusst nicht (Issue #103).
  *
- * Bewusst kein Datei-Watcher: gescannt wird beim ersten Zugriff je Workspace
- * und danach nur noch auf Anforderung („Skills neu laden“).
+ * Gescannt wird beim ersten Zugriff je Workspace, danach liefert der Cache.
+ * Verworfen wird er von `reload()` — entweder durch den Datei-Watcher, der
+ * die Skill-Verzeichnisse beobachtet (`skills-watcher.js`, Issue #126), oder
+ * durch „Skills neu laden“ in den Einstellungen. Der Dienst selbst kennt
+ * beide nicht und weiss nur, wie er alles wegwirft.
  */
 
 const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');

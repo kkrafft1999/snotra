@@ -66,7 +66,7 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_SHELL_STATE: 'settings:getShellState',
   /** Skill-Katalog (System-Skills + gefundene Ordner-Skills), Issue #18. */
   SETTINGS_GET_SKILL_CATALOG: 'settings:getSkillCatalog',
-  /** Skill-Verzeichnisse erneut scannen (kein Datei-Watcher im MVP). */
+  /** Skill-Verzeichnisse sofort erneut scannen — Ausweg neben dem Watcher (#126). */
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
 
   /**
@@ -132,6 +132,8 @@ const PUSH_CHANNELS = Object.freeze({
   TOOL_APPROVAL_RESOLVED: 'toolApproval:resolved',
   /** Modus, Regeln oder Muster haben sich geaendert; Anzeige aktualisieren. */
   TOOL_PERMISSIONS_CHANGED: 'toolPermissions:changed',
+  /** Ein Skill-Verzeichnis hat sich geaendert (Issue #126); Katalog neu holen. */
+  SKILLS_CHANGED: 'skills:changed',
 });
 
 module.exports = {

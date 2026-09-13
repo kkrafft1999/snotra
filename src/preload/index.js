@@ -55,6 +55,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // der Main-Prozess selbst — er wird hier bewusst nicht mitgeschickt (#68).
   getSkillCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG),
   reloadSkills: () => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS),
+  onSkillsChanged: (callback) => {
+    const channel = PUSH.SKILLS_CHANGED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),

@@ -9,6 +9,7 @@ const { createFsService } = require('../services/fs-service');
 const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
+const { createSkillsWatcher } = require('../services/skills-watcher');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
@@ -73,6 +74,11 @@ function createApplication({
   speechProviderId = 'openai',
   updates: updatesOverride,
   systemSkillsDir,
+  /**
+   * `fs.watch` aus dem synchronen fs-Modul — `fs` ist hier fs/promises und
+   * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
+   */
+  watchFile = null,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -130,6 +136,10 @@ function createApplication({
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH });
   const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
 
+  // Erst weiter unten gebaut (der Dienst braucht den Skill-Service), aber
+  // schon hier benannt: Der Workspace-Wechsel direkt darunter greift darauf zu.
+  let skillsWatcher = null;
+
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
   // Ein Workspace-Wechsel verwirft offene Freigaben und Sitzungsfreigaben (Konzept §7).
   const workspaceActivation = createWorkspaceActivation({
@@ -142,6 +152,9 @@ function createApplication({
       if (workspaceState.getActiveWorkspaceRoot() !== before) {
         approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
         sessionGrants.clear();
+        // Die Ordner-Skills des alten Workspace gehen uns nichts mehr an;
+        // der Watcher zieht mit (Issue #126).
+        skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
       }
     },
   });
@@ -236,6 +249,27 @@ function createApplication({
     os,
     systemSkillsDir: resolvedSystemSkillsDir,
   });
+
+  // Aenderungen an den Skill-Verzeichnissen verwerfen den Scan-Cache und
+  // melden sich beim Renderer (Issue #126) — „Skills neu laden“ bleibt als
+  // Ausweg, ist aber nicht mehr noetig. Ohne watch-Implementierung (Tests)
+  // laeuft alles wie vorher, nur ohne Watcher.
+  skillsWatcher = watchFile
+    ? createSkillsWatcher({
+        watch: watchFile,
+        path,
+        os,
+        onChange: () => {
+          skillsService.reload();
+          const win = getMainWindow();
+          if (win && !win.isDestroyed()) win.webContents.send(PUSH.SKILLS_CHANGED, {});
+        },
+      })
+    : null;
+  // Gleich anwerfen: Die Home-Quelle gilt auch ohne geoeffneten Ordner, und
+  // ein beim Start wiederhergestellter Workspace setzt den Root womoeglich,
+  // bevor es den Watcher gab.
+  skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
 
   const whisperService = createWhisperService({
     fetchImpl,
@@ -355,6 +389,7 @@ function createApplication({
 
   function dispose() {
     providerRuntime.disposeAll();
+    skillsWatcher?.close();
   }
 
   return {
