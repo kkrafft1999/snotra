@@ -86,7 +86,12 @@
   color-scheme:light;
 
   /* Marken-Palette */
-  --ds-blue:#00759E;                              /* einzige Akzentfarbe */
+  --ds-blue:#00759E;                              /* einzige Akzentfarbe, nur >= 14px */
+  --ds-blue-ink:#005F80;                          /* dieselbe Akzentfarbe fuer Text < 14px:
+                                                     #00759E kommt auf --ds-grey-card nur auf
+                                                     4,56:1 und faellt schon beim Einblenden
+                                                     unter die geforderten 4,5:1, diese
+                                                     Fassung auf 6,25:1 (Issue #113) */
   --ds-blue-soft:rgba(0,117,158,.05);
   --ds-blue-border:rgba(0,117,158,.25);
   --ds-chat-user-bg:rgba(0,117,158,.08);
@@ -126,6 +131,7 @@
 
   /* ---- Aliase (Kurznamen dieser Seite) ---- */
   --blue:var(--ds-blue);
+  --blue-ink:var(--ds-blue-ink);
   --blue-hover:var(--ds-btn-primary-bg-hover);
   --blue-soft:var(--ds-blue-soft);
   --blue-border:var(--ds-blue-border);
@@ -724,7 +730,7 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
 .filecard-head .p{font-family:var(--mono);font-size:12px;color:var(--strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filecard-head .badge{margin-left:auto}
 .filecard-body{margin:0;padding:12px;background:var(--grey-card);font-family:var(--mono);font-size:12px;line-height:1.5;color:var(--strong);overflow-x:auto}
-.filecard-body .k{color:var(--blue)}
+.filecard-body .k{color:var(--blue-ink)}
 .filecard-body .h{color:var(--black);font-weight:600}
 .minitree{display:flex;flex-direction:column;gap:0;font-family:var(--mono);font-size:12px;color:var(--strong)}
 .minitree .row{display:flex;align-items:center;gap:6px;height:24px}

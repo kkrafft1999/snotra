@@ -38,11 +38,7 @@
     'hero.eyebrow': 'Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
     'hero.h1.zeile1': 'Fachwissen wird nicht programmiert.',
     'hero.h1.zeile2': 'Es wird beschrieben.',
-    /* „Die Richtung ist gesetzt“ statt einer Zusage im Praesens: shell_execute
-       steckt in keinem Release, das man heute laden kann (siehe den Badge in
-       Saeule 03). Der Satz bleibt die Ansage, die er war — er behauptet nur
-       nicht mehr, der Download koenne es bereits. */
-    'hero.mission.teil1': 'Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Die Richtung ist gesetzt: angebunden wird, was ohnehin da ist — jedes CLI auf deiner Maschine.',
+    'hero.mission.teil1': 'Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.',
     'hero.mission.betont': 'Kein eigener Server, kein Konto, keine Telemetrie.',
     'hero.cta.primaer': 'Für macOS laden — 127 MB',
     'hero.cta.sekundaer': 'Windows & Linux',
@@ -153,8 +149,6 @@
     'saeule.03.wort': 'Anschluss',
     'saeule.03.titel': 'Verbindet sich mit allem, was schon da ist',
     'saeule.03.absatz': 'Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — git, docker, az, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.',
-    'saeule.03.badge.shell': 'shell_execute: kommt mit der nächsten Version',
-    'saeule.03.badge': 'MCP-Server in Arbeit',
     'saeule.03.demo.caption1': '// tool-log, wie er im chat läuft',
     'saeule.03.demo.summary': '3 Ausführungen · 1 Datei geschrieben',
     'saeule.03.demo.zeile1': 'Befehl „git log --since=1.week --oneline“ ausgeführt',
@@ -167,7 +161,6 @@
     'saeule.04.titel': 'Nichts passiert ohne dich',
     'saeule.04.absatz1': 'Jeder schreibende, ausführende oder externe Aufruf kommt vorher als Karte in den Chat: Zielpfad, vollständiger Befehl, Vorschau.',
     'saeule.04.absatz2': 'Für Ausführung gibt es bewusst kein „für diese Sitzung merken“.',
-    'saeule.04.badge': 'shell_execute: kommt mit der nächsten Version',
     'saeule.04.demo.caption': '// echte freigabe-karte — entscheide hier',
     'saeule.04.demo.titel': 'Ausführung bestätigen',
     'saeule.04.demo.headline': 'Snotra möchte einen Befehl in zsh ausführen (shell_execute).',
@@ -334,7 +327,7 @@
     'hero.eyebrow': 'Desktop app · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
     'hero.h1.zeile1': "Expertise isn't programmed.",
     'hero.h1.zeile2': "It's described.",
-    'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, and the model is a commodity you can swap out — including for one that runs locally on your own machine. The direction is set: what gets connected is whatever is already there — every CLI on your machine.",
+    'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, and the model is a commodity you can swap out — including for one that runs locally on your own machine. What gets connected is whatever is already there: every CLI on your machine.",
     'hero.mission.betont': 'No server of ours, no account, no telemetry.',
     'hero.cta.primaer': 'Download for macOS — 127 MB',
     'hero.cta.sekundaer': 'Windows & Linux',
@@ -449,8 +442,6 @@
     'saeule.03.wort': 'Connection',
     'saeule.03.titel': "Connects to everything that's already there",
     'saeule.03.absatz': "Every command-line tool on your machine becomes a tool for the model — git, docker, az, your company's own CLI. No connector, no adapter, no integration projects: a Skill describes the tool, the shell does the rest.",
-    'saeule.03.badge.shell': 'shell_execute: ships with the next release',
-    'saeule.03.badge': 'MCP server in progress',
     'saeule.03.demo.caption1': '// tool log, the way it runs in the chat',
     'saeule.03.demo.summary': '3 executions · 1 file written',
     'saeule.03.demo.zeile1': 'Ran command “git log --since=1.week --oneline”',
@@ -463,7 +454,6 @@
     'saeule.04.titel': 'Nothing happens without you',
     'saeule.04.absatz1': 'Every call that writes, executes or reaches outside shows up as a card in the chat first: target path, full command, preview.',
     'saeule.04.absatz2': 'For execution there is deliberately no “remember for this session”.',
-    'saeule.04.badge': 'shell_execute: ships with the next release',
     'saeule.04.demo.caption': '// a real approval card — decide here',
     'saeule.04.demo.titel': 'Confirm execution',
     'saeule.04.demo.headline': 'Snotra wants to run a command in zsh (shell_execute).',
@@ -724,14 +714,27 @@
     if (codes) markCode(el, codes);
   }
 
+  /* Das canonical-Element muss die Adresse nennen, die im Adressfeld steht.
+     Frueher richtete es sich nach der gewaehlten Sprache statt nach der URL,
+     und applyLang schrieb beim Laden ausserdem immer ein ?lang= in die
+     Adresse. Wer den Zustand zwischen beiden Schritten sah — Crawler,
+     Lighthouse — fand Adresse und canonical im Widerspruch (Issue #113). */
+  function syncCanonical() {
+    var can = doc.querySelector('link[rel="canonical"]');
+    if (!can) return;
+    try {
+      var url = new URL(window.location.href);
+      /* Der Host bleibt fest verdrahtet: Die Seite ist auch ueber
+         snotra-ai.web.app erreichbar, und von dort soll das canonical weiter
+         auf die eigene Domain zeigen. Nur Pfad und Abfrage kommen aus dem
+         Adressfeld. */
+      can.setAttribute('href', 'https://snotra-ai.dev' + url.pathname + url.search);
+    } catch (e) { /* aeltere Browser: das ausgelieferte canonical bleibt stehen */ }
+  }
+
   function applyLang(lang, opts) {
     state.lang = DICT[lang] ? lang : 'de';
     doc.documentElement.lang = state.lang;
-
-    /* Das canonical-Element muss die Fassung nennen, die gerade dasteht —
-       sonst zeigt die englische Ansicht auf die deutsche URL. */
-    var can = doc.querySelector('link[rel="canonical"]');
-    if (can) can.setAttribute('href', 'https://snotra-ai.dev/' + (state.lang === 'en' ? '?lang=en' : ''));
 
     each('[data-i18n]', function (el) { setText(el, t(el.getAttribute('data-i18n'))); });
 
@@ -753,10 +756,15 @@
       store('snotra-lang', state.lang);
       try {
         var url = new URL(window.location.href);
-        url.searchParams.set('lang', state.lang);
+        /* Deutsch ist die Vorgabe und steht auch in hreflang ohne Parameter;
+           ein ?lang=de waere nur eine zweite Adresse fuer dieselbe Seite. */
+        if (state.lang === 'de') url.searchParams.delete('lang');
+        else url.searchParams.set('lang', state.lang);
         window.history.replaceState(null, '', url.pathname + url.search + url.hash);
       } catch (e) { /* aeltere Browser: die Wahl steht dann nur im Speicher */ }
     }
+
+    syncCanonical();
   }
 
   /* Stellen, die nach dem Uebersetzen einen Zustand zurueckbekommen muessen. */
@@ -1186,5 +1194,8 @@
   /* ======================================================================
      9. Start
      ====================================================================== */
-  applyLang(pickLang(), { silent: false });
+  /* silent: Die automatisch erkannte Sprache ist keine Wahl des Besuchers —
+     sie gehoert weder in die Adresse noch in den Speicher. Erst ein Klick auf
+     DE/EN schreibt beides. */
+  applyLang(pickLang(), { silent: true });
 })();

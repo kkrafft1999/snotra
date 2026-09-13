@@ -55,7 +55,7 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
       <div class="hero-text">
         <p class="metaline"><span class="deco" aria-hidden="true">//</span><span data-version data-i18n="hero.eyebrow">Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1</span></p>
         <h1><span data-i18n="hero.h1.zeile1">Fachwissen wird nicht programmiert.</span><span class="line2" data-i18n="hero.h1.zeile2">Es wird beschrieben.</span></h1>
-        <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Die Richtung ist gesetzt: angebunden wird, was ohnehin da ist — jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein eigener Server, kein Konto, keine Telemetrie.</strong></p>
+        <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein eigener Server, kein Konto, keine Telemetrie.</strong></p>
         <div class="hero-actions">
           <a class="btn btn-primary btn-lg" id="hero-cta" data-hero-cta data-size="mac" href="#download" data-i18n="hero.cta.primaer">Für macOS laden — 127 MB</a>
           <a class="btn btn-secondary btn-lg" href="#download" data-i18n="hero.cta.sekundaer">Windows &amp; Linux</a>
@@ -219,8 +219,8 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
       <ul class="numbers-grid" role="list">
         <li class="num"><span class="v" data-count="1">1</span><span class="k" data-i18n="zahlen.01.label">Ordner im Zugriff</span></li>
         <li class="num"><span class="v" data-count="5">5</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
-        <!-- 14 = oeffentliche Tools in v1.5.1. Mit dem naechsten Release kommt shell_execute dazu -> 15. -->
-        <li class="num"><span class="v" data-count="14">14</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
+        <!-- 15 = oeffentliche Tools der Registry ohne debug_wait (internal: true), seit v1.5.2 inkl. shell_execute. -->
+        <li class="num"><span class="v" data-count="15">15</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
         <li class="num"><span class="v v--inf" aria-hidden="true">∞</span><span class="k"><span class="sr-only" data-i18n="zahlen.04.sr">Unbegrenzt viele </span><span data-i18n="zahlen.04.label">Systeme per CLI</span></span></li>
         <li class="num"><span class="v" data-count="0">0</span><span class="k" data-i18n="zahlen.05.label">Konten</span></li>
       </ul>
@@ -320,7 +320,7 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
             <p class="pillar-no">03 <span class="word" data-i18n="saeule.03.wort">Anschluss</span></p>
             <h3 data-i18n="saeule.03.titel">Verbindet sich mit allem, was schon da ist</h3>
             <p data-i18n="saeule.03.absatz" data-i18n-code="git|docker|az">Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — <code class="inline-code">git</code>, <code class="inline-code">docker</code>, <code class="inline-code">az</code>, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.</p>
-            <p class="badge-row"><span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge.shell">shell_execute: kommt mit der nächsten Version</span> <span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
+            <p class="badge-row"> <span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
           </div>
           <div class="pillar-demo">
             <p class="demo-cap" data-i18n="saeule.03.demo.caption1"><span class="deco" aria-hidden="true">//</span>tool-log, wie er im chat läuft</p>
@@ -358,7 +358,6 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
             <h3 data-i18n="saeule.04.titel">Nichts passiert ohne dich</h3>
             <p data-i18n="saeule.04.absatz1">Jeder schreibende, ausführende oder externe Aufruf kommt vorher als Karte in den Chat: Zielpfad, vollständiger Befehl, Vorschau.</p>
             <p data-i18n="saeule.04.absatz2">Für Ausführung gibt es bewusst kein „für diese Sitzung merken“.</p>
-            <p><span class="badge badge--blue badge--lg" data-i18n="saeule.04.badge">shell_execute: kommt mit der nächsten Version</span></p>
           </div>
           <div class="pillar-demo">
             <p class="demo-cap" data-i18n="saeule.04.demo.caption"><span class="deco" aria-hidden="true">//</span>echte freigabe-karte — entscheide hier</p>
