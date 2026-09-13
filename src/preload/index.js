@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // der Main-Prozess selbst — er wird hier bewusst nicht mitgeschickt (#68).
   getSkillCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG),
   reloadSkills: () => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS),
+  suggestSkills: (text) => ipcRenderer.invoke(REQ.SKILLS_SUGGEST, text),
   onSkillsChanged: (callback) => {
     const channel = PUSH.SKILLS_CHANGED;
     const listener = (_event, payload) => callback(payload);

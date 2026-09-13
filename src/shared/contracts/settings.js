@@ -7,7 +7,13 @@
  */
 'use strict';
 
-const { APP_LOCALES, PRESET_DETAIL_STYLES, PRESET_FIELD_TYPES } = require('./enums');
+const {
+  APP_LOCALES,
+  PRESET_DETAIL_STYLES,
+  PRESET_FIELD_TYPES,
+  DEFAULT_SKILL_SUGGESTION_MODE,
+  isSkillSuggestionMode,
+} = require('./enums');
 const { normalizeActiveSkills } = require('./skills');
 
 const MAX_TOOL_ROUNDS_MIN = 1;
@@ -235,7 +241,13 @@ function normalizeUiPrefs(raw) {
   // Shell-Ausfuehrung (Issue #102) ebenso: ein Befehl kann alles, was der
   // angemeldete Nutzer kann — das wird bewusst eingeschaltet.
   const shellExecutionEnabled = data.shellExecutionEnabled === true;
+  // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
+  // weil es nichts kostet und nichts verlaesst den Rechner.
+  const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
+    ? data.skillSuggestionMode
+    : DEFAULT_SKILL_SUGGESTION_MODE;
   return {
+    skillSuggestionMode,
     contentPaneVisible: data.contentPaneVisible !== false,
     baseSystemPrompt,
     appLocale,
@@ -266,6 +278,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (isAppLocale(patch.appLocale)) {
     out.appLocale = patch.appLocale;
+  }
+  if (isSkillSuggestionMode(patch.skillSuggestionMode)) {
+    out.skillSuggestionMode = patch.skillSuggestionMode;
   }
   const maxToolRounds = clampMaxToolRounds(patch.maxToolRounds);
   if (typeof maxToolRounds === 'number') {

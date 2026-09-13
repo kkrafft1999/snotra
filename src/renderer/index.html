@@ -189,6 +189,7 @@
           <ul id="chat-skill-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Verfügbare Skills"></ul>
           <ul id="chat-attachments" class="chat-attachments hidden" aria-label="Angehängte Bilder"></ul>
           <textarea id="chat-input" rows="1" placeholder="Nachricht…" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu chat-skill-menu"></textarea>
+          <p id="chat-skill-suggestion" class="chat-skill-suggestion hidden" aria-live="polite"></p>
           <div class="chat-composer-bar" role="toolbar" aria-label="Eingabe-Werkzeuge">
             <div class="chat-composer-bar-start">
               <button type="button" id="btn-chat-mic" title="Spracheingabe" aria-pressed="false" aria-label="Spracheingabe starten">
@@ -576,6 +577,23 @@
               </div>
             </details>
             <div class="settings-tools-card">
+              <div class="settings-rule-form__field">
+                <label for="settings-skill-suggestion-mode" class="modal-field-label eyebrow-row">
+                  Vorschläge im Chat
+                </label>
+                <select id="settings-skill-suggestion-mode" class="modal-input">
+                  <option value="lexical">Aus den Beschreibungen (ohne Modell)</option>
+                  <option value="model">Das Modell fragen</option>
+                  <option value="off">Keine Vorschläge</option>
+                </select>
+                <p class="modal-hint">
+                  Tippst du im Chat ein <code>/</code>, schlägt Snotra unter dem Eingabefeld einen
+                  passenden Skill zu dem vor, was du bis dahin geschrieben hast. Das Übernehmen
+                  bleibt dein Klick. „Aus den Beschreibungen“ rechnet auf deinem Rechner und kostet
+                  nichts; „Das Modell fragen“ versteht auch Fachkürzel, schickt dafür aber die
+                  Zeile und die Skill-Namen an den Anbieter und braucht einen Moment.
+                </p>
+              </div>
               <div class="settings-panel-models__head">
                 <h3 class="settings-subsection-title" id="heading-skill-catalog">Verfügbare Skills</h3>
                 <button type="button" id="btn-reload-skills" class="btn-secondary">Skills neu laden</button>

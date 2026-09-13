@@ -73,6 +73,32 @@ const APP_LOCALES = Object.freeze({
   EN: 'en',
 });
 
+/**
+ * Woher die Skill-Vorschläge kommen (Issue #125).
+ *
+ * `LEXICAL` rechnet im Renderer und kostet nichts; `MODEL` fragt das Modell
+ * und versteht dafür auch Fachkürzel, die in keiner Beschreibung stehen. In
+ * beiden Fällen bleibt das Übernehmen eine Nutzeraktion — vorgeschlagen wird,
+ * nie eingeschaltet (Prompt-Injection, siehe #18).
+ */
+const SKILL_SUGGESTION_MODES = Object.freeze({
+  OFF: 'off',
+  LEXICAL: 'lexical',
+  MODEL: 'model',
+});
+
+const SKILL_SUGGESTION_MODE_LABELS = Object.freeze({
+  [SKILL_SUGGESTION_MODES.OFF]: 'Keine Vorschläge',
+  [SKILL_SUGGESTION_MODES.LEXICAL]: 'Aus den Beschreibungen (ohne Modell)',
+  [SKILL_SUGGESTION_MODES.MODEL]: 'Das Modell fragen',
+});
+
+const DEFAULT_SKILL_SUGGESTION_MODE = SKILL_SUGGESTION_MODES.LEXICAL;
+
+function isSkillSuggestionMode(value) {
+  return Object.values(SKILL_SUGGESTION_MODES).includes(value);
+}
+
 // CSS-Klasse für Preset-Sublabels in der UI.
 const PRESET_DETAIL_STYLES = Object.freeze({
   DEFAULT: 'default',
@@ -93,6 +119,10 @@ module.exports = {
   WORKSPACE_PROGRESS_EVENTS,
   PERMISSION_PROGRESS_EVENTS,
   APP_LOCALES,
+  SKILL_SUGGESTION_MODES,
+  SKILL_SUGGESTION_MODE_LABELS,
+  DEFAULT_SKILL_SUGGESTION_MODE,
+  isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
 };
