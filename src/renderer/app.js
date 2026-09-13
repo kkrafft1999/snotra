@@ -6,6 +6,7 @@ import { initWhisperRecorder } from './voice/WhisperRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
+import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
 import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
@@ -113,6 +114,15 @@ const mentionAutocomplete = initMentionAutocomplete({
   onInputChanged: syncChatInputHeight,
 });
 
+// /-Vervollstaendigung fuer Skills (Issue #124); wie die @-Variante per
+// Capture-Listener, die beiden Listen schliessen sich durch ihre Suchmuster
+// gegenseitig aus.
+const skillAutocomplete = initSkillAutocomplete({
+  api,
+  appStore,
+  onInputChanged: syncChatInputHeight,
+});
+
 const chatStream = initChatStream({
   api,
   appStore,
@@ -180,6 +190,8 @@ const fileTree = initFileTree({
   onInputChanged: syncChatInputHeight,
   onWorkspaceChanged: async (folderPath) => {
     mentionAutocomplete.invalidate();
+    // Ordner-Skills haengen am Workspace, der Katalog ist damit hinfaellig.
+    skillAutocomplete.invalidate();
     await chatStream.loadChatForWorkspace(folderPath);
   },
   onProjectOpened: () => modelPicker.updateChatChrome(),

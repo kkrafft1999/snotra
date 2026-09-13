@@ -205,18 +205,33 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     };
   }
 
-  /** Bodies der eingeschalteten Skills — Reihenfolge = Quellpriorität. */
-  async function getActiveSkills({ workspaceRoot = null, activeSkills = null } = {}) {
+  /**
+   * Bodies der eingeschalteten Skills — Reihenfolge = Quellpriorität.
+   *
+   * `invokedSkills` sind die per `/name` im Chat aufgerufenen Skills
+   * (Issue #124). Sie kommen zusätzlich zur dauerhaften Auswahl dazu und
+   * zählen bewusst nicht gegen `MAX_ACTIVE_SKILLS`: Das Limit schützt das
+   * Token-Budget der *voreingestellten* Skills, ein Aufruf ist dagegen eine
+   * bewusste Einzelentscheidung des Nutzers für diesen Verlauf.
+   */
+  async function getActiveSkills({ workspaceRoot = null, activeSkills = null, invokedSkills = null } = {}) {
     const { skills } = await scan(workspaceRoot);
     const active = new Set(resolveActiveNames(skills, activeSkills));
+    const invoked = new Set(Array.isArray(invokedSkills) ? invokedSkills : []);
     return skills
-      .filter((skill) => skill.status === SKILL_STATUS.AVAILABLE && active.has(skill.name))
+      .filter(
+        (skill) =>
+          skill.status === SKILL_STATUS.AVAILABLE
+          && (active.has(skill.name) || invoked.has(skill.name))
+      )
       .map((skill) => ({
         name: skill.name,
         description: skill.description,
         source: skill.source,
         path: skill.path,
         body: skill.body,
+        /** Kam dieser Skill per `/name` dazu statt über die Einstellungen? */
+        invoked: invoked.has(skill.name) && !active.has(skill.name),
       }));
   }
 

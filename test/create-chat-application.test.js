@@ -130,10 +130,26 @@ test('createChatApplication reicht die eingeschalteten Skills bis in den Systemp
     payload: { messages: [{ role: 'user', content: 'Was kannst du?' }] },
   });
 
-  assert.deepEqual(skillQueries, [{ workspaceRoot: null, activeSkills: ['snotra-capabilities'] }]);
+  assert.deepEqual(skillQueries, [
+    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [] },
+  ]);
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.match(system.content, /## Skill: snotra-capabilities/);
   assert.match(system.content, /keine Shell/);
+
+  // Ein „/name“ in der Nutzernachricht reist als Aufruf mit (Issue #124),
+  // eines in einer Assistenz-Antwort dagegen nicht.
+  await engine.send({
+    sessionId: 's-2',
+    payload: {
+      messages: [
+        { role: 'user', content: 'Bitte /release vorbereiten' },
+        { role: 'assistant', content: 'Soll ich /install auch anwerfen?' },
+        { role: 'user', content: 'ja' },
+      ],
+    },
+  });
+  assert.deepEqual(skillQueries[1].invokedSkills, ['release']);
 });
 
 test('createChatApplication kommt ohne Skill-Service aus', async () => {

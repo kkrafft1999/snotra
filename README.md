@@ -218,6 +218,28 @@ Inhalt und damit ein Prompt-Injection-Risiko, deshalb braucht jeder eine
 ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
 maßgeblich bleiben die Tool-Häkchen unter Einstellungen › Tools.
 
+### Einen Skill im Chat aufrufen: `/name`
+
+Für den einmaligen Einsatz musst du nicht in die Einstellungen. Tippst du im
+Eingabefeld ein **`/`**, öffnet sich — wie bei der `@`-Dateireferenz — eine
+Liste **aller verfügbaren** Skills, nicht nur der eingeschalteten; gesucht wird
+dabei über Name *und* Beschreibung. `↑`/`↓` wählt aus, `Enter` oder `Tab`
+übernimmt, `Esc` schließt. Ein offener Ordner ist nicht nötig, die
+System-Skills sind immer da.
+
+Übernommen wird der Text `/name`, der in deiner Nachricht stehen bleibt. Er
+wirkt für den **weiteren Verlauf dieses Chats** — auch für die Folgeantworten
+und nach dem Neuladen des Chats, weil der Aufruf Teil der Nachricht ist. Deine
+Auswahl unter Einstellungen › Skills ändert sich dadurch nicht, und der Aufruf
+zählt **nicht** gegen die acht Häkchen: Das Limit schützt das Token-Budget der
+voreingestellten Skills, ein Aufruf ist deine bewusste Einzelentscheidung.
+
+Nur was *du* schreibst, zählt als Aufruf — ein `/name` in einer Antwort des
+Modells oder in einem Tool-Ergebnis bleibt wirkungslos. Damit kann sich weder
+das Modell selbst noch fremder Dateiinhalt einen Skill einschalten. Ein
+Schrägstrich mitten im Wort oder in einem Pfad (`/usr/bin`, `und/oder`) bleibt
+normaler Text.
+
 ### Dateien neben der `SKILL.md`
 
 Viele Skills legen ihr eigentliches Wissen daneben ab (`references/`,
