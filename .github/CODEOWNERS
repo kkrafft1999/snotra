@@ -1,5 +1,5 @@
-# Alle Änderungen brauchen ein Review von @kkrafft1999.
+# Alle Aenderungen brauchen ein Review von @kkrafft1999.
 # Wirkt zusammen mit dem Ruleset "main geschuetzt" (Require pull request +
 # Require review from Code Owners). Der Repository-Admin bypasst das Ruleset,
-# für alle anderen Mitwirkenden hängt jeder Merge nach main an diesem Review.
+# fuer alle anderen Mitwirkenden haengt jeder Merge nach main an diesem Review.
 * @kkrafft1999
