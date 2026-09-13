@@ -35,7 +35,7 @@
     'nav.github': 'GitHub',
     'nav.cta': 'Herunterladen',
 
-    'hero.eyebrow': 'Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
+    'hero.eyebrow': 'Desktop-App · macOS · Windows · Linux · Apache 2.0 · v1.5.3',
     'hero.h1.zeile1': 'Fachwissen wird nicht programmiert.',
     'hero.h1.zeile2': 'Es wird beschrieben.',
     'hero.mission.teil1': 'Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.',
@@ -45,7 +45,7 @@
     'hero.cta.platform.mac': 'Für macOS laden',
     'hero.cta.platform.win': 'Für Windows laden',
     'hero.cta.platform.deb': 'Für Linux laden',
-    'hero.note': 'Version 1.5.1 · quelloffen unter Apache 2.0 · keine Registrierung',
+    'hero.note': 'Version 1.5.3 · quelloffen unter Apache 2.0 · keine Registrierung',
     'hero.appwin.aria': 'Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.',
     'hero.stage.caption': 'Die Oberfläche der App, maßgetreu in HTML nachgebaut',
     /* „keine“ stimmt: es gehen keine Nutzungsdaten raus. Die App fragt beim
@@ -210,7 +210,7 @@
     'einsatzfeld.engineering.punkt1': 'Projektbezogene Code- und Repo-Assistenz',
 
     'download.label': '// download',
-    'download.h2': 'Version 1.5.1 — kostenlos, quelloffen, ohne Registrierung',
+    'download.h2': 'Version 1.5.3 — kostenlos, quelloffen, ohne Registrierung',
     'download.sub': 'Apache 2.0. Kein Konto, keine Telemetrie, kein eigener Server dazwischen — geladen wird direkt bei GitHub.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 127 MB',
@@ -325,7 +325,7 @@
     'nav.github': 'GitHub',
     'nav.cta': 'Download',
 
-    'hero.eyebrow': 'Desktop app · macOS · Windows · Linux · Apache 2.0 · v1.5.1',
+    'hero.eyebrow': 'Desktop app · macOS · Windows · Linux · Apache 2.0 · v1.5.3',
     'hero.h1.zeile1': "Expertise isn't programmed.",
     'hero.h1.zeile2': "It's described.",
     'hero.mission.teil1': "Snotra AI is the bench you do it on: a desktop app that points at exactly one folder. The know-how sits next to it as a text file, the capabilities sit in tools, and the model is a commodity you can swap out — including for one that runs locally on your own machine. What gets connected is whatever is already there: every CLI on your machine.",
@@ -335,7 +335,7 @@
     'hero.cta.platform.mac': 'Download for macOS',
     'hero.cta.platform.win': 'Download for Windows',
     'hero.cta.platform.deb': 'Download for Linux',
-    'hero.note': 'Version 1.5.1 · open source under Apache 2.0 · no sign-up',
+    'hero.note': 'Version 1.5.3 · open source under Apache 2.0 · no sign-up',
     'hero.appwin.aria': 'Reconstruction of the Snotra AI window: on the left the file tree of the folder “angebote”, in the middle the preview of angebot-q3.md, on the right the chat with tool log, approval card and input field.',
     'hero.stage.caption': 'The interface, rebuilt in HTML — the app ships with a German interface',
 
@@ -504,7 +504,7 @@
     'einsatzfeld.engineering.punkt1': 'Project-scoped code and repo assistance',
 
     'download.label': '// download',
-    'download.h2': 'Version 1.5.1 — free, open source, no sign-up',
+    'download.h2': 'Version 1.5.3 — free, open source, no sign-up',
     'download.sub': 'Apache 2.0. No account, no telemetry, no server of ours in between — the download comes straight from GitHub.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 127 MB',
@@ -815,7 +815,7 @@
 
   /* ======================================================================
      4. Download-Ziele aus dem letzten GitHub-Release
-     Die Asset-Namen tragen die Version (Snotra-AI-1.5.1-mac-arm64.dmg),
+     Die Asset-Namen tragen die Version (Snotra-AI-<version>-mac-arm64.dmg),
      /releases/latest/download/<name> funktioniert damit nicht. Faellt der
      Aufruf aus (Rate-Limit, Blocker, kein Netz), bleiben die im HTML
      hinterlegten Links auf .../releases/latest stehen.
@@ -842,8 +842,13 @@
 
   function applyRelease() {
     if (state.version) {
+      /* Ersetzt wird jede dreiteilige Versionsnummer, nicht eine bestimmte:
+         sonst muesste der im HTML und im Woerterbuch hinterlegte Fallback
+         immer im Gleichschritt mit diesem Regex gehoben werden, und ein
+         vergessener Bump hier wuerde die Zahl dauerhaft einfrieren.
+         "Apache 2.0" hat nur zwei Komponenten und bleibt unberuehrt. */
       each('[data-version]', function (el) {
-        el.textContent = el.textContent.replace(/1\.5\.1/g, state.version);
+        el.textContent = el.textContent.replace(/\d+\.\d+\.\d+/g, state.version);
       });
     }
     each('[data-size]', function (el) {
