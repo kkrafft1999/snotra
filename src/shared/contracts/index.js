@@ -55,6 +55,12 @@ const {
   normalizeSkillSummary,
   normalizeSkillCatalog,
 } = require('./skills');
+const {
+  findSkillQuery,
+  extractInvokedSkillNames,
+  filterSkillCandidates,
+  applySkillInvocation,
+} = require('./skill-invocation');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
@@ -170,6 +176,10 @@ module.exports = {
   normalizeActiveSkills,
   normalizeSkillSummary,
   normalizeSkillCatalog,
+  findSkillQuery,
+  extractInvokedSkillNames,
+  filterSkillCandidates,
+  applySkillInvocation,
   toUsageNumber,
   createEmptyUsage,
   normalizeUsage,
