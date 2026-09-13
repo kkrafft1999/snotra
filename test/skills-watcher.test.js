@@ -260,8 +260,27 @@ const nodeOs = require('os');
 // Ab hier gilt wieder die Pfadsyntax der laufenden Plattform.
 const realPath = nodePath;
 
+// Unter Windows ist TEMP oft ein 8.3-Kurzname (C:\Users\RUNNER~1\...), und
+// fs.watch meldet Pfade dann in der Langform. Einmal auflösen, damit Anlegen
+// und Beobachten denselben Pfad meinen.
+async function makeTempRoot(prefix) {
+  const dir = await fsPromises.mkdtemp(realPath.join(nodeOs.tmpdir(), prefix));
+  return fsPromises.realpath(dir);
+}
+
+// Stürzt der Prozess hier ab, meldet node:test nur ein nacktes „test failed“
+// für die ganze Datei. Diese beiden Zeilen machen die Ursache sichtbar.
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT in skills-watcher.test.js:', error);
+  process.exit(1);
+});
+process.on('unhandledRejection', (error) => {
+  console.error('UNHANDLED REJECTION in skills-watcher.test.js:', error);
+  process.exit(1);
+});
+
 test('meldet eine echte neue SKILL.md im Unterordner', async () => {
-  const root = await fsPromises.mkdtemp(realPath.join(nodeOs.tmpdir(), 'snotra-watch-'));
+  const root = await makeTempRoot('snotra-watch-');
   const skillsDir = realPath.join(root, '.agents', 'skills');
   await fsPromises.mkdir(skillsDir, { recursive: true });
 
@@ -301,7 +320,7 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
   // sieht Änderungen *darin*, verstummt unter macOS aber lautlos, wenn das
   // Verzeichnis selbst mitgelöscht wird — ohne Ereignis und ohne Fehler.
   // Gerettet wird das nur vom Wächter auf dem Vorfahren.
-  const root = await fsPromises.mkdtemp(realPath.join(nodeOs.tmpdir(), 'snotra-watch-rm-'));
+  const root = await makeTempRoot('snotra-watch-rm-');
   const skillDir = realPath.join(root, '.agents', 'skills', 'verschwindet');
   await fsPromises.mkdir(skillDir, { recursive: true });
   await fsPromises.writeFile(realPath.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
