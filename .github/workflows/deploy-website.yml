@@ -54,6 +54,30 @@ jobs:
           fi
           echo "projekt=$PROJEKT" >> "$GITHUB_OUTPUT"
 
+      - name: Cache-Buster aus dem Dateiinhalt setzen
+        run: |
+          # styles.css und app.js liegen 24 h im Browser-Cache (firebase.json).
+          # app.js schreibt beim Start alle data-i18n-Texte neu — ein alter
+          # Stand aus dem Cache setzt also den alten Text zurueck in die frisch
+          # geladene Seite. Der Hash im Query-String bricht das auf: gleiche
+          # Datei = gleiche URL = Cache greift weiter, geaenderte Datei = neue
+          # URL = der Browser holt sie sofort.
+          CSS=$(sha1sum website/styles.css | cut -c1-8)
+          JS=$(sha1sum website/app.js | cut -c1-8)
+          sed -i "s/styles\.css?v=dev/styles.css?v=$CSS/g; s/app\.js?v=dev/app.js?v=$JS/g" website/*.html
+
+          # Eine Einbindung ohne Platzhalter faellt sonst still auf den alten
+          # 24-h-Cache zurueck und niemand merkt es.
+          if grep -nE '(src|href)="(app\.js|styles\.css)"' website/*.html; then
+            echo "::error::Einbindung ohne ?v=dev gefunden — Cache-Buster greift dort nicht."
+            exit 1
+          fi
+          if grep -n '?v=dev' website/*.html; then
+            echo "::error::Platzhalter ?v=dev wurde nicht ersetzt."
+            exit 1
+          fi
+          grep -hoE '(app\.js|styles\.css)\?v=[0-9a-f]+' website/index.html | sort -u
+
       - name: Auf Firebase Hosting deployen
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
