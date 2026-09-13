@@ -66,6 +66,9 @@ gleich wegschreiben, damit die Zahlen nicht abgetippt werden müssen:
 mkdir -p out/traffic && node scripts/traffic-report.js --json --tage=7 > out/traffic/report.json
 ```
 
+`--ohne-downloads` **nicht** setzen: die Release-Downloads gehören fest in den
+Report.
+
 Eigene Zugriffe lassen sich ausblenden:
 `npm run traffic -- --eigene-ips=1.2.3.4` oder über `TRAFFIC_EIGENE_IPS`.
 
@@ -111,8 +114,15 @@ Zahlen bauen; eine Chart-Bibliothek braucht es dafür nicht.
    Balkendiagramm sonst unter.
 5. **Verlauf pro Tag** — `proTag` als kleines Balken- oder Liniendiagramm, wenn
    der Zeitraum mehr als einen Tag umfasst.
-6. **Weitere Tabellen**, nur wenn nicht leer: `kiBots`, `suchBots`,
-   `scannerZiele`, `fehlend`, `fehler`, `downloads`.
+6. **Release-Downloads** — `downloads` aus der JSON-Ausgabe, **immer**, als
+   eigener Abschnitt mit Version, Datum und Anzahl je Release und einer Summe.
+   Dazu der Hinweis, dass das der **Gesamtstand seit Veröffentlichung** ist und
+   nicht die Downloads im ausgewerteten Zeitraum — die beiden Zahlen gehören
+   nicht nebeneinander gelesen. Ist `downloads` leer oder `null` (dann hat
+   `gh api` nicht funktioniert), steht das als kurzer Satz im Abschnitt, statt
+   ihn wegzulassen.
+7. **Weitere Tabellen**, nur wenn nicht leer: `kiBots`, `suchBots`,
+   `scannerZiele`, `fehlend`, `fehler`.
 
 ### Regeln
 
@@ -120,7 +130,8 @@ Zahlen bauen; eine Chart-Bibliothek braucht es dafür nicht.
   trotzdem einzeln unterscheidbar, nicht zu „Rest" zusammenfassen.
 - Nur Zahlen aus dem Report übernehmen. Keine IP-Adressen, keine erfundenen
   Trends, keine Vergleiche mit Zeiträumen, die nicht abgefragt wurden.
-- Leere Abschnitte weglassen statt mit Nullen zu füllen.
+- Leere Abschnitte weglassen statt mit Nullen zu füllen — ausgenommen die
+  Release-Downloads, die immer stehen bleiben.
 - Hell und dunkel lesbar (`prefers-color-scheme`), Tabellen mit eigenem
   `overflow-x: auto`, die Seite selbst scrollt nicht seitwärts.
 - Der Report trägt eine sichtbare Überschrift und einen Erstellungsstempel mit
