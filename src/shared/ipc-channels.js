@@ -68,6 +68,8 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_SKILL_CATALOG: 'settings:getSkillCatalog',
   /** Skill-Verzeichnisse sofort erneut scannen — Ausweg neben dem Watcher (#126). */
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
+  /** Passenden Skill zur Eingabe vom Modell vorschlagen lassen (Issue #125). */
+  SKILLS_SUGGEST: 'skills:suggest',
 
   /**
    * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:

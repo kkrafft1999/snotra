@@ -1,41 +1,15 @@
 import contracts from '../generated/contracts.js';
 
-const { SKILL_STATUS, findSkillQuery, filterSkillCandidates, applySkillInvocation } = contracts;
+const { findSkillQuery, filterSkillCandidates, applySkillInvocation } = contracts;
 
 const MAX_VISIBLE_OPTIONS = 8;
-/**
- * Der Katalog wird beim ersten „/“ lazy geladen und danach vorgehalten.
- *
- * Dass ein neuer Skill auftaucht, besorgt seit Issue #126 der Datei-Watcher:
- * Er meldet sich über `skills:changed`, und der Cache fällt sofort. Diese
- * Frist ist nur noch das Sicherheitsnetz für Dateisysteme, auf denen das
- * Betriebssystem keine Änderungen meldet — etwa Netzlaufwerke. Deshalb darf
- * sie großzügig sein (Issue #130).
- */
-const CACHE_MAX_AGE_MS = 5 * 60_000;
 
-/**
- * `/`-Vervollständigung für die Chat-Eingabe (Issue #124, Teil von #89):
- * Tippt der Nutzer „/“, erscheint über dem Textfeld eine filterbare Liste
- * aller aufrufbaren Skills — nicht nur der in den Einstellungen
- * eingeschalteten. ↑/↓ navigiert, Enter/Tab übernimmt, Esc schließt.
- *
- * Übernommen wird nur der Text „/name“; wirksam wird der Skill erst im Main,
- * der ihn aus der abgeschickten Nachricht wieder herausliest. Die Auswahl in
- * den Einstellungen bleibt dabei unberührt.
- *
- * Anders als bei der @-Referenz braucht es keinen offenen Ordner: Die
- * System-Skills sind immer da.
- */
-export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
+export function initSkillAutocomplete({ catalog, onInputChanged }) {
   const chatInput = document.getElementById('chat-input');
   const menu = document.getElementById('chat-skill-menu');
-  const inactive = { invalidate() {}, refresh() {}, close() {}, isOpen: () => false };
-  if (!chatInput || !menu || typeof api?.getSkillCatalog !== 'function') return inactive;
+  const inactive = { refresh() {}, close() {}, isOpen: () => false };
+  if (!chatInput || !menu || !catalog) return inactive;
 
-  let cache = null; // { root, skills, fetchedAt }
-  let pending = null; // { root, promise }
-  let cacheGeneration = 0;
   let active = null; // { start, query } des offenen Aufrufs
   let items = [];
   let selectedIndex = 0;
@@ -53,19 +27,9 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
     chatInput.removeAttribute('aria-activedescendant');
   }
 
-  function invalidate() {
-    cacheGeneration += 1;
-    cache = null;
-    pending = null;
-    close();
-  }
-
   /**
-   * Wie `invalidate`, schließt die Liste aber nicht, sondern füllt sie neu.
-   *
-   * Für die Meldung des Datei-Watchers (Issue #130). Die kann mitten in der
-   * Eingabe eintreffen, und dann darf die Liste dem Nutzer weder unter den
-   * Fingern zuschnappen noch veraltet stehen bleiben.
+   * Nach einer Meldung des Datei-Watchers (#126, #130): neu füllen, ohne die
+   * Liste zu schließen.
    *
    * Entscheidend ist `update()` statt einer Prüfung auf eine *offene* Liste:
    * Wer „/neu“ tippt, während dieser Skill gerade angelegt wird, sieht eine
@@ -74,43 +38,7 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
    * der Eingabe und schließt, wenn gar keine Abfrage offen ist.
    */
   function refresh() {
-    cacheGeneration += 1;
-    cache = null;
-    pending = null;
     void update();
-  }
-
-  /** Aufrufbar ist, was nutzbar ist — verdeckte und kaputte Skills nicht. */
-  function isInvocable(skill) {
-    return skill?.status === SKILL_STATUS.ACTIVE || skill?.status === SKILL_STATUS.AVAILABLE;
-  }
-
-  async function loadSkills() {
-    // Der Katalog hängt am Workspace (Ordner-Skills), also ist der Root Teil
-    // des Cache-Schlüssels — auch wenn ohne Ordner die System-Skills bleiben.
-    const root = appStore.rootPath || '';
-    if (cache?.root === root && Date.now() - cache.fetchedAt < CACHE_MAX_AGE_MS) {
-      return cache.skills;
-    }
-    if (pending?.root === root) return pending.promise;
-
-    const generation = cacheGeneration;
-    const promise = (async () => {
-      let skills = [];
-      try {
-        const result = await api.getSkillCatalog();
-        skills = Array.isArray(result?.skills) ? result.skills.filter(isInvocable) : [];
-      } catch {
-        skills = [];
-      }
-      if (generation === cacheGeneration && (appStore.rootPath || '') === root) {
-        cache = { root, skills, fetchedAt: Date.now() };
-      }
-      if (pending?.promise === promise) pending = null;
-      return skills;
-    })();
-    pending = { root, promise };
-    return promise;
   }
 
   function markSelected({ scroll = false } = {}) {
@@ -166,7 +94,7 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
       return;
     }
     const seq = ++updateSeq;
-    const skills = await loadSkills();
+    const skills = await catalog.load();
     if (seq !== updateSeq) return; // inzwischen weitergetippt — jüngerer Aufruf übernimmt
 
     // Text und Cursor können sich während des Ladens geändert haben.
@@ -269,5 +197,5 @@ export function initSkillAutocomplete({ api, appStore, onInputChanged }) {
     markSelected();
   });
 
-  return { invalidate, refresh, close, isOpen };
+  return { refresh, close, isOpen };
 }

@@ -7,6 +7,8 @@ import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
+import { initSkillSuggestion } from './components/SkillSuggestion.js';
+import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
 import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
@@ -114,20 +116,36 @@ const mentionAutocomplete = initMentionAutocomplete({
   onInputChanged: syncChatInputHeight,
 });
 
+// Beide Skill-Teile im Chat lesen denselben Katalog (Issue #125).
+const skillCatalog = createSkillCatalogSource({ api, appStore });
+
 // /-Vervollstaendigung fuer Skills (Issue #124); wie die @-Variante per
 // Capture-Listener, die beiden Listen schliessen sich durch ihre Suchmuster
 // gegenseitig aus.
 const skillAutocomplete = initSkillAutocomplete({
-  api,
-  appStore,
+  catalog: skillCatalog,
   onInputChanged: syncChatInputHeight,
 });
 
+// Vorschlag unter dem Eingabefeld (Issue #125). Erscheint nur, solange eine
+// „/“-Abfrage offen ist — die Liste steht ueber dem Feld, der Hinweis
+// darunter.
+const skillSuggestion = initSkillSuggestion({
+  catalog: skillCatalog,
+  api,
+  onInputChanged: syncChatInputHeight,
+  onApplied: () => skillAutocomplete.close(),
+});
+
 // Der Datei-Watcher im Main meldet neue, geaenderte und entfernte Skills
-// (Issue #126). Die Liste zieht dadurch sofort nach, statt auf das Ablaufen
-// ihrer Cache-Frist zu warten (Issue #130) — und bleibt dabei offen, falls
-// die Meldung mitten in der Eingabe eintrifft.
-api.onSkillsChanged?.(() => skillAutocomplete.refresh());
+// (Issue #126). Liste und Vorschlag ziehen dadurch sofort nach, statt auf das
+// Ablaufen der Cache-Frist zu warten (Issue #130) — die Liste bleibt dabei
+// offen, falls die Meldung mitten in der Eingabe eintrifft.
+skillCatalog.onInvalidated(() => {
+  skillAutocomplete.refresh();
+  skillSuggestion.refresh();
+});
+api.onSkillsChanged?.(() => skillCatalog.invalidate());
 
 const chatStream = initChatStream({
   api,
@@ -173,6 +191,7 @@ const settingsModal = initSettingsModal({
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onCheckUpdates: () => updateBanner.checkNow(),
   toolPermissionsPanel,
+  onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),
   DEFAULT_MAX_TOOL_ROUNDS,
 });
 
@@ -197,7 +216,9 @@ const fileTree = initFileTree({
   onWorkspaceChanged: async (folderPath) => {
     mentionAutocomplete.invalidate();
     // Ordner-Skills haengen am Workspace, der Katalog ist damit hinfaellig.
-    skillAutocomplete.invalidate();
+    skillCatalog.invalidate();
+    skillAutocomplete.close();
+    skillSuggestion.hide();
     await chatStream.loadChatForWorkspace(folderPath);
   },
   onProjectOpened: () => modelPicker.updateChatChrome(),
@@ -235,6 +256,7 @@ void toolPermissions.refresh();
   try {
     uiPrefs = await api.getUIPrefs();
     setContentPaneVisible(uiPrefs.contentPaneVisible !== false);
+    skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
   } catch {
     setContentPaneVisible(true);

@@ -241,6 +241,33 @@ das Modell selbst noch fremder Dateiinhalt einen Skill einschalten. Ein
 Schrägstrich mitten im Wort oder in einem Pfad (`/usr/bin`, `und/oder`) bleibt
 normaler Text.
 
+### Passende Skills vorgeschlagen bekommen
+
+`/name` hilft nur, wenn du den Namen kennst. Deshalb schlägt Snotra dir einen
+passenden Skill vor: Schreib dein Anliegen und tipp dann ein **`/`** — unter
+dem Eingabefeld erscheint „Passt dazu: `/meeting-protocol`". Ein Klick
+übernimmt ihn, das `×` blendet ihn aus. Ohne `/` passiert nichts; der
+Vorschlag drängt sich also nie in ein normales Gespräch.
+
+Woher der Vorschlag kommt, stellst du unter **Einstellungen › Skills ›
+Vorschläge im Chat** ein:
+
+- **Aus den Beschreibungen (Voreinstellung).** Snotra vergleicht deine Zeile
+  mit den Skill-Beschreibungen — auf deinem Rechner, ohne Netz und ohne
+  Kosten. Wörter, die in vielen Beschreibungen stehen, zählen dabei weniger
+  als seltene. Gemessen an 16 Skills lag der richtige Vorschlag in 10 von 13
+  Fällen vorn, und bei fünf Anfragen ohne passenden Skill kam kein einziger
+  Fehlvorschlag. Was dieses Verfahren nicht kann: Fachkürzel erkennen, die in
+  keiner Beschreibung stehen (`TTAI-421`), und zwei sehr ähnliche Skills
+  auseinanderhalten.
+- **Das Modell fragen.** Genau dafür. Kostet dann aber einen kurzen Aufruf
+  beim Anbieter, dauert einen Moment, und deine Zeile geht zusammen mit den
+  Skill-Namen dorthin.
+- **Keine Vorschläge.**
+
+In jedem Fall gilt: Vorgeschlagen wird, eingeschaltet nie. Ein Ordner-Skill
+ist fremder Inhalt, und ihn zu übernehmen bleibt dein Klick.
+
 ### Dateien neben der `SKILL.md`
 
 Viele Skills legen ihr eigentliches Wissen daneben ab (`references/`,

@@ -17,6 +17,10 @@ const {
   TOOL_LINE_PHASES,
   CHAT_PROGRESS_TYPES,
   APP_LOCALES,
+  SKILL_SUGGESTION_MODES,
+  SKILL_SUGGESTION_MODE_LABELS,
+  DEFAULT_SKILL_SUGGESTION_MODE,
+  isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
   WORKSPACE_PROGRESS_EVENTS,
@@ -61,6 +65,10 @@ const {
   filterSkillCandidates,
   applySkillInvocation,
 } = require('./skill-invocation');
+const {
+  createSkillSuggester,
+  SUGGESTION_THRESHOLD,
+} = require('./skill-suggestion');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
@@ -145,6 +153,10 @@ module.exports = {
   WORKSPACE_PROGRESS_EVENTS,
   PERMISSION_PROGRESS_EVENTS,
   APP_LOCALES,
+  SKILL_SUGGESTION_MODES,
+  SKILL_SUGGESTION_MODE_LABELS,
+  DEFAULT_SKILL_SUGGESTION_MODE,
+  isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
   clampMaxToolRounds,
@@ -180,6 +192,8 @@ module.exports = {
   extractInvokedSkillNames,
   filterSkillCandidates,
   applySkillInvocation,
+  createSkillSuggester,
+  SUGGESTION_THRESHOLD,
   toUsageNumber,
   createEmptyUsage,
   normalizeUsage,

@@ -27,6 +27,8 @@ const {
   SKILL_SOURCE_LABELS,
   SKILL_STATUS,
   MAX_ACTIVE_SKILLS,
+  DEFAULT_SKILL_SUGGESTION_MODE,
+  isSkillSuggestionMode,
 } = contracts;
 
 let settingsDraftPresets = [];
@@ -49,6 +51,7 @@ export function initSettingsModal(deps) {
     updateChatChrome,
     onCheckUpdates,
     toolPermissionsPanel = null,
+    onSkillSuggestionModeChanged = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
 
@@ -82,6 +85,7 @@ export function initSettingsModal(deps) {
   const btnSettingsFooterClose = document.getElementById('btn-settings-footer-close');
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
   const selectAppLocale = document.getElementById('select-app-locale');
+  const selectSkillSuggestionMode = document.getElementById('settings-skill-suggestion-mode');
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
   const settingsToolList = document.getElementById('settings-tool-list');
   const settingsToolListEmpty = document.getElementById('settings-tool-list-empty');
@@ -1079,6 +1083,11 @@ export function initSettingsModal(deps) {
       const up = await api.getUIPrefs();
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
       selectAppLocale.value = up.appLocale === 'en' ? 'en' : 'de';
+      if (selectSkillSuggestionMode) {
+        selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
+          ? up.skillSuggestionMode
+          : DEFAULT_SKILL_SUGGESTION_MODE;
+      }
       const mtr =
         typeof up.maxToolRounds === 'number' && Number.isFinite(up.maxToolRounds)
           ? up.maxToolRounds
@@ -1294,6 +1303,7 @@ export function initSettingsModal(deps) {
         uiPrefs: {
           baseSystemPrompt: inputGlobalSystemPrompt.value || '',
           appLocale: selectAppLocale.value === 'en' ? 'en' : 'de',
+          skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
           maxToolRounds: (() => {
             const n = parseInt(inputMaxToolRounds?.value || '', 10);
             return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
@@ -1305,6 +1315,12 @@ export function initSettingsModal(deps) {
           shellExecutionEnabled: inputShellEnabled?.checked === true,
         },
       });
+      if (res?.ok || res?.uiPrefsSaved) {
+        // Sofort wirksam, ohne Neustart — wie die Sprache (Issue #97).
+        onSkillSuggestionModeChanged?.(
+          selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE
+        );
+      }
       if (!res?.ok) {
         // Der Modellteil kann scheitern, waehrend die uebrigen Einstellungen
         // geschrieben wurden. Die Sprache muss dann auch sofort umschalten,

@@ -4113,3 +4113,70 @@ select.modal-input {
 #settings-shell-status:empty {
   display: none;
 }
+
+/* ── Skill-Vorschlag unter der Eingabe (Issue #125) ─────────────────────────
+   Erscheint nur, waehrend eine „/“-Abfrage offen ist: die Liste der Skills
+   steht dann ueber dem Feld, dieser Hinweis darunter — sie kommen sich also
+   nicht ins Gehege. Bewusst leise gehalten; er soll auffindbar sein, nicht
+   um Aufmerksamkeit kaempfen. */
+.chat-skill-suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 4px 0;
+  padding: 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.3;
+  color: var(--text-muted-strong);
+  /* Lange Beschreibungen duerfen das Eingabefeld nicht auseinanderziehen. */
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.chat-skill-suggestion-label {
+  flex-shrink: 0;
+}
+
+.chat-skill-suggestion-btn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--chat-composer-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-default);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.chat-skill-suggestion-btn:hover,
+.chat-skill-suggestion-btn:focus-visible {
+  background: var(--chat-composer-bg);
+  border-color: var(--text-muted-strong);
+}
+
+.chat-skill-suggestion-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.chat-skill-suggestion-dismiss {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-skill-suggestion-dismiss:hover,
+.chat-skill-suggestion-dismiss:focus-visible {
+  color: var(--text-default);
+}

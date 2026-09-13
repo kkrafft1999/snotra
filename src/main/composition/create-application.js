@@ -10,11 +10,13 @@ const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
 const { createSkillsWatcher } = require('../services/skills-watcher');
+const { createSkillSuggestionService } = require('../services/skill-suggestion-service');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
+const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
@@ -301,7 +303,7 @@ function createApplication({
     return secrets;
   }
 
-  const { engine: chatEngine } = createChatApplication({
+  const { engine: chatEngine, llm: chatLlm } = createChatApplication({
     llmConfigStore,
     providerRuntime,
     providerSecrets,
@@ -361,6 +363,27 @@ function createApplication({
   // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in
   // Chat-Antworten wirkungslos — das sandboxed Preload kennt kein `shell`.
   if (shell) registerShellHandlers({ ipcMain, shell, clipboard, REQ });
+  // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`). Laeuft neben
+  // dem Chat und darf ihn nie stoeren: Jeder Fehler endet als "kein Vorschlag".
+  const skillSuggestionService = createSkillSuggestionService({
+    llm: chatLlm,
+    skillCatalog: skillsService,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    uiPrefsStore,
+  });
+  ipcMain.handle(REQ.SKILLS_SUGGEST, async (_event, text) => {
+    // Nur im dafuer eingeschalteten Modus ueberhaupt an den Provider gehen —
+    // der Renderer koennte das Gegenteil behaupten.
+    const prefs = await uiPrefsStore.readUIPrefs();
+    if (prefs.skillSuggestionMode !== SKILL_SUGGESTION_MODES.MODEL) return { name: '' };
+    try {
+      const treffer = await skillSuggestionService.suggest(typeof text === 'string' ? text : '');
+      return { name: treffer?.name || '' };
+    } catch {
+      return { name: '' };
+    }
+  });
+
   registerChatHandlers({
     ipcMain,
     chatEngine,
