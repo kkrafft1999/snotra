@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
   listWorkspacePaths: () => ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS),
-  showFileContextMenu: (filePath) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath),
+  showFileContextMenu: (filePath, options) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, options),
   onFsItemDeleted: (callback) => {
     const channel = PUSH.FS_ITEM_DELETED;
     const listener = (_event, payload) => callback(payload);

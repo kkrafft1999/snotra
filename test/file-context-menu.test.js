@@ -47,6 +47,53 @@ test('buildTemplate: „Öffnen“, plattformabhängiges „anzeigen“, Separat
   );
 });
 
+test('buildTemplate für Ordner: kein „Öffnen“, nur anzeigen und löschen (#120)', () => {
+  const { shell, Menu } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
+  const template = menu.buildTemplate('/ws/unterlagen', { isDirectory: true });
+  assert.deepEqual(
+    template.map((t) => t.label ?? t.type),
+    ['Im Finder anzeigen', 'separator', 'Löschen…'],
+  );
+});
+
+test('Ordner-Menü: „Im Explorer anzeigen“ und „Löschen…“ wirken auf den Ordnerpfad (#120)', async () => {
+  const { shell, Menu, calls, makeDialog } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, dialog: makeDialog(0), platform: 'win32' });
+  const deleted = [];
+  const template = menu.buildTemplate('C:\\ws\\unterlagen', {
+    isDirectory: true,
+    onDeleted: (p) => deleted.push(p),
+  });
+  template[0].click();
+  assert.deepEqual(calls.showItemInFolder, ['C:\\ws\\unterlagen']);
+  await template[2].click();
+  assert.deepEqual(calls.trashItem, ['C:\\ws\\unterlagen']);
+  assert.deepEqual(deleted, ['C:\\ws\\unterlagen']);
+  assert.deepEqual(calls.openPath, []);
+});
+
+test('Löschen eines Ordners: Hinweistext nennt den Inhalt, Papierkorb statt hartem Löschen (#120)', async () => {
+  const { shell, Menu, calls, makeDialog } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, dialog: makeDialog(1), platform: 'darwin' });
+  const result = await menu.deleteWithConfirmation('/ws/unterlagen', null, { isDirectory: true });
+  assert.deepEqual(result, { cancelled: true });
+  assert.deepEqual(calls.trashItem, []);
+  const box = calls.dialogs[0];
+  assert.match(box.message, /„unterlagen“ löschen\?/);
+  assert.match(box.detail, /Ordner wird mit seinem gesamten Inhalt in den Papierkorb/);
+});
+
+test('popup reicht isDirectory an das Template durch (#120)', () => {
+  const { shell, Menu } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
+  const built = menu.popup('/ws/unterlagen', { id: 1 }, { isDirectory: true });
+  assert.deepEqual(
+    built.template.map((t) => t.label ?? t.type),
+    ['Im Finder anzeigen', 'separator', 'Löschen…'],
+  );
+});
+
 test('Klick auf „Öffnen“ ruft shell.openPath mit dem Dateipfad', async () => {
   const { shell, Menu, calls } = createFakes();
   const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });

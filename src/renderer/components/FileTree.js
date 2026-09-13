@@ -7,7 +7,7 @@ import {
   svgFile,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
-import { basenameOf, parentDirOf, depthOf, joinNative } from '../utils/nativePath.js';
+import { basenameOf, parentDirOf, depthOf, joinNative, isInsideDir } from '../utils/nativePath.js';
 
 /**
  * Reine Hilfen für den Dateibaum (Phase 4.6.2 — Extraktion ohne DOM).
@@ -336,7 +336,8 @@ export function initFileTree(deps) {
     }
   });
 
-  // Ordner und leere Fläche haben (noch) kein Kontextmenü, siehe Issue #58.
+  // Dateien und Ordner bringen ihr eigenes Kontextmenü mit (#58, #120); auf der
+  // leeren Fläche daneben bleibt nur das native Browser-Menü zu unterdrücken.
   treeContainer.addEventListener('contextmenu', (e) => e.preventDefault());
 
   treeContainer.addEventListener('dragover', (e) => {
@@ -435,7 +436,14 @@ export function initFileTree(deps) {
         childContainer.dataset.loaded = 'false';
         parentEl.appendChild(childContainer);
 
-        row.addEventListener('click', () => toggleFolder(row, childContainer, item.path, depth + 1));
+        row.addEventListener('click', (e) => {
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault();
+            void openFileContextMenu(item);
+            return;
+          }
+          toggleFolder(row, childContainer, item.path, depth + 1);
+        });
       } else {
         row.addEventListener('click', (e) => {
           // ⌘-Klick (macOS) bzw. Ctrl-Klick (Windows/Linux) als Alternative zum Rechtsklick.
@@ -446,12 +454,13 @@ export function initFileTree(deps) {
           }
           selectFile(row, item);
         });
-        row.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          void openFileContextMenu(item);
-        });
       }
+
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void openFileContextMenu(item);
+      });
     }
   }
 
@@ -463,7 +472,9 @@ export function initFileTree(deps) {
 
   async function handleFsItemDeleted(deletedPath) {
     if (!appStore.rootPath || typeof deletedPath !== 'string' || !deletedPath) return;
-    if (appStore.selectedPath === deletedPath) {
+    // Bei einem gelöschten Ordner (#120) ist auch die Vorschau einer Datei
+    // darin hinfällig, nicht nur die des gelöschten Eintrags selbst.
+    if (appStore.selectedPath === deletedPath || isInsideDir(appStore.selectedPath, deletedPath)) {
       appStore.selectedPath = null;
       appStore.selectedIsDirectory = false;
       appStore.activeTreeItem = null;
@@ -473,10 +484,11 @@ export function initFileTree(deps) {
   }
 
   // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen / Löschen).
-  // Das Menü selbst baut der Main-Prozess, hier wird nur der Pfad übergeben.
+  // Das Menü selbst baut der Main-Prozess, hier wird nur der Pfad übergeben —
+  // dazu die Information, ob es ein Ordner ist, damit „Öffnen“ entfällt (#120).
   async function openFileContextMenu(item) {
     try {
-      const result = await api.showFileContextMenu(item.path);
+      const result = await api.showFileContextMenu(item.path, { isDirectory: Boolean(item.isDirectory) });
       if (result?.error) console.warn('Kontextmenü abgelehnt:', result.error);
     } catch (err) {
       console.warn('Kontextmenü fehlgeschlagen:', err?.message ?? err);

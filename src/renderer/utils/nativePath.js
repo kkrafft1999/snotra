@@ -49,6 +49,18 @@ export function parentDirOf(p) {
   return parent;
 }
 
+/**
+ * Liegt `childPath` unterhalb von `dirPath`? Vergleicht Segment für Segment,
+ * damit gemischte Trenner und Mehrfach-Trenner nicht stören. Der Ordner selbst
+ * zählt nicht als „innerhalb“.
+ */
+export function isInsideDir(childPath, dirPath) {
+  const dir = segmentsOf(dirPath);
+  const child = segmentsOf(childPath);
+  if (!dir.length || child.length <= dir.length) return false;
+  return dir.every((segment, i) => child[i] === segment);
+}
+
 /** Verschachtelungstiefe – zum Sortieren von Ordnern (flach vor tief). */
 export function depthOf(p) {
   return segmentsOf(p).length;

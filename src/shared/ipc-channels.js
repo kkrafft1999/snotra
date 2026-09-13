@@ -18,7 +18,7 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_MOVE_ITEM: 'fs:moveItem',
   /** Flache Pfadliste des Workspace für die @-Vervollständigung im Chat. */
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
-  /** Natives Kontextmenü (Öffnen / Im Finder anzeigen) für eine Datei im Dateibaum (Issue #58). */
+  /** Natives Kontextmenü für Datei oder Ordner im Dateibaum (Issues #58, #120). */
   FS_SHOW_FILE_CONTEXT_MENU: 'fs:showFileContextMenu',
 
   SETTINGS_GET_LLM_STATE: 'settings:getLLMState',

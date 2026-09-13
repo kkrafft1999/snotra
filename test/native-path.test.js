@@ -71,3 +71,16 @@ test('external write refresh: root + relative tool path matches the tree entry s
   assert.equal(abs, 'C:\\Users\\k\\repo\\docs\\neu.md');
   assert.equal(parentDirOf(abs), 'C:\\Users\\k\\repo\\docs');
 });
+
+test('isInsideDir erkennt Dateien unterhalb eines Ordners, den Ordner selbst nicht (#120)', async () => {
+  const { isInsideDir } = await nativePathPromise;
+  assert.equal(isInsideDir('/ws/docs/a.md', '/ws/docs'), true);
+  assert.equal(isInsideDir('/ws/docs/tief/a.md', '/ws/docs'), true);
+  assert.equal(isInsideDir('/ws/docs', '/ws/docs'), false);
+  assert.equal(isInsideDir('/ws/docs-alt/a.md', '/ws/docs'), false);
+  assert.equal(isInsideDir('/ws/a.md', '/ws/docs'), false);
+  assert.equal(isInsideDir('C:\\ws\\docs\\a.md', 'C:\\ws\\docs'), true);
+  assert.equal(isInsideDir('C:\\ws\\docs\\', 'C:\\ws\\docs'), false);
+  assert.equal(isInsideDir(null, '/ws/docs'), false);
+  assert.equal(isInsideDir('/ws/docs/a.md', ''), false);
+});

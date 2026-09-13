@@ -279,6 +279,27 @@ test('FS_SHOW_FILE_CONTEXT_MENU: Datei im Workspace öffnet das Menü am Hauptfe
   assert.equal(popups[0].win, mainWindow);
 });
 
+test('FS_SHOW_FILE_CONTEXT_MENU: isDirectory geht an das Menü, Vorgabe ist false (#120)', async (t) => {
+  const { ipcMain, workspace, popups } = await setup(t);
+  const folder = path.join(workspace, 'unterlagen');
+  await fs.mkdir(folder);
+
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, folder, { isDirectory: true });
+  assert.deepEqual(result, { ok: true });
+  assert.equal(popups[0].absPath, folder);
+  assert.equal(popups[0].opts.isDirectory, true);
+
+  await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(workspace, 'inside.txt'));
+  assert.equal(popups[1].opts.isDirectory, false);
+});
+
+test('FS_SHOW_FILE_CONTEXT_MENU: Ordner außerhalb des Workspace wird abgelehnt (#120)', async (t) => {
+  const { ipcMain, outside, popups } = await setup(t);
+  const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, outside, { isDirectory: true });
+  assert.match(result.error, /außerhalb/);
+  assert.deepEqual(popups, []);
+});
+
 test('FS_SHOW_FILE_CONTEXT_MENU: onDeleted pusht FS_ITEM_DELETED an den Renderer (#59)', async (t) => {
   const { ipcMain, workspace, popups, pushed } = await setup(t);
   const target = path.join(workspace, 'inside.txt');

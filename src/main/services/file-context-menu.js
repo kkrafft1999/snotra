@@ -3,11 +3,15 @@
 const path = require('path');
 
 /**
- * Kontextmenü für Dateien im Dateibaum (Issues #58, #59).
+ * Kontextmenü für Dateien und Ordner im Dateibaum (Issues #58, #59, #120).
  *
  * Baut ein natives Electron-Menü mit Dateioperationen. Die Pfadprüfung gegen
  * den Workspace passiert vorher im IPC-Handler; hier kommt nur noch ein
  * bereits validierter absoluter Pfad an.
+ *
+ * Ordner bekommen dasselbe Menü ohne „Öffnen“: Auf- und Zuklappen erledigt
+ * schon der Linksklick im Baum, und „mit Standardprogramm öffnen“ hätte für
+ * einen Ordner keine sinnvolle Bedeutung.
  */
 
 const REVEAL_LABELS = Object.freeze({
@@ -41,8 +45,11 @@ function createFileContextMenu({ Menu, shell, dialog = null, platform = process.
    * „Abbrechen“ ist Standard- und Escape-Antwort, damit Enter nichts löscht.
    * Ergebnis: { cancelled } | { deleted } | { error }.
    */
-  async function deleteWithConfirmation(filePath, window) {
+  async function deleteWithConfirmation(filePath, window, { isDirectory = false } = {}) {
     if (!dialog) return { error: 'Kein Dialog verfügbar.' };
+    const hint = isDirectory
+      ? 'Der Ordner wird mit seinem gesamten Inhalt in den Papierkorb verschoben.'
+      : 'Die Datei wird in den Papierkorb verschoben.';
     const { response } = await showMessageBox(window, {
       type: 'warning',
       buttons: ['Löschen', 'Abbrechen'],
@@ -50,7 +57,7 @@ function createFileContextMenu({ Menu, shell, dialog = null, platform = process.
       cancelId: 1,
       noLink: true,
       message: `„${path.basename(filePath)}“ löschen?`,
-      detail: `${filePath}\n\nDie Datei wird in den Papierkorb verschoben.`,
+      detail: `${filePath}\n\n${hint}`,
     });
     if (response !== 0) return { cancelled: true };
 
@@ -70,15 +77,15 @@ function createFileContextMenu({ Menu, shell, dialog = null, platform = process.
     }
   }
 
-  function buildTemplate(filePath, { window = null, onDeleted = null } = {}) {
+  function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false } = {}) {
     return [
-      { label: 'Öffnen', click: () => openWithDefaultApp(filePath) },
+      ...(isDirectory ? [] : [{ label: 'Öffnen', click: () => openWithDefaultApp(filePath) }]),
       { label: revealLabel, click: () => revealInFileManager(filePath) },
       { type: 'separator' },
       {
         label: 'Löschen…',
         click: async () => {
-          const result = await deleteWithConfirmation(filePath, window);
+          const result = await deleteWithConfirmation(filePath, window, { isDirectory });
           if (result.deleted && typeof onDeleted === 'function') onDeleted(filePath);
           return result;
         },
@@ -86,8 +93,8 @@ function createFileContextMenu({ Menu, shell, dialog = null, platform = process.
     ];
   }
 
-  function popup(filePath, window, { onDeleted = null } = {}) {
-    const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted }));
+  function popup(filePath, window, { onDeleted = null, isDirectory = false } = {}) {
+    const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted, isDirectory }));
     menu.popup(window ? { window } : {});
     return menu;
   }

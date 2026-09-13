@@ -13,12 +13,15 @@ function registerFsHandlers({ ipcMain, filesystem, REQ, PUSH = null, fileContext
 
   // Issue #58: Kontextmenü im Dateibaum. Der Pfad wird wie bei allen fs-Kanälen
   // gegen den aktiven Workspace geprüft, bevor er an die Shell geht.
-  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath) => {
+  // isDirectory steuert nur den Zuschnitt des Menüs (#120) — die Pfadprüfung
+  // hängt nicht daran, das Flag aus dem Renderer ist also unkritisch.
+  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath, { isDirectory = false } = {}) => {
     if (!fileContextMenu) return { error: 'Kontextmenü nicht verfügbar.' };
     const { absPath, error } = await filesystem.resolveWorkspacePath(filePath);
     if (error) return { error };
     const win = getMainWindow();
     fileContextMenu.popup(absPath, win, {
+      isDirectory,
       // Nach dem Löschen (Papierkorb) den Baum im Renderer nachziehen.
       onDeleted: (deletedPath) => {
         if (PUSH && win && !win.isDestroyed()) {
