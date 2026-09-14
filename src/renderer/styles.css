@@ -541,9 +541,57 @@ summary:focus-visible,
   margin-right: 4px;
 }
 
+/* min-width: 0 laesst den Namen im Flex-Layout schrumpfen — sonst schoebe ein
+   langer Name den @-Knopf (#56) aus dem Baum, der waagerecht nicht scrollt. */
 .tree-item .label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* @-Knopf in der Zeile (Issue #56): dragfreier Weg zur Chat-Referenz. Wie die
+   Entfernen-Aktion im Ordner-Verlauf erst bei Hover bzw. Fokus sichtbar, damit
+   der Baum ruhig bleibt; focus-within deckt die Tastatur ab. */
+.tree-item-reference {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+  opacity: 0;
+  transition:
+    opacity var(--ds-motion-fast),
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease;
+}
+
+.tree-item:hover .tree-item-reference,
+.tree-item:focus-within .tree-item-reference {
+  opacity: 1;
+}
+
+.tree-item-reference:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.tree-item-reference:active {
+  transform: scale(0.97);
+}
+
+/* Beim Ziehen stört der Knopf nur — er würde am Drag-Bild mithängen. */
+.tree-item.dragging .tree-item-reference {
+  opacity: 0;
 }
 
 .tree-item.dragging {

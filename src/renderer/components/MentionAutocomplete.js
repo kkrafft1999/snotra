@@ -2,7 +2,13 @@ import {
   applyMention,
   filterMentionCandidates,
   findMentionQuery,
+  insertReferenceAt,
 } from '../chat/mentionAutocomplete.js';
+import {
+  TREE_DRAG_MIME,
+  decodeTreeDragPayload,
+  workspaceReferenceFor,
+} from '../chat/workspaceReference.js';
 
 const MAX_VISIBLE_OPTIONS = 8;
 // Die Pfadliste wird beim ersten „@“ lazy geladen und kurz vorgehalten. Explizit
@@ -20,7 +26,12 @@ const CACHE_MAX_AGE_MS = 30_000;
 export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   const chatInput = document.getElementById('chat-input');
   const menu = document.getElementById('chat-mention-menu');
-  const inactive = { invalidate() {}, close() {}, isOpen: () => false };
+  const inactive = {
+    invalidate() {},
+    close() {},
+    isOpen: () => false,
+    insertReference: () => false,
+  };
   if (!chatInput || !menu || typeof api?.listWorkspacePaths !== 'function') return inactive;
 
   let cache = null; // { root, entries, fetchedAt }
@@ -162,16 +173,8 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
     markSelected({ scroll: true });
   }
 
-  function applySelected(index = selectedIndex) {
-    const entry = items[index];
-    if (!active || !entry) return;
-    const { text, caret } = applyMention(
-      chatInput.value,
-      active.start,
-      chatInput.selectionStart,
-      entry
-    );
-    const isDirectory = entry.kind === 'directory';
+  /** Schreibt das Ergebnis von applyMention/insertReferenceAt ins Textfeld. */
+  function commit({ text, caret }, isDirectory) {
     chatInput.value = text;
     chatInput.setSelectionRange(caret, caret);
     onInputChanged?.();
@@ -180,6 +183,62 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
     // Ordner: Die Referenz bleibt offen („@src/“), die Liste zeigt den Ordnerinhalt.
     if (isDirectory) void update();
   }
+
+  function applySelected(index = selectedIndex) {
+    const entry = items[index];
+    if (!active || !entry) return;
+    commit(
+      applyMention(chatInput.value, active.start, chatInput.selectionStart, entry),
+      entry.kind === 'directory'
+    );
+  }
+
+  /**
+   * Fügt eine Referenz ohne getippte „@“-Abfrage an der Cursorposition ein
+   * (Issue #56): Drop aus dem Dateibaum und der @-Knopf in der Baumzeile.
+   * @param {string} relPath Pfad relativ zur Projektwurzel, POSIX-Schreibweise
+   * @param {'file' | 'directory'} kind
+   * @returns {boolean} false, wenn nichts eingefügt wurde
+   */
+  function insertReference(relPath, kind) {
+    if (!appStore.rootPath || typeof relPath !== 'string' || !relPath) return false;
+    const isDirectory = kind === 'directory';
+    commit(
+      insertReferenceAt(chatInput.value, chatInput.selectionStart, { path: relPath, kind }),
+      isDirectory
+    );
+    return true;
+  }
+
+  /** Nutzlast eines Drags aus dem Dateibaum, sonst null. */
+  function treeReferenceFrom(dataTransfer) {
+    const payload = decodeTreeDragPayload(dataTransfer?.getData(TREE_DRAG_MIME));
+    if (!payload) return null;
+    return workspaceReferenceFor(payload.path, appStore.rootPath, {
+      isDirectory: payload.isDirectory,
+    });
+  }
+
+  const carriesTreeDrag = (e) => Array.from(e.dataTransfer?.types ?? []).includes(TREE_DRAG_MIME);
+
+  // Drop aus dem Dateibaum in die Eingabe (Issue #56). Nur der eigene MIME-Typ
+  // wird abgefangen — ein Text-Drop von außerhalb bleibt der Browser-Default,
+  // und im Baum selbst wird weiter verschoben.
+  chatInput.addEventListener('dragover', (e) => {
+    if (!carriesTreeDrag(e) || !appStore.rootPath) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+
+  chatInput.addEventListener('drop', (e) => {
+    if (!carriesTreeDrag(e) || !appStore.rootPath) return;
+    // Erst nach getData() entscheiden: liegt der Eintrag außerhalb des
+    // Projektordners, soll der absolute Pfad nicht ersatzweise landen.
+    const entry = treeReferenceFrom(e.dataTransfer);
+    e.preventDefault();
+    if (!entry) return;
+    insertReference(entry.path, entry.kind);
+  });
 
   // Capture-Phase, damit Enter/Tab/Esc hier landen, bevor ChatStream (Senden)
   // oder der globale Escape-Handler des FileTree sie sehen.
@@ -245,5 +304,5 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
     markSelected();
   });
 
-  return { invalidate, close, isOpen };
+  return { invalidate, close, isOpen, insertReference };
 }

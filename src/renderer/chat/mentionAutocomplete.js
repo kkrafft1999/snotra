@@ -107,3 +107,23 @@ export function applyMention(text, start, caret, entry) {
     caret: from + insert.length,
   };
 }
+
+/**
+ * Fügt eine Referenz an der Cursorposition ein, ohne dass eine offene
+ * @-Abfrage im Text steht (Issue #56: Drag & Drop aus dem Baum, @-Knopf in der
+ * Zeile). Steht direkt vor dem Cursor ein Zeichen, das kein „@“ einleiten darf,
+ * kommt ein Leerzeichen davor — sonst wäre die Referenz für findMentionQuery
+ * und für das Modell keine.
+ *
+ * Eingefügt wird über applyMention, damit beide Wege dieselbe Schreibweise
+ * erzeugen (Ordner mit „/“, Dateien mit Leerzeichen dahinter).
+ * @returns {{ text: string, caret: number }}
+ */
+export function insertReferenceAt(text, caret, entry) {
+  const source = typeof text === 'string' ? text : '';
+  const pos = Math.max(0, Math.min(Number.isFinite(caret) ? caret : source.length, source.length));
+  const needsLeadIn = pos > 0 && !MENTION_LEAD_IN.test(source[pos - 1]);
+  const prepared = needsLeadIn ? `${source.slice(0, pos)} ${source.slice(pos)}` : source;
+  const start = needsLeadIn ? pos + 1 : pos;
+  return applyMention(prepared, start, start, entry);
+}

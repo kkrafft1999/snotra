@@ -116,3 +116,56 @@ test('applyMention preserves the text behind the caret and reuses an existing sp
   const noSpace = applyMention('lies @docbitte', 5, 9, { path: 'docs/task.md', kind: 'file' });
   assert.equal(noSpace.text, 'lies @docs/task.md bitte');
 });
+
+test('insertReferenceAt fügt ohne getippte Abfrage an der Cursorposition ein', async () => {
+  const { insertReferenceAt } = await modulePromise;
+
+  // Leeres Feld und nach einem Leerzeichen: nichts davor nötig (Issue #56).
+  assert.deepEqual(insertReferenceAt('', 0, { path: 'README.md', kind: 'file' }), {
+    text: '@README.md ',
+    caret: 11,
+  });
+  assert.deepEqual(insertReferenceAt('lies ', 5, { path: 'docs/a.md', kind: 'file' }), {
+    text: 'lies @docs/a.md ',
+    caret: 16,
+  });
+  // Ordner wie in applyMention: abschließender „/“, kein Leerzeichen dahinter.
+  assert.deepEqual(insertReferenceAt('', 0, { path: 'src', kind: 'directory' }), {
+    text: '@src/',
+    caret: 5,
+  });
+});
+
+test('insertReferenceAt trennt vom Zeichen davor, damit das „@“ zählt', async () => {
+  const { insertReferenceAt, findMentionQuery } = await modulePromise;
+
+  const result = insertReferenceAt('lies', 4, { path: 'README.md', kind: 'file' });
+  assert.deepEqual(result, { text: 'lies @README.md ', caret: 16 });
+  // Ohne das eingefügte Leerzeichen wäre die Referenz für findMentionQuery keine.
+  assert.deepEqual(findMentionQuery(result.text, result.caret - 1), { start: 5, query: 'README.md' });
+
+  // Öffnende Klammer leitet ein „@“ selbst ein — kein zweites Zeichen davor.
+  assert.deepEqual(insertReferenceAt('(', 1, { path: 'a.md', kind: 'file' }), {
+    text: '(@a.md ',
+    caret: 7,
+  });
+});
+
+test('insertReferenceAt schreibt mitten im Text und übernimmt ein Leerzeichen', async () => {
+  const { insertReferenceAt } = await modulePromise;
+
+  // Cursor zwischen zwei Wörtern: der Rest bleibt stehen.
+  assert.deepEqual(insertReferenceAt('lies  bitte', 5, { path: 'a.md', kind: 'file' }), {
+    text: 'lies @a.md bitte',
+    caret: 11,
+  });
+  // Cursor außerhalb des Texts wird begrenzt, fehlender Wert heißt Textende.
+  assert.deepEqual(insertReferenceAt('x', 99, { path: 'a.md', kind: 'file' }), {
+    text: 'x @a.md ',
+    caret: 8,
+  });
+  assert.deepEqual(insertReferenceAt('', undefined, { path: 'a.md', kind: 'file' }), {
+    text: '@a.md ',
+    caret: 6,
+  });
+});
