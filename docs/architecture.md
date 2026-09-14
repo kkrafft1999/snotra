@@ -241,8 +241,38 @@ Grenzen, damit die grüne Zeile nicht mehr verspricht, als sie hält: kein echte
 Chromium, also **kein Layout** (`offsetParent`, `getBoundingClientRect`) und
 **kein Sanitizing** — DOMPurify arbeitet unter happy-dom nachweislich falsch
 (Details im Kopf von `test/helpers/dom.js`). `DataTransfer`/`DragEvent` baut der
-Helfer selbst nach. Ein echter Finder-/Explorer-Drop und das Zusammenspiel mit
-`marked`/`DOMPurify` bleiben damit einem Lauf in Chromium vorbehalten.
+Helfer selbst nach. Ein echter Finder-/Explorer-Drop bleibt manuell.
+
+## Smoke-Test in der echten App
+
+Was eine DOM-Nachbildung nicht leisten kann, prüft ein Durchlauf durch die
+laufende Electron-App: `npm run test:e2e` (nicht Teil von `npm test`). Bewusst
+**ein** Test — die Electron-Ebene ist die teuerste pro gefundenem Fehler, und
+ein Lauf, der beim Start alles einmal anfasst, holt den Großteil davon. Er
+dauert rund drei Sekunden.
+
+- **Treiber:** `playwright-core` (`_electron.launch`) als devDependency. Kein
+  Browser-Download, kein zweiter Test-Runner: `node --test` bleibt.
+- **Isolation:** eigenes `--user-data-dir`, ein per `mkdtemp` angelegter
+  Arbeitsordner. Die Einstellungen der installierten App bleiben unberührt.
+- **Modell:** `e2e/helpers/fake-model.mjs`, ein kleiner OpenAI-kompatibler
+  SSE-Server. Der Provider `mlx-lm` zeigt per `baseUrl` dorthin — kein API-Key,
+  kein Netz, und der Stream lässt sich verlangsamen, um ihn abzubrechen.
+- **Strecke:** Start mit vorgemerktem Ordner → Baum → Datei öffnen und Vorschau
+  → Chat-Runde abbrechen (der Abbruch muss bis zum Server durchschlagen) →
+  zweite Runde mit Links und gefährlichem Markup → **Sanitizing in echtem
+  Chromium** → Klick auf den Link landet im Main-Prozess → Einstellungen öffnen,
+  Tab wechseln, mit Escape schließen.
+- `shell.openExternal` wird im Main-Prozess ersetzt, damit der Test keinen
+  echten Browser aufmacht.
+
+Fallstricke des Treibers stehen im Kopf von `e2e/helpers/app.mjs` — vor allem:
+Playwrights eigenes Warten hängt hier (Timer-Drosselung im Renderer), deshalb
+pollt der Treiber selbst.
+
+Nicht in der CI: Electron braucht dort eine Anzeige (unter Linux `xvfb`), und
+der Nutzen steht bisher nicht gegen die Laufzeit auf drei Betriebssystemen.
+Der Test läuft lokal und vor Releases.
 
 ## Weitere funktionale Module
 
