@@ -11,6 +11,7 @@ function toCatalogEntry(provider) {
     fields: provider.fields || {},
     presentation: provider.presentation,
     apiBase: provider.apiBase || '',
+    capabilities: { images: provider.capabilities?.images === true },
   };
 }
 

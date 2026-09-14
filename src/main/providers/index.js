@@ -64,6 +64,7 @@ function listProviderMeta() {
       defaultBaseUrl: p.defaultBaseUrl || '',
       defaultInsecureTls: p.defaultInsecureTls === true,
       apiBase: p.apiBase || '',
+      capabilities: { images: p.capabilities?.images === true },
     };
   });
 }

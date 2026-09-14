@@ -41,6 +41,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       defaultBaseUrl: meta.defaultBaseUrl || '',
       defaultInsecureTls: meta.defaultInsecureTls === true,
       apiBase: meta.apiBase || '',
+      // Bild-Anhaenge (Issue #93): Der Composer lehnt sie ab, wenn der aktive
+      // Anbieter sie nicht weiterreicht.
+      capabilities: { images: meta.capabilities?.images === true },
       configured,
       hasKey,
       keyUnreadable,

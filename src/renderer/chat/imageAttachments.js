@@ -27,6 +27,7 @@ export const INTAKE_REJECTIONS = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported-type',
   TOO_MANY: 'too-many',
   TOO_LARGE: 'too-large',
+  NO_IMAGE_SUPPORT: 'no-image-support',
 });
 
 function formatMiB(bytes) {
@@ -41,6 +42,8 @@ export function rejectionMessage(reason) {
       return `Mehr als ${MAX_IMAGES_PER_MESSAGE} Bilder pro Nachricht gehen nicht.`;
     case INTAKE_REJECTIONS.TOO_LARGE:
       return `Das Bild ist auch verkleinert größer als ${formatMiB(MAX_IMAGE_ATTACHMENT_BYTES)}.`;
+    case INTAKE_REJECTIONS.NO_IMAGE_SUPPORT:
+      return 'Das aktive Modell nimmt keine Bilder entgegen.';
     default:
       return 'Das Bild konnte nicht übernommen werden.';
   }
@@ -49,13 +52,17 @@ export function rejectionMessage(reason) {
 /**
  * Entscheidet vor dem Einlesen, welche der eingefuegten Dateien ueberhaupt in
  * Frage kommen. `existingCount` sind die Chips, die schon am Composer haengen.
+ * `imagesSupported` sagt, ob der aktive Anbieter Bilder weiterreicht (#93).
  *
  * @returns {{ accepted: any[], rejections: string[] }}
  */
-export function planAttachmentIntake(existingCount, files) {
+export function planAttachmentIntake(existingCount, files, { imagesSupported = true } = {}) {
   const list = Array.isArray(files) ? files : [];
   const accepted = [];
   const rejections = [];
+  if (!imagesSupported) {
+    return { accepted, rejections: list.length > 0 ? [INTAKE_REJECTIONS.NO_IMAGE_SUPPORT] : [] };
+  }
   let free = Math.max(0, MAX_IMAGES_PER_MESSAGE - (Number(existingCount) || 0));
 
   for (const file of list) {

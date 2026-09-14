@@ -233,6 +233,23 @@ function buildProviderLabel(target, sendBundle) {
   return host ? `${providerId} (${host})` : providerId;
 }
 
+/**
+ * Prueft die zuletzt eingegebene Nachricht auf Bild-Anhaenge, die der Anbieter
+ * nicht weiterreicht (Issue #93). Aeltere Bilder im Verlauf blockieren nicht:
+ * Sie hatten ihren Zug, und ein Textmodell soll die Konversation fortsetzen
+ * koennen.
+ */
+function findUnsupportedAttachment(messages, sendBundle) {
+  if (sendBundle?.capabilities?.images === true) return null;
+  const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
+  if (normalizeAttachments(lastUser?.attachments).length === 0) return null;
+  const name = sendBundle?.providerName || 'Dieser Anbieter';
+  return createChatErrorResult({
+    error: `${name} nimmt in Snotra AI noch keine Bilder entgegen. Entferne den Anhang oder wechsle das Modell.`,
+    code: CHAT_ERROR_CODES.INVALID,
+  });
+}
+
 function sanitizeChatId(raw) {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -412,6 +429,12 @@ function createChatEngine({
       if (resolved.error) return resolved.error;
       const { target } = resolved;
       const sendBundle = await llm.prepareSendBundle(target);
+      // Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter sie
+      // nicht weiterreicht (Issue #93). Hier greift der Fall, dass nach dem
+      // Anhaengen auf ein anderes Modell umgeschaltet wurde: lieber eine klare
+      // Meldung als ein Bild, das unterwegs verschwindet.
+      const attachmentBlock = findUnsupportedAttachment(messages, sendBundle);
+      if (attachmentBlock) return attachmentBlock;
       const providerKey = buildProviderKey(target, sendBundle);
       const providerLabel = buildProviderLabel(target, sendBundle);
       const chatId = sanitizeChatId(payload?.chatId);

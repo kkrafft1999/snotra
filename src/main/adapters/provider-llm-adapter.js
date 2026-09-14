@@ -85,7 +85,12 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     const baseConfig = await providerSecrets.getEffectiveProviderConfig(target.providerId);
     const config = mergeProviderConfig(baseConfig, target, provider);
     const model = resolveModel(target, provider, baseConfig);
-    return { config, model };
+    return {
+      config,
+      model,
+      providerName: provider.name,
+      capabilities: { images: provider.capabilities?.images === true },
+    };
   }
 
   async function streamRound({

@@ -132,7 +132,13 @@ function makeLlmPort(results, {
     async prepareSendBundle(target) {
       bundleCalls.push(target);
       if (sendBundle) return sendBundle;
-      return { config: { apiKey: 'test' }, model: target.model || 'test-model' };
+      // Wie OpenAI heute: Der Anbieter reicht Bilder weiter (Issue #93).
+      return {
+        config: { apiKey: 'test' },
+        model: target.model || 'test-model',
+        providerName: 'Test-Anbieter',
+        capabilities: { images: true },
+      };
     },
     async streamRound(params) {
       calls.push(params);
@@ -1100,6 +1106,75 @@ test('engine reicht normalisierte Bild-Anhaenge an den Provider weiter', async (
   assert.equal(sent.attachments.length, 1);
   assert.equal(sent.attachments[0].mediaType, 'image/png');
   assert.equal(sent.attachments[0].dataBase64, PNG_1PX);
+});
+
+// Issue #93: Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter
+// sie nicht weiterreicht. Hier greift der Fall, dass nach dem Anhaengen auf ein
+// anderes Modell umgeschaltet wurde — dann lieber eine Meldung als ein Bild,
+// das unterwegs verschwindet.
+test('engine lehnt Bild-Anhaenge ab, wenn der Anbieter keine Bilder kann', async () => {
+  const PNG_1PX =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const llm = makeLlmPort([assistantText('unerreichbar')], {
+    sendBundle: {
+      config: { apiKey: 'test' },
+      model: 'text-only',
+      providerName: 'MLX-LM (lokal)',
+      capabilities: { images: false },
+    },
+  });
+  const { engine, calls } = makeEngine(null, { llm });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        {
+          role: 'user',
+          content: 'Was ist das?',
+          attachments: [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }],
+        },
+      ],
+    },
+    onEvent: () => {},
+  });
+
+  assert.match(result.error, /MLX-LM \(lokal\)/);
+  assert.equal(result.code, 'INVALID');
+  assert.equal(calls.length, 0, 'ohne Bild-Faehigkeit darf kein Request rausgehen');
+});
+
+test('engine laesst aeltere Bilder im Verlauf einen Textanbieter nicht blockieren', async () => {
+  const PNG_1PX =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const llm = makeLlmPort([assistantText('Weiter geht es.')], {
+    sendBundle: {
+      config: { apiKey: 'test' },
+      model: 'text-only',
+      providerName: 'MLX-LM (lokal)',
+      capabilities: { images: false },
+    },
+  });
+  const { engine, calls } = makeEngine(null, { llm });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        {
+          role: 'user',
+          content: 'Was ist das?',
+          attachments: [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }],
+        },
+        { role: 'assistant', content: 'Ein Diagramm.' },
+        { role: 'user', content: 'Und was steht da?' },
+      ],
+    },
+    onEvent: () => {},
+  });
+
+  assert.equal(result.content, 'Weiter geht es.');
+  assert.equal(calls.length, 1);
 });
 
 test('engine haengt Nachrichten ohne Bild kein leeres attachments-Feld an', async () => {

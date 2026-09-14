@@ -53,6 +53,19 @@ test('planAttachmentIntake weist fremde Formate ab, ohne die anderen zu verliere
   assert.deepEqual(rejections, [INTAKE_REJECTIONS.UNSUPPORTED_TYPE]);
 });
 
+test('planAttachmentIntake lehnt alles ab, wenn der Anbieter keine Bilder kann', async () => {
+  const { planAttachmentIntake, INTAKE_REJECTIONS } = await modulePromise;
+
+  const { accepted, rejections } = planAttachmentIntake(0, [fakeFile('image/png')], {
+    imagesSupported: false,
+  });
+  assert.deepEqual(accepted, []);
+  assert.deepEqual(rejections, [INTAKE_REJECTIONS.NO_IMAGE_SUPPORT]);
+
+  // Ohne eingefuegte Datei gibt es auch nichts zu melden.
+  assert.deepEqual(planAttachmentIntake(0, [], { imagesSupported: false }).rejections, []);
+});
+
 test('rejectionMessage liefert zu jedem Grund einen lesbaren Satz', async () => {
   const { rejectionMessage, INTAKE_REJECTIONS } = await modulePromise;
 

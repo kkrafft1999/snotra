@@ -230,6 +230,8 @@ module.exports = {
   id: 'mlx-lm',
   name: 'MLX-LM (lokal)',
   fields: { baseUrl: true },
+  // Der Server nimmt keine Bilder an — bleibt false (Issue #93).
+  capabilities: { images: false },
   defaultModel: '',
   defaultBaseUrl: DEFAULT_BASE,
   apiBase: DEFAULT_BASE,

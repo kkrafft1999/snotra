@@ -277,6 +277,9 @@ module.exports = {
   id: 'openai',
   name: 'OpenAI',
   fields: { apiKey: true },
+  // Sagt, ob *dieser Adapter* Bilder weiterreicht — nicht, ob das gewaehlte
+  // Modell sie versteht (Issue #93).
+  capabilities: { images: true },
   defaultModel: 'gpt-4o-mini',
   apiBase: DEFAULT_BASE,
   presentation: {

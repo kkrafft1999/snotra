@@ -95,6 +95,10 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   assert.equal(ollamaProvider.form.showBaseUrl, true);
   assert.equal(ollamaProvider.connectionDetail, true);
   assert.equal(ollamaProvider.fields, undefined);
+
+  // Der Composer liest die Bild-Faehigkeit aus dieser Sicht (Issue #93).
+  assert.equal(openaiProvider.capabilities.images, true);
+  assert.equal(ollamaProvider.capabilities.images, false);
 });
 
 test('buildPresetView respects connection draft overrides', () => {
