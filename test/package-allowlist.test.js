@@ -43,6 +43,7 @@ test('allowlist drops development, documentation and local files', () => {
     '/.venv/bin/python',
     '/docs/roadmap.md',
     '/test/fs-service.test.js',
+    '/e2e/smoke.test.mjs',
     '/scripts/check-asar-contents.js',
     '/out/Snotra AI-darwin-arm64/app.asar',
     '/README.md',

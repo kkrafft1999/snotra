@@ -23,8 +23,8 @@
 //     2026-09-14 mit happy-dom 20.14.5 und DOMPurify 3.4.14. Deshalb haengt
 //     dieser Helfer `marked`/`DOMPurify` gar nicht erst als Globals ein:
 //     markdownToSafeHtml() faellt dann auf reines Escapen zurueck, was
-//     berechenbar ist. Wer das echte Sanitizing pruefen will, braucht einen
-//     Lauf in Chromium (Playwright-Schritt aus #78).
+//     berechenbar ist. Das echte Sanitizing prueft `e2e/smoke.test.mjs` in der
+//     laufenden App (`npm run test:e2e`).
 
 const fs = require('node:fs');
 const path = require('node:path');
