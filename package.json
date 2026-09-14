@@ -10,6 +10,8 @@
     "test": "node --test \"test/**/*.test.js\"",
     "pretest:e2e": "node scripts/sync-renderer-vendor.js",
     "test:e2e": "node --test e2e/*.test.mjs",
+    "precoverage": "node scripts/sync-renderer-vendor.js",
+    "coverage": "node scripts/coverage.js",
     "start": "npm run sync-vendor && unset ELECTRON_RUN_AS_NODE && electron .",
     "package": "npm run sync-vendor && electron-forge package --arch arm64 --platform darwin",
     "package:win": "npm run sync-vendor && electron-forge package --platform win32 --arch x64",

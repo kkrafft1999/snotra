@@ -274,6 +274,46 @@ Nicht in der CI: Electron braucht dort eine Anzeige (unter Linux `xvfb`), und
 der Nutzen steht bisher nicht gegen die Laufzeit auf drei Betriebssystemen.
 Der Test läuft lokal und vor Releases.
 
+## Coverage: ehrlicher Nenner, getrennte Schwellen
+
+`npm run coverage` fährt die Suite mit `--experimental-test-coverage` und
+prüft zwei Bereiche gegen eigene Schwellen. Exit-Code 1, wenn einer darunter
+liegt.
+
+Stand 2026-09-14 (Node 24):
+
+| Bereich | Dateien im Bericht | Zeilen | Zweige | Funktionen |
+| --- | --- | --- | --- | --- |
+| Kern (`main`, `application`, `shared`, `preload`) | 119/122 | 95,7 % | 86,0 % | 89,6 % |
+| Renderer | 30/31 | 42,1 % | 74,3 % | 58,4 % |
+
+Schwellen (in `scripts/coverage.js`): Kern 94 / 85 / 88, Renderer 41 / 72 / 56.
+Sie sind eine **Sperrklinke** — knapp unter dem gemessenen Stand, damit ein
+Rückschritt auffällt, ohne dass jede Änderung die Zahl nachzieht. Wer sie senkt,
+sagt im Commit warum.
+
+Zwei Dinge daran sind Absicht:
+
+**Der Nenner enthält alle Quelldateien.** Node misst nur, was der Lauf lädt —
+eine Datei, die kein Test anfasst, fehlt im Bericht und drückt die Zahl nicht.
+Genau daher kam die frühere Angabe von ~94 % Zeilen: Sie beschrieb eine
+Auswahl. `test/source-files-load.test.js` lädt deshalb **jede** Datei unter
+`src/` (und findet nebenbei kaputte Importpfade in Dateien, die sonst niemand
+importiert). Was sich außerhalb von Electron nicht laden lässt, steht mit
+Begründung in `scripts/source-files.js` — vier Einstiegspunkte —, und
+`npm run coverage` listet sie im Bericht auf, statt sie zu verschweigen. Fehlt
+eine Datei ohne Begründung, schlägt der Lauf fehl.
+
+**Die Schwellen sind getrennt.** Der Renderer ist rund ein Drittel des Codes
+und aus einem Testlauf heraus schwerer zu erreichen als der Kern; eine
+gemeinsame Schwelle müsste sich am schwächeren Teil orientieren und ließe den
+Kern verwahrlosen. Die 42 % Zeilen im Renderer sind kein Ziel, sondern der
+ehrliche Stand — was dort fehlt, fängt teilweise der Smoke-Test auf einer
+anderen Ebene ab.
+
+Coverage ist **kein** CI-Gate: dort läuft `npm test`. Die Schwellen sind eine
+lokale Sperrklinke, keine Merge-Bedingung.
+
 ## Weitere funktionale Module
 
 Das Skill-System ([#18](https://github.com/kkrafft1999/snotra/issues/18)) ist
