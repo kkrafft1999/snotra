@@ -221,6 +221,29 @@ dupliziert.
 | `test/contracts*.test.js` | Wire-Enums und Settings-DTOs an der IPC-Grenze |
 | `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalisierte Anzeige-Daten für Settings, Verlauf |
 
+## Renderer-Tests am DOM
+
+Renderer-Komponenten werden seit [#78](https://github.com/kkrafft1999/snotra/issues/78)
+gegen ein echtes DOM getestet — `happy-dom` als einzige Testabhängigkeit,
+`node --test` bleibt der Runner, die CI braucht nichts weiter. `test/helpers/dom.js`
+baut ein Fenster aus der **echten** `src/renderer/index.html` (ohne deren
+Skript-Tags) und legt die Browser-Globals auf `globalThis`; die Komponenten
+werden als natives ESM per `await import(...)` geladen und mit gestubbtem
+`api`/`appStore` initialisiert.
+
+| Test | Was er prüft |
+| ---- | ------------ |
+| `test/file-tree-dom.test.js` | Baum zeichnen, Auf-/Zuklappen, Vorschau, Drop von außen ([#101](https://github.com/kkrafft1999/snotra/issues/101)): Zielordner je Trefferfläche, Lesen des `DataTransfer` vor dem ersten `await`, Busy-Sperre, Baum-Refresh |
+| `test/settings-modal-dom.test.js` | Tab-Umschaltung: Panel, `aria-selected`, Roving Tabindex, Überschrift, Escape |
+| `test/chat-links-dom.test.js` | Klick-Handler für Links aus Modellantworten ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) inkl. Fehlermeldung in der Statuszeile |
+
+Grenzen, damit die grüne Zeile nicht mehr verspricht, als sie hält: kein echtes
+Chromium, also **kein Layout** (`offsetParent`, `getBoundingClientRect`) und
+**kein Sanitizing** — DOMPurify arbeitet unter happy-dom nachweislich falsch
+(Details im Kopf von `test/helpers/dom.js`). `DataTransfer`/`DragEvent` baut der
+Helfer selbst nach. Ein echter Finder-/Explorer-Drop und das Zusammenspiel mit
+`marked`/`DOMPurify` bleiben damit einem Lauf in Chromium vorbehalten.
+
 ## Weitere funktionale Module
 
 Das Skill-System ([#18](https://github.com/kkrafft1999/snotra/issues/18)) ist
