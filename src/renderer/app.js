@@ -153,6 +153,7 @@ const chatStream = initChatStream({
   onInputChanged: syncChatInputHeight,
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
+  activeProviderSupportsImages: () => modelPicker.activeProviderSupportsImages(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
   syncChatTitle: () => modelPicker.syncChatTitle(),
   onWorkspaceFileWritten: (relativePath) => {

@@ -274,6 +274,8 @@ module.exports = {
   id: 'google',
   name: 'Google (Gemini)',
   fields: { apiKey: true },
+  // Auf true, sobald translateMessagesToGoogle Bilder abbildet (Issue #91).
+  capabilities: { images: false },
   defaultModel: 'gemini-2.0-flash',
   apiBase: API_BASE,
   presentation: {

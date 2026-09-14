@@ -227,6 +227,8 @@ module.exports = {
   id: 'ollama',
   name: 'Ollama (lokal)',
   fields: { baseUrl: true, insecureTls: true },
+  // Auf true, sobald translateMessagesToOllama Bilder abbildet (Issue #92).
+  capabilities: { images: false },
   defaultModel: 'llama3.2',
   defaultBaseUrl: DEFAULT_BASE,
   defaultInsecureTls: false,

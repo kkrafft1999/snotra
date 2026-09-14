@@ -455,6 +455,7 @@ export function initChatStream({
   onInputChanged,
   stopChatVoiceListening,
   activeProviderConfigured,
+  activeProviderSupportsImages,
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
@@ -1269,7 +1270,9 @@ export function initChatStream({
   // bleibt unberuehrt — nur wenn wirklich Bilder in der Zwischenablage liegen,
   // wird das Standardverhalten unterdrueckt.
   async function takeImageFiles(files) {
-    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length, files);
+    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length, files, {
+      imagesSupported: activeProviderSupportsImages?.() === true,
+    });
     for (const reason of rejections) flashTokenUsageNote(rejectionMessage(reason));
     if (accepted.length === 0) return;
 

@@ -320,6 +320,8 @@ module.exports = {
   id: 'anthropic',
   name: 'Anthropic (Claude)',
   fields: { apiKey: true },
+  // Auf true, sobald translateMessagesToAnthropic Bilder abbildet (Issue #90).
+  capabilities: { images: false },
   defaultModel: 'claude-sonnet-4-6',
   apiBase: API_BASE,
   presentation: {

@@ -31,6 +31,14 @@ export function initChatModelPicker({
     return !!(p && p.configured);
   }
 
+  // Ob der aktive Anbieter Bild-Anhaenge weiterreicht (Issue #93). Ohne das
+  // Feld — etwa aus einem aelteren Zustand — gilt „kann keine Bilder".
+  function activeProviderSupportsImages() {
+    const pid = appStore.llmState.chatTarget?.providerId;
+    const p = pid ? findProviderView(pid) : null;
+    return p?.capabilities?.images === true;
+  }
+
   function closeChatModelMenu() {
     chatModelMenuOpen = false;
     if (chatModelMenu) chatModelMenu.classList.add('hidden');
@@ -251,6 +259,7 @@ export function initChatModelPicker({
     findProviderMeta: findProviderView,
     findProviderView,
     activeProviderConfigured,
+    activeProviderSupportsImages,
     refreshLLMState,
     updateChatChrome,
     syncChatTitle,
