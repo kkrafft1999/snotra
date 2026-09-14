@@ -30,6 +30,18 @@ test('isExternalFileDrop lässt das interne Verschieben unberührt', async () =>
   assert.equal(isExternalFileDrop([], false), false);
 });
 
+test('isExternalFileDrop erkennt den Baum-Drag am eigenen MIME-Typ', async () => {
+  const { isExternalFileDrop } = await fileTreePromise;
+  // Issue #56: Der eigene Typ verraet den internen Drag auch dann, wenn der
+  // Modulzustand ihn nicht kennt — etwa nach Verlassen und Wiederbetreten.
+  assert.equal(isExternalFileDrop(['application/x-snotra-path'], false), false);
+  assert.equal(isExternalFileDrop(['application/x-snotra-path', 'Files'], false), false);
+  assert.equal(
+    isExternalFileDrop({ length: 2, 0: 'text/plain', 1: 'application/x-snotra-path' }, false),
+    false
+  );
+});
+
 test('importDestDirFor wählt die Ordnerzeile unter dem Zeiger', async () => {
   const { importDestDirFor } = await fileTreePromise;
   const root = path.join('/Users', 'k', 'projekt');

@@ -225,6 +225,9 @@ const fileTree = initFileTree({
   onProjectOpened: () => modelPicker.updateChatChrome(),
   sendChatMessage: () => chatStream.sendChatMessage(),
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
+  // @-Referenz aus dem Baum in die Chat-Eingabe (Issue #56); die Einfüge-Logik
+  // bleibt beim Textfeld, der Baum liefert nur den Pfad.
+  insertChatReference: (relPath, kind) => mentionAutocomplete.insertReference(relPath, kind),
 });
 
 fileTree.setHistoryDrawerCloseOnEscape(() => {

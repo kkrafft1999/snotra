@@ -2,12 +2,18 @@ import {
   isTextFile,
   getExtension,
   formatSize,
+  svgAt,
   svgChevron,
   svgFolder,
   svgFile,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
 import { basenameOf, parentDirOf, depthOf, joinNative, isInsideDir } from '../utils/nativePath.js';
+import {
+  TREE_DRAG_MIME,
+  encodeTreeDragPayload,
+  workspaceReferenceFor,
+} from '../chat/workspaceReference.js';
 
 /**
  * Reine Hilfen für den Dateibaum (Phase 4.6.2 — Extraktion ohne DOM).
@@ -28,12 +34,15 @@ export function parentDirFromItemPath(itemPath) {
  *
  * Zwei Bedingungen: das DataTransfer meldet Dateien **und** es laeuft kein
  * interner Drag aus dem Baum. Ohne die zweite Bedingung wuerde ein internes
- * Verschieben faelschlich als Import gelten. Landet #56 mit eigenem MIME-Typ,
- * tritt dieser an die Stelle des internen Quellpfads.
+ * Verschieben faelschlich als Import gelten. Seit #56 verraet den internen Drag
+ * zusaetzlich der eigene MIME-Typ: Den bringt jedes DataTransfer selbst mit,
+ * waehrend der Quellpfad nur im Modulzustand dieses Fensters steht.
  */
 export function isExternalFileDrop(types, hasInternalSource) {
   if (hasInternalSource) return false;
-  return Array.from(types || []).includes('Files');
+  const list = Array.from(types || []);
+  if (list.includes(TREE_DRAG_MIME)) return false;
+  return list.includes('Files');
 }
 
 /**
@@ -66,6 +75,7 @@ export function initFileTree(deps) {
     onProjectOpened,
     sendChatMessage,
     activeProviderConfigured,
+    insertChatReference,
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -454,12 +464,22 @@ export function initFileTree(deps) {
       label.textContent = item.name;
       row.appendChild(label);
 
+      const referenceBtn = buildReferenceButton(item);
+      if (referenceBtn) row.appendChild(referenceBtn);
+
       row.addEventListener('dragstart', (e) => {
         dragSourcePath = item.path;
         dragSourceRow = row;
         row.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
+        // „copyMove“ statt „move“: im Baum wird verschoben, in der Chat-Eingabe
+        // entsteht eine Kopie als @-Referenz (#56). Den eigenen MIME-Typ liest
+        // nur die Chat-Eingabe, fremde Ziele bekommen wie bisher den Pfad.
+        e.dataTransfer.effectAllowed = 'copyMove';
         e.dataTransfer.setData('text/plain', item.path);
+        e.dataTransfer.setData(
+          TREE_DRAG_MIME,
+          encodeTreeDragPayload({ path: item.path, isDirectory: Boolean(item.isDirectory) })
+        );
       });
 
       row.addEventListener('dragend', resetDragState);
@@ -506,6 +526,38 @@ export function initFileTree(deps) {
         void openFileContextMenu(item);
       });
     }
+  }
+
+  /**
+   * Der dragfreie zweite Weg zur @-Referenz (Issue #56): kleiner Knopf rechts
+   * in der Zeile, sichtbar bei Hover und bei Tastaturfokus. Der einfache Klick
+   * auf die Zeile bleibt davon unberührt — er wählt aus und zeigt die Vorschau.
+   */
+  function buildReferenceButton(item) {
+    if (typeof insertChatReference !== 'function') return null;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tree-item-reference';
+    btn.draggable = false;
+    btn.setAttribute('aria-label', `${item.name} im Chat referenzieren`);
+    btn.title = 'Im Chat referenzieren';
+    btn.innerHTML = svgAt();
+    btn.addEventListener('click', (e) => {
+      // Ohne stopPropagation würde die Zeile zusätzlich auswählen bzw. aufklappen.
+      e.preventDefault();
+      e.stopPropagation();
+      referenceInChat(item);
+    });
+    return btn;
+  }
+
+  /** Übersetzt einen Baum-Eintrag in eine @-Referenz und reicht sie an den Chat. */
+  function referenceInChat(item) {
+    const entry = workspaceReferenceFor(item.path, appStore.rootPath, {
+      isDirectory: Boolean(item.isDirectory),
+    });
+    if (!entry) return;
+    insertChatReference(entry.path, entry.kind);
   }
 
   // Issue #59: Main hat eine Datei über das Kontextmenü in den Papierkorb gelegt.
