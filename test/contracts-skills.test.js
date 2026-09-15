@@ -7,7 +7,6 @@ const {
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABELS,
   SKILL_STATUS,
-  MAX_ACTIVE_SKILLS,
   isValidSkillName,
   normalizeActiveSkills,
   normalizeSkillSummary,
@@ -25,13 +24,14 @@ test('System steht in der Quellenreihenfolge vorn und jede Quelle hat ein Label'
   }
 });
 
-test('normalizeActiveSkills säubert, entdoppelt und deckelt die Liste', () => {
+test('normalizeActiveSkills säubert und entdoppelt die Liste ohne Obergrenze', () => {
   assert.equal(normalizeActiveSkills(undefined), null, 'nie gesetzt ≠ leer');
   assert.deepEqual(normalizeActiveSkills([]), []);
   assert.deepEqual(normalizeActiveSkills([' demo ', 'demo', 42, '', 'zwei']), ['demo', 'zwei']);
   assert.deepEqual(normalizeActiveSkills(['../etc/passwd', 'ok']), ['ok']);
-  const many = Array.from({ length: MAX_ACTIVE_SKILLS + 5 }, (_, i) => `skill-${i}`);
-  assert.equal(normalizeActiveSkills(many).length, MAX_ACTIVE_SKILLS);
+  // Issue #137: es gibt keine Obergrenze mehr, alles Gültige bleibt drin.
+  const many = Array.from({ length: 42 }, (_, i) => `skill-${i}`);
+  assert.deepEqual(normalizeActiveSkills(many), many);
 });
 
 test('isValidSkillName lässt nur verzeichnistaugliche Namen zu', () => {

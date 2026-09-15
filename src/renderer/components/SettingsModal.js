@@ -26,7 +26,6 @@ const {
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABELS,
   SKILL_STATUS,
-  MAX_ACTIVE_SKILLS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
 } = contracts;
@@ -114,7 +113,6 @@ export function initSettingsModal(deps) {
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
-  const settingsSkillLimitHint = document.getElementById('settings-skill-limit-hint');
   const modalEncryptionWarning = document.getElementById('modal-encryption-warning');
   const modalSaveError = document.getElementById('modal-save-error');
   const btnChatSettings = document.getElementById('btn-chat-settings');
@@ -748,12 +746,6 @@ export function initSettingsModal(deps) {
     return li;
   }
 
-  function setSkillLimitHint(text) {
-    if (!settingsSkillLimitHint) return;
-    settingsSkillLimitHint.textContent = text;
-    settingsSkillLimitHint.classList.toggle('hidden', !text);
-  }
-
   function adoptSkillCatalog(result) {
     settingsSkillCatalog = Array.isArray(result?.skills) ? result.skills : [];
     // Der Katalog kennt bereits die Voreinstellung (System-Skills an), wenn in
@@ -763,7 +755,6 @@ export function initSettingsModal(deps) {
         .filter((skill) => skill.status === SKILL_STATUS.ACTIVE)
         .map((skill) => skill.name)
     );
-    setSkillLimitHint('');
     renderSkillList();
   }
 
@@ -1486,20 +1477,9 @@ export function initSettingsModal(deps) {
     if (!name) return;
     if (!input.checked) {
       settingsActiveSkillsDraft.delete(name);
-      setSkillLimitHint('');
-      return;
-    }
-    // Beim Speichern greift dieselbe Obergrenze — lieber hier bremsen, als
-    // stillschweigend Skills zu verlieren.
-    if (settingsActiveSkillsDraft.size >= MAX_ACTIVE_SKILLS) {
-      input.checked = false;
-      setSkillLimitHint(
-        `Höchstens ${MAX_ACTIVE_SKILLS} Skills gleichzeitig — erst einen abwählen.`
-      );
       return;
     }
     settingsActiveSkillsDraft.add(name);
-    setSkillLimitHint('');
   });
 
   btnReloadSkills?.addEventListener('click', async () => {

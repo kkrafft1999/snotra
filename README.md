@@ -209,7 +209,7 @@ Verzeichnis, fehlende `SKILL.md`, Name ≠ Verzeichnis) werden übersprungen und
 mit Grund angezeigt, statt den Scan abzubrechen.
 
 Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
-(höchstens acht gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
+(beliebig viele gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
 Die Skill-Verzeichnisse werden **beobachtet**: Legst du einen Skill an, änderst
 seine `SKILL.md` oder installierst einen per `skill-manager`, merkt Snotra das
 von selbst — die Liste in den Einstellungen und die `/`-Vervollständigung im

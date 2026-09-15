@@ -210,9 +210,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    *
    * `invokedSkills` sind die per `/name` im Chat aufgerufenen Skills
    * (Issue #124). Sie kommen zusätzlich zur dauerhaften Auswahl dazu und
-   * zählen bewusst nicht gegen `MAX_ACTIVE_SKILLS`: Das Limit schützt das
-   * Token-Budget der *voreingestellten* Skills, ein Aufruf ist dagegen eine
-   * bewusste Einzelentscheidung des Nutzers für diesen Verlauf.
+   * gelten nur für diesen Verlauf.
    */
   async function getActiveSkills({ workspaceRoot = null, activeSkills = null, invokedSkills = null } = {}) {
     const { skills } = await scan(workspaceRoot);

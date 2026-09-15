@@ -48,8 +48,6 @@ const SKILL_STATUS = Object.freeze({
   INVALID: 'invalid',
 });
 
-/** Obergrenze für die Anzahl gleichzeitig aktiver Skills (Token-Budget). */
-const MAX_ACTIVE_SKILLS = 8;
 /** Obergrenze für den in den Systemprompt übernommenen Body eines Skills. */
 const MAX_SKILL_BODY_CHARS = 20000;
 
@@ -82,7 +80,6 @@ function normalizeActiveSkills(raw) {
     const name = entry.trim();
     if (!isValidSkillName(name) || seen.has(name)) continue;
     seen.add(name);
-    if (seen.size >= MAX_ACTIVE_SKILLS) break;
   }
   return [...seen];
 }
@@ -121,7 +118,6 @@ module.exports = {
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABELS,
   SKILL_STATUS,
-  MAX_ACTIVE_SKILLS,
   MAX_SKILL_BODY_CHARS,
   isSkillSource,
   isSkillStatus,
