@@ -39,6 +39,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     trashItem = null,
     readOwnSecrets = null,
     describeShell = null,
+    refreshDynamicTools = null,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =
@@ -84,6 +85,24 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   }
 
   return {
+    /**
+     * Vor jedem Lauf: Tools, die nicht fest verdrahtet sind, aktualisieren
+     * (Issue #107 — die der MCP-Server). Bewusst hier und nicht in `getTools`,
+     * weil das Auffrischen einen Kindprozess starten kann und `getTools`
+     * synchron ist.
+     *
+     * Ein Fehler beim Auffrischen bleibt folgenlos: dann gibt es eben keine
+     * oder die zuletzt bekannten MCP-Tools. Ein nicht erreichbarer Server darf
+     * den Chat nicht anhalten.
+     */
+    async prepare() {
+      if (typeof refreshDynamicTools !== 'function') return;
+      try {
+        await refreshDynamicTools();
+      } catch {
+        /* der Verbindungsstatus zeigt den Grund, der Chat laeuft weiter */
+      }
+    },
     getTools(options) {
       return toolRegistry.getTools(options);
     },
@@ -120,7 +139,10 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         // Mindestklasse; Ziele können nicht geprüft werden.
         return {
           tool: name,
-          riskClasses: [definition.riskClass],
+          // Alle Mindestklassen, nicht nur die Grundklasse: ein MCP-Aufruf ist
+          // `execute` *und* `external` (Issue #107). Auch dieser Notpfad darf
+          // die Wirkung nicht kleiner aussehen lassen, als sie ist.
+          riskClasses: [definition.riskClass, ...(definition.additionalRiskClasses || [])],
           targets: [],
           planKey: JSON.stringify([name, args]),
         };

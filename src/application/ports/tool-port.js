@@ -72,6 +72,11 @@
 
 /**
  * @typedef {Object} ToolPort
+ * @property {() => Promise<void>} [prepare] — optional: Tools auffrischen, die
+ *   erst zur Laufzeit feststehen (Issue #107: die der MCP-Server). Wird einmal
+ *   je Lauf aufgerufen, bevor Systemprompt und Tool-Liste gebaut werden. Darf
+ *   nicht werfen — ein nicht erreichbarer Server ist kein Grund, den Chat zu
+ *   beenden
  * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => Array} getTools
  * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
