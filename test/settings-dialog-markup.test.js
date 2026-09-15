@@ -75,3 +75,29 @@ test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis
   assert.match(card, /shell_execute/);
   assert.match(card, /keine<\/strong> Projektordner-Grenze/);
 });
+
+// Issue #138: Der Schalter steht im Bereich „Allgemein“ neben dem
+// System-Prompt — er betrifft genau den, nicht die Tools. Und er muss sagen,
+// dass der absolute Pfad den Anbieter erreicht; sonst ist er eine Falle.
+test('der Bereich „Allgemein“ hat einen Schalter für Umgebungsinformationen (#138)', () => {
+  assert.equal(html.split('id="input-environment-info"').length - 1, 1);
+
+  const panelStart = html.indexOf('id="panel-settings-general"');
+  const panelEnd = html.indexOf('</section>', panelStart);
+  const panel = html.slice(panelStart, panelEnd);
+  assert.ok(panel.includes('id="input-environment-info"'), 'der Schalter liegt im Allgemein-Panel');
+
+  const toggleAt = panel.indexOf('id="input-environment-info"');
+  assert.ok(
+    toggleAt > panel.indexOf('id="input-global-system-prompt"'),
+    'er steht hinter dem System-Prompt, den er ergänzt'
+  );
+
+  const hintAt = panel.indexOf('id="hint-environment-info"');
+  assert.ok(hintAt > -1, 'zum Schalter gehört ein Erklärtext');
+  assert.match(panel.slice(toggleAt, hintAt + 400), /aria-describedby="hint-environment-info"/);
+  const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
+  assert.match(hint, /absolute[rn]? Pfad|absolute<\/strong>|<strong>absolute/i);
+  assert.match(hint, /Benutzernamen/, 'die Preisgabe wird benannt');
+  assert.match(hint, /Anbieter/, 'und wohin sie geht');
+});

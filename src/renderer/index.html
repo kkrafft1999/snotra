@@ -622,6 +622,28 @@
               </details>
             </div>
             <div class="modal-field-group">
+              <div class="modal-field-label eyebrow-row">Umgebung</div>
+              <label class="modal-checkbox">
+                <input type="checkbox" id="input-environment-info" aria-describedby="hint-environment-info">
+                <span>Umgebungsinformationen mitschicken</span>
+              </label>
+              <details id="hint-environment-info" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span>Gibt dem Modell Arbeitsverzeichnis, Plattform, Shell und das heutige Datum mit.</span>
+                </summary>
+                <div class="settings-note__body">
+                  <p>
+                    Ohne diese Angaben rät das Modell bei Shell-Befehlen die Plattform und datiert „letzte Woche“
+                    nach seinem Trainingsstand. Mitgeschickt werden der <strong>absolute Pfad</strong> des
+                    geöffneten Ordners — er enthält deinen Benutzernamen —, ob dort ein Git-Repository liegt,
+                    Plattform und Systemversion, die Shell von <code lang="en">shell_execute</code> (nur wenn
+                    eingeschaltet), das heutige Datum und die Snotra-Version. Das alles geht mit jeder Anfrage an
+                    den Anbieter.
+                  </p>
+                </div>
+              </details>
+            </div>
+            <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row">UI-Sprache</div>
               <label class="visually-hidden" for="select-app-locale">Sprache</label>
               <select id="select-app-locale" class="modal-input">

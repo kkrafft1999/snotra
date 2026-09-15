@@ -108,6 +108,9 @@ export function initSettingsModal(deps) {
   const inputShellEnabled = document.getElementById('input-shell-enabled');
   const shellStatusEl = document.getElementById('settings-shell-status');
   let shellReady = false;
+  // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
+  // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
+  const inputEnvironmentInfo = document.getElementById('input-environment-info');
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
@@ -1102,6 +1105,7 @@ export function initSettingsModal(deps) {
           typeof up.pythonInterpreterPath === 'string' ? up.pythonInterpreterPath : '';
       }
       if (inputShellEnabled) inputShellEnabled.checked = up.shellExecutionEnabled === true;
+      if (inputEnvironmentInfo) inputEnvironmentInfo.checked = up.environmentInfoEnabled !== false;
     } catch {
       inputGlobalSystemPrompt.value = '';
       selectAppLocale.value = 'de';
@@ -1110,6 +1114,9 @@ export function initSettingsModal(deps) {
       if (inputPythonEnabled) inputPythonEnabled.checked = false;
       if (inputPythonInterpreter) inputPythonInterpreter.value = '';
       if (inputShellEnabled) inputShellEnabled.checked = false;
+      // Beim Lesefehler die Voreinstellung zeigen, nicht „aus" — sonst
+      // schaltet ein blosses Oeffnen-und-Speichern den Block unbemerkt ab.
+      if (inputEnvironmentInfo) inputEnvironmentInfo.checked = true;
     }
     await loadPythonState();
     await loadShellState();
@@ -1313,6 +1320,7 @@ export function initSettingsModal(deps) {
           pythonExecutionEnabled: inputPythonEnabled?.checked === true,
           pythonInterpreterPath: inputPythonInterpreter?.value || '',
           shellExecutionEnabled: inputShellEnabled?.checked === true,
+          environmentInfoEnabled: inputEnvironmentInfo?.checked !== false,
         },
       });
       if (res?.ok || res?.uiPrefsSaved) {

@@ -49,6 +49,8 @@ const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
+const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
+const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 
@@ -303,6 +305,18 @@ function createApplication({
     return secrets;
   }
 
+  // Umgebungsangaben fuer den Systemprompt (Issue #138). Die Shell kommt aus
+  // derselben Erkennung wie `shell_execute` selbst — sonst nennt der Prompt
+  // eine andere Shell, als ein Befehl spaeter startet.
+  const environment = createEnvironmentAdapter({
+    fs,
+    path,
+    os,
+    appName: APP_NAME,
+    getAppVersion: () => app.getVersion(),
+    describeShell: () => shellSettings.describe(),
+  });
+
   const { engine: chatEngine, llm: chatLlm } = createChatApplication({
     llmConfigStore,
     providerRuntime,
@@ -310,6 +324,7 @@ function createApplication({
     uiPrefsStore,
     toolRegistry,
     skillsService,
+    environment,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,

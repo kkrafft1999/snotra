@@ -36,6 +36,7 @@ const {
   createPermissionDeniedToolResult,
   createPermissionAuditEntry,
 } = require('../../shared/contracts/tool-permissions');
+const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
@@ -273,6 +274,7 @@ function createChatEngine({
   preferences,
   workspacePaths,
   skills = null,
+  environment = null,
   toolPolicy = null,
   approvals = null,
   sessionGrants = createSessionGrants(),
@@ -498,8 +500,25 @@ function createChatEngine({
       }
       const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
 
-      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang.
-      const combinedSystem = [systemPrompt, skillsSystem, workspaceSystem]
+      // Umgebungsangaben (Issue #138). Abschaltbar, weil der absolute Pfad den
+      // Benutzernamen enthält und mit jeder Anfrage zum Anbieter geht; der
+      // Schalter steht standardmäßig an.
+      let environmentSystem = '';
+      if (environment && uiPrefs.environmentInfoEnabled !== false) {
+        try {
+          environmentSystem = buildEnvironmentSystemPrompt(
+            await environment.describe({ workspaceRoot })
+          );
+        } catch {
+          // Umgebungsangaben sind Beiwerk — sie dürfen keinen Chat verhindern.
+          environmentSystem = '';
+        }
+      }
+
+      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Die
+      // Umgebung ist Sachkontext wie der Ordner und steht deshalb bei ihm,
+      // hinter den Skills, die das Wie beschreiben.
+      const combinedSystem = [systemPrompt, skillsSystem, environmentSystem, workspaceSystem]
         .filter((part) => typeof part === 'string' && part.trim())
         .join('\n\n');
 

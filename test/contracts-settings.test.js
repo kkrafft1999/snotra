@@ -166,6 +166,20 @@ test('normalizeUiPrefs schaltet die Shell-Ausführung standardmäßig ab', () =>
   assert.equal(normalizeUiPrefsPatch({ shellExecutionEnabled: false }).shellExecutionEnabled, false);
 });
 
+// Issue #138: Anders als die Ausfuehrungs-Schalter ist dieser voreingestellt
+// an — er gibt nichts frei, er teilt nur mit. Nur ein ausdrueckliches `false`
+// schaltet ihn ab, damit alte Einstellungsdateien ihn nicht stumm verlieren.
+test('normalizeUiPrefs schickt Umgebungsinformationen standardmäßig mit', () => {
+  const { normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+
+  assert.equal(normalizeUiPrefs({}).environmentInfoEnabled, true);
+  assert.equal(normalizeUiPrefs({ environmentInfoEnabled: 'nein' }).environmentInfoEnabled, true);
+  assert.equal(normalizeUiPrefs({ environmentInfoEnabled: false }).environmentInfoEnabled, false);
+  assert.equal('environmentInfoEnabled' in normalizeUiPrefsPatch({ environmentInfoEnabled: 0 }), false);
+  assert.equal(normalizeUiPrefsPatch({ environmentInfoEnabled: false }).environmentInfoEnabled, false);
+  assert.equal(normalizeUiPrefsPatch({ environmentInfoEnabled: true }).environmentInfoEnabled, true);
+});
+
 test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
   const { normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
 

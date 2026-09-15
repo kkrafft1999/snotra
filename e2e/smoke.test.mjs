@@ -191,6 +191,27 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(rendered.pwned, false, 'das onerror-Skript ist gelaufen');
   step('Sanitizing geprueft');
 
+  // --- Umgebungsangaben im Systemprompt (Issue #138) -----------------------
+  // Nur hier pruefbar: Pfad, Plattform und Datum entstehen erst im echten
+  // Main-Prozess. Geprueft wird, was wirklich beim Modell ankommt.
+  const systemMessage = model.requestFor(LINK_QUESTION).body.messages
+    .find((m) => m.role === 'system')?.content || '';
+  assert.match(systemMessage, /Umgebung, in der du gerade läufst \(Snotra AI/);
+  assert.ok(
+    systemMessage.includes(`- Arbeitsverzeichnis: ${workspace}`),
+    'der Block nennt den wirklich geoeffneten Ordner'
+  );
+  assert.match(systemMessage, new RegExp(`- Plattform: ${process.platform}\\b`));
+  assert.match(systemMessage, /- Betriebssystem: \S+ \S+/);
+  assert.match(systemMessage, /- Heutiges Datum: \w+, \d{4}-\d{2}-\d{2}/);
+  // Der Ordner ist frisch angelegt und kein Repo — die Zeile muss das sagen.
+  assert.match(systemMessage, /- Git-Repository: nein/);
+  // `shell_execute` ist in der Testkonfiguration aus; dann darf der Block
+  // keine Shell versprechen (Nachtrag zu #138).
+  assert.ok(!systemMessage.includes('Shell für shell_execute'),
+    'ohne eingeschaltetes shell_execute keine Shell-Angabe');
+  step('Umgebungsblock im Systemprompt geprueft');
+
   // --- Klick auf den Link geht bis in den Main-Prozess ----------------------
   await page.evaluate(() => {
     const links = document.querySelectorAll('#chat-messages .chat-msg.assistant a');
