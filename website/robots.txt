@@ -11,9 +11,10 @@
 #   User-agent: GPTBot
 #   Disallow: /
 #
-# Eine sitemap.xml gibt es bewusst nicht: Die Seite hat drei Unterseiten, die
-# alle von der Startseite aus verlinkt sind. Ein Verweis auf eine fehlende
-# Datei wäre nur ein weiterer 404.
+# Die sitemap.xml führt nur die Startseite, weil Impressum und Datenschutz
+# bewusst auf noindex stehen (Issue #127).
 
 User-agent: *
 Allow: /
+
+Sitemap: https://snotra-ai.dev/sitemap.xml

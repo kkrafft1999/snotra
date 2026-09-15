@@ -8,6 +8,13 @@
     ],
     "cleanUrls": true,
     "trailingSlash": false,
+    "redirects": [
+      {
+        "source": "/apple-touch-icon-precomposed.png",
+        "destination": "/apple-touch-icon.png",
+        "type": 301
+      }
+    ],
     "headers": [
       {
         "source": "**/*.@(woff2|woff|ttf)",
