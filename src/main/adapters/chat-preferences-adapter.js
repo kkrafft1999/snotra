@@ -21,6 +21,11 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
       if (typeof prefs.historyCharLimit === 'number' && Number.isFinite(prefs.historyCharLimit)) {
         out.historyCharLimit = prefs.historyCharLimit;
       }
+      // Nur der ausdrueckliche Abschaltwert reist mit (Issue #138); fehlt das
+      // Feld, bleibt es bei der Voreinstellung „an".
+      if (prefs.environmentInfoEnabled === false) {
+        out.environmentInfoEnabled = false;
+      }
       return out;
     },
   };

@@ -3052,6 +3052,12 @@ select.modal-input {
   line-height: var(--ds-line-height-prose, 1.5);
 }
 
+/* Schalter in einer Feldgruppe (Umgebungsinformationen, Issue #138): braucht
+ * denselben Abstand zur erklaerenden Notiz wie ein Eingabefeld. */
+.modal-field-group > .modal-checkbox {
+  margin-bottom: 8px;
+}
+
 .modal-field-group .modal-hint code {
   font-family: var(--ds-font-mono);
   font-size: 0.92em;

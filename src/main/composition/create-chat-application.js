@@ -22,6 +22,7 @@ function createChatApplication({
   uiPrefsStore,
   toolRegistry,
   skillsService,
+  environment = null,
   path,
   maxToolRounds,
   toolPolicyStore = null,
@@ -56,13 +57,16 @@ function createChatApplication({
     preferences,
     workspacePaths,
     skills,
+    environment,
     toolPolicy,
     approvals,
     sessionGrants,
     maxToolRounds,
   });
 
-  return { engine, llm, tools, preferences, workspacePaths, skills, toolPolicy, sessionGrants };
+  return {
+    engine, llm, tools, preferences, workspacePaths, skills, environment, toolPolicy, sessionGrants,
+  };
 }
 
 module.exports = {

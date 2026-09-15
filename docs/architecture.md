@@ -51,6 +51,11 @@ bestehende Importe stabil bleiben.
 - `chat-preferences-port` — UI-Prefs, System-Prompt, Tool-Runden-Limit
 - `workspace-path-port` — Pfad-Helfer (z. B. `basename`)
 - `skill-port` — Bodies der eingeschalteten Skills für den Systemprompt
+- `environment-port` — Umgebungsangaben für den Environment-Block im
+  Systemprompt (Issue #138): Arbeitsverzeichnis, Git ja/nein, Plattform,
+  Systemversion, Shell und Tagesdatum. Ermittelt werden sie im
+  `main/adapters/environment-adapter.js` — der Core selbst sieht weder
+  `process.platform` noch das Dateisystem
 - `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
   Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
   kennt ihn nicht
@@ -313,6 +318,31 @@ anderen Ebene ab.
 
 Coverage ist **kein** CI-Gate: dort läuft `npm test`. Die Schwellen sind eine
 lokale Sperrklinke, keine Merge-Bedingung.
+
+## Systemprompt
+
+Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
+(`application/chat/chat-engine.js`), in dieser Reihenfolge:
+
+1. **Basisprompt** aus den Einstellungen — steht vorn und behält den Vorrang.
+2. **Skill-Block** (`buildSkillsSystemPrompt`) — die Anweisungen der
+   eingeschalteten Skills; sie beschreiben das *Wie*.
+3. **Environment-Block** (`application/chat/environment-prompt.js`, Issue #138)
+   — Arbeitsverzeichnis (absoluter Pfad), Git ja/nein, Plattform,
+   Systemversion, die Shell von `shell_execute` und das heutige Datum. Die
+   Shell steht nur dort, wenn das Tool eingeschaltet *und* eine Shell gefunden
+   ist; ohne offenen Ordner fallen Pfad- und Git-Zeile weg. Bewusst ohne
+   Uhrzeit, damit der Block einen Tag lang stabil bleibt und das Prompt-Caching
+   der Anbieter nicht bei jeder Nachricht bricht. Abschaltbar über
+   „Umgebungsinformationen mitschicken" in den Einstellungen (Voreinstellung
+   an) — der absolute Pfad enthält den Benutzernamen und geht an den Anbieter.
+4. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
+   `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
+   Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.
+
+Ein **Scratch-Verzeichnis** nennt der Block bewusst *nicht*: die Schreib-Tools
+kennen nur den Arbeitsordner als Wurzel, ein Pfad daneben wäre ein Hinweis auf
+etwas, das nicht funktioniert.
 
 ## Weitere funktionale Module
 

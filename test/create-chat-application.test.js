@@ -181,3 +181,102 @@ test('createChatApplication kommt ohne Skill-Service aus', async () => {
   });
   assert.equal(result.content, 'ok');
 });
+
+/* ── Umgebungsangaben im Systemprompt (Issue #138) ───────────────────────── */
+
+function environmentHarness({ uiPrefs = {}, environment } = {}) {
+  const calls = [];
+  const engine = createChatApplication({
+    llmConfigStore: {
+      readLLMConfig: async () => ({}),
+      resolveChatModelTarget: () => ({ providerId: 'test', model: 'test-model' }),
+    },
+    providerRuntime: {
+      getProvider: () => ({
+        id: 'test',
+        fields: {},
+        async streamChatRound(args) {
+          calls.push(args);
+          return assistantText('ok');
+        },
+      }),
+    },
+    providerSecrets: { getEffectiveProviderConfig: async () => ({ apiKey: 'k', model: 'm' }) },
+    uiPrefsStore: { readUIPrefs: async () => uiPrefs },
+    toolRegistry: { getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' },
+    environment,
+    path,
+    maxToolRounds: 2,
+  }).engine;
+  return { engine, calls, system: () => calls[0].messages.find((m) => m.role === 'system')?.content || '' };
+}
+
+const FIXED_ENVIRONMENT = {
+  async describe({ workspaceRoot }) {
+    return {
+      appName: 'Snotra AI',
+      appVersion: '1.5.3',
+      workspaceRoot,
+      isGitRepository: true,
+      platform: 'darwin',
+      osVersion: 'Darwin 27.0.0',
+      shell: 'zsh',
+      now: new Date(2026, 8, 15, 9, 0),
+    };
+  },
+};
+
+test('Umgebungsangaben stehen im Systemprompt und kennen den offenen Ordner', async () => {
+  const seen = [];
+  const { engine, system } = environmentHarness({
+    environment: {
+      describe: async (options) => {
+        seen.push(options);
+        return FIXED_ENVIRONMENT.describe(options);
+      },
+    },
+  });
+  await engine.send({
+    sessionId: 'env-1',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
+  assert.match(system(), /Umgebung, in der du gerade läufst \(Snotra AI 1\.5\.3\):/);
+  assert.match(system(), /- Arbeitsverzeichnis: /);
+  assert.match(system(), /- Plattform: darwin \(macOS\)/);
+  assert.match(system(), /- Heutiges Datum: Dienstag, 2026-09-15/);
+  // Der Ordnerkontext bleibt daneben bestehen — er nennt den Ordner im Satz.
+  assert.match(system(), /geöffneten Ordner/);
+});
+
+test('der Schalter „Umgebungsinformationen" schaltet den Block ab', async () => {
+  let asked = false;
+  const { engine, system } = environmentHarness({
+    uiPrefs: { environmentInfoEnabled: false },
+    environment: {
+      describe: async (options) => {
+        asked = true;
+        return FIXED_ENVIRONMENT.describe(options);
+      },
+    },
+  });
+  await engine.send({
+    sessionId: 'env-2',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.equal(asked, false, 'abgeschaltet wird gar nicht erst gefragt');
+  assert.ok(!system().includes('Umgebung, in der du gerade läufst'));
+  assert.match(system(), /geöffneten Ordner/);
+});
+
+test('ohne Environment-Port und bei einer werfenden Quelle läuft der Chat weiter', async () => {
+  for (const environment of [null, { describe: async () => { throw new Error('kaputt'); } }]) {
+    const { engine, system } = environmentHarness({ environment });
+    const result = await engine.send({
+      sessionId: 'env-3',
+      payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+    });
+    assert.equal(result.content, 'ok');
+    assert.ok(!system().includes('Umgebung, in der du gerade läufst'));
+  }
+});

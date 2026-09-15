@@ -241,6 +241,11 @@ function normalizeUiPrefs(raw) {
   // Shell-Ausfuehrung (Issue #102) ebenso: ein Befehl kann alles, was der
   // angemeldete Nutzer kann — das wird bewusst eingeschaltet.
   const shellExecutionEnabled = data.shellExecutionEnabled === true;
+  // Umgebungsangaben im Systemprompt (Issue #138) sind standardmaessig an:
+  // sie kosten wenig und sparen Tool-Runden. Wer den absoluten Pfad — und
+  // damit seinen Benutzernamen — nicht an den Anbieter geben will, schaltet
+  // sie ab; deshalb `!== false` statt `=== true`.
+  const environmentInfoEnabled = data.environmentInfoEnabled !== false;
   // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
   // weil es nichts kostet und nichts verlaesst den Rechner.
   const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
@@ -264,6 +269,7 @@ function normalizeUiPrefs(raw) {
     pythonExecutionEnabled,
     ...(pythonInterpreterPath ? { pythonInterpreterPath } : {}),
     shellExecutionEnabled,
+    environmentInfoEnabled,
   };
 }
 
@@ -317,6 +323,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.shellExecutionEnabled === 'boolean') {
     out.shellExecutionEnabled = patch.shellExecutionEnabled;
+  }
+  if (typeof patch.environmentInfoEnabled === 'boolean') {
+    out.environmentInfoEnabled = patch.environmentInfoEnabled;
   }
   return out;
 }
