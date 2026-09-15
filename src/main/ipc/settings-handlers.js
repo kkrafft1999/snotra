@@ -22,6 +22,7 @@ function registerSettingsHandlers({
   toolCatalog,
   skillCatalog = null,
   webSearchSettings = null,
+  mcpSettings = null,
   pythonSettings = null,
   shellSettings = null,
 }) {
@@ -313,6 +314,63 @@ function registerSettingsHandlers({
     hasApiKey: webSearchSettings ? await webSearchSettings.refresh() : false,
     encryptionAvailable: safeStorage.isEncryptionAvailable(),
   }));
+
+  // MCP-Server (Issue #108).
+  //
+  // Diese Handler sehen **nie** einen entschluesselten env-Wert: was sie
+  // zurueckgeben, hat der Store schon maskiert, und das Testen laeuft ueber
+  // die Kennung des gespeicherten Servers statt ueber mitgeschickte Werte.
+  // Die Grenze ist in test/infrastructure-boundaries.test.js festgenagelt.
+
+  async function buildMcpCatalog() {
+    if (!mcpSettings) return { servers: [], connections: [], skippedTools: [] };
+    return {
+      servers: await mcpSettings.listServers(),
+      connections: mcpSettings.describeConnections(),
+      skippedTools: mcpSettings.describeSkippedTools(),
+    };
+  }
+
+  ipcMain.handle(REQ.SETTINGS_GET_MCP_CATALOG, async () => buildMcpCatalog());
+
+  ipcMain.handle(REQ.SETTINGS_SAVE_MCP_SERVER, async (_event, input) => {
+    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    const result = await mcpSettings.save(input);
+    if (!result?.ok) {
+      return { ...createSettingsError(result?.errors?.[0] || 'Der Server konnte nicht gespeichert werden.'),
+        errors: result?.errors || [] };
+    }
+    // Direkt uebernehmen: sonst zeigte die Oberflaeche den neuen Stand, waehrend
+    // der Dienst noch mit dem alten liefe.
+    await mcpSettings.reload();
+    return { ...createSettingsOk(), ...(await buildMcpCatalog()) };
+  });
+
+  ipcMain.handle(REQ.SETTINGS_DELETE_MCP_SERVER, async (_event, id) => {
+    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    const result = await mcpSettings.remove(typeof id === 'string' ? id : '');
+    if (!result?.ok) {
+      return { ...createSettingsError(result?.errors?.[0] || 'Der Server konnte nicht gelöscht werden.'),
+        errors: result?.errors || [] };
+    }
+    await mcpSettings.reload();
+    return { ...createSettingsOk(), ...(await buildMcpCatalog()) };
+  });
+
+  ipcMain.handle(REQ.SETTINGS_RELOAD_MCP_SERVERS, async () => {
+    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    await mcpSettings.reload();
+    return { ...createSettingsOk(), ...(await buildMcpCatalog()) };
+  });
+
+  ipcMain.handle(REQ.SETTINGS_TEST_MCP_SERVER, async (_event, id) => {
+    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    const wanted = typeof id === 'string' ? id.trim() : '';
+    if (!wanted) return createSettingsError('Es fehlt die Kennung des Servers.');
+    const result = await mcpSettings.test(wanted);
+    if (!result?.status) return createSettingsError(result?.error || `Unbekannter MCP-Server „${wanted}".`);
+    return { ...createSettingsOk(), status: result.status, tools: result.tools || [] };
+  });
 
   ipcMain.handle(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, async (_event, apiKey) => {
     if (!webSearchSettings) {
