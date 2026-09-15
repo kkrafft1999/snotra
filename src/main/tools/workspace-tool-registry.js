@@ -20,9 +20,14 @@ function toDisabledNameSet(disabledNames) {
 
 function createToolRegistry(initialDefinitions = []) {
   const definitions = new Map();
+  // Zur Laufzeit wechselnde Tools — heute die der MCP-Server (Issue #107).
+  // Getrennt von den eingebauten, weil sie bei jeder Katalog-Aktualisierung
+  // komplett ersetzt werden: ein abgeschalteter Server soll seine Tools
+  // vollstaendig verlieren, nicht nur bis zum naechsten Neustart behalten.
+  let dynamic = new Map();
 
-  function register(definition) {
-    const { name, description, parameters, handler, riskClass } = definition || {};
+  function normalizeDefinition(definition) {
+    const { name, description, parameters, handler, riskClass, additionalRiskClasses } = definition || {};
     if (!name || typeof description !== 'string' || !parameters || typeof handler !== 'function') {
       throw new TypeError('Tool benötigt name, description, parameters und handler.');
     }
@@ -31,12 +36,19 @@ function createToolRegistry(initialDefinitions = []) {
     if (!isToolRiskClass(riskClass)) {
       throw new TypeError(`Tool ${name} benötigt eine gültige riskClass.`);
     }
-    if (definitions.has(name)) {
-      throw new Error(`Tool bereits registriert: ${name}`);
+    // Weitere Mindestklassen fuer Tools, deren Wirkung sich nicht in einer
+    // einzigen erschoepft (Issue #107: MCP ist zugleich `execute` und
+    // `external`). Nur ergaenzend — die Grundklasse bleibt.
+    const extra = Array.isArray(additionalRiskClasses) ? additionalRiskClasses : [];
+    for (const cls of extra) {
+      if (!isToolRiskClass(cls)) {
+        throw new TypeError(`Tool ${name} hat eine ungültige zusätzliche riskClass: ${cls}.`);
+      }
     }
-    definitions.set(name, {
+    return {
       ...definition,
       riskClass,
+      additionalRiskClasses: extra,
       // Standard true: die Datei-Tools haben ohne Ordner keinen Bezugspunkt.
       // Tools ohne Ordnerbezug (Websuche) setzen false und werden dem Modell
       // auch ohne geoeffneten Projektordner angeboten (Issue #96).
@@ -44,7 +56,35 @@ function createToolRegistry(initialDefinitions = []) {
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
-    });
+    };
+  }
+
+  function register(definition) {
+    const normalized = normalizeDefinition(definition);
+    if (definitions.has(normalized.name)) {
+      throw new Error(`Tool bereits registriert: ${normalized.name}`);
+    }
+    definitions.set(normalized.name, normalized);
+  }
+
+  /**
+   * Ersetzt die dynamischen Tools vollstaendig. Ein Name, den es schon fest
+   * gibt, wird uebergangen — der Namensraum (`mcp__…`) schliesst das zwar aus,
+   * aber ein eingebautes Tool darf nie von aussen ueberschrieben werden.
+   */
+  function setDynamicDefinitions(list) {
+    const next = new Map();
+    for (const definition of Array.isArray(list) ? list : []) {
+      const normalized = normalizeDefinition(definition);
+      if (definitions.has(normalized.name) || next.has(normalized.name)) continue;
+      next.set(normalized.name, normalized);
+    }
+    dynamic = next;
+  }
+
+  /** Eingebaute und dynamische Tools in einer Liste, eingebaute zuerst. */
+  function allDefinitions() {
+    return [...definitions.values(), ...dynamic.values()];
   }
 
   // Sichtbarkeit hängt nur an den Tool-Häkchen (disabledNames) bzw. einer
@@ -53,7 +93,7 @@ function createToolRegistry(initialDefinitions = []) {
   function getAvailableDefinitions({ allowedNames, disabledNames, workspaceOpen = true } = {}) {
     const allowed = toAllowedNameSet(allowedNames);
     const disabled = toDisabledNameSet(disabledNames);
-    return [...definitions.values()].filter(
+    return allDefinitions().filter(
       (definition) =>
         (!allowed || allowed.has(definition.name)) &&
         (!disabled || !disabled.has(definition.name)) &&
@@ -74,7 +114,7 @@ function createToolRegistry(initialDefinitions = []) {
    * erhalten, tauchen in den Einstellungen aber nicht auf.
    */
   function listCatalog() {
-    return [...definitions.values()]
+    return allDefinitions()
       .filter((definition) => definition.internal !== true)
       .map((definition) => ({
         name: definition.name,
@@ -122,11 +162,11 @@ function createToolRegistry(initialDefinitions = []) {
 
   /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
   function getDefinition(name) {
-    return definitions.get(name) || null;
+    return definitions.get(name) || dynamic.get(name) || null;
   }
 
   async function execute(name, args, context = {}) {
-    const definition = definitions.get(name);
+    const definition = getDefinition(name);
     if (!definition) {
       return JSON.stringify({ error: `Unbekanntes Tool: ${name}` });
     }
@@ -157,6 +197,7 @@ function createToolRegistry(initialDefinitions = []) {
 
   return {
     register,
+    setDynamicDefinitions,
     getTools,
     buildSystemPrompt,
     listCatalog,

@@ -271,11 +271,23 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
     });
   }
 
+  /**
+   * Sofort und synchron beenden — fuer das App-Ende (`will-quit`). Der
+   * freundliche Weg ueber `close()` ist asynchron und kaeme dort zu spaet:
+   * die Kindprozesse laufen in einer eigenen Prozessgruppe (`detached`) und
+   * wuerden den Elternprozess sonst als Waisen ueberleben.
+   */
+  function kill() {
+    closing = true;
+    killTree();
+  }
+
   return {
     start,
     request,
     notify,
     close,
+    kill,
     stderrText,
     isAlive: () => Boolean(child) && !exited,
     onExit: (listener) => { exitListeners.add(listener); },

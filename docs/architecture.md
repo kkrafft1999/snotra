@@ -76,7 +76,29 @@ bestehende Importe stabil bleiben.
   Die Trennung ist Absicht: bewusst kein `@modelcontextprotocol/sdk`, solange
   nur stdio und nur `tools` im Spiel sind — der Transport ist die Stelle, an
   der ein SDK später andocken könnte, ohne dass Port oder Core sich ändern.
-  Validierung der Serverkonfiguration in `shared/contracts/mcp.js`
+  Validierung der Serverkonfiguration in `shared/contracts/mcp.js`.
+
+  Zum Modell kommen diese Tools über den `main/adapters/mcp-adapter.js`, der
+  sie in Registry-Definitionen übersetzt (Issue #107). Drei Regeln gelten
+  dabei:
+
+  * **Namensraum** `mcp__<serverId>__<toolName>` — ein fremdes `read_file`
+    kann das eingebaute nie verdecken. Der doppelte Unterstrich ist als
+    Trenner reserviert, Serverkennungen dürfen ihn deshalb nicht enthalten.
+  * **Risikoklassen**: immer `execute` **und** `external`. Ein MCP-Tool ist
+    fremder Code mit unbekannter Wirkung — die Planung kennt seine Zielpfade
+    nicht, `targets` bleibt leer. Die Annotations des Servers dürfen nur
+    verschärfen (`destructiveHint` ergänzt `delete`); `readOnlyHint` wird
+    bewusst ignoriert, sonst entschiede der fremde Server darüber, wie streng
+    wir ihn behandeln. Folge der Klassenwahl: MCP-Aufrufe sind weder
+    sitzungsweise noch dauerhaft freigebbar — jeder einzelne wird gefragt.
+  * **Fehler sind Ergebnisse**: ein toter oder nicht startbarer Server liefert
+    eine Fehlermeldung als Tool-Ergebnis, keinen Wurf. Der Chat läuft weiter.
+
+  Weil MCP-Tools erst zur Laufzeit feststehen, hat der `tool-port` das
+  optionale `prepare()`: die Engine ruft es einmal je Lauf auf, bevor
+  Systemprompt und Tool-Liste gebaut werden. Danach ist die Liste für diesen
+  Lauf fest.
 - `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
   ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
   PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im

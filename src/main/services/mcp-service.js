@@ -357,6 +357,21 @@ function createMcpService({
     await Promise.allSettled([...connections.keys()].map((id) => disconnect(id)));
   }
 
+  /**
+   * Synchrones Gegenstueck zu `shutdown()` fuer das App-Ende: `will-quit`
+   * wartet auf nichts, und ein `detached` gestarteter Kindprozess wuerde die
+   * App sonst ueberleben. Hier wird deshalb sofort hart beendet.
+   */
+  function disposeSync() {
+    for (const connection of connections.values()) {
+      const transport = connection.transport;
+      connection.transport = null;
+      connection.tools = [];
+      connection.state = MCP_CONNECTION_STATES.STOPPED;
+      transport?.kill?.();
+    }
+  }
+
   return {
     setServers,
     listTools,
@@ -366,6 +381,7 @@ function createMcpService({
     describeConnections,
     describeConnection: describeOne,
     shutdown,
+    disposeSync,
   };
 }
 
