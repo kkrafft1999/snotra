@@ -19,10 +19,18 @@
  *   error-on-call  — antwortet mit einem JSON-RPC-Fehler
  *   tool-error     — antwortet mit isError: true (fachlicher Fehler)
  *   die-on-start   — schreibt auf stderr und beendet sich sofort
+ *   leak-env       — schreibt seinen Token auf stderr und beendet sich (Leck-Test)
  *   ignore-eof     — reagiert nicht auf das Schließen von stdin
  */
 
 const mode = process.argv[2] || 'ok';
+
+if (mode === 'leak-env') {
+  // Ein schlecht gebauter Server, der beim Scheitern seine Umgebung ausgibt.
+  // Genau der Fall, gegen den die Maskierung in #108 schuetzt.
+  process.stderr.write(`fake-mcp: Start fehlgeschlagen, GITHUB_TOKEN=${process.env.GITHUB_TOKEN}\n`);
+  process.exit(4);
+}
 
 if (mode === 'die-on-start') {
   process.stderr.write('fake-mcp: Konfiguration unvollständig, breche ab.\n');

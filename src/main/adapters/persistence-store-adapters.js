@@ -40,6 +40,31 @@ function createWebSearchStorePort(storage) {
   };
 }
 
+/**
+ * MCP-Serverliste fuer Oberflaeche und Handler (Issue #108). Bewusst OHNE die
+ * entschluesselnden Zugriffe: was an den Renderer geht, soll gar nicht erst
+ * die Moeglichkeit haben, an ein Geheimnis zu kommen.
+ */
+function createMcpConfigStorePort(storage) {
+  return {
+    readMcpServers: (...args) => storage.readMcpServers(...args),
+    saveMcpServer: (...args) => storage.saveMcpServer(...args),
+    deleteMcpServer: (...args) => storage.deleteMcpServer(...args),
+  };
+}
+
+/**
+ * Das entschluesselnde Gegenstueck — nur fuer den Dienst, der die Prozesse
+ * startet, und fuer den Abgleich gegen Tool-Ausgaben (Konzept §5). Geht nie
+ * an den Renderer.
+ */
+function createMcpSecretsPort(storage) {
+  return {
+    getMcpServersForRuntime: (...args) => storage.getMcpServersForRuntime(...args),
+    getMcpSecretValues: (...args) => storage.getMcpSecretValues(...args),
+  };
+}
+
 function createWorkspaceFolderStorePort(storage) {
   return {
     getValidatedLastFolder: (...args) => storage.getValidatedLastFolder(...args),
@@ -54,5 +79,7 @@ module.exports = {
   createUiPrefsStorePort,
   createChatHistoryStorePort,
   createWebSearchStorePort,
+  createMcpConfigStorePort,
+  createMcpSecretsPort,
   createWorkspaceFolderStorePort,
 };

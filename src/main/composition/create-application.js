@@ -35,8 +35,11 @@ const {
   createUiPrefsStorePort,
   createChatHistoryStorePort,
   createWebSearchStorePort,
+  createMcpConfigStorePort,
+  createMcpSecretsPort,
   createWorkspaceFolderStorePort,
 } = require('../adapters/persistence-store-adapters');
+const { redactOwnSecrets } = require('../../shared/runtime/sensitive-content');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../adapters/credential-adapter');
 const { createFilesystemIpcAdapter } = require('../adapters/filesystem-ipc-adapter');
@@ -80,10 +83,6 @@ function createApplication({
   speechProviderId = 'openai',
   updates: updatesOverride,
   systemSkillsDir,
-  // MCP-Server (Issue #107). Noch keine Persistenz und kein Settings-Dialog —
-  // die Liste kommt bewusst von hier herein und ist standardmaessig leer;
-  // beides kommt in #108/#109.
-  mcpServers = [],
   /**
    * `fs.watch` aus dem synchronen fs-Modul — `fs` ist hier fs/promises und
    * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
@@ -254,8 +253,57 @@ function createApplication({
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     clientInfo: { name: APP_NAME, version: app?.getVersion?.() || '0.0.0' },
   });
-  mcpService.setServers(mcpServers);
   const mcpAdapter = createMcpAdapter({ mcpService });
+  const mcpConfigStore = createMcpConfigStorePort(storage);
+  const mcpSecrets = createMcpSecretsPort(storage);
+
+  /**
+   * Uebernimmt die gespeicherte Serverliste in den laufenden Dienst (Issue
+   * #108). Entschluesselt wird genau hier und nur hier — der Rueckgabewert
+   * bleibt im Main-Prozess.
+   */
+  async function reloadMcpServers() {
+    mcpService.setServers(await mcpSecrets.getMcpServersForRuntime());
+  }
+
+  /**
+   * Was die Oberflaeche ueber MCP erfaehrt. Der Status eines Servers traegt
+   * seine Fehlermeldung und einen stderr-Auszug — und ein Server, der beim
+   * Start stolpert, gibt gern seine Umgebung aus. Deshalb laeuft beides durch
+   * die Maskierung, bevor es den Main-Prozess verlaesst (Konzept §5).
+   */
+  async function maskMcpStatuses(statuses) {
+    const secrets = await mcpSecrets.getMcpSecretValues();
+    if (secrets.length === 0) return statuses;
+    return statuses.map((status) => ({
+      ...status,
+      error: redactOwnSecrets(status.error, secrets),
+      stderr: redactOwnSecrets(status.stderr, secrets),
+    }));
+  }
+
+  const mcpSettings = {
+    listServers: () => mcpConfigStore.readMcpServers(),
+    // Synchron, weil die Statusanzeige nicht auf einen haengenden Server
+    // warten darf; maskiert wird beim Testen und beim Katalog-Aufbau.
+    describeConnections: () => mcpService.describeConnections(),
+    describeSkippedTools: () => mcpAdapter.describeSkippedTools(),
+    save: (input) => mcpConfigStore.saveMcpServer(input),
+    remove: (id) => mcpConfigStore.deleteMcpServer(id),
+    reload: reloadMcpServers,
+    async test(id) {
+      // Getestet wird der *gespeicherte* Server, nicht eine mitgeschickte
+      // Konfiguration: sonst muesste die Oberflaeche Geheimnisse senden.
+      await reloadMcpServers();
+      const status = await mcpService.connect(id);
+      if (!status) return { status: null, error: `Unbekannter MCP-Server „${id}".` };
+      const [masked] = await maskMcpStatuses([status]);
+      const tools = (await mcpService.listTools())
+        .filter((tool) => tool.serverId === id)
+        .map((tool) => tool.name);
+      return { status: masked, tools };
+    },
+  };
 
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
@@ -320,6 +368,9 @@ function createApplication({
       const effective = await providerSecrets.getEffectiveProviderConfig(providerId);
       if (effective?.apiKey) secrets.push(effective.apiKey);
     }
+    // Auch MCP-Tokens duerfen die App nicht ueber ein Tool-Ergebnis verlassen
+    // (Issue #108) — ein MCP-Server koennte sie sonst selbst zurueckgeben.
+    secrets.push(...(await mcpSecrets.getMcpSecretValues()));
     return secrets;
   }
 
@@ -386,6 +437,7 @@ function createApplication({
     toolCatalog: toolRegistry,
     skillCatalog: skillsService,
     webSearchSettings,
+    mcpSettings,
     pythonSettings,
     shellSettings,
   });
@@ -462,7 +514,14 @@ function createApplication({
     dispose,
     /** Beim Start einmal Interpreter suchen und die Einstellung uebernehmen (Issue #86). */
     initToolRuntimes: () =>
-      Promise.all([pythonSettings.refresh(), shellSettings.refresh(), webSearchSettings.refresh()]),
+      Promise.all([
+        pythonSettings.refresh(),
+        shellSettings.refresh(),
+        webSearchSettings.refresh(),
+        // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
+        // keinen Prozess — der Dienst verbindet traege.
+        reloadMcpServers(),
+      ]),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
   };
 }

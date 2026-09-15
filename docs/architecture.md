@@ -99,6 +99,26 @@ bestehende Importe stabil bleiben.
   optionale `prepare()`: die Engine ruft es einmal je Lauf auf, bevor
   Systemprompt und Tool-Liste gebaut werden. Danach ist die Liste für diesen
   Lauf fest.
+
+  Die Serverliste liegt in `mcp-servers.json` im userData-Verzeichnis (Issue
+  #108), eigene Datei wie beim Suchdienst. Umgebungsvariablen stehen dort je
+  Schlüssel entweder als `{ enc }` (über `safeStorage` verschlüsselt) oder als
+  `{ value }` (Klartext) — **verschlüsselt ist die Vorgabe**, Klartext die
+  bewusste Ausnahme je Schlüssel. Wer das Häkchen nicht anfasst, hat sein
+  Token geschützt; Vergessen darf nicht der teure Fall sein. Lässt sich nicht
+  verschlüsseln (Linux ohne Keyring), wird der Server **nicht** gespeichert
+  statt ein Token im Klartext abzulegen; die Klartextwerte allein ließen sich
+  weiterhin sichern.
+
+  Zwei Lesewege, absichtlich getrennt und in
+  `test/infrastructure-boundaries.test.js` festgenagelt:
+  `createMcpConfigStorePort` liefert die Anzeigeform ohne Geheimnisse und ist
+  das, was Handler und Renderer erreichen; `createMcpSecretsPort`
+  entschlüsselt und ist nur für den Dienst da, der die Prozesse startet.
+  MCP-Geheimnisse gehen zusätzlich in `readOwnSecrets` ein — ein MCP-Server
+  könnte sein eigenes Token sonst über ein Tool-Ergebnis zurückgeben — und
+  werden aus Fehlermeldung und stderr-Auszug maskiert
+  (`redactOwnSecrets`), bevor ein Status den Main-Prozess verlässt.
 - `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
   ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
   PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im

@@ -210,6 +210,34 @@ function containsOwnSecret(rawText, secrets) {
   return false;
 }
 
+/**
+ * Ersetzt eigene Geheimnisse woertlich durch die Maske (Issue #108).
+ *
+ * Gegenstueck zu containsOwnSecret: Wo dort eine Ausgabe ganz zurueckgehalten
+ * wird, soll hier der Text erhalten bleiben und nur das Geheimnis
+ * verschwinden — ein stderr-Auszug eines MCP-Servers ist die einzige Erklaerung
+ * fuer einen Startfehler, taugt aber nichts mehr, wenn er ganz entfaellt.
+ *
+ * Dieselbe Untergrenze von acht Zeichen wie beim Vergleich: kuerzere Werte
+ * kommen in beliebigem Text zufaellig vor, und eine Maske ueber jedem „de_DE"
+ * machte die Meldung unlesbar, ohne etwas zu schuetzen.
+ */
+function redactOwnSecrets(rawText, secrets) {
+  if (typeof rawText !== 'string' || !rawText) return typeof rawText === 'string' ? rawText : '';
+  if (!Array.isArray(secrets) || secrets.length === 0) return rawText;
+  let text = rawText;
+  // Lange Geheimnisse zuerst: sonst zerschneidet ein kurzes, das in einem
+  // langen steckt, dessen Treffer und laesst den Rest stehen.
+  const needles = secrets
+    .filter((secret) => typeof secret === 'string' && secret.trim().length >= 8)
+    .map((secret) => secret.trim())
+    .sort((a, b) => b.length - a.length);
+  for (const needle of needles) {
+    text = text.split(needle).join(MASK_TEXT);
+  }
+  return text;
+}
+
 module.exports = {
   SENSITIVE_CONTENT_RULES_VERSION,
   DEFAULT_SCAN_LIMIT_CHARS,
@@ -217,6 +245,7 @@ module.exports = {
   scanSensitiveContent,
   maskSensitiveContent,
   containsOwnSecret,
+  redactOwnSecrets,
   isPlaceholderValue,
   looksLikeSecretValue,
 };
