@@ -18,6 +18,8 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
+const { createMcpService } = require('../services/mcp-service');
+const { createMcpAdapter } = require('../adapters/mcp-adapter');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
@@ -78,6 +80,10 @@ function createApplication({
   speechProviderId = 'openai',
   updates: updatesOverride,
   systemSkillsDir,
+  // MCP-Server (Issue #107). Noch keine Persistenz und kein Settings-Dialog —
+  // die Liste kommt bewusst von hier herein und ist standardmaessig leer;
+  // beides kommt in #108/#109.
+  mcpServers = [],
   /**
    * `fs.watch` aus dem synchronen fs-Modul — `fs` ist hier fs/promises und
    * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
@@ -239,6 +245,18 @@ function createApplication({
     shellRunner,
   });
 
+  // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
+  // nichts, erst der erste Lauf mit Tool-Bedarf tut es. Den PATH bekommt der
+  // Dienst wie der Python-Runner aus dem Shell-Profil (Issue #111): ohne ihn
+  // faende eine aus dem Finder gestartete App weder `npx` noch `uvx`.
+  const mcpService = createMcpService({
+    spawn: childProcess.spawn,
+    readShellPath: async () => (await shellRunnerService.detect()).path || '',
+    clientInfo: { name: APP_NAME, version: app?.getVersion?.() || '0.0.0' },
+  });
+  mcpService.setServers(mcpServers);
+  const mcpAdapter = createMcpAdapter({ mcpService });
+
   // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
   // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
   const resolvedSystemSkillsDir =
@@ -341,6 +359,10 @@ function createApplication({
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
       describeShell: () => shellRunnerService.describe(),
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
+      // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
+      refreshDynamicTools: async () => {
+        toolRegistry.setDynamicDefinitions(await mcpAdapter.buildToolDefinitions());
+      },
     },
   });
 
@@ -429,6 +451,10 @@ function createApplication({
   function dispose() {
     providerRuntime.disposeAll();
     skillsWatcher?.close();
+    // Synchron und hart: `will-quit` wartet auf nichts, und die MCP-Prozesse
+    // laufen in einer eigenen Prozessgruppe — ohne das hier ueberlebten sie
+    // die App (Issue #106).
+    mcpService.disposeSync();
   }
 
   return {

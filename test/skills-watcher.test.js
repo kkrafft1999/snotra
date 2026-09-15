@@ -366,7 +366,11 @@ test('meldet eine echte neue SKILL.md im Unterordner', async () => {
       'utf8'
     );
 
-    for (let i = 0; i < 60 && meldungen === 0; i += 1) {
+    // Grosszuegiges Budget statt knapper 3 s: `fs.watch` liefert unter Last
+    // (die uebrige Suite startet Kindprozesse) spuerbar spaeter. Die Schleife
+    // bricht beim ersten Ereignis ab, ein gruener Lauf dauert also unveraendert
+    // Millisekunden — nur ein langsamer Rechner scheitert nicht mehr faelschlich.
+    for (let i = 0; i < 200 && meldungen === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     assert.ok(meldungen > 0, 'das Anlegen eines Skills wurde gemeldet');
@@ -403,7 +407,11 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
     meldungen = 0;
 
     await fsPromises.rm(realPath.join(root, '.agents'), { recursive: true, force: true });
-    for (let i = 0; i < 60 && meldungen === 0; i += 1) {
+    // Grosszuegiges Budget statt knapper 3 s: `fs.watch` liefert unter Last
+    // (die uebrige Suite startet Kindprozesse) spuerbar spaeter. Die Schleife
+    // bricht beim ersten Ereignis ab, ein gruener Lauf dauert also unveraendert
+    // Millisekunden — nur ein langsamer Rechner scheitert nicht mehr faelschlich.
+    for (let i = 0; i < 200 && meldungen === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     assert.ok(meldungen > 0, 'das Entfernen wurde gemeldet');

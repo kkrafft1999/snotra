@@ -186,9 +186,14 @@ function createToolCallPlanner({
       return { tool: toolName, error: `Unbekanntes Tool: ${toolName}`, reason: PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL, unknownTool: true, riskClasses: [], targets: [] };
     }
     const baseClass = definition.riskClass;
+    // Mindestklassen der Definition: Grundklasse plus ergaenzende. Ein Tool
+    // kann mehrere Wirkungen zugleich haben — ein MCP-Aufruf ist `execute`
+    // *und* `external` (Issue #107), und beide muessen auch auf den
+    // Fehlerpfaden in der Karte stehen, sonst zeigt sie zu wenig.
+    const baseClasses = [baseClass, ...(definition.additionalRiskClasses || [])];
     const argumentError = validateArguments(definition, args);
     if (argumentError) {
-      return { tool: toolName, error: argumentError, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [baseClass], targets: [] };
+      return { tool: toolName, error: argumentError, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
 
     const workspaceRoot = typeof context.workspaceRoot === 'string' ? context.workspaceRoot : '';
@@ -204,12 +209,12 @@ function createToolCallPlanner({
     if (toolName === 'shell_execute') {
       const guard = checkShellCommand(args?.command);
       if (guard.blocked) {
-        return { tool: toolName, error: guard.reason, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [baseClass], targets: [] };
+        return { tool: toolName, error: guard.reason, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       const rawCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
       const resolvedCwd = await fsService.resolveToolPath(workspaceRoot, rawCwd);
       if (resolvedCwd.error) {
-        return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [baseClass], targets: [] };
+        return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       shellCwd = resolvedCwd.absPath;
     }
@@ -218,17 +223,17 @@ function createToolCallPlanner({
     try {
       descriptors = definition.targets(args || {}) || [];
     } catch (error) {
-      return { tool: toolName, error: error?.message || 'Ziele nicht bestimmbar.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [baseClass], targets: [] };
+      return { tool: toolName, error: error?.message || 'Ziele nicht bestimmbar.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
     if (descriptors && descriptors.error) {
-      return { tool: toolName, error: descriptors.error, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [baseClass], targets: [] };
+      return { tool: toolName, error: descriptors.error, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
     const isWriteTool = baseClass === TOOL_RISK_CLASSES.WRITE || baseClass === TOOL_RISK_CLASSES.DELETE;
     if (isWriteTool && descriptors.length === 0) {
-      return { tool: toolName, error: 'Kein Zielpfad angegeben.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [baseClass], targets: [] };
+      return { tool: toolName, error: 'Kein Zielpfad angegeben.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
 
-    const classes = new Set([baseClass]);
+    const classes = new Set(baseClasses);
     for (const cls of context.forcedClasses || []) classes.add(cls);
     const targets = [];
     let hardLimit = null;

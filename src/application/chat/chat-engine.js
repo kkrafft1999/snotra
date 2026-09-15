@@ -460,6 +460,10 @@ function createChatEngine({
       // einen Ordner braucht (Issue #96).
       const workspaceOpen = Boolean(workspaceRoot);
       const toolOptions = { disabledNames, workspaceOpen };
+      // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
+      // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
+      // der mittendrin dazukommt, wirkt ab der naechsten Nachricht.
+      if (typeof tools.prepare === 'function') await tools.prepare(toolOptions);
       const toolsPrompt = tools.buildSystemPrompt(toolOptions);
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
