@@ -150,3 +150,53 @@ test('nach Schliessen und Wiederoeffnen steht der Dialog wieder auf Modelle', as
   assert.equal(tabFor('models').getAttribute('aria-selected'), 'true');
   assert.equal(panelFor('general').hidden, true);
 });
+
+// --- Skills ohne Obergrenze (Issue #137) ------------------------------------
+// Frueher hat der Dialog ab dem neunten Haken abgewinkt (MAX_ACTIVE_SKILLS = 8)
+// und einen Hinweis eingeblendet. Der Test haelt fest, dass jetzt beliebig
+// viele Skills gleichzeitig angehen und auch alle gespeichert werden.
+const MANY_SKILLS = Array.from({ length: 12 }, (_, i) => ({
+  name: `skill-${i + 1}`,
+  description: `Skill Nummer ${i + 1}`,
+  source: 'user-agents',
+  status: 'available',
+  path: `/tmp/.agents/skills/skill-${i + 1}`,
+  detail: '',
+  builtin: false,
+}));
+
+test('mehr als acht Skills lassen sich gleichzeitig aktivieren und speichern', async (t) => {
+  let committed = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: MANY_SKILLS, activeSkills: [] }),
+    commitSettings: async (payload) => {
+      committed = payload;
+      return { ok: true };
+    },
+  });
+  t.after(dom.cleanup);
+
+  tabFor('skills').click();
+  await flush();
+
+  const boxes = [...document.querySelectorAll('#settings-skill-list input[data-skill-name]')];
+  assert.equal(boxes.length, MANY_SKILLS.length, 'alle Skills stehen in der Liste');
+
+  for (const box of boxes) box.click();
+  await flush();
+
+  assert.deepEqual(
+    boxes.filter((box) => !box.checked).map((box) => box.dataset.skillName),
+    [],
+    'kein Haken darf zurueckspringen'
+  );
+
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  assert.deepEqual(
+    committed?.uiPrefs?.activeSkills,
+    MANY_SKILLS.map((skill) => skill.name),
+    'alle angehakten Skills landen in den Einstellungen'
+  );
+});
