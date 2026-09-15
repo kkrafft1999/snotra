@@ -11,8 +11,10 @@ const path = require('node:path');
 const WEB_DIR = path.join(__dirname, '..', 'website');
 const ORIGIN = 'https://snotra-ai.dev';
 
+// Zeilenenden normalisieren: Unter Windows checkt Git die Dateien per
+// core.autocrlf mit CRLF aus, sonst laufen die zeilenweisen Muster ins Leere.
 function lies(datei) {
-  return fs.readFileSync(path.join(WEB_DIR, datei), 'utf8');
+  return fs.readFileSync(path.join(WEB_DIR, datei), 'utf8').replace(/\r\n/g, '\n');
 }
 
 function htmlSeiten() {
