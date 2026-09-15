@@ -8,6 +8,12 @@ const {
   extractPresetOptions,
 } = require('../../shared/contracts/settings');
 const {
+  maskStoredMcpEnv,
+  normalizeStoredMcpEnv,
+  validateMcpServerConfig,
+  validateMcpServerInput,
+} = require('../../shared/contracts/mcp');
+const {
   inferChatTitle,
   sanitizeChatMessagesForStore,
   normalizeTokenUsageForStore,
@@ -34,6 +40,7 @@ function createStorageService({
   const UI_PREFS_FILENAME = 'ui-preferences.json';
   const CHAT_HISTORY_FILENAME = 'chat-history.json';
   const WEB_SEARCH_CONFIG_FILENAME = 'web-search-config.json';
+  const MCP_CONFIG_FILENAME = 'mcp-servers.json';
 
   const MAX_CHAT_SESSIONS = maxChatSessions;
   const MAX_FOLDER_HISTORY = maxFolderHistory;
@@ -330,6 +337,161 @@ function createStorageService({
       }
       await writeJsonAtomic(getWebSearchConfigPath(), { apiKeyEnc: enc });
       return { ok: true, hasApiKey: true };
+    });
+  }
+
+
+  // --- MCP-Server (Issue #108) ---------------------------------------------
+  //
+  // Eigene Datei wie bei der Websuche: MCP-Server sind kein LLM-Anbieter. Die
+  // env-Werte liegen je Schluessel entweder verschluesselt (`enc`) oder im
+  // Klartext (`value`) — verschluesselt ist die Vorgabe, Klartext die bewusste
+  // Ausnahme (Entscheidung zu #108).
+  //
+  // Zwei Lesewege, absichtlich getrennt: `readMcpServers` liefert die
+  // Anzeigeform ohne Geheimnisse und ist das, was an den Renderer geht;
+  // `getMcpServersForRuntime` entschluesselt und ist nur fuer den Dienst
+  // gedacht, der die Prozesse startet.
+
+  function getMcpConfigPath() {
+    return path.join(app.getPath('userData'), MCP_CONFIG_FILENAME);
+  }
+
+  async function readMcpConfigRaw() {
+    try {
+      const raw = await fs.readFile(getMcpConfigPath(), 'utf8');
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object' || !Array.isArray(data.servers)) return { servers: [] };
+      return data;
+    } catch {
+      return { servers: [] };
+    }
+  }
+
+  /** Gespeicherte Eintraege in geprueftem Zustand, env in gespeicherter Form. */
+  async function readMcpStoredServers() {
+    const data = await readMcpConfigRaw();
+    const out = [];
+    const seen = new Set();
+    for (const entry of data.servers) {
+      const { ok, value } = validateMcpServerConfig({ ...entry, env: {} });
+      if (!ok || seen.has(value.id)) continue;
+      seen.add(value.id);
+      out.push({ ...value, env: normalizeStoredMcpEnv(entry?.env) });
+    }
+    return out;
+  }
+
+  /** Anzeigeform fuer die Oberflaeche — ohne jedes Geheimnis. */
+  async function readMcpServers() {
+    return (await readMcpStoredServers()).map((server) => ({
+      ...server,
+      env: maskStoredMcpEnv(server.env),
+    }));
+  }
+
+  /**
+   * Laufzeitform fuer den MCP-Dienst: env flach und entschluesselt. Ein Wert,
+   * der sich nicht entschluesseln laesst (fremder safeStorage-Schluessel nach
+   * Nutzerwechsel), faellt weg statt den ganzen Server zu verhindern — der
+   * Server startet dann ohne ihn und scheitert sichtbar am eigenen Fehler.
+   */
+  async function getMcpServersForRuntime() {
+    return (await readMcpStoredServers()).map((server) => {
+      const env = {};
+      for (const [key, entry] of Object.entries(server.env)) {
+        if (typeof entry.value === 'string') env[key] = entry.value;
+        else {
+          const plain = decryptIfPossible(entry.enc);
+          if (plain !== null) env[key] = plain;
+        }
+      }
+      return { ...server, env };
+    });
+  }
+
+  /**
+   * Alle entschluesselten Geheimnisse als flache Liste. Nur zum Vergleich —
+   * damit ein MCP-Token weder ueber ein Tool-Ergebnis hinausgeht (Konzept §5)
+   * noch in einem stderr-Auszug auftaucht. Wird nie protokolliert.
+   */
+  async function getMcpSecretValues() {
+    const out = [];
+    for (const server of await readMcpStoredServers()) {
+      for (const entry of Object.values(server.env)) {
+        if (typeof entry.enc !== 'string') continue;
+        const plain = decryptIfPossible(entry.enc);
+        if (plain) out.push(plain);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Legt einen Server an oder ersetzt ihn. Ein Geheimnis mit `keep` behaelt
+   * seinen gespeicherten Wert — sonst loeschte das Umbenennen eines Servers
+   * dessen Token, weil die Oberflaeche ihn gar nicht kennt und nicht
+   * zuruecksenden kann.
+   */
+  async function saveMcpServer(input) {
+    const { ok, value, env, errors } = validateMcpServerInput(input);
+    if (!ok) return { ok: false, errors };
+
+    return withFileLock(getMcpConfigPath(), async () => {
+      const servers = await readMcpStoredServers();
+      const previous = servers.find((server) => server.id === value.id);
+      const storedEnv = {};
+      const unencryptable = [];
+
+      for (const entry of env) {
+        if (entry.keep) {
+          const before = previous?.env?.[entry.key];
+          if (before) storedEnv[entry.key] = before;
+          continue;
+        }
+        if (!entry.secret) {
+          storedEnv[entry.key] = { value: entry.value };
+          continue;
+        }
+        const enc = encryptIfPossible(entry.value);
+        if (!enc) {
+          unencryptable.push(entry.key);
+          continue;
+        }
+        storedEnv[entry.key] = { enc };
+      }
+
+      if (unencryptable.length > 0) {
+        // Lieber gar nicht speichern als ein Token im Klartext ablegen. Die
+        // Meldung nennt die Schluessel, niemals die Werte.
+        return {
+          ok: false,
+          errors: [
+            `Verschlüsselter Speicher ist auf diesem System nicht verfügbar. `
+            + `Diese Werte können deshalb nicht gespeichert werden: ${unencryptable.join(', ')}. `
+            + `Entweder das Häkchen „geheim“ entfernen (dann stehen sie im Klartext in der Konfiguration) `
+            + `oder den Wert weglassen.`,
+          ],
+        };
+      }
+
+      const next = servers.filter((server) => server.id !== value.id);
+      next.push({ ...value, env: storedEnv });
+      next.sort((a, b) => a.id.localeCompare(b.id));
+      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      return { ok: true, errors: [] };
+    });
+  }
+
+  async function deleteMcpServer(id) {
+    const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
+    if (!wanted) return { ok: false, errors: ['Es fehlt die Kennung des Servers.'] };
+    return withFileLock(getMcpConfigPath(), async () => {
+      const servers = await readMcpStoredServers();
+      const next = servers.filter((server) => server.id !== wanted);
+      if (next.length === servers.length) return { ok: false, errors: [`Unbekannter MCP-Server „${wanted}".`] };
+      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      return { ok: true, errors: [] };
     });
   }
 
@@ -667,6 +829,11 @@ function createStorageService({
     hasWebSearchApiKey,
     getWebSearchApiKey,
     setWebSearchApiKey,
+    readMcpServers,
+    getMcpServersForRuntime,
+    getMcpSecretValues,
+    saveMcpServer,
+    deleteMcpServer,
     normalizeWorkspaceRoot,
     workspaceBucketKey,
     inferChatTitle,

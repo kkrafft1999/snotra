@@ -55,6 +55,18 @@ const REQUEST_CHANNELS = Object.freeze({
    * und das Setzen bzw. Loeschen. Der Schluessel selbst geht nie an den
    * Renderer zurueck — nur die Ja/Nein-Auskunft.
    */
+  /**
+   * MCP-Server (Issue #108). Der Katalog liefert die Serverliste in
+   * Anzeigeform — env-Werte, die als geheim abgelegt sind, kommen nur als
+   * „vorhanden“ zurueck, nie als Wert. Gespeichert wird je Server; „neu
+   * laden“ uebernimmt die Datei in den laufenden Dienst, ohne App-Neustart.
+   * „Testen“ startet den Server einmal und meldet Status und Tool-Liste.
+   */
+  SETTINGS_GET_MCP_CATALOG: 'settings:getMcpCatalog',
+  SETTINGS_SAVE_MCP_SERVER: 'settings:saveMcpServer',
+  SETTINGS_DELETE_MCP_SERVER: 'settings:deleteMcpServer',
+  SETTINGS_RELOAD_MCP_SERVERS: 'settings:reloadMcpServers',
+  SETTINGS_TEST_MCP_SERVER: 'settings:testMcpServer',
   SETTINGS_GET_WEB_SEARCH_STATE: 'settings:getWebSearchState',
   SETTINGS_SET_WEB_SEARCH_API_KEY: 'settings:setWebSearchApiKey',
   /**

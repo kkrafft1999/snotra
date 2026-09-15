@@ -241,3 +241,71 @@ test('nur destructiveHint wird aus den Annotations übernommen', () => {
   );
   assert.deepEqual(tool.annotations, { destructiveHint: true });
 });
+
+// --- env-Formen: Eingabe, Speicher, Anzeige (Issue #108) ---
+
+const {
+  maskStoredMcpEnv,
+  normalizeMcpEnvInput,
+  normalizeStoredMcpEnv,
+  validateMcpServerInput,
+} = require('../src/shared/contracts/mcp');
+
+test('ohne ausdrückliches secret: false gilt ein Wert als geheim', () => {
+  const { entries, errors } = normalizeMcpEnvInput({
+    TOKEN: { value: 'x' },
+    AUCH_GEHEIM: { secret: true, value: 'y' },
+    OFFEN: { secret: false, value: 'z' },
+  });
+  assert.deepEqual(errors, []);
+  assert.deepEqual(entries.map((e) => [e.key, e.secret]), [
+    ['TOKEN', true],
+    ['AUCH_GEHEIM', true],
+    ['OFFEN', false],
+  ]);
+});
+
+test('keep merkt sich „unverändert" ohne Wert', () => {
+  const { entries } = normalizeMcpEnvInput({ TOKEN: { keep: true } });
+  assert.deepEqual(entries, [{ key: 'TOKEN', secret: true, value: null, keep: true }]);
+});
+
+test('ein Eintrag ohne Wert und ohne keep ist ein Fehler', () => {
+  const { entries, errors } = normalizeMcpEnvInput({ TOKEN: { secret: true } });
+  assert.deepEqual(entries, []);
+  assert.match(errors.join(' '), /TOKEN/);
+});
+
+test('ungültige Variablennamen werden gemeldet, ohne den Wert zu nennen', () => {
+  const { errors } = normalizeMcpEnvInput({ '2FALSCH': { value: 'sk-streng-geheim' } });
+  assert.match(errors.join(' '), /2FALSCH/);
+  assert.equal(errors.join(' ').includes('sk-streng-geheim'), false);
+});
+
+test('die gespeicherte Form nimmt nur enc oder value', () => {
+  assert.deepEqual(
+    normalizeStoredMcpEnv({ A: { enc: 'base64' }, B: { value: 'klar' }, C: { unsinn: 1 }, '2X': { value: 'x' }, D: null }),
+    { A: { enc: 'base64' }, B: { value: 'klar' } },
+  );
+});
+
+test('die Anzeigeform zeigt Klartext, aber nie ein Geheimnis', () => {
+  assert.deepEqual(maskStoredMcpEnv({ TOKEN: { enc: 'AAA' }, LANG: { value: 'de_DE' }, LEER: { value: '' } }), [
+    { key: 'LANG', secret: false, hasValue: true, value: 'de_DE' },
+    { key: 'LEER', secret: false, hasValue: false, value: '' },
+    { key: 'TOKEN', secret: true, hasValue: true },
+  ]);
+});
+
+test('validateMcpServerInput prüft Server und env zusammen', () => {
+  const gut = validateMcpServerInput({ id: 'gh', command: 'npx', env: { T: { value: 'x' } } });
+  assert.equal(gut.ok, true);
+  assert.deepEqual(gut.value.env, {}, 'die Laufzeitform bleibt hier leer — env kommt getrennt');
+  assert.deepEqual(gut.env.map((e) => e.key), ['T']);
+
+  const schlecht = validateMcpServerInput({ id: 'gh', env: { '2X': { value: 'y' } } });
+  assert.equal(schlecht.ok, false);
+  assert.equal(schlecht.value, null);
+  assert.match(schlecht.errors.join(' '), /Kommando/);
+  assert.match(schlecht.errors.join(' '), /2X/);
+});

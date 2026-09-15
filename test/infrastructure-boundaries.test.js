@@ -65,3 +65,27 @@ test('llm config store port does not expose decrypted provider secrets', () => {
   );
   assert.doesNotMatch(llmBlock, /getEffectiveProviderConfig/);
 });
+
+test('mcp config store port does not expose decrypted env values', () => {
+  // Issue #108: Was der Renderer erreichen kann, darf nicht entschluesseln
+  // koennen. Dieselbe Trennung wie beim LLM-Config-Store.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'main', 'adapters', 'persistence-store-adapters.js'),
+    'utf8'
+  );
+  const block = source.slice(
+    source.indexOf('function createMcpConfigStorePort'),
+    source.indexOf('function createMcpSecretsPort')
+  );
+  assert.doesNotMatch(block, /getMcpServersForRuntime/);
+  assert.doesNotMatch(block, /getMcpSecretValues/);
+  assert.match(block, /readMcpServers/);
+});
+
+test('mcp settings handlers never reach the decrypting port', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'main', 'ipc', 'settings-handlers.js'),
+    'utf8'
+  );
+  assert.doesNotMatch(source, /getMcpServersForRuntime|getMcpSecretValues/);
+});

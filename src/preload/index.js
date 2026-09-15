@@ -114,6 +114,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWebSearchState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_WEB_SEARCH_STATE),
   setWebSearchApiKey: (apiKey) =>
     ipcRenderer.invoke(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, String(apiKey ?? '')),
+  // MCP-Server (Issue #108). Der Katalog ist bereits maskiert — ein als geheim
+  // abgelegter env-Wert kommt nur als „vorhanden" zurueck, nie als Wert. Beim
+  // Speichern schickt die Oberflaeche fuer unveraenderte Geheimnisse
+  // `{ keep: true }` statt eines Wertes, den sie ohnehin nicht kennt.
+  getMcpCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_MCP_CATALOG),
+  saveMcpServer: (server) => ipcRenderer.invoke(REQ.SETTINGS_SAVE_MCP_SERVER, server),
+  deleteMcpServer: (id) => ipcRenderer.invoke(REQ.SETTINGS_DELETE_MCP_SERVER, String(id ?? '')),
+  reloadMcpServers: () => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_MCP_SERVERS),
+  testMcpServer: (id) => ipcRenderer.invoke(REQ.SETTINGS_TEST_MCP_SERVER, String(id ?? '')),
   getPythonState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_PYTHON_STATE),
   getShellState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SHELL_STATE),
   getToolPermissionState: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_STATE),
