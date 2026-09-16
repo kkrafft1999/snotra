@@ -296,6 +296,84 @@ Die Grenzen bleiben eng gezogen:
 Ohne geöffneten Ordner gibt es überhaupt keine Tools, also auch keine
 Skill-Pfade.
 
+## MCP-Server
+
+Über das **Model Context Protocol (MCP)** bindest du Werkzeuge fremder Systeme
+ein — Jira, Confluence, Datenbanken, interne APIs — ohne dass Snotra dafür ein
+eigenes Tool mitbringen müsste. Eine neue Fähigkeit kommt per Konfiguration
+dazu, nicht per Release. Verwaltet wird das unter **Einstellungen › MCP**; von
+Hand in JSON-Dateien zu schreiben ist nicht nötig.
+
+Unterstützt werden Server, die **lokal als Prozess** gestartet werden
+(stdio-Transport). Server, die nur über HTTP oder SSE erreichbar sind, gehen
+noch nicht.
+
+### Einen Server eintragen
+
+„Server hinzufügen“ öffnet ein kleines Formular:
+
+| Feld | Bedeutung |
+| ---- | --------- |
+| **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern |
+| **Anzeigename** | Frei wählbar, nur für die Liste |
+| **Kommando** und **Argumente** | Was gestartet wird, z. B. `npx` mit `-y @modelcontextprotocol/server-github` |
+| **Arbeitsverzeichnis** | Optional; leer heißt Projektordner |
+| **Umgebungsvariablen** | Name/Wert-Paare für den Prozess |
+
+**Umgebungsvariablen sind vorbelegt geheim.** Ein geheimer Wert wird über
+Electrons `safeStorage` verschlüsselt abgelegt und danach nicht mehr angezeigt
+— nur ersetzt oder gelöscht. Wer einen Wert bewusst lesbar halten will (etwa
+`LANG=de_DE`), nimmt das Häkchen weg; er steht dann im Klartext in der
+Konfiguration. Vergessen soll nicht der teure Fall sein. Lässt sich auf dem
+System nicht verschlüsseln, wird gar nicht erst gespeichert, statt ein Token
+offen abzulegen.
+
+**„Verbindung testen“** startet den Server einmal und zeigt, ob er antwortet
+und welche Tools er anbietet — oder eine verständliche Fehlermeldung samt
+`stderr`, wenn er nicht startet. Erst danach lassen sich einzelne Tools
+abwählen.
+
+### Server importieren
+
+Wer MCP schon in Claude Desktop, Claude Code oder Cursor nutzt, muss seine
+Server nicht abtippen: **„Importieren“** nimmt einen eingefügten
+`mcpServers`-Block entgegen — mit oder ohne umschließendes `mcpServers`,
+Markdown-Zäune, Kommentare und angehängte Kommas stören nicht. Während du
+einfügst, erscheint darunter, was erkannt wurde.
+
+Die Vorschau nennt zu jedem Eintrag den Namen, die daraus abgeleitete Kennung
+und das Startkommando, dazu die Punkte, die eine Entscheidung verlangen: Werte,
+die als geheim vorgemerkt sind (Schlüsselnamen wie `*_TOKEN` oder bekannte
+Tokenformate), noch nicht ausgefüllte Platzhalter und Kennungen, die einen
+vorhandenen Server ersetzen würden. Einträge, die nicht gehen — HTTP-/SSE-
+Transport, fehlendes Kommando — stehen mit Begründung darunter, statt
+stillschweigend zu verschwinden. Jeder Eintrag ist einzeln abwählbar.
+
+**Importierte Server sind zunächst ausgeschaltet.** Der Import ist ein
+Abtipp-Ersatz, keine Freigabe: Einschalten startet einen Prozess und bringt
+dessen Tools ins Modell, und das bleibt ein bewusster Schritt.
+
+Gelesen wird ausschließlich, was du einfügst. Snotra öffnet keine fremden
+Konfigurationsdateien.
+
+### Wie MCP-Tools im Chat auftauchen
+
+Tools eingeschalteter Server erreichen das Modell mit vorangestelltem
+Namensraum: `mcp__<kennung>__<toolname>`. Das hält sie von den eingebauten
+Tools getrennt und macht in der Tool-Zeile sichtbar, woher ein Aufruf kommt.
+Zusammengesetzte Namen über 64 Zeichen lässt Snotra aus und weist sie unter der
+Serverliste aus — ein Name, den das Modell nicht zuverlässig adressieren kann,
+nützt niemandem.
+
+Für die [Tool-Berechtigungen](#konfiguration) gelten MCP-Tools grundsätzlich als
+`execute` **und** `external`: Ein fremder Prozess läuft, und Daten verlassen
+die App. Meldet ein Server ein Tool ausdrücklich als destruktiv, kommt `delete`
+dazu. Strenger einstufen kann ein Server sich also selbst, milder nicht —
+sonst entschiede der fremde Server darüber, wie streng wir ihn behandeln.
+
+Ein Server, der nicht startet oder abstürzt, macht den Chat nicht kaputt: Der
+Fehler wird gemeldet, alles andere läuft weiter.
+
 ## Projektstruktur
 
 ```

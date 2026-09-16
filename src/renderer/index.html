@@ -625,6 +625,9 @@
               <h3 class="settings-subsection-title" id="heading-mcp-servers">Eingetragene Server</h3>
               <div class="settings-mcp-head__actions">
                 <button type="button" id="btn-reload-mcp" class="btn-secondary">Neu laden</button>
+                <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import">
+                  Importieren
+                </button>
                 <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server">
                   Server hinzufügen
                 </button>
@@ -802,6 +805,49 @@
             <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden">Verbindung testen</button>
             <button type="button" id="btn-mcp-server-cancel" class="btn-secondary">Abbrechen</button>
             <button type="button" id="btn-mcp-server-save" class="btn-primary">Speichern</button>
+          </footer>
+        </div>
+      </div>
+
+      <div id="mcp-import-overlay" class="add-model-overlay hidden" aria-hidden="true">
+        <div
+          class="add-model-dialog modal-dialog modal-dialog--nested"
+          role="dialog"
+          aria-modal="true"
+          id="dialog-mcp-import"
+          aria-labelledby="dialog-mcp-import-title">
+          <header class="add-model-dialog__header">
+            <h2 id="dialog-mcp-import-title" class="add-model-dialog__title">Server importieren</h2>
+            <button type="button" id="btn-mcp-import-close" class="settings-dialog__icon-close" aria-label="Popup schließen">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+              </svg>
+            </button>
+          </header>
+          <div class="add-model-dialog__body modal-dialog__body">
+            <div class="modal-field-group">
+              <label for="mcp-import-input" class="modal-field-label">Konfiguration einfügen</label>
+              <textarea id="mcp-import-input" class="modal-input modal-input--mono mcp-import__paste" rows="6"
+                spellcheck="false" autocomplete="off"
+                placeholder='{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] } } }'></textarea>
+              <p class="modal-hint">
+                Der Block aus Claude Desktop, Claude Code oder Cursor — mit oder ohne umschließendes
+                <code lang="en">mcpServers</code>. Kommentare und angehängte Kommas stören nicht.
+                Gelesen wird nur, was hier steht; es wird keine fremde Konfigurationsdatei geöffnet.
+              </p>
+            </div>
+            <p id="mcp-import-error" class="modal-warning hidden" role="alert"></p>
+            <p id="mcp-import-count" class="mcp-import__count" aria-live="polite"></p>
+            <ul id="mcp-import-list" class="mcp-import__list" aria-label="Erkannte Server"></ul>
+            <div id="mcp-import-skipped" class="mcp-import__skipped hidden"></div>
+            <p id="mcp-import-note" class="modal-hint hidden">
+              Übernommene Server sind zunächst <strong>ausgeschaltet</strong>. Einschalten startet einen
+              Prozess und bringt dessen Tools ins Modell — das bleibt ein bewusster Schritt.
+            </p>
+          </div>
+          <footer class="modal-actions">
+            <button type="button" id="btn-mcp-import-cancel" class="btn-secondary">Abbrechen</button>
+            <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled>Übernehmen</button>
           </footer>
         </div>
       </div>
