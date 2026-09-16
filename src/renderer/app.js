@@ -17,6 +17,7 @@ import { initToolModePicker } from './components/ToolModePicker.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
+import { initAppVersionBadge } from './components/AppVersionBadge.js';
 
 const api = window.electronAPI;
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
@@ -257,6 +258,7 @@ btnChatNew.addEventListener('click', () => chatHistory.startNewChatWithHistory()
 
 modelPicker.refreshLLMState();
 void toolPermissions.refresh();
+void initAppVersionBadge({ api });
 
 (async () => {
   let uiPrefs = { contentPaneVisible: true, appLocale: 'de' };

@@ -83,6 +83,15 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
   step('App gestartet');
 
+  // --- Fenstertitel: Name plus laufende Version -----------------------------
+  // Der Titel kommt aus dem Main-Prozess, nicht aus dem <title> des Renderers
+  // (siehe src/main/window.js) — deshalb hier ueber `app.evaluate` gelesen.
+  const { windowTitle, appVersion } = await snotra.app.evaluate(async ({ app, BrowserWindow }) => ({
+    windowTitle: BrowserWindow.getAllWindows()[0].getTitle(),
+    appVersion: app.getVersion(),
+  }));
+  assert.equal(windowTitle, `Snotra AI ${appVersion}`);
+
   // --- Start: der vorgemerkte Ordner ist offen und der Baum gezeichnet -------
   const labels = await poll(
     async () => {

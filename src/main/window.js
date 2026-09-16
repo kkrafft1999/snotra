@@ -1,4 +1,4 @@
-const { BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
@@ -9,6 +9,7 @@ let mainWindow = null;
 
 function createWindow() {
   const window = new BrowserWindow({
+    title: `Snotra AI ${app.getVersion()}`,
     width: 1280,
     height: 800,
     minWidth: 900,
@@ -21,6 +22,13 @@ function createWindow() {
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#ffffff',
+  });
+
+  // Ohne das setzt das <title> des Renderers den Fenstertitel sofort wieder
+  // auf "Snotra AI" zurueck und die Version waere nur einen Wimpernschlag
+  // lang zu sehen.
+  window.on('page-title-updated', (event) => {
+    event.preventDefault();
   });
 
   mainWindow = window;
