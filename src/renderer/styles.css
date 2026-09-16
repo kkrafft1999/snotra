@@ -194,6 +194,28 @@ summary:focus-visible,
   white-space: nowrap;
 }
 
+/* Laufende Version als Badge neben der Wortmarke. 10 px liegt unter der
+ * 14-px-Grenze der Token-Regel, deshalb --text-muted-strong (7,1:1) statt
+ * --text-muted. */
+#app-version {
+  font-family: var(--ds-font-ui);
+  font-size: 10px;
+  font-weight: var(--ds-font-weight-bold);
+  line-height: 1;
+  color: var(--text-muted-strong);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--btn-radius);
+  padding: 3px 7px;
+  margin-left: 8px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+#app-version[hidden] {
+  display: none;
+}
+
 #tree-header #btn-open-folder,
 #tree-header #btn-folder-history {
   display: inline-flex;
