@@ -293,6 +293,10 @@
             Skills
             <span class="settings-nav-item__desc">Arbeitsweisen für das Sprachmodell</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-mcp" id="tab-settings-mcp" data-settings-panel="mcp">
+            MCP
+            <span class="settings-nav-item__desc">Server externer Werkzeuge</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
             Allgemein
             <span class="settings-nav-item__desc">Texte, Prompts, Verhalten</span>
@@ -605,6 +609,32 @@
             </div>
           </section>
 
+          <section class="settings-panel" id="panel-settings-mcp" role="tabpanel" aria-labelledby="tab-settings-mcp" hidden>
+            <div class="settings-mcp-warning">
+              <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
+              <p>
+                <strong>Ein MCP-Server ist fremder Code, der auf deinem Rechner gestartet wird.</strong>
+                Er läuft mit deinen Rechten und kann alles tun, was du auch könntest. Im Lieferzustand
+                ist keiner eingetragen — es läuft nichts von selbst. Trag nur Server ein, deren
+                Herkunft du kennst.
+              </p>
+            </div>
+            <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
+            <div class="settings-panel-models__head">
+              <h3 class="settings-subsection-title" id="heading-mcp-servers">Eingetragene Server</h3>
+              <div class="settings-mcp-head__actions">
+                <button type="button" id="btn-reload-mcp" class="btn-secondary">Neu laden</button>
+                <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server">
+                  Server hinzufügen
+                </button>
+              </div>
+            </div>
+            <ul id="settings-mcp-list" class="settings-mcp-list" aria-labelledby="heading-mcp-servers"></ul>
+            <p id="settings-mcp-empty" class="settings-empty-hint hidden">
+              Noch kein Server eingetragen — „Server hinzufügen“ öffnen.
+            </p>
+          </section>
+
           <section class="settings-panel" id="panel-settings-general" role="tabpanel" aria-labelledby="tab-settings-general" hidden>
             <p class="settings-form-hint">
               Texte und Prompts für das gesamte Verhalten der App — getrennt von modellspezifischen Angaben beim Anbieter.
@@ -679,7 +709,7 @@
 
       <div class="settings-dialog__hint-bar">
         <details class="settings-note settings-note--bar">
-          <summary class="settings-note__summary"><span>Änderungen gelten erst mit <strong>Übernehmen</strong>.</span></summary>
+          <summary class="settings-note__summary"><span id="settings-apply-hint">Änderungen gelten erst mit <strong>Übernehmen</strong>.</span></summary>
           <div class="settings-note__body">
             <p>
               API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den
@@ -704,6 +734,76 @@
           </div>
         </div>
       </footer>
+
+      <div id="mcp-server-overlay" class="add-model-overlay hidden" aria-hidden="true">
+        <div
+          class="add-model-dialog modal-dialog modal-dialog--nested"
+          role="dialog"
+          aria-modal="true"
+          id="dialog-mcp-server"
+          aria-labelledby="dialog-mcp-server-title">
+          <header class="add-model-dialog__header">
+            <h2 id="dialog-mcp-server-title" class="add-model-dialog__title">Server hinzufügen</h2>
+            <button type="button" id="btn-mcp-server-close" class="settings-dialog__icon-close" aria-label="Popup schließen">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+              </svg>
+            </button>
+          </header>
+          <div class="add-model-dialog__body modal-dialog__body">
+            <p id="mcp-form-error" class="modal-warning hidden" role="alert"></p>
+            <div class="modal-field-group">
+              <label for="mcp-field-id" class="modal-field-label">Kennung</label>
+              <input type="text" id="mcp-field-id" class="modal-input modal-input--mono" placeholder="github" autocomplete="off" spellcheck="false">
+              <p class="modal-hint">
+                Kleinbuchstaben, Ziffern, Punkt, Bindestrich, Unterstrich. Sie steckt im Tool-Namen
+                (<code lang="en">mcp__github__…</code>) und lässt sich später nicht ändern.
+              </p>
+            </div>
+            <div class="modal-field-group">
+              <label for="mcp-field-label" class="modal-field-label">Anzeigename</label>
+              <input type="text" id="mcp-field-label" class="modal-input" placeholder="GitHub" autocomplete="off">
+            </div>
+            <div class="modal-field-group">
+              <label for="mcp-field-command" class="modal-field-label">Kommando</label>
+              <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="modal-field-group">
+              <label for="mcp-field-args" class="modal-field-label">Argumente</label>
+              <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
+              <p class="modal-hint">Durch Leerzeichen getrennt wie in der Kommandozeile; Anführungszeichen halten zusammen.</p>
+            </div>
+            <div class="modal-field-group">
+              <label for="mcp-field-cwd" class="modal-field-label">Arbeitsverzeichnis</label>
+              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(Projektordner)" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="modal-field-group">
+              <span class="modal-field-label" id="heading-mcp-env">Umgebungsvariablen</span>
+              <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
+              <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact">Variable hinzufügen</button>
+              <p class="modal-hint">
+                Werte sind vorbelegt <strong>geheim</strong> und liegen verschlüsselt im
+                Systemschlüsselbund. Ein geheimer Wert wird nach dem Speichern nicht mehr angezeigt —
+                nur ersetzt oder gelöscht.
+              </p>
+            </div>
+            <div class="modal-field-group hidden" id="mcp-tools-block">
+              <div class="settings-panel-models__head">
+                <span class="modal-field-label" id="heading-mcp-tools">Angebotene Tools</span>
+                <span id="mcp-tools-count" class="settings-tool-count"></span>
+              </div>
+              <div id="mcp-tools-list" class="mcp-tool-list" role="group" aria-labelledby="heading-mcp-tools"></div>
+            </div>
+            <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>
+          </div>
+          <footer class="modal-actions">
+            <button type="button" id="btn-mcp-server-delete" class="btn-destructive hidden">Server entfernen</button>
+            <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden">Verbindung testen</button>
+            <button type="button" id="btn-mcp-server-cancel" class="btn-secondary">Abbrechen</button>
+            <button type="button" id="btn-mcp-server-save" class="btn-primary">Speichern</button>
+          </footer>
+        </div>
+      </div>
 
       <div id="add-model-overlay" class="add-model-overlay hidden" aria-hidden="true">
       <div

@@ -336,6 +336,7 @@ function createMcpService({
       label: connection.config.label,
       state: connection.state,
       toolCount: connection.tools.length,
+      toolNames: connection.tools.map((tool) => tool.name),
       serverName: connection.serverName,
       serverVersion: connection.serverVersion,
       protocolVersion: connection.protocolVersion,

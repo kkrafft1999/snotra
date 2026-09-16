@@ -1,0 +1,475 @@
+import contracts from '../generated/contracts.js';
+
+const { MCP_CONNECTION_STATES } = contracts;
+
+/**
+ * Einstellungen › MCP (Issue #109, Teil von #62).
+ *
+ * Variante C aus dem Mockup: das Panel zeigt nur die Liste mit Status und
+ * Schalter, angelegt und bearbeitet wird in einem eigenen kleinen Dialog —
+ * dasselbe Muster wie „Modell hinzufügen". Das Panel bleibt damit auch bei
+ * vielen Servern kurz und ruhig.
+ *
+ * Wie die Berechtigungen (Issue #67) und anders als der Rest des Dialogs
+ * wirken Änderungen hier **sofort** über den Main-Prozess, nicht erst mit
+ * „Übernehmen": Die Serverliste gehört dem Main, dort liegen die Geheimnisse,
+ * und ein Verbindungstest braucht ohnehin den gespeicherten Stand.
+ *
+ * Geheime env-Werte kommen nie in den Renderer zurück. Ein gespeichertes
+ * Geheimnis erscheint im Formular als Platzhalter; wer es nicht anfasst,
+ * schickt `{ keep: true }` statt eines Wertes, den diese Seite gar nicht
+ * kennt.
+ */
+
+const CLOSE_ICON_HTML =
+  '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg>';
+
+/** Platzhalter für ein gespeichertes Geheimnis — nie der echte Wert. */
+const SECRET_PLACEHOLDER = '••••••••••••';
+
+/**
+ * Argumente stehen im Formular als eine Zeile, intern sind es einzelne
+ * Werte. Bewusst simpel an Leerraum getrennt: MCP-Argumente sind Paketnamen
+ * und Schalter, keine Sätze. Wer ein Leerzeichen im Argument braucht, kann
+ * es in Anführungszeichen setzen.
+ */
+export function splitArgs(text) {
+  const source = typeof text === 'string' ? text : '';
+  const out = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match = re.exec(source);
+  while (match) {
+    out.push(match[1] ?? match[2] ?? match[3]);
+    match = re.exec(source);
+  }
+  return out;
+}
+
+/** Rückweg für die Anzeige; Argumente mit Leerraum bekommen Anführungszeichen. */
+export function joinArgs(args) {
+  return (Array.isArray(args) ? args : [])
+    .map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg))
+    .join(' ');
+}
+
+/**
+ * Statuszeile eines Servers. Die Form trägt die Aussage, nicht die Farbe
+ * (Regelwerk: keine grünen Statusfarben) — gefüllter Punkt heißt verbunden,
+ * hohler Ring ausgeschaltet, Ausrufezeichen Fehler.
+ */
+export function describeConnection(server, connection) {
+  if (!server?.enabled) return { kind: 'off', text: 'ausgeschaltet' };
+  const state = connection?.state;
+  if (state === MCP_CONNECTION_STATES.READY) {
+    const count = connection.toolCount ?? 0;
+    return { kind: 'on', text: `verbunden · ${count} ${count === 1 ? 'Tool' : 'Tools'}` };
+  }
+  if (state === MCP_CONNECTION_STATES.FAILED) {
+    return { kind: 'error', text: 'Fehler beim Start', detail: connection.error, stderr: connection.stderr };
+  }
+  if (state === MCP_CONNECTION_STATES.STARTING) return { kind: 'off', text: 'wird gestartet …' };
+  // IDLE heisst: eingeschaltet, aber noch nie gebraucht. Traeges Verbinden
+  // ist Absicht (#106) — das soll hier nicht wie ein Fehler aussehen.
+  return { kind: 'off', text: 'noch nicht verbunden' };
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+export function initMcpPanel({ api }) {
+  const list = document.getElementById('settings-mcp-list');
+  const empty = document.getElementById('settings-mcp-empty');
+  const errorEl = document.getElementById('settings-mcp-error');
+  const btnReload = document.getElementById('btn-reload-mcp');
+  const btnAdd = document.getElementById('btn-add-mcp-server');
+
+  const overlay = document.getElementById('mcp-server-overlay');
+  const dialog = document.getElementById('dialog-mcp-server');
+  const dialogTitle = document.getElementById('dialog-mcp-server-title');
+  const btnClose = document.getElementById('btn-mcp-server-close');
+  const btnCancel = document.getElementById('btn-mcp-server-cancel');
+  const btnSave = document.getElementById('btn-mcp-server-save');
+  const btnTest = document.getElementById('btn-mcp-server-test');
+  const btnDelete = document.getElementById('btn-mcp-server-delete');
+  const fieldId = document.getElementById('mcp-field-id');
+  const fieldLabel = document.getElementById('mcp-field-label');
+  const fieldCommand = document.getElementById('mcp-field-command');
+  const fieldArgs = document.getElementById('mcp-field-args');
+  const fieldCwd = document.getElementById('mcp-field-cwd');
+  const envList = document.getElementById('mcp-env-list');
+  const btnEnvAdd = document.getElementById('btn-mcp-env-add');
+  const toolsBlock = document.getElementById('mcp-tools-block');
+  const toolsList = document.getElementById('mcp-tools-list');
+  const toolsCount = document.getElementById('mcp-tools-count');
+  const formError = document.getElementById('mcp-form-error');
+  const testResult = document.getElementById('mcp-test-result');
+
+  let servers = [];
+  let connections = [];
+  let skipped = [];
+  /** Der gerade bearbeitete Server; null = neu anlegen. */
+  let editing = null;
+  let lastFocus = null;
+
+  function connectionOf(id) {
+    return connections.find((entry) => entry.serverId === id) || null;
+  }
+
+  function setError(node, message) {
+    if (!node) return;
+    node.textContent = message || '';
+    node.classList.toggle('hidden', !message);
+  }
+
+  function statusNode(status) {
+    const wrap = el('span', 'mcp-status');
+    if (status.kind === 'error') {
+      const badge = el('span', 'mcp-status__badge', '!');
+      badge.setAttribute('aria-hidden', 'true');
+      wrap.append(badge);
+    } else {
+      const dot = el('span', `mcp-status__dot mcp-status__dot--${status.kind}`);
+      dot.setAttribute('aria-hidden', 'true');
+      wrap.append(dot);
+    }
+    wrap.append(el('span', null, status.text));
+    return wrap;
+  }
+
+  function render() {
+    if (!list) return;
+    list.replaceChildren();
+    empty?.classList.toggle('hidden', servers.length > 0);
+
+    for (const server of servers) {
+      const connection = connectionOf(server.id);
+      const status = describeConnection(server, connection);
+      const row = el('li', 'mcp-row');
+
+      const main = el('div', 'mcp-row__main');
+      main.append(el('span', 'mcp-row__name', server.label || server.id));
+      const meta = el('span', 'mcp-row__meta', `${server.command} ${joinArgs(server.args)}`.trim());
+      meta.title = meta.textContent;
+      main.append(meta);
+      row.append(main);
+
+      row.append(statusNode(status));
+
+      const actions = el('div', 'mcp-row__actions');
+      const edit = el('button', 'btn-secondary btn-compact', 'Bearbeiten');
+      edit.type = 'button';
+      edit.setAttribute('aria-label', `${server.label || server.id} bearbeiten`);
+      edit.addEventListener('click', () => openDialog(server));
+      actions.append(edit);
+
+      const toggle = el('button', 'mcp-switch');
+      toggle.type = 'button';
+      toggle.setAttribute('role', 'switch');
+      toggle.setAttribute('aria-checked', server.enabled ? 'true' : 'false');
+      toggle.setAttribute('aria-label', `${server.label || server.id} aktiv`);
+      toggle.addEventListener('click', () => setEnabled(server, !server.enabled));
+      actions.append(toggle);
+      row.append(actions);
+
+      if (status.kind === 'error' && (status.detail || status.stderr)) {
+        const box = el('div', 'mcp-row__error');
+        if (status.detail) box.append(el('p', null, status.detail));
+        if (status.stderr) box.append(el('pre', null, status.stderr));
+        row.append(box);
+      }
+      list.append(row);
+    }
+
+    if (skipped.length > 0) {
+      const note = el('li', 'mcp-row mcp-row--note');
+      note.append(el('p', null,
+        `${skipped.length} ${skipped.length === 1 ? 'Tool wurde' : 'Tools wurden'} ausgelassen, `
+        + 'weil der zusammengesetzte Name zu lang ist: '
+        + skipped.map((entry) => `${entry.serverId}/${entry.name}`).join(', ')));
+      list.append(note);
+    }
+  }
+
+  function adopt(result) {
+    servers = Array.isArray(result?.servers) ? result.servers : [];
+    connections = Array.isArray(result?.connections) ? result.connections : [];
+    skipped = Array.isArray(result?.skippedTools) ? result.skippedTools : [];
+    render();
+  }
+
+  async function load() {
+    try {
+      adopt(typeof api.getMcpCatalog === 'function' ? await api.getMcpCatalog() : null);
+      setError(errorEl, '');
+    } catch {
+      adopt(null);
+      setError(errorEl, 'Die MCP-Konfiguration konnte nicht gelesen werden.');
+    }
+  }
+
+  async function reload() {
+    try {
+      const result = await api.reloadMcpServers?.();
+      if (result?.ok) {
+        adopt(result);
+        setError(errorEl, '');
+      } else {
+        setError(errorEl, result?.error || 'Neu laden ist fehlgeschlagen.');
+      }
+    } catch {
+      setError(errorEl, 'Neu laden ist fehlgeschlagen.');
+    }
+  }
+
+  /** Ein-/Ausschalten geht ohne Umweg über den Dialog. */
+  async function setEnabled(server, enabled) {
+    const payload = toPayload(server, { enabled, env: keepAllEnv(server) });
+    const result = await api.saveMcpServer?.(payload);
+    if (result?.ok) {
+      adopt(result);
+      setError(errorEl, '');
+    } else {
+      setError(errorEl, result?.errors?.[0] || result?.error || 'Der Server konnte nicht geändert werden.');
+    }
+  }
+
+  /** Beim bloßen Umschalten bleiben alle env-Werte, wie sie sind. */
+  function keepAllEnv(server) {
+    const env = {};
+    for (const entry of server.env || []) {
+      env[entry.key] = entry.secret ? { secret: true, keep: true } : { secret: false, value: entry.value ?? '' };
+    }
+    return env;
+  }
+
+  function toPayload(server, patch = {}) {
+    return {
+      id: server.id,
+      label: server.label,
+      command: server.command,
+      args: server.args,
+      cwd: server.cwd,
+      enabled: server.enabled,
+      disabledTools: server.disabledTools,
+      ...patch,
+    };
+  }
+
+  // --- Unterdialog -------------------------------------------------------
+
+  function envRow(entry = { key: '', secret: true, hasValue: false, value: '' }) {
+    const row = el('div', 'mcp-env-row');
+    const key = el('input', 'modal-input modal-input--mono');
+    key.type = 'text';
+    key.value = entry.key || '';
+    key.placeholder = 'NAME';
+    key.setAttribute('aria-label', 'Name der Umgebungsvariable');
+
+    const value = el('input', 'modal-input modal-input--mono');
+    value.type = 'text';
+    value.setAttribute('aria-label', 'Wert der Umgebungsvariable');
+    // Ein gespeichertes Geheimnis kommt nicht zurueck — es steht als
+    // Platzhalter da und bleibt unangetastet, solange niemand hineinschreibt.
+    if (entry.secret && entry.hasValue) {
+      value.value = SECRET_PLACEHOLDER;
+      value.dataset.keep = 'true';
+      value.addEventListener('focus', () => {
+        if (value.dataset.keep === 'true') {
+          value.value = '';
+          delete value.dataset.keep;
+        }
+      });
+    } else {
+      value.value = entry.value || '';
+    }
+
+    const opts = el('div', 'mcp-env-row__opts');
+    const secretLabel = el('label', 'mcp-env-row__secret');
+    const secret = el('input');
+    secret.type = 'checkbox';
+    secret.checked = entry.secret !== false;
+    secretLabel.append(secret, el('span', null, 'geheim'));
+    opts.append(secretLabel);
+
+    const remove = el('button', 'settings-dialog__icon-close');
+    remove.type = 'button';
+    remove.innerHTML = CLOSE_ICON_HTML;
+    remove.setAttribute('aria-label', 'Umgebungsvariable entfernen');
+    remove.addEventListener('click', () => row.remove());
+    opts.append(remove);
+
+    row.append(key, value, opts);
+    return row;
+  }
+
+  function readEnv() {
+    const env = {};
+    for (const row of envList?.querySelectorAll('.mcp-env-row') || []) {
+      const [key, value] = row.querySelectorAll('input[type="text"]');
+      const secret = row.querySelector('input[type="checkbox"]');
+      const name = String(key?.value || '').trim();
+      if (!name) continue;
+      if (value?.dataset.keep === 'true') {
+        env[name] = { secret: true, keep: true };
+        continue;
+      }
+      env[name] = { secret: secret?.checked === true, value: String(value?.value ?? '') };
+    }
+    return env;
+  }
+
+  function renderTools(server) {
+    const connection = connectionOf(server?.id);
+    const names = connection?.state === MCP_CONNECTION_STATES.READY ? connection.toolNames || [] : [];
+    const known = Array.isArray(server?.knownTools) && server.knownTools.length > 0 ? server.knownTools : names;
+    toolsBlock?.classList.toggle('hidden', !server || known.length === 0);
+    if (!toolsList) return;
+    toolsList.replaceChildren();
+    const disabled = new Set(server?.disabledTools || []);
+    for (const name of known) {
+      const row = el('label', 'mcp-tool-row');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.value = name;
+      box.checked = !disabled.has(name);
+      row.append(box, el('code', null, name));
+      toolsList.append(row);
+    }
+    if (toolsCount) {
+      const active = known.length - known.filter((name) => disabled.has(name)).length;
+      toolsCount.textContent = `${active} von ${known.length} aktiv`;
+    }
+  }
+
+  function readDisabledTools() {
+    const out = [];
+    for (const box of toolsList?.querySelectorAll('input[type="checkbox"]') || []) {
+      if (!box.checked) out.push(box.value);
+    }
+    return out;
+  }
+
+  function openDialog(server) {
+    editing = server || null;
+    lastFocus = document.activeElement;
+    setError(formError, '');
+    if (testResult) testResult.replaceChildren();
+
+    dialogTitle.textContent = server ? 'Server bearbeiten' : 'Server hinzufügen';
+    fieldId.value = server?.id || '';
+    fieldId.disabled = Boolean(server);
+    fieldLabel.value = server?.label || '';
+    fieldCommand.value = server?.command || '';
+    fieldArgs.value = joinArgs(server?.args);
+    fieldCwd.value = server?.cwd || '';
+    envList.replaceChildren();
+    for (const entry of server?.env || []) envList.append(envRow(entry));
+    renderTools(server);
+    btnDelete.classList.toggle('hidden', !server);
+    btnTest.classList.toggle('hidden', !server);
+
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    queueMicrotask(() => (server ? fieldLabel : fieldId).focus());
+  }
+
+  function closeDialog() {
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+    editing = null;
+    try {
+      lastFocus?.focus();
+    } catch {
+      /* das Element kann inzwischen weg sein */
+    }
+  }
+
+  async function save() {
+    const payload = {
+      id: String(fieldId.value || '').trim().toLowerCase(),
+      label: String(fieldLabel.value || '').trim(),
+      command: String(fieldCommand.value || '').trim(),
+      args: splitArgs(fieldArgs.value),
+      cwd: String(fieldCwd.value || '').trim(),
+      enabled: editing ? editing.enabled : true,
+      disabledTools: readDisabledTools(),
+      env: readEnv(),
+    };
+    const result = await api.saveMcpServer?.(payload);
+    if (result?.ok) {
+      adopt(result);
+      closeDialog();
+      setError(errorEl, '');
+      return;
+    }
+    setError(formError, result?.errors?.[0] || result?.error || 'Der Server konnte nicht gespeichert werden.');
+  }
+
+  async function remove() {
+    if (!editing) return;
+    const result = await api.deleteMcpServer?.(editing.id);
+    if (result?.ok) {
+      adopt(result);
+      closeDialog();
+      return;
+    }
+    setError(formError, result?.errors?.[0] || result?.error || 'Der Server konnte nicht gelöscht werden.');
+  }
+
+  async function test() {
+    if (!editing || !testResult) return;
+    testResult.replaceChildren(el('p', 'mcp-test__pending', 'Verbindung wird getestet …'));
+    const result = await api.testMcpServer?.(editing.id);
+    testResult.replaceChildren();
+    if (!result?.ok || !result.status) {
+      testResult.append(el('p', 'mcp-test__fail', result?.error || 'Der Test ist fehlgeschlagen.'));
+      return;
+    }
+    const status = result.status;
+    if (status.state === MCP_CONNECTION_STATES.READY) {
+      const count = result.tools?.length ?? 0;
+      testResult.append(el('p', 'mcp-test__ok',
+        `Verbindung steht — ${count} ${count === 1 ? 'Tool' : 'Tools'} gefunden.`));
+      if (count > 0) testResult.append(el('p', 'mcp-test__tools', result.tools.join(', ')));
+      // Der Katalog des Servers ist jetzt bekannt — Haekchen anbieten.
+      renderTools({ ...editing, knownTools: result.tools || [] });
+    } else {
+      testResult.append(el('p', 'mcp-test__fail', status.error || 'Der Server hat nicht geantwortet.'));
+      if (status.stderr) testResult.append(el('pre', null, status.stderr));
+    }
+    await load();
+  }
+
+  btnReload?.addEventListener('click', reload);
+  btnAdd?.addEventListener('click', () => openDialog(null));
+  btnClose?.addEventListener('click', closeDialog);
+  btnCancel?.addEventListener('click', closeDialog);
+  btnSave?.addEventListener('click', save);
+  btnDelete?.addEventListener('click', remove);
+  btnTest?.addEventListener('click', test);
+  btnEnvAdd?.addEventListener('click', () => {
+    const row = envRow();
+    envList.append(row);
+    row.querySelector('input')?.focus();
+  });
+  // Escape schliesst nur den Unterdialog, nicht den ganzen
+  // Einstellungs-Dialog darunter.
+  dialog?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    closeDialog();
+  });
+
+  return {
+    async open() {
+      await load();
+    },
+    close() {
+      closeDialog();
+    },
+  };
+}

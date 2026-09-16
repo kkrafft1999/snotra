@@ -291,6 +291,11 @@ function createMcpConnectionStatus({
   label = '',
   state = MCP_CONNECTION_STATES.IDLE,
   toolCount = 0,
+  // Namen der gemeldeten Tools. Nur bei einer stehenden Verbindung gefuellt —
+  // der Settings-Dialog (#109) braucht sie, um einzelne Tools abwaehlbar zu
+  // machen, und sie liegen ohnehin schon im Speicher. Ein nie verbundener
+  // Server hat hier nichts; dort hilft „Verbindung testen".
+  toolNames = [],
   serverName = '',
   serverVersion = '',
   protocolVersion = '',
@@ -302,6 +307,7 @@ function createMcpConnectionStatus({
     label: String(label || ''),
     state: isMcpConnectionState(state) ? state : MCP_CONNECTION_STATES.IDLE,
     toolCount: Number.isFinite(toolCount) ? Math.max(0, Math.floor(toolCount)) : 0,
+    toolNames: Array.isArray(toolNames) ? toolNames.filter((name) => typeof name === 'string') : [],
     serverName: text(serverName, MCP_LIMITS.LABEL_MAX_CHARS),
     serverVersion: text(serverVersion, MCP_LIMITS.LABEL_MAX_CHARS),
     protocolVersion: text(protocolVersion, MCP_LIMITS.LABEL_MAX_CHARS),

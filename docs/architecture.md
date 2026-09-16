@@ -110,6 +110,19 @@ bestehende Importe stabil bleiben.
   statt ein Token im Klartext abzulegen; die Klartextwerte allein ließen sich
   weiterhin sichern.
 
+  Bedient wird das im Einstellungs-Dialog unter „MCP" (Issue #109). Der
+  Bereich liegt als eigene Renderer-Komponente in
+  `renderer/components/McpPanel.js`: das Panel trägt nur die Liste mit Status
+  und Schalter, angelegt und bearbeitet wird in einem Unterdialog nach dem
+  Muster von „Modell hinzufügen". Wie die Berechtigungen und anders als der
+  Rest des Dialogs wirken Änderungen dort **sofort** — die Liste gehört dem
+  Main, dort liegen die Geheimnisse, und ein Verbindungstest braucht ohnehin
+  den gespeicherten Stand. Die Fußleiste sagt das je Bereich.
+
+  Ein gespeichertes Geheimnis erscheint im Formular nur als Platzhalter; wer
+  es nicht anfasst, schickt `{ keep: true }` statt eines Wertes, den der
+  Renderer gar nicht kennt.
+
   Zwei Lesewege, absichtlich getrennt und in
   `test/infrastructure-boundaries.test.js` festgenagelt:
   `createMcpConfigStorePort` liefert die Anzeigeform ohne Geheimnisse und ist

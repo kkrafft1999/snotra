@@ -152,6 +152,7 @@ test('createMcpConnectionStatus füllt Lücken und prüft den Zustand', () => {
     label: '',
     state: MCP_CONNECTION_STATES.IDLE,
     toolCount: 0,
+    toolNames: [],
     serverName: '',
     serverVersion: '',
     protocolVersion: '',
@@ -161,6 +162,8 @@ test('createMcpConnectionStatus füllt Lücken und prüft den Zustand', () => {
   assert.equal(createMcpConnectionStatus({ state: 'irgendwas' }).state, MCP_CONNECTION_STATES.IDLE);
   assert.equal(createMcpConnectionStatus({ toolCount: -3 }).toolCount, 0);
   assert.equal(createMcpConnectionStatus({ state: MCP_CONNECTION_STATES.READY }).state, 'ready');
+  // Tool-Namen fuer den Settings-Dialog (#109); Nicht-Strings fallen weg.
+  assert.deepEqual(createMcpConnectionStatus({ toolNames: ['echo', 2, 'add'] }).toolNames, ['echo', 'add']);
 });
 
 // --- Namensraum und Risikoklassen (Issue #107) ---

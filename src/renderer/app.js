@@ -16,6 +16,7 @@ import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
+import { initMcpPanel } from './components/McpPanel.js';
 
 const api = window.electronAPI;
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
@@ -102,6 +103,7 @@ const toolPermissions = initToolPermissionState({ api });
 initToolModePicker({ toolPermissions });
 const approvalCards = initToolApprovalCards({ api, appStore });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
+const mcpPanel = initMcpPanel({ api });
 
 const voice = initWhisperRecorder({
   api,
@@ -192,6 +194,7 @@ const settingsModal = initSettingsModal({
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onCheckUpdates: () => updateBanner.checkNow(),
   toolPermissionsPanel,
+  mcpPanel,
   onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),
   DEFAULT_MAX_TOOL_ROUNDS,
 });
