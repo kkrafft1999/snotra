@@ -379,6 +379,102 @@ function mcpRiskClassesFor(annotations) {
   return classes;
 }
 
+/**
+ * Drei Formen der Umgebungsvariablen — bewusst auseinandergehalten, weil sie
+ * verschiedene Leser haben (Issue #108):
+ *
+ *  1. **Laufzeit** (`McpServerConfig.env`): flaches `{ KEY: "wert" }`. Nur der
+ *     Transport sieht das, und nur, um es dem Kindprozess mitzugeben.
+ *  2. **Gespeichert**: je Schluessel `{ enc }` (ueber safeStorage) oder
+ *     `{ value }` (Klartext). Selbstbeschreibend, damit man einer Datei
+ *     ansieht, was in ihr verschluesselt ist und was nicht.
+ *  3. **Angezeigt**: je Schluessel `{ key, secret, hasValue }` — bei einem
+ *     Secret **nie** der Wert. Nur die abgewaehlten Klartextwerte gehen
+ *     zurueck an die Oberflaeche.
+ *
+ * Vorgabe ist verschluesselt; Klartext ist die bewusste Ausnahme je Schluessel
+ * (Entscheidung zu #108). Wer das Haekchen nicht anfasst, hat sein Token
+ * geschuetzt — Vergessen darf nicht der teure Fall sein.
+ */
+
+/** Eingabeform beim Speichern: was die Oberflaeche (#109) schickt. */
+function normalizeMcpEnvInput(raw) {
+  const errors = [];
+  if (raw === undefined || raw === null) return { entries: [], errors };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { entries: [], errors: ['„env" muss ein Objekt aus Name/Wert-Paaren sein.'] };
+  }
+  const entries = [];
+  for (const [key, spec] of Object.entries(raw)) {
+    if (entries.length >= MCP_LIMITS.MAX_ENV_ENTRIES) {
+      errors.push(`Mehr als ${MCP_LIMITS.MAX_ENV_ENTRIES} Umgebungsvariablen werden nicht unterstützt.`);
+      break;
+    }
+    if (key.length > MCP_LIMITS.ENV_KEY_MAX_CHARS || !ENV_KEY_PATTERN.test(key)) {
+      errors.push(`„${key.slice(0, 40)}" ist kein gültiger Name für eine Umgebungsvariable.`);
+      continue;
+    }
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+      errors.push(`Der Eintrag „${key}" muss angeben, ob sein Wert geheim ist.`);
+      continue;
+    }
+    // Vorgabe geheim: nur ein ausdrueckliches `secret: false` macht Klartext.
+    const secret = spec.secret !== false;
+    const keep = spec.keep === true;
+    if (keep) {
+      entries.push({ key, secret, value: null, keep: true });
+      continue;
+    }
+    if (typeof spec.value !== 'string') {
+      errors.push(`Der Wert von „${key}" muss eine Zeichenkette sein.`);
+      continue;
+    }
+    entries.push({ key, secret, value: spec.value.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS), keep: false });
+  }
+  return { entries, errors };
+}
+
+/** Gespeicherte Form pruefen — kaputte Eintraege fallen weg statt zu werfen. */
+function normalizeStoredMcpEnv(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [key, entry] of Object.entries(raw)) {
+    if (!ENV_KEY_PATTERN.test(key) || !entry || typeof entry !== 'object') continue;
+    if (typeof entry.enc === 'string' && entry.enc) out[key] = { enc: entry.enc };
+    else if (typeof entry.value === 'string') out[key] = { value: entry.value };
+  }
+  return out;
+}
+
+/**
+ * Anzeigeform. Der verschluesselte Wert wird nicht etwa entschluesselt und
+ * dann maskiert — er wird hier gar nicht erst angefasst.
+ */
+function maskStoredMcpEnv(stored) {
+  const normalized = normalizeStoredMcpEnv(stored);
+  return Object.keys(normalized)
+    .sort()
+    .map((key) => {
+      const entry = normalized[key];
+      const secret = typeof entry.enc === 'string';
+      return secret
+        ? { key, secret: true, hasValue: true }
+        : { key, secret: false, hasValue: entry.value.length > 0, value: entry.value };
+    });
+}
+
+/**
+ * Eingabe eines ganzen Servers beim Speichern. Die Felder ausser `env` sind
+ * dieselben wie zur Laufzeit, deshalb prueft sie derselbe Validator.
+ */
+function validateMcpServerInput(raw) {
+  const base = validateMcpServerConfig({ ...(raw && typeof raw === 'object' ? raw : {}), env: {} });
+  const { entries, errors: envErrors } = normalizeMcpEnvInput(raw?.env);
+  const errors = [...base.errors, ...envErrors];
+  if (errors.length > 0) return { ok: false, value: null, env: [], errors };
+  return { ok: true, value: base.value, env: entries, errors: [] };
+}
+
 module.exports = {
   MCP_CONTRACT_VERSION,
   MCP_PROTOCOL_VERSION,
@@ -404,4 +500,8 @@ module.exports = {
   isMcpToolName,
   fitsMcpToolNameLimit,
   mcpRiskClassesFor,
+  normalizeMcpEnvInput,
+  normalizeStoredMcpEnv,
+  maskStoredMcpEnv,
+  validateMcpServerInput,
 };

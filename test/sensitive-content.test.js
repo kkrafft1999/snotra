@@ -125,3 +125,27 @@ test('containsOwnSecret vergleicht nur ausreichend lange, wörtliche Treffer', (
   assert.equal(containsOwnSecret('x', null), false);
   assert.equal(containsOwnSecret(null, ['sk-own-provider-key-123456']), false);
 });
+
+test('redactOwnSecrets entfernt eigene Geheimnisse und lässt den Rest lesbar', () => {
+  const { redactOwnSecrets, MASK_TEXT } = require('../src/shared/runtime/sensitive-content');
+
+  assert.equal(
+    redactOwnSecrets('Start fehlgeschlagen: TOKEN=ghp_streng_geheim_123', ['ghp_streng_geheim_123']),
+    `Start fehlgeschlagen: TOKEN=${MASK_TEXT}`,
+  );
+  // Zweimal im Text — beide Vorkommen müssen weg.
+  assert.equal(
+    redactOwnSecrets('a langes_geheimnis b langes_geheimnis', ['langes_geheimnis']),
+    `a ${MASK_TEXT} b ${MASK_TEXT}`,
+  );
+  // Kurze Werte bleiben: eine Maske über jedem „de_DE“ machte die Meldung
+  // unlesbar, ohne etwas zu schützen.
+  assert.equal(redactOwnSecrets('LANG=de_DE', ['de_DE']), 'LANG=de_DE');
+  // Das längere Geheimnis gewinnt, wenn eines im anderen steckt.
+  assert.equal(
+    redactOwnSecrets('x=abcdefgh_lang_und_laenger', ['abcdefgh', 'abcdefgh_lang_und_laenger']),
+    `x=${MASK_TEXT}`,
+  );
+  assert.equal(redactOwnSecrets('ohne Geheimnis', []), 'ohne Geheimnis');
+  assert.equal(redactOwnSecrets(null, ['x']), '');
+});
