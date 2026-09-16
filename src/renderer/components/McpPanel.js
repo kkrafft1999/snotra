@@ -1,6 +1,6 @@
 import contracts from '../generated/contracts.js';
 
-const { MCP_CONNECTION_STATES } = contracts;
+const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contracts;
 
 /**
  * Einstellungen › MCP (Issue #109, Teil von #62).
@@ -108,12 +108,29 @@ export function initMcpPanel({ api }) {
   const formError = document.getElementById('mcp-form-error');
   const testResult = document.getElementById('mcp-test-result');
 
+  const importOverlay = document.getElementById('mcp-import-overlay');
+  const importDialog = document.getElementById('dialog-mcp-import');
+  const btnImportOpen = document.getElementById('btn-import-mcp-servers');
+  const btnImportClose = document.getElementById('btn-mcp-import-close');
+  const btnImportCancel = document.getElementById('btn-mcp-import-cancel');
+  const btnImportApply = document.getElementById('btn-mcp-import-apply');
+  const importInput = document.getElementById('mcp-import-input');
+  const importError = document.getElementById('mcp-import-error');
+  const importCount = document.getElementById('mcp-import-count');
+  const importList = document.getElementById('mcp-import-list');
+  const importSkipped = document.getElementById('mcp-import-skipped');
+  const importNote = document.getElementById('mcp-import-note');
+
   let servers = [];
   let connections = [];
   let skipped = [];
   /** Der gerade bearbeitete Server; null = neu anlegen. */
   let editing = null;
   let lastFocus = null;
+  /** Erkannte Kandidaten des Import-Dialogs, in der Reihenfolge der Anzeige. */
+  let importCandidates = [];
+  /** Kennungen der abgewaehlten Kandidaten — abwaehlen ueberlebt das Neulesen. */
+  let importUnchecked = new Set();
 
   function connectionOf(id) {
     return connections.find((entry) => entry.serverId === id) || null;
@@ -444,6 +461,213 @@ export function initMcpPanel({ api }) {
     await load();
   }
 
+  // --- Import (Issue #110) -----------------------------------------------
+  //
+  // Variante B aus `docs/ui-design/mcp-import-mockup.html`: Das Eingabefeld
+  // bleibt stehen, die Vorschau waechst darunter mit. Gelesen wird ausschliesslich der eingefuegte Text —
+  // es wird keine fremde Konfigurationsdatei geoeffnet.
+  //
+  // Geparst wird im Renderer, gespeichert wird ueber denselben Weg wie ein
+  // von Hand eingetragener Server. Die Vorschau ist damit nur eine Ansicht;
+  // die Hoheit ueber Gueltigkeit und Geheimnisse bleibt im Main-Prozess.
+
+  /** Ein Hinweis unter der Vorschauzeile, optional mit Marke davor. */
+  function importNoteRow(text, badge = null, warn = false) {
+    const row = el('li', 'mcp-import__note');
+    if (badge) {
+      row.append(el('span', `mcp-import__badge${warn ? ' mcp-import__badge--warn' : ''}`, badge));
+    }
+    row.append(el('span', null, text));
+    return row;
+  }
+
+  /**
+   * Die Hinweise einer Zeile. Was eine Entscheidung verlangt — ein Server
+   * wuerde ersetzt, ein Wert ist noch ein Platzhalter — bekommt die auffaellige
+   * Marke; der Rest bleibt ruhig.
+   */
+  function importNotesFor(candidate) {
+    const notes = [];
+    if (candidate.conflict) {
+      notes.push(importNoteRow(
+        `Es gibt bereits einen Server „${candidate.id}“ — Übernehmen ersetzt ihn.`, 'ersetzt', true));
+    }
+    const secrets = candidate.env.filter((entry) => entry.secret).map((entry) => entry.key);
+    if (secrets.length > 0) {
+      notes.push(importNoteRow(
+        `${secrets.join(', ')} ${secrets.length === 1 ? 'wird' : 'werden'} verschlüsselt abgelegt.`, 'geheim'));
+    }
+    for (const note of candidate.notes) {
+      const warn = note.includes('Platzhalter') || note.includes('keinen Wert');
+      notes.push(importNoteRow(note, warn ? 'prüfen' : null, warn));
+    }
+    return notes;
+  }
+
+  function renderImportPreview() {
+    if (!importList) return;
+    importList.replaceChildren();
+
+    for (const candidate of importCandidates) {
+      const row = el('li', 'mcp-import__row');
+
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'mcp-import__check';
+      check.checked = !importUnchecked.has(candidate.id);
+      check.setAttribute('aria-label', `${candidate.label} übernehmen`);
+      check.addEventListener('change', () => {
+        if (check.checked) importUnchecked.delete(candidate.id);
+        else importUnchecked.add(candidate.id);
+        updateImportApply();
+      });
+      row.append(check);
+
+      const main = el('div', null);
+      const head = el('div', null);
+      head.append(el('span', 'mcp-import__name', candidate.label));
+      // Der Name darf alles sein, die Kennung nicht — beide zeigen, sonst
+      // ueberrascht spaeter der Tool-Namensraum.
+      head.append(el('span', 'mcp-import__id', candidate.id));
+      main.append(head);
+      main.append(el('div', 'mcp-import__cmd', `${candidate.command} ${joinArgs(candidate.args)}`.trim()));
+
+      const notes = importNotesFor(candidate);
+      if (notes.length > 0) {
+        const list = el('ul', 'mcp-import__notes');
+        for (const note of notes) list.append(note);
+        main.append(list);
+      }
+      row.append(main);
+      importList.append(row);
+    }
+
+    importNote?.classList.toggle('hidden', importCandidates.length === 0);
+  }
+
+  function renderImportSkipped(skippedEntries) {
+    if (!importSkipped) return;
+    importSkipped.replaceChildren();
+    importSkipped.classList.toggle('hidden', skippedEntries.length === 0);
+    if (skippedEntries.length === 0) return;
+
+    importSkipped.append(el('h4', null,
+      `${skippedEntries.length} ${skippedEntries.length === 1 ? 'Eintrag wird' : 'Einträge werden'} nicht übernommen`));
+    const list = el('ul', null);
+    for (const entry of skippedEntries) {
+      const item = el('li', null);
+      item.append(el('strong', null, entry.name));
+      item.append(document.createTextNode(` — ${entry.reason}`));
+      list.append(item);
+    }
+    importSkipped.append(list);
+  }
+
+  function selectedImportCandidates() {
+    return importCandidates.filter((candidate) => !importUnchecked.has(candidate.id));
+  }
+
+  function updateImportApply() {
+    if (!btnImportApply) return;
+    const count = selectedImportCandidates().length;
+    btnImportApply.disabled = count === 0;
+    btnImportApply.textContent = count === 0
+      ? 'Übernehmen'
+      : `${count} ${count === 1 ? 'Server' : 'Server'} übernehmen`;
+  }
+
+  /** Bei jeder Eingabe neu lesen — der Block ist klein, das kostet nichts. */
+  function refreshImportPreview() {
+    const text = importInput?.value ?? '';
+    const result = parseMcpServersBlock(text, { existingIds: servers.map((server) => server.id) });
+
+    importCandidates = result.candidates;
+    // Abgewaehlte Kennungen, die es nicht mehr gibt, vergessen.
+    importUnchecked = new Set([...importUnchecked].filter(
+      (id) => importCandidates.some((candidate) => candidate.id === id)));
+
+    // Ein leeres Feld ist kein Fehler, sondern der Ausgangszustand.
+    setError(importError, text.trim() ? (result.errors[0] || '') : '');
+    if (importCount) {
+      const gefunden = result.candidates.length;
+      const gesamt = gefunden + result.skipped.length;
+      importCount.textContent = gesamt === 0
+        ? ''
+        : gefunden === gesamt
+          ? `${gefunden} ${gefunden === 1 ? 'Eintrag' : 'Einträge'} erkannt.`
+          : `${gefunden} von ${gesamt} Einträgen können übernommen werden.`;
+    }
+    renderImportPreview();
+    renderImportSkipped(result.skipped);
+    updateImportApply();
+  }
+
+  function openImport() {
+    lastFocus = document.activeElement;
+    if (importInput) importInput.value = '';
+    importCandidates = [];
+    importUnchecked = new Set();
+    setError(importError, '');
+    refreshImportPreview();
+    importOverlay?.classList.remove('hidden');
+    importOverlay?.setAttribute('aria-hidden', 'false');
+    queueMicrotask(() => importInput?.focus());
+  }
+
+  function closeImport() {
+    importOverlay?.classList.add('hidden');
+    importOverlay?.setAttribute('aria-hidden', 'true');
+    try {
+      lastFocus?.focus();
+    } catch {
+      /* das Element kann inzwischen weg sein */
+    }
+  }
+
+  /**
+   * Uebernimmt die angehakten Kandidaten — einen nach dem anderen, ueber
+   * denselben Speicherweg wie ein von Hand eingetragener Server.
+   *
+   * Ein Fehlschlag bricht nicht ab: Die uebrigen sind unabhaengig voneinander,
+   * und ein halb durchgelaufener Import, der nichts sagt, waere schlimmer als
+   * einer, der nennt, was nicht ging.
+   */
+  async function applyImport() {
+    const auswahl = selectedImportCandidates();
+    if (auswahl.length === 0) return;
+
+    if (btnImportApply) btnImportApply.disabled = true;
+    const gescheitert = [];
+    let letztes = null;
+
+    for (const candidate of auswahl) {
+      let result = null;
+      try {
+        result = await api.saveMcpServer?.(toMcpServerInput(candidate));
+      } catch {
+        result = null;
+      }
+      if (result?.ok) letztes = result;
+      else gescheitert.push(`${candidate.label}: ${result?.errors?.[0] || result?.error || 'unbekannter Fehler'}`);
+    }
+
+    if (letztes) adopt(letztes);
+    if (gescheitert.length === 0) {
+      closeImport();
+      setError(errorEl, '');
+      return;
+    }
+    // Was durchging, ist gespeichert und steht in der Liste; der Dialog bleibt
+    // offen, damit der Rest nicht unbemerkt verloren geht.
+    //
+    // Erst neu lesen, dann melden: Die Vorschau setzt die Fehlerzeile aus dem
+    // Parse-Ergebnis und wuerde eine vorher gesetzte Meldung gleich wieder
+    // loeschen. Nebenbei stehen die eben gespeicherten Server jetzt als
+    // „ersetzt" da, was sie ab sofort ja auch sind.
+    refreshImportPreview();
+    setError(importError, `Nicht übernommen — ${gescheitert.join(' · ')}`);
+  }
+
   btnReload?.addEventListener('click', reload);
   btnAdd?.addEventListener('click', () => openDialog(null));
   btnClose?.addEventListener('click', closeDialog);
@@ -451,6 +675,19 @@ export function initMcpPanel({ api }) {
   btnSave?.addEventListener('click', save);
   btnDelete?.addEventListener('click', remove);
   btnTest?.addEventListener('click', test);
+  btnImportOpen?.addEventListener('click', openImport);
+  btnImportClose?.addEventListener('click', closeImport);
+  btnImportCancel?.addEventListener('click', closeImport);
+  btnImportApply?.addEventListener('click', applyImport);
+  importInput?.addEventListener('input', refreshImportPreview);
+  // Einfuegen meldet sich vor dem Aktualisieren des Feldes — deshalb erst im
+  // naechsten Tick lesen, sonst sieht die Vorschau den alten Stand.
+  importInput?.addEventListener('paste', () => queueMicrotask(refreshImportPreview));
+  importDialog?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    closeImport();
+  });
   btnEnvAdd?.addEventListener('click', () => {
     const row = envRow();
     envList.append(row);
@@ -470,6 +707,7 @@ export function initMcpPanel({ api }) {
     },
     close() {
       closeDialog();
+      closeImport();
     },
   };
 }

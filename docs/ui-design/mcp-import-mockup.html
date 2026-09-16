@@ -1,3 +1,240 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>MCP-Import — Varianten (Issue #110)</title>
+<!-- Die echten Stylesheets der App, hier eingebettet (Stand 2026-09-16), damit die Datei
+     sich ohne Server oeffnen laesst: ueber file:// werden relative Links verworfen. -->
+<style>
+/* ===== src/renderer/styles/tokens.css ===== */
+/*
+ * doubleSlash Mono-Blue Design-Tokens — Single Source of Truth fuer Farben,
+ * Typo, Abstaende und Motion. Massgebliches Regelwerk:
+ *   .claude/rules/ui-design-tokens.md
+ * Visuelle Referenz (States-Mockup, an diese Tokens angeglichen):
+ *   docs/ui-design/doubleslash-chat-design-states-a11y.html
+ *
+ * Mono-Blue-Mantra: EINE Akzentfarbe (--ds-blue). Cyan ist vollstaendig
+ * entfernt. --ds-blue-soft (5%-Wash) und --ds-blue-border (25%) sind die
+ * abgestuften Varianten fuer Hover-Wash, Active-States und Tool-Hero-Header.
+ *
+ * Regel: Hex-Werte werden nur hier definiert. Komponenten in styles.css
+ * beziehen sich ueber `var(--ds-*)` bzw. die abgeleiteten Aliase. Diese Datei
+ * wird in renderer/index.html VOR styles.css geladen.
+ */
+
+:root {
+  /* ── Marken-Palette ───────────────────────────────────────────────────── */
+  --ds-blue: #00759E;          /* einzige Akzentfarbe (5,0:1 auf #FFF) */
+  --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
+  --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
+  /* User-Bubble: Blau-Wash, der die Frage als eigenen Block vom Fliesstext
+   * der Antwort abhebt. 8 % ergibt dL* 4,13 gegen den Grund — klar als
+   * eigene Flaeche lesbar, aber bewusst zurueckhaltend: Der Wash soll die
+   * Frage gliedern, nicht betonen. Die frueheren 6 % (dL* 3,22) waren zu
+   * schwach, 10 % (dL* 5,30) trugen zu dick auf. Light liegt damit bewusst
+   * unter dem Dark-Mode (10 %, dL* 5,54) — auf dunklem Grund wirkt derselbe
+   * Wash zurueckhaltender und braucht mehr Prozent fuer dieselbe Wirkung. */
+  --ds-chat-user-bg: rgba(0, 117, 158, 0.08);
+  --ds-black: #000000;
+  --ds-white: #FFFFFF;
+
+  /* ── Neutrale Toene (Light) ───────────────────────────────────────────────
+   * Leicht kuehl getoent (R-B-Spanne 3), damit die Grauflaechen den Blau-Hue
+   * von --ds-blue aufnehmen, ohne eine zweite Farbe einzufuehren. Die drei
+   * Stufen sind aufeinander abgestimmt: Der Helligkeitsabstand Grund -> Card
+   * (dL* 2,44) und Grund -> Divider (dL* 3,48) ist derselbe wie im frueheren
+   * neutralen Satz (#F9F9F9/#F2F2F2/#EFEFEF) — geaendert wurde die Lage der
+   * ganzen Skala, nicht ihr Verhaeltnis. Wer einen Wert anfasst, muss die
+   * anderen beiden mitziehen, sonst brechen die Ebenenabstaende.
+   *
+   * Der Grund liegt bewusst dunkler als zuvor: Gegen die weisse Composer-
+   * Karte ergab #F9F9F9 nur dL* 2,07 und lag damit an der Wahrnehmungs-
+   * schwelle — die Karte war rechnerisch erhoeht, optisch aber nicht. Mit
+   * #F6F7F9 sind es dL* 2,79. */
+  --ds-grey-bg: #F6F7F9;       /* Seitenhintergrund, Footer-BG, Icon-Btn-Hover */
+  --ds-grey-card: #EFF0F2;     /* Karten-Hintergrund, Inline-Code */
+  --ds-grey-divider: #ECEDEF;  /* Trenner, Default-Borders */
+  --ds-grey-muted: #6D6D6D;    /* 4,84:1 auf #FFF — Sekundaerschrift, btn-secondary-Hover */
+  --ds-grey-strong: #5C5C5C;   /* 7,1:1 auf #FFF — fuer Text < 14 px */
+  /* Begrenzung von Bedienelementen (Sekundaer-Button, bedienbare Pille,
+   * Umschalter). --ds-grey-divider erreicht auf #FFF nur 1,17:1 und liegt
+   * damit unter der 3:1-Schwelle aus WCAG 1.4.11. Rein dekorative Rahmen
+   * (Karten, Panels, Chips) behalten --ds-grey-divider. */
+  --ds-grey-control-border: #8A8A8E;  /* 3,1:1 auf #FFF */
+
+  /* ── Status-Tokens (rote Ausnahmeregel) ───────────────────────────────────
+   * Rot ist im Mono-Blue-System NICHT als allgemeiner Akzent erlaubt. Diese
+   * Tokens sind ausschliesslich fuer Faelle, in denen die Bedeutung visuell
+   * wirklich rot verlangt: Error-Bubbles (Nutzer muss aktiv gewarnt werden)
+   * und Mic-Recording (etablierte Audio-Konvention). Keine sonstige
+   * Verwendung — fuer DONE-Status, Success oder neutralen Hinweis bitte
+   * --ds-blue oder --ds-grey-muted nutzen. */
+  --ds-error: #B03030;         /* 5,1:1 auf #FFF */
+  --ds-error-bg: rgba(176, 48, 48, 0.10);
+  --ds-error-border: rgba(176, 48, 48, 0.35);
+
+  --ds-mic-recording: #DC2626;        /* 4,8:1 auf #FFF — separater Rotton, damit
+                                         Recording-Pulse nicht mit Error-Bubbles
+                                         farblich kollidiert */
+  --ds-mic-recording-bg: rgba(220, 38, 38, 0.12);
+
+  /* ── Primary-Button: gleicher Bluton, Hover nur leicht dunkler (kein Schwarz-
+   *    Sprung). Active: leichter Lift via Schatten (Token --ds-btn-primary-active-shadow),
+   *    :active inset via scale(0.97) + Schatten in Komponenten-CSS. */
+  --ds-btn-primary-bg: var(--ds-blue);
+  --ds-btn-primary-bg-hover: #005f80;
+  --ds-btn-primary-fg: var(--ds-white);
+  --ds-btn-primary-active-shadow: 0 4px 14px rgba(0, 95, 128, 0.35);
+
+  /* Destructive-Button (Regelwerk: Schwarz statt Rot): Reset-Bestätigung in
+   * den Einstellungen. Dark invertiert, damit der Button auf dunklem Grund
+   * nicht verschwindet. */
+  --ds-btn-destructive-bg: var(--ds-black);
+  --ds-btn-destructive-bg-hover: var(--ds-grey-muted);
+  --ds-btn-destructive-fg: var(--ds-white);
+
+  /* Kreis-Icon-Buttons (neutral): Active-Lift — kein Brand-Blau im Schatten. */
+  --ds-icon-btn-active-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+  /* Overlay-Ebene (aufklappende Menues): Der einzige Ort, an dem eine Flaeche
+   * vom Untergrund abheben darf. Ein Menue schwebt ueber dem Inhalt, den es
+   * verdeckt — ohne Tiefenhinweis verschwimmen seine Kanten mit dem, was
+   * darunter liegt. Flache Cards und Panels bleiben davon unberuehrt. */
+  --ds-overlay-border: #DCDCE0;
+  --ds-overlay-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.07);
+
+  /* ── Typografie ───────────────────────────────────────────────────────── */
+  --ds-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ds-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --ds-font-tool: Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
+  --ds-font-numeric-tabular: tabular-nums;
+
+  --ds-font-size-xs: 11px;     /* Mindestgroesse Pill */
+  --ds-font-size-sm: 12px;     /* Eyebrow, Mono-Tags */
+  --ds-font-size-md: 13px;     /* Sekundaerer UI-Text */
+  --ds-font-size-base: 14px;   /* Body */
+  --ds-font-size-lg: 15px;
+  --ds-font-size-h3: 17px;     /* AI-Antwort */
+  --ds-font-size-h2: 24px;     /* Empty-State Headline (mobile) */
+  --ds-font-size-h1: 32px;     /* Empty-State Headline (desktop) */
+
+  --ds-font-weight-regular: 400;
+  --ds-font-weight-medium: 500;     /* Phase 5 F: CTA, Chip-Cmd, btn-secondary */
+  --ds-font-weight-bold: 600;
+  --ds-font-weight-heavy: 700;      /* Phase 5 F: Welcome-Headline (Hero) */
+
+  --ds-line-height-tight: 1.15;
+  --ds-line-height-base: 1.5;
+  --ds-line-height-prose: 1.55;
+
+  /* ── Abstaende & Radien ───────────────────────────────────────────────── */
+  --ds-radius-sm: 4px;         /* Fokus-Ring Radius */
+  --ds-radius-md: 6px;         /* Karten, Buttons, Chips */
+  --ds-radius-pill: 999px;
+  --ds-card-border: 1px solid var(--ds-grey-divider);
+
+  /* ── Touch-Targets ────────────────────────────────────────────────────── */
+  --ds-touch-min: 32px;        /* WCAG-Mindestgroesse */
+  --ds-touch-ideal: 44px;      /* WCAG-Empfehlung */
+  --ds-icon-size: 16px;        /* Standard-Icon-SVG */
+
+  /* Toolbar-Zeilen: horizontales Layout fuer Kreis-Icon-Buttons (32×32).
+   * Flex-`gap` zwischen Items; `cluster-pull` zieht Nachbarn per negativem
+   * Margin leicht ineinander — Glyphen wirken enger, Hitbox bleibt 32 px. */
+  --ds-icon-btn-row-gap: 0;
+  --ds-icon-btn-cluster-pull: 5px;
+
+  /* ── Chat-Abstaende ───────────────────────────────────────────────────── */
+  /* Grundabstand zwischen zwei Nachrichten derselben Rolle. */
+  --ds-chat-msg-gap: 14px;
+  /* Abstand am Rollenwechsel (User -> KI und KI -> User): deutlich groesser,
+   * damit Frage und Antwort optisch als getrennte Bloecke lesbar sind. */
+  --ds-chat-turn-gap: 30px;
+  /* Maximale Breite der Lesespalte (Nachrichten, Hinweis, Eingabezeile).
+   * 794px entspricht der Breite eines DIN-A4-Blatts (210 mm bei 96 dpi).
+   * Darueber hinaus waechst nur noch der Rand links und rechts. */
+  --ds-chat-max-width: 794px;
+  /* User-Bubble: hoechstens zwei Drittel der Lesespalte, damit die Frage
+   * auch bei langem Text als Block rechts stehen bleibt. */
+  --ds-chat-user-max-width: 66.6667%;
+  /* Composer-Karte (Textfeld + Werkzeugzeile): hebt sich als eigene Flaeche
+   * vom Chat-Grund ab. Light: Weiss auf Grau; Dark: eine Stufe heller als
+   * der Chat-Grund (#2b2b2c), sonst wirkt die Karte wie ein Loch. */
+  --ds-chat-composer-bg: var(--ds-white);
+  --ds-chat-composer-border: var(--ds-grey-divider);
+
+  /* ── Fokus-Ring ───────────────────────────────────────────────────────── */
+  --ds-focus-ring: 2px solid var(--ds-blue);
+  --ds-focus-offset: 2px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ds-motion-fast: 0.15s;
+  --ds-motion-medium: 0.3s;
+  --ds-motion-pulse: 1.6s;     /* Heartbeat fuer Live-Dot */
+}
+
+/* ── Dark-Mode-Mapping ──────────────────────────────────────────────────────
+ * Die Mono-Blue-Referenz ist Light-only. Diese Werte sind Kontrast-validierte
+ * Vorschlaege fuer den vorhandenen Theme-Toggle der Snotra-AI-App. --ds-blue
+ * muss im Dark-Mode aufgehellt werden, um als Schrift/BG ueber 4,5:1 zu
+ * kommen — der Hue bleibt im Blue-Bereich, damit es weiterhin als "die
+ * Akzentfarbe" gelesen wird.
+ */
+[data-theme='dark'] {
+  --ds-btn-destructive-bg: var(--ds-white);
+  --ds-btn-destructive-bg-hover: #C9C9CC;
+  --ds-btn-destructive-fg: var(--ds-black);
+  --ds-grey-bg: #1A1A1B;
+  --ds-grey-card: #232325;
+  --ds-grey-divider: #2E2E30;
+  --ds-grey-muted: #A1A1A6;    /* 5,4:1 auf #1A1A1B */
+  --ds-grey-strong: #C4C4C9;   /* 8,3:1 auf #1A1A1B */
+  --ds-grey-control-border: #8A8A8E;  /* 5,1:1 auf #1A1A1B */
+
+  --ds-blue: #3FB8E5;          /* 6,2:1 auf #1A1A1B */
+  --ds-blue-soft: rgba(63, 184, 229, 0.08);
+  --ds-blue-border: rgba(63, 184, 229, 0.30);
+  --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
+  --ds-chat-composer-bg: #343436;
+  --ds-chat-composer-border: #45454A;
+
+  --ds-error: #FF8080;
+  --ds-error-bg: rgba(255, 128, 128, 0.12);
+  --ds-error-border: rgba(255, 128, 128, 0.35);
+
+  --ds-mic-recording: #F87171;
+  --ds-mic-recording-bg: rgba(248, 113, 113, 0.15);
+
+  /* Im Dark-Mode: gleicher Hue wie --ds-blue, Hover-Stufe etwas dunkler/gesaettigter. */
+  --ds-btn-primary-bg: var(--ds-blue);
+  --ds-btn-primary-bg-hover: #2a9fc7;
+  --ds-btn-primary-fg: #1e1e1e;
+  --ds-btn-primary-active-shadow: 0 5px 16px rgba(0, 0, 0, 0.45);
+  --ds-icon-btn-active-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --ds-overlay-border: #45454A;
+  --ds-overlay-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.6),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Reduced-Motion-Token-Override ─────────────────────────────────────────
+ * Komponenten lesen `--ds-motion-fast` / `--ds-motion-pulse` und werden
+ * dadurch automatisch ruhig, sobald der Nutzer Bewegung reduziert haben will.
+ * Endlos-Animationen (Pulse, Spin, Cursor-Blink) muessen zusaetzlich in den
+ * jeweiligen Komponenten via @media-Block deaktiviert werden, weil
+ * `animation-duration: 0` die Frame-Anzahl nicht reduziert.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-motion-fast: 0.001s;
+    --ds-motion-medium: 0.001s;
+    --ds-motion-pulse: 0.001s;
+  }
+}
+
+/* ===== src/renderer/styles.css ===== */
 * {
   margin: 0;
   padding: 0;
@@ -4576,132 +4813,6 @@ select.modal-input {
   overflow: auto;
 }
 
-/* ── Einstellungen › MCP › Server importieren (Issue #110) ───────────────
-   Variante B: Das Eingabefeld bleibt oben stehen, die Vorschau waechst
-   darunter mit. Fehler im Block zeigen sich dadurch sofort am Feld, statt
-   erst nach einem Schrittwechsel. */
-
-.mcp-import__paste {
-  min-height: 132px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.mcp-import__count {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ds-grey-muted);
-}
-
-.mcp-import__count:empty {
-  display: none;
-}
-
-.mcp-import__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mcp-import__row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 12px 14px;
-  border: 1px solid var(--ds-grey-divider);
-  border-radius: 6px;
-  background: var(--bg-primary);
-}
-
-/* Das Haekchen sitzt in der ersten Zeile, nicht mittig zum ganzen Block —
-   sonst rutscht es bei vielen Hinweisen weit nach unten. */
-.mcp-import__check {
-  margin: 3px 0 0;
-  accent-color: var(--ds-blue);
-}
-
-.mcp-import__name {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.mcp-import__id {
-  margin-left: 8px;
-  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
-  font-size: 12px;
-  color: var(--ds-grey-muted);
-}
-
-.mcp-import__cmd {
-  margin-top: 3px;
-  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
-  font-size: 12px;
-  color: var(--ds-grey-muted);
-  overflow-wrap: anywhere;
-}
-
-.mcp-import__notes {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.mcp-import__note {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  font-size: 12px;
-  color: var(--ds-grey-strong);
-}
-
-.mcp-import__badge {
-  flex: none;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--ds-blue);
-  border: 1px solid var(--ds-blue-border);
-  background: var(--ds-blue-soft);
-}
-
-/* Ein Hinweis, der eine Entscheidung verlangt (Platzhalter, Ueberschreiben),
-   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg. */
-.mcp-import__badge--warn {
-  color: var(--ds-error);
-  border-color: var(--ds-error-border);
-  background: var(--ds-error-bg);
-}
-
-.mcp-import__skipped {
-  padding: 12px 14px;
-  border: 1px solid var(--ds-grey-divider);
-  border-radius: 6px;
-  background: var(--ds-grey-card);
-}
-
-.mcp-import__skipped h4 {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.mcp-import__skipped ul {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--ds-grey-muted);
-}
-
 @media (max-width: 640px) {
   .mcp-row {
     grid-template-columns: minmax(0, 1fr);
@@ -4726,3 +4837,346 @@ select.modal-input {
   color: var(--ds-grey-strong);
   cursor: not-allowed;
 }
+
+</style>
+<style>
+  /* Nur für diese Gegenüberstellung — nichts davon geht in die App. */
+  body { margin: 0; background: var(--ds-grey-bg); color: var(--text-primary);
+         font-family: Inter, system-ui, sans-serif; }
+  .mk-page { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  .mk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 8px; }
+  .mk-title { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .mk-sub { color: var(--text-muted); font-size: 14px; margin: 0 0 4px; }
+  .mk-stamp { color: var(--text-muted-strong); font-size: 12px; margin: 0; }
+  .mk-variant { margin-top: 44px; }
+  .mk-variant__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .mk-variant__name { font-size: 17px; font-weight: 600; margin: 0; }
+  .mk-variant__tag { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+                     color: var(--ds-blue); border: 1px solid var(--ds-blue-border); border-radius: 999px; padding: 2px 9px; }
+  .mk-variant__why { color: var(--text-muted); font-size: 14px; margin: 0 0 16px; max-width: 78ch; line-height: 1.5; }
+  .mk-stage { background: var(--ds-grey-card); border: 1px solid var(--ds-grey-divider); border-radius: 12px; padding: 24px; }
+  .mk-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .mk-steplabel { font-size: 12px; font-weight: 600; color: var(--text-muted-strong); margin: 0 0 8px; }
+  .mk-dialog { position: static; background: var(--bg-primary); border: 1px solid var(--ds-grey-divider);
+               border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.10); overflow: hidden; width: 100%; }
+  .mk-dialog header { display: flex; align-items: center; justify-content: space-between;
+                      padding: 16px 20px 12px; border-bottom: 1px solid var(--ds-grey-divider); }
+  .mk-dialog h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .mk-dialog__body { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .mk-dialog footer { display: flex; justify-content: flex-end; gap: 8px;
+                      padding: 14px 20px; border-top: 1px solid var(--ds-grey-divider); }
+  .mk-paste { width: 100%; min-height: 150px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              font-size: 12.5px; line-height: 1.55; }
+  .mk-toggle { display: flex; gap: 8px; align-items: center; }
+  /* Vorschauzeile: an .mcp-row angelehnt, plus Häkchen und Hinweise. */
+  .mk-prev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .mk-prev__row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;
+                  border: 1px solid var(--ds-grey-divider); border-radius: 10px; padding: 12px 14px; background: var(--bg-primary); }
+  .mk-prev__row input[type=checkbox] { margin-top: 3px; }
+  .mk-prev__name { font-weight: 600; font-size: 14px; }
+  .mk-prev__id { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+  .mk-prev__cmd { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text-muted);
+                  margin-top: 3px; overflow-wrap: anywhere; }
+  .mk-prev__notes { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .mk-prev__note { font-size: 12px; color: var(--text-muted-strong); display: flex; gap: 6px; align-items: flex-start; }
+  .mk-badge { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .mk-badge--secret { color: var(--ds-blue); border: 1px solid var(--ds-blue-border); background: var(--ds-blue-soft); }
+  .mk-badge--warn { color: #8a5a00; border: 1px solid rgba(138,90,0,.3); background: rgba(138,90,0,.07); }
+  [data-theme='dark'] .mk-badge--warn { color: #e0b155; border-color: rgba(224,177,85,.35); background: rgba(224,177,85,.1); }
+  .mk-skipped { border: 1px solid var(--ds-grey-divider); border-radius: 10px; padding: 12px 14px; background: var(--ds-grey-card); }
+  .mk-skipped h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .mk-skipped ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+  .mk-count { font-size: 13px; color: var(--text-muted); }
+  .mk-panelframe { background: var(--bg-primary); border: 1px solid var(--ds-grey-divider); border-radius: 12px; padding: 20px 22px; }
+  .mk-disclosure { border: 1px solid var(--ds-grey-divider); border-radius: 10px; margin-top: 16px; overflow: hidden; }
+  .mk-disclosure__head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--ds-grey-card);
+                         font-size: 14px; font-weight: 600; cursor: default; }
+  .mk-disclosure__body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .mk-caret { transition: transform .15s ease; }
+  .mk-note-inline { font-size: 13px; color: var(--text-muted); margin: 0; line-height: 1.5; }
+  @media (max-width: 900px) { .mk-steps { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="mk-page">
+
+  <div class="mk-head">
+    <div>
+      <h1 class="mk-title">MCP-Server importieren — drei Varianten</h1>
+      <p class="mk-sub">Issue #110, fünfte Scheibe von #62. Gleiche Logik, gleiche Inhalte — nur die Einbettung unterscheidet sich.</p>
+      <p class="mk-stamp">Erstellt 2026-09-16 · Claude Opus 5 · Reasoning-Effort: high · Entscheidung: Variante B</p>
+    </div>
+    <div class="mk-toggle">
+      <button type="button" class="btn-secondary btn-compact" onclick="document.documentElement.dataset.theme='light'">Hell</button>
+      <button type="button" class="btn-secondary btn-compact" onclick="document.documentElement.dataset.theme='dark'">Dunkel</button>
+    </div>
+  </div>
+
+  <!-- ── Variante A ─────────────────────────────────────────────── -->
+  <section class="mk-variant">
+    <div class="mk-variant__head">
+      <h2 class="mk-variant__name">Einfügen und Vorschau nacheinander</h2>
+      <span class="mk-variant__tag">Variante A</span>
+    </div>
+    <p class="mk-variant__why">
+      Eigener Dialog wie „Server hinzufügen“, in zwei Schritten. Der erste Schritt ist ein großes,
+      ruhiges Eingabefeld, der zweite gehört ganz der Vorschau. Folgt dem Muster, das der
+      MCP-Bereich schon hat, und hält beide Schritte übersichtlich — kostet aber einen Klick
+      und zeigt Fehler im Block erst nach „Weiter“.
+    </p>
+    <div class="mk-stage">
+      <div class="mk-steps">
+        <div>
+          <p class="mk-steplabel">Schritt 1 — einfügen</p>
+          <div class="mk-dialog">
+            <header>
+              <h2>Server importieren</h2>
+              <button type="button" class="settings-dialog__icon-close" aria-label="Popup schließen">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg>
+              </button>
+            </header>
+            <div class="mk-dialog__body">
+              <div class="modal-field-group">
+                <label class="modal-field-label" for="paste-a">Konfiguration einfügen</label>
+                <textarea id="paste-a" class="modal-input modal-input--mono mk-paste" spellcheck="false">{
+  "mcpServers": {
+    "Atlassian Jira": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "mcp-atlassian:latest"],
+      "env": { "JIRA_TOKEN": "<dein-token>" }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "ghp_0123456789abcdef" }
+    },
+    "remote-docs": { "url": "https://example.com/mcp" }
+  }
+}</textarea>
+                <p class="modal-hint">
+                  Der Block aus Claude Desktop, Claude Code oder Cursor — mit oder ohne
+                  umschließendes <code lang="en">mcpServers</code>. Kommentare und angehängte
+                  Kommas stören nicht. Gelesen wird nur, was hier steht; es wird keine fremde
+                  Konfigurationsdatei geöffnet.
+                </p>
+              </div>
+            </div>
+            <footer>
+              <button type="button" class="btn-secondary">Abbrechen</button>
+              <button type="button" class="btn-primary">Weiter</button>
+            </footer>
+          </div>
+        </div>
+
+        <div>
+          <p class="mk-steplabel">Schritt 2 — prüfen und übernehmen</p>
+          <div class="mk-dialog">
+            <header>
+              <h2>Server importieren</h2>
+              <button type="button" class="settings-dialog__icon-close" aria-label="Popup schließen">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg>
+              </button>
+            </header>
+            <div class="mk-dialog__body">
+              <p class="mk-count"><strong>2 von 3</strong> Einträgen können übernommen werden.</p>
+              <ul class="mk-prev">
+                <li class="mk-prev__row">
+                  <input type="checkbox" checked aria-label="Atlassian Jira übernehmen">
+                  <div>
+                    <div><span class="mk-prev__name">Atlassian Jira</span><span class="mk-prev__id">atlassian-jira</span></div>
+                    <div class="mk-prev__cmd">docker run --rm -i mcp-atlassian:latest</div>
+                    <ul class="mk-prev__notes">
+                      <li class="mk-prev__note"><span class="mk-badge mk-badge--secret">geheim</span> JIRA_TOKEN wird verschlüsselt abgelegt</li>
+                      <li class="mk-prev__note"><span class="mk-badge mk-badge--warn">Platzhalter</span> JIRA_TOKEN enthält noch <code>&lt;dein-token&gt;</code></li>
+                      <li class="mk-prev__note">Kennung aus dem Namen abgeleitet: <code>atlassian-jira</code></li>
+                    </ul>
+                  </div>
+                  <span></span>
+                </li>
+                <li class="mk-prev__row">
+                  <input type="checkbox" checked aria-label="github übernehmen">
+                  <div>
+                    <div><span class="mk-prev__name">github</span><span class="mk-prev__id">github</span></div>
+                    <div class="mk-prev__cmd">npx -y @modelcontextprotocol/server-github</div>
+                    <ul class="mk-prev__notes">
+                      <li class="mk-prev__note"><span class="mk-badge mk-badge--secret">geheim</span> GITHUB_TOKEN wird verschlüsselt abgelegt</li>
+                    </ul>
+                  </div>
+                  <span></span>
+                </li>
+              </ul>
+              <div class="mk-skipped">
+                <h4>1 Eintrag wird nicht übernommen</h4>
+                <ul>
+                  <li><strong>remote-docs</strong> — zeigt auf eine URL. Bisher werden nur lokal gestartete Server (stdio) unterstützt.</li>
+                </ul>
+              </div>
+              <p class="mk-note-inline">
+                Übernommene Server sind zunächst <strong>ausgeschaltet</strong>. Einschalten
+                startet einen Prozess und bringt dessen Tools ins Modell — das bleibt ein
+                bewusster Schritt.
+              </p>
+            </div>
+            <footer>
+              <button type="button" class="btn-secondary">Zurück</button>
+              <button type="button" class="btn-primary">2 Server übernehmen</button>
+            </footer>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Variante B ─────────────────────────────────────────────── -->
+  <section class="mk-variant">
+    <div class="mk-variant__head">
+      <h2 class="mk-variant__name">Vorschau wächst unter dem Feld mit</h2>
+      <span class="mk-variant__tag">Variante B</span>
+    </div>
+    <p class="mk-variant__why">
+      Ein Dialog, kein Schrittwechsel: Was erkannt wurde, erscheint direkt beim Einfügen unter dem
+      Feld. Fehler im Block zeigen sich sofort, und man kann oben korrigieren, ohne zurückzugehen.
+      Dafür wird der Dialog bei vielen Servern lang und muss scrollen.
+    </p>
+    <div class="mk-stage">
+      <div class="mk-dialog" style="max-width: 620px; margin: 0 auto;">
+        <header>
+          <h2>Server importieren</h2>
+          <button type="button" class="settings-dialog__icon-close" aria-label="Popup schließen">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg>
+          </button>
+        </header>
+        <div class="mk-dialog__body">
+          <div class="modal-field-group">
+            <label class="modal-field-label" for="paste-b">Konfiguration einfügen</label>
+            <textarea id="paste-b" class="modal-input modal-input--mono mk-paste" style="min-height:104px" spellcheck="false">{ "mcpServers": { "Atlassian Jira": { "command": "docker", "args": ["run","--rm","-i","mcp-atlassian:latest"], "env": { "JIRA_TOKEN": "<dein-token>" } }, "github": { "command": "npx", "args": ["-y","@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "ghp_0123456789abcdef" } }, "remote-docs": { "url": "https://example.com/mcp" } } }</textarea>
+          </div>
+          <p class="mk-count"><strong>2 von 3</strong> Einträgen können übernommen werden.</p>
+          <ul class="mk-prev">
+            <li class="mk-prev__row">
+              <input type="checkbox" checked aria-label="Atlassian Jira übernehmen">
+              <div>
+                <div><span class="mk-prev__name">Atlassian Jira</span><span class="mk-prev__id">atlassian-jira</span></div>
+                <div class="mk-prev__cmd">docker run --rm -i mcp-atlassian:latest</div>
+                <ul class="mk-prev__notes">
+                  <li class="mk-prev__note"><span class="mk-badge mk-badge--secret">geheim</span> JIRA_TOKEN wird verschlüsselt abgelegt</li>
+                  <li class="mk-prev__note"><span class="mk-badge mk-badge--warn">Platzhalter</span> JIRA_TOKEN enthält noch <code>&lt;dein-token&gt;</code></li>
+                </ul>
+              </div>
+              <span></span>
+            </li>
+            <li class="mk-prev__row">
+              <input type="checkbox" checked aria-label="github übernehmen">
+              <div>
+                <div><span class="mk-prev__name">github</span><span class="mk-prev__id">github</span></div>
+                <div class="mk-prev__cmd">npx -y @modelcontextprotocol/server-github</div>
+                <ul class="mk-prev__notes">
+                  <li class="mk-prev__note"><span class="mk-badge mk-badge--secret">geheim</span> GITHUB_TOKEN wird verschlüsselt abgelegt</li>
+                </ul>
+              </div>
+              <span></span>
+            </li>
+          </ul>
+          <div class="mk-skipped">
+            <h4>1 Eintrag wird nicht übernommen</h4>
+            <ul><li><strong>remote-docs</strong> — zeigt auf eine URL. Bisher werden nur lokal gestartete Server (stdio) unterstützt.</li></ul>
+          </div>
+        </div>
+        <footer>
+          <button type="button" class="btn-secondary">Abbrechen</button>
+          <button type="button" class="btn-primary">2 Server übernehmen</button>
+        </footer>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Variante C ─────────────────────────────────────────────── -->
+  <section class="mk-variant">
+    <div class="mk-variant__head">
+      <h2 class="mk-variant__name">Aufklappbarer Bereich im Panel</h2>
+      <span class="mk-variant__tag">Variante C</span>
+    </div>
+    <p class="mk-variant__why">
+      Kein Dialog: ein Abschnitt unter der Serverliste. Man sieht beim Importieren, was schon
+      eingetragen ist — hilfreich bei Kennungen, die kollidieren. Dafür wächst das Panel, und
+      der Bereich steht auch dann herum, wenn niemand importieren will.
+    </p>
+    <div class="mk-stage">
+      <div class="mk-panelframe">
+        <div class="settings-panel-models__head" style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+          <h3 class="settings-subsection-title" style="margin:0;">Eingetragene Server</h3>
+          <div class="settings-mcp-head__actions">
+            <button type="button" class="btn-secondary">Neu laden</button>
+            <button type="button" class="btn-primary">Server hinzufügen</button>
+          </div>
+        </div>
+        <ul class="settings-mcp-list" style="margin-top:12px;">
+          <li class="mcp-row">
+            <div class="mcp-row__main">
+              <span class="mcp-row__name">Heimat</span>
+              <span class="mcp-row__meta">docker run --rm -i mcp-heimat:latest</span>
+            </div>
+            <div class="mcp-row__actions">
+              <button type="button" class="btn-secondary btn-compact">Bearbeiten</button>
+              <button type="button" class="mcp-switch" role="switch" aria-checked="true" aria-label="Heimat aktiv"></button>
+            </div>
+          </li>
+        </ul>
+
+        <div class="mk-disclosure">
+          <div class="mk-disclosure__head">
+            <svg class="mk-caret" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(90deg)">
+              <path fill="currentColor" d="M6 3.5 10.5 8 6 12.5z"/>
+            </svg>
+            Aus JSON importieren
+          </div>
+          <div class="mk-disclosure__body">
+            <textarea class="modal-input modal-input--mono mk-paste" style="min-height:96px" spellcheck="false">{ "mcpServers": { "github": { "command": "npx", "args": ["-y","@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "ghp_0123456789abcdef" } }, "Heimat": { "command": "docker", "args": ["run","--rm","-i","mcp-heimat:latest"] } } }</textarea>
+            <p class="mk-count"><strong>2</strong> Einträge erkannt.</p>
+            <ul class="mk-prev">
+              <li class="mk-prev__row">
+                <input type="checkbox" checked aria-label="github übernehmen">
+                <div>
+                  <div><span class="mk-prev__name">github</span><span class="mk-prev__id">github</span></div>
+                  <div class="mk-prev__cmd">npx -y @modelcontextprotocol/server-github</div>
+                  <ul class="mk-prev__notes">
+                    <li class="mk-prev__note"><span class="mk-badge mk-badge--secret">geheim</span> GITHUB_TOKEN wird verschlüsselt abgelegt</li>
+                  </ul>
+                </div>
+                <span></span>
+              </li>
+              <li class="mk-prev__row">
+                <input type="checkbox" aria-label="Heimat übernehmen">
+                <div>
+                  <div><span class="mk-prev__name">Heimat</span><span class="mk-prev__id">heimat</span></div>
+                  <div class="mk-prev__cmd">docker run --rm -i mcp-heimat:latest</div>
+                  <ul class="mk-prev__notes">
+                    <li class="mk-prev__note"><span class="mk-badge mk-badge--warn">ersetzt</span> Es gibt bereits einen Server <code>heimat</code> — Übernehmen überschreibt ihn.</li>
+                  </ul>
+                </div>
+                <span></span>
+              </li>
+            </ul>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button type="button" class="btn-secondary">Leeren</button>
+              <button type="button" class="btn-primary">1 Server übernehmen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mk-variant">
+    <h2 class="mk-variant__name">In allen drei Varianten gleich</h2>
+    <p class="mk-variant__why" style="max-width:none">
+      Die Vorschauzeile zeigt Name, abgeleitete Kennung und das Startkommando; darunter stehen die
+      Hinweise, die der Parser liefert — als Secret vorgemerkte Werte, Platzhalter, abgeleitete oder
+      kollidierende Kennungen. Übersprungene Einträge stehen mit Begründung darunter, nie
+      stillschweigend weg. Übernommene Server sind aus.
+    </p>
+  </section>
+
+</div>
+</body>
+</html>
