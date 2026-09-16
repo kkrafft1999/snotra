@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const nodePath = require('path');
-const { createSkillsWatcher, MAX_FALLBACK_LEVELS } = require('../src/main/services/skills-watcher');
+const {
+  createSkillsWatcher,
+  MAX_FALLBACK_LEVELS,
+  DEFAULT_MAX_WAIT_MS,
+} = require('../src/main/services/skills-watcher');
 
 /**
  * Die Tests mit Ersatz-Watcher rechnen bewusst in POSIX-Pfaden: Geprüft wird
@@ -388,8 +392,23 @@ function createMeldungssignal() {
  * `vorbereiten` stellt den Ausgangszustand her und dient zugleich als
  * Lebendprobe: Bleibt schon dessen Echo aus, ist der Watcher noch nicht
  * scharf und der Versuch wird verworfen, statt `ausloesen` zu verheizen.
+ *
+ * Das Wartefenster richtet sich nach dem Höchstfenster des Dienstes, nicht
+ * nach einem geschätzten Wert: Unter Windows feuert ein Watcher nach dem
+ * Entfernen seines Verzeichnisses endlos weiter, und genau dagegen hält der
+ * Dienst die Meldung bis zu `DEFAULT_MAX_WAIT_MS` zurück. Ein kürzeres
+ * Fenster kann dort grundsätzlich nicht aufgehen — nachgestellt am
+ * 2026-09-16 mit einer Flut-Attrappe: erste Meldung nach 1060 ms bei einem
+ * Höchstfenster von 1000 ms. Der Faktor zwei lässt Luft für einen belasteten
+ * Runner und wandert mit, falls die Konstante sich ändert.
  */
-async function bisMeldung({ signal, vorbereiten = null, ausloesen, versuche = 20, fensterMs = 500 }) {
+async function bisMeldung({
+  signal,
+  vorbereiten = null,
+  ausloesen,
+  versuche = 5,
+  fensterMs = DEFAULT_MAX_WAIT_MS * 2,
+}) {
   for (let versuch = 0; versuch < versuche; versuch += 1) {
     if (vorbereiten) {
       await vorbereiten(versuch);
