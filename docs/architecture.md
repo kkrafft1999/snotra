@@ -68,6 +68,15 @@ bestehende Importe stabil bleiben.
   `main/services/python-runner-service.js`. Den PATH, mit dem gesucht und
   ausgeführt wird, bringt der Dienst nicht selbst auf: er kommt als
   `readShellPath` von außen herein (Issue #111)
+- `mcp-port` — Tools externer MCP-Server auflisten und aufrufen (Issue #106,
+  Teil von #62). Der Core sieht weder Prozesse noch JSON-RPC: die
+  Verbindungsverwaltung (Handshake, `tools/list`, `tools/call`, Zeitlimits,
+  Abbruch, sauberes Beenden) liegt im `main/services/mcp-service.js`, das
+  Zeilen-Framing über stdin/stdout im `main/services/mcp-stdio-transport.js`.
+  Die Trennung ist Absicht: bewusst kein `@modelcontextprotocol/sdk`, solange
+  nur stdio und nur `tools` im Spiel sind — der Transport ist die Stelle, an
+  der ein SDK später andocken könnte, ohne dass Port oder Core sich ändern.
+  Validierung der Serverkonfiguration in `shared/contracts/mcp.js`
 - `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
   ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
   PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im

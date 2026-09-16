@@ -143,6 +143,24 @@ const {
   createPermissionAuditEntry,
 } = require('./tool-permissions');
 
+const {
+  MCP_CONTRACT_VERSION,
+  MCP_PROTOCOL_VERSION,
+  MCP_TRANSPORTS,
+  MCP_TRANSPORT_LIST,
+  MCP_CONNECTION_STATES,
+  MCP_LIMITS,
+  MCP_TIMEOUTS,
+  isValidMcpServerId,
+  isMcpTransport,
+  isMcpConnectionState,
+  validateMcpServerConfig,
+  normalizeMcpServerConfig,
+  normalizeMcpToolCatalogEntry,
+  normalizeMcpToolCatalog,
+  createMcpConnectionStatus,
+} = require('./mcp');
+
 module.exports = {
   CONTRACT_VERSION,
   CHAT_ERROR_CODES,
@@ -263,4 +281,19 @@ module.exports = {
   isToolApprovalRequestDto,
   normalizeToolApprovalResponse,
   createPermissionAuditEntry,
+  MCP_CONTRACT_VERSION,
+  MCP_PROTOCOL_VERSION,
+  MCP_TRANSPORTS,
+  MCP_TRANSPORT_LIST,
+  MCP_CONNECTION_STATES,
+  MCP_LIMITS,
+  MCP_TIMEOUTS,
+  isValidMcpServerId,
+  isMcpTransport,
+  isMcpConnectionState,
+  validateMcpServerConfig,
+  normalizeMcpServerConfig,
+  normalizeMcpToolCatalogEntry,
+  normalizeMcpToolCatalog,
+  createMcpConnectionStatus,
 };
