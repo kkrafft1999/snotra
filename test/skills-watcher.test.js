@@ -340,40 +340,99 @@ process.on('unhandledRejection', (error) => {
   process.exit(1);
 });
 
+/**
+ * Ein Zähler, auf dessen nächsten Ausschlag man warten kann, statt zu pollen.
+ */
+function createMeldungssignal() {
+  let zaehler = 0;
+  let wecker = null;
+  return {
+    melden() {
+      zaehler += 1;
+      const w = wecker;
+      wecker = null;
+      w?.();
+    },
+    zuruecksetzen() {
+      zaehler = 0;
+    },
+    /** Wartet auf die nächste Meldung; `false`, wenn binnen `ms` keine kam. */
+    warten(ms) {
+      if (zaehler > 0) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          wecker = null;
+          resolve(false);
+        }, ms);
+        wecker = () => {
+          clearTimeout(timer);
+          resolve(true);
+        };
+      });
+    },
+  };
+}
+
+/**
+ * Löst `ausloesen` aus und wartet auf die Meldung — notfalls mehrmals.
+ *
+ * Der Grund für die Wiederholung (Issue #151): `fs.watch` meldet entweder
+ * binnen Millisekunden oder überhaupt nicht mehr. Gemessen am 2026-09-16 über
+ * sechs volle Suite-Läufe lag die grüne Meldung stabil bei ~110 ms, während
+ * der seltene Fehlschlag die vollen 10 s verstreichen ließ — die Verteilung
+ * ist also zweigipflig, nicht langschwänzig. Dahinter steckt das Startfenster
+ * des Watchers: `fs.watch()` kehrt zurück, bevor der FSEvents-Stream wirklich
+ * läuft, und was in dieses Fenster fällt, ist verloren. Ein größeres
+ * Zeitbudget hilft dagegen nicht, eine zweite Änderung schon.
+ *
+ * `vorbereiten` stellt den Ausgangszustand her und dient zugleich als
+ * Lebendprobe: Bleibt schon dessen Echo aus, ist der Watcher noch nicht
+ * scharf und der Versuch wird verworfen, statt `ausloesen` zu verheizen.
+ */
+async function bisMeldung({ signal, vorbereiten = null, ausloesen, versuche = 20, fensterMs = 500 }) {
+  for (let versuch = 0; versuch < versuche; versuch += 1) {
+    if (vorbereiten) {
+      await vorbereiten(versuch);
+      if (!(await signal.warten(fensterMs))) continue;
+    }
+    signal.zuruecksetzen();
+    await ausloesen(versuch);
+    if (await signal.warten(fensterMs)) return true;
+  }
+  return false;
+}
+
 test('meldet eine echte neue SKILL.md im Unterordner', async () => {
   const root = await makeTempRoot('snotra-watch-');
   const skillsDir = realPath.join(root, '.agents', 'skills');
   await fsPromises.mkdir(skillsDir, { recursive: true });
 
-  let meldungen = 0;
+  const signal = createMeldungssignal();
   const watcher = createSkillsWatcher({
     watch,
     path: realPath,
     os: { homedir: () => realPath.join(root, '__kein-home__') },
-    onChange: () => {
-      meldungen += 1;
-    },
+    onChange: () => signal.melden(),
     debounceMs: 50,
   });
 
   try {
     watcher.watchWorkspace(root);
-    const skillDir = realPath.join(skillsDir, 'frisch');
-    await fsPromises.mkdir(skillDir);
-    await fsPromises.writeFile(
-      realPath.join(skillDir, 'SKILL.md'),
-      '---\nname: frisch\ndescription: Neu angelegt\n---\n\nHallo.\n',
-      'utf8'
-    );
-
-    // Grosszuegiges Budget statt knapper 3 s: `fs.watch` liefert unter Last
-    // (die uebrige Suite startet Kindprozesse) spuerbar spaeter. Die Schleife
-    // bricht beim ersten Ereignis ab, ein gruener Lauf dauert also unveraendert
-    // Millisekunden — nur ein langsamer Rechner scheitert nicht mehr faelschlich.
-    for (let i = 0; i < 200 && meldungen === 0; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    assert.ok(meldungen > 0, 'das Anlegen eines Skills wurde gemeldet');
+    // Jeder Versuch legt einen eigenen Skill an — ein verlorener erster
+    // Anlauf wird so vom zweiten eingeholt.
+    const gemeldet = await bisMeldung({
+      signal,
+      ausloesen: async (versuch) => {
+        const skillDir = realPath.join(skillsDir, `frisch-${versuch}`);
+        await fsPromises.mkdir(skillDir);
+        await fsPromises.writeFile(
+          realPath.join(skillDir, 'SKILL.md'),
+          '---\nname: frisch\ndescription: Neu angelegt\n---\n\nHallo.\n',
+          'utf8'
+        );
+      },
+    });
+    assert.ok(gemeldet, 'das Anlegen eines Skills wurde gemeldet');
   } finally {
     watcher.close();
     await fsPromises.rm(root, { recursive: true, force: true });
@@ -386,35 +445,35 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
   // Verzeichnis selbst mitgelöscht wird — ohne Ereignis und ohne Fehler.
   // Gerettet wird das nur vom Wächter auf dem Vorfahren.
   const root = await makeTempRoot('snotra-watch-rm-');
-  const skillDir = realPath.join(root, '.agents', 'skills', 'verschwindet');
+  const agentsDir = realPath.join(root, '.agents');
+  const skillDir = realPath.join(agentsDir, 'skills', 'verschwindet');
+  // Die Struktur steht schon vor dem ersten Wächter: Nur dann hängt die Kette
+  // von Anfang an am Ziel. Begänne sie flach auf der Wurzel, bliebe ein
+  // verlorenes `.agents`-Ereignis unbemerkt und nichts baute sie je um.
   await fsPromises.mkdir(skillDir, { recursive: true });
-  await fsPromises.writeFile(realPath.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
 
-  let meldungen = 0;
+  const signal = createMeldungssignal();
   const watcher = createSkillsWatcher({
     watch,
     path: realPath,
     os: { homedir: () => realPath.join(root, '__kein-home__') },
-    onChange: () => {
-      meldungen += 1;
-    },
+    onChange: () => signal.melden(),
     debounceMs: 50,
   });
 
   try {
     watcher.watchWorkspace(root);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    meldungen = 0;
-
-    await fsPromises.rm(realPath.join(root, '.agents'), { recursive: true, force: true });
-    // Grosszuegiges Budget statt knapper 3 s: `fs.watch` liefert unter Last
-    // (die uebrige Suite startet Kindprozesse) spuerbar spaeter. Die Schleife
-    // bricht beim ersten Ereignis ab, ein gruener Lauf dauert also unveraendert
-    // Millisekunden — nur ein langsamer Rechner scheitert nicht mehr faelschlich.
-    for (let i = 0; i < 200 && meldungen === 0; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    assert.ok(meldungen > 0, 'das Entfernen wurde gemeldet');
+    const gemeldet = await bisMeldung({
+      signal,
+      // Stellt nach einem missglückten Versuch das Gelöschte wieder her und
+      // belegt zugleich, dass der Wächter am Ziel wirklich schon meldet.
+      vorbereiten: async () => {
+        await fsPromises.mkdir(skillDir, { recursive: true });
+        await fsPromises.writeFile(realPath.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
+      },
+      ausloesen: () => fsPromises.rm(agentsDir, { recursive: true, force: true }),
+    });
+    assert.ok(gemeldet, 'das Entfernen wurde gemeldet');
   } finally {
     watcher.close();
     await fsPromises.rm(root, { recursive: true, force: true });
