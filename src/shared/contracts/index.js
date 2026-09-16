@@ -160,6 +160,11 @@ const {
   normalizeMcpToolCatalog,
   createMcpConnectionStatus,
 } = require('./mcp');
+const {
+  MCP_IMPORT_MAX_SERVERS,
+  parseMcpServersBlock,
+  toMcpServerInput,
+} = require('./mcp-import');
 
 module.exports = {
   CONTRACT_VERSION,
@@ -296,4 +301,7 @@ module.exports = {
   normalizeMcpToolCatalogEntry,
   normalizeMcpToolCatalog,
   createMcpConnectionStatus,
+  MCP_IMPORT_MAX_SERVERS,
+  parseMcpServersBlock,
+  toMcpServerInput,
 };
