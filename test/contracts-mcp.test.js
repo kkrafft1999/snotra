@@ -162,3 +162,82 @@ test('createMcpConnectionStatus füllt Lücken und prüft den Zustand', () => {
   assert.equal(createMcpConnectionStatus({ toolCount: -3 }).toolCount, 0);
   assert.equal(createMcpConnectionStatus({ state: MCP_CONNECTION_STATES.READY }).state, 'ready');
 });
+
+// --- Namensraum und Risikoklassen (Issue #107) ---
+
+const {
+  MCP_BASE_RISK_CLASSES,
+  MCP_QUALIFIED_NAME_MAX_CHARS,
+  fitsMcpToolNameLimit,
+  isMcpToolName,
+  mcpRiskClassesFor,
+  parseQualifiedMcpToolName,
+  qualifiedMcpToolName,
+} = require('../src/shared/contracts/mcp');
+const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
+
+test('der Tool-Name trägt Server und Tool', () => {
+  assert.equal(qualifiedMcpToolName('github', 'search_repos'), 'mcp__github__search_repos');
+  assert.equal(isMcpToolName('mcp__github__search_repos'), true);
+  assert.equal(isMcpToolName('read_file'), false);
+  assert.deepEqual(parseQualifiedMcpToolName('mcp__github__search_repos'), {
+    serverId: 'github',
+    name: 'search_repos',
+  });
+});
+
+test('ein doppelter Unterstrich im Tool-Namen bleibt beim Tool', () => {
+  // Getrennt wird am *ersten* Trenner hinter dem Präfix — der Servername darf
+  // keinen doppelten Unterstrich enthalten, der Tool-Name schon.
+  assert.deepEqual(parseQualifiedMcpToolName('mcp__srv__a__b'), { serverId: 'srv', name: 'a__b' });
+});
+
+test('eine Serverkennung mit doppeltem Unterstrich wird abgelehnt', () => {
+  const { ok, errors } = validateMcpServerConfig({ id: 'my__srv', command: 'npx' });
+  assert.equal(ok, false);
+  assert.match(errors.join(' '), /doppelten Unterstrich/);
+});
+
+test('kaputte oder fremde Namen ergeben null statt halber Treffer', () => {
+  for (const name of ['read_file', 'mcp__', 'mcp__srv', 'mcp__srv__', 'mcp____tool', '', null]) {
+    assert.equal(parseQualifiedMcpToolName(name), null, `„${name}" darf nicht zerlegbar sein`);
+  }
+});
+
+test('der zusammengesetzte Name bleibt in der Grenze der Berechtigungsregeln', () => {
+  assert.equal(fitsMcpToolNameLimit(qualifiedMcpToolName('github', 'search')), true);
+  const zuLang = qualifiedMcpToolName('server', 'x'.repeat(MCP_QUALIFIED_NAME_MAX_CHARS));
+  assert.equal(fitsMcpToolNameLimit(zuLang), false);
+});
+
+test('MCP-Tools sind immer execute und external', () => {
+  assert.deepEqual([...MCP_BASE_RISK_CLASSES], [TOOL_RISK_CLASSES.EXECUTE, TOOL_RISK_CLASSES.EXTERNAL]);
+  assert.deepEqual(mcpRiskClassesFor(undefined), [TOOL_RISK_CLASSES.EXECUTE, TOOL_RISK_CLASSES.EXTERNAL]);
+});
+
+test('destructiveHint verschärft, readOnlyHint schwächt nicht ab', () => {
+  assert.deepEqual(mcpRiskClassesFor({ destructiveHint: true }), [
+    TOOL_RISK_CLASSES.EXECUTE,
+    TOOL_RISK_CLASSES.EXTERNAL,
+    TOOL_RISK_CLASSES.DELETE,
+  ]);
+  // Der fremde Server darf sich nicht selbst besserstellen — das ist der Kern
+  // der Entscheidung zu #107.
+  assert.deepEqual(mcpRiskClassesFor({ readOnlyHint: true, idempotentHint: true }), [
+    TOOL_RISK_CLASSES.EXECUTE,
+    TOOL_RISK_CLASSES.EXTERNAL,
+  ]);
+  assert.deepEqual(mcpRiskClassesFor({ readOnlyHint: true, destructiveHint: true }), [
+    TOOL_RISK_CLASSES.EXECUTE,
+    TOOL_RISK_CLASSES.EXTERNAL,
+    TOOL_RISK_CLASSES.DELETE,
+  ]);
+});
+
+test('nur destructiveHint wird aus den Annotations übernommen', () => {
+  const [tool] = normalizeMcpToolCatalog(
+    [{ name: 'rm', annotations: { destructiveHint: true, readOnlyHint: true, openWorldHint: true } }],
+    'srv',
+  );
+  assert.deepEqual(tool.annotations, { destructiveHint: true });
+});

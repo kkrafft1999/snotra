@@ -7,6 +7,7 @@
 'use strict';
 
 const { resolveDebugWaitMs } = require('../contracts/debug-wait');
+const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { APP_LOCALES } = require('../contracts/enums');
 const { parseSkillPath } = require('../runtime/skill-path');
 
@@ -177,6 +178,14 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
   }
   if (toolName === 'debug_wait') {
     return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
+  }
+  // MCP-Tools (Issue #107): der Namensraum `mcp__<server>__<tool>` ist eine
+  // interne Angelegenheit — im Log steht der Server vor dem Tool, damit man
+  // sieht, wessen Werkzeug da gerade laeuft, ohne die Maschinerie zu lesen.
+  const mcp = parseQualifiedMcpToolName(toolName);
+  if (mcp) {
+    const label = `${truncateToolLabel(mcp.serverId)} · ${truncateToolLabel(mcp.name)}`;
+    return isDone ? `${label} ausgeführt` : `${label} wird ausgeführt …`;
   }
   const name = truncateToolLabel(toolName || 'Tool');
   return isDone ? `${name} ausgeführt` : `${name} wird ausgeführt …`;
