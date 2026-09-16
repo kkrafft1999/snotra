@@ -8,11 +8,23 @@ import {
   toolStatusBadge,
 } from '../utils/tool-catalog-view.js';
 
+/**
+ * Bereiche, die **sofort** wirken statt erst mit „Uebernehmen": Berechtigungen
+ * (Issue #67) und MCP (Issue #109). Beide gehoeren dem Main-Prozess, beide
+ * schreiben beim Klick. Der Hinweis in der Fussleiste muss das sagen — sonst
+ * verspricht er eine Sicherheit, die es hier nicht gibt.
+ */
+const IMMEDIATE_PANELS = new Set(['permissions', 'mcp']);
+
+const APPLY_HINT_DEFERRED = 'Änderungen gelten erst mit <strong>Übernehmen</strong>.';
+const APPLY_HINT_IMMEDIATE = 'Änderungen in diesem Bereich wirken <strong>sofort</strong>.';
+
 const SETTINGS_NAV_LABELS = {
   models: 'Modelle',
   tools: 'Tools',
   permissions: 'Berechtigungen',
   skills: 'Skills',
+  mcp: 'MCP',
   general: 'Allgemein',
 };
 
@@ -50,6 +62,7 @@ export function initSettingsModal(deps) {
     updateChatChrome,
     onCheckUpdates,
     toolPermissionsPanel = null,
+    mcpPanel = null,
     onSkillSuggestionModeChanged = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
@@ -963,6 +976,10 @@ export function initSettingsModal(deps) {
     });
     settingsPanelHeadingEl.textContent =
       SETTINGS_NAV_LABELS[panelKey] || SETTINGS_NAV_LABELS.models;
+    const applyHint = document.getElementById('settings-apply-hint');
+    if (applyHint) {
+      applyHint.innerHTML = IMMEDIATE_PANELS.has(panelKey) ? APPLY_HINT_IMMEDIATE : APPLY_HINT_DEFERRED;
+    }
   }
 
   function setupDraftFromServerState() {
@@ -982,9 +999,22 @@ export function initSettingsModal(deps) {
     document.documentElement.lang = lc === 'en' ? 'en' : 'de';
   }
 
+  /**
+   * Der gerade offene Unterdialog — es gibt inzwischen zwei („Modell
+   * hinzufuegen" und MCP, Issue #109). Frueher stand hier fest das
+   * Modell-Overlay; ein offener MCP-Dialog haette den Tab-Fokus dann in den
+   * Dialog dahinter entkommen lassen.
+   */
+  function openNestedOverlay() {
+    return [...document.querySelectorAll('.add-model-overlay')].find(
+      (node) => !node.classList.contains('hidden')
+    ) || null;
+  }
+
   function getFocusableInSettingsModal() {
-    if (addModelOverlay && !addModelOverlay.classList.contains('hidden')) {
-      const nested = addModelOverlay.querySelector('.add-model-dialog');
+    const overlay = openNestedOverlay();
+    if (overlay) {
+      const nested = overlay.querySelector('.add-model-dialog');
       if (!nested) return [];
       return [...nested.querySelectorAll(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -1003,10 +1033,14 @@ export function initSettingsModal(deps) {
   function handleModalKeydown(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
+      // Ein offener Unterdialog schliesst zuerst sich selbst. Fremde
+      // Unterdialoge (MCP) behandeln Escape in ihrer eigenen Komponente und
+      // stoppen das Ereignis vorher — hier kommt dann gar nichts mehr an.
       if (addModelOverlay && !addModelOverlay.classList.contains('hidden')) {
         closeAddModelOverlay();
         return;
       }
+      if (openNestedOverlay()) return;
       closeSettingsModal();
       return;
     }
@@ -1116,6 +1150,9 @@ export function initSettingsModal(deps) {
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
     // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.
     await toolPermissionsPanel?.open?.(settingsToolCatalog);
+    // MCP (Issue #109) liest wie die Berechtigungen direkt vom Main und
+    // wirkt sofort — die Serverliste haengt nicht am Entwurf.
+    await mcpPanel?.open?.();
     await loadSkillCatalog();
     renderDraftPresetList();
     renderProviderSelect();
@@ -1133,6 +1170,7 @@ export function initSettingsModal(deps) {
 
   function closeSettingsModal() {
     toolPermissionsPanel?.close?.();
+    mcpPanel?.close?.();
     closeChatModelMenu(false);
     stashPopupCredentialInputs();
     closeAddModelOverlay();

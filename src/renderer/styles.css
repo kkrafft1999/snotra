@@ -4234,3 +4234,347 @@ select.modal-input {
 .chat-skill-suggestion-dismiss:focus-visible {
   color: var(--text-default);
 }
+
+/* --- Einstellungen › MCP (Issue #109) -----------------------------------
+ *
+ * Variante C: Das Panel traegt nur die Liste, bearbeitet wird im
+ * Unterdialog. Der Sicherheitshinweis steht bewusst offen und nicht in einem
+ * <details> — er ist der Grund, warum man hier zweimal hinschaut.
+ */
+
+.settings-mcp-warning {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+  background: var(--ds-grey-bg);
+}
+
+.settings-mcp-warning__mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--text-primary);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.settings-mcp-warning p {
+  font-size: 13px;
+  color: var(--ds-grey-strong);
+}
+
+.settings-mcp-head__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-mcp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mcp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+  background: var(--bg-primary);
+}
+
+.mcp-row--note {
+  display: block;
+  background: var(--ds-grey-bg);
+}
+
+.mcp-row--note p {
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+}
+
+.mcp-row__main {
+  min-width: 0;
+}
+
+.mcp-row__name {
+  display: block;
+  font-weight: 500;
+}
+
+/* Lange npx-Aufrufe sind der Normalfall — abschneiden statt die Zeile
+   dreizeilig werden zu lassen. Der volle Text haengt im title. */
+.mcp-row__meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-row__error {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--ds-grey-divider);
+  padding-top: 10px;
+}
+
+.mcp-row__error p {
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+}
+
+.mcp-row__error pre {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--ds-grey-card);
+  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow: auto;
+}
+
+/* Status traegt seine Aussage in Form und Text, nicht in Farbe. */
+.mcp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mcp-status__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.mcp-status__dot--on {
+  background: var(--ds-blue);
+}
+
+.mcp-status__dot--off {
+  border: 1.5px solid var(--ds-grey-control-border);
+}
+
+.mcp-status__badge {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mcp-switch {
+  width: 40px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  position: relative;
+  cursor: pointer;
+  border-radius: 999px;
+  background: var(--ds-grey-divider);
+  border: 1px solid var(--ds-grey-control-border);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mcp-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-grey-control-border);
+  transition: transform 0.15s;
+}
+
+.mcp-switch[aria-checked="true"] {
+  background: var(--ds-blue);
+  border-color: var(--ds-blue);
+}
+
+.mcp-switch[aria-checked="true"]::after {
+  transform: translateX(18px);
+  border-color: var(--ds-blue);
+}
+
+/* Umgebungsvariablen: vier Spalten, solange Platz ist — sonst umbrechen
+   statt die Felder auf Briefmarkengroesse zu quetschen. */
+.mcp-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mcp-env-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.mcp-env-row > .modal-input:nth-of-type(1) {
+  flex: 1 1 150px;
+  min-width: 130px;
+}
+
+.mcp-env-row > .modal-input:nth-of-type(2) {
+  flex: 2 1 190px;
+  min-width: 150px;
+}
+
+/* Haekchen und Entfernen gehoeren zusammen — beim Umbruch darf das Kreuz
+   nicht allein in die naechste Zeile rutschen. */
+.mcp-env-row__opts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.mcp-env-row__secret {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mcp-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mcp-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mcp-tool-row:hover {
+  background: var(--ds-blue-soft);
+}
+
+.mcp-tool-row code {
+  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 12.5px;
+}
+
+.mcp-test:empty {
+  display: none;
+}
+
+.mcp-test {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.mcp-test__ok::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: var(--ds-blue);
+}
+
+.mcp-test__fail {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.mcp-test__pending,
+.mcp-test__tools {
+  color: var(--ds-grey-strong);
+  font-size: 12px;
+}
+
+.mcp-test__tools {
+  margin-top: 6px;
+  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+}
+
+.mcp-test pre {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--ds-grey-card);
+  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 140px;
+  overflow: auto;
+}
+
+@media (max-width: 640px) {
+  .mcp-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .mcp-row__actions {
+    justify-content: flex-end;
+  }
+}
+
+/* Der Loeschknopf gehoert nicht neben „Speichern" — ein Fehlklick waere hier
+   nicht rueckgaengig zu machen (Issue #109). */
+#dialog-mcp-server .modal-actions #btn-mcp-server-delete {
+  margin-right: auto;
+}
+
+/* Die Kennung steckt im Tool-Namen und ist nachtraeglich nicht aenderbar. Das
+   muss man dem Feld ansehen, sonst tippt man dagegen an. */
+.modal-input:disabled {
+  background: var(--ds-grey-card);
+  color: var(--ds-grey-strong);
+  cursor: not-allowed;
+}
