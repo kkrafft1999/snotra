@@ -27,6 +27,10 @@ const os = { homedir: () => HOME };
 /**
  * Ein `fs.watch`-Ersatz, der über `missing` steuert, welche Verzeichnisse es
  * (noch) nicht gibt — genau der Fall, um den herum der Dienst gebaut ist.
+ *
+ * `aktiv(dir)` liefert den lebenden Wächter auf einem Pfad. Nötig, weil der
+ * Dienst vor dem rekursiven Wächter am Ziel flach anklopft: Dieser
+ * Probe-Wächter steht ebenfalls in `created`, ist aber längst geschlossen.
  */
 function createFakeWatch(missing = []) {
   const absent = new Set(missing);
@@ -54,7 +58,13 @@ function createFakeWatch(missing = []) {
     created.push(watcher);
     return watcher;
   }
-  return { watch, created, appear: (dir) => absent.delete(dir), absent };
+  return {
+    watch,
+    created,
+    appear: (dir) => absent.delete(dir),
+    absent,
+    aktiv: (dir) => created.filter((w) => w.dir === dir && !w.closed).at(-1) ?? null,
+  };
 }
 
 /**
@@ -127,8 +137,8 @@ test('beobachtet jede Ordner-Quelle samt ihrer Vorfahren, die System-Skills nich
     { dir: HOME, isTarget: false },
   ]);
   // Unterordner zählen nur beim Ziel — die SKILL.md liegt eine Ebene tiefer.
-  assert.equal(fake.created[0].options.recursive, true);
-  assert.equal(fake.created[1].options.recursive, false);
+  assert.equal(fake.aktiv(WS_SKILLS).options.recursive, true);
+  assert.equal(fake.aktiv(path.join(WS, '.agents')).options.recursive, false);
   watcher.close();
 });
 
@@ -147,7 +157,7 @@ test('ein fehlendes Verzeichnis lässt die vorhandenen Vorfahren beobachten', ()
   watcher.watchWorkspace(WS);
   const watched = watcher.watchedDirectories();
   assert.deepEqual(watched[0], { dir: WS, isTarget: false }, 'zwei Ebenen hoch bis zum Workspace');
-  assert.equal(fake.created[0].options.recursive, false, 'ein Wächter bleibt flach');
+  assert.equal(fake.aktiv(WS).options.recursive, false, 'ein Wächter bleibt flach');
   assert.deepEqual(watched[1], { dir: HOME_SKILLS, isTarget: true }, 'Home ist davon unberührt');
   watcher.close();
 });
@@ -155,7 +165,7 @@ test('ein fehlendes Verzeichnis lässt die vorhandenen Vorfahren beobachten', ()
 test('ein Wächter über dem Ziel reagiert nur auf das Pfadstück, auf das er wartet', () => {
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  const wsWatcher = fake.created.find((w) => w.dir === WS);
+  const wsWatcher = fake.aktiv(WS);
 
   // Ein belebtes Projektverzeichnis darf keine Skill-Scans auslösen.
   wsWatcher.handler('rename', 'build');
@@ -185,7 +195,8 @@ test('gibt es auch den Vorfahren nicht, bleibt die Quelle einfach unbeobachtet',
 test('viele Ereignisse münden in eine einzige Meldung', () => {
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  for (let i = 0; i < 20; i += 1) fake.created[0].handler('rename', `skill-${i}/SKILL.md`);
+  const ziel = fake.aktiv(WS_SKILLS);
+  for (let i = 0; i < 20; i += 1) ziel.handler('rename', `skill-${i}/SKILL.md`);
   assert.deepEqual(changes, [], 'noch nichts gemeldet');
   clock.tick();
   assert.equal(changes.length, 1, 'genau einmal');
@@ -198,7 +209,7 @@ test('eine ununterbrochene Ereignis-Flut verhindert die Meldung nicht', () => {
   // nie zu einer Meldung — genau daran scheiterte der Löschfall dort.
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  const ziel = fake.created.find((w) => w.dir === WS_SKILLS);
+  const ziel = fake.aktiv(WS_SKILLS);
 
   let verschobene = 0;
   for (let i = 0; i < 200; i += 1) {
@@ -221,8 +232,8 @@ test('ein nötiger Neuaufbau geht durch spätere Ereignisse nicht verloren', () 
   // toten Ziel-Watchers ein, die für sich genommen keinen bräuchten.
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  const wurzel = fake.created.find((w) => w.dir === WS);
-  const ziel = fake.created.find((w) => w.dir === WS_SKILLS);
+  const wurzel = fake.aktiv(WS);
+  const ziel = fake.aktiv(WS_SKILLS);
 
   fake.absent.add(WS_SKILLS);
   fake.absent.add(path.join(WS, '.agents'));
@@ -251,7 +262,7 @@ test('ein später angelegtes Verzeichnis wird erkannt und dann direkt beobachtet
   // danach muss der Dienst am echten Ziel hängen.
   fake.appear(WS_SKILLS);
   fake.appear(path.join(WS, '.agents'));
-  fake.created[0].handler('rename', '.agents');
+  fake.aktiv(WS).handler('rename', '.agents');
   clock.tick();
 
   assert.equal(changes.length, 1, 'Änderung gemeldet');
@@ -262,7 +273,7 @@ test('ein später angelegtes Verzeichnis wird erkannt und dann direkt beobachtet
 test('ein Fehler des Watchers stürzt nicht ab, sondern baut neu auf', () => {
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  const first = fake.created[0];
+  const first = fake.aktiv(WS_SKILLS);
   assert.equal(typeof first.listeners.error, 'function', 'Fehler werden behandelt');
 
   // Verschwindet das Verzeichnis, meldet Node einen Fehler statt eines
@@ -295,7 +306,8 @@ test('ein Workspace-Wechsel lässt keine Handles zurück', () => {
 test('close räumt alles ab und schluckt noch laufende Ereignisse', () => {
   const { fake, clock, changes, watcher } = setup();
   watcher.watchWorkspace(WS);
-  fake.created[0].handler('change', 'SKILL.md');
+  const ziel = fake.aktiv(WS_SKILLS);
+  ziel.handler('change', 'SKILL.md');
   assert.ok(clock.hasPending, 'eine Meldung steht an');
 
   watcher.close();
@@ -304,7 +316,7 @@ test('close räumt alles ab und schluckt noch laufende Ereignisse', () => {
   assert.deepEqual(watcher.watchedDirectories(), []);
 
   // Auch ein Ereignis, das den Weg noch findet, meldet nach close nichts mehr.
-  fake.created[0].handler('change', 'SKILL.md');
+  ziel.handler('change', 'SKILL.md');
   clock.tick();
   assert.deepEqual(changes, []);
 });
@@ -360,7 +372,7 @@ test('die Wiedervorlage hält durch und ein belebter Ordner löst nichts aus', (
     missing: [WS_SKILLS, path.join(WS, '.agents')],
   });
   watcher.watchWorkspace(WS);
-  const wurzel = fake.created.find((w) => w.dir === WS);
+  const wurzel = fake.aktiv(WS);
 
   for (let runde = 0; runde < 3; runde += 1) {
     // Zwischendurch arbeitet jemand im Projekt — das geht die Skills nichts an.
@@ -387,6 +399,40 @@ test('close beendet auch die Wiedervorlage', () => {
   watcher.close();
   assert.equal(watcher.retryPending(), false);
   assert.equal(clock.hasPending, false, 'kein Timer bleibt zurück');
+});
+
+test('ein rekursiver Wächter, der ENOENT verschweigt, wird nicht für das Ziel gehalten', () => {
+  // Unter Linux kehrt `watch(..., { recursive: true })` auch für einen
+  // fehlenden Pfad zurück und liefert einen Wächter, der nie etwas meldet
+  // (nachgemessen 2026-09-17, Node 24.21). Hinge die Kette an dieser
+  // Attrappe, wäre sie blind und die Wiedervorlage sähe ihr Ziel als
+  // erreicht an.
+  const fake = createFakeWatch([WS_SKILLS, path.join(WS, '.agents')]);
+  const clock = createFakeClock();
+  const linuxWatch = (dir, optionen, handler) => {
+    if (optionen?.recursive && fake.absent.has(dir)) {
+      return { dir, options: optionen, handler: () => {}, closed: false, on() { return this; }, close() { this.closed = true; } };
+    }
+    return fake.watch(dir, optionen, handler);
+  };
+  const watcher = createSkillsWatcher({
+    watch: linuxWatch,
+    path,
+    os,
+    onChange: () => {},
+    setTimeoutImpl: clock.setTimeoutImpl,
+    clearTimeoutImpl: clock.clearTimeoutImpl,
+    nowImpl: clock.nowImpl,
+  });
+
+  watcher.watchWorkspace(WS);
+  assert.deepEqual(
+    watcher.watchedDirectories()[0],
+    { dir: WS, isTarget: false },
+    'die Kette steigt zum Vorfahren auf, statt an der Attrappe zu hängen'
+  );
+  assert.equal(watcher.retryPending(), true, 'und die Wiedervorlage läuft');
+  watcher.close();
 });
 
 test('der Abstand der Wiedervorlage ist ein paar Sekunden', () => {

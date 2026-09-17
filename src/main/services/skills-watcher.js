@@ -177,6 +177,28 @@ function createSkillsWatcher({
   }
 
   /**
+   * Klopft flach an einem Verzeichnis an und wirft, wenn es fehlt.
+   *
+   * Nötig, weil `watch` einen fehlenden Pfad nicht überall gleich behandelt:
+   * Mit `recursive: true` kehrt es unter Linux auch dafür zurück und liefert
+   * einen Wächter, der nie etwas meldet — statt ENOENT zu werfen wie unter
+   * macOS und Windows (nachgemessen 2026-09-17, Node 24.21 auf Linux). Ein
+   * flacher Wächter wirft dagegen überall.
+   */
+  function probeWatchable(dir) {
+    const probe = watch(dir, { recursive: false }, () => {});
+    try {
+      // Ein 'error' ohne Listener risse den Main-Prozess mit — auch in der
+      // kurzen Zeitspanne bis zum close().
+      if (typeof probe.on === 'function') probe.on('error', () => {});
+      probe.close();
+    } catch {
+      // Ein Probe-Watcher, der sich nicht schließen lässt, ist kein Grund zur
+      // Aufregung: Er hat seine Frage bereits beantwortet.
+    }
+  }
+
+  /**
    * Beobachtet das Skill-Verzeichnis **und** seine vorhandenen Vorfahren.
    * Nicht entweder-oder: Das Ziel sieht die Arbeit an den Skills, die
    * Vorfahren sehen das Ziel selbst entstehen und vergehen.
@@ -188,6 +210,10 @@ function createSkillsWatcher({
       const isTarget = dir === targetDir;
       const childName = expectedChild;
       try {
+        // Erst anklopfen: Der rekursive Wächter am Ziel verschweigt einen
+        // fehlenden Pfad unter Linux, und die Kette stiege dann nie zum
+        // Vorfahren auf, sondern hinge an einer Attrappe.
+        if (isTarget) probeWatchable(dir);
         // Unterhalb des Skill-Verzeichnisses zählt jede Ebene (die SKILL.md
         // liegt im Unterordner). Ein Wächter darüber wartet nur auf ein
         // einzelnes Pfadstück und bleibt flach.
@@ -224,29 +250,18 @@ function createSkillsWatcher({
   }
 
   /**
-   * Gibt es das Verzeichnis inzwischen? Gefragt wird mit demselben Mittel,
-   * an dem es zuvor gescheitert ist: Ein `watch` auf einen fehlenden Pfad
-   * wirft ENOENT. Das erspart eine zweite Dateisystem-Abhängigkeit und prüft
-   * genau das, worauf es ankommt — nicht nur, ob der Pfad existiert, sondern
-   * ob er sich auch beobachten lässt.
+   * Gibt es das Verzeichnis inzwischen? Gefragt wird mit demselben Mittel, an
+   * dem es zuvor gescheitert ist — das erspart eine zweite Dateisystem-
+   * Abhängigkeit und prüft genau das, worauf es ankommt: nicht nur, ob der
+   * Pfad existiert, sondern ob er sich beobachten lässt.
    */
   function targetReachable(dir) {
-    let probe = null;
     try {
-      probe = watch(dir, { recursive: false }, () => {});
+      probeWatchable(dir);
+      return true;
     } catch {
       return false;
     }
-    try {
-      // Ein 'error' ohne Listener risse den Main-Prozess mit — auch in der
-      // kurzen Zeitspanne bis zum close().
-      if (typeof probe.on === 'function') probe.on('error', () => {});
-      probe.close();
-    } catch {
-      // Ein Probe-Watcher, der sich nicht schließen lässt, ist kein Grund
-      // zur Aufregung: Er hat seine Frage bereits beantwortet.
-    }
-    return true;
   }
 
   /**
