@@ -112,6 +112,7 @@ Wirkung. Dort ist das `.deb` die Lösung.
 ## Dateibaum
 
 - **Projektordner öffnen:** über den Knopf in der Seitenleiste oder die Liste der zuletzt genutzten Ordner. Alles Weitere bezieht sich immer auf diesen einen Ordner.
+- **Seitenleiste wegschalten:** Der Knopf links neben „Snotra AI“ in der Titelzeile blendet die Seitenleiste samt Trenner komplett aus, der Arbeitsbereich rückt nach. Solange sie sichtbar ist, liegt der Knopf blau hinterlegt. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht → Seitenleiste ein-/ausblenden*. Snotra merkt sich den Zustand bis zum nächsten Start.
 - **Verschieben:** Eine Datei oder einen Ordner im Baum auf eine Ordnerzeile ziehen verschiebt den Eintrag dorthin; auf der freien Fläche unter dem Baum landet er im Projektordner. Gibt es den Namen schon, wird `name (2).ext` daraus.
 - **Im Chat referenzieren:** Eine Datei oder einen Ordner in die Chat-Eingabe ziehen fügt dort `@<pfad relativ zur Projektwurzel>` ein; derselbe Weg ohne Ziehen ist der `@`-Knopf rechts in der Zeile (Hover oder Tabulator). Details unter [Chat](#chat).
 - **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick) auf eine Zeile öffnet Öffnen, „Im Finder bzw. Explorer anzeigen“ und Löschen. Gelöscht wird in den Papierkorb, nach Rückfrage.

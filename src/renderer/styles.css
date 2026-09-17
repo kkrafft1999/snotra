@@ -408,7 +408,8 @@ summary:focus-visible,
 }
 
 #theme-toggle,
-#btn-toggle-content-pane {
+#btn-toggle-content-pane,
+#btn-toggle-sidebar {
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
@@ -436,17 +437,41 @@ summary:focus-visible,
  * Folder-Buttons in der Sidebar (dort kontrastiert --bg-hover gegen
  * --bg-secondary). */
 #theme-toggle:hover,
-#btn-toggle-content-pane:hover {
+#btn-toggle-content-pane:hover,
+#btn-toggle-sidebar:hover {
   background: color-mix(in srgb, var(--text-primary) 9%, transparent);
   color: var(--text-primary);
 }
 
 #theme-toggle:active,
-#btn-toggle-content-pane:active {
+#btn-toggle-content-pane:active,
+#btn-toggle-sidebar:active {
   background: color-mix(in srgb, var(--text-primary) 16%, transparent);
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* Seitenleisten-Schalter (Issue #167): Der Zustand sitzt auf der Flaeche, nicht
+ * im Symbol — eingeschaltet traegt der Knopf den Blau-Wash wie ein gedrueckter
+ * Werkzeugknopf. --ds-blue-soft allein waere auf --bg-header kaum zu sehen,
+ * deshalb zusaetzlich der 25-%-Rahmen als inset-Ring (kein border, sonst
+ * springt das Icon um 1 px). Der :hover-Block oben liegt im Quelltext davor
+ * und wuerde sonst gewinnen — hier deshalb noch einmal eigens gesetzt. */
+#btn-toggle-sidebar[aria-pressed='true'] {
+  background: var(--ds-blue-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--ds-blue-border);
+}
+
+#btn-toggle-sidebar[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+#btn-toggle-sidebar[aria-pressed='true']:active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
 }
 
 /* ── Main Layout ── */
@@ -454,6 +479,40 @@ summary:focus-visible,
 #app {
   display: flex;
   height: calc(100% - 44px);
+}
+
+/* Ausgeblendete Seitenleiste (Issue #167). Die Breite steht als Inline-Wert am
+ * Element (SidebarResizer), deshalb braucht es hier !important — der gemerkte
+ * Wert bleibt so erhalten und gilt beim Einblenden wieder.
+ *
+ * `visibility: hidden` ist der eigentliche Schalter: eine nur 0 px breite
+ * Flaeche mit overflow:hidden haelt ihren Inhalt weiterhin im Tab-Lauf und im
+ * Screenreader. Als Uebergangseigenschaft schaltet visibility ausserdem erst am
+ * Ende der Dauer auf hidden, beim Einblenden dagegen sofort auf visible — genau
+ * die Reihenfolge, die man sehen will.
+ */
+#app.app--no-sidebar #sidebar {
+  width: 0 !important;
+  min-width: 0;
+  visibility: hidden;
+}
+
+#app.app--no-sidebar #divider {
+  width: 0;
+  visibility: hidden;
+}
+
+/* Die Transition haengt bewusst NICHT dauerhaft an #sidebar: waehrend des
+ * Ziehens am Trenner wuerde jede Breitenaenderung nachlaufen und der Griff
+ * bliebe hinter dem Mauszeiger zurueck. Die Klasse setzt app.js nur fuer die
+ * Dauer des Umschaltens. Unter prefers-reduced-motion fallen die --ds-motion-*
+ * ohnehin auf 0,001 s (tokens.css), deshalb keine eigene Media-Query. */
+#app.app--sidebar-animating #sidebar,
+#app.app--sidebar-animating #divider {
+  transition:
+    width var(--ds-motion-medium) cubic-bezier(0.2, 0.8, 0.2, 1),
+    min-width var(--ds-motion-medium) cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility var(--ds-motion-medium) linear;
 }
 
 /* ── Sidebar ── */
@@ -515,10 +574,13 @@ summary:focus-visible,
 
 /* ── Tree Items ── */
 
+/* Zeilenhoehe traegt den Zeilenabstand im Baum: 26 px + 20 % = 31,2 -> 31 px
+ * (Issue #167). Schrift, Icon und Einrueckung bleiben unveraendert, die Luft
+ * waechst dadurch gleichmaessig ober- und unterhalb des Namens. */
 .tree-item {
   display: flex;
   align-items: center;
-  height: 26px;
+  height: 31px;
   padding-right: 8px;
   border-left: 2px solid transparent;
   cursor: pointer;

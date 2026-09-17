@@ -140,6 +140,22 @@ test('createListModelsResult and settings result DTOs', () => {
   assert.deepEqual(createListModelsResult({ error: 'fail' }), { error: 'fail' });
 });
 
+// Seitenleiste (Issue #167): sichtbar, solange nichts anderes dasteht — nur ein
+// ausdrueckliches false blendet sie aus. Der Patch uebernimmt ausschliesslich
+// echte Booleans, damit ein halber Aufruf den gemerkten Zustand nicht kippt.
+test('normalizeUiPrefs merkt die ausgeblendete Seitenleiste', () => {
+  const { normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+
+  assert.equal(normalizeUiPrefs({}).sidebarVisible, true);
+  assert.equal(normalizeUiPrefs({ sidebarVisible: false }).sidebarVisible, false);
+  assert.equal(normalizeUiPrefs({ sidebarVisible: 'nein' }).sidebarVisible, true);
+
+  assert.equal('sidebarVisible' in normalizeUiPrefsPatch({}), false);
+  assert.equal('sidebarVisible' in normalizeUiPrefsPatch({ sidebarVisible: 'nein' }), false);
+  assert.equal(normalizeUiPrefsPatch({ sidebarVisible: false }).sidebarVisible, false);
+  assert.equal(normalizeUiPrefsPatch({ sidebarVisible: true }).sidebarVisible, true);
+});
+
 // Python-Ausfuehrung (Issue #86): standardmaessig aus, Pfad bereinigt.
 test('normalizeUiPrefs schaltet die Python-Ausführung standardmäßig ab', () => {
   const { normalizeUiPrefs } = require('../src/shared/contracts/settings');

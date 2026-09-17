@@ -148,6 +148,8 @@ const PUSH_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_CHANGED: 'toolPermissions:changed',
   /** Ein Skill-Verzeichnis hat sich geaendert (Issue #126); Katalog neu holen. */
   SKILLS_CHANGED: 'skills:changed',
+  /** Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B (Issue #167). */
+  UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
 });
 
 module.exports = {
