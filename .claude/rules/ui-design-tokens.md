@@ -37,25 +37,34 @@ In `tokens.css` sind dies die Kanalnamen (Light-Werte in `:root`, Dark in `[data
 | `--ds-blue-soft` | `rgba(0,117,158,0.05)` | Hover-Wash, aktive Radio-States |
 | `--ds-blue-border` | `rgba(0,117,158,0.25)` | Active-State Borders |
 | `--ds-black` | `#000000` | Primär-Schrift, Destructive-Aktion |
-| `--ds-white` | `#FFFFFF` | primäre Fläche |
-| `--ds-grey-bg` | `#F6F7F9` | Page-BG, Footer-BG |
-| `--ds-grey-card` | `#EFF0F2` | Code-BG, Inline-Code |
-| `--ds-grey-divider` | `#ECEDEF` | Borders, Trennlinien |
-| `--ds-grey-muted` | `#6D6D6D` | Sekundär-Schrift, Metadaten (nur ≥ 14 px) |
-| `--ds-grey-strong` | `#5C5C5C` | kleinere Sekundärschrift (< 14 px) |
+| `--ds-white` | `#FFFFFF` | **nur Tinte**: Schrift auf Blau, Häkchen, Toggle-Knob |
+| `--ds-surface` | `#FFFCF5` | primäre Fläche (Karten, Dialoge, Composer) |
+| `--ds-grey-bg` | `#F9F4ED` | Page-BG, Footer-BG |
+| `--ds-grey-card` | `#F2EDE6` | Code-BG, Inline-Code |
+| `--ds-grey-divider` | `#EFEAE3` | Borders, Trennlinien |
+| `--ds-grey-muted` | `#6F6D69` | Sekundär-Schrift, Metadaten (nur ≥ 14 px) |
+| `--ds-grey-strong` | `#5E5C59` | kleinere Sekundärschrift (< 14 px) |
 | `--ds-btn-primary-*` | siehe `tokens.css` | Primary/Save/Send: BG, FG, Hover, Active-Schatten |
 
-Die drei Grautoene sind **leicht kuehl getoent** (R-B-Spanne 3), damit sie den
-Blau-Hue von `--ds-blue` aufnehmen, ohne eine zweite Farbe einzufuehren. Sie
-bilden eine abgestimmte Skala: Der Helligkeitsabstand Grund → Card betraegt
-ΔL\* 2,44, Grund → Divider ΔL\* 3,48. **Wer einen der drei Werte aendert, muss
-die anderen beiden mitziehen** — sonst brechen die Ebenenabstaende.
+Die drei Grautoene sind **warm getoent** (b\* +4, R-B-Spanne 12). Bis zum
+2026-09-17 war der Satz leicht kuehl, damit die Grauflaechen den Blau-Hue von
+`--ds-blue` aufnehmen; diese Regel ist bewusst **umgedreht**. Der Grund ist
+jetzt Papier, `--ds-blue` ist der einzige kuehle Ton im System — dadurch wird
+es als Akzent gelesen und nicht als Grundstimmung. Wer die Waerme zurueckdreht,
+dreht diese Entscheidung mit zurueck; keine Einzelwerte anfassen.
 
-Der Grund liegt bewusst unter reinem Off-White: Gegen die weisse Composer-Karte
-ergab das fruehere `#F9F9F9` nur ΔL\* 2,07 und lag damit an der Wahrnehmungs-
-schwelle — die Karte war rechnerisch erhoeht, optisch aber nicht. Mit `#F6F7F9`
-sind es ΔL\* 2,79. Untergrenze fuer den Grund ist `#F1F2F4`; darunter fallen
-`--ds-grey-muted` und `--ds-blue` unter 4,6:1 und verlieren jeden Kontrastpuffer.
+Die Skala selbst ist unveraendert: Der Helligkeitsabstand Grund → Card betraegt
+ΔL\* 2,44, Grund → Divider ΔL\* 3,49. Verschoben wurden ausschliesslich a\* und
+b\*, **nie L\***. **Wer einen der drei Werte aendert, muss die anderen beiden
+mitziehen** — sonst brechen die Ebenenabstaende.
+
+Reines Weiss ist keine Flaeche mehr. `--ds-surface` sitzt bei L\* 99,0 statt
+100, weil warm *und* L\* 100 nicht gleichzeitig geht — auf warmem Grund liest
+`#FFFFFF` als kuehler, fast blaeulicher Fleck. Der Preis sind kleinere
+Ebenenabstaende: Flaeche → Panel-Grund ΔL\* 2,62 (vorher 2,79), Flaeche →
+Chat-Grund ΔL\* 1,23 (vorher 1,43). Untergrenze fuer den Panel-Grund ist
+`#F6F1EA`; darunter fallen `--ds-grey-muted` und `--ds-blue` unter 4,6:1 und
+verlieren jeden Kontrastpuffer.
 
 ### Typografie
 
@@ -104,7 +113,7 @@ Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe —
 ### Dialoge & Modals
 
 - Backdrop: `rgba(0,0,0,0.5)`, Padding 56/32px.
-- Dialog: max-width 480px, BG `--ds-white`, Border `--ds-grey-divider`, Radius 6px.
+- Dialog: max-width 480px, BG `--ds-surface`, Border `--ds-grey-divider`, Radius 6px.
 - Header: Padding 16/24px, Title 16px/600, Close-Icon-Button rechts. Border-bottom `--ds-grey-divider`.
 - Body: Padding 4/24/16px. Form-Rows mit Border-bottom zwischen Sections.
 - Footer: Padding 14/20px, BG `--ds-grey-bg`, rechtsbündig, 8px Gap zwischen Buttons.
@@ -112,7 +121,7 @@ Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe —
 
 ### Cards & Container
 
-- BG `--ds-white`, Border `--ds-grey-divider`, Radius 6px, **kein dekorativen Card-Schatten** (Chat-/Panel-Flächen bleiben flach). Einzige Ausnahme ist die Composer-Karte, siehe „Composer-Lift".
+- BG `--ds-surface`, Border `--ds-grey-divider`, Radius 6px, **kein dekorativen Card-Schatten** (Chat-/Panel-Flächen bleiben flach). Einzige Ausnahme ist die Composer-Karte, siehe „Composer-Lift".
 - Inneres Padding nach Inhaltstyp (Content 24px, Tool-Card 14px).
 
 ### Pills / Status-Badges

@@ -16,7 +16,7 @@
 
 :root {
   /* ── Marken-Palette ───────────────────────────────────────────────────── */
-  --ds-blue: #00759E;          /* einzige Akzentfarbe (5,0:1 auf #FFF) */
+  --ds-blue: #00759E;          /* einzige Akzentfarbe (5,1:1 auf --ds-surface) */
   --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
   --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
   /* User-Bubble: Blau-Wash, der die Frage als eigenen Block vom Fliesstext
@@ -28,31 +28,44 @@
    * Wash zurueckhaltender und braucht mehr Prozent fuer dieselbe Wirkung. */
   --ds-chat-user-bg: rgba(0, 117, 158, 0.08);
   --ds-black: #000000;
+  /* --ds-white ist seit dem Ivory-Wechsel (2026-09-17) nur noch *Tinte*:
+   * Schrift auf Blau (--ds-btn-primary-fg), Haekchen, Toggle-Knob. Als
+   * Flaeche taugt es nicht mehr — auf warmem Grund liest reines Weiss als
+   * kuehler, fast blaeulicher Fleck. Flaechen nehmen --ds-surface. */
   --ds-white: #FFFFFF;
+  /* Primaere Flaeche (Karten, Dialoge, Composer). Warmes Weiss statt #FFFFFF.
+   * L* 99,0 statt 100 — warm *und* L* 100 gibt es nicht, reines Weiss ist der
+   * einzige Ton auf dieser Stufe. Der Preis ist ein leicht kleinerer Abstand
+   * zum Grund (dL* 2,62 statt 2,79 zum Panel, 1,23 statt 1,43 zum Chat). */
+  --ds-surface: #FFFCF5;
 
   /* ── Neutrale Toene (Light) ───────────────────────────────────────────────
-   * Leicht kuehl getoent (R-B-Spanne 3), damit die Grauflaechen den Blau-Hue
-   * von --ds-blue aufnehmen, ohne eine zweite Farbe einzufuehren. Die drei
-   * Stufen sind aufeinander abgestimmt: Der Helligkeitsabstand Grund -> Card
-   * (dL* 2,44) und Grund -> Divider (dL* 3,48) ist derselbe wie im frueheren
-   * neutralen Satz (#F9F9F9/#F2F2F2/#EFEFEF) — geaendert wurde die Lage der
-   * ganzen Skala, nicht ihr Verhaeltnis. Wer einen Wert anfasst, muss die
-   * anderen beiden mitziehen, sonst brechen die Ebenenabstaende.
+   * **Warm getoent** (b* +4, R-B-Spanne 12). Bis zum 2026-09-17 war der Satz
+   * leicht kuehl, damit die Grauflaechen den Blau-Hue von --ds-blue aufnehmen.
+   * Die Regel ist bewusst umgedreht: Der Grund ist jetzt Papier, --ds-blue ist
+   * der einzige kuehle Ton im System und wird dadurch als Akzent gelesen statt
+   * als Grundstimmung. Wer die Waerme zurueckdreht, dreht diese Entscheidung
+   * mit zurueck — nicht einzelne Werte anfassen.
    *
-   * Der Grund liegt bewusst dunkler als zuvor: Gegen die weisse Composer-
-   * Karte ergab #F9F9F9 nur dL* 2,07 und lag damit an der Wahrnehmungs-
-   * schwelle — die Karte war rechnerisch erhoeht, optisch aber nicht. Mit
-   * #F6F7F9 sind es dL* 2,79. */
-  --ds-grey-bg: #F6F7F9;       /* Seitenhintergrund, Footer-BG, Icon-Btn-Hover */
-  --ds-grey-card: #EFF0F2;     /* Karten-Hintergrund, Inline-Code */
-  --ds-grey-divider: #ECEDEF;  /* Trenner, Default-Borders */
-  --ds-grey-muted: #6D6D6D;    /* 4,84:1 auf #FFF — Sekundaerschrift, btn-secondary-Hover */
-  --ds-grey-strong: #5C5C5C;   /* 7,1:1 auf #FFF — fuer Text < 14 px */
+   * Die drei Stufen bleiben eine abgestimmte Skala: Helligkeitsabstand
+   * Grund -> Card dL* 2,44, Grund -> Divider dL* 3,49. Das ist unveraendert
+   * gegenueber dem kuehlen Satz — verschoben wurden nur a* und b*, nie L*.
+   * Wer einen Wert anfasst, muss die anderen beiden mitziehen, sonst brechen
+   * die Ebenenabstaende.
+   *
+   * Der Grund liegt 0,8 L* tiefer als im kuehlen Satz, weil --ds-surface bei
+   * L* 99,0 statt 100 sitzt: Der Abstand Flaeche -> Grund (dL* 2,62) waere
+   * sonst unter die Wahrnehmungsschwelle gefallen, die bei dL* ~2,1 liegt. */
+  --ds-grey-bg: #F9F4ED;       /* Seitenhintergrund, Footer-BG, Icon-Btn-Hover */
+  --ds-grey-card: #F2EDE6;     /* Karten-Hintergrund, Inline-Code */
+  --ds-grey-divider: #EFEAE3;  /* Trenner, Default-Borders */
+  --ds-grey-muted: #6F6D69;    /* 5,0:1 auf --ds-surface — Sekundaerschrift, btn-secondary-Hover */
+  --ds-grey-strong: #5E5C59;   /* 6,5:1 auf --ds-surface — fuer Text < 14 px */
   /* Begrenzung von Bedienelementen (Sekundaer-Button, bedienbare Pille,
-   * Umschalter). --ds-grey-divider erreicht auf #FFF nur 1,17:1 und liegt
+   * Umschalter). --ds-grey-divider erreicht auf --ds-surface nur 1,2:1 und liegt
    * damit unter der 3:1-Schwelle aus WCAG 1.4.11. Rein dekorative Rahmen
    * (Karten, Panels, Chips) behalten --ds-grey-divider. */
-  --ds-grey-control-border: #8A8A8E;  /* 3,1:1 auf #FFF */
+  --ds-grey-control-border: #8D8A86;  /* 3,4:1 auf --ds-surface */
 
   /* ── Status-Tokens (rote Ausnahmeregel) ───────────────────────────────────
    * Rot ist im Mono-Blue-System NICHT als allgemeiner Akzent erlaubt. Diese
@@ -61,11 +74,11 @@
    * und Mic-Recording (etablierte Audio-Konvention). Keine sonstige
    * Verwendung — fuer DONE-Status, Success oder neutralen Hinweis bitte
    * --ds-blue oder --ds-grey-muted nutzen. */
-  --ds-error: #B03030;         /* 5,1:1 auf #FFF */
+  --ds-error: #B03030;         /* 6,2:1 auf --ds-surface */
   --ds-error-bg: rgba(176, 48, 48, 0.10);
   --ds-error-border: rgba(176, 48, 48, 0.35);
 
-  --ds-mic-recording: #DC2626;        /* 4,8:1 auf #FFF — separater Rotton, damit
+  --ds-mic-recording: #DC2626;        /* 4,7:1 auf --ds-surface — separater Rotton, damit
                                          Recording-Pulse nicht mit Error-Bubbles
                                          farblich kollidiert */
   --ds-mic-recording-bg: rgba(220, 38, 38, 0.12);
@@ -91,7 +104,7 @@
    * vom Untergrund abheben darf. Ein Menue schwebt ueber dem Inhalt, den es
    * verdeckt — ohne Tiefenhinweis verschwimmen seine Kanten mit dem, was
    * darunter liegt. Flache Cards und Panels bleiben davon unberuehrt. */
-  --ds-overlay-border: #DCDCE0;
+  --ds-overlay-border: #E0DCD5;
   --ds-overlay-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 2px 6px rgba(0, 0, 0, 0.07);
@@ -154,18 +167,18 @@
    * Flaeche, auf der eine Karte wirklich schwebt (die Composer-Karte); dort
    * traegt seit dem 2026-09-17 der Schatten die Tiefe, nicht mehr der
    * Grauwert. Deshalb darf der Grund heller liegen als die Dialog- und
-   * Panel-Flaechen, ohne dass die Karte flach wirkt. --ds-grey-bg bleibt
-   * bewusst unveraendert — die abgestimmte Grau-Skala (Grund/Card/Divider)
-   * gilt weiter fuer Einstellungen, Modals und Footer. */
-  --ds-chat-bg: #FAFBFC;
+   * Panel-Flaechen (--ds-grey-bg), ohne dass die Karte flach wirkt — der
+   * Abstand zu --ds-surface betraegt hier nur dL* 1,23. */
+  --ds-chat-bg: #FDF8F1;
 
   /* Composer-Karte (Textfeld + Werkzeugzeile): hebt sich als eigene Flaeche
-   * vom Chat-Grund ab. Light: Weiss auf hellem Grund; Dark: eine Stufe
-   * heller als der Chat-Grund, sonst wirkt die Karte wie ein Loch.
+   * vom Chat-Grund ab. Light: warmes Weiss (--ds-surface) auf hellem Grund —
+   * reines #FFFFFF wuerde hier kuehl ausbrechen; Dark: eine Stufe heller als
+   * der Chat-Grund, sonst wirkt die Karte wie ein Loch.
    * Der Rahmen ist eine Stufe dunkler als --ds-grey-divider, weil dieser auf
    * dem helleren Chat-Grund keine sichtbare Kante mehr ergibt. */
-  --ds-chat-composer-bg: var(--ds-white);
-  --ds-chat-composer-border: #E7E8EC;
+  --ds-chat-composer-bg: var(--ds-surface);
+  --ds-chat-composer-border: #ECE7E1;
   /* Composer-Lift (Ausnahme vom flachen Chat, siehe ui-design-tokens.md):
    * Der Schatten traegt den Hue von --ds-blue, damit die Tiefe im Mono-Blue-
    * System bleibt und keine zweite Farbe einfuehrt. Ruhezustand bewusst
@@ -197,22 +210,23 @@
  */
 [data-theme='dark'] {
   --ds-btn-destructive-bg: var(--ds-white);
-  --ds-btn-destructive-bg-hover: #C9C9CC;
+  --ds-btn-destructive-bg-hover: #CDC9C3;
   --ds-btn-destructive-fg: var(--ds-black);
-  --ds-grey-bg: #1A1A1B;
-  --ds-grey-card: #232325;
-  --ds-grey-divider: #2E2E30;
-  --ds-grey-muted: #A1A1A6;    /* 5,4:1 auf #1A1A1B */
-  --ds-grey-strong: #C4C4C9;   /* 8,3:1 auf #1A1A1B */
-  --ds-grey-control-border: #8A8A8E;  /* 5,1:1 auf #1A1A1B */
+  --ds-surface: #1F1E1C;
+  --ds-grey-bg: #1B1A18;
+  --ds-grey-card: #242321;
+  --ds-grey-divider: #2F2E2C;
+  --ds-grey-muted: #A5A19C;    /* 6,8:1 auf --ds-grey-bg */
+  --ds-grey-strong: #C8C4BE;   /* 10,0:1 auf --ds-grey-bg */
+  --ds-grey-control-border: #8D8A86;  /* 5,1:1 auf --ds-grey-bg */
 
-  --ds-blue: #3FB8E5;          /* 6,2:1 auf #1A1A1B */
+  --ds-blue: #3FB8E5;          /* 7,6:1 auf --ds-grey-bg */
   --ds-blue-soft: rgba(63, 184, 229, 0.08);
   --ds-blue-border: rgba(63, 184, 229, 0.30);
   --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
-  --ds-chat-bg: #313133;
-  --ds-chat-composer-bg: #3A3A3C;
-  --ds-chat-composer-border: #4B4B50;
+  --ds-chat-bg: #33312F;
+  --ds-chat-composer-bg: #3C3A38;
+  --ds-chat-composer-border: #4D4B48;
   /* Dark: die Grundtiefe kommt aus Schwarz (auf dunklem Grund traegt ein
    * farbiger Schatten allein nicht), der Blau-Hue liegt im weiten Radius. */
   --ds-chat-composer-shadow:
@@ -232,10 +246,10 @@
   /* Im Dark-Mode: gleicher Hue wie --ds-blue, Hover-Stufe etwas dunkler/gesaettigter. */
   --ds-btn-primary-bg: var(--ds-blue);
   --ds-btn-primary-bg-hover: #2a9fc7;
-  --ds-btn-primary-fg: #1e1e1e;
+  --ds-btn-primary-fg: #1F1E1C;
   --ds-btn-primary-active-shadow: 0 5px 16px rgba(0, 0, 0, 0.45);
   --ds-icon-btn-active-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
-  --ds-overlay-border: #45454A;
+  --ds-overlay-border: #474542;
   --ds-overlay-shadow:
     0 10px 30px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.45);

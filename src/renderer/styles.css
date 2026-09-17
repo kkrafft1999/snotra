@@ -5,22 +5,22 @@
 }
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f3f3f3;
-  --bg-tertiary: #e8e8e8;
+  --bg-primary: var(--ds-surface);
+  --bg-secondary: #F7F2EC;
+  --bg-tertiary: #ECE7E1;
   --chat-output-bg: var(--ds-chat-bg);
-  --bg-hover: #e8e8e8;
-  --bg-active: #d6d6d6;
-  --bg-header: #e8e8e8;
-  --text-primary: #1e1e1e;
-  --text-secondary: #616161;
+  --bg-hover: #ECE7E1;
+  --bg-active: #DAD5CF;
+  --bg-header: #ECE7E1;
+  --text-primary: #1F1E1C;
+  --text-secondary: #63615D;
   --text-muted: var(--ds-grey-muted);   /* 4.84:1 statt 2.85:1 */
   --text-muted-strong: var(--ds-grey-strong); /* fuer Text < 14px */
   --accent: var(--ds-blue);             /* Mono-Blue: einzige Akzentfarbe — Border, Outline, BG, Schrift */
   --accent-text: var(--ds-blue);        /* Alias bleibt fuer farbigen Text (Links etc.) */
   --accent-hover: var(--ds-btn-primary-bg-hover); /* dunklere Akzent-Stufe, z. B. Primary-Hover */
-  --border: #d4d4d4;
-  --scrollbar-thumb: #c1c1c1;
+  --border: #D8D3CD;
+  --scrollbar-thumb: #C5C0BB;
   --scrollbar-track: transparent;
 
   /* Horizontaler Innenrand im Chat (Text, Header, Eingabe) */
@@ -80,19 +80,19 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary: #1e1e1e;
-  --bg-secondary: #252526;
-  --bg-tertiary: #2d2d2d;
+  --bg-primary: var(--ds-surface);
+  --bg-secondary: #262523;
+  --bg-tertiary: #2E2D2B;
   --chat-output-bg: var(--ds-chat-bg);
-  --bg-hover: #2a2d2e;
-  --bg-active: #37373d;
-  --bg-header: #323233;
-  --text-primary: #cccccc;
-  --text-secondary: #969696;
+  --bg-hover: #2E2C2A;
+  --bg-active: #393735;
+  --bg-header: #333230;
+  --text-primary: #D0CBC6;
+  --text-secondary: #999691;
   /* --text-muted / --accent / --accent-text / --accent-hover werden
      ueber tokens.css ([data-theme='dark']) automatisch hell genug. */
-  --border: #3c3c3c;
-  --scrollbar-thumb: #424242;
+  --border: #3E3C39;
+  --scrollbar-thumb: #44423F;
   --scrollbar-track: transparent;
 
   /* Phase 5: Dark-Mode-Override jetzt in tokens.css. */
@@ -2193,8 +2193,8 @@ summary:focus-visible,
 select.modal-input {
   appearance: none;
   -webkit-appearance: none;
-  /* Chevron in --ds-grey-muted (#6D6D6D), wie Mono-Blue-Mockup */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%236D6D6D' d='M0 0l5 6 5-6z'/></svg>");
+  /* Chevron in --ds-grey-muted (#6F6D69), wie Mono-Blue-Mockup */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%236F6D69' d='M0 0l5 6 5-6z'/></svg>");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
