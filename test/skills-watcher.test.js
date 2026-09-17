@@ -5,6 +5,7 @@ const {
   createSkillsWatcher,
   MAX_FALLBACK_LEVELS,
   DEFAULT_MAX_WAIT_MS,
+  DEFAULT_RETRY_MS,
 } = require('../src/main/services/skills-watcher');
 
 /**
@@ -57,41 +58,47 @@ function createFakeWatch(missing = []) {
 }
 
 /**
- * Ein einziger anstehender Timer reicht — der Dienst entprellt nur einen.
- * Die Uhr ist mitgesteuert, damit sich das Höchstfenster prüfen lässt, ohne
- * wirklich zu warten.
+ * Eine mitgesteuerte Uhr — so lässt sich das Höchstfenster prüfen, ohne
+ * wirklich zu warten. Es können zwei Timer zugleich anstehen: das Entprellen
+ * und die Wiedervorlage aus #155. `tick()` nimmt den, der als Nächstes
+ * fällig wäre; `advance()` lässt die Uhr laufen, ohne etwas auszulösen.
  */
 function createFakeClock() {
-  let pending = null;
+  let timers = [];
   let nextId = 0;
   let now = 1_000_000;
+  const naechster = () =>
+    timers.reduce((frueh, t) => (frueh === null || t.faellig < frueh.faellig ? t : frueh), null);
   return {
-    setTimeoutImpl: (fn) => {
-      pending = { fn, id: ++nextId };
-      return pending.id;
+    setTimeoutImpl: (fn, ms = 0) => {
+      const timer = { fn, id: (nextId += 1), faellig: now + ms };
+      timers.push(timer);
+      return timer.id;
     },
     clearTimeoutImpl: (handle) => {
-      if (pending && pending.id === handle) pending = null;
+      timers = timers.filter((t) => t.id !== handle);
     },
     nowImpl: () => now,
     advance(ms) {
       now += ms;
     },
     get pendingId() {
-      return pending?.id ?? null;
+      return naechster()?.id ?? null;
     },
     get hasPending() {
-      return pending !== null;
+      return timers.length > 0;
     },
+    /** Führt den nächstfälligen Timer aus (Entprellen vor Wiedervorlage). */
     tick() {
-      const due = pending;
-      pending = null;
-      due?.fn();
+      const due = naechster();
+      if (!due) return;
+      timers = timers.filter((t) => t.id !== due.id);
+      due.fn();
     },
   };
 }
 
-function setup({ missing = [], onChange } = {}) {
+function setup({ missing = [], onChange, retryMs } = {}) {
   const fake = createFakeWatch(missing);
   const clock = createFakeClock();
   const changes = [];
@@ -103,6 +110,7 @@ function setup({ missing = [], onChange } = {}) {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    ...(retryMs === undefined ? {} : { retryMs }),
   });
   return { fake, clock, changes, watcher };
 }
@@ -310,6 +318,81 @@ test('liegt der Workspace im Home, wird dieselbe Quelle nicht doppelt beobachtet
   watcher.close();
 });
 
+// ── Wiedervorlage, solange das Ziel fehlt (Issue #155) ─────────────────────
+
+test('steht das Ziel, läuft keine Wiedervorlage', () => {
+  const { watcher } = setup();
+  watcher.watchWorkspace(WS);
+  assert.equal(watcher.retryPending(), false, 'kein Dauertimer im Normalfall');
+  watcher.close();
+});
+
+test('ein verlorenes Ereignis auf dem Vorfahren macht nicht dauerhaft taub', () => {
+  // Der Kern von #155: Die Kette hängt auf der Wurzel, das Verzeichnis
+  // entsteht — und das eine Ereignis, das den Umbau auslösen würde, kommt nie
+  // an. Ohne Wiedervorlage bliebe der Dienst für immer still, denn ein
+  // Vorfahren-Wächter ist flach und hört nur auf sein Pfadstück.
+  const { fake, clock, changes, watcher } = setup({
+    missing: [WS_SKILLS, path.join(WS, '.agents')],
+  });
+  watcher.watchWorkspace(WS);
+  assert.equal(watcher.watchedDirectories()[0].isTarget, false, 'zunächst nur der Vorfahre');
+  assert.equal(watcher.retryPending(), true, 'die Wiedervorlage steht');
+
+  // Verzeichnis angelegt — ohne jedes Ereignis an den Wächter.
+  fake.appear(WS_SKILLS);
+  fake.appear(path.join(WS, '.agents'));
+  clock.tick(); // Wiedervorlage
+
+  assert.deepEqual(
+    watcher.watchedDirectories()[0],
+    { dir: WS_SKILLS, isTarget: true },
+    'die Kette hängt jetzt am Ziel'
+  );
+  clock.tick(); // die Meldung ist entprellt
+  assert.equal(changes.length, 1, 'die Änderung wurde gemeldet');
+  assert.equal(watcher.retryPending(), false, 'und die Wiedervorlage ist am Ziel beendet');
+  watcher.close();
+});
+
+test('die Wiedervorlage hält durch und ein belebter Ordner löst nichts aus', () => {
+  const { fake, clock, changes, watcher } = setup({
+    missing: [WS_SKILLS, path.join(WS, '.agents')],
+  });
+  watcher.watchWorkspace(WS);
+  const wurzel = fake.created.find((w) => w.dir === WS);
+
+  for (let runde = 0; runde < 3; runde += 1) {
+    // Zwischendurch arbeitet jemand im Projekt — das geht die Skills nichts an.
+    wurzel.handler('change', 'README.md');
+    wurzel.handler('rename', `build/artefakt-${runde}`);
+    clock.tick(); // Wiedervorlage; das Ziel fehlt weiterhin
+    assert.equal(watcher.retryPending(), true, 'sie setzt sich selbst neu auf');
+  }
+  assert.deepEqual(changes, [], 'kein einziger Skill-Scan');
+  assert.equal(watcher.watchedDirectories()[0].isTarget, false);
+
+  fake.appear(WS_SKILLS);
+  fake.appear(path.join(WS, '.agents'));
+  clock.tick();
+  clock.tick();
+  assert.equal(changes.length, 1, 'erst das Verzeichnis selbst löst aus');
+  watcher.close();
+});
+
+test('close beendet auch die Wiedervorlage', () => {
+  const { clock, watcher } = setup({ missing: [WS_SKILLS, path.join(WS, '.agents')] });
+  watcher.watchWorkspace(WS);
+  assert.equal(watcher.retryPending(), true);
+  watcher.close();
+  assert.equal(watcher.retryPending(), false);
+  assert.equal(clock.hasPending, false, 'kein Timer bleibt zurück');
+});
+
+test('der Abstand der Wiedervorlage ist ein paar Sekunden', () => {
+  assert.equal(DEFAULT_RETRY_MS, 3000);
+});
+
 test('der Aufstieg endet an der Workspace-Wurzel', () => {
   assert.equal(MAX_FALLBACK_LEVELS, 2, '.agents/skills → .agents → Wurzel');
 });
@@ -493,6 +576,69 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
       ausloesen: () => fsPromises.rm(agentsDir, { recursive: true, force: true }),
     });
     assert.ok(gemeldet, 'das Entfernen wurde gemeldet');
+  } finally {
+    watcher.close();
+    await fsPromises.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('ein Watcher, der sein Startfenster verschläft, bleibt nicht taub', async () => {
+  // Der Fall aus #155, gegen das echte Dateisystem nachgestellt: `fs.watch()`
+  // kehrt zurück, bevor der FSEvents-Stream läuft — was in dieses Fenster
+  // fällt, ist weg. Die Attrappe verschläft ihre ersten Ereignisse, also auch
+  // das eine, das den Umbau auf `.agents/skills` auslösen würde. Ohne
+  // Wiedervorlage bliebe der Dienst danach dauerhaft still.
+  const STARTFENSTER_MS = 400;
+  const verschlafenderWatch = (dir, optionen, handler) => {
+    const geboren = Date.now();
+    return watch(dir, optionen, (...args) => {
+      if (Date.now() - geboren < STARTFENSTER_MS) return;
+      handler(...args);
+    });
+  };
+
+  // Der Workspace beginnt ohne `.agents` — die Kette hängt auf der Wurzel.
+  const root = await makeTempRoot('snotra-watch-taub-');
+  const skillsDir = realPath.join(root, '.agents', 'skills');
+
+  const signal = createMeldungssignal();
+  const watcher = createSkillsWatcher({
+    watch: verschlafenderWatch,
+    path: realPath,
+    // Ein Home, das es nicht gibt: Diese Quelle bleibt unerreichbar, die
+    // Wiedervorlage läuft also weiter — dem Workspace-Ziel schadet das nicht.
+    os: { homedir: () => realPath.join(root, '__kein-home__') },
+    onChange: () => signal.melden(),
+    debounceMs: 50,
+    retryMs: 100,
+  });
+
+  try {
+    watcher.watchWorkspace(root);
+    assert.equal(
+      watcher.watchedDirectories()[0].isTarget,
+      false,
+      'zu Beginn hängt die Kette auf einem Vorfahren'
+    );
+
+    await fsPromises.mkdir(realPath.join(skillsDir, 'neu'), { recursive: true });
+    await fsPromises.writeFile(
+      realPath.join(skillsDir, 'neu', 'SKILL.md'),
+      '---\nname: neu\ndescription: Nach dem Startfenster angelegt\n---\n\nHallo.\n',
+      'utf8'
+    );
+
+    // Großzügig bemessen: Es geht darum, *dass* die Meldung kommt, nicht wie
+    // schnell. Das Zeitbudget trägt mehrere Runden der Wiedervorlage.
+    assert.ok(
+      await signal.warten(DEFAULT_MAX_WAIT_MS * 10),
+      'das neue Skill-Verzeichnis wurde trotz verlorenem Ereignis gemeldet'
+    );
+    assert.deepEqual(
+      watcher.watchedDirectories()[0],
+      { dir: skillsDir, isTarget: true },
+      'und die Kette hängt danach am Ziel'
+    );
   } finally {
     watcher.close();
     await fsPromises.rm(root, { recursive: true, force: true });

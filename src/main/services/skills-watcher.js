@@ -34,6 +34,16 @@
  * Ein Vorgang erzeugt dabei viele Ereignisse — ein entpacktes Archiv oder ein
  * `git checkout` löst Dutzende aus. Gemeldet wird deshalb entprellt, ein
  * einziges Mal am Ende.
+ *
+ * Auf eines ist dabei kein Verlass: dass jedes Ereignis auch ankommt.
+ * `fs.watch()` kehrt zurück, bevor der FSEvents-Stream wirklich läuft — was in
+ * dieses Startfenster fällt, ist weg. Hängt die Kette mangels
+ * `.agents/skills` auf einem Vorfahren und geht ausgerechnet dessen Ereignis
+ * verloren, bliebe der Dienst dauerhaft taub, denn ein Vorfahren-Wächter ist
+ * flach und hört nur auf sein erwartetes Pfadstück (Issue #155). Dagegen steht
+ * eine Wiedervorlage: Solange ein Skill-Verzeichnis fehlt, wird alle paar
+ * Sekunden nachgesehen, ob es inzwischen da ist. Im Normalfall — Ziel
+ * vorhanden — läuft dieser Timer nicht.
  */
 
 /** Ereignisse zusammenfassen, statt bei jedem einzelnen neu zu scannen. */
@@ -49,6 +59,16 @@ const DEFAULT_DEBOUNCE_MS = 250;
 const DEFAULT_MAX_WAIT_MS = 1000;
 
 /**
+ * Abstand der Wiedervorlage, solange ein Skill-Verzeichnis fehlt (Issue #155).
+ * Der Timer läuft nur in diesem Ausnahmefall und endet, sobald das Ziel
+ * erreicht ist; eine Runde kostet je fehlendem Ziel einen `watch`-Versuch,
+ * der an ENOENT scheitert. Ein paar Sekunden sind der Kompromiss: schnell
+ * genug, dass ein frisch installierter Skill ohne Zutun auftaucht, träge
+ * genug, um im Hintergrund nicht aufzufallen.
+ */
+const DEFAULT_RETRY_MS = 3000;
+
+/**
  * Wie weit dürfen die Wächter aufsteigen? `.agents/skills` → `.agents` →
  * Workspace- bzw. Home-Wurzel. Weiter nicht: Darüber lägen fremde
  * Verzeichnisse, die uns nichts angehen.
@@ -62,6 +82,7 @@ function createSkillsWatcher({
   onChange,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   maxWaitMs = DEFAULT_MAX_WAIT_MS,
+  retryMs = DEFAULT_RETRY_MS,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
   nowImpl = Date.now,
@@ -79,6 +100,8 @@ function createSkillsWatcher({
   let pendingSince = null;
   /** Hat eines der gesammelten Ereignisse einen Neuaufbau verlangt? */
   let pendingRebuild = false;
+  /** Läuft nur, solange ein Skill-Verzeichnis fehlt (Wiedervorlage, #155). */
+  let retryTimer = null;
   let closed = false;
 
   function homeDir() {
@@ -194,10 +217,70 @@ function createSkillsWatcher({
     }
   }
 
+  /** Skill-Verzeichnisse, deren Kette gerade auf einem Vorfahren hängt. */
+  function unwatchedTargets() {
+    const beobachtet = new Set(slots.filter((slot) => slot.isTarget).map((slot) => slot.dir));
+    return targetDirectories(currentRoot).filter((dir) => !beobachtet.has(dir));
+  }
+
+  /**
+   * Gibt es das Verzeichnis inzwischen? Gefragt wird mit demselben Mittel,
+   * an dem es zuvor gescheitert ist: Ein `watch` auf einen fehlenden Pfad
+   * wirft ENOENT. Das erspart eine zweite Dateisystem-Abhängigkeit und prüft
+   * genau das, worauf es ankommt — nicht nur, ob der Pfad existiert, sondern
+   * ob er sich auch beobachten lässt.
+   */
+  function targetReachable(dir) {
+    let probe = null;
+    try {
+      probe = watch(dir, { recursive: false }, () => {});
+    } catch {
+      return false;
+    }
+    try {
+      // Ein 'error' ohne Listener risse den Main-Prozess mit — auch in der
+      // kurzen Zeitspanne bis zum close().
+      if (typeof probe.on === 'function') probe.on('error', () => {});
+      probe.close();
+    } catch {
+      // Ein Probe-Watcher, der sich nicht schließen lässt, ist kein Grund
+      // zur Aufregung: Er hat seine Frage bereits beantwortet.
+    }
+    return true;
+  }
+
+  /**
+   * Wiedervorlage, solange ein Ziel fehlt (Issue #155). Ein verlorenes
+   * Ereignis auf einem Vorfahren darf den Dienst nicht dauerhaft taub machen,
+   * und der Vorfahren-Wächter selbst bekommt danach nichts mehr mit. Hängen
+   * alle Ketten an ihrem Ziel, läuft hier kein Timer.
+   */
+  function scheduleRetry() {
+    if (retryTimer) {
+      clearTimeoutImpl(retryTimer);
+      retryTimer = null;
+    }
+    if (closed || unwatchedTargets().length === 0) return;
+
+    retryTimer = setTimeoutImpl(() => {
+      retryTimer = null;
+      if (closed) return;
+      if (!unwatchedTargets().some(targetReachable)) {
+        scheduleRetry();
+        return;
+      }
+      // Das Verzeichnis ist da, die Kette hängt aber noch oben: neu aufsetzen
+      // und melden, damit der Scan die inzwischen angelegten Skills sieht.
+      build(currentRoot);
+      notifyLater({ rebuild: false });
+    }, retryMs);
+  }
+
   function build(workspaceRoot) {
     closeSlots();
     currentRoot = workspaceRoot ?? null;
     for (const dir of targetDirectories(workspaceRoot)) watchChain(dir);
+    scheduleRetry();
   }
 
   /**
@@ -217,6 +300,10 @@ function createSkillsWatcher({
       clearTimeoutImpl(debounceTimer);
       debounceTimer = null;
     }
+    if (retryTimer) {
+      clearTimeoutImpl(retryTimer);
+      retryTimer = null;
+    }
     pendingSince = null;
     pendingRebuild = false;
     closeSlots();
@@ -228,12 +315,18 @@ function createSkillsWatcher({
     return slots.map((slot) => ({ dir: slot.dir, isTarget: slot.isTarget }));
   }
 
-  return { watchWorkspace, close, watchedDirectories };
+  /** Nur für Tests und Diagnose: wartet gerade eine Wiedervorlage? */
+  function retryPending() {
+    return retryTimer !== null;
+  }
+
+  return { watchWorkspace, close, watchedDirectories, retryPending };
 }
 
 module.exports = {
   createSkillsWatcher,
   DEFAULT_DEBOUNCE_MS,
   DEFAULT_MAX_WAIT_MS,
+  DEFAULT_RETRY_MS,
   MAX_FALLBACK_LEVELS,
 };
