@@ -458,11 +458,13 @@ summary:focus-visible,
 
 /* ── Sidebar ── */
 
+/* Keine eigene Kante: die uebernimmt .pane-divider, der direkt daneben liegt.
+ * Vorher lagen border-right und Divider nebeneinander — zwei Trenner auf
+ * einmal. */
 #sidebar {
   width: 280px;
   min-width: 180px;
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -671,19 +673,78 @@ summary:focus-visible,
   display: block;
 }
 
-/* ── Divider (resize handle) ── */
+/* ── Divider (Resize-Griff) ────────────────────────────────────────────────
+ *
+ * Variante B aus out/mockup/splitter-varianten.html. In Ruhe ist der Divider
+ * nur die Kante — eine Haarlinie, die den frueheren border-right der Sidebar
+ * bzw. border-left des Chat-Panels ersetzt. Der Vorgaenger war eine 4 px
+ * breite, unsichtbare Spalte, die bei Hover komplett in Akzentblau umschlug:
+ * aus nichts wurde ein harter Balken, und daneben stand weiterhin die Kante
+ * des Nachbarn.
+ *
+ * Jetzt waechst bei Hover mittig eine Kapsel aus der Linie und sagt damit
+ * ausdruecklich „hier laesst sich ziehen"; beim Ziehen wird sie laenger und
+ * nimmt die Akzentfarbe an. Sichtbar ist 1 px, greifbar sind 11 px — die
+ * Trefferflaeche haengt an ::before, liegt ausserhalb des Flusses und laesst
+ * das Layout deshalb in Ruhe.
+ *
+ * Bewegung: ueber --ds-motion-* getaktet, die unter prefers-reduced-motion
+ * ohnehin auf 0.001s fallen (tokens.css). Deshalb hier keine eigene
+ * Media-Query.
+ */
 
-#divider {
-  width: 4px;
-  cursor: col-resize;
-  background: transparent;
-  transition: background 0.2s;
+.pane-divider {
+  position: relative;
+  width: 1px;
   flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  /* ueber die Nachbarflaechen, sonst verschwindet die Kapsel unter ihnen */
+  z-index: 2;
 }
 
-#divider:hover,
-#divider.dragging {
+/* Trefferflaeche: 5 px Ueberstand nach beiden Seiten, unsichtbar. */
+.pane-divider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+}
+
+/* Griff-Kapsel. scaleY statt height fuer den Aufbau, damit die Bewegung auf
+ * dem Compositor laeuft; height wechselt nur beim Ziehen. */
+.pane-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--ds-grey-control-border);
+  opacity: 0;
+  transform: translate(-50%, -50%) scaleY(0.35);
+  transition:
+    opacity var(--ds-motion-fast) ease,
+    transform var(--ds-motion-medium) cubic-bezier(0.2, 0.8, 0.2, 1),
+    height var(--ds-motion-medium) cubic-bezier(0.2, 0.8, 0.2, 1),
+    background var(--ds-motion-fast) ease;
+  pointer-events: none;
+}
+
+.pane-divider:hover::after,
+.pane-divider:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scaleY(1);
+}
+
+.pane-divider.dragging::after {
+  opacity: 1;
+  height: 64px;
   background: var(--accent);
+  transform: translate(-50%, -50%) scaleY(1);
 }
 
 /* ── Workspace (content + chat) ── */
@@ -693,19 +754,6 @@ summary:focus-visible,
   flex: 1;
   min-width: 0;
   overflow: hidden;
-}
-
-#chat-divider {
-  width: 4px;
-  cursor: col-resize;
-  background: transparent;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-#chat-divider:hover,
-#chat-divider.dragging {
-  background: var(--accent);
 }
 
 #workspace.workspace--no-preview #content,
@@ -727,7 +775,6 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   background: var(--chat-output-bg);
-  border-left: 1px solid var(--border);
   overflow: hidden;
 }
 
