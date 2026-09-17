@@ -150,11 +150,33 @@
   /* User-Bubble: hoechstens zwei Drittel der Lesespalte, damit die Frage
    * auch bei langem Text als Block rechts stehen bleibt. */
   --ds-chat-user-max-width: 66.6667%;
+  /* Chat-Grund: eigener Wert statt --ds-grey-bg. Der Chat ist die einzige
+   * Flaeche, auf der eine Karte wirklich schwebt (die Composer-Karte); dort
+   * traegt seit dem 2026-09-17 der Schatten die Tiefe, nicht mehr der
+   * Grauwert. Deshalb darf der Grund heller liegen als die Dialog- und
+   * Panel-Flaechen, ohne dass die Karte flach wirkt. --ds-grey-bg bleibt
+   * bewusst unveraendert — die abgestimmte Grau-Skala (Grund/Card/Divider)
+   * gilt weiter fuer Einstellungen, Modals und Footer. */
+  --ds-chat-bg: #FAFBFC;
+
   /* Composer-Karte (Textfeld + Werkzeugzeile): hebt sich als eigene Flaeche
-   * vom Chat-Grund ab. Light: Weiss auf Grau; Dark: eine Stufe heller als
-   * der Chat-Grund (#2b2b2c), sonst wirkt die Karte wie ein Loch. */
+   * vom Chat-Grund ab. Light: Weiss auf hellem Grund; Dark: eine Stufe
+   * heller als der Chat-Grund, sonst wirkt die Karte wie ein Loch.
+   * Der Rahmen ist eine Stufe dunkler als --ds-grey-divider, weil dieser auf
+   * dem helleren Chat-Grund keine sichtbare Kante mehr ergibt. */
   --ds-chat-composer-bg: var(--ds-white);
-  --ds-chat-composer-border: var(--ds-grey-divider);
+  --ds-chat-composer-border: #E7E8EC;
+  /* Composer-Lift (Ausnahme vom flachen Chat, siehe ui-design-tokens.md):
+   * Der Schatten traegt den Hue von --ds-blue, damit die Tiefe im Mono-Blue-
+   * System bleibt und keine zweite Farbe einfuehrt. Ruhezustand bewusst
+   * leise; im Fokus wird der Glow spuerbar staerker und zeigt zusammen mit
+   * der blauen Kante, dass die Eingabe aktiv ist. */
+  --ds-chat-composer-shadow:
+    0 1px 2px rgba(0, 117, 158, 0.06),
+    0 6px 20px rgba(0, 117, 158, 0.12);
+  --ds-chat-composer-shadow-focus:
+    0 1px 2px rgba(0, 117, 158, 0.08),
+    0 8px 26px rgba(0, 117, 158, 0.20);
 
   /* ── Fokus-Ring ───────────────────────────────────────────────────────── */
   --ds-focus-ring: 2px solid var(--ds-blue);
@@ -188,8 +210,17 @@
   --ds-blue-soft: rgba(63, 184, 229, 0.08);
   --ds-blue-border: rgba(63, 184, 229, 0.30);
   --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
-  --ds-chat-composer-bg: #343436;
-  --ds-chat-composer-border: #45454A;
+  --ds-chat-bg: #313133;
+  --ds-chat-composer-bg: #3A3A3C;
+  --ds-chat-composer-border: #4B4B50;
+  /* Dark: die Grundtiefe kommt aus Schwarz (auf dunklem Grund traegt ein
+   * farbiger Schatten allein nicht), der Blau-Hue liegt im weiten Radius. */
+  --ds-chat-composer-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 6px 20px rgba(63, 184, 229, 0.12);
+  --ds-chat-composer-shadow-focus:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 8px 26px rgba(63, 184, 229, 0.22);
 
   --ds-error: #FF8080;
   --ds-error-bg: rgba(255, 128, 128, 0.12);

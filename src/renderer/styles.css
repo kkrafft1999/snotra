@@ -8,7 +8,7 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f3f3f3;
   --bg-tertiary: #e8e8e8;
-  --chat-output-bg: var(--ds-grey-bg);
+  --chat-output-bg: var(--ds-chat-bg);
   --bg-hover: #e8e8e8;
   --bg-active: #d6d6d6;
   --bg-header: #e8e8e8;
@@ -48,7 +48,11 @@
   --chat-composer-bottom: 24px;
   --chat-composer-bg: var(--ds-chat-composer-bg);
   --chat-composer-border: var(--ds-chat-composer-border);
-  /* Mono-Blue: keine box-shadow auf Chat-Flaechen (Regel ui-design-tokens). */
+  /* Composer-Lift: die einzige box-shadow auf einer Chat-Flaeche (Ausnahme
+   * im Regelwerk ui-design-tokens). Alle uebrigen Karten und Panels im Chat
+   * bleiben flach. */
+  --chat-composer-shadow: var(--ds-chat-composer-shadow);
+  --chat-composer-shadow-focus: var(--ds-chat-composer-shadow-focus);
   --font-ui: var(--ds-font-ui);
   --font-mono: var(--ds-font-mono);
 
@@ -79,7 +83,7 @@
   --bg-primary: #1e1e1e;
   --bg-secondary: #252526;
   --bg-tertiary: #2d2d2d;
-  --chat-output-bg: #2b2b2c;
+  --chat-output-bg: var(--ds-chat-bg);
   --bg-hover: #2a2d2e;
   --bg-active: #37373d;
   --bg-header: #323233;
@@ -1603,8 +1607,10 @@ summary:focus-visible,
 /* ── Composer (Claude-Code-Muster) ──────────────────────────────────────────
  * Eine Karte mit zwei Zeilen: oben das wachsende Textfeld, darunter eine
  * Werkzeugzeile. Links stehen Mikrofon, Sprachstatus und Modell-Auswahl,
- * rechts Token-Zaehler und Senden. Die Karte hebt sich als weisse Flaeche vom
- * grauen Chat-Grund ab; der Fokus-Ring sitzt an der Karte, nicht am Textfeld.
+ * rechts Token-Zaehler und Senden. Die Karte hebt sich per Schatten vom
+ * Chat-Grund ab (Composer-Lift, einzige erlaubte Schatten-Flaeche im Chat);
+ * der Fokus-Ring sitzt an der Karte, nicht am Textfeld, und im Fokus wird der
+ * Schatten zusaetzlich zur blauen Kante spuerbar staerker.
  * Die Klasse chat-input-row--multiline wird vom Renderer weiter gesetzt, hat
  * im Spaltenlayout aber keine Wirkung mehr. */
 #chat-input-row {
@@ -1616,12 +1622,16 @@ summary:focus-visible,
   background: var(--chat-composer-bg);
   border: 1px solid var(--chat-composer-border);
   border-radius: 14px;
+  box-shadow: var(--chat-composer-shadow);
   flex-shrink: 0;
-  transition: border-color var(--ds-motion-fast);
+  transition:
+    border-color var(--ds-motion-fast),
+    box-shadow var(--ds-motion-fast);
 }
 
 #chat-input-row:focus-within {
   border-color: var(--ds-blue);
+  box-shadow: var(--chat-composer-shadow-focus);
 }
 
 .chat-composer-bar {
