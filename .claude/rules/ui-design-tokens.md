@@ -112,7 +112,7 @@ Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe —
 
 ### Cards & Container
 
-- BG `--ds-white`, Border `--ds-grey-divider`, Radius 6px, **kein dekorativen Card-Schatten** (Chat-/Panel-Flächen bleiben flach).
+- BG `--ds-white`, Border `--ds-grey-divider`, Radius 6px, **kein dekorativen Card-Schatten** (Chat-/Panel-Flächen bleiben flach). Einzige Ausnahme ist die Composer-Karte, siehe „Composer-Lift".
 - Inneres Padding nach Inhaltstyp (Content 24px, Tool-Card 14px).
 
 ### Pills / Status-Badges
@@ -128,7 +128,7 @@ Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe —
 
 Du verwendest **niemals**:
 
-- Farbverläufe, dekorative Schatten auf Cards/Panels, Glows, 3D-Effekte (Overlays siehe Ausnahme unten)
+- Farbverläufe, dekorative Schatten auf Cards/Panels, Glows, 3D-Effekte (Overlays und Composer siehe Ausnahmen unten)
 - Mehr als eine Akzentfarbe (kein `#00A5E1`-Cyan mehr)
 - Cyan `#00A5E1` — vollständig durch `--ds-blue` ersetzt
 - Italic oder extrem leichte/schwere Display-Font-Weights (außerhalb der erlaubten Inter-Stufen)
@@ -139,7 +139,42 @@ Du verwendest **niemals**:
 **Erlaubt:** die in `tokens.css` definierten `box-shadow`-Tokens — keine freien Schatten-Werte in Komponenten:
 
 - `--ds-btn-primary-active-shadow` und `--ds-icon-btn-active-shadow` ausschließlich für den **Active-Lift** bei Primary- und Icon-Buttons.
-- `--ds-overlay-shadow` (dazu `--ds-overlay-border`) ausschließlich für **aufklappende Overlays** — Dropdown-Menüs wie Modell-Auswahl, `@`-Vervollständigung und Ordner-Verlauf. Ein Overlay schwebt über dem Inhalt, den es verdeckt; ohne Tiefenhinweis verschwimmen seine Kanten mit dem Darunterliegenden. Das ist kein dekorativer Card-Schatten: Flache Cards, Panels und Chat-Flächen bleiben flach.
+- `--ds-overlay-shadow` (dazu `--ds-overlay-border`) ausschließlich für **aufklappende Overlays** — Dropdown-Menüs wie Modell-Auswahl, `@`-Vervollständigung und Ordner-Verlauf. Ein Overlay schwebt über dem Inhalt, den es verdeckt; ohne Tiefenhinweis verschwimmen seine Kanten mit dem Darunterliegenden.
+- `--ds-chat-composer-shadow` / `--ds-chat-composer-shadow-focus` ausschließlich für die **Composer-Karte** (`#chat-input-row`) — siehe Abschnitt „Composer-Lift".
+
+Alle übrigen Cards, Panels und Chat-Flächen bleiben flach. Ein neuer Schatten-Token ist keine Gestaltungsfreiheit, sondern braucht denselben Begründungsweg wie die drei bestehenden: Er darf nur dort entstehen, wo eine Fläche tatsächlich über einer anderen liegt.
+
+## Composer-Lift (Ausnahmeregel, seit 2026-09-17)
+
+Die Eingabe-Karte im Chat (`#chat-input-row`) ist die **einzige Chat-Fläche mit
+einem Schatten**. Sie liegt als eigenes Bedienelement über dem Gesprächsverlauf,
+den sie beim Scrollen verdeckt — dieselbe Begründung wie beim Overlay, nur
+dauerhaft sichtbar.
+
+- Ruhezustand: `box-shadow: var(--ds-chat-composer-shadow)`
+- `:focus-within`: `box-shadow: var(--ds-chat-composer-shadow-focus)` **zusätzlich**
+  zur blauen Kante — der Zustand ist nie allein über den Schatten kodiert
+  (WCAG 1.4.1), die Kante bleibt das tragende Signal.
+- Der Schatten trägt den Hue von `--ds-blue`, nicht Neutralgrau. Ein grauer
+  Schatten wäre im Mono-Blue-System ein zweiter, stummer Farbkanal; der blaue
+  bleibt innerhalb der einen Akzentfarbe. Trotzdem gilt: **kein sichtbarer
+  Farbsaum** — die Deckkraft bleibt so niedrig, dass der Glow als Tiefe gelesen
+  wird, nicht als Leuchten.
+- Freie `box-shadow`-Werte in Komponenten bleiben verboten; wer die Stärke
+  ändert, ändert den Token in `tokens.css`.
+
+### Chat-Grund
+
+Der Chat hat seit derselben Änderung einen **eigenen Grund-Token**
+`--ds-chat-bg` (Light `#FAFBFC`, Dark `#313133`) statt `--ds-grey-bg`. Weil der
+Schatten die Tiefe der Composer-Karte trägt, darf der Grund heller liegen, als
+es die ΔL\*-Regel der Grau-Skala erlauben würde.
+
+`--ds-grey-bg` / `--ds-grey-card` / `--ds-grey-divider` bleiben davon
+**unberührt** — sie gelten weiter für Einstellungen, Modals, Footer und Panels,
+inklusive ihrer abgestimmten Abstände. Wer den Chat-Grund ändert, prüft nur die
+Composer-Karte gegen ihn; wer die Grau-Skala ändert, prüft weiterhin alle drei
+Stufen gemeinsam.
 
 ## Rote Status-Farben (Ausnahmeregel)
 
