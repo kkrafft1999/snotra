@@ -65,6 +65,17 @@ function buildApplicationMenu() {
   const viewMenu = {
     label: 'Ansicht',
     submenu: [
+      // Issue #167: das Kuerzel haengt bewusst am Menueeintrag statt an einer
+      // Tastenabfrage im Renderer — so steht es sichtbar im Menue und gilt
+      // auch, wenn der Fokus in einem Eingabefeld liegt.
+      {
+        label: 'Seitenleiste ein-/ausblenden',
+        accelerator: 'CmdOrCtrl+B',
+        click: () => {
+          getMainWindow()?.webContents.send(PUSH.UI_TOGGLE_SIDEBAR);
+        },
+      },
+      { type: 'separator' },
       { role: 'reload', label: 'Neu laden' },
       { role: 'forceReload', label: 'Hart neu laden' },
       { role: 'toggleDevTools', label: 'Entwicklertools' },

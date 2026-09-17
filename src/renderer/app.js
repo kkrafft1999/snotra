@@ -27,6 +27,8 @@ const DEFAULT_MAX_TOOL_ROUNDS = 14;
 // den jeweiligen Components.
 const btnOpen = document.getElementById('btn-open-folder');
 const workspace = document.getElementById('workspace');
+const appRoot = document.getElementById('app');
+const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 const btnToggleContentPane = document.getElementById('btn-toggle-content-pane');
 const iconContentPaneVisible = document.getElementById('icon-content-pane-visible');
 const iconContentPaneHidden = document.getElementById('icon-content-pane-hidden');
@@ -65,6 +67,10 @@ window.addEventListener('beforeunload', () => {
     syncInputHeightRaf = null;
   }
   chatInputRowResizeObserver?.disconnect();
+  if (sidebarAnimationTimer !== null) {
+    clearTimeout(sidebarAnimationTimer);
+    sidebarAnimationTimer = null;
+  }
 });
 
 function setContentPaneVisible(visible) {
@@ -94,6 +100,55 @@ btnToggleContentPane.addEventListener('click', async () => {
   } catch {
     setContentPaneVisible(wasVisible);
   }
+});
+
+// ── Seitenleiste ein-/ausblenden (Issue #167) ──────────────────────────────
+// Der Zustand steht am Knopf (aria-pressed) und an #app; das Aussehen kommt
+// vollstaendig aus dem CSS. Das Kuerzel steht im Tooltip, weil der Knopf sonst
+// nichts davon verraet — geschaltet wird es im Menue des Main-Prozesses.
+const SIDEBAR_SHORTCUT = navigator.userAgent.includes('Mac') ? '\u2318B' : 'Strg+B';
+
+// Nur fuer die Dauer des Umschaltens laeuft die Breiten-Transition; danach muss
+// sie wieder weg, sonst haengt der Trenner beim Ziehen hinterher.
+let sidebarAnimationTimer = null;
+function runSidebarTransition() {
+  appRoot.classList.add('app--sidebar-animating');
+  if (sidebarAnimationTimer !== null) clearTimeout(sidebarAnimationTimer);
+  // Etwas mehr als --ds-motion-medium (0,3 s) — transitionend feuert nicht
+  // zuverlaessig, wenn der Wert sich rechnerisch nicht aendert.
+  sidebarAnimationTimer = setTimeout(() => {
+    sidebarAnimationTimer = null;
+    appRoot.classList.remove('app--sidebar-animating');
+  }, 360);
+}
+
+function setSidebarVisible(visible, { animate = true } = {}) {
+  if (animate) runSidebarTransition();
+  appRoot.classList.toggle('app--no-sidebar', !visible);
+  const label = visible ? 'Seitenleiste ausblenden' : 'Seitenleiste einblenden';
+  btnToggleSidebar.title = `${label} (${SIDEBAR_SHORTCUT})`;
+  btnToggleSidebar.setAttribute('aria-label', label);
+  btnToggleSidebar.setAttribute('aria-pressed', visible ? 'true' : 'false');
+}
+
+async function toggleSidebar() {
+  const wasVisible = !appRoot.classList.contains('app--no-sidebar');
+  const visibleAfterToggle = !wasVisible;
+  setSidebarVisible(visibleAfterToggle);
+  try {
+    await api.setUIPrefs({ sidebarVisible: visibleAfterToggle });
+  } catch {
+    setSidebarVisible(wasVisible);
+  }
+}
+
+btnToggleSidebar.addEventListener('click', () => {
+  void toggleSidebar();
+});
+
+// Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B.
+api.onToggleSidebar?.(() => {
+  void toggleSidebar();
 });
 
 const modelPicker = initChatModelPicker({ api, appStore });
@@ -261,14 +316,18 @@ void toolPermissions.refresh();
 void initAppVersionBadge({ api });
 
 (async () => {
-  let uiPrefs = { contentPaneVisible: true, appLocale: 'de' };
+  let uiPrefs = { contentPaneVisible: true, sidebarVisible: true, appLocale: 'de' };
   try {
     uiPrefs = await api.getUIPrefs();
     setContentPaneVisible(uiPrefs.contentPaneVisible !== false);
+    // Beim Start ohne Animation: die Leiste soll gleich richtig stehen und
+    // nicht erst ins Bild fahren.
+    setSidebarVisible(uiPrefs.sidebarVisible !== false, { animate: false });
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
   } catch {
     setContentPaneVisible(true);
+    setSidebarVisible(true, { animate: false });
   }
   initSidebarResizer({
     api,

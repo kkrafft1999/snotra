@@ -254,6 +254,9 @@ function normalizeUiPrefs(raw) {
   return {
     skillSuggestionMode,
     contentPaneVisible: data.contentPaneVisible !== false,
+    // Seitenleiste (Issue #167): voreingestellt sichtbar — wer sie wegschaltet,
+    // findet sie nach dem Neustart weggeschaltet vor. Deshalb `!== false`.
+    sidebarVisible: data.sidebarVisible !== false,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
@@ -278,6 +281,9 @@ function normalizeUiPrefsPatch(raw) {
   const out = {};
   if (typeof patch.contentPaneVisible === 'boolean') {
     out.contentPaneVisible = patch.contentPaneVisible;
+  }
+  if (typeof patch.sidebarVisible === 'boolean') {
+    out.sidebarVisible = patch.sidebarVisible;
   }
   if (typeof patch.baseSystemPrompt === 'string') {
     out.baseSystemPrompt = patch.baseSystemPrompt;

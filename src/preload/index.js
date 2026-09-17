@@ -106,6 +106,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Seitenleiste umschalten (Issue #167). Das Kuerzel Cmd/Ctrl+B haengt am
+  // Menueeintrag im Main-Prozess — der Renderer bekommt nur das Signal, den
+  // Zustand haelt er selbst.
+  onToggleSidebar: (callback) => {
+    const channel = PUSH.UI_TOGGLE_SIDEBAR;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Tool-Berechtigungen (Issue #66). Der Renderer liest den Stand, stoesst
   // Aenderungen an und beantwortet Freigabe-Karten; die Entscheidung selbst
   // trifft der Main-Prozess (Policy, native Bestaetigung fuer Auto/Allow/Deny-Loeschen).
