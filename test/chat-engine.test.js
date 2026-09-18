@@ -199,7 +199,7 @@ test('engine streams contract events and returns a chat result without Electron'
   });
 
   assert.equal(result.content, 'Hallo!');
-  assert.deepEqual(result.usage, { prompt: 10, completion: 2, total: 12 });
+  assert.deepEqual(result.usage, { prompt: 10, completion: 2, total: 12, cached: 0 });
   assert.equal(calls.length, 1);
   assert.deepEqual(events.map((event) => event.type), [
     CHAT_ENGINE_EVENTS.PROGRESS,
@@ -841,10 +841,10 @@ test('engine reports usage as sum of rounds and contextUsage as the last round',
 
   assert.equal(result.content, 'Fertig.');
   // usage bleibt der Verbrauch des ganzen Zugs (alle drei Runden summiert) …
-  assert.deepEqual(result.usage, { prompt: 460, completion: 42, total: 502 });
+  assert.deepEqual(result.usage, { prompt: 460, completion: 42, total: 502, cached: 0 });
   // … contextUsage ist nur die letzte Runde: ihr prompt ist das zuletzt
   // gesendete Kontextfenster, nicht die Summe.
-  assert.deepEqual(result.contextUsage, { prompt: 210, completion: 20, total: 230 });
+  assert.deepEqual(result.contextUsage, { prompt: 210, completion: 20, total: 230, cached: 0 });
 });
 
 test('engine keeps the last complete round as contextUsage when the final round has no usage', async () => {
@@ -860,7 +860,7 @@ test('engine keeps the last complete round as contextUsage when the final round 
     onEvent: () => {},
   });
 
-  assert.deepEqual(result.contextUsage, { prompt: 100, completion: 10, total: 110 });
+  assert.deepEqual(result.contextUsage, { prompt: 100, completion: 10, total: 110, cached: 0 });
 });
 
 test('engine pending tool lines: complete arguments, repeated starts and parallel calls', async () => {
@@ -1391,6 +1391,63 @@ test('engine schlüsselt den Prompt nach Skills, Tools und Verlauf auf (#174)', 
   assert.equal(byId.get('tools:mcp:atlassian').count, 2);
   assert.equal(byId.get('system:base').group, 'system');
   assert.equal(byId.get('history:messages').group, 'history');
+});
+
+test('engine schaetzt die Aufschlüsselung gegen den Tokenizer des Anbieters (#178)', async () => {
+  // Gleiche Bausteine, zwei Anbieter: nur das Gewicht der Tool-Zeile darf sich
+  // unterscheiden, die Gesamtzahl nicht.
+  async function toolShareFor(providerId) {
+    const { engine } = makeEngine(null, {
+      llm: makeLlmPort([assistantText('ok', { usage: { prompt: 4000, completion: 20, total: 4020 } })], {
+        resolveResult: { providerId, model: 'm' },
+      }),
+      tools: makeToolPort(undefined, {
+        toolDefs: [
+          { name: 'list_directory', requiresWorkspace: true, description: 'X'.repeat(4000) },
+        ],
+      }),
+    });
+    const result = await engine.send({
+      sessionId: 'renderer-1',
+      payload: {
+        messages: [{ role: 'user', content: 'Y'.repeat(4000) }],
+        workspaceRoot: '/tmp/snotra-project',
+      },
+    });
+    assert.equal(result.contextBreakdown.total, 4000);
+    return result.contextBreakdown.parts.find((row) => row.id === 'tools:builtin').share;
+  }
+
+  const lokal = await toolShareFor('mlx-lm');
+  const openai = await toolShareFor('openai');
+  assert.ok(
+    lokal > openai * 1.4,
+    `Tool-Anteil lokal ${lokal} muss deutlich ueber OpenAI ${openai} liegen`
+  );
+});
+
+test('engine lenkt alle Runden eines Chats auf denselben Prompt-Cache (#179)', async () => {
+  const { engine, calls } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+    assistantText('Fertig.', {
+      usage: { prompt: 10000, completion: 20, total: 10020, cached: 9000 },
+    }),
+  ], {
+    tools: makeToolPort(() => '{}', { toolDefs: [{ name: 'read_file_text', requiresWorkspace: true }] }),
+  });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      chatId: 'chat-42',
+      messages: [{ role: 'user', content: 'Lies a.js' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+  });
+
+  assert.deepEqual(calls.map((call) => call.cacheKey), ['chat-42', 'chat-42']);
+  // Der Cache-Anteil der letzten Runde erreicht die Anzeige.
+  assert.equal(result.contextUsage.cached, 9000);
 });
 
 test('engine zaehlt Tool-Ergebnisse der letzten Runde in den Verlauf (#174)', async () => {

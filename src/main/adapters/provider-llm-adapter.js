@@ -93,6 +93,12 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     };
   }
 
+  /**
+   * `cacheKey` bindet die Runde an einen Prompt-Cache (Issue #179). Ohne ihn
+   * verteilt OpenAI die Anfragen frei auf seine Maschinen, und ein Chat trifft
+   * mal auf einen warmen und mal auf einen kalten Cache. Nur OpenAI wertet ihn
+   * aus; die uebrigen Provider ignorieren das Feld.
+   */
   async function streamRound({
     target,
     messages,
@@ -100,6 +106,7 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     callbacks,
     abortSignal,
     sendBundle,
+    cacheKey,
   }) {
     const provider = providerRuntime.getProvider(target.providerId);
     let config;
@@ -119,6 +126,7 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
       tools,
       callbacks,
       abortSignal,
+      cacheKey,
     });
   }
 

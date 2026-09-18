@@ -38,12 +38,19 @@ export function formatTokensShort(value) {
   return `${tokenFormatter.format(Math.round(inK))} K`;
 }
 
-/** Anteile unter 1 % nicht auf „0 %" runden — sonst sieht klein aus wie nichts. */
+/**
+ * Anteile unter 1 % nicht auf „0 %" runden — sonst sieht klein aus wie nichts.
+ * An beiden Raendern derselbe Gedanke: „100 %" heisst „alles", und alles ist
+ * etwas anderes als „fast alles". Ein Rest, der nicht aus dem Cache kam, darf
+ * nicht wegrunden.
+ */
 export function formatShare(share) {
   const value = Number(share);
   if (!Number.isFinite(value) || value <= 0) return '0 %';
   if (value < 0.01) return `< ${percentWholeFormatter.format(0.01)}`;
   if (value < 0.1) return percentFormatter.format(value);
+  if (value < 0.995) return percentWholeFormatter.format(value);
+  if (value < 1) return `> ${percentWholeFormatter.format(0.99)}`;
   return percentWholeFormatter.format(value);
 }
 
@@ -198,7 +205,7 @@ export function initTokenBreakdownPanel({
   function render() {
     const state = typeof getState === 'function' ? getState() : {};
     const breakdown = normalizeContextBreakdown(state?.breakdown);
-    const usage = state?.usage || { prompt: 0, completion: 0, total: 0 };
+    const usage = state?.usage || { prompt: 0, completion: 0, total: 0, cached: 0 };
     panel.textContent = '';
 
     const header = el('div', 'token-breakdown__header');
@@ -213,6 +220,22 @@ export function initTokenBreakdownPanel({
       )} Tokens Antwort`
     );
     header.appendChild(sum);
+    // Der Cache-Anteil gehoert in den Kopf zu den echten Zahlen des Anbieters
+    // und nicht in die geschaetzte Liste darunter (Issue #179). Ohne Treffer
+    // bleibt die Zeile weg: „0 aus dem Cache" beantwortet eine Frage, die
+    // niemand gestellt hat.
+    const cached = Math.max(0, Math.round(Number(usage.cached) || 0));
+    if (cached > 0) {
+      header.appendChild(
+        el(
+          'p',
+          'token-breakdown__cache',
+          `davon ${tokenFormatter.format(cached)} aus dem Cache${
+            usage.prompt > 0 ? ` (${formatShare(cached / usage.prompt)})` : ''
+          }`
+        )
+      );
+    }
     panel.appendChild(header);
 
     if (state?.inFlight) {

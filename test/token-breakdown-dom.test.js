@@ -157,6 +157,43 @@ test('die Gesamtzahl gilt als echt, die Anteile als Schätzung', async () => {
   assert.match(panel.querySelector('.token-breakdown__note').textContent, /vom Anbieter.*geschätzt/s);
 });
 
+test('der Cache-Anteil steht bei den echten Zahlen, nicht in der Schätzung (#179)', async () => {
+  const { trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200, cached: 8704 },
+  });
+  click(trigger);
+
+  const cache = panel.querySelector('.token-breakdown__cache');
+  assert.ok(cache, 'ohne Zeile bleibt unsichtbar, ob Caching ueberhaupt greift');
+  // Intl setzt vor das Prozentzeichen ein schmales geschuetztes Leerzeichen.
+  assert.match(cache.textContent, /davon 8\.704 aus dem Cache \(87\s%\)/u);
+  // Im Kopf, ueber der Trennlinie — also bei promptTokens und nicht zwischen
+  // den geschaetzten Zeilen.
+  assert.equal(cache.closest('.token-breakdown__header') !== null, true);
+});
+
+test('„100 %" heißt alles — fast alles rundet nicht dorthin (#179)', async () => {
+  const { trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 14052, completion: 312, total: 14364, cached: 13998 },
+  });
+  click(trigger);
+
+  // 13.998 von 14.052 sind 99,6 % — „100 %" waere die Behauptung, es sei
+  // nichts frisch gerechnet worden.
+  assert.match(panel.querySelector('.token-breakdown__cache').textContent, /\(>\s?99\s%\)/u);
+});
+
+test('ohne Cache-Treffer bleibt die Zeile weg (#179)', async () => {
+  const { trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200, cached: 0 },
+  });
+  click(trigger);
+  assert.equal(panel.querySelector('.token-breakdown__cache'), null);
+});
+
 test('ohne Tokenzahl des Anbieters sagt die Fläche, dass alles geschätzt ist', async () => {
   const { trigger, panel } = await mount({
     breakdown: demoBreakdown(0),

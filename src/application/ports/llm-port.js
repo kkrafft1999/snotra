@@ -51,6 +51,7 @@
  *   callbacks: LlmStreamCallbacks,
  *   abortSignal: AbortSignal,
  *   sendBundle?: LlmSendBundle,
+ *   cacheKey?: string,
  * }) => Promise<LlmRoundResult>} streamRound
  * @property {(err: unknown) => string} formatRoundError
  */

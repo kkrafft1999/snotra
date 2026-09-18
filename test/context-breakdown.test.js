@@ -9,6 +9,8 @@ const assert = require('node:assert/strict');
 const {
   CONTEXT_PART_GROUPS,
   CONTEXT_CONTENT_KINDS,
+  CHARS_PER_TOKEN_PROFILE_BY_PROVIDER,
+  charsPerTokenProfile,
   estimateTokensFromChars,
   createContextBreakdown,
   normalizeContextBreakdown,
@@ -124,4 +126,89 @@ test('keine Zeile verschwindet, wenn der Anbieter eine winzige Zahl meldet', () 
   assert.equal(breakdown.parts.length, 8);
   assert.ok(breakdown.parts.every((row) => row.tokens >= 1));
   assert.equal(breakdown.parts.reduce((sum, row) => sum + row.tokens, 0), 11);
+});
+
+/* ── Teiler je Anbieter (Issue #178) ───────────────────────────────────────── */
+
+// Messung vom 2026-09-18 (gpt-tokenizer, o200k_base) ueber alle eingebauten
+// Tool-Schemas dieses Repos. Die Zahl ist die Messlatte: Das o200k-Profil muss
+// sie auf ~10 % genau treffen, sonst zeigt die Aufschluesselung wieder eine
+// Tool-Zeile, an der man sich nicht orientieren kann.
+const O200K_TOOL_SCHEMA_CHARS = 17210;
+const O200K_TOOL_SCHEMA_TOKENS = 4154;
+
+test('gleiche Zeichenzahl, je nach Anbieter eine andere Schaetzung (#178)', () => {
+  const chars = O200K_TOOL_SCHEMA_CHARS;
+  const lokal = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'mlx-lm');
+  const openai = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'openai');
+
+  assert.ok(lokal > openai * 1.5, `${lokal} (lokal) muss deutlich ueber ${openai} (OpenAI) liegen`);
+  // Ohne Anbieter bleibt es beim konservativen Standardprofil — genau das, was
+  // alle Aufrufer ohne Anbieter-Kontext (Tests, Altlasten) erwarten duerfen.
+  assert.equal(estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON), lokal);
+  // Anthropic und Google haben bewusst kein eigenes Profil: ungemessen faellt
+  // ein Anbieter auf das konservativere zurueck, statt auf eine erfundene Zahl.
+  assert.equal(CHARS_PER_TOKEN_PROFILE_BY_PROVIDER.anthropic, undefined);
+  assert.equal(
+    estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'anthropic'),
+    lokal
+  );
+  assert.deepEqual(charsPerTokenProfile('google'), charsPerTokenProfile('ollama'));
+});
+
+test('die OpenAI-Schaetzung trifft die Tokenizer-Messung auf 10 % (#178)', () => {
+  const geschaetzt = estimateTokensFromChars(
+    O200K_TOOL_SCHEMA_CHARS,
+    CONTEXT_CONTENT_KINDS.JSON,
+    'openai'
+  );
+  const abweichung = Math.abs(geschaetzt - O200K_TOOL_SCHEMA_TOKENS) / O200K_TOOL_SCHEMA_TOKENS;
+  assert.ok(abweichung <= 0.1, `${geschaetzt} statt ${O200K_TOOL_SCHEMA_TOKENS} (${abweichung})`);
+
+  // Der alte globale Teiler 2,3 lag um rund 80 % daneben — das ist der Fehler,
+  // den Issue #178 behebt; er darf nicht unbemerkt zurueckkommen.
+  const alt = estimateTokensFromChars(
+    O200K_TOOL_SCHEMA_CHARS,
+    CONTEXT_CONTENT_KINDS.JSON,
+    'mlx-lm'
+  );
+  assert.ok(alt / O200K_TOOL_SCHEMA_TOKENS > 1.5);
+});
+
+test('das Anbieter-Profil verschiebt Gewichte, nicht die Gesamtzahl (#178)', () => {
+  const parts = [
+    part({
+      id: 'tools',
+      group: CONTEXT_PART_GROUPS.TOOLS,
+      chars: 17210,
+      contentKind: CONTEXT_CONTENT_KINDS.JSON,
+    }),
+    part({
+      id: 'verlauf',
+      group: CONTEXT_PART_GROUPS.HISTORY,
+      chars: 17210,
+      contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+    }),
+  ];
+  const toolTokens = (breakdown) => breakdown.parts.find((row) => row.id === 'tools').tokens;
+
+  const lokal = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'mlx-lm' });
+  const openai = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'openai' });
+
+  // Skaliert wird weiterhin auf 100 % der echten Zahl — beide Male.
+  for (const breakdown of [lokal, openai]) {
+    assert.equal(breakdown.scaled, true);
+    assert.equal(breakdown.total, 10000);
+    assert.equal(
+      breakdown.parts.reduce((sum, row) => sum + row.tokens, 0),
+      10000
+    );
+  }
+
+  // Bei OpenAI wiegen gleich viele Zeichen JSON und Prosa fast gleich schwer,
+  // beim lokalen Profil dominiert das JSON — genau der Unterschied, der die
+  // Anzeige bisher in die Irre gefuehrt hat.
+  assert.ok(toolTokens(lokal) > toolTokens(openai));
+  assert.ok(Math.abs(toolTokens(openai) - 5000) < 250, `${toolTokens(openai)}`);
+  assert.ok(toolTokens(lokal) > 6000, `${toolTokens(lokal)}`);
 });

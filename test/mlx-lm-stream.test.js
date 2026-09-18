@@ -143,7 +143,7 @@ test('streamChatRound collects text, usage and finish reason', async (t) => {
 
   assert.equal(res.message.content, 'Hallo');
   assert.equal(res.finishReason, 'stop');
-  assert.deepEqual(res.usage, { prompt: 7, completion: 3, total: 10 });
+  assert.deepEqual(res.usage, { prompt: 7, completion: 3, total: 10, cached: 0 });
   assert.deepEqual(sink.textDeltas, ['Hal', 'lo']);
 });
 

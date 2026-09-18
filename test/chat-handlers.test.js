@@ -283,7 +283,7 @@ test('CHAT_SEND returns the final assistant text when no tools are called', asyn
   const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
   assert.equal(res.content, 'Hallo!');
   assert.deepEqual(res.toolTrace, []);
-  assert.deepEqual(res.usage, { prompt: 10, completion: 2, total: 12 });
+  assert.deepEqual(res.usage, { prompt: 10, completion: 2, total: 12, cached: 0 });
   assert.equal(res.rawExchanges, undefined, 'CHAT_SEND no longer returns raw exchanges');
 });
 
