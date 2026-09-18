@@ -223,3 +223,54 @@ test('eine kaputte Konfigurationsdatei ergibt eine leere Liste statt eines Abstu
   assert.deepEqual(await storage.readMcpServers(), []);
   assert.deepEqual(await storage.getMcpServersForRuntime(), []);
 });
+
+// --- Tool-Katalog (Issue #170) -------------------------------------------
+
+test('der Tool-Katalog wird fortgeschrieben, ohne env anzufassen', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+
+  const result = await storage.updateMcpServerKnownTools('github', ['search', 'create_issue', 'search']);
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, true);
+
+  const [server] = await storage.readMcpServers();
+  assert.deepEqual(server.knownTools, ['search', 'create_issue'], 'Reihenfolge des Servers, ohne Dopplung');
+  const token = server.env.find((entry) => entry.key === 'GITHUB_TOKEN');
+  assert.equal(token.secret, true);
+  assert.equal(token.hasValue, true, 'das Geheimnis darf der Katalog nicht kosten');
+});
+
+test('ein unveraenderter Katalog schreibt die Datei nicht neu', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  await storage.updateMcpServerKnownTools('github', ['search']);
+
+  const zweite = await storage.updateMcpServerKnownTools('github', ['search']);
+  assert.equal(zweite.changed, false);
+});
+
+test('ein leerer Katalog und ein unbekannter Server aendern nichts', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  await storage.updateMcpServerKnownTools('github', ['search']);
+
+  assert.equal((await storage.updateMcpServerKnownTools('github', [])).ok, false);
+  assert.equal((await storage.updateMcpServerKnownTools('fremd', ['x'])).ok, false);
+
+  const [server] = await storage.readMcpServers();
+  assert.deepEqual(server.knownTools, ['search'], 'der bekannte Katalog bleibt stehen');
+});
+
+test('das Speichern aus dem Formular loescht den Katalog nicht', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  await storage.updateMcpServerKnownTools('github', ['search', 'create_issue']);
+
+  // Das Formular kennt die Tools nicht, wenn der Server nicht laeuft.
+  await storage.saveMcpServer({ ...GITHUB, label: 'GitHub (neu)', env: { GITHUB_TOKEN: { secret: true, keep: true } } });
+
+  const [server] = await storage.readMcpServers();
+  assert.equal(server.label, 'GitHub (neu)');
+  assert.deepEqual(server.knownTools, ['search', 'create_issue']);
+});

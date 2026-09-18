@@ -47,12 +47,12 @@ function katalog(overrides = {}) {
   };
 }
 
-async function mount(apiOverrides = {}) {
+async function mount(apiOverrides = {}, daten = null) {
   setupRendererDom();
   const { initMcpPanel } = await importRenderer('components', 'McpPanel.js');
   const calls = [];
   const api = {
-    getMcpCatalog: async () => katalog(),
+    getMcpCatalog: async () => daten || katalog(),
     saveMcpServer: async (payload) => { calls.push(['save', payload]); return { ok: true, ...katalog() }; },
     deleteMcpServer: async (id) => { calls.push(['delete', id]); return { ok: true, ...katalog() }; },
     reloadMcpServers: async () => { calls.push(['reload']); return { ok: true, ...katalog() }; },
@@ -191,6 +191,59 @@ test('Tools sind einzeln abwaehlbar und landen in disabledTools', async () => {
   document.getElementById('btn-mcp-server-save').click();
   await flush();
   assert.deepEqual(calls[0][1].disabledTools.sort(), ['delete_repository', 'search']);
+});
+
+test('ohne laufende Verbindung bleibt die gespeicherte Auswahl erhalten (#170)', async () => {
+  // Der Server ist gestoppt und hat noch keinen gespeicherten Katalog: der
+  // Dialog zeigt keine Checkboxen. Frueher schrieb das Speichern dann ein
+  // leeres disabledTools und loeschte die Auswahl.
+  const { calls } = await mount({}, katalog({
+    connections: [
+      { serverId: 'github', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
+      { serverId: 'files', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
+    ],
+  }));
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+
+  assert.equal(document.querySelectorAll('#mcp-tools-list input[type="checkbox"]').length, 0);
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].disabledTools, ['delete_repository'], 'die Auswahl darf nicht verloren gehen');
+});
+
+test('der gespeicherte Katalog traegt den Dialog ohne Verbindung (#170)', async () => {
+  const { calls } = await mount({}, katalog({
+    servers: [
+      {
+        id: 'github',
+        label: 'GitHub',
+        command: 'npx',
+        args: [],
+        cwd: null,
+        enabled: true,
+        disabledTools: ['delete_repository'],
+        knownTools: ['search', 'delete_repository', 'create_issue'],
+        env: [],
+      },
+    ],
+    connections: [
+      { serverId: 'github', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
+    ],
+  }));
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+
+  const boxen = [...document.querySelectorAll('#mcp-tools-list input[type="checkbox"]')];
+  assert.deepEqual(boxen.map((b) => b.value), ['search', 'delete_repository', 'create_issue']);
+  assert.deepEqual(boxen.map((b) => b.checked), [true, false, true]);
+  assert.equal(document.getElementById('mcp-tools-count').textContent, '2 von 3 aktiv');
+
+  boxen[2].checked = false;
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].disabledTools.sort(), ['create_issue', 'delete_repository']);
+  assert.deepEqual(calls[0][1].knownTools, ['search', 'delete_repository', 'create_issue']);
 });
 
 test('ein Fehlschlag beim Speichern haelt den Dialog offen und nennt den Grund', async () => {

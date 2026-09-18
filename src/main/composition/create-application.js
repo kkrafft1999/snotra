@@ -248,13 +248,16 @@ function createApplication({
   // nichts, erst der erste Lauf mit Tool-Bedarf tut es. Den PATH bekommt der
   // Dienst wie der Python-Runner aus dem Shell-Profil (Issue #111): ohne ihn
   // faende eine aus dem Finder gestartete App weder `npx` noch `uvx`.
+  const mcpConfigStore = createMcpConfigStorePort(storage);
   const mcpService = createMcpService({
     spawn: childProcess.spawn,
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     clientInfo: { name: APP_NAME, version: app?.getVersion?.() || '0.0.0' },
+    // Der Tool-Katalog wird mitgeschrieben, damit die Einstellungen ihn auch
+    // dann zeigen, wenn der Server nicht laeuft (Issue #170).
+    rememberTools: (id, names) => mcpConfigStore.updateMcpServerKnownTools(id, names),
   });
   const mcpAdapter = createMcpAdapter({ mcpService });
-  const mcpConfigStore = createMcpConfigStorePort(storage);
   const mcpSecrets = createMcpSecretsPort(storage);
 
   /**

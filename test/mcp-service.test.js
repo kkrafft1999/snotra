@@ -316,3 +316,26 @@ test('eine geänderte Konfiguration beendet den alten Prozess', async (t) => {
   assert.equal(await waitGone(children[0]), true, 'der alte Prozess läuft noch');
   assert.equal((await service.listTools()).length, 2);
 });
+
+test('nach einer geglueckten Verbindung wird der Tool-Katalog gemeldet (#170)', async (t) => {
+  const gemeldet = [];
+  const { service } = makeService({
+    rememberTools: async (id, names) => { gemeldet.push([id, names]); },
+  });
+  t.after(() => service.shutdown());
+  await service.setServers([server('eins', 'ok')]);
+  await service.listTools();
+
+  assert.deepEqual(gemeldet, [['eins', ['echo', 'add']]]);
+});
+
+test('ein Fehler beim Merken kostet die Verbindung nicht (#170)', async (t) => {
+  const { service } = makeService({
+    rememberTools: async () => { throw new Error('Platte voll'); },
+  });
+  t.after(() => service.shutdown());
+  await service.setServers([server('eins', 'ok')]);
+  const tools = await service.listTools();
+
+  assert.equal(tools.length, 2, 'die Tools stehen trotzdem bereit');
+});

@@ -33,6 +33,7 @@ test('eine minimale Konfiguration bekommt brauchbare Vorgaben', () => {
     cwd: null,
     enabled: true,
     disabledTools: [],
+    knownTools: [],
   });
 });
 

@@ -9,6 +9,7 @@ const {
 } = require('../../shared/contracts/settings');
 const {
   maskStoredMcpEnv,
+  normalizeKnownTools,
   normalizeStoredMcpEnv,
   validateMcpServerConfig,
   validateMcpServerInput,
@@ -475,11 +476,40 @@ function createStorageService({
         };
       }
 
+      // Der Tool-Katalog gehoert dem Server, nicht dem Formular: schickt die
+      // Oberflaeche keinen mit (sie kennt ihn nur bei laufender Verbindung),
+      // bleibt der gespeicherte stehen.
+      const knownTools = value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
       const next = servers.filter((server) => server.id !== value.id);
-      next.push({ ...value, env: storedEnv });
+      next.push({ ...value, knownTools, env: storedEnv });
       next.sort((a, b) => a.id.localeCompare(b.id));
       await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
       return { ok: true, errors: [] };
+    });
+  }
+
+  /**
+   * Schreibt den zuletzt gemeldeten Tool-Katalog eines Servers fort. Bewusst
+   * getrennt von saveMcpServer: hier kommt kein Formular her, sondern eine
+   * geglueckte Verbindung — env und alle uebrigen Felder bleiben unberuehrt.
+   */
+  async function updateMcpServerKnownTools(id, toolNames) {
+    const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
+    const names = normalizeKnownTools(toolNames);
+    if (!wanted || names.length === 0) return { ok: false };
+    return withFileLock(getMcpConfigPath(), async () => {
+      const servers = await readMcpStoredServers();
+      const current = servers.find((server) => server.id === wanted);
+      if (!current) return { ok: false };
+      const before = current.knownTools || [];
+      if (before.length === names.length && before.every((name, i) => name === names[i])) {
+        return { ok: true, changed: false };
+      }
+      const next = servers.map((server) => (
+        server.id === wanted ? { ...server, knownTools: names } : server
+      ));
+      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      return { ok: true, changed: true };
     });
   }
 
@@ -833,6 +863,7 @@ function createStorageService({
     getMcpServersForRuntime,
     getMcpSecretValues,
     saveMcpServer,
+  updateMcpServerKnownTools,
     deleteMcpServer,
     normalizeWorkspaceRoot,
     workspaceBucketKey,

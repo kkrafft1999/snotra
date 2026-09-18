@@ -52,6 +52,12 @@ function createMcpService({
   readShellPath = async () => '',
   clientInfo = { name: 'Snotra AI', version: '0.0.0' },
   timeouts = MCP_TIMEOUTS,
+  /**
+   * Wird nach jeder geglueckten Verbindung mit dem Tool-Katalog gerufen, damit
+   * die Oberflaeche ihn auch bei stehendem Server zeigen kann (#170). Fehler
+   * hier duerfen keine Verbindung kosten — es ist nur ein Merkzettel.
+   */
+  rememberTools = async () => {},
   env = process.env,
   platform = process.platform,
 } = {}) {
@@ -232,6 +238,13 @@ function createMcpService({
     connection.state = MCP_CONNECTION_STATES.READY;
     connection.error = '';
     connection.stderr = '';
+
+    try {
+      await rememberTools(connection.config.id, connection.tools.map((tool) => tool.name));
+    } catch {
+      // Der Katalog ist Komfort, kein Vertrag: schlaegt das Schreiben fehl,
+      // laeuft die Verbindung trotzdem.
+    }
   }
 
   /**
