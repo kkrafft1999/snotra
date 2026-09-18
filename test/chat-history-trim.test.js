@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_HISTORY_CHAR_LIMIT,
+  DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
   TOOL_OUTPUT_PLACEHOLDER,
@@ -25,6 +26,18 @@ test('resolveHistoryCharLimit falls back to the default', () => {
   assert.equal(resolveHistoryCharLimit({}), DEFAULT_HISTORY_CHAR_LIMIT);
   assert.equal(resolveHistoryCharLimit(undefined), DEFAULT_HISTORY_CHAR_LIMIT);
   assert.equal(resolveHistoryCharLimit({ historyCharLimit: 10_000 }), 10_000);
+});
+
+test('resolveHistoryCharLimit uses a tighter default for local providers', () => {
+  assert.equal(resolveHistoryCharLimit({}, 'mlx-lm'), DEFAULT_LOCAL_HISTORY_CHAR_LIMIT);
+  assert.equal(resolveHistoryCharLimit({}, 'Ollama'), DEFAULT_LOCAL_HISTORY_CHAR_LIMIT);
+  assert.equal(resolveHistoryCharLimit({}, 'openai'), DEFAULT_HISTORY_CHAR_LIMIT);
+  assert.equal(resolveHistoryCharLimit({}, undefined), DEFAULT_HISTORY_CHAR_LIMIT);
+  assert.ok(DEFAULT_LOCAL_HISTORY_CHAR_LIMIT < DEFAULT_HISTORY_CHAR_LIMIT);
+});
+
+test('an explicit setting outranks the local default', () => {
+  assert.equal(resolveHistoryCharLimit({ historyCharLimit: 150_000 }, 'mlx-lm'), 150_000);
 });
 
 test('estimateMessageChars counts content and tool_calls arguments', () => {

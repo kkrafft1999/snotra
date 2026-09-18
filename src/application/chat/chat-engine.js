@@ -528,7 +528,7 @@ function createChatEngine({
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
-      const historyCharLimit = resolveHistoryCharLimit(uiPrefs);
+      const historyCharLimit = resolveHistoryCharLimit(uiPrefs, target?.providerId);
       // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
       // Content — und werden hier normalisiert, weil der Payload aus dem
       // Renderer ungeprueft ist. Nachrichten ohne Anhang behalten exakt ihre
