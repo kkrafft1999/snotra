@@ -38,13 +38,15 @@ Thumbs.db
 *.swp
 *.swo
 
-# Claude Code: geteilte Skills (.claude/skills/) und Regeln (.claude/rules/) versionieren;
+# Claude Code: geteilte Skills (.claude/skills/), Regeln (.claude/rules/) und die
+# Start-Konfiguration des Preview-Panes (.claude/launch.json) versionieren;
 # persoenliche Settings/Caches (settings*.json u. a.) lokal ignorieren
 .claude/*
 !.claude/skills/
 !.claude/skills/**
 !.claude/rules/
 !.claude/rules/**
+!.claude/launch.json
 
 # Lighthouse CI (lokale Laeufe und Reports, siehe .github/workflows/website-performance.yml)
 .lighthouseci/
