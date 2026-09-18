@@ -471,6 +471,54 @@ test('der Block steht, sobald überhaupt ein Tool sichtbar ist (#182)', () => {
   assert.equal(nurDatei.buildSystemPrompt({ workspaceOpen: false }), '');
 });
 
+test('die Schemas wiederholen die Konventionen nicht mehr (#183)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const schemas = JSON.stringify(registry.getTools());
+
+  // Was einmal im Konventionsblock steht, steht nicht noch 30-mal im Schema.
+  for (const wiederholung of ['Relativer Pfad', '2 MB', 'Punkt-Präfix', '.gitignore']) {
+    assert.equal(schemas.includes(wiederholung), false, `„${wiederholung}" steht noch im Schema`);
+  }
+  // Grenzen sagt das Schema selbst — maschinenlesbar statt in Prosa daneben.
+  assert.equal(schemas.includes('Obergrenze'), false);
+  const suche = registry.getTools().find((tool) => tool.function.name === 'search_in_files');
+  assert.equal(suche.function.parameters.properties.max_results.default, 50);
+  assert.equal(suche.function.parameters.properties.max_results.maximum, 200);
+  assert.equal(suche.function.parameters.properties.include_hidden.default, false);
+});
+
+test('die Ordner-Parameter behalten ihre eigene, korrekte Kurzfassung (#183)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const beschreibung = (name) =>
+    registry.getTools().find((tool) => tool.function.name === name)
+      .function.parameters.properties.relative_path.description;
+
+  // Ordner-Startpunkte ohne `required` — ein Datei-Beispiel wäre hier
+  // irreführender als gar keins, deshalb ausdrücklich nicht die
+  // Datei-Formulierung der übrigen Tools.
+  for (const name of ['list_directory', 'find_files', 'list_directory_tree']) {
+    assert.equal(beschreibung(name), 'Startordner; leer oder "." = ganzes Projekt.', name);
+  }
+  assert.equal(
+    beschreibung('search_in_files'),
+    'Startordner oder einzelne Datei; leer oder "." = ganzes Projekt.'
+  );
+  for (const name of ['read_file_text', 'read_file_lines', 'edit_file']) {
+    assert.match(beschreibung(name), /^Dateipfad, z\. B\./, name);
+  }
+});
+
+test('der gitignore-Hinweis überlebt die Kürzung (#183)', () => {
+  // Ohne ihn liefert etwa `find_files out/**/*.html` ein sauberes, leeres
+  // Ergebnis ohne jeden Hinweis — eine stille Falschantwort ohne
+  // Selbstkorrektur. Er ist aus den Schemas verschwunden, muss also im
+  // System-Prompt stehen.
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  assert.equal(JSON.stringify(registry.getTools()).includes('.gitignore'), false);
+  assert.match(registry.buildSystemPrompt(), /\.gitignore des Projektroots ausschließt/);
+  assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
+});
+
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {
   const registry = createWorkspaceToolRegistry({
     fsService: makeFsServiceStub(),
