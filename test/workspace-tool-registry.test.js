@@ -519,6 +519,126 @@ test('der gitignore-Hinweis überlebt die Kürzung (#183)', () => {
   assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
 });
 
+/* ── Die teuersten Schemata neu gefasst (Issue #184) ───────────────────────── */
+
+test('die Schemas erklären nicht mehr, was die Fehlermeldung ohnehin sagt (#184)', () => {
+  // Leitregel: Name und Typ tragen die Bedeutung, die Beschreibung nur noch
+  // das, was daraus nicht folgt. Jeder Satz hier hat einen zweiten Träger in
+  // fs-service.js bzw. search-line-matcher.js — er kostet im Fehlerfall eine
+  // Runde statt in jeder Runde Tokens.
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const schemas = JSON.stringify(registry.getTools());
+
+  const gestrichen = [
+    // apply_patch: Atomarität und Rollback (die Datei ist im Fehlerfall
+    // unverändert — das sieht das Modell, ohne dass man es ihm vorher sagt).
+    'Alles oder nichts',
+    'atomar',
+    'zurückgesetzt',
+    // apply_patch: die ausbuchstabierte Diff-Grammatik. Der Parser gibt sie
+    // wörtlich zurück (fs-service.js:540/588/638/696).
+    '@@ -alteZeile',
+    'unverändert)',
+    // edit_file/apply_patch: die Eindeutigkeitsregel im Wortlaut der
+    // Fehlermeldung (fs-service.js:461/1288).
+    'inklusive Einrückung und Zeilenumbrüchen',
+    'umgebende Zeilen mit aufnehmen',
+    // search_in_files: Länge und Komplexität des Regex melden
+    // search-line-matcher.js:55/113.
+    '(a+)+',
+    'höchstens 256 Zeichen',
+    // list_directory_tree: Suchreihenfolge und Symlinks ändern die Wahl des
+    // Tools nicht, das Baumformat liest man an der Antwort ab.
+    'Breitensuche',
+    'Symlinks',
+    'Text-Baum mit Einrückung',
+  ];
+  for (const satz of gestrichen) {
+    assert.equal(schemas.includes(satz), false, `„${satz}" steht noch im Schema`);
+  }
+});
+
+test('die beiden Rettungssätze überleben die Kürzung (#184)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const tool = (name) => registry.getTools().find((t) => t.function.name === name);
+
+  // 1. Der gitignore-/Versteckt-Hinweis. Ohne ihn ist ein leeres Ergebnis
+  //    nicht von „gibt es nicht" zu unterscheiden — stille Falschantwort ohne
+  //    Selbstkorrektur, die teuerste Fehlerklasse.
+  assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
+
+  // 2. Der Ersparnis-Satz an read_file_lines. Er kostet 9 Token; eine
+  //    unnötige Volllesung von workspace-tool-registry.js kostet über 10.000.
+  assert.match(
+    tool('read_file_lines').function.description,
+    /Token-sparsamer als read_file_text/
+  );
+
+  // Die stille Teilmessung bleibt benannt: ohne Bereich liefert das Tool 200
+  // Zeilen und meldet dabei truncated=false (fs-service.js:215).
+  assert.match(
+    tool('read_file_lines').function.parameters.properties.end_line.description,
+    /Standard start_line \+ 199/
+  );
+  // „[+N]" ist das einzige Zeichen dafür, dass der Baum unvollständig ist.
+  assert.match(tool('list_directory_tree').function.description, /\[\+N\]/);
+});
+
+test('read_file_lines behält beide Modi im Parametersatz (#184)', () => {
+  // Zeilen- und Byte-Bereich sind zwei echte Modi (fs-service.js:1083-1114).
+  // Eine Sparfassung, die start_byte/length stillschweigend streicht, spart
+  // keine Token, sondern nimmt dem Tool einen Modus.
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const { properties } = registry
+    .getTools()
+    .find((tool) => tool.function.name === 'read_file_lines').function.parameters;
+
+  assert.deepEqual(Object.keys(properties), [
+    'relative_path',
+    'start_line',
+    'end_line',
+    'start_byte',
+    'length',
+  ]);
+  // Die Unvereinbarkeit steht genau einmal — am zweiten Modus.
+  assert.match(properties.start_byte.description, /nicht mit start_line\/end_line kombinierbar/);
+  assert.equal(properties.start_line.description.includes('kombinierbar'), false);
+});
+
+test('der Aufklapptext in den Einstellungen bleibt der ausführliche (#184)', () => {
+  // `modelDescription` ist gekürzt, `description` nicht: In Einstellungen ›
+  // Tools ist der Volltext die einzige Stelle, an der ein Nutzer erfährt, was
+  // ein Tool wirklich tut — und er muss länger sein als die Kurzzeile darüber.
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const katalog = new Map(registry.listCatalog().map((eintrag) => [eintrag.name, eintrag]));
+  const schema = new Map(registry.getTools().map((tool) => [tool.function.name, tool.function]));
+
+  for (const name of [
+    'apply_patch',
+    'search_in_files',
+    'read_file_lines',
+    'list_directory_tree',
+    'find_files',
+    'edit_file',
+  ]) {
+    const eintrag = katalog.get(name);
+    assert.ok(
+      eintrag.description.length > eintrag.shortDescription.length,
+      `${name}: der Volltext ist nicht länger als die Kurzzeile darüber`
+    );
+    assert.ok(
+      eintrag.description.length > schema.get(name).description.length,
+      `${name}: der Volltext ist nicht länger als der Schema-Text`
+    );
+  }
+
+  // Was aus dem Schema gestrichen wurde, steht im Aufklapptext weiterhin.
+  assert.match(katalog.get('apply_patch').description, /Alles oder nichts/);
+  assert.match(katalog.get('edit_file').description, /inklusive Einrückung und Zeilenumbrüchen/);
+  assert.match(katalog.get('list_directory_tree').description, /Breitensuche/);
+  assert.match(katalog.get('search_in_files').description, /Zeitbudget von 5 s/);
+});
+
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {
   const registry = createWorkspaceToolRegistry({
     fsService: makeFsServiceStub(),

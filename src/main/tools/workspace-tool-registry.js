@@ -332,9 +332,23 @@ function createToolRegistry(initialDefinitions = []) {
  * Prosa-Klammer daneben. Gemessen am 2026-09-18 (o200k, 16 Tools):
  * 16.900 → 15.421 Zeichen, 4.062 → 3.696 Token, rund 366 Token je Runde.
  *
+ * Seit #184 gilt fuer die `modelDescription` der teuersten Schemata die
+ * Leitregel: **Name und Typ tragen die Bedeutung, die Beschreibung nur noch
+ * das, was daraus nicht folgt.** Gestrichen ist, wofuer ein zweiter Traeger
+ * existiert — allen voran die Fehlermeldungen von `fs-service.js`, die ihre
+ * eigene Grammatik woertlich zurueckgeben. Der Preis ist dann hoechstens eine
+ * zusaetzliche Runde, nicht eine falsche Antwort. Was ohne zweiten Traeger
+ * still falsch antworten wuerde, bleibt stehen: der gitignore-Hinweis im
+ * Konventionsblock und der Ersparnis-Satz an `read_file_lines`. Gemessen am
+ * 2026-09-18 (o200k, 16 Tools): 15.421 → 13.935 Zeichen,
+ * 3.696 → 3.326 Token, rund 370 Token je Runde.
+ *
  * Der Volltext in `description` bleibt dabei unangetastet — er ist der
  * Aufklapptext in Einstellungen › Tools und die einzige Stelle, an der ein
- * Nutzer erfaehrt, was ein Tool wirklich tut.
+ * Nutzer erfaehrt, was ein Tool wirklich tut. Er ist deshalb laenger als die
+ * `modelDescription` daneben und laenger als die `promptDescription`, die in
+ * den Einstellungen als Kurzzeile darueber steht — beides gehoert nach einer
+ * Kuerzung einmal angesehen.
  */
 function createWorkspaceToolRegistry({
   fsService,
@@ -461,11 +475,15 @@ function createWorkspaceToolRegistry({
         'entweder einen Zeilenbereich (start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
         'Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu Treffern aus search_in_files. ' +
         'Token-sparsamer als read_file_text, wenn nur ein Teil der Datei gebraucht wird. Maximale Dateigröße: 2 MB.',
+      // Der Satz zur Token-Ersparnis bleibt ausdruecklich stehen (Issue #184):
+      // er kostet 9 Token, eine unnoetige Volllesung dieser Datei kostet ueber
+      // 10.000. Der Verweis auf search_in_files faellt weg — das Zeilenformat
+      // steht in der Antwort selbst.
       modelDescription:
-        'Liest gezielt einen Ausschnitt einer Textdatei: entweder einen Zeilenbereich ' +
-        '(start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
-        'Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu ' +
-        'Treffern aus search_in_files. Token-sparsamer als read_file_text, wenn nur ein Teil gebraucht wird.',
+        'Liest einen Ausschnitt einer Textdatei: entweder einen Zeilenbereich (start_line/end_line, ' +
+        '1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). Im Zeilenmodus steht vor ' +
+        'jeder Zeile ihre Nummer und ein Tabulator. Token-sparsamer als read_file_text, wenn nur ein ' +
+        'Teil gebraucht wird.',
       promptDescription:
         'Liest gezielt Zeilen- oder Byte-Ausschnitte aus Textdateien des Projektordners (Zeilen nummeriert).',
       parameters: {
@@ -478,7 +496,7 @@ function createWorkspaceToolRegistry({
           start_line: {
             type: 'integer',
             default: 1,
-            description: 'Erste Zeile (1-basiert). Nicht mit start_byte/length kombinierbar.',
+            description: 'Erste Zeile (1-basiert).',
           },
           end_line: {
             type: 'integer',
@@ -488,7 +506,10 @@ function createWorkspaceToolRegistry({
           },
           start_byte: {
             type: 'integer',
-            description: 'Byte-Offset (0-basiert). Nicht mit start_line/end_line kombinierbar.',
+            // Der Byte-Modus ist ein echter zweiter Modus, kein Beiwerk
+            // (fs-service.js:1083-1114) — er bleibt im Parametersatz, und die
+            // Unvereinbarkeit steht hier einmal statt an beiden Modi (#184).
+            description: 'Byte-Offset (0-basiert); zweiter Modus, nicht mit start_line/end_line kombinierbar.',
           },
           length: {
             type: 'integer',
@@ -512,11 +533,13 @@ function createWorkspaceToolRegistry({
         'und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. ' +
         'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien. ' +
         'Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen mit einem Zeitbudget von 5 s pro Suche.',
+      // Ohne die Randbedingungen (binaer, zu gross, 10.000 Zeichen je Zeile,
+      // 5-s-Zeitbudget): Sie aendern die Wahl des Tools nicht, und wo sie
+      // greifen, meldet sich die Suche selbst — das Zeitbudget als Fehler,
+      // die Ueberspringer ueber den Hinweis im Konventionsblock (#184).
       modelDescription:
         'Durchsucht Textdateien rekursiv nach einem Suchtext oder regulären Ausdruck und liefert nur ' +
-        'Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. Binäre und zu große ' +
-        'Dateien bleiben aus. Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen ' +
-        'mit einem Zeitbudget von 5 s pro Suche.',
+        'Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien.',
       promptDescription:
         'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
       parameters: {
@@ -528,9 +551,11 @@ function createWorkspaceToolRegistry({
             // woertliche Suche. Als Schema-Keyword wuerde sie lange
             // Suchtexte verbieten, die tatsaechlich erlaubt sind.
             type: 'string',
-            description:
-              'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax (höchstens 256 Zeichen, ' +
-              'keine verschachtelten unbegrenzten Wiederholungen wie "(a+)+" — solche Muster werden abgelehnt).',
+            // Laengen- und Komplexitaetsgrenze stehen woertlich in den
+            // Fehlermeldungen von `validateRegexPattern`
+            // (search-line-matcher.js:55/113) — ein abgelehntes Muster kostet
+            // eine Runde, der Vorabtext kostet jede Runde (#184).
+            description: 'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax.',
           },
           is_regex: {
             type: 'boolean',
@@ -560,13 +585,11 @@ function createWorkspaceToolRegistry({
           },
           include: {
             type: 'string',
-            description:
-              'Optionales Glob-Muster (gitignore-Syntax); nur passende Dateien werden durchsucht, z. B. "*.js" oder "src/**/*.md".',
+            description: 'Glob-Muster (gitignore-Syntax); nur passende Dateien durchsuchen, z. B. "*.js" oder "src/**/*.md".',
           },
           exclude: {
             type: 'string',
-            description:
-              'Optionales Glob-Muster (gitignore-Syntax); passende Dateien und Ordner werden übersprungen, z. B. "dist" oder "*.min.js".',
+            description: 'Glob-Muster (gitignore-Syntax); passende Dateien und Ordner überspringen, z. B. "dist" oder "*.min.js".',
           },
           include_hidden: {
             type: 'boolean',
@@ -589,10 +612,12 @@ function createWorkspaceToolRegistry({
         'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
         'Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner. ' +
         'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git.',
+      // Die Muster-Syntax stand doppelt — hier und am Parameter `pattern`,
+      // der sie ohnehin tragen muss. Sie bleibt dort, die Beschreibung sagt
+      // nur noch, wofuer man das Tool nimmt (#184).
       modelDescription:
         'Findet Dateien und Ordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
-        'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
-        'Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner.',
+        'ein Aufruf statt vieler list_directory-Runden.',
       promptDescription:
         'Findet Datei- und Ordnerpfade im Projektordner per Glob-Muster (z. B. "**/*.js").',
       parameters: {
@@ -601,8 +626,8 @@ function createWorkspaceToolRegistry({
           pattern: {
             type: 'string',
             description:
-              'Glob-Muster (gitignore-Syntax), z. B. "*.md", "src/**/*.js" oder "components/"; ' +
-              'wird gegen den Pfad relativ zum Projektroot geprüft.',
+              'Glob-Muster in gitignore-Syntax (*, ?, **), z. B. "*.md", "src/**/*.js" oder ' +
+              '"components/" (nur Ordner); Muster mit / sind am Projektroot verankert.',
           },
           relative_path: {
             type: 'string',
@@ -710,11 +735,14 @@ function createWorkspaceToolRegistry({
         'heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, ' +
         'damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, ' +
         'Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
+      // Ohne die Erklaerung der Breitensuche, ohne "folgt keinen Symlinks" und
+      // ohne die Beschreibung des Baumformats — Einrueckung und "/" liest man
+      // an der Antwort ab. "[+N]" bleibt: es ist das einzige Zeichen dafuer,
+      // dass der Baum unvollstaendig ist (#184).
       modelDescription:
-        'Liefert einen kompakten rekursiven Ordnerbaum in einem Aufruf statt vieler list_directory-Runden. ' +
-        'Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner heißt: N direkte ' +
-        'Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, damit bei ' +
-        'knappem Budget zuerst die oberen Ebenen vollständig sind. Folgt keinen Symlinks.',
+        'Liefert einen kompakten rekursiven Ordnerbaum in einem Aufruf statt vieler ' +
+        'list_directory-Runden. "[+N]" hinter einem Ordner heißt: N direkte Einträge sind nicht ' +
+        'angezeigt (max_depth oder max_entries erreicht).',
       promptDescription:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
       parameters: {
@@ -809,11 +837,13 @@ function createWorkspaceToolRegistry({
         'old_string wird durch new_string ersetzt, ohne die Datei komplett neu zu schreiben. ' +
         'old_string muss exakt und eindeutig vorkommen — inklusive Einrückung und Zeilenumbrüchen; ' +
         'bei mehreren Treffern mehr Kontext angeben oder replace_all=true setzen. Maximale Dateigröße: 2 MB.',
+      // Die Eindeutigkeitsregel samt "inklusive Einrueckung und
+      // Zeilenumbruechen" steht woertlich in den beiden Fehlermeldungen
+      // (fs-service.js:1288/1293) und am Parameter `old_string` — sie muss
+      // nicht zusaetzlich in jeder Runde mitgeschickt werden (#184).
       modelDescription:
         'Ersetzt in einer Textdatei gezielt eine Textstelle: old_string wird durch new_string ersetzt, ' +
-        'ohne die Datei komplett neu zu schreiben. old_string muss exakt und eindeutig vorkommen — ' +
-        'inklusive Einrückung und Zeilenumbrüchen; bei mehreren Treffern mehr Kontext angeben oder ' +
-        'replace_all=true setzen.',
+        'ohne die Datei komplett neu zu schreiben.',
       promptDescription:
         'Ersetzt gezielt Textstellen in Dateien des Projektordners (old_string → new_string), ohne die ganze Datei neu zu schreiben.',
       parameters: {
@@ -825,8 +855,7 @@ function createWorkspaceToolRegistry({
           },
           old_string: {
             type: 'string',
-            description:
-              'Exakter zu ersetzender Text; muss eindeutig in der Datei vorkommen — bei Bedarf umgebende Zeilen mit aufnehmen.',
+            description: 'Exakter zu ersetzender Text; muss eindeutig in der Datei vorkommen.',
           },
           new_string: {
             type: 'string',
@@ -858,15 +887,22 @@ function createWorkspaceToolRegistry({
         'ein Schreibvorgang, werden bereits geschriebene Dateien zurückgesetzt. Für eine einzelne Ersetzung ist ' +
         'edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann ' +
         'apply_patch nicht. Maximale Dateigröße: 2 MB.',
+      // Ohne die Atomaritaets- und Rollback-Prosa (Issue #184): Sie aendert
+      // die Wahl des Tools nicht und nicht die Form des Aufrufs. Was das
+      // Modell dabei verliert, bekommt es im Fehlerfall zurueck — die Datei
+      // ist dann unveraendert, und die Meldung sagt, welcher Schritt bzw.
+      // Hunk gescheitert ist. Der Preis ist hoechstens eine zusaetzliche
+      // Runde, nicht eine falsche Antwort.
+      //
+      // Stehen bleibt, was das Modell *vorher* wissen muss: die zwei Modi,
+      // der Verweis auf edit_file und die drei Dinge, die apply_patch nicht
+      // kann — sonst baut es einen Patch, den der Parser grundsaetzlich
+      // ablehnt (fs-service.js:657/661).
       modelDescription:
         'Ändert bestehende Textdateien mit mehreren zusammenhängenden Änderungen in einem Aufruf — ' +
-        'entweder als Liste von Ersetzungen (edits, alle in derselben Datei, in dieser Reihenfolge ' +
-        'angewendet) oder als unified diff (patch, auch über mehrere Dateien hinweg). Alles oder ' +
-        'nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. ' +
-        'Jede Datei wird für sich atomar ersetzt (nie halb geschrieben); über mehrere Dateien hinweg ' +
-        'gilt das nicht — scheitert ein Schreibvorgang, werden bereits geschriebene Dateien ' +
-        'zurückgesetzt. Für eine einzelne Ersetzung ist edit_file einfacher. Dateien anlegen ' +
-        '(write_file_text), löschen oder umbenennen kann apply_patch nicht.',
+        'entweder als Liste von Ersetzungen (edits, alle in derselben Datei) oder als unified diff ' +
+        '(patch, auch über mehrere Dateien hinweg). Für eine einzelne Ersetzung ist edit_file ' +
+        'einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann apply_patch nicht.',
       promptDescription:
         'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
       parameters: {
@@ -874,24 +910,20 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description:
-              'Dateipfad, z. B. "src/app.js". Im edits-Modus erforderlich; im patch-Modus ' +
-              'überflüssig, weil die Pfade in den "+++"-Kopfzeilen des Diffs stehen.',
+            description: 'Dateipfad, z. B. "src/app.js". Nur im edits-Modus; im patch-Modus stehen die Pfade im Diff.',
           },
           edits: {
             type: 'array',
             maxItems: 50,
             description:
-              'Ersetzungen in relative_path, der Reihe nach angewendet. ' +
-              'Jeder Schritt sieht das Ergebnis der vorherigen. Nicht mit patch kombinierbar.',
+              'Ersetzungen in relative_path, der Reihe nach angewendet — jeder Schritt sieht das ' +
+              'Ergebnis der vorherigen. Nicht mit patch kombinierbar.',
             items: {
               type: 'object',
               properties: {
                 old_string: {
                   type: 'string',
-                  description:
-                    'Exakter zu ersetzender Text; muss zum Zeitpunkt dieses Schritts eindeutig ' +
-                    'vorkommen — bei Bedarf umgebende Zeilen mit aufnehmen.',
+                  description: 'Exakter zu ersetzender Text; muss zum Zeitpunkt dieses Schritts eindeutig vorkommen.',
                 },
                 new_string: {
                   type: 'string',
@@ -900,9 +932,7 @@ function createWorkspaceToolRegistry({
                 replace_all: {
                   type: 'boolean',
                   default: false,
-                  description:
-                    'true, um in diesem Schritt alle Vorkommen zu ersetzen ' +
-                    '(sonst muss der Treffer eindeutig sein).',
+                  description: 'true, um in diesem Schritt alle Vorkommen zu ersetzen.',
                 },
               },
               required: ['old_string', 'new_string'],
@@ -910,11 +940,15 @@ function createWorkspaceToolRegistry({
           },
           patch: {
             type: 'string',
+            // Ohne die ausbuchstabierte Diff-Grammatik: Der Parser gibt sie im
+            // Fehlerfall woertlich zurueck — Hunk-Kopf (fs-service.js:540),
+            // Rumpfzeilen (:588), Dateikopf (:638/:696). Die Toleranz bei den
+            // Zeilennummern bleibt, weil sie kein Fehler meldet: ohne sie
+            // liest das Modell Dateien neu, die es nicht neu lesen muss (#184).
             description:
-              'Unified diff als Text: je Datei "--- alt" und "+++ neu" (a//b/-Präfixe erlaubt), ' +
-              'darunter Hunks "@@ -alteZeile,anzahl +neueZeile,anzahl @@" mit Rumpfzeilen, die mit ' +
-              '" " (unverändert), "-" (entfernt) oder "+" (neu) beginnen. Die Zeilennummern dürfen ' +
-              'leicht verschoben sein, der Kontext muss exakt passen. Nicht mit edits kombinierbar.',
+              'Unified diff als Text: je Datei "--- alt"/"+++ neu", darunter "@@ …"-Hunks. Die ' +
+              'Zeilennummern dürfen leicht verschoben sein, der Kontext muss exakt passen. ' +
+              'Nicht mit edits kombinierbar.',
           },
         },
       },
