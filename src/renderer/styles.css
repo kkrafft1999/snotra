@@ -2129,7 +2129,6 @@ summary:focus-visible,
 }
 
 .token-breakdown__group {
-  padding: 10px 14px 4px;
   border-bottom: 1px solid var(--ds-grey-divider);
 }
 
@@ -2137,10 +2136,30 @@ summary:focus-visible,
   border-bottom: none;
 }
 
+/* Die ganze Gruppenzeile ist der Schalter — die spitze Klammer muss niemand
+   treffen. Sie liegt links, wo auch die Ordner ihre Klammer haben. */
+.token-breakdown__group-head {
+  display: block;
+  width: 100%;
+  padding: 9px 14px 10px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.token-breakdown__group-head:hover,
+.token-breakdown__group-head:focus-visible {
+  background: var(--ds-blue-soft);
+}
+
 /* Umbruch statt Abschneiden: Das Chat-Panel ist ab 260px erlaubt, die Flaeche
    also gut 170px schmal. Dann rutschen Zahl und Anteil unter das Etikett,
    statt es auf wenige Zeichen einzudampfen. */
-.token-breakdown__group-head {
+.token-breakdown__group-line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -2148,14 +2167,39 @@ summary:focus-visible,
   padding-bottom: 6px;
 }
 
+.token-breakdown__group-chevron {
+  flex: none;
+  /* Mittig zur Versalienzeile statt auf der Schriftlinie — ein Pfeil hat
+     keine Grundlinie, an der er sich ausrichten koennte. */
+  align-self: center;
+  color: var(--text-muted-strong);
+  transition: transform var(--ds-motion-fast, 0.15s ease);
+}
+
+.token-breakdown__group--open .token-breakdown__group-chevron {
+  transform: rotate(90deg);
+}
+
 .token-breakdown__group-label {
-  flex: 1 1 auto;
-  min-width: 80px;
+  flex: 0 1 auto;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
   color: var(--text-muted-strong);
+}
+
+/* Zugeklappt ist die Zahl der Posten der einzige Hinweis, wie viel sich hinter
+   der Gruppe verbirgt — sie steht deshalb auch dann da, wenn man sie sieht. */
+.token-breakdown__group-count {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+  opacity: 0.8;
 }
 
 .token-breakdown__group-tokens,
@@ -2181,10 +2225,16 @@ summary:focus-visible,
   text-align: right;
 }
 
+/* Eingerueckt bis unter das Gruppen-Etikett: Die Einzelposten gehoeren sichtbar
+   zu der Zeile, die man aufgeklappt hat. */
 .token-breakdown__rows {
   margin: 0;
-  padding: 0;
+  padding: 0 6px 8px 20px;
   list-style: none;
+}
+
+.token-breakdown__rows[hidden] {
+  display: none;
 }
 
 .token-breakdown__row-item {
@@ -2318,6 +2368,8 @@ summary:focus-visible,
 
 @media (prefers-reduced-motion: reduce) {
   .chat-token-usage,
+  .token-breakdown__group-head,
+  .token-breakdown__group-chevron,
   .token-breakdown__row--action,
   .token-breakdown__row-action {
     transition: none;
