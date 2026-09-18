@@ -88,6 +88,14 @@ function rowLabels(panel) {
   return [...panel.querySelectorAll('.token-breakdown__row-label')].map((n) => n.textContent);
 }
 
+function groupHead(panel, group) {
+  return panel.querySelector(`.token-breakdown__group-head[data-group="${group}"]`);
+}
+
+function expandAll(panel) {
+  for (const head of panel.querySelectorAll('.token-breakdown__group-head')) click(head);
+}
+
 test('die Anzeige ist ein Schalter mit Dialog-Semantik und richtigem Zustand', async () => {
   const { api, trigger, panel } = await mount({
     breakdown: demoBreakdown(),
@@ -122,6 +130,7 @@ test('jeder Skill steht einzeln, teuerster zuerst, mit Gruppen darüber', async 
 
   const groups = [...panel.querySelectorAll('.token-breakdown__group-label')].map((n) => n.textContent);
   assert.deepEqual(groups, ['System-Prompt', 'Skills', 'Tool-Definitionen', 'Verlauf']);
+  expandAll(panel);
   assert.deepEqual(rowLabels(panel), [
     'Eigener System-Prompt',
     'grosser-skill',
@@ -190,6 +199,7 @@ test('eine Skill-Zeile führt zu ihrem Schalter in den Einstellungen', async () 
     { onOpenSkillSettings: (name) => opened.push(name) }
   );
   click(trigger);
+  click(groupHead(panel, 'skills'));
 
   const rows = [...panel.querySelectorAll('.token-breakdown__row')];
   const skillRow = rows.find((row) => row.dataset.skillName === 'grosser-skill');
@@ -230,4 +240,82 @@ test('ein Klick daneben schließt, einer in der Fläche nicht', async () => {
 
   click(dom.document.getElementById('chat-messages'));
   assert.equal(api.isOpen(), false);
+});
+
+test('die Gruppen starten zugeklappt — erst die Summen, dann die Einzelposten', async () => {
+  const { trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+
+  const heads = [...panel.querySelectorAll('.token-breakdown__group-head')];
+  assert.equal(heads.length, 4, 'jede Gruppe ist ein Schalter');
+  for (const head of heads) {
+    assert.equal(head.tagName, 'BUTTON', 'kein <div> mit onclick');
+    assert.equal(head.getAttribute('aria-expanded'), 'false');
+    // Was der Schalter auf- und zuklappt, steht in aria-controls.
+    const rows = panel.querySelector(`#${head.getAttribute('aria-controls')}`);
+    assert.ok(rows, 'aria-controls zeigt auf eine echte Liste');
+    assert.equal(rows.hidden, true, 'die Einzelposten sind zunächst verborgen');
+  }
+  // Die Summe je Gruppe muss auch zugeklappt lesbar sein.
+  assert.ok(panel.textContent.includes('Skills'));
+  assert.ok(panel.textContent.includes('2 Posten'), 'zugeklappt sagt die Zeile, wie viel dahintersteckt');
+});
+
+test('ein Klick auf die Gruppe klappt auf und wieder zu', async () => {
+  const { trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+
+  const head = groupHead(panel, 'skills');
+  const rows = panel.querySelector(`#${head.getAttribute('aria-controls')}`);
+
+  click(head);
+  assert.equal(head.getAttribute('aria-expanded'), 'true');
+  assert.equal(rows.hidden, false);
+  assert.equal(
+    head.parentElement.classList.contains('token-breakdown__group--open'),
+    true,
+    'die spitze Klammer dreht sich über die Klasse'
+  );
+  // Nur die angeklickte Gruppe geht auf.
+  assert.equal(groupHead(panel, 'tools').getAttribute('aria-expanded'), 'false');
+
+  click(head);
+  assert.equal(head.getAttribute('aria-expanded'), 'false');
+  assert.equal(rows.hidden, true);
+});
+
+test('aufgeklappte Gruppen bleiben es — auch nach neuer Antwort und erneutem Öffnen', async () => {
+  const { trigger, panel, current, api } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+  click(groupHead(panel, 'skills'));
+
+  // Neue Zahlen zeichnen die Fläche neu.
+  current.breakdown = demoBreakdown(12000);
+  api.refresh();
+  assert.equal(groupHead(panel, 'skills').getAttribute('aria-expanded'), 'true');
+
+  // Und auch Zu- und Wieder-Aufmachen vergisst den Zustand nicht.
+  click(trigger);
+  click(trigger);
+  assert.equal(groupHead(panel, 'skills').getAttribute('aria-expanded'), 'true');
+  assert.equal(groupHead(panel, 'history').getAttribute('aria-expanded'), 'false');
+});
+
+test('ein Klick auf die Gruppe schließt die Fläche nicht', async () => {
+  const { trigger, panel, api } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+  click(groupHead(panel, 'tools'));
+  assert.equal(api.isOpen(), true);
 });

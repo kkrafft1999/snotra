@@ -47,6 +47,14 @@ export function formatShare(share) {
   return percentWholeFormatter.format(value);
 }
 
+/**
+ * Spitze Klammer wie bei den aufklappbaren Zeilen in den Einstellungen —
+ * dieselbe Form, dieselbe Drehung beim Öffnen, damit „das kann man aufklappen"
+ * in der App überall gleich aussieht.
+ */
+const CHEVRON_ICON_HTML =
+  '<svg class="token-breakdown__group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -97,6 +105,10 @@ export function initTokenBreakdownPanel({
   onOpen,
 } = {}) {
   let open = false;
+  // Welche Gruppen aufgeklappt sind. Lebt so lange wie die Fläche selbst,
+  // damit ein Blick auf die Skills nicht nach jeder Antwort neu erarbeitet
+  // werden muss.
+  const expandedGroups = new Set();
 
   function isOpen() {
     return open;
@@ -131,6 +143,56 @@ export function initTokenBreakdownPanel({
     if (canJump) renderSkillAction(row);
     item.appendChild(row);
     list.appendChild(item);
+  }
+
+  /**
+   * Eine Gruppe: Summe immer sichtbar, Einzelposten erst auf Klick.
+   *
+   * Zugeklappt ist der Ausgangszustand — die erste Frage lautet „wo geht der
+   * Platz hin", nicht „welcher Skill genau". Wer aufklappt, bleibt aufgeklappt:
+   * `expandedGroups` überlebt das Neuzeichnen nach einer neuen Antwort und das
+   * Schließen der Fläche, sonst müsste man nach jeder Anfrage wieder klicken.
+   */
+  function renderGroup(group) {
+    const item = el('li', 'token-breakdown__group');
+    const expanded = expandedGroups.has(group.group);
+    if (expanded) item.classList.add('token-breakdown__group--open');
+
+    const rowsId = `chat-token-breakdown-rows-${group.group}`;
+    const head = el('button', 'token-breakdown__group-head');
+    head.type = 'button';
+    head.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    head.setAttribute('aria-controls', rowsId);
+    head.dataset.group = group.group;
+
+    const headLine = el('span', 'token-breakdown__group-line');
+    headLine.insertAdjacentHTML('beforeend', CHEVRON_ICON_HTML);
+    const groupFigures = el('span', 'token-breakdown__figures');
+    groupFigures.append(
+      el('span', 'token-breakdown__group-tokens', formatTokensShort(group.tokens)),
+      el('span', 'token-breakdown__group-share', formatShare(group.share))
+    );
+    headLine.append(
+      el('span', 'token-breakdown__group-label', group.label),
+      el(
+        'span',
+        'token-breakdown__group-count',
+        group.parts.length === 1 ? '1 Posten' : `${group.parts.length} Posten`
+      ),
+      groupFigures
+    );
+    head.appendChild(headLine);
+    // Der Balken gehört zur Summe, nicht zum Detail: Er zeigt auch zugeklappt,
+    // welche Gruppe den Prompt dominiert.
+    head.appendChild(buildBar(group.share));
+    item.appendChild(head);
+
+    const rows = el('ul', 'token-breakdown__rows');
+    rows.id = rowsId;
+    rows.hidden = !expanded;
+    for (const part of group.parts) renderRow(rows, part);
+    item.appendChild(rows);
+    return item;
   }
 
   function render() {
@@ -174,21 +236,7 @@ export function initTokenBreakdownPanel({
 
     const groups = groupContextParts(breakdown);
     const list = el('ul', 'token-breakdown__list');
-    for (const group of groups) {
-      const groupItem = el('li', 'token-breakdown__group');
-      const heading = el('div', 'token-breakdown__group-head');
-      const groupFigures = el('span', 'token-breakdown__figures');
-      groupFigures.append(
-        el('span', 'token-breakdown__group-tokens', formatTokensShort(group.tokens)),
-        el('span', 'token-breakdown__group-share', formatShare(group.share))
-      );
-      heading.append(el('span', 'token-breakdown__group-label', group.label), groupFigures);
-      groupItem.appendChild(heading);
-      const rows = el('ul', 'token-breakdown__rows');
-      for (const part of group.parts) renderRow(rows, part);
-      groupItem.appendChild(rows);
-      list.appendChild(groupItem);
-    }
+    for (const group of groups) list.appendChild(renderGroup(group));
     panel.appendChild(list);
 
     panel.appendChild(
@@ -244,6 +292,21 @@ export function initTokenBreakdownPanel({
   });
 
   panel?.addEventListener('click', (event) => {
+    const head = event.target.closest?.('.token-breakdown__group-head');
+    if (head) {
+      // An Ort und Stelle umschalten statt neu zu zeichnen: Die Fläche scrollt,
+      // und ein Neuaufbau würde beim Aufklappen unter dem Finger wegspringen.
+      const group = head.dataset.group;
+      const expanded = head.getAttribute('aria-expanded') === 'true';
+      const rows = head.parentElement?.querySelector('.token-breakdown__rows');
+      if (expanded) expandedGroups.delete(group);
+      else expandedGroups.add(group);
+      head.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      head.parentElement?.classList.toggle('token-breakdown__group--open', !expanded);
+      if (rows) rows.hidden = expanded;
+      return;
+    }
+
     const row = event.target.closest?.('.token-breakdown__row--action');
     if (!row) return;
     const name = row.dataset.skillName;
