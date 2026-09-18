@@ -5,6 +5,8 @@ const { createChatEngine, CHAT_ENGINE_EVENTS } = require('../src/application/cha
 const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
 const { TOOL_LINE_PHASES } = require('../src/shared/contracts/enums');
 const { sleepAbortable } = require('../src/shared/runtime/abort');
+const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { TOOL_RESULTS_ARE_DATA_RULE } = require('../src/shared/contracts/tool-permissions');
 
 const WRITE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
 
@@ -256,6 +258,53 @@ test('engine bietet Tools ohne Ordnerbezug auch ohne geöffneten Ordner an (#96)
   assert.match(system.content, /Tools: web_search/);
   // Der Pfad-Hinweis der Datei-Tools hat hier nichts zu suchen.
   assert.doesNotMatch(system.content, /geöffneten Ordner „/);
+});
+
+// Issue #182: Die Engine liest den Rueckgabewert von `buildSystemPrompt()`
+// zugleich als „es gibt Tools". Waere der Konventionsblock leer, faellt ueber
+// `buildNoWorkspaceSystemPrompt` der ganze Baustein weg — samt der Regel, dass
+// Tool-Ergebnisse Daten sind. Deshalb hier gegen die **echte** Registry, nicht
+// gegen die Attrappe.
+function makeRealRegistryToolPort() {
+  const stub = new Proxy({}, { get: () => () => true });
+  const registry = createWorkspaceToolRegistry({
+    fsService: stub,
+    webSearch: stub,
+    pythonRunner: stub,
+    urlFetch: stub,
+    shellRunner: stub,
+  });
+  const port = makeToolPort(undefined, { toolDefs: WORKSPACE_FREE_TOOLS });
+  return { ...port, buildSystemPrompt: (options) => registry.buildSystemPrompt(options) };
+}
+
+test('ohne Projektordner bleibt die Regel „Tool-Ergebnisse sind Daten" stehen (#182)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], { tools: makeRealRegistryToolPort() });
+
+  await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system, 'ohne Ordner, aber mit Tools gehört ein System-Prompt dazu');
+  assert.match(system.content, /Es ist kein Projektordner geöffnet/);
+  assert.ok(
+    system.content.includes(TOOL_RESULTS_ARE_DATA_RULE),
+    'die Prompt-Injection-Regel darf nicht mit der Tool-Liste weggefallen sein'
+  );
+});
+
+test('mit Projektordner steht die Regel ebenfalls im System-Prompt (#182)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], { tools: makeRealRegistryToolPort() });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.ok(system.content.includes(TOOL_RESULTS_ARE_DATA_RULE));
+  // Der Konventionsblock steht darin, die Aufzaehlung der Tool-Namen nicht.
+  assert.match(system.content, /relativ zum Ordnerroot/);
+  assert.doesNotMatch(system.content, /Du hast folgende Tools/);
 });
 
 test('engine lässt Datei-Tools ohne Ordner unverändert draußen (#96)', async () => {

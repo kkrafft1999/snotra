@@ -35,8 +35,9 @@ test('web_search erscheint dem Modell nur mit hinterlegtem Schlüssel', () => {
   assert.equal(names(mit).includes('web_search'), true);
 
   // Im System-Prompt taucht es entsprechend auch nur mit Schlüssel auf.
-  assert.equal(ohne.buildSystemPrompt().includes('web_search'), false);
-  assert.match(mit.buildSystemPrompt(), /web_search/);
+  // Seit #182 zaehlt der System-Prompt keine Tool-Namen mehr auf.
+  assert.equal(ohne.getTools().some((t) => t.function.name === 'web_search'), false);
+  assert.equal(mit.getTools().some((t) => t.function.name === 'web_search'), true);
 });
 
 test('web_search steht im Katalog der Einstellungen, auch ohne Schlüssel', () => {

@@ -75,6 +75,12 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
       // Skill eingeschaltet ist (Issue #173).
       requiresSkills: definition.requiresSkills === true,
+      // Was dieses Tool beim Durchlaufen ueberspringt (Issue #182): `hidden` =
+      // Eintraege mit Punkt-Praefix, `ignored` = Muster aus der .gitignore des
+      // Projektroots. Steht einmal im Konventionsblock statt in jeder
+      // Beschreibung — und wird von dort aus den sichtbaren Tools gebaut,
+      // damit der Satz nicht behauptet, was ein abgewaehltes Tool tut.
+      skips: Array.isArray(definition.skips) ? definition.skips : [],
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
@@ -191,29 +197,81 @@ function createToolRegistry(initialDefinitions = []) {
     }));
   }
 
+  /** Namen einer Liste als Aufzaehlung: „a, b und c". */
+  function joinNames(names) {
+    if (names.length <= 1) return names.join('');
+    return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
+  }
+
+  /**
+   * Konventionsblock fuer den System-Prompt (Issue #182).
+   *
+   * Hier stand bis #182 eine Prosa-Liste aller Tool-Namen — 1.806 Zeichen
+   * ≈ 300 Token je Runde, die ausschliesslich wiederholte, was ohnehin als
+   * Schema im `tools`-Feld der Anfrage steht. Alle fuenf Provider uebergeben
+   * die Tools nativ; keiner haengt an der Prosa-Fassung.
+   *
+   * Was bleibt, ist das, was fuer die Tools **als Gruppe** gilt und nirgendwo
+   * sonst steht. Zwei Bedingungen dafuer:
+   *
+   *  1. Der Block ist **nie leer**, sobald ein Tool sichtbar ist. Sein
+   *     Rueckgabewert ist fuer die Engine zugleich das Signal „es gibt Tools":
+   *     `buildNoWorkspaceSystemPrompt` liefert bei leerem Block gar nichts
+   *     mehr — samt `TOOL_RESULTS_ARE_DATA_RULE`. Ein leerer Block waere also
+   *     kein Sparen, sondern ein Sicherheitsverlust. Deshalb die
+   *     unbedingte erste Zeile.
+   *  2. Der Block ist **beschreibend, nicht pauschal**. `include_hidden` gibt
+   *     es nur an drei Tools, `.gitignore` gilt nur fuer die rekursiven. Ein
+   *     Satz wie „alle Tools ueberspringen versteckte Dateien" waere falsch —
+   *     und damit schlimmer als die Doppelung, die er ersetzt. Die Saetze
+   *     werden deshalb aus den tatsaechlich sichtbaren Tools gebaut und
+   *     nennen sie beim Namen; ein abgewaehltes Tool taucht nicht auf.
+   */
   function buildSystemPrompt(options = {}) {
     const available = getAvailableDefinitions(options);
     if (available.length === 0) return '';
 
-    const toolLines = available.map(
-      (definition) =>
-        `- ${definition.name}: ${definition.promptDescription || definition.description}`
-    );
-    let prompt = `Du hast folgende Tools zur Verfügung:\n${toolLines.join('\n')}`;
-    // Ohne Datei-Tools waere der Pfad-Hinweis sinnlos — ohne geoeffneten Ordner
-    // stehen nur die Tools ohne Ordnerbezug in der Liste (Issue #96).
+    const parts = ['Deine Tools stehen mit vollständigem Schema im tools-Feld dieser Anfrage.'];
+
+    // Ohne Datei-Tools waeren Pfad- und Groessenregel sinnlos — ohne geoeffneten
+    // Ordner stehen nur die Tools ohne Ordnerbezug zur Verfuegung (Issue #96).
     if (available.some((definition) => definition.requiresWorkspace !== false)) {
-      prompt +=
-        `\nNutze für Datei-Tools nur relative Pfade zum Ordnerroot ` +
-        `(z. B. "" oder "." für die Wurzel, "src/index.js" für eine Datei).`;
+      parts.push(
+        'Pfade der Datei-Tools sind immer relativ zum Ordnerroot ' +
+          '("" oder "." für die Wurzel, "src/index.js" für eine Datei); ' +
+          'sie verarbeiten Dateien bis 2 MB und melden darüber einen Fehler.'
+      );
+    }
+
+    // Aus den sichtbaren Tools gebaut statt fest verdrahtet (Bedingung 2).
+    const skipsHidden = available.filter((definition) => definition.skips.includes('hidden'));
+    const skipsIgnored = available.filter((definition) => definition.skips.includes('ignored'));
+    if (skipsHidden.length > 0) {
+      let sentence = `${joinNames(skipsHidden.map((d) => d.name))} überspringen versteckte Einträge (Punkt-Präfix)`;
+      if (skipsIgnored.length > 0) {
+        sentence +=
+          `, ${joinNames(skipsIgnored.map((d) => d.name))} zusätzlich alles, was die .gitignore ` +
+          'des Projektroots ausschließt; .git bleibt immer außen vor';
+      }
+      parts.push(
+        // Ohne diesen Hinweis ist ein leeres Ergebnis nicht von „gibt es
+        // nicht" zu unterscheiden — eine stille Falschantwort ohne
+        // Selbstkorrektur, die teuerste Fehlerklasse (Issue #183).
+        `${sentence}. Ein leeres Ergebnis kann deshalb heißen, dass es Treffer gibt, ` +
+          'sie aber übersprungen wurden.'
+      );
+    }
+    if (available.some((definition) => definition.parameters?.properties?.include_hidden)) {
+      parts.push('Wo ein Tool den Parameter include_hidden hat, nimmt true die versteckten Einträge hinzu.');
     }
 
     if (available.some((definition) => definition.riskClass === TOOL_RISK_CLASSES.WRITE)) {
-      prompt +=
-        ` Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung oder neue Datei wünscht, ` +
-        `und fasse danach kurz zusammen, was du geschrieben hast.`;
+      parts.push(
+        'Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung ' +
+          'oder neue Datei wünscht, und fasse danach kurz zusammen, was du geschrieben hast.'
+      );
     }
-    return prompt;
+    return parts.join('\n');
   }
 
   /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
@@ -273,6 +331,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'list_directory',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
@@ -419,6 +478,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'search_in_files',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck ' +
@@ -483,6 +543,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'find_files',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Findet Dateien und Ordner im Projektordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
@@ -587,6 +648,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'list_directory_tree',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler ' +
