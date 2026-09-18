@@ -69,6 +69,19 @@ const {
   SUGGESTION_THRESHOLD,
 } = require('./skill-suggestion');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
+const {
+  CONTEXT_BREAKDOWN_VERSION,
+  CONTEXT_PART_GROUPS,
+  CONTEXT_PART_GROUP_ORDER,
+  CONTEXT_PART_GROUP_LABELS,
+  CONTEXT_CONTENT_KINDS,
+  CHARS_PER_TOKEN,
+  estimateTokensFromChars,
+  createContextPart,
+  createContextBreakdown,
+  normalizeContextBreakdown,
+  groupContextParts,
+} = require('./context-breakdown');
 const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
   TOOL_CATEGORIES,
@@ -220,6 +233,17 @@ module.exports = {
   normalizeUsage,
   coerceUsage,
   mergeUsage,
+  CONTEXT_BREAKDOWN_VERSION,
+  CONTEXT_PART_GROUPS,
+  CONTEXT_PART_GROUP_ORDER,
+  CONTEXT_PART_GROUP_LABELS,
+  CONTEXT_CONTENT_KINDS,
+  CHARS_PER_TOKEN,
+  estimateTokensFromChars,
+  createContextPart,
+  createContextBreakdown,
+  normalizeContextBreakdown,
+  groupContextParts,
   DEBUG_WAIT,
   resolveDebugWaitMs,
   TOOL_CATEGORIES,

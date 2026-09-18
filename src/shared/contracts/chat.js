@@ -73,21 +73,37 @@ function sanitizeChatTitle(raw) {
  *   contextUsage  Usage der letzten LLM-Runde. Deren `prompt` ist die Groesse
  *                 des Kontextfensters, das zuletzt tatsaechlich an das Modell
  *                 ging — das zeigt der Token-Zaehler im Composer.
- * contextUsage wird nur aufgenommen, wenn es uebergeben wurde, damit die
+ *   contextBreakdown  Woraus dieses Kontextfenster besteht (Issue #174):
+ *                 geschaetzte Anteile je Skill, Tool-Gruppe und Verlauf.
+ * Beide werden nur aufgenommen, wenn sie uebergeben wurden, damit die
  * bestehenden Wire-Formen unveraendert bleiben.
  */
 
 /** Erfolgreiches Chat-Ergebnis (Modell hat geantwortet, keine Tools mehr offen). */
-function createChatResult({ content = '', toolTrace = [], usage = null, contextUsage } = {}) {
+function createChatResult({
+  content = '',
+  toolTrace = [],
+  usage = null,
+  contextUsage,
+  contextBreakdown,
+} = {}) {
   const result = { content, toolTrace, usage };
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
   return result;
 }
 
 /** Vom Nutzer bzw. per AbortSignal abgebrochenes Chat-Ergebnis. */
-function createCancelledChatResult({ content = '', toolTrace = [], usage = null, contextUsage } = {}) {
+function createCancelledChatResult({
+  content = '',
+  toolTrace = [],
+  usage = null,
+  contextUsage,
+  contextBreakdown,
+} = {}) {
   const result = { cancelled: true, content, toolTrace, usage };
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
   return result;
 }
 
@@ -96,10 +112,18 @@ function createCancelledChatResult({ content = '', toolTrace = [], usage = null,
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  */
-function createChatErrorResult({ error, code = CHAT_ERROR_CODES.INVALID, usage, contextUsage, toolTrace } = {}) {
+function createChatErrorResult({
+  error,
+  code = CHAT_ERROR_CODES.INVALID,
+  usage,
+  contextUsage,
+  contextBreakdown,
+  toolTrace,
+} = {}) {
   const result = { error, code };
   if (usage !== undefined) result.usage = usage;
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
+  if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
   // Nur bei Abbruch durch verfallene Freigabe (Issue #66): die bis dahin
   // gelaufenen Tool-Schritte bleiben im Verlauf sichtbar.
   if (Array.isArray(toolTrace) && toolTrace.length > 0) result.toolTrace = toolTrace;

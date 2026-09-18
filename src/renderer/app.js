@@ -219,6 +219,10 @@ const chatStream = initChatStream({
     return fileTree.notifyExternalFileWrite(relativePath);
   },
   approvalCards,
+  // Sprung von einer Skill-Zeile der Token-Aufschlüsselung zu ihrem Schalter
+  // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert
+  // erst zur Laufzeit.
+  openSkillSettings: (skillName) => settingsModal.openSettingsModal({ panel: 'skills', skillName }),
 });
 
 const chatHistory = initChatHistoryDrawer({

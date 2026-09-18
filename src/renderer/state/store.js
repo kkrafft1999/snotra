@@ -22,6 +22,10 @@ export const appStore = {
   chatSendSeq: 0,
   chatAbortedSendSeq: 0,
   chatTokenUsage: { prompt: 0, completion: 0, total: 0 },
+  // Woraus der zuletzt gesendete Prompt bestand (Issue #174). Lebt nur in
+  // dieser Sitzung: Ein wiederhergestellter Chat kennt die Aufteilung seiner
+  // alten Anfragen nicht mehr, die Anzeige sagt das dann auch.
+  chatContextBreakdown: null,
   currentChatId: '',
   currentChatWorkspace: null,
   // Titel der geladenen Konversation. Leer bei einem neuen Chat — dann leitet

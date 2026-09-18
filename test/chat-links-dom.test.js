@@ -148,8 +148,10 @@ test('scheitert das Oeffnen, sagt es die Statuszeile statt still zu bleiben', as
   clickOn(linkIn('Doku'));
   await flush();
 
+  // Der Hinweis steht in der Textzelle der Token-Anzeige — seit Issue #174
+  // ist die Anzeige selbst ein Schalter mit Aufschlüsselung.
   assert.equal(
-    document.getElementById('chat-token-usage').textContent,
+    document.getElementById('chat-token-usage-value').textContent,
     'Kein Standardbrowser gefunden.'
   );
 });
@@ -162,5 +164,5 @@ test('wirft der Main-Prozess, bleibt der Klick trotzdem beantwortet', async () =
   clickOn(linkIn('Doku'));
   await flush();
 
-  assert.equal(document.getElementById('chat-token-usage').textContent, 'IPC weg');
+  assert.equal(document.getElementById('chat-token-usage-value').textContent, 'IPC weg');
 });

@@ -3,9 +3,16 @@
 const { isAbortError, createChatAbortError } = require('../../shared/runtime/abort');
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
-const { normalizeAttachments } = require('../../shared/contracts/attachments');
+const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { parseQualifiedMcpToolName } = require('../../shared/contracts/mcp');
+const {
+  CONTEXT_PART_GROUPS,
+  CONTEXT_CONTENT_KINDS,
+  createContextPart,
+  createContextBreakdown,
+} = require('../../shared/contracts/context-breakdown');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -195,28 +202,32 @@ function collectInvokedSkillNames(messages) {
  *    Nutzer abgeschaltet oder per Allowlist ausgesperrt). Ohne diesen
  *    Rückfall würden Skills still wirkungslos, und genau das wäre der
  *    Fehler, den niemand bemerkt.
+ *
+ * @returns {{ text: string, parts: object[] }} Der Prompttext und seine
+ *   Bausteine je Skill für die Token-Aufschlüsselung (Issue #174).
  */
 function buildSkillsSystemPrompt(
   activeSkills,
   { toolsAvailable = false, canLoadSkills = false } = {}
 ) {
-  if (!Array.isArray(activeSkills) || activeSkills.length === 0) return '';
+  const empty = { text: '', parts: [] };
+  if (!Array.isArray(activeSkills) || activeSkills.length === 0) return empty;
   const usable = activeSkills.filter(
     (skill) => skill && typeof skill.body === 'string' && skill.body.trim()
   );
-  if (usable.length === 0) return '';
+  if (usable.length === 0) return empty;
 
   // Ohne Nachlade-Tool bleibt es beim alten Verhalten: alles sofort.
   const eager = canLoadSkills ? usable.filter((skill) => skill.invoked) : usable;
   const lazy = canLoadSkills ? usable.filter((skill) => !skill.invoked) : [];
 
   const intro = [];
+  const catalogLines = lazy.map((skill) => `- ${skill.name}: ${describeSkillForCatalog(skill)}`);
   if (lazy.length > 0) {
-    const lines = lazy.map((skill) => `- ${skill.name}: ${describeSkillForCatalog(skill)}`);
     intro.push(
       'Folgende Skills sind eingeschaltet. Hier steht nur, wofür jeder da ist — ' +
         'die eigentliche Anleitung holst du dir mit „load_skill“.\n' +
-        lines.join('\n')
+        catalogLines.join('\n')
     );
     intro.push(
       'Passt die Beschreibung eines Skills zu dem, was ansteht, rufe „load_skill“ ' +
@@ -259,7 +270,281 @@ function buildSkillsSystemPrompt(
   }
 
   const sections = eager.map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
-  return [...intro, ...sections].join('\n\n');
+  const text = [...intro, ...sections].join('\n\n');
+
+  // Aufschlüsselung fuer die Token-Anzeige (Issue #174): je Skill eine Zeile,
+  // damit sichtbar wird, welcher Skill wie viel vom Prompt belegt. Der
+  // Rahmentext (Hinweise zu load_skill, Skill-Pfaden, „/name") gehoert keinem
+  // einzelnen Skill und bekommt deshalb eine eigene Zeile.
+  const parts = [];
+  let catalogChars = 0;
+  lazy.forEach((skill, index) => {
+    const chars = catalogLines[index].length;
+    catalogChars += chars;
+    parts.push(
+      createContextPart({
+        id: `skill:${skill.name}`,
+        group: CONTEXT_PART_GROUPS.SKILLS,
+        label: skill.name,
+        detail: 'nur Kurzbeschreibung',
+        chars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+        skillName: skill.name,
+      })
+    );
+  });
+  eager.forEach((skill, index) => {
+    parts.push(
+      createContextPart({
+        id: `skill:${skill.name}`,
+        group: CONTEXT_PART_GROUPS.SKILLS,
+        label: skill.name,
+        detail: 'vollständige Anleitung im Prompt',
+        chars: sections[index].length,
+        contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
+        skillName: skill.name,
+      })
+    );
+  });
+  const introChars = Math.max(0, intro.join('\n\n').length - catalogChars);
+  if (introChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'skills:intro',
+        group: CONTEXT_PART_GROUPS.SKILLS,
+        label: 'Hinweise zu den Skills',
+        detail: 'gilt für alle eingeschalteten Skills',
+        chars: introChars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+
+  return { text, parts };
+}
+
+/* ── Aufschlüsselung des Kontextfensters (Issue #174) ────────────────────────
+ * Die Engine ist die einzige Stelle, die weiss, woraus der Prompt besteht. Sie
+ * zaehlt hier die Zeichen ihrer Bausteine; die echte Tokenzahl kommt danach
+ * vom Anbieter und verteilt sich auf sie (context-breakdown.js).
+ */
+
+/** Zeichen eines Tool-Schemas, so wie es an den Anbieter geht. */
+function toolDefinitionChars(definition) {
+  try {
+    return JSON.stringify(definition ?? {}).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Tool-Definitionen als Zeilen: die eingebauten zusammen, jeder MCP-Server
+ * einzeln. Wer sieht, dass ein Server 4.000 Token kostet, kann ihn abschalten;
+ * eine Sammelzeile „Tools" wuerde genau das verbergen.
+ */
+function buildToolContextParts(toolDefs) {
+  const list = Array.isArray(toolDefs) ? toolDefs : [];
+  let builtinChars = 0;
+  let builtinCount = 0;
+  const servers = new Map();
+  for (const definition of list) {
+    const chars = toolDefinitionChars(definition);
+    const mcp = parseQualifiedMcpToolName(definition?.function?.name);
+    if (mcp) {
+      const entry = servers.get(mcp.serverId) || { chars: 0, count: 0 };
+      entry.chars += chars;
+      entry.count += 1;
+      servers.set(mcp.serverId, entry);
+      continue;
+    }
+    builtinChars += chars;
+    builtinCount += 1;
+  }
+
+  const parts = [];
+  if (builtinChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'tools:builtin',
+        group: CONTEXT_PART_GROUPS.TOOLS,
+        label: 'Eingebaute Tools',
+        detail: `${builtinCount} Schemas`,
+        chars: builtinChars,
+        contentKind: CONTEXT_CONTENT_KINDS.JSON,
+        count: builtinCount,
+      })
+    );
+  }
+  for (const [serverId, entry] of servers) {
+    parts.push(
+      createContextPart({
+        id: `tools:mcp:${serverId}`,
+        group: CONTEXT_PART_GROUPS.TOOLS,
+        label: `MCP · ${serverId}`,
+        detail: `${entry.count} Schemas`,
+        chars: entry.chars,
+        contentKind: CONTEXT_CONTENT_KINDS.JSON,
+        count: entry.count,
+      })
+    );
+  }
+  return parts;
+}
+
+/** Zeichen einer Verlaufs-Nachricht, Bildanhaenge eingerechnet. */
+function messageContentChars(message) {
+  const content = message?.content;
+  if (typeof content === 'string') return content.length;
+  if (content == null) return 0;
+  try {
+    return JSON.stringify(content).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Der Verlauf in drei Zeilen: Nachrichten, Tool-Ergebnisse, Bilder. Feiner
+ * aufzuloesen (je Nachricht eine Zeile) hilft niemandem — abschalten laesst
+ * sich eine einzelne Nachricht ohnehin nicht, wohl aber ein Verlauf, der zu
+ * lang geworden ist.
+ */
+function buildHistoryContextParts(messages) {
+  let messageChars = 0;
+  let toolChars = 0;
+  let imageChars = 0;
+  let messageCount = 0;
+  let toolCount = 0;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!message || message.role === 'system') continue;
+    if (message.role === 'tool') {
+      toolChars += messageContentChars(message);
+      toolCount += 1;
+      continue;
+    }
+    messageChars += messageContentChars(message);
+    messageCount += 1;
+    if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      try {
+        toolChars += JSON.stringify(message.tool_calls).length;
+      } catch {
+        /* Ein unserialisierbarer Aufruf bleibt ungezaehlt — besser als kein Ergebnis. */
+      }
+    }
+    imageChars += attachmentsCharCost(message.attachments);
+  }
+
+  const parts = [];
+  if (messageChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'history:messages',
+        group: CONTEXT_PART_GROUPS.HISTORY,
+        label: 'Nachrichten',
+        detail: `${messageCount} im Kontextfenster`,
+        chars: messageChars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+        count: messageCount,
+      })
+    );
+  }
+  if (toolChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'history:tool-results',
+        group: CONTEXT_PART_GROUPS.HISTORY,
+        label: 'Tool-Aufrufe und -Ergebnisse',
+        detail: `${toolCount} Ergebnisse`,
+        chars: toolChars,
+        contentKind: CONTEXT_CONTENT_KINDS.JSON,
+        count: toolCount,
+      })
+    );
+  }
+  if (imageChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'history:images',
+        group: CONTEXT_PART_GROUPS.HISTORY,
+        label: 'Bildanhänge',
+        detail: 'geschätzter Anteil',
+        chars: imageChars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+  return parts;
+}
+
+/**
+ * Die Teile des Prompts, die fuer den ganzen Lauf feststehen: eigener Prompt,
+ * Skills, Umgebung, Ordnerkontext und die Tool-Schemas. Die Tool-Liste im
+ * Prompttext zaehlt zu den Tools, nicht zum Ordnerkontext — sie verschwindet
+ * mit ihnen.
+ */
+function buildStaticContextParts({
+  systemPrompt,
+  skillParts,
+  environmentSystem,
+  workspaceSystem,
+  toolsPrompt,
+  toolDefs,
+}) {
+  const parts = [];
+  if (systemPrompt) {
+    parts.push(
+      createContextPart({
+        id: 'system:base',
+        group: CONTEXT_PART_GROUPS.SYSTEM,
+        label: 'Eigener System-Prompt',
+        detail: 'Einstellungen › Allgemein',
+        chars: systemPrompt.length,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+  parts.push(...(Array.isArray(skillParts) ? skillParts : []));
+  if (environmentSystem) {
+    parts.push(
+      createContextPart({
+        id: 'system:environment',
+        group: CONTEXT_PART_GROUPS.SYSTEM,
+        label: 'Umgebungsangaben',
+        detail: 'Einstellungen › Allgemein',
+        chars: environmentSystem.length,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+  const promptListChars = typeof toolsPrompt === 'string' ? toolsPrompt.length : 0;
+  const workspaceChars = Math.max(0, (workspaceSystem || '').length - promptListChars);
+  if (workspaceChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'system:workspace',
+        group: CONTEXT_PART_GROUPS.SYSTEM,
+        label: 'Ordnerkontext',
+        detail: 'Ordner, Auswahl, Regeln',
+        chars: workspaceChars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+  if (promptListChars > 0) {
+    parts.push(
+      createContextPart({
+        id: 'tools:prompt-list',
+        group: CONTEXT_PART_GROUPS.TOOLS,
+        label: 'Tool-Liste im Prompttext',
+        detail: 'Namen und Kurzbeschreibungen',
+        chars: promptListChars,
+        contentKind: CONTEXT_CONTENT_KINDS.PROSE,
+      })
+    );
+  }
+  parts.push(...buildToolContextParts(toolDefs));
+  return parts;
 }
 
 /**
@@ -350,9 +635,16 @@ function createChatEngine({
     emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPhaseEvent(phase));
   }
 
-  function returnCancelledChat(onEvent, toolTrace, content = '', usage = null, contextUsage = null) {
+  function returnCancelledChat(
+    onEvent,
+    toolTrace,
+    content = '',
+    usage = null,
+    contextUsage = null,
+    contextBreakdown = null
+  ) {
     emitPhase(onEvent, CHAT_PHASES.IDLE);
-    return createCancelledChatResult({ content, toolTrace, usage, contextUsage });
+    return createCancelledChatResult({ content, toolTrace, usage, contextUsage, contextBreakdown });
   }
 
   // Argumente, die in der Tool-Zeile erscheinen (Pfad, Suchbegriff, Muster).
@@ -478,6 +770,8 @@ function createChatEngine({
     // Kontextfensters, das zuletzt an das Modell ging (Anzeige im Composer).
     let requestUsage = null;
     let contextUsage = null;
+    // Woraus sich der zuletzt gesendete Prompt zusammensetzt (Issue #174).
+    let contextBreakdown = null;
 
     try {
       const messages = payload?.messages;
@@ -569,10 +863,10 @@ function createChatEngine({
       const canLoadSkills = availableToolDefs.some(
         (definition) => definition?.function?.name === LOAD_SKILL_TOOL
       );
-      const skillsSystem = buildSkillsSystemPrompt(activeSkills, {
-        toolsAvailable: workspaceOpen,
-        canLoadSkills,
-      });
+      const { text: skillsSystem, parts: skillContextParts } = buildSkillsSystemPrompt(
+        activeSkills,
+        { toolsAvailable: workspaceOpen, canLoadSkills }
+      );
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
       // könne keine Dateien lesen oder schreiben.
@@ -606,6 +900,17 @@ function createChatEngine({
       const combinedSystem = [systemPrompt, skillsSystem, environmentSystem, workspaceSystem]
         .filter((part) => typeof part === 'string' && part.trim())
         .join('\n\n');
+
+      // Woraus dieser Prompt besteht (Issue #174). Die Teile stehen jetzt fest;
+      // nur der Verlauf waechst mit jeder Tool-Runde und wird dort gezaehlt.
+      const staticContextParts = buildStaticContextParts({
+        systemPrompt,
+        skillParts: skillContextParts,
+        environmentSystem,
+        workspaceSystem,
+        toolsPrompt,
+        toolDefs: availableToolDefs,
+      });
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
@@ -973,7 +1278,7 @@ function createChatEngine({
 
       for (let round = 0; round < toolRoundLimit; round += 1) {
         if (abortSignal.aborted) {
-          return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
+          return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
         }
 
         emitPhase(onEvent, CHAT_PHASES.WAITING);
@@ -990,20 +1295,36 @@ function createChatEngine({
           );
         }
 
+        const sentMessages = stripSensitiveMarkers(apiMessages);
+        // Der Verlauf ist der einzige Teil, der zwischen den Runden waechst —
+        // Tool-Ergebnisse kommen hinzu (Issue #174).
+        const roundContextParts = [
+          ...staticContextParts,
+          ...buildHistoryContextParts(sentMessages),
+        ];
+
         const streamed = await llm.streamRound({
           target,
           sendBundle,
-          messages: stripSensitiveMarkers(apiMessages),
+          messages: sentMessages,
           tools: toolDefs,
           callbacks,
           abortSignal,
         });
         requestUsage = mergeUsage(requestUsage, streamed.usage);
         // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
-        contextUsage = normalizeUsage(streamed.usage) || contextUsage;
+        const roundUsage = normalizeUsage(streamed.usage);
+        contextUsage = roundUsage || contextUsage;
+        // Ohne Usage des Anbieters bleibt die Aufschlüsselung eine reine
+        // Schaetzung (promptTokens 0) — sie beschreibt trotzdem genau die
+        // Anfrage, die gerade hinausging.
+        contextBreakdown = createContextBreakdown({
+          parts: roundContextParts,
+          promptTokens: roundUsage ? roundUsage.prompt : 0,
+        });
 
         if (streamed.cancelled) {
-          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, contextUsage);
+          return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, contextUsage, contextBreakdown);
         }
         if (streamed.error) {
           emitPhase(onEvent, CHAT_PHASES.IDLE);
@@ -1012,6 +1333,7 @@ function createChatEngine({
             code: streamed.code || CHAT_ERROR_CODES.API,
             usage: requestUsage,
             contextUsage,
+            contextBreakdown,
           });
         }
 
@@ -1029,13 +1351,14 @@ function createChatEngine({
             toolTrace,
             usage: requestUsage,
             contextUsage,
+            contextBreakdown,
           });
         }
 
         for (let callIndex = 0; callIndex < toolCalls.length; callIndex += 1) {
           const toolCall = toolCalls[callIndex];
           if (abortSignal.aborted) {
-            return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
+            return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
           }
           const toolName = toolCall.function?.name || 'tool';
           const args = parseToolArguments(toolCall.function?.arguments);
@@ -1061,7 +1384,7 @@ function createChatEngine({
             emitProgressPayloads(outcome.progressEvents);
           } catch (error) {
             if (isAbortError(error)) {
-              return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
+              return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
             }
             throw error;
           }
@@ -1079,6 +1402,7 @@ function createChatEngine({
               code: CHAT_ERROR_CODES.PERMISSION,
               usage: requestUsage,
               contextUsage,
+              contextBreakdown,
               toolTrace,
             });
           }
@@ -1093,10 +1417,11 @@ function createChatEngine({
         code: CHAT_ERROR_CODES.TOOL_LIMIT,
         usage: requestUsage,
         contextUsage,
+        contextBreakdown,
       });
     } catch (error) {
       if (isAbortError(error)) {
-        return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage);
+        return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
       }
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
