@@ -769,12 +769,17 @@ test('engine turns provider failures into the existing error DTO', async () => {
     payload: { messages: [{ role: 'user', content: 'Hi' }] },
   });
 
-  assert.deepEqual(result, {
+  const { contextBreakdown, ...dto } = result;
+  assert.deepEqual(dto, {
     error: 'Kontingent erschöpft',
     code: 'RATE_LIMIT',
     usage: null,
     contextUsage: null,
   });
+  // Auch die gescheiterte Anfrage sagt, woraus sie bestand (Issue #174) —
+  // ohne Usage des Anbieters bleibt es bei der Schaetzung.
+  assert.equal(contextBreakdown.scaled, false);
+  assert.ok(contextBreakdown.parts.length > 0);
 });
 
 test('engine emits pending tool lines while the model still streams a tool call', async () => {
@@ -1318,4 +1323,96 @@ test('engine haengt Nachrichten ohne Bild kein leeres attachments-Feld an', asyn
 
   const sent = calls[0].messages.find((m) => m.role === 'user');
   assert.equal('attachments' in sent, false);
+});
+
+test('engine schlüsselt den Prompt nach Skills, Tools und Verlauf auf (#174)', async () => {
+  const { engine } = makeEngine(
+    [assistantText('ok', { usage: { prompt: 4000, completion: 20, total: 4020 } })],
+    {
+      tools: makeToolPort(undefined, {
+        toolDefs: [
+          { name: 'list_directory', requiresWorkspace: true },
+          { name: 'mcp__atlassian__jira_get_issue', requiresWorkspace: false },
+          { name: 'mcp__atlassian__jira_search', requiresWorkspace: false },
+        ],
+      }),
+      skills: makeSkillPort([
+        {
+          name: 'grosser-skill',
+          description: 'Kurz',
+          source: 'system',
+          path: '/skills/grosser-skill',
+          body: 'A'.repeat(6000),
+          invoked: true,
+        },
+        {
+          name: 'kleiner-skill',
+          description: 'Auch kurz',
+          source: 'system',
+          path: '/skills/kleiner-skill',
+          body: 'B'.repeat(200),
+          invoked: true,
+        },
+      ]),
+      preferences: { async read() { return { baseSystemPrompt: 'Sei knapp.' }; } },
+    }
+  );
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Hi' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+  });
+
+  const breakdown = result.contextBreakdown;
+  assert.ok(breakdown, 'Ergebnis traegt eine Aufschlüsselung');
+  assert.equal(breakdown.scaled, true);
+  assert.equal(breakdown.promptTokens, 4000);
+  assert.equal(
+    breakdown.parts.reduce((sum, row) => sum + row.tokens, 0),
+    4000,
+    'die Zeilen gehen exakt auf die echte Zahl auf'
+  );
+
+  const byId = new Map(breakdown.parts.map((row) => [row.id, row]));
+  // Jeder eingeschaltete Skill bekommt eine eigene Zeile — das ist der Kern
+  // des Wunsches, nicht eine Sammelzeile „Skills".
+  assert.ok(byId.has('skill:grosser-skill'));
+  assert.ok(byId.has('skill:kleiner-skill'));
+  assert.equal(byId.get('skill:grosser-skill').skillName, 'grosser-skill');
+  assert.ok(
+    byId.get('skill:grosser-skill').tokens > byId.get('skill:kleiner-skill').tokens * 5,
+    'der grosse Skill kostet sichtbar mehr'
+  );
+  // Tools getrennt nach eingebaut und je MCP-Server.
+  assert.ok(byId.has('tools:builtin'));
+  assert.equal(byId.get('tools:mcp:atlassian').count, 2);
+  assert.equal(byId.get('system:base').group, 'system');
+  assert.equal(byId.get('history:messages').group, 'history');
+});
+
+test('engine zaehlt Tool-Ergebnisse der letzten Runde in den Verlauf (#174)', async () => {
+  const bigOutput = JSON.stringify({ text: 'C'.repeat(5000) });
+  const { engine } = makeEngine(
+    [
+      assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+      assistantText('Fertig.', { usage: { prompt: 3000, completion: 10, total: 3010 } }),
+    ],
+    { tools: makeToolPort(() => bigOutput, { toolDefs: [{ name: 'read_file_text', requiresWorkspace: true }] }) }
+  );
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Lies a.js' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+  });
+
+  const row = result.contextBreakdown.parts.find((p) => p.id === 'history:tool-results');
+  assert.ok(row, 'Tool-Ergebnisse stehen als eigene Zeile im Verlauf');
+  assert.equal(row.count, 1);
+  assert.ok(row.share > 0.5, `Das grosse Ergebnis dominiert den Prompt, war aber ${row.share}`);
 });

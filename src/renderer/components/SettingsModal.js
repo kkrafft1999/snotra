@@ -1084,7 +1084,16 @@ export function initSettingsModal(deps) {
     btnOpenAddModel?.focus?.();
   }
 
-  async function openSettingsModal() {
+  /**
+   * @param {{ panel?: string, skillName?: string }} [request]
+   *   Optionaler Sprung an eine bestimmte Stelle — heute aus der
+   *   Token-Aufschlüsselung im Composer zum Schalter eines Skills (Issue #174).
+   *   Der Knopf im Chat haengt direkt als Click-Handler dran und liefert ein
+   *   Event; deshalb wird nur ein echtes Options-Objekt beachtet.
+   */
+  async function openSettingsModal(request) {
+    const jump =
+      request && typeof request === 'object' && typeof request.panel === 'string' ? request : null;
     stopChatVoiceListening();
     setModalError('');
     setProviderStatus('');
@@ -1106,7 +1115,7 @@ export function initSettingsModal(deps) {
       btnSettingsSave.disabled = false;
     }
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
-    activateSettingsPanel('models');
+    activateSettingsPanel(jump && SETTINGS_NAV_LABELS[jump.panel] ? jump.panel : 'models');
     try {
       const up = await api.getUIPrefs();
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
@@ -1159,6 +1168,9 @@ export function initSettingsModal(deps) {
     syncPopupProviderUI(selectProvider.value, true);
 
     queueMicrotask(() => {
+      // Mit Sprungziel steht der Fokus auf dem gemeinten Schalter, sonst wie
+      // bisher auf dem ersten Reiter.
+      if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
       try {
         settingsNavTabs[0]?.focus();
       } catch {
@@ -1166,6 +1178,21 @@ export function initSettingsModal(deps) {
         fb[0]?.focus();
       }
     });
+  }
+
+  /**
+   * Schalter eines Skills in die Sicht holen und fokussieren. Liefert false,
+   * wenn es ihn nicht (mehr) gibt — dann bleibt es beim Standardfokus.
+   */
+  function focusSkillSwitch(skillName) {
+    if (!settingsSkillList) return false;
+    const input = settingsSkillList.querySelector(
+      `input[type="checkbox"][data-skill-name="${CSS.escape(skillName)}"]`
+    );
+    if (!input) return false;
+    input.scrollIntoView({ block: 'center' });
+    input.focus();
+    return true;
   }
 
   function closeSettingsModal() {

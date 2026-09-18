@@ -24,6 +24,8 @@ import {
 import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-debug.js';
 // Bereinigtes Berechtigungs-Audit je Tool-Zeile (Issue #67): Tooltip und Zustand.
 import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
+// Aufschlüsselung hinter der Token-Anzeige (Issue #174).
+import { initTokenBreakdownPanel } from './TokenBreakdownPanel.js';
 
 const { coerceUsage, createEmptyUsage, toolCategoryForEntry, inferChatTitle } = contracts;
 
@@ -460,19 +462,36 @@ export function initChatStream({
   syncChatTitle,
   onWorkspaceFileWritten,
   approvalCards,
+  openSkillSettings,
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
   const btnChatSend = document.getElementById('btn-chat-send');
   const chatTokenUsageEl = document.getElementById('chat-token-usage');
+  const chatTokenUsageValueEl = document.getElementById('chat-token-usage-value');
+  const chatTokenBreakdownEl = document.getElementById('chat-token-breakdown');
   const chatAttachmentsEl = document.getElementById('chat-attachments');
 
   // Anhaenge des noch nicht abgeschickten Zuges (Issue #84). Sie leben nur im
   // Composer; mit dem Senden wandern sie an die Nachricht.
   let pendingAttachments = [];
 
-  function setChatTokenUsage(usage) {
+  const tokenBreakdownPanel = initTokenBreakdownPanel({
+    trigger: chatTokenUsageEl,
+    panel: chatTokenBreakdownEl,
+    getState: () => ({
+      breakdown: appStore.chatContextBreakdown,
+      usage: appStore.chatTokenUsage,
+      inFlight: !!appStore.chatInFlight,
+    }),
+    // Wer sieht, dass ein Skill 3.000 Token kostet, will ihn sofort
+    // abschalten können (Issue #174).
+    onOpenSkillSettings: (name) => openSkillSettings?.(name),
+  });
+
+  function setChatTokenUsage(usage, { breakdown = null } = {}) {
     appStore.chatTokenUsage = coerceUsage(usage);
+    appStore.chatContextBreakdown = breakdown;
     syncChatTokenUsageDisplay();
   }
 
@@ -487,10 +506,12 @@ export function initChatStream({
   function syncChatTokenUsageDisplay() {
     if (!chatTokenUsageEl) return;
     const usage = appStore.chatTokenUsage || createEmptyUsage();
-    chatTokenUsageEl.textContent = formatChatTokenUsage(usage.prompt);
+    if (chatTokenUsageValueEl) chatTokenUsageValueEl.textContent = formatChatTokenUsage(usage.prompt);
     chatTokenUsageEl.title =
       `Kontextfenster der letzten Anfrage: ${tokenCountFormatter.format(usage.prompt)} Tokens ` +
-      `(Antwort: ${tokenCountFormatter.format(usage.completion)} Tokens)`;
+      `(Antwort: ${tokenCountFormatter.format(usage.completion)} Tokens). ` +
+      'Klicken für die Aufschlüsselung.';
+    tokenBreakdownPanel.refresh();
   }
 
   function applyUsageFromResult(result) {
@@ -499,6 +520,9 @@ export function initChatStream({
     const usage = result?.contextUsage ?? result?.usage;
     if (!usage) return;
     appStore.chatTokenUsage = coerceUsage(usage);
+    // Die Aufschlüsselung gehoert zu genau dieser Zahl (Issue #174) — fehlt
+    // sie, bleibt keine alte stehen, die etwas anderes beschreibt.
+    appStore.chatContextBreakdown = result?.contextBreakdown ?? null;
     syncChatTokenUsageDisplay();
   }
   function syncChatSendButton() {
@@ -508,6 +532,9 @@ export function initChatStream({
     btnChatSend.title = inFlight ? 'Antwort abbrechen' : 'Senden';
     btnChatSend.setAttribute('aria-label', inFlight ? 'Antwort abbrechen' : 'Senden');
     btnChatSend.innerHTML = inFlight ? CHAT_STOP_ICON_HTML : CHAT_SEND_ICON_HTML;
+    // Die Aufschlüsselung sagt waehrend einer laufenden Anfrage dazu, dass
+    // ihre Werte noch von der vorherigen stammen (Issue #174).
+    tokenBreakdownPanel.refresh();
   }
 
   function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines, { thinking = false, elapsedMs = 0 } = {}) {
@@ -1334,7 +1361,10 @@ export function initChatStream({
   function flashTokenUsageNote(text) {
     if (!chatTokenUsageEl) return;
     clearTimeout(tokenUsageNoteTimer);
-    chatTokenUsageEl.textContent = text;
+    // Nur den Text austauschen, nicht den Inhalt des Schalters: Die Anzeige
+    // ist seit Issue #174 ein Button mit eigener Textzelle.
+    if (chatTokenUsageValueEl) chatTokenUsageValueEl.textContent = text;
+    else chatTokenUsageEl.textContent = text;
     tokenUsageNoteTimer = setTimeout(() => {
       tokenUsageNoteTimer = 0;
       syncChatTokenUsageDisplay();

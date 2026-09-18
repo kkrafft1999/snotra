@@ -248,7 +248,23 @@
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
             </div>
             <div class="chat-composer-bar-end">
-              <p id="chat-token-usage" class="chat-token-usage" aria-live="polite">0 Tokens</p>
+              <span class="chat-token-usage-wrap">
+                <button
+                  type="button"
+                  id="chat-token-usage"
+                  class="chat-token-usage"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="chat-token-breakdown">
+                  <span id="chat-token-usage-value" aria-live="polite">0 Tokens</span>
+                </button>
+                <div
+                  id="chat-token-breakdown"
+                  class="chat-token-breakdown hidden"
+                  role="dialog"
+                  aria-labelledby="chat-token-breakdown-title"
+                  tabindex="-1"></div>
+              </span>
               <button type="button" id="btn-chat-send" title="Senden" aria-label="Senden">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="12" y1="19" x2="12" y2="5"/>

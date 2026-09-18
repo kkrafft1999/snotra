@@ -2045,15 +2045,283 @@ summary:focus-visible,
   margin: 0;
 }
 
+/* Bewusst ohne `position: relative`: Die Aufschlüsselung soll sich an der
+   Composer-Karte ausrichten (#chat-input-row), nicht an dieser schmalen Zelle.
+   Sonst haengt eine 360px breite Flaeche an einem 90px breiten Bezug und
+   laeuft bei schmalem Chat-Panel links aus dem Fenster. */
+.chat-token-usage-wrap {
+  display: inline-flex;
+}
+
+/* Die Anzeige ist seit Issue #174 ein Schalter: Ein Klick klappt auf, woraus
+   der Prompt besteht. Sie bleibt optisch eine Beschriftung — ein Button-Look
+   an dieser Stelle wuerde mit dem Senden-Knopf daneben konkurrieren. */
 .chat-token-usage {
   margin: 0;
-  padding: 0 6px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
   font-size: 11px;
   line-height: 1.3;
   color: var(--text-muted-strong);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   user-select: none;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.chat-token-usage:hover,
+.chat-token-usage[aria-expanded='true'] {
+  border-color: var(--ds-blue-border);
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
+.chat-token-breakdown {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  z-index: 60;
+  width: 360px;
+  /* Nie breiter als die Composer-Karte — ein schmales Chat-Panel schneidet
+     sonst die linke Haelfte ab. */
+  max-width: calc(100% - 16px);
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+  padding: 12px 0 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: 6px;
+  box-shadow: var(--ds-overlay-shadow);
+  text-align: left;
+}
+
+.chat-token-breakdown.hidden {
+  display: none;
+}
+
+.token-breakdown__header {
+  padding: 0 14px 10px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.token-breakdown__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.token-breakdown__sum {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.token-breakdown__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.token-breakdown__group {
+  padding: 10px 14px 4px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.token-breakdown__group:last-child {
+  border-bottom: none;
+}
+
+/* Umbruch statt Abschneiden: Das Chat-Panel ist ab 260px erlaubt, die Flaeche
+   also gut 170px schmal. Dann rutschen Zahl und Anteil unter das Etikett,
+   statt es auf wenige Zeichen einzudampfen. */
+.token-breakdown__group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding-bottom: 6px;
+}
+
+.token-breakdown__group-label {
+  flex: 1 1 auto;
+  min-width: 80px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted-strong);
+}
+
+.token-breakdown__group-tokens,
+.token-breakdown__group-share {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zahl und Anteil als Paar — sie wandern zusammen in die naechste Zeile. */
+.token-breakdown__figures {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.token-breakdown__group-share {
+  min-width: 42px;
+  text-align: right;
+}
+
+.token-breakdown__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.token-breakdown__row-item {
+  margin: 0 0 2px;
+}
+
+.token-breakdown__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+/* Zeilen, die zu einem Schalter fuehren (heute: Skills), verhalten sich wie
+   die uebrigen einladenden Karten-Elemente: blaue Kante plus 5%-Wash. */
+.token-breakdown__row--action {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.token-breakdown__row--action:hover,
+.token-breakdown__row--action:focus-visible {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.token-breakdown__row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+}
+
+.token-breakdown__row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.token-breakdown__row-label {
+  flex: 1 1 auto;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.token-breakdown__row-tokens,
+.token-breakdown__row-share {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.token-breakdown__row-share {
+  min-width: 42px;
+  text-align: right;
+}
+
+.token-breakdown__bar {
+  display: block;
+  height: 3px;
+  margin: 4px 0 0;
+  border-radius: 999px;
+  background: var(--ds-grey-divider);
+  overflow: hidden;
+}
+
+.token-breakdown__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ds-blue);
+}
+
+.token-breakdown__row-detail {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+}
+
+.token-breakdown__row-action {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--accent-text);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.token-breakdown__row--action:hover .token-breakdown__row-action,
+.token-breakdown__row--action:focus-visible .token-breakdown__row-action {
+  opacity: 1;
+}
+
+.token-breakdown__note {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.token-breakdown__note--live {
+  border-top: none;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  color: var(--accent-text);
+}
+
+.token-breakdown__empty {
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-token-usage,
+  .token-breakdown__row--action,
+  .token-breakdown__row-action {
+    transition: none;
+  }
 }
 
 /* ── Settings modal (Mono-Blue: Header + Body + Footer, kein Schatten) ── */
