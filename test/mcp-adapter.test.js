@@ -183,12 +183,20 @@ function registryWithMcp(definitions) {
   return registry;
 }
 
-test('MCP-Tools erscheinen neben den eingebauten im Modell und im Systemprompt', async () => {
+test('MCP-Tools erscheinen neben den eingebauten im Schema fürs Modell', async () => {
   const registry = registryWithMcp(await definitionsOf(fakeService()));
 
-  const names = registry.getTools({ workspaceOpen: true }).map((t) => t.function.name);
-  assert.deepEqual(names, ['read_file_text', 'mcp__github__search', 'mcp__github__delete_repo']);
-  assert.match(registry.buildSystemPrompt({ workspaceOpen: true }), /mcp__github__search: Sucht in Repositories/);
+  const tools = registry.getTools({ workspaceOpen: true });
+  assert.deepEqual(
+    tools.map((t) => t.function.name),
+    ['read_file_text', 'mcp__github__search', 'mcp__github__delete_repo']
+  );
+  // Seit #182 traegt das Schema die Beschreibung allein — der System-Prompt
+  // zaehlt keine Tool-Namen mehr auf.
+  assert.match(
+    tools.find((t) => t.function.name === 'mcp__github__search').function.description,
+    /Sucht in Repositories/
+  );
   assert.equal(registry.getDefinition('mcp__github__search').riskClass, TOOL_RISK_CLASSES.EXECUTE);
 });
 
@@ -198,13 +206,12 @@ test('MCP-Tools stehen auch ohne geöffneten Ordner zur Verfügung', async () =>
   assert.deepEqual(names, ['mcp__github__search', 'mcp__github__delete_repo']);
 });
 
-test('abgewählte MCP-Tools verschwinden aus Definition, Prompt und Ausführung', async () => {
+test('abgewählte MCP-Tools verschwinden aus Definition und Ausführung', async () => {
   const registry = registryWithMcp(await definitionsOf(fakeService()));
   const options = { workspaceOpen: true, disabledNames: ['mcp__github__delete_repo'] };
 
   const names = registry.getTools(options).map((t) => t.function.name);
   assert.equal(names.includes('mcp__github__delete_repo'), false);
-  assert.equal(registry.buildSystemPrompt(options).includes('delete_repo'), false);
 
   const output = await registry.execute('mcp__github__delete_repo', {}, { approved: true, disabledNames: options.disabledNames });
   assert.match(JSON.parse(output).error, /deaktiviert/);

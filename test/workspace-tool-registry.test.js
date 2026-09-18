@@ -77,11 +77,12 @@ test('registry zeigt Schreib-Tools unabhängig vom Modus und filtert nur nach Al
     ['read', 'write']
   );
 
-  const prompt = registry.buildSystemPrompt({ allowedNames: ['read', 'write'] });
-  assert.match(prompt, /read/);
-  assert.match(prompt, /write/);
-  assert.doesNotMatch(prompt, /other/);
-  assert.match(prompt, /Schreib-Tools zurückhaltend/);
+  // Seit #182 zaehlt der Block keine Tool-Namen mehr auf — was von der
+  // Allowlist abhaengt, ist der Schreib-Hinweis.
+  assert.match(
+    registry.buildSystemPrompt({ allowedNames: ['read', 'write'] }),
+    /Schreib-Tools zurückhaltend/
+  );
   assert.doesNotMatch(registry.buildSystemPrompt({ allowedNames: ['read'] }), /Schreib-Tools zurückhaltend/);
 });
 
@@ -96,10 +97,6 @@ test('registry filters disabled tool names from tools, prompt and execution', as
     registry.getTools({ disabledNames: ['other', 'write'] }).map((tool) => tool.function.name),
     ['read']
   );
-  const prompt = registry.buildSystemPrompt({ disabledNames: ['other'] });
-  assert.match(prompt, /read/);
-  assert.doesNotMatch(prompt, /other/);
-
   assert.match(
     JSON.parse(await registry.execute('other', {}, { ...APPROVED, disabledNames: ['other'] })).error,
     /deaktiviert/
@@ -136,14 +133,13 @@ test('registry lässt den Pfad-Hinweis weg, wenn kein Datei-Tool dabei ist (#96)
     definition('web_search', { riskClass: TOOL_RISK_CLASSES.EXTERNAL, requiresWorkspace: false }),
   ]);
 
-  const withWorkspace = registry.buildSystemPrompt();
-  assert.match(withWorkspace, /read_file_text/);
-  assert.match(withWorkspace, /relative Pfade zum Ordnerroot/);
+  assert.match(registry.buildSystemPrompt(), /relativ zum Ordnerroot/);
 
   const withoutWorkspace = registry.buildSystemPrompt({ workspaceOpen: false });
-  assert.match(withoutWorkspace, /web_search/);
-  assert.doesNotMatch(withoutWorkspace, /read_file_text/);
-  assert.doesNotMatch(withoutWorkspace, /relative Pfade zum Ordnerroot/);
+  assert.doesNotMatch(withoutWorkspace, /relativ zum Ordnerroot/);
+  // Bedingung 1 aus #182: ohne Datei-Tools bleibt der Block trotzdem gefuellt —
+  // sein Rueckgabewert ist fuer die Engine das Signal „es gibt Tools".
+  assert.notEqual(withoutWorkspace, '');
 });
 
 test('registry liefert ohne Workspace und ohne ordnerfreie Tools einen leeren Prompt (#96)', () => {
@@ -207,8 +203,9 @@ test('modelDescription geht an das Modell, description bleibt in den Einstellung
       riskClass: TOOL_RISK_CLASSES.READ,
     },
   ]);
-  // Die Kurzzeile im System-Prompt bleibt die promptDescription.
-  assert.match(registry.buildSystemPrompt(), /- read: Prompt für read/);
+  // `promptDescription` traegt seit #182 nur noch die zugeklappte Zeile in den
+  // Einstellungen — der System-Prompt zaehlt keine Tools mehr auf.
+  assert.doesNotMatch(registry.buildSystemPrompt(), /Prompt für read/);
 });
 
 test('ohne modelDescription bleibt getTools() byte-identisch (#181)', () => {
@@ -376,7 +373,7 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'edit_file',
     'apply_patch',
   ]);
-  assert.match(registry.buildSystemPrompt(), /write_file_text/);
+  assert.match(registry.buildSystemPrompt(), /Schreib-Tools zurückhaltend/);
   // web_search fehlt oben bewusst: ohne eingerichteten Suchdienst wird es dem
   // Modell nicht angeboten (Issue #63). Im Katalog der Einstellungen steht es.
   assert.equal(names.includes('web_search'), false);
@@ -416,6 +413,110 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
   // 17 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
   assert.equal(Object.keys(classes).length, 16);
+});
+
+test('der System-Prompt zählt keine Tool-Namen mehr auf (#182)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const prompt = registry.buildSystemPrompt();
+  const namen = registry.getTools().map((tool) => tool.function.name);
+
+  assert.doesNotMatch(prompt, /Du hast folgende Tools/);
+  // Genannt werden nur die Tools, über die der Block eine Aussage macht —
+  // die übrigen stehen ausschließlich im tools-Feld der Anfrage.
+  const genannt = namen.filter((name) => prompt.includes(name));
+  assert.deepEqual(genannt, [
+    'list_directory',
+    'search_in_files',
+    'find_files',
+    'list_directory_tree',
+  ]);
+});
+
+test('der Konventionsblock beschreibt, statt zu verallgemeinern (#182)', () => {
+  const registry = createToolRegistry([
+    { ...definition('list_directory'), skips: ['hidden'] },
+    { ...definition('find_files'), skips: ['hidden', 'ignored'] },
+    { ...definition('read_file_text') },
+  ]);
+
+  const prompt = registry.buildSystemPrompt();
+  // Beide überspringen Verstecktes, nur find_files zusätzlich .gitignore —
+  // „alle Tools überspringen versteckte Dateien" wäre schlicht falsch.
+  assert.match(prompt, /list_directory und find_files überspringen versteckte Einträge/);
+  assert.match(prompt, /find_files zusätzlich alles, was die \.gitignore/);
+  assert.doesNotMatch(prompt, /list_directory zusätzlich/);
+  // Der gitignore-Hinweis muss bleiben: ohne ihn ist ein leeres Ergebnis nicht
+  // von „gibt es nicht" zu unterscheiden (#183).
+  assert.match(prompt, /Ein leeres Ergebnis kann deshalb heißen/);
+
+  // Wer abgewählt ist, taucht im Satz nicht auf.
+  const ohneFindFiles = registry.buildSystemPrompt({ disabledNames: ['find_files'] });
+  assert.doesNotMatch(ohneFindFiles, /find_files/);
+  assert.doesNotMatch(ohneFindFiles, /\.gitignore/);
+  assert.match(ohneFindFiles, /list_directory überspringen versteckte Einträge/);
+});
+
+test('der Block steht, sobald überhaupt ein Tool sichtbar ist (#182)', () => {
+  // Bedingung 1 aus #182: Der Rückgabewert ist für die Engine das Signal
+  // „es gibt Tools". Ein leerer Block nähme dem „kein Projektordner"-Baustein
+  // die Prompt-Injection-Regel mit — Sparen wäre das nicht.
+  const nurWebsuche = createToolRegistry([
+    definition('web_search', { riskClass: TOOL_RISK_CLASSES.EXTERNAL, requiresWorkspace: false }),
+  ]);
+  assert.notEqual(nurWebsuche.buildSystemPrompt(), '');
+  assert.notEqual(nurWebsuche.buildSystemPrompt({ workspaceOpen: false }), '');
+
+  // Nur wirklich ohne sichtbares Tool bleibt er leer.
+  const nurDatei = createToolRegistry([definition('read_file_text')]);
+  assert.equal(nurDatei.buildSystemPrompt({ workspaceOpen: false }), '');
+});
+
+test('die Schemas wiederholen die Konventionen nicht mehr (#183)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const schemas = JSON.stringify(registry.getTools());
+
+  // Was einmal im Konventionsblock steht, steht nicht noch 30-mal im Schema.
+  for (const wiederholung of ['Relativer Pfad', '2 MB', 'Punkt-Präfix', '.gitignore']) {
+    assert.equal(schemas.includes(wiederholung), false, `„${wiederholung}" steht noch im Schema`);
+  }
+  // Grenzen sagt das Schema selbst — maschinenlesbar statt in Prosa daneben.
+  assert.equal(schemas.includes('Obergrenze'), false);
+  const suche = registry.getTools().find((tool) => tool.function.name === 'search_in_files');
+  assert.equal(suche.function.parameters.properties.max_results.default, 50);
+  assert.equal(suche.function.parameters.properties.max_results.maximum, 200);
+  assert.equal(suche.function.parameters.properties.include_hidden.default, false);
+});
+
+test('die Ordner-Parameter behalten ihre eigene, korrekte Kurzfassung (#183)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const beschreibung = (name) =>
+    registry.getTools().find((tool) => tool.function.name === name)
+      .function.parameters.properties.relative_path.description;
+
+  // Ordner-Startpunkte ohne `required` — ein Datei-Beispiel wäre hier
+  // irreführender als gar keins, deshalb ausdrücklich nicht die
+  // Datei-Formulierung der übrigen Tools.
+  for (const name of ['list_directory', 'find_files', 'list_directory_tree']) {
+    assert.equal(beschreibung(name), 'Startordner; leer oder "." = ganzes Projekt.', name);
+  }
+  assert.equal(
+    beschreibung('search_in_files'),
+    'Startordner oder einzelne Datei; leer oder "." = ganzes Projekt.'
+  );
+  for (const name of ['read_file_text', 'read_file_lines', 'edit_file']) {
+    assert.match(beschreibung(name), /^Dateipfad, z\. B\./, name);
+  }
+});
+
+test('der gitignore-Hinweis überlebt die Kürzung (#183)', () => {
+  // Ohne ihn liefert etwa `find_files out/**/*.html` ein sauberes, leeres
+  // Ergebnis ohne jeden Hinweis — eine stille Falschantwort ohne
+  // Selbstkorrektur. Er ist aus den Schemas verschwunden, muss also im
+  // System-Prompt stehen.
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  assert.equal(JSON.stringify(registry.getTools()).includes('.gitignore'), false);
+  assert.match(registry.buildSystemPrompt(), /\.gitignore des Projektroots ausschließt/);
+  assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
 });
 
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {

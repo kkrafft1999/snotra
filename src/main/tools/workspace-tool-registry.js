@@ -75,6 +75,12 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
       // Skill eingeschaltet ist (Issue #173).
       requiresSkills: definition.requiresSkills === true,
+      // Was dieses Tool beim Durchlaufen ueberspringt (Issue #182): `hidden` =
+      // Eintraege mit Punkt-Praefix, `ignored` = Muster aus der .gitignore des
+      // Projektroots. Steht einmal im Konventionsblock statt in jeder
+      // Beschreibung — und wird von dort aus den sichtbaren Tools gebaut,
+      // damit der Satz nicht behauptet, was ein abgewaehltes Tool tut.
+      skips: Array.isArray(definition.skips) ? definition.skips : [],
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
@@ -191,29 +197,82 @@ function createToolRegistry(initialDefinitions = []) {
     }));
   }
 
+  /** Namen einer Liste als Aufzaehlung: „a, b und c". */
+  function joinNames(names) {
+    if (names.length <= 1) return names.join('');
+    return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
+  }
+
+  /**
+   * Konventionsblock fuer den System-Prompt (Issue #182).
+   *
+   * Hier stand bis #182 eine Prosa-Liste aller Tool-Namen, die ausschliesslich
+   * wiederholte, was ohnehin als Schema im `tools`-Feld der Anfrage steht.
+   * Alle fuenf Provider uebergeben die Tools nativ; keiner haengt an der
+   * Prosa-Fassung. Gemessen am 2026-09-18 (o200k, 14 sichtbare Tools):
+   * 2.191 → 867 Zeichen, 541 → 191 Token, also rund 350 Token je Runde.
+   *
+   * Was bleibt, ist das, was fuer die Tools **als Gruppe** gilt und nirgendwo
+   * sonst steht. Zwei Bedingungen dafuer:
+   *
+   *  1. Der Block ist **nie leer**, sobald ein Tool sichtbar ist. Sein
+   *     Rueckgabewert ist fuer die Engine zugleich das Signal „es gibt Tools":
+   *     `buildNoWorkspaceSystemPrompt` liefert bei leerem Block gar nichts
+   *     mehr — samt `TOOL_RESULTS_ARE_DATA_RULE`. Ein leerer Block waere also
+   *     kein Sparen, sondern ein Sicherheitsverlust. Deshalb die
+   *     unbedingte erste Zeile.
+   *  2. Der Block ist **beschreibend, nicht pauschal**. `include_hidden` gibt
+   *     es nur an drei Tools, `.gitignore` gilt nur fuer die rekursiven. Ein
+   *     Satz wie „alle Tools ueberspringen versteckte Dateien" waere falsch —
+   *     und damit schlimmer als die Doppelung, die er ersetzt. Die Saetze
+   *     werden deshalb aus den tatsaechlich sichtbaren Tools gebaut und
+   *     nennen sie beim Namen; ein abgewaehltes Tool taucht nicht auf.
+   */
   function buildSystemPrompt(options = {}) {
     const available = getAvailableDefinitions(options);
     if (available.length === 0) return '';
 
-    const toolLines = available.map(
-      (definition) =>
-        `- ${definition.name}: ${definition.promptDescription || definition.description}`
-    );
-    let prompt = `Du hast folgende Tools zur Verfügung:\n${toolLines.join('\n')}`;
-    // Ohne Datei-Tools waere der Pfad-Hinweis sinnlos — ohne geoeffneten Ordner
-    // stehen nur die Tools ohne Ordnerbezug in der Liste (Issue #96).
+    const parts = ['Deine Tools stehen mit vollständigem Schema im tools-Feld dieser Anfrage.'];
+
+    // Ohne Datei-Tools waeren Pfad- und Groessenregel sinnlos — ohne geoeffneten
+    // Ordner stehen nur die Tools ohne Ordnerbezug zur Verfuegung (Issue #96).
     if (available.some((definition) => definition.requiresWorkspace !== false)) {
-      prompt +=
-        `\nNutze für Datei-Tools nur relative Pfade zum Ordnerroot ` +
-        `(z. B. "" oder "." für die Wurzel, "src/index.js" für eine Datei).`;
+      parts.push(
+        'Pfade der Datei-Tools sind immer relativ zum Ordnerroot ' +
+          '("" oder "." für die Wurzel, "src/index.js" für eine Datei); ' +
+          'sie verarbeiten Dateien bis 2 MB und melden darüber einen Fehler.'
+      );
+    }
+
+    // Aus den sichtbaren Tools gebaut statt fest verdrahtet (Bedingung 2).
+    const skipsHidden = available.filter((definition) => definition.skips.includes('hidden'));
+    const skipsIgnored = available.filter((definition) => definition.skips.includes('ignored'));
+    if (skipsHidden.length > 0) {
+      let sentence = `${joinNames(skipsHidden.map((d) => d.name))} überspringen versteckte Einträge (Punkt-Präfix)`;
+      if (skipsIgnored.length > 0) {
+        sentence +=
+          `, ${joinNames(skipsIgnored.map((d) => d.name))} zusätzlich alles, was die .gitignore ` +
+          'des Projektroots ausschließt; .git bleibt immer außen vor';
+      }
+      parts.push(
+        // Ohne diesen Hinweis ist ein leeres Ergebnis nicht von „gibt es
+        // nicht" zu unterscheiden — eine stille Falschantwort ohne
+        // Selbstkorrektur, die teuerste Fehlerklasse (Issue #183).
+        `${sentence}. Ein leeres Ergebnis kann deshalb heißen, dass es Treffer gibt, ` +
+          'sie aber übersprungen wurden.'
+      );
+    }
+    if (available.some((definition) => definition.parameters?.properties?.include_hidden)) {
+      parts.push('Wo ein Tool den Parameter include_hidden hat, nimmt true die versteckten Einträge hinzu.');
     }
 
     if (available.some((definition) => definition.riskClass === TOOL_RISK_CLASSES.WRITE)) {
-      prompt +=
-        ` Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung oder neue Datei wünscht, ` +
-        `und fasse danach kurz zusammen, was du geschrieben hast.`;
+      parts.push(
+        'Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung ' +
+          'oder neue Datei wünscht, und fasse danach kurz zusammen, was du geschrieben hast.'
+      );
     }
-    return prompt;
+    return parts.join('\n');
   }
 
   /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
@@ -262,6 +321,21 @@ function createToolRegistry(initialDefinitions = []) {
   };
 }
 
+/**
+ * Die eingebauten Tools.
+ *
+ * Zu den Beschreibungsfeldern siehe `normalizeDefinition`. Seit #183 stehen
+ * die Konventionen, die fuer mehrere Tools zugleich gelten — Pfade, versteckte
+ * Eintraege, .gitignore, die 2-MB-Grenze — einmal im Konventionsblock des
+ * System-Prompts statt an rund 30 Stellen in den Schemas. Grenzen sagt das
+ * Schema selbst (`default`, `maximum`, `maxItems`, `maxLength`) statt einer
+ * Prosa-Klammer daneben. Gemessen am 2026-09-18 (o200k, 16 Tools):
+ * 16.900 → 15.421 Zeichen, 4.062 → 3.696 Token, rund 366 Token je Runde.
+ *
+ * Der Volltext in `description` bleibt dabei unangetastet — er ist der
+ * Aufklapptext in Einstellungen › Tools und die einzige Stelle, an der ein
+ * Nutzer erfaehrt, was ein Tool wirklich tut.
+ */
 function createWorkspaceToolRegistry({
   fsService,
   webSearch = null,
@@ -273,17 +347,20 @@ function createWorkspaceToolRegistry({
     {
       name: 'list_directory',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
+      modelDescription: 'Listet Dateien und Unterordner eines Verzeichnisses auf.',
       promptDescription: 'Listet Dateien und Unterordner im Projektordner auf.',
       parameters: {
         type: 'object',
         properties: {
           relative_path: {
             type: 'string',
-            description:
-              'Relativer Pfad zum Ordner; leerer String oder "." für das Projektroot.',
+            // Ordner-Startpunkt, kein Dateipfad: ein Datei-Beispiel waere hier
+            // irrefuehrender als gar keins (Issue #183).
+            description: 'Startordner; leer oder "." = ganzes Projekt.',
           },
         },
       },
@@ -354,18 +431,20 @@ function createWorkspaceToolRegistry({
       description:
         'Liest den Textinhalt einer Datei als UTF-8 (nur innerhalb des Projektordners). ' +
         'Maximale Dateigröße: 2 MB — größere Dateien liefern einen Fehler.',
+      modelDescription: 'Liest den Textinhalt einer Datei als UTF-8.',
       promptDescription: 'Liest Textdateien innerhalb des Projektordners.',
       parameters: {
         type: 'object',
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Relativer Pfad zur Datei, z. B. "package.json" oder "src/app.js".',
+            description: 'Dateipfad, z. B. "src/app.js".',
           },
           max_characters: {
             type: 'integer',
-            description:
-              'Maximale Zeichenanzahl des zurückgegebenen Texts (Standard 32000, Obergrenze 200000).',
+            default: 32000,
+            maximum: 200000,
+            description: 'Maximale Zeichenanzahl des zurückgegebenen Texts.',
           },
         },
         required: ['relative_path'],
@@ -382,6 +461,11 @@ function createWorkspaceToolRegistry({
         'entweder einen Zeilenbereich (start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
         'Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu Treffern aus search_in_files. ' +
         'Token-sparsamer als read_file_text, wenn nur ein Teil der Datei gebraucht wird. Maximale Dateigröße: 2 MB.',
+      modelDescription:
+        'Liest gezielt einen Ausschnitt einer Textdatei: entweder einen Zeilenbereich ' +
+        '(start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
+        'Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu ' +
+        'Treffern aus search_in_files. Token-sparsamer als read_file_text, wenn nur ein Teil gebraucht wird.',
       promptDescription:
         'Liest gezielt Zeilen- oder Byte-Ausschnitte aus Textdateien des Projektordners (Zeilen nummeriert).',
       parameters: {
@@ -389,26 +473,28 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Relativer Pfad zur Datei, z. B. "src/app.js".',
+            description: 'Dateipfad, z. B. "src/app.js".',
           },
           start_line: {
             type: 'integer',
-            description:
-              'Erste Zeile des Ausschnitts (1-basiert, Standard 1). Nicht mit start_byte/length kombinierbar.',
+            default: 1,
+            description: 'Erste Zeile (1-basiert). Nicht mit start_byte/length kombinierbar.',
           },
           end_line: {
             type: 'integer',
-            description:
-              'Letzte Zeile (inklusiv; Standard start_line + 199, maximal 1000 Zeilen pro Aufruf).',
+            // Der Standard haengt an start_line und laesst sich nicht als
+            // `default` ausdruecken — bleibt deshalb Prosa (Issue #183).
+            description: 'Letzte Zeile, inklusiv (Standard start_line + 199, höchstens 1000 je Aufruf).',
           },
           start_byte: {
             type: 'integer',
-            description:
-              'Byte-Offset (0-basiert), ab dem gelesen wird. Nicht mit start_line/end_line kombinierbar.',
+            description: 'Byte-Offset (0-basiert). Nicht mit start_line/end_line kombinierbar.',
           },
           length: {
             type: 'integer',
-            description: 'Anzahl Bytes ab start_byte (Standard 16000, Obergrenze 32000).',
+            default: 16000,
+            maximum: 32000,
+            description: 'Anzahl Bytes ab start_byte.',
           },
         },
         required: ['relative_path'],
@@ -419,18 +505,28 @@ function createWorkspaceToolRegistry({
     {
       name: 'search_in_files',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck ' +
         'und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. ' +
         'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien. ' +
         'Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen mit einem Zeitbudget von 5 s pro Suche.',
+      modelDescription:
+        'Durchsucht Textdateien rekursiv nach einem Suchtext oder regulären Ausdruck und liefert nur ' +
+        'Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. Binäre und zu große ' +
+        'Dateien bleiben aus. Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen ' +
+        'mit einem Zeitbudget von 5 s pro Suche.',
       promptDescription:
         'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
       parameters: {
         type: 'object',
         properties: {
           query: {
+            // Kein `maxLength: 256` (Issue #183): Die Grenze gilt nur fuer
+            // regulaere Ausdruecke (`validateRegexPattern`), nicht fuer die
+            // woertliche Suche. Als Schema-Keyword wuerde sie lange
+            // Suchtexte verbieten, die tatsaechlich erlaubt sind.
             type: 'string',
             description:
               'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax (höchstens 256 Zeichen, ' +
@@ -438,26 +534,29 @@ function createWorkspaceToolRegistry({
           },
           is_regex: {
             type: 'boolean',
-            description:
-              'true, um query als regulären Ausdruck zu interpretieren (Standard false = wörtliche Suche).',
+            default: false,
+            description: 'true, um query als regulären Ausdruck zu lesen (sonst wörtliche Suche).',
           },
           relative_path: {
             type: 'string',
-            description:
-              'Startordner (oder einzelne Datei) relativ zum Projektroot; leer oder "." für das gesamte Projekt.',
+            description: 'Startordner oder einzelne Datei; leer oder "." = ganzes Projekt.',
           },
           context_lines: {
             type: 'integer',
-            description:
-              'Anzahl Kontextzeilen vor und nach jeder Trefferzeile (Standard 2, Maximum 10).',
+            default: 2,
+            maximum: 10,
+            description: 'Kontextzeilen vor und nach jeder Trefferzeile.',
           },
           max_results: {
             type: 'integer',
-            description: 'Maximale Anzahl Treffer (Standard 50, Obergrenze 200).',
+            default: 50,
+            maximum: 200,
+            description: 'Maximale Anzahl Treffer.',
           },
           case_sensitive: {
             type: 'boolean',
-            description: 'true, um Groß-/Kleinschreibung zu beachten (Standard false).',
+            default: false,
+            description: 'true, um Groß-/Kleinschreibung zu beachten.',
           },
           include: {
             type: 'string',
@@ -471,8 +570,8 @@ function createWorkspaceToolRegistry({
           },
           include_hidden: {
             type: 'boolean',
-            description:
-              'true, um auch versteckte Einträge (Punkt-Präfix) zu durchsuchen (Standard false; .git bleibt immer ausgenommen).',
+            default: false,
+            description: 'true, um versteckte Einträge mitzudurchsuchen.',
           },
         },
         required: ['query'],
@@ -483,12 +582,17 @@ function createWorkspaceToolRegistry({
     {
       name: 'find_files',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Findet Dateien und Ordner im Projektordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
         'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
         'Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner. ' +
         'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git.',
+      modelDescription:
+        'Findet Dateien und Ordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
+        'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
+        'Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner.',
       promptDescription:
         'Findet Datei- und Ordnerpfade im Projektordner per Glob-Muster (z. B. "**/*.js").',
       parameters: {
@@ -502,17 +606,18 @@ function createWorkspaceToolRegistry({
           },
           relative_path: {
             type: 'string',
-            description:
-              'Startordner relativ zum Projektroot; leer oder "." für das gesamte Projekt.',
+            description: 'Startordner; leer oder "." = ganzes Projekt.',
           },
           max_results: {
             type: 'integer',
-            description: 'Maximale Anzahl gefundener Pfade (Standard 100, Obergrenze 500).',
+            default: 100,
+            maximum: 500,
+            description: 'Maximale Anzahl gefundener Pfade.',
           },
           include_hidden: {
             type: 'boolean',
-            description:
-              'true, um auch versteckte Einträge (Punkt-Präfix) zu finden (Standard false; .git bleibt immer ausgenommen).',
+            default: false,
+            description: 'true, um versteckte Einträge mitzufinden.',
           },
         },
         required: ['pattern'],
@@ -529,6 +634,11 @@ function createWorkspaceToolRegistry({
         'Existenz, Typ (Datei/Ordner), Größe in Bytes, Änderungszeitpunkt (ISO 8601) und ' +
         'auf Wunsch die Zeilenzahl. Token-sparsam, um vor dem Lesen zu entscheiden, ' +
         'ob und wie gelesen werden sollte — z. B. bei großen Dateien read_file_lines statt read_file_text.',
+      modelDescription:
+        'Liefert Metadaten zu einem Pfad, ohne die Datei zu lesen: Existenz, Typ (Datei/Ordner), ' +
+        'Größe in Bytes, Änderungszeitpunkt (ISO 8601) und auf Wunsch die Zeilenzahl. Token-sparsam, ' +
+        'um vor dem Lesen zu entscheiden, ob und wie gelesen werden sollte — z. B. bei großen Dateien ' +
+        'read_file_lines statt read_file_text.',
       promptDescription:
         'Liefert Metadaten (Existenz, Typ, Größe, Änderungszeit, optional Zeilenzahl) zu Pfaden im Projektordner, ohne Dateiinhalt.',
       parameters: {
@@ -536,13 +646,12 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description:
-              'Relativer Pfad zu Datei oder Ordner, z. B. "src/app.js"; "." für das Projektroot.',
+            description: 'Pfad zu Datei oder Ordner; "." = Projektroot.',
           },
           include_line_count: {
             type: 'boolean',
-            description:
-              'true, um bei Textdateien zusätzlich die Zeilenzahl zu liefern (Standard false).',
+            default: false,
+            description: 'true, um bei Textdateien zusätzlich die Zeilenzahl zu liefern.',
           },
         },
         required: ['relative_path'],
@@ -559,6 +668,11 @@ function createWorkspaceToolRegistry({
         'bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
         '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines ' +
         'gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
+      modelDescription:
+        'Liefert die Gliederung einer Datei mit Zeilennummern, ohne den Inhalt zu lesen: bei Markdown ' +
+        'die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
+        '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit ' +
+        'read_file_lines gezielt nur den passenden Abschnitt zu lesen.',
       promptDescription:
         'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
       parameters: {
@@ -566,17 +680,18 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Relativer Pfad zur Datei, z. B. "docs/konzept.md" oder "src/app.js".',
+            description: 'Dateipfad, z. B. "docs/konzept.md".',
           },
           max_depth: {
             type: 'integer',
-            description:
-              'Nur Einträge bis zu dieser Ebene liefern (1 = nur oberste Ebene). Standard: alle Ebenen.',
+            // Standard ist „alle Ebenen" und damit keine Zahl — bleibt Prosa.
+            description: 'Nur Einträge bis zu dieser Ebene (1 = nur oberste). Standard: alle Ebenen.',
           },
           max_entries: {
             type: 'integer',
-            description:
-              'Maximale Anzahl Einträge (Standard 200, höchstens 1000); darüber wird truncated=true gemeldet.',
+            default: 200,
+            maximum: 1000,
+            description: 'Maximale Anzahl Einträge; darüber wird truncated=true gemeldet.',
           },
         },
         required: ['relative_path'],
@@ -587,6 +702,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'list_directory_tree',
       riskClass: TOOL_RISK_CLASSES.READ,
+      skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler ' +
@@ -594,6 +710,11 @@ function createWorkspaceToolRegistry({
         'heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, ' +
         'damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, ' +
         'Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
+      modelDescription:
+        'Liefert einen kompakten rekursiven Ordnerbaum in einem Aufruf statt vieler list_directory-Runden. ' +
+        'Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner heißt: N direkte ' +
+        'Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, damit bei ' +
+        'knappem Budget zuerst die oberen Ebenen vollständig sind. Folgt keinen Symlinks.',
       promptDescription:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
       parameters: {
@@ -601,23 +722,24 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description:
-              'Startordner relativ zum Projektroot; leer oder "." für das gesamte Projekt.',
+            description: 'Startordner; leer oder "." = ganzes Projekt.',
           },
           max_depth: {
             type: 'integer',
-            description:
-              'Maximale Tiefe (1 = nur direkte Einträge; Standard 3, Obergrenze 10). Tiefere Ordner erscheinen mit [+N].',
+            default: 3,
+            maximum: 10,
+            description: 'Maximale Tiefe (1 = nur direkte Einträge). Tiefere Ordner erscheinen mit [+N].',
           },
           max_entries: {
             type: 'integer',
-            description:
-              'Maximale Anzahl angezeigter Einträge insgesamt (Standard 200, Obergrenze 1000); darüber truncated=true.',
+            default: 200,
+            maximum: 1000,
+            description: 'Maximale Anzahl angezeigter Einträge; darüber truncated=true.',
           },
           include_hidden: {
             type: 'boolean',
-            description:
-              'true, um auch versteckte Einträge (Punkt-Präfix) zu zeigen (Standard false; .git bleibt immer ausgenommen).',
+            default: false,
+            description: 'true, um versteckte Einträge mitzuzeigen.',
           },
         },
       },
@@ -657,13 +779,16 @@ function createWorkspaceToolRegistry({
         'Erstellt oder überschreibt eine Textdatei (UTF-8) innerhalb des geöffneten Projektordners. ' +
         'Fehlende Zwischenordner werden automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig. ' +
         'Maximale Inhaltsgröße: 2 MB.',
+      modelDescription:
+        'Erstellt oder überschreibt eine Textdatei (UTF-8). Fehlende Zwischenordner werden ' +
+        'automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig.',
       promptDescription: 'Erstellt oder überschreibt Textdateien im Projektordner.',
       parameters: {
         type: 'object',
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Relativer Pfad zur Zieldatei, z. B. "src/notes.md" oder "docs/neu.md".',
+            description: 'Pfad zur Zieldatei, z. B. "docs/neu.md".',
           },
           content: {
             type: 'string',
@@ -684,6 +809,11 @@ function createWorkspaceToolRegistry({
         'old_string wird durch new_string ersetzt, ohne die Datei komplett neu zu schreiben. ' +
         'old_string muss exakt und eindeutig vorkommen — inklusive Einrückung und Zeilenumbrüchen; ' +
         'bei mehreren Treffern mehr Kontext angeben oder replace_all=true setzen. Maximale Dateigröße: 2 MB.',
+      modelDescription:
+        'Ersetzt in einer Textdatei gezielt eine Textstelle: old_string wird durch new_string ersetzt, ' +
+        'ohne die Datei komplett neu zu schreiben. old_string muss exakt und eindeutig vorkommen — ' +
+        'inklusive Einrückung und Zeilenumbrüchen; bei mehreren Treffern mehr Kontext angeben oder ' +
+        'replace_all=true setzen.',
       promptDescription:
         'Ersetzt gezielt Textstellen in Dateien des Projektordners (old_string → new_string), ohne die ganze Datei neu zu schreiben.',
       parameters: {
@@ -691,7 +821,7 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Relativer Pfad zur Datei, z. B. "src/app.js".',
+            description: 'Dateipfad, z. B. "src/app.js".',
           },
           old_string: {
             type: 'string',
@@ -704,8 +834,8 @@ function createWorkspaceToolRegistry({
           },
           replace_all: {
             type: 'boolean',
-            description:
-              'true, um alle Vorkommen zu ersetzen (Standard false = genau ein eindeutiger Treffer erforderlich).',
+            default: false,
+            description: 'true, um alle Vorkommen zu ersetzen (sonst muss der Treffer eindeutig sein).',
           },
         },
         required: ['relative_path', 'old_string', 'new_string'],
@@ -728,6 +858,15 @@ function createWorkspaceToolRegistry({
         'ein Schreibvorgang, werden bereits geschriebene Dateien zurückgesetzt. Für eine einzelne Ersetzung ist ' +
         'edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann ' +
         'apply_patch nicht. Maximale Dateigröße: 2 MB.',
+      modelDescription:
+        'Ändert bestehende Textdateien mit mehreren zusammenhängenden Änderungen in einem Aufruf — ' +
+        'entweder als Liste von Ersetzungen (edits, alle in derselben Datei, in dieser Reihenfolge ' +
+        'angewendet) oder als unified diff (patch, auch über mehrere Dateien hinweg). Alles oder ' +
+        'nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. ' +
+        'Jede Datei wird für sich atomar ersetzt (nie halb geschrieben); über mehrere Dateien hinweg ' +
+        'gilt das nicht — scheitert ein Schreibvorgang, werden bereits geschriebene Dateien ' +
+        'zurückgesetzt. Für eine einzelne Ersetzung ist edit_file einfacher. Dateien anlegen ' +
+        '(write_file_text), löschen oder umbenennen kann apply_patch nicht.',
       promptDescription:
         'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
       parameters: {
@@ -736,13 +875,14 @@ function createWorkspaceToolRegistry({
           relative_path: {
             type: 'string',
             description:
-              'Relativer Pfad zur Datei, z. B. "src/app.js". Im edits-Modus erforderlich; ' +
-              'im patch-Modus überflüssig, weil die Pfade in den "+++"-Kopfzeilen des Diffs stehen.',
+              'Dateipfad, z. B. "src/app.js". Im edits-Modus erforderlich; im patch-Modus ' +
+              'überflüssig, weil die Pfade in den "+++"-Kopfzeilen des Diffs stehen.',
           },
           edits: {
             type: 'array',
+            maxItems: 50,
             description:
-              'Ersetzungen in relative_path, der Reihe nach angewendet (höchstens 50). ' +
+              'Ersetzungen in relative_path, der Reihe nach angewendet. ' +
               'Jeder Schritt sieht das Ergebnis der vorherigen. Nicht mit patch kombinierbar.',
             items: {
               type: 'object',
@@ -759,9 +899,10 @@ function createWorkspaceToolRegistry({
                 },
                 replace_all: {
                   type: 'boolean',
+                  default: false,
                   description:
                     'true, um in diesem Schritt alle Vorkommen zu ersetzen ' +
-                    '(Standard false = genau ein eindeutiger Treffer erforderlich).',
+                    '(sonst muss der Treffer eindeutig sein).',
                 },
               },
               required: ['old_string', 'new_string'],
@@ -821,7 +962,9 @@ function createWorkspaceToolRegistry({
           },
           timeout_ms: {
             type: 'integer',
-            description: 'Zeitlimit in Millisekunden (Standard 10000, Obergrenze 120000).',
+            default: 10000,
+            maximum: 120000,
+            description: 'Zeitlimit in Millisekunden.',
           },
         },
         required: ['code'],
@@ -895,8 +1038,8 @@ function createWorkspaceToolRegistry({
           cwd: {
             type: 'string',
             description:
-              'Optionaler Unterordner des Projektordners als Arbeitsverzeichnis, relativ angegeben '
-              + '(z. B. "frontend"). Ohne Angabe läuft der Befehl im Projektordner.',
+              'Optionaler Unterordner als Arbeitsverzeichnis (z. B. "frontend"). '
+              + 'Ohne Angabe läuft der Befehl im Projektordner.',
           },
           stdin: {
             type: 'string',
@@ -904,7 +1047,9 @@ function createWorkspaceToolRegistry({
           },
           timeout_ms: {
             type: 'integer',
-            description: 'Zeitlimit in Millisekunden (Standard 30000, Obergrenze 300000).',
+            default: 30000,
+            maximum: 300000,
+            description: 'Zeitlimit in Millisekunden.',
           },
         },
         required: ['command'],
@@ -975,12 +1120,14 @@ function createWorkspaceToolRegistry({
         properties: {
           query: {
             type: 'string',
-            description:
-              'Suchanfrage in natürlicher Sprache oder als Stichworte (höchstens 400 Zeichen).',
+            maxLength: 400,
+            description: 'Suchanfrage in natürlicher Sprache oder als Stichworte.',
           },
           max_results: {
             type: 'integer',
-            description: 'Maximale Anzahl Treffer (Standard 5, Obergrenze 10).',
+            default: 5,
+            maximum: 10,
+            description: 'Maximale Anzahl Treffer.',
           },
           language: {
             type: 'string',
@@ -1035,8 +1182,9 @@ function createWorkspaceToolRegistry({
           },
           max_characters: {
             type: 'integer',
-            description:
-              'Maximale Zeichenanzahl des zurückgegebenen Texts (Standard 20000, Obergrenze 100000).',
+            default: 20000,
+            maximum: 100000,
+            description: 'Maximale Zeichenanzahl des zurückgegebenen Texts.',
           },
         },
         required: ['url'],

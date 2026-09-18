@@ -34,8 +34,10 @@ test('run_python erscheint dem Modell nur, wenn es erlaubt und ein Interpreter d
 
   assert.equal(aus.getTools().some((t) => t.function.name === 'run_python'), false);
   assert.equal(an.getTools().some((t) => t.function.name === 'run_python'), true);
-  assert.equal(aus.buildSystemPrompt().includes('run_python'), false);
-  assert.match(an.buildSystemPrompt(), /run_python/);
+  // Seit #182 zaehlt der System-Prompt keine Tool-Namen mehr auf; sichtbar
+  // wird ein Tool ausschliesslich ueber sein Schema.
+  assert.equal(aus.getTools().some((t) => t.function.name === 'run_python'), false);
+  assert.equal(an.getTools().some((t) => t.function.name === 'run_python'), true);
 });
 
 test('run_python trägt die höchste Risikoklasse und ist damit nie dauerhaft freigebbar', () => {

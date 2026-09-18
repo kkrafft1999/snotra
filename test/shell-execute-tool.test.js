@@ -72,8 +72,10 @@ test('shell_execute erscheint dem Modell nur, wenn es erlaubt und eine Shell da 
 
   assert.equal(aus.getTools().some((t) => t.function.name === 'shell_execute'), false);
   assert.equal(an.getTools().some((t) => t.function.name === 'shell_execute'), true);
-  assert.equal(aus.buildSystemPrompt().includes('shell_execute'), false);
-  assert.match(an.buildSystemPrompt(), /shell_execute/);
+  // Seit #182 zaehlt der System-Prompt keine Tool-Namen mehr auf (siehe oben:
+  // die Sichtbarkeit haengt am Schema).
+  assert.equal(aus.getTools().some((t) => t.function.name === 'shell_execute'), false);
+  assert.equal(an.getTools().some((t) => t.function.name === 'shell_execute'), true);
 });
 
 test('shell_execute trägt die höchste Risikoklasse und ist damit nie dauerhaft freigebbar', () => {
