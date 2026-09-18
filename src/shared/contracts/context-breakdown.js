@@ -45,11 +45,9 @@ const CONTEXT_PART_GROUP_LABELS = Object.freeze({
 /**
  * Inhaltsarten mit unterschiedlicher Tokendichte.
  *
- * „1 Token ≈ 4 Zeichen" (chat-history-trim.js) gilt fuer Fliesstext. Fuer
- * JSON-Tool-Schemas ist sie um Faktor zwei zu optimistisch: gemessen am
- * 2026-09-18 waren es 2,28 Zeichen je Token (Issue #169). Eine Anzeige, die
- * zum Abschalten verleiten soll, darf Tools nicht halb so teuer aussehen
- * lassen, wie sie sind — deshalb je Inhaltsart ein eigener Teiler.
+ * „1 Token ≈ 4 Zeichen" (chat-history-trim.js) gilt fuer Fliesstext. Ob ein
+ * JSON-Schema dichter packt, haengt am Tokenizer — deshalb je Inhaltsart ein
+ * eigener Teiler, und je Anbieter ein eigener Satz davon.
  */
 const CONTEXT_CONTENT_KINDS = Object.freeze({
   PROSE: 'prose',
@@ -57,22 +55,91 @@ const CONTEXT_CONTENT_KINDS = Object.freeze({
   JSON: 'json',
 });
 
-const CHARS_PER_TOKEN = Object.freeze({
-  [CONTEXT_CONTENT_KINDS.PROSE]: 4,
-  // Markdown traegt Auszeichnung und Code — dichter als Fliesstext, aber
-  // weit entfernt von der Dichte eines JSON-Schemas.
-  [CONTEXT_CONTENT_KINDS.MARKDOWN]: 3.4,
-  [CONTEXT_CONTENT_KINDS.JSON]: 2.3,
+/**
+ * Teiler je Inhaltsart, gebuendelt zu Profilen — ein Profil je Tokenizer.
+ *
+ * Der Teiler ist keine Konstante der Welt, sondern eine Eigenschaft des
+ * Tokenizers am anderen Ende (Issue #178). Ein global gesetzter Wert ist
+ * deshalb fuer alle ausser einem Anbieter falsch: Die 2,3 fuer JSON stammen
+ * aus einer Messung gegen ein lokales Qwen-Modell (Issue #169) und uebertreiben
+ * den Block „Tool-Definitionen" gegen o200k um rund 80 %. Weil die Schaetzungen
+ * anschliessend auf die echte `promptTokens` skaliert werden, untertreibt
+ * derselbe Fehler im selben Zug Verlauf und Skills — wer die Anzeige zum
+ * Aufraeumen benutzt, raeumt dann an der falschen Stelle auf.
+ *
+ * Messverfahren fuer beide Profile: denselben Text einmal zaehlen
+ * (`text.length`) und einmal durch den Tokenizer schicken, Quotient bilden.
+ */
+const CHARS_PER_TOKEN_PROFILES = Object.freeze({
+  /**
+   * Lokale Modelle (mlx-lm, Ollama), gemessen gegen Qwen am 2026-09-18
+   * (Issue #169). Deutscher Fliesstext und Markdown liegen nahe an der
+   * Faustregel, JSON packt der Tokenizer deutlich dichter.
+   */
+  local: Object.freeze({
+    [CONTEXT_CONTENT_KINDS.PROSE]: 4,
+    // Markdown traegt Auszeichnung und Code — dichter als Fliesstext, aber
+    // weit entfernt von der Dichte eines JSON-Schemas.
+    [CONTEXT_CONTENT_KINDS.MARKDOWN]: 3.4,
+    [CONTEXT_CONTENT_KINDS.JSON]: 2.3,
+  }),
+  /**
+   * o200k_base — der Tokenizer der aktuellen OpenAI-Modelle. Gemessen am
+   * 2026-09-18 mit `gpt-tokenizer` (cjs/encoding/o200k_base) gegen den
+   * tatsaechlichen Inhalt dieses Repos:
+   *  - JSON: alle 17 eingebauten Tool-Schemas, 17.210 Zeichen / 4.154 Token
+   *    = 4,14 (je Tool zwischen 3,91 und 4,59).
+   *  - Markdown: `system-skills/snotra-capabilities/SKILL.md` 3,77,
+   *    `docs/sicherheitskonzept.md` 3,98, `README.md` 3,91.
+   *  - Prosa: der Tool-System-Prompt der Registry, 2.257 / 556 = 4,06.
+   * Fuer JSON ist der konservativere (kleinere) Randwert der Messreihe
+   * genommen, damit die teuerste Gruppe eher zu teuer als zu billig aussieht.
+   */
+  o200k: Object.freeze({
+    [CONTEXT_CONTENT_KINDS.PROSE]: 4,
+    [CONTEXT_CONTENT_KINDS.MARKDOWN]: 3.8,
+    [CONTEXT_CONTENT_KINDS.JSON]: 4.1,
+  }),
 });
+
+/**
+ * Ohne Messung kein eigenes Profil.
+ *
+ * Eingetragen ist nur, wogegen tatsaechlich gemessen wurde. Anthropic und
+ * Google bleiben bewusst draussen: Ihre Tokenizer liegen hier nicht vor, und
+ * eine geschaetzte Zahl waere derselbe Fehler wie der, den Issue #178
+ * behebt — nur mit besserem Gewissen. Sie fallen auf `local` zurueck, das von
+ * beiden Profilen das konservativere ist (kleinerer Teiler = mehr geschaetzte
+ * Tokens). Wer ein Profil ergaenzt, misst vorher und schreibt Datum und
+ * Verfahren wie oben dazu.
+ */
+const DEFAULT_CHARS_PER_TOKEN_PROFILE = 'local';
+
+const CHARS_PER_TOKEN_PROFILE_BY_PROVIDER = Object.freeze({
+  openai: 'o200k',
+  'mlx-lm': 'local',
+  ollama: 'local',
+});
+
+/** Rueckwaertskompatibler Name fuer das Standardprofil. */
+const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE];
+
+function charsPerTokenProfile(providerId) {
+  const key =
+    (typeof providerId === 'string' && CHARS_PER_TOKEN_PROFILE_BY_PROVIDER[providerId])
+    || DEFAULT_CHARS_PER_TOKEN_PROFILE;
+  return CHARS_PER_TOKEN_PROFILES[key];
+}
 
 function isContentKind(value) {
   return Object.prototype.hasOwnProperty.call(CHARS_PER_TOKEN, value);
 }
 
-function charsPerToken(contentKind) {
+function charsPerToken(contentKind, providerId) {
+  const profile = charsPerTokenProfile(providerId);
   return isContentKind(contentKind)
-    ? CHARS_PER_TOKEN[contentKind]
-    : CHARS_PER_TOKEN[CONTEXT_CONTENT_KINDS.PROSE];
+    ? profile[contentKind]
+    : profile[CONTEXT_CONTENT_KINDS.PROSE];
 }
 
 function toCount(value) {
@@ -82,10 +149,10 @@ function toCount(value) {
 }
 
 /** Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind. */
-function estimateTokensFromChars(chars, contentKind) {
+function estimateTokensFromChars(chars, contentKind, providerId) {
   const count = toCount(chars);
   if (count === 0) return 0;
-  return Math.max(1, Math.round(count / charsPerToken(contentKind)));
+  return Math.max(1, Math.round(count / charsPerToken(contentKind, providerId)));
 }
 
 function text(value) {
@@ -126,15 +193,21 @@ function createContextPart({
  * bleiben die rohen Schaetzungen stehen; `scaled` sagt der Anzeige, welcher
  * Fall vorliegt. Der Rundungsrest landet beim groessten Posten, damit die
  * Summe der Zeilen exakt der angezeigten Gesamtzahl entspricht.
+ *
+ * `providerId` waehlt das Teiler-Profil (Issue #178). Auf die Gesamtzahl hat
+ * es keinen Einfluss — solange skaliert wird, verschiebt ein anderes Profil
+ * nur die Gewichte zwischen den Zeilen. Genau darum geht es: Bisher bekam der
+ * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
+ * und Skills entsprechend zu wenig.
  */
-function createContextBreakdown({ parts = [], promptTokens = 0 } = {}) {
+function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
     .map((part) => createContextPart(part))
     .filter((part) => part.chars > 0);
 
   const estimated = usable.map((part) => ({
     ...part,
-    tokens: estimateTokensFromChars(part.chars, part.contentKind),
+    tokens: estimateTokensFromChars(part.chars, part.contentKind, providerId),
   }));
   const estimatedTotal = estimated.reduce((sum, part) => sum + part.tokens, 0);
   const real = toCount(promptTokens);
@@ -235,6 +308,10 @@ module.exports = {
   CONTEXT_PART_GROUP_LABELS,
   CONTEXT_CONTENT_KINDS,
   CHARS_PER_TOKEN,
+  CHARS_PER_TOKEN_PROFILES,
+  CHARS_PER_TOKEN_PROFILE_BY_PROVIDER,
+  DEFAULT_CHARS_PER_TOKEN_PROFILE,
+  charsPerTokenProfile,
   estimateTokensFromChars,
   createContextPart,
   createContextBreakdown,

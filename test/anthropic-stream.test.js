@@ -38,7 +38,7 @@ test('streamChatRound accumulates text deltas, usage and maps end_turn to stop',
 
   assert.equal(res.message.content, 'Hallo!');
   assert.equal(res.finishReason, 'stop');
-  assert.deepEqual(res.usage, { prompt: 20, completion: 5, total: 25 });
+  assert.deepEqual(res.usage, { prompt: 20, completion: 5, total: 25, cached: 0 });
   assert.deepEqual(sink.textDeltas, ['Hal', 'lo!']);
 
   const body = JSON.parse(calls[0].options.body);
@@ -47,6 +47,42 @@ test('streamChatRound accumulates text deltas, usage and maps end_turn to stop',
   assert.deepEqual(body.messages, [{ role: 'user', content: 'Hi' }]);
   assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
   assert.equal(calls[0].options.headers['x-api-key'], 'sk-ant-test');
+});
+
+test('streamChatRound zaehlt die Cache-Anteile zum Prompt (#179)', async (t) => {
+  mockFetch(t, () =>
+    sseResponse([
+      // Anthropic nennt die Cache-Zahlen nur im message_start, und zwar NEBEN
+      // input_tokens: der volle Prompt ist 500 + 9000 + 500.
+      sse('message_start', {
+        message: {
+          usage: {
+            input_tokens: 500,
+            cache_read_input_tokens: 9000,
+            cache_creation_input_tokens: 500,
+            output_tokens: 0,
+          },
+        },
+      }),
+      sse('content_block_start', { index: 0, content_block: { type: 'text' } }),
+      sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'ok' } }),
+      sse('content_block_stop', { index: 0 }),
+      sse('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 20 } }),
+      sse('message_stop', {}),
+    ])
+  );
+  const sink = collectCallbacks();
+
+  const res = await anthropic.streamChatRound({
+    config: CONFIG,
+    model: 'claude-sonnet-4-6',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: sink.callbacks,
+  });
+
+  // Das abschliessende message_delta wiederholt die Cache-Zahlen nicht — sie
+  // duerfen dabei nicht verloren gehen.
+  assert.deepEqual(res.usage, { prompt: 10000, completion: 20, total: 10020, cached: 9000 });
 });
 
 test('streamChatRound assembles streamed tool_use input and maps tool_use to tool_calls', async (t) => {

@@ -33,11 +33,13 @@ test('normalizeUsage maps provider-specific usage fields', () => {
     prompt: 10,
     completion: 5,
     total: 15,
+    cached: 0,
   });
   assert.deepEqual(normalizeUsage({ promptTokenCount: 8, candidatesTokenCount: 3 }), {
     prompt: 8,
     completion: 3,
     total: 11,
+    cached: 0,
   });
   assert.equal(normalizeUsage({}), null);
 });
@@ -65,7 +67,7 @@ test('mergeUsage sums usage across rounds', () => {
       { prompt: 10, completion: 5, total: 15 },
       { prompt: 3, completion: 2, total: 5 }
     ),
-    { prompt: 13, completion: 7, total: 20 }
+    { prompt: 13, completion: 7, total: 20, cached: 0 }
   );
 });
 

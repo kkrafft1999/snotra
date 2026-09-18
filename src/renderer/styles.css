@@ -2122,6 +2122,18 @@ summary:focus-visible,
   font-variant-numeric: tabular-nums;
 }
 
+/* Cache-Anteil: gehoert zu den echten Zahlen im Kopf und traegt deshalb
+   dieselbe Farbe wie die Summenzeile darueber. Dass es eine Fussnote zum
+   Prompt ist und keine dritte Kennzahl, sagt die Stellung und das „davon" —
+   nicht ein schwaecheres Grau. Bei 11 px waere --text-muted ohnehin die
+   falsche Stufe (Token-Regel: unter 14 px --text-muted-strong). */
+.token-breakdown__cache {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
 .token-breakdown__list {
   margin: 0;
   padding: 0;

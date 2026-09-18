@@ -1,5 +1,5 @@
 const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
-const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
+const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -197,9 +197,12 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       if (type === 'message_start') {
         const startUsage = normalizeUsage(payload.message?.usage);
         if (startUsage) {
-          usage = usage || { prompt: 0, completion: 0, total: 0 };
+          usage = usage || createEmptyUsage();
           usage.prompt = startUsage.prompt;
           usage.completion = startUsage.completion;
+          // Anthropic nennt die Cache-Anteile nur hier, im `message_start`;
+          // das `message_delta` am Ende wiederholt sie nicht (Issue #179).
+          usage.cached = startUsage.cached;
           usage.total = usage.prompt + usage.completion;
         }
       } else if (type === 'content_block_start') {
@@ -240,9 +243,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       } else if (type === 'message_delta') {
         const deltaUsage = normalizeUsage(payload.usage);
         if (deltaUsage) {
-          usage = usage || { prompt: 0, completion: 0, total: 0 };
+          usage = usage || createEmptyUsage();
           if (deltaUsage.completion > 0) usage.completion = deltaUsage.completion;
           if (deltaUsage.prompt > 0) usage.prompt = deltaUsage.prompt;
+          if (deltaUsage.cached > 0) usage.cached = deltaUsage.cached;
           usage.total = usage.prompt + usage.completion;
         }
         const sr = payload.delta?.stop_reason;

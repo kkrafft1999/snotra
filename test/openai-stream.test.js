@@ -37,7 +37,7 @@ test('streamChatRound accumulates text deltas and usage from the SSE stream', as
 
   assert.equal(res.message.content, 'Hallo!');
   assert.equal(res.finishReason, 'stop');
-  assert.deepEqual(res.usage, { prompt: 12, completion: 5, total: 17 });
+  assert.deepEqual(res.usage, { prompt: 12, completion: 5, total: 17, cached: 0 });
   assert.deepEqual(sink.textDeltas, ['Hal', 'lo!']);
   assert.deepEqual(sink.reasoningDeltas, ['denke…']);
 
@@ -215,6 +215,67 @@ test('streamChatRound ignores malformed JSON data lines', async (t) => {
     callbacks: sink.callbacks,
   });
   assert.equal(res.message.content, 'ok');
+});
+
+test('streamChatRound meldet cached_tokens als Teilmenge des Prompts (#179)', async (t) => {
+  mockFetch(t, () =>
+    sseResponse([
+      sse('response.output_text.delta', { delta: 'ok' }),
+      sse('response.completed', {
+        response: {
+          usage: {
+            input_tokens: 10000,
+            input_tokens_details: { cached_tokens: 8192 },
+            output_tokens: 20,
+            total_tokens: 10020,
+          },
+        },
+      }),
+      'data: [DONE]\n\n',
+    ])
+  );
+  const sink = collectCallbacks();
+
+  const res = await openai.streamChatRound({
+    config: CONFIG,
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: sink.callbacks,
+  });
+
+  assert.deepEqual(res.usage, { prompt: 10000, completion: 20, total: 10020, cached: 8192 });
+});
+
+test('streamChatRound bindet die Runde mit prompt_cache_key an den Chat (#179)', async (t) => {
+  const stream = () =>
+    sseResponse([
+      sse('response.output_text.delta', { delta: 'ok' }),
+      sse('response.completed', { response: { usage: { input_tokens: 1, output_tokens: 1 } } }),
+      'data: [DONE]\n\n',
+    ]);
+  const calls = mockFetch(t, stream);
+  const sink = collectCallbacks();
+  const messages = [{ role: 'user', content: 'Hi' }];
+
+  await openai.streamChatRound({
+    config: CONFIG,
+    model: 'gpt-4o',
+    messages,
+    callbacks: sink.callbacks,
+    cacheKey: 'chat-42',
+  });
+  assert.equal(JSON.parse(calls[0].options.body).prompt_cache_key, 'chat-42');
+
+  // Ohne Schluessel bleibt das Feld weg — nicht als leerer String, den OpenAI
+  // als eigenen Cache-Bucket lesen wuerde.
+  await openai.streamChatRound({
+    config: CONFIG,
+    model: 'gpt-4o',
+    messages,
+    callbacks: sink.callbacks,
+    cacheKey: '   ',
+  });
+  assert.equal('prompt_cache_key' in JSON.parse(calls[1].options.body), false);
 });
 
 test('streamChatRound sendet reasoning.summary nur mit reasoningSummary=auto (Issue #87)', async (t) => {

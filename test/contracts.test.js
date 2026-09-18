@@ -50,17 +50,87 @@ test('normalizeUsage maps provider fields and coerceUsage never returns null', (
     prompt: 10,
     completion: 5,
     total: 15,
+    cached: 0,
   });
   assert.equal(normalizeUsage({}), null);
-  assert.deepEqual(createEmptyUsage(), { prompt: 0, completion: 0, total: 0 });
-  assert.deepEqual(coerceUsage({}), { prompt: 0, completion: 0, total: 0 });
-  assert.deepEqual(coerceUsage({ prompt_tokens: 3 }), { prompt: 3, completion: 0, total: 3 });
+  assert.deepEqual(createEmptyUsage(), { prompt: 0, completion: 0, total: 0, cached: 0 });
+  assert.deepEqual(coerceUsage({}), { prompt: 0, completion: 0, total: 0, cached: 0 });
+  assert.deepEqual(coerceUsage({ prompt_tokens: 3 }), {
+    prompt: 3,
+    completion: 0,
+    total: 3,
+    cached: 0,
+  });
+});
+
+test('cached_tokens: OpenAI zaehlt im Prompt, Anthropic daneben (#179)', () => {
+  // OpenAI (Responses): cached_tokens steckt in input_tokens_details und ist
+  // eine Teilmenge von input_tokens — der Prompt bleibt, wie er gemeldet wird.
+  assert.deepEqual(
+    normalizeUsage({
+      input_tokens: 10000,
+      input_tokens_details: { cached_tokens: 8192 },
+      output_tokens: 200,
+      total_tokens: 10200,
+    }),
+    { prompt: 10000, completion: 200, total: 10200, cached: 8192 }
+  );
+  // OpenAI (Chat Completions): derselbe Wert, anderer Schluessel.
+  assert.equal(
+    normalizeUsage({ prompt_tokens: 500, prompt_tokens_details: { cached_tokens: 384 } }).cached,
+    384
+  );
+  // Anthropic: cache_read und cache_creation stehen NEBEN input_tokens. Wer sie
+  // stehen laesst, verliert 9.500 von 10.000 Prompt-Token.
+  assert.deepEqual(
+    normalizeUsage({
+      input_tokens: 500,
+      cache_read_input_tokens: 9000,
+      cache_creation_input_tokens: 500,
+      output_tokens: 200,
+    }),
+    { prompt: 10000, completion: 200, total: 10200, cached: 9000 }
+  );
+  // Google: wieder Teilmenge.
+  assert.equal(
+    normalizeUsage({ promptTokenCount: 800, cachedContentTokenCount: 600 }).cached,
+    600
+  );
+  // Anbieter ohne Cache melden keinen — und keine erfundene 0-Ersatzzahl.
+  assert.equal(normalizeUsage({ prompt_eval_count: 100, eval_count: 20 }).cached, 0);
+  // Ein bereits normalisiertes Objekt darf beim zweiten Durchlauf nicht
+  // wachsen — sonst addiert die Tool-Schleife den Cache-Anteil mehrfach.
+  const einmal = normalizeUsage({
+    input_tokens: 500,
+    cache_read_input_tokens: 9000,
+    output_tokens: 200,
+  });
+  assert.deepEqual(normalizeUsage(einmal), einmal);
+  // Nie mehr aus dem Cache als im Prompt.
+  assert.equal(normalizeUsage({ prompt_tokens: 100, cached_tokens: 900 }).cached, 100);
+});
+
+test('mergeUsage summiert den Cache-Anteil ueber die Runden (#179)', () => {
+  assert.deepEqual(
+    mergeUsage(
+      { prompt: 10, completion: 5, total: 15, cached: 0 },
+      { prompt: 10000, completion: 20, total: 10020, cached: 9000 }
+    ),
+    { prompt: 10010, completion: 25, total: 10035, cached: 9000 }
+  );
+  // Ein Altbestand ohne `cached` (gespeicherte Chats vor #179) zaehlt als 0,
+  // statt die Summe auf NaN zu ziehen.
+  assert.equal(
+    mergeUsage({ prompt: 10, completion: 5, total: 15 }, { prompt: 1, completion: 1, total: 2 })
+      .cached,
+    0
+  );
 });
 
 test('mergeUsage sums rounds and tolerates null inputs', () => {
   assert.deepEqual(
     mergeUsage({ prompt: 10, completion: 5, total: 15 }, { prompt: 3, completion: 2, total: 5 }),
-    { prompt: 13, completion: 7, total: 20 }
+    { prompt: 13, completion: 7, total: 20, cached: 0 }
   );
   assert.deepEqual(mergeUsage({ prompt: 1, completion: 1, total: 2 }, null), {
     prompt: 1,

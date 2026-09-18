@@ -116,7 +116,7 @@ function translateMessagesToResponsesInput(messages) {
   return out;
 }
 
-async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
+async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal, cacheKey }) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: 'Kein API-Key hinterlegt.', code: 'NO_API_KEY' };
 
@@ -129,6 +129,14 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (respTools) {
     body.tools = respTools;
     body.tool_choice = 'auto';
+  }
+  // Prompt-Caching greift ab ~1.024 Token automatisch, aber nur, wenn die
+  // Anfrage auf derselben Maschine landet wie die vorige. Der Schluessel (die
+  // Chat-ID) sorgt dafuer, dass die Runden eines Chats zuverlaessig denselben
+  // Cache treffen — spuerbar in der Tool-Schleife, wo dieselben Schemas bis zu
+  // 40-mal hinausgehen (Issue #179).
+  if (typeof cacheKey === 'string' && cacheKey.trim()) {
+    body.prompt_cache_key = cacheKey.trim();
   }
   if (typeof config?.reasoningEffort === 'string' && config.reasoningEffort.trim()) {
     body.reasoning = { effort: config.reasoningEffort.trim() };

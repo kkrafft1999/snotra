@@ -1310,6 +1310,9 @@ function createChatEngine({
           tools: toolDefs,
           callbacks,
           abortSignal,
+          // Alle Runden eines Chats auf denselben Prompt-Cache lenken
+          // (Issue #179); ohne Chat-ID bleibt es beim Verhalten des Anbieters.
+          cacheKey: chatId || undefined,
         });
         requestUsage = mergeUsage(requestUsage, streamed.usage);
         // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
@@ -1321,6 +1324,10 @@ function createChatEngine({
         contextBreakdown = createContextBreakdown({
           parts: roundContextParts,
           promptTokens: roundUsage ? roundUsage.prompt : 0,
+          // Der Teiler Zeichen→Token gehoert dem Tokenizer am anderen Ende
+          // (Issue #178) — ohne den Anbieter schaetzt die Aufschluesselung
+          // gegen das falsche Modell.
+          providerId: target?.providerId,
         });
 
         if (streamed.cancelled) {

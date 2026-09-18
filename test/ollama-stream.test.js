@@ -33,7 +33,7 @@ test('streamChatRound accumulates streamed text and reports usage from the final
 
   assert.equal(res.message.content, 'Hallo!');
   assert.equal(res.finishReason, 'stop');
-  assert.deepEqual(res.usage, { prompt: 12, completion: 5, total: 17 });
+  assert.deepEqual(res.usage, { prompt: 12, completion: 5, total: 17, cached: 0 });
   assert.deepEqual(sink.textDeltas, ['Hal', 'lo!']);
 
   const body = JSON.parse(calls[0].options.body);
