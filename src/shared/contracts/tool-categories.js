@@ -9,6 +9,8 @@
  */
 'use strict';
 
+const { LOAD_SKILL_TOOL } = require('./skills');
+
 const TOOL_CATEGORIES = Object.freeze({
   /** Zugriff auf Dateien eines eingeschalteten Skills („skill:<name>/…“, #61). */
   SKILL: 'skill',
@@ -25,6 +27,9 @@ const TOOL_CATEGORIES = Object.freeze({
 });
 
 const TOOL_CATEGORY_BY_TOOL = Object.freeze({
+  // Nachladen einer Skill-Anleitung ist immer ein Skill-Schritt, auch wenn
+  // technisch eine Datei gelesen wird (Issue #173).
+  [LOAD_SKILL_TOOL]: TOOL_CATEGORIES.SKILL,
   read_file_text: TOOL_CATEGORIES.READ,
   read_file_lines: TOOL_CATEGORIES.READ,
   outline_file: TOOL_CATEGORIES.READ,

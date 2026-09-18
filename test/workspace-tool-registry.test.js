@@ -297,6 +297,7 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   const names = registry.getTools().map((tool) => tool.function.name);
   assert.deepEqual(names, [
     'list_directory',
+    'load_skill',
     'read_file_text',
     'read_file_lines',
     'search_in_files',
@@ -322,12 +323,15 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // Modell nicht (Issue #102).
   assert.equal(names.includes('shell_execute'), false);
 
-  // Konzept §2: acht Lesetools → read, drei Schreibtools → write,
+  // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
   // web_search und fetch_url → external. debug_wait ist read, steht aber als
   // internes Test-Tool nicht im Katalog der Einstellungen (Issue #98).
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   const readTools = [
     'list_directory',
+    // Nachladen einer Skill-Anleitung liest nur, und zwar aus einem
+    // schreibgeschuetzten Verzeichnis (Issue #173).
+    'load_skill',
     'read_file_text',
     'read_file_lines',
     'search_in_files',
@@ -344,8 +348,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.shell_execute, 'execute');
   assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
   assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
-  // 16 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
-  assert.equal(Object.keys(classes).length, 15);
+  // 17 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
+  assert.equal(Object.keys(classes).length, 16);
 });
 
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {
@@ -356,7 +360,13 @@ test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht
   });
 
   const withoutWorkspace = registry.getTools({ workspaceOpen: false }).map((tool) => tool.function.name);
-  assert.deepEqual(withoutWorkspace, ['web_search', 'fetch_url']);
+  // load_skill haengt nicht am Ordner, sondern an eingeschalteten Skills (#173).
+  assert.deepEqual(withoutWorkspace, ['load_skill', 'web_search', 'fetch_url']);
+  assert.deepEqual(
+    registry.getTools({ workspaceOpen: false, skillNames: [] }).map((tool) => tool.function.name),
+    ['web_search', 'fetch_url'],
+    'ohne eingeschalteten Skill faellt load_skill weg'
+  );
 
   const withWorkspace = registry.getTools().map((tool) => tool.function.name);
   assert.ok(withWorkspace.includes('list_directory'));

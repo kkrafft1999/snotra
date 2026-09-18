@@ -16,6 +16,14 @@
  */
 'use strict';
 
+/**
+ * Name des Tools, mit dem das Modell die Anleitung eines eingeschalteten
+ * Skills nachlädt (Issue #173). Steht hier, weil drei Schichten denselben
+ * Namen brauchen: die Registry beim Registrieren, die Engine beim Prüfen, ob
+ * es ihn überhaupt gibt, und die Anzeige für die Zeile im Verlauf.
+ */
+const LOAD_SKILL_TOOL = 'load_skill';
+
 /** Quellen in Prioritätsreihenfolge: der erste Treffer eines Namens gewinnt. */
 const SKILL_SOURCES = Object.freeze({
   /** Eingebaut, Teil der App — kann nicht überschrieben werden. */
@@ -114,6 +122,7 @@ function normalizeSkillCatalog(raw) {
 }
 
 module.exports = {
+  LOAD_SKILL_TOOL,
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABELS,

@@ -1,6 +1,8 @@
 const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
 const { sleepAbortable } = require('../../shared/runtime/abort');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
+const { formatSkillPath } = require('../../shared/runtime/skill-path');
+const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -53,6 +55,9 @@ function createToolRegistry(initialDefinitions = []) {
       // Tools ohne Ordnerbezug (Websuche) setzen false und werden dem Modell
       // auch ohne geoeffneten Projektordner angeboten (Issue #96).
       requiresWorkspace: definition.requiresWorkspace !== false,
+      // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
+      // Skill eingeschaltet ist (Issue #173).
+      requiresSkills: definition.requiresSkills === true,
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
@@ -90,7 +95,15 @@ function createToolRegistry(initialDefinitions = []) {
   // Sichtbarkeit hängt nur an den Tool-Häkchen (disabledNames) bzw. einer
   // expliziten Allowlist. Ob ein Aufruf laufen darf, entscheidet pro Aufruf
   // die Policy in der Engine (Issue #66) — nicht mehr ein globaler Schreibschalter.
-  function getAvailableDefinitions({ allowedNames, disabledNames, workspaceOpen = true } = {}) {
+  function getAvailableDefinitions({
+    allowedNames,
+    disabledNames,
+    workspaceOpen = true,
+    skillNames = null,
+  } = {}) {
+    // Kein `skillNames` heisst „nicht gesagt" und nicht „keine" — sonst waeren
+    // alle Aufrufer ohne Skill-Kontext (Tests, Katalog) ploetzlich skilllos.
+    const skillsAvailable = skillNames === null || (Array.isArray(skillNames) && skillNames.length > 0);
     const allowed = toAllowedNameSet(allowedNames);
     const disabled = toDisabledNameSet(disabledNames);
     return allDefinitions().filter(
@@ -99,6 +112,9 @@ function createToolRegistry(initialDefinitions = []) {
         (!disabled || !disabled.has(definition.name)) &&
         // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96).
         (workspaceOpen !== false || definition.requiresWorkspace === false) &&
+        // Ohne eingeschalteten Skill hat `load_skill` nichts zu laden und
+        // kostet nur ein Schema in jeder Anfrage (Issue #173).
+        (skillsAvailable || definition.requiresSkills !== true) &&
         // Tools, die eine Konfiguration brauchen (Issue #63: Schluessel fuer
         // die Websuche), werden dem Modell ohne sie gar nicht erst gezeigt —
         // besser als ein Aufruf, der zur Laufzeit scheitert.
@@ -130,7 +146,12 @@ function createToolRegistry(initialDefinitions = []) {
       function: {
         name: definition.name,
         description: definition.description,
-        parameters: definition.parameters,
+        // Ein Tool darf sein Schema je Anfrage schaerfen (Issue #173:
+        // `load_skill` traegt die eingeschalteten Skills als enum).
+        parameters:
+          typeof definition.parametersFor === 'function'
+            ? definition.parametersFor(options)
+            : definition.parameters,
       },
     }));
   }
@@ -233,6 +254,63 @@ function createWorkspaceToolRegistry({
       },
       handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
         fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots, sensitivity }),
+    },
+    {
+      name: LOAD_SKILL_TOOL,
+      riskClass: TOOL_RISK_CLASSES.READ,
+      // Ein Skill-Verzeichnis liegt nicht im Projektordner — die Anleitung
+      // eines eingeschalteten Skills ist auch ohne geöffneten Ordner lesbar
+      // (Issue #173). Ohne eingeschalteten Skill gibt es nichts zu laden,
+      // dann bleibt das Tool weg.
+      requiresWorkspace: false,
+      requiresSkills: true,
+      // Über denselben „skill:“-Pfad wie jede andere Skill-Datei: so gelten
+      // Wurzel-Auflösung, Ausbruchsprüfung und Freigabekarte unverändert, und
+      // im Verlauf steht „Skill <name>“ statt eines nackten Dateipfads (#61).
+      targets: (args) => {
+        const name = typeof args.name === 'string' ? args.name.trim() : '';
+        if (!name) return { error: 'name ist erforderlich.' };
+        return [{ path: formatSkillPath(name, 'SKILL.md'), kind: 'file', access: 'read' }];
+      },
+      description:
+        'Lädt die vollständige Anleitung eines eingeschalteten Skills. Im Prompt steht je Skill nur '
+        + 'eine kurze Beschreibung — passt sie zu dem, was ansteht, hole dir hiermit die Anleitung, '
+        + 'bevor du mit der Aufgabe beginnst, und richte dich danach. Rate nicht, was in einer '
+        + 'Anleitung stehen könnte.',
+      promptDescription: 'Lädt die Anleitung eines eingeschalteten Skills nach.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+          },
+        },
+        required: ['name'],
+      },
+      // Die eingeschalteten Skills stehen je Anfrage als `enum` im Schema.
+      // Gemessen mit llama3.1:8b und 18 Skills (Issue #173): ohne enum erfindet
+      // das Modell Namen („notizen", „Teams-Nachricht") und laedt nichts; mit
+      // enum waehlt es ausschliesslich echte Namen. Die Pruefung selbst haengt
+      // nicht daran — `runLoadSkillTool` loest den Namen ohnehin gegen die
+      // eingeschalteten Skills auf, und `parameters` bleibt als Grundschema
+      // ohne Anfragezustand stehen, damit die Argumentpruefung stabil bleibt.
+      parametersFor: ({ skillNames } = {}) => {
+        const names = Array.isArray(skillNames) ? skillNames.filter((n) => typeof n === 'string' && n) : [];
+        return {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+              ...(names.length > 0 ? { enum: names } : {}),
+            },
+          },
+          required: ['name'],
+        };
+      },
+      handler: (args, { workspaceRoot, skillRoots }) =>
+        fsService.runLoadSkillTool(args, workspaceRoot, { skillRoots }),
     },
     {
       name: 'read_file_text',

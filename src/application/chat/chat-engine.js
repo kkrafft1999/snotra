@@ -5,6 +5,7 @@ const { extractStringFromPartialJson } = require('../../shared/runtime/partial-j
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { normalizeAttachments } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
+const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -176,21 +177,61 @@ function collectInvokedSkillNames(messages) {
 }
 
 /**
- * Anweisungsteil der eingeschalteten Skills (Issue #18). Steht hinter dem
- * Prompt des Nutzers, aber vor dem Ordnerkontext: Skills beschreiben, *wie*
- * gearbeitet wird, der Ordnerkontext nur, *woran*.
+ * Anweisungsteil der eingeschalteten Skills (Issue #18, seit #173 auf Abruf).
+ *
+ * Steht hinter dem Prompt des Nutzers, aber vor dem Ordnerkontext: Skills
+ * beschreiben, *wie* gearbeitet wird, der Ordnerkontext nur, *woran*.
+ *
+ * Im Prompt steht je Skill nur `name` und `description`; die Anleitung holt
+ * sich das Modell bei Bedarf mit `load_skill` (Issue #173). Vorher lag der
+ * volle Body jedes eingeschalteten Skills in jeder Anfrage — bei acht
+ * Ordner-Skills rund 16.000 Token, unabhängig davon, ob einer davon je
+ * gebraucht wurde (#172).
+ *
+ * Zwei Fälle bleiben beim vollen Body:
+ *  - per `/name` aufgerufene Skills — wer den Skill nennt, will ihn auch,
+ *    und ein Nachladeschritt wäre nur Umweg (Issue #124);
+ *  - `canLoadSkills === false`, also kein verfügbares `load_skill` (vom
+ *    Nutzer abgeschaltet oder per Allowlist ausgesperrt). Ohne diesen
+ *    Rückfall würden Skills still wirkungslos, und genau das wäre der
+ *    Fehler, den niemand bemerkt.
  */
-function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) {
+function buildSkillsSystemPrompt(
+  activeSkills,
+  { toolsAvailable = false, canLoadSkills = false } = {}
+) {
   if (!Array.isArray(activeSkills) || activeSkills.length === 0) return '';
   const usable = activeSkills.filter(
     (skill) => skill && typeof skill.body === 'string' && skill.body.trim()
   );
   if (usable.length === 0) return '';
-  const sections = usable.map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
-  const intro = [
-    'Folgende Skills sind eingeschaltet. Ihre Anweisungen gelten für diese ' +
-      'Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.',
-  ];
+
+  // Ohne Nachlade-Tool bleibt es beim alten Verhalten: alles sofort.
+  const eager = canLoadSkills ? usable.filter((skill) => skill.invoked) : usable;
+  const lazy = canLoadSkills ? usable.filter((skill) => !skill.invoked) : [];
+
+  const intro = [];
+  if (lazy.length > 0) {
+    const lines = lazy.map((skill) => `- ${skill.name}: ${describeSkillForCatalog(skill)}`);
+    intro.push(
+      'Folgende Skills sind eingeschaltet. Hier steht nur, wofür jeder da ist — ' +
+        'die eigentliche Anleitung holst du dir mit „load_skill“.\n' +
+        lines.join('\n')
+    );
+    intro.push(
+      'Passt die Beschreibung eines Skills zu dem, was ansteht, rufe „load_skill“ ' +
+        'mit seinem Namen auf, bevor du mit der Aufgabe beginnst, und richte dich ' +
+        'danach nach der Anleitung. Rate nicht, was darin stehen könnte, und ' +
+        'behaupte nicht, einem Skill gefolgt zu sein, den du nicht geladen hast.'
+    );
+  }
+  if (eager.length > 0) {
+    intro.push(
+      'Die Anweisungen der folgenden Skills stehen vollständig unten und gelten ' +
+        'für diese Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.'
+    );
+  }
+
   // Ohne diesen Hinweis bleibt das „/name“ in der Nachricht des Nutzers eine
   // unerklärte Marke — das Modell soll wissen, dass es der Auslöser war und
   // keine Frage nach einem Dateipfad (Issue #124).
@@ -204,8 +245,8 @@ function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) 
   }
   // Ein Skill besteht oft aus mehr als der SKILL.md — verweist sie auf
   // references/ oder assets/, muss das Modell wissen, wie es dorthin kommt
-  // (Issue #61). Ohne offenen Ordner gibt es keine Tools, dann bleibt der
-  // Hinweis weg.
+  // (Issue #61). Ohne offenen Ordner gibt es keine Lese-Tools, dann bleibt der
+  // Hinweis weg; „load_skill“ selbst braucht keinen Ordner.
   if (toolsAvailable) {
     const names = usable.map((skill) => skill.name).join(', ');
     intro.push(
@@ -216,7 +257,24 @@ function buildSkillsSystemPrompt(activeSkills, { toolsAvailable = false } = {}) 
         `gelten weiterhin nur für den Arbeitsordner.`
     );
   }
+
+  const sections = eager.map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
   return [...intro, ...sections].join('\n\n');
+}
+
+/**
+ * Beschreibung für die Kurzliste. Ohne `description` im Frontmatter kann ein
+ * Skill nicht geladen werden — der Dienst lässt solche Skills gar nicht erst
+ * zu (`skills-service.js`) —, der Rückfall ist also nur Vorsichtsmaßnahme.
+ */
+function describeSkillForCatalog(skill) {
+  const description = typeof skill.description === 'string' ? skill.description.trim() : '';
+  if (description) return collapseWhitespace(description);
+  return 'Ohne Beschreibung — bei Zweifel laden.';
+}
+
+function collapseWhitespace(text) {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** Provider-Endpunkt als Bindungsschlüssel sensibler Freigaben (Konzept §4). */
@@ -459,12 +517,62 @@ function createChatEngine({
       // Nicht mehr „Ordner offen = Tools an": jedes Tool sagt selbst, ob es
       // einen Ordner braucht (Issue #96).
       const workspaceOpen = Boolean(workspaceRoot);
-      const toolOptions = { disabledNames, workspaceOpen };
+
+      // Skills stehen vor den Tools, weil beide voneinander abhängen: Ob
+      // `load_skill` überhaupt angeboten wird, hängt daran, ob etwas zu laden
+      // da ist — und ob der Prompt die Skills nur nennt oder ausschreibt,
+      // hängt daran, ob `load_skill` verfügbar ist (Issue #173). Eingeschaltet
+      // sind Skills unabhängig davon, ob ein Ordner offen ist; die
+      // System-Skills beschreiben die App selbst.
+      let activeSkills = [];
+      // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
+      // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie.
+      let skillRoots = [];
+      if (skills) {
+        try {
+          activeSkills = await skills.getActiveSkills({
+            workspaceRoot,
+            activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
+            // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
+            // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
+            // prägen (Issue #124).
+            invokedSkills: collectInvokedSkillNames(messages),
+          });
+          skillRoots = activeSkills
+            .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
+            .map((skill) => ({ name: skill.name, dir: skill.path }));
+        } catch {
+          // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
+          activeSkills = [];
+          skillRoots = [];
+        }
+      }
+      const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
+
+      const toolOptions = {
+        disabledNames,
+        workspaceOpen,
+        // Die eingeschalteten Skills: ohne sie hat `load_skill` nichts zu tun
+        // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
+        // seinem Schema (Issue #173).
+        skillNames: skillRoots.map((entry) => entry.name),
+      };
       // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
       // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
       // der mittendrin dazukommt, wirkt ab der naechsten Nachricht.
       if (typeof tools.prepare === 'function') await tools.prepare(toolOptions);
       const toolsPrompt = tools.buildSystemPrompt(toolOptions);
+      const availableToolDefs = tools.getTools(toolOptions);
+      // Der Nutzer kann `load_skill` in den Einstellungen abschalten. Dann
+      // gibt es keinen Weg zur Anleitung, und der Prompt fällt auf das alte
+      // Verhalten zurück, statt Skills still wirkungslos zu lassen (#173).
+      const canLoadSkills = availableToolDefs.some(
+        (definition) => definition?.function?.name === LOAD_SKILL_TOOL
+      );
+      const skillsSystem = buildSkillsSystemPrompt(activeSkills, {
+        toolsAvailable: workspaceOpen,
+        canLoadSkills,
+      });
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
       // könne keine Dateien lesen oder schreiben.
@@ -476,33 +584,6 @@ function createChatEngine({
             selectedIsDirectory: selection?.isDirectory === true,
           })
         : buildNoWorkspaceSystemPrompt({ toolsPrompt });
-      // Skills gelten unabhängig davon, ob ein Ordner offen ist — die
-      // System-Skills beschreiben die App selbst.
-      let skillsSystem = '';
-      // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
-      // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie.
-      let skillRoots = [];
-      if (skills) {
-        try {
-          const active = await skills.getActiveSkills({
-            workspaceRoot,
-            activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
-            // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
-            // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
-            // prägen (Issue #124).
-            invokedSkills: collectInvokedSkillNames(messages),
-          });
-          skillsSystem = buildSkillsSystemPrompt(active, { toolsAvailable: Boolean(workspaceRoot) });
-          skillRoots = active
-            .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
-            .map((skill) => ({ name: skill.name, dir: skill.path }));
-        } catch {
-          // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
-          skillsSystem = '';
-          skillRoots = [];
-        }
-      }
-      const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
 
       // Umgebungsangaben (Issue #138). Abschaltbar, weil der absolute Pfad den
       // Benutzernamen enthält und mit jeder Anfrage zum Anbieter geht; der
@@ -550,7 +631,6 @@ function createChatEngine({
       const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       apiMessages.push(...windowedHistory);
 
-      const availableToolDefs = tools.getTools(toolOptions);
       // Eine leere Liste ist kein „keine Tools": manche Provider lehnen ein
       // leeres tools-Array ab. Ohne Tools bleibt das Feld weg wie bisher.
       const toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
