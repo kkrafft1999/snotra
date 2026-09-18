@@ -173,6 +173,27 @@ function normalizeDisabledTools(raw) {
 }
 
 /**
+ * Zuletzt vom Server gemeldete Tool-Namen. Sie werden mitgespeichert, damit
+ * die Oberflaeche die Auswahl auch dann anzeigen kann, wenn der Server
+ * gerade nicht laeuft — bei einem Docker-MCP ist das der Normalfall. Die
+ * Reihenfolge bleibt die des Servers.
+ */
+function normalizeKnownTools(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const value of raw) {
+    if (typeof value !== 'string') continue;
+    const name = value.trim().slice(0, MCP_LIMITS.TOOL_NAME_MAX_CHARS);
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+    if (out.length >= MCP_LIMITS.MAX_TOOLS) break;
+  }
+  return out;
+}
+
+/**
  * Prüft eine Serverkonfiguration und liefert sie in Normalform.
  *
  * @param {unknown} raw
@@ -225,6 +246,7 @@ function validateMcpServerConfig(raw) {
     // Fehlend heißt eingeschaltet: wer einen Server einträgt, will ihn nutzen.
     enabled: raw.enabled === undefined || raw.enabled === null ? true : raw.enabled === true,
     disabledTools: normalizeDisabledTools(raw.disabledTools),
+    knownTools: normalizeKnownTools(raw.knownTools),
   };
 
   return { ok: errors.length === 0, value: errors.length === 0 ? value : null, errors };
@@ -506,6 +528,7 @@ module.exports = {
   isMcpToolName,
   fitsMcpToolNameLimit,
   mcpRiskClassesFor,
+  normalizeKnownTools,
   normalizeMcpEnvInput,
   normalizeStoredMcpEnv,
   maskStoredMcpEnv,

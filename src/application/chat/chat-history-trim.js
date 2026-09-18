@@ -1,7 +1,8 @@
 // Begrenzt, wie viel Verlauf pro Chat-Request an den Provider geht.
 // Heuristik statt echter Tokenizer: 1 Token ≈ 4 Zeichen; das Budget wird
 // deshalb in Zeichen gefuehrt und ist ueber ui-preferences.json
-// (historyCharLimit) konfigurierbar.
+// (historyCharLimit) konfigurierbar. Ohne Einstellung haengt das Budget am
+// Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter.
 
 const { attachmentsCharCost } = require('../../shared/contracts/attachments');
 
@@ -9,6 +10,12 @@ const CHARS_PER_TOKEN = 4;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
+// Lokale Modelle verarbeiten den Prompt um Groessenordnungen langsamer als
+// Cloud-Anbieter (gemessen: ~93 tok/s Prefill auf mlx-lm, also ~9 Minuten
+// allein fuer das Fuellen des Standardbudgets). Fuer sie gilt deshalb ein
+// engeres Budget; eine ausdrueckliche Einstellung sticht es weiterhin.
+const DEFAULT_LOCAL_HISTORY_CHAR_LIMIT = 40_000;
+const LOCAL_PROVIDER_IDS = new Set(['mlx-lm', 'ollama']);
 
 const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
   note: 'Ältere Tool-Ausgabe wurde gekürzt, um den Verlauf kompakt zu halten.',
@@ -19,8 +26,16 @@ function clampHistoryCharLimit(raw) {
   return Math.min(HISTORY_CHAR_LIMIT_MAX, Math.max(HISTORY_CHAR_LIMIT_MIN, Math.round(raw)));
 }
 
-function resolveHistoryCharLimit(uiPrefs) {
-  return clampHistoryCharLimit(uiPrefs?.historyCharLimit) ?? DEFAULT_HISTORY_CHAR_LIMIT;
+function isLocalProvider(providerId) {
+  return typeof providerId === 'string' && LOCAL_PROVIDER_IDS.has(providerId.trim().toLowerCase());
+}
+
+function defaultHistoryCharLimit(providerId) {
+  return isLocalProvider(providerId) ? DEFAULT_LOCAL_HISTORY_CHAR_LIMIT : DEFAULT_HISTORY_CHAR_LIMIT;
+}
+
+function resolveHistoryCharLimit(uiPrefs, providerId) {
+  return clampHistoryCharLimit(uiPrefs?.historyCharLimit) ?? defaultHistoryCharLimit(providerId);
 }
 
 function estimateMessageChars(message) {
@@ -116,10 +131,14 @@ function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_
 module.exports = {
   CHARS_PER_TOKEN,
   DEFAULT_HISTORY_CHAR_LIMIT,
+  DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
+  LOCAL_PROVIDER_IDS,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
   TOOL_OUTPUT_PLACEHOLDER,
   clampHistoryCharLimit,
+  isLocalProvider,
+  defaultHistoryCharLimit,
   resolveHistoryCharLimit,
   estimateMessageChars,
   estimateMessagesChars,

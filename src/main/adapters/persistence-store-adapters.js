@@ -50,6 +50,7 @@ function createMcpConfigStorePort(storage) {
     readMcpServers: (...args) => storage.readMcpServers(...args),
     saveMcpServer: (...args) => storage.saveMcpServer(...args),
     deleteMcpServer: (...args) => storage.deleteMcpServer(...args),
+    updateMcpServerKnownTools: (...args) => storage.updateMcpServerKnownTools(...args),
   };
 }
 

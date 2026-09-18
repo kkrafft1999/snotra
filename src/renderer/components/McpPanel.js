@@ -272,6 +272,7 @@ export function initMcpPanel({ api }) {
       cwd: server.cwd,
       enabled: server.enabled,
       disabledTools: server.disabledTools,
+      knownTools: server.knownTools,
       ...patch,
     };
   }
@@ -339,10 +340,20 @@ export function initMcpPanel({ api }) {
     return env;
   }
 
-  function renderTools(server) {
+  /**
+   * Die Tool-Namen eines Servers: bevorzugt die der laufenden Verbindung,
+   * sonst der gespeicherte Katalog der letzten Verbindung. Ohne beides bleibt
+   * die Liste leer — dann war der Server noch nie erreichbar.
+   */
+  function knownToolsOf(server) {
     const connection = connectionOf(server?.id);
-    const names = connection?.state === MCP_CONNECTION_STATES.READY ? connection.toolNames || [] : [];
-    const known = Array.isArray(server?.knownTools) && server.knownTools.length > 0 ? server.knownTools : names;
+    const live = connection?.state === MCP_CONNECTION_STATES.READY ? connection.toolNames || [] : [];
+    if (live.length > 0) return live;
+    return Array.isArray(server?.knownTools) ? server.knownTools : [];
+  }
+
+  function renderTools(server) {
+    const known = knownToolsOf(server);
     toolsBlock?.classList.toggle('hidden', !server || known.length === 0);
     if (!toolsList) return;
     toolsList.replaceChildren();
@@ -362,12 +373,16 @@ export function initMcpPanel({ api }) {
     }
   }
 
+  /**
+   * Die abgewaehlten Tools aus dem Dialog. Zeigt der Dialog gar keine Liste —
+   * weil der Server nicht laeuft und noch kein Katalog gespeichert ist —,
+   * bleibt die gespeicherte Auswahl stehen. Ein leeres Formularfeld heisst
+   * „unbekannt", nicht „alles wieder einschalten" (Issue #170).
+   */
   function readDisabledTools() {
-    const out = [];
-    for (const box of toolsList?.querySelectorAll('input[type="checkbox"]') || []) {
-      if (!box.checked) out.push(box.value);
-    }
-    return out;
+    const boxes = [...(toolsList?.querySelectorAll('input[type="checkbox"]') || [])];
+    if (boxes.length === 0) return editing?.disabledTools || [];
+    return boxes.filter((box) => !box.checked).map((box) => box.value);
   }
 
   function openDialog(server) {
@@ -414,6 +429,7 @@ export function initMcpPanel({ api }) {
       cwd: String(fieldCwd.value || '').trim(),
       enabled: editing ? editing.enabled : true,
       disabledTools: readDisabledTools(),
+      knownTools: knownToolsOf(editing),
       env: readEnv(),
     };
     const result = await api.saveMcpServer?.(payload);
