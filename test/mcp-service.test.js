@@ -63,6 +63,16 @@ test('ein stdio-Server liefert seinen Tool-Katalog', async (t) => {
   assert.deepEqual(tools.map((tool) => tool.name), ['echo', 'add']);
   assert.equal(tools[0].serverId, 'files');
   assert.equal(tools[0].description, 'Gibt den Text zurück.');
+  // Issue #185: die redundanten `title`-Annotationen kommen nicht mit — der
+  // Parameter, der `title` heisst, schon.
+  assert.deepEqual(tools[0].inputSchema, {
+    type: 'object',
+    properties: {
+      text: { type: 'string' },
+      title: { type: 'string', description: 'Überschrift über der Ausgabe.' },
+    },
+    required: ['text'],
+  });
 
   const status = statusOf(service, 'files');
   assert.equal(status.state, MCP_CONNECTION_STATES.READY);

@@ -15,6 +15,7 @@ const {
   isValidMcpServerId,
   normalizeMcpToolCatalog,
   normalizeMcpServerConfig,
+  stripSchemaTitles,
   validateMcpServerConfig,
 } = require('../src/shared/contracts/mcp');
 
@@ -141,10 +142,103 @@ test('Tool-Katalog: Einträge ohne Namen und Dopplungen fallen weg', () => {
   assert.deepEqual(tools[1].inputSchema, { type: 'object', properties: {} });
 });
 
-test('das inputSchema wird unverändert durchgereicht', () => {
+test('das inputSchema wird bis auf die title-Annotationen durchgereicht', () => {
   const schema = { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] };
   const [tool] = normalizeMcpToolCatalog([{ name: 'read', inputSchema: schema }], 'files');
   assert.deepEqual(tool.inputSchema, schema);
+});
+
+// Issue #185: Pydantic-Server haengen an jede Eigenschaft ein `title`, das nur
+// den Feldnamen wiederholt. Das kostet in jeder Runde Token und sagt dem
+// Modell nichts.
+test('redundante title-Annotationen fallen aus dem Schema', () => {
+  const [tool] = normalizeMcpToolCatalog(
+    [{
+      name: 'post_my_time',
+      inputSchema: {
+        type: 'object',
+        title: 'post_my_timeArguments',
+        properties: {
+          session_id: { type: 'string', title: 'Session Id', description: 'Die Sitzung' },
+          minutes: { type: 'integer', title: 'Minutes' },
+        },
+        required: ['session_id'],
+      },
+    }],
+    'heimat',
+  );
+  assert.deepEqual(tool.inputSchema, {
+    type: 'object',
+    properties: {
+      session_id: { type: 'string', description: 'Die Sitzung' },
+      minutes: { type: 'integer' },
+    },
+    required: ['session_id'],
+  });
+});
+
+// Der eigentliche Fallstrick: vier Atlassian-Tools haben einen Parameter, der
+// tatsaechlich `title` heisst — darunter `confluence_get_page`. Ein naiver
+// Walk ueber alle Objekte wuerde ihn loeschen und das Tool brechen.
+test('ein Parameter namens „title" ueberlebt', () => {
+  const stripped = stripSchemaTitles({
+    type: 'object',
+    title: 'confluence_get_pageArguments',
+    properties: {
+      title: { type: 'string', title: 'Title', description: 'Titel der Seite' },
+      space_key: { type: 'string', title: 'Space Key' },
+    },
+    required: ['title'],
+  });
+  assert.deepEqual(stripped, {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Titel der Seite' },
+      space_key: { type: 'string' },
+    },
+    required: ['title'],
+  });
+});
+
+test('auch verschachtelte Schemas werden erreicht — und ihre title-Parameter verschont', () => {
+  const stripped = stripSchemaTitles({
+    type: 'object',
+    properties: {
+      pages: {
+        type: 'array',
+        title: 'Pages',
+        items: { type: 'object', title: 'Page', properties: { title: { type: 'string', title: 'Title' } } },
+      },
+      mode: { anyOf: [{ type: 'string', title: 'Modus' }, { type: 'null' }], title: 'Mode', default: null },
+      ref: { $ref: '#/$defs/Filter' },
+    },
+    $defs: { Filter: { type: 'object', title: 'Filter', properties: { title: { const: 'x', title: 'Title' } } } },
+  });
+  assert.deepEqual(stripped, {
+    type: 'object',
+    properties: {
+      pages: {
+        type: 'array',
+        items: { type: 'object', properties: { title: { type: 'string' } } },
+      },
+      mode: { anyOf: [{ type: 'string' }, { type: 'null' }], default: null },
+      ref: { $ref: '#/$defs/Filter' },
+    },
+    $defs: { Filter: { type: 'object', properties: { title: { const: 'x' } } } },
+  });
+});
+
+test('stripSchemaTitles fasst die Vorlage nicht an und lässt Daten in Ruhe', () => {
+  const schema = {
+    type: 'object',
+    title: 'Args',
+    properties: { kind: { type: 'string', title: 'Kind', enum: ['title', 'body'], default: 'title' } },
+  };
+  const before = JSON.stringify(schema);
+  const stripped = stripSchemaTitles(schema);
+  assert.equal(JSON.stringify(schema), before, 'das Eingabeobjekt gehört dem Aufrufer');
+  // `enum` und `default` sind Daten, kein Schema — dort wird nichts gesucht.
+  assert.deepEqual(stripped.properties.kind, { type: 'string', enum: ['title', 'body'], default: 'title' });
 });
 
 test('createMcpConnectionStatus füllt Lücken und prüft den Zustand', () => {
