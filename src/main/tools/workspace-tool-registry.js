@@ -28,10 +28,27 @@ function createToolRegistry(initialDefinitions = []) {
   // vollstaendig verlieren, nicht nur bis zum naechsten Neustart behalten.
   let dynamic = new Map();
 
+  /**
+   * Prueft und ergaenzt eine Tool-Definition.
+   *
+   * Drei Beschreibungsfelder mit je eigenem Leser — wer eines aendert, sollte
+   * wissen, wen er trifft (Issue #181):
+   *  - `description` (Pflicht): Volltext fuer Einstellungen › Tools, aufklappbar.
+   *    Ohne `modelDescription` geht er zugleich als Schema-Text an das Modell.
+   *  - `modelDescription` (optional): Schema-Text ausschliesslich fuer das
+   *    Modell. Gesetzt schlaegt er `description` in `getTools()`, sonst nichts.
+   *  - `promptDescription` (optional): Kurzzeile fuer die Tool-Liste im
+   *    System-Prompt und fuer die zugeklappte Zeile in den Einstellungen.
+   */
   function normalizeDefinition(definition) {
-    const { name, description, parameters, handler, riskClass, additionalRiskClasses } = definition || {};
+    const { name, description, modelDescription, parameters, handler, riskClass, additionalRiskClasses } = definition || {};
     if (!name || typeof description !== 'string' || !parameters || typeof handler !== 'function') {
       throw new TypeError('Tool benötigt name, description, parameters und handler.');
+    }
+    // Ein Feld vom falschen Typ faellt sonst erst beim Anbieter auf — und dort
+    // als unverstaendlicher Schema-Fehler statt als Tippfehler hier.
+    if (modelDescription != null && typeof modelDescription !== 'string') {
+      throw new TypeError(`Tool ${name}: modelDescription muss ein String sein.`);
     }
     // Jedes Tool trägt eine validierte Mindestklasse (Konzept §2). Es gibt
     // keinen impliziten read-Default: ohne Klasse keine Registrierung.
@@ -95,6 +112,12 @@ function createToolRegistry(initialDefinitions = []) {
   // Sichtbarkeit hängt nur an den Tool-Häkchen (disabledNames) bzw. einer
   // expliziten Allowlist. Ob ein Aufruf laufen darf, entscheidet pro Aufruf
   // die Policy in der Engine (Issue #66) — nicht mehr ein globaler Schreibschalter.
+  //
+  // Was der Nutzer in den Einstellungen nicht sieht, bekommt auch das Modell
+  // nicht (Issue #180): Ein internes Tool waere sonst ein Schema, das in jeder
+  // Runde Tokens kostet und das niemand abwaehlen kann, weil es in der
+  // Tool-Liste gar nicht auftaucht. Nur die Sichtbarkeit — `getDefinition` und
+  // `execute` bleiben offen, die UI-Tests loesen `debug_wait` weiterhin aus.
   function getAvailableDefinitions({
     allowedNames,
     disabledNames,
@@ -108,6 +131,7 @@ function createToolRegistry(initialDefinitions = []) {
     const disabled = toDisabledNameSet(disabledNames);
     return allDefinitions().filter(
       (definition) =>
+        definition.internal !== true &&
         (!allowed || allowed.has(definition.name)) &&
         (!disabled || !disabled.has(definition.name)) &&
         // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96).
@@ -126,8 +150,8 @@ function createToolRegistry(initialDefinitions = []) {
    * Katalog für die Einstellungen (Issue #98). Liefert neben der vollen
    * `description` die kurze `promptDescription` als `shortDescription`: die
    * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
-   * Interne Tools (`internal: true`, z. B. debug_wait) bleiben dem Modell
-   * erhalten, tauchen in den Einstellungen aber nicht auf.
+   * Interne Tools (`internal: true`, z. B. debug_wait) tauchen weder hier noch
+   * in den Schemas fuer das Modell auf (Issue #180) — ausfuehrbar bleiben sie.
    */
   function listCatalog() {
     return allDefinitions()
@@ -140,12 +164,23 @@ function createToolRegistry(initialDefinitions = []) {
       }));
   }
 
+  /**
+   * Schemas fuer den Anbieter.
+   *
+   * Die Beschreibung hat zwei Leser mit gegensaetzlichen Interessen (Issue
+   * #181): Das Modell bekommt sie in jeder Runde und zahlt sie in Tokens, der
+   * Nutzer klappt sie in Einstellungen › Tools auf und will es genau wissen.
+   * `modelDescription` trennt beide — gesetzt geht sie an das Modell, sonst
+   * bleibt es bei `description`. Getrimmt geprueft, damit ein versehentlich
+   * leer gelassenes Feld nicht stillschweigend eine leere Beschreibung
+   * hinausschickt.
+   */
   function getTools(options = {}) {
     return getAvailableDefinitions(options).map((definition) => ({
       type: 'function',
       function: {
         name: definition.name,
-        description: definition.description,
+        description: definition.modelDescription?.trim() || definition.description,
         // Ein Tool darf sein Schema je Anfrage schaerfen (Issue #173:
         // `load_skill` traegt die eingeschalteten Skills als enum).
         parameters:

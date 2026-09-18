@@ -55,7 +55,7 @@ werden blockiert; es gibt keinen impliziten `read`-Default.
 
 | Klasse | Bedeutung | Zuordnung / Beispiel |
 | --- | --- | --- |
-| `read` | Lesen gewöhnlicher Daten oder Aktion ohne Seiteneffekt | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`; auch `debug_wait` (kein Dateizugriff) |
+| `read` | Lesen gewöhnlicher Daten oder Aktion ohne Seiteneffekt | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`; auch `debug_wait` (kein Dateizugriff, seit Issue #180 aber nur noch aus Tests auslösbar — dem Modell wird es nicht mehr angeboten) |
 | `read-sensitive` | Sensible Inhalte oder gezielter Zugriff auf einen sensiblen Pfad | Dynamische Hochstufung der Lese-Tools, auch unter `skill:` |
 | `write` | Datei erstellen, gezielt ändern oder mit Wiederherstellungskopie überschreiben | `write_file_text` bei neuer Datei oder mit erfolgreich angelegter Wiederherstellungskopie (Abschnitt 9); `edit_file`, `apply_patch` |
 | `delete` | Löschen oder vollständiges Überschreiben ohne gesicherte Wiederherstellung | `write_file_text` bei bestehender Datei, wenn die Wiederherstellungskopie nicht angelegt werden kann; künftiges Lösch-Tool |

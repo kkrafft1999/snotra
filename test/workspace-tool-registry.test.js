@@ -191,7 +191,53 @@ test('catalog falls back to the full description when a tool has no short text',
   ]);
 });
 
-test('internal tools stay available to the model but leave the settings catalog', () => {
+test('modelDescription geht an das Modell, description bleibt in den Einstellungen (#181)', () => {
+  const lang = 'Ausfuehrlicher Text fuer die Einstellungen, der alles erklaert.';
+  const registry = createToolRegistry([
+    { ...definition('read'), description: lang, modelDescription: 'Liest eine Datei.' },
+  ]);
+
+  assert.equal(registry.getTools()[0].function.description, 'Liest eine Datei.');
+  // Die Einstellungen zeigen unveraendert den Volltext und die Kurzzeile.
+  assert.deepEqual(registry.listCatalog(), [
+    {
+      name: 'read',
+      description: lang,
+      shortDescription: 'Prompt für read',
+      riskClass: TOOL_RISK_CLASSES.READ,
+    },
+  ]);
+  // Die Kurzzeile im System-Prompt bleibt die promptDescription.
+  assert.match(registry.buildSystemPrompt(), /- read: Prompt für read/);
+});
+
+test('ohne modelDescription bleibt getTools() byte-identisch (#181)', () => {
+  const ohneFeld = createToolRegistry([definition('read'), definition('write')]);
+  // Das Feld ueberhaupt zu kennen darf nichts aendern, solange niemand es setzt —
+  // das ist die Abnahmebedingung der Trennung: erst trennen, dann kuerzen.
+  const mitLeerem = createToolRegistry([
+    { ...definition('read'), modelDescription: '' },
+    { ...definition('write'), modelDescription: '   \n  ' },
+  ]);
+
+  assert.equal(
+    JSON.stringify(mitLeerem.getTools()),
+    JSON.stringify(ohneFeld.getTools())
+  );
+  // Explizit: ein leer gelassenes Feld schickt dem Modell keine leere
+  // Beschreibung, sondern faellt auf description zurueck.
+  assert.equal(mitLeerem.getTools()[0].function.description, 'Beschreibung für read');
+  assert.equal(mitLeerem.getTools()[1].function.description, 'Beschreibung für write');
+});
+
+test('modelDescription vom falschen Typ faellt sofort auf (#181)', () => {
+  assert.throws(
+    () => createToolRegistry([{ ...definition('read'), modelDescription: 42 }]),
+    /modelDescription/
+  );
+});
+
+test('internal tools leave both the settings catalog and the schemas (#180)', () => {
   const registry = createToolRegistry([
     definition('read'),
     { ...definition('debug_wait'), internal: true },
@@ -201,10 +247,27 @@ test('internal tools stay available to the model but leave the settings catalog'
     registry.listCatalog().map((entry) => entry.name),
     ['read']
   );
-  // Dem Modell wird das Tool weiterhin angeboten — es dient den UI-Tests.
+  // Was in den Einstellungen fehlt, kann niemand abwaehlen — also darf es auch
+  // nicht in jeder Runde Tokens kosten (Issue #180).
   assert.deepEqual(
     registry.getTools().map((tool) => tool.function.name),
-    ['read', 'debug_wait']
+    ['read']
+  );
+  assert.equal(registry.buildSystemPrompt().includes('debug_wait'), false);
+});
+
+test('internal tools stay executable although the model never sees them (#180)', async () => {
+  const registry = createToolRegistry([
+    definition('read'),
+    { ...definition('debug_wait'), internal: true },
+  ]);
+
+  // Die UI-Tests loesen debug_wait ueber Fake-LLMs aus: Der Filter aendert die
+  // Sichtbarkeit, nicht die Ausfuehrbarkeit.
+  assert.equal(registry.getDefinition('debug_wait')?.name, 'debug_wait');
+  assert.equal(
+    JSON.parse(await registry.execute('debug_wait', { value: 'x' }, APPROVED)).name,
+    'debug_wait'
   );
 });
 
@@ -213,6 +276,10 @@ test('debug_wait is marked internal in the workspace registry', () => {
 
   assert.equal(
     registry.listCatalog().some((entry) => entry.name === 'debug_wait'),
+    false
+  );
+  assert.equal(
+    registry.getTools().some((tool) => tool.function.name === 'debug_wait'),
     false
   );
   assert.equal(registry.getDefinition('debug_wait').internal, true);
@@ -305,7 +372,6 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'stat_path',
     'outline_file',
     'list_directory_tree',
-    'debug_wait',
     'write_file_text',
     'edit_file',
     'apply_patch',
@@ -324,8 +390,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(names.includes('shell_execute'), false);
 
   // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
-  // web_search und fetch_url → external. debug_wait ist read, steht aber als
-  // internes Test-Tool nicht im Katalog der Einstellungen (Issue #98).
+  // web_search und fetch_url → external. debug_wait ist read, bleibt als
+  // internes Test-Tool aber ausserhalb von Katalog und Schemas (#98, #180).
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   const readTools = [
     'list_directory',
