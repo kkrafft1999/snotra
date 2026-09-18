@@ -234,9 +234,8 @@ System-Skills sind immer da.
 Übernommen wird der Text `/name`, der in deiner Nachricht stehen bleibt. Er
 wirkt für den **weiteren Verlauf dieses Chats** — auch für die Folgeantworten
 und nach dem Neuladen des Chats, weil der Aufruf Teil der Nachricht ist. Deine
-Auswahl unter Einstellungen › Skills ändert sich dadurch nicht, und der Aufruf
-zählt **nicht** gegen die acht Häkchen: Das Limit schützt das Token-Budget der
-voreingestellten Skills, ein Aufruf ist deine bewusste Einzelentscheidung.
+Auswahl unter Einstellungen › Skills ändert sich dadurch nicht — der Aufruf
+gilt nur für diesen Chat und ist deine bewusste Einzelentscheidung.
 
 Nur was *du* schreibst, zählt als Aufruf — ein `/name` in einer Antwort des
 Modells oder in einem Tool-Ergebnis bleibt wirkungslos. Damit kann sich weder
