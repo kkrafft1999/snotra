@@ -10,6 +10,7 @@ const { resolveDebugWaitMs } = require('../contracts/debug-wait');
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { APP_LOCALES } = require('../contracts/enums');
 const { parseSkillPath } = require('../runtime/skill-path');
+const { LOAD_SKILL_TOOL } = require('../contracts/skills');
 
 function truncateToolLabel(s, max = 48) {
   const t = String(s ?? '');
@@ -54,6 +55,13 @@ function formatPauseDurationLabel(ms, phase, locale = APP_LOCALES.DE) {
  */
 function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES.DE) {
   const isDone = phase === 'done';
+  // Vor den Datei-Tools: Nachladen einer Anleitung soll im Verlauf als
+  // Skill-Schritt lesbar sein und nicht als „Datei gelesen" (Issue #173).
+  if (toolName === LOAD_SKILL_TOOL) {
+    const name = typeof args?.name === 'string' ? args.name.trim() : '';
+    const label = name ? `Skill ${truncateToolLabel(name, 24)}` : 'Skill';
+    return isDone ? `${label} geladen` : `${label} wird geladen …`;
+  }
   if (toolName === 'list_directory') {
     const pathLabel = formatRelativePathForLabel(args?.relative_path);
     if (pathLabel) {

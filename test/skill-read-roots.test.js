@@ -228,3 +228,117 @@ test('Die Registry gibt Skill-Wurzeln nur an Lese-Tools weiter', async (t) => {
   );
   assert.match(write.error, /nur mit den Lese-Tools/);
 });
+
+// ---------------------------------------------------------------------------
+// Nachladen der Anleitung auf Abruf (Issue #173)
+// ---------------------------------------------------------------------------
+
+test('load_skill liefert die Anleitung ohne Frontmatter', async (t) => {
+  const { base, workspace, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  const out = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
+  assert.equal(out.error, undefined);
+  assert.equal(out.skill, 'demo');
+  assert.equal(out.truncated, false);
+  assert.equal(out.instructions, 'Siehe references/.');
+  // Das Frontmatter kennt das Modell schon aus der Kurzliste im Prompt.
+  assert.equal(out.instructions.includes('name: demo'), false);
+});
+
+test('load_skill braucht keinen geöffneten Ordner', async (t) => {
+  const { base, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  const out = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, null, { skillRoots }));
+  assert.equal(out.instructions, 'Siehe references/.');
+});
+
+test('load_skill weist unbekannte, leere und ungültige Namen ab', async (t) => {
+  const { base, workspace, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  const unknown = JSON.parse(await svc.runLoadSkillTool({ name: 'fehlt' }, workspace, { skillRoots }));
+  assert.match(unknown.error, /Unbekannter Skill/);
+  assert.match(unknown.error, /demo/, 'die eingeschalteten Skills werden genannt');
+
+  const empty = JSON.parse(await svc.runLoadSkillTool({}, workspace, { skillRoots }));
+  assert.match(empty.error, /name ist erforderlich/);
+
+  // Ein Pfad im Namen darf nicht zu einer zweiten Adressierungsform werden.
+  const escape = JSON.parse(
+    await svc.runLoadSkillTool({ name: '../geheim' }, workspace, { skillRoots })
+  );
+  assert.match(escape.error, /Kein gültiger Skill-Name/);
+});
+
+test('load_skill meldet eine SKILL.md ohne Anleitung, statt leer zu antworten', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: demo\n---\n\n   \n', 'utf8');
+  const leer = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
+  assert.match(leer.error, /keine Anleitung/);
+
+  await fs.writeFile(path.join(skillDir, 'SKILL.md'), 'Nur Text, kein Frontmatter.\n', 'utf8');
+  const ohneFrontmatter = JSON.parse(
+    await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots })
+  );
+  assert.match(ohneFrontmatter.error, /YAML-Frontmatter/);
+});
+
+test('load_skill läuft über die Registry als Skill-Schritt, nicht als Dateizugriff', async (t) => {
+  const { base, workspace, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
+
+  const out = JSON.parse(
+    await registry.execute('load_skill', { name: 'demo' }, {
+      workspaceRoot: workspace,
+      skillRoots,
+      approved: true,
+    })
+  );
+  assert.equal(out.instructions, 'Siehe references/.');
+
+  // Das Ziel ist der übliche „skill:“-Pfad — davon hängen Freigabekarte,
+  // Verlaufszeile und Schreibschutz ab (#61).
+  const definition = registry.getDefinition('load_skill');
+  assert.deepEqual(definition.targets({ name: 'demo' }), [
+    { path: 'skill:demo/SKILL.md', kind: 'file', access: 'read' },
+  ]);
+  assert.equal(definition.riskClass, 'read');
+  assert.equal(definition.requiresWorkspace, false);
+  assert.equal(definition.requiresSkills, true);
+});
+
+test('load_skill trägt die eingeschalteten Skills als enum im Schema (#173)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
+  const schemaFor = (options) =>
+    registry.getTools(options).find((tool) => tool.function.name === 'load_skill');
+
+  // Gemessen mit llama3.1:8b: ohne enum erfindet ein kleines Modell bei langer
+  // Skill-Liste Namen und lädt nichts. Mit enum wählt es aus der Liste.
+  assert.deepEqual(schemaFor({ skillNames: ['demo', 'traffic'] }).function.parameters, {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+        enum: ['demo', 'traffic'],
+      },
+    },
+    required: ['name'],
+  });
+
+  // Ohne Angabe kein enum — die Argumentprüfung darf nicht am Anfragezustand hängen.
+  assert.equal(schemaFor({}).function.parameters.properties.name.enum, undefined);
+  assert.equal(registry.getDefinition('load_skill').parameters.properties.name.enum, undefined);
+
+  // Leere Liste heißt „kein Skill eingeschaltet“ — dann fällt das Tool weg.
+  assert.equal(schemaFor({ skillNames: [] }), undefined);
+});

@@ -1,4 +1,10 @@
 const { SKILL_PATH_PREFIX, parseSkillPath } = require('../../shared/runtime/skill-path');
+const { formatSkillPath } = require('../../shared/runtime/skill-path');
+const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
+const { MAX_SKILL_BODY_CHARS, isValidSkillName } = require('../../shared/contracts/skills');
+
+/** Dateiname der Skill-Anleitung — gespiegelt aus `skills-service.js`. */
+const SKILL_FILE = 'SKILL.md';
 const {
   SEARCH_MAX_PATTERN_CHARS,
   SEARCH_MAX_MATCH_LINE_CHARS,
@@ -1016,6 +1022,52 @@ function createFsService({
         size_bytes: st.size,
         truncated,
         content: text,
+      });
+    } catch (e) {
+      return JSON.stringify({ error: e.message });
+    }
+  }
+
+  /**
+   * Nachladen der Anleitung eines eingeschalteten Skills (Issue #173).
+   *
+   * Im Systemprompt steht je Skill nur Name und Beschreibung; die `SKILL.md`
+   * holt das Modell erst, wenn sie zur Aufgabe passt. Der Weg dorthin ist
+   * derselbe wie bei jeder anderen Skill-Datei — `skill:<name>/SKILL.md` über
+   * `resolveToolPath` —, damit Wurzel-Auflösung, Ausbruchsprüfung und
+   * Freigabekarte genau einmal existieren.
+   *
+   * Zurück kommt nur der Anweisungsteil: Das Frontmatter hat das Modell in
+   * Gestalt der Beschreibung bereits gesehen, und `name`/`description` noch
+   * einmal mitzuschicken wäre genau die Dopplung, die dieses Issue abschafft.
+   */
+  async function runLoadSkillTool(args, workspaceRoot, options = {}) {
+    const name = typeof args.name === 'string' ? args.name.trim() : '';
+    if (!name) return JSON.stringify({ error: 'name ist erforderlich.' });
+    if (!isValidSkillName(name)) {
+      return JSON.stringify({ error: `Kein gültiger Skill-Name: „${name}“.` });
+    }
+    const rel = formatSkillPath(name, SKILL_FILE);
+    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
+    if (error) return JSON.stringify({ error });
+    try {
+      const raw = await fs.readFile(absPath, 'utf8');
+      const parsed = parseSkillDocument(raw);
+      if (!parsed) {
+        return JSON.stringify({ error: `${SKILL_FILE} von „${name}“ hat kein YAML-Frontmatter.` });
+      }
+      const body = parsed.body.trim();
+      if (!body) {
+        return JSON.stringify({ error: `Skill „${name}“ hat keine Anleitung.` });
+      }
+      const truncated = body.length > MAX_SKILL_BODY_CHARS;
+      const instructions = truncated
+        ? `${body.slice(0, MAX_SKILL_BODY_CHARS)}\n… [gekürzt auf ${MAX_SKILL_BODY_CHARS} Zeichen]`
+        : body;
+      return JSON.stringify({
+        skill: name,
+        truncated,
+        instructions,
       });
     } catch (e) {
       return JSON.stringify({ error: e.message });
@@ -2299,6 +2351,7 @@ function createFsService({
     resolveToolPath,
     listApplyPatchTargets,
     runListDirectoryTool,
+    runLoadSkillTool,
     runReadFileTextTool,
     runReadFileLinesTool,
     runWriteFileTextTool,

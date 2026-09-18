@@ -33,7 +33,7 @@ test('fetch_url ist als externes Tool registriert und braucht keinen Ordner (#95
   const names = registry.getTools().map((tool) => tool.function.name);
   assert.ok(names.includes('fetch_url'));
   assert.deepEqual(
-    registry.getTools({ workspaceOpen: false }).map((tool) => tool.function.name),
+    registry.getTools({ workspaceOpen: false, skillNames: [] }).map((tool) => tool.function.name),
     ['fetch_url'],
     'ohne Ordner bleibt der Seitenabruf verfügbar'
   );

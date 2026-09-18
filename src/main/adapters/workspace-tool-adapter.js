@@ -9,6 +9,7 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { formatToolDisplayLine } = require('../../shared/presentation/tool-display');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
+const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
 const { createToolCallPlanner } = require('../tools/tool-call-planner');
@@ -122,8 +123,14 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       }
       // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der
       // Eintrag den Skill-Namen — daraus wird im Chat die Skill-Kategorie.
-      const skill = parseSkillPath(args?.relative_path);
-      if (skill) entry.skill = skill.name;
+      // `load_skill` trägt den Namen im Argument statt im Pfad (Issue #173).
+      if (toolName === LOAD_SKILL_TOOL) {
+        const name = typeof args?.name === 'string' ? args.name.trim() : '';
+        if (name) entry.skill = name;
+      } else {
+        const skill = parseSkillPath(args?.relative_path);
+        if (skill) entry.skill = skill.name;
+      }
       return entry;
     },
     formatDisplayLine(entry, phase, locale) {

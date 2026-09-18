@@ -617,7 +617,9 @@ test('engine zeigt Schreib-Tools unabhaengig vom alten Schreibschalter (Issue #6
     },
   });
 
-  assert.deepEqual(getToolsCalls, [{ disabledNames: [], workspaceOpen: true }]);
+  assert.deepEqual(getToolsCalls, [
+    { disabledNames: [], workspaceOpen: true, skillNames: [] },
+  ]);
   assert.equal(calls[0].tools[0].function.name, 'write_file_text');
 });
 
@@ -649,7 +651,7 @@ test('engine passes disabled tools to registry and execution context', async () 
   });
 
   assert.deepEqual(getToolsCalls, [
-    { disabledNames: ['debug_wait', 'search_in_files'], workspaceOpen: true },
+    { disabledNames: ['debug_wait', 'search_in_files'], workspaceOpen: true, skillNames: [] },
   ]);
   assert.deepEqual(tools.calls[0].context.disabledNames, ['debug_wait', 'search_in_files']);
 });
@@ -1074,6 +1076,134 @@ test('engine leaves the system message untouched when no skill is active', async
   });
 
   assert.equal(calls[0].messages.some((m) => m.role === 'system'), false);
+});
+
+// Skills auf Abruf (Issue #173): Im Prompt steht nur noch die Kurzliste, den
+// Body holt das Modell mit `load_skill`. Der Attrappen-ToolPort oben kennt
+// dieses Tool nicht — deshalb reichen die Tests es ausdrücklich herein, wo es
+// um das neue Verhalten geht, und lassen es weg, wo der Rückfall zählt.
+const LOAD_SKILL_DEFS = [
+  { name: 'list_directory', requiresWorkspace: true },
+  { name: 'load_skill', requiresWorkspace: false },
+];
+
+function makeSkillPort(skills) {
+  return { async getActiveSkills() { return skills; } };
+}
+
+test('engine nennt eingeschaltete Skills nur mit Beschreibung und lädt sie auf Abruf (#173)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    tools: makeToolPort(undefined, { toolDefs: LOAD_SKILL_DEFS }),
+    skills: makeSkillPort([
+      {
+        name: 'traffic',
+        description: 'Traffic-Report für snotra-ai.dev',
+        source: 'system',
+        path: '/skills/traffic',
+        body: 'Rufe gcloud auf und baue den HTML-Report.',
+      },
+    ]),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.match(system.content, /- traffic: Traffic-Report für snotra-ai\.dev/);
+  assert.match(system.content, /load_skill/);
+  // Der Body ist der ganze Punkt der Übung: Er darf nicht mehr im Prompt stehen.
+  assert.equal(system.content.includes('Rufe gcloud auf'), false);
+  assert.equal(system.content.includes('## Skill: traffic'), false);
+});
+
+test('engine schreibt per „/name" aufgerufene Skills weiterhin sofort aus (#173)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    tools: makeToolPort(undefined, { toolDefs: LOAD_SKILL_DEFS }),
+    skills: makeSkillPort([
+      {
+        name: 'gerufen',
+        description: 'Kurzbeschreibung',
+        source: 'system',
+        path: '/skills/gerufen',
+        body: 'Sofort gültige Regel.',
+        invoked: true,
+      },
+      {
+        name: 'nur-gelistet',
+        description: 'Andere Kurzbeschreibung',
+        source: 'system',
+        path: '/skills/nur-gelistet',
+        body: 'Regel auf Abruf.',
+      },
+    ]),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: '/gerufen Los' }] },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.match(system.content, /## Skill: gerufen/);
+  assert.match(system.content, /Sofort gültige Regel\./);
+  // Der nicht gerufene Skill steht daneben nur in der Kurzliste.
+  assert.match(system.content, /- nur-gelistet: Andere Kurzbeschreibung/);
+  assert.equal(system.content.includes('Regel auf Abruf.'), false);
+});
+
+test('engine fällt auf den vollen Body zurück, wenn load_skill abgeschaltet ist (#173)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    tools: makeToolPort(undefined, { toolDefs: LOAD_SKILL_DEFS }),
+    preferences: { async read() { return { disabledTools: ['load_skill'] }; } },
+    skills: makeSkillPort([
+      { name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' },
+    ]),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  // Ohne Weg zur Anleitung wäre die Kurzliste ein stilles Versprechen.
+  assert.match(system.content, /## Skill: demo/);
+  assert.match(system.content, /Regel A\./);
+  assert.equal(system.content.includes('load_skill'), false);
+});
+
+test('engine bietet load_skill nur an, wenn ein Skill eingeschaltet ist (#173)', async () => {
+  const getToolsCalls = [];
+  const tools = makeToolPort(undefined, { toolDefs: LOAD_SKILL_DEFS });
+  const inner = tools.getTools;
+  tools.getTools = (options) => {
+    getToolsCalls.push(options);
+    return inner(options);
+  };
+
+  const { engine } = makeEngine([assistantText('ok')], {
+    tools,
+    skills: makeSkillPort([
+      { name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' },
+    ]),
+  });
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+  assert.deepEqual(getToolsCalls.at(-1).skillNames, ['demo']);
+
+  const { engine: leer } = makeEngine([assistantText('ok')], {
+    tools,
+    skills: makeSkillPort([]),
+  });
+  await leer.send({
+    sessionId: 'renderer-2',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+  assert.deepEqual(getToolsCalls.at(-1).skillNames, []);
 });
 
 // Bild-Anhaenge (Issue #84): Der Payload aus dem Renderer ist ungeprueft, also
