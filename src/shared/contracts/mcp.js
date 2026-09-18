@@ -258,18 +258,95 @@ function normalizeMcpServerConfig(raw) {
 }
 
 /**
- * Ein Eintrag aus `tools/list`. Das `inputSchema` wird bewusst
- * durchgereicht statt geprüft — es ist JSON Schema für das Modell, nicht für
- * uns; ein Server, der hier Unsinn liefert, scheitert beim Aufruf, nicht
- * schon beim Auflisten. Fehlt es ganz, setzen wir das leere Objektschema,
- * damit die Anbindung in #107 sich auf ein Feld verlassen kann.
+ * Stellen in einem JSON Schema, an denen wieder ein Schema steht. Nur dort
+ * wird weitergelaufen — alles andere (`enum`, `default`, `examples`, `const`)
+ * sind Daten, in denen nichts zu suchen ist.
+ *
+ * Aufgeteilt nach Form des Werts: ein einzelnes Schema, eine Liste von
+ * Schemas, oder eine Sammlung Name → Schema. Der Unterschied ist der Kern
+ * dieser Funktion: Bei einer Sammlung ist der Schlüssel ein *Name*, kein
+ * Schlüsselwort — `properties.title` ist ein Parameter namens „title" und
+ * muss bleiben.
+ */
+const SCHEMA_KEYWORDS_VALUE = Object.freeze([
+  'items', 'additionalItems', 'unevaluatedItems',
+  'additionalProperties', 'unevaluatedProperties', 'propertyNames',
+  'contains', 'not', 'if', 'then', 'else',
+]);
+const SCHEMA_KEYWORDS_LIST = Object.freeze(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
+const SCHEMA_KEYWORDS_MAP = Object.freeze([
+  'properties', 'patternProperties', 'dependentSchemas', '$defs', 'definitions',
+]);
+
+/**
+ * Notbremse gegen ein absurd verschachteltes Schema. JSON vom Server kann
+ * keine Zyklen enthalten, aber tief genug für einen Stacküberlauf schon —
+ * ab hier bleibt der Rest, wie er ist.
+ */
+const SCHEMA_MAX_DEPTH = 32;
+
+/**
+ * Entfernt die `title`-Annotationen aus einem JSON Schema (Issue #185).
+ *
+ * Pydantic — und damit die Mehrzahl der MCP-Server — hängt an jede Eigenschaft
+ * ein `title`, das nur den Feldnamen in Titelschreibweise wiederholt
+ * (`session_id` → `"title": "Session Id"`). Für das Modell steht darin nichts,
+ * was nicht schon im Namen steht; bezahlt wird es in jeder Runde. `title` ist
+ * laut JSON Schema eine Beschriftung für Menschen; was das Modell wissen muss,
+ * gehört in `description` — und die bleibt unangetastet.
+ *
+ * Entscheidend ist, **schemabewusst** zu laufen statt rekursiv über alle
+ * Objekte: Es gibt Tools mit einem Parameter, der tatsächlich `title` heißt
+ * (bei Atlassian vier, darunter `confluence_get_page`). Ein naiver Walk löscht
+ * diesen Parameter und bricht das Tool. Entfernt wird deshalb nur ein `title`
+ * als Schlüsselwort *innerhalb* eines Schemas, nie ein Eintrag namens `title`
+ * in `properties` & Co. Das Schema eines solchen Parameters wird dabei
+ * betreten wie jedes andere — nur eben unter seinem Namen.
+ *
+ * Arbeitet auf einer Kopie: das Eingabeobjekt gehört dem Aufrufer.
+ */
+function stripSchemaTitles(node, depth = 0) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return node;
+  if (depth >= SCHEMA_MAX_DEPTH) return node;
+
+  const out = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'title') continue;
+    if (SCHEMA_KEYWORDS_VALUE.includes(key)) {
+      // `items` darf im älteren Entwurf auch eine Liste sein (Tupel-Form).
+      out[key] = Array.isArray(value)
+        ? value.map((item) => stripSchemaTitles(item, depth + 1))
+        : stripSchemaTitles(value, depth + 1);
+    } else if (SCHEMA_KEYWORDS_LIST.includes(key) && Array.isArray(value)) {
+      out[key] = value.map((item) => stripSchemaTitles(item, depth + 1));
+    } else if (SCHEMA_KEYWORDS_MAP.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+      const map = {};
+      for (const [name, sub] of Object.entries(value)) map[name] = stripSchemaTitles(sub, depth + 1);
+      out[key] = map;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/**
+ * Ein Eintrag aus `tools/list`. Das `inputSchema` wird bewusst nicht geprüft —
+ * es ist JSON Schema für das Modell, nicht für uns; ein Server, der hier
+ * Unsinn liefert, scheitert beim Aufruf, nicht schon beim Auflisten. Fehlt es
+ * ganz, setzen wir das leere Objektschema, damit die Anbindung in #107 sich
+ * auf ein Feld verlassen kann.
+ *
+ * Angefasst wird genau eines: die `title`-Annotationen fallen weg, weil sie
+ * bei Pydantic-Servern nur den Feldnamen wiederholen und in jeder Runde
+ * mitbezahlt werden (Issue #185, siehe stripSchemaTitles).
  */
 function normalizeMcpToolCatalogEntry(raw, serverId) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const name = text(raw.name, MCP_LIMITS.TOOL_NAME_MAX_CHARS);
   if (!name) return null;
   const schema = raw.inputSchema && typeof raw.inputSchema === 'object' && !Array.isArray(raw.inputSchema)
-    ? raw.inputSchema
+    ? stripSchemaTitles(raw.inputSchema)
     : { type: 'object', properties: {} };
   // Von den Annotations wird nur uebernommen, was verschaerfen kann — die
   // uebrigen Hinweise (readOnlyHint, idempotentHint, openWorldHint) waeren
@@ -516,6 +593,7 @@ module.exports = {
   isMcpConnectionState,
   validateMcpServerConfig,
   normalizeMcpServerConfig,
+  stripSchemaTitles,
   normalizeMcpToolCatalogEntry,
   normalizeMcpToolCatalog,
   createMcpConnectionStatus,

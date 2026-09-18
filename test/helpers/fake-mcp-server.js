@@ -37,8 +37,24 @@ if (mode === 'die-on-start') {
   process.exit(3);
 }
 
+// `echo` traegt bewusst ein Pydantic-Schema, wie es die Mehrzahl der Server
+// liefert: `title` an jeder Eigenschaft und am Wurzelschema, dazu eine
+// Eigenschaft, die selbst `title` heisst. Genau daran entscheidet sich, ob
+// das Entschlacken in #185 schemabewusst ist oder ein Tool bricht.
 const TOOLS = [
-  { name: 'echo', description: 'Gibt den Text zurück.', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } },
+  {
+    name: 'echo',
+    description: 'Gibt den Text zurück.',
+    inputSchema: {
+      type: 'object',
+      title: 'echoArguments',
+      properties: {
+        text: { type: 'string', title: 'Text' },
+        title: { type: 'string', title: 'Title', description: 'Überschrift über der Ausgabe.' },
+      },
+      required: ['text'],
+    },
+  },
   { name: 'add', description: 'Addiert zwei Zahlen.', inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } } } },
 ];
 

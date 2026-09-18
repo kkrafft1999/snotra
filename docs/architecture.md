@@ -79,7 +79,7 @@ bestehende Importe stabil bleiben.
   Validierung der Serverkonfiguration in `shared/contracts/mcp.js`.
 
   Zum Modell kommen diese Tools über den `main/adapters/mcp-adapter.js`, der
-  sie in Registry-Definitionen übersetzt (Issue #107). Drei Regeln gelten
+  sie in Registry-Definitionen übersetzt (Issue #107). Vier Regeln gelten
   dabei:
 
   * **Namensraum** `mcp__<serverId>__<toolName>` — ein fremdes `read_file`
@@ -94,6 +94,18 @@ bestehende Importe stabil bleiben.
     sitzungsweise noch dauerhaft freigebbar — jeder einzelne wird gefragt.
   * **Fehler sind Ergebnisse**: ein toter oder nicht startbarer Server liefert
     eine Fehlermeldung als Tool-Ergebnis, keinen Wurf. Der Chat läuft weiter.
+  * **`title` fliegt aus dem Schema** (Issue #185): Pydantic-Server hängen an
+    jede Eigenschaft eine Beschriftung, die nur den Feldnamen wiederholt
+    (`session_id` → `"title": "Session Id"`). Sie sagt dem Modell nichts und
+    kostet in jeder Runde — beim heimat-Server 72 von 204 Schema-Token, also
+    gut ein Drittel. `stripSchemaTitles` in `shared/contracts/mcp.js` räumt
+    sie beim Übernehmen des Katalogs weg. Der Walk ist **schemabewusst**, und
+    das ist der ganze Punkt: In `properties`, `$defs` & Co. ist der Schlüssel
+    ein *Name*, kein Schlüsselwort — ein Parameter, der `title` heißt (bei
+    Atlassian vier, darunter `confluence_get_page`), bleibt unangetastet. Ein
+    naiver Walk über alle Objekte würde ihn löschen und das Tool brechen.
+    `description` bleibt in jedem Fall stehen; dort steht, was das Modell
+    wissen muss.
 
   Weil MCP-Tools erst zur Laufzeit feststehen, hat der `tool-port` das
   optionale `prepare()`: die Engine ruft es einmal je Lauf auf, bevor

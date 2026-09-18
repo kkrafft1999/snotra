@@ -18,7 +18,8 @@
  * @property {string} name — Name wie vom Server gemeldet, ohne Namensraum
  * @property {string} title — Anzeigename, oft leer
  * @property {string} description
- * @property {Object} inputSchema — JSON Schema, unverändert vom Server
+ * @property {Object} inputSchema — JSON Schema vom Server, bis auf die
+ *   entfernten `title`-Annotationen unverändert (#185)
  */
 
 /**
