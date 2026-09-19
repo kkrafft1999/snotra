@@ -21,6 +21,13 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
               ? stored.insecureTls
               : provider.defaultInsecureTls === true),
       };
+      // Zusatz-Header gehoeren zur Verbindung und muessen deshalb auch beim
+      // Abruf der Modellliste mit (Issue #193). Sie kommen ausschliesslich aus
+      // dem verschluesselten Speicher — der Renderer kennt sie nicht und kann
+      // sie im Request nicht mitschicken.
+      if (typeof stored.extraHeaders === 'string' && stored.extraHeaders) {
+        config.extraHeaders = stored.extraHeaders;
+      }
 
       try {
         const result = await provider.listModels(config);

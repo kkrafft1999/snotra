@@ -282,6 +282,33 @@ function createStorageService({
         ? entry.insecureTls
         : (provider.defaultInsecureTls === true);
     }
+    // Felder des Providers „OpenAI-kompatibel" (Issue #193). Sie beschreiben
+    // die Verbindung, nicht die Modellwahl, und liegen deshalb hier statt im
+    // Preset.
+    if (provider.fields?.displayName) {
+      out.displayName = typeof entry.displayName === 'string' ? entry.displayName.trim() : '';
+    }
+    if (provider.fields?.apiStyle) {
+      out.apiStyle = typeof entry.apiStyle === 'string' && entry.apiStyle.trim()
+        ? entry.apiStyle.trim()
+        : (provider.defaultApiStyle || 'chat');
+    }
+    if (provider.fields?.extraHeaders && entry.extraHeadersEnc) {
+      // Wie der API-Key ein Geheimnis: verschluesselt auf der Platte, und wenn
+      // der Schluessel nicht mehr passt, lieber gar nichts als Datenmuell.
+      const headers = decryptIfPossible(entry.extraHeadersEnc);
+      if (headers) out.extraHeaders = headers;
+    }
+    if (provider.fields?.supportsImages) {
+      out.supportsImages = typeof entry.supportsImages === 'boolean'
+        ? entry.supportsImages
+        : (provider.defaultSupportsImages === true);
+    }
+    if (provider.fields?.sendTools) {
+      out.sendTools = typeof entry.sendTools === 'boolean'
+        ? entry.sendTools
+        : (provider.defaultSendTools !== false);
+    }
     return out;
   }
 

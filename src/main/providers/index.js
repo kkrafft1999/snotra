@@ -29,8 +29,12 @@
  * @typedef {Object} ProviderAdapter
  * @property {string} id
  * @property {string} name
- * @property {{apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean}} [fields]
+ * @property {{apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean, displayName?: boolean,
+ *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean}} [fields]
  *   Welche Konfig-Felder der Provider braucht.
+ * @property {boolean} [optionalApiKey] Der Key darf leer bleiben (Issue #193).
+ * @property {(config: ProviderConfig) => {images: boolean}} [capabilitiesFor]
+ *   Faehigkeiten, die erst aus der Konfiguration folgen statt fest am Adapter zu haengen.
  * @property {string} [defaultModel]
  * @property {string} [defaultBaseUrl]
  * @property {boolean} [defaultInsecureTls]
@@ -45,9 +49,17 @@ const anthropic = require('./anthropic');
 const google = require('./google');
 const ollama = require('./ollama');
 const mlxLm = require('./mlx-lm');
+const openaiCompatible = require('./openai-compatible');
 
-const PROVIDERS = { openai, anthropic, google, ollama, 'mlx-lm': mlxLm };
-const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm'];
+const PROVIDERS = {
+  openai,
+  anthropic,
+  google,
+  ollama,
+  'mlx-lm': mlxLm,
+  'openai-compatible': openaiCompatible,
+};
+const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm', 'openai-compatible'];
 
 function getProvider(id) {
   return PROVIDERS[id] || null;
@@ -65,6 +77,9 @@ function listProviderMeta() {
       defaultInsecureTls: p.defaultInsecureTls === true,
       apiBase: p.apiBase || '',
       capabilities: { images: p.capabilities?.images === true },
+      // Ein Anbieter, der ohne Key auskommt (Issue #193): ein leeres Feld ist
+      // dort kein unvollstaendiger Zugang.
+      optionalApiKey: p.optionalApiKey === true,
     };
   });
 }

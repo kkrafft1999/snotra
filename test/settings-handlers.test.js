@@ -32,6 +32,28 @@ const mockProviders = {
     if (id === 'ollama') {
       return { defaultModel: 'llama3', fields: { baseUrl: true } };
     }
+    // Der generische Anbieter aus Issue #193 — optionaler Key, Zusatz-Header
+    // als Geheimnis, dazu die Schalter.
+    if (id === 'openai-compatible') {
+      return {
+        defaultModel: '',
+        optionalApiKey: true,
+        defaultBaseUrl: 'http://localhost:1234/v1',
+        defaultApiStyle: 'chat',
+        defaultSendTools: true,
+        defaultSupportsImages: false,
+        fields: {
+          apiKey: true,
+          baseUrl: true,
+          insecureTls: true,
+          displayName: true,
+          apiStyle: true,
+          extraHeaders: true,
+          supportsImages: true,
+          sendTools: true,
+        },
+      };
+    }
     return null;
   },
 };
@@ -822,4 +844,74 @@ test('cancelModelListing forwards cancellation through IPC and adapter to the pr
   await ipcMain.invoke(REQ.SETTINGS_CANCEL_MODELS);
   assert.equal(signal.aborted, true);
   assert.deepEqual(await pending, { error: 'Anfrage abgebrochen.' });
+});
+
+// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
+
+test('mergeProviderPatchIntoConfigImpl speichert die neuen Felder', () => {
+  const config = { providers: {} };
+  const res = mergeProviderPatchIntoConfigImpl(makeDeps(), config, 'openai-compatible', {
+    baseUrl: 'http://localhost:1234/v1',
+    displayName: '  LM Studio  ',
+    apiStyle: 'full',
+    extraHeaders: 'X-Tenant: acme',
+    supportsImages: true,
+    sendTools: false,
+    insecureTls: true,
+  });
+
+  assert.equal(res.ok, true);
+  assert.deepEqual(config.providers['openai-compatible'], {
+    baseUrl: 'http://localhost:1234/v1',
+    displayName: 'LM Studio',
+    apiStyle: 'full',
+    // Zusatz-Header liegen verschluesselt, nie im Klartext.
+    extraHeadersEnc: Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'),
+    supportsImages: true,
+    sendTools: false,
+    insecureTls: true,
+  });
+});
+
+test('ein leerer Anzeigename loescht ihn wieder', () => {
+  const config = { providers: { 'openai-compatible': { displayName: 'Alt', baseUrl: 'x' } } };
+  mergeProviderPatchIntoConfigImpl(makeDeps(), config, 'openai-compatible', { displayName: '   ' });
+  assert.equal('displayName' in config.providers['openai-compatible'], false);
+  assert.equal(config.providers['openai-compatible'].baseUrl, 'x');
+});
+
+test('removeExtraHeaders loescht die gespeicherten Header', () => {
+  const config = { providers: { 'openai-compatible': { extraHeadersEnc: 'abc', baseUrl: 'x' } } };
+  mergeProviderPatchIntoConfigImpl(makeDeps(), config, 'openai-compatible', {
+    removeExtraHeaders: true,
+  });
+  assert.equal(config.providers['openai-compatible'].extraHeadersEnc, undefined);
+});
+
+test('ohne verschluesselten Speicher werden keine Zusatz-Header abgelegt', () => {
+  const config = { providers: {} };
+  const res = mergeProviderPatchIntoConfigImpl(makeDeps(false), config, 'openai-compatible', {
+    extraHeaders: 'X-Tenant: acme',
+  });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /Verschlüsselter Speicher/);
+});
+
+test('ein unbekannter API-Stil wird nicht uebernommen', () => {
+  const config = { providers: { 'openai-compatible': { apiStyle: 'chat' } } };
+  mergeProviderPatchIntoConfigImpl(makeDeps(), config, 'openai-compatible', { apiStyle: 'azure' });
+  assert.equal(config.providers['openai-compatible'].apiStyle, 'chat');
+});
+
+test('die neuen Felder gehen an einem Anbieter vorbei, der sie nicht kennt', () => {
+  const config = { providers: {} };
+  mergeProviderPatchIntoConfigImpl(makeDeps(), config, 'ollama', {
+    baseUrl: 'http://127.0.0.1:11434',
+    displayName: 'Nicht speichern',
+    apiStyle: 'full',
+    extraHeaders: 'X-Tenant: acme',
+    supportsImages: true,
+    sendTools: false,
+  });
+  assert.deepEqual(config.providers.ollama, { baseUrl: 'http://127.0.0.1:11434' });
 });
