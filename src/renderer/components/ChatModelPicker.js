@@ -33,7 +33,14 @@ export function initChatModelPicker({
 
   // Ob der aktive Anbieter Bild-Anhaenge weiterreicht (Issue #93). Ohne das
   // Feld — etwa aus einem aelteren Zustand — gilt „kann keine Bilder".
+  //
+  // Bei Verbindung je Eintrag (Issue #202) entscheidet der **Eintrag**: Zwei
+  // Zeilen desselben Anbieters koennen auf verschiedene Server zeigen, von
+  // denen nur einer Bilder versteht.
   function activeProviderSupportsImages() {
+    const preset = (appStore.llmState.presets || [])
+      .find((pr) => pr.id === appStore.llmState.activePresetId);
+    if (preset?.connection) return preset.connection.supportsImages === true;
     const pid = appStore.llmState.chatTarget?.providerId;
     const p = pid ? findProviderView(pid) : null;
     return p?.capabilities?.images === true;

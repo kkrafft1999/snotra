@@ -477,6 +477,11 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   const { safeStorage, providerCatalog } = deps;
   const provider = providerCatalog.getProvider(providerId);
   if (!provider) return createSettingsError('Unbekannter Provider.');
+  // Bei Verbindung je Eintrag (Issue #202) gehoert nichts davon unter
+  // `providers`. Der Payload kommt aus dem Renderer und wird nicht geglaubt:
+  // Ein Anbieter-Zugang hier wuerde beim naechsten Lesen ohnehin wegmigriert
+  // und bis dahin eine zweite, konkurrierende Wahrheit sein.
+  if (hasPresetConnection(provider)) return createSettingsOk();
   const prevEntry = (config.providers && config.providers[providerId]) || {};
   const next = { ...prevEntry };
 

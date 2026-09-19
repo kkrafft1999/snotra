@@ -706,6 +706,9 @@ function buildProviderFormView(provider) {
     showSendTools: !!provider?.fields?.sendTools,
     // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
     allowManualModel: presentation.manualModel === true,
+    // Verbindung je Eintrag (Issue #202): Das Formular bearbeitet dann die
+    // Zeile, nicht den Anbieter.
+    connectionPerPreset: provider?.connectionPerPreset === true,
     templates: buildProviderTemplateViews(provider),
   };
 }

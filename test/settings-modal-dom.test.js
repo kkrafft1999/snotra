@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
-async function mountSettings(overrides = {}) {
+async function mountSettings({ providers, ...overrides } = {}) {
   const dom = setupRendererDom();
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
   const { appStore } = await importRenderer('state', 'store.js');
@@ -20,7 +20,7 @@ async function mountSettings(overrides = {}) {
     activePresetId: null,
     presets: [],
     chatTarget: null,
-    providers: [{ id: 'openai', name: 'OpenAI', configured: true }],
+    providers: providers || [{ id: 'openai', name: 'OpenAI', configured: true }],
   };
   appStore.lastFocusBeforeModal = null;
 
@@ -54,8 +54,304 @@ async function mountSettings(overrides = {}) {
 
   await modal.openSettingsModal();
   await flush();
+  dom.reopenSettings = async () => {
+    modal.closeSettingsModal?.();
+    await modal.openSettingsModal();
+    await flush();
+  };
   return { dom, modal, appStore };
 }
+
+/**
+ * Anbieter-Sicht des generischen Anbieters, wie sie der Main-Prozess liefert
+ * (Issue #202): Verbindung je Eintrag, acht Felder, freier Modellname.
+ */
+const COMPAT_VIEW = {
+  id: 'openai-compatible',
+  name: 'OpenAI-kompatibel',
+  builtInName: 'OpenAI-kompatibel',
+  configured: true,
+  defaultModel: '',
+  defaultBaseUrl: 'http://localhost:1234/v1',
+  defaultInsecureTls: false,
+  apiBase: 'http://localhost:1234/v1',
+  capabilities: { images: false },
+  optionalApiKey: true,
+  connectionDetail: true,
+  presetFields: [],
+  form: {
+    showApiKey: true,
+    apiKeyOptional: true,
+    apiKeyPlaceholder: 'leer lassen',
+    showBaseUrl: true,
+    baseUrlPlaceholder: 'http://localhost:1234/v1',
+    showInsecureTls: true,
+    insecureTlsHint: 'nur bei selbstsigniertem Zertifikat',
+    showDisplayName: true,
+    displayNamePlaceholder: 'OpenAI-kompatibel',
+    showApiStyle: true,
+    apiStyleOptions: [{ value: 'chat', label: 'Nur Chat Completions' }],
+    defaultApiStyle: 'chat',
+    showExtraHeaders: true,
+    showSupportsImages: true,
+    showSendTools: true,
+    allowManualModel: true,
+    connectionPerPreset: true,
+    templates: [],
+  },
+};
+
+/** Legt ueber den Dialog eine Zeile an, wie ein Mensch es taete. */
+async function zeileAnlegen({ name, baseUrl, model, apiKey, extraHeaders }) {
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  const tippen = (id, wert) => {
+    const el = document.getElementById(id);
+    el.value = wert;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  tippen('input-display-name', name);
+  tippen('input-base-url', baseUrl);
+  tippen('input-model', model);
+  if (apiKey) tippen('input-api-key', apiKey);
+  if (extraHeaders) tippen('input-extra-headers', extraHeaders);
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+}
+
+const zeilenTitel = () => [...document.querySelectorAll('#pref-model-list strong')].map((n) => n.textContent);
+const zeilenServer = () => [...document.querySelectorAll('#pref-model-list .settings-pref-detail')].map((n) => n.textContent);
+
+test('zwei Zeilen desselben Anbieters behalten je eigene Adresse und Namen (#202)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'Firmen-Gateway', baseUrl: 'https://gw.firma.example/v1', model: 'gpt-4o-mini' });
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+
+  // Genau der Fall, der vor #202 unmoeglich war: Die zweite Eingabe hat die
+  // erste ueberschrieben, beide Zeilen zeigten auf denselben Server.
+  assert.deepEqual(zeilenTitel(), ['Firmen-Gateway \u00b7 gpt-4o-mini', 'LM Studio \u00b7 qwen2.5']);
+  assert.match(zeilenServer()[0], /gw\.firma\.example/);
+  assert.match(zeilenServer()[1], /localhost:1234/);
+});
+
+test('getippte Verbindungswerte erreichen den Main-Prozess (#202)', async (t) => {
+  // Der Weg, der vorher abriss: Die Feld-Listener schrieben in den Entwurf des
+  // *Anbieters*, waehrend das Formular auf dem Entwurf der *Zeile* arbeitete.
+  // Adresse und Anzeigename kamen deshalb leer an, Schluessel und Header gar
+  // nicht — und zwei Zeilen landeten auf demselben Server.
+  let gesendet = null;
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { gesendet = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({
+    name: 'Mein Ziel',
+    baseUrl: 'https://ziel.example/v1',
+    model: 'ziel-modell',
+    apiKey: 'sk-geheim',
+    extraHeaders: 'X-Tenant: acme',
+  });
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  const zeile = gesendet.presets.find((pr) => pr.model === 'ziel-modell');
+  assert.deepEqual(zeile.connection, {
+    displayName: 'Mein Ziel',
+    baseUrl: 'https://ziel.example/v1',
+    apiStyle: 'chat',
+    insecureTls: false,
+    supportsImages: false,
+    sendTools: true,
+    apiKey: 'sk-geheim',
+    extraHeaders: 'X-Tenant: acme',
+  });
+  // Die Ja/Nein-Angaben zu Geheimnissen bleiben im Renderer; der Main-Prozess
+  // weiss selbst, was gespeichert ist.
+  assert.equal('hasKey' in zeile.connection, false);
+  assert.equal('draft' in zeile.connection, false);
+});
+
+test('eine bestehende Zeile laesst sich bearbeiten, statt eine neue anzulegen (#202)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  assert.equal(zeilenTitel().length, 1);
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+
+  // Der Dialog sagt, dass er bearbeitet, und der Anbieter steht fest.
+  assert.equal(document.getElementById('dialog-add-model-title').textContent, 'Modell bearbeiten');
+  assert.equal(document.getElementById('btn-add-preset-row').textContent, '\u00c4nderungen \u00fcbernehmen');
+  assert.equal(document.getElementById('select-provider').disabled, true);
+  assert.equal(document.getElementById('input-display-name').value, 'LM Studio');
+  assert.equal(document.getElementById('input-base-url').value, 'http://localhost:1234/v1');
+  assert.equal(document.getElementById('input-model').value, 'qwen2.5');
+
+  const url = document.getElementById('input-base-url');
+  url.value = 'http://localhost:9999/v1';
+  url.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+
+  assert.equal(zeilenTitel().length, 1, 'Bearbeiten darf keine zweite Zeile anlegen');
+  assert.match(zeilenServer()[0], /localhost:9999/);
+});
+
+test('der Dialog kehrt nach dem Bearbeiten in den Anlegen-Modus zurueck (#202)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  document.getElementById('btn-add-model-close').click();
+  await flush();
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+
+  assert.equal(document.getElementById('dialog-add-model-title').textContent, 'Modell hinzuf\u00fcgen');
+  assert.equal(document.getElementById('select-provider').disabled, false);
+});
+
+test('ein gespeichertes Geheimnis bleibt beim Bearbeiten stehen (#202)', async (t) => {
+  let gesendet = null;
+  // Zeile mit bereits gespeichertem Schluessel und Header, wie sie aus dem
+  // Main-Prozess kommt: nur die Ja/Nein-Angaben, nie die Werte.
+  const gespeichert = {
+    id: 'p1',
+    providerId: 'openai-compatible',
+    model: 'qwen2.5',
+    menuVisible: true,
+    configured: true,
+    labelBase: 'LM Studio \u00b7 qwen2.5',
+    connection: {
+      displayName: 'LM Studio',
+      baseUrl: 'http://localhost:1234/v1',
+      apiStyle: 'chat',
+      insecureTls: false,
+      supportsImages: false,
+      sendTools: true,
+      hasKey: true,
+      keyUnreadable: false,
+      hasExtraHeaders: true,
+    },
+  };
+  const { dom, appStore } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { gesendet = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [gespeichert];
+  appStore.llmState.activePresetId = 'p1';
+  await dom.reopenSettings();
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  // Die Felder bleiben leer und sagen stattdessen, dass das Gespeicherte haelt.
+  assert.equal(document.getElementById('input-api-key').value, '');
+  assert.equal(document.getElementById('input-api-key').placeholder, 'Gespeicherter Key bleibt erhalten');
+  assert.equal(document.getElementById('input-extra-headers').placeholder, 'Gespeicherte Header bleiben erhalten');
+
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  const zeile = gesendet.presets[0];
+  assert.equal('apiKey' in zeile.connection, false, 'nichts Neues ueberschreiben');
+  assert.equal('removeApiKey' in zeile.connection, false, 'und nichts loeschen');
+  assert.equal(zeile.connection.baseUrl, 'http://localhost:1234/v1');
+});
+
+test('der Papierkorb neben dem Feld loescht das gespeicherte Geheimnis (#202)', async (t) => {
+  let gesendet = null;
+  const { dom, appStore } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { gesendet = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [{
+    id: 'p1',
+    providerId: 'openai-compatible',
+    model: 'qwen2.5',
+    menuVisible: true,
+    configured: true,
+    connection: {
+      displayName: 'LM Studio',
+      baseUrl: 'http://localhost:1234/v1',
+      apiStyle: 'chat',
+      insecureTls: false,
+      supportsImages: false,
+      sendTools: true,
+      hasKey: true,
+      keyUnreadable: false,
+      hasExtraHeaders: true,
+    },
+  }];
+  appStore.llmState.activePresetId = 'p1';
+  await dom.reopenSettings();
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  document.getElementById('btn-remove-api-key').click();
+  document.getElementById('btn-remove-extra-headers').click();
+  await flush();
+  assert.equal(document.getElementById('input-api-key').placeholder, 'Key wird beim Speichern entfernt');
+
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  assert.equal(gesendet.presets[0].connection.removeApiKey, true);
+  assert.equal(gesendet.presets[0].connection.removeExtraHeaders, true);
+});
+
+test('die Vorlage belegt Adresse und API-Stil vor (#193)', async (t) => {
+  const mitVorlagen = {
+    ...COMPAT_VIEW,
+    form: {
+      ...COMPAT_VIEW.form,
+      templates: [
+        { id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiStyle: 'chat', hint: 'Router-Dienst.' },
+      ],
+      apiStyleOptions: [
+        { value: 'chat', label: 'Nur Chat Completions' },
+        { value: 'full', label: 'Responses, sonst Chat Completions' },
+      ],
+    },
+  };
+  const { dom } = await mountSettings({ providers: [mitVorlagen] });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+
+  const vorlage = document.getElementById('select-provider-template');
+  vorlage.value = 'openrouter';
+  vorlage.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+
+  assert.equal(document.getElementById('input-base-url').value, 'https://openrouter.ai/api/v1');
+  assert.equal(document.getElementById('select-api-style').value, 'chat');
+  assert.match(document.getElementById('provider-template-hint').textContent, /Router-Dienst/);
+});
 
 const tabFor = (key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`);
 const panelFor = (key) => document.getElementById(`panel-settings-${key}`);

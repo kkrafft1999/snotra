@@ -3053,6 +3053,33 @@ select.modal-input {
     color var(--ds-motion-fast);
 }
 
+/* Bearbeiten-Knopf in der Eintragsliste (Issue #202). Teilt Groesse, Form und
+ * Hover mit dem Papierkorb: beide sind Zeilenaktionen desselben Rangs. */
+.settings-icon-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast);
+}
+
+.settings-icon-edit:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.settings-icon-edit svg {
+  display: block;
+}
+
 .settings-icon-trash:hover {
   background: var(--ds-grey-bg);
   color: var(--text-primary);
