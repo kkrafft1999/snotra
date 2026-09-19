@@ -5,6 +5,7 @@ const {
   formatPresetOptionSuffixFromView,
   buildPresetFieldViews,
   buildProviderFormView,
+  hasPresetConnection,
 } = require('../../shared/contracts/settings');
 
 function createSettingsPresentationService({ providerCatalog, defaultProviderId }) {
@@ -108,16 +109,57 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     };
   }
 
-  function buildPresetView(preset, providerViewsById, connectionOverrides) {
+  /**
+   * Verbindung eines Eintrags fuer den Renderer (Issue #202).
+   *
+   * Nur die unkritischen Felder plus zwei Ja/Nein-Angaben: Der Renderer soll
+   * anzeigen und bearbeiten koennen, ohne je einen Schluessel oder einen
+   * Zusatz-Header im Klartext zu sehen.
+   */
+  function buildPresetConnectionView(preset, provider, apiKeyDecryptable) {
+    const conn = (preset && typeof preset.connection === 'object' && preset.connection) || {};
+    const hasKey = typeof conn.apiKeyEnc === 'string' && conn.apiKeyEnc.length > 0;
+    return {
+      displayName: typeof conn.displayName === 'string' ? conn.displayName : '',
+      baseUrl: conn.baseUrl || provider?.defaultBaseUrl || '',
+      apiStyle: typeof conn.apiStyle === 'string' && conn.apiStyle
+        ? conn.apiStyle
+        : (provider?.defaultApiStyle || 'chat'),
+      insecureTls: typeof conn.insecureTls === 'boolean'
+        ? conn.insecureTls
+        : provider?.defaultInsecureTls === true,
+      supportsImages: typeof conn.supportsImages === 'boolean'
+        ? conn.supportsImages
+        : provider?.defaultSupportsImages === true,
+      sendTools: typeof conn.sendTools === 'boolean'
+        ? conn.sendTools
+        : provider?.defaultSendTools !== false,
+      hasKey,
+      keyUnreadable: hasKey && apiKeyDecryptable?.[`preset:${preset.id}`] === false,
+      hasExtraHeaders: typeof conn.extraHeadersEnc === 'string' && conn.extraHeadersEnc.length > 0,
+    };
+  }
+
+  function buildPresetView(preset, providerViewsById, connectionOverrides, apiKeyDecryptable) {
     const providerView = providerViewsById[preset.providerId];
     if (!providerView) return null;
+    const provider = getProvider(preset.providerId);
+    const perPreset = hasPresetConnection(provider);
 
-    const connection = connectionOverrides?.[preset.providerId];
+    // Bei Verbindung je Eintrag beschreibt die Zeile sich selbst: eigener
+    // Anzeigename, eigene Adresse, eigener Zustand (Issue #202).
+    const presetConnection = perPreset
+      ? buildPresetConnectionView(preset, provider, apiKeyDecryptable)
+      : null;
+    const connection = presetConnection || connectionOverrides?.[preset.providerId];
     const sublabel = formatPresetSublabelFromView(preset, providerView, connection);
     // Zusatz wie das Reasoning-Level haengt hinter dem Modell, damit Chat-Menue
     // und Pille einzeilig bleiben: „OpenAI · gpt-5 · high“.
     const optionSuffix = formatPresetOptionSuffixFromView(preset, providerView);
-    const base = `${providerView.name} · ${preset.model || providerView.defaultModel}`;
+    const name = presetConnection?.displayName?.trim()
+      || providerView.builtInName
+      || providerView.name;
+    const base = `${name} · ${preset.model || providerView.defaultModel}`;
     const label = optionSuffix ? `${base} · ${optionSuffix}` : base;
 
     return {
@@ -130,8 +172,13 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       optionSuffix,
       sublabel: sublabel.text,
       sublabelStyle: sublabel.style,
-      configured: providerView.configured,
-      ...extractPresetOptionFields(preset, getProvider(preset.providerId)),
+      // Vollstaendig ist ein Eintrag mit eigener Verbindung, sobald er eine
+      // Server-URL hat; der Schluessel ist bei diesem Anbieter optional.
+      configured: perPreset
+        ? !!String(presetConnection.baseUrl || '').trim() && !presetConnection.keyUnreadable
+        : providerView.configured,
+      ...(presetConnection ? { connection: presetConnection } : {}),
+      ...extractPresetOptionFields(preset, provider),
     };
   }
 
@@ -169,7 +216,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
 
     const presetsWire = Array.isArray(config.presets) ? config.presets : [];
     const presets = presetsWire
-      .map((row) => buildPresetView(row, providerViewsById, connectionOverrides))
+      .map((row) => buildPresetView(row, providerViewsById, connectionOverrides, apiKeyDecryptable))
       .filter(Boolean);
 
     return {

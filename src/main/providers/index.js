@@ -33,6 +33,7 @@
  *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean}} [fields]
  *   Welche Konfig-Felder der Provider braucht.
  * @property {boolean} [optionalApiKey] Der Key darf leer bleiben (Issue #193).
+ * @property {boolean} [connectionPerPreset] Verbindung gehoert zum Eintrag (Issue #202).
  * @property {(config: ProviderConfig) => {images: boolean}} [capabilitiesFor]
  *   Faehigkeiten, die erst aus der Konfiguration folgen statt fest am Adapter zu haengen.
  * @property {string} [defaultModel]
@@ -80,6 +81,8 @@ function listProviderMeta() {
       // Ein Anbieter, der ohne Key auskommt (Issue #193): ein leeres Feld ist
       // dort kein unvollstaendiger Zugang.
       optionalApiKey: p.optionalApiKey === true,
+      // Verbindung am Eintrag statt am Anbieter (Issue #202).
+      connectionPerPreset: p.connectionPerPreset === true,
     };
   });
 }

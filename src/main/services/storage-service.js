@@ -6,6 +6,9 @@ const {
   normalizePresetWire,
   normalizeUiPrefs,
   extractPresetOptions,
+  hasPresetConnection,
+  normalizeStoredPresetConnection,
+  LLM_CONFIG_VERSION,
 } = require('../../shared/contracts/settings');
 const {
   maskStoredMcpEnv,
@@ -84,7 +87,7 @@ function createStorageService({
 
   function defaultLLMConfig() {
     return {
-      version: 3,
+      version: LLM_CONFIG_VERSION,
       activeProvider: DEFAULT_PROVIDER,
       activePresetId: null,
       presets: [],
@@ -119,6 +122,9 @@ function createStorageService({
       const providerOptions = buildProviderOptionsFromPreset(preset, pMeta);
       const target = {
         providerId: preset.providerId,
+        // Ohne die Eintrags-Kennung laesst sich bei `connectionPerPreset` die
+        // Verbindung nicht mehr aufloesen (Issue #202).
+        presetId: preset.id,
         model: typeof preset.model === 'string' && preset.model.trim()
           ? preset.model.trim()
           : pMeta.defaultModel,
@@ -179,6 +185,55 @@ function createStorageService({
     return out;
   }
 
+  /**
+   * v3 -> v4 (Issue #202): Die Verbindung wandert vom Anbieter in den Eintrag.
+   *
+   * `providers['openai-compatible']` wird in **jeden** Eintrag dieses Anbieters
+   * kopiert und danach aus `providers` entfernt. Idempotent: Eine Datei, die
+   * schon auf v4 steht, wird nicht angefasst, und ein Eintrag, der bereits eine
+   * Verbindung hat, behaelt seine eigene.
+   *
+   * Ohne diesen Schritt verlieren bestehende Eintraege ihre Server-URL und
+   * fallen beim naechsten Start auf den Standard zurueck — der Chat ginge
+   * stillschweigend an die falsche Adresse.
+   */
+  async function migrateLLMConfigToV4(existing, { persist = true } = {}) {
+    const out = { ...existing };
+    const presets = Array.isArray(out.presets) ? out.presets : [];
+    const providers = (out.providers && typeof out.providers === 'object') ? { ...out.providers } : {};
+    let changed = false;
+
+    for (const providerId of Object.keys(providers)) {
+      const provider = providerCatalog.getProvider(providerId);
+      if (!provider || !hasPresetConnection(provider)) continue;
+      const alt = providers[providerId] || {};
+      for (const preset of presets) {
+        if (!preset || preset.providerId !== providerId) continue;
+        if (preset.connection && typeof preset.connection === 'object') continue;
+        const connection = normalizeStoredPresetConnection(alt, provider);
+        // Ohne Server-URL im Altbestand greift der Standard des Anbieters —
+        // genau das, was der Eintrag vorher zur Laufzeit auch bekam.
+        if (!connection.baseUrl && provider.defaultBaseUrl) {
+          connection.baseUrl = provider.defaultBaseUrl;
+        }
+        preset.connection = connection;
+        changed = true;
+      }
+      // Der Anbieter-Eintrag hat ausgedient; `model` daran war ohnehin nur ein
+      // Abbild des aktiven Presets.
+      delete providers[providerId];
+      changed = true;
+    }
+
+    out.providers = providers;
+    out.presets = presets;
+    out.version = LLM_CONFIG_VERSION;
+    if (persist && (changed || existing.version !== LLM_CONFIG_VERSION)) {
+      await writeLLMConfig(out);
+    }
+    return out;
+  }
+
   async function readLLMConfigRaw() {
     try {
       const raw = await fs.readFile(getLLMConfigPath(), 'utf8');
@@ -201,7 +256,7 @@ function createStorageService({
 
   async function readLLMConfig({ persistMigration = true } = {}) {
     const existing = await readLLMConfigRaw();
-    if (existing && existing.version === 3 && existing.providers) {
+    if (existing && existing.version === LLM_CONFIG_VERSION && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
         existing.providers = {};
       }
@@ -209,12 +264,21 @@ function createStorageService({
       if (!Array.isArray(existing.presets)) existing.presets = [];
       return existing;
     }
+    if (existing && existing.version === 3 && existing.providers) {
+      if (!existing.providers || typeof existing.providers !== 'object') {
+        existing.providers = {};
+      }
+      if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
+      if (!Array.isArray(existing.presets)) existing.presets = [];
+      return migrateLLMConfigToV4(existing, { persist: persistMigration });
+    }
     if (existing && existing.version === 2 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
         existing.providers = {};
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
-      return migrateLLMConfigToV3(existing, { persist: persistMigration });
+      const v3 = await migrateLLMConfigToV3(existing, { persist: false });
+      return migrateLLMConfigToV4(v3, { persist: persistMigration });
     }
     // Migrate from legacy openai-config.json (if present)
     const legacy = await readLegacyOpenAIConfig();
@@ -226,8 +290,8 @@ function createStorageService({
       };
       migrated.activeProvider = 'openai';
     }
-    const withV3 = await migrateLLMConfigToV3(migrated, { persist: persistMigration });
-    return withV3;
+    const withV3 = await migrateLLMConfigToV3(migrated, { persist: false });
+    return migrateLLMConfigToV4(withV3, { persist: persistMigration });
   }
 
   async function writeLLMConfig(config) {
@@ -262,10 +326,50 @@ function createStorageService({
     }
   }
 
-  async function getEffectiveProviderConfig(providerId) {
+  /**
+   * Verbindung eines Eintrags (Issue #202). Klartext-Geheimnisse entstehen hier
+   * und bleiben im Main-Prozess.
+   */
+  function connectionConfigFromPreset(provider, preset) {
+    const conn = (preset && typeof preset.connection === 'object' && preset.connection) || {};
+    const out = { model: preset?.model || provider.defaultModel };
+    out.baseUrl = conn.baseUrl || provider.defaultBaseUrl || '';
+    out.displayName = typeof conn.displayName === 'string' ? conn.displayName : '';
+    out.apiStyle = typeof conn.apiStyle === 'string' && conn.apiStyle
+      ? conn.apiStyle
+      : (provider.defaultApiStyle || 'chat');
+    out.insecureTls = typeof conn.insecureTls === 'boolean'
+      ? conn.insecureTls
+      : provider.defaultInsecureTls === true;
+    out.supportsImages = typeof conn.supportsImages === 'boolean'
+      ? conn.supportsImages
+      : provider.defaultSupportsImages === true;
+    out.sendTools = typeof conn.sendTools === 'boolean'
+      ? conn.sendTools
+      : provider.defaultSendTools !== false;
+    const apiKey = decryptIfPossible(conn.apiKeyEnc);
+    if (apiKey) out.apiKey = apiKey;
+    const extraHeaders = decryptIfPossible(conn.extraHeadersEnc);
+    if (extraHeaders) out.extraHeaders = extraHeaders;
+    return out;
+  }
+
+  /**
+   * @param {string} providerId
+   * @param {{presetId?: string}} [scope] Bei `connectionPerPreset` Pflicht —
+   *   ohne den Eintrag ist die Verbindung nicht bestimmbar.
+   */
+  async function getEffectiveProviderConfig(providerId, { presetId } = {}) {
     const provider = providerCatalog.getProvider(providerId);
     if (!provider) return null;
     const config = await readLLMConfig();
+    if (hasPresetConnection(provider)) {
+      const presets = Array.isArray(config.presets) ? config.presets : [];
+      const preset = presets.find((p) => p && p.id === presetId && p.providerId === providerId);
+      // Ohne passenden Eintrag bleibt nur der nackte Standard des Anbieters —
+      // besser als eine fremde Verbindung zu erraten.
+      return connectionConfigFromPreset(provider, preset || null);
+    }
     const entry = (config.providers && config.providers[providerId]) || {};
     const out = { model: entry.model || provider.defaultModel };
     if (provider.fields?.apiKey && entry.apiKeyEnc) {

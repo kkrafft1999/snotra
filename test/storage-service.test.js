@@ -38,6 +38,7 @@ const mockProviders = {
         name: 'OpenAI-kompatibel',
         defaultModel: '',
         optionalApiKey: true,
+        connectionPerPreset: true,
         defaultBaseUrl: 'http://localhost:1234/v1',
         defaultApiStyle: 'chat',
         defaultSendTools: true,
@@ -132,6 +133,9 @@ test('resolveChatModelTarget prefers active preset', () => {
   });
   assert.deepEqual(target, {
     providerId: 'anthropic',
+    // Die Eintrags-Kennung reist mit, damit sich bei `connectionPerPreset` die
+    // Verbindung aufloesen laesst (Issue #202).
+    presetId: 'p1',
     model: 'claude-custom',
     reasoningEffort: null,
   });
@@ -582,78 +586,190 @@ test('folder history: removing an entry leaves the folder and last-folder.json u
   assert.ok((await fs.stat(ws)).isDirectory());
 });
 
-// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
 
-test('getEffectiveProviderConfig liefert die neuen Felder mit ihren Voreinstellungen', async (t) => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
-  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
-  const storage = makeStorageWithEncryption(tmp);
+// --- Verbindung je Eintrag (Issue #202) -----------------------------------
 
-  await storage.writeLLMConfig({
+const COMPAT = 'openai-compatible';
+
+function v3ConfigMitCompat() {
+  return {
     version: 3,
-    activeProvider: 'openai-compatible',
-    providers: { 'openai-compatible': { baseUrl: 'http://localhost:1234/v1' } },
-    presets: [],
+    activeProvider: COMPAT,
+    activePresetId: 'p1',
+    presets: [
+      { id: 'p1', providerId: COMPAT, model: 'qwen2.5', menuVisible: true },
+      { id: 'p2', providerId: COMPAT, model: 'llama3', menuVisible: true },
+      { id: 'p3', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+    ],
+    providers: {
+      [COMPAT]: {
+        baseUrl: 'http://localhost:1234/v1',
+        displayName: 'LM Studio',
+        apiStyle: 'full',
+        sendTools: false,
+        apiKeyEnc: Buffer.from('enc:sk-alt', 'utf8').toString('base64'),
+        extraHeadersEnc: Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'),
+        model: 'qwen2.5',
+      },
+      openai: { apiKeyEnc: Buffer.from('enc:sk-oai', 'utf8').toString('base64') },
+    },
+  };
+}
+
+async function tmpStore(t) {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-202-'));
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  return { tmp, storage: makeStorageWithEncryption(tmp) };
+}
+
+test('Migration v3 -> v4 kopiert die Verbindung in jeden Eintrag des Anbieters', async (t) => {
+  const { tmp, storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v3ConfigMitCompat());
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 4);
+  // Die Verbindung steht jetzt an beiden Eintraegen - vollstaendig, inklusive
+  // der verschluesselten Geheimnisse.
+  for (const id of ['p1', 'p2']) {
+    const conn = config.presets.find((pr) => pr.id === id).connection;
+    assert.equal(conn.baseUrl, 'http://localhost:1234/v1');
+    assert.equal(conn.displayName, 'LM Studio');
+    assert.equal(conn.apiStyle, 'full');
+    assert.equal(conn.sendTools, false);
+    assert.equal(conn.apiKeyEnc, Buffer.from('enc:sk-alt', 'utf8').toString('base64'));
+    assert.equal(conn.extraHeadersEnc, Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'));
+  }
+  // Der Anbieter-Eintrag hat ausgedient, die uebrigen Anbieter bleiben stehen.
+  assert.equal(COMPAT in config.providers, false);
+  assert.ok(config.providers.openai.apiKeyEnc);
+  // Eintraege anderer Anbieter bekommen keine Verbindung angehaengt.
+  assert.equal('connection' in config.presets.find((pr) => pr.id === 'p3'), false);
+
+  const aufDerPlatte = JSON.parse(await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8'));
+  assert.equal(aufDerPlatte.version, 4, 'die Migration wird auch geschrieben');
+});
+
+test('die Migration ist idempotent', async (t) => {
+  const { tmp, storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v3ConfigMitCompat());
+
+  const erst = await storage.readLLMConfig();
+  const nachDemErstenLauf = await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8');
+  const zweit = await storage.readLLMConfig();
+  const nachDemZweitenLauf = await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8');
+
+  assert.deepEqual(zweit, erst);
+  assert.equal(nachDemZweitenLauf, nachDemErstenLauf);
+  assert.equal(zweit.presets.filter((pr) => pr.providerId === COMPAT).length, 2);
+});
+
+test('eine Konfiguration ohne diesen Anbieter bleibt inhaltlich unveraendert', async (t) => {
+  const { storage } = await tmpStore(t);
+  const vorher = {
+    version: 3,
+    activeProvider: 'openai',
+    activePresetId: 'p1',
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+    providers: { openai: { apiKeyEnc: Buffer.from('enc:sk-oai', 'utf8').toString('base64') } },
+  };
+  await storage.writeLLMConfig(vorher);
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 4);
+  assert.deepEqual(config.providers, vorher.providers);
+  assert.deepEqual(config.presets, vorher.presets);
+});
+
+test('ein Eintrag mit eigener Verbindung wird bei der Migration nicht ueberschrieben', async (t) => {
+  const { storage } = await tmpStore(t);
+  const config = v3ConfigMitCompat();
+  config.presets[0].connection = { baseUrl: 'https://schon-da.example/v1', apiStyle: 'chat' };
+  await storage.writeLLMConfig(config);
+
+  const gelesen = await storage.readLLMConfig();
+  assert.equal(gelesen.presets[0].connection.baseUrl, 'https://schon-da.example/v1');
+  assert.equal(gelesen.presets[1].connection.baseUrl, 'http://localhost:1234/v1');
+});
+
+test('getEffectiveProviderConfig loest die Verbindung ueber den Eintrag auf', async (t) => {
+  const { storage } = await tmpStore(t);
+  await storage.writeLLMConfig({
+    version: 4,
+    activeProvider: COMPAT,
+    activePresetId: 'a',
+    providers: {},
+    presets: [
+      {
+        id: 'a',
+        providerId: COMPAT,
+        model: 'qwen2.5',
+        menuVisible: true,
+        connection: {
+          baseUrl: 'http://localhost:1234/v1',
+          displayName: 'LM Studio',
+          apiStyle: 'chat',
+          sendTools: true,
+          supportsImages: false,
+          insecureTls: false,
+        },
+      },
+      {
+        id: 'b',
+        providerId: COMPAT,
+        model: 'gpt-4o-mini',
+        menuVisible: true,
+        connection: {
+          baseUrl: 'https://gateway.firma.example/v1',
+          displayName: 'Firmen-Gateway',
+          apiStyle: 'full',
+          sendTools: true,
+          supportsImages: true,
+          insecureTls: true,
+          apiKeyEnc: Buffer.from('enc:sk-gw', 'utf8').toString('base64'),
+          extraHeadersEnc: Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'),
+        },
+      },
+    ],
   });
 
-  const config = await storage.getEffectiveProviderConfig('openai-compatible');
+  const lokal = await storage.getEffectiveProviderConfig(COMPAT, { presetId: 'a' });
+  assert.equal(lokal.baseUrl, 'http://localhost:1234/v1');
+  assert.equal(lokal.displayName, 'LM Studio');
+  assert.equal('apiKey' in lokal, false, 'ohne Key bleibt das Feld weg');
+  assert.equal(lokal.supportsImages, false);
+
+  const gateway = await storage.getEffectiveProviderConfig(COMPAT, { presetId: 'b' });
+  assert.equal(gateway.baseUrl, 'https://gateway.firma.example/v1');
+  assert.equal(gateway.apiKey, 'sk-gw');
+  assert.equal(gateway.extraHeaders, 'X-Tenant: acme');
+  assert.equal(gateway.apiStyle, 'full');
+  assert.equal(gateway.insecureTls, true);
+  assert.equal(gateway.supportsImages, true);
+
+  // Zwei Eintraege, zwei Ziele - genau das war vorher unmoeglich.
+  assert.notEqual(lokal.baseUrl, gateway.baseUrl);
+});
+
+test('ohne passenden Eintrag bleibt nur der Standard des Anbieters', async (t) => {
+  const { storage } = await tmpStore(t);
+  await storage.writeLLMConfig({
+    version: 4, activeProvider: COMPAT, activePresetId: null, providers: {}, presets: [],
+  });
+  const config = await storage.getEffectiveProviderConfig(COMPAT, { presetId: 'gibt-es-nicht' });
   assert.equal(config.baseUrl, 'http://localhost:1234/v1');
-  assert.equal(config.apiStyle, 'chat');
-  assert.equal(config.sendTools, true);
-  assert.equal(config.supportsImages, false);
-  assert.equal(config.displayName, '');
-  assert.equal(config.insecureTls, false);
-  // Ohne gespeicherte Header fehlt das Feld ganz — kein leerer Platzhalter.
-  assert.equal('extraHeaders' in config, false);
-  // Ohne Key auch kein Key-Feld: „kein Key" ist hier ein gueltiger Zustand.
   assert.equal('apiKey' in config, false);
 });
 
-test('gespeicherte Zusatz-Header kommen entschluesselt heraus', async (t) => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
-  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
-  const storage = makeStorageWithEncryption(tmp);
-
-  await storage.writeLLMConfig({
-    version: 3,
-    activeProvider: 'openai-compatible',
-    providers: {
-      'openai-compatible': {
-        baseUrl: 'https://gw.intern.example/v1',
-        apiKeyEnc: Buffer.from('enc:sk-gw', 'utf8').toString('base64'),
-        extraHeadersEnc: Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'),
-        apiStyle: 'full',
-        sendTools: false,
-        supportsImages: true,
-        displayName: 'Gateway',
-      },
-    },
-    presets: [],
+test('resolveChatModelTarget nennt den Eintrag, aus dem es stammt', async (t) => {
+  const { storage } = await tmpStore(t);
+  const target = storage.resolveChatModelTarget({
+    activePresetId: 'b',
+    presets: [
+      { id: 'a', providerId: COMPAT, model: 'qwen2.5' },
+      { id: 'b', providerId: COMPAT, model: 'gpt-4o-mini' },
+    ],
+    providers: {},
   });
-
-  const config = await storage.getEffectiveProviderConfig('openai-compatible');
-  assert.equal(config.apiKey, 'sk-gw');
-  assert.equal(config.extraHeaders, 'X-Tenant: acme');
-  assert.equal(config.apiStyle, 'full');
-  assert.equal(config.sendTools, false);
-  assert.equal(config.supportsImages, true);
-  assert.equal(config.displayName, 'Gateway');
-});
-
-test('ein unlesbares Header-Geheimnis liefert lieber nichts als Datenmuell', async (t) => {
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
-  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
-  const storage = makeStorageWithEncryption(tmp);
-
-  await storage.writeLLMConfig({
-    version: 3,
-    activeProvider: 'openai-compatible',
-    providers: {
-      'openai-compatible': { baseUrl: 'x', extraHeadersEnc: Buffer.from('kaputt').toString('base64') },
-    },
-    presets: [],
-  });
-
-  const config = await storage.getEffectiveProviderConfig('openai-compatible');
-  assert.equal('extraHeaders' in config, false);
+  assert.equal(target.presetId, 'b');
+  assert.equal(target.model, 'gpt-4o-mini');
 });

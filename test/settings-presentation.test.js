@@ -167,46 +167,97 @@ test('ohne API-Key gilt der generische Anbieter mit Server-URL als konfiguriert'
   assert.equal(view.form.apiKeyOptional, true);
 });
 
-test('der Anzeigename ersetzt den Anbieternamen in allen Beschriftungen', () => {
-  const view = compatView({ baseUrl: 'http://localhost:1234/v1', displayName: '  LM Studio  ' });
-  assert.equal(view.name, 'LM Studio');
-  assert.equal(view.builtInName, 'OpenAI-kompatibel');
+// --- Verbindung je Eintrag (Issue #202) -----------------------------------
 
-  const preset = presentation.buildPresetView(
-    { id: 'p', providerId: 'openai-compatible', model: 'qwen2.5', menuVisible: true },
-    { 'openai-compatible': view }
+function compatPresetView(connection, { model = 'qwen2.5', apiKeyDecryptable } = {}) {
+  const meta = providerCatalog.listProviderMeta().find((m) => m.id === 'openai-compatible');
+  const providerView = presentation.buildProviderView(meta, {}, {});
+  return presentation.buildPresetView(
+    { id: 'p1', providerId: 'openai-compatible', model, menuVisible: true, connection },
+    { 'openai-compatible': providerView },
+    undefined,
+    apiKeyDecryptable
   );
-  assert.equal(preset.labelBase, 'LM Studio · qwen2.5');
+}
+
+test('der Anzeigename der Zeile ersetzt den Anbieternamen in den Beschriftungen', () => {
+  const preset = compatPresetView({ displayName: 'LM Studio', baseUrl: 'http://localhost:1234/v1' });
+  assert.equal(preset.labelBase, 'LM Studio \u00b7 qwen2.5');
+  assert.match(preset.sublabel, /localhost:1234/);
 });
 
 test('ohne Anzeigename bleibt es beim eingebauten Namen', () => {
-  const view = compatView({ baseUrl: 'http://localhost:1234/v1', displayName: '   ' });
-  assert.equal(view.name, 'OpenAI-kompatibel');
+  const preset = compatPresetView({ displayName: '   ', baseUrl: 'http://localhost:1234/v1' });
+  assert.equal(preset.labelBase, 'OpenAI-kompatibel \u00b7 qwen2.5');
 });
 
-test('die Bild-Faehigkeit folgt dem gespeicherten Schalter, nicht dem Adapter', () => {
-  assert.equal(compatView({ baseUrl: 'x' }).capabilities.images, false);
-  assert.equal(compatView({ baseUrl: 'x', supportsImages: true }).capabilities.images, true);
+test('zwei Zeilen fuehren zwei verschiedene Ziele nebeneinander', () => {
+  const gateway = compatPresetView(
+    { displayName: 'Firmen-Gateway', baseUrl: 'https://gateway.firma.example/v1' },
+    { model: 'gpt-4o-mini' }
+  );
+  const lokal = compatPresetView(
+    { displayName: 'LM Studio', baseUrl: 'http://localhost:1234/v1' },
+    { model: 'qwen2.5-coder' }
+  );
+  assert.equal(gateway.labelBase, 'Firmen-Gateway \u00b7 gpt-4o-mini');
+  assert.equal(lokal.labelBase, 'LM Studio \u00b7 qwen2.5-coder');
+  assert.notEqual(gateway.sublabel, lokal.sublabel);
+  assert.match(gateway.sublabel, /gateway\.firma\.example/);
 });
 
-test('die View sagt nur, OB Zusatz-Header liegen — nie welche', () => {
-  const view = compatView({ baseUrl: 'x', extraHeadersEnc: 'Y2lwaGVy' });
-  assert.equal(view.hasExtraHeaders, true);
-  assert.equal('extraHeaders' in view, false);
-  assert.equal('extraHeadersEnc' in view, false);
-  assert.doesNotMatch(JSON.stringify(view), /Y2lwaGVy/);
+test('ein Eintrag mit Server-URL gilt ohne Schluessel als vollstaendig', () => {
+  assert.equal(compatPresetView({ baseUrl: 'http://localhost:1234/v1' }).configured, true);
+  assert.equal(compatPresetView({ baseUrl: '   ' }).configured, false);
 });
 
-test('API-Stil und Tool-Schalter kommen mit ihren Voreinstellungen heraus', () => {
-  const fresh = compatView({ baseUrl: 'x' });
-  assert.equal(fresh.apiStyle, 'chat');
-  assert.equal(fresh.sendTools, true);
-  assert.equal(fresh.supportsImages, false);
-
-  const set = compatView({ baseUrl: 'x', apiStyle: 'full', sendTools: false });
-  assert.equal(set.apiStyle, 'full');
-  assert.equal(set.sendTools, false);
+test('ein unlesbarer Schluessel macht die Zeile unvollstaendig', () => {
+  const preset = compatPresetView(
+    { baseUrl: 'http://localhost:1234/v1', apiKeyEnc: 'Y2lwaGVy' },
+    { apiKeyDecryptable: { 'preset:p1': false } }
+  );
+  assert.equal(preset.connection.keyUnreadable, true);
+  assert.equal(preset.configured, false);
 });
+
+test('die Zeile meldet nur, OB Geheimnisse liegen - nie welche', () => {
+  const preset = compatPresetView({
+    baseUrl: 'x',
+    apiKeyEnc: 'S0VZ',
+    extraHeadersEnc: 'Y2lwaGVy',
+  });
+  assert.equal(preset.connection.hasKey, true);
+  assert.equal(preset.connection.hasExtraHeaders, true);
+  assert.equal('apiKeyEnc' in preset.connection, false);
+  assert.equal('extraHeadersEnc' in preset.connection, false);
+  assert.doesNotMatch(JSON.stringify(preset), /Y2lwaGVy|S0VZ/);
+});
+
+test('API-Stil und Schalter der Zeile kommen mit ihren Voreinstellungen heraus', () => {
+  const fresh = compatPresetView({ baseUrl: 'x' });
+  assert.equal(fresh.connection.apiStyle, 'chat');
+  assert.equal(fresh.connection.sendTools, true);
+  assert.equal(fresh.connection.supportsImages, false);
+
+  const set = compatPresetView({
+    baseUrl: 'x', apiStyle: 'full', sendTools: false, supportsImages: true,
+  });
+  assert.equal(set.connection.apiStyle, 'full');
+  assert.equal(set.connection.sendTools, false);
+  assert.equal(set.connection.supportsImages, true);
+});
+
+test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {
+  const meta = providerCatalog.listProviderMeta().find((m) => m.id === 'ollama');
+  const providerView = presentation.buildProviderView(meta, { baseUrl: 'http://127.0.0.1:11434' }, {});
+  const preset = presentation.buildPresetView(
+    { id: 'o1', providerId: 'ollama', model: 'llama3.2', menuVisible: true },
+    { ollama: providerView }
+  );
+  assert.equal('connection' in preset, false);
+  assert.equal(preset.labelBase, 'Ollama (lokal) \u00b7 llama3.2');
+});
+
 
 test('das Formular meldet alle acht Felder und die Vorlagen', () => {
   const form = compatView({ baseUrl: 'x' }).form;

@@ -18,6 +18,7 @@ function toCatalogEntry(provider) {
     apiBase: provider.apiBase || '',
     capabilities: { images: provider.capabilities?.images === true },
     optionalApiKey: provider.optionalApiKey === true,
+    connectionPerPreset: provider.connectionPerPreset === true,
     // Faehigkeiten, die an der gespeicherten Konfiguration haengen statt am
     // Adapter (Issue #193) — die Praesentation ruft sie mit dem Eintrag auf.
     ...(typeof provider.capabilitiesFor === 'function'
