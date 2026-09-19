@@ -486,6 +486,29 @@ Der Renderer **darf** Provider-IDs und Preset-Felder aus IPC-DTOs *anzeigen*,
 solange er keine Provider-Wire-Formate parst und keine Tool-/Provider-Logik
 dupliziert.
 
+### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208))
+
+Wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
+neben dem Startschirm, der für den kalten Start gedacht ist. Die Entscheidung
+darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
+
+1. **`index.html` startet mit `workspace--no-preview`.** Der erste Bildaufbau
+   passiert, bevor `app.js` etwas weiß; stünde dort die offene Spalte, blitzte
+   der Startschirm auf und spränge gleich wieder weg. `test/startup-layout.test.js`
+   hält Markup und Umschalter-Zustand (`aria-pressed`) zusammen.
+2. **`loadChatForWorkspace()` meldet das Ergebnis** (`{ restored, wasActive }`)
+   statt es nur anzuwenden — der Start braucht die Auskunft, der Ordnerwechsel
+   ignoriert sie.
+3. **`contentPaneVisibleOnStart()`** (`renderer/utils/startupLayout.js`) fügt
+   beides mit der gespeicherten Einstellung zusammen; `app.js` wendet das
+   Ergebnis im `finally` der Startsequenz an, damit ein Fehler beim Laden die
+   Spalte nicht zugeklappt hängen lässt.
+
+Die Vorschau lebt in dieser Spalte, deshalb holt ein Klick auf eine Datei sie
+über `revealContentPane` zurück — sonst bliebe der Klick folgenlos. Die
+Startgröße des Fensters (1536 × 960, begrenzt auf die Arbeitsfläche) liegt als
+reine Funktion `fitToWorkArea()` in `src/main/window.js`.
+
 ## Automatisierte Grenzwächter
 
 | Test | Was er prüft |
@@ -511,6 +534,7 @@ werden als natives ESM per `await import(...)` geladen und mit gestubbtem
 | `test/file-tree-dom.test.js` | Baum zeichnen, Auf-/Zuklappen, Vorschau, Drop von außen ([#101](https://github.com/kkrafft1999/snotra/issues/101)): Zielordner je Trefferfläche, Lesen des `DataTransfer` vor dem ersten `await`, Busy-Sperre, Baum-Refresh |
 | `test/settings-modal-dom.test.js` | Tab-Umschaltung: Panel, `aria-selected`, Roving Tabindex, Überschrift, Escape |
 | `test/chat-links-dom.test.js` | Klick-Handler für Links aus Modellantworten ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) inkl. Fehlermeldung in der Statuszeile |
+| `test/chat-restore-report-dom.test.js` | Was `loadChatForWorkspace()` dem Start meldet ([#208](https://github.com/kkrafft1999/snotra/issues/208)): wiederhergestellte Konversation, leerer Ordner, bloße Begrüßung |
 
 Grenzen, damit die grüne Zeile nicht mehr verspricht, als sie hält: kein echtes
 Chromium, also **kein Layout** (`offsetParent`, `getBoundingClientRect`) und

@@ -154,6 +154,30 @@ test('Klick auf eine Datei oeffnet die Vorschau und markiert die Zeile', async (
   assert.equal(appStore.selectedPath, '/ws/README.md');
 });
 
+test('Klick auf eine Datei holt die eingeklappte mittlere Spalte zurueck', async (t) => {
+  // Beim Start neben einem wiederhergestellten Chat ist die Spalte zu
+  // (Issue #208) — ein Klick auf eine Datei bliebe sonst folgenlos.
+  const reveals = [];
+  const { dom, container } = await mountTree({}, { revealContentPane: () => reveals.push(true) });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+
+  assert.equal(reveals.length, 1, 'die Spalte muss vor der Vorschau aufgehen');
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), false);
+});
+
+test('ohne revealContentPane bleibt der Klick auf eine Datei wie gehabt', async (t) => {
+  const { dom, container } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+
+  assert.equal(document.getElementById('preview-filename').textContent, 'README.md');
+});
+
 test('Drop auf eine Ordnerzeile uebernimmt in diesen Ordner', async (t) => {
   const { dom, container, calls } = await mountTree();
   t.after(dom.cleanup);

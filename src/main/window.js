@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, screen, shell } = require('electron');
 const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
@@ -7,11 +7,45 @@ const projectRoot = path.resolve(__dirname, '..', '..');
 
 let mainWindow = null;
 
+// Startgroesse (Issue #208): 20 % mehr als die frueheren 1280 x 800. Drei
+// Spalten brauchen Platz — kleiner faengt jedes frische Profil damit an, dass
+// man das Fenster erst einmal aufzieht.
+const DEFAULT_WINDOW_WIDTH = 1536;
+const DEFAULT_WINDOW_HEIGHT = 960;
+
+/**
+ * Die Startgroesse darf nicht ueber die Arbeitsflaeche hinauswachsen: auf einem
+ * 13-Zoll-Notebook ist der sichtbare Bereich keine 960 px hoch, und ein Fenster,
+ * dessen Fuss unter der Bildschirmkante liegt, verdeckt die Chat-Eingabe.
+ *
+ * Reine Funktion, damit sie ohne laufendes Electron pruefbar ist.
+ */
+function fitToWorkArea(
+  workArea,
+  { width = DEFAULT_WINDOW_WIDTH, height = DEFAULT_WINDOW_HEIGHT } = {}
+) {
+  const available = (value) => (Number.isFinite(value) && value > 0 ? value : Infinity);
+  return {
+    width: Math.round(Math.min(width, available(workArea?.width))),
+    height: Math.round(Math.min(height, available(workArea?.height))),
+  };
+}
+
+function defaultWindowSize() {
+  try {
+    return fitToWorkArea(screen.getPrimaryDisplay().workAreaSize);
+  } catch {
+    // Ohne Display-Auskunft (Headless-Start in Tests) bleibt es beim Wunschmass.
+    return fitToWorkArea(null);
+  }
+}
+
 function createWindow() {
+  const { width, height } = defaultWindowSize();
   const window = new BrowserWindow({
     title: `Snotra AI ${app.getVersion()}`,
-    width: 1280,
-    height: 800,
+    width,
+    height,
     minWidth: 900,
     minHeight: 420,
     webPreferences: {
@@ -66,4 +100,7 @@ function getMainWindow() {
 module.exports = {
   createWindow,
   getMainWindow,
+  fitToWorkArea,
+  DEFAULT_WINDOW_WIDTH,
+  DEFAULT_WINDOW_HEIGHT,
 };
