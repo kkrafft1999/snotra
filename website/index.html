@@ -60,7 +60,7 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
         <p class="mission"><span data-i18n="hero.mission.teil1">Snotra AI ist die Werkbank dafür: eine Desktop-App, die auf genau einen Ordner zeigt. Das Fachwissen liegt als Textdatei daneben, die Fähigkeiten stecken in Werkzeugen, das Modell ist austauschbare Ware — auch gegen eines, das lokal auf deinem Rechner läuft. Angebunden wird, was ohnehin da ist: jedes CLI auf deiner Maschine.</span> <strong data-i18n="hero.mission.betont">Kein eigener Server, kein Konto, keine Telemetrie.</strong></p>
         <div class="hero-actions">
           <a class="btn btn-primary btn-lg" id="hero-cta" data-hero-cta data-size="mac" href="#download" data-i18n="hero.cta.primaer">Für macOS laden — 127 MB</a>
-          <a class="btn btn-secondary btn-lg" href="#download" data-i18n="hero.cta.sekundaer">Windows &amp; Linux</a>
+          <a class="btn btn-secondary btn-lg" id="hero-cta-alt" href="#download" data-i18n="hero.cta.sekundaer">Windows &amp; Linux</a>
         </div>
         <p class="hero-note" data-version data-i18n="hero.note">Version 1.5.3 · quelloffen unter Apache 2.0 · keine Registrierung</p>
       </div>
@@ -447,6 +447,12 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
         <h2 data-version data-i18n="download.h2">Version 1.5.3 — kostenlos, quelloffen, ohne Registrierung</h2>
         <p class="sec-sub" data-i18n="download.sub">Apache 2.0. Kein Konto, keine Telemetrie, kein eigener Server dazwischen — geladen wird direkt bei GitHub.</p>
       </div>
+
+      <!-- Telefon/Tablet: eingeblendet von app.js, wenn das Geraet keine der
+           drei Desktop-Plattformen ist. Ohne JS bleibt der Hinweis verborgen —
+           dann beschriftet sich auch der Hero-Knopf nicht plattformgenau,
+           sondern zeigt die volle Liste. -->
+      <p class="dl-mobile" id="dl-mobile" hidden data-i18n="download.mobil.hinweis">Snotra AI ist eine Desktop-App für macOS, Windows und Linux — auf Telefon und Tablet lässt sie sich nicht installieren. Öffne die Seite an deinem Rechner, dann steht hier gleich das passende Paket.</p>
 
       <div class="dl-grid reveal">
         <article class="dl">
