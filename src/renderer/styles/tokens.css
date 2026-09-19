@@ -156,6 +156,11 @@
   /* Abstand am Rollenwechsel (User -> KI und KI -> User): deutlich groesser,
    * damit Frage und Antwort optisch als getrennte Bloecke lesbar sind. */
   --ds-chat-turn-gap: 30px;
+  /* Luft zwischen der letzten Nachricht und der Composer-Karte. Bewusst
+   * groesser als --ds-chat-turn-gap: die Karte ist keine weitere Nachricht,
+   * sondern eine eigene Flaeche — bei gleichem Abstand wie zwischen Frage und
+   * Antwort wirkt der Verlauf unten gedrungen und die Karte klebt am Text. */
+  --ds-chat-composer-gap: 32px;
   /* Maximale Breite der Lesespalte (Nachrichten, Hinweis, Eingabezeile).
    * 794px entspricht der Breite eines DIN-A4-Blatts (210 mm bei 96 dpi).
    * Darueber hinaus waechst nur noch der Rand links und rechts. */

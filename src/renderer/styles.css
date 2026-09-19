@@ -46,6 +46,11 @@
   );
   /* Luft unter dem Composer bis zum Fensterrand. */
   --chat-composer-bottom: 24px;
+  /* Luft ueber dem Composer: Abstand der letzten Nachricht zur Karte. Sitzt
+   * komplett als padding-bottom an #chat-messages, damit der Hinweistext
+   * (#chat-hint) weiterhin dicht am Composer haengt und nicht mitten in der
+   * Luecke steht. */
+  --chat-composer-gap: var(--ds-chat-composer-gap);
   --chat-composer-bg: var(--ds-chat-composer-bg);
   --chat-composer-border: var(--ds-chat-composer-border);
   /* Composer-Lift: die einzige box-shadow auf einer Chat-Flaeche (Ausnahme
@@ -1180,7 +1185,7 @@ summary:focus-visible,
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--chat-output-bg);
-  padding: 4px var(--chat-gutter-inline) 8px;
+  padding: 4px var(--chat-gutter-inline) var(--chat-composer-gap);
   /* Scrollbar-Platz auf beiden Seiten reservieren: sonst wandert die
    * Lesespalte um die halbe Scrollbar-Breite nach links, sobald der Verlauf
    * scrollbar wird — und wieder zurueck, wenn nicht. */
@@ -1727,7 +1732,7 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   padding: 4px 6px 6px;
-  margin: 8px var(--chat-gutter-outer) var(--chat-composer-bottom);
+  margin: 0 var(--chat-gutter-outer) var(--chat-composer-bottom);
   background: var(--chat-composer-bg);
   border: 1px solid var(--chat-composer-border);
   border-radius: 14px;
