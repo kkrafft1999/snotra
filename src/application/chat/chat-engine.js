@@ -198,10 +198,15 @@ function collectInvokedSkillNames(messages) {
  * Zwei Fälle bleiben beim vollen Body:
  *  - per `/name` aufgerufene Skills — wer den Skill nennt, will ihn auch,
  *    und ein Nachladeschritt wäre nur Umweg (Issue #124);
- *  - `canLoadSkills === false`, also kein verfügbares `load_skill` (vom
- *    Nutzer abgeschaltet oder per Allowlist ausgesperrt). Ohne diesen
- *    Rückfall würden Skills still wirkungslos, und genau das wäre der
- *    Fehler, den niemand bemerkt.
+ *  - `canLoadSkills === false`, also kein verfügbares `load_skill`. Ohne
+ *    diesen Rückfall würden Skills still wirkungslos, und genau das wäre der
+ *    Fehler, den niemand bemerkt. Seit #195 ist `load_skill` Grundausstattung
+ *    und nicht mehr abwählbar — vorher kehrte genau dieser Rückfall die
+ *    Absicht des Nutzers um: Wer alle Tools abwaehlte, um Tokens zu sparen,
+ *    bekam dafür jede Skill-Anleitung in voller Länge in jede Anfrage. Der
+ *    Fall bleibt als Sicherung für Skills ohne Verzeichnis (dann trägt
+ *    `load_skill` sie nicht in seinem enum) und für Tool-Ports ohne dieses
+ *    Tool.
  *
  * @returns {{ text: string, parts: object[] }} Der Prompttext und seine
  *   Bausteine je Skill für die Token-Aufschlüsselung (Issue #174).
@@ -857,9 +862,10 @@ function createChatEngine({
       if (typeof tools.prepare === 'function') await tools.prepare(toolOptions);
       const toolsPrompt = tools.buildSystemPrompt(toolOptions);
       const availableToolDefs = tools.getTools(toolOptions);
-      // Der Nutzer kann `load_skill` in den Einstellungen abschalten. Dann
-      // gibt es keinen Weg zur Anleitung, und der Prompt fällt auf das alte
+      // Gibt es keinen Weg zur Anleitung, fällt der Prompt auf das alte
       // Verhalten zurück, statt Skills still wirkungslos zu lassen (#173).
+      // Über die Einstellungen passiert das nicht mehr — `load_skill` ist
+      // Grundausstattung (#195); siehe buildSkillsSystemPrompt.
       const canLoadSkills = availableToolDefs.some(
         (definition) => definition?.function?.name === LOAD_SKILL_TOOL
       );

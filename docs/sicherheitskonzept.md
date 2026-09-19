@@ -55,7 +55,7 @@ werden blockiert; es gibt keinen impliziten `read`-Default.
 
 | Klasse | Bedeutung | Zuordnung / Beispiel |
 | --- | --- | --- |
-| `read` | Lesen gewöhnlicher Daten oder Aktion ohne Seiteneffekt | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`; auch `debug_wait` (kein Dateizugriff, seit Issue #180 aber nur noch aus Tests auslösbar — dem Modell wird es nicht mehr angeboten) |
+| `read` | Lesen gewöhnlicher Daten oder Aktion ohne Seiteneffekt | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`, `load_skill` |
 | `read-sensitive` | Sensible Inhalte oder gezielter Zugriff auf einen sensiblen Pfad | Dynamische Hochstufung der Lese-Tools, auch unter `skill:` |
 | `write` | Datei erstellen, gezielt ändern oder mit Wiederherstellungskopie überschreiben | `write_file_text` bei neuer Datei oder mit erfolgreich angelegter Wiederherstellungskopie (Abschnitt 9); `edit_file`, `apply_patch` |
 | `delete` | Löschen oder vollständiges Überschreiben ohne gesicherte Wiederherstellung | `write_file_text` bei bestehender Datei, wenn die Wiederherstellungskopie nicht angelegt werden kann; künftiges Lösch-Tool |
@@ -95,7 +95,7 @@ Verbindliche Reihenfolge:
    niemals neu verfügbar.
 2. Passende globale oder Workspace-Deny-Regel → `deny`. Jede Sperre schlägt jede
    Erlaubnis, auch eine spezifischere oder spätere Erlaubnis.
-3. `ask-all` → `ask`, ausdrücklich auch bei Lesetools und `debug_wait`.
+3. `ask-all` → `ask`, ausdrücklich auch bei Lesetools.
    Allow-Listen und Sitzungsfreigaben überspringen hier keine Rückfrage.
 4. `auto` → `allow` innerhalb der Grenzen, ohne Tool-Rückfragen. Das gilt auch
    für sensible Workspace-Daten; darauf muss die Modus-Warnung hinweisen.

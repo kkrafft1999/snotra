@@ -109,9 +109,9 @@ test('Deny-Regeln greifen per Tool oder Klasse, bei mehreren Zielen reicht ein T
   });
   assert.equal(patch.decision, 'deny', 'Mehrdatei-Patch: ein gesperrtes Ziel sperrt alles');
 
-  // Ohne Ziel (debug_wait) greift nur eine Sperre auf „alles“.
-  assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'debug_wait', riskClasses: ['read'], targets: [], rules: [rule({ id: 'x', effect: 'deny', tool: 'debug_wait', pathPattern: 'src/**' })] }).decision, 'allow');
-  assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'debug_wait', riskClasses: ['read'], targets: [], rules: [rule({ id: 'x', effect: 'deny', tool: 'debug_wait' })] }).decision, 'deny');
+  // Ohne Ziel (z. B. web_search) greift nur eine Sperre auf „alles“.
+  assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'web_search', riskClasses: ['read'], targets: [], rules: [rule({ id: 'x', effect: 'deny', tool: 'web_search', pathPattern: 'src/**' })] }).decision, 'allow');
+  assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'web_search', riskClasses: ['read'], targets: [], rules: [rule({ id: 'x', effect: 'deny', tool: 'web_search' })] }).decision, 'deny');
 });
 
 test('ask-all fragt auch Lesetools und ignoriert Sitzungsfreigaben und Allow-Regeln', () => {
@@ -119,7 +119,7 @@ test('ask-all fragt auch Lesetools und ignoriert Sitzungsfreigaben und Allow-Reg
   const verdict = decideToolPolicy({ mode: 'ask-all', toolName: 'list_directory', riskClasses: ['read'], targets: [], rules, sessionGrant: { id: 'g' } });
   assert.equal(verdict.decision, 'ask');
   assert.deepEqual(verdict.askClasses, ['read']);
-  assert.equal(decideToolPolicy({ mode: 'ask-all', toolName: 'debug_wait', riskClasses: ['read'] }).decision, 'ask');
+  assert.equal(decideToolPolicy({ mode: 'ask-all', toolName: 'web_search', riskClasses: ['read'] }).decision, 'ask');
 });
 
 test('auto erlaubt alle Klassen innerhalb der Grenzen, auch sensible Daten', () => {

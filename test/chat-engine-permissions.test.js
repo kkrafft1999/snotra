@@ -456,8 +456,8 @@ test('harte Grenzen und Sperr-Regeln blockieren in jedem Modus, auch mit Freigab
 test('deaktivierte Tools, ungültige Argumente und Plan-Fehler blockieren ohne Handler und ohne Karte', async () => {
   const approvals = makeApprovals('allow-once');
   const tools = makeToolPort();
-  const { engine, llm } = makeEngine([assistantToolCall('c1', 'debug_wait', {}), assistantText('ok')], {
-    tools, approvals, preferences: { async read() { return { disabledTools: ['debug_wait'] }; } },
+  const { engine, llm } = makeEngine([assistantToolCall('c1', 'web_search', {}), assistantText('ok')], {
+    tools, approvals, preferences: { async read() { return { disabledTools: ['web_search'] }; } },
   });
   await send(engine);
   assert.equal(tools.calls.length, 0);

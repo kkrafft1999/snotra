@@ -11,8 +11,6 @@ const {
   normalizeUsage,
   coerceUsage,
   mergeUsage,
-  DEBUG_WAIT,
-  resolveDebugWaitMs,
   createChatResult,
   createCancelledChatResult,
   createChatErrorResult,
@@ -138,13 +136,6 @@ test('mergeUsage sums rounds and tolerates null inputs', () => {
     total: 2,
   });
   assert.equal(mergeUsage(null, null), null);
-});
-
-test('resolveDebugWaitMs clamps to the shared bounds', () => {
-  assert.equal(resolveDebugWaitMs(), DEBUG_WAIT.DEFAULT_MS);
-  assert.equal(resolveDebugWaitMs({ duration_seconds: 0 }), DEBUG_WAIT.MIN_MS);
-  assert.equal(resolveDebugWaitMs({ duration_seconds: 999 }), DEBUG_WAIT.MAX_MS);
-  assert.equal(resolveDebugWaitMs({ duration_ms: 1234 }), 1234);
 });
 
 test('createChatResult / createCancelledChatResult produce the stable success shapes', () => {

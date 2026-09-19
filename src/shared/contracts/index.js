@@ -83,7 +83,6 @@ const {
   groupContextParts,
 } = require('./context-breakdown');
 const { endpointHost, isLocalEndpoint } = require('./provider-endpoint');
-const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
@@ -247,8 +246,6 @@ module.exports = {
   groupContextParts,
   endpointHost,
   isLocalEndpoint,
-  DEBUG_WAIT,
-  resolveDebugWaitMs,
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
   toolCategory,

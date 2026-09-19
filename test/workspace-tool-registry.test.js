@@ -234,52 +234,25 @@ test('modelDescription vom falschen Typ faellt sofort auf (#181)', () => {
   );
 });
 
-test('internal tools leave both the settings catalog and the schemas (#180)', () => {
-  const registry = createToolRegistry([
-    definition('read'),
-    { ...definition('debug_wait'), internal: true },
-  ]);
+// Was der Nutzer in den Einstellungen sieht, bekommt auch das Modell — und
+// umgekehrt (Issue #180). Den Weg „nur das Modell" gibt es weiter, aber nur
+// als ausdrueckliche Grundausstattung (#195); den Weg „weder noch" trug
+// `internal`, das mit #203 entfallen ist.
+test('Katalog und Schemas nennen dieselben Tools (#180)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  // Ohne Ordner- und Skill-Bindung vergleichen, sonst filtert nicht die
+  // Sichtbarkeit, sondern die Verfuegbarkeit (#96/#173).
+  const schemas = registry.getTools().map((tool) => tool.function.name);
+  const katalog = registry.listCatalog().map((entry) => entry.name);
+  const essenziell = schemas.filter((name) => registry.getDefinition(name).essential === true);
 
+  assert.ok(essenziell.length > 0, 'ohne Grundausstattung prueft der Vergleich nichts');
   assert.deepEqual(
-    registry.listCatalog().map((entry) => entry.name),
-    ['read']
+    schemas.filter((name) => !essenziell.includes(name)).sort(),
+    // Konfigurationsgebundene Tools stehen im Katalog, aber ohne Schluessel
+    // bzw. Laufzeit nicht in den Schemas (#63/#86/#95/#102).
+    katalog.filter((name) => registry.getDefinition(name).isAvailable() === true).sort()
   );
-  // Was in den Einstellungen fehlt, kann niemand abwaehlen — also darf es auch
-  // nicht in jeder Runde Tokens kosten (Issue #180).
-  assert.deepEqual(
-    registry.getTools().map((tool) => tool.function.name),
-    ['read']
-  );
-  assert.equal(registry.buildSystemPrompt().includes('debug_wait'), false);
-});
-
-test('internal tools stay executable although the model never sees them (#180)', async () => {
-  const registry = createToolRegistry([
-    definition('read'),
-    { ...definition('debug_wait'), internal: true },
-  ]);
-
-  // Die UI-Tests loesen debug_wait ueber Fake-LLMs aus: Der Filter aendert die
-  // Sichtbarkeit, nicht die Ausfuehrbarkeit.
-  assert.equal(registry.getDefinition('debug_wait')?.name, 'debug_wait');
-  assert.equal(
-    JSON.parse(await registry.execute('debug_wait', { value: 'x' }, APPROVED)).name,
-    'debug_wait'
-  );
-});
-
-test('debug_wait is marked internal in the workspace registry', () => {
-  const registry = createWorkspaceToolRegistry({ fsService: {} });
-
-  assert.equal(
-    registry.listCatalog().some((entry) => entry.name === 'debug_wait'),
-    false
-  );
-  assert.equal(
-    registry.getTools().some((tool) => tool.function.name === 'debug_wait'),
-    false
-  );
-  assert.equal(registry.getDefinition('debug_wait').internal, true);
 });
 
 test('registry executes handlers with request context', async () => {
@@ -387,14 +360,15 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(names.includes('shell_execute'), false);
 
   // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
-  // web_search und fetch_url → external. debug_wait ist read, bleibt als
-  // internes Test-Tool aber ausserhalb von Katalog und Schemas (#98, #180).
+  // web_search und fetch_url → external.
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
+  // Die Grundausstattung steht oben in den Schemas, aber nicht im Katalog
+  // (#195) — ihre Klasse kommt deshalb direkt aus der Definition.
+  assert.equal(registry.getDefinition('list_directory').riskClass, 'read');
+  // Nachladen einer Skill-Anleitung liest nur, und zwar aus einem
+  // schreibgeschuetzten Verzeichnis (Issue #173).
+  assert.equal(registry.getDefinition('load_skill').riskClass, 'read');
   const readTools = [
-    'list_directory',
-    // Nachladen einer Skill-Anleitung liest nur, und zwar aus einem
-    // schreibgeschuetzten Verzeichnis (Issue #173).
-    'load_skill',
     'read_file_text',
     'read_file_lines',
     'search_in_files',
@@ -409,10 +383,53 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(classes.shell_execute, 'execute');
-  assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
-  assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
-  // 17 registrierte Tools minus debug_wait, das im Katalog fehlt (#98).
-  assert.equal(Object.keys(classes).length, 16);
+  // 16 registrierte Tools minus die beiden essenziellen list_directory und
+  // load_skill, die niemand abwaehlt (#195).
+  assert.equal(Object.keys(classes).length, 14);
+  assert.equal(Object.hasOwn(classes, 'list_directory'), false);
+  assert.equal(Object.hasOwn(classes, 'load_skill'), false);
+});
+
+// Grundausstattung (#195): Wer alle Tools abwaehlte, um Tokens zu sparen, nahm
+// `load_skill` mit — und bekam dafür jede Skill-Anleitung voll in jede Anfrage
+// (chat-engine.js). Diese Tools bleiben deshalb sichtbar fuer das Modell und
+// unsichtbar in den Einstellungen: Es gibt nichts zu entscheiden.
+test('die Grundausstattung lässt sich nicht abwählen und steht nicht im Katalog (#195)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const essential = ['list_directory', 'load_skill'];
+
+  // Alles abgewaehlt, was es gibt — genau der Fall aus dem Fehlerbericht.
+  const alleAb = registry
+    .getTools({ disabledNames: registry.listCatalog().map((entry) => entry.name).concat(essential) })
+    .map((tool) => tool.function.name);
+  assert.deepEqual(alleAb, essential);
+  // Der Konventionsblock bleibt damit ebenfalls bestehen — er ist fuer die
+  // Engine das Signal ‚es gibt Tools' und traegt die Sicherheitsregel (#182).
+  assert.notEqual(registry.buildSystemPrompt({ disabledNames: essential }), '');
+
+  const katalog = registry.listCatalog().map((entry) => entry.name);
+  for (const name of essential) {
+    assert.equal(katalog.includes(name), false, `${name} gehört nicht in die Tool-Liste`);
+    // Registriert, ausfuehrbar und als Grundausstattung markiert bleibt es.
+    assert.equal(registry.getDefinition(name).essential, true, name);
+  }
+});
+
+// Grundausstattung heisst nicht ‚immer da': list_directory braucht weiterhin
+// einen Ordner, load_skill einen eingeschalteten Skill (#96/#173).
+test('die Grundausstattung hält sich weiter an Ordner und Skills (#195)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+
+  const ohneOrdner = registry
+    .getTools({ workspaceOpen: false, skillNames: [] })
+    .map((tool) => tool.function.name);
+  assert.equal(ohneOrdner.includes('list_directory'), false);
+  assert.equal(ohneOrdner.includes('load_skill'), false);
+
+  const mitSkill = registry
+    .getTools({ workspaceOpen: false, skillNames: ['demo'] })
+    .map((tool) => tool.function.name);
+  assert.equal(mitSkill.includes('load_skill'), true);
 });
 
 test('der System-Prompt zählt keine Tool-Namen mehr auf (#182)', () => {
@@ -674,7 +691,8 @@ test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (I
   assert.deepEqual(targets('search_in_files', { query: 'x', relative_path: 'src' }), [
     { path: 'src', kind: 'tree', access: 'read' },
   ]);
-  assert.deepEqual(targets('debug_wait', {}), []);
+  // Ein Tool ohne Dateiziel: die Policy hat hier nur „alles" zu greifen.
+  assert.deepEqual(targets('web_search', { query: 'x' }), []);
   assert.deepEqual(targets('write_file_text', { relative_path: 'n.md', content: '' }), [
     { path: 'n.md', kind: 'file', access: 'write', overwrite: true },
   ]);

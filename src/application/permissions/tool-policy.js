@@ -111,7 +111,7 @@ function ruleNamesCall(rule, toolName, riskClasses) {
 
 /**
  * Eine Sperre greift, wenn Tool oder Klasse passen und mindestens ein Ziel
- * dem Pfadmuster entspricht. Ohne Ziele (z. B. debug_wait) greift nur ein
+ * dem Pfadmuster entspricht. Ohne Ziele greift nur ein
  * Muster für „alles“.
  */
 function denyRuleMatches(rule, { toolName, riskClasses, paths }) {

@@ -6,7 +6,6 @@
  */
 'use strict';
 
-const { resolveDebugWaitMs } = require('../contracts/debug-wait');
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { APP_LOCALES } = require('../contracts/enums');
 const { parseSkillPath } = require('../runtime/skill-path');
@@ -33,19 +32,6 @@ function formatRelativePathForLabel(relativePath) {
     return `${truncateToolLabel(skill.rest)} (Skill ${name})`;
   }
   return truncateToolLabel(raw);
-}
-
-function formatPauseDurationLabel(ms, phase, locale = APP_LOCALES.DE) {
-  const seconds = ms / 1000;
-  const label = Number.isInteger(seconds)
-    ? String(seconds)
-    : seconds.toLocaleString(locale === APP_LOCALES.EN ? 'en-US' : 'de-DE', {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      });
-  const unit = seconds === 1 ? 'Sekunde' : 'Sekunden';
-  if (phase === 'done') return `${label} ${unit} gewartet`;
-  return `Warte ${label} ${unit} …`;
 }
 
 /**
@@ -184,9 +170,6 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES
     }
     return isDone ? 'Seite gelesen' : 'Seite wird gelesen …';
   }
-  if (toolName === 'debug_wait') {
-    return formatPauseDurationLabel(resolveDebugWaitMs(args), phase, locale);
-  }
   // MCP-Tools (Issue #107): der Namensraum `mcp__<server>__<tool>` ist eine
   // interne Angelegenheit — im Log steht der Server vor dem Tool, damit man
   // sieht, wessen Werkzeug da gerade laeuft, ohne die Maschinerie zu lesen.
@@ -220,10 +203,7 @@ function permissionSuffix(entry, phase) {
 
 function formatToolDisplayLine(entry, phase = 'start', locale = APP_LOCALES.DE) {
   if (typeof entry === 'string') return entry;
-  const line =
-    entry?.tool === 'debug_wait' && Number.isFinite(entry?.waitMs)
-      ? formatPauseDurationLabel(entry.waitMs, phase, locale)
-      : summarizeToolCall(entry?.tool, entry?.args, phase, locale);
+  const line = summarizeToolCall(entry?.tool, entry?.args, phase, locale);
   const withPermission = `${line}${permissionSuffix(entry, phase)}`;
   return entry?.noWorkspace ? `${withPermission} · kein Ordner geöffnet` : withPermission;
 }

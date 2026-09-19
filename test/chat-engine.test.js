@@ -40,10 +40,13 @@ function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresW
   const calls = [];
   const planCalls = [];
   // Wie die echte Registry (Issue #96): ohne geoeffneten Ordner bleiben nur die
-  // Tools ohne Ordnerbezug in Liste und Prompt.
+  // Tools ohne Ordnerbezug in Liste und Prompt. Und wie sie seit #195: die
+  // Haekchen des Nutzers gelten nicht fuer die Grundausstattung (`essential`).
   const visible = ({ workspaceOpen = true, disabledNames = [] } = {}) =>
     toolDefs.filter(
-      (def) => (workspaceOpen !== false || def.requiresWorkspace === false) && !disabledNames.includes(def.name)
+      (def) =>
+        (workspaceOpen !== false || def.requiresWorkspace === false) &&
+        (!disabledNames.includes(def.name) || def.essential === true)
     );
   return {
     calls,
@@ -62,7 +65,8 @@ function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresW
     },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
-      if (toolName === 'debug_wait') entry.waitMs = 500;
+      // Wie der echte Adapter (#173): `load_skill` merkt sich den Skill-Namen.
+      if (toolName === 'load_skill' && typeof args?.name === 'string') entry.skill = args.name;
       return entry;
     },
     formatDisplayLine(entry, phase) {
@@ -583,23 +587,26 @@ test('engine supplies a synthetic tool error when no workspace is open', async (
   assert.match(toolMessage.content, /Kein Arbeitsordner geöffnet/);
 });
 
-test('engine preserves debug_wait metadata in its tool trace', async () => {
+// Der Trace traegt mehr als Name und Argumente: was `buildTraceEntry` im
+// Adapter ergaenzt, muss bis in die Antwort durchkommen. Traeger ist seit dem
+// Wegfall von debug_wait (#197) der Skill-Name von `load_skill`.
+test('engine preserves tool-trace metadata from the adapter', async () => {
   const { engine } = makeEngine([
-    assistantToolCall('call_1', 'debug_wait', { duration_seconds: 0.1 }),
+    assistantToolCall('call_1', 'load_skill', { name: 'traffic' }),
     assistantText('Fertig.'),
   ]);
 
   const result = await engine.send({
     sessionId: 'renderer-1',
     payload: {
-      messages: [{ role: 'user', content: 'Warte' }],
+      messages: [{ role: 'user', content: 'Lade den Skill' }],
       workspaceRoot: '/tmp/snotra-project',
     },
   });
 
   assert.equal(result.content, 'Fertig.');
-  assert.equal(result.toolTrace[0].waitMs, 500);
-  assert.equal(result.toolTrace[0].line, '0,5 Sekunden gewartet');
+  assert.equal(result.toolTrace[0].skill, 'traffic');
+  assert.equal(result.toolTrace[0].line, 'Skill traffic geladen');
 });
 
 test('engine stops at its configured tool-round limit', async () => {
@@ -686,7 +693,7 @@ test('engine passes disabled tools to registry and execution context', async () 
     tools,
     preferences: {
       async read() {
-        return { allowWorkspaceWrite: false, disabledTools: ['debug_wait', 'search_in_files'] };
+        return { allowWorkspaceWrite: false, disabledTools: ['web_search', 'search_in_files'] };
       },
     },
   });
@@ -700,9 +707,9 @@ test('engine passes disabled tools to registry and execution context', async () 
   });
 
   assert.deepEqual(getToolsCalls, [
-    { disabledNames: ['debug_wait', 'search_in_files'], workspaceOpen: true, skillNames: [] },
+    { disabledNames: ['web_search', 'search_in_files'], workspaceOpen: true, skillNames: [] },
   ]);
-  assert.deepEqual(tools.calls[0].context.disabledNames, ['debug_wait', 'search_in_files']);
+  assert.deepEqual(tools.calls[0].context.disabledNames, ['web_search', 'search_in_files']);
 });
 
 test('engine preserves start display lines on tool trace when aborted during execution', async () => {
@@ -1137,8 +1144,8 @@ test('engine leaves the system message untouched when no skill is active', async
 // dieses Tool nicht — deshalb reichen die Tests es ausdrücklich herein, wo es
 // um das neue Verhalten geht, und lassen es weg, wo der Rückfall zählt.
 const LOAD_SKILL_DEFS = [
-  { name: 'list_directory', requiresWorkspace: true },
-  { name: 'load_skill', requiresWorkspace: false },
+  { name: 'list_directory', requiresWorkspace: true, essential: true },
+  { name: 'load_skill', requiresWorkspace: false, essential: true },
 ];
 
 function makeSkillPort(skills) {
@@ -1207,10 +1214,47 @@ test('engine schreibt per „/name" aufgerufene Skills weiterhin sofort aus (#17
   assert.equal(system.content.includes('Regel auf Abruf.'), false);
 });
 
-test('engine fällt auf den vollen Body zurück, wenn load_skill abgeschaltet ist (#173)', async () => {
+// Der Fehler hinter #195: Wer alle Tools abwaehlte, um Tokens zu sparen, nahm
+// `load_skill` mit — und bekam dafür jede Skill-Anleitung in voller Länge in
+// jede Anfrage. Aus ein paar hundert gesparten Token wurden mehrere tausend
+// zusätzliche. Seit #195 ist `load_skill` Grundausstattung; abgewaehlt bleibt
+// es trotzdem verfügbar, und die Skills bleiben auf Abruf.
+test('alle Tools abgewählt lässt die Skills auf Abruf, statt sie auszuschreiben (#195)', async () => {
   const { engine, calls } = makeEngine([assistantText('ok')], {
     tools: makeToolPort(undefined, { toolDefs: LOAD_SKILL_DEFS }),
-    preferences: { async read() { return { disabledTools: ['load_skill'] }; } },
+    preferences: {
+      async read() {
+        return { disabledTools: LOAD_SKILL_DEFS.map((def) => def.name) };
+      },
+    },
+    skills: makeSkillPort([
+      { name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' },
+    ]),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+  });
+
+  const system = calls[0].messages.find((m) => m.role === 'system');
+  assert.match(system.content, /- demo: d/);
+  assert.match(system.content, /load_skill/);
+  assert.equal(system.content.includes('Regel A.'), false);
+  assert.equal(system.content.includes('## Skill: demo'), false);
+  // Und das Tool geht auch wirklich mit hinaus — sonst wäre die Kurzliste ein
+  // Versprechen ohne Einlösung.
+  assert.equal(
+    calls[0].tools.some((tool) => tool.function.name === 'load_skill'),
+    true
+  );
+});
+
+test('engine fällt auf den vollen Body zurück, wenn es kein load_skill gibt (#173)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    // Ein Tool-Port ohne `load_skill`: seit #195 der einzige Weg hierher —
+    // etwa ein Skill ohne eigenes Verzeichnis, den das enum nicht trägt.
+    tools: makeToolPort(undefined, { toolDefs: [{ name: 'list_directory', requiresWorkspace: true }] }),
     skills: makeSkillPort([
       { name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' },
     ]),

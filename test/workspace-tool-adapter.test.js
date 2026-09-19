@@ -51,14 +51,14 @@ test('workspace tool adapter skips fileWritten when the tool output reports an e
   assert.deepEqual(result.progressEvents, []);
 });
 
-test('workspace tool adapter adds display lines and debug_wait metadata via the port API', () => {
+test('workspace tool adapter adds display lines and skill metadata via the port API', () => {
   const adapter = createWorkspaceToolAdapter(makeRegistry());
 
-  const entry = adapter.buildTraceEntry('debug_wait', { duration_seconds: 0.1 });
-  assert.equal(entry.waitMs, 500);
+  const entry = adapter.buildTraceEntry('load_skill', { name: 'traffic' });
+  assert.equal(entry.skill, 'traffic');
   assert.equal(
     adapter.formatDisplayLine(entry, 'start'),
-    'Warte 0,5 Sekunden …'
+    'Skill traffic wird geladen …'
   );
   assert.equal(
     adapter.formatDisplayLine(

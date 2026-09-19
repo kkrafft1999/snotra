@@ -1,6 +1,5 @@
 'use strict';
 
-const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
 const { createWorkspaceFileWrittenEvent } = require('../../shared/contracts/chat');
 const {
   TOOL_RISK_CLASSES,
@@ -118,9 +117,6 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
-      if (toolName === 'debug_wait') {
-        entry.waitMs = resolveDebugWaitMs(args);
-      }
       // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der
       // Eintrag den Skill-Namen — daraus wird im Chat die Skill-Kategorie.
       // `load_skill` trägt den Namen im Argument statt im Pfad (Issue #173).

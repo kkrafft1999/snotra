@@ -116,10 +116,10 @@ test('normalizeUiPrefs and patch apply clamps', () => {
 
 test('normalizeUiPrefs and patch sanitize disabledTools', () => {
   assert.deepEqual(normalizeUiPrefs({}).disabledTools, []);
-  assert.deepEqual(normalizeUiPrefs({ disabledTools: 'debug_wait' }).disabledTools, []);
+  assert.deepEqual(normalizeUiPrefs({ disabledTools: 'web_search' }).disabledTools, []);
   assert.deepEqual(
-    normalizeUiPrefs({ disabledTools: [' debug_wait ', 'debug_wait', 42, '', 'edit_file'] }).disabledTools,
-    ['debug_wait', 'edit_file']
+    normalizeUiPrefs({ disabledTools: [' web_search ', 'web_search', 42, '', 'edit_file'] }).disabledTools,
+    ['web_search', 'edit_file']
   );
 
   assert.equal('disabledTools' in normalizeUiPrefsPatch({}), false);

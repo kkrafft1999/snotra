@@ -38,7 +38,7 @@ test('Sitzungsumfang nennt Tool, exakte Ziele und Klassen', () => {
     describeSessionScope({ tool: 'edit_file', targets: [{ path: 'a.js' }, 'b.js'], riskClasses: ['write'] }),
     'Gilt in dieser Sitzung für edit_file auf genau a.js, b.js (Ändern).'
   );
-  assert.match(describeSessionScope({ tool: 'debug_wait', targets: [], riskClasses: ['read'] }), /ohne Dateiziel/);
+  assert.match(describeSessionScope({ tool: 'web_search', targets: [], riskClasses: ['read'] }), /ohne Dateiziel/);
 });
 
 test('buildApprovalRequest bindet Plan, Policy-Version und bietet Sitzung nur für freigebbare Klassen', () => {

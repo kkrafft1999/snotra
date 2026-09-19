@@ -460,8 +460,12 @@ Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
 (`application/chat/chat-engine.js`), in dieser Reihenfolge:
 
 1. **Basisprompt** aus den Einstellungen — steht vorn und behält den Vorrang.
-2. **Skill-Block** (`buildSkillsSystemPrompt`) — die Anweisungen der
-   eingeschalteten Skills; sie beschreiben das *Wie*.
+2. **Skill-Block** (`buildSkillsSystemPrompt`) — die eingeschalteten Skills;
+   sie beschreiben das *Wie*. Im Prompt steht je Skill nur Name und
+   Kurzbeschreibung, die Anleitung holt das Modell bei Bedarf mit `load_skill`
+   ([#173](https://github.com/kkrafft1999/snotra/issues/173)). Nur zwei Fälle
+   stehen sofort voll im Prompt: per `/name` gerufene Skills und der Rückfall,
+   wenn es kein `load_skill` gibt.
 3. **Environment-Block** (`application/chat/environment-prompt.js`, Issue #138)
    — Arbeitsverzeichnis (absoluter Pfad), Git ja/nein, Plattform,
    Systemversion, die Shell von `shell_execute` und das heutige Datum. Die
@@ -474,6 +478,31 @@ Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
 4. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
    `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
    Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.
+
+### Grundausstattung der Tools
+
+Grundsatz seit [#180](https://github.com/kkrafft1999/snotra/issues/180): Was
+in Einstellungen › Tools steht, geht an das Modell — und umgekehrt. Sonst
+kostet ein Schema in jeder Runde Tokens, das niemand abwählen kann, weil es in
+der Liste nicht auftaucht.
+
+`essential: true` ist die eine ausdrückliche Ausnahme
+([#195](https://github.com/kkrafft1999/snotra/issues/195)): nur in den
+Einstellungen versteckt, immer an das Modell. Die Häkchen des Nutzers greifen
+darauf nicht, `requiresWorkspace` und `requiresSkills` weiterhin schon. Die
+Gegenrichtung — `internal: true`, vor Nutzer *und* Modell versteckt und nur
+aus Tests auslösbar — ist mit
+[#203](https://github.com/kkrafft1999/snotra/issues/203) entfallen, nachdem ihr
+einziger Träger `debug_wait` weg war
+([#197](https://github.com/kkrafft1999/snotra/issues/197)).
+
+Grundausstattung sind `list_directory` und `load_skill`. Beide sind kein
+Zusatz, sondern der Zugang zu etwas, das der Nutzer an anderer Stelle schon
+eingeschaltet hat — ein Ordner bzw. ein Skill. Abgewaehlt sparten sie ein
+kleines Schema und kosteten ein Vielfaches woanders: ohne `load_skill` fällt
+der Skill-Block auf den vollen Body jeder Anleitung zurück, ohne
+`list_directory` rät das Modell Pfade. Eine Zeile mit Häkchen wäre dort also
+kein Sparschalter, sondern eine Falle — deshalb steht sie nicht in der Liste.
 
 Ein **Scratch-Verzeichnis** nennt der Block bewusst *nicht*: die Schreib-Tools
 kennen nur den Arbeitsordner als Wurzel, ein Pfad daneben wäre ein Hinweis auf

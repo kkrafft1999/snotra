@@ -240,7 +240,7 @@
     <rect class="tool" x="384" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="444" y="1308">list_directory</text>
     <rect class="tool" x="516" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="576" y="1308">read_file_text</text>
     <rect class="tool" x="384" y="1322" width="120" height="26" rx="6"/><text class="chip tt-tool" x="444" y="1340">write_file_text*</text>
-    <rect class="tool" x="516" y="1322" width="120" height="26" rx="6"/><text class="chip tt-tool" x="576" y="1340">debug_wait</text>
+    <rect class="tool" x="516" y="1322" width="120" height="26" rx="6"/><text class="chip tt-tool" x="576" y="1340">load_skill</text>
   </g>
 
   <rect class="svc" x="666" y="1240" width="516" height="112" rx="10" fill="#eef1f8"/>
@@ -284,7 +284,7 @@
   <text class="btitle tt-contract" x="1317" y="180" text-anchor="middle">contracts/</text>
   <text class="chipsub" x="1317" y="197" fill="#8a5a12">DTOs · Events · Enums</text>
   <text class="chipsub" x="1317" y="211" fill="#8a5a12">chat · settings · usage</text>
-  <text class="chipsub" x="1317" y="225" fill="#8a5a12">llm-target · debug-wait</text>
+  <text class="chipsub" x="1317" y="225" fill="#8a5a12">llm-target · skills</text>
 
   <rect class="contract" x="1240" y="240" width="154" height="52" rx="8" fill="#fdf6e3"/>
   <text class="btitle tt-contract" x="1317" y="262" text-anchor="middle">presentation/</text>
