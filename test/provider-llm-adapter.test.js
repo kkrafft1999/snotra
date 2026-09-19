@@ -305,3 +305,59 @@ test('adapter validateTarget returns NO_API_KEY with send-specific suffix', asyn
   assert.equal(explainErr.code, 'NO_API_KEY');
   assert.doesNotMatch(explainErr.error, /Einstellungen speichern/);
 });
+
+// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
+
+const COMPAT_PROVIDER = {
+  id: 'openai-compatible',
+  name: 'OpenAI-kompatibel',
+  defaultModel: '',
+  defaultBaseUrl: 'http://localhost:1234/v1',
+  optionalApiKey: true,
+  fields: { apiKey: true, baseUrl: true },
+  capabilitiesFor(config) {
+    return { images: config?.supportsImages === true };
+  },
+  async streamChatRound() {
+    return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
+  },
+};
+
+function compatAdapter(storedConfig) {
+  return createProviderLlmAdapter(
+    makeAdapterDeps({
+      providerRuntime: { getProvider: (id) => (id === 'openai-compatible' ? COMPAT_PROVIDER : null) },
+      providerSecrets: { getEffectiveProviderConfig: async () => storedConfig },
+    })
+  );
+}
+
+test('ein optionaler API-Key blockiert den Versand nicht (#193)', async () => {
+  const llm = compatAdapter({ baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  const error = await llm.validateTarget(
+    { providerId: 'openai-compatible', model: 'qwen2.5' },
+    { forSend: true }
+  );
+  assert.equal(error, null);
+});
+
+test('eine fehlende Server-URL bleibt ein Fehler', async () => {
+  const llm = compatAdapter({ model: 'qwen2.5' });
+  const error = await llm.validateTarget({ providerId: 'openai-compatible', model: 'qwen2.5' });
+  assert.equal(error.code, 'NO_BASE_URL');
+});
+
+test('prepareSendBundle nimmt Anzeigenamen und Bild-Faehigkeit aus der Konfiguration', async () => {
+  const withImages = await compatAdapter({
+    baseUrl: 'http://localhost:1234/v1',
+    displayName: '  LM Studio  ',
+    supportsImages: true,
+  }).prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
+  assert.equal(withImages.providerName, 'LM Studio');
+  assert.deepEqual(withImages.capabilities, { images: true });
+
+  const plain = await compatAdapter({ baseUrl: 'http://localhost:1234/v1' })
+    .prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
+  assert.equal(plain.providerName, 'OpenAI-kompatibel');
+  assert.deepEqual(plain.capabilities, { images: false });
+});

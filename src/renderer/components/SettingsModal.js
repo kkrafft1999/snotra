@@ -84,8 +84,28 @@ export function initSettingsModal(deps) {
   const inputBaseUrl = document.getElementById('input-base-url');
   const providerInsecureRow = document.getElementById('provider-insecure-row');
   const inputInsecureTls = document.getElementById('input-insecure-tls');
+  // Felder des Providers „OpenAI-kompatibel" (Issue #193). Sie stehen fest im
+  // Markup und werden je Anbieter ein- oder ausgeblendet — genau wie die drei
+  // bestehenden Verbindungsfelder.
+  const providerTemplateRow = document.getElementById('provider-template-row');
+  const selectProviderTemplate = document.getElementById('select-provider-template');
+  const providerTemplateHint = document.getElementById('provider-template-hint');
+  const providerDisplayNameRow = document.getElementById('provider-display-name-row');
+  const inputDisplayName = document.getElementById('input-display-name');
+  const providerKeyHint = document.getElementById('provider-key-hint');
+  const providerExtraHeadersRow = document.getElementById('provider-extra-headers-row');
+  const inputExtraHeaders = document.getElementById('input-extra-headers');
+  const btnRemoveExtraHeaders = document.getElementById('btn-remove-extra-headers');
+  const providerApiStyleRow = document.getElementById('provider-api-style-row');
+  const selectApiStyle = document.getElementById('select-api-style');
+  const providerSendToolsRow = document.getElementById('provider-send-tools-row');
+  const inputSendTools = document.getElementById('input-send-tools');
+  const providerSupportsImagesRow = document.getElementById('provider-supports-images-row');
+  const inputSupportsImages = document.getElementById('input-supports-images');
   const presetFieldsPopup = document.getElementById('preset-fields-popup');
   const selectModel = document.getElementById('select-model');
+  const inputModel = document.getElementById('input-model');
+  const modelNameOptions = document.getElementById('model-name-options');
   const btnLoadModels = document.getElementById('btn-load-models');
   const modelLoadProviderLabel = document.getElementById('model-load-provider-label');
   const modelStatus = document.getElementById('model-status');
@@ -132,6 +152,9 @@ export function initSettingsModal(deps) {
   const settingsVersionLabel = document.getElementById('settings-version-label');
   const btnCheckUpdates = document.getElementById('btn-check-updates');
 
+  /** Anbieter, dessen Werte gerade im Popup stehen (siehe stashPopupCredentialInputs). */
+  let popupProviderId = null;
+
   function findProviderView(providerId) {
     return findProviderMeta(providerId);
   }
@@ -144,6 +167,23 @@ export function initSettingsModal(deps) {
       baseUrl: (draft.baseUrl || pv.baseUrl || pv.defaultBaseUrl || '').trim(),
       insecureTls: typeof draft.insecureTls === 'boolean' ? draft.insecureTls : !!pv.insecureTls,
     };
+  }
+
+  /**
+   * Anbietername, wie er nach dem Speichern dastuende: Der Anzeigename aus dem
+   * Entwurf sticht den gespeicherten (Issue #193) — sonst behielte die Liste
+   * beim Tippen den alten Namen.
+   */
+  function draftProviderName(providerId) {
+    const pv = findProviderView(providerId);
+    if (!pv) return '';
+    const draft = settingsCredentialDraft[providerId];
+    if (pv.form?.showDisplayName && draft && typeof draft.displayName === 'string') {
+      const typed = draft.displayName.trim();
+      if (typed) return typed;
+      return pv.builtInName || pv.name;
+    }
+    return pv.name;
   }
 
   function presetSublabelForDraft(pr) {
@@ -205,27 +245,53 @@ export function initSettingsModal(deps) {
     modelStatus.classList.toggle('error', !!isError);
   }
 
+  /** Entwurf eines Provider-Zugangs aus der gespeicherten Sicht. */
+  function credentialDraftFor(pv) {
+    return {
+      apiKey: '',
+      removeApiKey: false,
+      baseUrl: (pv.baseUrl || pv.defaultBaseUrl || '').trim(),
+      insecureTls: !!pv.insecureTls,
+      // Issue #193: Anzeigename, API-Stil und die beiden Schalter sind
+      // gespeicherte Werte; die Zusatz-Header sind ein Geheimnis und kommen wie
+      // der API-Key leer herein — die View sagt nur, ob welche liegen.
+      displayName: typeof pv.displayName === 'string' ? pv.displayName : '',
+      apiStyle: typeof pv.apiStyle === 'string' ? pv.apiStyle : (pv.form?.defaultApiStyle || 'chat'),
+      extraHeaders: '',
+      removeExtraHeaders: false,
+      supportsImages: pv.supportsImages === true,
+      sendTools: pv.sendTools !== false,
+    };
+  }
+
   function hydrateCredentialDraftFromLlmState() {
     settingsCredentialDraft = {};
     for (const p of appStore.llmState.providers || []) {
-      settingsCredentialDraft[p.id] = {
-        apiKey: '',
-        removeApiKey: false,
-        baseUrl: (p.baseUrl || p.defaultBaseUrl || '').trim(),
-        insecureTls: !!p.insecureTls,
-      };
+      settingsCredentialDraft[p.id] = credentialDraftFor(p);
     }
   }
 
   function stashPopupCredentialInputs() {
-    const id = selectProvider?.value;
+    // Der Entwurf des **angezeigten** Anbieters, nicht der des ausgewaehlten:
+    // Beim Anbieterwechsel steht im Auswahlfeld schon der neue, in den Feldern
+    // aber noch der alte — ohne diese Unterscheidung wanderte die Server-URL
+    // des vorigen Anbieters in den neuen Entwurf.
+    const id = popupProviderId || selectProvider?.value;
     if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].apiKey = (inputApiKey.value || '').trim();
-    if (settingsCredentialDraft[id].apiKey) {
-      settingsCredentialDraft[id].removeApiKey = false;
+    const draft = settingsCredentialDraft[id];
+    const form = findProviderView(id)?.form || {};
+    draft.apiKey = (inputApiKey.value || '').trim();
+    if (draft.apiKey) draft.removeApiKey = false;
+    draft.baseUrl = (inputBaseUrl.value || '').trim();
+    draft.insecureTls = !!inputInsecureTls.checked;
+    if (form.showDisplayName) draft.displayName = (inputDisplayName.value || '').trim();
+    if (form.showApiStyle && selectApiStyle.value) draft.apiStyle = selectApiStyle.value;
+    if (form.showExtraHeaders) {
+      draft.extraHeaders = inputExtraHeaders.value || '';
+      if (draft.extraHeaders.trim()) draft.removeExtraHeaders = false;
     }
-    settingsCredentialDraft[id].baseUrl = (inputBaseUrl.value || '').trim();
-    settingsCredentialDraft[id].insecureTls = !!inputInsecureTls.checked;
+    if (form.showSupportsImages) draft.supportsImages = !!inputSupportsImages.checked;
+    if (form.showSendTools) draft.sendTools = !!inputSendTools.checked;
     stashPopupPresetFieldValues(id);
   }
 
@@ -314,21 +380,68 @@ export function initSettingsModal(deps) {
       appStore.llmState.activeProvider;
   }
 
-  function renderModelSelect(currentValue, options) {
-    selectModel.innerHTML = '';
+  /**
+   * Ob der Modellname frei eingetippt werden darf (Issue #193). Bei Anbietern,
+   * deren Modellliste nicht garantiert erreichbar ist, waere ein reines
+   * Auswahlfeld eine Sackgasse: Ohne Liste gaebe es nichts auszuwaehlen.
+   */
+  function allowsManualModel(providerView) {
+    return providerView?.form?.allowManualModel === true;
+  }
+
+  /** Der gerade sichtbare Modellname — je nach Anbieter aus Liste oder Feld. */
+  function currentModelValue(providerView) {
+    return allowsManualModel(providerView)
+      ? (inputModel.value || '').trim()
+      : (selectModel.value || '').trim();
+  }
+
+  function renderModelSelect(currentValue, options, providerView) {
+    const manual = allowsManualModel(providerView);
+    selectModel.classList.toggle('hidden', manual);
+    inputModel.classList.toggle('hidden', !manual);
+
     const seen = new Set();
+    const known = [];
+    if (Array.isArray(options)) {
+      for (const m of options) {
+        const id = m?.id;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        known.push({ id, label: m.label || id });
+      }
+    }
+
+    if (manual) {
+      // Der eingetippte Name hat Vorrang vor allem, was spaeter noch laedt —
+      // sonst verschwaende er, sobald die Liste doch ankommt.
+      const typed = (inputModel.value || '').trim();
+      inputModel.value = typed || currentValue || '';
+      inputModel.placeholder = known.length
+        ? known[0].id
+        : 'Modellname, z. B. qwen2.5-coder-7b';
+      modelNameOptions.innerHTML = '';
+      for (const m of known) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        if (m.label !== m.id) opt.label = m.label;
+        modelNameOptions.appendChild(opt);
+      }
+      return;
+    }
+
+    selectModel.innerHTML = '';
+    const added = new Set();
     const add = (id, label) => {
-      if (!id || seen.has(id)) return;
-      seen.add(id);
+      if (!id || added.has(id)) return;
+      added.add(id);
       const opt = document.createElement('option');
       opt.value = id;
       opt.setAttribute('lang', 'en');
       opt.textContent = label || id;
       selectModel.appendChild(opt);
     };
-    if (Array.isArray(options)) {
-      for (const m of options) add(m.id, m.label || m.id);
-    }
+    for (const m of known) add(m.id, m.label);
     if (currentValue) add(currentValue, currentValue);
     if (selectModel.children.length === 0) {
       const opt = document.createElement('option');
@@ -341,23 +454,72 @@ export function initSettingsModal(deps) {
     }
   }
 
-  function syncPopupProviderUI(providerId, skipStash) {
+  /** Vorlagen-Auswahl (Issue #193): belegt Felder vor, speichert sich nie. */
+  function renderProviderTemplates(providerView) {
+    const templates = providerView?.form?.templates || [];
+    if (templates.length === 0) {
+      providerTemplateRow.classList.add('hidden');
+      selectProviderTemplate.innerHTML = '';
+      providerTemplateHint.textContent = '';
+      return;
+    }
+    providerTemplateRow.classList.remove('hidden');
+    selectProviderTemplate.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Vorlage wählen —';
+    selectProviderTemplate.appendChild(placeholder);
+    for (const template of templates) {
+      const opt = document.createElement('option');
+      opt.value = template.id;
+      opt.textContent = template.label;
+      selectProviderTemplate.appendChild(opt);
+    }
+    selectProviderTemplate.value = '';
+    providerTemplateHint.textContent =
+      'Belegt Server-URL und API-Stil vor; danach ist jedes Feld frei änderbar. Die Vorlage selbst wird nicht gespeichert.';
+  }
+
+  function applyProviderTemplate(providerId, templateId) {
+    const pv = findProviderView(providerId);
+    const template = (pv?.form?.templates || []).find((t) => t.id === templateId);
+    if (!template || !settingsCredentialDraft[providerId]) return;
+    const draft = settingsCredentialDraft[providerId];
+    draft.baseUrl = template.baseUrl || '';
+    draft.apiStyle = template.apiStyle || 'chat';
+    syncPopupProviderUI(providerId, true);
+    // Die Auswahl selbst bleibt sichtbar, damit klar ist, woher die Werte
+    // kommen — gespeichert wird sie nicht.
+    selectProviderTemplate.value = templateId;
+    providerTemplateHint.textContent = template.hint
+      || 'Werte übernommen; jedes Feld lässt sich jetzt überschreiben.';
+    renderDraftPresetList();
+  }
+
+  function syncPopupProviderUI(providerId, skipStash, { resetModel = !skipStash } = {}) {
     const pv = findProviderView(providerId);
     if (!pv) return;
     if (!skipStash) stashPopupCredentialInputs();
 
+    popupProviderId = providerId;
     selectProvider.value = providerId;
 
     if (!settingsCredentialDraft[providerId]) {
-      settingsCredentialDraft[providerId] = {
-        apiKey: '',
-        removeApiKey: false,
-        baseUrl: (pv.baseUrl || pv.defaultBaseUrl || '').trim(),
-        insecureTls: !!pv.insecureTls,
-      };
+      settingsCredentialDraft[providerId] = credentialDraftFor(pv);
     }
     const draft = settingsCredentialDraft[providerId];
     const form = pv.form || {};
+
+    renderProviderTemplates(pv);
+
+    if (form.showDisplayName) {
+      providerDisplayNameRow.classList.remove('hidden');
+      inputDisplayName.value = draft.displayName || '';
+      inputDisplayName.placeholder = form.displayNamePlaceholder || pv.builtInName || pv.name;
+    } else {
+      providerDisplayNameRow.classList.add('hidden');
+      inputDisplayName.value = '';
+    }
 
     if (form.showApiKey) {
       providerKeyRow.classList.remove('hidden');
@@ -372,10 +534,48 @@ export function initSettingsModal(deps) {
       const showTrash =
         pv.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
       btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
+      // Ein optionaler Key braucht die Ansage, dass leer in Ordnung ist —
+      // sonst liest sich das leere Feld wie eine fehlende Angabe (Issue #193).
+      providerKeyHint?.classList.toggle('hidden', form.apiKeyOptional !== true);
     } else {
       providerKeyRow.classList.add('hidden');
       inputApiKey.value = '';
       btnRemoveApiKey?.classList.add('hidden');
+      providerKeyHint?.classList.add('hidden');
+    }
+
+    if (form.showExtraHeaders) {
+      providerExtraHeadersRow.classList.remove('hidden');
+      inputExtraHeaders.value = draft.extraHeaders || '';
+      if (draft.removeExtraHeaders && pv.hasExtraHeaders) {
+        inputExtraHeaders.placeholder = 'Header werden beim Speichern entfernt';
+      } else if (pv.hasExtraHeaders) {
+        inputExtraHeaders.placeholder = 'Gespeicherte Header bleiben erhalten';
+      } else {
+        inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
+      }
+      const showHeaderTrash =
+        pv.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
+      btnRemoveExtraHeaders?.classList.toggle('hidden', !showHeaderTrash);
+    } else {
+      providerExtraHeadersRow.classList.add('hidden');
+      inputExtraHeaders.value = '';
+      btnRemoveExtraHeaders?.classList.add('hidden');
+    }
+
+    if (form.showApiStyle) {
+      providerApiStyleRow.classList.remove('hidden');
+      selectApiStyle.innerHTML = '';
+      for (const option of form.apiStyleOptions || []) {
+        const opt = document.createElement('option');
+        opt.value = option.value;
+        opt.textContent = option.label;
+        selectApiStyle.appendChild(opt);
+      }
+      selectApiStyle.value = draft.apiStyle || form.defaultApiStyle || 'chat';
+    } else {
+      providerApiStyleRow.classList.add('hidden');
+      selectApiStyle.innerHTML = '';
     }
 
     if (form.showBaseUrl) {
@@ -395,16 +595,38 @@ export function initSettingsModal(deps) {
       inputInsecureTls.checked = false;
     }
 
+    if (form.showSendTools) {
+      providerSendToolsRow.classList.remove('hidden');
+      inputSendTools.checked = draft.sendTools !== false;
+    } else {
+      providerSendToolsRow.classList.add('hidden');
+      inputSendTools.checked = false;
+    }
+
+    if (form.showSupportsImages) {
+      providerSupportsImagesRow.classList.remove('hidden');
+      inputSupportsImages.checked = draft.supportsImages === true;
+    } else {
+      providerSupportsImagesRow.classList.add('hidden');
+      inputSupportsImages.checked = false;
+    }
+
     renderPresetFieldsPopup(pv);
 
     if (modelLoadProviderLabel) {
-      modelLoadProviderLabel.textContent = pv.name;
+      modelLoadProviderLabel.textContent = draftProviderName(providerId) || pv.name;
     }
 
-    renderModelSelect(pv.model || pv.defaultModel || '', null);
+    // Beim Anbieterwechsel und beim Oeffnen steht der gespeicherte Name im
+    // Feld, nicht der stehengebliebene des vorigen Anbieters.
+    if (resetModel) inputModel.value = '';
+    renderModelSelect(pv.model || pv.defaultModel || '', null, pv);
 
     const lines = [];
-    if (pv.apiBase) lines.push(`API: ${pv.apiBase}`);
+    // Bei einem Anbieter mit Server-URL steht dort, wohin es wirklich geht —
+    // die Standard-URL waere bei einem geaenderten Ziel schlicht falsch.
+    const shownApiBase = form.showBaseUrl ? (draft.baseUrl || pv.apiBase) : pv.apiBase;
+    if (shownApiBase) lines.push(`API: ${shownApiBase}`);
     if (pv.isActiveChatProvider) lines.push('Aktueller Chat-Anbieter');
     if (form.showApiKey) {
       if (draft.removeApiKey && pv.hasKey) {
@@ -415,9 +637,21 @@ export function initSettingsModal(deps) {
         lines.push('Key gespeichert');
       } else if (draft.apiKey) {
         lines.push('Neuer Key wird beim Speichern gesetzt');
+      } else if (form.apiKeyOptional) {
+        // Kein Key ist hier ein gueltiger Zustand und soll auch so dastehen.
+        lines.push('Ohne API-Schlüssel');
       }
     } else if (pv.configured) {
       lines.push('Konfiguriert');
+    }
+    if (form.showExtraHeaders) {
+      if (draft.removeExtraHeaders && pv.hasExtraHeaders) {
+        lines.push('Header werden beim Speichern entfernt');
+      } else if ((draft.extraHeaders || '').trim()) {
+        lines.push('Neue Header werden beim Speichern gesetzt');
+      } else if (pv.hasExtraHeaders) {
+        lines.push('Header gespeichert');
+      }
     }
     setProviderStatus(lines.join(' · '), false);
     setModelStatus('');
@@ -447,7 +681,8 @@ export function initSettingsModal(deps) {
       main.className = 'settings-pref-main';
       const title = document.createElement('strong');
       title.lang = 'en';
-      title.textContent = pr.label || `${pv.name} · ${pr.model || pv.defaultModel}`;
+      title.textContent = `${draftProviderName(pr.providerId) || pv.name} · ${pr.model || pv.defaultModel}`
+        + (pr.optionSuffix ? ` · ${pr.optionSuffix}` : '');
       const detail = document.createElement('span');
       detail.className = presetDetailClassForDraft(pr);
       detail.textContent = presetSublabelForDraft(pr);
@@ -1065,7 +1300,7 @@ export function initSettingsModal(deps) {
     addModelOverlay.setAttribute('aria-hidden', 'false');
     renderProviderSelect();
     const pid = selectProvider.value;
-    syncPopupProviderUI(pid, true);
+    syncPopupProviderUI(pid, true, { resetModel: true });
   }
 
   let modelRequestGeneration = 0;
@@ -1223,7 +1458,9 @@ export function initSettingsModal(deps) {
     const baseUrl = (d.baseUrl || '').trim();
     const insecureTls = form.showInsecureTls ? !!d.insecureTls : undefined;
 
-    if (form.showApiKey && !apiKey && (!pv.hasKey || d.removeApiKey)) {
+    // Ein optionaler Key darf fehlen (Issue #193) — dort ist die Server-URL die
+    // einzige Voraussetzung.
+    if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!pv.hasKey || d.removeApiKey)) {
       setModelStatus('Bitte zuerst einen API-Key eingeben.', true);
       return;
     }
@@ -1242,22 +1479,39 @@ export function initSettingsModal(deps) {
         insecureTls,
       });
       if (generation !== modelRequestGeneration) return;
+      // Eine fehlgeschlagene oder leere Liste ist bei einem frei gewaehlten
+      // Endpunkt kein Fehler, sondern ein Zustand (Issue #193): Der Anbieter
+      // bleibt per Hand eingetragenem Modellnamen nutzbar. Die Meldung sagt
+      // trotzdem, warum die Liste leer blieb — sonst raet man.
+      const manual = allowsManualModel(pv);
       if (result?.error) {
-        setModelStatus(`Fehler: ${result.error}`, true);
+        setModelStatus(
+          manual
+            ? `Keine Modellliste: ${result.error} — Modellnamen von Hand eintragen.`
+            : `Fehler: ${result.error}`,
+          !manual
+        );
         return;
       }
       const models = Array.isArray(result?.models) ? result.models : [];
       if (models.length === 0) {
-        setModelStatus('Keine Modelle gefunden.', true);
-        renderModelSelect(pv.model || pv.defaultModel || '', null);
+        setModelStatus(
+          manual
+            ? 'Der Server hat eine leere Modellliste geliefert — Modellnamen von Hand eintragen.'
+            : 'Keine Modelle gefunden.',
+          !manual
+        );
+        renderModelSelect(currentModelValue(pv) || pv.model || pv.defaultModel || '', null, pv);
         return;
       }
-      const current = selectModel.value || pv.model || pv.defaultModel || models[0].id;
-      renderModelSelect(current, models);
-      if ([...selectModel.options].some((o) => o.value === current)) {
-        selectModel.value = current;
-      } else {
-        selectModel.value = models[0].id;
+      const current = currentModelValue(pv) || pv.model || pv.defaultModel || models[0].id;
+      renderModelSelect(current, models, pv);
+      if (!manual) {
+        if ([...selectModel.options].some((o) => o.value === current)) {
+          selectModel.value = current;
+        } else {
+          selectModel.value = models[0].id;
+        }
       }
       setModelStatus(`${models.length} Modelle gefunden.`, false);
     } catch (err) {
@@ -1271,13 +1525,13 @@ export function initSettingsModal(deps) {
   function buildDraftPresetCandidate(providerId) {
     const pv = findProviderView(providerId);
     if (!pv) return null;
-    const model = (selectModel.value || '').trim() || pv.defaultModel || '';
+    const model = currentModelValue(pv) || pv.defaultModel || '';
     const row = {
       id: 'draft',
       providerId,
       model,
       menuVisible: true,
-      label: `${pv.name} · ${model}`,
+      label: `${draftProviderName(providerId) || pv.name} · ${model}`,
     };
     for (const field of pv.presetFields || []) {
       const value = popupPresetFieldValues[providerId]?.[field.key] || field.defaultValue;
@@ -1293,6 +1547,14 @@ export function initSettingsModal(deps) {
     if (!providerView) return false;
     const candidate = buildDraftPresetCandidate(pv);
     if (!candidate) return false;
+    // Bei frei eintragbarem Modellnamen (Issue #193) gibt es keine Liste, die
+    // einen Wert erzwingt — ein leerer Eintrag waere im Chat-Menue eine Zeile
+    // ohne Modell und beim Senden ein Fehler.
+    if (allowsManualModel(providerView) && !candidate.model) {
+      setModelStatus('Bitte einen Modellnamen eintragen.', true);
+      inputModel.focus();
+      return false;
+    }
 
     const dup = settingsDraftPresets.some((row) => {
       const rowProvider = findProviderView(row.providerId);
@@ -1315,7 +1577,7 @@ export function initSettingsModal(deps) {
       providerId: pv,
       model,
       menuVisible: true,
-      label: `${providerView.name} · ${model}`,
+      label: `${draftProviderName(pv) || providerView.name} · ${model}`,
       sublabel: formatted.text,
       sublabelStyle: formatted.style,
     };
@@ -1354,6 +1616,18 @@ export function initSettingsModal(deps) {
       const bu = typeof d.baseUrl === 'string' ? d.baseUrl.trim() : '';
       if (bu && pv.form?.showBaseUrl) patch.baseUrl = bu;
       if (pv.form?.showInsecureTls) patch.insecureTls = !!d.insecureTls;
+      // Felder des Providers „OpenAI-kompatibel" (Issue #193). Der Anzeigename
+      // geht auch leer mit — sonst liesse er sich nie wieder loeschen.
+      if (pv.form?.showDisplayName) patch.displayName = (d.displayName || '').trim();
+      if (pv.form?.showApiStyle && d.apiStyle) patch.apiStyle = d.apiStyle;
+      if (pv.form?.showExtraHeaders) {
+        if (d.removeExtraHeaders) patch.removeExtraHeaders = true;
+        if (typeof d.extraHeaders === 'string' && d.extraHeaders.trim()) {
+          patch.extraHeaders = d.extraHeaders;
+        }
+      }
+      if (pv.form?.showSupportsImages) patch.supportsImages = d.supportsImages === true;
+      if (pv.form?.showSendTools) patch.sendTools = d.sendTools !== false;
       providerPatches[pid] = patch;
     }
 
@@ -1481,6 +1755,59 @@ export function initSettingsModal(deps) {
       settingsCredentialDraft[id].insecureTls = !!inputInsecureTls.checked;
       renderDraftPresetList();
     }
+  });
+
+  // --- Felder des Providers „OpenAI-kompatibel" (Issue #193) ---------------
+
+  selectProviderTemplate?.addEventListener('change', () => {
+    const id = selectProvider.value;
+    const templateId = selectProviderTemplate.value;
+    if (!id || !templateId) return;
+    applyProviderTemplate(id, templateId);
+  });
+
+  inputDisplayName?.addEventListener('input', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].displayName = inputDisplayName.value;
+    renderDraftPresetList();
+  });
+
+  selectApiStyle?.addEventListener('change', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].apiStyle = selectApiStyle.value;
+  });
+
+  inputExtraHeaders?.addEventListener('input', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].extraHeaders = inputExtraHeaders.value;
+    if (inputExtraHeaders.value.trim()) {
+      settingsCredentialDraft[id].removeExtraHeaders = false;
+    }
+    syncPopupProviderUI(id, true);
+  });
+
+  btnRemoveExtraHeaders?.addEventListener('click', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].extraHeaders = '';
+    settingsCredentialDraft[id].removeExtraHeaders = true;
+    syncPopupProviderUI(id, true);
+    inputExtraHeaders.focus();
+  });
+
+  inputSendTools?.addEventListener('change', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].sendTools = !!inputSendTools.checked;
+  });
+
+  inputSupportsImages?.addEventListener('change', () => {
+    const id = selectProvider.value;
+    if (!id || !settingsCredentialDraft[id]) return;
+    settingsCredentialDraft[id].supportsImages = !!inputSupportsImages.checked;
   });
 
   btnLoadModels.addEventListener('click', () => {

@@ -5,6 +5,7 @@ const {
   createSettingsError,
   normalizeListModelsRequest,
   normalizeUiPrefsPatch,
+  isApiStyle,
 } = require('../../shared/contracts/settings');
 
 function registerSettingsHandlers({
@@ -442,6 +443,40 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
     next.insecureTls = patch.insecureTls;
   }
 
+  // Felder des Providers „OpenAI-kompatibel" (Issue #193).
+  if (provider.fields?.displayName && typeof patch?.displayName === 'string') {
+    const name = patch.displayName.trim();
+    if (name) next.displayName = name;
+    else delete next.displayName;
+  }
+
+  if (provider.fields?.apiStyle && isApiStyle(patch?.apiStyle)) {
+    next.apiStyle = patch.apiStyle;
+  }
+
+  if (provider.fields?.extraHeaders) {
+    if (patch?.removeExtraHeaders === true) {
+      delete next.extraHeadersEnc;
+    }
+    const incomingHeaders = typeof patch?.extraHeaders === 'string' ? patch.extraHeaders.trim() : '';
+    if (incomingHeaders) {
+      // Zusatz-Header koennen ein Gateway-Token tragen und werden deshalb wie
+      // der API-Key behandelt: nur verschluesselt auf die Platte, sonst gar nicht.
+      if (!safeStorage.isEncryptionAvailable()) {
+        return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+      }
+      next.extraHeadersEnc = safeStorage.encryptString(incomingHeaders).toString('base64');
+    }
+  }
+
+  if (provider.fields?.supportsImages && typeof patch?.supportsImages === 'boolean') {
+    next.supportsImages = patch.supportsImages;
+  }
+
+  if (provider.fields?.sendTools && typeof patch?.sendTools === 'boolean') {
+    next.sendTools = patch.sendTools;
+  }
+
   config.providers = config.providers || {};
   config.providers[providerId] = next;
   return createSettingsOk();
@@ -469,7 +504,10 @@ function isProviderConfigured({ safeStorage }, meta, entry) {
   const baseUrlEff = meta.fields?.baseUrl
     ? (entry.baseUrl || meta.defaultBaseUrl || '')
     : '';
-  return meta.fields?.apiKey
+  // Ein Anbieter mit optionalem Key (Issue #193) gilt mit gesetzter Server-URL
+  // als vollstaendig — ein lokaler Server ohne Key ist kein halber Zugang.
+  const needsKey = meta.fields?.apiKey && meta.optionalApiKey !== true;
+  return needsKey
     ? canDecryptApiKeyEnc(safeStorage, entry.apiKeyEnc)
     : meta.fields?.baseUrl
       ? !!String(baseUrlEff).trim()

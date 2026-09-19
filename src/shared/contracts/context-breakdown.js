@@ -18,6 +18,8 @@
  */
 'use strict';
 
+const { isLocalEndpoint } = require('./provider-endpoint');
+
 const CONTEXT_BREAKDOWN_VERSION = 1;
 
 /** Grobe Blöcke des Prompts — die Anzeige gruppiert danach. */
@@ -124,7 +126,22 @@ const CHARS_PER_TOKEN_PROFILE_BY_PROVIDER = Object.freeze({
 /** Rueckwaertskompatibler Name fuer das Standardprofil. */
 const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE];
 
-function charsPerTokenProfile(providerId) {
+/**
+ * Profil eines Anbieters. Die Provider-ID ist der Normalfall; eine Server-URL,
+ * die auf diesen Rechner zeigt, sticht sie (Issue #193).
+ *
+ * Grund: Seit es einen generischen Anbieter gibt, sagt die ID nicht mehr, was
+ * am anderen Ende steht — dieselbe ID bedient LM Studio auf `localhost` und
+ * ein Gateway im Netz. Zeigt sie auf diesen Rechner, laeuft dort ein lokal
+ * geladenes Modell, und das ist genau der Fall, fuer den `local` gemessen ist.
+ *
+ * Fuer einen **entfernten** OpenAI-kompatiblen Endpunkt gibt es bewusst kein
+ * eigenes Profil: Dahinter kann alles stecken, von einem OpenAI-Gateway bis zu
+ * Llama bei einem Router. Ohne Messung bleibt es beim konservativeren
+ * Standardprofil — dieselbe Regel, die auch Anthropic und Google draussen haelt.
+ */
+function charsPerTokenProfile(providerId, { baseUrl } = {}) {
+  if (isLocalEndpoint(baseUrl)) return CHARS_PER_TOKEN_PROFILES.local;
   const key =
     (typeof providerId === 'string' && CHARS_PER_TOKEN_PROFILE_BY_PROVIDER[providerId])
     || DEFAULT_CHARS_PER_TOKEN_PROFILE;
@@ -135,8 +152,8 @@ function isContentKind(value) {
   return Object.prototype.hasOwnProperty.call(CHARS_PER_TOKEN, value);
 }
 
-function charsPerToken(contentKind, providerId) {
-  const profile = charsPerTokenProfile(providerId);
+function charsPerToken(contentKind, providerId, options) {
+  const profile = charsPerTokenProfile(providerId, options);
   return isContentKind(contentKind)
     ? profile[contentKind]
     : profile[CONTEXT_CONTENT_KINDS.PROSE];
@@ -149,10 +166,10 @@ function toCount(value) {
 }
 
 /** Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind. */
-function estimateTokensFromChars(chars, contentKind, providerId) {
+function estimateTokensFromChars(chars, contentKind, providerId, options) {
   const count = toCount(chars);
   if (count === 0) return 0;
-  return Math.max(1, Math.round(count / charsPerToken(contentKind, providerId)));
+  return Math.max(1, Math.round(count / charsPerToken(contentKind, providerId, options)));
 }
 
 function text(value) {
@@ -194,20 +211,21 @@ function createContextPart({
  * Fall vorliegt. Der Rundungsrest landet beim groessten Posten, damit die
  * Summe der Zeilen exakt der angezeigten Gesamtzahl entspricht.
  *
- * `providerId` waehlt das Teiler-Profil (Issue #178). Auf die Gesamtzahl hat
+ * `providerId` — und bei einem generischen Anbieter die Server-URL — waehlt das
+ * Teiler-Profil (Issue #178, #193). Auf die Gesamtzahl hat
  * es keinen Einfluss — solange skaliert wird, verschiebt ein anderes Profil
  * nur die Gewichte zwischen den Zeilen. Genau darum geht es: Bisher bekam der
  * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
  * und Skills entsprechend zu wenig.
  */
-function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '' } = {}) {
+function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '', baseUrl = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
     .map((part) => createContextPart(part))
     .filter((part) => part.chars > 0);
 
   const estimated = usable.map((part) => ({
     ...part,
-    tokens: estimateTokensFromChars(part.chars, part.contentKind, providerId),
+    tokens: estimateTokensFromChars(part.chars, part.contentKind, providerId, { baseUrl }),
   }));
   const estimatedTotal = estimated.reduce((sum, part) => sum + part.tokens, 0);
   const real = toCount(promptTokens);

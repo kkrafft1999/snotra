@@ -189,6 +189,15 @@ function presetIdentityKey(preset, providerOrView) {
   return parts.join('\0');
 }
 
+/** Anzeigename und Zusatz-Header sind Freitext; hier nur eine Obergrenze. */
+const MAX_DISPLAY_NAME_CHARS = 60;
+const MAX_EXTRA_HEADERS_CHARS = 4000;
+const API_STYLES = Object.freeze(['chat', 'full']);
+
+function isApiStyle(value) {
+  return typeof value === 'string' && API_STYLES.includes(value);
+}
+
 function normalizeProviderPatch(raw, provider) {
   if (!raw || typeof raw !== 'object' || !provider) return {};
   const patch = {};
@@ -201,6 +210,27 @@ function normalizeProviderPatch(raw, provider) {
   }
   if (typeof raw.insecureTls === 'boolean' && provider.fields?.insecureTls) {
     patch.insecureTls = raw.insecureTls;
+  }
+  // Felder des Providers „OpenAI-kompatibel" (Issue #193). Anders als bei
+  // `baseUrl` ist der leere String hier eine gueltige Angabe: Er loescht den
+  // Anzeigenamen bzw. die Zusatz-Header.
+  if (typeof raw.displayName === 'string' && provider.fields?.displayName) {
+    patch.displayName = raw.displayName.trim().slice(0, MAX_DISPLAY_NAME_CHARS);
+  }
+  if (isApiStyle(raw.apiStyle) && provider.fields?.apiStyle) {
+    patch.apiStyle = raw.apiStyle;
+  }
+  if (raw.removeExtraHeaders === true && provider.fields?.extraHeaders) {
+    patch.removeExtraHeaders = true;
+  }
+  if (typeof raw.extraHeaders === 'string' && raw.extraHeaders.trim() && provider.fields?.extraHeaders) {
+    patch.extraHeaders = raw.extraHeaders.slice(0, MAX_EXTRA_HEADERS_CHARS);
+  }
+  if (typeof raw.supportsImages === 'boolean' && provider.fields?.supportsImages) {
+    patch.supportsImages = raw.supportsImages;
+  }
+  if (typeof raw.sendTools === 'boolean' && provider.fields?.sendTools) {
+    patch.sendTools = raw.sendTools;
   }
   return patch;
 }
@@ -497,13 +527,39 @@ function buildPresetFieldViews(provider) {
   return out;
 }
 
+/** Vorlagen des Providers als reine Daten fuer die Oberflaeche (Issue #193). */
+function buildProviderTemplateViews(provider) {
+  const templates = provider?.presentation?.templates;
+  if (!Array.isArray(templates)) return [];
+  const out = [];
+  for (const template of templates) {
+    if (!template || typeof template.id !== 'string' || !template.id.trim()) continue;
+    out.push({
+      id: template.id.trim(),
+      label: typeof template.label === 'string' ? template.label : template.id.trim(),
+      baseUrl: typeof template.baseUrl === 'string' ? template.baseUrl : '',
+      apiStyle: isApiStyle(template.apiStyle) ? template.apiStyle : 'chat',
+      hint: typeof template.hint === 'string' ? template.hint : '',
+    });
+  }
+  return out;
+}
+
 function buildProviderFormView(provider) {
   const presentation = provider?.presentation || {};
   const showApiKey = !!provider?.fields?.apiKey;
   const showBaseUrl = !!provider?.fields?.baseUrl;
   const showInsecureTls = !!provider?.fields?.insecureTls;
+  const apiStyleOptions = Array.isArray(presentation.apiStyleOptions)
+    ? presentation.apiStyleOptions
+        .filter((o) => o && isApiStyle(o.value))
+        .map((o) => ({ value: o.value, label: typeof o.label === 'string' ? o.label : o.value }))
+    : [];
   return {
     showApiKey,
+    // Ein optionaler Key braucht eine andere Beschriftung als ein fehlender:
+    // „leer lassen" ist hier kein Mangel, sondern der Normalfall (Issue #193).
+    apiKeyOptional: provider?.optionalApiKey === true,
     apiKeyPlaceholder: typeof presentation.apiKeyPlaceholder === 'string'
       ? presentation.apiKeyPlaceholder
       : '••••••',
@@ -515,10 +571,26 @@ function buildProviderFormView(provider) {
     insecureTlsHint: typeof presentation.insecureTlsHint === 'string'
       ? presentation.insecureTlsHint
       : 'Nur bei selbstsigniertem oder intern signiertem Zertifikat, dem du vertraust.',
+    // Felder des Providers „OpenAI-kompatibel" (Issue #193).
+    showDisplayName: !!provider?.fields?.displayName,
+    displayNamePlaceholder: provider?.name || '',
+    showApiStyle: !!provider?.fields?.apiStyle && apiStyleOptions.length > 0,
+    apiStyleOptions,
+    defaultApiStyle: isApiStyle(provider?.defaultApiStyle) ? provider.defaultApiStyle : 'chat',
+    showExtraHeaders: !!provider?.fields?.extraHeaders,
+    showSupportsImages: !!provider?.fields?.supportsImages,
+    showSendTools: !!provider?.fields?.sendTools,
+    // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
+    allowManualModel: presentation.manualModel === true,
+    templates: buildProviderTemplateViews(provider),
   };
 }
 
 module.exports = {
+  API_STYLES,
+  isApiStyle,
+  MAX_DISPLAY_NAME_CHARS,
+  MAX_EXTRA_HEADERS_CHARS,
   MAX_TOOL_ROUNDS_MIN,
   MAX_TOOL_ROUNDS_MAX,
   SIDEBAR_WIDTH_MIN,
@@ -548,6 +620,7 @@ module.exports = {
   formatPresetSublabelFromView,
   buildPresetFieldViews,
   buildProviderFormView,
+  buildProviderTemplateViews,
   extractPresetOptions,
   allowedPresetOptionKeys,
   filterDeclaredPresetOptions,

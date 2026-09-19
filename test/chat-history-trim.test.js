@@ -8,6 +8,7 @@ const {
   TOOL_OUTPUT_PLACEHOLDER,
   clampHistoryCharLimit,
   resolveHistoryCharLimit,
+  isLocalProvider,
   estimateMessageChars,
   estimateTokens,
   trimHistoryMessages,
@@ -38,6 +39,24 @@ test('resolveHistoryCharLimit uses a tighter default for local providers', () =>
 
 test('an explicit setting outranks the local default', () => {
   assert.equal(resolveHistoryCharLimit({ historyCharLimit: 150_000 }, 'mlx-lm'), 150_000);
+});
+
+test('eine Server-URL auf diesem Rechner zaehlt als lokal (#193)', () => {
+  // Der generische Anbieter passt in keine ID-Liste: dieselbe ID bedient
+  // localhost und ein Gateway im Netz.
+  assert.equal(
+    resolveHistoryCharLimit({}, 'openai-compatible', 'http://localhost:1234/v1'),
+    DEFAULT_LOCAL_HISTORY_CHAR_LIMIT
+  );
+  assert.equal(
+    resolveHistoryCharLimit({}, 'openai-compatible', 'https://openrouter.ai/api/v1'),
+    DEFAULT_HISTORY_CHAR_LIMIT
+  );
+  assert.equal(isLocalProvider('openai-compatible', 'http://127.0.0.1:8080/v1'), true);
+  assert.equal(isLocalProvider('openai-compatible', 'https://gw.intern.example/v1'), false);
+  // Die bestehenden IDs bleiben unangetastet — die Host-Regel greift zusaetzlich.
+  assert.equal(isLocalProvider('mlx-lm'), true);
+  assert.equal(isLocalProvider('ollama', 'https://ollama.intern.example'), true);
 });
 
 test('estimateMessageChars counts content and tool_calls arguments', () => {

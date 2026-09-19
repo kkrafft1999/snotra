@@ -151,3 +151,103 @@ test('a stored but undecryptable API key marks provider and presets as not confi
   const legacyCaller = build(undefined);
   assert.equal(legacyCaller.providers.find((p) => p.id === 'openai').configured, true, 'ohne Map wie bisher');
 });
+
+// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
+
+function compatView(entry) {
+  const meta = providerCatalog.listProviderMeta().find((m) => m.id === 'openai-compatible');
+  return presentation.buildProviderView(meta, entry, { chatProviderId: 'openai' });
+}
+
+test('ohne API-Key gilt der generische Anbieter mit Server-URL als konfiguriert', () => {
+  const view = compatView({ baseUrl: 'http://localhost:1234/v1' });
+  assert.equal(view.configured, true);
+  assert.equal(view.hasKey, false);
+  assert.equal(view.optionalApiKey, true);
+  assert.equal(view.form.apiKeyOptional, true);
+});
+
+test('der Anzeigename ersetzt den Anbieternamen in allen Beschriftungen', () => {
+  const view = compatView({ baseUrl: 'http://localhost:1234/v1', displayName: '  LM Studio  ' });
+  assert.equal(view.name, 'LM Studio');
+  assert.equal(view.builtInName, 'OpenAI-kompatibel');
+
+  const preset = presentation.buildPresetView(
+    { id: 'p', providerId: 'openai-compatible', model: 'qwen2.5', menuVisible: true },
+    { 'openai-compatible': view }
+  );
+  assert.equal(preset.labelBase, 'LM Studio · qwen2.5');
+});
+
+test('ohne Anzeigename bleibt es beim eingebauten Namen', () => {
+  const view = compatView({ baseUrl: 'http://localhost:1234/v1', displayName: '   ' });
+  assert.equal(view.name, 'OpenAI-kompatibel');
+});
+
+test('die Bild-Faehigkeit folgt dem gespeicherten Schalter, nicht dem Adapter', () => {
+  assert.equal(compatView({ baseUrl: 'x' }).capabilities.images, false);
+  assert.equal(compatView({ baseUrl: 'x', supportsImages: true }).capabilities.images, true);
+});
+
+test('die View sagt nur, OB Zusatz-Header liegen — nie welche', () => {
+  const view = compatView({ baseUrl: 'x', extraHeadersEnc: 'Y2lwaGVy' });
+  assert.equal(view.hasExtraHeaders, true);
+  assert.equal('extraHeaders' in view, false);
+  assert.equal('extraHeadersEnc' in view, false);
+  assert.doesNotMatch(JSON.stringify(view), /Y2lwaGVy/);
+});
+
+test('API-Stil und Tool-Schalter kommen mit ihren Voreinstellungen heraus', () => {
+  const fresh = compatView({ baseUrl: 'x' });
+  assert.equal(fresh.apiStyle, 'chat');
+  assert.equal(fresh.sendTools, true);
+  assert.equal(fresh.supportsImages, false);
+
+  const set = compatView({ baseUrl: 'x', apiStyle: 'full', sendTools: false });
+  assert.equal(set.apiStyle, 'full');
+  assert.equal(set.sendTools, false);
+});
+
+test('das Formular meldet alle acht Felder und die Vorlagen', () => {
+  const form = compatView({ baseUrl: 'x' }).form;
+  assert.deepEqual(
+    {
+      showApiKey: form.showApiKey,
+      showBaseUrl: form.showBaseUrl,
+      showInsecureTls: form.showInsecureTls,
+      showDisplayName: form.showDisplayName,
+      showApiStyle: form.showApiStyle,
+      showExtraHeaders: form.showExtraHeaders,
+      showSupportsImages: form.showSupportsImages,
+      showSendTools: form.showSendTools,
+    },
+    {
+      showApiKey: true,
+      showBaseUrl: true,
+      showInsecureTls: true,
+      showDisplayName: true,
+      showApiStyle: true,
+      showExtraHeaders: true,
+      showSupportsImages: true,
+      showSendTools: true,
+    }
+  );
+  assert.equal(form.allowManualModel, true);
+  assert.ok(form.templates.length >= 7);
+  assert.ok(form.templates.every((tpl) => tpl.id && tpl.label && ['chat', 'full'].includes(tpl.apiStyle)));
+});
+
+test('die bestehenden Anbieter zeigen keines der neuen Felder', () => {
+  for (const id of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
+    const meta = providerCatalog.listProviderMeta().find((m) => m.id === id);
+    const view = presentation.buildProviderView(meta, {}, {});
+    assert.equal(view.form.showDisplayName, false, id);
+    assert.equal(view.form.showApiStyle, false, id);
+    assert.equal(view.form.showExtraHeaders, false, id);
+    assert.equal(view.form.showSupportsImages, false, id);
+    assert.equal(view.form.showSendTools, false, id);
+    assert.equal(view.form.allowManualModel, false, id);
+    assert.deepEqual(view.form.templates, [], id);
+    assert.equal(view.optionalApiKey, false, id);
+  }
+});

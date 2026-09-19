@@ -271,6 +271,65 @@ userData-Migration auf (`services/userdata-migration.js`, Übernahme aus dem
 Ordner der Vorgänger-Identität „Weyouze Anything“) — keine verstreute
 Verdrahtung in den Handlern.
 
+## Provider-Adapter
+
+`src/main/providers/` hält je Anbieter ein Modul, das den Vertrag aus
+`providers/index.js` erfüllt (`listModels`, `streamChatRound`, dazu `fields`,
+`presentation`, `capabilities`). Registriert sind sechs: `openai`, `anthropic`,
+`google`, `ollama`, `mlx-lm` und `openai-compatible`.
+
+Die beiden OpenAI-Protokolle liegen **einmal** da und werden geteilt, statt je
+Anbieter kopiert zu werden:
+
+| Modul | Protokoll | Benutzt von |
+| ----- | --------- | ----------- |
+| `openai-chat-transport.js` | Chat Completions (`POST {base}/chat/completions`), SSE | `mlx-lm`, `openai-compatible` |
+| `openai-responses-transport.js` | Responses (`POST {base}/responses`), SSE | `openai`, `openai-compatible` |
+
+Die Transporte kennen weder Anbieter-IDs noch gespeicherte Konfiguration: Sie
+bekommen fertige Header, eine Base-URL und die Nachrichten. Alles
+Anbieter-Eigene — welche Header, ob Bilder, ob Tools, welcher Stil — entscheidet
+das Provider-Modul. `ollama` bleibt außen vor: Es spricht die native API
+(`/api/tags`, `/api/chat` mit NDJSON) und nicht den OpenAI-Layer unter `/v1`.
+
+### Was ein Anbieter über seine Felder sagt
+
+`fields` steuert Formular, Persistenz und Validierung gemeinsam — der Renderer
+zeigt genau die Felder, die ein Anbieter deklariert
+(`buildProviderFormView` in `shared/contracts/settings.js`), der
+Storage-Service liest genau sie (`getEffectiveProviderConfig`), und der
+Settings-Handler schreibt genau sie (`mergeProviderPatchIntoConfigImpl`).
+Neben `apiKey`, `baseUrl` und `insecureTls` gibt es seit Issue #193
+`displayName`, `apiStyle`, `extraHeaders`, `supportsImages` und `sendTools`.
+
+Zwei Sonderfälle deklariert ein Anbieter zusätzlich am Modul:
+
+- `optionalApiKey: true` — ein leerer Schlüssel ist ein **gültiger** Zustand.
+  Sonst gilt ein Anbieter mit `fields.apiKey` ohne Key als unvollständig
+  konfiguriert und lehnt Modellabruf wie Versand ab.
+- `capabilitiesFor(config)` — Fähigkeiten, die an der gespeicherten
+  Konfiguration hängen statt am Adapter. `capabilities` bleibt die
+  Voreinstellung für Anbieter ohne diese Funktion.
+
+Geheimnisse verlassen den Main-Prozess nicht: Der API-Schlüssel und die
+Zusatz-Header liegen `safeStorage`-verschlüsselt (`apiKeyEnc`,
+`extraHeadersEnc`), und die Provider-View meldet dem Renderer nur `hasKey`
+bzw. `hasExtraHeaders` — nie den Inhalt.
+
+### Lokal oder entfernt: am Host, nicht an der ID
+
+Drei Stellen behandeln lokale Anbieter anders als Cloud-Anbieter: das Zeitlimit
+des Modellabrufs (`services/request-timeout.js`), das Zeichenbudget des
+Verlaufs (`application/chat/chat-history-trim.js`) und der Teiler Zeichen→Token
+der Kontext-Aufschlüsselung (`shared/contracts/context-breakdown.js`).
+
+Bis Issue #193 hing das an einer festen Liste von Provider-IDs. Der generische
+Anbieter passt in keine solche Liste — dieselbe ID bedient LM Studio auf
+`localhost` und ein Gateway im Netz. Die Frage beantwortet deshalb
+`shared/contracts/provider-endpoint.js` am **Host der Base-URL**; die
+bestehenden ID-Einträge für `ollama` und `mlx-lm` bleiben unangetastet, die
+Host-Regel greift zusätzlich.
+
 ## Renderer: was verschoben wurde, was bleibt
 
 **Aus dem Renderer entfernt** (jetzt Main oder `shared/`):

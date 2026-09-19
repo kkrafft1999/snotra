@@ -210,3 +210,75 @@ test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
   assert.equal('pythonExecutionEnabled' in normalizeUiPrefsPatch({ pythonExecutionEnabled: 'ja' }), false);
   assert.equal(normalizeUiPrefsPatch({ pythonExecutionEnabled: true }).pythonExecutionEnabled, true);
 });
+
+// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
+
+const COMPAT_META = {
+  name: 'OpenAI-kompatibel',
+  optionalApiKey: true,
+  defaultApiStyle: 'chat',
+  fields: {
+    apiKey: true,
+    baseUrl: true,
+    insecureTls: true,
+    displayName: true,
+    apiStyle: true,
+    extraHeaders: true,
+    supportsImages: true,
+    sendTools: true,
+  },
+};
+
+test('normalizeProviderPatch übernimmt die neuen Verbindungsfelder', () => {
+  const { normalizeProviderPatch } = require('../src/shared/contracts/settings');
+
+  assert.deepEqual(
+    normalizeProviderPatch(
+      {
+        baseUrl: ' http://localhost:1234/v1 ',
+        displayName: '  LM Studio  ',
+        apiStyle: 'full',
+        extraHeaders: 'X-Tenant: acme',
+        supportsImages: true,
+        sendTools: false,
+        insecureTls: true,
+      },
+      COMPAT_META,
+    ),
+    {
+      baseUrl: 'http://localhost:1234/v1',
+      insecureTls: true,
+      displayName: 'LM Studio',
+      apiStyle: 'full',
+      extraHeaders: 'X-Tenant: acme',
+      supportsImages: true,
+      sendTools: false,
+    },
+  );
+});
+
+test('normalizeProviderPatch lässt den leeren Anzeigenamen durch, unbekannte Stile nicht', () => {
+  const { normalizeProviderPatch, MAX_DISPLAY_NAME_CHARS } = require('../src/shared/contracts/settings');
+
+  // Leer heißt „löschen" — anders als bei baseUrl ist das eine echte Angabe.
+  assert.equal(normalizeProviderPatch({ displayName: '   ' }, COMPAT_META).displayName, '');
+  assert.equal(
+    normalizeProviderPatch({ displayName: 'x'.repeat(200) }, COMPAT_META).displayName.length,
+    MAX_DISPLAY_NAME_CHARS,
+  );
+  assert.equal('apiStyle' in normalizeProviderPatch({ apiStyle: 'azure' }, COMPAT_META), false);
+  assert.equal(normalizeProviderPatch({ removeExtraHeaders: true }, COMPAT_META).removeExtraHeaders, true);
+});
+
+test('normalizeProviderPatch ignoriert Felder, die der Anbieter nicht führt', () => {
+  const { normalizeProviderPatch } = require('../src/shared/contracts/settings');
+  const ollamaLike = { name: 'Ollama', fields: { baseUrl: true } };
+
+  assert.deepEqual(
+    normalizeProviderPatch(
+      { baseUrl: 'http://127.0.0.1:11434', displayName: 'Nein', apiStyle: 'full', sendTools: false },
+      ollamaLike,
+    ),
+    { baseUrl: 'http://127.0.0.1:11434' },
+  );
+});
