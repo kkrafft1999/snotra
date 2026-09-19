@@ -45,6 +45,7 @@
     'hero.cta.platform.mac': 'Für macOS laden',
     'hero.cta.platform.win': 'Für Windows laden',
     'hero.cta.platform.deb': 'Für Linux laden',
+    'hero.cta.mobil': 'Zu den Downloads',
     'hero.note': 'Version 1.5.3 · quelloffen unter Apache 2.0 · keine Registrierung',
     'hero.appwin.aria': 'Nachbau des Snotra-AI-Fensters: links der Dateibaum des Ordners angebote, in der Mitte die Vorschau von angebot-q3.md, rechts der Chat mit Tool-Log, Freigabe-Karte und Eingabefeld.',
     'hero.stage.caption': 'Die Oberfläche der App, maßgetreu in HTML nachgebaut',
@@ -212,6 +213,7 @@
     'download.label': '// download',
     'download.h2': 'Version 1.5.3 — kostenlos, quelloffen, ohne Registrierung',
     'download.sub': 'Apache 2.0. Kein Konto, keine Telemetrie, kein eigener Server dazwischen — geladen wird direkt bei GitHub.',
+    'download.mobil.hinweis': 'Snotra AI ist eine Desktop-App für macOS, Windows und Linux — auf Telefon und Tablet lässt sie sich nicht installieren. Öffne die Seite an deinem Rechner, dann steht hier gleich das passende Paket.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 127 MB',
     'download.mac.btn': 'DMG laden',
@@ -335,6 +337,7 @@
     'hero.cta.platform.mac': 'Download for macOS',
     'hero.cta.platform.win': 'Download for Windows',
     'hero.cta.platform.deb': 'Download for Linux',
+    'hero.cta.mobil': 'Go to downloads',
     'hero.note': 'Version 1.5.3 · open source under Apache 2.0 · no sign-up',
     'hero.appwin.aria': 'Reconstruction of the Snotra AI window: on the left the file tree of the folder “angebote”, in the middle the preview of angebot-q3.md, on the right the chat with tool log, approval card and input field.',
     'hero.stage.caption': 'The interface, rebuilt in HTML — the app ships with a German interface',
@@ -506,6 +509,7 @@
     'download.label': '// download',
     'download.h2': 'Version 1.5.3 — free, open source, no sign-up',
     'download.sub': 'Apache 2.0. No account, no telemetry, no server of ours in between — the download comes straight from GitHub.',
+    'download.mobil.hinweis': 'Snotra AI is a desktop app for macOS, Windows and Linux — it cannot be installed on a phone or tablet. Open this page on your computer and the matching package will be waiting right here.',
     'download.mac.titel': 'macOS',
     'download.mac.meta': 'Apple Silicon (arm64) · DMG · 127 MB',
     'download.mac.btn': 'Download DMG',
@@ -830,7 +834,21 @@
     { key: 'targz', test: function (n) { return /\.tar\.gz$/.test(n); } }
   ];
 
+  /* Telefone und Tablets zuerst: ihre Kennungen tragen dieselben Namen wie
+     die Desktop-Systeme — Android meldet "Linux", iPhone und iPad melden
+     "Mac OS X". Ohne diesen Zweig bekam ein Telefon ein .deb bzw. ein DMG
+     angeboten (Issue #199). iPadOS gibt sich ab Version 13 vollstaendig als
+     Mac aus; verraten wird es nur vom Touchscreen. */
+  function isHandheld() {
+    var uaData = navigator.userAgentData;
+    if (uaData && uaData.mobile === true) return true;
+    var ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|Windows Phone|IEMobile|Opera Mini/i.test(ua)) return true;
+    return /Mac/i.test(ua) && navigator.maxTouchPoints > 1;
+  }
+
   function detectPlatform() {
+    if (isHandheld()) return 'mobil';
     var p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
     var ua = navigator.userAgent || '';
     if (/Mac/i.test(p) || /Mac OS X/i.test(ua)) return 'mac';
@@ -839,6 +857,15 @@
     return null;
   }
   state.platform = detectPlatform();
+
+  if (state.platform === 'mobil') {
+    /* Der zweite Hero-Knopf ("Windows & Linux") zeigt auf dieselbe Stelle wie
+       der erste, sobald der nicht mehr plattformgenau ist. */
+    var heroAlt = doc.getElementById('hero-cta-alt');
+    if (heroAlt) heroAlt.hidden = true;
+    var mobilHinweis = doc.getElementById('dl-mobile');
+    if (mobilHinweis) mobilHinweis.hidden = false;
+  }
 
   function applyRelease() {
     if (state.version) {
@@ -860,9 +887,14 @@
       if (url) el.href = url;
     });
 
-    /* Hero-Knopf: beschriftet sich nach der Plattform des Besuchers. */
+    /* Hero-Knopf: beschriftet sich nach der Plattform des Besuchers. Auf
+       Telefon und Tablet gibt es nichts zu installieren — dort fuehrt er in
+       den Download-Abschnitt, wo der Hinweis dazu steht. */
     var hero = doc.getElementById('hero-cta');
-    if (hero && state.platform) {
+    if (hero && state.platform === 'mobil') {
+      hero.textContent = t('hero.cta.mobil');
+      hero.href = '#download';
+    } else if (hero && state.platform) {
       var key = state.platform;
       var size = state.sizes[key] || DEFAULT_SIZES[key];
       hero.textContent = t('hero.cta.platform.' + key) + (size ? ' — ' + size : '');

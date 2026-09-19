@@ -780,6 +780,14 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
 .dl .spec{font-family:var(--mono);font-size:12px;color:var(--strong)}
 .dl .btn{margin-top:14px;align-self:flex-start}
 .dl .alt{margin-top:10px;font-size:13px;color:var(--strong)}
+
+/* Hinweis fuer Telefon und Tablet. Kein display hier: der Hinweis haengt am
+   hidden-Attribut, das app.js nur auf solchen Geraeten abnimmt. */
+.dl-mobile{
+  margin-top:36px;border:1px solid var(--blue-border);border-radius:var(--r-container);
+  background:var(--blue-soft);padding:16px 18px;
+  font-size:14px;line-height:1.5;color:var(--strong);max-width:70ch;
+}
 @media(max-width:820px){.dl-grid{grid-template-columns:1fr}}
 
 /* ---------- Unsignierte Builds ---------- */
