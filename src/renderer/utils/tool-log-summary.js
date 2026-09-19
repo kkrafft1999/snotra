@@ -40,7 +40,6 @@ const GROUP_LABELS = {
   list: ['%d Ordner aufgelistet', '%d Ordner aufgelistet'],
   check: ['%d Pfad geprüft', '%d Pfade geprüft'],
   write: ['%d Datei geschrieben', '%d Dateien geschrieben'],
-  wait: ['%d Pause', '%d Pausen'],
   // Seit #102 nicht mehr nur Python: die Kategorie deckt jede Ausfuehrung ab.
   exec: ['%d Ausführung', '%d Ausführungen'],
   other: ['%d Tool-Schritt', '%d Tool-Schritte'],
@@ -62,8 +61,7 @@ const CATEGORY_RANK = {
   read: 5,
   list: 6,
   check: 7,
-  wait: 8,
-  other: 9,
+  other: 8,
 };
 
 function categoryRank(category) {

@@ -25,8 +25,19 @@ const SKILL_PATH = path.join(
 );
 
 // Der Katalog kennt keine Handler-Aufrufe, ein leerer fsService genügt.
-// `listCatalog()` filtert bereits alles mit `internal: true` (debug_wait).
-const catalog = createWorkspaceToolRegistry({ fsService: {} }).listCatalog();
+const registry = createWorkspaceToolRegistry({ fsService: {} });
+// Zwei Quellen, weil keine allein das ist, was das Modell sieht:
+// `listCatalog()` lässt die Grundausstattung weg (#195), `getTools()` die
+// Tools, die erst mit Konfiguration verfügbar werden (Schlüssel, Python,
+// Shell). Der Skill muss beides nennen, also zählt die Vereinigung.
+const catalog = [
+  ...registry.listCatalog(),
+  ...registry
+    .getTools()
+    .map((tool) => tool.function.name)
+    .filter((name) => !registry.listCatalog().some((entry) => entry.name === name))
+    .map((name) => ({ name, riskClass: registry.getDefinition(name).riskClass })),
+];
 const skillText = fs.readFileSync(SKILL_PATH, 'utf8');
 
 test('snotra-capabilities nennt jedes Tool, das dem Modell angeboten wird (Issue #114)', () => {

@@ -172,19 +172,6 @@ test('list_directory lists directories before files and hides dotfiles', async (
   await fs.rm(tmpRoot, { recursive: true, force: true });
 });
 
-test('debug_wait waits for the requested duration through the registry', async () => {
-  const registry = makeToolRegistry();
-  const started = Date.now();
-  const out = JSON.parse(
-    await registry.execute('debug_wait', { duration_seconds: 0.6 }, { workspaceRoot: '/tmp/project' })
-  );
-  const elapsed = Date.now() - started;
-  assert.equal(out.ok, true);
-  assert.equal(out.waited_ms, 600);
-  assert.equal(out.waited_seconds, 0.6);
-  assert.ok(elapsed >= 550);
-});
-
 test('write_file_text laeuft ohne Freigabe der Policy nicht (Issue #66)', async () => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));

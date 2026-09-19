@@ -1,5 +1,3 @@
-const { resolveDebugWaitMs } = require('../../shared/contracts/debug-wait');
-const { sleepAbortable } = require('../../shared/runtime/abort');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
@@ -131,8 +129,10 @@ function createToolRegistry(initialDefinitions = []) {
   // Was der Nutzer in den Einstellungen nicht sieht, bekommt auch das Modell
   // nicht (Issue #180): Ein internes Tool waere sonst ein Schema, das in jeder
   // Runde Tokens kostet und das niemand abwaehlen kann, weil es in der
-  // Tool-Liste gar nicht auftaucht. Nur die Sichtbarkeit — `getDefinition` und
-  // `execute` bleiben offen, die UI-Tests loesen `debug_wait` weiterhin aus.
+  // Tool-Liste gar nicht auftaucht. `internal` filtert nur die Sichtbarkeit —
+  // `getDefinition` und `execute` bleiben offen, damit Tests ein solches Tool
+  // ausloesen koennen. Derzeit tragen es keine eingebauten Tools: das einzige
+  // (`debug_wait`) ist mit #197 entfallen.
   //
   // Die Grundausstattung (`essential`, Issue #195) ist die Gegenrichtung: sie
   // steht ebenfalls nicht in der Tool-Liste, geht aber immer an das Modell.
@@ -181,8 +181,8 @@ function createToolRegistry(initialDefinitions = []) {
    * Katalog für die Einstellungen (Issue #98). Liefert neben der vollen
    * `description` die kurze `promptDescription` als `shortDescription`: die
    * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
-   * Interne Tools (`internal: true`, z. B. debug_wait) tauchen weder hier noch
-   * in den Schemas fuer das Modell auf (Issue #180) — ausfuehrbar bleiben sie.
+   * Interne Tools (`internal: true`) tauchen weder hier noch in den Schemas
+   * fuer das Modell auf (Issue #180) — ausfuehrbar bleiben sie.
    * Die Grundausstattung (`essential: true`) fehlt hier ebenfalls, aber aus dem
    * umgekehrten Grund: Sie geht immer an das Modell, also gibt es nichts zu
    * entscheiden, und eine Zeile ohne Wahl waere nur ein taubes Haekchen (#195).
@@ -808,32 +808,6 @@ function createWorkspaceToolRegistry({
       },
       handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
         fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots, sensitivity }),
-    },
-    {
-      name: 'debug_wait',
-      riskClass: TOOL_RISK_CLASSES.READ,
-      // Nur für UI-Tests: dem Modell weiterhin angeboten, in den
-      // Einstellungen aber ausgeblendet (Issue #98).
-      internal: true,
-      targets: () => [],
-      description:
-        'Nur zum UI-Test: wartet eine konfigurierbare Zeit und liefert danach OK zurück. Kein Dateizugriff.',
-      promptDescription: 'Wartet ausschließlich für UI-Tests eine kurze Zeit.',
-      parameters: {
-        type: 'object',
-        properties: {
-          duration_seconds: {
-            type: 'number',
-            description:
-              'Wartezeit in Sekunden (Standard 5, Minimum 0,5, Maximum 20).',
-          },
-        },
-      },
-      async handler(args, { abortSignal }) {
-        const ms = resolveDebugWaitMs(args);
-        await sleepAbortable(ms, abortSignal);
-        return JSON.stringify({ ok: true, waited_ms: ms, waited_seconds: ms / 1000 });
-      },
     },
     {
       name: 'write_file_text',

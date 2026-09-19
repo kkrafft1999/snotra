@@ -390,12 +390,14 @@ test('CHAT_SEND rejects tool calls with a synthetic error when no workspace is o
   assert.match(toolMsg.content, /Kein Arbeitsordner geöffnet/);
 });
 
-test('CHAT_SEND attaches the clamped debug_wait duration to the tool trace entry', async () => {
+// Der ganze IPC-Weg muss tragen, was der Adapter dem Trace-Eintrag ergaenzt.
+// Traeger ist seit dem Wegfall von debug_wait (#197) der Skill-Name.
+test('CHAT_SEND attaches the adapter metadata to the tool trace entry', async () => {
   const { provider } = makeScriptedProvider([
-    assistantToolCall([toolCall('call_1', 'debug_wait', { duration_seconds: 0.1 })]),
+    assistantToolCall([toolCall('call_1', 'load_skill', { name: 'traffic' })]),
     assistantText('fertig'),
   ]);
-  const toolRegistry = makeToolRegistryStub(() => JSON.stringify({ ok: true, waited_ms: 500 }));
+  const toolRegistry = makeToolRegistryStub(() => JSON.stringify({ ok: true }));
   const { sendHandler } = setupChatHandlers({
     provider,
     toolRegistry,
@@ -404,12 +406,11 @@ test('CHAT_SEND attaches the clamped debug_wait duration to the tool trace entry
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'warte kurz' }],
+    messages: [{ role: 'user', content: 'lade den Skill' }],
   });
 
-  // duration_seconds: 0.1 liegt unter dem Minimum (500ms) und wird geclampt.
-  assert.equal(res.toolTrace[0].waitMs, 500);
-  assert.equal(res.toolTrace[0].line, '0,5 Sekunden gewartet');
+  assert.equal(res.toolTrace[0].skill, 'traffic');
+  assert.equal(res.toolTrace[0].line, 'Skill traffic geladen');
 });
 
 test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhausted', async () => {

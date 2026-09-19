@@ -19,7 +19,6 @@ const TOOL_CATEGORIES = Object.freeze({
   LIST: 'list',
   CHECK: 'check',
   WRITE: 'write',
-  WAIT: 'wait',
   /** Ausgefuehrter Code und Shell-Befehle (#86/#102) — eigene Kategorie, weil beides die Workspace-Grenze umgeht. */
   EXEC: 'exec',
   /** Unbekannt — z. B. Einträge aus Sessions, die vor #60 gespeichert wurden. */
@@ -41,7 +40,6 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   write_file_text: TOOL_CATEGORIES.WRITE,
   edit_file: TOOL_CATEGORIES.WRITE,
   apply_patch: TOOL_CATEGORIES.WRITE,
-  debug_wait: TOOL_CATEGORIES.WAIT,
   run_python: TOOL_CATEGORIES.EXEC,
   shell_execute: TOOL_CATEGORIES.EXEC,
 });

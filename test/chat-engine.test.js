@@ -65,7 +65,8 @@ function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresW
     },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
-      if (toolName === 'debug_wait') entry.waitMs = 500;
+      // Wie der echte Adapter (#173): `load_skill` merkt sich den Skill-Namen.
+      if (toolName === 'load_skill' && typeof args?.name === 'string') entry.skill = args.name;
       return entry;
     },
     formatDisplayLine(entry, phase) {
@@ -586,23 +587,26 @@ test('engine supplies a synthetic tool error when no workspace is open', async (
   assert.match(toolMessage.content, /Kein Arbeitsordner geöffnet/);
 });
 
-test('engine preserves debug_wait metadata in its tool trace', async () => {
+// Der Trace traegt mehr als Name und Argumente: was `buildTraceEntry` im
+// Adapter ergaenzt, muss bis in die Antwort durchkommen. Traeger ist seit dem
+// Wegfall von debug_wait (#197) der Skill-Name von `load_skill`.
+test('engine preserves tool-trace metadata from the adapter', async () => {
   const { engine } = makeEngine([
-    assistantToolCall('call_1', 'debug_wait', { duration_seconds: 0.1 }),
+    assistantToolCall('call_1', 'load_skill', { name: 'traffic' }),
     assistantText('Fertig.'),
   ]);
 
   const result = await engine.send({
     sessionId: 'renderer-1',
     payload: {
-      messages: [{ role: 'user', content: 'Warte' }],
+      messages: [{ role: 'user', content: 'Lade den Skill' }],
       workspaceRoot: '/tmp/snotra-project',
     },
   });
 
   assert.equal(result.content, 'Fertig.');
-  assert.equal(result.toolTrace[0].waitMs, 500);
-  assert.equal(result.toolTrace[0].line, '0,5 Sekunden gewartet');
+  assert.equal(result.toolTrace[0].skill, 'traffic');
+  assert.equal(result.toolTrace[0].line, 'Skill traffic geladen');
 });
 
 test('engine stops at its configured tool-round limit', async () => {
@@ -689,7 +693,7 @@ test('engine passes disabled tools to registry and execution context', async () 
     tools,
     preferences: {
       async read() {
-        return { allowWorkspaceWrite: false, disabledTools: ['debug_wait', 'search_in_files'] };
+        return { allowWorkspaceWrite: false, disabledTools: ['web_search', 'search_in_files'] };
       },
     },
   });
@@ -703,9 +707,9 @@ test('engine passes disabled tools to registry and execution context', async () 
   });
 
   assert.deepEqual(getToolsCalls, [
-    { disabledNames: ['debug_wait', 'search_in_files'], workspaceOpen: true, skillNames: [] },
+    { disabledNames: ['web_search', 'search_in_files'], workspaceOpen: true, skillNames: [] },
   ]);
-  assert.deepEqual(tools.calls[0].context.disabledNames, ['debug_wait', 'search_in_files']);
+  assert.deepEqual(tools.calls[0].context.disabledNames, ['web_search', 'search_in_files']);
 });
 
 test('engine preserves start display lines on tool trace when aborted during execution', async () => {

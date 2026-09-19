@@ -213,9 +213,9 @@ test('mehr als drei Gruppen: Rest wird als „N weitere Schritte“ gezählt', a
     { text: 'b', state: 'done', category: 'search' },
     { text: 'c', state: 'done', category: 'list' },
     { text: 'd', state: 'done', category: 'write' },
-    { text: 'e', state: 'done', category: 'wait' },
+    { text: 'e', state: 'done', category: 'check' },
   ];
-  // Auflistung und Pause sind die unwichtigsten und fallen in den Rest.
+  // Auflistung und Pfadpruefung sind die unwichtigsten und fallen in den Rest.
   const out = summarizeToolLog(steps);
   assert.equal(out.text, '1 Datei geschrieben · 1 Suche · 1 Datei gelesen');
   assert.equal(out.extra, '· 2 weitere Schritte');

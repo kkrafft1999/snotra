@@ -124,10 +124,6 @@ test('summarizeToolCall formats workspace tools with start and done labels', () 
   );
   assert.equal(summarizeToolCall('list_directory_tree', {}, 'start'), 'Ordnerbaum wird gelesen …');
   assert.equal(summarizeToolCall('list_directory_tree', {}, 'done'), 'Ordnerbaum gelesen');
-  assert.equal(summarizeToolCall('debug_wait', {}, 'start'), 'Warte 5 Sekunden …');
-  assert.equal(summarizeToolCall('debug_wait', {}, 'done'), '5 Sekunden gewartet');
-  assert.equal(summarizeToolCall('debug_wait', { duration_seconds: 1.2 }, 'start'), 'Warte 1,2 Sekunden …');
-  assert.equal(summarizeToolCall('debug_wait', { duration_seconds: 1 }, 'done'), '1 Sekunde gewartet');
   assert.equal(summarizeToolCall('unknown_tool', {}, 'start'), 'unknown_tool wird ausgeführt …');
   assert.equal(summarizeToolCall('unknown_tool', {}, 'done'), 'unknown_tool ausgeführt');
 });
@@ -150,17 +146,6 @@ test('formatToolDisplayLine formats raw tool trace entries', () => {
   );
   // Persistierte Alt-Sessions enthalten bereits formatierte Strings.
   assert.equal(formatToolDisplayLine('Datei x gelesen', 'done'), 'Datei x gelesen');
-});
-
-test('formatToolDisplayLine uses main-supplied waitMs for debug_wait', () => {
-  assert.equal(
-    formatToolDisplayLine({ tool: 'debug_wait', args: {}, waitMs: 1200 }, 'start'),
-    'Warte 1,2 Sekunden …'
-  );
-  assert.equal(
-    formatToolDisplayLine({ tool: 'debug_wait', args: {}, waitMs: 1000 }, 'done'),
-    '1 Sekunde gewartet'
-  );
 });
 
 test('summarizeToolCall nutzt für die Phase pending die Start-Formulierung', () => {

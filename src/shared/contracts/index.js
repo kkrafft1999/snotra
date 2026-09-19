@@ -82,7 +82,6 @@ const {
   normalizeContextBreakdown,
   groupContextParts,
 } = require('./context-breakdown');
-const { DEBUG_WAIT, resolveDebugWaitMs } = require('./debug-wait');
 const {
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
@@ -244,8 +243,6 @@ module.exports = {
   createContextBreakdown,
   normalizeContextBreakdown,
   groupContextParts,
-  DEBUG_WAIT,
-  resolveDebugWaitMs,
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
   toolCategory,

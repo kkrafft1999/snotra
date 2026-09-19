@@ -237,7 +237,7 @@ test('modelDescription vom falschen Typ faellt sofort auf (#181)', () => {
 test('internal tools leave both the settings catalog and the schemas (#180)', () => {
   const registry = createToolRegistry([
     definition('read'),
-    { ...definition('debug_wait'), internal: true },
+    { ...definition('nur_intern'), internal: true },
   ]);
 
   assert.deepEqual(
@@ -250,36 +250,23 @@ test('internal tools leave both the settings catalog and the schemas (#180)', ()
     registry.getTools().map((tool) => tool.function.name),
     ['read']
   );
-  assert.equal(registry.buildSystemPrompt().includes('debug_wait'), false);
+  assert.equal(registry.buildSystemPrompt().includes('nur_intern'), false);
 });
 
 test('internal tools stay executable although the model never sees them (#180)', async () => {
   const registry = createToolRegistry([
     definition('read'),
-    { ...definition('debug_wait'), internal: true },
+    { ...definition('nur_intern'), internal: true },
   ]);
 
-  // Die UI-Tests loesen debug_wait ueber Fake-LLMs aus: Der Filter aendert die
-  // Sichtbarkeit, nicht die Ausfuehrbarkeit.
-  assert.equal(registry.getDefinition('debug_wait')?.name, 'debug_wait');
+  // Ein Test kann ein internes Tool ueber ein Fake-LLM ausloesen: Der Filter
+  // aendert die Sichtbarkeit, nicht die Ausfuehrbarkeit. Eingebaute Tools
+  // tragen `internal` seit dem Wegfall von debug_wait (#197) keine mehr.
+  assert.equal(registry.getDefinition('nur_intern')?.name, 'nur_intern');
   assert.equal(
-    JSON.parse(await registry.execute('debug_wait', { value: 'x' }, APPROVED)).name,
-    'debug_wait'
+    JSON.parse(await registry.execute('nur_intern', { value: 'x' }, APPROVED)).name,
+    'nur_intern'
   );
-});
-
-test('debug_wait is marked internal in the workspace registry', () => {
-  const registry = createWorkspaceToolRegistry({ fsService: {} });
-
-  assert.equal(
-    registry.listCatalog().some((entry) => entry.name === 'debug_wait'),
-    false
-  );
-  assert.equal(
-    registry.getTools().some((tool) => tool.function.name === 'debug_wait'),
-    false
-  );
-  assert.equal(registry.getDefinition('debug_wait').internal, true);
 });
 
 test('registry executes handlers with request context', async () => {
@@ -387,8 +374,7 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(names.includes('shell_execute'), false);
 
   // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
-  // web_search und fetch_url → external. debug_wait ist read, bleibt als
-  // internes Test-Tool aber ausserhalb von Katalog und Schemas (#98, #180).
+  // web_search und fetch_url → external.
   const classes = Object.fromEntries(registry.listCatalog().map((entry) => [entry.name, entry.riskClass]));
   // Die Grundausstattung steht oben in den Schemas, aber nicht im Katalog
   // (#195) — ihre Klasse kommt deshalb direkt aus der Definition.
@@ -411,10 +397,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(classes.shell_execute, 'execute');
-  assert.equal(registry.getDefinition('debug_wait').riskClass, 'read');
-  assert.equal(Object.hasOwn(classes, 'debug_wait'), false);
-  // 17 registrierte Tools minus debug_wait (#98) und minus die beiden
-  // essenziellen list_directory und load_skill, die niemand abwaehlt (#195).
+  // 16 registrierte Tools minus die beiden essenziellen list_directory und
+  // load_skill, die niemand abwaehlt (#195).
   assert.equal(Object.keys(classes).length, 14);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
@@ -721,7 +705,8 @@ test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (I
   assert.deepEqual(targets('search_in_files', { query: 'x', relative_path: 'src' }), [
     { path: 'src', kind: 'tree', access: 'read' },
   ]);
-  assert.deepEqual(targets('debug_wait', {}), []);
+  // Ein Tool ohne Dateiziel: die Policy hat hier nur „alles" zu greifen.
+  assert.deepEqual(targets('web_search', { query: 'x' }), []);
   assert.deepEqual(targets('write_file_text', { relative_path: 'n.md', content: '' }), [
     { path: 'n.md', kind: 'file', access: 'write', overwrite: true },
   ]);

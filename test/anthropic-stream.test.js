@@ -132,7 +132,7 @@ test('streamChatRound falls back to "{}" for unparseable streamed tool input', a
     sseResponse([
       sse('content_block_start', {
         index: 0,
-        content_block: { type: 'tool_use', id: 'toolu_2', name: 'debug_wait' },
+        content_block: { type: 'tool_use', id: 'toolu_2', name: 'web_search' },
       }),
       sse('content_block_delta', { index: 0, delta: { type: 'input_json_delta', partial_json: 'not valid json' } }),
       sse('message_delta', { delta: { stop_reason: 'tool_use' } }),

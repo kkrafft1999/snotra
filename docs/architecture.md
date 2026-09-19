@@ -424,10 +424,11 @@ Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
 
 Sichtbarkeit und Verfügbarkeit eines Tools sind zwei Achsen
 ([#195](https://github.com/kkrafft1999/snotra/issues/195)). `internal: true`
-(z. B. `debug_wait`) versteckt vor Nutzer *und* Modell; `essential: true`
-versteckt nur in Einstellungen › Tools und geht immer an das Modell — die
-Häkchen des Nutzers greifen darauf nicht, `requiresWorkspace` und
-`requiresSkills` weiterhin schon.
+versteckt vor Nutzer *und* Modell und wird seit dem Wegfall von `debug_wait`
+([#197](https://github.com/kkrafft1999/snotra/issues/197)) von keinem
+eingebauten Tool getragen; `essential: true` versteckt nur in Einstellungen › Tools und geht
+immer an das Modell — die Häkchen des Nutzers greifen darauf nicht,
+`requiresWorkspace` und `requiresSkills` weiterhin schon.
 
 Grundausstattung sind `list_directory` und `load_skill`. Beide sind kein
 Zusatz, sondern der Zugang zu etwas, das der Nutzer an anderer Stelle schon
