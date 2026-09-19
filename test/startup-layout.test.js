@@ -1,9 +1,10 @@
-// Startzustand von Fenster und mittlerer Spalte (Issue #208).
+// Startzustand der mittleren Spalte (Issue #208).
 //
-// Zwei Entscheidungen, die man sonst nur per Augenschein pruefen koennte:
-// wie gross das Fenster aufgeht und ob die mittlere Spalte beim Start offen
-// ist. Beide liegen als reine Funktionen vor, dazu eine Klammer um das
-// Markup — der erste Bildaufbau kommt aus der index.html, nicht aus dem Code.
+// Ob beim Start der Startschirm neben dem Chat steht, koennte man sonst nur per
+// Augenschein pruefen. Die Entscheidung liegt deshalb als reine Funktion vor,
+// dazu eine Klammer um das Markup — der erste Bildaufbau kommt aus der
+// index.html, nicht aus dem Code. Die Fenstergroesse prueft
+// test/window-state.test.js.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,44 +12,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const {
-  fitToWorkArea,
-  DEFAULT_WINDOW_WIDTH,
-  DEFAULT_WINDOW_HEIGHT,
-} = require('../src/main/window.js');
-
 const startupLayoutPromise = import(
   pathToFileURL(
     path.join(__dirname, '..', 'src', 'renderer', 'utils', 'startupLayout.js')
   ).href
 );
-
-test('die Startgroesse liegt 20 % ueber den frueheren 1280 x 800', () => {
-  assert.equal(DEFAULT_WINDOW_WIDTH, Math.round(1280 * 1.2));
-  assert.equal(DEFAULT_WINDOW_HEIGHT, Math.round(800 * 1.2));
-});
-
-test('auf einem grossen Bildschirm bleibt es beim Wunschmass', () => {
-  assert.deepEqual(fitToWorkArea({ width: 2560, height: 1440 }), {
-    width: DEFAULT_WINDOW_WIDTH,
-    height: DEFAULT_WINDOW_HEIGHT,
-  });
-});
-
-test('auf einem kleinen Bildschirm bleibt das Fenster in der Arbeitsflaeche', () => {
-  // 13-Zoll-Notebook: 960 px waeren hoeher als der sichtbare Bereich.
-  assert.deepEqual(fitToWorkArea({ width: 1440, height: 875 }), {
-    width: 1440,
-    height: 875,
-  });
-});
-
-test('ohne brauchbare Bildschirmangabe gilt das Wunschmass', () => {
-  const expected = { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT };
-  assert.deepEqual(fitToWorkArea(null), expected);
-  assert.deepEqual(fitToWorkArea({ width: 0, height: -1 }), expected);
-  assert.deepEqual(fitToWorkArea({ width: 'breit', height: NaN }), expected);
-});
 
 test('ein wiederhergestellter Chat laesst die mittlere Spalte zu', async () => {
   const { contentPaneVisibleOnStart } = await startupLayoutPromise;

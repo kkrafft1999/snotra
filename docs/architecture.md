@@ -505,9 +505,25 @@ darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
    Spalte nicht zugeklappt hängen lässt.
 
 Die Vorschau lebt in dieser Spalte, deshalb holt ein Klick auf eine Datei sie
-über `revealContentPane` zurück — sonst bliebe der Klick folgenlos. Die
-Startgröße des Fensters (1536 × 960, begrenzt auf die Arbeitsfläche) liegt als
-reine Funktion `fitToWorkArea()` in `src/main/window.js`.
+über `revealContentPane` zurück — sonst bliebe der Klick folgenlos.
+
+### Fensterzustand ([#209](https://github.com/kkrafft1999/snotra/issues/209))
+
+Größe, Position, maximiert und Vollbild liegen in `window-state.json` im
+`userData`-Ordner — bewusst neben der Ablage aus `storage-service`: der Zustand
+gehört dem Fenster allein, niemand sonst liest ihn, und er muss stehen, bevor
+irgendein Service existiert. Geschrieben wird synchron (die letzte Änderung ist
+beim Schließen fällig, danach wartet der Prozess auf nichts mehr) und während
+des Betriebs entprellt, weil Ziehen am Fensterrand sonst dutzendfach pro
+Sekunde auf die Platte ginge. Gesichert wird immer `getNormalBounds()`, also
+das Maß *unter* Maximierung und Vollbild.
+
+Die Entscheidung beim Start liegt als reine Funktion `resolveWindowBounds()` in
+`src/main/window-state.js`, weil zwischen zwei Starts Bildschirme dazukommen,
+wegfallen und ihre Auflösung ändern: Größe auf die Arbeitsfläche begrenzen,
+Position in sie einrasten, und wenn vom gespeicherten Rechteck weniger als
+100 px sichtbar wären, die Position fallen lassen — dann zentriert Electron.
+Ohne gespeicherten Zustand gilt die Startgröße aus #208 (1536 × 960).
 
 ## Automatisierte Grenzwächter
 
@@ -535,6 +551,10 @@ werden als natives ESM per `await import(...)` geladen und mit gestubbtem
 | `test/settings-modal-dom.test.js` | Tab-Umschaltung: Panel, `aria-selected`, Roving Tabindex, Überschrift, Escape |
 | `test/chat-links-dom.test.js` | Klick-Handler für Links aus Modellantworten ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) inkl. Fehlermeldung in der Statuszeile |
 | `test/chat-restore-report-dom.test.js` | Was `loadChatForWorkspace()` dem Start meldet ([#208](https://github.com/kkrafft1999/snotra/issues/208)): wiederhergestellte Konversation, leerer Ordner, bloße Begrüßung |
+
+Außerhalb des DOM-Stacks, aber zur selben Strecke: `test/window-state.test.js`
+prüft die Fensterentscheidung beim Start (Standardgröße, gemerkter Zustand,
+abgezogener Bildschirm) und das Schreiben und Lesen der Zustandsdatei.
 
 Grenzen, damit die grüne Zeile nicht mehr verspricht, als sie hält: kein echtes
 Chromium, also **kein Layout** (`offsetParent`, `getBoundingClientRect`) und
