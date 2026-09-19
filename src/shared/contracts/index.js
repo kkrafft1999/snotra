@@ -82,6 +82,7 @@ const {
   normalizeContextBreakdown,
   groupContextParts,
 } = require('./context-breakdown');
+const { endpointHost, isLocalEndpoint } = require('./provider-endpoint');
 const {
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
@@ -243,6 +244,8 @@ module.exports = {
   createContextBreakdown,
   normalizeContextBreakdown,
   groupContextParts,
+  endpointHost,
+  isLocalEndpoint,
   TOOL_CATEGORIES,
   TOOL_CATEGORY_BY_TOOL,
   toolCategory,

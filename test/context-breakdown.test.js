@@ -156,6 +156,21 @@ test('gleiche Zeichenzahl, je nach Anbieter eine andere Schaetzung (#178)', () =
   assert.deepEqual(charsPerTokenProfile('google'), charsPerTokenProfile('ollama'));
 });
 
+test('eine Server-URL auf diesem Rechner sticht das ID-Profil (#193)', () => {
+  const lokal = charsPerTokenProfile('mlx-lm');
+  // Der generische Anbieter hat kein eigenes ID-Profil; entfernt bleibt es beim
+  // konservativen Standard, lokal gilt das gemessene local-Profil.
+  assert.deepEqual(charsPerTokenProfile('openai-compatible'), lokal);
+  assert.deepEqual(
+    charsPerTokenProfile('openai-compatible', { baseUrl: 'http://localhost:1234/v1' }),
+    lokal
+  );
+  // Auch ein fest verdrahteter Anbieter, den jemand auf localhost zeigen
+  // laesst, spricht dann mit einem lokal geladenen Modell.
+  assert.notDeepEqual(charsPerTokenProfile('openai'), lokal);
+  assert.deepEqual(charsPerTokenProfile('openai', { baseUrl: 'http://127.0.0.1:8080/v1' }), lokal);
+});
+
 test('die OpenAI-Schaetzung trifft die Tokenizer-Messung auf 10 % (#178)', () => {
   const geschaetzt = estimateTokensFromChars(
     O200K_TOOL_SCHEMA_CHARS,

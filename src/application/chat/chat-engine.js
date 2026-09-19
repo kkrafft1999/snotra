@@ -920,7 +920,13 @@ function createChatEngine({
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
-      const historyCharLimit = resolveHistoryCharLimit(uiPrefs, target?.providerId);
+      // Der Server hinter der ID entscheidet mit, ob das enge lokale Budget
+      // gilt (Issue #193) — dieselbe ID kann auf localhost oder ins Netz zeigen.
+      const historyCharLimit = resolveHistoryCharLimit(
+        uiPrefs,
+        target?.providerId,
+        sendBundle?.config?.baseUrl
+      );
       // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
       // Content — und werden hier normalisiert, weil der Payload aus dem
       // Renderer ungeprueft ist. Nachrichten ohne Anhang behalten exakt ihre
@@ -1332,8 +1338,10 @@ function createChatEngine({
           promptTokens: roundUsage ? roundUsage.prompt : 0,
           // Der Teiler Zeichen→Token gehoert dem Tokenizer am anderen Ende
           // (Issue #178) — ohne den Anbieter schaetzt die Aufschluesselung
-          // gegen das falsche Modell.
+          // gegen das falsche Modell. Die Server-URL entscheidet mit, weil ein
+          // generischer Anbieter mal lokal und mal entfernt steht (Issue #193).
           providerId: target?.providerId,
+          baseUrl: sendBundle?.config?.baseUrl,
         });
 
         if (streamed.cancelled) {

@@ -920,7 +920,21 @@
             <select id="select-provider" class="modal-input" aria-describedby="provider-status"></select>
             <p id="provider-status" class="modal-hint"></p>
 
-            <div id="provider-key-row">
+            <div id="provider-template-row" class="hidden provider-flow-group">
+              <div class="popup-flow-subhead">Vorlage</div>
+              <label class="visually-hidden" for="select-provider-template">Vorlage auswählen</label>
+              <select id="select-provider-template" class="modal-input" aria-describedby="provider-template-hint"></select>
+              <p id="provider-template-hint" class="modal-hint"></p>
+            </div>
+
+            <div id="provider-display-name-row" class="hidden provider-flow-group">
+              <div class="popup-flow-subhead">Anzeigename</div>
+              <label class="visually-hidden" for="input-display-name">Anzeigename</label>
+              <input type="text" id="input-display-name" class="modal-input" autocomplete="off" aria-describedby="provider-display-name-hint" />
+              <p id="provider-display-name-hint" class="modal-hint">Steht im Chat vor dem Modellnamen. Leer lassen für den Standardnamen.</p>
+            </div>
+
+            <div id="provider-key-row" class="provider-flow-group">
               <div class="popup-flow-subhead">API-Schlüssel</div>
               <div class="modal-row">
                 <label class="visually-hidden" for="input-api-key">API-Key</label>
@@ -929,6 +943,26 @@
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </div>
+              <p id="provider-key-hint" class="modal-hint hidden">Leer lassen, wenn der Server keinen Schlüssel verlangt — dann geht kein <code>Authorization</code>-Header hinaus.</p>
+            </div>
+
+            <div id="provider-extra-headers-row" class="hidden provider-flow-group">
+              <div class="popup-flow-subhead">Zusätzliche Header</div>
+              <div class="modal-row">
+                <label class="visually-hidden" for="input-extra-headers">Zusätzliche Header, eine Zeile je „Name: Wert“</label>
+                <textarea id="input-extra-headers" class="modal-input modal-input--grow modal-textarea modal-textarea--short" rows="3" autocomplete="off" spellcheck="false" aria-describedby="provider-extra-headers-hint"></textarea>
+                <button type="button" id="btn-remove-extra-headers" class="settings-icon-trash hidden" aria-label="Zusätzliche Header entfernen">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+              <p id="provider-extra-headers-hint" class="modal-hint">Eine Zeile je <code>Name: Wert</code>. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert und nach dem Speichern nicht mehr angezeigt.</p>
+            </div>
+
+            <div id="provider-api-style-row" class="hidden provider-flow-group">
+              <div class="popup-flow-subhead">API-Stil</div>
+              <label class="visually-hidden" for="select-api-style">API-Stil</label>
+              <select id="select-api-style" class="modal-input" aria-describedby="provider-api-style-hint"></select>
+              <p id="provider-api-style-hint" class="modal-hint">Die meisten Server können nur <code>/chat/completions</code>. <code>/responses</code> nur wählen, wenn der Dienst es ausdrücklich anbietet.</p>
             </div>
 
             <div id="provider-insecure-row" class="hidden modal-checkbox-row">
@@ -937,6 +971,22 @@
                 <span>TLS-Zertifikat ignorieren (insecure)</span>
               </label>
               <p class="modal-hint">Nur bei selbstsigniertem oder intern signiertem Zertifikat, dem du vertraust.</p>
+            </div>
+
+            <div id="provider-send-tools-row" class="hidden modal-checkbox-row">
+              <label class="modal-checkbox">
+                <input type="checkbox" id="input-send-tools" />
+                <span>Tools mitschicken</span>
+              </label>
+              <p class="modal-hint">Abschalten, wenn der Server an Tool-Schemata scheitert — dann bleibt es beim reinen Chat.</p>
+            </div>
+
+            <div id="provider-supports-images-row" class="hidden modal-checkbox-row">
+              <label class="modal-checkbox">
+                <input type="checkbox" id="input-supports-images" />
+                <span>Bild-Anhänge erlauben</span>
+              </label>
+              <p class="modal-hint">Nur einschalten, wenn das Modell dahinter Bilder versteht. Sonst werden Anhänge im Chat gar nicht erst angeboten.</p>
             </div>
 
             <div class="provider-form-grid-popup">
@@ -949,6 +999,9 @@
                 <div class="popup-flow-subhead">Modell</div>
                 <div class="modal-row">
                   <select id="select-model" class="modal-input modal-input--grow"></select>
+                  <label class="visually-hidden" for="input-model">Modellname</label>
+                  <input type="text" id="input-model" class="modal-input modal-input--grow hidden" list="model-name-options" autocomplete="off" spellcheck="false" aria-describedby="model-status" />
+                  <datalist id="model-name-options"></datalist>
                   <button type="button" id="btn-load-models" class="btn-secondary">Modelle laden</button>
                 </div>
                 <p id="model-status" class="modal-hint"></p>

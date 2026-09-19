@@ -31,6 +31,30 @@ const mockProviders = {
         presentation: {},
       };
     }
+    // Der generische Anbieter aus Issue #193.
+    if (id === 'openai-compatible') {
+      return {
+        id: 'openai-compatible',
+        name: 'OpenAI-kompatibel',
+        defaultModel: '',
+        optionalApiKey: true,
+        defaultBaseUrl: 'http://localhost:1234/v1',
+        defaultApiStyle: 'chat',
+        defaultSendTools: true,
+        defaultSupportsImages: false,
+        fields: {
+          apiKey: true,
+          baseUrl: true,
+          insecureTls: true,
+          displayName: true,
+          apiStyle: true,
+          extraHeaders: true,
+          supportsImages: true,
+          sendTools: true,
+        },
+        presentation: {},
+      };
+    }
     return null;
   },
 };
@@ -556,4 +580,80 @@ test('folder history: removing an entry leaves the folder and last-folder.json u
   assert.deepEqual(await storage.getValidatedFolderHistory(), []);
   assert.equal(await storage.getValidatedLastFolder(), ws);
   assert.ok((await fs.stat(ws)).isDirectory());
+});
+
+// --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------
+
+test('getEffectiveProviderConfig liefert die neuen Felder mit ihren Voreinstellungen', async (t) => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  const storage = makeStorageWithEncryption(tmp);
+
+  await storage.writeLLMConfig({
+    version: 3,
+    activeProvider: 'openai-compatible',
+    providers: { 'openai-compatible': { baseUrl: 'http://localhost:1234/v1' } },
+    presets: [],
+  });
+
+  const config = await storage.getEffectiveProviderConfig('openai-compatible');
+  assert.equal(config.baseUrl, 'http://localhost:1234/v1');
+  assert.equal(config.apiStyle, 'chat');
+  assert.equal(config.sendTools, true);
+  assert.equal(config.supportsImages, false);
+  assert.equal(config.displayName, '');
+  assert.equal(config.insecureTls, false);
+  // Ohne gespeicherte Header fehlt das Feld ganz — kein leerer Platzhalter.
+  assert.equal('extraHeaders' in config, false);
+  // Ohne Key auch kein Key-Feld: „kein Key" ist hier ein gueltiger Zustand.
+  assert.equal('apiKey' in config, false);
+});
+
+test('gespeicherte Zusatz-Header kommen entschluesselt heraus', async (t) => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  const storage = makeStorageWithEncryption(tmp);
+
+  await storage.writeLLMConfig({
+    version: 3,
+    activeProvider: 'openai-compatible',
+    providers: {
+      'openai-compatible': {
+        baseUrl: 'https://gw.intern.example/v1',
+        apiKeyEnc: Buffer.from('enc:sk-gw', 'utf8').toString('base64'),
+        extraHeadersEnc: Buffer.from('enc:X-Tenant: acme', 'utf8').toString('base64'),
+        apiStyle: 'full',
+        sendTools: false,
+        supportsImages: true,
+        displayName: 'Gateway',
+      },
+    },
+    presets: [],
+  });
+
+  const config = await storage.getEffectiveProviderConfig('openai-compatible');
+  assert.equal(config.apiKey, 'sk-gw');
+  assert.equal(config.extraHeaders, 'X-Tenant: acme');
+  assert.equal(config.apiStyle, 'full');
+  assert.equal(config.sendTools, false);
+  assert.equal(config.supportsImages, true);
+  assert.equal(config.displayName, 'Gateway');
+});
+
+test('ein unlesbares Header-Geheimnis liefert lieber nichts als Datenmuell', async (t) => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-compat-'));
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  const storage = makeStorageWithEncryption(tmp);
+
+  await storage.writeLLMConfig({
+    version: 3,
+    activeProvider: 'openai-compatible',
+    providers: {
+      'openai-compatible': { baseUrl: 'x', extraHeadersEnc: Buffer.from('kaputt').toString('base64') },
+    },
+    presets: [],
+  });
+
+  const config = await storage.getEffectiveProviderConfig('openai-compatible');
+  assert.equal('extraHeaders' in config, false);
 });

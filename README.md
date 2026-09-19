@@ -34,7 +34,7 @@ Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft 
 - **Node.js** ≥ 24 (Active LTS, siehe `.nvmrc`; mit nvm: `nvm use`)
 - **npm** (kommt mit Node)
 - macOS, Windows oder Linux
-- Optional: API-Key für OpenAI / Anthropic / Google bzw. ein lokales [Ollama](https://ollama.com/)
+- Optional: API-Key für OpenAI / Anthropic / Google, ein lokales [Ollama](https://ollama.com/) oder irgendein anderer Server mit OpenAI-kompatibler Schnittstelle (LM Studio, llama.cpp, vLLM, OpenRouter, ein Firmen-Gateway — siehe [Anbieter](#anbieter))
 
 ## Schnellstart
 
@@ -125,7 +125,7 @@ Wirkung. Dort ist das `.deb` die Lösung.
 - **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button.
 - **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rlse` findet z. B. `docs/release.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/release.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
 - **Dateien aus dem Baum übernehmen (Maus):** Was du im Dateibaum schon vor Augen hast, musst du nicht abtippen. Zieh die Datei oder den Ordner aus dem Baum in die Chat-Eingabe — eingefügt wird an der Cursorposition der Pfad **relativ zur Projektwurzel** (`@docs/release.md`, Ordner mit `/` am Ende), nicht der absolute Pfad. Ohne Ziehen geht es über den `@`-Knopf, der rechts in der Zeile erscheint, sobald du mit der Maus über die Zeile fährst oder den Knopf per Tabulator ansteuerst. Der einfache Klick auf eine Zeile bleibt, was er war: auswählen und Vorschau zeigen; das Verschieben im Baum per Drag & Drop ebenfalls.
-- **Screenshots einfügen:** Ein Bild in der Zwischenablage (macOS `Cmd+Ctrl+Shift+4`, Windows Snipping Tool) landet mit `Cmd/Ctrl+V` als Anhang über der Eingabezeile — mit Vorschau, Dateigröße und einem Knopf zum Entfernen. Der getippte Text bleibt dabei unberührt; ein Screenshot ohne Begleitfrage lässt sich ebenfalls abschicken. Erlaubt sind PNG, JPEG, GIF und WebP, bis zu 4 Bilder je Nachricht und 5 MB pro Bild; größere Bilder werden vor dem Senden auf 1568 px längste Kante verkleinert. Weil ein Screenshot oft mehr zeigt, als man bewusst teilen will, siehst du vor dem Senden immer die Vorschau — bei einem Cloud-Anbieter verlässt das Bild deinen Rechner. Bilder weiterreichen kann derzeit nur **OpenAI**: Ist ein anderer Anbieter aktiv, wird das Einfügen mit einem Hinweis in der Statuszeile abgelehnt, statt still zu verschwinden — und hängst du ein Bild an und wechselst danach auf ein Modell ohne Bild-Unterstützung, sagt Snotra das beim Senden, bevor die Anfrage rausgeht. Im gespeicherten Verlauf sind Bilder noch nicht enthalten.
+- **Screenshots einfügen:** Ein Bild in der Zwischenablage (macOS `Cmd+Ctrl+Shift+4`, Windows Snipping Tool) landet mit `Cmd/Ctrl+V` als Anhang über der Eingabezeile — mit Vorschau, Dateigröße und einem Knopf zum Entfernen. Der getippte Text bleibt dabei unberührt; ein Screenshot ohne Begleitfrage lässt sich ebenfalls abschicken. Erlaubt sind PNG, JPEG, GIF und WebP, bis zu 4 Bilder je Nachricht und 5 MB pro Bild; größere Bilder werden vor dem Senden auf 1568 px längste Kante verkleinert. Weil ein Screenshot oft mehr zeigt, als man bewusst teilen will, siehst du vor dem Senden immer die Vorschau — bei einem Cloud-Anbieter verlässt das Bild deinen Rechner. Bilder weiterreichen kann **OpenAI** und, wenn du den Schalter „Bild-Anhänge erlauben“ setzt, der Anbieter **OpenAI-kompatibel**: Ist ein anderer Anbieter aktiv, wird das Einfügen mit einem Hinweis in der Statuszeile abgelehnt, statt still zu verschwinden — und hängst du ein Bild an und wechselst danach auf ein Modell ohne Bild-Unterstützung, sagt Snotra das beim Senden, bevor die Anfrage rausgeht. Im gespeicherten Verlauf sind Bilder noch nicht enthalten.
 - **Was das Modell davon sieht:** nur die Referenz im Text. Der System-Prompt erklärt die `@pfad`-Konvention; die Datei liest das Modell bei Bedarf selbst über die Lese-Tools, Inhalte werden nicht automatisch eingebettet (Token-Ziel).
 
 - **Python ausführen (standardmäßig aus):** Nach dem Einschalten unter Einstellungen › Tools › „Python ausführen“ bekommt das Modell das Tool `run_python`: es schreibt ein Python-3-Programm, Snotra führt es im geöffneten Projektordner aus und gibt Ausgabe, Fehlerausgabe und Exit-Code zurück. Damit werden Auswertungen gerechnet statt geschätzt — Summen über eine CSV, Umrechnungen, Datenumformung, Regex an echten Beispielen prüfen. Jeder Aufruf ist ein frisches Skript, es gibt keinen Zustand zwischen Aufrufen und kein `pip install`; welche Pakete verfügbar sind, bestimmst du über einen eigenen Interpreter-Pfad (z. B. ein venv). Gesucht wird der Interpreter in **deinem** PATH — Snotra liest ihn beim Start einmal aus deinem Shell-Profil, damit auch eine aus dem Finder gestartete App den Homebrew-, pyenv- oder asdf-Python findet statt des System-Python; Unterprozesse im Skript (`subprocess`) sehen denselben PATH. Welcher Interpreter gefunden wurde, steht unter Einstellungen › Tools.
@@ -139,7 +139,41 @@ Wirkung. Dort ist das `.deb` die Lösung.
 - **Websuche:** Mit einem hinterlegten Tavily-Schlüssel (Einstellungen › Tools › Websuche) bekommt das Modell das Tool `web_search` — es liefert Titel, URL und einen kurzen Auszug je Treffer, keine ganzen Seiten. Ohne Schlüssel wird das Tool gar nicht erst angeboten. Die Suchanfrage verlässt deinen Rechner, deshalb ist das Tool als **externer Dienst** eingestuft: im Modus „Intelligent“ fragt Snotra vor jeder Suche nach. Einen kostenlosen Schlüssel gibt es unter [app.tavily.com](https://app.tavily.com); er wird wie die Modell-Schlüssel verschlüsselt abgelegt. Einen geöffneten Projektordner braucht die Suche nicht — anders als die Datei-Tools steht sie auch im leeren Chat zur Verfügung.
 - **Seiten lesen:** Was `web_search` an Adressen findet, liest das Tool `fetch_url` am Stück: es ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite statt des HTML — gekürzt, ohne Skripte und Navigation. Gedacht für das, was über den kurzen Auszug hinausgeht: ein Changelog, eine Norm, eine lange Fehlermeldung. Auch dieses Tool ist ein **externer Dienst** und braucht keinen Projektordner; einzurichten gibt es nichts. Abgelehnt werden lokale und private Adressen (`localhost`, Heimnetz, Cloud-Metadaten) — auch dann, wenn eine Weiterleitung erst dorthin führt — sowie alles, was kein Text ist: PDF, Bilder und Downloads holt Snotra nicht. **Der gelesene Text kommt von einem Fremden**: er ist für das Modell Material, kein Auftrag, und jeder Tool-Aufruf danach läuft erneut durch die Freigabe.
 
-**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (Ollama/MLX-LM) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
+**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Ollama und MLX-LM gelten immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
+
+## Anbieter
+
+Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Sechs Anbieter stehen zur Wahl:
+
+| Anbieter | Zugang | Bemerkung |
+| -------- | ------ | --------- |
+| **OpenAI** | API-Key | Spricht die Responses-API; kann Bilder und Reasoning-Level |
+| **Anthropic** | API-Key | |
+| **Google** | API-Key | |
+| **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |
+| **MLX-LM (lokal)** | Server-URL | `mlx_lm.server` auf Apple Silicon |
+| **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle |
+
+### OpenAI-kompatibel
+
+Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks. Es gibt bewusst *einen* solchen Eintrag — wer das Ziel wechselt, ändert URL und Schlüssel.
+
+Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil vor (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, „Eigener Endpunkt“); danach ist jedes Feld frei änderbar, und die Vorlage selbst wird nicht gespeichert. Die Felder:
+
+| Feld | Bedeutung |
+| ---- | --------- |
+| **Server-URL** | Wurzel der API, z. B. `http://localhost:1234/v1`. Pflichtangabe; ein Schrägstrich am Ende wird abgeschnitten |
+| **API-Schlüssel** | **Optional.** Leer lassen heißt: es geht *kein* `Authorization`-Header hinaus — der Normalfall bei lokalen Servern. Mit Schlüssel: `Authorization: Bearer …` |
+| **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“). Leer lassen für „OpenAI-kompatibel“ |
+| **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen |
+| **API-Stil** | „Nur Chat Completions“ (Standard, passt fast immer) oder „Responses, sonst Chat Completions“. Geraten wird nichts; bei `404`/`405` auf `/responses` fällt Snotra genau einmal zurück und bleibt für die Sitzung dabei |
+| **TLS-Zertifikat ignorieren** | Wie bei Ollama, nur für selbst- oder intern signierte Zertifikate, denen du vertraust |
+| **Tools mitschicken** | Standardmäßig an. Aus lassen bei Servern, die an Tool-Schemata scheitern — dann bleibt es beim reinen Chat |
+| **Bild-Anhänge erlauben** | Standardmäßig aus. An nur, wenn das Modell dahinter Bilder versteht; sonst werden Anhänge im Chat gar nicht erst angeboten |
+
+**Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt.
+
+**Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama und MLX-LM.
 
 ## Konfiguration
 

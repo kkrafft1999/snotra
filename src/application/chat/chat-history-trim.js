@@ -5,6 +5,7 @@
 // Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter.
 
 const { attachmentsCharCost } = require('../../shared/contracts/attachments');
+const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
 
 const CHARS_PER_TOKEN = 4;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
@@ -26,16 +27,28 @@ function clampHistoryCharLimit(raw) {
   return Math.min(HISTORY_CHAR_LIMIT_MAX, Math.max(HISTORY_CHAR_LIMIT_MIN, Math.round(raw)));
 }
 
-function isLocalProvider(providerId) {
-  return typeof providerId === 'string' && LOCAL_PROVIDER_IDS.has(providerId.trim().toLowerCase());
+/**
+ * Lokal ist, wessen ID in der Liste steht **oder** wessen Server-URL auf diesen
+ * Rechner zeigt (Issue #193). Die zweite Haelfte gibt es, seit ein Anbieter
+ * dieselbe ID fuer localhost und fuer ein Gateway im Netz benutzt; sie greift
+ * zusaetzlich und nimmt den bestehenden IDs nichts weg.
+ */
+function isLocalProvider(providerId, baseUrl) {
+  if (typeof providerId === 'string' && LOCAL_PROVIDER_IDS.has(providerId.trim().toLowerCase())) {
+    return true;
+  }
+  return isLocalEndpoint(baseUrl);
 }
 
-function defaultHistoryCharLimit(providerId) {
-  return isLocalProvider(providerId) ? DEFAULT_LOCAL_HISTORY_CHAR_LIMIT : DEFAULT_HISTORY_CHAR_LIMIT;
+function defaultHistoryCharLimit(providerId, baseUrl) {
+  return isLocalProvider(providerId, baseUrl)
+    ? DEFAULT_LOCAL_HISTORY_CHAR_LIMIT
+    : DEFAULT_HISTORY_CHAR_LIMIT;
 }
 
-function resolveHistoryCharLimit(uiPrefs, providerId) {
-  return clampHistoryCharLimit(uiPrefs?.historyCharLimit) ?? defaultHistoryCharLimit(providerId);
+function resolveHistoryCharLimit(uiPrefs, providerId, baseUrl) {
+  return clampHistoryCharLimit(uiPrefs?.historyCharLimit)
+    ?? defaultHistoryCharLimit(providerId, baseUrl);
 }
 
 function estimateMessageChars(message) {

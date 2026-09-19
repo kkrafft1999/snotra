@@ -41,6 +41,11 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     return target.model || baseConfig?.model || provider.defaultModel;
   }
 
+  function providerDisplayName(provider, config) {
+    const custom = typeof config?.displayName === 'string' ? config.displayName.trim() : '';
+    return custom || provider.name;
+  }
+
   async function resolveChatTarget() {
     const config = await llmConfigStore.readLLMConfig();
     const raw = llmConfigStore.resolveChatModelTarget(config);
@@ -64,7 +69,9 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     }
 
     const providerConfig = await providerSecrets.getEffectiveProviderConfig(target.providerId);
-    if (provider.fields?.apiKey && !providerConfig?.apiKey) {
+    // Ein Anbieter mit optionalem Key (Issue #193) darf ohne Key laufen — ein
+    // lokaler Server verlangt keinen.
+    if (provider.fields?.apiKey && provider.optionalApiKey !== true && !providerConfig?.apiKey) {
       const suffix = forSend ? ' Bitte in den Einstellungen speichern.' : '';
       return createChatErrorResult({
         error: `Kein API-Key für ${provider.name} hinterlegt.${suffix}`,
@@ -88,8 +95,12 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     return {
       config,
       model,
-      providerName: provider.name,
-      capabilities: { images: provider.capabilities?.images === true },
+      // Der Anzeigename gehoert in jede Meldung, die den Anbieter nennt —
+      // sonst steht „OpenAI-kompatibel" da, wo der Nutzer „LM Studio" sieht.
+      providerName: providerDisplayName(provider, config),
+      capabilities: typeof provider.capabilitiesFor === 'function'
+        ? { images: provider.capabilitiesFor(config)?.images === true }
+        : { images: provider.capabilities?.images === true },
     };
   }
 

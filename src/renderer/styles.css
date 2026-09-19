@@ -3525,6 +3525,22 @@ select.modal-input {
   line-height: var(--ds-line-height-prose, 1.5);
 }
 
+/* Zusatz-Header im Anbieter-Popup (Issue #193): drei Zeilen reichen fuer den
+ * Normalfall, der Rest kommt ueber resize. Ohne die eigene Untergrenze zoege
+ * .modal-textarea das Feld auf 120px und schoebe Server-URL und Modell aus dem
+ * sichtbaren Bereich. */
+.modal-textarea--short {
+  min-height: 72px;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-md);
+}
+
+/* Der Papierkorb steht oben am Feld, nicht mittig daneben: Bei einem mehr-
+ * zeiligen Feld wandert er sonst mit der Hoehe nach unten weg. */
+#provider-extra-headers-row .settings-icon-trash {
+  align-self: flex-start;
+}
+
 /* Schalter in einer Feldgruppe (Umgebungsinformationen, Issue #138): braucht
  * denselben Abstand zur erklaerenden Notiz wie ein Eingabefeld. */
 .modal-field-group > .modal-checkbox {
@@ -3622,6 +3638,27 @@ select.modal-input {
   border-radius: var(--ds-radius-md);
   background: var(--ds-grey-bg);
   padding: 14px 16px 14px;
+}
+
+/* Feldgruppe im Anbieter-Popup: Feld + Hinweis gehoeren zusammen, die
+ * naechste Ueberschrift nicht mehr dazu. Der Hinweis hat nur 4px Abstand nach
+ * oben und keinen nach unten, und die Ueberschrift verliert in ihrem eigenen
+ * Wrapper das :first-of-type-Margin — ohne diesen Abstand klebte jeder
+ * Hinweistext an der Ueberschrift darunter und las sich wie deren Einleitung
+ * (Issue #193). */
+.provider-flow-group {
+  margin-bottom: 14px;
+}
+
+/* Modellzeile: Bei frei eingetragenem Namen muss man lesen koennen, was
+ * dasteht. Neben „Modelle laden" blieben in der halbbreiten Spalte nur rund
+ * acht Zeichen uebrig — deshalb darf der Knopf umbrechen (Issue #193). */
+.popup-model-slot .modal-row {
+  flex-wrap: wrap;
+}
+
+#input-model {
+  flex: 1 1 180px;
 }
 
 .provider-form-grid-popup {
