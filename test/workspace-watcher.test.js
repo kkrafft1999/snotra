@@ -160,6 +160,48 @@ test('kann die Plattform nicht rekursiv beobachten, bleibt ein flacher Wächter'
   assert.deepEqual(versuche, [false, true, false], 'anklopfen, rekursiv versuchen, flach nehmen');
 });
 
+test('beobachtet wird der aufgelöste Pfad, gemeldet der angezeigte', () => {
+  // Der Windows-Fall: TEMP ist ein 8.3-Kurzname, `fs.watch` meldet die
+  // Langform — und libuv bricht darüber den ganzen Prozess ab. Beobachtet wird
+  // deshalb aufgelöst. Der Renderer kennt seinen Baum aber unter dem
+  // angezeigten Pfad, also muss die Meldung dorthin zurückübersetzt werden.
+  const KURZ = path.join(path.sep, 'PROJEK~1', 'demo');
+  const fake = createFakeWatch();
+  const clock = createFakeClock();
+  const meldungen = [];
+  const watcher = createWorkspaceWatcher({
+    watch: fake.watch,
+    path,
+    realpath: (dir) => (dir === KURZ ? WS : dir),
+    onChange: (payload) => meldungen.push(payload),
+    setTimeoutImpl: clock.setTimeoutImpl,
+    clearTimeoutImpl: clock.clearTimeoutImpl,
+    nowImpl: clock.nowImpl,
+  });
+
+  watcher.watchWorkspace(KURZ);
+  assert.deepEqual(watcher.watchedDirectories(), [{ dir: WS, isTarget: true }], 'beobachtet: aufgelöst');
+
+  fake.aktiv(WS).handler('rename', path.join('docs', 'notiz.md'));
+  clock.tick();
+  assert.deepEqual(meldungen[0].directories, [path.join(KURZ, 'docs')], 'gemeldet: angezeigt');
+});
+
+test('lässt sich der Pfad nicht auflösen, bleibt es beim angezeigten', () => {
+  const fake = createFakeWatch();
+  const watcher = createWorkspaceWatcher({
+    watch: fake.watch,
+    path,
+    realpath: () => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    },
+    onChange: () => {},
+  });
+  watcher.watchWorkspace(WS);
+  // Der Watcher scheitert dann sauber am fehlenden Ordner, nicht hier.
+  assert.deepEqual(watcher.watchedDirectories(), [{ dir: WS, isTarget: true }]);
+});
+
 test('ohne geöffneten Ordner wird nichts beobachtet', () => {
   const { watcher } = setupWorkspace();
   watcher.watchWorkspace(null);
@@ -404,13 +446,35 @@ test('das Ereignis-DTO räumt die Liste auf und kappt sie bei 200', () => {
 // ── Gegen das echte Dateisystem ────────────────────────────────────────────
 
 /**
+ * Unter Windows ist TEMP oft ein 8.3-Kurzname (C:\Users\RUNNER~1\...), und
+ * `fs.watch` meldet Pfade dann in der Langform. libuv verträgt das nicht: Es
+ * bricht mit einer nativen Assertion ab (`!_wcsnicmp(filename, dir, dirlen)`,
+ * `src\win\fs-event.c`) und reißt den ganzen Testprozess mit — nachgemessen
+ * am 2026-09-19 im Windows-CI. Einmal auflösen, damit Anlegen und Beobachten
+ * denselben Pfad meinen; dieselbe Lektion steckt in
+ * `test/skills-watcher.test.js`.
+ */
+async function makeTempRoot(prefix) {
+  const dir = await nodeFs.promises.mkdtemp(nodePath.join(os.tmpdir(), prefix));
+  return nodeFs.promises.realpath(dir);
+}
+
+// Stürzt der Prozess in einem der Läufe unten ab, meldet node:test nur ein
+// nacktes „test failed“ für die ganze Datei. Diese Zeilen machen die Ursache
+// sichtbar.
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT in workspace-watcher.test.js:', error);
+  process.exit(1);
+});
+
+/**
  * Die Ersatz-Watcher oben prüfen die Logik. Ob `fs.watch` auf dieser
  * Plattform wirklich das meldet, worauf der Dateibaum baut — einen rekursiven
  * Wächter samt relativem Pfad —, kann nur ein echter Lauf beantworten.
  */
 function realWatcherTest(name, run) {
   test(name, { timeout: 15000 }, async (t) => {
-    const root = await nodeFs.promises.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-ws-watch-'));
+    const root = await makeTempRoot('snotra-ws-watch-');
     const meldungen = [];
     let aufwecken = null;
     const watcher = createWorkspaceWatcher({

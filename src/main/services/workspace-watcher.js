@@ -78,29 +78,62 @@ function isIgnoredWorkspacePath(relativePath) {
   return segments.slice(0, -1).some((segment) => IGNORED_CONTENT_DIRS.has(segment));
 }
 
-function createWorkspaceWatcher({ watch, path, onChange, ...watcherOptions }) {
+/**
+ * @param {object} options
+ * @param {Function} options.watch `fs.watch`.
+ * @param {object} options.path Pfad-Modul.
+ * @param {Function} [options.realpath] `fs.realpathSync.native` — siehe unten.
+ * @param {Function} options.onChange Meldung mit `{ directories, complete }`.
+ */
+function createWorkspaceWatcher({ watch, path, onChange, realpath = null, ...watcherOptions }) {
   if (typeof watch !== 'function') throw new TypeError('createWorkspaceWatcher benötigt watch.');
   if (!path) throw new TypeError('createWorkspaceWatcher benötigt path.');
   if (typeof onChange !== 'function') throw new TypeError('createWorkspaceWatcher benötigt onChange.');
+
+  /**
+   * Der Pfad, unter dem der Renderer den Baum kennt — nicht zwingend der, den
+   * `fs.watch` bekommt (siehe `watchablePath`). Gemeldet wird immer in dieser
+   * Schreibweise, sonst fände der Renderer seine Ordner nicht wieder.
+   */
+  let angezeigterRoot = null;
+
+  /**
+   * Windows verträgt keinen 8.3-Kurznamen im beobachteten Pfad: Meldet der
+   * Wächter danach die Langform, bricht libuv mit einer nativen Assertion ab
+   * (`!_wcsnicmp(filename, dir, dirlen)`, `src\win\fs-event.c`) — und das
+   * reißt den ganzen Prozess mit, kein Fehler, den man fangen könnte
+   * (nachgemessen 2026-09-19 im Windows-CI). Beobachtet wird deshalb die
+   * aufgelöste Form; gemeldet weiterhin die angezeigte.
+   */
+  function watchablePath(root) {
+    if (typeof realpath !== 'function') return root;
+    try {
+      return realpath(root);
+    } catch {
+      // Gibt es den Ordner (noch) nicht, bleibt es beim angezeigten Pfad —
+      // der Watcher scheitert dann sauber an ENOENT statt hier.
+      return root;
+    }
+  }
 
   return createDirectoryWatcher({
     watch,
     path,
     resolveTargets: (workspaceRoot) => {
-      const root =
+      angezeigterRoot =
         typeof workspaceRoot === 'string' && workspaceRoot.trim()
           ? path.resolve(workspaceRoot)
           : null;
       // Ohne geöffneten Ordner gibt es nichts zu beobachten. Und der Root
       // selbst braucht keine Kette nach oben — er existiert.
-      return root ? [{ dir: root, fallbackLevels: 0 }] : [];
+      return angezeigterRoot ? [{ dir: watchablePath(angezeigterRoot), fallbackLevels: 0 }] : [];
     },
     ignores: isIgnoredWorkspacePath,
     changedDirectoryFor: (relativePath, targetDir) => {
       // Ein Git-Signal sagt „hier wurde großflächig getauscht“, aber nicht wo.
       // `null` heißt: nicht zuzuordnen — der Empfänger lädt gröber neu.
       if (isGitSignal(relativePath)) return null;
-      return path.dirname(path.join(targetDir, relativePath));
+      return path.dirname(path.join(angezeigterRoot ?? targetDir, relativePath));
     },
     onChange,
     ...watcherOptions,

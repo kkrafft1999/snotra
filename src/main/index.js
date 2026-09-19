@@ -1,8 +1,9 @@
 const { app, ipcMain, dialog, safeStorage, Menu, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
-// Nur fuer den Skill-Watcher (Issue #126): fs/promises kennt kein watch().
-const { watch: watchFile } = require('fs');
+// Nur fuer die Datei-Watcher (Issues #126, #158): fs/promises kennt weder
+// watch() noch realpathSync.native.
+const { watch: watchFile, realpathSync } = require('fs');
 const providers = require('./providers');
 const { createWindow, getMainWindow } = require('./window');
 const { registerMediaCapturePermissions } = require('./permissions');
@@ -157,6 +158,7 @@ app.whenReady().then(async () => {
     LIMITS,
     defaultProviderId: DEFAULT_PROVIDER,
     watchFile,
+    realpathNative: realpathSync.native,
   });
 
   Menu.setApplicationMenu(buildApplicationMenu());

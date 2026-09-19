@@ -90,6 +90,12 @@ function createApplication({
    * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
    */
   watchFile = null,
+  /**
+   * `fs.realpathSync.native`, aus demselben Grund von aussen hereingereicht.
+   * Nur der Dateibaum-Watcher braucht es — und nur, um Windows nicht an einem
+   * 8.3-Kurznamen abstuerzen zu lassen (Issue #158).
+   */
+  realpathNative = null,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -360,6 +366,9 @@ function createApplication({
     ? createWorkspaceWatcher({
         watch: watchFile,
         path,
+        // Nur zum Beobachten: Ein 8.3-Kurzname im Pfad bringt libuv unter
+        // Windows zum Abbruch des ganzen Prozesses (siehe workspace-watcher).
+        realpath: realpathNative,
         onChange: ({ directories, complete }) => {
           const win = getMainWindow();
           if (!win || win.isDestroyed()) return;
