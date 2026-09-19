@@ -10,7 +10,11 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
         return createListModelsResult({ error: 'Unbekannter Provider.' });
       }
 
-      const stored = (await providerSecrets.getEffectiveProviderConfig(providerId)) || {};
+      // Bei `connectionPerPreset` liegt die gespeicherte Verbindung am Eintrag
+      // (Issue #202); `presetId` sagt, an welchem.
+      const stored = (await providerSecrets.getEffectiveProviderConfig(providerId, {
+        presetId: request.presetId,
+      })) || {};
       const config = {
         signal: request.signal,
         apiKey: request.apiKey || stored.apiKey || '',
@@ -21,12 +25,15 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
               ? stored.insecureTls
               : provider.defaultInsecureTls === true),
       };
-      // Zusatz-Header gehoeren zur Verbindung und muessen deshalb auch beim
-      // Abruf der Modellliste mit (Issue #193). Sie kommen ausschliesslich aus
-      // dem verschluesselten Speicher — der Renderer kennt sie nicht und kann
-      // sie im Request nicht mitschicken.
-      if (typeof stored.extraHeaders === 'string' && stored.extraHeaders) {
-        config.extraHeaders = stored.extraHeaders;
+      // Zusatz-Header gehoeren zur Verbindung und muessen auch beim Abruf der
+      // Modellliste mit (Issue #193). Frisch getippte kommen aus dem Request,
+      // sonst aus dem verschluesselten Speicher — der Renderer kennt die
+      // gespeicherten nie.
+      const extraHeaders = typeof request.extraHeaders === 'string' && request.extraHeaders.trim()
+        ? request.extraHeaders
+        : stored.extraHeaders;
+      if (typeof extraHeaders === 'string' && extraHeaders) {
+        config.extraHeaders = extraHeaders;
       }
 
       try {

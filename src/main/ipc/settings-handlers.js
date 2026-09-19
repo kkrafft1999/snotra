@@ -6,6 +6,11 @@ const {
   normalizeListModelsRequest,
   normalizeUiPrefsPatch,
   isApiStyle,
+  LLM_CONFIG_VERSION,
+  hasPresetConnection,
+  normalizePresetConnectionPatch,
+  normalizeStoredPresetConnection,
+  PRESET_CONNECTION_PLAIN_FIELDS,
 } = require('../../shared/contracts/settings');
 
 function registerSettingsHandlers({
@@ -48,6 +53,15 @@ function registerSettingsHandlers({
         apiKeyDecryptable[providerId] = canDecryptApiKeyEnc(safeStorage, entry.apiKeyEnc);
       }
     }
+    // Verbindung je Eintrag (Issue #202): Der Schluessel haengt an der Zeile,
+    // also auch die Frage, ob er noch lesbar ist. Eigener Namensraum, damit
+    // eine Preset-Kennung nie eine Provider-ID ueberschreibt.
+    for (const preset of Array.isArray(config.presets) ? config.presets : []) {
+      const enc = preset?.connection?.apiKeyEnc;
+      if (preset?.id && enc) {
+        apiKeyDecryptable[`preset:${preset.id}`] = canDecryptApiKeyEnc(safeStorage, enc);
+      }
+    }
     return presentationService.buildLlmStateDto({
       encryptionAvailable,
       config: { ...config, presets: presetsWire },
@@ -75,18 +89,23 @@ function registerSettingsHandlers({
       }
       const meta = providerCatalog.getProvider(preset.providerId);
       const entry = (config.providers && config.providers[preset.providerId]) || {};
-      if (!isProviderConfigured({ safeStorage }, meta, entry)) {
+      if (!isProviderConfigured({ safeStorage }, meta, entry, preset)) {
         validationError = createSettingsError('Anbieter ist noch nicht konfiguriert.');
         return config;
       }
       config.activePresetId = presetId.trim();
       config.activeProvider = preset.providerId;
       config.providers = config.providers || {};
-      const pe = { ...(config.providers[preset.providerId] || {}) };
-      pe.model = typeof preset.model === 'string' && preset.model.trim()
-        ? preset.model.trim()
-        : meta.defaultModel;
-      config.providers[preset.providerId] = pe;
+      // Bei Verbindung je Eintrag gibt es keinen Anbieter-Eintrag mehr, in den
+      // das aktive Modell gespiegelt werden koennte — und er wuerde beim
+      // naechsten Lesen ohnehin wieder wegmigriert (Issue #202).
+      if (!hasPresetConnection(meta)) {
+        const pe = { ...(config.providers[preset.providerId] || {}) };
+        pe.model = typeof preset.model === 'string' && preset.model.trim()
+          ? preset.model.trim()
+          : meta.defaultModel;
+        config.providers[preset.providerId] = pe;
+      }
       return config;
     });
     if (validationError) return validationError;
@@ -132,6 +151,16 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_COMMIT_SETTINGS, async (_event, payload) => {
     const uiPatch = normalizeUiPrefsPatch(payload?.uiPrefs);
     const rawPresets = Array.isArray(payload?.presets) ? payload.presets : [];
+    // Die Normalisierung wirft Klartext-Geheimnisse weg (und das soll sie).
+    // Der Verbindungs-Entwurf je Zeile wird deshalb vorher aus dem Rohpayload
+    // gezogen und unten unter dem Dateilock verschluesselt (Issue #202).
+    const connectionPatches = new Map();
+    for (const row of rawPresets) {
+      const provider = row?.providerId ? providerCatalog.getProvider(row.providerId) : null;
+      if (!provider || !hasPresetConnection(provider) || typeof row.id !== 'string') continue;
+      const patch = normalizePresetConnectionPatch(row.connection, provider);
+      if (patch) connectionPatches.set(row.id, patch);
+    }
     const presets = rawPresets
       .map((row) => llmConfigStore.normalizePresetEntry(row))
       .filter(Boolean);
@@ -160,7 +189,9 @@ function registerSettingsHandlers({
       if (!meta) continue;
       const patch = patches[pr.providerId];
       const incomingKey = typeof patch?.apiKey === 'string' ? patch.apiKey.trim() : '';
-      if (meta.fields?.apiKey && incomingKey) {
+      const presetPatch = connectionPatches.get(pr.id);
+      const incomingPresetSecret = !!(presetPatch?.apiKey || presetPatch?.extraHeaders);
+      if (meta.fields?.apiKey && (incomingKey || incomingPresetSecret)) {
         if (!safeStorage.isEncryptionAvailable()) {
           return rejectModelPart('Verschlüsselter Speicher ist nicht verfügbar.', uiPatch);
         }
@@ -183,12 +214,35 @@ function registerSettingsHandlers({
           }
         }
 
+        // Verbindung je Eintrag (Issue #202): Was bleibt, kommt aus dem
+        // gespeicherten Eintrag; was neu ist, aus dem Entwurf. Verschluesselt
+        // wird hier, der Klartext geht nicht weiter.
+        const storedById = new Map(
+          (Array.isArray(config.presets) ? config.presets : [])
+            .filter((row) => row && typeof row.id === 'string')
+            .map((row) => [row.id, row])
+        );
+        for (const pr of presets) {
+          const meta = providerCatalog.getProvider(pr.providerId);
+          if (!meta || !hasPresetConnection(meta)) continue;
+          const merged = mergePresetConnection({ safeStorage }, {
+            previous: storedById.get(pr.id)?.connection,
+            patch: connectionPatches.get(pr.id),
+            provider: meta,
+          });
+          if (!merged.ok) {
+            validationError = merged;
+            return config;
+          }
+          pr.connection = merged.connection;
+        }
+
         for (const pr of presets) {
           const meta = providerCatalog.getProvider(pr.providerId);
           const entry = (draft.providers && draft.providers[pr.providerId]) || {};
-          if (!isProviderConfigured({ safeStorage }, meta, entry)) {
+          if (!isProviderConfigured({ safeStorage }, meta, entry, pr)) {
             validationError = createSettingsError(
-              `Zugang für „${meta.name}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
+              `Zugang für „${presetAccessLabel(meta, pr)}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
             );
             return config;
           }
@@ -202,13 +256,17 @@ function registerSettingsHandlers({
           }
         }
 
-        draft.version = 3;
+        // Die Version kommt aus der Contract-Schicht: Eine fest verdrahtete
+        // Zahl hier liesse den naechsten Lesevorgang erneut migrieren und
+        // brach damit den Rollback-Vergleich (Issue #202).
+        draft.version = LLM_CONFIG_VERSION;
         draft.presets = presets;
         draft.activePresetId = activePresetId;
         const target = llmConfigStore.resolveChatModelTarget(draft);
         draft.activeProvider = target.providerId;
         const activeEntryPid = target.providerId;
-        if (activeEntryPid && providerCatalog.getProvider(activeEntryPid)) {
+        const activeMeta = activeEntryPid ? providerCatalog.getProvider(activeEntryPid) : null;
+        if (activeMeta && !hasPresetConnection(activeMeta)) {
           const pe = { ...(draft.providers[activeEntryPid] || {}) };
           pe.model = target.model;
           draft.providers[activeEntryPid] = pe;
@@ -419,6 +477,11 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   const { safeStorage, providerCatalog } = deps;
   const provider = providerCatalog.getProvider(providerId);
   if (!provider) return createSettingsError('Unbekannter Provider.');
+  // Bei Verbindung je Eintrag (Issue #202) gehoert nichts davon unter
+  // `providers`. Der Payload kommt aus dem Renderer und wird nicht geglaubt:
+  // Ein Anbieter-Zugang hier wuerde beim naechsten Lesen ohnehin wegmigriert
+  // und bis dahin eine zweite, konkurrierende Wahrheit sein.
+  if (hasPresetConnection(provider)) return createSettingsOk();
   const prevEntry = (config.providers && config.providers[providerId]) || {};
   const next = { ...prevEntry };
 
@@ -500,7 +563,59 @@ function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
   }
 }
 
-function isProviderConfigured({ safeStorage }, meta, entry) {
+/**
+ * Fuehrt die gespeicherte Verbindung eines Eintrags mit dem Entwurf zusammen
+ * (Issue #202). Geheimnisse werden hier verschluesselt; ein leerer Entwurf
+ * laesst alles stehen, `remove*` loescht gezielt.
+ */
+function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
+  const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
+  const draft = patch && typeof patch === 'object' ? patch : {};
+
+  for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
+    if (draft[key] === undefined) continue;
+    if (key === 'displayName' && !String(draft[key]).trim()) delete next.displayName;
+    else next[key] = draft[key];
+  }
+
+  if (draft.removeApiKey === true) delete next.apiKeyEnc;
+  if (typeof draft.apiKey === 'string' && draft.apiKey.trim()) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+    }
+    next.apiKeyEnc = safeStorage.encryptString(draft.apiKey.trim()).toString('base64');
+  }
+
+  if (draft.removeExtraHeaders === true) delete next.extraHeadersEnc;
+  if (typeof draft.extraHeaders === 'string' && draft.extraHeaders.trim()) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+    }
+    next.extraHeadersEnc = safeStorage.encryptString(draft.extraHeaders.trim()).toString('base64');
+  }
+
+  return { ok: true, connection: normalizeStoredPresetConnection(next, provider) };
+}
+
+/** Beschriftung einer unvollstaendigen Zeile: ihr Name, sonst der des Anbieters. */
+function presetAccessLabel(meta, preset) {
+  const name = preset?.connection?.displayName;
+  return typeof name === 'string' && name.trim() ? name.trim() : meta.name;
+}
+
+/**
+ * @param {object} [preset] Bei `connectionPerPreset` entscheidet die Verbindung
+ *   des Eintrags, nicht die des Anbieters (Issue #202).
+ */
+function isProviderConfigured({ safeStorage }, meta, entry, preset) {
+  if (hasPresetConnection(meta)) {
+    const conn = preset?.connection || {};
+    if (!String(conn.baseUrl || meta.defaultBaseUrl || '').trim()) return false;
+    // Ein gespeicherter, aber nicht mehr lesbarer Schluessel ist schlimmer als
+    // gar keiner: Die Anfrage ginge ohne Authentifizierung hinaus.
+    if (conn.apiKeyEnc && !canDecryptApiKeyEnc(safeStorage, conn.apiKeyEnc)) return false;
+    return true;
+  }
   const baseUrlEff = meta.fields?.baseUrl
     ? (entry.baseUrl || meta.defaultBaseUrl || '')
     : '';
@@ -514,4 +629,9 @@ function isProviderConfigured({ safeStorage }, meta, entry) {
       : true;
 }
 
-module.exports = { registerSettingsHandlers, mergeProviderPatchIntoConfigImpl, canDecryptApiKeyEnc };
+module.exports = {
+  registerSettingsHandlers,
+  mergeProviderPatchIntoConfigImpl,
+  mergePresetConnection,
+  canDecryptApiKeyEnc,
+};

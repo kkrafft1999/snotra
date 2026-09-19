@@ -152,11 +152,15 @@ Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hi
 | **Google** | API-Key | |
 | **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |
 | **MLX-LM (lokal)** | Server-URL | `mlx_lm.server` auf Apple Silicon |
-| **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle |
+| **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle; **Verbindung je Eintrag**, mehrere Ziele nebeneinander |
 
 ### OpenAI-kompatibel
 
-Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks. Es gibt bewusst *einen* solchen Eintrag — wer das Ziel wechselt, ändert URL und Schlüssel.
+Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks.
+
+**Die Verbindung gehört zum Eintrag.** Jede Zeile der Präferenzliste trägt ihre eigene Adresse, ihren eigenen Schlüssel und ihren eigenen Namen — ein lokaler LM-Studio-Server und ein Firmen-Gateway stehen also nebeneinander, ohne sich zu überschreiben. Bei den übrigen fünf Anbietern bleibt es bei einer Konfiguration je Anbieter: Der OpenAI-Schlüssel soll sich gerade *nicht* über mehrere Zeilen verteilen. Der Preis dieser Wahl ist bekannt — wer sechs OpenRouter-Modelle führt, trägt den Schlüssel sechsmal ein und ändert ihn an sechs Stellen.
+
+Eine bestehende Zeile änderst du über das **Stift-Symbol** in der Liste (per Tabulator erreichbar, Enter öffnet). Der Dialog heißt dann *Modell bearbeiten*, der Anbieter steht fest, und **Änderungen übernehmen** ersetzt die Zeile, statt eine neue anzulegen. Gespeicherte Schlüssel und Header bleiben erhalten, solange du sie nicht überschreibst oder mit dem Papierkorb daneben löschst.
 
 Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil vor (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, „Eigener Endpunkt“); danach ist jedes Feld frei änderbar, und die Vorlage selbst wird nicht gespeichert. Die Felder:
 
@@ -164,7 +168,7 @@ Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil v
 | ---- | --------- |
 | **Server-URL** | Wurzel der API, z. B. `http://localhost:1234/v1`. Pflichtangabe; ein Schrägstrich am Ende wird abgeschnitten |
 | **API-Schlüssel** | **Optional.** Leer lassen heißt: es geht *kein* `Authorization`-Header hinaus — der Normalfall bei lokalen Servern. Mit Schlüssel: `Authorization: Bearer …` |
-| **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“). Leer lassen für „OpenAI-kompatibel“ |
+| **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“) und unterscheidet die Zeilen voneinander. Leer lassen für „OpenAI-kompatibel“ |
 | **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen |
 | **API-Stil** | „Nur Chat Completions“ (Standard, passt fast immer) oder „Responses, sonst Chat Completions“. Geraten wird nichts; bei `404`/`405` auf `/responses` fällt Snotra genau einmal zurück und bleibt für die Sitzung dabei |
 | **TLS-Zertifikat ignorieren** | Wie bei Ollama, nur für selbst- oder intern signierte Zertifikate, denen du vertraust |

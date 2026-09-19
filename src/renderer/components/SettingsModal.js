@@ -110,6 +110,8 @@ export function initSettingsModal(deps) {
   const modelLoadProviderLabel = document.getElementById('model-load-provider-label');
   const modelStatus = document.getElementById('model-status');
   const btnAddPresetRow = document.getElementById('btn-add-preset-row');
+  const addModelTitle = document.getElementById('dialog-add-model-title');
+  const addModelIntroLead = document.getElementById('add-model-intro-lead');
   const btnAddModelCloseX = document.getElementById('btn-add-model-close-x');
   const btnAddModelClose = document.getElementById('btn-add-model-close');
   const btnSettingsSave = document.getElementById('btn-settings-save');
@@ -154,6 +156,74 @@ export function initSettingsModal(deps) {
 
   /** Anbieter, dessen Werte gerade im Popup stehen (siehe stashPopupCredentialInputs). */
   let popupProviderId = null;
+  /**
+   * Verbindung je Eintrag (Issue #202): Bei Anbietern mit
+   * `form.connectionPerPreset` bearbeitet das Popup **eine Zeile**, nicht den
+   * Anbieter. `popupEditPresetId` sagt welche (null = neue Zeile),
+   * `popupConnectionDraft` haelt die Werte der laufenden Bearbeitung.
+   */
+  let popupEditPresetId = null;
+  let popupConnectionDraft = null;
+
+  function usesPresetConnection(providerView) {
+    return providerView?.form?.connectionPerPreset === true;
+  }
+
+  /** Leerer Verbindungs-Entwurf aus den Voreinstellungen des Anbieters. */
+  function emptyConnectionDraft(pv) {
+    return {
+      apiKey: '',
+      removeApiKey: false,
+      baseUrl: (pv.defaultBaseUrl || '').trim(),
+      insecureTls: pv.defaultInsecureTls === true,
+      displayName: '',
+      apiStyle: pv.form?.defaultApiStyle || 'chat',
+      extraHeaders: '',
+      removeExtraHeaders: false,
+      supportsImages: false,
+      sendTools: true,
+    };
+  }
+
+  /** Entwurf aus einer bestehenden Zeile; Geheimnisse bleiben leer. */
+  function connectionDraftFromRow(pv, row) {
+    const conn = row?.connection || {};
+    return {
+      ...emptyConnectionDraft(pv),
+      baseUrl: (conn.baseUrl || pv.defaultBaseUrl || '').trim(),
+      insecureTls: conn.insecureTls === true,
+      displayName: typeof conn.displayName === 'string' ? conn.displayName : '',
+      apiStyle: conn.apiStyle || pv.form?.defaultApiStyle || 'chat',
+      supportsImages: conn.supportsImages === true,
+      sendTools: conn.sendTools !== false,
+    };
+  }
+
+  /** Der Entwurf, auf den die Formularfelder gerade schreiben. */
+  function activeDraft(providerId) {
+    const pv = findProviderView(providerId);
+    if (usesPresetConnection(pv)) return popupConnectionDraft;
+    return settingsCredentialDraft[providerId];
+  }
+
+  /**
+   * Was zu diesem Entwurf **gespeichert** ist. Bei Verbindung je Eintrag steht
+   * das an der Zeile, sonst am Anbieter — die Oberflaeche fragt nur, ob ein
+   * Geheimnis liegt, nie welches.
+   */
+  function activeStored(providerId) {
+    const pv = findProviderView(providerId);
+    if (!usesPresetConnection(pv)) {
+      return { hasKey: !!pv.hasKey, keyUnreadable: !!pv.keyUnreadable, hasExtraHeaders: !!pv.hasExtraHeaders };
+    }
+    const row = settingsDraftPresets.find((r) => r.id === popupEditPresetId);
+    const conn = row?.connection || {};
+    return {
+      hasKey: conn.hasKey === true,
+      keyUnreadable: conn.keyUnreadable === true,
+      hasExtraHeaders: conn.hasExtraHeaders === true,
+    };
+  }
 
   function findProviderView(providerId) {
     return findProviderMeta(providerId);
@@ -186,11 +256,19 @@ export function initSettingsModal(deps) {
     return pv.name;
   }
 
+  /**
+   * Verbindung, gegen die eine Zeile beschriftet wird: die eigene der Zeile
+   * (Issue #202), sonst der Entwurf des Anbieters.
+   */
+  function connectionForRow(pr) {
+    if (pr?.connection) return pr.connection;
+    return settingsCredentialDraft[pr.providerId] ? draftConnectionFor(pr.providerId) : undefined;
+  }
+
   function presetSublabelForDraft(pr) {
     const pv = findProviderView(pr.providerId);
     if (!pv) return pr.sublabel || '';
-    const connection = settingsCredentialDraft[pr.providerId] ? draftConnectionFor(pr.providerId) : undefined;
-    const formatted = formatPresetSublabelFromView(pr, pv, connection);
+    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr));
     return formatted.text || pr.sublabel || '';
   }
 
@@ -201,8 +279,7 @@ export function initSettingsModal(deps) {
         ? 'settings-pref-detail settings-pref-detail--mono'
         : 'settings-pref-detail';
     }
-    const connection = settingsCredentialDraft[pr.providerId] ? draftConnectionFor(pr.providerId) : undefined;
-    const formatted = formatPresetSublabelFromView(pr, pv, connection);
+    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr));
     const style = formatted.text ? formatted.style : pr.sublabelStyle;
     return style === PRESET_DETAIL_STYLES.MONO
       ? 'settings-pref-detail settings-pref-detail--mono'
@@ -221,6 +298,22 @@ export function initSettingsModal(deps) {
       if (field.key && pr[field.key]) {
         row[field.key] = pr[field.key];
       }
+    }
+    // Verbindung je Eintrag (Issue #202): Die unkritischen Felder plus die
+    // Klartext-Geheimnisse, die gerade eingetippt wurden. Die Ja/Nein-Angaben
+    // (`hasKey`, `hasExtraHeaders`) bleiben hier — der Main-Prozess weiss
+    // selbst, was gespeichert ist.
+    if (pr.connection && usesPresetConnection(pv)) {
+      const { displayName, baseUrl, apiStyle, insecureTls, supportsImages, sendTools, draft } = pr.connection;
+      row.connection = {
+        displayName,
+        baseUrl,
+        apiStyle,
+        insecureTls,
+        supportsImages,
+        sendTools,
+        ...(draft || {}),
+      };
     }
     return row;
   }
@@ -277,8 +370,9 @@ export function initSettingsModal(deps) {
     // aber noch der alte — ohne diese Unterscheidung wanderte die Server-URL
     // des vorigen Anbieters in den neuen Entwurf.
     const id = popupProviderId || selectProvider?.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    const draft = settingsCredentialDraft[id];
+    if (!id) return;
+    const draft = activeDraft(id);
+    if (!draft) return;
     const form = findProviderView(id)?.form || {};
     draft.apiKey = (inputApiKey.value || '').trim();
     if (draft.apiKey) draft.removeApiKey = false;
@@ -483,8 +577,8 @@ export function initSettingsModal(deps) {
   function applyProviderTemplate(providerId, templateId) {
     const pv = findProviderView(providerId);
     const template = (pv?.form?.templates || []).find((t) => t.id === templateId);
-    if (!template || !settingsCredentialDraft[providerId]) return;
-    const draft = settingsCredentialDraft[providerId];
+    const draft = activeDraft(providerId);
+    if (!template || !draft) return;
     draft.baseUrl = template.baseUrl || '';
     draft.apiStyle = template.apiStyle || 'chat';
     syncPopupProviderUI(providerId, true);
@@ -504,11 +598,19 @@ export function initSettingsModal(deps) {
     popupProviderId = providerId;
     selectProvider.value = providerId;
 
-    if (!settingsCredentialDraft[providerId]) {
+    const form = pv.form || {};
+    if (usesPresetConnection(pv)) {
+      // Beim Wechsel auf diesen Anbieter beginnt eine neue Zeile, sofern nicht
+      // gerade eine bestehende bearbeitet wird (Issue #202).
+      if (!popupConnectionDraft) {
+        const row = settingsDraftPresets.find((r) => r.id === popupEditPresetId);
+        popupConnectionDraft = row ? connectionDraftFromRow(pv, row) : emptyConnectionDraft(pv);
+      }
+    } else if (!settingsCredentialDraft[providerId]) {
       settingsCredentialDraft[providerId] = credentialDraftFor(pv);
     }
-    const draft = settingsCredentialDraft[providerId];
-    const form = pv.form || {};
+    const draft = activeDraft(providerId) || credentialDraftFor(pv);
+    const stored = activeStored(providerId);
 
     renderProviderTemplates(pv);
 
@@ -524,15 +626,15 @@ export function initSettingsModal(deps) {
     if (form.showApiKey) {
       providerKeyRow.classList.remove('hidden');
       inputApiKey.value = draft.apiKey || '';
-      if (draft.removeApiKey && pv.hasKey) {
+      if (draft.removeApiKey && stored.hasKey) {
         inputApiKey.placeholder = 'Key wird beim Speichern entfernt';
-      } else if (pv.hasKey) {
+      } else if (stored.hasKey) {
         inputApiKey.placeholder = 'Gespeicherter Key bleibt erhalten';
       } else {
         inputApiKey.placeholder = form.apiKeyPlaceholder || '••••••';
       }
       const showTrash =
-        pv.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
+        stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
       btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
       // Ein optionaler Key braucht die Ansage, dass leer in Ordnung ist —
       // sonst liest sich das leere Feld wie eine fehlende Angabe (Issue #193).
@@ -547,15 +649,15 @@ export function initSettingsModal(deps) {
     if (form.showExtraHeaders) {
       providerExtraHeadersRow.classList.remove('hidden');
       inputExtraHeaders.value = draft.extraHeaders || '';
-      if (draft.removeExtraHeaders && pv.hasExtraHeaders) {
+      if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
         inputExtraHeaders.placeholder = 'Header werden beim Speichern entfernt';
-      } else if (pv.hasExtraHeaders) {
+      } else if (stored.hasExtraHeaders) {
         inputExtraHeaders.placeholder = 'Gespeicherte Header bleiben erhalten';
       } else {
         inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
       }
       const showHeaderTrash =
-        pv.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
+        stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
       btnRemoveExtraHeaders?.classList.toggle('hidden', !showHeaderTrash);
     } else {
       providerExtraHeadersRow.classList.add('hidden');
@@ -629,11 +731,11 @@ export function initSettingsModal(deps) {
     if (shownApiBase) lines.push(`API: ${shownApiBase}`);
     if (pv.isActiveChatProvider) lines.push('Aktueller Chat-Anbieter');
     if (form.showApiKey) {
-      if (draft.removeApiKey && pv.hasKey) {
+      if (draft.removeApiKey && stored.hasKey) {
         lines.push('Key wird beim Speichern entfernt');
-      } else if (pv.keyUnreadable && !draft.apiKey) {
+      } else if (stored.keyUnreadable && !draft.apiKey) {
         lines.push('Gespeicherter API-Key kann nicht mehr entschlüsselt werden (z. B. nach der Umbenennung der App in Snotra AI). Bitte den Key neu eingeben.');
-      } else if (pv.hasKey && !draft.apiKey) {
+      } else if (stored.hasKey && !draft.apiKey) {
         lines.push('Key gespeichert');
       } else if (draft.apiKey) {
         lines.push('Neuer Key wird beim Speichern gesetzt');
@@ -645,11 +747,11 @@ export function initSettingsModal(deps) {
       lines.push('Konfiguriert');
     }
     if (form.showExtraHeaders) {
-      if (draft.removeExtraHeaders && pv.hasExtraHeaders) {
+      if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
         lines.push('Header werden beim Speichern entfernt');
       } else if ((draft.extraHeaders || '').trim()) {
         lines.push('Neue Header werden beim Speichern gesetzt');
-      } else if (pv.hasExtraHeaders) {
+      } else if (stored.hasExtraHeaders) {
         lines.push('Header gespeichert');
       }
     }
@@ -663,6 +765,8 @@ export function initSettingsModal(deps) {
     prefModelList.innerHTML = '';
     const empty = settingsDraftPresets.length === 0;
     prefListEmpty.classList.toggle('hidden', !empty);
+    const editSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>';
     const trashSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
@@ -681,7 +785,11 @@ export function initSettingsModal(deps) {
       main.className = 'settings-pref-main';
       const title = document.createElement('strong');
       title.lang = 'en';
-      title.textContent = `${draftProviderName(pr.providerId) || pv.name} · ${pr.model || pv.defaultModel}`
+      // Bei Verbindung je Eintrag traegt die Zeile ihren eigenen Namen.
+      const zeilenName = pr.connection
+        ? (pr.connection.displayName?.trim() || pv.builtInName || pv.name)
+        : (draftProviderName(pr.providerId) || pv.name);
+      title.textContent = `${zeilenName} · ${pr.model || pv.defaultModel}`
         + (pr.optionSuffix ? ` · ${pr.optionSuffix}` : '');
       const detail = document.createElement('span');
       detail.className = presetDetailClassForDraft(pr);
@@ -720,6 +828,19 @@ export function initSettingsModal(deps) {
       rm.dataset.presetId = pr.id;
       rm.innerHTML = trashSvg;
 
+      // Bearbeiten (Issue #202): Seit die Verbindung zur Zeile gehoert, muss
+      // sich eine bestehende Zeile aendern lassen. Ein eigener Knopf statt
+      // einer klickbaren Zeile — die Zeile traegt schon Schalter und
+      // Papierkorb, und ineinander verschachtelte Bedienelemente sind fuer
+      // Tastatur und Screenreader kaputt.
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'settings-icon-edit';
+      edit.setAttribute('aria-label', `${pr.label || pv.name} bearbeiten`);
+      edit.dataset.editPresetId = pr.id;
+      edit.innerHTML = editSvg;
+
+      actions.appendChild(edit);
       actions.appendChild(sw);
       actions.appendChild(rm);
       row.appendChild(main);
@@ -1294,13 +1415,53 @@ export function initSettingsModal(deps) {
     }
   }
 
-  function openAddModelOverlay() {
+  /**
+   * Oeffnet das Popup. Mit `presetId` bearbeitet es eine bestehende Zeile
+   * (Issue #202) — bei Verbindung je Eintrag der einzige Weg, Server-URL oder
+   * Schluessel einer schon angelegten Zeile zu aendern.
+   */
+  function openAddModelOverlay({ presetId = null } = {}) {
     stashPopupCredentialInputs();
+    popupEditPresetId = presetId;
+    popupConnectionDraft = null;
     addModelOverlay.classList.remove('hidden');
     addModelOverlay.setAttribute('aria-hidden', 'false');
     renderProviderSelect();
+
+    const row = presetId ? settingsDraftPresets.find((r) => r.id === presetId) : null;
+    if (row) {
+      selectProvider.value = row.providerId;
+      const pv = findProviderView(row.providerId);
+      if (usesPresetConnection(pv)) popupConnectionDraft = connectionDraftFromRow(pv, row);
+    }
     const pid = selectProvider.value;
     syncPopupProviderUI(pid, true, { resetModel: true });
+    if (row) {
+      const pv = findProviderView(row.providerId);
+      if (allowsManualModel(pv)) inputModel.value = row.model || '';
+      else renderModelSelect(row.model || '', null, pv);
+    }
+    setDialogMode(!!row);
+    // Beim Bearbeiten steht der Anbieter fest: Ein Wechsel waere ein anderer
+    // Eintrag, kein bearbeiteter.
+    selectProvider.disabled = !!row;
+  }
+
+  /** Beschriftungen des Popups: anlegen oder bearbeiten. */
+  function setDialogMode(editing) {
+    if (addModelTitle) {
+      addModelTitle.textContent = editing ? 'Modell bearbeiten' : 'Modell hinzufügen';
+    }
+    if (btnAddPresetRow) {
+      btnAddPresetRow.textContent = editing ? 'Änderungen übernehmen' : 'Übernehmen';
+    }
+    // Die Einleitung spricht sonst weiter vom Hinzufuegen, waehrend man
+    // gerade eine bestehende Zeile aendert.
+    if (addModelIntroLead) {
+      addModelIntroLead.innerHTML = editing
+        ? 'Zugang und Modell dieses Eintrags ändern; <strong>Änderungen übernehmen</strong> ersetzt die Zeile.'
+        : 'Zugang und Modell gemeinsam einstellen und mit <strong>Übernehmen</strong> in die Präferenzliste legen.';
+    }
   }
 
   let modelRequestGeneration = 0;
@@ -1314,6 +1475,10 @@ export function initSettingsModal(deps) {
   function closeAddModelOverlay() {
     cancelModelListing();
     stashPopupCredentialInputs();
+    popupEditPresetId = null;
+    popupConnectionDraft = null;
+    selectProvider.disabled = false;
+    setDialogMode(false);
     addModelOverlay.classList.add('hidden');
     addModelOverlay.setAttribute('aria-hidden', 'true');
     btnOpenAddModel?.focus?.();
@@ -1556,7 +1721,9 @@ export function initSettingsModal(deps) {
       return false;
     }
 
+    // Die bearbeitete Zeile ist keine Dublette ihrer selbst.
     const dup = settingsDraftPresets.some((row) => {
+      if (row.id === popupEditPresetId) return false;
       const rowProvider = findProviderView(row.providerId);
       if (!rowProvider) return false;
       return presetIdentityKey(presetToWireRow(row), rowProvider) === presetIdentityKey(candidate, providerView);
@@ -1566,31 +1733,72 @@ export function initSettingsModal(deps) {
       return false;
     }
     setModalError('');
-    const id =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+
+    const editing = settingsDraftPresets.find((row) => row.id === popupEditPresetId);
+    const id = editing
+      ? editing.id
+      : (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
-        : `p-${Date.now()}`;
+        : `p-${Date.now()}`);
     const model = candidate.model;
-    const formatted = formatPresetSublabelFromView(candidate, providerView, draftConnectionFor(pv));
-    const newPreset = {
+    const connection = usesPresetConnection(providerView)
+      ? connectionViewFromDraft(providerView, activeDraft(pv), editing)
+      : null;
+    const formatted = formatPresetSublabelFromView(
+      candidate,
+      providerView,
+      connection || draftConnectionFor(pv)
+    );
+    const row = {
       id,
       providerId: pv,
       model,
-      menuVisible: true,
-      label: `${draftProviderName(pv) || providerView.name} · ${model}`,
+      menuVisible: editing ? editing.menuVisible !== false : true,
+      label: `${connection?.displayName?.trim() || draftProviderName(pv) || providerView.name} · ${model}`,
       sublabel: formatted.text,
       sublabelStyle: formatted.style,
+      ...(connection ? { connection } : {}),
     };
     for (const field of providerView.presetFields || []) {
       if (candidate[field.key]) {
-        newPreset[field.key] = candidate[field.key];
+        row[field.key] = candidate[field.key];
       }
     }
 
-    settingsDraftPresets.push(newPreset);
+    if (editing) settingsDraftPresets[settingsDraftPresets.indexOf(editing)] = row;
+    else settingsDraftPresets.push(row);
     if (!settingsDraftActivePresetId) settingsDraftActivePresetId = id;
     renderDraftPresetList();
     return true;
+  }
+
+  /**
+   * Entwurf -> Verbindung der Zeile. Die Ja/Nein-Angaben zu Geheimnissen
+   * kommen aus dem bisherigen Zustand und werden vom Entwurf nur fortgeschrieben
+   * — der Renderer kennt die Werte selbst nie (Issue #202).
+   */
+  function connectionViewFromDraft(providerView, draft, previous) {
+    const alt = previous?.connection || {};
+    const typedKey = !!(draft?.apiKey || '').trim();
+    const typedHeaders = !!(draft?.extraHeaders || '').trim();
+    return {
+      displayName: (draft?.displayName || '').trim(),
+      baseUrl: (draft?.baseUrl || providerView.defaultBaseUrl || '').trim(),
+      apiStyle: draft?.apiStyle || providerView.form?.defaultApiStyle || 'chat',
+      insecureTls: draft?.insecureTls === true,
+      supportsImages: draft?.supportsImages === true,
+      sendTools: draft?.sendTools !== false,
+      hasKey: typedKey || (alt.hasKey === true && !draft?.removeApiKey),
+      keyUnreadable: alt.keyUnreadable === true && !typedKey && !draft?.removeApiKey,
+      hasExtraHeaders: typedHeaders || (alt.hasExtraHeaders === true && !draft?.removeExtraHeaders),
+      // Nur fuer den Weg zum Main-Prozess; nicht Teil der Ansicht.
+      draft: {
+        ...(typedKey ? { apiKey: draft.apiKey.trim() } : {}),
+        ...(draft?.removeApiKey ? { removeApiKey: true } : {}),
+        ...(typedHeaders ? { extraHeaders: draft.extraHeaders } : {}),
+        ...(draft?.removeExtraHeaders ? { removeExtraHeaders: true } : {}),
+      },
+    };
   }
 
   async function commitSettingsFromModal() {
@@ -1607,9 +1815,13 @@ export function initSettingsModal(deps) {
     const providerPatches = {};
     const ids = new Set(settingsDraftPresets.map((p) => p.providerId));
     for (const pid of ids) {
-      const d = settingsCredentialDraft[pid];
       const pv = findProviderView(pid);
-      if (!pv || !d) continue;
+      // Bei Verbindung je Eintrag gibt es keinen Anbieter-Zugang mehr, der
+      // gespeichert werden koennte (Issue #202) — die Werte reisen an der
+      // Zeile mit.
+      if (!pv || usesPresetConnection(pv)) continue;
+      const d = settingsCredentialDraft[pid];
+      if (!d) continue;
       const patch = {};
       if (d.removeApiKey) patch.removeApiKey = true;
       if (typeof d.apiKey === 'string' && d.apiKey.trim()) patch.apiKey = d.apiKey.trim();
@@ -1724,37 +1936,34 @@ export function initSettingsModal(deps) {
 
   inputApiKey.addEventListener('input', () => {
     const id = selectProvider.value;
-    if (id && settingsCredentialDraft[id]) {
-      settingsCredentialDraft[id].apiKey = inputApiKey.value;
-      if (inputApiKey.value.trim()) {
-        settingsCredentialDraft[id].removeApiKey = false;
-      }
-      syncPopupProviderUI(id, true);
-    }
+    const draft = activeDraft(id);
+    if (!draft) return;
+    draft.apiKey = inputApiKey.value;
+    if (inputApiKey.value.trim()) draft.removeApiKey = false;
+    syncPopupProviderUI(id, true);
   });
 
   btnRemoveApiKey?.addEventListener('click', () => {
     const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].apiKey = '';
-    settingsCredentialDraft[id].removeApiKey = true;
+    const draft = activeDraft(id);
+    if (!draft) return;
+    draft.apiKey = '';
+    draft.removeApiKey = true;
     syncPopupProviderUI(id, true);
   });
 
   inputBaseUrl.addEventListener('input', () => {
-    const id = selectProvider.value;
-    if (id && settingsCredentialDraft[id]) {
-      settingsCredentialDraft[id].baseUrl = inputBaseUrl.value;
-      renderDraftPresetList();
-    }
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.baseUrl = inputBaseUrl.value;
+    renderDraftPresetList();
   });
 
   inputInsecureTls.addEventListener('change', () => {
-    const id = selectProvider.value;
-    if (id && settingsCredentialDraft[id]) {
-      settingsCredentialDraft[id].insecureTls = !!inputInsecureTls.checked;
-      renderDraftPresetList();
-    }
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.insecureTls = !!inputInsecureTls.checked;
+    renderDraftPresetList();
   });
 
   // --- Felder des Providers „OpenAI-kompatibel" (Issue #193) ---------------
@@ -1767,47 +1976,47 @@ export function initSettingsModal(deps) {
   });
 
   inputDisplayName?.addEventListener('input', () => {
-    const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].displayName = inputDisplayName.value;
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.displayName = inputDisplayName.value;
     renderDraftPresetList();
   });
 
   selectApiStyle?.addEventListener('change', () => {
-    const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].apiStyle = selectApiStyle.value;
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.apiStyle = selectApiStyle.value;
   });
 
   inputExtraHeaders?.addEventListener('input', () => {
     const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].extraHeaders = inputExtraHeaders.value;
-    if (inputExtraHeaders.value.trim()) {
-      settingsCredentialDraft[id].removeExtraHeaders = false;
-    }
+    const draft = activeDraft(id);
+    if (!draft) return;
+    draft.extraHeaders = inputExtraHeaders.value;
+    if (inputExtraHeaders.value.trim()) draft.removeExtraHeaders = false;
     syncPopupProviderUI(id, true);
   });
 
   btnRemoveExtraHeaders?.addEventListener('click', () => {
     const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].extraHeaders = '';
-    settingsCredentialDraft[id].removeExtraHeaders = true;
+    const draft = activeDraft(id);
+    if (!draft) return;
+    draft.extraHeaders = '';
+    draft.removeExtraHeaders = true;
     syncPopupProviderUI(id, true);
     inputExtraHeaders.focus();
   });
 
   inputSendTools?.addEventListener('change', () => {
-    const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].sendTools = !!inputSendTools.checked;
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.sendTools = !!inputSendTools.checked;
   });
 
   inputSupportsImages?.addEventListener('change', () => {
-    const id = selectProvider.value;
-    if (!id || !settingsCredentialDraft[id]) return;
-    settingsCredentialDraft[id].supportsImages = !!inputSupportsImages.checked;
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.supportsImages = !!inputSupportsImages.checked;
   });
 
   btnLoadModels.addEventListener('click', () => {
@@ -1825,6 +2034,11 @@ export function initSettingsModal(deps) {
   });
 
   prefModelList?.addEventListener('click', (e) => {
+    const edit = e.target.closest('.settings-icon-edit');
+    if (edit && prefModelList.contains(edit)) {
+      openAddModelOverlay({ presetId: edit.dataset.editPresetId });
+      return;
+    }
     const sw = e.target.closest('.settings-pref-switch');
     if (sw && prefModelList.contains(sw)) {
       const id = sw.dataset.presetId;

@@ -16,6 +16,15 @@ const {
 } = require('./enums');
 const { normalizeActiveSkills } = require('./skills');
 
+/**
+ * Schema-Version von `llm-config.json`.
+ *
+ * 3: Presets mit Provider-ID und Modell, Verbindung unter `providers[id]`.
+ * 4: Bei Anbietern mit `connectionPerPreset` liegt die Verbindung im Eintrag
+ *    (Issue #202). Wer die Zahl erhoeht, schreibt die Migration dazu.
+ */
+const LLM_CONFIG_VERSION = 4;
+
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;
 const SIDEBAR_WIDTH_MIN = 150;
@@ -144,6 +153,101 @@ function extractPresetOptions(raw, provider) {
 }
 
 /**
+ * Verbindung je Eintrag (Issue #202).
+ *
+ * Bei Anbietern mit `connectionPerPreset` gehören Server-URL, Schlüssel,
+ * Zusatz-Header und die Schalter zum **Eintrag**, nicht zum Anbieter — nur so
+ * lassen sich ein lokaler Server und ein Gateway nebeneinander führen.
+ *
+ * Drei Formen, die nie vermischt werden dürfen:
+ *  - **gespeichert**: Klartextfelder + `apiKeyEnc`/`extraHeadersEnc`. Nur Platte
+ *    und Main-Prozess.
+ *  - **Entwurf** (Renderer → Main): Klartextfelder + `apiKey`/`extraHeaders` im
+ *    Klartext, dazu `removeApiKey`/`removeExtraHeaders`. Lebt nur für die Dauer
+ *    eines Speicherns.
+ *  - **Ansicht** (Main → Renderer): Klartextfelder + `hasKey`/`hasExtraHeaders`.
+ *    Der Renderer erfährt nie einen Geheimniswert.
+ */
+const PRESET_CONNECTION_PLAIN_FIELDS = Object.freeze([
+  'displayName',
+  'baseUrl',
+  'apiStyle',
+  'insecureTls',
+  'supportsImages',
+  'sendTools',
+]);
+const PRESET_CONNECTION_SECRET_FIELDS = Object.freeze(['apiKeyEnc', 'extraHeadersEnc']);
+
+/** Hängt die Verbindung bei diesem Anbieter am Eintrag statt am Anbieter? */
+function hasPresetConnection(provider) {
+  return provider?.connectionPerPreset === true;
+}
+
+function connectionPlainValue(key, value, provider) {
+  if (key === 'displayName') {
+    return typeof value === 'string' ? value.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : undefined;
+  }
+  if (key === 'baseUrl') {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  }
+  if (key === 'apiStyle') {
+    return isApiStyle(value) ? value : undefined;
+  }
+  if (key === 'sendTools') {
+    return typeof value === 'boolean' ? value : undefined;
+  }
+  if (key === 'insecureTls' || key === 'supportsImages') {
+    return typeof value === 'boolean' ? value : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Gespeicherte Verbindung eines Eintrags. Unbekannte Felder fallen weg; die
+ * verschlüsselten Geheimnisse werden unverändert durchgereicht, weil nur der
+ * Main-Prozess sie überhaupt lesen kann.
+ */
+function normalizeStoredPresetConnection(raw, provider) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = {};
+  for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
+    const value = connectionPlainValue(key, raw[key], provider);
+    if (value !== undefined) out[key] = value;
+  }
+  for (const key of PRESET_CONNECTION_SECRET_FIELDS) {
+    if (typeof raw[key] === 'string' && raw[key]) out[key] = raw[key];
+  }
+  // Voreinstellungen, damit ein Eintrag nie halb beschrieben in den Provider geht.
+  if (out.apiStyle === undefined) out.apiStyle = provider?.defaultApiStyle || 'chat';
+  if (out.sendTools === undefined) out.sendTools = provider?.defaultSendTools !== false;
+  if (out.supportsImages === undefined) out.supportsImages = provider?.defaultSupportsImages === true;
+  if (out.insecureTls === undefined) out.insecureTls = provider?.defaultInsecureTls === true;
+  return out;
+}
+
+/**
+ * Verbindungs-Entwurf aus dem Renderer. Klartext-Geheimnisse bleiben hier
+ * stehen — der Aufrufer verschlüsselt sie sofort und wirft sie weg.
+ */
+function normalizePresetConnectionPatch(raw, provider) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = {};
+  for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
+    const value = connectionPlainValue(key, raw[key], provider);
+    if (value !== undefined) out[key] = value;
+  }
+  // Der leere Anzeigename ist eine gültige Angabe: er löscht ihn.
+  if (typeof raw.displayName === 'string' && !raw.displayName.trim()) out.displayName = '';
+  if (typeof raw.apiKey === 'string' && raw.apiKey.trim()) out.apiKey = raw.apiKey.trim();
+  if (raw.removeApiKey === true) out.removeApiKey = true;
+  if (typeof raw.extraHeaders === 'string' && raw.extraHeaders.trim()) {
+    out.extraHeaders = raw.extraHeaders.slice(0, MAX_EXTRA_HEADERS_CHARS);
+  }
+  if (raw.removeExtraHeaders === true) out.removeExtraHeaders = true;
+  return out;
+}
+
+/**
  * Normalisiert einen Preset-Eintrag für Persistenz und IPC.
  * @param {object} raw
  * @param {(id: string) => object|null} getProvider
@@ -171,12 +275,22 @@ function normalizePresetWire(raw, getProvider) {
       preset[k] = v;
     }
   }
+  if (hasPresetConnection(provider)) {
+    const connection = normalizeStoredPresetConnection(raw.connection, provider);
+    if (connection) preset.connection = connection;
+  }
   return preset;
 }
 
 function presetIdentityKey(preset, providerOrView) {
   if (!preset) return '';
   const parts = [preset.providerId, preset.model || ''];
+  // Zwei Zeilen mit demselben Modell, aber verschiedenen Servern sind zwei
+  // verschiedene Eintraege (Issue #202) — sonst lehnt die Liste den zweiten
+  // als Dublette ab.
+  if (hasPresetConnection(providerOrView) || providerOrView?.connectionPerPreset) {
+    parts.push(preset.connection?.baseUrl || '');
+  }
   const fields = providerOrView?.presentation?.presetFields
     || providerOrView?.presetFields;
   if (Array.isArray(fields)) {
@@ -378,6 +492,16 @@ function normalizeListModelsRequest(raw) {
   }
   if (typeof payload.insecureTls === 'boolean') {
     out.insecureTls = payload.insecureTls;
+  }
+  // Verbindung je Eintrag (Issue #202): Der Dialog fragt die Modellliste fuer
+  // die Zeile ab, an der gerade gearbeitet wird. `presetId` benennt die
+  // gespeicherte Verbindung als Rueckfall, die Klartextfelder den Entwurf, der
+  // noch nicht gespeichert ist.
+  if (typeof payload.presetId === 'string' && payload.presetId.trim()) {
+    out.presetId = payload.presetId.trim();
+  }
+  if (typeof payload.extraHeaders === 'string' && payload.extraHeaders.trim()) {
+    out.extraHeaders = payload.extraHeaders;
   }
   return out;
 }
@@ -582,11 +706,15 @@ function buildProviderFormView(provider) {
     showSendTools: !!provider?.fields?.sendTools,
     // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
     allowManualModel: presentation.manualModel === true,
+    // Verbindung je Eintrag (Issue #202): Das Formular bearbeitet dann die
+    // Zeile, nicht den Anbieter.
+    connectionPerPreset: provider?.connectionPerPreset === true,
     templates: buildProviderTemplateViews(provider),
   };
 }
 
 module.exports = {
+  LLM_CONFIG_VERSION,
   API_STYLES,
   isApiStyle,
   MAX_DISPLAY_NAME_CHARS,
@@ -610,6 +738,11 @@ module.exports = {
   createListModelsResult,
   normalizePresetWire,
   presetIdentityKey,
+  hasPresetConnection,
+  normalizeStoredPresetConnection,
+  normalizePresetConnectionPatch,
+  PRESET_CONNECTION_PLAIN_FIELDS,
+  PRESET_CONNECTION_SECRET_FIELDS,
   normalizeProviderPatch,
   normalizeUiPrefs,
   normalizeUiPrefsPatch,

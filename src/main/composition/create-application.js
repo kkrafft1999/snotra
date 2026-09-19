@@ -362,14 +362,43 @@ function createApplication({
     defaultProviderId,
   });
 
+  /**
+   * Werte aus „Name: Wert"-Zeilen. Geschwaerzt wird der **Wert**, nicht der
+   * Header-Name: `X-Tenant` ist kein Geheimnis, sein Inhalt kann eines sein.
+   * Sehr kurze Werte bleiben draussen, sonst schwaerzt ein `X-Env: dev` jedes
+   * Vorkommen von „dev" in jeder Tool-Ausgabe.
+   */
+  function extraHeaderSecretValues(raw) {
+    const out = [];
+    for (const line of String(raw).split(/\r?\n/)) {
+      const sep = line.indexOf(':');
+      if (sep <= 0) continue;
+      const value = line.slice(sep + 1).trim();
+      if (value.length >= 8) out.push(value);
+    }
+    return out;
+  }
+
   // Eigene Provider-Schluessel duerfen die App nie ueber ein Tool verlassen
   // (Konzept §5). Nur zum Vergleich gelesen, nie protokolliert.
   async function readOwnSecrets() {
     const config = await llmConfigStore.readLLMConfig();
     const secrets = [];
-    for (const providerId of Object.keys(config?.providers || {})) {
-      const effective = await providerSecrets.getEffectiveProviderConfig(providerId);
+    const add = (effective) => {
       if (effective?.apiKey) secrets.push(effective.apiKey);
+      // Zusatz-Header tragen bei einem Gateway das Token (Issue #193) und
+      // duerfen die App so wenig verlassen wie ein API-Key.
+      if (effective?.extraHeaders) secrets.push(...extraHeaderSecretValues(effective.extraHeaders));
+    };
+    for (const providerId of Object.keys(config?.providers || {})) {
+      add(await providerSecrets.getEffectiveProviderConfig(providerId));
+    }
+    // Anbieter mit Verbindung je Eintrag (Issue #202) stehen nicht in
+    // `providers`; ihre Schluessel haengen an den Eintraegen. Ohne diese
+    // Schleife fiele genau der Gateway-Token durch die Schwaerzung.
+    for (const preset of Array.isArray(config?.presets) ? config.presets : []) {
+      if (!preset?.id || !preset.connection) continue;
+      add(await providerSecrets.getEffectiveProviderConfig(preset.providerId, { presetId: preset.id }));
     }
     // Auch MCP-Tokens duerfen die App nicht ueber ein Tool-Ergebnis verlassen
     // (Issue #108) — ein MCP-Server koennte sie sonst selbst zurueckgeben.

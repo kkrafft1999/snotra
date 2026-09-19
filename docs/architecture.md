@@ -302,7 +302,7 @@ Settings-Handler schreibt genau sie (`mergeProviderPatchIntoConfigImpl`).
 Neben `apiKey`, `baseUrl` und `insecureTls` gibt es seit Issue #193
 `displayName`, `apiStyle`, `extraHeaders`, `supportsImages` und `sendTools`.
 
-Zwei Sonderfälle deklariert ein Anbieter zusätzlich am Modul:
+Drei Sonderfälle deklariert ein Anbieter zusätzlich am Modul:
 
 - `optionalApiKey: true` — ein leerer Schlüssel ist ein **gültiger** Zustand.
   Sonst gilt ein Anbieter mit `fields.apiKey` ohne Key als unvollständig
@@ -310,11 +310,56 @@ Zwei Sonderfälle deklariert ein Anbieter zusätzlich am Modul:
 - `capabilitiesFor(config)` — Fähigkeiten, die an der gespeicherten
   Konfiguration hängen statt am Adapter. `capabilities` bleibt die
   Voreinstellung für Anbieter ohne diese Funktion.
+- `connectionPerPreset: true` — die Verbindung gehört zum **Eintrag**, nicht
+  zum Anbieter (Issue #202). Siehe unten.
 
 Geheimnisse verlassen den Main-Prozess nicht: Der API-Schlüssel und die
 Zusatz-Header liegen `safeStorage`-verschlüsselt (`apiKeyEnc`,
-`extraHeadersEnc`), und die Provider-View meldet dem Renderer nur `hasKey`
+`extraHeadersEnc`), und die View meldet dem Renderer nur `hasKey`
 bzw. `hasExtraHeaders` — nie den Inhalt.
+
+### Verbindung je Eintrag
+
+Bei `connectionPerPreset` liegt die Verbindung nicht unter
+`providers[id]`, sondern als `connection` am Preset:
+
+```jsonc
+{
+  "version": 4,
+  "providers": { /* die übrigen fünf Anbieter */ },
+  "presets": [
+    { "id": "…", "providerId": "openai-compatible", "model": "qwen2.5",
+      "connection": { "baseUrl": "…", "apiKeyEnc": "…", "displayName": "LM Studio", … } }
+  ]
+}
+```
+
+Der Grund ist ein Anwendungsfall, der vorher unmöglich war: ein lokaler Server
+**und** ein Firmen-Gateway nebeneinander. Der Preis ist, dass ein Schlüssel so
+oft in der Datei steht, wie es Einträge auf denselben Server gibt; deshalb gilt
+die Regel nur für den generischen Anbieter und nicht für die fünf festen.
+
+Daraus folgen vier Dinge, die leicht übersehen werden:
+
+- **Das Chat-Ziel trägt `presetId`.** Ohne die Kennung lässt sich die
+  Verbindung nicht mehr auflösen; `getEffectiveProviderConfig(providerId,
+  { presetId })` braucht sie. Bewusst nur die Kennung — das Ziel geht als DTO
+  bis in den Renderer.
+- **`configured` ist eine Eigenschaft des Eintrags**, nicht des Anbieters:
+  `buildPresetView` entscheidet es, nicht `buildProviderView`.
+- **Die Schwärzung eigener Schlüssel** (`readOwnSecrets` in
+  `create-application.js`) läuft über `providers` *und* über die Einträge —
+  sonst fiele genau der Gateway-Token durch.
+- **Der Anbieter-Eintrag darf nicht zurückkehren.** Renderer und
+  `mergeProviderPatchIntoConfigImpl` lassen `providers[id]` für solche
+  Anbieter aus; sonst stünde neben der Verbindung am Eintrag eine zweite,
+  konkurrierende Wahrheit.
+
+Die Schema-Version steht als `LLM_CONFIG_VERSION` in
+`shared/contracts/settings.js` — Main-Prozess und Settings-Handler lesen
+dieselbe Zahl. Die Migration v3 → v4 kopiert `providers['openai-compatible']`
+in jeden Eintrag dieses Anbieters und entfernt den Anbieter-Eintrag; sie ist
+idempotent und lässt eine bereits vorhandene Verbindung stehen.
 
 ### Lokal oder entfernt: am Host, nicht an der ID
 

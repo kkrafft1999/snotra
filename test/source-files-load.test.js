@@ -48,3 +48,31 @@ test('die Ausnahmeliste zeigt auf Dateien, die es noch gibt', () => {
     assert.ok(fs.existsSync(path.join(SRC_DIR, rel)), `${rel} steht in der Ausnahmeliste, existiert aber nicht mehr`);
   }
 });
+
+// Ein echtes Steuerzeichen im Quelltext - etwa ein NUL in einer Zeichenklasse,
+// das als Escape-Sequenz gemeint war - macht die Datei fuer Git zur
+// Binaerdatei. Der Code laeuft weiter, aber `git diff` zeigt nur noch
+// "Bin 0 -> N bytes", die Datei faellt aus `git grep`, und ein Review sieht die
+// Aenderung nicht mehr. Genau so ist es in #193 passiert (behoben in #202);
+// dieser Waechter faengt den naechsten Fall beim Test statt im Review.
+test('keine Quelldatei enthaelt echte Steuerzeichen', () => {
+  // Tab, Zeilenumbruch und Wagenruecklauf sind gewoehnlicher Weissraum.
+  const erlaubt = new Set([0x09, 0x0a, 0x0d]);
+  const treffer = [];
+  for (const rel of collectSourceFiles()) {
+    const bytes = fs.readFileSync(path.join(SRC_DIR, rel));
+    for (let i = 0; i < bytes.length; i += 1) {
+      const byte = bytes[i];
+      if ((byte < 0x20 || byte === 0x7f) && !erlaubt.has(byte)) {
+        const zeile = bytes.subarray(0, i).toString('utf8').split('\n').length;
+        treffer.push(`${rel}:${zeile} - 0x${byte.toString(16).padStart(2, '0')}`);
+        break;
+      }
+    }
+  }
+  assert.deepEqual(
+    treffer,
+    [],
+    `Steuerzeichen im Quelltext (als Escape-Sequenz schreiben):\n${treffer.join('\n')}`
+  );
+});

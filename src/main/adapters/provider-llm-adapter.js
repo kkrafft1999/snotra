@@ -22,9 +22,17 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     const providerOptions = resolveProviderOptions(raw, provider);
     return createChatModelTarget({
       providerId: raw.providerId,
+      // Bei `connectionPerPreset` haengt die Verbindung am Eintrag; ohne die
+      // Kennung koennte sie hier niemand mehr aufloesen (Issue #202).
+      presetId: raw.presetId,
       model,
       providerOptions,
     });
+  }
+
+  /** Verbindungsquelle einer Runde: der Eintrag, sonst der Anbieter. */
+  function scopeOf(target) {
+    return target?.presetId ? { presetId: target.presetId } : {};
   }
 
   function mergeProviderConfig(baseConfig, target, provider) {
@@ -68,7 +76,10 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
       });
     }
 
-    const providerConfig = await providerSecrets.getEffectiveProviderConfig(target.providerId);
+    const providerConfig = await providerSecrets.getEffectiveProviderConfig(
+      target.providerId,
+      scopeOf(target)
+    );
     // Ein Anbieter mit optionalem Key (Issue #193) darf ohne Key laufen — ein
     // lokaler Server verlangt keinen.
     if (provider.fields?.apiKey && provider.optionalApiKey !== true && !providerConfig?.apiKey) {
@@ -89,7 +100,10 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
 
   async function prepareSendBundle(target) {
     const provider = providerRuntime.getProvider(target.providerId);
-    const baseConfig = await providerSecrets.getEffectiveProviderConfig(target.providerId);
+    const baseConfig = await providerSecrets.getEffectiveProviderConfig(
+      target.providerId,
+      scopeOf(target)
+    );
     const config = mergeProviderConfig(baseConfig, target, provider);
     const model = resolveModel(target, provider, baseConfig);
     return {
@@ -126,7 +140,10 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
       config = sendBundle.config;
       model = sendBundle.model;
     } else {
-      const baseConfig = await providerSecrets.getEffectiveProviderConfig(target.providerId);
+      const baseConfig = await providerSecrets.getEffectiveProviderConfig(
+        target.providerId,
+        scopeOf(target)
+      );
       config = mergeProviderConfig(baseConfig, target, provider);
       model = resolveModel(target, provider, baseConfig);
     }
