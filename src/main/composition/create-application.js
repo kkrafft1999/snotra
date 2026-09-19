@@ -5,6 +5,7 @@ const nodeCrypto = require('crypto');
 const nodeChildProcess = require('child_process');
 
 const { createStorageService } = require('../services/storage-service');
+const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
 const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
@@ -110,6 +111,10 @@ function createApplication({
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
   });
+
+  // Bilder eines Chats liegen als Dateien neben der Verlaufsdatei, nicht als
+  // Base64 darin (Issue #94).
+  const chatAttachments = createChatAttachmentStore({ app, fs, path });
 
   const llmConfigStore = createLlmConfigStorePort(storage);
   const providerSecrets = createProviderSecretsPort(storage);
@@ -514,6 +519,7 @@ function createApplication({
     ipcMain,
     chatHistoryStore,
     REQ,
+    chatAttachments,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
   });

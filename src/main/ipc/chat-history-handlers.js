@@ -8,10 +8,23 @@
 // Root nennen, unter dem sie gefuehrt wurde — aber nur, wenn es ein bereits
 // geoeffneter Ordner ist (`isKnownWorkspaceRoot`). Alles andere faellt auf den
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
+
+/**
+ * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten
+ * landen nie in der Session-Datei, es gibt dann eben auch keine Datei daneben.
+ */
+const NO_ATTACHMENT_STORE = {
+  persistMessages: async (_chatId, messages) => messages,
+  readAttachment: async () => ({ ok: false }),
+  deleteChat: async () => {},
+  pruneChats: async () => {},
+};
+
 function registerChatHistoryHandlers({
   ipcMain,
   chatHistoryStore,
   REQ,
+  chatAttachments = NO_ATTACHMENT_STORE,
   getActiveWorkspaceRoot = () => null,
   isKnownWorkspaceRoot = async () => false,
 }) {
@@ -62,8 +75,15 @@ function registerChatHistoryHandlers({
           : null;
       const titleProvided =
         typeof sessionRow?.title === 'string' && sessionRow.title.trim().length > 0;
+      // Bilder zuerst auf die Platte, danach normalisieren: die Normalisierung
+      // nimmt nur Datei-Referenzen an, Base64 kommt so gar nicht erst in die
+      // Verlaufsdatei (Issue #94).
+      const sessionId = typeof sessionRow?.id === 'string' ? sessionRow.id.trim() : '';
+      const messages = sessionId
+        ? await chatAttachments.persistMessages(sessionId, sessionRow?.messages)
+        : sessionRow?.messages;
       const normalized = chatHistoryStore.normalizeSessionForStore(
-        { ...(sessionRow || {}), workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow) },
+        { ...(sessionRow || {}), messages, workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow) },
         {
           existingTitle: titleProvided ? undefined : existing?.title,
           requireMessages: true,
@@ -83,6 +103,10 @@ function registerChatHistoryHandlers({
         }
       }
       await chatHistoryStore.writeChatHistoryStore(store);
+      // Unter demselben Lock aufraeumen: Bilder von Chats, die es nicht mehr
+      // gibt — aus dem Limit gefallen, von Hand geloescht oder Reste einer in
+      // Quarantaene gestellten Verlaufsdatei.
+      await chatAttachments.pruneChats(store.sessions.map((s) => s.id));
       return { ok: true };
     }));
 
@@ -95,6 +119,7 @@ function registerChatHistoryHandlers({
         if (v === id) delete store.activeByWorkspace[k];
       }
       await chatHistoryStore.writeChatHistoryStore(store);
+      await chatAttachments.deleteChat(id);
       return { ok: true };
     }));
 
@@ -110,6 +135,14 @@ function registerChatHistoryHandlers({
       await chatHistoryStore.writeChatHistoryStore(store);
       return { ok: true };
     }));
+
+  // Bilddaten eines gespeicherten Anhangs (Issue #94). Der Renderer fragt erst
+  // beim Anzeigen — der gesamte Verlauf eines Ordners auf einmal waere zu viel.
+  ipcMain.handle(REQ.CHAT_ATTACHMENT_READ, async (_event, chatId, file) => {
+    if (typeof chatId !== 'string' || !chatId.trim()) return { ok: false };
+    if (typeof file !== 'string' || !file) return { ok: false };
+    return chatAttachments.readAttachment(chatId.trim(), file);
+  });
 }
 
 module.exports = { registerChatHistoryHandlers };

@@ -1873,14 +1873,152 @@ summary:focus-visible,
   gap: 6px;
   margin: 0 0 6px;
   padding: 0;
+  max-width: 100%;
   list-style: none;
 }
 
-.chat-msg-attachment-img {
-  max-width: 240px;
-  max-height: 180px;
-  border-radius: var(--ds-radius-md);
+/* 240px ist die Wunschbreite, nicht die Untergrenze: in einem schmalen
+ * Chat-Panel muss das Bild mitschrumpfen, sonst steht es über die Blase hinaus.
+ * `min-width: 0` hebt dafür die inhaltsbasierte Mindestbreite des Flex-Items auf. */
+.chat-msg-attachments > li {
+  display: flex;
+  min-width: 0;
+  max-width: min(240px, 100%);
+}
+
+/* Die Kachel ist ein Button — das Bild lässt sich groß ansehen (Issue #94).
+ * Hover-Muster wie bei Chips: blaue Kante plus 5%-Wash, es lädt zum Klick ein. */
+.chat-msg-attachment {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  background: none;
   border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  line-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast) ease, background-color var(--ds-motion-fast) ease;
+}
+
+button.chat-msg-attachment:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-msg-attachment-img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: calc(var(--ds-radius-md) - 1px);
+}
+
+/* Wartet auf die Datei bzw. sie ist weg: gleiche Fläche wie ein Thumbnail,
+ * damit der Verlauf beim Nachladen nicht springt. Zustand steht als Text da,
+ * nicht nur als Farbe. */
+.chat-msg-attachment--loading,
+.chat-msg-attachment--missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 160px;
+  max-width: 100%;
+  height: 108px;
+  padding: 8px;
+  line-height: 1.3;
+  text-align: center;
+  cursor: default;
+}
+
+/* Gestrichelt und mit sichtbarer Kante: die Fläche soll als leerer Platz
+ * gelesen werden, nicht als Bild, das noch lädt. --ds-grey-divider wäre gegen
+ * den Karton-Grund zu leise dafür. */
+.chat-msg-attachment--loading,
+.chat-msg-attachment--missing {
+  background: var(--ds-grey-card);
+  border: 1px dashed var(--ds-grey-muted);
+}
+
+.chat-msg-attachment-icon {
+  display: block;
+  color: var(--ds-grey-muted);
+}
+
+.chat-msg-attachment-note {
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+}
+
+/* ── Bild-Anhang in groß (Issue #94) ──────────────────────────────────────
+ * Kein Dialog-Rahmen: das Bild selbst ist der Inhalt, alles andere wäre
+ * Beiwerk. Der Schließen-Knopf sitzt darüber, damit er auch bei einem sehr
+ * breiten Screenshot erreichbar bleibt. */
+/* Unter `.image-lightbox` verschachtelt, weil die allgemeinen `.modal-*`-Regeln
+ * weiter unten in dieser Datei stehen und sonst gewinnen würden. */
+.image-lightbox .image-lightbox__dialog {
+  max-width: min(1100px, 100%);
+  width: auto;
+  align-items: center;
+  /* Unten Platz für die Bildunterschrift, die aus dem Fluss genommen ist. */
+  padding: 12px 12px 32px;
+  background: var(--ds-surface);
+}
+
+.image-lightbox .image-lightbox__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 50%;
+  color: inherit;
+  cursor: pointer;
+}
+
+.image-lightbox .image-lightbox__close:hover {
+  background: var(--ds-grey-bg);
+}
+
+.image-lightbox .image-lightbox__close:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.image-lightbox .image-lightbox__img {
+  display: block;
+  max-width: 100%;
+  /* Dialog-Höhe (90vh) abzüglich Padding und Bildunterschrift. */
+  max-height: calc(90vh - 56px);
+  object-fit: contain;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+}
+
+/* Aus dem Fluss genommen: sonst bestimmte ein langer Dateiname die Breite des
+ * Dialogs, und ein schmales Bild bekäme links und rechts einen breiten Rand. */
+.image-lightbox .image-lightbox__caption {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 9px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+}
+
+.image-lightbox .image-lightbox__caption:empty {
+  display: none;
 }
 
 /* @-Vervollständigung (Issue #52): Liste der Workspace-Pfade über dem Textfeld,

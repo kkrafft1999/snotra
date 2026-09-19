@@ -287,6 +287,33 @@ keinen Dateizugriff; die Vertrauensgrenze bleibt `getActiveWorkspaceRoot()`.
 Welchen Bucket `CHAT_HISTORY_SET_ACTIVE` trifft, entscheidet aus demselben Grund
 die Session selbst, nicht der gerade aktive Ordner.
 
+### Bild-Anhänge im Verlauf (Issue #94)
+
+Bilder liegen **neben** der Verlaufsdatei, nicht darin:
+`services/chat-attachment-store.js` schreibt sie nach
+`chat-attachments/<Chat-ID>/<SHA-256>.<ext>` im userData-Ordner, die Session
+trägt nur `{ kind, mediaType, file }`. Vier Screenshots in einer Nachricht
+kosten die Session-JSON damit ein paar Dutzend Zeichen statt Megabytes an
+Base64. Der Dateiname ist der Inhalts-Hash — derselbe Screenshot landet bei
+jedem Sichern unter demselben Namen, das Schreiben ist also wiederholbar.
+
+Die Normalisierung (`chat-history-normalization.js`) nimmt über
+`normalizeStoredAttachments()` **nur** Referenzen an. Base64 kann damit auch
+dann nicht in die Verlaufsdatei geraten, wenn die Ablage fehlt oder ein
+Schreibversuch scheitert. Dateinamen aus der Verlaufsdatei werden vor jedem
+Pfad-Zusammenbau gegen `ATTACHMENT_FILE_RE` geprüft, Chat-IDs, die als
+Ordnername nicht taugen, laufen über ihren Hash — aus dem Anhang-Ordner führt
+nichts heraus.
+
+Der Renderer bekommt beim Laden nur die Referenz und holt die Bilddaten erst
+beim Anzeigen über `CHAT_ATTACHMENT_READ` nach; ein Ordner mit vielen Sessions
+schickt so nicht seinen gesamten Bildbestand über IPC. Eine fehlende Datei ist
+`{ ok: false }` und wird als Platzhalter gezeigt, nicht als Fehler. Aufgeräumt
+wird unter dem Verlaufs-Lock: `CHAT_HISTORY_DELETE` entfernt den Ordner des
+Chats, jedes `CHAT_HISTORY_UPSERT` zusätzlich alles, wozu es keine Session mehr
+gibt (aus `MAX_CHAT_SESSIONS` gefallen, Reste einer quarantänisierten
+Verlaufsdatei).
+
 ## Composition root
 
 `src/main/composition/create-application.js` ist der zentrale Einstieg nach dem

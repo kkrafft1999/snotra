@@ -26,6 +26,8 @@ import { createToolLogDebug, compactToolLinePayload } from '../utils/tool-log-de
 import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
 // Aufschlüsselung hinter der Token-Anzeige (Issue #174).
 import { initTokenBreakdownPanel } from './TokenBreakdownPanel.js';
+// Klick auf ein Thumbnail zeigt das Bild gross (Issue #94).
+import { initImageLightbox } from './ImageLightbox.js';
 
 const { coerceUsage, createEmptyUsage, toolCategoryForEntry, inferChatTitle } = contracts;
 
@@ -475,6 +477,8 @@ export function initChatStream({
   // Composer; mit dem Senden wandern sie an die Nachricht.
   let pendingAttachments = [];
 
+  const imageLightbox = initImageLightbox();
+
   const tokenBreakdownPanel = initTokenBreakdownPanel({
     trigger: chatTokenUsageEl,
     panel: chatTokenBreakdownEl,
@@ -693,6 +697,105 @@ export function initChatStream({
     if (wrap) syncToolLogSummary(wrap, { thinking: true, elapsedMs: thinkingElapsedMs(last) });
   }
 
+  // Symbol fuer einen Anhang, dessen Datei nicht mehr da ist: Bildrahmen mit
+  // Strich. Kein Emoji, kein Rot — der Zustand steht zusaetzlich als Text da.
+  const MISSING_IMAGE_ICON_HTML =
+    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.5" stroke-linecap="round">' +
+    '<rect x="3" y="4.5" width="18" height="15" rx="2"/>' +
+    '<path d="M3.5 16.5 8.5 11l3.5 3.5"/><circle cx="15.5" cy="9" r="1.4"/>' +
+    '<path d="M4 20 20 4"/></svg>';
+
+  /**
+   * Bilder einer gesendeten Nachricht. Frisch eingefuegte Anhaenge tragen ihre
+   * Daten noch selbst; aus dem Verlauf geladene nur eine Datei-Referenz — die
+   * wird hier nachgeholt (Issue #94).
+   */
+  function buildAttachmentGallery(attachments) {
+    const gallery = document.createElement('ul');
+    gallery.className = 'chat-msg-attachments';
+    for (const attachment of attachments) {
+      gallery.appendChild(buildAttachmentTile(attachment));
+    }
+    return gallery;
+  }
+
+  function buildAttachmentTile(attachment) {
+    const item = document.createElement('li');
+    const label = attachment?.name || 'Angehängtes Bild';
+
+    const showImage = (src) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chat-msg-attachment';
+      button.setAttribute('aria-label', `${label} vergrößert anzeigen`);
+      button.title = label;
+      const img = document.createElement('img');
+      img.className = 'chat-msg-attachment-img';
+      img.src = src;
+      img.alt = label;
+      button.appendChild(img);
+      button.addEventListener('click', () => imageLightbox.open({ src, alt: label, trigger: button }));
+      item.replaceChildren(button);
+    };
+
+    const showNote = (modifier, text) => {
+      const box = document.createElement('div');
+      box.className = `chat-msg-attachment chat-msg-attachment--${modifier}`;
+      box.setAttribute('role', 'img');
+      box.setAttribute('aria-label', `${label}: ${text}`);
+      if (modifier === 'missing') {
+        const icon = document.createElement('span');
+        icon.className = 'chat-msg-attachment-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = MISSING_IMAGE_ICON_HTML;
+        box.appendChild(icon);
+      }
+      const note = document.createElement('span');
+      note.className = 'chat-msg-attachment-note';
+      note.textContent = text;
+      box.appendChild(note);
+      item.replaceChildren(box);
+    };
+
+    const inlineUrl = toDataUrl(attachment);
+    if (inlineUrl) {
+      showImage(inlineUrl);
+    } else if (attachment?.file) {
+      showNote('loading', 'Bild wird geladen…');
+      void loadStoredAttachment(attachment, { showImage, showNote });
+    } else {
+      showNote('missing', 'Bild nicht mehr vorhanden');
+    }
+    return item;
+  }
+
+  async function loadStoredAttachment(attachment, { showImage, showNote }) {
+    const chatId = appStore.currentChatId;
+    const sessionAtLoad = appStore.chatSessionId;
+    let result = null;
+    try {
+      result =
+        typeof api.readChatAttachment === 'function'
+          ? await api.readChatAttachment(chatId, attachment.file)
+          : null;
+    } catch {
+      result = null;
+    }
+    // Der Nutzer kann inzwischen die Konversation gewechselt haben.
+    if (sessionAtLoad !== appStore.chatSessionId) return;
+    if (!result?.ok || !result.dataBase64) {
+      showNote('missing', 'Bild nicht mehr vorhanden');
+      return;
+    }
+    // Einmal geholt, bleibt das Bild am Anhang haengen: das naechste Rendern
+    // kommt ohne IPC aus, und eine Anschlussfrage nimmt es wieder mit zum
+    // Modell — sonst fiele es beim Weiterreden aus dem Kontext.
+    attachment.dataBase64 = result.dataBase64;
+    if (result.mediaType) attachment.mediaType = result.mediaType;
+    showImage(toDataUrl(attachment));
+  }
+
   function renderChatMessages() {
     // Der Kurztitel in der Kopfzeile leitet sich aus der ersten Nutzerfrage
     // ab und steht deshalb erst nach dem Rendern der Nachrichten fest.
@@ -762,18 +865,7 @@ export function initChatStream({
         }
       } else {
         if (Array.isArray(m.attachments) && m.attachments.length > 0) {
-          const gallery = document.createElement('ul');
-          gallery.className = 'chat-msg-attachments';
-          for (const attachment of m.attachments) {
-            const item = document.createElement('li');
-            const img = document.createElement('img');
-            img.className = 'chat-msg-attachment-img';
-            img.src = toDataUrl(attachment);
-            img.alt = attachment.name || 'Angehängtes Bild';
-            item.appendChild(img);
-            gallery.appendChild(item);
-          }
-          li.appendChild(gallery);
+          li.appendChild(buildAttachmentGallery(m.attachments));
         }
         if (m.content) {
           const textEl = document.createElement('div');

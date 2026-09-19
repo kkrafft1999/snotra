@@ -9,17 +9,42 @@
  */
 
 const { inferChatTitle } = require('../../shared/contracts/chat');
+const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
+
+/**
+ * Bild-Teil in einem Array-Content — die Formen, in denen Anbieter und Renderer
+ * Bilder verpacken. Sie tragen keinen Text und duerfen nicht als JSON in den
+ * Verlauf sickern; dort laege sonst genau das Base64, das Issue #94 aus der
+ * Session-Datei heraushaelt.
+ */
+function isImageContentPart(part) {
+  if (!part || typeof part !== 'object') return false;
+  return (
+    part.type === 'image' ||
+    part.type === 'image_url' ||
+    part.kind === 'image' ||
+    typeof part.dataBase64 === 'string' ||
+    typeof part.image_url === 'object' ||
+    typeof part.inlineData === 'object' ||
+    typeof part.source === 'object'
+  );
+}
 
 function messageContentForStore(content) {
   if (content == null) return '';
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const parts = [];
+    let unknown = false;
     for (const part of content) {
       if (typeof part === 'string') parts.push(part);
       else if (part && typeof part === 'object' && typeof part.text === 'string') parts.push(part.text);
+      else if (isImageContentPart(part)) continue;
+      else unknown = true;
     }
     if (parts.length) return parts.join('\n');
+    // Eine Nachricht, die nur aus Bildern bestand, hat schlicht keinen Text.
+    if (!unknown) return '';
     try {
       return JSON.stringify(content);
     } catch {
@@ -102,7 +127,10 @@ function isStoredAssistantMessageWorthKeeping(row) {
 
 function isLoadedMessageWorthKeeping(message) {
   if (!message) return false;
-  if (message.role === 'user') return message.content.trim().length > 0;
+  // Ein Screenshot ohne Begleitfrage ist eine vollwertige Nachricht (#94).
+  if (message.role === 'user') {
+    return message.content.trim().length > 0 || (message.attachments?.length ?? 0) > 0;
+  }
   return (
     message.isError ||
     message.toolTrace.length > 0 ||
@@ -118,8 +146,14 @@ function sanitizeChatMessagesForStore(raw) {
     if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
     const content = messageContentForStore(m.content);
     if (m.role === 'user') {
-      if (!content.trim()) continue;
-      out.push({ role: 'user', content });
+      // Anhaenge kommen hier ausschliesslich als Datei-Referenz an: die
+      // Bilddaten hat die Anhang-Ablage vorher auf die Platte geschrieben
+      // (Issue #94). Base64 wird bewusst nicht uebernommen.
+      const attachments = normalizeStoredAttachments(m.attachments);
+      if (!content.trim() && attachments.length === 0) continue;
+      const row = { role: 'user', content };
+      if (attachments.length) row.attachments = attachments;
+      out.push(row);
       continue;
     }
     const row = { role: 'assistant', content };
@@ -157,7 +191,12 @@ function normalizeLoadedMessages(raw) {
     .map((m) => {
       if (!m || (m.role !== 'user' && m.role !== 'assistant')) return null;
       if (m.role === 'user') {
-        return { role: 'user', content: messageContentForStore(m.content) };
+        const row = { role: 'user', content: messageContentForStore(m.content) };
+        // Die Bilddaten holt der Renderer erst beim Anzeigen nach (#94) —
+        // saemtliche Sessions eines Ordners auf einmal waeren zu viel.
+        const attachments = normalizeStoredAttachments(m.attachments);
+        if (attachments.length) row.attachments = attachments;
+        return row;
       }
       const toolTrace = Array.isArray(m.toolTrace)
         ? m.toolTrace.map(toolTraceEntryForStore).filter((e) => e !== '')
