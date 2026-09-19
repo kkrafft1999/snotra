@@ -422,13 +422,20 @@ Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
 
 ### Grundausstattung der Tools
 
-Sichtbarkeit und Verfügbarkeit eines Tools sind zwei Achsen
-([#195](https://github.com/kkrafft1999/snotra/issues/195)). `internal: true`
-versteckt vor Nutzer *und* Modell und wird seit dem Wegfall von `debug_wait`
-([#197](https://github.com/kkrafft1999/snotra/issues/197)) von keinem
-eingebauten Tool getragen; `essential: true` versteckt nur in Einstellungen › Tools und geht
-immer an das Modell — die Häkchen des Nutzers greifen darauf nicht,
-`requiresWorkspace` und `requiresSkills` weiterhin schon.
+Grundsatz seit [#180](https://github.com/kkrafft1999/snotra/issues/180): Was
+in Einstellungen › Tools steht, geht an das Modell — und umgekehrt. Sonst
+kostet ein Schema in jeder Runde Tokens, das niemand abwählen kann, weil es in
+der Liste nicht auftaucht.
+
+`essential: true` ist die eine ausdrückliche Ausnahme
+([#195](https://github.com/kkrafft1999/snotra/issues/195)): nur in den
+Einstellungen versteckt, immer an das Modell. Die Häkchen des Nutzers greifen
+darauf nicht, `requiresWorkspace` und `requiresSkills` weiterhin schon. Die
+Gegenrichtung — `internal: true`, vor Nutzer *und* Modell versteckt und nur
+aus Tests auslösbar — ist mit
+[#203](https://github.com/kkrafft1999/snotra/issues/203) entfallen, nachdem ihr
+einziger Träger `debug_wait` weg war
+([#197](https://github.com/kkrafft1999/snotra/issues/197)).
 
 Grundausstattung sind `list_directory` und `load_skill`. Beide sind kein
 Zusatz, sondern der Zugang zu etwas, das der Nutzer an anderer Stelle schon

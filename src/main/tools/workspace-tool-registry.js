@@ -53,12 +53,6 @@ function createToolRegistry(initialDefinitions = []) {
     if (!isToolRiskClass(riskClass)) {
       throw new TypeError(`Tool ${name} benötigt eine gültige riskClass.`);
     }
-    // `internal` versteckt vor Nutzer *und* Modell, `essential` nur vor dem
-    // Nutzer — beides zusammen ergibt keinen Sinn und waere ein Tippfehler,
-    // der sich erst als fehlendes Tool im Prompt zeigt.
-    if (definition.internal === true && definition.essential === true) {
-      throw new TypeError(`Tool ${name}: internal und essential schliessen sich aus.`);
-    }
     // Weitere Mindestklassen fuer Tools, deren Wirkung sich nicht in einer
     // einzigen erschoepft (Issue #107: MCP ist zugleich `execute` und
     // `external`). Nur ergaenzend — die Grundklasse bleibt.
@@ -126,16 +120,16 @@ function createToolRegistry(initialDefinitions = []) {
   // expliziten Allowlist. Ob ein Aufruf laufen darf, entscheidet pro Aufruf
   // die Policy in der Engine (Issue #66) — nicht mehr ein globaler Schreibschalter.
   //
-  // Was der Nutzer in den Einstellungen nicht sieht, bekommt auch das Modell
-  // nicht (Issue #180): Ein internes Tool waere sonst ein Schema, das in jeder
-  // Runde Tokens kostet und das niemand abwaehlen kann, weil es in der
-  // Tool-Liste gar nicht auftaucht. `internal` filtert nur die Sichtbarkeit —
-  // `getDefinition` und `execute` bleiben offen, damit Tests ein solches Tool
-  // ausloesen koennen. Derzeit tragen es keine eingebauten Tools: das einzige
-  // (`debug_wait`) ist mit #197 entfallen.
+  // Grundsatz seit Issue #180: Was der Nutzer in den Einstellungen nicht
+  // sieht, bekommt auch das Modell nicht — sonst kostet ein Schema in jeder
+  // Runde Tokens, und niemand kann es abwaehlen, weil es in der Tool-Liste
+  // gar nicht auftaucht. Das Gegenstueck dazu (`internal`: vor beiden
+  // versteckt, nur fuer Tests ausfuehrbar) ist mit #203 entfallen, nachdem
+  // sein einziger Traeger `debug_wait` weg war (#197).
   //
-  // Die Grundausstattung (`essential`, Issue #195) ist die Gegenrichtung: sie
-  // steht ebenfalls nicht in der Tool-Liste, geht aber immer an das Modell.
+  // Die Grundausstattung (`essential`, Issue #195) ist die ausdrueckliche
+  // Ausnahme vom Grundsatz: sie steht nicht in der Tool-Liste, geht aber
+  // immer an das Modell.
   // Diese Tools sind keine Wahl des Nutzers, sondern der Zugang zu etwas, das
   // er an anderer Stelle schon eingeschaltet hat — `load_skill` ist der
   // einzige Weg zur Anleitung eines eingeschalteten Skills, `list_directory`
@@ -159,7 +153,6 @@ function createToolRegistry(initialDefinitions = []) {
     const disabled = toDisabledNameSet(disabledNames);
     return allDefinitions().filter(
       (definition) =>
-        definition.internal !== true &&
         (!allowed || allowed.has(definition.name)) &&
         // Die Haekchen des Nutzers gelten nicht fuer die Grundausstattung; eine
         // programmatische Allowlist (Tests, kuenftige Modi) schon — sie ist
@@ -181,15 +174,13 @@ function createToolRegistry(initialDefinitions = []) {
    * Katalog für die Einstellungen (Issue #98). Liefert neben der vollen
    * `description` die kurze `promptDescription` als `shortDescription`: die
    * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
-   * Interne Tools (`internal: true`) tauchen weder hier noch in den Schemas
-   * fuer das Modell auf (Issue #180) — ausfuehrbar bleiben sie.
-   * Die Grundausstattung (`essential: true`) fehlt hier ebenfalls, aber aus dem
-   * umgekehrten Grund: Sie geht immer an das Modell, also gibt es nichts zu
-   * entscheiden, und eine Zeile ohne Wahl waere nur ein taubes Haekchen (#195).
+   * Die Grundausstattung (`essential: true`) fehlt hier: Sie geht immer an das
+   * Modell, also gibt es nichts zu entscheiden, und eine Zeile ohne Wahl waere
+   * nur ein taubes Haekchen (#195). Sonst gilt Katalog = Schemas (#180).
    */
   function listCatalog() {
     return allDefinitions()
-      .filter((definition) => definition.internal !== true && definition.essential !== true)
+      .filter((definition) => definition.essential !== true)
       .map((definition) => ({
         name: definition.name,
         description: definition.description,

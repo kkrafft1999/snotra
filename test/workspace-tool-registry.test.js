@@ -234,38 +234,24 @@ test('modelDescription vom falschen Typ faellt sofort auf (#181)', () => {
   );
 });
 
-test('internal tools leave both the settings catalog and the schemas (#180)', () => {
-  const registry = createToolRegistry([
-    definition('read'),
-    { ...definition('nur_intern'), internal: true },
-  ]);
+// Was der Nutzer in den Einstellungen sieht, bekommt auch das Modell — und
+// umgekehrt (Issue #180). Den Weg „nur das Modell" gibt es weiter, aber nur
+// als ausdrueckliche Grundausstattung (#195); den Weg „weder noch" trug
+// `internal`, das mit #203 entfallen ist.
+test('Katalog und Schemas nennen dieselben Tools (#180)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  // Ohne Ordner- und Skill-Bindung vergleichen, sonst filtert nicht die
+  // Sichtbarkeit, sondern die Verfuegbarkeit (#96/#173).
+  const schemas = registry.getTools().map((tool) => tool.function.name);
+  const katalog = registry.listCatalog().map((entry) => entry.name);
+  const essenziell = schemas.filter((name) => registry.getDefinition(name).essential === true);
 
+  assert.ok(essenziell.length > 0, 'ohne Grundausstattung prueft der Vergleich nichts');
   assert.deepEqual(
-    registry.listCatalog().map((entry) => entry.name),
-    ['read']
-  );
-  // Was in den Einstellungen fehlt, kann niemand abwaehlen — also darf es auch
-  // nicht in jeder Runde Tokens kosten (Issue #180).
-  assert.deepEqual(
-    registry.getTools().map((tool) => tool.function.name),
-    ['read']
-  );
-  assert.equal(registry.buildSystemPrompt().includes('nur_intern'), false);
-});
-
-test('internal tools stay executable although the model never sees them (#180)', async () => {
-  const registry = createToolRegistry([
-    definition('read'),
-    { ...definition('nur_intern'), internal: true },
-  ]);
-
-  // Ein Test kann ein internes Tool ueber ein Fake-LLM ausloesen: Der Filter
-  // aendert die Sichtbarkeit, nicht die Ausfuehrbarkeit. Eingebaute Tools
-  // tragen `internal` seit dem Wegfall von debug_wait (#197) keine mehr.
-  assert.equal(registry.getDefinition('nur_intern')?.name, 'nur_intern');
-  assert.equal(
-    JSON.parse(await registry.execute('nur_intern', { value: 'x' }, APPROVED)).name,
-    'nur_intern'
+    schemas.filter((name) => !essenziell.includes(name)).sort(),
+    // Konfigurationsgebundene Tools stehen im Katalog, aber ohne Schluessel
+    // bzw. Laufzeit nicht in den Schemas (#63/#86/#95/#102).
+    katalog.filter((name) => registry.getDefinition(name).isAvailable() === true).sort()
   );
 });
 
