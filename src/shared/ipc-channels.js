@@ -121,6 +121,12 @@ const REQUEST_CHANNELS = Object.freeze({
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
   /**
+   * Chat wird zum aktiven (Issue #211): Der Main stellt Modell und
+   * Freigabemodus dieses Chats her. Der Renderer nennt nur die Kennung und ob
+   * der Wechsel ausdruecklich war — die Werte selbst liegen im Main.
+   */
+  CHAT_HISTORY_ACTIVATE: 'chatHistory:activate',
+  /**
    * Bilddaten eines gespeicherten Anhangs (Issue #94). Der Verlauf traegt nur
    * die Datei-Referenz; der Renderer holt das Bild erst beim Anzeigen nach.
    */

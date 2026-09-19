@@ -464,6 +464,8 @@ export function initChatStream({
   onWorkspaceFileWritten,
   approvalCards,
   openSkillSettings,
+  // Modell und Freigabemodus des Chats herstellen (Issue #211).
+  activateChatSession = async () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
@@ -919,6 +921,10 @@ export function initChatStream({
       // Die zuletzt gefuehrte Konversation wird damit auch die aktive dieses
       // Ordners — sonst begaenne der naechste Wechsel wieder von vorn.
       if (!wasActive) await api.setActiveChatId(restore.id);
+      // Automatisch hergestellt (App-Start, Ordnerwechsel): Modell und Modus
+      // dieses Chats gelten wieder — „Auto“ aber nicht, das faellt auf
+      // „Intelligent“ zurueck (Issue #211).
+      await activateChatSession(restore.id, 'auto');
       chatInput.value = '';
       onInputChanged();
       renderChatMessages();
@@ -931,6 +937,7 @@ export function initChatStream({
     appStore.currentChatTitle = '';
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
+    await activateChatSession(appStore.currentChatId, 'auto');
     chatInput.value = '';
     onInputChanged();
     renderChatMessages();
@@ -950,6 +957,8 @@ export function initChatStream({
     chatInput.value = '';
     onInputChanged();
     await api.setActiveChatId(null);
+    // Neuer Chat: Standard-Modell aus den Einstellungen, Modus „Intelligent“.
+    await activateChatSession(appStore.currentChatId, 'explicit');
     renderChatMessages();
   }
 

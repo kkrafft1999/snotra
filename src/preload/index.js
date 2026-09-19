@@ -76,6 +76,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bild eines gespeicherten Anhangs nachladen (Issue #94).
   readChatAttachment: (chatId, file) => ipcRenderer.invoke(REQ.CHAT_ATTACHMENT_READ, chatId, file),
   setActiveChatId: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, id),
+  // Modell und Freigabemodus des Chats herstellen (Issue #211). `activation`
+  // trennt den ausdruecklichen Wechsel im Verlauf vom automatischen
+  // Wiederherstellen beim Start oder Ordnerwechsel.
+  activateChatSession: (id, activation) =>
+    ipcRenderer.invoke(REQ.CHAT_HISTORY_ACTIVATE, id, activation),
   chat: (messages, options) =>
     ipcRenderer.invoke(REQ.CHAT_SEND, {
       messages,

@@ -13,6 +13,8 @@ export function initChatHistoryDrawer({
   resetChatTokenUsage,
   seedGreetingIfWorkspace,
   onNewChatStarted,
+  // Modell und Freigabemodus des Chats herstellen (Issue #211).
+  activateChatSession = async () => {},
 }) {
   const chatHistoryDrawer = document.getElementById('chat-history-drawer');
   const chatHistoryList = document.getElementById('chat-history-list');
@@ -101,6 +103,10 @@ export function initChatHistoryDrawer({
     setChatTokenUsage?.(s.tokenUsage);
     onInputChanged();
     await api.setActiveChatId(id);
+    // Ausdruecklicher Wechsel: Dieser Chat bekommt sein Modell und seinen
+    // Freigabemodus zurueck — auch „Auto“, das er nur nach einer nativen
+    // Bestaetigung tragen kann (Issue #211).
+    await activateChatSession(id, 'explicit');
     renderChatMessages();
     updateChatChrome();
     setHistoryDrawerOpen(false);
@@ -120,6 +126,8 @@ export function initChatHistoryDrawer({
       resetChatTokenUsage?.();
       onInputChanged();
       await api.setActiveChatId(null);
+      // Der Ersatz ist ein neuer Chat: Standard-Modell, Modus „Intelligent“.
+      await activateChatSession(appStore.currentChatId, 'explicit');
       renderChatMessages();
       updateChatChrome();
     }

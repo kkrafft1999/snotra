@@ -302,3 +302,45 @@ test('normalizeSessionForStore benennt eine Bild-Session und bleibt schlank', ()
   assert.equal(session.title, 'Bild');
   assert.ok(JSON.stringify(session).length < 400);
 });
+
+/** Modell und Freigabemodus eines Chats (Issue #211). */
+const CHAT_WITH_SETTINGS = {
+  id: 'chat-1',
+  updatedAt: 1,
+  messages: [{ role: 'user', content: 'Hallo' }],
+};
+
+test('Modell und Modus des Chats gehen durch Speichern und Laden', () => {
+  const stored = normalizeSessionForStore({
+    ...CHAT_WITH_SETTINGS,
+    modelPresetId: '  preset-a  ',
+    toolPermissionMode: 'ask-all',
+  });
+  assert.equal(stored.modelPresetId, 'preset-a');
+  assert.equal(stored.toolPermissionMode, 'ask-all');
+
+  const loaded = normalizeSessionForLoad(stored);
+  assert.equal(loaded.modelPresetId, 'preset-a');
+  assert.equal(loaded.toolPermissionMode, 'ask-all');
+});
+
+test('ein unbekannter Modus wird verworfen statt auf „Intelligent“ normalisiert', () => {
+  // „nichts gespeichert“ und „ausdruecklich intelligent“ laufen gleich, sagen
+  // aber nicht dasselbe — und ein zugespielter Wert darf nie zur Freigabe werden.
+  const stored = normalizeSessionForStore({
+    ...CHAT_WITH_SETTINGS,
+    toolPermissionMode: 'alles-erlauben',
+  });
+  assert.equal('toolPermissionMode' in stored, false);
+});
+
+test('ein Chat ohne eigene Wahl bekommt auch keine Felder', () => {
+  const stored = normalizeSessionForStore(CHAT_WITH_SETTINGS);
+  assert.equal('modelPresetId' in stored, false);
+  assert.equal('toolPermissionMode' in stored, false);
+
+  // Verlaeufe von vor der Aenderung laufen unveraendert weiter.
+  const loaded = normalizeSessionForLoad({ id: 'alt', updatedAt: 1, messages: [] });
+  assert.equal('modelPresetId' in loaded, false);
+  assert.equal('toolPermissionMode' in loaded, false);
+});

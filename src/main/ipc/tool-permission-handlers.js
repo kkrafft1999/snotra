@@ -76,6 +76,9 @@ function registerToolPermissionHandlers({
   getActiveWorkspaceRoot = () => null,
   REQ,
   PUSH,
+  // Der Modus gehoert zum Chat (Issue #211): Was hier gesetzt wird, merkt sich
+  // der laufende Chat und bekommt es beim naechsten Oeffnen zurueck.
+  chatSessionSettings = null,
 }) {
   if (!toolPolicyStore || !approvals || !sessionGrants) {
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
@@ -127,6 +130,7 @@ function registerToolPermissionHandlers({
     }
     const result = await toolPolicyStore.setMode(mode);
     if (!result.ok) return createSettingsError(result.error);
+    await chatSessionSettings?.rememberMode(result.mode);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), mode: result.mode };
   });

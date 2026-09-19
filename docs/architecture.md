@@ -314,6 +314,37 @@ Chats, jedes `CHAT_HISTORY_UPSERT` zusätzlich alles, wozu es keine Session mehr
 gibt (aus `MAX_CHAT_SESSIONS` gefallen, Reste einer quarantänisierten
 Verlaufsdatei).
 
+### Modell und Freigabemodus gehören zum Chat (Issue #211)
+
+Beides lag früher nur app-weit: `activePresetId` in der LLM-Konfiguration, der
+Berechtigungsmodus in der signierten `tool-policy.json`. Ein Eintrag aus dem
+Verlauf kam deshalb mit seinen Nachrichten zurück, lief aber mit dem gerade
+eingestellten Modell und Modus weiter.
+
+`services/chat-session-settings.js` ist der Gegenpart dazu. Er merkt sich je
+Chat `modelPresetId` und `toolPermissionMode`, schreibt beides in die Zeile des
+Chats im Verlauf und wendet es beim Wechsel wieder an. Die Werte kommen
+ausschließlich aus dem Main: `CHAT_HISTORY_ACTIVATE` nennt nur die Chat-Kennung
+und ob der Wechsel ausdrücklich war, und `CHAT_HISTORY_UPSERT` verwirft, was der
+Renderer zu diesen beiden Feldern mitschickt (Konzept §5).
+
+Zwei bewusst verschiedene Regeln für einen neuen Chat:
+
+- **Modell**: Der zuletzt ausdrücklich gewählte Eintrag gilt weiter. Er steht
+  als `defaultPresetId` in der LLM-Konfiguration und wird nur von einer echten
+  Wahl fortgeschrieben (Pille, Einstellungen) — das Herstellen eines alten Chats
+  setzt nur `activePresetId`. Fehlt das Feld in einer älteren Konfiguration,
+  ergänzt `readLLMConfig` es einmalig aus `activePresetId`; ohne diesen Schritt
+  wanderte der Standard beim ersten Chatwechsel mit.
+- **Freigabemodus**: immer wieder `smart`. `auto` kommt nur beim ausdrücklichen
+  Wechsel im Verlauf zurück, beim automatischen Herstellen (App-Start,
+  Ordnerwechsel) fällt es auf `smart` — Details in
+  [`sicherheitskonzept.md`](./sicherheitskonzept.md) §8.
+
+Ein Eintrag, den es nicht mehr gibt oder dessen Zugang unvollständig ist, fällt
+auf den Standard zurück (`isPresetUsable`), statt den Chat mit einem toten
+Modell zu öffnen.
+
 ## Composition root
 
 `src/main/composition/create-application.js` ist der zentrale Einstieg nach dem

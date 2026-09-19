@@ -6,6 +6,8 @@ const path = require('path');
 const {
   registerSettingsHandlers,
   mergeProviderPatchIntoConfigImpl,
+  applyActivePreset,
+  isPresetUsable,
 } = require('../src/main/ipc/settings-handlers');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
@@ -168,7 +170,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null } = {}) {
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const safeStorage = {
@@ -235,6 +237,7 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     toolCatalog,
     skillCatalog,
     shellSettings,
+    chatSessionSettings,
   });
   return {
     ipcMain,
@@ -243,7 +246,24 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     uiPrefsStore,
     workspaceActivation,
     getActiveWorkspaceRoot: () => activeWorkspaceRoot,
+    providerCatalog,
+    safeStorage,
   };
+}
+
+/** Zwei vollstaendig konfigurierte Eintraege desselben Anbieters. */
+async function seedTwoPresets(llmConfigStore) {
+  await llmConfigStore.updateLLMConfig(async (config) => {
+    config.providers = { openai: { apiKeyEnc: Buffer.from('enc:sk-test', 'utf8').toString('base64'), model: 'gpt-4o' } };
+    config.presets = [
+      { id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+      { id: 'p2', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true },
+    ];
+    config.activePresetId = 'p1';
+    config.defaultPresetId = 'p1';
+    config.activeProvider = 'openai';
+    return config;
+  });
 }
 
 test('getToolCatalog returns the registry catalog, or an empty list without one', async (t) => {
@@ -915,4 +935,48 @@ test('die neuen Felder gehen an einem Anbieter vorbei, der sie nicht kennt', () 
     sendTools: false,
   });
   assert.deepEqual(config.providers.ollama, { baseUrl: 'http://127.0.0.1:11434' });
+});
+
+/**
+ * Der zuletzt ausdruecklich gewaehlte Eintrag ist der Standard fuer neue Chats
+ * (Issue #211) — das Herstellen eines alten Chats aendert ihn nicht.
+ */
+test('eine ausdrueckliche Wahl setzt den Standard fuer neue Chats mit', async (t) => {
+  const remembered = [];
+  const { ipcMain, llmConfigStore } = await setupHandlers(t, {
+    chatSessionSettings: { rememberPreset: async (id) => remembered.push(id) },
+  });
+  await seedTwoPresets(llmConfigStore);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, 'p2');
+  assert.equal(res.ok, true);
+
+  const config = await llmConfigStore.readLLMConfig();
+  assert.equal(config.activePresetId, 'p2');
+  assert.equal(config.defaultPresetId, 'p2');
+  // Und der laufende Chat merkt sich denselben Eintrag.
+  assert.deepEqual(remembered, ['p2']);
+});
+
+test('das Herstellen eines Chats laesst den Standard stehen', async (t) => {
+  const { ipcMain, llmConfigStore, providerCatalog, safeStorage } = await setupHandlers(t);
+  await seedTwoPresets(llmConfigStore);
+  await ipcMain.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, 'p2');
+
+  const res = await applyActivePreset({ llmConfigStore, providerCatalog, safeStorage }, 'p1');
+  assert.equal(res.ok, true);
+
+  const config = await llmConfigStore.readLLMConfig();
+  assert.equal(config.activePresetId, 'p1');
+  assert.equal(config.defaultPresetId, 'p2');
+});
+
+test('isPresetUsable erkennt geloeschte und unvollstaendige Eintraege', async (t) => {
+  const { llmConfigStore, providerCatalog, safeStorage } = await setupHandlers(t);
+  await seedTwoPresets(llmConfigStore);
+  const deps = { llmConfigStore, providerCatalog, safeStorage };
+
+  assert.equal(await isPresetUsable(deps, 'p1'), true);
+  assert.equal(await isPresetUsable(deps, 'gibt-es-nicht'), false);
+  assert.equal(await isPresetUsable(deps, ''), false);
 });

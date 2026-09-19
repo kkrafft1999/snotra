@@ -52,7 +52,12 @@ const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
-const { registerSettingsHandlers } = require('../ipc/settings-handlers');
+const {
+  registerSettingsHandlers,
+  applyActivePreset,
+  isPresetUsable,
+} = require('../ipc/settings-handlers');
+const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
@@ -157,6 +162,30 @@ function createApplication({
   });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH });
   const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
+
+  // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
+  // beides weiterhin ueber die bestehenden Wege — „Auto“ also nur nach dem
+  // nativen Dialog; hier wird es je Chat gemerkt und beim Wechsel hergestellt.
+  const presetDeps = { llmConfigStore, providerCatalog, safeStorage };
+  const chatSessionSettings = createChatSessionSettings({
+    chatHistoryStore,
+    applyPreset: (presetId) => applyActivePreset(presetDeps, presetId),
+    getDefaultPresetId: async () => {
+      const config = await llmConfigStore.readLLMConfig();
+      return config.defaultPresetId || config.activePresetId || null;
+    },
+    isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
+    getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
+    getActiveMode: async () => (await toolPolicyStore.read()).mode,
+    applyMode: async (mode) => {
+      const result = await toolPolicyStore.setMode(mode);
+      if (!result?.ok) return;
+      // Wie bei jeder Moduspflege (Konzept §7): offene Karten verwerfen und
+      // Sitzungsfreigaben loeschen. Der neue Chat erbt keine Freigaben des alten.
+      approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+      sessionGrants.clear();
+    },
+  });
 
   // Erst weiter unten gebaut (der Dienst braucht den Skill-Service), aber
   // schon hier benannt: Der Workspace-Wechsel direkt darunter greift darauf zu.
@@ -514,6 +543,7 @@ function createApplication({
     mcpSettings,
     pythonSettings,
     shellSettings,
+    chatSessionSettings,
   });
   registerChatHistoryHandlers({
     ipcMain,
@@ -522,6 +552,7 @@ function createApplication({
     chatAttachments,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
+    chatSessionSettings,
   });
   registerUpdateHandlers({ ipcMain, updates, REQ });
   // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in
@@ -565,6 +596,7 @@ function createApplication({
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     REQ,
     PUSH,
+    chatSessionSettings,
   });
 
   async function runUpdateCheck({ silent }) {

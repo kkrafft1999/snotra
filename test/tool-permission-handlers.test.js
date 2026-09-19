@@ -28,7 +28,7 @@ function makeSender(id = 1) {
   return { id, sent, send: (channel, payload) => sent.push({ channel, payload }), isDestroyed: () => false, once() {} };
 }
 
-async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt' } = {}) {
+async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', chatSessionSettings = null } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} } });
@@ -52,6 +52,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt' } 
     getActiveWorkspaceRoot: () => workspaceRoot,
     REQ,
     PUSH,
+    chatSessionSettings,
   });
   // Handler direkt mit einem Event aufrufen, dessen sender das Fenster ist.
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
@@ -201,4 +202,26 @@ test('Freigabe-Antworten: nur eigene offene Anfrage, nur requestId und Entscheid
   assert.equal('args' in outcome, false);
   assert.equal((await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId, response: 'deny' })).ok, false, 'doppelt');
   assert.deepEqual((await invoke(REQ.TOOL_APPROVAL_LIST_PENDING, sender)).requests, []);
+});
+
+test('der gesetzte Modus wird dem laufenden Chat gemerkt (#211)', async (t) => {
+  const remembered = [];
+  const { invoke } = await setup(t, {
+    chatSessionSettings: { rememberMode: async (mode) => remembered.push(mode) },
+  });
+
+  await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, makeSender(), 'ask-all');
+  assert.deepEqual(remembered, ['ask-all']);
+});
+
+test('ein abgelehnter Auto-Dialog merkt auch nichts (#211)', async (t) => {
+  const remembered = [];
+  const { invoke } = await setup(t, {
+    dialogResponse: 1,
+    chatSessionSettings: { rememberMode: async (mode) => remembered.push(mode) },
+  });
+
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, makeSender(), 'auto');
+  assert.equal(res.ok, false);
+  assert.deepEqual(remembered, []);
 });

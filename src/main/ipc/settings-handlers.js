@@ -31,6 +31,10 @@ function registerSettingsHandlers({
   mcpSettings = null,
   pythonSettings = null,
   shellSettings = null,
+  // Modell und Freigabemodus gehoeren zum Chat (Issue #211): Eine
+  // ausdrueckliche Wahl gilt fuer den laufenden Chat *und* wird der Standard
+  // fuer neue. Fehlt der Dienst (Tests), bleibt es beim bisherigen Verhalten.
+  chatSessionSettings = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -75,40 +79,15 @@ function registerSettingsHandlers({
   }
 
   ipcMain.handle(REQ.SETTINGS_SET_ACTIVE_PRESET, async (_event, presetId) => {
-    if (typeof presetId !== 'string' || !presetId.trim()) {
-      return createSettingsError('Kein Eintrag gewählt.');
-    }
-    let validationError = null;
-    await llmConfigStore.updateLLMConfig(async (config) => {
-      const preset = Array.isArray(config.presets)
-        ? config.presets.find((p) => p && p.id === presetId.trim())
-        : null;
-      if (!preset || !providerCatalog.getProvider(preset.providerId)) {
-        validationError = createSettingsError('Eintrag nicht gefunden.');
-        return config;
-      }
-      const meta = providerCatalog.getProvider(preset.providerId);
-      const entry = (config.providers && config.providers[preset.providerId]) || {};
-      if (!isProviderConfigured({ safeStorage }, meta, entry, preset)) {
-        validationError = createSettingsError('Anbieter ist noch nicht konfiguriert.');
-        return config;
-      }
-      config.activePresetId = presetId.trim();
-      config.activeProvider = preset.providerId;
-      config.providers = config.providers || {};
-      // Bei Verbindung je Eintrag gibt es keinen Anbieter-Eintrag mehr, in den
-      // das aktive Modell gespiegelt werden koennte — und er wuerde beim
-      // naechsten Lesen ohnehin wieder wegmigriert (Issue #202).
-      if (!hasPresetConnection(meta)) {
-        const pe = { ...(config.providers[preset.providerId] || {}) };
-        pe.model = typeof preset.model === 'string' && preset.model.trim()
-          ? preset.model.trim()
-          : meta.defaultModel;
-        config.providers[preset.providerId] = pe;
-      }
-      return config;
-    });
-    if (validationError) return validationError;
+    // Ausdrueckliche Wahl in der Chat-Leiste: gilt fuer den laufenden Chat und
+    // wird der Standard fuer neue (Issue #211).
+    const result = await applyActivePreset(
+      { llmConfigStore, providerCatalog, safeStorage },
+      presetId,
+      { makeDefault: true }
+    );
+    if (!result.ok) return result;
+    await chatSessionSettings?.rememberPreset(presetId.trim());
     return createSettingsOk();
   });
 
@@ -262,6 +241,7 @@ function registerSettingsHandlers({
         draft.version = LLM_CONFIG_VERSION;
         draft.presets = presets;
         draft.activePresetId = activePresetId;
+        draft.defaultPresetId = activePresetId;
         const target = llmConfigStore.resolveChatModelTarget(draft);
         draft.activeProvider = target.providerId;
         const activeEntryPid = target.providerId;
@@ -303,6 +283,9 @@ function registerSettingsHandlers({
       );
     }
 
+    // Auch der Dialog waehlt ausdruecklich: Der laufende Chat uebernimmt den
+    // Eintrag, nicht nur der naechste neue (Issue #211).
+    await chatSessionSettings?.rememberPreset(activePresetId);
     return createSettingsOk();
   });
 
@@ -597,6 +580,74 @@ function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
   return { ok: true, connection: normalizeStoredPresetConnection(next, provider) };
 }
 
+/**
+ * Aktiven Eintrag setzen — der einzige Weg dorthin (Issue #202, #211).
+ *
+ * `makeDefault` schreibt zusaetzlich `defaultPresetId` fort, den Standard fuer
+ * neue Chats. Das tut nur eine ausdrueckliche Wahl; wird ein Chat aus dem
+ * Verlauf hergestellt, aendert sich der Standard nicht.
+ */
+async function applyActivePreset(
+  { llmConfigStore, providerCatalog, safeStorage },
+  rawPresetId,
+  { makeDefault = false } = {}
+) {
+  if (typeof rawPresetId !== 'string' || !rawPresetId.trim()) {
+    return createSettingsError('Kein Eintrag gewählt.');
+  }
+  const presetId = rawPresetId.trim();
+  let validationError = null;
+  await llmConfigStore.updateLLMConfig(async (config) => {
+    const preset = Array.isArray(config.presets)
+      ? config.presets.find((p) => p && p.id === presetId)
+      : null;
+    if (!preset || !providerCatalog.getProvider(preset.providerId)) {
+      validationError = createSettingsError('Eintrag nicht gefunden.');
+      return config;
+    }
+    const meta = providerCatalog.getProvider(preset.providerId);
+    const entry = (config.providers && config.providers[preset.providerId]) || {};
+    if (!isProviderConfigured({ safeStorage }, meta, entry, preset)) {
+      validationError = createSettingsError('Anbieter ist noch nicht konfiguriert.');
+      return config;
+    }
+    config.activePresetId = presetId;
+    if (makeDefault) config.defaultPresetId = presetId;
+    config.activeProvider = preset.providerId;
+    config.providers = config.providers || {};
+    // Bei Verbindung je Eintrag gibt es keinen Anbieter-Eintrag mehr, in den
+    // das aktive Modell gespiegelt werden koennte — und er wuerde beim
+    // naechsten Lesen ohnehin wieder wegmigriert (Issue #202).
+    if (!hasPresetConnection(meta)) {
+      const pe = { ...(config.providers[preset.providerId] || {}) };
+      pe.model = typeof preset.model === 'string' && preset.model.trim()
+        ? preset.model.trim()
+        : meta.defaultModel;
+      config.providers[preset.providerId] = pe;
+    }
+    return config;
+  });
+  return validationError || createSettingsOk();
+}
+
+/**
+ * Taugt der Eintrag noch als Modell dieses Chats (Issue #211)? Geloescht oder
+ * unvollstaendig konfiguriert heisst nein — dann greift der Standard.
+ */
+async function isPresetUsable({ llmConfigStore, providerCatalog, safeStorage }, rawPresetId) {
+  if (typeof rawPresetId !== 'string' || !rawPresetId.trim()) return false;
+  const presetId = rawPresetId.trim();
+  const config = await llmConfigStore.readLLMConfig();
+  const preset = Array.isArray(config.presets)
+    ? config.presets.find((p) => p && p.id === presetId)
+    : null;
+  if (!preset) return false;
+  const meta = providerCatalog.getProvider(preset.providerId);
+  if (!meta) return false;
+  const entry = (config.providers && config.providers[preset.providerId]) || {};
+  return isProviderConfigured({ safeStorage }, meta, entry, preset);
+}
+
 /** Beschriftung einer unvollstaendigen Zeile: ihr Name, sonst der des Anbieters. */
 function presetAccessLabel(meta, preset) {
   const name = preset?.connection?.displayName;
@@ -631,6 +682,8 @@ function isProviderConfigured({ safeStorage }, meta, entry, preset) {
 
 module.exports = {
   registerSettingsHandlers,
+  applyActivePreset,
+  isPresetUsable,
   mergeProviderPatchIntoConfigImpl,
   mergePresetConnection,
   canDecryptApiKeyEnc,
