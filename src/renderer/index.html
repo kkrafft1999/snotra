@@ -1023,6 +1023,25 @@
   </div>
 </div>
 
+  <!-- Bild-Anhang in gross (Issue #94). Nur ein Bild und ein Schliessen-Knopf:
+       der Dialog zeigt, was das Thumbnail nicht hergibt, und sonst nichts. -->
+  <div id="image-lightbox" class="modal image-lightbox hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="image-lightbox-backdrop"></div>
+    <div
+      class="modal-dialog image-lightbox__dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-lightbox-caption">
+      <button type="button" id="image-lightbox-close" class="image-lightbox__close" aria-label="Bild schließen">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+        </svg>
+      </button>
+      <img id="image-lightbox-img" class="image-lightbox__img" alt="" />
+      <p id="image-lightbox-caption" class="image-lightbox__caption"></p>
+    </div>
+  </div>
+
   <script src="vendor/marked.umd.js"></script>
   <script src="vendor/purify.min.js"></script>
   <script type="module" src="./app.js"></script>

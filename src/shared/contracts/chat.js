@@ -9,6 +9,7 @@
  */
 'use strict';
 
+const { countImageAttachments } = require('./attachments');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -26,17 +27,25 @@ const CHAT_TITLE_MAX_LENGTH = 48;
  * Leitet den Kurztitel einer Konversation aus ihrer ersten Nutzerfrage ab.
  * Wird von der Verlaufs-Ablage (Main) und der Kopfzeile (Renderer) genutzt —
  * beide muessen denselben Text zeigen, deshalb liegt die Regel hier.
+ *
+ * Ein Screenshot ohne Begleitfrage ist eine gueltige erste Nachricht
+ * (Issue #94). Ohne Text gibt es nichts zu kuerzen — dann benennt der Titel,
+ * was in der Nachricht steckt, statt „Neuer Chat" stehen zu lassen.
  */
 function inferChatTitle(messages) {
   const list = Array.isArray(messages) ? messages : [];
   const first = list.find((m) => m && m.role === 'user');
-  if (first && first.content != null && String(first.content).trim()) {
+  if (!first) return 'Neuer Chat';
+  if (first.content != null && String(first.content).trim()) {
     const text = String(first.content).trim().replace(/\s+/g, ' ');
     if (text.length > CHAT_TITLE_MAX_LENGTH) {
       return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
     }
     return text || 'Chat';
   }
+  const images = countImageAttachments(first);
+  if (images === 1) return 'Bild';
+  if (images > 1) return `${images} Bilder`;
   return 'Neuer Chat';
 }
 

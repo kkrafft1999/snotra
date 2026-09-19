@@ -66,6 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),
+  // Bild eines gespeicherten Anhangs nachladen (Issue #94).
+  readChatAttachment: (chatId, file) => ipcRenderer.invoke(REQ.CHAT_ATTACHMENT_READ, chatId, file),
   setActiveChatId: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, id),
   chat: (messages, options) =>
     ipcRenderer.invoke(REQ.CHAT_SEND, {

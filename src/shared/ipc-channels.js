@@ -120,6 +120,11 @@ const REQUEST_CHANNELS = Object.freeze({
   CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
+  /**
+   * Bilddaten eines gespeicherten Anhangs (Issue #94). Der Verlauf traegt nur
+   * die Datei-Referenz; der Renderer holt das Bild erst beim Anzeigen nach.
+   */
+  CHAT_ATTACHMENT_READ: 'chatHistory:readAttachment',
 
   CHAT_SEND: 'chat:send',
   /** Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden. */

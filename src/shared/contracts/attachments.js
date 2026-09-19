@@ -10,6 +10,11 @@
  * beim Aufnehmen aus der Zwischenablage und der Main-Prozess beim Entgegen-
  * nehmen des IPC-Payloads. Was ueber IPC kommt, ist ungeprueft — der Main
  * verlaesst sich nicht darauf, dass der Renderer schon aufgeraeumt hat.
+ *
+ * Ein Anhang hat zwei Formen (Issue #94): unterwegs traegt er die Bilddaten
+ * selbst (`dataBase64`), im gespeicherten Verlauf nur den Namen der Datei, die
+ * daneben liegt (`file`). Base64 in der Session-JSON blaeht sie sonst auf —
+ * vier Screenshots pro Nachricht schlagen mit Megabytes zu Buche.
  */
 'use strict';
 
@@ -24,6 +29,32 @@ const IMAGE_ATTACHMENT_MEDIA_TYPES = Object.freeze([
 ]);
 
 const ATTACHMENT_KINDS = Object.freeze({ IMAGE: 'image' });
+
+/**
+ * Dateiendung je Medientyp. Der gespeicherte Verlauf legt ein Bild als Datei
+ * ab und traegt in der Nachricht nur die Referenz (Issue #94) — die Endung
+ * muss deshalb eindeutig aus dem Medientyp folgen und umgekehrt.
+ */
+const IMAGE_ATTACHMENT_EXTENSIONS = Object.freeze({
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+});
+
+const IMAGE_ATTACHMENT_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+});
+
+/**
+ * Erlaubter Dateiname einer abgelegten Anhangsdatei: Inhalts-Hash plus Endung.
+ * Bewusst eng — der Name kommt aus der Verlaufsdatei bzw. ueber IPC und wird zu
+ * einem Pfad zusammengesetzt; weder Trenner noch Punkte duerfen darin vorkommen.
+ */
+const ATTACHMENT_FILE_RE = /^[0-9a-f]{32,64}\.(?:png|jpg|gif|webp)$/;
 
 // Aus LIMITS durchgereicht, damit der Renderer die Grenzwerte ueber das
 // Contract-Bundle bekommt und sie nicht ein zweites Mal beziffert.
@@ -100,6 +131,66 @@ function normalizeAttachments(list) {
   return out;
 }
 
+/** Endung, unter der ein Bild dieses Medientyps abgelegt wird ('' = unbekannt). */
+function attachmentFileExtension(mediaType) {
+  if (typeof mediaType !== 'string') return '';
+  return IMAGE_ATTACHMENT_EXTENSIONS[mediaType.trim().toLowerCase()] || '';
+}
+
+/** Medientyp zu einer Anhangsdatei — aus der Endung, nicht aus fremden Angaben. */
+function attachmentMediaTypeForFile(file) {
+  if (typeof file !== 'string') return '';
+  const dot = file.lastIndexOf('.');
+  if (dot < 0) return '';
+  return IMAGE_ATTACHMENT_MEDIA_TYPE_BY_EXTENSION[file.slice(dot + 1).toLowerCase()] || '';
+}
+
+/** Ist das ein Dateiname, den die Ablage selbst vergeben haben kann? */
+function isAttachmentFileName(value) {
+  return typeof value === 'string' && ATTACHMENT_FILE_RE.test(value);
+}
+
+/**
+ * Anhang in Ablage-Form: `{ kind, mediaType, file }` statt Base64 (Issue #94).
+ * Liefert `null`, sobald etwas nicht stimmt — insbesondere, wenn Endung und
+ * Medientyp auseinanderlaufen. Base64 wird hier nie uebernommen; genau das
+ * haelt die Verlaufsdatei schlank.
+ */
+function normalizeStoredAttachment(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.kind !== undefined && raw.kind !== ATTACHMENT_KINDS.IMAGE) return null;
+
+  const mediaType = typeof raw.mediaType === 'string' ? raw.mediaType.trim().toLowerCase() : '';
+  const file = typeof raw.file === 'string' ? raw.file.trim() : '';
+  if (!isImageMediaType(mediaType) || !isAttachmentFileName(file)) return null;
+  if (attachmentMediaTypeForFile(file) !== mediaType) return null;
+
+  const out = { kind: ATTACHMENT_KINDS.IMAGE, mediaType, file };
+  const bytes = Math.round(Number(raw.bytes) || 0);
+  if (bytes > 0) out.bytes = bytes;
+  const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 120) : '';
+  if (name) out.name = name;
+  return out;
+}
+
+/** Anhangsliste in Ablage-Form, bei MAX_IMAGES_PER_MESSAGE gekappt. */
+function normalizeStoredAttachments(list) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  const out = [];
+  for (const raw of list) {
+    if (out.length >= LIMITS.MAX_IMAGES_PER_MESSAGE) break;
+    const normalized = normalizeStoredAttachment(raw);
+    if (normalized) out.push(normalized);
+  }
+  return out;
+}
+
+/** Zaehlt die Bild-Anhaenge einer Nachricht, gleich ob Base64 oder Referenz. */
+function countImageAttachments(message) {
+  const list = Array.isArray(message?.attachments) ? message.attachments : [];
+  return list.filter((a) => a && (a.kind === undefined || a.kind === ATTACHMENT_KINDS.IMAGE)).length;
+}
+
 /** Nur die Bilder einer Nachricht — bequemer Zugriff fuer die Provider. */
 function imageAttachmentsOf(message) {
   const list = Array.isArray(message?.attachments) ? message.attachments : [];
@@ -124,7 +215,14 @@ module.exports = {
   MAX_IMAGE_EDGE_PX,
   IMAGE_ATTACHMENT_MEDIA_TYPES,
   IMAGE_ATTACHMENT_CHAR_COST,
+  ATTACHMENT_FILE_RE,
   isImageMediaType,
+  attachmentFileExtension,
+  attachmentMediaTypeForFile,
+  isAttachmentFileName,
+  normalizeStoredAttachment,
+  normalizeStoredAttachments,
+  countImageAttachments,
   base64ByteLength,
   normalizeImageAttachment,
   normalizeAttachments,

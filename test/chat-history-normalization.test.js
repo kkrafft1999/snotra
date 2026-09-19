@@ -225,3 +225,80 @@ test('normalizeLoadedMessages keeps the tool name for loaded sessions', () => {
     'Alt-Eintrag',
   ]);
 });
+
+// --- Bild-Anhaenge im gespeicherten Verlauf (Issue #94) ---------------------
+
+const REF_PNG = { kind: 'image', mediaType: 'image/png', file: `${'b'.repeat(64)}.png`, bytes: 512 };
+
+test('inferChatTitle benennt eine erste Nachricht, die nur aus Bildern besteht', () => {
+  assert.equal(inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG] }]), 'Bild');
+  assert.equal(inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG, REF_PNG] }]), '2 Bilder');
+  // Text schlaegt Bild — der Titel bleibt die Frage.
+  assert.equal(inferChatTitle([{ role: 'user', content: 'Was ist das?', attachments: [REF_PNG] }]), 'Was ist das?');
+  // Ohne Anhang bleibt es beim bisherigen Verhalten.
+  assert.equal(inferChatTitle([{ role: 'user', content: '   ' }]), 'Neuer Chat');
+});
+
+test('sanitizeChatMessagesForStore behaelt Bild-Referenzen und wirft Base64 weg', () => {
+  const stored = sanitizeChatMessagesForStore([
+    {
+      role: 'user',
+      content: '',
+      attachments: [
+        { ...REF_PNG, dataBase64: 'AAAA', name: 'Screenshot.png' },
+        // Ohne Datei-Referenz gibt es nichts abzulegen.
+        { kind: 'image', mediaType: 'image/png', dataBase64: 'AAAA' },
+      ],
+    },
+  ]);
+  assert.equal(stored.length, 1);
+  assert.deepEqual(stored[0].attachments, [{ ...REF_PNG, name: 'Screenshot.png' }]);
+  assert.equal(JSON.stringify(stored).includes('dataBase64'), false);
+});
+
+test('sanitizeChatMessagesForStore wirft eine Nachricht ohne Text und ohne Bild weg', () => {
+  assert.deepEqual(sanitizeChatMessagesForStore([{ role: 'user', content: '   ' }]), []);
+  assert.deepEqual(
+    sanitizeChatMessagesForStore([{ role: 'user', content: '   ', attachments: [{ file: 'kaputt' }] }]),
+    []
+  );
+});
+
+test('messageContentForStore laesst Bild-Teile nicht als JSON in den Verlauf sickern', () => {
+  const [onlyImage] = sanitizeChatMessagesForStore([
+    {
+      role: 'assistant',
+      content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }],
+      toolTrace: ['etwas passiert'],
+    },
+  ]);
+  assert.equal(onlyImage.content, '');
+  const [mixed] = sanitizeChatMessagesForStore([
+    {
+      role: 'user',
+      content: [
+        { type: 'image', source: { data: 'AAAA' } },
+        { type: 'text', text: 'Was steht da?' },
+      ],
+    },
+  ]);
+  assert.equal(mixed.content, 'Was steht da?');
+});
+
+test('normalizeLoadedMessages reicht Bild-Referenzen an den Renderer durch', () => {
+  const loaded = normalizeLoadedMessages([
+    { role: 'user', content: '', attachments: [REF_PNG, { mediaType: 'image/png', file: '../weg.png' }] },
+  ]);
+  assert.equal(loaded.length, 1);
+  assert.deepEqual(loaded[0].attachments, [REF_PNG]);
+});
+
+test('normalizeSessionForStore benennt eine Bild-Session und bleibt schlank', () => {
+  const session = normalizeSessionForStore({
+    id: 'chat-1',
+    updatedAt: 1,
+    messages: [{ role: 'user', content: '', attachments: [{ ...REF_PNG, dataBase64: 'AAAA' }] }],
+  });
+  assert.equal(session.title, 'Bild');
+  assert.ok(JSON.stringify(session).length < 400);
+});
