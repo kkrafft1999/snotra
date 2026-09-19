@@ -255,6 +255,26 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }));
   assert.deepEqual(tabs, { toolsVisible: true, modelsHidden: true, heading: 'Tools' });
 
+  // Die Grundausstattung steht nicht in der Liste (#195). Hier statt im
+  // Unit-Test, weil erst die gerenderte Liste beweist, dass der Katalog aus
+  // dem Main-Prozess auch so ankommt — ein taubes Haekchen waere eine Falle:
+  // abgewaehlt wuerde `load_skill` jede Skill-Anleitung voll in den Prompt
+  // zurueckholen.
+  const toolRows = await poll(async () => {
+    const names = await page.evaluate(() =>
+      [...document.querySelectorAll('#settings-tool-list input[data-tool-name]')].map(
+        (input) => input.dataset.toolName
+      )
+    );
+    return names.length > 0 ? names : null;
+  }, { what: 'gerenderte Tool-Liste' });
+  for (const hidden of ['list_directory', 'load_skill']) {
+    assert.equal(toolRows.includes(hidden), false, `${hidden} steht nicht in der Tool-Liste`);
+  }
+  // Gegenprobe: die Liste ist nicht einfach leer.
+  assert.ok(toolRows.includes('read_file_text'), 'read_file_text steht in der Tool-Liste');
+  step('Tool-Liste ohne Grundausstattung geprueft');
+
   await page.keyboard.press('Escape');
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),

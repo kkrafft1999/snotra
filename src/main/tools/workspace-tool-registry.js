@@ -55,6 +55,12 @@ function createToolRegistry(initialDefinitions = []) {
     if (!isToolRiskClass(riskClass)) {
       throw new TypeError(`Tool ${name} benötigt eine gültige riskClass.`);
     }
+    // `internal` versteckt vor Nutzer *und* Modell, `essential` nur vor dem
+    // Nutzer — beides zusammen ergibt keinen Sinn und waere ein Tippfehler,
+    // der sich erst als fehlendes Tool im Prompt zeigt.
+    if (definition.internal === true && definition.essential === true) {
+      throw new TypeError(`Tool ${name}: internal und essential schliessen sich aus.`);
+    }
     // Weitere Mindestklassen fuer Tools, deren Wirkung sich nicht in einer
     // einzigen erschoepft (Issue #107: MCP ist zugleich `execute` und
     // `external`). Nur ergaenzend — die Grundklasse bleibt.
@@ -75,6 +81,9 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
       // Skill eingeschaltet ist (Issue #173).
       requiresSkills: definition.requiresSkills === true,
+      // Standard false: Grundausstattung, die der Nutzer nicht abwaehlen kann
+      // und in Einstellungen › Tools deshalb auch nicht sieht (Issue #195).
+      essential: definition.essential === true,
       // Was dieses Tool beim Durchlaufen ueberspringt (Issue #182): `hidden` =
       // Eintraege mit Punkt-Praefix, `ignored` = Muster aus der .gitignore des
       // Projektroots. Steht einmal im Konventionsblock statt in jeder
@@ -124,6 +133,19 @@ function createToolRegistry(initialDefinitions = []) {
   // Runde Tokens kostet und das niemand abwaehlen kann, weil es in der
   // Tool-Liste gar nicht auftaucht. Nur die Sichtbarkeit — `getDefinition` und
   // `execute` bleiben offen, die UI-Tests loesen `debug_wait` weiterhin aus.
+  //
+  // Die Grundausstattung (`essential`, Issue #195) ist die Gegenrichtung: sie
+  // steht ebenfalls nicht in der Tool-Liste, geht aber immer an das Modell.
+  // Diese Tools sind keine Wahl des Nutzers, sondern der Zugang zu etwas, das
+  // er an anderer Stelle schon eingeschaltet hat — `load_skill` ist der
+  // einzige Weg zur Anleitung eines eingeschalteten Skills, `list_directory`
+  // der einzige Weg in einen geoeffneten Ordner. Abgewaehlt kosteten sie kein
+  // Schema mehr, dafuer aber ein Vielfaches an anderer Stelle: ohne
+  // `load_skill` liegt jede Skill-Anleitung wieder voll im Prompt
+  // (chat-engine.js), ohne `list_directory` raet das Modell Pfade und liest
+  // sich durch Fehlschlaege. Ein altes Haekchen aus den Einstellungen bleibt
+  // gespeichert, wirkt hier aber nicht mehr — wird ein Tool spaeter wieder
+  // abwaehlbar, gilt es unveraendert weiter.
   function getAvailableDefinitions({
     allowedNames,
     disabledNames,
@@ -139,7 +161,10 @@ function createToolRegistry(initialDefinitions = []) {
       (definition) =>
         definition.internal !== true &&
         (!allowed || allowed.has(definition.name)) &&
-        (!disabled || !disabled.has(definition.name)) &&
+        // Die Haekchen des Nutzers gelten nicht fuer die Grundausstattung; eine
+        // programmatische Allowlist (Tests, kuenftige Modi) schon — sie ist
+        // keine Einstellung, sondern eine Zusicherung des Aufrufers.
+        (!disabled || !disabled.has(definition.name) || definition.essential === true) &&
         // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96).
         (workspaceOpen !== false || definition.requiresWorkspace === false) &&
         // Ohne eingeschalteten Skill hat `load_skill` nichts zu laden und
@@ -158,10 +183,13 @@ function createToolRegistry(initialDefinitions = []) {
    * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
    * Interne Tools (`internal: true`, z. B. debug_wait) tauchen weder hier noch
    * in den Schemas fuer das Modell auf (Issue #180) — ausfuehrbar bleiben sie.
+   * Die Grundausstattung (`essential: true`) fehlt hier ebenfalls, aber aus dem
+   * umgekehrten Grund: Sie geht immer an das Modell, also gibt es nichts zu
+   * entscheiden, und eine Zeile ohne Wahl waere nur ein taubes Haekchen (#195).
    */
   function listCatalog() {
     return allDefinitions()
-      .filter((definition) => definition.internal !== true)
+      .filter((definition) => definition.internal !== true && definition.essential !== true)
       .map((definition) => ({
         name: definition.name,
         description: definition.description,
@@ -361,6 +389,9 @@ function createWorkspaceToolRegistry({
     {
       name: 'list_directory',
       riskClass: TOOL_RISK_CLASSES.READ,
+      // Grundausstattung (Issue #195): Ohne einen Blick in den Ordner raet das
+      // Modell Pfade — das kostet mehr Runden und mehr Tokens als das Schema.
+      essential: true,
       skips: ['hidden'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
@@ -390,6 +421,10 @@ function createWorkspaceToolRegistry({
       // dann bleibt das Tool weg.
       requiresWorkspace: false,
       requiresSkills: true,
+      // Grundausstattung (Issue #195): der einzige Weg zur Anleitung eines
+      // eingeschalteten Skills. Abgewaehlt liegt jede Anleitung wieder voll im
+      // Prompt (chat-engine.js) — Sparen am Schema, Zahlen am Body.
+      essential: true,
       // Über denselben „skill:“-Pfad wie jede andere Skill-Datei: so gelten
       // Wurzel-Auflösung, Ausbruchsprüfung und Freigabekarte unverändert, und
       // im Verlauf steht „Skill <name>“ statt eines nackten Dateipfads (#61).
