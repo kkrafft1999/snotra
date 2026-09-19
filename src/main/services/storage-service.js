@@ -90,6 +90,9 @@ function createStorageService({
       version: LLM_CONFIG_VERSION,
       activeProvider: DEFAULT_PROVIDER,
       activePresetId: null,
+      // Standard fuer neue Chats (Issue #211). Fehlt der Wert — etwa in einer
+      // Konfiguration von vor der Aenderung —, gilt `activePresetId`.
+      defaultPresetId: null,
       presets: [],
       providers: {},
     };
@@ -254,6 +257,18 @@ function createStorageService({
     }
   }
 
+  /**
+   * Standard fuer neue Chats (Issue #211). Eine Konfiguration von vorher kennt
+   * das Feld nicht — dann gilt einmalig der aktive Eintrag. Ohne diesen Schritt
+   * wanderte der Standard mit: Das Herstellen eines alten Chats setzt
+   * `activePresetId`, und der naechste neue Chat haette dessen Modell geerbt.
+   */
+  function withDefaultPresetId(config) {
+    if (!config || typeof config !== 'object') return config;
+    if (!config.defaultPresetId) config.defaultPresetId = config.activePresetId || null;
+    return config;
+  }
+
   async function readLLMConfig({ persistMigration = true } = {}) {
     const existing = await readLLMConfigRaw();
     if (existing && existing.version === LLM_CONFIG_VERSION && existing.providers) {
@@ -262,7 +277,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return existing;
+      return withDefaultPresetId(existing);
     }
     if (existing && existing.version === 3 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
@@ -270,7 +285,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return migrateLLMConfigToV4(existing, { persist: persistMigration });
+      return withDefaultPresetId(await migrateLLMConfigToV4(existing, { persist: persistMigration }));
     }
     if (existing && existing.version === 2 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
@@ -278,7 +293,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       const v3 = await migrateLLMConfigToV3(existing, { persist: false });
-      return migrateLLMConfigToV4(v3, { persist: persistMigration });
+      return withDefaultPresetId(await migrateLLMConfigToV4(v3, { persist: persistMigration }));
     }
     // Migrate from legacy openai-config.json (if present)
     const legacy = await readLegacyOpenAIConfig();
@@ -291,7 +306,7 @@ function createStorageService({
       migrated.activeProvider = 'openai';
     }
     const withV3 = await migrateLLMConfigToV3(migrated, { persist: false });
-    return migrateLLMConfigToV4(withV3, { persist: persistMigration });
+    return withDefaultPresetId(await migrateLLMConfigToV4(withV3, { persist: persistMigration }));
   }
 
   async function writeLLMConfig(config) {

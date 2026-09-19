@@ -9,6 +9,8 @@
 // geoeffneter Ordner ist (`isKnownWorkspaceRoot`). Alles andere faellt auf den
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 
+const { CHAT_ACTIVATION } = require('../services/chat-session-settings');
+
 /**
  * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten
  * landen nie in der Session-Datei, es gibt dann eben auch keine Datei daneben.
@@ -20,6 +22,16 @@ const NO_ATTACHMENT_STORE = {
   pruneChats: async () => {},
 };
 
+/**
+ * Ohne Chat-Einstellungen (Tests, Minimalaufbau) verhaelt sich der Verlauf wie
+ * vor Issue #211: Es wird nichts je Chat gemerkt und nichts hergestellt.
+ */
+const NO_CHAT_SESSION_SETTINGS = {
+  activate: async () => ({}),
+  valuesFor: () => ({}),
+  forget: () => {},
+};
+
 function registerChatHistoryHandlers({
   ipcMain,
   chatHistoryStore,
@@ -27,6 +39,7 @@ function registerChatHistoryHandlers({
   chatAttachments = NO_ATTACHMENT_STORE,
   getActiveWorkspaceRoot = () => null,
   isKnownWorkspaceRoot = async () => false,
+  chatSessionSettings = NO_CHAT_SESSION_SETTINGS,
 }) {
   async function resolveSessionWorkspaceRoot(sessionRow) {
     const activeRoot = getActiveWorkspaceRoot();
@@ -82,8 +95,22 @@ function registerChatHistoryHandlers({
       const messages = sessionId
         ? await chatAttachments.persistMessages(sessionId, sessionRow?.messages)
         : sessionRow?.messages;
+      // Modell und Freigabemodus kommen ausschliesslich aus dem Main (Issue
+      // #211). Was der Renderer dazu mitschickt, wird verworfen — sonst waere
+      // er die Rechtequelle fuer „Auto“ (Konzept §5). Bekannt ist der zuletzt
+      // gemerkte Wert, sonst der bereits gespeicherte.
+      const sessionSettings = {
+        modelPresetId: existing?.modelPresetId,
+        toolPermissionMode: existing?.toolPermissionMode,
+        ...chatSessionSettings.valuesFor(sessionId),
+      };
       const normalized = chatHistoryStore.normalizeSessionForStore(
-        { ...(sessionRow || {}), messages, workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow) },
+        {
+          ...(sessionRow || {}),
+          messages,
+          workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
+          ...sessionSettings,
+        },
         {
           existingTitle: titleProvided ? undefined : existing?.title,
           requireMessages: true,
@@ -120,6 +147,7 @@ function registerChatHistoryHandlers({
       }
       await chatHistoryStore.writeChatHistoryStore(store);
       await chatAttachments.deleteChat(id);
+      chatSessionSettings.forget(id);
       return { ok: true };
     }));
 
@@ -135,6 +163,17 @@ function registerChatHistoryHandlers({
       await chatHistoryStore.writeChatHistoryStore(store);
       return { ok: true };
     }));
+
+  // Modell und Freigabemodus des Chats herstellen (Issue #211). Der Renderer
+  // liefert nur die Kennung; welche Werte dahinterstehen, weiss der Main.
+  ipcMain.handle(REQ.CHAT_HISTORY_ACTIVATE, async (_event, id, activation) => {
+    const chatId = typeof id === 'string' ? id.trim().slice(0, 128) : null;
+    const explicit = activation !== CHAT_ACTIVATION.AUTO;
+    const applied = await chatSessionSettings.activate(chatId, {
+      activation: explicit ? CHAT_ACTIVATION.EXPLICIT : CHAT_ACTIVATION.AUTO,
+    });
+    return { ok: true, ...applied };
+  });
 
   // Bilddaten eines gespeicherten Anhangs (Issue #94). Der Renderer fragt erst
   // beim Anzeigen — der gesamte Verlauf eines Ordners auf einmal waere zu viel.

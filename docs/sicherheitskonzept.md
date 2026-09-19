@@ -395,9 +395,17 @@ Main öffnet (Abschnitt 5):
 >
 > **Auto aktivieren** · **Abbrechen**
 
-Der Modus wird global gespeichert, bleibt im Chat ständig sichtbar und kann
-dort auf Intelligent zurückgestellt werden. Das Einschalten neuer externer
-Fähigkeiten erhält später eine eigene Einrichtung mit benannten Auswirkungen.
+Der Modus gehört zur Konversation (Issue #211): Er wird beim Chat gespeichert,
+bleibt im Chat ständig sichtbar und kann dort auf Intelligent zurückgestellt
+werden. Ein **neuer** Chat beginnt immer bei `smart` — `auto` ist eine
+Entscheidung für einen Chat, nicht für die App. Wird ein Chat aus dem Verlauf
+**ausdrücklich** geöffnet, gilt sein gespeicherter Modus wieder, auch `auto`:
+Dorthin kann der Wert nur durch die native Bestätigung oben gekommen sein, und
+er stammt aus dem Speicher des Main, nicht aus dem Renderer — der nennt beim
+Wechsel ausschließlich die Chat-Kennung. Wird ein Chat dagegen **automatisch**
+hergestellt (App-Start, Ordnerwechsel), fällt `auto` auf `smart` zurück;
+strengere Modi bleiben erhalten. Das Einschalten neuer externer Fähigkeiten
+erhält später eine eigene Einrichtung mit benannten Auswirkungen.
 
 Bei Migration entfällt `allowWorkspaceWrite`; sowohl bisher `true` als auch
 `false` werden zu `smart`, niemals zu Auto. Hinweis: „Dateiänderungen fragen jetzt

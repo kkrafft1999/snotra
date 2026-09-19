@@ -161,6 +161,22 @@ const approvalCards = initToolApprovalCards({ api, appStore });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
 
+/**
+ * Chat wird zum aktiven (Issue #211): Der Main stellt Modell und Freigabemodus
+ * dieses Chats her, danach ziehen die beiden Pillen nach. `activation` trennt
+ * den ausdruecklichen Wechsel im Verlauf vom automatischen Wiederherstellen
+ * beim Start oder Ordnerwechsel — nur der ausdrueckliche holt „Auto“ zurueck.
+ */
+async function activateChatSession(chatId, activation = 'explicit') {
+  try {
+    await api.activateChatSession?.(chatId, activation);
+  } catch {
+    // Bleibt es beim gerade eingestellten Modell und Modus, laeuft der Chat
+    // weiter — die Pillen zeigen dann eben den unveraenderten Stand.
+  }
+  await Promise.all([modelPicker.refreshLLMState(), toolPermissions.refresh()]);
+}
+
 const voice = initWhisperRecorder({
   api,
   onInputChanged: syncChatInputHeight,
@@ -223,6 +239,7 @@ const chatStream = initChatStream({
   // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert
   // erst zur Laufzeit.
   openSkillSettings: (skillName) => settingsModal.openSettingsModal({ panel: 'skills', skillName }),
+  activateChatSession,
 });
 
 const chatHistory = initChatHistoryDrawer({
@@ -236,6 +253,7 @@ const chatHistory = initChatHistoryDrawer({
   setChatTokenUsage: (usage) => chatStream.setChatTokenUsage(usage),
   resetChatTokenUsage: () => chatStream.resetChatTokenUsage(),
   seedGreetingIfWorkspace: (workspaceRoot) => chatStream.seedGreetingIfWorkspace(workspaceRoot),
+  activateChatSession,
   onNewChatStarted: async () => {
     await chatStream.startNewChat();
     modelPicker.updateChatChrome();

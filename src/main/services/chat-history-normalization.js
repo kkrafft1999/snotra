@@ -10,6 +10,31 @@
 
 const { inferChatTitle } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
+const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
+
+const TOOL_PERMISSION_MODE_VALUES = Object.freeze(Object.values(TOOL_PERMISSION_MODES));
+
+/**
+ * Modell und Freigabemodus eines Chats (Issue #211). Beides ist optional: Ein
+ * Verlauf aus einer aelteren Version kennt die Felder nicht, und ein Chat ohne
+ * eigene Wahl soll auch keine bekommen — er faellt auf den Standard zurueck.
+ */
+function chatModelPresetIdForStore(raw) {
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, 128) : undefined;
+}
+
+/**
+ * Nur die drei bekannten Modi. Ein unbekannter Wert wird verworfen statt auf
+ * `smart` normalisiert: „nichts gespeichert“ und „ausdruecklich intelligent“
+ * sind derselbe Lauf, aber nicht dieselbe Aussage — und ein zugespielter Wert
+ * darf hier auf keinen Fall zu einer Freigabe werden.
+ */
+function chatToolPermissionModeForStore(raw) {
+  if (typeof raw !== 'string') return undefined;
+  return TOOL_PERMISSION_MODE_VALUES.includes(raw) ? raw : undefined;
+}
 
 /**
  * Bild-Teil in einem Array-Content — die Formen, in denen Anbieter und Renderer
@@ -230,7 +255,7 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
     typeof normalizeWorkspaceRoot === 'function'
       ? normalizeWorkspaceRoot(sessionRow.workspaceRoot)
       : sessionRow.workspaceRoot || null;
-  return {
+  const out = {
     id: sessionRow.id.trim(),
     workspaceRoot,
     title: title ? title.slice(0, 200) : 'Chat',
@@ -238,11 +263,16 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
     messages,
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
   };
+  const modelPresetId = chatModelPresetIdForStore(sessionRow.modelPresetId);
+  if (modelPresetId) out.modelPresetId = modelPresetId;
+  const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
+  if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
+  return out;
 }
 
 function normalizeSessionForLoad(sessionRow) {
   if (!sessionRow || typeof sessionRow !== 'object') return null;
-  return {
+  const out = {
     id: sessionRow.id,
     workspaceRoot: sessionRow.workspaceRoot ?? null,
     title: sessionRow.title || 'Chat',
@@ -250,10 +280,17 @@ function normalizeSessionForLoad(sessionRow) {
     messages: normalizeLoadedMessages(sessionRow.messages),
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
   };
+  const modelPresetId = chatModelPresetIdForStore(sessionRow.modelPresetId);
+  if (modelPresetId) out.modelPresetId = modelPresetId;
+  const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
+  if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
+  return out;
 }
 
 module.exports = {
   inferChatTitle,
+  chatModelPresetIdForStore,
+  chatToolPermissionModeForStore,
   toolTraceEntryToString,
   toolTraceEntryForStore,
   sanitizeChatMessagesForStore,

@@ -16,7 +16,7 @@ const mockProviders = {
   },
 };
 
-async function setup(t, { maxChatSessions = 3 } = {}) {
+async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const storage = createStorageService({
@@ -43,6 +43,7 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
     REQ,
     getActiveWorkspaceRoot: () => activeRoot,
     isKnownWorkspaceRoot: async (folderPath) => knownRoots.has(path.resolve(folderPath)),
+    ...(chatSessionSettings ? { chatSessionSettings } : {}),
   });
   const setActiveRoot = (root) => {
     activeRoot = root ?? null;
@@ -374,4 +375,84 @@ test('ein ausdruecklich ordnerloser Chat behaelt seinen eigenen Bucket', async (
   const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(noWs.sessions.map((s) => s.id), ['a']);
   assert.equal(noWs.activeChatId, 'a');
+});
+
+/**
+ * Modell und Freigabemodus des Chats (Issue #211): Der Renderer stoesst den
+ * Wechsel an, die Werte selbst liegen im Main.
+ */
+function fakeChatSessionSettings(values = {}) {
+  const calls = { activate: [], forget: [] };
+  return {
+    calls,
+    activate: async (chatId, options) => {
+      calls.activate.push({ chatId, ...options });
+      return { chatId };
+    },
+    valuesFor: (chatId) => ({ ...(values[chatId] || {}) }),
+    forget: (chatId) => calls.forget.push(chatId),
+  };
+}
+
+test('Modell und Freigabemodus des Chats kommen aus dem Main, nicht aus der Nutzlast', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings({
+    a: { modelPresetId: 'preset-echt', toolPermissionMode: 'ask-all' },
+  });
+  const { ipcMain, storage } = await setup(t, { chatSessionSettings });
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+    ...sessionRow('a'),
+    // Ein Renderer, der sich selbst Rechte geben will: wird verworfen.
+    modelPresetId: 'preset-untergeschoben',
+    toolPermissionMode: 'auto',
+  });
+
+  const store = await storage.readChatHistoryStore();
+  const stored = store.sessions.find((x) => x.id === 'a');
+  assert.equal(stored.modelPresetId, 'preset-echt');
+  assert.equal(stored.toolPermissionMode, 'ask-all');
+});
+
+test('ohne gemerkte Werte bleibt stehen, was schon gespeichert war', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings({
+    a: { modelPresetId: 'preset-echt', toolPermissionMode: 'auto' },
+  });
+  const { ipcMain, storage } = await setup(t, { chatSessionSettings });
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  // Zweiter Lauf ohne Merkwerte — etwa nach einem Neustart.
+  chatSessionSettings.valuesFor = () => ({});
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), updatedAt: 2000 });
+
+  const store = await storage.readChatHistoryStore();
+  const stored = store.sessions.find((x) => x.id === 'a');
+  assert.equal(stored.modelPresetId, 'preset-echt');
+  assert.equal(stored.toolPermissionMode, 'auto');
+});
+
+test('der Wechsel meldet dem Main, ob er ausdruecklich war', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings();
+  const { ipcMain } = await setup(t, { chatSessionSettings });
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'a', 'explicit');
+  await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'b', 'auto');
+  // Unbekannte Angabe gilt als ausdruecklich — sie kann nur aus der App kommen,
+  // und ein automatischer Wechsel nennt sich ausdruecklich `auto`.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'c');
+
+  assert.deepEqual(chatSessionSettings.calls.activate, [
+    { chatId: 'a', activation: 'explicit' },
+    { chatId: 'b', activation: 'auto' },
+    { chatId: 'c', activation: 'explicit' },
+  ]);
+});
+
+test('ein geloeschter Chat wird auch im Main vergessen', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings();
+  const { ipcMain } = await setup(t, { chatSessionSettings });
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
+
+  assert.deepEqual(chatSessionSettings.calls.forget, ['a']);
 });
