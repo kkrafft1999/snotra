@@ -29,7 +29,7 @@ function fakeFilesystem() {
   };
 }
 
-async function mountTree(overrides = {}) {
+async function mountTree(overrides = {}, extraDeps = {}) {
   const dom = setupRendererDom();
   const { initFileTree } = await importRenderer('components', 'FileTree.js');
   const { appStore } = await importRenderer('state', 'store.js');
@@ -40,13 +40,24 @@ async function mountTree(overrides = {}) {
   appStore.selectedIsDirectory = false;
 
   const entries = fakeFilesystem();
-  const calls = { importItems: [], moveItem: [], inspectImport: [] };
+  const calls = { importItems: [], moveItem: [], inspectImport: [], readDirectory: [] };
+  // Der Dateisystem-Watcher meldet ueber diesen Rueckruf (#158).
+  let treeChangedListener = null;
 
   const api = {
     activateFolder: async () => ({ ok: true }),
     getFolderHistory: async () => ({ paths: [] }),
-    readDirectory: async (dir) => entries[dir] ?? [],
+    readDirectory: async (dir) => {
+      calls.readDirectory.push(dir);
+      return entries[dir] ?? [];
+    },
     readFile: async () => ({ content: '# Titel', size: 12 }),
+    onFsTreeChanged: (callback) => {
+      treeChangedListener = callback;
+      return () => {
+        treeChangedListener = null;
+      };
+    },
     moveItem: async (source, dest) => { calls.moveItem.push([source, dest]); return {}; },
     inspectImport: async (sources, dest) => {
       calls.inspectImport.push([sources, dest]);
@@ -67,10 +78,26 @@ async function mountTree(overrides = {}) {
     onProjectOpened() {},
     sendChatMessage() {},
     activeProviderConfigured: () => true,
+    ...extraDeps,
   });
 
   await tree.openProject(ROOT);
-  return { dom, tree, api, appStore, calls, entries, container: document.getElementById('tree-container') };
+  /** Eine Watcher-Meldung zustellen und abwarten, bis der Baum sie verdaut hat. */
+  const emitTreeChanged = async (payload) => {
+    treeChangedListener?.(payload);
+    await flush();
+    await flush();
+  };
+  return {
+    dom,
+    tree,
+    api,
+    appStore,
+    calls,
+    entries,
+    emitTreeChanged,
+    container: document.getElementById('tree-container'),
+  };
 }
 
 /** Eine Datei, wie sie ein Drop aus Finder/Explorer mitbringt. */
@@ -263,4 +290,158 @@ test('dragover markiert Ordnerzeile und freie Flaeche unterschiedlich', async (t
 
   dispatchDragEvent(container, 'dragover', { dataTransfer });
   assert.ok(container.classList.contains('drop-target-root--import'));
+});
+
+// ── Abgleich mit dem Dateisystem (Issue #158) ───────────────────────────────
+//
+// Der Watcher im Main meldet nur, welche Ordner sich geaendert haben. Was der
+// Baum daraus macht — und was er dabei stehen laesst — steht hier.
+
+/** Ein Eintrag, wie ihn readDirectory liefert. */
+const fileEntry = (dir, name) => ({
+  name,
+  path: `${dir}/${name}`,
+  isDirectory: false,
+  size: 3,
+  modified: 0,
+});
+
+test('eine von aussen angelegte Datei erscheint im gemeldeten Ordner', async (t) => {
+  const { dom, container, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  entries['/ws'] = [...entries['/ws'], fileEntry('/ws', 'neu.txt')];
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  assert.deepEqual(
+    [...container.querySelectorAll(':scope > .tree-item .label')].map((el) => el.textContent),
+    ['docs', 'README.md', 'neu.txt']
+  );
+});
+
+test('eine geloeschte Datei verschwindet, auch tief im aufgeklappten Ordner', async (t) => {
+  const { dom, container, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  assert.ok(rowFor(container, '/ws/docs/notes.md'), 'Ausgangslage: der Ordner ist offen');
+
+  entries['/ws/docs'] = [];
+  await emitTreeChanged({ directories: ['/ws/docs'], complete: true });
+
+  assert.equal(rowFor(container, '/ws/docs/notes.md'), null);
+  const children = container.querySelector('.tree-children[data-path="/ws/docs"]');
+  assert.ok(children.classList.contains('expanded'), 'der Ordner bleibt aufgeklappt');
+});
+
+test('eine Meldung ohne Aenderung am Ordnerinhalt laesst das DOM unangetastet', async (t) => {
+  const { dom, container, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  const vorher = rowFor(container, '/ws/README.md');
+  // Schreibt die KI oder ein Build-Lauf in eine vorhandene Datei, aendert sich
+  // der Ordnerinhalt nicht — dann darf auch nichts neu gezeichnet werden.
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  assert.equal(rowFor(container, '/ws/README.md'), vorher, 'derselbe Knoten, kein Flackern');
+});
+
+test('ein nicht sichtbarer Ordner wird gar nicht erst gelesen', async (t) => {
+  const { dom, calls, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  calls.readDirectory.length = 0;
+  await emitTreeChanged({ directories: ['/ws/docs'], complete: true });
+
+  assert.deepEqual(calls.readDirectory, [], 'zugeklappt heisst: spaeter beim Aufklappen');
+});
+
+test('eine unvollstaendige Meldung prueft alles Sichtbare', async (t) => {
+  const { dom, container, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+
+  // So sieht ein Zweigwechsel aus: der Watcher weiss nur, dass etwas war.
+  entries['/ws/docs'] = [fileEntry('/ws/docs', 'anders.md')];
+  await emitTreeChanged({ directories: [], complete: false });
+
+  assert.ok(rowFor(container, '/ws/docs/anders.md'), 'auch ohne Ordnernamen in der Meldung');
+  assert.equal(rowFor(container, '/ws/docs/notes.md'), null);
+});
+
+test('Auswahl, Tastaturfokus und Scrollposition ueberleben die Aktualisierung', async (t) => {
+  const { dom, container, appStore, entries, emitTreeChanged } = await mountTree(
+    {},
+    { insertChatReference() {} }
+  );
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(appStore.selectedPath, '/ws/README.md');
+
+  // Der Fokus steht auf dem @-Knopf der Zeile — mitten in der Tastaturbedienung.
+  rowFor(container, '/ws/README.md').querySelector('.tree-item-reference').focus();
+  container.scrollTop = 42;
+
+  entries['/ws'] = [...entries['/ws'], fileEntry('/ws', 'neu.txt')];
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  const danach = rowFor(container, '/ws/README.md');
+  assert.ok(danach.classList.contains('active'), 'die Auswahl bleibt hervorgehoben');
+  assert.equal(appStore.activeTreeItem, danach, 'und zeigt auf den neuen Knoten');
+  assert.equal(
+    document.activeElement,
+    danach.querySelector('.tree-item-reference'),
+    'der Fokus wandert auf dieselbe Stelle der neuen Zeile'
+  );
+  assert.equal(container.scrollTop, 42);
+});
+
+test('die geloeschte ausgewaehlte Datei schliesst ihre Vorschau', async (t) => {
+  const { dom, container, appStore, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), false);
+
+  entries['/ws'] = entries['/ws'].filter((item) => item.name !== 'README.md');
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  assert.equal(appStore.selectedPath, null, 'die Auswahl zeigt auf nichts mehr');
+  assert.equal(appStore.activeTreeItem, null);
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), true);
+  assert.equal(document.getElementById('welcome').classList.contains('hidden'), false);
+});
+
+test('die offene Vorschau laedt nach, wenn sich ihr Ordner meldet', async (t) => {
+  let inhalt = 'alt';
+  const { dom, container, emitTreeChanged } = await mountTree({
+    readFile: async () => ({ content: inhalt, size: inhalt.length }),
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(document.getElementById('preview-content').textContent, 'alt');
+
+  inhalt = 'neu';
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  assert.equal(document.getElementById('preview-content').textContent, 'neu');
+});
+
+test('ohne geoeffneten Ordner passiert nichts', async (t) => {
+  const { dom, appStore, calls, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  appStore.rootPath = null;
+  calls.readDirectory.length = 0;
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  assert.deepEqual(calls.readDirectory, []);
 });

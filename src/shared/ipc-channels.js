@@ -140,6 +140,13 @@ const PUSH_CHANNELS = Object.freeze({
   UPDATE_AVAILABLE: 'update:available',
   /** Main hat eine Datei aus dem Workspace gelöscht (Kontextmenü, Issue #59); Renderer aktualisiert den Baum. */
   FS_ITEM_DELETED: 'fs:item-deleted',
+  /**
+   * Im Projektordner hat sich etwas geändert (Issue #158) — von wem auch
+   * immer: KI, Terminal, Finder, anderer Editor. Nutzlast ist ein
+   * WorkspaceTreeChanged-DTO ({ directories, complete }); der Renderer lädt
+   * die betroffenen, gerade sichtbaren Ordner neu.
+   */
+  FS_TREE_CHANGED: 'fs:tree-changed',
   /** Freigabe-Karte anzeigen (Issue #66); Payload ist ein ToolApprovalRequest-DTO. */
   TOOL_APPROVAL_REQUEST: 'toolApproval:request',
   /** Anfrage beantwortet oder verfallen; Karte schliessen. */

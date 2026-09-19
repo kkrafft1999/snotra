@@ -32,6 +32,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Der Projektordner hat sich geaendert (Issue #158) — egal durch wen.
+  onFsTreeChanged: (callback) => {
+    const channel = PUSH.FS_TREE_CHANGED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
 
   // LLM provider settings (multi-provider)
   getLLMState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LLM_STATE),

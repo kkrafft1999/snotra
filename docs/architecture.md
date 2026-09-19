@@ -192,6 +192,38 @@ in die Chat-Engine gereicht. Das Parsen des Frontmatters liegt als reine
 Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
 `shared/contracts/skills.js`.
 
+### Ein Watcher, zwei Anwender
+
+Dass die App mitbekommt, was **neben** ihr im Dateisystem passiert, leistet ein
+einziger Dienst: `services/directory-watcher.js`. Er kapselt die teuer
+bezahlten Eigenheiten von `fs.watch` — fehlende Zielverzeichnisse, ein
+verschwindender Watch-Root (macOS verstummt, Windows feuert endlos), die
+Linux-Attrappe bei `recursive: true`, Ereignis-Lawinen (Entprellung mit
+Höchstfenster), `error`-Ereignisse ohne Listener und die Wiedervorlage nach
+einem verlorenen Ereignis (Issues
+[#126](https://github.com/kkrafft1999/snotra/issues/126),
+[#155](https://github.com/kkrafft1999/snotra/issues/155)).
+
+Darauf sitzen zwei dünne Hüllen, die nur noch sagen, *was* beobachtet wird:
+
+- `services/skills-watcher.js` — `.agents/skills` in Workspace und Home, mit
+  Vorfahren-Kette (die Verzeichnisse fehlen meistens). Meldet ohne Nutzlast;
+  der Skill-Katalog wird ohnehin komplett neu gelesen.
+- `services/workspace-watcher.js` — der Projektordner, rekursiv und ohne Kette
+  nach oben. Er meldet die betroffenen **Ordner**, damit der Dateibaum nicht
+  bei jedem Ereignis alles neu laden muss (Issue
+  [#158](https://github.com/kkrafft1999/snotra/issues/158)). Eine Ignorierliste
+  hält den Inhalt von `node_modules/` und `.git/` sowie Editor-Temporärdateien
+  draußen; `.git/HEAD` und `.git/index` kommen bewusst durch — sie sind das
+  Zeichen für einen Zweigwechsel und melden sich als `complete: false`, worauf
+  der Renderer einmal gröber neu lädt statt hundertfach einzeln.
+
+Der Weg zum Baum: `fs:tree-changed`
+(`shared/contracts/workspace-tree.js`) → `FileTree.js` lädt die gemeldeten
+Ordner neu, aber nur die gerade sichtbaren, und nur wenn sich ihr Inhalt
+wirklich geändert hat. Auswahl, Tastaturfokus und Scrollposition werden vor dem
+Neuzeichnen gesichert und danach wiederhergestellt.
+
 ## Workspace-Verwaltung im Main-Prozess
 
 Der **aktive Workspace** ist die Vertrauensgrenze des Dateisystems: alle

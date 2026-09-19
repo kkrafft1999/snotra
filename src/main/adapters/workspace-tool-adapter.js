@@ -241,18 +241,50 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   };
 }
 
+/** Tools, die im Workspace schreiben und deren Ergebnis den Baum betrifft. */
+const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
+
+/**
+ * Welche Dateien hat der Aufruf geschrieben? Bis Issue #158 wurde nur
+ * `write_file_text` gemeldet — `edit_file` und `apply_patch` liefen still
+ * durch, und die Vorschau der offenen Datei zeigte weiter den alten Inhalt.
+ *
+ * Gefragt wird das Ergebnis, nicht die Argumente: `apply_patch` im
+ * Diff-Modus kennt seine Pfade erst aus dem Patch, und ein Aufruf, der nichts
+ * geschrieben hat, meldet so auch nichts.
+ */
+function writtenRelativePaths(toolName, args, parsed) {
+  const paths = [];
+  if (toolName === 'write_file_text') {
+    // Der einzige Fall ohne Pfad im Ergebnis — er steht nur im Aufruf.
+    const fromArgs = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
+    if (fromArgs) paths.push(fromArgs);
+    return paths;
+  }
+  if (typeof parsed?.relative_path === 'string' && parsed.relative_path.trim()) {
+    paths.push(parsed.relative_path.trim());
+  }
+  // apply_patch im Diff-Modus: ein Aufruf, mehrere Dateien.
+  for (const entry of Array.isArray(parsed?.files) ? parsed.files : []) {
+    const rel = typeof entry?.relative_path === 'string' ? entry.relative_path.trim() : '';
+    if (rel) paths.push(rel);
+  }
+  return paths;
+}
+
 function collectProgressEvents(toolName, args, output) {
   const events = [];
-  if (toolName !== 'write_file_text') return events;
-  const relativePath = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
-  if (!relativePath) return events;
+  if (!WRITING_TOOLS.has(toolName)) return events;
+  let parsed = null;
   try {
-    const parsed = JSON.parse(output);
-    if (parsed && typeof parsed === 'object' && parsed.error) return events;
+    parsed = JSON.parse(output);
   } catch {
     return events;
   }
-  events.push(createWorkspaceFileWrittenEvent(relativePath));
+  if (!parsed || typeof parsed !== 'object' || parsed.error) return events;
+  for (const relativePath of new Set(writtenRelativePaths(toolName, args, parsed))) {
+    events.push(createWorkspaceFileWrittenEvent(relativePath));
+  }
   return events;
 }
 
