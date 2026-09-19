@@ -76,6 +76,7 @@ export function initFileTree(deps) {
     sendChatMessage,
     activeProviderConfigured,
     insertChatReference,
+    revealContentPane,
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -1014,6 +1015,10 @@ export function initFileTree(deps) {
     setActiveItem(row);
     appStore.selectedPath = item.path;
     appStore.selectedIsDirectory = false;
+    // Die Vorschau lebt in der mittleren Spalte. Ist die zu — beim Start neben
+    // einem wiederhergestellten Chat (Issue #208) oder weil sie weggeschaltet
+    // wurde —, waere der Klick auf eine Datei sonst folgenlos.
+    revealContentPane?.();
     await showFileContent(item);
   }
 

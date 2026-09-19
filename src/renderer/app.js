@@ -18,6 +18,7 @@ import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
+import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
 
 const api = window.electronAPI;
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
@@ -91,7 +92,26 @@ function setContentPaneVisible(visible) {
   }
 }
 
+// Die mittlere Spalte startet zu und klappt erst auf, wenn feststeht, dass kein
+// Chat wiederhergestellt wird (Issue #208). Andersherum blitzte der Startschirm
+// jedes Mal kurz auf und spraenge gleich wieder weg.
+setContentPaneVisible(false);
+
+// Beide Merker gehoeren nur dem Start: ob der geladene Ordner eine Konversation
+// zurueckgebracht hat, und ob der Nutzer waehrend des Starts schon selbst
+// geschaltet hat — dann hat seine Hand Vorrang.
+let chatRestoredOnLoad = false;
+let contentPaneToggledByUser = false;
+
+function applyStartupContentPane(preference) {
+  if (contentPaneToggledByUser) return;
+  setContentPaneVisible(
+    contentPaneVisibleOnStart({ preference, chatRestored: chatRestoredOnLoad })
+  );
+}
+
 btnToggleContentPane.addEventListener('click', async () => {
+  contentPaneToggledByUser = true;
   const wasVisible = !workspace.classList.contains('workspace--no-preview');
   const visibleAfterToggle = !wasVisible;
   setContentPaneVisible(visibleAfterToggle);
@@ -301,7 +321,8 @@ const fileTree = initFileTree({
     skillCatalog.invalidate();
     skillAutocomplete.close();
     skillSuggestion.hide();
-    await chatStream.loadChatForWorkspace(folderPath);
+    const loaded = await chatStream.loadChatForWorkspace(folderPath);
+    chatRestoredOnLoad = loaded?.restored === true;
   },
   onProjectOpened: () => modelPicker.updateChatChrome(),
   sendChatMessage: () => chatStream.sendChatMessage(),
@@ -309,6 +330,12 @@ const fileTree = initFileTree({
   // @-Referenz aus dem Baum in die Chat-Eingabe (Issue #56); die Einfüge-Logik
   // bleibt beim Textfeld, der Baum liefert nur den Pfad.
   insertChatReference: (relPath, kind) => mentionAutocomplete.insertReference(relPath, kind),
+  // Wer eine Datei anklickt, will sie sehen — auch wenn die mittlere Spalte
+  // gerade zu ist (Issue #208).
+  revealContentPane: () => {
+    contentPaneToggledByUser = true;
+    setContentPaneVisible(true);
+  },
 });
 
 fileTree.setHistoryDrawerCloseOnEscape(() => {
@@ -341,14 +368,12 @@ void initAppVersionBadge({ api });
   let uiPrefs = { contentPaneVisible: true, sidebarVisible: true, appLocale: 'de' };
   try {
     uiPrefs = await api.getUIPrefs();
-    setContentPaneVisible(uiPrefs.contentPaneVisible !== false);
     // Beim Start ohne Animation: die Leiste soll gleich richtig stehen und
     // nicht erst ins Bild fahren.
     setSidebarVisible(uiPrefs.sidebarVisible !== false, { animate: false });
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
   } catch {
-    setContentPaneVisible(true);
     setSidebarVisible(true, { animate: false });
   }
   initSidebarResizer({
@@ -356,14 +381,22 @@ void initAppVersionBadge({ api });
     initialSidebarWidth: uiPrefs.sidebarWidth,
     initialChatPanelWidth: uiPrefs.chatPanelWidth,
   });
-  const { folderPath } = await api.getLastFolder();
-  // openProject meldet false, wenn der Main-Prozess den Ordner nicht mehr
-  // aktiviert (geloescht, nicht mehr im Verlauf) — dann ohne Ordner starten.
-  const opened = folderPath ? await fileTree.openProject(folderPath) : false;
-  if (!opened) {
-    await chatStream.loadChatForWorkspace(null);
-    await fileTree.refreshWelcomeRecent();
-    modelPicker.updateChatChrome();
+  try {
+    const { folderPath } = await api.getLastFolder();
+    // openProject meldet false, wenn der Main-Prozess den Ordner nicht mehr
+    // aktiviert (geloescht, nicht mehr im Verlauf) — dann ohne Ordner starten.
+    const opened = folderPath ? await fileTree.openProject(folderPath) : false;
+    if (!opened) {
+      const loaded = await chatStream.loadChatForWorkspace(null);
+      chatRestoredOnLoad = loaded?.restored === true;
+      await fileTree.refreshWelcomeRecent();
+      modelPicker.updateChatChrome();
+    }
+  } finally {
+    // Erst jetzt steht fest, ob ein Chat zurueckgekommen ist — vorher waere die
+    // Spalte nur geraten. Im `finally`, damit sie auch nach einem Fehler beim
+    // Laden nicht eingeklappt haengen bleibt.
+    applyStartupContentPane(uiPrefs.contentPaneVisible !== false);
   }
   syncChatInputHeight();
 })();

@@ -24,12 +24,17 @@
     </div>
     <div class="titlebar-spacer"></div>
     <div class="icon-btn-row">
-      <button type="button" id="btn-toggle-content-pane" title="Mittlere Vorschau ausblenden" aria-label="Mittlere Vorschau ausblenden" aria-pressed="true">
-        <svg id="icon-content-pane-visible" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <!-- Startzustand: eingeklappt. Erst wenn feststeht, dass kein Chat
+           wiederhergestellt wird, klappt app.js die Spalte auf (Issue #208) —
+           umgekehrt blitzte der Startschirm auf und spraenge wieder weg. Wer
+           das aendert, aendert auch den Aufruf von setContentPaneVisible()
+           ganz oben in app.js. -->
+      <button type="button" id="btn-toggle-content-pane" title="Mittlere Vorschau einblenden" aria-label="Mittlere Vorschau einblenden" aria-pressed="false">
+        <svg id="icon-content-pane-visible" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="hidden" aria-hidden="true">
           <rect x="1.5" y="2.5" width="6.5" height="11" rx="1"/>
           <rect x="9.5" y="2.5" width="5" height="11" rx="1"/>
         </svg>
-        <svg id="icon-content-pane-hidden" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" class="hidden" aria-hidden="true">
+        <svg id="icon-content-pane-hidden" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
         </svg>
       </button>
@@ -71,7 +76,7 @@
     <div id="divider" class="pane-divider" role="separator" aria-orientation="vertical"
          tabindex="0" aria-label="Breite der Seitenleiste"></div>
 
-    <div id="workspace">
+    <div id="workspace" class="workspace--no-preview">
       <section id="content">
         <div id="welcome">
           <p class="welcome-eyebrow">

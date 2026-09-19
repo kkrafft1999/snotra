@@ -903,6 +903,10 @@ export function initChatStream({
     await api.setActiveChatId(appStore.currentChatId);
   }
 
+  /**
+   * Meldet zurueck, ob eine vorhandene Konversation wiederhergestellt wurde —
+   * der Start richtet die mittlere Spalte danach aus (Issue #208).
+   */
   async function loadChatForWorkspace(workspaceRoot) {
     stopChatVoiceListening();
     approvalCards?.reset();
@@ -928,7 +932,7 @@ export function initChatStream({
       chatInput.value = '';
       onInputChanged();
       renderChatMessages();
-      return;
+      return { restored: true, wasActive };
     }
     if (hist?.activeChatId) await api.setActiveChatId(null);
     appStore.currentChatId = crypto.randomUUID();
@@ -941,6 +945,7 @@ export function initChatStream({
     chatInput.value = '';
     onInputChanged();
     renderChatMessages();
+    return { restored: false, wasActive: false };
   }
 
   async function startNewChat() {
