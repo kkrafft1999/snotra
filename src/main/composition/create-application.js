@@ -10,12 +10,14 @@ const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
 const { createSkillsWatcher } = require('../services/skills-watcher');
+const { createWorkspaceWatcher } = require('../services/workspace-watcher');
 const { createSkillSuggestionService } = require('../services/skill-suggestion-service');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
+const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createMcpService } = require('../services/mcp-service');
@@ -88,6 +90,12 @@ function createApplication({
    * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
    */
   watchFile = null,
+  /**
+   * `fs.realpathSync.native`, aus demselben Grund von aussen hereingereicht.
+   * Nur der Dateibaum-Watcher braucht es — und nur, um Windows nicht an einem
+   * 8.3-Kurznamen abstuerzen zu lassen (Issue #158).
+   */
+  realpathNative = null,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -148,6 +156,8 @@ function createApplication({
   // Erst weiter unten gebaut (der Dienst braucht den Skill-Service), aber
   // schon hier benannt: Der Workspace-Wechsel direkt darunter greift darauf zu.
   let skillsWatcher = null;
+  // Dasselbe fuer den Dateibaum-Watcher (Issue #158).
+  let workspaceWatcher = null;
 
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
   // Ein Workspace-Wechsel verwirft offene Freigaben und Sitzungsfreigaben (Konzept §7).
@@ -162,8 +172,11 @@ function createApplication({
         approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
         sessionGrants.clear();
         // Die Ordner-Skills des alten Workspace gehen uns nichts mehr an;
-        // der Watcher zieht mit (Issue #126).
+        // der Watcher zieht mit (Issue #126). Ebenso der Dateibaum: Sonst
+        // kaemen Meldungen fuer den alten Ordner an — und ein Handle bliebe
+        // zurueck (Issue #158).
         skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
+        workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
       }
     },
   });
@@ -343,6 +356,30 @@ function createApplication({
   // ein beim Start wiederhergestellter Workspace setzt den Root womoeglich,
   // bevor es den Watcher gab.
   skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
+
+  // Der Dateibaum zeigte bis Issue #158 nur den Stand vom letzten Mal, als die
+  // App selbst etwas angefasst hat. Jetzt meldet der Watcher jede Aenderung im
+  // Projektordner — von der KI, aus dem Terminal, aus dem Finder — und der
+  // Renderer laedt die betroffenen, sichtbaren Ordner nach. Ohne
+  // watch-Implementierung (Tests) laeuft alles wie vorher, nur ohne Watcher.
+  workspaceWatcher = watchFile
+    ? createWorkspaceWatcher({
+        watch: watchFile,
+        path,
+        // Nur zum Beobachten: Ein 8.3-Kurzname im Pfad bringt libuv unter
+        // Windows zum Abbruch des ganzen Prozesses (siehe workspace-watcher).
+        realpath: realpathNative,
+        onChange: ({ directories, complete }) => {
+          const win = getMainWindow();
+          if (!win || win.isDestroyed()) return;
+          win.webContents.send(
+            PUSH.FS_TREE_CHANGED,
+            createWorkspaceTreeChangedEvent({ directories, complete })
+          );
+        },
+      })
+    : null;
+  workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
 
   const whisperService = createWhisperService({
     fetchImpl,
@@ -535,6 +572,7 @@ function createApplication({
   function dispose() {
     providerRuntime.disposeAll();
     skillsWatcher?.close();
+    workspaceWatcher?.close();
     // Synchron und hart: `will-quit` wartet auf nichts, und die MCP-Prozesse
     // laufen in einer eigenen Prozessgruppe — ohne das hier ueberlebten sie
     // die App (Issue #106).

@@ -99,6 +99,9 @@ export function initFileTree(deps) {
 
   let historyDrawerCloseOnEscape = null;
 
+  // Meldungen des Dateisystem-Watchers laufen nacheinander ab (Issue #158).
+  let treeSyncChain = Promise.resolve();
+
   // Drag-&-Drop-State lebt komplett in diesem Component; resetDragState()
   // ist der einzige Aufräumpfad, damit keine Row-Referenzen hängenbleiben.
   let dragSourcePath = null;
@@ -566,6 +569,16 @@ export function initFileTree(deps) {
     void handleFsItemDeleted(deletedPath);
   });
 
+  // Issue #158: Der Watcher im Main meldet jede Änderung im Projektordner —
+  // gleich ob sie von der KI, aus dem Terminal, aus dem Finder oder von einem
+  // anderen Editor kommt. Die Meldungen laufen der Reihe nach durch: Zwei
+  // gleichzeitig laufende Neuzeichnungen kämen sich am selben DOM in die Quere.
+  api.onFsTreeChanged?.((payload) => {
+    treeSyncChain = treeSyncChain
+      .then(() => syncTreeWithFilesystem(payload))
+      .catch((err) => console.warn('Baum-Abgleich fehlgeschlagen:', err?.message ?? err));
+  });
+
   async function handleFsItemDeleted(deletedPath) {
     if (!appStore.rootPath || typeof deletedPath !== 'string' || !deletedPath) return;
     // Bei einem gelöschten Ordner (#120) ist auch die Vorschau einer Datei
@@ -787,16 +800,25 @@ export function initFileTree(deps) {
     await refreshParentOf(absPath);
 
     if (appStore.selectedPath === absPath && !appStore.selectedIsDirectory) {
-      const result = await api.readFile(absPath);
-      if (!result.error) {
-        welcomeEl.classList.add('hidden');
-        filePreview.classList.remove('hidden');
-        fileInfo.classList.add('hidden');
-        previewFilename.textContent = basenameOf(absPath);
-        previewMeta.textContent = formatSize(result.size);
-        previewContent.textContent = result.content;
-      }
+      await showTextPreview(absPath);
     }
+  }
+
+  /**
+   * Vorschau einer Datei neu aus dem Dateisystem lesen. Anders als
+   * showFileContent() kommt sie ohne Baum-Eintrag aus — der Aufrufer hat nur
+   * einen Pfad, und die Datei kann inzwischen weg sein (dann bleibt stehen,
+   * was zu sehen war; ums Aufräumen kümmert sich der Aufrufer).
+   */
+  async function showTextPreview(absPath) {
+    const result = await api.readFile(absPath);
+    if (result.error) return;
+    welcomeEl.classList.add('hidden');
+    filePreview.classList.remove('hidden');
+    fileInfo.classList.add('hidden');
+    previewFilename.textContent = basenameOf(absPath);
+    previewMeta.textContent = formatSize(result.size);
+    previewContent.textContent = result.content;
   }
 
   async function refreshFolder(dirPath) {
@@ -823,6 +845,148 @@ export function initFileTree(deps) {
         if (arrow) arrow.classList.add('expanded');
       }
     }
+  }
+
+  // ── Abgleich mit dem Dateisystem (Issue #158) ─────────────────────────────
+
+  function rowForPath(itemPath) {
+    if (!itemPath) return null;
+    return treeContainer.querySelector(`.tree-item[data-path="${CSS.escape(itemPath)}"]`);
+  }
+
+  /** Der Projektordner und alles, was gerade aufgeklappt ist — mehr ist nicht
+   *  zu sehen. Nicht sichtbare Ordner laden beim Aufklappen ohnehin frisch. */
+  function visibleFolderPaths() {
+    return [appStore.rootPath, ...collectExpandedFolderPaths()];
+  }
+
+  /** Die gezeichneten Einträge eines Ordners (nur die direkte Ebene). */
+  function rowsOfFolder(dirPath) {
+    const container =
+      dirPath === appStore.rootPath
+        ? treeContainer
+        : treeContainer.querySelector(`.tree-children[data-path="${CSS.escape(dirPath)}"]`);
+    if (!container) return null;
+    return [...container.children].filter((el) => el.classList?.contains('tree-item'));
+  }
+
+  /**
+   * Steht im Ordner etwas anderes als im Baum? Die Frage kostet ein
+   * `readDirectory` und erspart im Regelfall alles Weitere: Schreibt ein
+   * Build-Lauf oder die KI in eine vorhandene Datei, ändert sich der
+   * Ordnerinhalt nicht — dann bleibt das DOM unangetastet, und weder Fokus
+   * noch Scrollposition geraten ins Rutschen.
+   */
+  async function folderListingChanged(dirPath) {
+    const rows = rowsOfFolder(dirPath);
+    if (!rows) return false;
+    const items = (await api.readDirectory(dirPath)) || [];
+    const jetzt = items.map((item) => `${item.isDirectory ? 'd' : 'f'}:${item.path}`);
+    const vorher = rows.map((row) => `${row.dataset.isDirectory === 'true' ? 'd' : 'f'}:${row.dataset.path}`);
+    return jetzt.length !== vorher.length || jetzt.some((eintrag, i) => eintrag !== vorher[i]);
+  }
+
+  /**
+   * Was der Nutzer gerade tut, überlebt die Aktualisierung: Auswahl,
+   * Tastaturfokus und Scrollposition. Ein Refresh, der den Fokus wegnimmt,
+   * bricht die Tastaturbedienung mitten im Navigieren (#74).
+   */
+  function captureTreeView() {
+    const active = document.activeElement;
+    const inTree = active && treeContainer.contains(active) ? active : null;
+    return {
+      scrollTop: treeContainer.scrollTop,
+      focusPath: inTree?.closest('.tree-item')?.dataset?.path ?? null,
+      focusReference: Boolean(inTree?.classList?.contains('tree-item-reference')),
+    };
+  }
+
+  function restoreTreeView(view) {
+    // Die ausgewählte Zeile ist nach dem Neuzeichnen ein anderer Knoten —
+    // ohne das hier verlöre die Auswahl ihre Hervorhebung.
+    const selectedRow = rowForPath(appStore.selectedPath);
+    if (selectedRow) setActiveItem(selectedRow);
+    if (view.focusPath) {
+      const row = rowForPath(view.focusPath);
+      const target = view.focusReference ? row?.querySelector('.tree-item-reference') : row;
+      target?.focus?.();
+    }
+    treeContainer.scrollTop = view.scrollTop;
+  }
+
+  /** Zeichnet die geänderten Ordner neu — von oben nach unten. */
+  async function redrawFolders(dirPaths) {
+    const view = captureTreeView();
+    const expandedBefore = collectExpandedFolderPaths();
+    const sorted = [...dirPaths].sort((a, b) => folderDepthSortKey(a) - folderDepthSortKey(b));
+
+    if (sorted.includes(appStore.rootPath)) {
+      // Der Root-Zweig zeichnet den ganzen Baum neu und stellt die
+      // aufgeklappten Ordner selbst wieder her — alles Weitere erübrigt sich.
+      await refreshFolder(appStore.rootPath);
+    } else {
+      for (const dir of sorted) await refreshFolder(dir);
+      // Ein neu gezeichneter Ordner verliert seine aufgeklappten Kinder.
+      const wieder = expandedBefore.filter(
+        (p) => p !== appStore.rootPath && sorted.some((dir) => p !== dir && isInsideDir(p, dir))
+      );
+      await restoreExpandedFolders(wieder);
+    }
+
+    restoreTreeView(view);
+  }
+
+  /**
+   * Die Auswahl nachziehen: Ist sie verschwunden, wird sie aufgehoben und die
+   * Vorschau geschlossen — besser als eine Vorschau, die auf nichts mehr
+   * zeigt. Hat sich der Ordner der ausgewählten Datei gemeldet, wird ihr
+   * Inhalt neu gelesen; welche Datei genau geschrieben wurde, weiß der
+   * Watcher nicht.
+   */
+  async function syncSelection(reportedDirs, complete) {
+    const selected = appStore.selectedPath;
+    if (!selected) return;
+    const parent = parentDirOf(selected);
+    // Liegt der Eintrag in einem zugeklappten Ordner, ist nichts zu tun.
+    if (!visibleFolderPaths().includes(parent)) return;
+    if (!rowForPath(selected)) {
+      appStore.selectedPath = null;
+      appStore.selectedIsDirectory = false;
+      appStore.activeTreeItem = null;
+      showWelcome();
+      return;
+    }
+    if (appStore.selectedIsDirectory) return;
+    if (complete && !reportedDirs.includes(parent)) return;
+    // Nur nachladen, was ohnehin sichtbar ist — eine geschlossene Vorschau
+    // reißt der Watcher nicht von sich aus auf.
+    if (filePreview.classList.contains('hidden')) return;
+    await showTextPreview(selected);
+  }
+
+  /**
+   * Eine Meldung des Watchers abarbeiten. `complete: false` heißt „da war
+   * mehr, das sich keinem Ordner zuordnen ließ“ — etwa ein `git`-Wechsel, der
+   * halbe Verzeichnisbäume austauscht. Dann wird einmal alles Sichtbare
+   * geprüft statt hundertfach einzeln.
+   */
+  async function syncTreeWithFilesystem({ directories, complete } = {}) {
+    if (!appStore.rootPath) return;
+    const gemeldet = (Array.isArray(directories) ? directories : []).filter(
+      (dir) => typeof dir === 'string' && dir
+    );
+    const vollstaendig = complete !== false;
+    const zuPruefen = vollstaendig
+      ? visibleFolderPaths().filter((dir) => gemeldet.includes(dir))
+      : visibleFolderPaths();
+
+    const geaendert = [];
+    for (const dir of zuPruefen) {
+      if (await folderListingChanged(dir)) geaendert.push(dir);
+    }
+    if (geaendert.length > 0) await redrawFolders(geaendert);
+
+    await syncSelection(gemeldet, vollstaendig);
   }
 
   async function toggleFolder(row, childContainer, dirPath, depth) {

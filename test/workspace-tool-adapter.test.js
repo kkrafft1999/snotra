@@ -69,6 +69,68 @@ test('workspace tool adapter adds display lines and skill metadata via the port 
   );
 });
 
+// Issue #158: Bis dahin meldete nur write_file_text. edit_file und apply_patch
+// liefen still durch — der Baum und die offene Vorschau blieben stehen.
+test('edit_file meldet die geänderte Datei aus dem Ergebnis', async () => {
+  const adapter = createWorkspaceToolAdapter(
+    makeRegistry(() =>
+      JSON.stringify({ relative_path: 'src/app.js', replacements: 1, bytes_written: 42 })
+    )
+  );
+
+  const result = await adapter.execute(
+    'edit_file',
+    { relative_path: 'src/app.js', old_string: 'a', new_string: 'b' },
+    { workspaceRoot: '/tmp/project', allowWrite: true }
+  );
+
+  assert.deepEqual(result.progressEvents, [
+    {
+      type: CHAT_PROGRESS_TYPES.WORKSPACE,
+      event: WORKSPACE_PROGRESS_EVENTS.FILE_WRITTEN,
+      relativePath: 'src/app.js',
+    },
+  ]);
+});
+
+test('apply_patch meldet jede Datei des Diffs einzeln', async () => {
+  const adapter = createWorkspaceToolAdapter(
+    makeRegistry(() =>
+      JSON.stringify({
+        mode: 'unified_diff',
+        files_changed: 2,
+        files: [{ relative_path: 'a.js' }, { relative_path: 'sub/b.js' }],
+      })
+    )
+  );
+
+  // Im Diff-Modus stehen die Pfade nur im Patch — das Ergebnis kennt sie.
+  const result = await adapter.execute(
+    'apply_patch',
+    { patch: '--- a.js\n+++ a.js\n' },
+    { workspaceRoot: '/tmp/project', allowWrite: true }
+  );
+
+  assert.deepEqual(
+    result.progressEvents.map((event) => event.relativePath),
+    ['a.js', 'sub/b.js']
+  );
+});
+
+test('ein gescheitertes edit_file meldet nichts', async () => {
+  const adapter = createWorkspaceToolAdapter(
+    makeRegistry(() => JSON.stringify({ error: 'old_string wurde nicht gefunden.' }))
+  );
+
+  const result = await adapter.execute(
+    'edit_file',
+    { relative_path: 'src/app.js', old_string: 'a', new_string: 'b' },
+    { workspaceRoot: '/tmp/project', allowWrite: true }
+  );
+
+  assert.deepEqual(result.progressEvents, []);
+});
+
 test('buildTraceEntry marks reads from a skill directory with the skill name', () => {
   const adapter = createWorkspaceToolAdapter(makeRegistry());
   const skillEntry = adapter.buildTraceEntry('read_file_text', {

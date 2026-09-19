@@ -127,6 +127,28 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(preview.content, README);
   step('Vorschau geprueft');
 
+  // --- Der Baum folgt dem Dateisystem (Issue #158) --------------------------
+  // Kein Klick in der App: Die Datei entsteht daneben, so wie sie im Terminal,
+  // im Finder oder unter der Hand der KI entstuende. Der Watcher im Main muss
+  // sie melden, der Renderer sie zeichnen.
+  const treeLabels = () => page.evaluate(() =>
+    [...document.querySelectorAll('#tree-container .tree-item .label')].map((el) => el.textContent)
+  );
+  const vonAussen = path.join(workspace, 'von-aussen.md');
+  await writeFile(vonAussen, '# Von aussen\n', 'utf8');
+  await poll(async () => {
+    const labels = await treeLabels();
+    return labels.includes('von-aussen.md') ? labels : null;
+  }, { what: 'von aussen angelegte Datei im Baum' });
+  step('angelegte Datei erscheint im Baum');
+
+  await rm(vonAussen);
+  await poll(async () => {
+    const labels = await treeLabels();
+    return labels.includes('von-aussen.md') ? null : labels;
+  }, { what: 'von aussen geloeschte Datei aus dem Baum verschwunden' });
+  step('geloeschte Datei verschwindet aus dem Baum');
+
   // --- Chat abbrechen: der Stream laeuft, der Stop-Knopf beendet ihn --------
   model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort '.repeat(40), chunkDelayMs: 120 });
   await ask(page, LONG_QUESTION);

@@ -107,6 +107,10 @@ const {
   isToolLinePhase,
 } = require('./chat');
 const {
+  createWorkspaceTreeChangedEvent,
+  MAX_TREE_CHANGED_DIRECTORIES,
+} = require('./workspace-tree');
+const {
   ATTACHMENT_KINDS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGES_PER_MESSAGE,
@@ -265,6 +269,8 @@ module.exports = {
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
+  createWorkspaceTreeChangedEvent,
+  MAX_TREE_CHANGED_DIRECTORIES,
   ATTACHMENT_KINDS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGES_PER_MESSAGE,
