@@ -52,10 +52,9 @@ nicht suchen müssen.
 
 Fällt eines davon aus, wird nicht gemergt, sondern gemeldet.
 
-Eine Lücke bleibt bewusst offen: Die CI fährt nur `npm test`, der
-Electron-Smoke-Test läuft allein vor dem Push auf dem Rechner des Agenten
-(#237). Solange das so ist, deckt das Pflicht-Gate nur eine der beiden
-Testebenen ab — die andere bleibt Zusage, nicht Prüfung.
+Seit [#237](https://github.com/kkrafft1999/snotra/issues/237) fährt `ci.yml`
+im selben Job auch `npm run test:e2e` — das Pflicht-Gate deckt damit beide
+Testebenen ab, nicht nur die DOM-Nachbildung.
 
 ## Erst fragen
 
