@@ -6,6 +6,12 @@ name: CI
 # (Issue #100). Wird ausserdem von release.yml als Test-Gate vor den Build-Jobs
 # aufgerufen (workflow_call), damit ein Release-Tag nie Binaerdateien aus einem
 # roten Stand erzeugt (Issue #70).
+#
+# Neben der Unit-Suite laeuft im selben Job auch der Electron-Smoke-Test
+# (test:e2e, e2e/smoke.test.mjs) mit, weil er Dinge abdeckt, die node --test
+# grundsaetzlich nicht kann: Sanitizing mit dem echten DOMPurify, Layout und
+# Fokus in der laufenden App (Issue #237). Linux braucht dafuer einen
+# virtuellen Display-Server (Electron startet sonst gar nicht headless).
 
 on:
   pull_request:
@@ -35,3 +41,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Xvfb installieren (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Electron-Smoke-Test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run test:e2e
+      - name: Electron-Smoke-Test
+        if: runner.os != 'Linux'
+        run: npm run test:e2e

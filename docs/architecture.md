@@ -748,9 +748,14 @@ Fallstricke des Treibers stehen im Kopf von `e2e/helpers/app.mjs` — vor allem:
 Playwrights eigenes Warten hängt hier (Timer-Drosselung im Renderer), deshalb
 pollt der Treiber selbst.
 
-Nicht in der CI: Electron braucht dort eine Anzeige (unter Linux `xvfb`), und
-der Nutzen steht bisher nicht gegen die Laufzeit auf drei Betriebssystemen.
-Der Test läuft lokal und vor Releases.
+Seit [#237](https://github.com/kkrafft1999/snotra/issues/237) läuft der
+Smoke-Test auch in `ci.yml`, im selben Job wie `npm test`, auf allen drei
+Plattformen. Unter Linux fehlt dem Runner eine Anzeige — der Schritt läuft
+dort über `xvfb-run --auto-servernum`, macOS und Windows brauchen keinen
+Zusatz. Damit prüft die CI beide Testebenen, nicht nur die DOM-Nachbildung,
+und das Pflicht-Gate im Ruleset auf `main` deckt tatsächlich ab, was die
+Projektregel [`git-workflow.md`](../.claude/rules/git-workflow.md) vor dem
+Push verlangt.
 
 ## Coverage: ehrlicher Nenner, getrennte Schwellen
 
