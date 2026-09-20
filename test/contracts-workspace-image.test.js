@@ -14,6 +14,7 @@ const {
   sniffImageMime,
   decodeWorkspaceImageSource,
   isWorkspaceImageSource,
+  isWindowsDrivePath,
   createWorkspaceImageResult,
   createWorkspaceImageError,
   workspaceImageErrorMessage,
@@ -106,4 +107,19 @@ test('aus der Markdown-URL wird wieder der Pfad des Modells', () => {
   assert.equal(decodeWorkspaceImageSource('100%-fertig.png'), '100%-fertig.png');
   assert.equal(decodeWorkspaceImageSource('%E0%A4%A.png'), '%E0%A4%A.png');
   assert.equal(decodeWorkspaceImageSource(null), '');
+});
+
+test('ein Windows-Laufwerkspfad ist erkennbar — und nur der', () => {
+  // Die Ausnahme im Sanitizer haengt an dieser Frage, deshalb steht sie hier
+  // einzeln: DOMPurify wuerde `D:` sonst als unbekanntes Schema wegwerfen.
+  for (const src of ['C:/ws/p.png', 'C:\\ws\\p.png', 'C:%5Cws%5Cp.png', 'd:/ws/p.png']) {
+    assert.equal(isWindowsDrivePath(src), true, src);
+  }
+  for (const src of ['/Users/k/p.png', 'bilder/p.png', 'https://x/y.png',
+    'javascript:alert(1)', 'data:image/png;base64,AAA',
+    // Ohne Trenner ist das ein laufwerksrelativer Pfad — nichts, was ein
+    // Modell schreibt, und nichts, wofuer die Ausnahme gelten soll.
+    'C:datei.png', '', null]) {
+    assert.equal(isWindowsDrivePath(src), false, String(src));
+  }
 });

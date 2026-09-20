@@ -138,6 +138,25 @@ function isWorkspaceImageSource(src) {
   return !/^[a-z][a-z0-9+.-]+:/i.test(raw);
 }
 
+/**
+ * Sieht dieses `src` nach einem Windows-Pfad mit Laufwerksbuchstaben aus?
+ *
+ * Gebraucht an genau einer Stelle, und die ist heikel genug für eine eigene
+ * Funktion: DOMPurify liest `D:` als unbekanntes URL-Schema und wirft das
+ * `src` weg (`IS_ALLOWED_URI` erlaubt nur bekannte Schemata, alles ohne
+ * Schema — oder mit mindestens zwei Zeichen davor). Ein absoluter Pfad des
+ * Modells käme unter Windows also nie beim Renderer an, während `/Users/…`
+ * auf macOS und Linux anstandslos durchgeht.
+ *
+ * Erfasst `C:/…`, `C:\…` und die prozent-kodierte Form `C:%5C…`, die
+ * `marked` daraus macht. **Nicht** `C:datei` ohne Trenner: Das ist unter
+ * Windows ein Pfad relativ zum Laufwerk und nichts, was ein Modell schreibt.
+ */
+function isWindowsDrivePath(src) {
+  const raw = typeof src === 'string' ? src.trim() : '';
+  return /^[a-z]:(?:[\\/]|%5c)/i.test(raw);
+}
+
 function createWorkspaceImageResult({ mime, base64, mtimeMs = 0, size = 0 } = {}) {
   return { ok: true, mime, base64, mtimeMs, size };
 }
@@ -164,13 +183,14 @@ function workspaceImageDataUrl(result) {
 
 module.exports = {
   MAX_WORKSPACE_IMAGE_BYTES,
-  decodeWorkspaceImageSource,
   WORKSPACE_IMAGE_ERRORS,
   WORKSPACE_IMAGE_ERROR_MESSAGES,
   WORKSPACE_IMAGE_MIME_TYPES,
   WORKSPACE_IMAGE_SNIFF_BYTES,
   sniffImageMime,
+  decodeWorkspaceImageSource,
   isWorkspaceImageSource,
+  isWindowsDrivePath,
   createWorkspaceImageResult,
   createWorkspaceImageError,
   workspaceImageErrorMessage,

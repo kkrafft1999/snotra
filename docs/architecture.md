@@ -282,6 +282,18 @@ WebP — kein SVG) und die Größe begrenzt. Zurück kommt `{ mime, base64 }` od
 ein Grund aus `shared/contracts/workspace-image.js`, zu dem der Renderer einen
 gestalteten Platzhalter baut.
 
+**Eine Ausnahme im Sanitizer**, die einzige an dieser Stelle: DOMPurify erlaubt
+nur bekannte URL-Schemata und wirft alles andere weg. Ein Windows-Pfad
+`D:\ws\plot.png` sieht für die Prüfung aus wie ein Schema `d:` — das `src`
+verschwindet, während `/Users/…` auf macOS und Linux anstandslos durchgeht. Ein
+`uponSanitizeAttribute`-Hook in `renderer/utils/helpers.js` hält deshalb genau
+diesen einen Fall fest: nur `<img src>`, nur ein echter Laufwerkspfad
+(`isWindowsDrivePath`). Sie öffnet nichts — der Wert wird nie geladen, sondern
+durch einen `data:`-URI oder einen Platzhalter ersetzt; selbst wenn das
+ausbliebe, lässt `img-src 'self' data:` kein `d:` zu, und geprüft wird der Pfad
+ohnehin erst im Main-Prozess. Ohne sie gäbe es auf Windows nie ein Bild über
+einen absoluten Pfad.
+
 Zwei Eigenheiten hängen am Streaming: Während die Antwort läuft, setzt
 `scheduleStreamRender` je Animation-Frame das komplette `innerHTML` neu —
 Bilder bekommen deshalb bis zum Ende nur einen ruhigen Platzhalter. Und der

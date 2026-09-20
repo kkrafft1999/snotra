@@ -324,6 +324,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       '![Vektor](diagramm.svg)',
       '',
       '![Draussen](../../etc/hosts)',
+      '',
+      // Nicht wegen des Ergebnisses, sondern wegen des Weges: DOMPurify liest
+      // `C:` als unbekanntes URL-Schema und wuerde das `src` wegwerfen. Ob die
+      // Datei dann existiert, haengt an der Plattform — dass der Pfad
+      // ueberhaupt beim Aufloeser ankommt, nicht.
+      '![Laufwerk](C:/ws/bilder/plot.png)',
     ].join('\n'),
   });
   await ask(page, IMAGE_QUESTION);
@@ -356,7 +362,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       const fertig = state
         && !state.busy
         && state.geladen.length === 2
-        && state.platzhalter.length === 3
+        && state.platzhalter.length === 4
         && state.geladen.every((bild) => bild.breite > 0);
       return fertig ? state : null;
     },
@@ -373,10 +379,13 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // Fehlend, SVG und ausserhalb: Platzhalter mit Grund statt Broken-Image-Icon.
   const gruende = Object.fromEntries(bilder.platzhalter.map((p) => [p.alt, p.grund]));
-  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Vektor']);
+  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Laufwerk', 'Vektor']);
   assert.equal(gruende.Fehlt, 'Bild nicht gefunden');
   assert.equal(gruende.Vektor, 'Dieses Bildformat wird nicht angezeigt');
   assert.equal(gruende.Draussen, 'Außerhalb des Arbeitsordners');
+  // Der Laufwerkspfad darf alles sein, nur nicht „gar nicht erst gefragt“ —
+  // genau das waere er ohne die Ausnahme im Sanitizer.
+  assert.notEqual(gruende.Laufwerk, 'Nur Bilder aus dem Arbeitsordner werden angezeigt');
   for (const p of bilder.platzhalter) {
     assert.equal(p.rolle, 'img', `${p.alt}: der Platzhalter meldet sich als Bild`);
   }
