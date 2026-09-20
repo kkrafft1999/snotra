@@ -1076,6 +1076,52 @@
     </div>
   </div>
 
+  <!-- Selbst-Update (Issue #232). Ein Dialog fuer den ganzen Weg: gefunden →
+       laedt → bereit → wird installiert. Kopf und Fussleiste bleiben stehen,
+       Rumpf und Knoepfe wechseln je Schritt. Abgebrochen werden kann bis zum
+       Beginn der Installation — danach laeuft der Tausch durch. -->
+  <div id="modal-update" class="modal modal-update hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-update-backdrop"></div>
+    <div
+      class="modal-dialog update-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-update-title"
+      aria-describedby="modal-update-summary">
+      <header class="modal-dialog__header">
+        <h2 id="modal-update-title" class="modal-dialog__title">Aktualisierung</h2>
+        <button type="button" id="modal-update-close" class="modal-dialog__close" aria-label="Dialog schließen">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+          </svg>
+        </button>
+      </header>
+      <div class="modal-dialog__body update-dialog__body">
+        <p id="modal-update-summary" class="update-dialog__summary"></p>
+        <div id="modal-update-progress" class="update-progress hidden">
+          <div
+            class="update-progress__track"
+            id="modal-update-track"
+            role="progressbar"
+            aria-labelledby="modal-update-progress-text"
+            aria-valuemin="0"
+            aria-valuemax="100">
+            <div id="modal-update-bar" class="update-progress__bar"></div>
+          </div>
+          <p id="modal-update-progress-text" class="update-progress__text" role="status" aria-live="polite"></p>
+        </div>
+        <p id="modal-update-hint" class="modal-hint update-dialog__hint hidden"></p>
+        <details id="modal-update-notes" class="update-notes hidden">
+          <summary class="update-notes__summary">Was sich geändert hat</summary>
+          <div id="modal-update-notes-body" class="update-notes__body"></div>
+        </details>
+      </div>
+      <footer class="modal-dialog__footer" id="modal-update-footer">
+        <div class="modal-actions" id="modal-update-actions"></div>
+      </footer>
+    </div>
+  </div>
+
   <script src="vendor/marked.umd.js"></script>
   <script src="vendor/purify.min.js"></script>
   <script type="module" src="./app.js"></script>

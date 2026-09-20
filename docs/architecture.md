@@ -183,6 +183,38 @@ nur mit geöffnetem Projektordner, sondern filtert je Tool.
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
 
+### Selbst-Update: drei Schritte, drei Module
+
+Der `update-port` ist bewusst kein einzelnes „aktualisiere dich", sondern
+`checkForUpdate` / `downloadUpdate` / `installUpdate` plus Abbruch. Grund ist
+die Anforderung selbst (Issue #232): Der Nutzer bestätigt Laden und
+Installieren einzeln und kann dazwischen aussteigen — ein zusammengefasster
+Aufruf könnte das nicht abbilden.
+
+Dahinter liegen drei Module in `services/`, getrennt nach dem, was jeweils
+schiefgehen kann:
+
+- `update-targets.js` — **rein**, ohne Dateisystem und Prozesse. Beantwortet
+  „welche Art von Installation läuft hier" (macOS-Bundle, Windows-Verzeichnis,
+  AppImage, entpacktes Linux-Verzeichnis, Systempaket, Entwicklungs-Build) und
+  „welches Release-Asset passt dazu". Diese Entscheidung fällt auf jeder
+  Plattform anders und lässt sich auf keiner gefahrlos ausprobieren, deshalb
+  steht sie als reine Funktion für sich.
+- `update-download.js` — Strom auf die Platte, mit Fortschritt und echtem
+  Abbruch. Lädt nur von `github.com` bzw. `*.githubusercontent.com` über HTTPS
+  und verwirft eine Datei, deren Länge nicht zur angekündigten passt; ein
+  Torso darf beim nächsten Versuch nicht als fertiger Download durchgehen.
+- `update-installer.js` — der Austausch. Überall dasselbe Muster: die neue
+  Version wird **neben** der alten fertig ausgepackt und geprüft, erst danach
+  übernimmt ein losgelöstes Helferskript, das auf das Ende dieses Prozesses
+  wartet, umbenennt und neu startet. Im laufenden Prozess ginge es nicht — unter
+  Windows ist die `.exe` gesperrt, unter Linux hängt das AppImage als
+  Dateisystem im eigenen Prozess. Die Skripte selbst werden als reine
+  Zeichenketten gebaut und sind damit ohne Installation prüfbar.
+
+Die Adresse des Pakets verlässt den Main-Prozess nie: Der Renderer erfährt aus
+`checkForUpdate` nur Name und Größe und stößt den Download ohne Parameter an.
+
 Der **Skill-Service** (`services/skills-service.js`) scannt die drei
 Skill-Quellen — die eingebauten System-Skills aus `system-skills/` im
 App-Bundle sowie `.agents/skills/` in Workspace und Home; Verzeichnisse

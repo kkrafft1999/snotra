@@ -110,12 +110,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelTranscription: () => ipcRenderer.invoke(REQ.WHISPER_CANCEL),
   transcribeAudio: (audioBuffer) => ipcRenderer.invoke(REQ.WHISPER_TRANSCRIBE, audioBuffer),
 
-  // Self-Update (Notifier)
+  // Selbst-Update (Issue #232). Der Renderer nennt nie eine Adresse — er
+  // stoesst nur an; was geladen wird, entscheidet der Main-Prozess.
   getAppVersion: () => ipcRenderer.invoke(REQ.UPDATE_GET_VERSION),
   checkForUpdate: () => ipcRenderer.invoke(REQ.UPDATE_CHECK),
   ignoreUpdateVersion: (version) => ipcRenderer.invoke(REQ.UPDATE_IGNORE_VERSION, version),
+  downloadUpdate: () => ipcRenderer.invoke(REQ.UPDATE_DOWNLOAD),
+  cancelUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_CANCEL_DOWNLOAD),
+  discardUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_DISCARD_DOWNLOAD),
+  installUpdate: () => ipcRenderer.invoke(REQ.UPDATE_INSTALL),
   onUpdateAvailable: (callback) => {
     const channel = PUSH.UPDATE_AVAILABLE;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onUpdateProgress: (callback) => {
+    const channel = PUSH.UPDATE_PROGRESS;
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

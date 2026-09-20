@@ -4326,60 +4326,147 @@ select.modal-input {
   }
 }
 
-/* Update-Notifier-Banner: liegt als Overlay direkt unter der Titlebar, damit
-   die Hoehenberechnung von #app (100% - 44px) unberuehrt bleibt. */
-.update-banner {
-  position: fixed;
-  top: 44px;
-  left: 0;
-  right: 0;
-  z-index: 50;
+/* ── Selbst-Update-Dialog (Issue #232) ───────────────────────────────────────
+ * Erbt Backdrop, Rahmen, Kopf und Fussleiste von `.modal-dialog`; eigen sind
+ * nur der Fortschrittsbalken und der zusammenklappbare Aenderungstext. */
+
+.update-dialog__body {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 12px;
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--accent);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  padding-top: 16px;
 }
 
-.update-banner.hidden {
+.update-dialog__summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.update-dialog__hint {
+  margin: 0;
+}
+
+/* Fortschritt: Balken UND Text. Der Balken allein waere ein Zustand, der nur
+   ueber Form kodiert ist — die Prozentzahl daneben macht ihn vorlesbar. */
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.update-progress.hidden {
   display: none;
 }
 
-.update-banner--info {
-  border-bottom-color: var(--border);
+.update-progress__track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  background: var(--ds-grey-divider);
+  border-radius: 999px;
 }
 
-.update-banner-text {
-  flex: 1 1 auto;
-  min-width: 0;
+.update-progress__bar {
+  width: 0;
+  height: 100%;
+  background: var(--ds-blue);
+  border-radius: 999px;
+  transition: width var(--ds-motion-medium) ease-out;
 }
 
-.update-banner-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
+/* Ohne bekannte Gesamtgroesse laeuft ein Streifen durch, statt eine
+   Prozentzahl zu erfinden. */
+.update-progress__track--indeterminate .update-progress__bar {
+  width: 35%;
+  transition: none;
+  animation: update-progress-slide 1.2s ease-in-out infinite;
 }
 
-.update-banner-close {
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
-  padding: 2px 8px;
-  cursor: pointer;
-  border-radius: 4px;
+@keyframes update-progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(286%); }
 }
 
-.update-banner-close:hover {
-  background: var(--bg-hover);
+@media (prefers-reduced-motion: reduce) {
+  .update-progress__track--indeterminate .update-progress__bar {
+    width: 100%;
+    animation: none;
+    opacity: 0.4;
+  }
+  .update-progress__bar {
+    transition: none;
+  }
+}
+
+.update-progress__text {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-grey-strong);
+}
+
+.update-notes {
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+}
+
+.update-notes.hidden {
+  display: none;
+}
+
+.update-notes__summary {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.update-notes__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Eigenes Dreieck, damit der Marker in beiden Themes die Textfarbe traegt. */
+.update-notes__summary::before {
+  display: inline-block;
+  width: 12px;
+  content: '\25B8';
+  color: var(--ds-grey-muted);
+  transition: transform var(--ds-motion-fast) ease;
+}
+
+.update-notes[open] > .update-notes__summary::before {
+  transform: rotate(90deg);
+}
+
+.update-notes__summary:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.update-notes__body {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 0 12px 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
+
+.modal-update .modal-dialog__footer.hidden {
+  display: none;
+}
+
+/* Waehrend Laden und Installieren gibt es nichts zu schliessen — der Knopf
+   bleibt sichtbar, damit der Kopf nicht springt, aber ohne Angebot. */
+.modal-update--busy .modal-dialog__close {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ── Tool-Berechtigungen (Issue #67) ─────────────────────────────────────────
