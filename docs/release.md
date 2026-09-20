@@ -18,22 +18,47 @@ sie an.
   ```
 - `gh` muss authentifiziert sein (`gh auth status`).
 
+## Ablauf im Überblick
+
+![Release-Ablauf: Versions-Commit über einen Pull Request, danach Tag-Push, der die Pipeline auslöst](release-ablauf.svg)
+
+Kurz: Der Versions-Commit geht wie jede andere Änderung durch einen Pull
+Request. Erst der gemergte Stand wird getaggt, und allein der Tag-Push startet
+die Pipeline. Auf `main` wird nie direkt geschrieben.
+
 ## Version als Single Source of Truth
 
 Die angezeigte und verglichene Version kommt aus `version` in
-[`package.json`](../package.json) (→ `app.getVersion()`). Vor jedem Release
-hochzählen (SemVer):
+[`package.json`](../package.json) (→ `app.getVersion()`). Genau dieser Wert
+entscheidet, ob sich eine laufende Installation als veraltet erkennt — er muss
+deshalb zum Release-Tag passen.
+
+Vor jedem Release hochzählen (SemVer), aber **auf einem eigenen Branch**:
 
 ```sh
-npm version patch   # oder: minor / major  — setzt package.json + erstellt Git-Tag vX.Y.Z
+git switch -c release/vX.Y.Z
+npm version patch --no-git-tag-version   # oder: minor / major
+git commit -am "vX.Y.Z"
+git push origin release/vX.Y.Z
+gh pr create --title "Release vX.Y.Z"
 ```
 
-`npm version` legt den Tag `vX.Y.Z` automatisch an und committet den Bump.
-Alternativ die Version von Hand in `package.json` ändern und selbst taggen:
+`--no-git-tag-version` ist wesentlich: Ohne die Option committet `npm version`
+auf den aktuellen Branch und legt den Tag gleich mit an. Auf `main` ausgeführt
+heißt das ein Direkt-Commit, den Ruleset `23177645` nur per Bypass durchlässt
+(Issue #238). Mit der Option ändert `npm version` nur `package.json` und
+`package-lock.json`.
+
+Nach grünen Pflicht-Checks mergen und den Tag auf den gemergten Stand setzen:
 
 ```sh
+gh pr merge --squash --delete-branch
+git switch main && git pull
 git tag vX.Y.Z
 ```
+
+Der Tag-Ref ist vom Ruleset nicht erfasst (`target: branch`), sein Push also
+unkritisch.
 
 ## Build
 
@@ -115,25 +140,44 @@ gh run list --workflow ci.yml --limit 5
 gh run watch
 ```
 
-Optional lässt sich `main` per Branch-Protection absichern, so dass die Checks
-`Tests (macos-14)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` vor dem
-Merge bestehen müssen (Settings → Branches → Branch protection rules; nicht
-Teil des Repos).
+`main` ist über Ruleset `23177645` geschützt: Änderungen brauchen einen Pull
+Request, Force-Push und Löschen sind gesperrt, und die drei Kontexte
+`Tests (macos-14)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` sind
+Pflicht. Das Ruleset hat `target: branch` und erfasst deshalb **nur Branches** —
+Tags kann man ohne PR pushen, was der Release-Weg oben ausnutzt.
 
 ## Release veröffentlichen
 
-```sh
-git push origin main --tags
+Es wird **nur der Tag** gepusht — der Stand liegt über den gemergten PR bereits
+auf `main`:
 
+```sh
+git push origin vX.Y.Z
+```
+
+Das ist der Punkt ohne Wiederkehr: Der Push startet `release.yml`, und am Ende
+steht ein öffentliches Release. Quittiert GitHub den Push mit
+`Bypassed rule violations for refs/heads/main`, wurde versehentlich doch auf
+`main` geschrieben — dann nachsehen, nicht übergehen.
+
+Lauf und Ergebnis:
+
+```sh
+gh run list --workflow=release.yml --limit 1
+gh run watch <RUN_ID> --exit-status
+gh release view vX.Y.Z --json url,assets -q '.url, (.assets[].name)'
+```
+
+Release und Assets legt die Pipeline selbst an; die Artefakte heißen
+einheitlich `Snotra-AI-<version>-<mac|win|linux>-<arch>.<endung>`. Von Hand
+braucht es `gh release create` nur, wenn die Pipeline ausfällt:
+
+```sh
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "Was ist neu …" \
   "out/make/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
-
-Weitere Assets (Windows-ZIP, Linux-`.deb` und -`.tar.gz`) als zusätzliche Pfade
-anhängen. Die Pipeline benennt sie einheitlich
-`Snotra-AI-<version>-<mac|win|linux>-<arch>.<endung>`.
 
 Der Text aus `--notes` erscheint als Release-Body und steht der App im Banner
 als `notes` zur Verfügung.

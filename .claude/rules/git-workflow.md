@@ -57,10 +57,27 @@ Testebenen ab — die andere bleibt Zusage, nicht Prüfung.
 - **Konflikte, Force-Push, Rebase**, alles, was Historie umschreibt.
 - **Änderungen am Ruleset selbst** oder am Schutz von `main`. Wer das Gate
   verstellt, verstellt die Grundlage dieser Regel.
-- **Direkt auf `main` schreiben:** nie, auch nicht mit Admin-Bypass.
+- **Direkt auf `main` schreiben:** nie, auch nicht mit Admin-Bypass. Das gilt
+  auch für den **Versions-Commit eines Releases** — er geht wie jede andere
+  Änderung über einen PR (Issue #238).
 
 Im Zweifel gilt der Zweifel: lieber den Stand melden und fragen, als einen
 Merge zurückdrehen.
+
+## Tags sind nicht gemeint
+
+Das Push-Verbot gilt Branches. Ruleset `23177645` hat `target: branch` und
+erfasst Tag-Refs nicht — `git push origin vX.Y.Z` ist deshalb kein Bypass und
+braucht keine gesonderte Rückfrage. Die Bestätigung der Zielversion holt der
+[`release`-Skill](../skills/release/SKILL.md) ohnehin ein, bevor er taggt;
+sein Ablauf steht als Diagramm in
+[`docs/release-ablauf.svg`](../../docs/release-ablauf.svg).
+
+Bis zum 2026-09-20 lief der Bump per `npm version` direkt auf `main` und kam
+nur durch den `RepositoryRole`-Bypass durch; GitHub quittierte jedes Release
+mit `Bypassed rule violations for refs/heads/main`. Taucht diese Zeile wieder
+in einer Push-Ausgabe auf, ist etwas am Ablauf vorbeigelaufen — melden, nicht
+übergehen.
 
 ## Reihenfolge
 
