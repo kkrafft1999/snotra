@@ -220,9 +220,16 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
     <div class="wrap">
       <ul class="numbers-grid" role="list">
         <li class="num"><span class="v" data-count="1">1</span><span class="k" data-i18n="zahlen.01.label">Ordner im Zugriff</span></li>
-        <li class="num"><span class="v" data-count="5">5</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
-        <!-- 15 = oeffentliche Tools der Registry ohne debug_wait (internal: true), seit v1.5.2 inkl. shell_execute. -->
-        <li class="num"><span class="v" data-count="15">15</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
+        <!-- 6 = fest registrierte Anbieter der App, seit v1.6.0 inkl. "OpenAI-kompatibel". -->
+        <li class="num"><span class="v" data-count="6">6</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
+        <!-- 16 = eingebaute Tools, die dem Modell angeboten werden. Gegengeprueft von
+             test/workspace-tool-registry.test.js (14 abwaehlbare plus die zwei der
+             Grundausstattung, list_directory und load_skill, die nicht in
+             Einstellungen > Tools stehen, aber trotzdem an das Modell gehen).
+             debug_wait zaehlt nicht mit: Es ist mit #197 weggefallen. Dass die Zahl
+             seit der 15 von v1.5.2 trotzdem gestiegen ist, liegt an fetch_url (#95) —
+             die 15 war also schon vor dem Wegfall ueberholt. -->
+        <li class="num"><span class="v" data-count="16">16</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
         <li class="num"><span class="v v--inf" aria-hidden="true">∞</span><span class="k"><span class="sr-only" data-i18n="zahlen.04.sr">Unbegrenzt viele </span><span data-i18n="zahlen.04.label">Systeme per CLI</span></span></li>
         <li class="num"><span class="v" data-count="0">0</span><span class="k" data-i18n="zahlen.05.label">Konten</span></li>
       </ul>
@@ -271,6 +278,7 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
                   <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="Google · gemini-2.5-pro"><span class="m-name">Google · gemini-2.5-pro</span><span class="m-tag">API</span></button></li>
                   <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="Ollama · qwen3:14b" data-local><span class="m-name">Ollama · qwen3:14b</span><span class="m-tag" data-i18n="saeule.01.demo.tag.lokal">lokal</span></button></li>
                   <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="MLX-LM · mistral-small" data-local><span class="m-name">MLX-LM · mistral-small</span><span class="m-tag" data-i18n="saeule.01.demo.tag.lokal">lokal</span></button></li>
+                  <li role="none"><button role="menuitemradio" aria-checked="false" type="button" data-model="LM Studio · qwen2.5" data-local><span class="m-name">LM Studio · qwen2.5</span><span class="m-tag" data-i18n="saeule.01.demo.tag.lokal">lokal</span></button></li>
                 </ul>
               </div>
               <p class="demo-cap demo-hint" id="model-hint" data-i18n="saeule.01.demo.hinweis">Fünf Anbieter, ein Port. Zwei davon rechnen auf deinem Rechner.</p>
@@ -322,7 +330,7 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
             <p class="pillar-no">03 <span class="word" data-i18n="saeule.03.wort">Anschluss</span></p>
             <h3 data-i18n="saeule.03.titel">Verbindet sich mit allem, was schon da ist</h3>
             <p data-i18n="saeule.03.absatz" data-i18n-code="git|docker|az">Jedes Kommandozeilen-Werkzeug auf deinem Rechner wird zum Werkzeug des Modells — <code class="inline-code">git</code>, <code class="inline-code">docker</code>, <code class="inline-code">az</code>, das CLI deines Hauses. Kein Konnektor, kein Adapter, keine Integrationsprojekte: Ein Skill beschreibt das Werkzeug, den Rest macht die Shell.</p>
-            <p class="badge-row"><span class="badge badge--blue badge--lg" data-i18n="saeule.03.badge">MCP-Server in Arbeit</span></p>
+            <p data-i18n="saeule.03.absatz2">Der zweite Weg ist das Model Context Protocol. Ein MCP-Server bringt die Werkzeuge eines Systems selbst mit — Jira, Confluence, eine Datenbank, eure interne API. Eingetragen wird er unter Einstellungen, danach steht er im Chat. Eine neue Fähigkeit kommt per Konfiguration, nicht per Release.</p>
           </div>
           <div class="pillar-demo">
             <p class="demo-cap" data-i18n="saeule.03.demo.caption1"><span class="deco" aria-hidden="true">//</span>tool-log, wie er im chat läuft</p>
@@ -349,6 +357,26 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
               <code class="cli-chip">kubectl</code><code class="cli-chip">psql</code><code class="cli-chip">rsync</code>
               <code class="cli-chip">terraform</code><code class="cli-chip">pandoc</code><code class="cli-chip">ffmpeg</code>
               <code class="cli-chip">gh</code><code class="cli-chip">jq</code><code class="cli-chip" data-i18n="saeule.03.demo.chip.haus">euer-haus-cli</code>
+            </div>
+            <p class="demo-cap" data-i18n="saeule.03.demo.caption3"><span class="deco" aria-hidden="true">//</span>mcp-server, wie sie in den einstellungen stehen</p>
+            <div class="demo-surface">
+              <ul class="mcp-list" role="list">
+                <li class="mcp-row">
+                  <svg class="mcp-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6"/><path d="M15 3v6"/><path d="M6 9h12v3a6 6 0 0 1-12 0z"/><path d="M12 18v3"/></svg>
+                  <span class="mcp-name">jira</span>
+                  <span class="mcp-tools" data-i18n="saeule.03.demo.mcp.jira">9 Werkzeuge</span>
+                </li>
+                <li class="mcp-row">
+                  <svg class="mcp-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6"/><path d="M15 3v6"/><path d="M6 9h12v3a6 6 0 0 1-12 0z"/><path d="M12 18v3"/></svg>
+                  <span class="mcp-name">confluence</span>
+                  <span class="mcp-tools" data-i18n="saeule.03.demo.mcp.confluence">6 Werkzeuge</span>
+                </li>
+                <li class="mcp-row">
+                  <svg class="mcp-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6"/><path d="M15 3v6"/><path d="M6 9h12v3a6 6 0 0 1-12 0z"/><path d="M12 18v3"/></svg>
+                  <span class="mcp-name" data-i18n="saeule.03.demo.mcp.haus.name">euer-haus-server</span>
+                  <span class="mcp-tools" data-i18n="saeule.03.demo.mcp.haus">4 Werkzeuge</span>
+                </li>
+              </ul>
             </div>
           </div>
         </article>
