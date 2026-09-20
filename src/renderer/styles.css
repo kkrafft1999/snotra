@@ -389,7 +389,11 @@ summary:focus-visible,
 /* ── Theme Toggle ── */
 
 /* Toolbar-Zeilen: mehrere Kreis-Icon-Buttons horizontal — Abstaende zentral
- * ueber tokens.css (--ds-icon-btn-row-gap, --ds-icon-btn-cluster-pull). */
+ * ueber tokens.css (--ds-icon-btn-row-gap, --ds-icon-btn-cluster-pull). Seit
+ * Issue #222 steht so eine Zeile auch links in der Titelleiste: Die Schalter
+ * fuer die beiden Spalten gehoeren zusammen, stehen in der Reihenfolge ihrer
+ * Spalten (Seitenleiste, dann Anzeige) und haben denselben Abstand wie die
+ * Gruppe rechts. */
 .icon-btn-row {
   display: inline-flex;
   align-items: center;
@@ -457,27 +461,14 @@ summary:focus-visible,
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
-/* Seitenleisten-Schalter (Issue #167): Der Zustand sitzt auf der Flaeche, nicht
- * im Symbol — eingeschaltet traegt der Knopf den Blau-Wash wie ein gedrueckter
- * Werkzeugknopf. --ds-blue-soft allein waere auf --bg-header kaum zu sehen,
- * deshalb zusaetzlich der 25-%-Rahmen als inset-Ring (kein border, sonst
- * springt das Icon um 1 px). Der :hover-Block oben liegt im Quelltext davor
- * und wuerde sonst gewinnen — hier deshalb noch einmal eigens gesetzt. */
-#btn-toggle-sidebar[aria-pressed='true'] {
-  background: var(--ds-blue-soft);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--ds-blue-border);
-}
-
-#btn-toggle-sidebar[aria-pressed='true']:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-}
-
-#btn-toggle-sidebar[aria-pressed='true']:active {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-}
+/* Der Seitenleisten-Schalter trug bis 1.7.1 im eingeschalteten Zustand einen
+ * Blau-Wash (Issue #167). Das ist mit Issue #221 wieder weg: Der Zustand steht
+ * ohnehin daneben — die Seitenleiste ist ja zu sehen —, und der farbige Knopf
+ * zog in der sonst ruhigen Titelzeile Blick und Zeigefinger auf sich. Der
+ * Knopf sieht jetzt in beiden Zustaenden gleich aus; gemeldet wird der Zustand
+ * weiter ueber aria-pressed und den Tooltip. Hover, Druecken und Fokus kommen
+ * aus den gemeinsamen Regeln oben und sind unveraendert.
+ */
 
 /* ── Main Layout ── */
 

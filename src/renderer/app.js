@@ -30,8 +30,6 @@ const btnOpen = document.getElementById('btn-open-folder');
 const appRoot = document.getElementById('app');
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 const btnToggleContentPane = document.getElementById('btn-toggle-content-pane');
-const iconContentPaneVisible = document.getElementById('icon-content-pane-visible');
-const iconContentPaneHidden = document.getElementById('icon-content-pane-hidden');
 const chatInput = document.getElementById('chat-input');
 const chatInputRow = document.getElementById('chat-input-row');
 const btnChatNew = document.getElementById('btn-chat-new');
@@ -76,15 +74,11 @@ window.addEventListener('beforeunload', () => {
 function setContentPaneVisible(visible) {
   if (visible) {
     appRoot.classList.remove('app--no-preview');
-    iconContentPaneVisible.classList.remove('hidden');
-    iconContentPaneHidden.classList.add('hidden');
     btnToggleContentPane.title = 'Mittlere Vorschau ausblenden';
     btnToggleContentPane.setAttribute('aria-label', 'Mittlere Vorschau ausblenden');
     btnToggleContentPane.setAttribute('aria-pressed', 'true');
   } else {
     appRoot.classList.add('app--no-preview');
-    iconContentPaneVisible.classList.add('hidden');
-    iconContentPaneHidden.classList.remove('hidden');
     btnToggleContentPane.title = 'Mittlere Vorschau einblenden';
     btnToggleContentPane.setAttribute('aria-label', 'Mittlere Vorschau einblenden');
     btnToggleContentPane.setAttribute('aria-pressed', 'false');
