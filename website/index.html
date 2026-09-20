@@ -223,8 +223,12 @@ window.__snotraReveal=setTimeout(function(){document.documentElement.classList.a
         <!-- 6 = fest registrierte Anbieter der App, seit v1.6.0 inkl. "OpenAI-kompatibel". -->
         <li class="num"><span class="v" data-count="6">6</span><span class="k" data-i18n="zahlen.02.label">Modellanbieter</span></li>
         <!-- 16 = eingebaute Tools, die dem Modell angeboten werden. Gegengeprueft von
-             test/workspace-tool-registry.test.js; zwei davon sind Grundausstattung und
-             stehen nicht in Einstellungen > Tools, gehen aber trotzdem an das Modell. -->
+             test/workspace-tool-registry.test.js (14 abwaehlbare plus die zwei der
+             Grundausstattung, list_directory und load_skill, die nicht in
+             Einstellungen > Tools stehen, aber trotzdem an das Modell gehen).
+             debug_wait zaehlt nicht mit: Es ist mit #197 weggefallen. Dass die Zahl
+             seit der 15 von v1.5.2 trotzdem gestiegen ist, liegt an fetch_url (#95) —
+             die 15 war also schon vor dem Wegfall ueberholt. -->
         <li class="num"><span class="v" data-count="16">16</span><span class="k" data-i18n="zahlen.03.label">Werkzeuge</span></li>
         <li class="num"><span class="v v--inf" aria-hidden="true">∞</span><span class="k"><span class="sr-only" data-i18n="zahlen.04.sr">Unbegrenzt viele </span><span data-i18n="zahlen.04.label">Systeme per CLI</span></span></li>
         <li class="num"><span class="v" data-count="0">0</span><span class="k" data-i18n="zahlen.05.label">Konten</span></li>
