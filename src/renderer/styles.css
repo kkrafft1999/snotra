@@ -386,7 +386,7 @@ summary:focus-visible,
   color: var(--text-muted);
 }
 
-/* ── Theme Toggle ── */
+/* ── Icon-Buttons der Titelleiste ── */
 
 /* Toolbar-Zeilen: mehrere Kreis-Icon-Buttons horizontal — Abstaende zentral
  * ueber tokens.css (--ds-icon-btn-row-gap, --ds-icon-btn-cluster-pull). Seit
@@ -414,7 +414,6 @@ summary:focus-visible,
   flex: 1;
 }
 
-#theme-toggle,
 #btn-toggle-content-pane,
 #btn-toggle-sidebar,
 #btn-toggle-chat-panel,
@@ -445,7 +444,6 @@ summary:focus-visible,
  * beiden Themes ein sichtbares "Grau-Patch" erzeugt – analog zu den
  * Folder-Buttons in der Sidebar (dort kontrastiert --bg-hover gegen
  * --bg-secondary). */
-#theme-toggle:hover,
 #btn-toggle-content-pane:hover,
 #btn-toggle-sidebar:hover,
 #btn-toggle-chat-panel:hover,
@@ -454,7 +452,6 @@ summary:focus-visible,
   color: var(--text-primary);
 }
 
-#theme-toggle:active,
 #btn-toggle-content-pane:active,
 #btn-toggle-sidebar:active,
 #btn-toggle-chat-panel:active,
@@ -2899,7 +2896,6 @@ select.modal-input {
 
 @media (prefers-reduced-motion: reduce) {
   .btn-primary:active:not(:disabled),
-  #theme-toggle:active,
   #btn-toggle-content-pane:active,
   #btn-toggle-chat-panel:active,
   #btn-toggle-chat-history:active,

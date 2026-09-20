@@ -35,7 +35,7 @@ const chatInput = document.getElementById('chat-input');
 const chatInputRow = document.getElementById('chat-input-row');
 const btnChatNew = document.getElementById('btn-chat-new');
 
-initTheme();
+const theme = initTheme();
 
 let syncInputHeightRaf = null;
 function syncChatInputHeight() {
@@ -339,6 +339,8 @@ const settingsModal = initSettingsModal({
   toolPermissionsPanel,
   mcpPanel,
   onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),
+  getTheme: theme.getTheme,
+  setTheme: theme.setTheme,
   DEFAULT_MAX_TOOL_ROUNDS,
 });
 

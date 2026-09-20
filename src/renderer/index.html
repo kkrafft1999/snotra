@@ -42,16 +42,6 @@
       <span id="app-version" hidden></span>
     </div>
     <div class="titlebar-spacer"></div>
-    <div class="icon-btn-row">
-      <button type="button" id="theme-toggle" title="Theme wechseln" aria-label="Theme wechseln">
-        <svg id="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" class="hidden" aria-hidden="true">
-          <path d="M8 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 8 1zm0 11a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 8 12zm7-4a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1 0-1h1a.5.5 0 0 1 .5.5zM4 8a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1 0-1h1A.5.5 0 0 1 4 8zm9.354-3.646a.5.5 0 0 1 0 .707l-.707.707a.5.5 0 1 1-.707-.707l.707-.707a.5.5 0 0 1 .707 0zM5.06 11.647a.5.5 0 0 1 0 .707l-.707.707a.5.5 0 1 1-.707-.707l.707-.707a.5.5 0 0 1 .707 0zm8.587.707a.5.5 0 0 1-.707 0l-.707-.707a.5.5 0 0 1 .707-.707l.707.707a.5.5 0 0 1 0 .707zM5.06 4.353a.5.5 0 0 1-.707 0l-.707-.707a.5.5 0 1 1 .707-.707l.707.707a.5.5 0 0 1 0 .707zM8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>
-        </svg>
-        <svg id="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M13.5 8.5a5.5 5.5 0 1 1-7-7 7 7 0 0 0 7 7z"/>
-        </svg>
-      </button>
-    </div>
     <!-- Die Spalten-Schalter der rechten Haelfte, gespiegelt zu denen links:
          aussen am Fensterrand und in der Reihenfolge ihrer Spalten (Chat,
          dann Verlauf). Das Bild ist dasselbe wie links, nur gespiegelt — die
@@ -357,7 +347,7 @@
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
             Allgemein
-            <span class="settings-nav-item__desc">Texte, Prompts, Verhalten</span>
+            <span class="settings-nav-item__desc">Darstellung, Texte, Verhalten</span>
           </button>
         </nav>
 
@@ -715,7 +705,7 @@
 
           <section class="settings-panel" id="panel-settings-general" role="tabpanel" aria-labelledby="tab-settings-general" hidden>
             <p class="settings-form-hint">
-              Texte und Prompts für das gesamte Verhalten der App — getrennt von modellspezifischen Angaben beim Anbieter.
+              Darstellung, Texte und Prompts für das gesamte Verhalten der App — getrennt von modellspezifischen Angaben beim Anbieter.
             </p>
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row">System-Prompt</div>
@@ -746,6 +736,24 @@
                     Plattform und Systemversion, die Shell von <code lang="en">shell_execute</code> (nur wenn
                     eingeschaltet), das heutige Datum und die Snotra-Version. Das alles geht mit jeder Anfrage an
                     den Anbieter.
+                  </p>
+                </div>
+              </details>
+            </div>
+            <div class="modal-field-group">
+              <div class="modal-field-label eyebrow-row">Erscheinungsbild</div>
+              <label class="visually-hidden" for="select-app-theme">Erscheinungsbild</label>
+              <select id="select-app-theme" class="modal-input">
+                <option value="light">Hell</option>
+                <option value="dark">Dunkel</option>
+              </select>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span>Helle oder dunkle Oberfläche — bis v1.7.3 ein Knopf in der Titelleiste.</span></summary>
+                <div class="settings-note__body">
+                  <p>
+                    Anders als die übrigen Einstellungen bleibt die Wahl <strong>auf diesem Gerät</strong>: Sie muss
+                    schon beim Aufbau des Fensters feststehen, sonst blitzte bei jedem Start kurz die helle
+                    Oberfläche auf.
                   </p>
                 </div>
               </details>

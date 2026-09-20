@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
-async function mountSettings({ providers, ...overrides } = {}) {
+async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   const dom = setupRendererDom();
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
   const { appStore } = await importRenderer('state', 'store.js');
@@ -50,6 +50,7 @@ async function mountSettings({ providers, ...overrides } = {}) {
     findProviderMeta: (id) => appStore.llmState.providers.find((p) => p.id === id) || null,
     updateChatChrome() {},
     onCheckUpdates() {},
+    ...modalDeps,
   });
 
   await modal.openSettingsModal();
@@ -582,4 +583,77 @@ test('ein zweiter Menueaufruf bei offenem Dialog laesst den gemerkten Fokus steh
     davor,
     'sonst landete der Fokus nach dem Schliessen im Dialog selbst'
   );
+});
+
+// —— Erscheinungsbild (hell/dunkel) ——
+//
+// Der Umschalter sass bis v1.7.3 als Knopf in der Titelleiste; seitdem steht
+// er als Auswahl unter „Allgemein". Geprueft wird der Weg, der dabei neu ist:
+// Der offene Dialog zeigt den geltenden Stand, und uebernommen wird er erst
+// mit „Uebernehmen" — sonst aenderte ein versehentliches Antippen das Theme
+// dauerhaft, waehrend daneben steht, dass nichts ohne „Uebernehmen" gilt.
+
+function mountMitTheme({ theme = 'light', ...overrides } = {}) {
+  const gesetzt = [];
+  const mounted = mountSettings({
+    modalDeps: {
+      getTheme: () => theme,
+      setTheme: (mode) => { gesetzt.push(mode); return mode; },
+    },
+    ...overrides,
+  });
+  return { mounted, gesetzt };
+}
+
+test('der Dialog zeigt das geltende Erscheinungsbild', async (t) => {
+  const { mounted } = mountMitTheme({ theme: 'dark' });
+  const { dom } = await mounted;
+  t.after(dom.cleanup);
+
+  assert.equal(document.getElementById('select-app-theme').value, 'dark');
+});
+
+test('das gewaehlte Erscheinungsbild gilt erst mit „Uebernehmen"', async (t) => {
+  const { mounted, gesetzt } = mountMitTheme({ theme: 'light' });
+  const { dom } = await mounted;
+  t.after(dom.cleanup);
+
+  document.getElementById('select-app-theme').value = 'dark';
+  await flush();
+  assert.deepEqual(gesetzt, [], 'die Auswahl allein darf noch nichts umschalten');
+
+  document.getElementById('btn-settings-save').click();
+  await flush();
+  assert.deepEqual(gesetzt, ['dark']);
+});
+
+test('ein abgebrochener Dialog laesst das Erscheinungsbild in Ruhe', async (t) => {
+  const { mounted, gesetzt } = mountMitTheme({ theme: 'light' });
+  const { dom, modal } = await mounted;
+  t.after(dom.cleanup);
+
+  document.getElementById('select-app-theme').value = 'dark';
+  modal.closeSettingsModal();
+  await flush();
+
+  assert.deepEqual(gesetzt, []);
+});
+
+test('scheitert nur der Modellteil, schaltet das Erscheinungsbild trotzdem um', async (t) => {
+  // Wie bei der Sprache (Issue #97): Die UI-Einstellungen sind geschrieben,
+  // der Dialog bleibt mit der Meldung offen — dann muss das Fenster auch so
+  // aussehen, wie es gerade gespeichert wurde.
+  const { mounted, gesetzt } = mountMitTheme({
+    theme: 'light',
+    commitSettings: async () => ({ ok: false, uiPrefsSaved: true, error: 'Modell kaputt' }),
+  });
+  const { dom } = await mounted;
+  t.after(dom.cleanup);
+
+  document.getElementById('select-app-theme').value = 'dark';
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  assert.deepEqual(gesetzt, ['dark']);
+  assert.match(document.getElementById('modal-save-error').textContent, /Modell kaputt/);
 });
