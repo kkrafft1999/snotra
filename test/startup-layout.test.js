@@ -54,6 +54,9 @@ test('das Markup startet mit eingeklappter Spalte', () => {
   const appRoot = html.match(/<main id="app"[^>]*>/);
   assert.ok(appRoot, '#app muss es geben');
   assert.match(appRoot[0], /class="[^"]*app--no-preview/);
+  // Die Verlaufsspalte ebenso (Epic #223, Phase B): Sie soll niemandem beim
+  // Start ungefragt eine Spalte wegnehmen.
+  assert.match(appRoot[0], /class="[^"]*app--no-history/);
   const toggle = html.match(/<button[^>]*id="btn-toggle-content-pane"[^>]*>/);
   assert.ok(toggle, 'der Umschalter muss es geben');
   assert.match(

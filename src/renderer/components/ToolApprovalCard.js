@@ -295,7 +295,9 @@ export function initToolApprovalCards({ api, appStore }) {
 
   function overlayOpen() {
     if (isVisible(document.getElementById('modal-settings'))) return true;
-    for (const id of ['chat-mention-menu', 'chat-model-menu', 'chat-tool-mode-menu', 'chat-history-drawer']) {
+    // Der Chat-Verlauf steht seit Epic #223 (Phase B) als Spalte da und ist
+    // kein Overlay mehr — er beansprucht Escape nicht mehr fuer sich.
+    for (const id of ['chat-mention-menu', 'chat-model-menu', 'chat-tool-mode-menu']) {
       if (isVisible(document.getElementById(id))) return true;
     }
     return [...document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"]')].some(isVisible);

@@ -845,20 +845,103 @@ summary:focus-visible,
   flex: 0 0 auto;
 }
 
+#app.app--no-preview #chat-area {
+  flex: 1 1 auto;
+}
+
 #app.app--no-preview #chat-panel {
   flex: 1 1 auto;
   width: auto !important;
-  max-width: none;
 }
 
-/* max-width bezieht sich seit Phase A auf #app, nicht mehr auf den frueheren
- * Container aus Anzeige + Chat: Der Chat ist jetzt eine der beiden Haelften und
- * darf hoechstens die halbe Fensterbreite einnehmen. SidebarResizer.js rechnet
- * mit derselben Grenze. */
+/* ── Chat-Bereich (Chat + Verlauf) ────────────────────────────────────────
+ * Das Gegenstueck zum Arbeitsbereich (Epic #223, Phase B): zwei Spalten mit
+ * einem Trenner, die Breite hat jede fuer sich. Der Bereich selbst bekommt
+ * keine eigene — er ist so breit wie seine Kinder, damit die gemerkte
+ * Chat-Breite genau das bleibt, was sie vorher war.
+ */
+
+#chat-area {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Der Verlauf ist eine Spalte und kein Ausklapper mehr: Er verdeckt nichts,
+ * bleibt neben dem laufenden Chat stehen und behaelt seine Breite ueber den
+ * Neustart. Weggeschaltet ist er wie die Seitenleiste — die Klasse sitzt an
+ * #app, wo auch app--no-sidebar und app--no-preview stehen. */
+#app.app--no-history #chat-history,
+#app.app--no-history #history-divider {
+  display: none;
+}
+
+#chat-history {
+  width: 260px;
+  min-width: 180px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+/* Gleiche Kopfzeile wie im Dateibaum: 13 px Bold, eine Zeile, Knopf rechts. */
+#chat-history-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+#chat-history-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#btn-chat-history-close {
+  flex-shrink: 0;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease;
+}
+
+#btn-chat-history-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+#btn-chat-history-close:active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  transform: scale(0.97);
+}
+
+/* Die Obergrenze steht seit Phase B allein in SidebarResizer.js: Sie haengt
+ * nicht mehr an einer Prozentzahl, sondern daran, was nach Chat und Verlauf
+ * fuer Baum und Anzeige uebrig bleiben muss — das kann CSS nicht ausrechnen. */
 #chat-panel {
   width: 320px;
   min-width: 260px;
-  max-width: 50%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1098,20 +1181,6 @@ summary:focus-visible,
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
-#chat-history-drawer {
-  flex-shrink: 0;
-  max-height: 220px;
-  overflow-y: auto;
-  margin: 0 var(--chat-gutter-x) 8px;
-  border: 1px solid var(--ds-grey-divider);
-  border-radius: 6px;
-  background: var(--bg-primary);
-}
-
-#chat-history-drawer.hidden {
-  display: none;
-}
-
 .chat-history-empty {
   margin: 0;
   padding: 10px 12px;
@@ -1122,6 +1191,8 @@ summary:focus-visible,
 .chat-history-list {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
   padding: 4px 0;
 }
 
