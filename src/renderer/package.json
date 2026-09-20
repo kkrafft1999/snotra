@@ -1,0 +1,4 @@
+{
+  "//": "Kein eigenes Paket – nur die Modulgrenze. Der Main-Prozess ist CommonJS, der Renderer laedt native ES-Module. Ohne diese Datei muesste Node beim Testen jede Renderer-Datei zweimal parsen (MODULE_TYPELESS_PACKAGE_JSON).",
+  "type": "module"
+}

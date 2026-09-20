@@ -8,52 +8,24 @@ import {
   svgFile,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
-import { basenameOf, parentDirOf, depthOf, joinNative, isInsideDir } from '../utils/nativePath.js';
+import { basenameOf, parentDirOf, joinNative, isInsideDir } from '../utils/nativePath.js';
 import {
   TREE_DRAG_MIME,
   encodeTreeDragPayload,
   workspaceReferenceFor,
 } from '../chat/workspaceReference.js';
-
-/**
- * Reine Hilfen für den Dateibaum (Phase 4.6.2 — Extraktion ohne DOM).
- * Pfade kommen nativ aus dem Main-Prozess (Windows: Backslash), deshalb
- * laufen alle Zerlegungen über nativePath.js statt über split('/') (#73).
- */
-
-export function folderDepthSortKey(dirPath) {
-  return depthOf(dirPath);
-}
-
-export function parentDirFromItemPath(itemPath) {
-  return parentDirOf(itemPath);
-}
-
-/**
- * Kommt der Drag von ausserhalb der App (Finder/Explorer)? Issue #101.
- *
- * Zwei Bedingungen: das DataTransfer meldet Dateien **und** es laeuft kein
- * interner Drag aus dem Baum. Ohne die zweite Bedingung wuerde ein internes
- * Verschieben faelschlich als Import gelten. Seit #56 verraet den internen Drag
- * zusaetzlich der eigene MIME-Typ: Den bringt jedes DataTransfer selbst mit,
- * waehrend der Quellpfad nur im Modulzustand dieses Fensters steht.
- */
-export function isExternalFileDrop(types, hasInternalSource) {
-  if (hasInternalSource) return false;
-  const list = Array.from(types || []);
-  if (list.includes(TREE_DRAG_MIME)) return false;
-  return list.includes('Files');
-}
-
-/**
- * Zielordner eines externen Drops: die Ordnerzeile unter dem Zeiger, sonst
- * der Projektordner. Ohne geoeffneten Projektordner gibt es kein Ziel.
- */
-export function importDestDirFor(rowDataset, rootPath) {
-  if (!rootPath) return null;
-  if (rowDataset && rowDataset.isDirectory === 'true' && rowDataset.path) return rowDataset.path;
-  return rootPath;
-}
+// Pfad- und Baumlogik des Dateibaums, DOM-frei und einzeln getestet (#81).
+import {
+  foldersToCheck,
+  foldersToReexpand,
+  importDestDirFor,
+  isExternalFileDrop,
+  listingSignature,
+  listingsDiffer,
+  parentDirFromItemPath,
+  sortFoldersTopDown,
+  treeDepthFromIndentWidth,
+} from '../tree/treePaths.js';
 
 const QUICK_ACTION_PROMPTS = {
   analyse:
@@ -665,18 +637,14 @@ export function initFileTree(deps) {
   }
 
   async function restoreExpandedFolders(paths) {
-    const unique = [...new Set(paths)].sort(
-      (a, b) => folderDepthSortKey(a) - folderDepthSortKey(b)
-    );
-    for (const p of unique) {
+    for (const p of sortFoldersTopDown(paths)) {
       await expandFolderAtPath(p);
     }
   }
 
   function loadDepthFromTreeRow(row) {
     if (!row) return 1;
-    const w = parseInt(row.querySelector('.indent')?.style.width || '4', 10);
-    return Math.round(w / 16) + 1;
+    return treeDepthFromIndentWidth(row.querySelector('.indent')?.style.width);
   }
 
   async function expandFolderAtPath(dirPath) {
@@ -882,9 +850,9 @@ export function initFileTree(deps) {
     const rows = rowsOfFolder(dirPath);
     if (!rows) return false;
     const items = (await api.readDirectory(dirPath)) || [];
-    const jetzt = items.map((item) => `${item.isDirectory ? 'd' : 'f'}:${item.path}`);
-    const vorher = rows.map((row) => `${row.dataset.isDirectory === 'true' ? 'd' : 'f'}:${row.dataset.path}`);
-    return jetzt.length !== vorher.length || jetzt.some((eintrag, i) => eintrag !== vorher[i]);
+    const jetzt = items.map((item) => listingSignature(item.path, item.isDirectory));
+    const vorher = rows.map((row) => listingSignature(row.dataset.path, row.dataset.isDirectory === 'true'));
+    return listingsDiffer(jetzt, vorher);
   }
 
   /**
@@ -919,7 +887,7 @@ export function initFileTree(deps) {
   async function redrawFolders(dirPaths) {
     const view = captureTreeView();
     const expandedBefore = collectExpandedFolderPaths();
-    const sorted = [...dirPaths].sort((a, b) => folderDepthSortKey(a) - folderDepthSortKey(b));
+    const sorted = sortFoldersTopDown(dirPaths);
 
     if (sorted.includes(appStore.rootPath)) {
       // Der Root-Zweig zeichnet den ganzen Baum neu und stellt die
@@ -928,10 +896,9 @@ export function initFileTree(deps) {
     } else {
       for (const dir of sorted) await refreshFolder(dir);
       // Ein neu gezeichneter Ordner verliert seine aufgeklappten Kinder.
-      const wieder = expandedBefore.filter(
-        (p) => p !== appStore.rootPath && sorted.some((dir) => p !== dir && isInsideDir(p, dir))
+      await restoreExpandedFolders(
+        foldersToReexpand({ expandedBefore, redrawn: sorted, rootPath: appStore.rootPath })
       );
-      await restoreExpandedFolders(wieder);
     }
 
     restoreTreeView(view);
@@ -977,9 +944,11 @@ export function initFileTree(deps) {
       (dir) => typeof dir === 'string' && dir
     );
     const vollstaendig = complete !== false;
-    const zuPruefen = vollstaendig
-      ? visibleFolderPaths().filter((dir) => gemeldet.includes(dir))
-      : visibleFolderPaths();
+    const zuPruefen = foldersToCheck({
+      visible: visibleFolderPaths(),
+      reported: gemeldet,
+      complete: vollstaendig,
+    });
 
     const geaendert = [];
     for (const dir of zuPruefen) {

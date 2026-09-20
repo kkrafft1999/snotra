@@ -486,6 +486,35 @@ Der Renderer **darf** Provider-IDs und Preset-Felder aus IPC-DTOs *anzeigen*,
 solange er keine Provider-Wire-Formate parst und keine Tool-/Provider-Logik
 dupliziert.
 
+### Aufteilung im Renderer ([#81](https://github.com/kkrafft1999/snotra/issues/81))
+
+Die Komponenten unter `renderer/components/` sind die Verdrahtung: Sie hängen
+Handler an Elemente und zeichnen. Alles, was sich *entscheiden* lässt, ohne
+einen Knoten anzufassen, liegt daneben — und ist damit einzeln prüfbar, statt
+nur über die ganze Komponente erreichbar zu sein:
+
+| Modul | Was dort liegt | Test |
+| ----- | -------------- | ---- |
+| `renderer/tree/treePaths.js` | Pfad- und Baumlogik des Dateibaums: Ordner von oben nach unten sortieren, Einrückung → Baumtiefe, externer Drop und sein Zielordner, Ordnerinhalte vergleichen, was nach einem Neuzeichnen wieder aufzuklappen ist | `test/tree-paths.test.js` |
+| `renderer/chat/toolLogView.js` | Tool-Log im Chat als DOM-Schicht: Zeilen samt Zustand und Berechtigungs-Audit, der aufklappbare `<details>`-Block, der Einzeiler in der `<summary>`, das Abschließen eines abgebrochenen Laufs | `test/tool-log-view-dom.test.js` |
+| `renderer/chat/toolLogDebug.js` | Der Diagnose-Puffer des Tool-Logs ([#87](https://github.com/kkrafft1999/snotra/issues/87)) als eine Instanz je Renderer — Ansicht und `ChatStream` teilen ihn, statt ihn durch jede Signatur zu reichen | `test/tool-log-debug.test.js` |
+| `renderer/utils/tool-log-summary.js` | Was im Einzeiler *steht* — DOM-frei, älter als die Aufteilung | `test/tool-log-summary.test.js` |
+
+`FileTree.js` und `ChatStream.js` bleiben groß, weil Verdrahtung nun einmal
+Platz braucht — die Pfad- und Tool-Log-Logik steckt aber nicht mehr darin. Die
+verbleibenden Brocken (`styles.css`, `fs-service.js`, `SettingsModal.js`)
+werden mit den Issues geteilt, die sie ohnehin anfassen; eine Umsortierung ohne
+Anlass bringt nur Konfliktfläche.
+
+**Modulgrenze:** `src/renderer/package.json` deklariert `{ "type": "module" }`.
+Der Main-Prozess ist CommonJS, der Renderer lädt native ES-Module ohne Bundler;
+ohne diese eine Datei müsste Node jede Renderer-Datei im Testlauf zweimal
+parsen und warnte bei jedem Lauf (`MODULE_TYPELESS_PACKAGE_JSON`). Das
+Root-Paket bleibt bewusst ohne `type`. Auf das Packaging wirkt sich die Datei
+nicht aus: Die Allowlist in `config.forge.packagerConfig.ignore` lässt alles
+unter `src/` durch, und `scripts/check-asar-contents.js` prüft das nach jedem
+Build.
+
 ### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208))
 
 Wer die App in einer Konversation verlässt, soll dort wieder landen — nicht

@@ -9,7 +9,7 @@ const rendererModule = (...segments) =>
   import(pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', ...segments)).href);
 
 const nativePathPromise = rendererModule('utils', 'nativePath.js');
-const fileTreePromise = rendererModule('components', 'FileTree.js');
+const treePathsPromise = rendererModule('tree', 'treePaths.js');
 
 test('basenameOf handles POSIX and Windows paths alike', async () => {
   const { basenameOf } = await nativePathPromise;
@@ -56,8 +56,8 @@ test('joinNative appends a relative POSIX path in the style of the root', async 
   assert.equal(joinNative('C:\\repo', ''), 'C:\\repo');
 });
 
-test('FileTree helpers resolve parents and depth for Windows paths', async () => {
-  const { parentDirFromItemPath, folderDepthSortKey } = await fileTreePromise;
+test('treePaths helpers resolve parents and depth for Windows paths', async () => {
+  const { parentDirFromItemPath, folderDepthSortKey } = await treePathsPromise;
   assert.equal(parentDirFromItemPath('C:\\repo\\src\\app.js'), 'C:\\repo\\src');
   assert.equal(parentDirFromItemPath('/repo/src/app.js'), '/repo/src');
   const sorted = ['C:\\r\\a\\b', 'C:\\r', 'C:\\r\\a'].sort((a, b) => folderDepthSortKey(a) - folderDepthSortKey(b));
