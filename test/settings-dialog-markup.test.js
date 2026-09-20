@@ -101,3 +101,23 @@ test('der Bereich „Allgemein“ hat einen Schalter für Umgebungsinformationen
   assert.match(hint, /Benutzernamen/, 'die Preisgabe wird benannt');
   assert.match(hint, /Anbieter/, 'und wohin sie geht');
 });
+
+// Der Umschalter fuer hell/dunkel sass bis v1.7.3 als Knopf in der
+// Titelleiste. Er steht jetzt unter „Allgemein" — und nur dort, sonst gaebe es
+// zwei Bedienstellen fuer eine Einstellung.
+test('das Erscheinungsbild wird unter „Allgemein“ gewählt, nicht in der Titelleiste', () => {
+  assert.equal(html.split('id="select-app-theme"').length - 1, 1);
+  assert.ok(!html.includes('id="theme-toggle"'), 'in der Titelleiste steht kein Knopf mehr');
+
+  const panelStart = html.indexOf('id="panel-settings-general"');
+  const panel = html.slice(panelStart, html.indexOf('</section>', panelStart));
+  const selectAt = panel.indexOf('id="select-app-theme"');
+  assert.ok(selectAt > -1, 'die Auswahl liegt im Allgemein-Panel');
+
+  const select = panel.slice(selectAt, panel.indexOf('</select>', selectAt));
+  assert.match(select, /value="light"/);
+  assert.match(select, /value="dark"/);
+
+  // Ohne sichtbares Label braucht die Auswahl eines fuer den Screenreader.
+  assert.match(panel.slice(0, selectAt), /for="select-app-theme"[^>]*>Erscheinungsbild/);
+});

@@ -64,6 +64,8 @@ export function initSettingsModal(deps) {
     toolPermissionsPanel = null,
     mcpPanel = null,
     onSkillSuggestionModeChanged = null,
+    getTheme = null,
+    setTheme = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
 
@@ -119,6 +121,7 @@ export function initSettingsModal(deps) {
   const btnSettingsFooterClose = document.getElementById('btn-settings-footer-close');
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
   const selectAppLocale = document.getElementById('select-app-locale');
+  const selectAppTheme = document.getElementById('select-app-theme');
   const selectSkillSuggestionMode = document.getElementById('settings-skill-suggestion-mode');
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
   const settingsToolList = document.getElementById('settings-tool-list');
@@ -1355,6 +1358,15 @@ export function initSettingsModal(deps) {
   }
 
   /**
+   * Erscheinungsbild aus der Auswahl uebernehmen — wie die Sprache erst mit
+   * „Uebernehmen", damit ein abgebrochener Dialog nichts hinterlaesst.
+   */
+  function applyDraftTheme() {
+    if (!selectAppTheme || !setTheme) return;
+    setTheme(selectAppTheme.value === 'dark' ? 'dark' : 'light');
+  }
+
+  /**
    * Der gerade offene Unterdialog — es gibt inzwischen zwei („Modell
    * hinzufuegen" und MCP, Issue #109). Frueher stand hier fest das
    * Modell-Overlay; ein offener MCP-Dialog haette den Tab-Fokus dann in den
@@ -1519,6 +1531,9 @@ export function initSettingsModal(deps) {
       const up = await api.getUIPrefs();
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
       selectAppLocale.value = up.appLocale === 'en' ? 'en' : 'de';
+      // Das Erscheinungsbild steht nicht in den UI-Prefs, sondern im
+      // localStorage des Renderers (siehe ThemeManager.js).
+      if (selectAppTheme) selectAppTheme.value = getTheme?.() === 'dark' ? 'dark' : 'light';
       if (selectSkillSuggestionMode) {
         selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
           ? up.skillSuggestionMode
@@ -1874,11 +1889,15 @@ export function initSettingsModal(deps) {
         // Der Modellteil kann scheitern, waehrend die uebrigen Einstellungen
         // geschrieben wurden. Die Sprache muss dann auch sofort umschalten,
         // obwohl der Dialog mit der Meldung offen bleibt (Issue #97).
-        if (res?.uiPrefsSaved) applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
+        if (res?.uiPrefsSaved) {
+          applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
+          applyDraftTheme();
+        }
         setModalError(res?.error || 'Speichern fehlgeschlagen.');
         return;
       }
       applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
+      applyDraftTheme();
       await refreshLLMState();
       closeSettingsModal();
     } finally {

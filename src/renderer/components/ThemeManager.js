@@ -1,28 +1,36 @@
-export function initTheme() {
-  const themeToggle = document.getElementById('theme-toggle');
-  const iconSun = document.getElementById('icon-sun');
-  const iconMoon = document.getElementById('icon-moon');
+/**
+ * Erscheinungsbild der Oberflaeche (hell/dunkel). Umgeschaltet wird es unter
+ * Einstellungen › Allgemein; bis v1.7.3 sass dafuer ein Knopf in der
+ * Titelleiste.
+ *
+ * Die Wahl liegt bewusst im localStorage und nicht in den UI-Prefs des
+ * Main-Prozesses: Sie muss schon beim ersten Aufbau der Seite feststehen.
+ * Ueber IPC kaeme sie erst nach dem ersten Bild — das helle Theme wuerde bei
+ * jedem Start kurz aufblitzen.
+ */
+const STORAGE_KEY = 'theme';
 
+export function normalizeTheme(value) {
+  return value === 'dark' ? 'dark' : 'light';
+}
+
+export function initTheme() {
   function setTheme(mode) {
-    if (mode === 'dark') {
+    const theme = normalizeTheme(mode);
+    if (theme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark');
-      iconSun.classList.remove('hidden');
-      iconMoon.classList.add('hidden');
     } else {
       document.documentElement.removeAttribute('data-theme');
-      iconSun.classList.add('hidden');
-      iconMoon.classList.remove('hidden');
     }
-    localStorage.setItem('theme', mode);
+    localStorage.setItem(STORAGE_KEY, theme);
+    return theme;
   }
 
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  setTheme(savedTheme);
+  function getTheme() {
+    return normalizeTheme(localStorage.getItem(STORAGE_KEY));
+  }
 
-  themeToggle.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    setTheme(current === 'dark' ? 'light' : 'dark');
-  });
+  setTheme(getTheme());
 
-  return { setTheme };
+  return { setTheme, getTheme };
 }
