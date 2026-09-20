@@ -115,6 +115,16 @@ const REQUEST_CHANNELS = Object.freeze({
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
   UPDATE_IGNORE_VERSION: 'update:ignoreVersion',
+  /**
+   * Selbst-Update (Issue #232). Bewusst drei getrennte Schritte statt eines
+   * „update jetzt": Der Nutzer bestaetigt Laden und Installieren einzeln und
+   * kann dazwischen aussteigen. Die Download-Adresse nennt immer der Main —
+   * der Renderer stoesst nur an.
+   */
+  UPDATE_DOWNLOAD: 'update:download',
+  UPDATE_CANCEL_DOWNLOAD: 'update:cancelDownload',
+  UPDATE_DISCARD_DOWNLOAD: 'update:discardDownload',
+  UPDATE_INSTALL: 'update:install',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
   CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
@@ -149,6 +159,8 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_TOOL_LINE: 'chat:tool-line',
   CHAT_PROGRESS: 'chat:progress',
   UPDATE_AVAILABLE: 'update:available',
+  /** Fortschritt des laufenden Update-Downloads (Issue #232). */
+  UPDATE_PROGRESS: 'update:progress',
   /** Main hat eine Datei aus dem Workspace gelöscht (Kontextmenü, Issue #59); Renderer aktualisiert den Baum. */
   FS_ITEM_DELETED: 'fs:item-deleted',
   /**

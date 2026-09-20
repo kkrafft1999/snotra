@@ -1,10 +1,19 @@
 'use strict';
 
-// Update-Notifier (Stufe 1): prueft die GitHub-Releases-API des oeffentlichen
-// Repos auf eine neuere Version und meldet das Ergebnis. Es wird NICHTS
-// automatisch heruntergeladen oder installiert — der Renderer verlinkt nur auf
-// die Release-Seite. Bewusst ohne native autoUpdater/Squirrel, weil die App
-// nicht code-signiert ist.
+// Selbst-Update (Issue #232): prueft die GitHub-Releases-API des oeffentlichen
+// Repos auf eine neuere Version, laedt das passende Release-Asset und spielt es
+// ein. Jeder Schritt wird einzeln vom Renderer angestossen — pruefen, laden,
+// installieren sind drei getrennte Aufrufe, damit der Nutzer dazwischen
+// jederzeit abbrechen kann.
+//
+// Bewusst ohne nativen autoUpdater/Squirrel: beide setzen eine Code-Signatur
+// voraus, die dieses Projekt nicht hat. Stattdessen laedt update-download.js
+// das Asset und update-installer.js tauscht die Installation aus; die
+// Entscheidung, WAS getauscht wird, steht in update-targets.js.
+
+const { detectInstallTarget, pickReleaseAsset } = require('./update-targets');
+const { createUpdateDownloader } = require('./update-download');
+const { createUpdateInstaller } = require('./update-installer');
 
 const GITHUB_API = 'https://api.github.com';
 const DEFAULT_REPO = 'kkrafft1999/snotra';
@@ -77,13 +86,64 @@ function isNewerVersion(latest, current) {
 
 /**
  * @param {object} deps
- * @param {object} deps.app            Electron-app (fuer getVersion).
- * @param {object} deps.storage        storage-service (fuer ignoredUpdateVersion).
- * @param {string} [deps.repo]         "owner/name"; default kkrafft1999/snotra.
- * @param {function} [deps.fetchImpl]  Override fuer Tests; default globaler fetch.
+ * @param {object} deps.app             Electron-app (getVersion, getPath, isPackaged).
+ * @param {object} deps.storage         storage-service (fuer ignoredUpdateVersion).
+ * @param {string} [deps.repo]          "owner/name"; default kkrafft1999/snotra.
+ * @param {function} [deps.fetchImpl]   Override fuer Tests; default globaler fetch.
+ * @param {object} [deps.downloader]    Test-Haken; default createUpdateDownloader.
+ * @param {object} [deps.installer]     Test-Haken; default createUpdateInstaller.
+ * @param {object} [deps.runtime]       Test-Haken fuer Plattform/Pfade der Installation.
+ * @param {function} [deps.quitApp]     Wird nach erfolgreicher Installation gerufen.
  */
-function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = {}) {
+function createUpdateService({
+  app,
+  storage,
+  repo = DEFAULT_REPO,
+  fetchImpl,
+  downloader: downloaderOverride,
+  installer: installerOverride,
+  runtime,
+  quitApp,
+} = {}) {
   const doFetch = fetchImpl || globalThis.fetch;
+
+  function getTempDir() {
+    try {
+      return app.getPath('temp');
+    } catch {
+      return require('os').tmpdir();
+    }
+  }
+
+  const downloader = downloaderOverride
+    || createUpdateDownloader({ tempDir: getTempDir(), fetchImpl: doFetch });
+  const installer = installerOverride || createUpdateInstaller();
+
+  /** Wo laeuft diese Installation, und kann sie sich selbst austauschen? */
+  function getInstallTarget() {
+    if (runtime) return detectInstallTarget(runtime);
+    let execPath = process.execPath;
+    try {
+      execPath = app.getPath('exe');
+    } catch { /* Fallback bleibt process.execPath */ }
+    return detectInstallTarget({
+      platform: process.platform,
+      execPath,
+      env: process.env,
+      isPackaged: app?.isPackaged !== false,
+    });
+  }
+
+  function getArch() {
+    return runtime?.arch || process.arch;
+  }
+
+  /**
+   * Das im letzten Check gefundene Paket inklusive Download-Adresse. Bleibt
+   * absichtlich im Main-Prozess: Der Renderer erfaehrt nur Name und Groesse
+   * und kann damit keine andere Quelle unterschieben.
+   */
+  let lastAsset = null;
 
   function getCurrentVersion() {
     try {
@@ -154,6 +214,20 @@ function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = 
       ignored = (await getIgnoredVersion()) === latestVersion;
     }
 
+    // Selbst-Update nur anbieten, wenn BEIDES stimmt: Der Ablageort laesst
+    // sich austauschen UND das Release hat ein Paket fuer diese Plattform.
+    // Fehlt eines, bleibt der bisherige Weg ueber die Release-Seite — lieber
+    // ein ehrlicher Verweis als ein Knopf, der nicht kann, was er verspricht.
+    const target = getInstallTarget();
+    const asset = target.canSelfUpdate
+      ? pickReleaseAsset({ assets: release.assets, kind: target.kind, arch: getArch() })
+      : null;
+    lastAsset = asset;
+    const canSelfUpdate = Boolean(target.canSelfUpdate && asset);
+    const selfUpdateBlockedReason = canSelfUpdate
+      ? ''
+      : (target.reason || 'Für diese Installation gibt es im Release kein passendes Paket.');
+
     return {
       updateAvailable: newer && !ignored,
       currentVersion,
@@ -162,7 +236,65 @@ function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = 
       releaseUrl: typeof release.html_url === 'string' ? release.html_url : `https://github.com/${repo}/releases/latest`,
       publishedAt: release.published_at || null,
       notes: typeof release.body === 'string' ? release.body : '',
+      canSelfUpdate,
+      selfUpdateBlockedReason,
+      installKind: target.kind,
+      asset: asset ? { name: asset.name, size: asset.size } : null,
     };
+  }
+
+  /**
+   * Laedt das Paket der neuesten Version. `onProgress` bekommt geladene und
+   * erwartete Bytes; `cancelDownload()` bricht ab.
+   *
+   * Prueft dafuer noch einmal frisch — zwischen der Meldung und dem Klick auf
+   * „Herunterladen" koennen Minuten liegen. So kommt die Download-Adresse
+   * immer direkt von GitHub und nie aus dem Renderer.
+   */
+  async function downloadUpdate({ onProgress } = {}) {
+    const result = await checkForUpdate({ respectIgnored: false });
+    if (!result.updateAvailable) {
+      return { ok: false, error: result.error || 'Es gibt keine neuere Version.' };
+    }
+    if (!result.canSelfUpdate || !lastAsset) {
+      return {
+        ok: false,
+        manualOnly: true,
+        releaseUrl: result.releaseUrl,
+        error: result.selfUpdateBlockedReason || 'Selbst-Update ist hier nicht möglich.',
+      };
+    }
+    return downloader.download({ asset: lastAsset, version: result.latestVersion, onProgress });
+  }
+
+  function cancelDownload() {
+    return { ok: downloader.cancel() };
+  }
+
+  async function discardDownload() {
+    await downloader.discard();
+    return { ok: true };
+  }
+
+  /**
+   * Spielt die zuvor geladene Datei ein und startet die App neu. Ein Erfolg
+   * beendet die App — der Renderer sieht die Antwort dann nicht mehr.
+   */
+  async function installUpdate() {
+    const ready = downloader.getReady();
+    if (!ready) {
+      return { ok: false, error: 'Es liegt keine geladene Version bereit.' };
+    }
+    const target = getInstallTarget();
+    const result = await installer.install({
+      filePath: ready.filePath,
+      version: ready.version,
+      target,
+      workDir: downloader.getWorkDir(),
+    });
+    if (!result.ok) return result;
+    if (typeof quitApp === 'function') quitApp();
+    return result;
   }
 
   async function getIgnoredVersion() {
@@ -192,6 +324,11 @@ function createUpdateService({ app, storage, repo = DEFAULT_REPO, fetchImpl } = 
     checkForUpdate,
     getIgnoredVersion,
     ignoreVersion,
+    getInstallTarget,
+    downloadUpdate,
+    cancelDownload,
+    discardDownload,
+    installUpdate,
   };
 }
 

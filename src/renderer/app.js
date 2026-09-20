@@ -11,7 +11,7 @@ import { initSkillSuggestion } from './components/SkillSuggestion.js';
 import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
 import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
-import { initUpdateBanner } from './components/UpdateBanner.js';
+import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
@@ -282,7 +282,7 @@ const chatHistory = initChatHistoryPanel({
   },
 });
 
-const updateBanner = initUpdateBanner({ api });
+const updateDialog = initUpdateDialog({ api });
 
 const settingsModal = initSettingsModal({
   api,
@@ -292,7 +292,7 @@ const settingsModal = initSettingsModal({
   refreshLLMState: () => modelPicker.refreshLLMState(),
   findProviderMeta: (id) => modelPicker.findProviderMeta(id),
   updateChatChrome: () => modelPicker.updateChatChrome(),
-  onCheckUpdates: () => updateBanner.checkNow(),
+  onCheckUpdates: () => updateDialog.checkNow(),
   toolPermissionsPanel,
   mcpPanel,
   onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),

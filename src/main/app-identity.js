@@ -10,4 +10,9 @@
 const APP_NAME = 'Snotra AI';
 const LEGACY_APP_NAME = 'Weyouze Anything';
 
-module.exports = { APP_NAME, LEGACY_APP_NAME };
+// Muss mit `config.forge.packagerConfig.appBundleId` in package.json
+// uebereinstimmen. Das Selbst-Update prueft damit, dass im geladenen Paket
+// wirklich diese App steckt, bevor es die installierte ersetzt.
+const APP_BUNDLE_ID = 'dev.snotra-ai.app';
+
+module.exports = { APP_NAME, LEGACY_APP_NAME, APP_BUNDLE_ID };

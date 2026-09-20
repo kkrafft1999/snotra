@@ -143,3 +143,202 @@ test('checkForUpdate targets the Snotra repo with a Snotra User-Agent by default
   assert.equal(calls[0].url, 'https://api.github.com/repos/kkrafft1999/snotra/releases/latest');
   assert.match(calls[0].opts.headers['User-Agent'], /^Snotra-AI-/);
 });
+
+// ── Selbst-Update (Issue #232) ──────────────────────────────────────────────
+
+const MAC_RUNTIME = {
+  platform: 'darwin',
+  arch: 'arm64',
+  execPath: '/Applications/Snotra AI.app/Contents/MacOS/Snotra AI',
+  isPackaged: true,
+};
+
+function releaseWithAssets(extra = {}) {
+  return {
+    tag_name: 'v1.4.0',
+    html_url: 'https://example.test/releases/v1.4.0',
+    published_at: '2026-06-01T00:00:00Z',
+    body: 'Neue Sachen',
+    assets: [
+      { name: 'Snotra-AI-1.4.0-mac-arm64.dmg', size: 4096, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-mac-arm64.dmg' },
+      { name: 'Snotra-AI-1.4.0-win-x64.zip', size: 5120, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-win-x64.zip' },
+    ],
+    ...extra,
+  };
+}
+
+/** Downloader-Attrappe, die mitschreibt, womit sie gefuettert wurde. */
+function fakeDownloader({ ready = null } = {}) {
+  const calls = [];
+  let current = ready;
+  return {
+    calls,
+    async download(args) {
+      calls.push(args);
+      current = { filePath: '/tmp/snotra.dmg', version: args.version, assetName: args.asset.name, bytes: args.asset.size };
+      return { ok: true, filePath: current.filePath, version: args.version };
+    },
+    cancel: () => true,
+    async discard() { current = null; },
+    getReady: () => current,
+    getWorkDir: () => '/tmp/snotra-update',
+  };
+}
+
+test('checkForUpdate meldet das passende Paket und dass ein Selbst-Update geht', async () => {
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  const res = await svc.checkForUpdate();
+  assert.equal(res.canSelfUpdate, true);
+  assert.equal(res.installKind, 'macos-bundle');
+  // Nur Name und Groesse — die Adresse bleibt im Main-Prozess.
+  assert.deepEqual(res.asset, { name: 'Snotra-AI-1.4.0-mac-arm64.dmg', size: 4096 });
+  assert.equal(res.selfUpdateBlockedReason, '');
+});
+
+test('ohne passendes Paket bleibt nur der Verweis auf die Release-Seite', async () => {
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    fetchImpl: async () => jsonResponse(releaseWithAssets({ assets: [] })),
+  });
+  const res = await svc.checkForUpdate();
+  assert.equal(res.updateAvailable, true);
+  assert.equal(res.canSelfUpdate, false);
+  assert.equal(res.asset, null);
+  assert.match(res.selfUpdateBlockedReason, /kein passendes Paket/);
+});
+
+test('eine Paketinstallation nennt ihren Grund statt eines Downloads', async () => {
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: { platform: 'linux', arch: 'x64', execPath: '/opt/Snotra AI/Snotra AI', isPackaged: true },
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  const res = await svc.checkForUpdate();
+  assert.equal(res.canSelfUpdate, false);
+  assert.match(res.selfUpdateBlockedReason, /Administratorrechte/);
+
+  const download = await svc.downloadUpdate();
+  assert.equal(download.ok, false);
+  assert.equal(download.manualOnly, true);
+  assert.equal(download.releaseUrl, 'https://example.test/releases/v1.4.0');
+});
+
+test('downloadUpdate prueft frisch nach und laedt die Adresse aus dem Release', async () => {
+  const downloader = fakeDownloader();
+  let fetches = 0;
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: async () => { fetches += 1; return jsonResponse(releaseWithAssets()); },
+  });
+
+  const res = await svc.downloadUpdate();
+  assert.equal(res.ok, true);
+  assert.equal(fetches, 1, 'genau eine frische Pruefung, kein zweiter Abruf');
+  assert.equal(downloader.calls.length, 1);
+  assert.equal(
+    downloader.calls[0].asset.url,
+    'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-mac-arm64.dmg'
+  );
+  assert.equal(downloader.calls[0].version, '1.4.0');
+});
+
+test('downloadUpdate laedt nichts, wenn es gar kein Update mehr gibt', async () => {
+  const downloader = fakeDownloader();
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: async () => jsonResponse({ tag_name: 'v1.0.0', assets: [] }),
+  });
+  const res = await svc.downloadUpdate();
+  assert.equal(res.ok, false);
+  assert.deepEqual(downloader.calls, []);
+});
+
+test('downloadUpdate laedt auch eine zuvor uebersprungene Version', async () => {
+  const downloader = fakeDownloader();
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage({ ignoredUpdateVersion: '1.4.0' }),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  // „Überspringen" gilt fuer die Meldung beim Start, nicht fuer einen Klick
+  // auf „Herunterladen".
+  assert.equal(downloader.calls.length, 0);
+  assert.equal((await svc.downloadUpdate()).ok, true);
+  assert.equal(downloader.calls.length, 1);
+});
+
+test('installUpdate reicht Datei, Version und Ziel an den Installer und beendet die App', async () => {
+  const downloader = fakeDownloader();
+  const seen = [];
+  let quits = 0;
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    installer: { async install(args) { seen.push(args); return { ok: true, relaunching: true }; } },
+    quitApp: () => { quits += 1; },
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+
+  await svc.downloadUpdate();
+  const res = await svc.installUpdate();
+
+  assert.deepEqual(res, { ok: true, relaunching: true });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].filePath, '/tmp/snotra.dmg');
+  assert.equal(seen[0].version, '1.4.0');
+  assert.equal(seen[0].target.kind, 'macos-bundle');
+  assert.equal(seen[0].workDir, '/tmp/snotra-update');
+  assert.equal(quits, 1);
+});
+
+test('installUpdate ohne geladene Datei beendet die App nicht', async () => {
+  let quits = 0;
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader: fakeDownloader(),
+    installer: { async install() { throw new Error('darf nicht aufgerufen werden'); } },
+    quitApp: () => { quits += 1; },
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  const res = await svc.installUpdate();
+  assert.equal(res.ok, false);
+  assert.match(res.error, /keine geladene Version/);
+  assert.equal(quits, 0);
+});
+
+test('eine gescheiterte Installation laesst die laufende App stehen', async () => {
+  let quits = 0;
+  const svc = createUpdateService({
+    app,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader: fakeDownloader(),
+    installer: { async install() { return { ok: false, error: 'Keine Schreibrechte.' }; } },
+    quitApp: () => { quits += 1; },
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  await svc.downloadUpdate();
+  const res = await svc.installUpdate();
+  assert.deepEqual(res, { ok: false, error: 'Keine Schreibrechte.' });
+  assert.equal(quits, 0, 'die App darf sich nicht beenden, wenn nichts getauscht wurde');
+});

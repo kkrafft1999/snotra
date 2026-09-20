@@ -109,6 +109,47 @@ Beim **AppImage** führt dieser Weg nicht zum Ziel: Das Image wird
 schreibgeschützt und `nosuid` eingehängt, ein Setuid-Bit hätte darin keine
 Wirkung. Dort ist das `.deb` die Lösung.
 
+## Aktualisierung
+
+Snotra AI sucht beim Start still nach einer neueren Version und meldet sich nur,
+wenn es eine gibt; *Snotra AI → Nach Updates suchen…* fragt jederzeit von Hand
+nach. Ab dann führt ein Dialog durch den ganzen Weg — **jeder Schritt einzeln
+bestätigt, jeder bis zuletzt abbrechbar**:
+
+1. **Gefunden.** Version, Größe des Pakets und „Was sich geändert hat".
+   „Herunterladen" lädt, „Überspringen" bietet genau diese Version nie wieder
+   an, „Später" fragt beim nächsten Start erneut.
+2. **Wird geladen.** Fortschritt in Prozent und Megabyte. „Abbrechen" bricht
+   den Download wirklich ab und räumt die halbe Datei weg.
+3. **Bereit.** Erst jetzt wird gefragt, ob installiert werden soll. Beim
+   Installieren beendet sich die App, wird ersetzt und startet neu — ungesendete
+   Eingaben gehen dabei verloren. „Abbrechen" verwirft die geladene Datei.
+4. **Wird installiert.** Der einzige Schritt ohne Rückweg; das steht auch so im
+   Dialog.
+
+Geladen wird ausschließlich das Release-Asset, das GitHub selbst für die
+laufende Installation ausweist — die Adresse kommt nie aus dem Fenster. Vor dem
+Austausch prüft die App unter macOS zusätzlich die Bundle-Kennung und die
+Versionsnummer im geladenen Paket. Schlägt irgendetwas fehl, bleibt die laufende
+Version unangetastet und der Dialog nennt den Grund.
+
+**Wann die App sich nicht selbst aktualisiert.** Dann erklärt der Dialog, warum,
+und verweist auf die Release-Seite:
+
+| Fall | Grund |
+| --- | --- |
+| Als `.deb` nach `/opt` installiert | Der Austausch bräuchte Administratorrechte. |
+| Kein Schreibrecht am Installationsort | z. B. `C:\Program Files` oder ein Mehrbenutzer-Mac. |
+| Entwicklungs-Build (`npm start`) | Da gibt es nichts zu ersetzen. |
+| Kein passendes Paket im Release | Lieber nichts anbieten als das Falsche einspielen. |
+
+Selbst aktualisieren können sich das macOS-App-Bundle, das Windows-Verzeichnis,
+ein laufendes AppImage und ein entpacktes Linux-Verzeichnis.
+
+Weil die Artefakte **unsigniert** sind, kommt bewusst kein `electron-updater`
+bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
+
+
 ## Dateibaum
 
 - **Projektordner öffnen:** über den Knopf in der Seitenleiste oder die Liste der zuletzt genutzten Ordner. Alles Weitere bezieht sich immer auf diesen einen Ordner.

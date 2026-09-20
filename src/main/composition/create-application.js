@@ -426,7 +426,13 @@ function createApplication({
   });
   const speech = createSpeechAdapter(whisperService);
 
-  const updates = updatesOverride || createUpdateAdapter(createUpdateService({ app, storage: uiPrefsStore }));
+  const updates = updatesOverride || createUpdateAdapter(createUpdateService({
+    app,
+    storage: uiPrefsStore,
+    // Nach dem Tausch laeuft schon das Helferskript und wartet auf das
+    // Ende dieses Prozesses — erst danach startet es die neue Version.
+    quitApp: () => app.quit(),
+  }));
 
   const settingsPresentation = createSettingsPresentationService({
     providerCatalog,
@@ -554,9 +560,10 @@ function createApplication({
     isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
     chatSessionSettings,
   });
-  registerUpdateHandlers({ ipcMain, updates, REQ });
-  // Ohne diese Handler bleiben „Herunterladen“ im Update-Banner und Links in
-  // Chat-Antworten wirkungslos — das sandboxed Preload kennt kein `shell`.
+  registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
+  // Ohne diese Handler bleiben der Verweis auf die Release-Seite im
+  // Update-Dialog und Links in Chat-Antworten wirkungslos — das sandboxed
+  // Preload kennt kein `shell`.
   if (shell) registerShellHandlers({ ipcMain, shell, clipboard, REQ });
   // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`). Laeuft neben
   // dem Chat und darf ihn nie stoeren: Jeder Fehler endet als "kein Vorschlag".

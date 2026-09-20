@@ -11,6 +11,18 @@ function createUpdateAdapter(updateService) {
     ignoreVersion(version) {
       return updateService.ignoreVersion(version);
     },
+    downloadUpdate(options) {
+      return updateService.downloadUpdate(options);
+    },
+    cancelDownload() {
+      return updateService.cancelDownload();
+    },
+    discardDownload() {
+      return updateService.discardDownload();
+    },
+    installUpdate() {
+      return updateService.installUpdate();
+    },
   };
 }
 
