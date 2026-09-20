@@ -22,13 +22,14 @@ const SESSION = {
 
 async function setup() {
   setupRendererDom();
-  const { initChatHistoryDrawer } = await importRenderer('components', 'ChatHistoryDrawer.js');
+  const { initChatHistoryPanel } = await importRenderer('components', 'ChatHistoryPanel.js');
   const { appStore } = await importRenderer('state', 'store.js');
 
   const activations = [];
   const api = {
     getChatHistory: async () => ({ sessions: [SESSION], activeChatId: null }),
     setActiveChatId: async () => ({ ok: true }),
+    setUIPrefs: async () => ({ ok: true }),
     deleteChatSession: async () => ({ ok: true }),
     activateChatSession: async (chatId, activation) => {
       activations.push({ chatId, activation });
@@ -40,7 +41,7 @@ async function setup() {
   appStore.chatMessages = [];
   appStore.currentChatTitle = '';
 
-  const drawer = initChatHistoryDrawer({
+  const panel = initChatHistoryPanel({
     api,
     appStore,
     stopChatVoiceListening: () => {},
@@ -54,13 +55,13 @@ async function setup() {
     onNewChatStarted: async () => {},
     activateChatSession: (chatId, activation) => api.activateChatSession(chatId, activation),
   });
-  return { drawer, appStore, activations };
+  return { panel, appStore, activations };
 }
 
 test('ein Eintrag aus dem Verlauf stellt Modell und Modus dieses Chats her', async () => {
-  const { drawer, appStore, activations } = await setup();
+  const { panel, appStore, activations } = await setup();
 
-  await drawer.openChatSession('chat-alt');
+  await panel.openChatSession('chat-alt');
   await flush();
 
   assert.equal(appStore.currentChatId, 'chat-alt');
@@ -68,20 +69,20 @@ test('ein Eintrag aus dem Verlauf stellt Modell und Modus dieses Chats her', asy
 });
 
 test('derselbe Chat noch einmal angeklickt stellt nichts neu her', async () => {
-  const { drawer, appStore, activations } = await setup();
+  const { panel, appStore, activations } = await setup();
   appStore.currentChatId = 'chat-alt';
 
-  await drawer.openChatSession('chat-alt');
+  await panel.openChatSession('chat-alt');
   await flush();
 
   assert.deepEqual(activations, []);
 });
 
 test('nach dem Löschen des offenen Chats gilt wieder der Standard', async () => {
-  const { drawer, appStore, activations } = await setup();
+  const { panel, appStore, activations } = await setup();
   appStore.currentChatId = 'chat-alt';
 
-  await drawer.removeChatFromHistory('chat-alt');
+  await panel.removeChatFromHistory('chat-alt');
   await flush();
 
   assert.equal(activations.length, 1);

@@ -1,7 +1,15 @@
 import { formatHistoryTime } from '../chat/messageUtils.js';
-import { dismissOnOutsideClick } from '../utils/helpers.js';
 
-export function initChatHistoryDrawer({
+/**
+ * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
+ *
+ * Bis 1.7.0 war er ein Ausklapper ueber den Nachrichten: Er schob den Chat nach
+ * unten, ging beim Klick daneben und bei Escape wieder zu und war nach jeder
+ * Auswahl weg. Als Spalte bleibt er stehen — man sieht den laufenden Chat und
+ * die Liste gleichzeitig, und das Umschalten kostet keine Gedaechtnisleistung
+ * mehr. Deshalb schliesst hier nichts mehr von selbst.
+ */
+export function initChatHistoryPanel({
   api,
   appStore,
   stopChatVoiceListening,
@@ -15,16 +23,32 @@ export function initChatHistoryDrawer({
   onNewChatStarted,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
   activateChatSession = async () => {},
+  // Nach dem Ein- oder Ausblenden teilt der Resizer die Breiten neu auf.
+  onVisibilityChanged = () => {},
 }) {
-  const chatHistoryDrawer = document.getElementById('chat-history-drawer');
+  const appRoot = document.getElementById('app');
   const chatHistoryList = document.getElementById('chat-history-list');
   const chatHistoryEmpty = document.getElementById('chat-history-empty');
   const btnChatHistory = document.getElementById('btn-chat-history');
+  const btnChatHistoryClose = document.getElementById('btn-chat-history-close');
 
-  function setHistoryDrawerOpen(open) {
-    chatHistoryDrawer.classList.toggle('hidden', !open);
-    chatHistoryDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+  function isHistoryOpen() {
+    return !appRoot.classList.contains('app--no-history');
+  }
+
+  /**
+   * `persist: false` beim Herstellen des gemerkten Zustands und beim
+   * automatischen Wegklappen im zu schmalen Fenster — was der Nutzer zuletzt
+   * wollte, soll ein Platzmangel nicht ueberschreiben.
+   */
+  function setHistoryOpen(open, { persist = true } = {}) {
+    appRoot.classList.toggle('app--no-history', !open);
+    const label = open ? 'Chat-Verlauf ausblenden' : 'Chat-Verlauf einblenden';
     btnChatHistory.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btnChatHistory.setAttribute('aria-label', label);
+    btnChatHistory.title = open ? 'Verlauf ausblenden' : 'Verlauf';
+    onVisibilityChanged(open, { persisted: persist });
+    if (persist) void api.setUIPrefs({ chatHistoryVisible: open }).catch(() => {});
   }
 
   async function renderHistoryList() {
@@ -83,19 +107,13 @@ export function initChatHistoryDrawer({
   }
 
   async function openChatSession(id) {
-    if (!id || id === appStore.currentChatId) {
-      setHistoryDrawerOpen(false);
-      return;
-    }
+    if (!id || id === appStore.currentChatId) return;
     stopChatVoiceListening();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
     const hist = await api.getChatHistory();
     const s = hist.sessions?.find((x) => x.id === id);
-    if (!s || !Array.isArray(s.messages)) {
-      setHistoryDrawerOpen(false);
-      return;
-    }
+    if (!s || !Array.isArray(s.messages)) return;
     appStore.currentChatId = id;
     appStore.currentChatWorkspace = s.workspaceRoot || null;
     appStore.chatMessages = s.messages;
@@ -109,7 +127,6 @@ export function initChatHistoryDrawer({
     await activateChatSession(id, 'explicit');
     renderChatMessages();
     updateChatChrome();
-    setHistoryDrawerOpen(false);
     await renderHistoryList();
   }
 
@@ -136,32 +153,20 @@ export function initChatHistoryDrawer({
 
   async function startNewChatWithHistory() {
     await onNewChatStarted();
-    setHistoryDrawerOpen(false);
     await renderHistoryList();
   }
 
-  btnChatHistory.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const open = chatHistoryDrawer.classList.contains('hidden');
+  btnChatHistory.addEventListener('click', async () => {
+    const open = !isHistoryOpen();
     if (open) await renderHistoryList();
-    setHistoryDrawerOpen(open);
+    setHistoryOpen(open);
   });
 
-  chatHistoryDrawer.addEventListener('click', (e) => e.stopPropagation());
-
-  dismissOnOutsideClick({
-    isOpen: isHistoryDrawerOpen,
-    ownsTarget: (t) => chatHistoryDrawer.contains(t) || btnChatHistory.contains(t),
-    onDismiss: () => setHistoryDrawerOpen(false),
-  });
-
-  function isHistoryDrawerOpen() {
-    return !chatHistoryDrawer.classList.contains('hidden');
-  }
+  btnChatHistoryClose?.addEventListener('click', () => setHistoryOpen(false));
 
   return {
-    isHistoryDrawerOpen,
-    setHistoryDrawerOpen,
+    isHistoryOpen,
+    setHistoryOpen,
     renderHistoryList,
     openChatSession,
     removeChatFromHistory,

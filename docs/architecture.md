@@ -545,10 +545,43 @@ Zwei Regeln hängen daran:
   selbst. Die Rechnung läuft rückwärts genauso, deshalb landet Maximieren und
   Zurücksetzen wieder dort, wo man war.
 
-Bezugsfläche für die Obergrenze des Chats ist seitdem `#app`, nicht mehr der
-frühere Container aus Anzeige und Chat: Der Chat ist eine der beiden Hälften
-und darf höchstens die halbe Fensterbreite einnehmen. Dieselbe Grenze steht als
-`max-width` im CSS und in `maxChatWidth()`.
+Seit Phase B ist auch die rechte Hälfte ein Paar: `#chat-area` klammert Chat und
+Verlauf, die Struktur ist damit symmetrisch.
+
+```
+#app
+├── #workspace        #sidebar · #divider · #content
+├── #chat-divider
+└── #chat-area        #chat-panel · #history-divider · #chat-history
+```
+
+Der Verlauf war bis 1.7.0 ein Ausklapper über den Nachrichten: Er schob den
+Chat nach unten, ging beim Klick daneben und bei Escape wieder zu und
+verschwand nach jeder Auswahl. Als Spalte bleibt er stehen — deshalb schließt
+`ChatHistoryPanel.js` nichts mehr von selbst, `FileTree.js` hat seinen
+Escape-Haken dafür verloren und `ToolApprovalCard.js` zählt ihn nicht mehr zu
+den Overlays, die Escape für sich beanspruchen. Geschaltet wird er weiter über
+den Knopf im Chat-Kopf; die Titelzeile bekommt dafür keinen dritten Schalter.
+
+Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
+
+- **Der Arbeitsbereich behält sein Mindestmaß** (`workspaceMin()`): die
+  eingestellte Breite der Seitenleiste plus `CONTENT_MIN`, und zwar nur für
+  das, was gerade sichtbar ist. Die Seitenleiste geht mit ihrer eingestellten
+  Breite ein, nicht mit ihrem Minimum — wer sie breit gezogen hat, will sie
+  breit sehen; dann weicht lieber der Verlauf.
+- **Wird es zu eng, gibt zuerst der Chat nach, dann der Verlauf, dann klappt
+  der Verlauf weg** (`ensureRoomForWorkspace()`). Das geschieht mit
+  `persist: false`: Der gemerkte Wunsch des Nutzers bleibt stehen, damit die
+  Spalte im breiteren Fenster wiederkommt — in der Breite von vor dem
+  Zusammendrücken. Wer sie selbst zuklappt, findet sie nicht von allein wieder.
+- **Die Obergrenze des Chats** rechnet gegen `#app` und zieht die
+  Verlaufsbreite ab. Sie steht nur noch im JS, nicht mehr als `max-width` im
+  CSS: „was nach Chat und Verlauf für Baum und Anzeige übrig bleiben muss" ist
+  keine Prozentzahl.
+
+Die Liste hängt an `onChatPersisted` aus `ChatStream.js` — eine Spalte, die
+dauerhaft danebensteht, darf nicht den Titel von vorhin zeigen.
 
 ### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208))
 
