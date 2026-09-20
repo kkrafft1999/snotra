@@ -42,7 +42,10 @@ function registerDialogHandlers({
       title: 'Ordner auswählen',
       buttonLabel: 'Ordner öffnen',
       message: 'Wähle einen Ordner aus, der angezeigt werden soll',
-      properties: ['openDirectory'],
+      // `createDirectory` blendet unter macOS den Knopf "Neuer Ordner" ein, damit
+      // man den Ordner fuer ein frisches Vorhaben nicht vorher im Finder anlegen
+      // muss (Issue #230). Windows und Linux ignorieren die Property.
+      properties: ['openDirectory', 'createDirectory'],
     };
     const defaultPath = await resolveDefaultPath(workspaceFolderStore);
     if (defaultPath) options.defaultPath = defaultPath;

@@ -54,7 +54,17 @@ test('der Dialog startet im zuletzt aktiven Workspace-Ordner', async () => {
 
   assert.equal(seenOptions.length, 1);
   assert.equal(seenOptions[0].defaultPath, '/projekte/snotra');
-  assert.deepEqual(seenOptions[0].properties, ['openDirectory']);
+  assert.deepEqual(seenOptions[0].properties, ['openDirectory', 'createDirectory']);
+});
+
+// Unter macOS zeigt Electron den Knopf "Neuer Ordner" nur mit dieser Property;
+// ohne sie muss man den Dialog abbrechen und im Finder anlegen (Issue #230).
+test('der Dialog erlaubt das Anlegen eines neuen Ordners', async () => {
+  const { ipcMain, seenOptions } = setup({ lastFolder: '/projekte/snotra' });
+
+  await ipcMain.invoke(REQ.DIALOG_OPEN_FOLDER);
+
+  assert.ok(seenOptions[0].properties.includes('createDirectory'));
 });
 
 test('ohne bekannten Ordner bleibt defaultPath ungesetzt', async () => {
