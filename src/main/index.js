@@ -77,6 +77,16 @@ function buildApplicationMenu() {
         },
       },
       { type: 'separator' },
+      // Der einzige Weg in die Einstellungen war bis hierher das Zahnrad im
+      // Chat-Kopf — und das ist weg, sobald die Chat-Spalte weggeschaltet ist.
+      {
+        label: 'Einstellungen\u2026',
+        accelerator: 'CmdOrCtrl+,',
+        click: () => {
+          getMainWindow()?.webContents.send(PUSH.UI_OPEN_SETTINGS);
+        },
+      },
+      { type: 'separator' },
       { role: 'reload', label: 'Neu laden' },
       { role: 'forceReload', label: 'Hart neu laden' },
       { role: 'toggleDevTools', label: 'Entwicklertools' },

@@ -30,6 +30,7 @@ const btnOpen = document.getElementById('btn-open-folder');
 const appRoot = document.getElementById('app');
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 const btnToggleContentPane = document.getElementById('btn-toggle-content-pane');
+const btnToggleChatPanel = document.getElementById('btn-toggle-chat-panel');
 const chatInput = document.getElementById('chat-input');
 const chatInputRow = document.getElementById('chat-input-row');
 const btnChatNew = document.getElementById('btn-chat-new');
@@ -112,6 +113,42 @@ btnToggleContentPane.addEventListener('click', async () => {
     await api.setUIPrefs({ contentPaneVisible: visibleAfterToggle });
   } catch {
     setContentPaneVisible(wasVisible);
+  }
+});
+
+// ── Chat-Spalte ein-/ausblenden ────────────────────────────────────────────
+// Spiegelbild zur mittleren Anzeige: derselbe Mechanismus, dieselbe Klasse an
+// #app, derselbe Knopf — nur auf der anderen Seite der Titelzeile. Bleibt der
+// Chat weg, steht rechts nur noch der Verlauf.
+function setChatPanelVisible(visible) {
+  const label = visible ? 'Chat ausblenden' : 'Chat einblenden';
+  appRoot.classList.toggle('app--no-chat', !visible);
+  btnToggleChatPanel.title = label;
+  btnToggleChatPanel.setAttribute('aria-label', label);
+  btnToggleChatPanel.setAttribute('aria-pressed', visible ? 'true' : 'false');
+  // Die Eingabezeile misst ihre Hoehe an sich selbst; weggeschaltet misst sie
+  // 0. Ohne dieses Nachmessen kaeme sie einzeilig zurueck, auch wenn ein
+  // langer Entwurf drinsteht.
+  if (visible) syncChatInputHeight();
+}
+
+function revealChatPanel() {
+  if (!appRoot.classList.contains('app--no-chat')) return;
+  setChatPanelVisible(true);
+  panelResizer?.ensureRoomForWorkspace();
+  void api.setUIPrefs({ chatPanelVisible: true }).catch(() => {});
+}
+
+btnToggleChatPanel.addEventListener('click', async () => {
+  const wasVisible = !appRoot.classList.contains('app--no-chat');
+  const visibleAfterToggle = !wasVisible;
+  setChatPanelVisible(visibleAfterToggle);
+  panelResizer?.ensureRoomForWorkspace();
+  try {
+    await api.setUIPrefs({ chatPanelVisible: visibleAfterToggle });
+  } catch {
+    setChatPanelVisible(wasVisible);
+    panelResizer?.ensureRoomForWorkspace();
   }
 });
 
@@ -280,6 +317,12 @@ const chatHistory = initChatHistoryPanel({
     await chatStream.startNewChat();
     modelPicker.updateChatChrome();
   },
+  // Nach dem Umschalten teilt der Resizer die Breiten neu auf — sonst stuende
+  // die neue Spalte ueber dem Arbeitsbereich.
+  onVisibilityChanged: (_open, meta) => panelResizer?.handleHistoryVisibility(meta),
+  // Wer einen Chat im Verlauf anklickt, will ihn sehen — genau wie der Klick
+  // auf eine Datei die mittlere Spalte zurueckholt.
+  revealChatPanel,
 });
 
 const updateDialog = initUpdateDialog({ api });
@@ -361,7 +404,12 @@ void toolPermissions.refresh();
 void initAppVersionBadge({ api });
 
 (async () => {
-  let uiPrefs = { contentPaneVisible: true, sidebarVisible: true, appLocale: 'de' };
+  let uiPrefs = {
+    contentPaneVisible: true,
+    sidebarVisible: true,
+    chatPanelVisible: true,
+    appLocale: 'de',
+  };
   try {
     uiPrefs = await api.getUIPrefs();
     // Beim Start ohne Animation: die Leiste soll gleich richtig stehen und
@@ -373,6 +421,9 @@ void initAppVersionBadge({ api });
       chatHistory.setHistoryOpen(true, { persist: false });
       void chatHistory.renderHistoryList();
     }
+    // Der Chat startet sichtbar, ausser der Nutzer hat ihn weggeschaltet.
+    // Kein Zurueckschreiben: Der gemerkte Stand ist kein neuer Wunsch.
+    setChatPanelVisible(uiPrefs.chatPanelVisible !== false);
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
   } catch {

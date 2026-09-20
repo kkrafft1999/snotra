@@ -140,6 +140,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Einstellungen oeffnen (Menue "Ansicht > Einstellungen" bzw. Cmd/Ctrl+Komma).
+  // Wie oben: Das Kuerzel haengt am Menueeintrag, der Renderer bekommt nur das
+  // Signal.
+  onOpenSettings: (callback) => {
+    const channel = PUSH.UI_OPEN_SETTINGS;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Tool-Berechtigungen (Issue #66). Der Renderer liest den Stand, stoesst
   // Aenderungen an und beantwortet Freigabe-Karten; die Entscheidung selbst
   // trifft der Main-Prozess (Policy, native Bestaetigung fuer Auto/Allow/Deny-Loeschen).

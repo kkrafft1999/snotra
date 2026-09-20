@@ -150,7 +150,6 @@ export function initSettingsModal(deps) {
   const btnReloadSkills = document.getElementById('btn-reload-skills');
   const modalEncryptionWarning = document.getElementById('modal-encryption-warning');
   const modalSaveError = document.getElementById('modal-save-error');
-  const btnChatSettings = document.getElementById('btn-chat-settings');
   const settingsVersionLabel = document.getElementById('settings-version-label');
   const btnCheckUpdates = document.getElementById('btn-check-updates');
 
@@ -2107,7 +2106,16 @@ export function initSettingsModal(deps) {
     void refreshSkillCatalogKeepingSelection();
   });
 
-  btnChatSettings.addEventListener('click', openSettingsModal);
+  // Der einzige Weg in den Dialog: Menue "Ansicht > Einstellungen" bzw.
+  // Cmd/Ctrl+Komma. Das Zahnrad im Chat-Kopf ist entfallen — es war mit der
+  // Chat-Spalte weg, und eine Einstellung des ganzen Programms gehoert nicht in
+  // die Kopfzeile einer Spalte. Steht der Dialog schon offen, passiert nichts:
+  // Ein zweiter Aufruf ueberschriebe nur den gemerkten Fokus von vor dem
+  // Oeffnen mit einem Element aus dem Dialog selbst.
+  api.onOpenSettings?.(() => {
+    if (!modalSettings.classList.contains('hidden')) return;
+    void openSettingsModal();
+  });
 
   return { openSettingsModal, closeSettingsModal, applyShellLocale };
 }

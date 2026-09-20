@@ -563,8 +563,9 @@ Baum stand allein daneben. Seit Phase A gilt:
 
 Zwei Regeln hängen daran:
 
-- **Beide Wegschalt-Zustände sitzen auf `#app`** — `app--no-sidebar` und
-  `app--no-preview`. Vorher trug jede Hälfte ihren eigenen Mechanismus auf
+- **Alle Wegschalt-Zustände sitzen auf `#app`** — `app--no-sidebar`,
+  `app--no-preview`, `app--no-chat` und `app--no-history`. Vorher trug jede
+  Hälfte ihren eigenen Mechanismus auf
   einem anderen Container; dieselbe Geste war zweimal beschrieben. Ohne
   Anzeige fällt `#workspace` auf `flex: 0 0 auto` zurück, sonst teilte es sich
   die Breite mit dem Chat, statt auf die Seitenleiste zu schrumpfen.
@@ -592,8 +593,37 @@ Chat nach unten, ging beim Klick daneben und bei Escape wieder zu und
 verschwand nach jeder Auswahl. Als Spalte bleibt er stehen — deshalb schließt
 `ChatHistoryPanel.js` nichts mehr von selbst, `FileTree.js` hat seinen
 Escape-Haken dafür verloren und `ToolApprovalCard.js` zählt ihn nicht mehr zu
-den Overlays, die Escape für sich beanspruchen. Geschaltet wird er weiter über
-den Knopf im Chat-Kopf; die Titelzeile bekommt dafür keinen dritten Schalter.
+den Overlays, die Escape für sich beanspruchen.
+
+Seitdem ist die Symmetrie auch bedienbar: **Jede der vier Spalten hat genau
+einen Schalter, und alle vier stehen in der Titelzeile** — links die des
+Arbeitsbereichs, rechts spiegelverkehrt die der Chat-Seite, jeweils in der
+Reihenfolge ihrer Spalten und mit demselben, gespiegelten Bild. Damit gilt für
+Chat und Verlauf dasselbe Muster wie für Baum und Anzeige:
+
+- Der Chat ist wegschaltbar (`app--no-chat`, `chatPanelVisible` in den
+  UI-Prefs); übrig bleibt dann der Verlauf. `SidebarResizer.js` rechnet seine
+  Breite in diesem Zustand als 0 und lässt die gemerkte Breite in Ruhe, damit
+  er so breit zurückkommt, wie er weggegangen ist.
+- **Ein Klick im Verlauf holt die Chat-Spalte zurück** (`revealChatPanel`) —
+  Spiegelbild zu `revealContentPane` beim Klick auf eine Datei im Baum. Ohne
+  das liefe der Klick in eine weggeschaltete Fläche.
+- Der Knopf für einen neuen Chat steht in der Kopfzeile des Verlaufs, so wie
+  „Ordner öffnen“ in der Kopfzeile des Baums steht: Die Aktion, die einer
+  Spalte Einträge verschafft, gehört in diese Spalte.
+- Der Einstellungsdialog hat keinen Knopf mehr. Das Zahnrad saß in der
+  Kopfzeile des Chats und war mit dessen Spalte weg; seitdem führt nur noch
+  *Ansicht → Einstellungen…* (`CmdOrCtrl+,`) hinein — ein Push auf
+  `UI_OPEN_SETTINGS`, genau wie `UI_TOGGLE_SIDEBAR` beim Kürzel `Cmd/Ctrl+B`.
+  Das Kürzel hängt am Menüeintrag und nicht an einer Tastenabfrage im
+  Renderer, damit es auch in einem Eingabefeld gilt. Ein zweiter Aufruf bei
+  offenem Dialog ist ein No-op: `openSettingsModal()` merkt sich den Fokus von
+  **vor** dem Öffnen, und den überschriebe er sonst mit einem Element aus dem
+  Dialog selbst.
+- Die drei Spaltenköpfe (`#tree-header`, `#chat-header`,
+  `#chat-history-header`) bilden eine Linie. Ihre Höhe kam bisher von den
+  Icon-Knöpfen darin; der Chat-Kopf hat seit dem Entfallen des Zahnrads keine
+  mehr und trägt dieselbe Rechnung deshalb als `min-height`.
 
 Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
 

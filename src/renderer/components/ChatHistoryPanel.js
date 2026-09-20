@@ -8,6 +8,11 @@ import { formatHistoryTime } from '../chat/messageUtils.js';
  * Auswahl weg. Als Spalte bleibt er stehen — man sieht den laufenden Chat und
  * die Liste gleichzeitig, und das Umschalten kostet keine Gedaechtnisleistung
  * mehr. Deshalb schliesst hier nichts mehr von selbst.
+ *
+ * Ein- und ausgeblendet wird die Spalte inzwischen wie ihre drei Geschwister
+ * ueber die Titelzeile; in der Kopfzeile des Verlaufs steht stattdessen der
+ * Knopf fuer einen neuen Chat — so wie "Ordner oeffnen" in der Kopfzeile des
+ * Baums steht.
  */
 export function initChatHistoryPanel({
   api,
@@ -25,12 +30,16 @@ export function initChatHistoryPanel({
   activateChatSession = async () => {},
   // Nach dem Ein- oder Ausblenden teilt der Resizer die Breiten neu auf.
   onVisibilityChanged = () => {},
+  // Wer einen Chat aus dem Verlauf anklickt, will ihn sehen — auch wenn die
+  // Chat-Spalte gerade zu ist (Spiegelbild zum Klick auf eine Datei im Baum).
+  revealChatPanel = () => {},
 }) {
   const appRoot = document.getElementById('app');
   const chatHistoryList = document.getElementById('chat-history-list');
   const chatHistoryEmpty = document.getElementById('chat-history-empty');
-  const btnChatHistory = document.getElementById('btn-chat-history');
-  const btnChatHistoryClose = document.getElementById('btn-chat-history-close');
+  // Der Schalter steht in der Titelzeile, gespiegelt zu denen der linken
+  // Haelfte — nicht mehr in der Kopfzeile des Chats.
+  const btnChatHistory = document.getElementById('btn-toggle-chat-history');
 
   function isHistoryOpen() {
     return !appRoot.classList.contains('app--no-history');
@@ -44,9 +53,11 @@ export function initChatHistoryPanel({
   function setHistoryOpen(open, { persist = true } = {}) {
     appRoot.classList.toggle('app--no-history', !open);
     const label = open ? 'Chat-Verlauf ausblenden' : 'Chat-Verlauf einblenden';
-    btnChatHistory.setAttribute('aria-expanded', open ? 'true' : 'false');
-    btnChatHistory.setAttribute('aria-label', label);
-    btnChatHistory.title = open ? 'Verlauf ausblenden' : 'Verlauf';
+    // aria-pressed statt aria-expanded: Der Knopf schaltet eine Spalte, er
+    // klappt nichts aus — genau wie seine drei Nachbarn in der Titelzeile.
+    btnChatHistory?.setAttribute('aria-pressed', open ? 'true' : 'false');
+    btnChatHistory?.setAttribute('aria-label', label);
+    if (btnChatHistory) btnChatHistory.title = label;
     onVisibilityChanged(open, { persisted: persist });
     if (persist) void api.setUIPrefs({ chatHistoryVisible: open }).catch(() => {});
   }
@@ -108,6 +119,9 @@ export function initChatHistoryPanel({
 
   async function openChatSession(id) {
     if (!id || id === appStore.currentChatId) return;
+    // Erst die Spalte, dann der Inhalt: Sonst liefe das Rendern in eine
+    // weggeschaltete Flaeche und die Eingabezeile kaeme ohne Hoehe zurueck.
+    revealChatPanel();
     stopChatVoiceListening();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
@@ -156,13 +170,11 @@ export function initChatHistoryPanel({
     await renderHistoryList();
   }
 
-  btnChatHistory.addEventListener('click', async () => {
+  btnChatHistory?.addEventListener('click', async () => {
     const open = !isHistoryOpen();
     if (open) await renderHistoryList();
     setHistoryOpen(open);
   });
-
-  btnChatHistoryClose?.addEventListener('click', () => setHistoryOpen(false));
 
   return {
     isHistoryOpen,

@@ -541,3 +541,45 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
   await flush();
   assert.match(hint(), /erst mit Übernehmen/);
 });
+
+test('der Dialog haengt am Menueeintrag statt an einem Knopf im Chat', async (t) => {
+  // Das Zahnrad sass in der Kopfzeile des Chats und war mit dessen Spalte weg.
+  // Seitdem fuehrt nur noch "Ansicht > Einstellungen" bzw. Cmd/Ctrl+Komma
+  // hinein — der Renderer muss sich dafuer beim Main anmelden.
+  let trigger = null;
+  const { dom, modal } = await mountSettings({
+    onOpenSettings: (callback) => { trigger = callback; },
+  });
+  t.after(dom.cleanup);
+  const modalSettings = document.getElementById('modal-settings');
+
+  assert.equal(document.getElementById('btn-chat-settings'), null, 'kein Zahnrad mehr');
+  assert.equal(typeof trigger, 'function', 'der Renderer meldet sich beim Menue an');
+
+  modal.closeSettingsModal();
+  assert.ok(modalSettings.classList.contains('hidden'));
+
+  trigger();
+  await flush();
+  assert.ok(!modalSettings.classList.contains('hidden'), 'der Menueeintrag oeffnet ihn');
+});
+
+test('ein zweiter Menueaufruf bei offenem Dialog laesst den gemerkten Fokus stehen', async (t) => {
+  let trigger = null;
+  const { dom, appStore } = await mountSettings({
+    onOpenSettings: (callback) => { trigger = callback; },
+  });
+  t.after(dom.cleanup);
+
+  const davor = document.getElementById('chat-input');
+  appStore.lastFocusBeforeModal = davor;
+
+  trigger();
+  await flush();
+
+  assert.equal(
+    appStore.lastFocusBeforeModal,
+    davor,
+    'sonst landete der Fokus nach dem Schliessen im Dialog selbst'
+  );
+});

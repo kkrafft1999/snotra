@@ -418,6 +418,27 @@ test('readUIPrefs kennt Breite und Zustand der Verlaufsspalte', async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
+test('readUIPrefs merkt sich auch die weggeschaltete Chat-Spalte', async () => {
+  // Gegenstueck zu contentPaneVisible: Der Chat ist voreingestellt da, wer ihn
+  // wegschaltet, findet ihn weggeschaltet vor — deshalb `!== false`.
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  const storage = makeStorage(tmpDir);
+
+  await storage.writeUIPrefs({ contentPaneVisible: true, appLocale: 'de' });
+  let prefs = await storage.readUIPrefs();
+  assert.equal(prefs.chatPanelVisible, true, 'ohne Angabe bleibt der Chat sichtbar');
+
+  await storage.writeUIPrefs({
+    contentPaneVisible: true,
+    appLocale: 'de',
+    chatPanelVisible: false,
+  });
+  prefs = await storage.readUIPrefs();
+  assert.equal(prefs.chatPanelVisible, false);
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});
+
 test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);

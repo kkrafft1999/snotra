@@ -77,7 +77,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     await rm(workspace, { recursive: true, force: true });
     await rm(userDataDir, { recursive: true, force: true });
   });
-  const { page } = snotra;
+  const { page, app } = snotra;
   const readOpenedLinks = await snotra.captureExternalLinks();
   const started = Date.now();
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
@@ -256,7 +256,13 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   step('Link-Klick geprueft');
 
   // --- Einstellungen: oeffnen, Tab wechseln, mit Escape schliessen ----------
-  await page.evaluate(() => document.getElementById('btn-chat-settings').click());
+  // Es gibt keinen Knopf mehr dafuer: Der Dialog haengt am Menueeintrag
+  // "Ansicht > Einstellungen" (Cmd/Ctrl+Komma). Das Kuerzel selbst laesst sich
+  // von aussen nicht druecken, der Eintrag dahinter schon.
+  await app.evaluate(({ Menu }) => {
+    const view = Menu.getApplicationMenu().items.find((i) => i.label === 'Ansicht');
+    view.submenu.items.find((i) => i.label?.startsWith('Einstellungen')).click();
+  });
   await poll(() => page.evaluate(() =>
     !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geoeffneter Einstellungsdialog' });
