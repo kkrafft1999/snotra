@@ -515,13 +515,48 @@ nicht aus: Die Allowlist in `config.forge.packagerConfig.ignore` lässt alles
 unter `src/` durch, und `scripts/check-asar-contents.js` prüft das nach jedem
 Build.
 
+### Zwei Hälften: Arbeitsbereich und Chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
+
+Verzeichnisbaum und Anzeige gehören zusammen — man klickt links eine Datei an
+und sieht sie daneben. Der Chat ist die andere Hälfte. Das Markup bildete das
+bis 1.7.0 genau andersherum ab: `#workspace` klammerte Anzeige und Chat, der
+Baum stand allein daneben. Seit Phase A gilt:
+
+```
+#app
+├── #workspace        Arbeitsbereich: #sidebar · #divider · #content
+├── #chat-divider
+└── #chat-panel       Chat (in Phase B: Chat + Verlauf)
+```
+
+Zwei Regeln hängen daran:
+
+- **Beide Wegschalt-Zustände sitzen auf `#app`** — `app--no-sidebar` und
+  `app--no-preview`. Vorher trug jede Hälfte ihren eigenen Mechanismus auf
+  einem anderen Container; dieselbe Geste war zweimal beschrieben. Ohne
+  Anzeige fällt `#workspace` auf `flex: 0 0 auto` zurück, sonst teilte es sich
+  die Breite mit dem Chat, statt auf die Seitenleiste zu schrumpfen.
+- **Wird das Fenster breiter, teilen sich beide Hälften den Zuwachs je zur
+  Hälfte.** Das steht in `SidebarResizer.js` (ein `ResizeObserver` auf `#app`)
+  und nicht im CSS: Flexbox kann „zusätzliche Breite gleichmäßig verteilen"
+  nicht ausdrücken, weil ihm der Bezugspunkt fehlt — `flex-grow` verteilt den
+  Rest gegen die Basis, nicht gegen den vorherigen Stand. Geschrieben wird nur
+  die neue Chat-Breite; der Arbeitsbereich füllt als `flex: 1` den Rest von
+  selbst. Die Rechnung läuft rückwärts genauso, deshalb landet Maximieren und
+  Zurücksetzen wieder dort, wo man war.
+
+Bezugsfläche für die Obergrenze des Chats ist seitdem `#app`, nicht mehr der
+frühere Container aus Anzeige und Chat: Der Chat ist eine der beiden Hälften
+und darf höchstens die halbe Fensterbreite einnehmen. Dieselbe Grenze steht als
+`max-width` im CSS und in `maxChatWidth()`.
+
 ### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208))
 
 Wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
 neben dem Startschirm, der für den kalten Start gedacht ist. Die Entscheidung
 darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
 
-1. **`index.html` startet mit `workspace--no-preview`.** Der erste Bildaufbau
+1. **`index.html` startet mit `app--no-preview`.** Der erste Bildaufbau
    passiert, bevor `app.js` etwas weiß; stünde dort die offene Spalte, blitzte
    der Startschirm auf und spränge gleich wieder weg. `test/startup-layout.test.js`
    hält Markup und Umschalter-Zustand (`aria-pressed`) zusammen.

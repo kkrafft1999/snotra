@@ -27,7 +27,6 @@ const DEFAULT_MAX_TOOL_ROUNDS = 14;
 // Content-Pane-Toggle, Öffnen-Buttons) — alle anderen Selektoren leben in
 // den jeweiligen Components.
 const btnOpen = document.getElementById('btn-open-folder');
-const workspace = document.getElementById('workspace');
 const appRoot = document.getElementById('app');
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 const btnToggleContentPane = document.getElementById('btn-toggle-content-pane');
@@ -76,14 +75,14 @@ window.addEventListener('beforeunload', () => {
 
 function setContentPaneVisible(visible) {
   if (visible) {
-    workspace.classList.remove('workspace--no-preview');
+    appRoot.classList.remove('app--no-preview');
     iconContentPaneVisible.classList.remove('hidden');
     iconContentPaneHidden.classList.add('hidden');
     btnToggleContentPane.title = 'Mittlere Vorschau ausblenden';
     btnToggleContentPane.setAttribute('aria-label', 'Mittlere Vorschau ausblenden');
     btnToggleContentPane.setAttribute('aria-pressed', 'true');
   } else {
-    workspace.classList.add('workspace--no-preview');
+    appRoot.classList.add('app--no-preview');
     iconContentPaneVisible.classList.add('hidden');
     iconContentPaneHidden.classList.remove('hidden');
     btnToggleContentPane.title = 'Mittlere Vorschau einblenden';
@@ -112,7 +111,7 @@ function applyStartupContentPane(preference) {
 
 btnToggleContentPane.addEventListener('click', async () => {
   contentPaneToggledByUser = true;
-  const wasVisible = !workspace.classList.contains('workspace--no-preview');
+  const wasVisible = !appRoot.classList.contains('app--no-preview');
   const visibleAfterToggle = !wasVisible;
   setContentPaneVisible(visibleAfterToggle);
   try {
