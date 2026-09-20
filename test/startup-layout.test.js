@@ -48,9 +48,12 @@ test('das Markup startet mit eingeklappter Spalte', () => {
     path.join(__dirname, '..', 'src', 'renderer', 'index.html'),
     'utf8'
   );
-  const workspace = html.match(/<div id="workspace"[^>]*>/);
-  assert.ok(workspace, '#workspace muss es geben');
-  assert.match(workspace[0], /class="[^"]*workspace--no-preview/);
+  // Der Zustand haengt seit Epic #223 (Phase A) an #app: Arbeitsbereich und
+  // Chat sind dort Geschwister, und beide Wegschalt-Klassen sitzen am selben
+  // Container.
+  const appRoot = html.match(/<main id="app"[^>]*>/);
+  assert.ok(appRoot, '#app muss es geben');
+  assert.match(appRoot[0], /class="[^"]*app--no-preview/);
   const toggle = html.match(/<button[^>]*id="btn-toggle-content-pane"[^>]*>/);
   assert.ok(toggle, 'der Umschalter muss es geben');
   assert.match(

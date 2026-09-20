@@ -16,20 +16,21 @@ const CHAT_MIN = 260;
 
 /**
  * happy-dom kennt kein Layout: getBoundingClientRect() liefert ueberall 0.
- * Fuer den Chat-Trenner haengt die Obergrenze aber an der Breite des
- * Workspace, deshalb wird sie hier gesetzt — sonst faellt jeder Wert auf das
- * Minimum und der Test prueft nichts.
+ * Fuer den Chat-Trenner haengt die Obergrenze aber an der Breite der
+ * Bezugsflaeche — seit Epic #223 (Phase A) ist das #app —, deshalb wird sie
+ * hier gesetzt; sonst faellt jeder Wert auf das Minimum und der Test prueft
+ * nichts.
  */
-function stubWorkspaceWidth(workspace, width) {
-  workspace.getBoundingClientRect = () => ({
+function stubAppWidth(appRoot, width) {
+  appRoot.getBoundingClientRect = () => ({
     width, height: 800, top: 0, bottom: 800, left: 0, right: width, x: 0, y: 0,
   });
 }
 
 async function mount({ api = {}, sidebarWidth = 280, chatPanelWidth = 320 } = {}) {
   const dom = setupRendererDom();
-  const workspace = dom.document.getElementById('workspace');
-  stubWorkspaceWidth(workspace, 1200);
+  const appRoot = dom.document.getElementById('app');
+  stubAppWidth(appRoot, 1200);
 
   const { initSidebarResizer } = await importRenderer('components', 'SidebarResizer.js');
   initSidebarResizer({

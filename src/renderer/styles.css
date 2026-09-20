@@ -814,7 +814,18 @@ summary:focus-visible,
   transform: translate(-50%, -50%) scaleY(1);
 }
 
-/* ── Workspace (content + chat) ── */
+/* ── Arbeitsbereich (Baum + Anzeige) ──────────────────────────────────────
+ * Seit der Umgruppierung (Epic #223, Phase A) klammert #workspace den Baum und
+ * die Anzeige; der Chat ist sein Geschwister direkt unter #app. Beide
+ * Wegschalt-Zustaende haengen dadurch am selben Container — #app traegt
+ * app--no-sidebar und app--no-preview, statt dass jede Haelfte ihren eigenen
+ * Mechanismus mitbringt.
+ *
+ * flex: 1 (Basis 0) heisst weiterhin: der Arbeitsbereich fuellt, was der Chat
+ * uebrig laesst. Dass beim Verbreitern des Fensters beide Haelften je die
+ * Haelfte dazubekommen, macht SidebarResizer.js — CSS allein kann "zusaetzliche
+ * Breite teilen" nicht ausdruecken, weil ihm der Bezugspunkt fehlt.
+ */
 
 #workspace {
   display: flex;
@@ -823,17 +834,27 @@ summary:focus-visible,
   overflow: hidden;
 }
 
-#workspace.workspace--no-preview #content,
-#workspace.workspace--no-preview #chat-divider {
+#app.app--no-preview #content,
+#app.app--no-preview #chat-divider {
   display: none;
 }
 
-#workspace.workspace--no-preview #chat-panel {
+/* Ohne Anzeige bleibt vom Arbeitsbereich nur die Seitenleiste — er darf dann
+ * nicht mehr fuellen, sonst teilte er sich die Breite mit dem Chat. */
+#app.app--no-preview #workspace {
+  flex: 0 0 auto;
+}
+
+#app.app--no-preview #chat-panel {
   flex: 1 1 auto;
   width: auto !important;
   max-width: none;
 }
 
+/* max-width bezieht sich seit Phase A auf #app, nicht mehr auf den frueheren
+ * Container aus Anzeige + Chat: Der Chat ist jetzt eine der beiden Haelften und
+ * darf hoechstens die halbe Fensterbreite einnehmen. SidebarResizer.js rechnet
+ * mit derselben Grenze. */
 #chat-panel {
   width: 320px;
   min-width: 260px;

@@ -19,14 +19,19 @@ function clampSidebarWidth(raw) {
   return Math.max(SIDEBAR_MIN, Math.min(raw, SIDEBAR_MAX));
 }
 
-function maxChatWidth(workspace) {
-  if (!workspace) return CHAT_MIN;
-  const rect = workspace.getBoundingClientRect();
+// Bezugsflaeche ist seit der Umgruppierung (Epic #223, Phase A) #app, also das
+// ganze Fenster unter der Titelzeile — vorher war es der Container aus Anzeige
+// und Chat. Der Chat ist jetzt eine der beiden Haelften; seine Obergrenze ist
+// entsprechend die halbe Fensterbreite, dieselbe Grenze steht als max-width im
+// CSS.
+function maxChatWidth(bounds) {
+  if (!bounds) return CHAT_MIN;
+  const rect = bounds.getBoundingClientRect();
   return Math.max(CHAT_MIN, Math.min(rect.width * 0.5, rect.width - 200));
 }
 
-function clampChatWidth(raw, workspace) {
-  return Math.max(CHAT_MIN, Math.min(raw, maxChatWidth(workspace)));
+function clampChatWidth(raw, bounds) {
+  return Math.max(CHAT_MIN, Math.min(raw, maxChatWidth(bounds)));
 }
 
 function parsePx(styleWidth) {
@@ -57,7 +62,7 @@ export function initSidebarResizer({
 }) {
   const divider = document.getElementById('divider');
   const sidebar = document.getElementById('sidebar');
-  const workspace = document.getElementById('workspace');
+  const appRoot = document.getElementById('app');
   const chatDivider = document.getElementById('chat-divider');
   const chatPanel = document.getElementById('chat-panel');
 
@@ -81,9 +86,9 @@ export function initSidebarResizer({
 
   function applyChatWidth(raw) {
     if (!chatPanel) return null;
-    const width = clampChatWidth(raw, workspace);
+    const width = clampChatWidth(raw, appRoot);
     chatPanel.style.width = `${width}px`;
-    syncSeparator(chatDivider, width, CHAT_MIN, maxChatWidth(workspace));
+    syncSeparator(chatDivider, width, CHAT_MIN, maxChatWidth(appRoot));
     return width;
   }
 
@@ -100,7 +105,7 @@ export function initSidebarResizer({
   ) {
     applyChatWidth(initialChatPanelWidth);
   } else {
-    syncSeparator(chatDivider, currentChatWidth(), CHAT_MIN, maxChatWidth(workspace));
+    syncSeparator(chatDivider, currentChatWidth(), CHAT_MIN, maxChatWidth(appRoot));
   }
 
   let isResizing = false;
@@ -127,6 +132,45 @@ export function initSidebarResizer({
   function schedulePersist() {
     clearTimeout(persistTimer);
     persistTimer = setTimeout(() => { void persistPanelWidths(); }, KEY_PERSIST_DELAY);
+  }
+
+  /**
+   * Wird das Fenster breiter, teilen sich Arbeitsbereich und Chat den Zuwachs
+   * je zur Haelfte (Epic #223) — vorher bekam ihn allein die Anzeige. Zu
+   * schreiben ist nur die neue Chat-Breite: Der Arbeitsbereich fuellt den Rest
+   * von selbst, weil er `flex: 1` traegt. Beim Schmalerwerden laeuft dieselbe
+   * Rechnung rueckwaerts, sodass Maximieren und Zuruecksetzen wieder dort
+   * landen, wo man vorher war.
+   *
+   * Ohne Anzeige nimmt der Chat ohnehin die ganze Breite ein — dann gibt es
+   * nichts zu teilen.
+   */
+  if (typeof ResizeObserver !== 'undefined' && appRoot && chatPanel) {
+    let lastWidth = appRoot.getBoundingClientRect().width;
+    // Die halbe Pixelzahl bleibt beim Ziehen am Fensterrand liegen: ohne diesen
+    // Uebertrag bekaeme der Chat bei lauter Ein-Pixel-Schritten jedes Mal eine
+    // aufgerundete Haelfte und damit am Ende den ganzen Zuwachs.
+    let carry = 0;
+    new ResizeObserver(() => {
+      const width = appRoot.getBoundingClientRect().width;
+      const growth = width - lastWidth;
+      lastWidth = width;
+      if (
+        growth === 0
+        || isResizing
+        || isResizingChat
+        || appRoot.classList.contains('app--no-preview')
+      ) {
+        carry = 0;
+        return;
+      }
+      const share = growth / 2 + carry;
+      const step = Math.trunc(share);
+      carry = share - step;
+      if (step === 0) return;
+      const before = currentChatWidth();
+      if (applyChatWidth(before + step) !== before) schedulePersist();
+    }).observe(appRoot);
   }
 
   /**
@@ -183,8 +227,8 @@ export function initSidebarResizer({
       applySidebarWidth(e.clientX);
       return;
     }
-    if (isResizingChat && workspace && chatPanel) {
-      const rect = workspace.getBoundingClientRect();
+    if (isResizingChat && appRoot && chatPanel) {
+      const rect = appRoot.getBoundingClientRect();
       applyChatWidth(rect.right - e.clientX);
     }
   });
