@@ -579,6 +579,19 @@ Chat und Verlauf dasselbe Muster wie für Baum und Anzeige:
 - Der Knopf für einen neuen Chat steht in der Kopfzeile des Verlaufs, so wie
   „Ordner öffnen“ in der Kopfzeile des Baums steht: Die Aktion, die einer
   Spalte Einträge verschafft, gehört in diese Spalte.
+- Der Einstellungsdialog hat keinen Knopf mehr. Das Zahnrad saß in der
+  Kopfzeile des Chats und war mit dessen Spalte weg; seitdem führt nur noch
+  *Ansicht → Einstellungen…* (`CmdOrCtrl+,`) hinein — ein Push auf
+  `UI_OPEN_SETTINGS`, genau wie `UI_TOGGLE_SIDEBAR` beim Kürzel `Cmd/Ctrl+B`.
+  Das Kürzel hängt am Menüeintrag und nicht an einer Tastenabfrage im
+  Renderer, damit es auch in einem Eingabefeld gilt. Ein zweiter Aufruf bei
+  offenem Dialog ist ein No-op: `openSettingsModal()` merkt sich den Fokus von
+  **vor** dem Öffnen, und den überschriebe er sonst mit einem Element aus dem
+  Dialog selbst.
+- Die drei Spaltenköpfe (`#tree-header`, `#chat-header`,
+  `#chat-history-header`) bilden eine Linie. Ihre Höhe kam bisher von den
+  Icon-Knöpfen darin; der Chat-Kopf hat seit dem Entfallen des Zahnrads keine
+  mehr und trägt dieselbe Rechnung deshalb als `min-height`.
 
 Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
 

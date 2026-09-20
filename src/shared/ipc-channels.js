@@ -168,6 +168,8 @@ const PUSH_CHANNELS = Object.freeze({
   SKILLS_CHANGED: 'skills:changed',
   /** Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B (Issue #167). */
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
+  /** Menue "Ansicht > Einstellungen" bzw. Cmd/Ctrl+Komma. */
+  UI_OPEN_SETTINGS: 'ui:open-settings',
 });
 
 module.exports = {

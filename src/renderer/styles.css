@@ -401,13 +401,11 @@ summary:focus-visible,
   flex-shrink: 0;
 }
 
-.icon-btn-row > :not(:last-child),
-.chat-header-actions > button:not(:last-child) {
+.icon-btn-row > :not(:last-child) {
   margin-inline-end: calc(-1 * var(--ds-icon-btn-cluster-pull));
 }
 
-.icon-btn-row button:focus-visible,
-.chat-header-actions > button:focus-visible {
+.icon-btn-row button:focus-visible {
   position: relative;
   z-index: 1;
 }
@@ -938,12 +936,19 @@ summary:focus-visible,
   overflow: hidden;
 }
 
+/* Die Hoehe kam bis 1.7.1 von den Icon-Knoepfen rechts; ohne sie sass der
+ * Chat-Titel hoeher als "Verlauf" und der Projektname nebenan. Die drei
+ * Spaltenkoepfe stehen aber nebeneinander und muessen eine Linie bilden —
+ * deshalb dieselbe Rechnung wie dort, nur ausgeschrieben: 10 px Abstand,
+ * 32 px Knopfhoehe, 10 px Abstand. #tree-header und #chat-history-header
+ * kommen auf denselben Wert, ihre Trennlinie kommt oben drauf. */
 #chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px var(--chat-gutter-x) 10px;
+  min-height: calc(var(--ds-touch-min) + 20px);
+  padding: 4px var(--chat-gutter-x);
   background: var(--chat-output-bg);
   flex-shrink: 0;
 }
@@ -1121,14 +1126,7 @@ summary:focus-visible,
   font-weight: var(--ds-font-weight-bold);
 }
 
-.chat-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-icon-btn-row-gap);
-}
-
-#btn-chat-new,
-#btn-chat-settings {
+#btn-chat-new {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1148,14 +1146,12 @@ summary:focus-visible,
     box-shadow 0.1s ease;
 }
 
-#btn-chat-new:hover,
-#btn-chat-settings:hover {
+#btn-chat-new:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-#btn-chat-new:active,
-#btn-chat-settings:active {
+#btn-chat-new:active {
   background: var(--bg-active);
   color: var(--text-primary);
   transform: scale(0.97);
@@ -2911,7 +2907,6 @@ select.modal-input {
   #tree-header #btn-folder-history:active,
   .folder-history-item-remove:active,
   #btn-chat-new:active,
-  #btn-chat-settings:active,
   #btn-chat-mic:active:not(:disabled),
   #btn-chat-send:active:not(:disabled),
   .modal-dialog__close:active,
