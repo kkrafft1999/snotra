@@ -27,8 +27,9 @@ deshalb vor dem Tag-Push **eine** explizite Bestätigung der Zielversion.
 direkt auf `main`. `npm version` ohne `--no-git-tag-version` würde auf dem
 aktuellen Branch committen — beim Release also auf `main`, was nur per
 Ruleset-Bypass durchgeht und [`git-workflow.md`](../../rules/git-workflow.md)
-widerspricht (Issue #238). Der Tag-Push selbst ist unkritisch: Ruleset `23177645`
-hat `target: branch` und erfasst Tags nicht.
+widerspricht (Issue #238). Seit #240 steht in `bypass_actors` niemand mehr — ein
+Direkt-Push wird also abgelehnt, nicht nur protokolliert. Der Tag-Push selbst
+ist unkritisch: Ruleset `23177645` hat `target: branch` und erfasst Tags nicht.
 
 ## Schritt 1 — Bump-Typ bestimmen
 
@@ -119,9 +120,9 @@ Nur der Tag-Ref wird gepusht — **kein** `git push origin main`, der Stand lieg
 ja bereits über den Merge dort. Der Push über SSH braucht
 `dangerouslyDisableSandbox: true` (Lesezugriff auf `~/.ssh/known_hosts`).
 
-Sieht GitHub beim Push eine Meldung `Bypassed rule violations for
-refs/heads/main`, ist etwas schiefgelaufen — dann wurde doch auf `main`
-geschrieben. Melden, nicht ignorieren.
+Lehnt GitHub den Push ab, weil er auf `main` zielt, ist etwas schiefgelaufen —
+seit dem Entzug des Bypass (#240) gibt es dafür keinen Durchschlupf mehr.
+Melden, nicht umgehen.
 
 ## Schritt 8 — Pipeline beobachten und Ergebnis melden
 

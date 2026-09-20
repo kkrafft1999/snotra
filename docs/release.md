@@ -45,9 +45,9 @@ gh pr create --title "Release vX.Y.Z"
 
 `--no-git-tag-version` ist wesentlich: Ohne die Option committet `npm version`
 auf den aktuellen Branch und legt den Tag gleich mit an. Auf `main` ausgeführt
-heißt das ein Direkt-Commit, den Ruleset `23177645` nur per Bypass durchlässt
-(Issue #238). Mit der Option ändert `npm version` nur `package.json` und
-`package-lock.json`.
+heißt das ein Direkt-Commit — und den lehnt Ruleset `23177645` ab, seit dort
+kein Bypass-Actor mehr eingetragen ist (Issues #238 und #240). Mit der Option
+ändert `npm version` nur `package.json` und `package-lock.json`.
 
 Nach grünen Pflicht-Checks mergen und den Tag auf den gemergten Stand setzen:
 
@@ -143,7 +143,8 @@ gh run watch
 `main` ist über Ruleset `23177645` geschützt: Änderungen brauchen einen Pull
 Request, Force-Push und Löschen sind gesperrt, und die drei Kontexte
 `Tests (macos-14)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` sind
-Pflicht. Das Ruleset hat `target: branch` und erfasst deshalb **nur Branches** —
+Pflicht. In `bypass_actors` steht seit dem 2026-09-20 niemand mehr (#240) —
+die Regeln gelten also auch für den Owner. Das Ruleset hat `target: branch` und erfasst deshalb **nur Branches** —
 Tags kann man ohne PR pushen, was der Release-Weg oben ausnutzt.
 
 ## Release veröffentlichen
@@ -156,9 +157,8 @@ git push origin vX.Y.Z
 ```
 
 Das ist der Punkt ohne Wiederkehr: Der Push startet `release.yml`, und am Ende
-steht ein öffentliches Release. Quittiert GitHub den Push mit
-`Bypassed rule violations for refs/heads/main`, wurde versehentlich doch auf
-`main` geschrieben — dann nachsehen, nicht übergehen.
+steht ein öffentliches Release. Lehnt GitHub den Push ab, zielte er auf `main`
+statt auf den Tag — dann nachsehen, nicht umgehen.
 
 Lauf und Ergebnis:
 

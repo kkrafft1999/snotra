@@ -12,6 +12,12 @@ Force-Push und das Löschen des Branches und macht die drei Kontexte
 `Tests (macos-14)`, `Tests (windows-latest)` und `Tests (ubuntu-latest)` zur
 Pflicht. Ein roter Stand kommt damit nicht durch, auch nicht aus Versehen.
 
+Seit dem 2026-09-20 steht in `bypass_actors` **niemand** mehr (#240). Die
+Regeln gelten damit auch für den Owner: Ein Direkt-Push auf `main` scheitert
+hart, statt still durchzugehen. Der Preis ist ein fehlender Notausgang — läuft
+ein Pflicht-Check einmal nicht mehr an, muss erst das Ruleset angefasst
+werden, bevor wieder etwas nach `main` kann.
+
 Bis zum 2026-09-20 verlangte das Ruleset stattdessen ein Review. Da es in
 einem Solo-Repo niemanden gibt, der es geben könnte, war jeder Merge ein
 Admin-Bypass — und den verweigert die Agent-Umgebung als *Merge Without
@@ -75,9 +81,10 @@ sein Ablauf steht als Diagramm in
 
 Bis zum 2026-09-20 lief der Bump per `npm version` direkt auf `main` und kam
 nur durch den `RepositoryRole`-Bypass durch; GitHub quittierte jedes Release
-mit `Bypassed rule violations for refs/heads/main`. Taucht diese Zeile wieder
-in einer Push-Ausgabe auf, ist etwas am Ablauf vorbeigelaufen — melden, nicht
-übergehen.
+mit `Bypassed rule violations for refs/heads/main`. Beides ist weg: der Bump
+geht über einen PR (#238), der Bypass ist entfernt (#240). Ein Direkt-Push
+wird jetzt abgelehnt — kommt so eine Ablehnung, ist etwas am Ablauf
+vorbeigelaufen, und das gehört gemeldet statt umgangen.
 
 ## Reihenfolge
 
