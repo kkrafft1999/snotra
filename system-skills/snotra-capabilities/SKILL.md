@@ -1,6 +1,6 @@
 ---
 name: snotra-capabilities
-description: Fähigkeiten von Snotra AI selbst — Tools, MCP, Ordnerzugriff, Freigaben, Skills, Einstellungen. Verwenden, wenn der Nutzer fragt, was du oder die App kannst, warum etwas nicht geht, oder wo eine Einstellung sitzt.
+description: Fähigkeiten und Aufbau von Snotra AI selbst — Tools, MCP, Ordnerzugriff, Freigaben, Skills, Einstellungen. Verwenden, wenn der Nutzer fragt, was du oder die App kannst, warum etwas nicht geht oder wo eine Einstellung sitzt — auch bei Fragen zu deiner eigenen Ausstattung: was ein Skill ist, welche eingeschaltet sind, was in deinem Systemprompt steht. Darüber nicht raten, erst laden.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
