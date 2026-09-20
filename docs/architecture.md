@@ -256,6 +256,33 @@ Ordner neu, aber nur die gerade sichtbaren, und nur wenn sich ihr Inhalt
 wirklich geändert hat. Auswahl, Tastaturfokus und Scrollposition werden vor dem
 Neuzeichnen gesichert und danach wiederhergestellt.
 
+## Bilder aus dem Workspace im Chat
+
+Ein vom Modell erzeugtes Bild (`![Diagramm](diagramm.png)`) liegt im
+Projektordner und damit außerhalb des App-Origins. Die CSP des Renderers
+erlaubt `img-src 'self' data:` — geladen wird deshalb **nicht** über ein
+eigenes Protokoll, sondern per IPC als `data:`-URI (Issue
+[#244](https://github.com/kkrafft1999/snotra/issues/244)). Das spart sowohl
+eine CSP-Lockerung als auch eine `protocol.handle`-Registrierung; der Preis ist
+Base64 im Speicher und kein Browser-Caching, wogegen ein Größenlimit von 10 MB
+und ein kleiner Cache im Renderer stehen.
+
+Der Weg: `ChatStream.js` ruft nach dem Sanitizing `applyWorkspaceImages`
+(`renderer/chat/workspaceImages.js`) auf den fertigen `<img>`-Knoten im DOM —
+nie per String-Ersetzung im HTML, DOMPurify läuft unverändert zuerst. Von dort
+geht `fs:readWorkspaceImage` an `fs-service.readWorkspaceImage`, das den Pfad
+(relativ oder absolut) gegen den aktiven Workspace auflöst, ihn lexikalisch
+**und** über `realpath` prüft, den Typ am Dateikopf bestimmt (PNG, JPEG, GIF,
+WebP — kein SVG) und die Größe begrenzt. Zurück kommt `{ mime, base64 }` oder
+ein Grund aus `shared/contracts/workspace-image.js`, zu dem der Renderer einen
+gestalteten Platzhalter baut.
+
+Zwei Eigenheiten hängen am Streaming: Während die Antwort läuft, setzt
+`scheduleStreamRender` je Animation-Frame das komplette `innerHTML` neu —
+Bilder bekommen deshalb bis zum Ende nur einen ruhigen Platzhalter. Und der
+Abschluss bestellt den noch ausstehenden Frame ab (`cancelStreamRender`), sonst
+schriebe er den Zwischenstand über das gerade geladene Bild zurück.
+
 ## Workspace-Verwaltung im Main-Prozess
 
 Der **aktive Workspace** ist die Vertrauensgrenze des Dateisystems: alle

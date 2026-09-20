@@ -1758,6 +1758,77 @@ summary:focus-visible,
   margin: 0.75em 0;
 }
 
+/* ── Bilder aus dem Arbeitsordner in der Antwort (Issue #244) ─────────────
+ * Die Bytes kommen per IPC als data:-URI; hier geht es nur noch darum, dass
+ * ein Diagramm die Blase nicht sprengt. `height: auto` haelt das
+ * Seitenverhaeltnis, auch wenn das Modell Breite/Hoehe mitgeschickt hat. */
+.chat-md .chat-md-image-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+}
+
+/* Kein Bild: gestaltete Flaeche mit Grund statt Broken-Image-Icon. Inline-
+ * Element, weil Markdown das <img> in einen Absatz stellt — ein <div> waere
+ * dort nicht erlaubt. Farben kommen aus den Tokens und tragen Dark damit von
+ * selbst mit. */
+.chat-md-image {
+  display: inline-flex;
+  /* Oben ausgerichtet statt mittig: Bei einem langen Alt-Text stuende das
+   * Zeichen sonst irgendwo in der Mitte eines Textblocks statt neben seiner
+   * ersten Zeile. */
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0.35em 0;
+  padding: 8px 10px;
+  vertical-align: middle;
+  text-align: left;
+  background: var(--ds-grey-card);
+  border: 1px dashed var(--ds-grey-muted);
+  border-radius: var(--ds-radius-md);
+}
+
+/* Waehrend die Antwort laeuft, soll nichts locken: gleiche Geometrie, aber
+ * eine ruhige durchgezogene Kante statt der gestrichelten „hier fehlt was“. */
+.chat-md-image--pending {
+  border-style: solid;
+  border-color: var(--ds-grey-divider);
+}
+
+.chat-md-image-icon {
+  display: flex;
+  flex: 0 0 auto;
+  /* Optischer Ausgleich zur Oberkante der ersten Textzeile (13px/1.3). */
+  margin-top: 1px;
+  color: var(--ds-grey-muted);
+}
+
+.chat-md-image-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+/* Der Alt-Text ist die Aussage des Modells und bleibt vollstaendig stehen —
+ * auch ein langer bricht um, statt die Blase zu verbreitern. */
+.chat-md-image-alt {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.chat-md-image-reason {
+  font-size: 12px;
+  color: var(--ds-grey-strong);
+  overflow-wrap: anywhere;
+}
+
 /* Phase 5: Error-Bubble-Praefix per ::before, damit der Status nicht nur
  * ueber Farbe kommuniziert wird (siehe checklist.md, Status-Block). */
 .chat-msg.error {
