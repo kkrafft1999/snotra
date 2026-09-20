@@ -753,6 +753,25 @@ h2{font-size:clamp(1.8rem,3.6vw,2.9rem);line-height:1.06;font-weight:600;letter-
 }
 .cli-chip.on{border-color:var(--blue-border);color:var(--blue)}
 
+/* MCP-Server-Liste (Saeule 03)
+   Bewusst keine cli-chips: Ein MCP-Server ist kein Befehl in einer Reihe,
+   sondern ein eingetragener Anschluss mit eigener Zeile. Dieselbe Mono-Groesse
+   wie .cli-chip und .minitree, damit die drei Demos einer Saeule zusammengehoeren. */
+.mcp-list{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.mcp-row{
+  display:flex;align-items:center;gap:8px;min-height:24px;
+  font-family:var(--mono);font-size:12px;color:var(--strong);
+}
+.mcp-ico{
+  width:14px;height:14px;flex-shrink:0;
+  fill:none;stroke:var(--blue);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;
+}
+.mcp-name{color:var(--blue)}
+/* auto statt fester Spalte: "9 Werkzeuge" und "9 tools" sind verschieden lang,
+   eine Grid-Spalte muesste fuer beide Sprachen geraten werden.
+   --strong statt --muted: bei 11px gilt die Regel fuer Text < 14px. */
+.mcp-tools{margin-left:auto;color:var(--strong);font-size:11px}
+
 /* ---------- Einsatzfelder ---------- */
 .fields{
   display:grid;grid-template-columns:repeat(var(--cols),1fr);column-gap:var(--gutter);
