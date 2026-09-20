@@ -96,6 +96,29 @@ function sniffImageMime(header) {
 }
 
 /**
+ * Holt aus dem `src` eines gerenderten `<img>` den Pfad zurück, den das Modell
+ * geschrieben hat.
+ *
+ * Nötig, weil Markdown eine URL erzeugt und keinen Dateipfad: `marked`
+ * prozent-kodiert alles, was in einer URL nicht roh stehen darf. Aus
+ * `![x](C:\ws\plot.png)` wird `C:%5Cws%5Cplot.png`, aus `bilder/grün.png`
+ * wird `bilder/gr%C3%BCn.png`, und ein Leerzeichen schreibt das Modell ohnehin
+ * als `%20`. Ohne Rückwandlung fände der Main-Prozess keine dieser Dateien.
+ *
+ * Ist die Kodierung kaputt (einzelnes `%`), bleibt der Rohwert stehen — er
+ * scheitert dann an der Pfadprüfung statt an einer Ausnahme.
+ */
+function decodeWorkspaceImageSource(src) {
+  const raw = typeof src === 'string' ? src.trim() : '';
+  if (!raw.includes('%')) return raw;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
  * Darf dieses `src` überhaupt gegen den Workspace aufgelöst werden?
  *
  * Nein für alles, was schon eine eigene Herkunft nennt: `http(s)://`,
@@ -141,6 +164,7 @@ function workspaceImageDataUrl(result) {
 
 module.exports = {
   MAX_WORKSPACE_IMAGE_BYTES,
+  decodeWorkspaceImageSource,
   WORKSPACE_IMAGE_ERRORS,
   WORKSPACE_IMAGE_ERROR_MESSAGES,
   WORKSPACE_IMAGE_MIME_TYPES,

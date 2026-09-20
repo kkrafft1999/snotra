@@ -181,3 +181,20 @@ test('ein Knoten ohne Bilder und ein fehlender Knoten laufen ins Leere', async (
   assert.deepEqual(asked, []);
   await flush();
 });
+
+test('die Prozent-Kodierung aus dem Markdown wird zurueckgedreht', async () => {
+  // So kommen die Pfade aus `marked` an: Backslashes, Umlaute und Leerzeichen
+  // stehen dort kodiert. Der Main-Prozess braucht den echten Pfad.
+  const el = bubble(
+    '<p><img src="C:%5Cws%5Cplot.png" alt="Windows">'
+    + '<img src="bilder/gr%C3%BCn.png" alt="Umlaut">'
+    + '<img src="bilder/mein%20plot.png" alt="Leerzeichen"></p>'
+  );
+  await images.applyWorkspaceImages(el, { api, workspaceRoot: '/ws' });
+
+  assert.deepEqual(asked.sort(), [
+    'C:\\ws\\plot.png',
+    'bilder/grün.png',
+    'bilder/mein plot.png',
+  ].sort());
+});

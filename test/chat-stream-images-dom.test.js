@@ -136,11 +136,23 @@ test('waehrend die Antwort laeuft, wird nichts geholt', async () => {
 });
 
 test('ein absoluter Pfad aus dem Workspace kommt genauso an', async () => {
-  const abs = path.join('/ws', 'bilder', 'plot.png');
+  const abs = '/ws/bilder/plot.png';
   show(`![Plot](${abs})`);
   await flush();
 
   assert.deepEqual(asked, [abs]);
+  assert.equal(letzteBlase().querySelector('img').getAttribute('src'), PNG_DATA_URL);
+});
+
+test('ein Windows-Pfad ueberlebt den Weg durch Markdown', async () => {
+  // Markdown erzeugt eine URL: `marked` macht aus `C:\ws\plot.png` das
+  // `src` `C:%5Cws%5Cplot.png`. Ohne Rueckwandlung suchte der Main-Prozess
+  // eine Datei, die es unter diesem Namen nirgends gibt. Plattformunabhaengig
+  // pruefbar, weil hier nur der Renderer beteiligt ist.
+  show(String.raw`![Plot](C:\ws\bilder\plot.png)`);
+  await flush();
+
+  assert.deepEqual(asked, ['C:\\ws\\bilder\\plot.png']);
   assert.equal(letzteBlase().querySelector('img').getAttribute('src'), PNG_DATA_URL);
 });
 

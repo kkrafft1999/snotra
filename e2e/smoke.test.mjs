@@ -307,15 +307,17 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Nur hier pruefbar: happy-dom rendert keine Bilder. Erst Chromium sagt, ob
   // aus dem data:-URI wirklich Pixel werden — `naturalWidth > 0`.
   await mkdir(path.join(workspace, 'bilder'), { recursive: true });
-  await writeFile(path.join(workspace, 'bilder', 'plot.png'), BREITES_PNG);
+  // Leerzeichen im Namen: Im Markdown steht dafuer `%20`, und nur eine
+  // Ruecknahme dieser Kodierung findet die Datei wieder.
+  await writeFile(path.join(workspace, 'bilder', 'mein plot.png'), BREITES_PNG);
   await writeFile(path.join(workspace, 'diagramm.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
-  const absolutesBild = path.join(workspace, 'bilder', 'plot.png');
+  const absolutesBild = path.join(workspace, 'bilder', 'mein plot.png');
   model.queueAnswer({
     match: IMAGE_QUESTION,
     text: [
-      '![Relativ](bilder/plot.png)',
+      '![Relativ](bilder/mein%20plot.png)',
       '',
-      `![Absolut](${absolutesBild.split(path.sep).join('/')})`,
+      `![Absolut](${encodeURI(absolutesBild.split(path.sep).join('/'))})`,
       '',
       '![Fehlt](bilder/gibtsnicht.png)',
       '',

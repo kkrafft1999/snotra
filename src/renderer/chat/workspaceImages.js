@@ -1,6 +1,7 @@
 import contracts from '../generated/contracts.js';
 
 const {
+  decodeWorkspaceImageSource,
   isWorkspaceImageSource,
   workspaceImageErrorMessage,
   workspaceImageDataUrl,
@@ -120,7 +121,9 @@ function markLoaded(img, dataUrl) {
 }
 
 async function resolveOne(img, { api, workspaceRoot }) {
-  const src = img.getAttribute('src') || '';
+  // Markdown liefert eine URL, kein Dateipfad — zurueck in den Pfad, den das
+  // Modell geschrieben hat (Backslashes, Umlaute, Leerzeichen).
+  const src = decodeWorkspaceImageSource(img.getAttribute('src'));
   const altText = img.getAttribute('alt') || '';
 
   if (!isWorkspaceImageSource(src)) {

@@ -12,6 +12,7 @@ const {
   WORKSPACE_IMAGE_ERRORS,
   WORKSPACE_IMAGE_MIME_TYPES,
   sniffImageMime,
+  decodeWorkspaceImageSource,
   isWorkspaceImageSource,
   createWorkspaceImageResult,
   createWorkspaceImageError,
@@ -92,4 +93,17 @@ test('der data:-URI entsteht nur aus einem vollstaendigen Ergebnis', () => {
 
 test('das Groessenlimit ist gesetzt und nicht aus Versehen null', () => {
   assert.equal(MAX_WORKSPACE_IMAGE_BYTES, 10 * 1024 * 1024);
+});
+
+test('aus der Markdown-URL wird wieder der Pfad des Modells', () => {
+  // `marked` erzeugt eine URL, keinen Dateipfad, und kodiert entsprechend.
+  assert.equal(decodeWorkspaceImageSource('C:%5Cws%5Cplot.png'), 'C:\\ws\\plot.png');
+  assert.equal(decodeWorkspaceImageSource('bilder/gr%C3%BCn.png'), 'bilder/grün.png');
+  assert.equal(decodeWorkspaceImageSource('bilder/mein%20plot.png'), 'bilder/mein plot.png');
+  // Ohne „%“ gibt es nichts zu tun — nur trimmen.
+  assert.equal(decodeWorkspaceImageSource('  bilder/plot.png  '), 'bilder/plot.png');
+  // Kaputte Kodierung wirft nicht, sie bleibt stehen und scheitert an der Pfadpruefung.
+  assert.equal(decodeWorkspaceImageSource('100%-fertig.png'), '100%-fertig.png');
+  assert.equal(decodeWorkspaceImageSource('%E0%A4%A.png'), '%E0%A4%A.png');
+  assert.equal(decodeWorkspaceImageSource(null), '');
 });

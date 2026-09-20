@@ -269,7 +269,12 @@ und ein kleiner Cache im Renderer stehen.
 
 Der Weg: `ChatStream.js` ruft nach dem Sanitizing `applyWorkspaceImages`
 (`renderer/chat/workspaceImages.js`) auf den fertigen `<img>`-Knoten im DOM —
-nie per String-Ersetzung im HTML, DOMPurify läuft unverändert zuerst. Von dort
+nie per String-Ersetzung im HTML, DOMPurify läuft unverändert zuerst. Das `src`
+dort ist eine **URL, kein Dateipfad**: `marked` prozent-kodiert, was in einer
+URL nicht roh stehen darf, aus `C:\ws\plot.png` wird `C:%5Cws%5Cplot.png` und
+aus `bilder/grün.png` wird `bilder/gr%C3%BCn.png`. Ohne die Rücknahme in
+`decodeWorkspaceImageSource` fände der Main-Prozess keine Datei mit Leerzeichen,
+Umlaut oder Windows-Trenner. Von dort
 geht `fs:readWorkspaceImage` an `fs-service.readWorkspaceImage`, das den Pfad
 (relativ oder absolut) gegen den aktiven Workspace auflöst, ihn lexikalisch
 **und** über `realpath` prüft, den Typ am Dateikopf bestimmt (PNG, JPEG, GIF,
