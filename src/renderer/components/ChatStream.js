@@ -508,10 +508,13 @@ export function initChatStream({
   async function persistCurrentChat() {
     const persistable = appStore.chatMessages.filter((m) => !m.greeting);
     if (!appStore.currentChatId || persistable.length === 0) return;
+    // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
+    // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
+    // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
+    // gesprochen“, obwohl niemand etwas gesagt hat.
     await api.upsertChatSession({
       id: appStore.currentChatId,
       workspaceRoot: appStore.currentChatWorkspace,
-      updatedAt: Date.now(),
       messages: persistable,
       tokenUsage: appStore.chatTokenUsage,
       // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
