@@ -238,6 +238,49 @@ function normalizeLoadedMessages(raw) {
     .filter(isLoadedMessageWorthKeeping);
 }
 
+/**
+ * Feldweiser Vergleich zweier Werte in Ablageform — reihenfolgenunabhaengig,
+ * damit eine aeltere Verlaufsdatei nicht allein wegen einer anderen
+ * Schluesselreihenfolge als veraendert gilt.
+ */
+function sameStoredValue(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, i) => sameStoredValue(value, b[i]));
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const keysA = Object.keys(a).sort();
+    const keysB = Object.keys(b).sort();
+    if (keysA.length !== keysB.length) return false;
+    if (keysA.some((key, i) => key !== keysB[i])) return false;
+    return keysA.every((key) => sameStoredValue(a[key], b[key]));
+  }
+  return false;
+}
+
+/**
+ * Hat seit dem letzten Speichern ein Zug stattgefunden (Issue #245)?
+ *
+ * `updatedAt` soll die letzte Interaktion mit dem Sprachmodell nennen, nicht
+ * den letzten Schreibvorgang. Sonst wandert ein Chat auf „heute“, nur weil man
+ * ihn geoeffnet, das Modell gewechselt oder den Titel hat nachziehen lassen —
+ * alles drei schreibt die Session, ohne dass ein Wort gewechselt wurde.
+ *
+ * Verglichen wird die Anzahl und die letzte Nachricht: Der Verlauf waechst nur
+ * hinten, ein Zug aendert damit immer mindestens eines von beidem. Die
+ * gespeicherte Seite laeuft vorher noch einmal durch die Sanitisierung, damit
+ * ein Verlauf aus einer aelteren Version nicht schon durch das Nachziehen
+ * seiner Form als veraendert zaehlt.
+ */
+function storedChatMessagesChanged(existingMessages, nextMessages) {
+  const before = sanitizeChatMessagesForStore(existingMessages);
+  const after = Array.isArray(nextMessages) ? nextMessages : [];
+  if (before.length !== after.length) return true;
+  if (after.length === 0) return false;
+  return !sameStoredValue(before[before.length - 1], after[after.length - 1]);
+}
+
 function resolveSessionTitle(sessionRow, messages, existingTitle) {
   const titleRaw = typeof sessionRow.title === 'string' ? sessionRow.title.trim() : '';
   if (titleRaw) return titleRaw;
@@ -294,6 +337,7 @@ module.exports = {
   toolTraceEntryToString,
   toolTraceEntryForStore,
   sanitizeChatMessagesForStore,
+  storedChatMessagesChanged,
   normalizeTokenUsageForStore,
   normalizeLoadedMessages,
   normalizeSessionForStore,

@@ -10,6 +10,7 @@
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 
 const { CHAT_ACTIVATION } = require('../services/chat-session-settings');
+const { storedChatMessagesChanged } = require('../services/chat-history-normalization');
 
 /**
  * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten
@@ -40,6 +41,9 @@ function registerChatHistoryHandlers({
   getActiveWorkspaceRoot = () => null,
   isKnownWorkspaceRoot = async () => false,
   chatSessionSettings = NO_CHAT_SESSION_SETTINGS,
+  // Der Zeitstempel eines Chats entsteht seit Issue #245 hier, nicht im
+  // Renderer. Einspeisbar, damit Tests eine Reihenfolge festlegen koennen.
+  now = () => Date.now(),
 }) {
   async function resolveSessionWorkspaceRoot(sessionRow) {
     const activeRoot = getActiveWorkspaceRoot();
@@ -110,6 +114,11 @@ function registerChatHistoryHandlers({
           messages,
           workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
           ...sessionSettings,
+          // Was der Renderer als Zeitpunkt mitschickt, gilt nicht (Issue #245):
+          // er schreibt die Session auch, wenn gar nichts gesprochen wurde —
+          // beim Verlassen, beim Modellwechsel, beim nachgezogenen Titel. Den
+          // Stempel setzt der Main gleich darunter, und nur fuer einen Zug.
+          updatedAt: undefined,
         },
         {
           existingTitle: titleProvided ? undefined : existing?.title,
@@ -117,6 +126,11 @@ function registerChatHistoryHandlers({
         }
       );
       if (!normalized) return { ok: false };
+      const previousUpdatedAt = Number.isFinite(existing?.updatedAt) ? existing.updatedAt : null;
+      normalized.updatedAt =
+        previousUpdatedAt !== null && !storedChatMessagesChanged(existing.messages, normalized.messages)
+          ? previousUpdatedAt
+          : now();
       const idx = store.sessions.findIndex((x) => x.id === normalized.id);
       if (idx >= 0) store.sessions[idx] = normalized;
       else store.sessions.push(normalized);

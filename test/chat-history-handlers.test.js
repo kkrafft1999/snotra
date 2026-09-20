@@ -17,6 +17,11 @@ const mockProviders = {
 };
 
 async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
+  // Der Zeitstempel kommt seit Issue #245 aus dem Main. Im Test laeuft dafuer
+  // eine eigene Uhr: echte Millisekunden lagen bei aufeinanderfolgenden
+  // Upserts gleichauf, und eine Reihenfolge waere nicht mehr pruefbar.
+  let clock = 1_000_000;
+  const now = () => (clock += 1000);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const storage = createStorageService({
@@ -43,6 +48,7 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
     REQ,
     getActiveWorkspaceRoot: () => activeRoot,
     isKnownWorkspaceRoot: async (folderPath) => knownRoots.has(path.resolve(folderPath)),
+    now,
     ...(chatSessionSettings ? { chatSessionSettings } : {}),
   });
   const setActiveRoot = (root) => {
@@ -51,15 +57,18 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
   const setKnownRoots = (...roots) => {
     knownRoots = new Set(roots.map((r) => path.resolve(r)));
   };
-  return { ipcMain, storage, tmpDir, setActiveRoot, setKnownRoots };
+  return { ipcMain, storage, tmpDir, setActiveRoot, setKnownRoots, now: () => clock };
 }
 
-function sessionRow(id, { updatedAt = 1000, title = `Chat ${id}` } = {}) {
+// `updatedAt` reicht der Renderer seit Issue #245 nicht mehr mit — der Main
+// stempelt selbst. Wo ein Test den Wert noch nennt, prueft er, dass er
+// wirkungslos bleibt.
+function sessionRow(id, { updatedAt, title = `Chat ${id}`, messages } = {}) {
   return {
     id,
     title,
-    updatedAt,
-    messages: [{ role: 'user', content: `hello from ${id}` }],
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+    messages: messages || [{ role: 'user', content: `hello from ${id}` }],
   };
 }
 
@@ -455,4 +464,170 @@ test('ein geloeschter Chat wird auch im Main vergessen', async (t) => {
   await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
 
   assert.deepEqual(chatSessionSettings.calls.forget, ['a']);
+});
+
+// ---------------------------------------------------------------------------
+// Wann ein Chat zuletzt gefuehrt wurde (Issue #245).
+//
+// Der Zeitstempel ist die einzige Zeitangabe einer Session — er traegt die
+// Uhrzeit im Verlauf, dessen Sortierung, die Auswahl des wiederherzustellenden
+// Chats und die Reihenfolge beim Abschneiden. Frueher stempelte der Renderer
+// bei jedem Schreiben, und der schreibt auch, wenn gar nichts gesprochen
+// wurde. Seitdem setzt ihn der Main, und nur bei einem Zug.
+// ---------------------------------------------------------------------------
+
+async function storedSession(storage, id) {
+  const store = await storage.readChatHistoryStore();
+  return store.sessions.find((s) => s.id === id);
+}
+
+test('#245: Oeffnen und Verlassen ohne Eingabe laesst den Zeitpunkt stehen', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  const gefuehrt = (await storedSession(storage, 'a')).updatedAt;
+
+  // Genau das, was der Renderer beim Verlassen eines nur angesehenen Chats
+  // schickt: derselbe Nachrichtenstand noch einmal.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+
+  assert.equal((await storedSession(storage, 'a')).updatedAt, gefuehrt);
+});
+
+test('#245: ein Modell- oder Moduswechsel verschiebt den Zeitpunkt nicht', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings();
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t, { chatSessionSettings });
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  const gefuehrt = (await storedSession(storage, 'a')).updatedAt;
+
+  // Der Nutzer stellt in der Chat-Leiste um; der Main merkt sich den Wert und
+  // gibt ihn beim naechsten Schreiben mit (Issue #211).
+  chatSessionSettings.valuesFor = () => ({
+    modelPresetId: 'preset-neu',
+    toolPermissionMode: 'ask-all',
+  });
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+
+  const stored = await storedSession(storage, 'a');
+  assert.equal(stored.modelPresetId, 'preset-neu', 'der Wert selbst wird gespeichert');
+  assert.equal(stored.toolPermissionMode, 'ask-all');
+  assert.equal(stored.updatedAt, gefuehrt, 'eine Einstellung ist keine Unterhaltung');
+});
+
+test('#245: eine gesendete Nachricht setzt den Zeitpunkt auf jetzt', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  const vorher = (await storedSession(storage, 'a')).updatedAt;
+
+  await ipcMain.invoke(
+    REQ.CHAT_HISTORY_UPSERT,
+    sessionRow('a', {
+      messages: [
+        { role: 'user', content: 'hello from a' },
+        { role: 'user', content: 'und noch eine Frage' },
+      ],
+    })
+  );
+
+  assert.ok((await storedSession(storage, 'a')).updatedAt > vorher);
+});
+
+test('#245: eine eingetroffene Antwort setzt den Zeitpunkt, auch bei gleicher Anzahl', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  const laufend = [
+    { role: 'user', content: 'Was steht in der Datei?' },
+    { role: 'assistant', content: 'Einen Moment' },
+  ];
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { messages: laufend }));
+  const vorher = (await storedSession(storage, 'a')).updatedAt;
+
+  await ipcMain.invoke(
+    REQ.CHAT_HISTORY_UPSERT,
+    sessionRow('a', {
+      messages: [laufend[0], { role: 'assistant', content: 'Die vollstaendige Antwort' }],
+    })
+  );
+
+  assert.ok((await storedSession(storage, 'a')).updatedAt > vorher);
+});
+
+test('#245: ein nachgezogener Titel verschiebt den Zeitpunkt nicht', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { title: '' }));
+  const antwort = (await storedSession(storage, 'a')).updatedAt;
+
+  // Das Modell benennt die Konversation im Hintergrund, nachdem die Antwort
+  // schon steht — der Chat darf dadurch nicht juenger werden als die Antwort.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { title: 'Vom Modell benannt' }));
+
+  const stored = await storedSession(storage, 'a');
+  assert.equal(stored.title, 'Vom Modell benannt');
+  assert.equal(stored.updatedAt, antwort);
+});
+
+test('#245: ein Zeitpunkt aus der Nutzlast gilt nicht', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { updatedAt: 9_999_999_999 }));
+
+  const stored = await storedSession(storage, 'a');
+  assert.notEqual(stored.updatedAt, 9_999_999_999);
+  assert.ok(Number.isFinite(stored.updatedAt));
+});
+
+test('#245: ein nur angesehener Chat bleibt im Verlauf, wo er war', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 10 });
+  setActiveRoot(tmpDir);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('alt'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('neu'));
+
+  // „alt“ geoeffnet, das Modell gewechselt, wieder weggewechselt.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('alt'));
+
+  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(got.sessions.map((s) => s.id), ['neu', 'alt']);
+  assert.ok((await storedSession(storage, 'alt')).updatedAt < (await storedSession(storage, 'neu')).updatedAt);
+});
+
+test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestempelt', async (t) => {
+  const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+
+  // So sah eine Zeile vor der Vereinheitlichung aus: Felder in anderer
+  // Reihenfolge, dazu Reste, die die Sanitisierung heute wegnimmt.
+  const store = await storage.readChatHistoryStore();
+  store.sessions.push({
+    updatedAt: 1234,
+    id: 'legacy',
+    messages: [
+      { content: 'hello from legacy', role: 'user' },
+      { streaming: false, role: 'assistant', content: 'Antwort', toolTrace: [{ text: 'ok' }] },
+    ],
+    title: 'Alter Chat',
+    workspaceRoot: tmpDir,
+  });
+  await storage.writeChatHistoryStore(store);
+
+  // Der Renderer laedt sie und schreibt sie beim Verlassen unveraendert zurueck.
+  const geladen = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const session = geladen.sessions.find((s) => s.id === 'legacy');
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+    id: 'legacy',
+    title: session.title,
+    workspaceRoot: session.workspaceRoot,
+    messages: session.messages,
+  });
+
+  assert.equal((await storedSession(storage, 'legacy')).updatedAt, 1234);
 });

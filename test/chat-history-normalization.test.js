@@ -7,6 +7,7 @@ const {
   normalizeLoadedMessages,
   normalizeSessionForStore,
   normalizeSessionForLoad,
+  storedChatMessagesChanged,
 } = require('../src/main/services/chat-history-normalization');
 
 test('inferChatTitle uses first user message and truncates long text', () => {
@@ -343,4 +344,37 @@ test('ein Chat ohne eigene Wahl bekommt auch keine Felder', () => {
   const loaded = normalizeSessionForLoad({ id: 'alt', updatedAt: 1, messages: [] });
   assert.equal('modelPresetId' in loaded, false);
   assert.equal('toolPermissionMode' in loaded, false);
+});
+
+test('storedChatMessagesChanged erkennt einen Zug, aber kein blosses Wiederschreiben (#245)', () => {
+  const stand = [
+    { role: 'user', content: 'Frage' },
+    { role: 'assistant', content: 'Antwort' },
+  ];
+
+  assert.equal(storedChatMessagesChanged(stand, stand), false);
+  assert.equal(
+    storedChatMessagesChanged(stand, [...stand, { role: 'user', content: 'Nachfrage' }]),
+    true,
+    'eine Nachricht mehr'
+  );
+  assert.equal(
+    storedChatMessagesChanged(stand, [stand[0], { role: 'assistant', content: 'Antwort, vollstaendig' }]),
+    true,
+    'gleiche Anzahl, aber die Antwort ist eingetroffen'
+  );
+  assert.equal(storedChatMessagesChanged(undefined, stand), true, 'ohne Vorstand ist alles neu');
+  assert.equal(storedChatMessagesChanged([], []), false);
+});
+
+test('storedChatMessagesChanged sieht ueber die Form aelterer Verlaeufe hinweg (#245)', () => {
+  // Wie eine alte Zeile auf der Platte steht: andere Schluesselreihenfolge,
+  // dazu Reste, die die Sanitisierung heute wegnimmt.
+  const gespeichert = [
+    { content: 'Frage', role: 'user' },
+    { streaming: false, role: 'assistant', content: 'Antwort', toolTrace: [{ text: 'ok' }], isError: false },
+  ];
+  const heute = sanitizeChatMessagesForStore(gespeichert);
+
+  assert.equal(storedChatMessagesChanged(gespeichert, heute), false);
 });
