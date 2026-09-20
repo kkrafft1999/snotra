@@ -20,7 +20,13 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { setupRendererDom } = require('./helpers/dom.js');
 
-const { SRC_DIR, ELECTRON_ENTRY_POINTS, collectSourceFiles } = require('../scripts/source-files.js');
+const {
+  SRC_DIR,
+  TEST_DIR,
+  ELECTRON_ENTRY_POINTS,
+  collectSourceFiles,
+  collectTestFiles,
+} = require('../scripts/source-files.js');
 
 test('jede Quelldatei laesst sich laden', async (t) => {
   // Die Renderer-Module sind natives ESM und erwarten ein DOM; ohne das
@@ -53,19 +59,25 @@ test('die Ausnahmeliste zeigt auf Dateien, die es noch gibt', () => {
 // das als Escape-Sequenz gemeint war - macht die Datei fuer Git zur
 // Binaerdatei. Der Code laeuft weiter, aber `git diff` zeigt nur noch
 // "Bin 0 -> N bytes", die Datei faellt aus `git grep`, und ein Review sieht die
-// Aenderung nicht mehr. Genau so ist es in #193 passiert (behoben in #202);
-// dieser Waechter faengt den naechsten Fall beim Test statt im Review.
-test('keine Quelldatei enthaelt echte Steuerzeichen', () => {
+// Aenderung nicht mehr. Genau so ist es in #193 passiert (behoben in #202) und
+// in #67 (behoben in #206); dieser Waechter faengt den naechsten Fall beim Test
+// statt im Review. Testdateien zaehlen mit: fuer Git ist der Unterschied
+// zwischen src/ und test/ keiner.
+test('keine Quell- oder Testdatei enthaelt echte Steuerzeichen', () => {
   // Tab, Zeilenumbruch und Wagenruecklauf sind gewoehnlicher Weissraum.
   const erlaubt = new Set([0x09, 0x0a, 0x0d]);
+  const dateien = [
+    ...collectSourceFiles().map((rel) => [`src/${rel}`, path.join(SRC_DIR, rel)]),
+    ...collectTestFiles().map((rel) => [`test/${rel}`, path.join(TEST_DIR, rel)]),
+  ];
   const treffer = [];
-  for (const rel of collectSourceFiles()) {
-    const bytes = fs.readFileSync(path.join(SRC_DIR, rel));
+  for (const [name, full] of dateien) {
+    const bytes = fs.readFileSync(full);
     for (let i = 0; i < bytes.length; i += 1) {
       const byte = bytes[i];
       if ((byte < 0x20 || byte === 0x7f) && !erlaubt.has(byte)) {
         const zeile = bytes.subarray(0, i).toString('utf8').split('\n').length;
-        treffer.push(`${rel}:${zeile} - 0x${byte.toString(16).padStart(2, '0')}`);
+        treffer.push(`${name}:${zeile} - 0x${byte.toString(16).padStart(2, '0')}`);
         break;
       }
     }
