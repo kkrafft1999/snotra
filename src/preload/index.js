@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFolder: () => ipcRenderer.invoke(REQ.DIALOG_OPEN_FOLDER),
   readDirectory: (dirPath) => ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath),
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
+  // Bild aus dem Arbeitsordner fuer eine Chat-Antwort (Issue #244).
+  readWorkspaceImage: (imagePath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_IMAGE, imagePath),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
   // Drag & Drop von aussen (Issue #101). In Electron 44 gibt es File.path
   // nicht mehr; webUtils.getPathForFile ist der dokumentierte Ersatz und einer

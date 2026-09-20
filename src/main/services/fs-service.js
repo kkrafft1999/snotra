@@ -13,6 +13,14 @@ const {
 } = require('./search-line-matcher');
 const { formatBytesDe } = require('../../shared/runtime/format-bytes');
 const {
+  MAX_WORKSPACE_IMAGE_BYTES,
+  WORKSPACE_IMAGE_ERRORS,
+  WORKSPACE_IMAGE_SNIFF_BYTES,
+  sniffImageMime,
+  createWorkspaceImageResult,
+  createWorkspaceImageError,
+} = require('../../shared/contracts/workspace-image');
+const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
   RegexSearchTimeoutError,
   createRegexSearchWorker,
@@ -2331,6 +2339,73 @@ function createFsService({
     };
   }
 
+  /**
+   * Bytes eines Bildes aus dem Arbeitsordner (Issue #244).
+   *
+   * Nimmt den Pfad so, wie ihn das Modell in seine Antwort geschrieben hat:
+   * relativ (`bilder/plot.png`) oder absolut (`/Users/…/ws/plot.png`).
+   * `path.resolve` deckt beides ab — ein absoluter Pfad gewinnt, ein relativer
+   * haengt sich an die Wurzel.
+   *
+   * Geprueft wird zweimal: lexikalisch gegen die Wurzel und danach ueber
+   * `realpath`. Nur das zweite faengt einen Symlink, der aus dem Workspace
+   * herauszeigt — dieselbe Vorsicht wie bei den geschuetzten Pfaden der Tools.
+   *
+   * Skill-Ordner (`skillRoots`) sind hier bewusst keine zweite Wurzel: Fuer
+   * Bilder gilt zunaechst nur der Arbeitsordner.
+   */
+  async function readWorkspaceImage(workspaceRoot, rawPath) {
+    if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) {
+      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NO_WORKSPACE);
+    }
+    const raw = typeof rawPath === 'string' ? rawPath.trim() : '';
+    if (!raw) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
+
+    const root = path.resolve(workspaceRoot);
+    const absPath = path.resolve(root, raw);
+    if (!containsPath(root, absPath)) {
+      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE);
+    }
+
+    let realTarget;
+    let stats;
+    try {
+      const realRoot = await fs.realpath(root);
+      realTarget = await fs.realpath(absPath);
+      if (!containsPath(realRoot, realTarget)) {
+        return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE);
+      }
+      stats = await fs.stat(realTarget);
+    } catch {
+      // Nicht da, haengender Symlink, keine Leseerlaubnis: fuer den Chat ist
+      // das alles dasselbe — es gibt kein Bild.
+      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
+    }
+    if (!stats.isFile()) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
+    if (stats.size > MAX_WORKSPACE_IMAGE_BYTES) {
+      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.TOO_LARGE);
+    }
+
+    let buffer;
+    try {
+      buffer = await fs.readFile(realTarget);
+    } catch {
+      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
+    }
+    // Der Typ haengt am Inhalt, nicht an der Endung: Eine Textdatei namens
+    // `plot.png` darf keinen Ladeversuch ausloesen, und SVG faellt hier
+    // zwangslaeufig durch, weil es keine Kopf-Signatur mitbringt.
+    const mime = sniffImageMime(buffer.subarray(0, WORKSPACE_IMAGE_SNIFF_BYTES));
+    if (!mime) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.UNSUPPORTED_TYPE);
+
+    return createWorkspaceImageResult({
+      mime,
+      base64: buffer.toString('base64'),
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+    });
+  }
+
   async function readFilePreview(filePath) {
     const stats = await fs.stat(filePath);
     const MAX_SIZE = 1024 * 1024; // 1 MB limit for preview
@@ -2369,6 +2444,7 @@ function createFsService({
     inspectImportSources,
     importExternalItems,
     readFilePreview,
+    readWorkspaceImage,
   };
 }
 

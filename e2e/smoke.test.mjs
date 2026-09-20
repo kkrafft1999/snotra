@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
@@ -24,6 +25,7 @@ const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
 const LINK_QUESTION = 'Zeig mir Links.';
+const IMAGE_QUESTION = 'Zeig mir das Diagramm.';
 
 /**
  * Antwort der zweiten Runde: genau das, was der Sanitizer beschneiden muss.
@@ -45,6 +47,52 @@ const ANSWER_WITH_LINKS = [
   '',
   '<iframe src="https://example.com"></iframe>',
 ].join('\n');
+
+/**
+ * Baut ein echtes, graues PNG der gewuenschten Groesse. Selbst gebaut statt
+ * einbasierter Konstante, weil die Breite hier die Aussage traegt: Ein Bild,
+ * das breiter ist als das Chat-Panel, muss auf dessen Breite schrumpfen — das
+ * zeigt nur ein grosses Bild in echtem Chromium.
+ */
+function makePng(width, height) {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;   // 8 Bit je Kanal
+  ihdr[9] = 2;   // Truecolor (RGB)
+  // Eine Bildzeile ist ein Filter-Byte plus drei Bytes je Pixel.
+  const raw = Buffer.alloc(height * (1 + width * 3), 0x80);
+  for (let y = 0; y < height; y += 1) raw[y * (1 + width * 3)] = 0;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** Breiter als jedes Chat-Panel in diesem Test — genau darum geht es. */
+const BREITES_PNG = makePng(1200, 60);
 
 /** Frage abschicken — `page.evaluate` sieht nur, was man ihm mitgibt. */
 function ask(page, question) {
@@ -254,6 +302,94 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }, { what: 'an den Main-Prozess gereichter Link' });
   assert.deepEqual(opened, ['https://example.com/docs']);
   step('Link-Klick geprueft');
+
+  // --- Bilder aus dem Arbeitsordner in der Antwort (Issue #244) -------------
+  // Nur hier pruefbar: happy-dom rendert keine Bilder. Erst Chromium sagt, ob
+  // aus dem data:-URI wirklich Pixel werden — `naturalWidth > 0`.
+  await mkdir(path.join(workspace, 'bilder'), { recursive: true });
+  // Leerzeichen im Namen: Im Markdown steht dafuer `%20`, und nur eine
+  // Ruecknahme dieser Kodierung findet die Datei wieder.
+  await writeFile(path.join(workspace, 'bilder', 'mein plot.png'), BREITES_PNG);
+  await writeFile(path.join(workspace, 'diagramm.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const absolutesBild = path.join(workspace, 'bilder', 'mein plot.png');
+  model.queueAnswer({
+    match: IMAGE_QUESTION,
+    text: [
+      '![Relativ](bilder/mein%20plot.png)',
+      '',
+      `![Absolut](${encodeURI(absolutesBild.split(path.sep).join('/'))})`,
+      '',
+      '![Fehlt](bilder/gibtsnicht.png)',
+      '',
+      '![Vektor](diagramm.svg)',
+      '',
+      '![Draussen](../../etc/hosts)',
+      '',
+      // Nicht wegen des Ergebnisses, sondern wegen des Weges: DOMPurify liest
+      // `C:` als unbekanntes URL-Schema und wuerde das `src` wegwerfen. Ob die
+      // Datei dann existiert, haengt an der Plattform — dass der Pfad
+      // ueberhaupt beim Aufloeser ankommt, nicht.
+      '![Laufwerk](C:/ws/bilder/plot.png)',
+    ].join('\n'),
+  });
+  await ask(page, IMAGE_QUESTION);
+  step('Bild-Frage abgeschickt');
+
+  const bilder = await poll(
+    async () => {
+      const state = await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+        const last = bubbles[bubbles.length - 1];
+        if (!last) return null;
+        return {
+          busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+          geladen: [...last.querySelectorAll('img')].map((img) => ({
+            alt: img.getAttribute('alt'),
+            istDataUri: (img.getAttribute('src') || '').startsWith('data:image/png;base64,'),
+            breite: img.naturalWidth,
+            passtInDieBlase: img.getBoundingClientRect().width <= last.getBoundingClientRect().width,
+          })),
+          platzhalter: [...last.querySelectorAll('.chat-md-image--placeholder')].map((box) => ({
+            alt: box.querySelector('.chat-md-image-alt')?.textContent || '',
+            grund: box.querySelector('.chat-md-image-reason')?.textContent || '',
+            rolle: box.getAttribute('role'),
+          })),
+        };
+      });
+      // Das Aufloesen laeuft ueber IPC und ist einen Tick spaeter dran als das
+      // fertige Markup; direkt danach steht das Dekodieren noch aus. Vor
+      // beidem saehe man 5 rohe <img> und haette nichts gemessen.
+      const fertig = state
+        && !state.busy
+        && state.geladen.length === 2
+        && state.platzhalter.length === 4
+        && state.geladen.every((bild) => bild.breite > 0);
+      return fertig ? state : null;
+    },
+    { what: 'aufgeloeste Bilder in der Antwort' }
+  );
+
+  // Relativ und absolut: beide kommen an, beide sind wirklich dekodiert.
+  assert.deepEqual(bilder.geladen.map((b) => b.alt).sort(), ['Absolut', 'Relativ']);
+  for (const bild of bilder.geladen) {
+    assert.equal(bild.istDataUri, true, `${bild.alt}: kommt als data:-URI`);
+    assert.ok(bild.breite > 0, `${bild.alt}: Chromium hat das Bild wirklich dekodiert`);
+    assert.equal(bild.passtInDieBlase, true, `${bild.alt}: sprengt die Blase nicht`);
+  }
+
+  // Fehlend, SVG und ausserhalb: Platzhalter mit Grund statt Broken-Image-Icon.
+  const gruende = Object.fromEntries(bilder.platzhalter.map((p) => [p.alt, p.grund]));
+  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Laufwerk', 'Vektor']);
+  assert.equal(gruende.Fehlt, 'Bild nicht gefunden');
+  assert.equal(gruende.Vektor, 'Dieses Bildformat wird nicht angezeigt');
+  assert.equal(gruende.Draussen, 'Außerhalb des Arbeitsordners');
+  // Der Laufwerkspfad darf alles sein, nur nicht „gar nicht erst gefragt“ —
+  // genau das waere er ohne die Ausnahme im Sanitizer.
+  assert.notEqual(gruende.Laufwerk, 'Nur Bilder aus dem Arbeitsordner werden angezeigt');
+  for (const p of bilder.platzhalter) {
+    assert.equal(p.rolle, 'img', `${p.alt}: der Platzhalter meldet sich als Bild`);
+  }
+  step('Bilder aus dem Arbeitsordner geprueft');
 
   // --- Einstellungen: oeffnen, Tab wechseln, mit Escape schliessen ----------
   // Es gibt keinen Knopf mehr dafuer: Der Dialog haengt am Menueeintrag

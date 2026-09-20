@@ -15,6 +15,12 @@ const REQUEST_CHANNELS = Object.freeze({
 
   FS_READ_DIRECTORY: 'fs:readDirectory',
   FS_READ_FILE: 'fs:readFile',
+  /**
+   * Bytes eines Bildes aus dem Arbeitsordner als `{ mime, base64 }` (Issue
+   * #244). Braucht einen eigenen Kanal, weil `FS_READ_FILE` Text vorschaut und
+   * hier Typ, Groesse und Symlink-Ausbruch anders geprueft werden.
+   */
+  FS_READ_WORKSPACE_IMAGE: 'fs:readWorkspaceImage',
   FS_MOVE_ITEM: 'fs:moveItem',
   /** Flache Pfadliste des Workspace für die @-Vervollständigung im Chat. */
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',

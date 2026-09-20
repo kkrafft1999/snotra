@@ -120,6 +120,13 @@ function createFilesystemIpcAdapter({
     async resolveWorkspacePath(filePath) {
       return boundPath(filePath);
     },
+    // Bild aus dem Arbeitsordner fuer die Chat-Antwort (Issue #244). Der Pfad
+    // kommt aus dem Markdown des Modells und laeuft deshalb nicht ueber
+    // boundPath(): der darf hier auch relativ sein, und die Fehlergruende sind
+    // Codes fuer den Platzhalter statt Saetze fuer eine Fehlermeldung.
+    async readWorkspaceImage(imagePath) {
+      return fsService.readWorkspaceImage(getActiveWorkspaceRoot(), imagePath);
+    },
     async readFilePreview(filePath) {
       const { absPath, error } = await boundPath(filePath);
       if (error) return { error };

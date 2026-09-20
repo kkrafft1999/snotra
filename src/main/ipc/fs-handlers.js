@@ -63,6 +63,12 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_READ_FILE, async (_event, filePath) =>
     filesystem.readFilePreview(filePath));
 
+  // Issue #244: Bytes eines Bildes aus dem Arbeitsordner als data:-URI-Bausteine.
+  // Der Renderer reicht den Pfad durch, wie das Modell ihn geschrieben hat —
+  // geprueft (Workspace, Symlink, Typ, Groesse) wird ausschliesslich hier.
+  ipcMain.handle(REQ.FS_READ_WORKSPACE_IMAGE, async (_event, imagePath) =>
+    filesystem.readWorkspaceImage(imagePath));
+
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async () =>
     filesystem.listWorkspacePaths());
 

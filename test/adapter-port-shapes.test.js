@@ -57,6 +57,7 @@ const FILESYSTEM_PORT_KEYS = [
   'listWorkspacePaths',
   'resolveWorkspacePath',
   'readFilePreview',
+  'readWorkspaceImage',
 ];
 
 function makeStorageStub() {

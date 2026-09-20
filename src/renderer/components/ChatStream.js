@@ -39,6 +39,9 @@ import { compactToolLinePayload } from '../utils/tool-log-debug.js';
 import { initTokenBreakdownPanel } from './TokenBreakdownPanel.js';
 // Klick auf ein Thumbnail zeigt das Bild gross (Issue #94).
 import { initImageLightbox } from './ImageLightbox.js';
+// Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
+// per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
+import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
 
 const { coerceUsage, createEmptyUsage, inferChatTitle } = contracts;
 
@@ -255,10 +258,15 @@ export function initChatStream({
 
     appendReasoningDetails(bubble, message.reasoningText);
 
+    // Ein noch ausstehender Frame des Streams wuerde gleich wieder den
+    // Zwischenstand schreiben — samt Platzhaltern statt der Bilder (#244).
+    cancelStreamRender();
     const streamEl = bubble.querySelector('.chat-md-streaming');
     if (streamEl) {
       streamEl.classList.remove('chat-md-streaming');
       streamEl.innerHTML = markdownToSafeHtml(message.content || '');
+      // Erst jetzt: Waehrend des Streams stand hier nur ein Platzhalter.
+      void showWorkspaceImages(streamEl);
     }
   }
 
@@ -269,14 +277,31 @@ export function initChatStream({
     syncLiveDot();
   }
 
+  /**
+   * Bilder eines gerenderten Antwort-Knotens aufloesen (Issue #244). Relative
+   * Pfade gelten gegen den **gerade** geoeffneten Ordner — ein in einem anderen
+   * Workspace geoeffneter Verlauf zeigt deshalb Platzhalter statt fremder
+   * Bilder, und auf den frueheren Ordner wird nie zugegriffen.
+   */
+  function showWorkspaceImages(container, { streaming = false } = {}) {
+    return applyWorkspaceImages(container, { api, workspaceRoot: appStore.rootPath, streaming });
+  }
+
   let streamRenderRaf = 0;
+
+  function cancelStreamRender() {
+    if (!streamRenderRaf) return;
+    cancelAnimationFrame(streamRenderRaf);
+    streamRenderRaf = 0;
+  }
 
   function scheduleStreamRender(streamEl, text) {
     if (!streamEl) return;
-    if (streamRenderRaf) cancelAnimationFrame(streamRenderRaf);
+    cancelStreamRender();
     streamRenderRaf = requestAnimationFrame(() => {
       streamRenderRaf = 0;
       streamEl.innerHTML = markdownToSafeHtml(text);
+      void showWorkspaceImages(streamEl, { streaming: true });
       chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     });
   }
@@ -457,6 +482,7 @@ export function initChatStream({
           const stream = document.createElement('div');
           stream.className = 'chat-md-streaming chat-md';
           stream.innerHTML = markdownToSafeHtml(m.content || '');
+          void showWorkspaceImages(stream, { streaming: true });
           li.appendChild(stream);
           approvalCards?.mount(li, m);
         } else {
@@ -478,6 +504,7 @@ export function initChatStream({
           const inner = document.createElement('div');
           inner.className = 'chat-md';
           inner.innerHTML = markdownToSafeHtml(m.content);
+          void showWorkspaceImages(inner);
           li.appendChild(inner);
           // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
           // bleiben an ihrer Nachricht, bis der Chat gewechselt wird.
@@ -825,13 +852,11 @@ export function initChatStream({
                 syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
               }
             }
-            if (
-              p.type === 'workspace'
-              && p.event === 'fileWritten'
-              && typeof p.relativePath === 'string'
-              && typeof onWorkspaceFileWritten === 'function'
-            ) {
-              onWorkspaceFileWritten(p.relativePath);
+            if (p.type === 'workspace' && p.event === 'fileWritten' && typeof p.relativePath === 'string') {
+              // Ein ueberschriebenes Bild traegt seinen neuen Inhalt nicht im
+              // Pfad — der Cache aus #244 zeigte sonst weiter den alten Stand.
+              clearWorkspaceImageCache();
+              if (typeof onWorkspaceFileWritten === 'function') onWorkspaceFileWritten(p.relativePath);
             }
           }, p?.type))
         : () => {};

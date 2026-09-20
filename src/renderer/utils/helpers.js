@@ -1,3 +1,5 @@
+import contracts from '../generated/contracts.js';
+
 const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'js', 'ts', 'jsx', 'tsx', 'json', 'html', 'htm', 'css',
   'scss', 'less', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf',
@@ -42,6 +44,20 @@ let domPurifyConfigured = false;
 
 function configureDomPurify() {
   if (domPurifyConfigured || typeof DOMPurify === 'undefined') return;
+  // Windows-Pfad mit Laufwerksbuchstaben an einem Bild stehen lassen (Issue
+  // #244). DOMPurify liest `D:` als unbekanntes URL-Schema und wirft das
+  // `src` weg — ein absoluter Pfad des Modells kaeme unter Windows also nie
+  // an, waehrend `/Users/…` auf macOS und Linux durchgeht.
+  //
+  // Die Ausnahme ist so eng wie moeglich: nur `<img src>`, nur ein echter
+  // Laufwerkspfad. Sie oeffnet nichts — der Wert wird nie geladen, sondern in
+  // workspaceImages.js durch einen `data:`-URI oder einen Platzhalter ersetzt,
+  // und selbst wenn das ausbliebe, laesst die CSP (`img-src 'self' data:`)
+  // kein `d:` zu. Geprueft wird der Pfad ohnehin erst im Main-Prozess.
+  DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    if (node.tagName !== 'IMG' || data.attrName !== 'src') return;
+    if (contracts.isWindowsDrivePath(data.attrValue)) data.forceKeepAttr = true;
+  });
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (node.tagName === 'A') {
       node.setAttribute('target', '_blank');
