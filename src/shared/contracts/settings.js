@@ -415,6 +415,9 @@ function normalizeUiPrefs(raw) {
     // vorher ein Ausklapper und soll niemanden ungefragt eine Spalte kosten.
     // Deshalb `=== true` statt `!== false`.
     chatHistoryVisible: data.chatHistoryVisible === true,
+    // Chat-Spalte: voreingestellt sichtbar — sie ist der Grund, warum es die
+    // App gibt. Wer sie wegschaltet, findet sie weggeschaltet vor.
+    chatPanelVisible: data.chatPanelVisible !== false,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
@@ -446,6 +449,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.chatHistoryVisible === 'boolean') {
     out.chatHistoryVisible = patch.chatHistoryVisible;
+  }
+  if (typeof patch.chatPanelVisible === 'boolean') {
+    out.chatPanelVisible = patch.chatPanelVisible;
   }
   if (typeof patch.baseSystemPrompt === 'string') {
     out.baseSystemPrompt = patch.baseSystemPrompt;

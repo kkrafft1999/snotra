@@ -102,8 +102,10 @@ export function initSidebarResizer({
     return parsePx(sidebar.style.width) ?? sidebar.getBoundingClientRect().width;
   }
 
+  /** Breite der Chat-Spalte — 0, solange sie weggeschaltet ist. */
   function currentChatWidth() {
     if (!chatPanel) return CHAT_MIN;
+    if (appRoot?.classList.contains('app--no-chat')) return 0;
     const inline = parsePx(chatPanel.style.width);
     if (inline !== null) return inline;
     // Ohne Anzeige fuellt der Chat die ganze Flaeche; gemessen kaeme hier die
@@ -172,7 +174,9 @@ export function initSidebarResizer({
     adjusting = true;
     try {
       const needed = workspaceMin(appRoot, currentSidebarWidth());
-      applyChatWidth(currentChatWidth());
+      // Die weggeschaltete Spalte behaelt ihre gemerkte Breite: Ein
+      // applyChatWidth(0) schriebe sie auf das Minimum fest.
+      if (!appRoot.classList.contains('app--no-chat')) applyChatWidth(currentChatWidth());
 
       if (collapsedForSpace && currentHistoryWidth() === 0) {
         const wanted = widthBeforeSqueeze
@@ -305,6 +309,7 @@ export function initSidebarResizer({
         || isResizing
         || isResizingChat
         || appRoot.classList.contains('app--no-preview')
+        || appRoot.classList.contains('app--no-chat')
       ) {
         carry = 0;
         return;

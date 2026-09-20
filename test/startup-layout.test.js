@@ -64,4 +64,46 @@ test('das Markup startet mit eingeklappter Spalte', () => {
     /aria-pressed="false"/,
     'der Umschalter muss denselben Zustand melden wie das Layout'
   );
+  // Die Chat-Spalte ist die einzige der vier, die offen startet.
+  assert.doesNotMatch(appRoot[0], /class="[^"]*app--no-chat/);
+});
+
+test('die vier Spalten-Schalter stehen in der Titelzeile und melden ihren Zustand', () => {
+  // Gespiegeltes Paar rechts: derselbe Mechanismus wie links, nur fuer Chat
+  // und Verlauf. Faellt einer aus dem Markup, faellt hier der Test und nicht
+  // erst die Verdrahtung in app.js bzw. ChatHistoryPanel.js.
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'renderer', 'index.html'),
+    'utf8'
+  );
+  const titlebar = html.slice(html.indexOf('<header id="titlebar"'), html.indexOf('</header>'));
+  const pressed = (id) => {
+    const btn = titlebar.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
+    assert.ok(btn, `${id} muss in der Titelzeile stehen`);
+    const state = btn[0].match(/aria-pressed="(true|false)"/);
+    assert.ok(state, `${id} muss seinen Zustand melden`);
+    return state[1];
+  };
+  assert.equal(pressed('btn-toggle-sidebar'), 'true');
+  assert.equal(pressed('btn-toggle-content-pane'), 'false');
+  assert.equal(pressed('btn-toggle-chat-panel'), 'true');
+  assert.equal(pressed('btn-toggle-chat-history'), 'false');
+
+  // Der Verlaufs-Schalter sass bis 1.7.1 in der Kopfzeile des Chats; dort darf
+  // er nicht zusaetzlich stehen, sonst gibt es zwei Knoepfe fuer eine Spalte.
+  assert.equal(
+    html.match(/id="btn-toggle-chat-history"/g)?.length,
+    1,
+    'den Verlaufs-Schalter gibt es genau einmal'
+  );
+  assert.doesNotMatch(html, /id="btn-chat-history"/);
+  assert.doesNotMatch(html, /id="btn-chat-history-close"/);
+
+  // Der Knopf fuer einen neuen Chat steht in der Verlaufsspalte — so wie
+  // "Ordner oeffnen" in der Kopfzeile des Baums.
+  const historyHeader = html.slice(
+    html.indexOf('<div id="chat-history-header">'),
+    html.indexOf('id="chat-history-empty"')
+  );
+  assert.match(historyHeader, /id="btn-chat-new"/);
 });

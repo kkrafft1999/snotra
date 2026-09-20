@@ -52,6 +52,29 @@
         </svg>
       </button>
     </div>
+    <!-- Die Spalten-Schalter der rechten Haelfte, gespiegelt zu denen links:
+         aussen am Fensterrand und in der Reihenfolge ihrer Spalten (Chat,
+         dann Verlauf). Das Bild ist dasselbe wie links, nur gespiegelt — die
+         Trennlinie sitzt bei x=10 statt bei x=6, gefuellt ist die Flaeche, die
+         der Knopf schaltet. -->
+    <div class="icon-btn-row">
+      <button type="button" id="btn-toggle-chat-panel" title="Chat ausblenden" aria-label="Chat ausblenden" aria-pressed="true" aria-controls="chat-panel">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 2.5H2.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H10z" fill="currentColor" stroke="none"/>
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+          <line x1="10" y1="2.5" x2="10" y2="13.5"/>
+        </svg>
+      </button>
+      <!-- Startzustand: eingeklappt — genau wie die Klasse app--no-history an
+           #app. Wer das aendert, aendert beides. -->
+      <button type="button" id="btn-toggle-chat-history" title="Chat-Verlauf einblenden" aria-label="Chat-Verlauf einblenden" aria-pressed="false" aria-controls="chat-history">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 2.5h3.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10z" fill="currentColor" stroke="none"/>
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+          <line x1="10" y1="2.5" x2="10" y2="13.5"/>
+        </svg>
+      </button>
+    </div>
   </header>
 
   <main id="app" class="app--no-preview app--no-history">
@@ -179,18 +202,6 @@
             <span id="chat-title">Chat</span>
           </div>
           <div class="chat-header-actions">
-            <button type="button" id="btn-chat-history" title="Verlauf" aria-label="Chat-Verlauf einblenden" aria-expanded="false" aria-controls="chat-history">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </button>
-            <button type="button" id="btn-chat-new" title="Neuer Chat" aria-label="Neuer Chat">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
             <button type="button" id="btn-chat-settings" title="Einstellungen" aria-label="Einstellungen öffnen">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"/>
@@ -290,12 +301,17 @@
       <aside id="chat-history" role="region" aria-label="Chat-Verlauf">
         <div id="chat-history-header">
           <span id="chat-history-title">Verlauf</span>
-          <button type="button" id="btn-chat-history-close" title="Verlauf ausblenden" aria-label="Verlauf ausblenden">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <!-- Gegenstueck zu "Ordner oeffnen" in der Kopfzeile des Baums: Die
+               Aktion, die der Spalte neue Eintraege verschafft, steht in der
+               Spalte. Weggeschaltet wird sie ueber die Titelzeile. -->
+          <div class="icon-btn-row">
+            <button type="button" id="btn-chat-new" title="Neuer Chat" aria-label="Neuer Chat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <p id="chat-history-empty" class="chat-history-empty hidden">Noch keine gespeicherten Chats.</p>
         <div id="chat-history-list" class="chat-history-list"></div>

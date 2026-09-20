@@ -34,6 +34,7 @@ async function mount({
   chatPanelWidth = 320,
   chatHistoryWidth = 260,
   historyOpen = false,
+  chatHidden = false,
   appWidth = 1200,
 } = {}) {
   const dom = setupRendererDom();
@@ -41,6 +42,8 @@ async function mount({
   stubAppWidth(appRoot, appWidth);
   // Die Verlaufsspalte startet im Markup weggeschaltet (Epic #223, Phase B).
   appRoot.classList.toggle('app--no-history', !historyOpen);
+  // Die Chat-Spalte ist ebenso wegschaltbar; app.js setzt die Klasse beim Start.
+  appRoot.classList.toggle('app--no-chat', chatHidden);
 
   const historyVisibility = [];
   const { initSidebarResizer } = await importRenderer('components', 'SidebarResizer.js');
@@ -277,4 +280,43 @@ test('wer den Verlauf selbst zuklappt, findet ihn nicht von allein wieder', asyn
   mounted.resizer.ensureRoomForWorkspace();
 
   assert.deepEqual(mounted.historyVisibility, [], 'nichts darf von selbst aufklappen');
+});
+
+test('die weggeschaltete Chat-Spalte belegt keinen Platz und behaelt ihre Breite', async () => {
+  // Ohne Chat bleibt von der rechten Haelfte nur der Verlauf. Seine Obergrenze
+  // waechst entsprechend — und die gemerkte Chat-Breite darf dabei nicht auf
+  // ihr Minimum zusammenfallen, sonst kaeme der Chat schmaler zurueck, als er
+  // weggegangen ist.
+  const mounted = await mount({
+    historyOpen: true,
+    chatHidden: true,
+    appWidth: 900,
+    sidebarWidth: 280,
+    chatPanelWidth: 420,
+    chatHistoryWidth: 260,
+  });
+
+  assert.equal(width(mounted.chatPanel), 420, 'die gemerkte Breite bleibt stehen');
+  assert.deepEqual(mounted.historyVisibility, [], 'ohne Chat ist genug Platz');
+
+  // Im Markup ist die Anzeige zu, dem Arbeitsbereich bleibt also die
+  // Seitenleiste: 900 - 280 = 620. Wuerde der weggeschaltete Chat mitzaehlen,
+  // blieben davon 200 und die Spalte fiele auf ihr Minimum von 180.
+  // Home schiebt den Trenner nach links, die Spalte rechts davon wird breit.
+  press(mounted.historyDivider, 'Home');
+  assert.equal(width(mounted.chatHistory), 620);
+});
+
+test('ohne Chat und ohne Anzeige bleibt der Verlauf neben der Seitenleiste stehen', async () => {
+  const mounted = await mount({
+    historyOpen: true,
+    chatHidden: true,
+    appWidth: 700,
+    sidebarWidth: 280,
+    chatHistoryWidth: 260,
+  });
+  mounted.appRoot.classList.add('app--no-preview');
+  mounted.resizer.ensureRoomForWorkspace();
+
+  assert.deepEqual(mounted.historyVisibility, [], 'nichts muss weichen');
 });
