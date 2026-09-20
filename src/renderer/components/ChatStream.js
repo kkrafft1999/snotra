@@ -127,6 +127,9 @@ export function initChatStream({
   openSkillSettings,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
   activateChatSession = async () => {},
+  // Meldet, dass der laufende Chat in die Ablage geschrieben wurde — der
+  // Verlauf haengt daran seine Liste nach (Epic #223, Phase B).
+  onChatPersisted = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
@@ -516,6 +519,9 @@ export function initChatStream({
       ...(appStore.currentChatTitle ? { title: appStore.currentChatTitle } : {}),
     });
     await api.setActiveChatId(appStore.currentChatId);
+    // Die Verlaufsspalte steht seit Epic #223 (Phase B) dauerhaft daneben und
+    // wuerde sonst den alten Titel und den alten Zeitpunkt zeigen.
+    onChatPersisted();
   }
 
   /**

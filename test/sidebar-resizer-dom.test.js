@@ -13,6 +13,7 @@ const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
 const SIDEBAR_MIN = 150;
 const SIDEBAR_MAX = 600;
 const CHAT_MIN = 260;
+const HISTORY_MIN = 180;
 
 /**
  * happy-dom kennt kein Layout: getBoundingClientRect() liefert ueberall 0.
@@ -27,24 +28,48 @@ function stubAppWidth(appRoot, width) {
   });
 }
 
-async function mount({ api = {}, sidebarWidth = 280, chatPanelWidth = 320 } = {}) {
+async function mount({
+  api = {},
+  sidebarWidth = 280,
+  chatPanelWidth = 320,
+  chatHistoryWidth = 260,
+  historyOpen = false,
+  appWidth = 1200,
+} = {}) {
   const dom = setupRendererDom();
   const appRoot = dom.document.getElementById('app');
-  stubAppWidth(appRoot, 1200);
+  stubAppWidth(appRoot, appWidth);
+  // Die Verlaufsspalte startet im Markup weggeschaltet (Epic #223, Phase B).
+  appRoot.classList.toggle('app--no-history', !historyOpen);
 
+  const historyVisibility = [];
   const { initSidebarResizer } = await importRenderer('components', 'SidebarResizer.js');
-  initSidebarResizer({
+  const resizer = initSidebarResizer({
     api,
     initialSidebarWidth: sidebarWidth,
     initialChatPanelWidth: chatPanelWidth,
+    initialChatHistoryWidth: chatHistoryWidth,
+    setHistoryVisible: (open) => {
+      historyVisibility.push(open);
+      appRoot.classList.toggle('app--no-history', !open);
+    },
   });
+
+  // app.js raeumt direkt nach dem Aufbau einmal auf; ohne das stuende die
+  // Verlaufsspalte im zu schmalen Fenster bis zur ersten Fensteraenderung da.
+  resizer.ensureRoomForWorkspace();
 
   return {
     dom,
+    resizer,
+    appRoot,
+    historyVisibility,
     divider: dom.document.getElementById('divider'),
     sidebar: dom.document.getElementById('sidebar'),
     chatDivider: dom.document.getElementById('chat-divider'),
     chatPanel: dom.document.getElementById('chat-panel'),
+    historyDivider: dom.document.getElementById('history-divider'),
+    chatHistory: dom.document.getElementById('chat-history'),
   };
 }
 
@@ -57,10 +82,14 @@ function press(element, key, { shiftKey = false } = {}) {
 const width = (element) => parseInt(element.style.width, 10);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('beide Trenner sind als bedienbarer Separator ausgezeichnet', async () => {
-  const { divider, chatDivider } = await mount();
+test('alle Trenner sind als bedienbarer Separator ausgezeichnet', async () => {
+  const { divider, chatDivider, historyDivider } = await mount();
 
-  for (const [name, element] of [['divider', divider], ['chat-divider', chatDivider]]) {
+  for (const [name, element] of [
+    ['divider', divider],
+    ['chat-divider', chatDivider],
+    ['history-divider', historyDivider],
+  ]) {
     assert.equal(element.getAttribute('role'), 'separator', name);
     assert.equal(element.getAttribute('aria-orientation'), 'vertical', name);
     assert.equal(element.getAttribute('tabindex'), '0', name);
@@ -169,4 +198,83 @@ test('der Griff wird nach einem Tastenschritt kurz hervorgehoben', async () => {
 
   await sleep(400);
   assert.equal(divider.classList.contains('dragging'), false);
+});
+
+// ── Verlaufsspalte (Epic #223, Phase B) ────────────────────────────────────
+
+test('der Verlauf waechst, wenn sein Trenner nach links wandert', async () => {
+  const { historyDivider, chatHistory } = await mount({ historyOpen: true, chatHistoryWidth: 260 });
+
+  press(historyDivider, 'ArrowLeft');
+  assert.equal(width(chatHistory), 276);
+
+  press(historyDivider, 'ArrowRight');
+  assert.equal(width(chatHistory), 260);
+
+  press(historyDivider, 'End');
+  assert.equal(width(chatHistory), HISTORY_MIN);
+});
+
+test('die Obergrenze des Chats laesst der Verlaufsspalte ihren Platz', async () => {
+  // Ohne Verlauf reicht der Chat bis zur halben Fensterbreite (1200 / 2).
+  const zu = await mount({ historyOpen: false });
+  press(zu.chatDivider, 'Home');
+  assert.equal(width(zu.chatPanel), 600);
+
+  // Mit 260 px Verlauf bleibt fuer den Chat entsprechend weniger:
+  // 1200 - 280 (Seitenleiste) - 260 = 660, gedeckelt auf die Haelfte.
+  const offen = await mount({ historyOpen: true, chatHistoryWidth: 260 });
+  press(offen.chatDivider, 'Home');
+  assert.equal(width(offen.chatPanel), 600);
+
+  // Eine breite Verlaufsspalte drueckt die Grenze unter die Haelfte.
+  const breit = await mount({ historyOpen: true, chatHistoryWidth: 500 });
+  press(breit.chatDivider, 'Home');
+  assert.equal(width(breit.chatPanel), 420);
+});
+
+test('wird es zu eng, klappt der Verlauf weg statt alles zu quetschen', async () => {
+  const { historyVisibility, appRoot } = await mount({
+    historyOpen: true,
+    appWidth: 700,
+    sidebarWidth: 280,
+    chatPanelWidth: 260,
+    chatHistoryWidth: 180,
+  });
+
+  assert.deepEqual(historyVisibility, [false], 'die Spalte muss von selbst weichen');
+  assert.ok(appRoot.classList.contains('app--no-history'));
+});
+
+test('im breiteren Fenster kommt die weggeklappte Spalte zurueck', async () => {
+  // Erst breit aufsetzen, damit die Spalte ihre gemerkten 260 px wirklich hat.
+  const mounted = await mount({
+    historyOpen: true,
+    appWidth: 1400,
+    sidebarWidth: 280,
+    chatPanelWidth: 260,
+    chatHistoryWidth: 260,
+  });
+  assert.deepEqual(mounted.historyVisibility, [], 'bei 1400 px ist noch Platz');
+  assert.equal(width(mounted.chatHistory), 260);
+
+  stubAppWidth(mounted.appRoot, 700);
+  mounted.resizer.ensureRoomForWorkspace();
+  assert.deepEqual(mounted.historyVisibility, [false]);
+
+  stubAppWidth(mounted.appRoot, 1400);
+  mounted.resizer.ensureRoomForWorkspace();
+  assert.deepEqual(mounted.historyVisibility, [false, true]);
+  assert.equal(width(mounted.chatHistory), 260, 'und zwar in ihrer alten Breite');
+});
+
+test('wer den Verlauf selbst zuklappt, findet ihn nicht von allein wieder', async () => {
+  const mounted = await mount({ historyOpen: true, appWidth: 1400 });
+
+  // So meldet sich der Verlauf, wenn der Nutzer den Knopf gedrueckt hat.
+  mounted.appRoot.classList.add('app--no-history');
+  mounted.resizer.handleHistoryVisibility({ persisted: true });
+  mounted.resizer.ensureRoomForWorkspace();
+
+  assert.deepEqual(mounted.historyVisibility, [], 'nichts darf von selbst aufklappen');
 });

@@ -31,6 +31,10 @@ const SIDEBAR_WIDTH_MIN = 150;
 const SIDEBAR_WIDTH_MAX = 600;
 const CHAT_PANEL_WIDTH_MIN = 260;
 const CHAT_PANEL_WIDTH_MAX = 2000;
+// Verlaufsspalte (Epic #223, Phase B). Schmaler als 180 px bricht die Zeile
+// „Titel + Zeitpunkt" auseinander, breiter als 800 px hat sie nichts zu zeigen.
+const CHAT_HISTORY_WIDTH_MIN = 180;
+const CHAT_HISTORY_WIDTH_MAX = 800;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 
@@ -47,6 +51,11 @@ function clampSidebarWidth(raw) {
 function clampChatPanelWidth(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(CHAT_PANEL_WIDTH_MAX, Math.max(CHAT_PANEL_WIDTH_MIN, Math.round(raw)));
+}
+
+function clampChatHistoryWidth(raw) {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  return Math.min(CHAT_HISTORY_WIDTH_MAX, Math.max(CHAT_HISTORY_WIDTH_MIN, Math.round(raw)));
 }
 
 function clampHistoryCharLimit(raw) {
@@ -373,6 +382,7 @@ function normalizeUiPrefs(raw) {
   }
   const sidebarWidth = clampSidebarWidth(data.sidebarWidth);
   const chatPanelWidth = clampChatPanelWidth(data.chatPanelWidth);
+  const chatHistoryWidth = clampChatHistoryWidth(data.chatHistoryWidth);
   const historyCharLimit = clampHistoryCharLimit(data.historyCharLimit);
   const activeSkills = normalizeActiveSkills(data.activeSkills);
   const ignoredUpdateVersion = typeof data.ignoredUpdateVersion === 'string'
@@ -401,6 +411,10 @@ function normalizeUiPrefs(raw) {
     // Seitenleiste (Issue #167): voreingestellt sichtbar — wer sie wegschaltet,
     // findet sie nach dem Neustart weggeschaltet vor. Deshalb `!== false`.
     sidebarVisible: data.sidebarVisible !== false,
+    // Verlaufsspalte (Epic #223, Phase B): voreingestellt zu — der Verlauf war
+    // vorher ein Ausklapper und soll niemanden ungefragt eine Spalte kosten.
+    // Deshalb `=== true` statt `!== false`.
+    chatHistoryVisible: data.chatHistoryVisible === true,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
@@ -411,6 +425,7 @@ function normalizeUiPrefs(raw) {
     ...(typeof maxToolRounds === 'number' ? { maxToolRounds } : {}),
     ...(typeof sidebarWidth === 'number' ? { sidebarWidth } : {}),
     ...(typeof chatPanelWidth === 'number' ? { chatPanelWidth } : {}),
+    ...(typeof chatHistoryWidth === 'number' ? { chatHistoryWidth } : {}),
     ...(typeof historyCharLimit === 'number' ? { historyCharLimit } : {}),
     ...(typeof ignoredUpdateVersion === 'string' ? { ignoredUpdateVersion } : {}),
     pythonExecutionEnabled,
@@ -428,6 +443,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.sidebarVisible === 'boolean') {
     out.sidebarVisible = patch.sidebarVisible;
+  }
+  if (typeof patch.chatHistoryVisible === 'boolean') {
+    out.chatHistoryVisible = patch.chatHistoryVisible;
   }
   if (typeof patch.baseSystemPrompt === 'string') {
     out.baseSystemPrompt = patch.baseSystemPrompt;
@@ -449,6 +467,10 @@ function normalizeUiPrefsPatch(raw) {
   const chatPanelWidth = clampChatPanelWidth(patch.chatPanelWidth);
   if (typeof chatPanelWidth === 'number') {
     out.chatPanelWidth = chatPanelWidth;
+  }
+  const chatHistoryWidth = clampChatHistoryWidth(patch.chatHistoryWidth);
+  if (typeof chatHistoryWidth === 'number') {
+    out.chatHistoryWidth = chatHistoryWidth;
   }
   const historyCharLimit = clampHistoryCharLimit(patch.historyCharLimit);
   if (typeof historyCharLimit === 'number') {
@@ -725,11 +747,14 @@ module.exports = {
   SIDEBAR_WIDTH_MAX,
   CHAT_PANEL_WIDTH_MIN,
   CHAT_PANEL_WIDTH_MAX,
+  CHAT_HISTORY_WIDTH_MIN,
+  CHAT_HISTORY_WIDTH_MAX,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
   clampMaxToolRounds,
   clampSidebarWidth,
   clampChatPanelWidth,
+  clampChatHistoryWidth,
   clampHistoryCharLimit,
   isAppLocale,
   normalizeDisabledTools,

@@ -70,7 +70,6 @@ export function initFileTree(deps) {
   const welcomeActionsList = document.getElementById('welcome-actions-list');
   const chatInput = document.getElementById('chat-input');
 
-  let historyDrawerCloseOnEscape = null;
 
   // Meldungen des Dateisystem-Watchers laufen nacheinander ab (Issue #158).
   let treeSyncChain = Promise.resolve();
@@ -216,7 +215,7 @@ export function initFileTree(deps) {
 
       // Kein <button> mehr: Der Entfernen-Button (Issue #57) läge sonst in
       // einem Button verschachtelt (ungültiges HTML). Stattdessen eine Zeile
-      // mit role=menuitem und Tastatur-Handling wie im ChatHistoryDrawer.
+      // mit role=menuitem und Tastatur-Handling wie im ChatHistoryPanel.
       const row = document.createElement('div');
       row.className = 'folder-history-item';
       row.setAttribute('role', 'menuitem');
@@ -337,14 +336,11 @@ export function initFileTree(deps) {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    // Phase 5 (Review #21): Escape schliesst auch den Chat-History-Drawer.
-    // Reihenfolge: Folder-History zuerst, dann Chat-History.
+    // Frueher schloss Escape hier auch den Chat-Verlauf. Seit Epic #223
+    // (Phase B) ist der eine Spalte und kein Ausklapper — eine Spalte raeumt
+    // man nicht mit Escape weg, sonst verschwindet sie unter der Hand.
     if (!folderHistoryMenu.classList.contains('hidden')) {
       closeFolderHistoryMenu();
-      return;
-    }
-    if (typeof historyDrawerCloseOnEscape === 'function') {
-      historyDrawerCloseOnEscape();
     }
   });
 
@@ -1035,15 +1031,10 @@ export function initFileTree(deps) {
     infoType.textContent = getExtension(item.name) || 'Unbekannt';
   }
 
-  function setHistoryDrawerCloseOnEscape(fn) {
-    historyDrawerCloseOnEscape = typeof fn === 'function' ? fn : null;
-  }
-
   return {
     openProject,
     refreshFolderHistory,
     refreshWelcomeRecent,
-    setHistoryDrawerCloseOnEscape,
     closeFolderHistoryMenu,
     notifyExternalFileWrite,
   };

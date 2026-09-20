@@ -9,7 +9,7 @@ import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
 import { initSkillSuggestion } from './components/SkillSuggestion.js';
 import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
-import { initChatHistoryDrawer } from './components/ChatHistoryDrawer.js';
+import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateBanner } from './components/UpdateBanner.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
@@ -259,9 +259,18 @@ const chatStream = initChatStream({
   // erst zur Laufzeit.
   openSkillSettings: (skillName) => settingsModal.openSettingsModal({ panel: 'skills', skillName }),
   activateChatSession,
+  // Steht die Verlaufsspalte offen, soll sie den neuen Titel und den neuen
+  // Zeitpunkt gleich zeigen statt erst beim naechsten Einblenden.
+  onChatPersisted: () => {
+    if (chatHistory.isHistoryOpen()) void chatHistory.renderHistoryList();
+  },
 });
 
-const chatHistory = initChatHistoryDrawer({
+// Der Resizer entsteht erst in der Startsequenz, der Verlauf braucht ihn aber
+// schon beim ersten Umschalten — deshalb ueber diesen Merker statt direkt.
+let panelResizer = null;
+
+const chatHistory = initChatHistoryPanel({
   api,
   appStore,
   stopChatVoiceListening: voice.stopChatVoiceListening,
@@ -337,12 +346,6 @@ const fileTree = initFileTree({
   },
 });
 
-fileTree.setHistoryDrawerCloseOnEscape(() => {
-  if (chatHistory.isHistoryDrawerOpen()) {
-    chatHistory.setHistoryDrawerOpen(false);
-  }
-});
-
 async function openFolderViaDialog() {
   const folderPath = await api.openFolder();
   if (folderPath) {
@@ -370,16 +373,27 @@ void initAppVersionBadge({ api });
     // Beim Start ohne Animation: die Leiste soll gleich richtig stehen und
     // nicht erst ins Bild fahren.
     setSidebarVisible(uiPrefs.sidebarVisible !== false, { animate: false });
+    // Der gemerkte Zustand ist kein neuer Wunsch — deshalb nicht zurueck-
+    // schreiben. Die Liste wird erst beim Einblenden gefuellt.
+    if (uiPrefs.chatHistoryVisible === true) {
+      chatHistory.setHistoryOpen(true, { persist: false });
+      void chatHistory.renderHistoryList();
+    }
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
   } catch {
     setSidebarVisible(true, { animate: false });
   }
-  initSidebarResizer({
+  panelResizer = initSidebarResizer({
     api,
     initialSidebarWidth: uiPrefs.sidebarWidth,
     initialChatPanelWidth: uiPrefs.chatPanelWidth,
+    initialChatHistoryWidth: uiPrefs.chatHistoryWidth,
+    // Wird es zu eng, klappt die Spalte weg und im breiteren Fenster wieder
+    // auf — ohne den gemerkten Wunsch des Nutzers zu ueberschreiben.
+    setHistoryVisible: (open) => chatHistory.setHistoryOpen(open, { persist: false }),
   });
+  panelResizer.ensureRoomForWorkspace();
   try {
     const { folderPath } = await api.getLastFolder();
     // openProject meldet false, wenn der Main-Prozess den Ordner nicht mehr

@@ -386,6 +386,38 @@ test('parallel readChatHistoryStore migrates plaintext once under encryption', a
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
+test('readUIPrefs kennt Breite und Zustand der Verlaufsspalte', async () => {
+  // Epic #223, Phase B: Der Verlauf ist eine eigene Spalte und merkt sich
+  // beides. Voreingestellt ist er zu — deshalb `=== true` im Contract.
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  const storage = makeStorage(tmpDir);
+
+  await storage.writeUIPrefs({ contentPaneVisible: true, appLocale: 'de' });
+  let prefs = await storage.readUIPrefs();
+  assert.equal(prefs.chatHistoryVisible, false, 'ohne Angabe bleibt die Spalte zu');
+  assert.equal(prefs.chatHistoryWidth, undefined);
+
+  await storage.writeUIPrefs({
+    contentPaneVisible: true,
+    appLocale: 'de',
+    chatHistoryVisible: true,
+    chatHistoryWidth: 40,
+  });
+  prefs = await storage.readUIPrefs();
+  assert.equal(prefs.chatHistoryVisible, true);
+  assert.equal(prefs.chatHistoryWidth, 180);
+
+  await storage.writeUIPrefs({
+    contentPaneVisible: true,
+    appLocale: 'de',
+    chatHistoryWidth: 9000,
+  });
+  prefs = await storage.readUIPrefs();
+  assert.equal(prefs.chatHistoryWidth, 800);
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});
+
 test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
