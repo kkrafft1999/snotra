@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Project-Instructions-Port (Issue #212): liest die `AGENTS.md`-Kette vom
- * Dateisystem und liefert sie in der Reihenfolge, in der sie im Prompt stehen
- * soll — global vor Projekt, geteilt vor eigen.
+ * Project-Instructions-Port (Issue #212, nachgeschärft in #253): liest die
+ * drei `AGENTS.md`-Quellen vom Dateisystem und liefert sie in der Reihenfolge,
+ * in der sie im Prompt stehen sollen — dieselbe Liste wie bei den Skills
+ * (Issue #251): Workspace, dann `~/.snotra`, dann `~/.agents`.
  *
  * **Bewusst ohne Cache und ohne Watcher.** Vier `readFile`-Aufrufe je Anfrage
  * kosten gegen einen Modellaufruf nichts Messbares; der Skill-Katalog braucht
@@ -42,36 +43,34 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     return typeof home === 'string' && home.trim() ? path.resolve(home) : null;
   }
 
-  /** Die Kette als Paare aus Quelle und absolutem Pfad, in Prompt-Reihenfolge. */
+  /** Die Quellen als Paare aus Quelle und absolutem Pfad, in Lesereihenfolge. */
   function chain(workspaceRoot) {
     const targets = [];
-    const home = homeDir();
-    if (home) {
-      targets.push({
-        source: PROJECT_INSTRUCTION_SOURCES.USER_AGENTS,
-        file: path.join(home, '.agents', PROJECT_INSTRUCTIONS_FILE),
-      });
-      targets.push({
-        source: PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA,
-        file: path.join(home, '.snotra', PROJECT_INSTRUCTIONS_FILE),
-      });
-    }
     const root =
       typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
+    // Im Projekt zaehlt allein `.agents/` — eine AGENTS.md in der Ordnerwurzel
+    // bleibt ungelesen (Issue #253), auch wenn sie anderswo verbreiteter ist.
     if (root) {
-      targets.push({
-        source: PROJECT_INSTRUCTION_SOURCES.WORKSPACE_ROOT,
-        file: path.join(root, PROJECT_INSTRUCTIONS_FILE),
-      });
       targets.push({
         source: PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
         file: path.join(root, '.agents', PROJECT_INSTRUCTIONS_FILE),
       });
     }
+    const home = homeDir();
+    if (home) {
+      targets.push({
+        source: PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA,
+        file: path.join(home, '.snotra', PROJECT_INSTRUCTIONS_FILE),
+      });
+      targets.push({
+        source: PROJECT_INSTRUCTION_SOURCES.USER_AGENTS,
+        file: path.join(home, '.agents', PROJECT_INSTRUCTIONS_FILE),
+      });
+    }
     // Liegt der geöffnete Ordner im Home, fallen Pfade zusammen — `~/.agents`
     // ist dann zugleich `<workspace>/.agents`. Dieselbe Datei zweimal im
     // Prompt wäre doppelt bezahlt und läse sich wie zwei Anweisungen; es
-    // gewinnt der erste Treffer, also die allgemeinere Quelle.
+    // bleibt der erste Treffer stehen.
     const seen = new Set();
     return targets.filter(({ file }) => {
       if (seen.has(file)) return false;

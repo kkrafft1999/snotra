@@ -124,16 +124,17 @@ test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () 
     /aria-describedby="hint-project-instructions"/
   );
   const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
-  // Alle vier Stufen der Kette müssen dort stehen — sonst sucht der Nutzer
-  // die Datei an der falschen Stelle.
-  for (const pfad of [
-    '~/.agents/AGENTS.md',
-    '~/.snotra/AGENTS.md',
-    '&lt;Ordner&gt;/AGENTS.md',
-    '&lt;Ordner&gt;/.agents/AGENTS.md',
-  ]) {
+  // Alle drei Quellen müssen dort stehen — sonst sucht der Nutzer die Datei
+  // an der falschen Stelle.
+  for (const pfad of ['&lt;Ordner&gt;/.agents/AGENTS.md', '~/.snotra/AGENTS.md', '~/.agents/AGENTS.md']) {
     assert.ok(hint.includes(pfad), `der Erklärtext nennt ${pfad}`);
   }
+  // Und der Wegfall der Ordnerwurzel gehört benannt (#253): Wer dort eine
+  // Datei liegen hat, soll nicht raten müssen, warum sie nichts tut.
+  assert.match(hint, /Im Projekt zählt allein/);
+  assert.match(hint, /Ordnerwurzel liest Snotra/);
+  assert.match(hint, /ergänzen einander/,
+    'der Text behauptet keine Rangfolge, sondern sagt, dass alles gemeinsam gilt');
   assert.match(hint, /Anweisung, keine Daten|Anweisung<\/strong>, keine Daten/,
     'und sagt, dass der Inhalt das Verhalten ändert');
 });

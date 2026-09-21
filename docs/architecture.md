@@ -60,9 +60,9 @@ bestehende Importe stabil bleiben.
   Block mit den Projektanweisungen (Issue #212). Wo sie liegen, weiß allein
   `main/adapters/project-instructions-adapter.js`; der Core sieht weder
   `os.homedir()` noch das Dateisystem. Bewusst **ohne Cache und ohne
-  Watcher**: Die Kette ist vier Dateien lang und wird je Anfrage frisch
-  gelesen — anders als der Skill-Katalog, der ganze Verzeichnisse scannt und
-  Frontmatter parst und deshalb beides braucht
+  Watcher**: Es sind drei Dateien, die je Anfrage frisch gelesen werden —
+  anders als der Skill-Katalog, der ganze Verzeichnisse scannt und Frontmatter
+  parst und deshalb beides braucht
 - `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
   Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
   kennt ihn nicht
@@ -870,16 +870,19 @@ Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
    „Umgebungsinformationen mitschicken" in den Einstellungen (Voreinstellung
    an) — der absolute Pfad enthält den Benutzernamen und geht an den Anbieter.
 4. **Projektanweisungen** (`application/chat/project-instructions-prompt.js`,
-   Issue #212) — die `AGENTS.md`-Kette `~/.agents` → `~/.snotra` →
-   `<workspace>` → `<workspace>/.agents`, alle vorhandenen Dateien
-   aneinandergehängt, von allgemein nach speziell. Das Spezifischere steht
-   näher am Ende und gewinnt damit bei Widerspruch, ohne dass die Dateien
-   inhaltlich zusammengeführt werden müssten. Je Datei höchstens 20.000
-   Zeichen (`MAX_PROJECT_INSTRUCTION_CHARS`, gleich der Grenze für
-   Skill-Bodies), Übergroßes wird sichtbar gekürzt statt verworfen, und jede
-   Datei bekommt eine eigene Zeile in der Kontext-Aufschlüsselung (#174).
-   Abschaltbar über „`AGENTS.md` mitschicken" in den Einstellungen
-   (Voreinstellung an).
+   Issue #212, nachgeschärft in #253) — die `AGENTS.md`-Dateien aus
+   `<workspace>/.agents`, `~/.snotra` und `~/.agents`, alle vorhandenen
+   aneinandergehängt. Sie **ergänzen einander und gelten gemeinsam**; keine
+   schlägt eine andere, die Reihenfolge ist deshalb Lese- und keine Rangfolge.
+   Es ist dieselbe Quellenliste wie für Skills (#251) — zwei Ordnungen, die
+   man getrennt lernen müsste, wären teurer als der eine Gleichlauf. Im
+   Projekt zählt allein `.agents/`: Eine `AGENTS.md` in der Ordnerwurzel wird
+   nicht gelesen, obwohl sie außerhalb dieses Projekts die verbreitetere Form
+   ist. Je Datei höchstens 20.000 Zeichen
+   (`MAX_PROJECT_INSTRUCTION_CHARS`, gleich der Grenze für Skill-Bodies),
+   Übergroßes wird sichtbar gekürzt statt verworfen, und jede Datei bekommt
+   eine eigene Zeile in der Kontext-Aufschlüsselung (#174). Abschaltbar über
+   „`AGENTS.md` mitschicken" in den Einstellungen (Voreinstellung an).
 5. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
    `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
    Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.

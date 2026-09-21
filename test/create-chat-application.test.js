@@ -301,8 +301,8 @@ function instructionsPort(files) {
 
 test('AGENTS.md steht im Systemprompt und kennt den offenen Ordner (#212)', async () => {
   const { seen, port } = instructionsPort([
+    { source: PI.WORKSPACE_AGENTS, text: 'Nutze npm.' },
     { source: PI.USER_AGENTS, text: 'Duze mich.' },
-    { source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' },
   ]);
   const { engine, system } = environmentHarness({ projectInstructions: port });
   const result = await engine.send({
@@ -311,18 +311,20 @@ test('AGENTS.md steht im Systemprompt und kennt den offenen Ordner (#212)', asyn
   });
   assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
   assert.match(system(), /Projektanweisungen aus AGENTS\.md/);
-  assert.match(system(), /## AGENTS\.md \(global\)\n\nDuze mich\./);
   assert.match(system(), /## AGENTS\.md \(Projekt\)\n\nNutze npm\./);
+  assert.match(system(), /## AGENTS\.md \(global, Alt-Ort\)\n\nDuze mich\./);
+  // Sie ergaenzen einander — der Prompt stellt keine zur Wahl (#253).
+  assert.match(system(), /ergänzen einander/);
   // Jede Datei taucht einzeln in der Aufschlüsselung auf (#174).
   const ids = result.contextBreakdown.parts.map((part) => part.id);
+  assert.ok(ids.includes('system:agents-md:workspace-agents'), ids.join(', '));
   assert.ok(ids.includes('system:agents-md:user-agents'), ids.join(', '));
-  assert.ok(ids.includes('system:agents-md:workspace-root'), ids.join(', '));
 });
 
 test('die Projektanweisungen stehen vor dem Ordner-/Tool-Block', async () => {
   // Der Ordnerblock trägt die Regel, dass Tool-Ergebnisse Daten sind — sie
   // soll nicht das Letzte sein, was eine fremde AGENTS.md überschreiben kann.
-  const { port } = instructionsPort([{ source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' }]);
+  const { port } = instructionsPort([{ source: PI.WORKSPACE_AGENTS, text: 'Nutze npm.' }]);
   const { engine, system } = environmentHarness({ projectInstructions: port });
   await engine.send({
     sessionId: 'agents-2',
@@ -333,7 +335,7 @@ test('die Projektanweisungen stehen vor dem Ordner-/Tool-Block', async () => {
 });
 
 test('der Schalter „AGENTS.md mitschicken" schaltet die ganze Kette ab', async () => {
-  const { seen, port } = instructionsPort([{ source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' }]);
+  const { seen, port } = instructionsPort([{ source: PI.WORKSPACE_AGENTS, text: 'Nutze npm.' }]);
   const { engine, system } = environmentHarness({
     uiPrefs: { projectInstructionsEnabled: false },
     projectInstructions: port,

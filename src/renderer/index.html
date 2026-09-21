@@ -752,13 +752,18 @@
                 </summary>
                 <div class="settings-note__body">
                   <p>
-                    Gelesen werden bis zu vier Dateien, von allgemein nach speziell:
-                    <code>~/.agents/AGENTS.md</code> (gilt überall, auch für andere Agenten),
-                    <code>~/.snotra/AGENTS.md</code> (gilt überall, nur für Snotra),
-                    <code>&lt;Ordner&gt;/AGENTS.md</code> und <code>&lt;Ordner&gt;/.agents/AGENTS.md</code>
-                    aus dem geöffneten Projekt. Vorhandene Dateien werden in dieser Reihenfolge
-                    angehängt; widersprechen sie sich, gilt die speziellere. Je Datei gehen höchstens
-                    20.000 Zeichen mit, Längeres wird sichtbar gekürzt.
+                    Gelesen werden bis zu drei Dateien:
+                    <code>&lt;Ordner&gt;/.agents/AGENTS.md</code> aus dem geöffneten Projekt,
+                    <code>~/.snotra/AGENTS.md</code> (gilt überall) und
+                    <code>~/.agents/AGENTS.md</code> (gilt überall, älterer Ort, wird weiter
+                    gelesen). Alle vorhandenen <strong>ergänzen einander</strong> und gelten
+                    gemeinsam — keine ersetzt eine andere. Je Datei gehen höchstens 20.000 Zeichen
+                    mit, Längeres wird sichtbar gekürzt.
+                  </p>
+                  <p>
+                    Im Projekt zählt allein <code>.agents/</code>. Eine <code lang="en">AGENTS.md</code>
+                    direkt in der Ordnerwurzel liest Snotra <strong>nicht</strong>, auch wenn das
+                    anderswo die verbreitetere Form ist.
                   </p>
                   <p>
                     Der Inhalt ist <strong>Anweisung, keine Daten</strong> — anders als Tool-Ergebnisse
