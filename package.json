@@ -1,6 +1,6 @@
 {
   "name": "snotra",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "main": "src/main/index.js",
   "productName": "Snotra AI",
   "scripts": {
