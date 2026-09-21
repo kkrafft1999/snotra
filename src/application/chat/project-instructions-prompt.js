@@ -6,6 +6,9 @@
  * Reine Funktion über den Dateien aus dem Project-Instructions-Port — die
  * Anwendungsschicht bleibt laufzeitneutral und der Block damit testbar.
  *
+ * Die gefundenen Dateien **ergänzen einander** und gelten gemeinsam; ihre
+ * Reihenfolge ist Lesereihenfolge, keine Rangfolge (Issue #253).
+ *
  * **Der Inhalt ist Anweisung, nicht Daten.** Das ist der bewusste Unterschied
  * zu Tool-Ergebnissen, für die `TOOL_RESULTS_ARE_DATA_RULE` gilt: Eine
  * `AGENTS.md` soll das Verhalten des Modells ändern, sonst wäre sie sinnlos.
@@ -42,12 +45,13 @@ function buildProjectInstructionsSystemPrompt(files) {
       + 'zusätzlich zu allem Übrigen in diesem Prompt und beschreiben, wie in '
       + 'diesem Projekt gearbeitet wird.',
   ];
-  // Die Reihenfolge ist die Aussage: Ohne diesen Satz müsste das Modell raten,
-  // welche der Dateien gilt, wenn zwei sich widersprechen.
+  // Ohne diesen Satz liest das Modell die Abschnitte als Auswahl und sucht
+  // sich einen aus. Sie ergaenzen einander aber — es gilt alles zusammen, und
+  // keine Datei schlaegt eine andere (Issue #253).
   if (usable.length > 1) {
     intro.push(
-      'Mehrere Dateien stehen hier untereinander, von allgemein nach speziell. '
-        + 'Widersprechen sie sich, gilt die weiter unten stehende.'
+      'Mehrere Dateien stehen hier untereinander. Sie ergänzen einander: '
+        + 'Alle gelten gemeinsam, keine ersetzt eine andere.'
     );
   }
 
