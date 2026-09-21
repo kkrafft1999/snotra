@@ -84,7 +84,7 @@ test('ein gefundenes Update wird gezeigt, aber noch nichts geladen', async (t) =
   // Die Groesse steht im Text — der Nutzer entscheidet mit Kenntnis darueber,
   // was der Klick kostet, ohne dass die Knopfzeile umbricht.
   assert.match(ui.summary(), /die neue Version \(92,0 MB\) herunter/);
-  assert.deepEqual(ui.labels(), ['Herunterladen', 'Überspringen', 'Später']);
+  assert.deepEqual(ui.labels(), ['Herunterladen', 'Später erinnern', 'Diese Version überspringen']);
   assert.deepEqual(ui.calls, [], 'ohne Klick wird nichts geladen');
   assert.match(ui.dom.document.getElementById('modal-update-notes-body').textContent, /Selbst-Update/);
 });
@@ -96,19 +96,35 @@ test('eine Vorab-Version wird als solche benannt', async (t) => {
   assert.equal(ui.title(), 'Version 1.8.0 ist verfügbar (Vorab-Version)');
 });
 
-test('„Später" schliesst nur, „Überspringen" merkt sich die Version', async (t) => {
+test('„Später erinnern" schliesst nur, „überspringen" merkt sich die Version', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Später');
+  await ui.click('Später erinnern');
   assert.equal(ui.isOpen(), false);
   assert.deepEqual(ui.calls, []);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Überspringen');
+  await ui.click('Diese Version überspringen');
   assert.equal(ui.isOpen(), false);
   assert.deepEqual(ui.calls, ['ignore:1.8.0']);
+});
+
+test('die dauerhafte Wirkung steht in der Beschriftung, nicht im Titel-Text', async (t) => {
+  const ui = await mount();
+  t.after(ui.dom.cleanup);
+  await ui.push({ ...AVAILABLE });
+
+  // Ein `title` waere fuer Tastatur und Touch unsichtbar — die Knoepfe
+  // muessen ihre Wirkung selbst sagen.
+  assert.deepEqual(ui.buttons().map((b) => b.title), ['', '', '']);
+  // Nur einer der beiden Abbrecher wirkt dauerhaft; der steht als dritte
+  // Stufe da, nicht als gleichwertiger Nachbar der Hauptaktion.
+  const skip = ui.buttons().find((b) => b.textContent.includes('überspringen'));
+  assert.equal(skip.className, 'btn-tertiary');
+  assert.equal(ui.buttons()[0].className, 'btn-primary', 'Hauptaktion bleibt vorn');
+  assert.equal(ui.dom.document.activeElement, ui.buttons()[0], 'und behaelt den Fokus');
 });
 
 test('der ganze Weg: laden bestaetigen, dann noch einmal installieren bestaetigen', async (t) => {
@@ -266,7 +282,7 @@ test('ohne moegliches Selbst-Update erklaert der Dialog den Grund und verlinkt',
   });
 
   assert.equal(ui.hint().textContent, 'Snotra AI wurde als Systempaket installiert.');
-  assert.deepEqual(ui.labels(), ['Release-Seite öffnen', 'Überspringen', 'Später']);
+  assert.deepEqual(ui.labels(), ['Release-Seite öffnen', 'Später erinnern', 'Diese Version überspringen']);
 
   await ui.click('Release-Seite öffnen');
   assert.deepEqual(ui.calls, ['open:https://example.test/releases/v1.8.0']);
