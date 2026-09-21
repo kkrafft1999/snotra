@@ -696,9 +696,16 @@ Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
 Die Liste hängt an `onChatPersisted` aus `ChatStream.js` — eine Spalte, die
 dauerhaft danebensteht, darf nicht den Titel von vorhin zeigen.
 
-### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208))
+### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208), [#255](https://github.com/kkrafft1999/snotra/issues/255))
 
-Wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
+Die Spalte ist voreingestellt zu ([#255](https://github.com/kkrafft1999/snotra/issues/255)):
+Ohne gespeicherte Prefs startet die App mit Baum und Chat, `normalizeUiPrefs`
+liest `contentPaneVisible` deshalb als `=== true` statt `!== false` — wie
+`chatHistoryVisible`. Bestandsinstallationen merken davon nichts, weil
+`updateUIPrefs` die normalisierten Prefs vollständig zurückschreibt und dort
+längst `true` steht.
+
+Und wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
 neben dem Startschirm, der für den kalten Start gedacht ist. Die Entscheidung
 darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
 
@@ -710,9 +717,10 @@ darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
    statt es nur anzuwenden — der Start braucht die Auskunft, der Ordnerwechsel
    ignoriert sie.
 3. **`contentPaneVisibleOnStart()`** (`renderer/utils/startupLayout.js`) fügt
-   beides mit der gespeicherten Einstellung zusammen; `app.js` wendet das
-   Ergebnis im `finally` der Startsequenz an, damit ein Fehler beim Laden die
-   Spalte nicht zugeklappt hängen lässt.
+   beides mit der gespeicherten Einstellung zusammen — offen startet die Spalte
+   nur bei `preference === true` und ohne wiederhergestellten Chat; `app.js`
+   wendet das Ergebnis im `finally` der Startsequenz an, damit ein Fehler beim
+   Laden die Spalte nicht zugeklappt hängen lässt.
 
 Die Vorschau lebt in dieser Spalte, deshalb holt ein Klick auf eine Datei sie
 über `revealContentPane` zurück — sonst bliebe der Klick folgenlos.

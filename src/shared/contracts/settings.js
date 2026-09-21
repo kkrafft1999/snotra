@@ -412,7 +412,11 @@ function normalizeUiPrefs(raw) {
     : DEFAULT_SKILL_SUGGESTION_MODE;
   return {
     skillSuggestionMode,
-    contentPaneVisible: data.contentPaneVisible !== false,
+    // Mittlere Anzeige (Issue #255): voreingestellt zu. Wer nichts gespeichert
+    // hat, soll mit Baum und Chat anfangen — die Spalte kommt dazu, wenn man
+    // sie holt. Deshalb `=== true` statt `!== false`; ein gemerktes `true`
+    // bringt sie beim naechsten Start von selbst wieder mit.
+    contentPaneVisible: data.contentPaneVisible === true,
     // Seitenleiste (Issue #167): voreingestellt sichtbar — wer sie wegschaltet,
     // findet sie nach dem Neustart weggeschaltet vor. Deshalb `!== false`.
     sidebarVisible: data.sidebarVisible !== false,
