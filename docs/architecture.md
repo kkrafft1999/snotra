@@ -222,12 +222,23 @@ schiefgehen kann:
 Die Adresse des Pakets verlässt den Main-Prozess nie: Der Renderer erfährt aus
 `checkForUpdate` nur Name und Größe und stößt den Download ohne Parameter an.
 
-Der **Skill-Service** (`services/skills-service.js`) scannt die drei
+Der **Skill-Service** (`services/skills-service.js`) scannt die vier
 Skill-Quellen — die eingebauten System-Skills aus `system-skills/` im
-App-Bundle sowie `.agents/skills/` in Workspace und Home; Verzeichnisse
-anderer Werkzeuge wie `.claude/` bleiben ungelesen — und wird über
-`adapters/skills-adapter.js` als schmaler `skill-port`
-in die Chat-Engine gereicht. Das Parsen des Frontmatters liegt als reine
+App-Bundle, `.agents/skills/` im Workspace sowie im Home `~/.snotra/skills/`
+und `~/.agents/skills/`; Verzeichnisse anderer Werkzeuge wie `.claude/`
+bleiben ungelesen — und wird über `adapters/skills-adapter.js` als schmaler
+`skill-port` in die Chat-Engine gereicht.
+
+`~/.snotra/` ist dabei Snotras **eigenes Benutzerverzeichnis**: die Wurzel für
+nutzerweite Daten, die Snotra gehören und für die es keinen
+herstellerneutralen Standard gibt (Issue #251). `.agents/` bleibt dem
+vorbehalten, worauf sich Werkzeuge geeinigt haben. Seit #251 ist
+`~/.snotra/skills/` der Standardort für globale Skills und geht in der
+Prioritätsreihenfolge dem Alt-Ort `~/.agents/skills/` vor; der Workspace
+bleibt die stärkste Ordner-Quelle. Angelegt wird nichts und migriert wird
+nichts — ein fehlendes Verzeichnis ist wie jedes andere kein Fehler. Vom
+`userData`-Ordner ist das streng getrennt: der ist von Electron verwalteter
+App-Zustand und für Tools gesperrt. Das Parsen des Frontmatters liegt als reine
 Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
 `shared/contracts/skills.js`.
 
@@ -245,7 +256,8 @@ einem verlorenen Ereignis (Issues
 
 Darauf sitzen zwei dünne Hüllen, die nur noch sagen, *was* beobachtet wird:
 
-- `services/skills-watcher.js` — `.agents/skills` in Workspace und Home, mit
+- `services/skills-watcher.js` — `.agents/skills` im Workspace sowie
+  `~/.snotra/skills` und `~/.agents/skills` im Home, jeweils mit
   Vorfahren-Kette (die Verzeichnisse fehlen meistens). Meldet ohne Nutzlast;
   der Skill-Katalog wird ohnehin komplett neu gelesen.
 - `services/workspace-watcher.js` — der Projektordner, rekursiv und ohne Kette

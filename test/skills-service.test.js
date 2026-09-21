@@ -50,6 +50,7 @@ test('liest Ordner-Skills aus Workspace und Home, aber schaltet sie nicht ein', 
   const workspace = path.join(root, 'ws');
   const home = path.join(root, 'home');
   await writeSkill(path.join(workspace, '.agents', 'skills'), 'ws-agents');
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'home-snotra');
   await writeSkill(path.join(home, '.agents', 'skills'), 'home-agents');
   const service = makeService({ home });
 
@@ -59,10 +60,69 @@ test('liest Ordner-Skills aus Workspace und Home, aber schaltet sie nicht ein', 
     skills.map((skill) => [skill.name, skill.source, skill.status]),
     [
       ['ws-agents', SKILL_SOURCES.WORKSPACE_AGENTS, SKILL_STATUS.AVAILABLE],
+      ['home-snotra', SKILL_SOURCES.USER_SNOTRA, SKILL_STATUS.AVAILABLE],
       ['home-agents', SKILL_SOURCES.USER_AGENTS, SKILL_STATUS.AVAILABLE],
     ]
   );
   assert.deepEqual(await service.getActiveSkills({ workspaceRoot: workspace }), []);
+});
+
+// Issue #251: `~/.snotra` ist der neue Standardort für globale Skills. Bei
+// Namensgleichheit gewinnt er gegen den Alt-Ort `~/.agents`, der Workspace
+// aber gegen beide.
+test('bei gleichem Namen gewinnt ~/.snotra gegen ~/.agents', async (t) => {
+  const root = await makeTempTree(t);
+  const home = path.join(root, 'home');
+  const gewinner = await writeSkill(path.join(home, '.snotra', 'skills'), 'doppelt', { body: 'Snotra' });
+  await writeSkill(path.join(home, '.agents', 'skills'), 'doppelt', { body: 'Agents' });
+  const service = makeService({ home });
+
+  const { skills } = await service.listCatalog({ activeSkills: ['doppelt'] });
+
+  assert.deepEqual(
+    skills.map((skill) => [skill.source, skill.status]),
+    [
+      [SKILL_SOURCES.USER_SNOTRA, SKILL_STATUS.ACTIVE],
+      [SKILL_SOURCES.USER_AGENTS, SKILL_STATUS.SHADOWED],
+    ]
+  );
+  assert.ok(skills[1].detail.includes(gewinner), 'der überdeckte Eintrag nennt den Pfad des Gewinners');
+
+  const active = await service.getActiveSkills({ activeSkills: ['doppelt'] });
+  assert.equal(active.length, 1);
+  assert.equal(active[0].body, 'Snotra');
+});
+
+test('der Workspace schlägt auch ~/.snotra', async (t) => {
+  const root = await makeTempTree(t);
+  const workspace = path.join(root, 'ws');
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(workspace, '.agents', 'skills'), 'doppelt', { body: 'Workspace' });
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'doppelt', { body: 'Snotra' });
+  const service = makeService({ home });
+
+  const active = await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['doppelt'] });
+
+  assert.equal(active.length, 1);
+  assert.equal(active[0].source, SKILL_SOURCES.WORKSPACE_AGENTS);
+  assert.equal(active[0].body, 'Workspace');
+});
+
+// Kein Auto-Anlegen: Wer `~/.agents/skills` nutzt, merkt vom neuen Ort nichts.
+test('ein fehlendes ~/.snotra bleibt geräuschlos', async (t) => {
+  const root = await makeTempTree(t);
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(home, '.agents', 'skills'), 'nur-alt');
+  const service = makeService({ home });
+
+  const { skills } = await service.listCatalog({});
+
+  assert.deepEqual(
+    skills.map((skill) => [skill.name, skill.source]),
+    [['nur-alt', SKILL_SOURCES.USER_AGENTS]]
+  );
+  assert.equal(await fs.access(path.join(home, '.snotra')).then(() => true, () => false), false,
+    'der Scan legt nichts an');
 });
 
 // Issue #103: `.claude/` gehoert einem anderen Werkzeug. Snotra liest dort

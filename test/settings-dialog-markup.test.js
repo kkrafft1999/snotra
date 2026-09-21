@@ -61,6 +61,15 @@ test('der Skills-Bereich nennt .claude nicht mehr als Quelle (#103)', () => {
   assert.ok(html.includes('.agents/skills'), 'die verbleibende Quelle steht im Dialog');
 });
 
+// Issue #251: Der Hinweistext soll den neuen Standardort nennen — samt dem
+// Umstand, dass ~/.snotra Snotras eigenes Benutzerverzeichnis ist und der
+// Alt-Ort weiterhin gelesen wird.
+test('der Skills-Bereich nennt ~/.snotra/skills als Standardort (#251)', () => {
+  assert.ok(html.includes('~/.snotra/skills'), 'der neue Standardort steht im Dialog');
+  assert.ok(html.includes('~/.agents/skills'), 'der Alt-Ort steht weiterhin im Dialog');
+  assert.match(html, /Benutzerverzeichnis/, '~/.snotra ist als eigenes Verzeichnis beschrieben');
+});
+
 // Issue #102: Die Shell-Ausfuehrung ist die weitreichendste Einstellung der
 // App — sie braucht einen eigenen Bereich mit sichtbarer Warnung.
 test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis (#102)', () => {

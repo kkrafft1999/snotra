@@ -8,9 +8,9 @@
  * erst nach „Skills neu laden“ auf. Dieser Dienst beobachtet die Quellen und
  * meldet Änderungen, damit der Scan-Cache von selbst verfällt.
  *
- * Beobachtet werden die beiden *Ordner*-Quellen: `<workspace>/.agents/skills`
- * und `~/.agents/skills`. Die System-Skills liegen im App-Bundle und ändern
- * sich zur Laufzeit nicht.
+ * Beobachtet werden die drei *Ordner*-Quellen: `<workspace>/.agents/skills`,
+ * `~/.snotra/skills` und `~/.agents/skills`. Die System-Skills liegen im
+ * App-Bundle und ändern sich zur Laufzeit nicht.
  *
  * Seit Issue #158 steckt die Mechanik in `directory-watcher.js` — dieselbe,
  * die auch den Dateibaum am Dateisystem hält. Hier bleibt nur, was an den
@@ -28,8 +28,8 @@ const {
 
 /**
  * Wie weit dürfen die Wächter aufsteigen? `.agents/skills` → `.agents` →
- * Workspace- bzw. Home-Wurzel. Weiter nicht: Darüber lägen fremde
- * Verzeichnisse, die uns nichts angehen.
+ * Workspace- bzw. Home-Wurzel, ebenso `~/.snotra/skills` → `~/.snotra` → `~`.
+ * Weiter nicht: Darüber lägen fremde Verzeichnisse, die uns nichts angehen.
  */
 const MAX_FALLBACK_LEVELS = 2;
 
@@ -53,8 +53,11 @@ function createSkillsWatcher({ watch, path, os = null, onChange, ...watcherOptio
       typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
     if (root) dirs.push(path.join(root, '.agents', 'skills'));
     const home = homeDir();
-    if (home) dirs.push(path.join(home, '.agents', 'skills'));
-    // Liegt der Workspace im Home, fallen beide Pfade zusammen.
+    if (home) {
+      dirs.push(path.join(home, '.snotra', 'skills'));
+      dirs.push(path.join(home, '.agents', 'skills'));
+    }
+    // Liegt der Workspace im Home, fallen zwei der Pfade zusammen.
     return [...new Set(dirs)];
   }
 

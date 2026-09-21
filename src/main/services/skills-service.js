@@ -3,11 +3,12 @@
 /**
  * Skill-Discovery und -Parsing (Issue #18).
  *
- * Sammelt Skills aus drei Quellen — den eingebauten System-Skills der App,
- * `.agents/skills` im Workspace und `~/.agents/skills` — und liefert einen
- * Katalog für die Einstellungen sowie die Bodies der eingeschalteten Skills
- * für den Systemprompt. Verzeichnisse anderer Werkzeuge, insbesondere
- * `.claude/`, liest Snotra bewusst nicht (Issue #103).
+ * Sammelt Skills aus vier Quellen — den eingebauten System-Skills der App,
+ * `.agents/skills` im Workspace, `~/.snotra/skills` (Standardort für globale
+ * Skills, Issue #251) und `~/.agents/skills` (kompatibler Alt-Ort) — und
+ * liefert einen Katalog für die Einstellungen sowie die Bodies der
+ * eingeschalteten Skills für den Systemprompt. Verzeichnisse anderer
+ * Werkzeuge, insbesondere `.claude/`, liest Snotra bewusst nicht (Issue #103).
  *
  * Gescannt wird beim ersten Zugriff je Workspace, danach liefert der Cache.
  * Verworfen wird er von `reload()` — entweder durch den Datei-Watcher, der
@@ -53,6 +54,9 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     }
     const home = homeDir();
     if (home) {
+      // `~/.snotra/` gehört Snotra allein und ist der Standardort; der ältere
+      // `~/.agents/skills` bleibt lesbar und kommt deshalb dahinter.
+      dirs.push({ source: SKILL_SOURCES.USER_SNOTRA, dir: path.join(home, '.snotra', 'skills') });
       dirs.push({ source: SKILL_SOURCES.USER_AGENTS, dir: path.join(home, '.agents', 'skills') });
     }
     return dirs;

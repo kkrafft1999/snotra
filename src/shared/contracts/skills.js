@@ -7,9 +7,12 @@
  * - **System-Skills** sind fest in die App eingebaut (`system-skills/` im
  *   App-Bundle). Sie werden nicht installiert, sind immer vorhanden und
  *   laufen ansonsten durch dieselbe Registry wie alles andere.
- * - **Ordner-Skills** liegen im Workspace oder im Home-Verzeichnis unter
- *   `.agents/skills/`. Andere Werkzeugverzeichnisse — insbesondere
- *   `.claude/` — liest Snotra bewusst nicht (Issue #103).
+ * - **Ordner-Skills** liegen im Workspace unter `.agents/skills/` oder global
+ *   unter `~/.snotra/skills/`. `~/.snotra/` ist die Wurzel für Snotra-eigene
+ *   Nutzerdaten und seit Issue #251 der Standardort für globale Skills;
+ *   `~/.agents/skills/` bleibt als kompatibler Alt-Ort lesbar. Andere
+ *   Werkzeugverzeichnisse — insbesondere `.claude/` — liest Snotra bewusst
+ *   nicht (Issue #103).
  *
  * CommonJS, damit Main (require) und der Renderer (generiertes ESM-Bundle)
  * dieselben Werte sehen.
@@ -29,12 +32,20 @@ const SKILL_SOURCES = Object.freeze({
   /** Eingebaut, Teil der App — kann nicht überschrieben werden. */
   SYSTEM: 'system',
   WORKSPACE_AGENTS: 'workspace-agents',
+  /** Standardort für globale Skills (Issue #251). */
+  USER_SNOTRA: 'user-snotra',
+  /** Kompatibler Alt-Ort, weiterhin gelesen. */
   USER_AGENTS: 'user-agents',
 });
 
+/**
+ * Der Workspace bleibt die stärkste Ordner-Quelle; unter den globalen gewinnt
+ * der neue Standardort vor dem Alt-Ort (entschieden am 2026-09-21, #251).
+ */
 const SKILL_SOURCE_ORDER = Object.freeze([
   SKILL_SOURCES.SYSTEM,
   SKILL_SOURCES.WORKSPACE_AGENTS,
+  SKILL_SOURCES.USER_SNOTRA,
   SKILL_SOURCES.USER_AGENTS,
 ]);
 
@@ -42,7 +53,8 @@ const SKILL_SOURCE_ORDER = Object.freeze([
 const SKILL_SOURCE_LABELS = Object.freeze({
   [SKILL_SOURCES.SYSTEM]: 'System-Skills (eingebaut)',
   [SKILL_SOURCES.WORKSPACE_AGENTS]: 'Ordner · .agents/skills',
-  [SKILL_SOURCES.USER_AGENTS]: 'Benutzer · ~/.agents/skills',
+  [SKILL_SOURCES.USER_SNOTRA]: 'Benutzer · ~/.snotra/skills',
+  [SKILL_SOURCES.USER_AGENTS]: 'Benutzer · ~/.agents/skills (Alt-Ort)',
 });
 
 const SKILL_STATUS = Object.freeze({
