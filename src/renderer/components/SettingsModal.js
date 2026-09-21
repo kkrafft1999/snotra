@@ -148,6 +148,7 @@ export function initSettingsModal(deps) {
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
+  const inputProjectInstructions = document.getElementById('input-project-instructions');
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
   const btnReloadSkills = document.getElementById('btn-reload-skills');
@@ -1554,6 +1555,9 @@ export function initSettingsModal(deps) {
       }
       if (inputShellEnabled) inputShellEnabled.checked = up.shellExecutionEnabled === true;
       if (inputEnvironmentInfo) inputEnvironmentInfo.checked = up.environmentInfoEnabled !== false;
+      if (inputProjectInstructions) {
+        inputProjectInstructions.checked = up.projectInstructionsEnabled !== false;
+      }
     } catch {
       inputGlobalSystemPrompt.value = '';
       selectAppLocale.value = 'de';
@@ -1565,6 +1569,7 @@ export function initSettingsModal(deps) {
       // Beim Lesefehler die Voreinstellung zeigen, nicht „aus" — sonst
       // schaltet ein blosses Oeffnen-und-Speichern den Block unbemerkt ab.
       if (inputEnvironmentInfo) inputEnvironmentInfo.checked = true;
+      if (inputProjectInstructions) inputProjectInstructions.checked = true;
     }
     await loadPythonState();
     await loadShellState();
@@ -1877,6 +1882,7 @@ export function initSettingsModal(deps) {
           pythonInterpreterPath: inputPythonInterpreter?.value || '',
           shellExecutionEnabled: inputShellEnabled?.checked === true,
           environmentInfoEnabled: inputEnvironmentInfo?.checked !== false,
+          projectInstructionsEnabled: inputProjectInstructions?.checked !== false,
         },
       });
       if (res?.ok || res?.uiPrefsSaved) {

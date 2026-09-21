@@ -56,6 +56,13 @@ bestehende Importe stabil bleiben.
   Systemversion, Shell und Tagesdatum. Ermittelt werden sie im
   `main/adapters/environment-adapter.js` — der Core selbst sieht weder
   `process.platform` noch das Dateisystem
+- `project-instructions-port` — die gefundenen `AGENTS.md`-Dateien für den
+  Block mit den Projektanweisungen (Issue #212). Wo sie liegen, weiß allein
+  `main/adapters/project-instructions-adapter.js`; der Core sieht weder
+  `os.homedir()` noch das Dateisystem. Bewusst **ohne Cache und ohne
+  Watcher**: Die Kette ist vier Dateien lang und wird je Anfrage frisch
+  gelesen — anders als der Skill-Katalog, der ganze Verzeichnisse scannt und
+  Frontmatter parst und deshalb beides braucht
 - `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
   Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
   kennt ihn nicht
@@ -843,7 +850,7 @@ lokale Sperrklinke, keine Merge-Bedingung.
 
 ## Systemprompt
 
-Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
+Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
 (`application/chat/chat-engine.js`), in dieser Reihenfolge:
 
 1. **Basisprompt** aus den Einstellungen — steht vorn und behält den Vorrang.
@@ -862,9 +869,29 @@ Der Systemprompt wird pro Anfrage aus vier Bausteinen zusammengesetzt
    der Anbieter nicht bei jeder Nachricht bricht. Abschaltbar über
    „Umgebungsinformationen mitschicken" in den Einstellungen (Voreinstellung
    an) — der absolute Pfad enthält den Benutzernamen und geht an den Anbieter.
-4. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
+4. **Projektanweisungen** (`application/chat/project-instructions-prompt.js`,
+   Issue #212) — die `AGENTS.md`-Kette `~/.agents` → `~/.snotra` →
+   `<workspace>` → `<workspace>/.agents`, alle vorhandenen Dateien
+   aneinandergehängt, von allgemein nach speziell. Das Spezifischere steht
+   näher am Ende und gewinnt damit bei Widerspruch, ohne dass die Dateien
+   inhaltlich zusammengeführt werden müssten. Je Datei höchstens 20.000
+   Zeichen (`MAX_PROJECT_INSTRUCTION_CHARS`, gleich der Grenze für
+   Skill-Bodies), Übergroßes wird sichtbar gekürzt statt verworfen, und jede
+   Datei bekommt eine eigene Zeile in der Kontext-Aufschlüsselung (#174).
+   Abschaltbar über „`AGENTS.md` mitschicken" in den Einstellungen
+   (Voreinstellung an).
+5. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
    `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
    Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.
+
+Die Reihenfolge der letzten beiden ist Absicht: Der Inhalt einer `AGENTS.md`
+ist **Anweisung, keine Daten** — anders als Tool-Ergebnisse, für die
+`TOOL_RESULTS_ARE_DATA_RULE` gilt. Sie soll das Verhalten des Modells ändern,
+sonst wäre sie sinnlos; vertretbar ist das, weil der Nutzer den Ordner selbst
+geöffnet hat. Genau deshalb steht sie **vor** dem Ordner-/Tool-Block und nicht
+dahinter: Die Regel, dass Tool-Ergebnisse Daten sind, soll nicht das Letzte
+sein, was eine fremde Anweisungsdatei überschreiben könnte. Die Notbremse ist
+der Schalter, nicht die Platzierung.
 
 ### Grundausstattung der Tools
 

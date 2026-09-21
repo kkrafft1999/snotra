@@ -184,7 +184,7 @@ test('createChatApplication kommt ohne Skill-Service aus', async () => {
 
 /* ── Umgebungsangaben im Systemprompt (Issue #138) ───────────────────────── */
 
-function environmentHarness({ uiPrefs = {}, environment } = {}) {
+function environmentHarness({ uiPrefs = {}, environment, projectInstructions } = {}) {
   const calls = [];
   const engine = createChatApplication({
     llmConfigStore: {
@@ -205,6 +205,7 @@ function environmentHarness({ uiPrefs = {}, environment } = {}) {
     uiPrefsStore: { readUIPrefs: async () => uiPrefs },
     toolRegistry: { getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' },
     environment,
+    projectInstructions,
     path,
     maxToolRounds: 2,
   }).engine;
@@ -278,5 +279,85 @@ test('ohne Environment-Port und bei einer werfenden Quelle läuft der Chat weite
     });
     assert.equal(result.content, 'ok');
     assert.ok(!system().includes('Umgebung, in der du gerade läufst'));
+  }
+});
+
+/* ── Projektanweisungen aus AGENTS.md (Issue #212) ───────────────────────── */
+
+const { PROJECT_INSTRUCTION_SOURCES: PI } = require('../src/shared/contracts/project-instructions');
+
+function instructionsPort(files) {
+  const seen = [];
+  return {
+    seen,
+    port: {
+      load: async (options) => {
+        seen.push(options);
+        return files;
+      },
+    },
+  };
+}
+
+test('AGENTS.md steht im Systemprompt und kennt den offenen Ordner (#212)', async () => {
+  const { seen, port } = instructionsPort([
+    { source: PI.USER_AGENTS, text: 'Duze mich.' },
+    { source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' },
+  ]);
+  const { engine, system } = environmentHarness({ projectInstructions: port });
+  const result = await engine.send({
+    sessionId: 'agents-1',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
+  assert.match(system(), /Projektanweisungen aus AGENTS\.md/);
+  assert.match(system(), /## AGENTS\.md \(global\)\n\nDuze mich\./);
+  assert.match(system(), /## AGENTS\.md \(Projekt\)\n\nNutze npm\./);
+  // Jede Datei taucht einzeln in der Aufschlüsselung auf (#174).
+  const ids = result.contextBreakdown.parts.map((part) => part.id);
+  assert.ok(ids.includes('system:agents-md:user-agents'), ids.join(', '));
+  assert.ok(ids.includes('system:agents-md:workspace-root'), ids.join(', '));
+});
+
+test('die Projektanweisungen stehen vor dem Ordner-/Tool-Block', async () => {
+  // Der Ordnerblock trägt die Regel, dass Tool-Ergebnisse Daten sind — sie
+  // soll nicht das Letzte sein, was eine fremde AGENTS.md überschreiben kann.
+  const { port } = instructionsPort([{ source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' }]);
+  const { engine, system } = environmentHarness({ projectInstructions: port });
+  await engine.send({
+    sessionId: 'agents-2',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  const text = system();
+  assert.ok(text.indexOf('Projektanweisungen aus AGENTS.md') < text.indexOf('geöffneten Ordner'));
+});
+
+test('der Schalter „AGENTS.md mitschicken" schaltet die ganze Kette ab', async () => {
+  const { seen, port } = instructionsPort([{ source: PI.WORKSPACE_ROOT, text: 'Nutze npm.' }]);
+  const { engine, system } = environmentHarness({
+    uiPrefs: { projectInstructionsEnabled: false },
+    projectInstructions: port,
+  });
+  const result = await engine.send({
+    sessionId: 'agents-3',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.deepEqual(seen, [], 'abgeschaltet wird gar nicht erst gelesen');
+  assert.ok(!system().includes('Projektanweisungen aus AGENTS.md'));
+  assert.ok(!result.contextBreakdown.parts.some((part) => part.id.startsWith('system:agents-md:')));
+  assert.match(system(), /geöffneten Ordner/);
+});
+
+test('ohne Port, ohne Dateien und bei einer werfenden Quelle läuft der Chat weiter', async () => {
+  const kaputt = { load: async () => { throw new Error('kaputt'); } };
+  const leer = { load: async () => [] };
+  for (const projectInstructions of [undefined, leer, kaputt]) {
+    const { engine, system } = environmentHarness({ projectInstructions });
+    const result = await engine.send({
+      sessionId: 'agents-4',
+      payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+    });
+    assert.equal(result.content, 'ok');
+    assert.ok(!system().includes('Projektanweisungen aus AGENTS.md'));
   }
 });

@@ -102,6 +102,42 @@ test('der Bereich „Allgemein“ hat einen Schalter für Umgebungsinformationen
   assert.match(hint, /Anbieter/, 'und wohin sie geht');
 });
 
+// Issue #212: Derselbe Platz, dieselbe Begruendungspflicht — der Schalter
+// entscheidet, ob fremde Anweisungen aus einem geoeffneten Ordner wirken.
+test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () => {
+  assert.equal(html.split('id="input-project-instructions"').length - 1, 1);
+
+  const panelStart = html.indexOf('id="panel-settings-general"');
+  const panelEnd = html.indexOf('</section>', panelStart);
+  const panel = html.slice(panelStart, panelEnd);
+  const toggleAt = panel.indexOf('id="input-project-instructions"');
+  assert.ok(toggleAt > -1, 'der Schalter liegt im Allgemein-Panel');
+  assert.ok(
+    toggleAt > panel.indexOf('id="input-global-system-prompt"'),
+    'er steht hinter dem System-Prompt, den er ergänzt'
+  );
+
+  const hintAt = panel.indexOf('id="hint-project-instructions"');
+  assert.ok(hintAt > -1, 'zum Schalter gehört ein Erklärtext');
+  assert.match(
+    panel.slice(toggleAt, hintAt + 400),
+    /aria-describedby="hint-project-instructions"/
+  );
+  const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
+  // Alle vier Stufen der Kette müssen dort stehen — sonst sucht der Nutzer
+  // die Datei an der falschen Stelle.
+  for (const pfad of [
+    '~/.agents/AGENTS.md',
+    '~/.snotra/AGENTS.md',
+    '&lt;Ordner&gt;/AGENTS.md',
+    '&lt;Ordner&gt;/.agents/AGENTS.md',
+  ]) {
+    assert.ok(hint.includes(pfad), `der Erklärtext nennt ${pfad}`);
+  }
+  assert.match(hint, /Anweisung, keine Daten|Anweisung<\/strong>, keine Daten/,
+    'und sagt, dass der Inhalt das Verhalten ändert');
+});
+
 // Der Umschalter fuer hell/dunkel sass bis v1.7.3 als Knopf in der
 // Titelleiste. Er steht jetzt unter „Allgemein" — und nur dort, sonst gaebe es
 // zwei Bedienstellen fuer eine Einstellung.

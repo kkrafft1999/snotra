@@ -194,6 +194,14 @@ test('normalizeUiPrefs schickt Umgebungsinformationen standardmäßig mit', () =
   assert.equal('environmentInfoEnabled' in normalizeUiPrefsPatch({ environmentInfoEnabled: 0 }), false);
   assert.equal(normalizeUiPrefsPatch({ environmentInfoEnabled: false }).environmentInfoEnabled, false);
   assert.equal(normalizeUiPrefsPatch({ environmentInfoEnabled: true }).environmentInfoEnabled, true);
+
+  // Projektanweisungen aus AGENTS.md (#212) — dieselbe Mechanik.
+  assert.equal(normalizeUiPrefs({}).projectInstructionsEnabled, true);
+  assert.equal(normalizeUiPrefs({ projectInstructionsEnabled: 'nein' }).projectInstructionsEnabled, true);
+  assert.equal(normalizeUiPrefs({ projectInstructionsEnabled: false }).projectInstructionsEnabled, false);
+  assert.equal('projectInstructionsEnabled' in normalizeUiPrefsPatch({ projectInstructionsEnabled: 0 }), false);
+  assert.equal(normalizeUiPrefsPatch({ projectInstructionsEnabled: false }).projectInstructionsEnabled, false);
+  assert.equal(normalizeUiPrefsPatch({ projectInstructionsEnabled: true }).projectInstructionsEnabled, true);
 });
 
 test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
