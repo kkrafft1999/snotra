@@ -320,3 +320,46 @@ test('ohne Chat und ohne Anzeige bleibt der Verlauf neben der Seitenleiste stehe
 
   assert.deepEqual(mounted.historyVisibility, [], 'nichts muss weichen');
 });
+
+test('beim Erststart bekommt die Spalte den Startschirm und der Chat den Rest', async () => {
+  // Issue #258: Ohne Ordner steht in der mittleren Spalte der Startschirm, und
+  // der ist 560 + 2 x 32 = 624 px breit. Alles darueber waere Leerraum —
+  // deshalb geht der Rest an den Chat.
+  const mounted = await mount({
+    appWidth: 1536,
+    sidebarWidth: 260,
+    chatPanelWidth: undefined,
+  });
+  mounted.appRoot.classList.remove('app--no-preview');
+
+  assert.equal(mounted.resizer.fitChatToWelcome(), 1536 - 260 - 624);
+  assert.equal(width(mounted.chatPanel), 652);
+
+  // Ist die Seitenleiste weggeschaltet, belegt sie nichts — der Chat bekommt
+  // ihre Breite dazu, statt sie an Leerraum neben dem Startschirm zu verlieren.
+  mounted.appRoot.classList.add('app--no-sidebar');
+  assert.equal(mounted.resizer.fitChatToWelcome(), 1536 * 0.5, 'gedeckelt bei der Haelfte');
+});
+
+test('im schmalen Fenster deckelt die halbe Breite den Chat', async () => {
+  // 900 - 260 - 624 = 16 px blieben dem Chat — das unterschreitet sein
+  // Minimum. Dann ist die Spalte eben schmaler als der Startschirm gern haette.
+  const mounted = await mount({
+    appWidth: 900,
+    sidebarWidth: 260,
+    chatPanelWidth: undefined,
+  });
+  mounted.appRoot.classList.remove('app--no-preview');
+
+  assert.equal(mounted.resizer.fitChatToWelcome(), CHAT_MIN);
+});
+
+test('ohne Anzeige oder ohne Chat gibt es nichts einzurichten', async () => {
+  // Die Anzeige ist im Markup zu — dann fuellt der Chat ohnehin alles.
+  const zu = await mount({ appWidth: 1536, chatPanelWidth: undefined });
+  assert.equal(zu.resizer.fitChatToWelcome(), null);
+
+  const ohneChat = await mount({ appWidth: 1536, chatHidden: true, chatPanelWidth: undefined });
+  ohneChat.appRoot.classList.remove('app--no-preview');
+  assert.equal(ohneChat.resizer.fitChatToWelcome(), null);
+});

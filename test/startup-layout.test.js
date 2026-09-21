@@ -1,4 +1,4 @@
-// Startzustand der mittleren Spalte (Issue #208).
+// Startzustand der mittleren Spalte (Issues #208, #255, #258).
 //
 // Ob beim Start der Startschirm neben dem Chat steht, koennte man sonst nur per
 // Augenschein pruefen. Die Entscheidung liegt deshalb als reine Funktion vor,
@@ -21,32 +21,87 @@ const startupLayoutPromise = import(
 test('ein wiederhergestellter Chat laesst die mittlere Spalte zu', async () => {
   const { contentPaneVisibleOnStart } = await startupLayoutPromise;
   assert.equal(
-    contentPaneVisibleOnStart({ preference: true, chatRestored: true }),
+    contentPaneVisibleOnStart({ preference: true, chatRestored: true, hasFolder: true }),
     false,
     'wer im Chat aufgehoert hat, soll dort weitermachen — nicht am Startschirm'
+  );
+  // Auch ohne Ordner: Ein Gespraech schlaegt den Startschirm (#258).
+  assert.equal(
+    contentPaneVisibleOnStart({ chatRestored: true, hasFolder: false }),
+    false
   );
 });
 
 test('wer die Spalte eingeblendet hat, bekommt sie ohne Chat wieder', async () => {
   const { contentPaneVisibleOnStart } = await startupLayoutPromise;
-  assert.equal(contentPaneVisibleOnStart({ preference: true, chatRestored: false }), true);
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: true, chatRestored: false, hasFolder: true }),
+    true
+  );
   // Kein Ladeergebnis (Fehler beim Start) zaehlt nicht als Chat.
-  assert.equal(contentPaneVisibleOnStart({ preference: true, chatRestored: undefined }), true);
-});
-
-test('ohne gespeicherten Wunsch bleibt die Spalte zu', async () => {
-  // Issue #255: Die frische Installation startet mit Baum und Chat. Fehlt die
-  // Praeferenz, ist das keine stille Zustimmung zur Spalte.
-  const { contentPaneVisibleOnStart } = await startupLayoutPromise;
-  assert.equal(contentPaneVisibleOnStart({ preference: undefined, chatRestored: false }), false);
-  assert.equal(contentPaneVisibleOnStart({ chatRestored: undefined }), false);
-  assert.equal(contentPaneVisibleOnStart({ preference: undefined, chatRestored: true }), false);
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: true, chatRestored: undefined, hasFolder: true }),
+    true
+  );
 });
 
 test('die weggeschaltete Spalte bleibt weggeschaltet', async () => {
   const { contentPaneVisibleOnStart } = await startupLayoutPromise;
-  assert.equal(contentPaneVisibleOnStart({ preference: false, chatRestored: false }), false);
-  assert.equal(contentPaneVisibleOnStart({ preference: false, chatRestored: true }), false);
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: false, chatRestored: false, hasFolder: true }),
+    false
+  );
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: false, chatRestored: true, hasFolder: true }),
+    false
+  );
+  // Ausdruecklich weggeschaltet heisst auch ohne Ordner weggeschaltet (#258) —
+  // sonst kaeme der Startschirm gegen den Willen des Nutzers zurueck.
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: false, chatRestored: false, hasFolder: false }),
+    false
+  );
+});
+
+test('ohne gespeicherten Wunsch entscheidet der Ordner', async () => {
+  // Issue #255: Mit Ordner bleibt die Spalte zu — zu sehen gaebe es nur den
+  // Startschirm. Issue #258: Ohne Ordner ist genau er das Richtige.
+  const { contentPaneVisibleOnStart } = await startupLayoutPromise;
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: undefined, chatRestored: false, hasFolder: true }),
+    false
+  );
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: undefined, chatRestored: false, hasFolder: false }),
+    true
+  );
+  // Gar keine Angabe (Fehler beim Lesen der Prefs) faellt auf denselben Weg.
+  assert.equal(contentPaneVisibleOnStart({}), true);
+});
+
+test('die Breite des Startschirms steht im CSS und im Resizer gleich', () => {
+  // Der Resizer rechnet mit 560 + 2 x 32 px, damit die Spalte beim Erststart
+  // genau den Startschirm fasst (#258). Waechst `#welcome` im CSS, muss die
+  // Zahl mitwachsen — sonst bleibt ein Streifen Leerraum stehen oder der Text
+  // wird umgebrochen.
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'renderer', 'styles.css'),
+    'utf8'
+  );
+  const welcome = css.slice(css.indexOf('#welcome {'), css.indexOf('.welcome-eyebrow'));
+  const maxWidth = Number(welcome.match(/max-width:\s*(\d+)px/)?.[1]);
+  const padding = Number(welcome.match(/padding:\s*\d+px\s+(\d+)px/)?.[1]);
+  assert.equal(maxWidth, 560, 'Inhaltsbreite des Startschirms');
+  assert.equal(padding, 32, 'seitliche Polsterung des Startschirms');
+
+  const resizer = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'renderer', 'components', 'SidebarResizer.js'),
+    'utf8'
+  );
+  const formel = resizer.match(/const CONTENT_WELCOME = (.+);/)?.[1];
+  assert.ok(formel, 'CONTENT_WELCOME muss es geben');
+  // eslint-disable-next-line no-new-func
+  assert.equal(Function(`return ${formel}`)(), maxWidth + 2 * padding);
 });
 
 test('das Markup startet mit eingeklappter Spalte', () => {

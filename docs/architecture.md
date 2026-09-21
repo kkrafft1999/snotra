@@ -708,14 +708,20 @@ Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
 Die Liste hängt an `onChatPersisted` aus `ChatStream.js` — eine Spalte, die
 dauerhaft danebensteht, darf nicht den Titel von vorhin zeigen.
 
-### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208), [#255](https://github.com/kkrafft1999/snotra/issues/255))
+### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208), [#255](https://github.com/kkrafft1999/snotra/issues/255), [#258](https://github.com/kkrafft1999/snotra/issues/258))
 
-Die Spalte ist voreingestellt zu ([#255](https://github.com/kkrafft1999/snotra/issues/255)):
-Ohne gespeicherte Prefs startet die App mit Baum und Chat, `normalizeUiPrefs`
-liest `contentPaneVisible` deshalb als `=== true` statt `!== false` — wie
-`chatHistoryVisible`. Bestandsinstallationen merken davon nichts, weil
-`updateUIPrefs` die normalisierten Prefs vollständig zurückschreibt und dort
-längst `true` steht.
+Ohne gespeicherten Wunsch entscheidet der Ordner: Mit Ordner bleibt die Spalte
+zu ([#255](https://github.com/kkrafft1999/snotra/issues/255)) — zu sehen gäbe
+es dort nur den Startschirm. Ohne Ordner ist genau er das Richtige
+([#258](https://github.com/kkrafft1999/snotra/issues/258)), sonst stünde die
+App beim ersten Start leer da.
+
+Dafür ist `contentPaneVisible` **dreiwertig**: `normalizeUiPrefs` lässt den
+Schlüssel weg, solange nichts gespeichert ist, statt ihn auf `false` zu
+normalisieren. „Nie eingestellt" ist etwas anderes als „ausdrücklich
+weggeschaltet" — nur so kann der Start den Startschirm zeigen, ohne die
+Entscheidung dessen zu überfahren, der die Spalte weggeklickt hat. Geschrieben
+wird der Wert allein vom Umschalter in der Titelzeile.
 
 Und wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
 neben dem Startschirm, der für den kalten Start gedacht ist. Die Entscheidung
@@ -729,10 +735,19 @@ darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
    statt es nur anzuwenden — der Start braucht die Auskunft, der Ordnerwechsel
    ignoriert sie.
 3. **`contentPaneVisibleOnStart()`** (`renderer/utils/startupLayout.js`) fügt
-   beides mit der gespeicherten Einstellung zusammen — offen startet die Spalte
-   nur bei `preference === true` und ohne wiederhergestellten Chat; `app.js`
-   wendet das Ergebnis im `finally` der Startsequenz an, damit ein Fehler beim
-   Laden die Spalte nicht zugeklappt hängen lässt.
+   beides mit der gespeicherten Einstellung und dem geöffneten Ordner zusammen:
+   ein wiederhergestellter Chat schlägt alles, danach zählt die ausdrückliche
+   Präferenz, und ohne sie der Ordner. `app.js` wendet das Ergebnis im `finally`
+   der Startsequenz an, damit ein Fehler beim Laden die Spalte nicht zugeklappt
+   hängen lässt.
+
+Zeigt die Spalte den Startschirm, bekommt sie nur dessen Breite: `#welcome` ist
+inhaltlich auf 560 px begrenzt und hat 32 px Polsterung je Seite, macht 624 px.
+Den Rest des Fensters gibt `fitChatToWelcome()` (`SidebarResizer.js`) dem Chat —
+begrenzt durch dieselbe Deckelung bei der halben Fensterbreite wie beim Ziehen
+am Trenner. Eine gemerkte Chat-Breite bleibt unangetastet, und geschrieben wird
+hier nichts: Was der Start einrichtet, ist kein neuer Wunsch.
+`test/startup-layout.test.js` hält die 624 px mit dem CSS zusammen.
 
 Die Vorschau lebt in dieser Spalte, deshalb holt ein Klick auf eine Datei sie
 über `revealContentPane` zurück — sonst bliebe der Klick folgenlos.

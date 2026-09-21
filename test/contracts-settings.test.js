@@ -114,12 +114,13 @@ test('normalizeUiPrefs and patch apply clamps', () => {
   assert.equal(clampSidebarWidth(999), 600);
 });
 
-test('ohne gespeicherten Wunsch startet die mittlere Anzeige zu', () => {
-  // Issue #255: Eine frische Installation hat keine ui-preferences.json — dann
-  // sollen nur Baum und Chat stehen. Erst ein ausdrueckliches `true` bringt die
-  // Spalte zurueck; alles andere (fehlend, kaputt, `false`) laesst sie zu.
-  assert.equal(normalizeUiPrefs({}).contentPaneVisible, false);
-  assert.equal(normalizeUiPrefs({ contentPaneVisible: 'ja' }).contentPaneVisible, false);
+test('ohne gespeicherten Wunsch bleibt die mittlere Anzeige ungesetzt', () => {
+  // Issues #255/#258: Eine frische Installation hat keine ui-preferences.json.
+  // Der Schluessel bleibt dann weg — "nie eingestellt" ist etwas anderes als
+  // ein weggeschaltetes `false`, und der Start entscheidet daran, ob er den
+  // Startschirm zeigt. Nur echte Booleans kommen durch.
+  assert.equal('contentPaneVisible' in normalizeUiPrefs({}), false);
+  assert.equal('contentPaneVisible' in normalizeUiPrefs({ contentPaneVisible: 'ja' }), false);
   assert.equal(normalizeUiPrefs({ contentPaneVisible: false }).contentPaneVisible, false);
   assert.equal(normalizeUiPrefs({ contentPaneVisible: true }).contentPaneVisible, true);
   // Die drei Nachbarspalten behalten ihre eigene Voreinstellung: Baum und Chat
