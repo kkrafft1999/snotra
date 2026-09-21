@@ -28,6 +28,57 @@ function formatBytes(bytes) {
   return `${mb.toFixed(1).replace('.', ',')} MB`;
 }
 
+/**
+ * Macht aus den Release-Notizen von GitHub eine schlichte Aufzaehlung.
+ *
+ * GitHub setzt seine Notizen automatisch zusammen: eine Ueberschrift
+ * „What's Changed", je Aenderung eine Zeile „… by @name in <PR-Link>" und
+ * zum Schluss einen Vergleichs-Link. Im Dialog interessiert davon nur, *was*
+ * sich geaendert hat — wer es gemacht hat und unter welcher Nummer, steht auf
+ * der Release-Seite. Also bleibt hier die nackte Aufzaehlung stehen.
+ */
+function formatReleaseNotes(notes) {
+  const lines = String(notes || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  // „New Contributors" ist eine reine Namensliste — die faellt komplett weg.
+  let skipping = false;
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '');
+    if (/^\s{0,3}(\*\*)?Full Changelog(\*\*)?\s*:/i.test(line)) continue;
+
+    const heading = line.match(/^\s{0,3}#{1,6}\s+(.*?)\s*#*$/);
+    if (heading) {
+      const text = heading[1];
+      skipping = /^new contributors$/i.test(text);
+      if (skipping || /^what'?s changed$/i.test(text)) continue;
+      out.push(text);
+      continue;
+    }
+    if (skipping) continue;
+
+    const bullet = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (bullet) {
+      const text = stripAuthorAndLink(bullet[2]);
+      if (text) out.push(`${bullet[1]}• ${text}`);
+      continue;
+    }
+    out.push(line);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** „Titel by @name in https://…/pull/42" → „Titel". */
+function stripAuthorAndLink(text) {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\s+in\s+<?https?:\/\/\S+>?\s*$/i, '')
+    .replace(/\s+by\s+@[^\s]+\s*$/i, '')
+    .replace(/\s*<?https?:\/\/\S+>?\s*$/, '')
+    .trim();
+}
+
 export function initUpdateDialog({ api }) {
   const root = document.getElementById('modal-update');
   const backdrop = document.getElementById('modal-update-backdrop');
@@ -51,6 +102,8 @@ export function initUpdateDialog({ api }) {
 
   /** Letzter Befund des Main-Prozesses; Grundlage aller Texte im Dialog. */
   let info = null;
+  /** Aufbereitete Aenderungsliste; leer heisst: es gibt nichts zu zeigen. */
+  let notesText = '';
   /** 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'info' */
   let state = 'available';
   let lastMessage = '';
@@ -199,7 +252,7 @@ export function initUpdateDialog({ api }) {
     // Die Aenderungsliste hilft nur bei der Entscheidung „laden/installieren?".
     // Waehrend des Ladens, beim Einspielen und im Fehlerfall lenkt sie ab.
     const notesHelpHere = next === 'available' || next === 'ready';
-    notesEl.classList.toggle('hidden', !notesHelpHere || !(info?.notes || '').trim());
+    notesEl.classList.toggle('hidden', !notesHelpHere || !notesText);
     root.classList.toggle('modal-update--busy', !isDismissable());
     closeBtn.disabled = !isDismissable();
 
@@ -275,8 +328,8 @@ export function initUpdateDialog({ api }) {
   }
 
   function showNotes(notes) {
-    const text = String(notes || '').trim();
-    notesBodyEl.textContent = text;
+    notesText = formatReleaseNotes(notes);
+    notesBodyEl.textContent = notesText;
     notesEl.open = false;
   }
 
@@ -350,4 +403,4 @@ export function initUpdateDialog({ api }) {
   return { checkNow, isOpen };
 }
 
-export { formatBytes };
+export { formatBytes, formatReleaseNotes };
