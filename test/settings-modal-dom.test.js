@@ -545,7 +545,7 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
 
 test('der Dialog haengt am Menueeintrag statt an einem Knopf im Chat', async (t) => {
   // Das Zahnrad sass in der Kopfzeile des Chats und war mit dessen Spalte weg.
-  // Seitdem fuehrt nur noch "Ansicht > Einstellungen" bzw. Cmd/Ctrl+Komma
+  // Seitdem fuehrt nur noch der Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma
   // hinein — der Renderer muss sich dafuer beim Main anmelden.
   let trigger = null;
   const { dom, modal } = await mountSettings({

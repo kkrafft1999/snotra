@@ -428,12 +428,22 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // --- Einstellungen: oeffnen, Tab wechseln, mit Escape schliessen ----------
   // Es gibt keinen Knopf mehr dafuer: Der Dialog haengt am Menueeintrag
-  // "Ansicht > Einstellungen" (Cmd/Ctrl+Komma). Das Kuerzel selbst laesst sich
-  // von aussen nicht druecken, der Eintrag dahinter schon.
-  await app.evaluate(({ Menu }) => {
-    const view = Menu.getApplicationMenu().items.find((i) => i.label === 'Ansicht');
-    view.submenu.items.find((i) => i.label?.startsWith('Einstellungen')).click();
+  // "Einstellungen…" (Cmd/Ctrl+Komma). Das Kuerzel selbst laesst sich von
+  // aussen nicht druecken, der Eintrag dahinter schon. Wo er steht, haengt an
+  // der Plattform (Issue #266) — auf macOS im App-Menue, sonst unter
+  // "Ansicht" —, deshalb wird die ganze Leiste durchsucht statt ein Menue
+  // geraten. Dass es genau eine Fundstelle gibt, prueft der Unit-Test.
+  const settingsMenu = await app.evaluate(({ Menu }) => {
+    for (const top of Menu.getApplicationMenu().items) {
+      const item = top.submenu?.items.find((i) => i.label?.startsWith('Einstellungen'));
+      if (item) {
+        item.click();
+        return top.label;
+      }
+    }
+    return null;
   });
+  assert.ok(settingsMenu, 'Einstellungen stehen in keinem Menue');
   await poll(() => page.evaluate(() =>
     !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geoeffneter Einstellungsdialog' });
