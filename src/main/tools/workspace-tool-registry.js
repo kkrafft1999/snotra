@@ -291,12 +291,14 @@ function createToolRegistry(initialDefinitions = []) {
       parts.push('Wo ein Tool den Parameter include_hidden hat, nimmt true die versteckten Einträge hinzu.');
     }
 
-    if (available.some((definition) => definition.riskClass === TOOL_RISK_CLASSES.WRITE)) {
-      parts.push(
-        'Nutze Schreib-Tools zurückhaltend: nur wenn der Nutzer ausdrücklich eine Änderung ' +
-          'oder neue Datei wünscht, und fasse danach kurz zusammen, was du geschrieben hast.'
-      );
-    }
+    // Hier stand bis #268 ein Vorbehalt gegen Schreib-Tools („nutze sie
+    // zurueckhaltend"). Er hat das Gegenteil bewirkt: Manche Modelle haben
+    // daraufhin gar nicht mehr geschrieben, auch auf ausdrueckliche Bitte
+    // nicht — eine Bremse fuer gefragte statt fuer ungefragte Schreibvorgaenge.
+    // Vor ungewollten Schreibvorgaengen schuetzt ohnehin nicht der Prompt,
+    // sondern die Freigabe je Aufruf (Konzept §6/§7) — Code, den das Modell
+    // nicht umdeuten kann. Kein Ersatzsatz: jede Formulierung mit demselben
+    // Beigeschmack traegt dasselbe Risiko.
     return parts.join('\n');
   }
 
