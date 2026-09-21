@@ -2937,6 +2937,37 @@ select.modal-input {
   margin-top: 18px;
 }
 
+/* Dritte Stufe: eine Aktion, die man anbieten muss, aber nicht empfehlen
+ * will — im Update-Dialog das dauerhafte Überspringen einer Version. Kein
+ * Rahmen, kein Fuellton, nur Text mit ruhiger Unterstreichung; die Hoehe
+ * bleibt die der anderen Knoepfe, damit die Zeile eine Grundlinie behaelt. */
+.btn-tertiary {
+  padding: var(--btn-padding-y) 0;
+  font-size: var(--btn-font-size);
+  font-weight: 400;
+  font-family: var(--font-ui);
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: var(--ds-grey-muted);
+  text-underline-offset: 3px;
+  transition: var(--btn-transition);
+}
+
+.btn-tertiary:hover:not(:disabled) {
+  color: var(--text-primary);
+  text-decoration-color: currentColor;
+}
+
+.btn-tertiary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-primary {
   padding: var(--btn-padding-y) var(--btn-padding-x);
   font-size: var(--btn-font-size);
@@ -4509,6 +4540,29 @@ select.modal-input {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text-secondary);
+}
+
+/* Der leise Knopf bekommt eine eigene Zeile ueber den beiden anderen und
+   steht dort links: ein Angebot, keine Empfehlung. Drei Knoepfe nebeneinander
+   passen in 480px nicht zuverlaessig — „Release-Seite öffnen" allein misst
+   schon 160px —, und eine Zeile, die je nach Schriftrendering umbricht, sieht
+   kaputt aus statt gewollt. Im DOM kommt er zuletzt, damit Fokus und
+   Tab-Reihenfolge weiter bei der Hauptaktion beginnen. */
+.update-dialog .modal-actions .btn-tertiary {
+  order: -2;
+  margin-right: auto;
+}
+
+/* Der Zeilenumbruch selbst: ein leeres Flex-Element voller Breite zwischen
+   dem leisen Knopf und den beiden anderen. Der naheliegende Weg — dem Knopf
+   `flex-basis: 100%` geben — macht ihn ueber die ganze Zeile breit, und der
+   Fokus-Rahmen umschliesst dann eine leere Flaeche wie ein Eingabefeld.
+   Ohne einen Knopf dritter Stufe gibt es nichts umzubrechen. */
+.update-dialog .modal-actions:has(.btn-tertiary)::before {
+  content: '';
+  order: -1;
+  flex-basis: 100%;
+  height: 0;
 }
 
 .modal-update .modal-dialog__footer.hidden {

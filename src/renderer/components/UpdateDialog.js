@@ -135,14 +135,11 @@ export function initUpdateDialog({ api }) {
     }
   }
 
-  function makeButton(label, className, onClick, { title = '' } = {}) {
+  function makeButton(label, className, onClick) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = className;
     btn.textContent = label;
-    // „Überspringen" und „Später" unterscheiden sich in der Wirkung, nicht im
-    // Wort — der Titel sagt, was genau passiert.
-    if (title) btn.title = title;
     btn.addEventListener('click', onClick);
     return btn;
   }
@@ -274,12 +271,14 @@ export function initUpdateDialog({ api }) {
       } else {
         actionsEl.appendChild(makeButton('Herunterladen', 'btn-primary', startDownload));
       }
-      actionsEl.appendChild(makeButton('Überspringen', 'btn-secondary', skipVersion, {
-        title: `Version ${version} nicht mehr anbieten`,
-      }));
-      actionsEl.appendChild(makeButton('Später', 'btn-secondary', close, {
-        title: 'Beim nächsten Start erneut fragen',
-      }));
+      // Beide Knoepfe schliessen den Dialog, aber nur einer davon fuer immer.
+      // Das steht jetzt in der Beschriftung statt in einem Titel-Text, den
+      // per Tastatur ohnehin niemand zu sehen bekommt. „Überspringen" wirkt
+      // dauerhaft und steht deshalb leise und abgesetzt links — auffindbar
+      // fuer den, der es sucht, kein Nachbar der Hauptaktion fuer den, der
+      // nur wegklicken will (die Reihenfolge macht das CSS).
+      actionsEl.appendChild(makeButton('Später erinnern', 'btn-secondary', close));
+      actionsEl.appendChild(makeButton('Diese Version überspringen', 'btn-tertiary', skipVersion));
     } else if (next === 'downloading') {
       titleEl.textContent = `Version ${version} wird geladen`;
       summaryEl.textContent = 'Du kannst weiterarbeiten – die Installation beginnt erst, wenn du sie bestätigst.';
