@@ -79,11 +79,14 @@ Ein Skill ist ein Verzeichnis mit `SKILL.md` (YAML-Frontmatter `name`,
 Beschreibung der eingeschalteten Skills — passt eine, vor der Arbeit die
 Anleitung mit `load_skill` holen; Nachbardateien über `skill:<name>/<pfad>`.
 
-System-Skills sind eingebaut und an. Ordner-Skills liest die App nur aus
-`.agents/skills/` im geöffneten Ordner und im Home-Verzeichnis, nicht aus
-Verzeichnissen anderer Werkzeuge (etwa `.claude/`), und sie sind einzeln
-einzuschalten. Kein Skill-Manager, kein Marketplace:
-Verzeichnis anlegen, unter Einstellungen › Skills neu laden.
+System-Skills sind eingebaut und an. Ordner-Skills liest die App aus
+`.agents/skills/` im geöffneten Ordner sowie global aus `~/.snotra/skills/`
+(empfohlener Ort) und `~/.agents/skills/` (Alt-Ort, weiterhin gelesen), nicht
+aus Verzeichnissen anderer Werkzeuge (etwa `.claude/`), und sie sind einzeln
+einzuschalten. `~/.snotra/` ist Snotras eigenes Benutzerverzeichnis; die App
+legt es nicht selbst an und verschiebt auch nichts dorthin. Kein
+Skill-Manager, kein Marketplace: Verzeichnis anlegen, unter Einstellungen ›
+Skills neu laden.
 
 Der Nutzer kann einen Skill auch einmalig per `/name` in seiner Nachricht
 aufrufen — das gilt für den weiteren Chat, ohne die Auswahl in den

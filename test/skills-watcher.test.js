@@ -21,6 +21,7 @@ const path = nodePath.posix;
 const HOME = path.join(path.sep, 'home', 'nutzer');
 const WS = path.join(path.sep, 'projekte', 'demo');
 const WS_SKILLS = path.join(WS, '.agents', 'skills');
+const HOME_SNOTRA_SKILLS = path.join(HOME, '.snotra', 'skills');
 const HOME_SKILLS = path.join(HOME, '.agents', 'skills');
 const os = { homedir: () => HOME };
 
@@ -132,6 +133,9 @@ test('beobachtet jede Ordner-Quelle samt ihrer Vorfahren, die System-Skills nich
     { dir: WS_SKILLS, isTarget: true },
     { dir: path.join(WS, '.agents'), isTarget: false },
     { dir: WS, isTarget: false },
+    { dir: HOME_SNOTRA_SKILLS, isTarget: true },
+    { dir: path.join(HOME, '.snotra'), isTarget: false },
+    { dir: HOME, isTarget: false },
     { dir: HOME_SKILLS, isTarget: true },
     { dir: path.join(HOME, '.agents'), isTarget: false },
     { dir: HOME, isTarget: false },
@@ -142,13 +146,53 @@ test('beobachtet jede Ordner-Quelle samt ihrer Vorfahren, die System-Skills nich
   watcher.close();
 });
 
-test('ohne offenen Ordner bleibt die Home-Quelle beobachtet', () => {
+test('ohne offenen Ordner bleiben die Home-Quellen beobachtet', () => {
   const { watcher } = setup();
   watcher.watchWorkspace(null);
   assert.deepEqual(
     watcher.watchedDirectories().map((w) => w.dir),
-    [HOME_SKILLS, path.join(HOME, '.agents'), HOME]
+    [
+      HOME_SNOTRA_SKILLS,
+      path.join(HOME, '.snotra'),
+      HOME,
+      HOME_SKILLS,
+      path.join(HOME, '.agents'),
+      HOME,
+    ]
   );
+  watcher.close();
+});
+
+// Issue #251: Der neue Standardort ist meistens noch gar nicht da — der
+// Aufstieg `~/.snotra/skills` → `~/.snotra` → `~` muss ihn trotzdem einfangen.
+test('ein fehlendes ~/.snotra/skills hängt die Kette an das Home-Verzeichnis', () => {
+  const { fake, clock, changes, watcher } = setup({
+    missing: [HOME_SNOTRA_SKILLS, path.join(HOME, '.snotra')],
+  });
+  watcher.watchWorkspace(null);
+  assert.deepEqual(watcher.watchedDirectories()[0], { dir: HOME, isTarget: false });
+  assert.equal(watcher.retryPending(), true, 'die Wiedervorlage wartet auf das Verzeichnis');
+
+  // Jetzt legt der Nutzer ~/.snotra/skills an. Das Ereignis dafür kommt auf
+  // dem Home-Wächter der anderen Kette an und geht dort verloren — die
+  // Wiedervorlage holt den Umbau trotzdem nach.
+  fake.appear(HOME_SNOTRA_SKILLS);
+  fake.appear(path.join(HOME, '.snotra'));
+  clock.tick(); // Wiedervorlage
+  clock.tick(); // entprellte Meldung
+
+  assert.equal(changes.length, 1, 'Änderung gemeldet');
+  assert.deepEqual(watcher.watchedDirectories()[0], { dir: HOME_SNOTRA_SKILLS, isTarget: true });
+  assert.equal(watcher.retryPending(), false, 'und die Wiedervorlage ist beendet');
+  watcher.close();
+});
+
+test('eine neue SKILL.md unter ~/.snotra/skills wird gemeldet', () => {
+  const { fake, clock, changes, watcher } = setup();
+  watcher.watchWorkspace(WS);
+  fake.aktiv(HOME_SNOTRA_SKILLS).handler('rename', 'frisch/SKILL.md');
+  clock.tick();
+  assert.equal(changes.length, 1);
   watcher.close();
 });
 
@@ -158,7 +202,7 @@ test('ein fehlendes Verzeichnis lässt die vorhandenen Vorfahren beobachten', ()
   const watched = watcher.watchedDirectories();
   assert.deepEqual(watched[0], { dir: WS, isTarget: false }, 'zwei Ebenen hoch bis zum Workspace');
   assert.equal(fake.aktiv(WS).options.recursive, false, 'ein Wächter bleibt flach');
-  assert.deepEqual(watched[1], { dir: HOME_SKILLS, isTarget: true }, 'Home ist davon unberührt');
+  assert.deepEqual(watched[1], { dir: HOME_SNOTRA_SKILLS, isTarget: true }, 'Home ist davon unberührt');
   watcher.close();
 });
 
@@ -185,7 +229,16 @@ test('ein Wächter über dem Ziel reagiert nur auf das Pfadstück, auf das er wa
 
 test('gibt es auch den Vorfahren nicht, bleibt die Quelle einfach unbeobachtet', () => {
   const { watcher } = setup({
-    missing: [WS_SKILLS, path.join(WS, '.agents'), WS, HOME_SKILLS, path.join(HOME, '.agents'), HOME],
+    missing: [
+      WS_SKILLS,
+      path.join(WS, '.agents'),
+      WS,
+      HOME_SNOTRA_SKILLS,
+      path.join(HOME, '.snotra'),
+      HOME_SKILLS,
+      path.join(HOME, '.agents'),
+      HOME,
+    ],
   });
   watcher.watchWorkspace(WS);
   assert.deepEqual(watcher.watchedDirectories(), [], 'kein Absturz, nur kein Watcher');
@@ -298,7 +351,7 @@ test('ein Workspace-Wechsel lässt keine Handles zurück', () => {
   assert.ok(alte.every((w) => w.closed), 'alle alten Watcher geschlossen');
   assert.deepEqual(
     watcher.watchedDirectories().filter((w) => w.isTarget).map((w) => w.dir),
-    [path.join(anderer, '.agents', 'skills'), HOME_SKILLS]
+    [path.join(anderer, '.agents', 'skills'), HOME_SNOTRA_SKILLS, HOME_SKILLS]
   );
   watcher.close();
 });
@@ -324,9 +377,8 @@ test('close räumt alles ab und schluckt noch laufende Ereignisse', () => {
 test('liegt der Workspace im Home, wird dieselbe Quelle nicht doppelt beobachtet', () => {
   const { watcher } = setup();
   watcher.watchWorkspace(HOME);
-  const dirs = watcher.watchedDirectories().map((w) => w.dir);
-  assert.deepEqual(dirs, [...new Set(dirs)], 'jeder Pfad nur einmal');
-  assert.deepEqual(dirs, [HOME_SKILLS, path.join(HOME, '.agents'), HOME]);
+  const ziele = watcher.watchedDirectories().filter((w) => w.isTarget).map((w) => w.dir);
+  assert.deepEqual(ziele, [HOME_SKILLS, HOME_SNOTRA_SKILLS], 'jedes Ziel nur einmal');
   watcher.close();
 });
 
@@ -439,7 +491,7 @@ test('der Abstand der Wiedervorlage ist ein paar Sekunden', () => {
   assert.equal(DEFAULT_RETRY_MS, 3000);
 });
 
-test('der Aufstieg endet an der Workspace-Wurzel', () => {
+test('der Aufstieg endet an der Workspace- bzw. Home-Wurzel', () => {
   assert.equal(MAX_FALLBACK_LEVELS, 2, '.agents/skills → .agents → Wurzel');
 });
 
