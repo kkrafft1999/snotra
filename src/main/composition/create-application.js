@@ -64,6 +64,7 @@ const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
+const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
@@ -284,12 +285,26 @@ function createApplication({
   // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die
   // Adressregeln stecken im Adapter (Issue #95).
   const urlFetch = createHttpUrlFetchAdapter();
+
+  // Gedaechtnis (Issue #166). Der Adapter kennt die zwei Pfade, der Wrapper
+  // die eine Regel, die nicht in den Adapter gehoert: ob Snotra ungefragt
+  // merken darf. Sie haengt an einer Einstellung und wird deshalb bei jedem
+  // Aufruf frisch gelesen — ein Schalter, der erst nach einem Neustart wirkt,
+  // waere bei diesem Thema keiner.
+  const memory = createMemoryAdapter({
+    fs,
+    path,
+    os,
+    isSelfMemoryAllowed: async () => (await uiPrefsStore.readUIPrefs()).memorySelfEnabled !== false,
+  });
+
   const toolRegistry = createWorkspaceToolRegistry({
     fsService,
     webSearch,
     pythonRunner,
     urlFetch,
     shellRunner,
+    memory,
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
@@ -510,6 +525,7 @@ function createApplication({
     skillsService,
     environment,
     projectInstructions,
+    memory,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,
@@ -555,6 +571,7 @@ function createApplication({
     presentation: settingsPresentation,
     toolCatalog: toolRegistry,
     skillCatalog: skillsService,
+    memory,
     webSearchSettings,
     mcpSettings,
     pythonSettings,

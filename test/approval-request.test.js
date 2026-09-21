@@ -38,7 +38,12 @@ test('Sitzungsumfang nennt Tool, exakte Ziele und Klassen', () => {
     describeSessionScope({ tool: 'edit_file', targets: [{ path: 'a.js' }, 'b.js'], riskClasses: ['write'] }),
     'Gilt in dieser Sitzung für edit_file auf genau a.js, b.js (Ändern).'
   );
-  assert.match(describeSessionScope({ tool: 'web_search', targets: [], riskClasses: ['read'] }), /ohne Dateiziel/);
+  // Ohne Pfade haengt die Freigabe am Tool statt an einem Ziel — „auf genau
+  // ohne Dateiziel" waere kein deutscher Satz (#166).
+  assert.equal(
+    describeSessionScope({ tool: 'web_search', targets: [], riskClasses: ['read'] }),
+    'Gilt in dieser Sitzung für jeden Aufruf von web_search (Lesen).'
+  );
 });
 
 test('buildApprovalRequest bindet Plan, Policy-Version und bietet Sitzung nur für freigebbare Klassen', () => {

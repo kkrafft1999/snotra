@@ -12,6 +12,15 @@ const {
   normalizeStoredPresetConnection,
   PRESET_CONNECTION_PLAIN_FIELDS,
 } = require('../../shared/contracts/settings');
+const {
+  MEMORY_SCOPES,
+  MEMORY_SCOPE_ORDER,
+  MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_SHORT_PATHS,
+  MAX_MEMORY_CHARS,
+  isMemoryScope,
+  parseMemoryEntries,
+} = require('../../shared/contracts/memory');
 
 function registerSettingsHandlers({
   ipcMain,
@@ -27,6 +36,7 @@ function registerSettingsHandlers({
   presentation,
   toolCatalog,
   skillCatalog = null,
+  memory = null,
   webSearchSettings = null,
   mcpSettings = null,
   pythonSettings = null,
@@ -347,6 +357,70 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_RELOAD_SKILLS, async () => {
     if (skillCatalog && typeof skillCatalog.reload === 'function') skillCatalog.reload();
     return buildSkillCatalog();
+  });
+
+  // Gedaechtnis (Issue #166). Der Renderer bekommt beide Ebenen mit ihren
+  // Eintraegen und dem echten Pfad — der Pfad ist hier Anzeige, kein Auftrag:
+  // Gelesen und geschrieben wird ausschliesslich ueber den Port, der die
+  // Ebene selbst aufloest.
+  async function buildMemoryState() {
+    if (!memory) return { available: false, scopes: [] };
+    const workspaceRoot = getActiveWorkspaceRoot();
+    const prefs = await uiPrefsStore.readUIPrefs();
+    const paths = memory.paths({ workspaceRoot });
+    const files = await memory.load({ workspaceRoot });
+    const byScope = new Map(files.map((file) => [file.scope, file]));
+    return {
+      available: true,
+      selfEnabled: prefs.memorySelfEnabled !== false,
+      scopes: MEMORY_SCOPE_ORDER.map((scope) => {
+        const file = byScope.get(scope) || null;
+        const text = file ? file.text : '';
+        return {
+          scope,
+          label: MEMORY_SCOPE_LABELS[scope],
+          // Ohne geoeffneten Ordner gibt es die Projekt-Ebene nicht; die
+          // Oberflaeche soll das sagen statt einen leeren Kasten zu zeigen.
+          path: paths[scope],
+          // Der absolute Pfad ist unter `path` fuer den Tooltip da. In der
+          // Karte steht die kurze Form: ein `/var/folders/…`-Pfad sprengt die
+          // Zeile und sagt nichts, was der Ordnername nicht besser saegte.
+          shortPath: MEMORY_SCOPE_SHORT_PATHS[scope],
+          folderName:
+            scope === MEMORY_SCOPES.WORKSPACE && workspaceRoot
+              ? workspaceRoot.split(/[\\/]/).filter(Boolean).pop() || null
+              : null,
+          enabled:
+            scope === MEMORY_SCOPES.WORKSPACE
+              ? prefs.memoryWorkspaceEnabled !== false
+              : prefs.memoryUserEnabled !== false,
+          chars: text.length,
+          maxChars: MAX_MEMORY_CHARS,
+          truncated: file ? file.truncated === true : false,
+          entries: parseMemoryEntries(text),
+        };
+      }),
+    };
+  }
+
+  ipcMain.handle(REQ.SETTINGS_GET_MEMORY, async () => buildMemoryState());
+
+  ipcMain.handle(REQ.SETTINGS_FORGET_MEMORY, async (_event, payload) => {
+    if (!memory) return { ok: false, error: 'Das Gedächtnis ist nicht verfügbar.' };
+    const scope = payload?.scope;
+    const line = payload?.line;
+    if (!isMemoryScope(scope) || !Number.isInteger(line)) {
+      return { ok: false, error: 'Unbrauchbare Angabe zum Vergessen.' };
+    }
+    try {
+      const result = await memory.forget({ scope, line, workspaceRoot: getActiveWorkspaceRoot() });
+      // Der neue Stand geht direkt mit zurueck: Ein zweiter Aufruf koennte
+      // zwischen Loeschen und Nachladen eine andere Datei sehen, und dann
+      // zeigte die Liste Zeilennummern, die nicht mehr stimmen.
+      return { ok: true, removed: result.removed === true, state: await buildMemoryState() };
+    } catch (error) {
+      return { ok: false, error: error?.message || 'Der Eintrag ließ sich nicht entfernen.' };
+    }
   });
 
   // Websuche (Issue #63). Der hinterlegte Schluessel verlaesst den Main nie —

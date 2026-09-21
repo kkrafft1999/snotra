@@ -75,6 +75,13 @@ const PREVIEW_KIND_LABELS = Object.freeze({
   diff: 'Patch',
   code: 'Python-Quelltext',
   shell: 'Befehl',
+  memory: 'Merksatz',
+});
+
+/** Reichweite eines Gedaechtnis-Eintrags in Worten (Issue #166). */
+const MEMORY_SCOPE_TEXTS = Object.freeze({
+  workspace: 'Projekt — gilt nur im geöffneten Ordner',
+  user: 'Global — gilt in jedem Ordner',
 });
 
 function hasClass(classes, riskClass) {
@@ -206,6 +213,7 @@ export function buildApprovalCardView(dto) {
     providerLabel: typeof dto.providerLabel === 'string' ? dto.providerLabel : '',
     warning: overwriteWarning(dto),
     shellLabel: '',
+    memoryScopeLabel: '',
     cwdLabel: '',
     preview: null,
     actions: {
@@ -224,7 +232,13 @@ export function buildApprovalCardView(dto) {
     const parts = [];
     if (typeof dto.sessionScopeLabel === 'string' && dto.sessionScopeLabel) parts.push(dto.sessionScopeLabel);
     if (classes.includes(TOOL_RISK_CLASSES.WRITE)) {
-      parts.push('Weitere Änderungen an genau diesen Zielen laufen dann ohne Rückfrage.');
+      // Ohne Dateiziel gilt die Freigabe dem Tool, nicht einem Ziel — „an
+      // genau diesen Zielen" widerspräche dem Satz davor (#166).
+      parts.push(
+        Array.isArray(dto.targets) && dto.targets.length > 0
+          ? 'Weitere Änderungen an genau diesen Zielen laufen dann ohne Rückfrage.'
+          : 'Weitere Aufrufe laufen dann ohne Rückfrage.'
+      );
     }
     if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
       parts.push('Gilt nur für diesen Dateistand und den gewählten Provider.');
@@ -258,6 +272,11 @@ export function buildApprovalCardView(dto) {
         : dto.preview.shell;
     }
     if (typeof dto.preview.cwd === 'string' && dto.preview.cwd) view.cwdLabel = dto.preview.cwd;
+    // Beim Merken gehoert die Reichweite auf die Karte: „Projekt" oder
+    // „global" ist der ganze Unterschied, ueber den hier entschieden wird.
+    if (MEMORY_SCOPE_TEXTS[dto.preview.memoryScope]) {
+      view.memoryScopeLabel = MEMORY_SCOPE_TEXTS[dto.preview.memoryScope];
+    }
   }
   return view;
 }

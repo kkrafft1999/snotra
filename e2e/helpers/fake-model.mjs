@@ -67,6 +67,38 @@ export async function startFakeModel() {
         Connection: 'keep-alive',
       });
 
+      // Tool-Aufruf statt Text (Issue #166): dasselbe SSE-Protokoll, nur mit
+      // `tool_calls` im Delta und `finish_reason: 'tool_calls'` am Ende. Damit
+      // laesst sich die Strecke Modell → Freigabe → Tool im Test fahren, ohne
+      // ein echtes Modell zu fragen.
+      if (Array.isArray(answer.toolCalls) && answer.toolCalls.length > 0) {
+        answer.toolCalls.forEach((call, index) => {
+          res.write(sse({
+            id: 'fake', object: 'chat.completion.chunk', model: 'fake-model',
+            choices: [{
+              index: 0,
+              delta: {
+                tool_calls: [{
+                  index,
+                  id: `call_${index}`,
+                  type: 'function',
+                  function: { name: call.name, arguments: JSON.stringify(call.arguments ?? {}) },
+                }],
+              },
+              finish_reason: null,
+            }],
+          }));
+        });
+        res.write(sse({
+          choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+          usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
+        }));
+        res.write('data: [DONE]\n\n');
+        res.end();
+        record.finished = true;
+        return;
+      }
+
       // In Woerter zerlegen, damit ein Abbruch mitten im Stream moeglich ist.
       const parts = answer.text.match(/\S+\s*/g) ?? [answer.text];
       for (const part of parts) {
@@ -93,7 +125,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text: string, chunkDelayMs?: number }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {

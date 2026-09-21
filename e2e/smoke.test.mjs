@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -27,11 +27,24 @@ const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 const WORKSPACE_ROOT_AGENTS_MD = '# Wurzel\n\nAnweisung-aus-der-Ordnerwurzel.\n';
 const AGENTS_DIR_AGENTS_MD = '# Projekt\n\nAnweisung-aus-dot-agents.\n';
 
+// Gedaechtnis (Issue #166): eine Ebene mit Eintraegen, damit die Karte in den
+// Einstellungen etwas zu zeigen hat. Der zweite Eintrag traegt die Markierung
+// „selbst gemerkt" — sie unterscheidet, was Snotra von sich aus notiert hat.
+const WORKSPACE_MEMORY_MD = [
+  '# Gedächtnis · Projekt',
+  '',
+  '- 2026-09-21 — Gemerkt-fuer-dieses-Projekt.',
+  '- 2026-09-19 (selbst gemerkt) — Von-selbst-gemerkt.',
+  '',
+].join('\n');
+
 // Die Fragen dienen dem Fake-Modell als Schluessel: welche Antwort es schickt,
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
 const LINK_QUESTION = 'Zeig mir Links.';
 const IMAGE_QUESTION = 'Zeig mir das Diagramm.';
+const MEMORY_QUESTION = 'Bitte merke dir etwas.';
+const MEMORY_NEW_ENTRY = 'Frisch-gemerkt-im-Smoke-Test.';
 
 /**
  * Antwort der zweiten Runde: genau das, was der Sanitizer beschneiden muss.
@@ -122,6 +135,7 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'AGENTS.md'), WORKSPACE_ROOT_AGENTS_MD, 'utf8');
   await mkdir(path.join(dir, '.agents'));
   await writeFile(path.join(dir, '.agents', 'AGENTS.md'), AGENTS_DIR_AGENTS_MD, 'utf8');
+  await writeFile(path.join(dir, '.agents', 'memory.md'), WORKSPACE_MEMORY_MD, 'utf8');
   return dir;
 }
 
@@ -326,6 +340,21 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   );
   step('AGENTS.md im Systemprompt geprueft');
 
+  // --- Gedaechtnis im Systemprompt (Issue #166) ----------------------------
+  // Dieselbe Begruendung: Welche memory.md gefunden wird, entscheidet der
+  // Adapter am Dateisystem, nicht der Core.
+  assert.match(systemMessage, /Dein Gedächtnis/);
+  assert.match(systemMessage, /## Gedächtnis \(Projekt\)/);
+  assert.ok(
+    systemMessage.includes('Gemerkt-fuer-dieses-Projekt.'),
+    'die memory.md aus .agents steht im Prompt'
+  );
+  // Direkt hinter dem eigenen Prompt des Nutzers und damit vor allem Fremden.
+  assert.ok(
+    systemMessage.indexOf('Dein Gedächtnis') < systemMessage.indexOf('Projektanweisungen aus AGENTS.md')
+  );
+  step('Gedaechtnis im Systemprompt geprueft');
+
   // --- Klick auf den Link geht bis in den Main-Prozess ----------------------
   await page.evaluate(() => {
     const links = document.querySelectorAll('#chat-messages .chat-msg.assistant a');
@@ -474,8 +503,83 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(toolRows.includes('read_file_text'), 'read_file_text steht in der Tool-Liste');
   step('Tool-Liste ohne Grundausstattung geprueft');
 
+  // Gedaechtnis (Issue #166): beide Ebenen als eigene Karte, die Eintraege aus
+  // der Datei als Text. Hier statt im Unit-Test, weil erst die gerenderte
+  // Liste beweist, dass die Datei ueber den Main-Prozess bis ins DOM kommt —
+  // und dass der Eintragstext als Text ankommt und nicht als Markup.
+  await page.evaluate(() =>
+    document.querySelector('.settings-nav-item[data-settings-panel="memory"]').click());
+  const memory = await poll(async () => {
+    const found = await page.evaluate(() => ({
+      heading: document.getElementById('settings-panel-heading').textContent,
+      karten: [...document.querySelectorAll('#settings-memory-scopes .memory-card__path')].map(
+        (el) => el.textContent
+      ),
+      eintraege: [...document.querySelectorAll('#settings-memory-scopes .memory-item__text')].map(
+        (el) => el.textContent
+      ),
+      badges: [...document.querySelectorAll('.memory-item__origin')].map((el) => el.textContent),
+      selbstSchalter: document.getElementById('input-memory-self')?.checked,
+    }));
+    return found.eintraege.length > 0 ? found : null;
+  }, { what: 'gerendertes Gedaechtnis' });
+  assert.equal(memory.heading, 'Gedächtnis');
+  // Beide Ebenen stehen da, auch die leere globale.
+  assert.deepEqual(memory.karten, ['.agents/memory.md', '~/.snotra/memory.md']);
+  assert.ok(memory.eintraege.some((t) => t.includes('Gemerkt-fuer-dieses-Projekt.')), memory.eintraege.join(' | '));
+  assert.deepEqual(memory.badges, ['selbst gemerkt']);
+  // Der Schalter fuer selbststaendiges Merken steht voreingestellt an.
+  assert.equal(memory.selbstSchalter, true);
+  step('Gedaechtnis-Einstellungen geprueft');
+
   await page.keyboard.press('Escape');
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geschlossener Einstellungsdialog' });
+
+  // --- „merk dir das": Modell → Freigabe → Datei (Issue #166) ---------------
+  // Die teuerste Strecke des Gedaechtnisses und die einzige, die kein
+  // Unit-Test erreicht: Erst hier faellt auf, wenn die Berechtigungspruefung
+  // dazwischengeht. Genau das tat sie anfangs — ein Schreib-Tool ohne
+  // Pfadziel gilt dort als ungueltig, bis `pathlessWrite` es ausnimmt.
+  model.queueAnswer({
+    match: MEMORY_QUESTION,
+    toolCalls: [{
+      name: 'remember',
+      arguments: { scope: 'workspace', text: MEMORY_NEW_ENTRY, origin: 'requested' },
+    }],
+  });
+  model.queueAnswer({ match: 'remember', text: 'Hab ich mir gemerkt.' });
+  await ask(page, MEMORY_QUESTION);
+
+  const approval = await poll(() => page.evaluate(() => {
+    const card = document.querySelector('.chat-approval-card');
+    if (!card) return null;
+    return {
+      text: card.textContent.replace(/\s+/g, ' '),
+      antworten: [...card.querySelectorAll('button[data-response]')].map((b) => b.dataset.response),
+    };
+  }), { what: 'Freigabekarte fuer remember' });
+  // Die Karte nennt die Reichweite und den Merksatz — einen Pfad gibt es
+  // nicht, weil das Tool keinen bildet.
+  assert.match(approval.text, /Reichweite/);
+  assert.match(approval.text, /gilt nur im geöffneten Ordner/);
+  assert.equal(approval.text.includes('ohne Dateiziel'), false, 'kein "ohne Dateiziel" auf der Karte');
+  assert.ok(approval.antworten.includes('allow-once'), approval.antworten.join(','));
+
+  await page.evaluate(() =>
+    document.querySelector('.chat-approval-card button[data-response="allow-once"]').click());
+
+  const gemerkt = await poll(async () => {
+    try {
+      const text = await readFile(path.join(workspace, '.agents', 'memory.md'), 'utf8');
+      return text.includes(MEMORY_NEW_ENTRY) ? text : null;
+    } catch {
+      return null;
+    }
+  }, { what: 'in die memory.md geschriebener Eintrag' });
+  // Angehaengt, mit Datum, ohne das Bestehende anzuruehren.
+  assert.match(gemerkt, new RegExp(`- \\d{4}-\\d{2}-\\d{2} — ${MEMORY_NEW_ENTRY}`));
+  assert.ok(gemerkt.includes('Gemerkt-fuer-dieses-Projekt.'), 'der alte Eintrag steht noch da');
+  step('„merk dir das" bis in die Datei geprueft');
 });

@@ -341,6 +341,10 @@
             Skills
             <span class="settings-nav-item__desc">Arbeitsweisen für das Sprachmodell</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-memory" id="tab-settings-memory" data-settings-panel="memory">
+            Gedächtnis
+            <span class="settings-nav-item__desc">Was Snotra über Chats hinweg behält</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-mcp" id="tab-settings-mcp" data-settings-panel="mcp">
             MCP
             <span class="settings-nav-item__desc">Server externer Werkzeuge</span>
@@ -680,6 +684,36 @@
                 Keine Skills gefunden.
               </p>
             </div>
+          </section>
+
+          <section class="settings-panel" id="panel-settings-memory" role="tabpanel" aria-labelledby="tab-settings-memory" hidden>
+            <details class="settings-note">
+              <summary class="settings-note__summary">
+                <span>Was Snotra sich merkt, steht in einer <code lang="en">memory.md</code> und geht
+                mit jeder Anfrage an den Anbieter.</span>
+              </summary>
+              <div class="settings-note__body">
+                <p>
+                  Das <strong>Projekt-Gedächtnis</strong> liegt im geöffneten Ordner und zieht mit ihm
+                  um; es gehört zum Projekt und kann in ein Repository geraten. Das
+                  <strong>globale Gedächtnis</strong> gilt über alle Ordner hinweg. Beide Dateien
+                  kannst du auch im Editor bearbeiten — Snotra liest sie bei der nächsten Nachricht
+                  neu. Passwörter, Schlüssel und Zugangsdaten gehören nicht hinein.
+                </p>
+              </div>
+            </details>
+            <div class="settings-tools-card">
+              <label class="modal-checkbox">
+                <input type="checkbox" id="input-memory-self" aria-describedby="hint-memory-self">
+                <span>Snotra darf sich von selbst etwas merken</span>
+              </label>
+              <p class="modal-hint" id="hint-memory-self">
+                Ist das aus, merkt sich Snotra nur, worum du ausdrücklich bittest
+                („bitte merke dir …“). Jeder Merkvorgang bleibt freigabepflichtig und steht
+                im Tool-Log.
+              </p>
+            </div>
+            <div id="settings-memory-scopes"></div>
           </section>
 
           <section class="settings-panel" id="panel-settings-mcp" role="tabpanel" aria-labelledby="tab-settings-mcp" hidden>

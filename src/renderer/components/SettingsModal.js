@@ -18,12 +18,22 @@ const IMMEDIATE_PANELS = new Set(['permissions', 'mcp']);
 
 const APPLY_HINT_DEFERRED = 'Änderungen gelten erst mit <strong>Übernehmen</strong>.';
 const APPLY_HINT_IMMEDIATE = 'Änderungen in diesem Bereich wirken <strong>sofort</strong>.';
+/**
+ * Das Gedaechtnis ist geteilt (Issue #166): Vergessen schreibt sofort in die
+ * Datei, die Schalter gehoeren zum Entwurf. Beide Standardsaetze waeren hier
+ * die Haelfte der Wahrheit — und die falsche Haelfte ist die, nach der jemand
+ * einen Eintrag zurueckholen will.
+ */
+const APPLY_HINT_MEMORY =
+  'Vergessene Einträge sind <strong>sofort</strong> weg; die Schalter gelten erst mit '
+  + '<strong>Übernehmen</strong>.';
 
 const SETTINGS_NAV_LABELS = {
   models: 'Modelle',
   tools: 'Tools',
   permissions: 'Berechtigungen',
   skills: 'Skills',
+  memory: 'Gedächtnis',
   mcp: 'MCP',
   general: 'Allgemein',
 };
@@ -63,6 +73,7 @@ export function initSettingsModal(deps) {
     onCheckUpdates,
     toolPermissionsPanel = null,
     mcpPanel = null,
+    memoryPanel = null,
     onSkillSuggestionModeChanged = null,
     getTheme = null,
     setTheme = null,
@@ -1337,7 +1348,8 @@ export function initSettingsModal(deps) {
       SETTINGS_NAV_LABELS[panelKey] || SETTINGS_NAV_LABELS.models;
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
-      applyHint.innerHTML = IMMEDIATE_PANELS.has(panelKey) ? APPLY_HINT_IMMEDIATE : APPLY_HINT_DEFERRED;
+      if (panelKey === 'memory') applyHint.innerHTML = APPLY_HINT_MEMORY;
+      else applyHint.innerHTML = IMMEDIATE_PANELS.has(panelKey) ? APPLY_HINT_IMMEDIATE : APPLY_HINT_DEFERRED;
     }
   }
 
@@ -1581,6 +1593,10 @@ export function initSettingsModal(deps) {
     // MCP (Issue #109) liest wie die Berechtigungen direkt vom Main und
     // wirkt sofort — die Serverliste haengt nicht am Entwurf.
     await mcpPanel?.open?.();
+    // Gedaechtnis (Issue #166): Die Eintraege kommen wie die Serverliste
+    // direkt vom Main, das Vergessen wirkt sofort. Nur die drei Schalter
+    // gehoeren zum Entwurf und werden mit „Übernehmen“ gespeichert.
+    await memoryPanel?.refresh?.();
     await loadSkillCatalog();
     renderDraftPresetList();
     renderProviderSelect();
@@ -1883,6 +1899,7 @@ export function initSettingsModal(deps) {
           shellExecutionEnabled: inputShellEnabled?.checked === true,
           environmentInfoEnabled: inputEnvironmentInfo?.checked !== false,
           projectInstructionsEnabled: inputProjectInstructions?.checked !== false,
+          ...(memoryPanel?.readPrefs?.() || {}),
         },
       });
       if (res?.ok || res?.uiPrefsSaved) {

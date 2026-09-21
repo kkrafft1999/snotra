@@ -70,8 +70,14 @@ function describeSessionScope({ tool, targets, riskClasses } = {}) {
   const paths = (Array.isArray(targets) ? targets : [])
     .map((target) => (typeof target === 'string' ? target : target?.path))
     .filter((p) => typeof p === 'string' && p);
-  const targetText = paths.length > 0 ? paths.join(', ') : 'ohne Dateiziel';
-  return `Gilt in dieser Sitzung für ${tool} auf genau ${targetText} (${classes.join(', ') || 'Lesen'}).`;
+  const wirkung = classes.join(', ') || 'Lesen';
+  // Ohne Pfade ergäbe „auf genau ohne Dateiziel“ keinen deutschen Satz. Den
+  // Fall gibt es bei `shell_execute` (#102) und beim Merken (#166): Dort hängt
+  // die Freigabe am Tool, nicht an einem Ziel — und genau das soll dastehen.
+  if (paths.length === 0) {
+    return `Gilt in dieser Sitzung für jeden Aufruf von ${tool} (${wirkung}).`;
+  }
+  return `Gilt in dieser Sitzung für ${tool} auf genau ${paths.join(', ')} (${wirkung}).`;
 }
 
 /**

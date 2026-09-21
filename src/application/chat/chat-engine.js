@@ -46,6 +46,8 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
+const { buildMemorySystemPrompt } = require('./memory-prompt');
+const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
@@ -491,6 +493,7 @@ function buildHistoryContextParts(messages) {
  */
 function buildStaticContextParts({
   systemPrompt,
+  memoryParts,
   skillParts,
   environmentSystem,
   projectInstructionParts,
@@ -511,6 +514,9 @@ function buildStaticContextParts({
       })
     );
   }
+  // Je Gedächtnis-Ebene eine eigene Zeile (Issue #166), an derselben Stelle
+  // wie im Prompt: direkt hinter dem eigenen System-Prompt des Nutzers.
+  parts.push(...(Array.isArray(memoryParts) ? memoryParts : []));
   parts.push(...(Array.isArray(skillParts) ? skillParts : []));
   if (environmentSystem) {
     parts.push(
@@ -629,6 +635,7 @@ function createChatEngine({
   skills = null,
   environment = null,
   projectInstructions = null,
+  memory = null,
   toolPolicy = null,
   approvals = null,
   sessionGrants = createSessionGrants(),
@@ -926,7 +933,33 @@ function createChatEngine({
         }
       }
 
-      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Die
+      // Gedächtnis (Issue #166). Je Ebene abschaltbar, weil beide mit jeder
+      // Anfrage zum Anbieter gehen — der Ordner-Schalter ist zugleich die
+      // Notbremse für einen fremden Ordner, dessen `memory.md` man nicht
+      // übernehmen will.
+      let memorySystem = '';
+      let memoryParts = [];
+      if (memory) {
+        try {
+          const files = (await memory.load({ workspaceRoot })).filter((file) =>
+            file.scope === MEMORY_SCOPES.WORKSPACE
+              ? uiPrefs.memoryWorkspaceEnabled !== false
+              : uiPrefs.memoryUserEnabled !== false
+          );
+          const built = buildMemorySystemPrompt(files);
+          memorySystem = built.text;
+          memoryParts = built.parts;
+        } catch {
+          // Eine unlesbare memory.md darf den Chat nicht blockieren.
+          memorySystem = '';
+          memoryParts = [];
+        }
+      }
+
+      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
+      // Gedächtnis steht direkt dahinter, weil es dasselbe ist: was der Nutzer
+      // selbst gesagt hat, nur über mehrere Unterhaltungen hinweg. Zwischen
+      // beide soll sich nichts Fremdes schieben. Die
       // Umgebung ist Sachkontext wie der Ordner und steht deshalb bei ihm,
       // hinter den Skills, die das Wie beschreiben. Die Projektanweisungen
       // stehen bewusst *vor* dem Ordner-/Tool-Block: Der trägt die Regel, dass
@@ -934,6 +967,7 @@ function createChatEngine({
       // eine fremde AGENTS.md überschreiben könnte.
       const combinedSystem = [
         systemPrompt,
+        memorySystem,
         skillsSystem,
         environmentSystem,
         projectInstructionsSystem,
@@ -946,6 +980,7 @@ function createChatEngine({
       // nur der Verlauf waechst mit jeder Tool-Runde und wird dort gezaehlt.
       const staticContextParts = buildStaticContextParts({
         systemPrompt,
+        memoryParts,
         skillParts: skillContextParts,
         environmentSystem,
         projectInstructionParts,

@@ -437,6 +437,36 @@ Notbremse dafür ist der Schalter **Einstellungen › Allgemein ›
 „`AGENTS.md` mitschicken"** (voreingestellt an), der alle drei Stellen
 abschaltet.
 
+## Gedächtnis: `memory.md`
+
+Snotra fängt nicht jeden Chat bei null an. Sag im Chat **„bitte merke dir …"**,
+und der Satz steht ab der nächsten Nachricht wieder im Systemprompt — auch in
+einem neuen Chat, auch nach einem Neustart.
+
+Es gibt zwei Ebenen, beide als gewöhnliche Markdown-Datei:
+
+| Ebene | Datei | Gilt für |
+| --- | --- | --- |
+| Projekt | `<ordner>/.agents/memory.md` | nur den geöffneten Ordner |
+| Global | `~/.snotra/memory.md` | jeden Ordner |
+
+Dieselben zwei Orte wie bei `AGENTS.md` und den Skills. Weil es Dateien sind,
+kannst du sie im Editor lesen und bearbeiten, und das Projekt-Gedächtnis zieht
+beim Verschieben des Ordners mit um. Es liegt damit aber auch **in deinem
+Projekt** und kann in ein Repository geraten — was nur dich angeht, gehört ins
+globale Gedächtnis oder gar nicht hinein. **Passwörter, Schlüssel und
+Zugangsdaten niemals:** Das Gedächtnis geht mit jeder Anfrage an den Anbieter.
+
+Snotra merkt sich auch **von selbst**, was dauerhaft wichtig aussieht. Jeder
+Merkvorgang ist freigabepflichtig und steht mit Ziel und Pfad im Tool-Log — und
+das selbstständige Merken lässt sich abschalten, dann bleibt es bei dem, worum
+du ausdrücklich bittest.
+
+Unter **Einstellungen › Gedächtnis** siehst du beide Ebenen mit allen
+Einträgen, löschst einzelne davon und schaltest jede Ebene ab. Je Ebene gehen
+höchstens 8.000 Zeichen mit; wie viel das am Kontextfenster ausmacht, steht
+einzeln in der Aufschlüsselung unter dem Eingabefeld.
+
 ## MCP-Server
 
 Über das **Model Context Protocol (MCP)** bindest du Werkzeuge fremder Systeme

@@ -56,6 +56,13 @@ bestehende Importe stabil bleiben.
   Systemversion, Shell und Tagesdatum. Ermittelt werden sie im
   `main/adapters/environment-adapter.js` — der Core selbst sieht weder
   `process.platform` noch das Dateisystem
+- `memory-port` — die beiden `memory.md`-Dateien und das Anhängen einzelner
+  Einträge (#166). Adapter: `main/adapters/memory-adapter.js`. **Die Pfade
+  entstehen ausschließlich dort**: Das Tool `remember` nennt nur die Ebene
+  (`workspace` | `user`), nie einen Pfad — deshalb weicht das Schreiben nach
+  `~/.snotra` die Workspace-Grenze der Datei-Tools nicht auf. Der Adapter
+  schreibt seriell je Datei, damit zwei Fenster im selben Ordner sich nicht
+  gegenseitig überschreiben.
 - `project-instructions-port` — die gefundenen `AGENTS.md`-Dateien für den
   Block mit den Projektanweisungen (Issue #212). Wo sie liegen, weiß allein
   `main/adapters/project-instructions-adapter.js`; der Core sieht weder
@@ -920,13 +927,25 @@ Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
 (`application/chat/chat-engine.js`), in dieser Reihenfolge:
 
 1. **Basisprompt** aus den Einstellungen — steht vorn und behält den Vorrang.
-2. **Skill-Block** (`buildSkillsSystemPrompt`) — die eingeschalteten Skills;
+2. **Gedächtnis-Block** (`application/chat/memory-prompt.js`,
+   [#166](https://github.com/kkrafft1999/snotra/issues/166)) — die beiden
+   `memory.md`-Dateien aus `<workspace>/.agents` und `~/.snotra`. Er steht
+   direkt hinter dem Basisprompt, weil er dasselbe ist: was der Nutzer selbst
+   gesagt hat, nur über mehrere Unterhaltungen hinweg — dazwischen soll sich
+   nichts Fremdes schieben. Je Ebene höchstens 8.000 Zeichen
+   (`MAX_MEMORY_CHARS`), Übergroßes wird sichtbar gekürzt, und jede Ebene
+   bekommt eine eigene Zeile in der Kontext-Aufschlüsselung (#174). Je Ebene
+   abschaltbar unter Einstellungen › Gedächtnis (Voreinstellung an).
+   Geschrieben wird er nur über das Tool `remember`; die Anleitung dazu steht
+   im System-Skill `snotra-memory` und wird erst bei Bedarf geladen — Inhalt
+   immer, Regelwerk auf Abruf.
+3. **Skill-Block** (`buildSkillsSystemPrompt`) — die eingeschalteten Skills;
    sie beschreiben das *Wie*. Im Prompt steht je Skill nur Name und
    Kurzbeschreibung, die Anleitung holt das Modell bei Bedarf mit `load_skill`
    ([#173](https://github.com/kkrafft1999/snotra/issues/173)). Nur zwei Fälle
    stehen sofort voll im Prompt: per `/name` gerufene Skills und der Rückfall,
    wenn es kein `load_skill` gibt.
-3. **Environment-Block** (`application/chat/environment-prompt.js`, Issue #138)
+4. **Environment-Block** (`application/chat/environment-prompt.js`, Issue #138)
    — Arbeitsverzeichnis (absoluter Pfad), Git ja/nein, Plattform,
    Systemversion, die Shell von `shell_execute` und das heutige Datum. Die
    Shell steht nur dort, wenn das Tool eingeschaltet *und* eine Shell gefunden
@@ -935,7 +954,7 @@ Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
    der Anbieter nicht bei jeder Nachricht bricht. Abschaltbar über
    „Umgebungsinformationen mitschicken" in den Einstellungen (Voreinstellung
    an) — der absolute Pfad enthält den Benutzernamen und geht an den Anbieter.
-4. **Projektanweisungen** (`application/chat/project-instructions-prompt.js`,
+5. **Projektanweisungen** (`application/chat/project-instructions-prompt.js`,
    Issue #212, nachgeschärft in #253) — die `AGENTS.md`-Dateien aus
    `<workspace>/.agents`, `~/.snotra` und `~/.agents`, alle vorhandenen
    aneinandergehängt. Sie **ergänzen einander und gelten gemeinsam**; keine
@@ -949,7 +968,7 @@ Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
    Übergroßes wird sichtbar gekürzt statt verworfen, und jede Datei bekommt
    eine eigene Zeile in der Kontext-Aufschlüsselung (#174). Abschaltbar über
    „`AGENTS.md` mitschicken" in den Einstellungen (Voreinstellung an).
-5. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
+6. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
    `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
    Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.
 

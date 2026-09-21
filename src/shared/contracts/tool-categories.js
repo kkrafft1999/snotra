@@ -42,6 +42,10 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   apply_patch: TOOL_CATEGORIES.WRITE,
   run_python: TOOL_CATEGORIES.EXEC,
   shell_execute: TOOL_CATEGORIES.EXEC,
+  // Merken ist ein Schreibvorgang wie jeder andere (Issue #166) — eine Datei
+  // entsteht oder waechst. Dass sie der App gehoert und nicht dem Projekt,
+  // aendert daran nichts; im Log soll es bei den Schreibschritten stehen.
+  remember: TOOL_CATEGORIES.WRITE,
 });
 
 /** Kategorie eines Tools; unbekannte und fehlende Namen ergeben OTHER. */

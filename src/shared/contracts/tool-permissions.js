@@ -403,6 +403,20 @@ function createToolApprovalRequestDto({
       truncated: preview.truncated === true,
       masked: preview.masked === true,
     };
+    // Angaben, die neben der Vorschau als eigene Zeile auf die Karte gehören:
+    // Shell und Arbeitsordner bei `shell_execute` (#102), die Reichweite beim
+    // Merken (#166). Ohne sie zeigt die Karte „ohne Dateiziel" und verschweigt
+    // das Einzige, worüber hier entschieden wird.
+    if (typeof preview.shell === 'string' && preview.shell) {
+      dto.preview.shell = preview.shell.slice(0, 200);
+      dto.preview.shellLogin = preview.shellLogin === true;
+    }
+    if (typeof preview.cwd === 'string' && preview.cwd) {
+      dto.preview.cwd = preview.cwd.slice(0, 1000);
+    }
+    if (typeof preview.memoryScope === 'string' && preview.memoryScope) {
+      dto.preview.memoryScope = preview.memoryScope.slice(0, 20);
+    }
   }
   return dto;
 }

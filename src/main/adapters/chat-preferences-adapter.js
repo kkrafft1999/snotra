@@ -30,6 +30,16 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
       if (prefs.projectInstructionsEnabled === false) {
         out.projectInstructionsEnabled = false;
       }
+      // Und fuer die beiden Gedaechtnis-Ebenen (Issue #166). `memorySelfEnabled`
+      // steht bewusst nicht hier: Ob Snotra ungefragt merken darf, betrifft das
+      // Schreiben und wird im Memory-Adapter geprueft — der Chat-Core baut nur
+      // den Prompt und hat damit nichts zu tun.
+      if (prefs.memoryWorkspaceEnabled === false) {
+        out.memoryWorkspaceEnabled = false;
+      }
+      if (prefs.memoryUserEnabled === false) {
+        out.memoryUserEnabled = false;
+      }
       return out;
     },
   };

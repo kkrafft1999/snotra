@@ -17,6 +17,7 @@ import { initToolModePicker } from './components/ToolModePicker.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
+import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
 
@@ -219,6 +220,7 @@ initToolModePicker({ toolPermissions });
 const approvalCards = initToolApprovalCards({ api, appStore });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
+const memoryPanel = initMemoryPanel({ api });
 
 /**
  * Chat wird zum aktiven (Issue #211): Der Main stellt Modell und Freigabemodus
@@ -347,6 +349,7 @@ const settingsModal = initSettingsModal({
   onCheckUpdates: () => updateDialog.checkNow(),
   toolPermissionsPanel,
   mcpPanel,
+  memoryPanel,
   onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),
   getTheme: theme.getTheme,
   setTheme: theme.setTheme,
