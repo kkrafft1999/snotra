@@ -77,13 +77,18 @@ test('registry zeigt Schreib-Tools unabhängig vom Modus und filtert nur nach Al
     ['read', 'write']
   );
 
-  // Seit #182 zaehlt der Block keine Tool-Namen mehr auf — was von der
-  // Allowlist abhaengt, ist der Schreib-Hinweis.
-  assert.match(
+  // Seit #182 zaehlt der Block keine Tool-Namen mehr auf, seit #268 traegt er
+  // auch keinen Schreib-Vorbehalt mehr: Der hat Modelle davon abgehalten,
+  // ueberhaupt zu schreiben. Ein sichtbares Schreib-Tool darf den Block
+  // deshalb nicht mehr veraendern.
+  assert.equal(
     registry.buildSystemPrompt({ allowedNames: ['read', 'write'] }),
-    /Schreib-Tools zurückhaltend/
+    registry.buildSystemPrompt({ allowedNames: ['read'] })
   );
-  assert.doesNotMatch(registry.buildSystemPrompt({ allowedNames: ['read'] }), /Schreib-Tools zurückhaltend/);
+  assert.doesNotMatch(
+    registry.buildSystemPrompt({ allowedNames: ['read', 'write'] }),
+    /zurückhaltend/
+  );
 });
 
 test('registry filters disabled tool names from tools, prompt and execution', async () => {
@@ -346,7 +351,9 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'edit_file',
     'apply_patch',
   ]);
-  assert.match(registry.buildSystemPrompt(), /Schreib-Tools zurückhaltend/);
+  // Kein Schreib-Vorbehalt mehr im Block (#268) — der Schutz haengt an der
+  // Freigabe je Aufruf, nicht an einer Bitte im Prompt.
+  assert.doesNotMatch(registry.buildSystemPrompt(), /zurückhaltend/);
   // web_search fehlt oben bewusst: ohne eingerichteten Suchdienst wird es dem
   // Modell nicht angeboten (Issue #63). Im Katalog der Einstellungen steht es.
   assert.equal(names.includes('web_search'), false);
