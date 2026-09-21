@@ -237,13 +237,34 @@ test('Standardprogramm Linux: xdg-mime plus Name= aus dem .desktop-Eintrag', asy
       return cb(null, 'org.gnome.gedit.desktop\n');
     },
   });
+  const tried = [];
   const fs = {
     readFile: async (p) => {
+      tried.push(p);
       if (p === '/home/k/.local/share/applications/org.gnome.gedit.desktop') return '[Desktop Entry]\nName=Texteditor\n';
       throw new Error('ENOENT');
     },
   };
   assert.equal(await resolver.resolve('/ws/a.md', { fs }), 'Texteditor');
+  // Linux-Pfade bleiben Linux-Pfade, auch wenn der Test unter Windows läuft.
+  assert.deepEqual(tried, ['/home/k/.local/share/applications/org.gnome.gedit.desktop']);
+});
+
+test('Standardprogramm Linux: die Suchpfade sind auch unter Windows POSIX-Pfade (#123)', async () => {
+  const resolver = createDefaultAppResolver({
+    platform: 'linux',
+    homedir: () => '/home/k',
+    execFile: (cmd, args, opts, cb) => cb(null, args[1] === 'filetype' ? 'text/plain' : 'nano.desktop'),
+  });
+  const tried = [];
+  const fs = { readFile: async (p) => { tried.push(p); throw new Error('ENOENT'); } };
+  await resolver.resolve('/ws/a.txt', { fs });
+  assert.deepEqual(tried, [
+    '/home/k/.local/share/applications/nano.desktop',
+    '/usr/share/applications/nano.desktop',
+    '/usr/local/share/applications/nano.desktop',
+  ]);
+  assert.equal(tried.some((p) => p.includes('\\')), false);
 });
 
 test('Standardprogramm Linux: ohne .desktop-Datei bleibt die Kennung als Notnagel', async () => {

@@ -178,14 +178,16 @@ function createDefaultAppResolver({
     const desktopId = await run('xdg-mime', ['query', 'default', mime]);
     if (!desktopId) return null;
     const home = typeof homedir === 'function' ? homedir() : env.HOME;
+    // Durchgängig `posix`: Diese Pfade sind Linux-Pfade, auch wenn der Code
+    // (im Test) unter Windows läuft — `path.join` machte daraus Backslashes.
     const dirs = [
-      ...(home ? [nodePath.join(home, '.local', 'share', 'applications')] : []),
+      ...(home ? [nodePath.posix.join(home, '.local', 'share', 'applications')] : []),
       ...LINUX_DESKTOP_DIRS,
     ];
     for (const dir of dirs) {
       try {
         // eslint-disable-next-line no-await-in-loop -- die Liste ist drei Einträge lang
-        const content = await fs.readFile(nodePath.join(dir, desktopId), 'utf8');
+        const content = await fs.readFile(nodePath.posix.join(dir, desktopId), 'utf8');
         const name = content.split(/\r?\n/).find((line) => line.startsWith('Name='));
         if (name) return name.slice('Name='.length).trim() || null;
       } catch {
