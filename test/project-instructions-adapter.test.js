@@ -8,8 +8,13 @@ const {
   MAX_PROJECT_INSTRUCTION_CHARS,
 } = require('../src/shared/contracts/project-instructions');
 
-const HOME = path.join('/home', 'konrad');
-const ROOT = path.join('/tmp', 'projekt');
+// Aufgeloest, nicht nur zusammengesetzt: Der Adapter loest Home und Ordner
+// auf, und unter Windows haengt `resolve` dabei den Laufwerksbuchstaben an
+// (`\\tmp\\projekt` wird zu `D:\\tmp\\projekt`). Ohne das hier laufen die
+// Erwartungen an den erzeugten Pfaden vorbei — auf dem Mac unsichtbar, in der
+// Windows-CI rot.
+const HOME = path.resolve(path.join('/home', 'konrad'));
+const ROOT = path.resolve(path.join('/tmp', 'projekt'));
 
 const P = {
   userAgents: path.join(HOME, '.agents', 'AGENTS.md'),
@@ -139,6 +144,26 @@ test('ein relativer Ordnerpfad wird aufgelöst, bevor gelesen wird', async () =>
   const log = [];
   await build({}, { log }).load({ workspaceRoot: './unterordner' });
   assert.ok(log.includes(path.join(path.resolve('./unterordner'), 'AGENTS.md')));
+});
+
+test('unter Windows-Pfaden gilt dieselbe Kette und dieselbe Doppelt-Erkennung', () => {
+  // Pinnt die Kette gegen Windows-Pfadsemantik auf jeder Plattform fest —
+  // sonst faellt ein fest verdrahteter `/` erst in der Windows-CI auf.
+  const win = path.win32;
+  const home = 'C:\\Users\\konrad';
+  const log = [];
+  const adapter = createProjectInstructionsAdapter({
+    fs: makeFs({}, log),
+    path: win,
+    os: { homedir: () => home },
+  });
+  return adapter.load({ workspaceRoot: home }).then(() => {
+    assert.deepEqual(log, [
+      'C:\\Users\\konrad\\.agents\\AGENTS.md',
+      'C:\\Users\\konrad\\.snotra\\AGENTS.md',
+      'C:\\Users\\konrad\\AGENTS.md',
+    ]);
+  });
 });
 
 test('ohne fs oder path lässt sich der Adapter nicht bauen', () => {

@@ -30,11 +30,16 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
   if (!fs || !path) throw new TypeError('createProjectInstructionsAdapter benötigt fs und path.');
 
   function homeDir() {
+    let home;
     try {
-      return os && typeof os.homedir === 'function' ? os.homedir() : null;
+      home = os && typeof os.homedir === 'function' ? os.homedir() : null;
     } catch {
       return null;
     }
+    // Aufgeloest wie der Workspace-Pfad weiter unten. `os.homedir()` liefert
+    // ohnehin absolut, aber die Doppelt-Erkennung vergleicht beide Seiten als
+    // Zeichenkette — da sollen sie in derselben Form entstehen.
+    return typeof home === 'string' && home.trim() ? path.resolve(home) : null;
   }
 
   /** Die Kette als Paare aus Quelle und absolutem Pfad, in Prompt-Reihenfolge. */
