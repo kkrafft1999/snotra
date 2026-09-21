@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -43,6 +43,8 @@ const WORKSPACE_MEMORY_MD = [
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
 const LINK_QUESTION = 'Zeig mir Links.';
 const IMAGE_QUESTION = 'Zeig mir das Diagramm.';
+const MEMORY_QUESTION = 'Bitte merke dir etwas.';
+const MEMORY_NEW_ENTRY = 'Frisch-gemerkt-im-Smoke-Test.';
 
 /**
  * Antwort der zweiten Runde: genau das, was der Sanitizer beschneiden muss.
@@ -534,4 +536,50 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geschlossener Einstellungsdialog' });
+
+  // --- „merk dir das": Modell → Freigabe → Datei (Issue #166) ---------------
+  // Die teuerste Strecke des Gedaechtnisses und die einzige, die kein
+  // Unit-Test erreicht: Erst hier faellt auf, wenn die Berechtigungspruefung
+  // dazwischengeht. Genau das tat sie anfangs — ein Schreib-Tool ohne
+  // Pfadziel gilt dort als ungueltig, bis `pathlessWrite` es ausnimmt.
+  model.queueAnswer({
+    match: MEMORY_QUESTION,
+    toolCalls: [{
+      name: 'remember',
+      arguments: { scope: 'workspace', text: MEMORY_NEW_ENTRY, origin: 'requested' },
+    }],
+  });
+  model.queueAnswer({ match: 'remember', text: 'Hab ich mir gemerkt.' });
+  await ask(page, MEMORY_QUESTION);
+
+  const approval = await poll(() => page.evaluate(() => {
+    const card = document.querySelector('.chat-approval-card');
+    if (!card) return null;
+    return {
+      text: card.textContent.replace(/\s+/g, ' '),
+      antworten: [...card.querySelectorAll('button[data-response]')].map((b) => b.dataset.response),
+    };
+  }), { what: 'Freigabekarte fuer remember' });
+  // Die Karte nennt die Reichweite und den Merksatz — einen Pfad gibt es
+  // nicht, weil das Tool keinen bildet.
+  assert.match(approval.text, /Reichweite/);
+  assert.match(approval.text, /gilt nur im geöffneten Ordner/);
+  assert.equal(approval.text.includes('ohne Dateiziel'), false, 'kein "ohne Dateiziel" auf der Karte');
+  assert.ok(approval.antworten.includes('allow-once'), approval.antworten.join(','));
+
+  await page.evaluate(() =>
+    document.querySelector('.chat-approval-card button[data-response="allow-once"]').click());
+
+  const gemerkt = await poll(async () => {
+    try {
+      const text = await readFile(path.join(workspace, '.agents', 'memory.md'), 'utf8');
+      return text.includes(MEMORY_NEW_ENTRY) ? text : null;
+    } catch {
+      return null;
+    }
+  }, { what: 'in die memory.md geschriebener Eintrag' });
+  // Angehaengt, mit Datum, ohne das Bestehende anzuruehren.
+  assert.match(gemerkt, new RegExp(`- \\d{4}-\\d{2}-\\d{2} — ${MEMORY_NEW_ENTRY}`));
+  assert.ok(gemerkt.includes('Gemerkt-fuer-dieses-Projekt.'), 'der alte Eintrag steht noch da');
+  step('„merk dir das" bis in die Datei geprueft');
 });
