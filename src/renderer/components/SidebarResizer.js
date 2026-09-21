@@ -9,6 +9,12 @@ const HISTORY_MIN = 180;
 const HISTORY_MAX = 800;
 const HISTORY_DEFAULT = 260;
 const CONTENT_MIN = 200;
+// Breite, in der der Startschirm aufgeht: `#welcome` ist inhaltlich auf 560 px
+// begrenzt und hat 32 px Polsterung je Seite (styles.css). Mehr Spalte hiesse
+// nur mehr Leerraum um denselben Text — den Platz bekommt beim Erststart
+// lieber der Chat (Issue #258). `test/startup-layout.test.js` haelt die Zahl
+// mit dem CSS zusammen.
+const CONTENT_WELCOME = 560 + 2 * 32;
 
 // Tastaturbedienung der Trenner (WAI-ARIA "Window Splitter"). Gelesen wird
 // die Pfeilrichtung woertlich: Der Trenner wandert dorthin, wohin die Taste
@@ -206,6 +212,30 @@ export function initSidebarResizer({
     } finally {
       adjusting = false;
     }
+  }
+
+  /**
+   * Stellt die Chat-Breite so ein, dass der mittleren Spalte genau der
+   * Startschirm bleibt (Issue #258). Gerufen wird das nur beim Start ohne
+   * Ordner und ohne gemerkte Chat-Breite — eine gemerkte Breite ist ein
+   * ausdruecklicher Wunsch und bleibt stehen. Geschrieben wird hier nichts:
+   * Was der Start einrichtet, ist kein neuer Wunsch.
+   *
+   * Das Clamping in applyChatWidth bleibt zustaendig — im schmalen Fenster
+   * deckelt es den Chat bei der halben Breite, und die Spalte wird dann eben
+   * schmaler als der Startschirm gern haette.
+   */
+  function fitChatToWelcome() {
+    if (!appRoot || !chatPanel) return null;
+    if (appRoot.classList.contains('app--no-preview')) return null;
+    if (appRoot.classList.contains('app--no-chat')) return null;
+    const total = appRoot.getBoundingClientRect().width;
+    if (!total) return null;
+    // Die weggeschaltete Seitenleiste belegt nichts — wie in workspaceMin.
+    const sidebarPx = appRoot.classList.contains('app--no-sidebar')
+      ? 0
+      : currentSidebarWidth();
+    return applyChatWidth(total - sidebarPx - currentHistoryWidth() - CONTENT_WELCOME);
   }
 
   /**
@@ -435,5 +465,5 @@ export function initSidebarResizer({
 
   // Der Verlauf schaltet sich ueber seinen eigenen Knopf ein; danach muss der
   // Platz neu aufgeteilt werden, sonst steht er ueber dem Arbeitsbereich.
-  return { ensureRoomForWorkspace, handleHistoryVisibility };
+  return { ensureRoomForWorkspace, handleHistoryVisibility, fitChatToWelcome };
 }

@@ -97,11 +97,20 @@ setContentPaneVisible(false);
 let chatRestoredOnLoad = false;
 let contentPaneToggledByUser = false;
 
-function applyStartupContentPane(preference) {
+function applyStartupContentPane({ preference, hasFolder, chatWidthRemembered }) {
   if (contentPaneToggledByUser) return;
-  setContentPaneVisible(
-    contentPaneVisibleOnStart({ preference, chatRestored: chatRestoredOnLoad })
-  );
+  const visible = contentPaneVisibleOnStart({
+    preference,
+    chatRestored: chatRestoredOnLoad,
+    hasFolder,
+  });
+  setContentPaneVisible(visible);
+  // Ohne Ordner steht in der Spalte der Startschirm, und der braucht nicht
+  // mehr als seine 624 px (Issue #258). Den Rest bekommt der Chat — ausser die
+  // Breite ist gemerkt, dann gilt sie.
+  if (visible && hasFolder !== true && !chatWidthRemembered) {
+    panelResizer?.fitChatToWelcome();
+  }
 }
 
 btnToggleContentPane.addEventListener('click', async () => {
@@ -407,9 +416,9 @@ void initAppVersionBadge({ api });
 
 (async () => {
   let uiPrefs = {
-    // Faellt das Lesen der Prefs aus, gilt dieselbe Voreinstellung wie im
-    // Contract: die mittlere Anzeige bleibt zu (Issue #255).
-    contentPaneVisible: false,
+    // Faellt das Lesen der Prefs aus, bleibt `contentPaneVisible` ungesetzt —
+    // genau wie im Contract, wenn nichts gespeichert ist (Issues #255, #258).
+    // Der Start entscheidet dann am Ordner.
     sidebarVisible: true,
     chatPanelVisible: true,
     appLocale: 'de',
@@ -443,12 +452,16 @@ void initAppVersionBadge({ api });
     setHistoryVisible: (open) => chatHistory.setHistoryOpen(open, { persist: false }),
   });
   panelResizer.ensureRoomForWorkspace();
+  // Ob am Ende ein Ordner offen ist, entscheidet ueber den Startschirm — und
+  // damit ueber die Spalte (Issue #258). Deshalb vor dem try, es wird im
+  // finally gebraucht.
+  let folderOpened = false;
   try {
     const { folderPath } = await api.getLastFolder();
     // openProject meldet false, wenn der Main-Prozess den Ordner nicht mehr
     // aktiviert (geloescht, nicht mehr im Verlauf) — dann ohne Ordner starten.
-    const opened = folderPath ? await fileTree.openProject(folderPath) : false;
-    if (!opened) {
+    folderOpened = folderPath ? await fileTree.openProject(folderPath) : false;
+    if (!folderOpened) {
       const loaded = await chatStream.loadChatForWorkspace(null);
       chatRestoredOnLoad = loaded?.restored === true;
       await fileTree.refreshWelcomeRecent();
@@ -458,7 +471,11 @@ void initAppVersionBadge({ api });
     // Erst jetzt steht fest, ob ein Chat zurueckgekommen ist — vorher waere die
     // Spalte nur geraten. Im `finally`, damit sie auch nach einem Fehler beim
     // Laden nicht eingeklappt haengen bleibt.
-    applyStartupContentPane(uiPrefs.contentPaneVisible === true);
+    applyStartupContentPane({
+      preference: uiPrefs.contentPaneVisible,
+      hasFolder: folderOpened,
+      chatWidthRemembered: typeof uiPrefs.chatPanelWidth === 'number',
+    });
   }
   syncChatInputHeight();
 })();
