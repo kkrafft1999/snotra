@@ -2148,8 +2148,9 @@ export function initSettingsModal(deps) {
     void refreshSkillCatalogKeepingSelection();
   });
 
-  // Der einzige Weg in den Dialog: Menue "Ansicht > Einstellungen" bzw.
-  // Cmd/Ctrl+Komma. Das Zahnrad im Chat-Kopf ist entfallen — es war mit der
+  // Der einzige Weg in den Dialog: der Menueeintrag "Einstellungen…" bzw.
+  // Cmd/Ctrl+Komma. Wo er steht, entscheidet die Plattform — auf macOS im
+  // App-Menue, sonst unter "Ansicht" (siehe services/application-menu.js). Das Zahnrad im Chat-Kopf ist entfallen — es war mit der
   // Chat-Spalte weg, und eine Einstellung des ganzen Programms gehoert nicht in
   // die Kopfzeile einer Spalte. Steht der Dialog schon offen, passiert nichts:
   // Ein zweiter Aufruf ueberschriebe nur den gemerkten Fokus von vor dem

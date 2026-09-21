@@ -13,6 +13,7 @@ const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
 const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
+const { createApplicationMenuTemplate } = require('./services/application-menu');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
 // "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
@@ -27,114 +28,6 @@ app.setName(APP_NAME);
 const DEFAULT_PROVIDER = 'openai';
 
 let application = null;
-
-function buildApplicationMenu() {
-  // Auf macOS muss das ERSTE Submenu den App-Namen als label tragen — das ist
-  // der fett gedruckte Eintrag rechts neben dem Apfel. Auf Windows/Linux gibt
-  // es kein App-Menue, dort beginnen wir direkt mit Datei/Bearbeiten.
-  const isMac = process.platform === 'darwin';
-  const appName = app.getName();
-
-  const macAppMenu = {
-    label: appName,
-    submenu: [
-      { role: 'about' },
-      { type: 'separator' },
-      { role: 'services' },
-      { type: 'separator' },
-      { role: 'hide', label: `${appName} ausblenden` },
-      { role: 'hideOthers', label: 'Andere ausblenden' },
-      { role: 'unhide', label: 'Alle einblenden' },
-      { type: 'separator' },
-      { role: 'quit', label: `${appName} beenden` },
-    ],
-  };
-
-  const editMenu = {
-    label: 'Bearbeiten',
-    submenu: [
-      { role: 'undo', label: 'Rueckgaengig' },
-      { role: 'redo', label: 'Wiederholen' },
-      { type: 'separator' },
-      { role: 'cut', label: 'Ausschneiden' },
-      { role: 'copy', label: 'Kopieren' },
-      { role: 'paste', label: 'Einfuegen' },
-      { role: 'selectAll', label: 'Alles auswaehlen' },
-    ],
-  };
-
-  const viewMenu = {
-    label: 'Ansicht',
-    submenu: [
-      // Issue #167: das Kuerzel haengt bewusst am Menueeintrag statt an einer
-      // Tastenabfrage im Renderer — so steht es sichtbar im Menue und gilt
-      // auch, wenn der Fokus in einem Eingabefeld liegt.
-      {
-        label: 'Seitenleiste ein-/ausblenden',
-        accelerator: 'CmdOrCtrl+B',
-        click: () => {
-          getMainWindow()?.webContents.send(PUSH.UI_TOGGLE_SIDEBAR);
-        },
-      },
-      { type: 'separator' },
-      // Der einzige Weg in die Einstellungen war bis hierher das Zahnrad im
-      // Chat-Kopf — und das ist weg, sobald die Chat-Spalte weggeschaltet ist.
-      {
-        label: 'Einstellungen\u2026',
-        accelerator: 'CmdOrCtrl+,',
-        click: () => {
-          getMainWindow()?.webContents.send(PUSH.UI_OPEN_SETTINGS);
-        },
-      },
-      { type: 'separator' },
-      { role: 'reload', label: 'Neu laden' },
-      { role: 'forceReload', label: 'Hart neu laden' },
-      { role: 'toggleDevTools', label: 'Entwicklertools' },
-      { type: 'separator' },
-      { role: 'resetZoom', label: 'Zoom zuruecksetzen' },
-      { role: 'zoomIn', label: 'Vergroessern' },
-      { role: 'zoomOut', label: 'Verkleinern' },
-      { type: 'separator' },
-      { role: 'togglefullscreen', label: 'Vollbild' },
-    ],
-  };
-
-  const windowMenu = {
-    label: 'Fenster',
-    role: 'window',
-    submenu: [
-      { role: 'minimize', label: 'Im Dock ablegen' },
-      { role: 'zoom', label: 'Vollbild Fenster' },
-      ...(isMac ? [{ type: 'separator' }, { role: 'front', label: 'Alle nach vorne' }] : [{ role: 'close', label: 'Schliessen' }]),
-    ],
-  };
-
-  const helpMenu = {
-    label: 'Hilfe',
-    role: 'help',
-    submenu: [
-      {
-        label: 'Nach Updates suchen…',
-        click: () => { void application.runUpdateCheck({ silent: false }); },
-      },
-      { type: 'separator' },
-      {
-        label: 'Projekt auf GitHub',
-        click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),
-      },
-    ],
-  };
-
-  const template = [
-    ...(isMac ? [macAppMenu] : []),
-    editMenu,
-    viewMenu,
-    windowMenu,
-    helpMenu,
-  ];
-
-  return Menu.buildFromTemplate(template);
-}
 
 app.whenReady().then(async () => {
   registerMediaCapturePermissions();
@@ -171,7 +64,13 @@ app.whenReady().then(async () => {
     realpathNative: realpathSync.native,
   });
 
-  Menu.setApplicationMenu(buildApplicationMenu());
+  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
+    appName: app.getName(),
+    getMainWindow,
+    shell,
+    PUSH,
+    onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
+  })));
 
   // Der aktive Workspace wird nicht vorab gesetzt: er entsteht erst, wenn der
   // Renderer den zuletzt geoeffneten Ordner ueber SETTINGS_ACTIVATE_FOLDER

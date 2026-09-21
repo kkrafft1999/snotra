@@ -494,6 +494,13 @@ userData-Migration auf (`services/userdata-migration.js`, Übernahme aus dem
 Ordner der Vorgänger-Identität „Weyouze Anything“) — keine verstreute
 Verdrahtung in den Handlern.
 
+Die **Menüleiste** liegt als reines Template in
+`services/application-menu.js`: `createApplicationMenuTemplate()` bekommt
+Plattform, App-Name, `getMainWindow`, `shell` und die Update-Prüfung
+hereingereicht und gibt die Menüstruktur zurück. `Menu.buildFromTemplate()`
+bleibt in `index.js` — so lässt sich prüfen, was in welchem Menü steht, ohne
+Electron zu starten (`test/application-menu.test.js`).
+
 ## Provider-Adapter
 
 `src/main/providers/` hält je Anbieter ein Modul, das den Vertrag aus
@@ -714,8 +721,13 @@ Chat und Verlauf dasselbe Muster wie für Baum und Anzeige:
   Spalte Einträge verschafft, gehört in diese Spalte.
 - Der Einstellungsdialog hat keinen Knopf mehr. Das Zahnrad saß in der
   Kopfzeile des Chats und war mit dessen Spalte weg; seitdem führt nur noch
-  *Ansicht → Einstellungen…* (`CmdOrCtrl+,`) hinein — ein Push auf
-  `UI_OPEN_SETTINGS`, genau wie `UI_TOGGLE_SIDEBAR` beim Kürzel `Cmd/Ctrl+B`.
+  die Menüleiste hinein (`CmdOrCtrl+,`) — ein Push auf `UI_OPEN_SETTINGS`,
+  genau wie `UI_TOGGLE_SIDEBAR` beim Kürzel `Cmd/Ctrl+B`. Wo der Eintrag
+  steht, entscheidet die Plattform (Issue #266): auf macOS im App-Menü unter
+  *Snotra AI → Einstellungen…*, gleich unter „Über“, wie es Mac-Nutzer
+  erwarten; auf Windows und Linux, wo es kein App-Menü gibt, unter
+  *Ansicht → Einstellungen…*. Nie an beiden Stellen, sonst wäre `CmdOrCtrl+,`
+  doppelt vergeben.
   Das Kürzel hängt am Menüeintrag und nicht an einer Tastenabfrage im
   Renderer, damit es auch in einem Eingabefeld gilt. Ein zweiter Aufruf bei
   offenem Dialog ist ein No-op: `openSettingsModal()` merkt sich den Fokus von

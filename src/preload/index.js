@@ -146,7 +146,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
-  // Einstellungen oeffnen (Menue "Ansicht > Einstellungen" bzw. Cmd/Ctrl+Komma).
+  // Einstellungen oeffnen (Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma).
   // Wie oben: Das Kuerzel haengt am Menueeintrag, der Renderer bekommt nur das
   // Signal.
   onOpenSettings: (callback) => {
