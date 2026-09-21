@@ -364,6 +364,37 @@ lehnt den ganzen Drop ab, statt halb zu kopieren. Bestätigt wird in
 `ipc/fs-handlers.js` nativ über `dialog.showMessageBox` — der Renderer stößt nur
 an, siehe `docs/sicherheitskonzept.md` §5.
 
+### Kontextmenü des Dateibaums
+
+`services/file-context-menu.js` baut das native Menü (Öffnen, Anzeigen,
+Informationen, Löschen). Der Renderer stößt es über `fs:showFileContextMenu`
+nur an; den Pfad prüft vorher `resolveWorkspacePath()` im Handler, im Menü
+kommt also ausschließlich ein bereits geprüfter absoluter Pfad an. `isDirectory`
+aus dem Renderer schneidet lediglich das Menü zu und ist deshalb unkritisch.
+
+Die Auskunft dahinter steht in `services/file-info.js` (Issue
+[#123](https://github.com/kkrafft1999/snotra/issues/123)) und liefert eine
+Feldliste, die das Menü als `dialog.showMessageBox` zeigt — dieselbe Machart
+wie die Lösch-Rückfrage, kein eigener Renderer-Code. Drei Entscheidungen darin
+sind bewusst:
+
+- **Ordner werden nicht rekursiv gezählt.** Angezeigt wird die Anzahl der
+  *direkten* Einträge; alles darunter zu summieren kann bei `node_modules`
+  beliebig teuer werden, und ein Dialog darf darauf nicht warten.
+- **Formatierung ohne `Intl`.** Tausenderpunkte und `21.09.2026, 14:32`
+  entstehen von Hand, damit die Ausgabe nicht an der ICU-Ausstattung der
+  jeweiligen Node-Version hängt. Werte, die es nicht gibt oder die auf der
+  Epoche liegen — `birthtime` ist unter Linux/ext4 oft 0 —, werden zu
+  „unbekannt“ statt zu „01.01.1970“.
+- **„Öffnen mit“ ist best effort.** Electron kennt das Standardprogramm nicht,
+  es kostet je Plattform einen Kindprozess mit hartem Timeout; jeder Fehlschlag
+  endet als „unbekannt“, der Rest der Anzeige hängt nie daran. Unter macOS
+  fragt ein JXA-Einzeiler `NSWorkspace.URLForApplicationToOpenURL:`, **nicht**
+  den Finder: Ein Apple Event an den Finder bräuchte die
+  Automatisierungs-Freigabe und läuft bis zur Antwort ins Timeout. Unter
+  Windows löst `AssocQueryString` über die Endung auf (CRLF normalisieren),
+  unter Linux `xdg-mime` plus `Name=` aus dem `.desktop`-Eintrag.
+
 Damit kann der Renderer die Grenze nicht verschieben: Er benennt den Workspace
 in keinem Aufruf mehr. `CHAT_SEND`, Skill-Katalog und Chat-Verlauf bekommen den
 Root über `getActiveWorkspaceRoot()` im jeweiligen Handler injiziert; ein im
