@@ -534,7 +534,10 @@ function createApplication({
   });
 
   registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
-  const fileContextMenu = Menu && shell ? createFileContextMenu({ Menu, shell, dialog }) : null;
+  // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
+  const fileContextMenu = Menu && shell
+    ? createFileContextMenu({ Menu, shell, dialog, clipboard })
+    : null;
   // dialog: der Import von außen (#101) wird nativ bestätigt, nicht im Renderer.
   registerFsHandlers({ ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });

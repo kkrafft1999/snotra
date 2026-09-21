@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const { createFileContextMenu, revealLabelForPlatform } = require('../src/main/services/file-context-menu');
 
 function createFakes() {
-  const calls = { openPath: [], showItemInFolder: [], popup: [], trashItem: [], dialogs: [] };
+  const calls = {
+    openPath: [], showItemInFolder: [], popup: [], trashItem: [], dialogs: [], copied: [], described: [],
+  };
   const shell = {
     openPath: async (p) => {
       calls.openPath.push(p);
@@ -28,7 +30,16 @@ function createFakes() {
       return { response };
     },
   });
-  return { shell, Menu, calls, makeDialog };
+  const clipboard = { writeText: (value) => calls.copied.push(value) };
+  // Der Inhalt der Info-Ansicht wird in file-info.test.js geprüft; hier zählt
+  // nur, was das Menü daraus macht.
+  const makeFileInfo = (result = { name: 'a.txt', path: '/ws/a.txt', fields: [['Name', 'a.txt']] }) => ({
+    describe: async (p, opts) => {
+      calls.described.push({ path: p, opts });
+      return result;
+    },
+  });
+  return { shell, Menu, calls, makeDialog, clipboard, makeFileInfo };
 }
 
 test('revealLabelForPlatform: Finder auf macOS, Explorer auf Windows, sonst Dateimanager', () => {
@@ -43,7 +54,7 @@ test('buildTemplate: „Öffnen“, plattformabhängiges „anzeigen“, Separat
   const template = menu.buildTemplate('/ws/a.txt');
   assert.deepEqual(
     template.map((t) => t.label ?? t.type),
-    ['Öffnen', 'Im Explorer anzeigen', 'separator', 'Löschen…'],
+    ['Öffnen', 'Im Explorer anzeigen', 'Informationen', 'separator', 'Löschen…'],
   );
 });
 
@@ -53,7 +64,7 @@ test('buildTemplate für Ordner: kein „Öffnen“, nur anzeigen und löschen (
   const template = menu.buildTemplate('/ws/unterlagen', { isDirectory: true });
   assert.deepEqual(
     template.map((t) => t.label ?? t.type),
-    ['Im Finder anzeigen', 'separator', 'Löschen…'],
+    ['Im Finder anzeigen', 'Informationen', 'separator', 'Löschen…'],
   );
 });
 
@@ -67,7 +78,7 @@ test('Ordner-Menü: „Im Explorer anzeigen“ und „Löschen…“ wirken auf 
   });
   template[0].click();
   assert.deepEqual(calls.showItemInFolder, ['C:\\ws\\unterlagen']);
-  await template[2].click();
+  await template[3].click();
   assert.deepEqual(calls.trashItem, ['C:\\ws\\unterlagen']);
   assert.deepEqual(deleted, ['C:\\ws\\unterlagen']);
   assert.deepEqual(calls.openPath, []);
@@ -90,7 +101,7 @@ test('popup reicht isDirectory an das Template durch (#120)', () => {
   const built = menu.popup('/ws/unterlagen', { id: 1 }, { isDirectory: true });
   assert.deepEqual(
     built.template.map((t) => t.label ?? t.type),
-    ['Im Finder anzeigen', 'separator', 'Löschen…'],
+    ['Im Finder anzeigen', 'Informationen', 'separator', 'Löschen…'],
   );
 });
 
@@ -125,7 +136,7 @@ test('popup: baut das Menü und öffnet es am übergebenen Fenster', () => {
   const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
   const win = { id: 1 };
   const built = menu.popup('/ws/a.txt', win);
-  assert.equal(built.template.length, 4);
+  assert.equal(built.template.length, 5);
   assert.deepEqual(calls.popup, [{ window: win }]);
 });
 
@@ -175,11 +186,11 @@ test('Menüeintrag „Löschen…“ ruft onDeleted nur nach erfolgreichem Lösc
   const { shell, Menu, makeDialog } = createFakes();
   const deleted = [];
   const menuOk = createFileContextMenu({ Menu, shell, dialog: makeDialog(0), platform: 'darwin' });
-  await menuOk.buildTemplate('/ws/a.txt', { onDeleted: (p) => deleted.push(p) })[3].click();
+  await menuOk.buildTemplate('/ws/a.txt', { onDeleted: (p) => deleted.push(p) })[4].click();
   assert.deepEqual(deleted, ['/ws/a.txt']);
 
   const menuCancel = createFileContextMenu({ Menu, shell, dialog: makeDialog(1), platform: 'darwin' });
-  await menuCancel.buildTemplate('/ws/b.txt', { onDeleted: (p) => deleted.push(p) })[3].click();
+  await menuCancel.buildTemplate('/ws/b.txt', { onDeleted: (p) => deleted.push(p) })[4].click();
   assert.deepEqual(deleted, ['/ws/a.txt']);
 });
 
@@ -189,4 +200,117 @@ test('Löschen ohne Dialog-Objekt liefert Fehler statt zu löschen (#59)', async
   const result = await menu.deleteWithConfirmation('/ws/a.txt', null);
   assert.match(result.error, /Dialog/);
   assert.deepEqual(calls.trashItem, []);
+});
+
+test('„Informationen“: Dialog mit Name im Titel und den Feldern als Detailtext (#123)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    dialog: makeDialog(0),
+    clipboard,
+    platform: 'darwin',
+    fileInfo: makeFileInfo({
+      name: 'notiz.md',
+      path: '/ws/notiz.md',
+      fields: [['Name', 'notiz.md'], ['Pfad', '/ws/notiz.md'], ['Größe', '1,4 MB (1.468.006 Bytes)']],
+    }),
+  });
+  const result = await menu.showInfo('/ws/notiz.md', { id: 1 });
+  assert.deepEqual(result, { shown: true });
+  const box = calls.dialogs[0];
+  assert.equal(box.type, 'info');
+  assert.match(box.message, /Informationen zu „notiz\.md“/);
+  assert.equal(box.detail, 'Name: notiz.md\nPfad: /ws/notiz.md\nGröße: 1,4 MB (1.468.006 Bytes)');
+  assert.deepEqual(box.buttons, ['OK', 'Pfad kopieren']);
+  assert.equal(box.defaultId, 0);
+  assert.equal(box.cancelId, 0);
+  assert.deepEqual(calls.copied, []);
+});
+
+test('„Informationen“: „Pfad kopieren“ legt den vollen Pfad in die Zwischenablage (#123)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    dialog: makeDialog(1),
+    clipboard,
+    platform: 'darwin',
+    fileInfo: makeFileInfo({ name: 'notiz.md', path: '/ws/unterlagen/notiz.md', fields: [['Name', 'notiz.md']] }),
+  });
+  const result = await menu.showInfo('/ws/unterlagen/notiz.md', null);
+  assert.deepEqual(result, { copied: true });
+  assert.deepEqual(calls.copied, ['/ws/unterlagen/notiz.md']);
+});
+
+test('„Informationen“: ohne Zwischenablage gibt es keinen toten Knopf (#123)', async () => {
+  const { shell, Menu, calls, makeDialog, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({
+    Menu, shell, dialog: makeDialog(0), platform: 'linux', fileInfo: makeFileInfo(),
+  });
+  await menu.showInfo('/ws/a.txt', null);
+  assert.deepEqual(calls.dialogs[0].buttons, ['OK']);
+});
+
+test('„Informationen“: isDirectory wird an die Auskunft durchgereicht (#123)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    dialog: makeDialog(0),
+    clipboard,
+    platform: 'darwin',
+    fileInfo: makeFileInfo({ name: 'unterlagen', path: '/ws/unterlagen', fields: [['Typ', 'Ordner']] }),
+  });
+  await menu.buildTemplate('/ws/unterlagen', { isDirectory: true })[1].click();
+  // Der Klick-Handler ist nicht awaitbar; ein Tick reicht für die Zusage.
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls.described, [{ path: '/ws/unterlagen', opts: { isDirectory: true } }]);
+  assert.match(calls.dialogs[0].message, /Informationen zu „unterlagen“/);
+});
+
+test('„Informationen“: fehlgeschlagenes stat wird als Fehlerdialog gemeldet, nicht geworfen (#123)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard } = createFakes();
+  const warnings = [];
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    dialog: makeDialog(0),
+    clipboard,
+    platform: 'darwin',
+    logger: { warn: (...a) => warnings.push(a.join(' ')) },
+    fileInfo: { describe: async () => ({ error: 'ENOENT: no such file or directory' }) },
+  });
+  const result = await menu.showInfo('/ws/weg.txt', null);
+  assert.deepEqual(result, { error: 'ENOENT: no such file or directory' });
+  assert.equal(calls.dialogs[0].type, 'error');
+  assert.match(calls.dialogs[0].message, /Informationen nicht verfügbar/);
+  assert.match(calls.dialogs[0].detail, /ENOENT/);
+  assert.match(warnings.join(' '), /ENOENT/);
+  assert.deepEqual(calls.copied, []);
+});
+
+test('„Informationen“ ohne Dialog-Objekt liefert einen Fehler statt zu werfen (#123)', async () => {
+  const { shell, Menu, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'darwin', fileInfo: makeFileInfo() });
+  const result = await menu.showInfo('/ws/a.txt', null);
+  assert.match(result.error, /Dialog/);
+});
+
+test('„Informationen“: ein abstürzender Dialog reißt den Main-Prozess nicht mit (#123)', async () => {
+  const { shell, Menu, clipboard, makeFileInfo } = createFakes();
+  const warnings = [];
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    clipboard,
+    platform: 'darwin',
+    logger: { warn: (...a) => warnings.push(a.join(' ')) },
+    fileInfo: makeFileInfo(),
+    dialog: { showMessageBox: async () => { throw new Error('Fenster ist weg'); } },
+  });
+  // Der Menü-Handler gibt nichts zurück; eine Rejection darf hier enden.
+  menu.buildTemplate('/ws/a.txt')[2].click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.match(warnings.join(' '), /Fenster ist weg/);
 });
