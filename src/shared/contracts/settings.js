@@ -400,6 +400,11 @@ function normalizeUiPrefs(raw) {
   // damit seinen Benutzernamen — nicht an den Anbieter geben will, schaltet
   // sie ab; deshalb `!== false` statt `=== true`.
   const environmentInfoEnabled = data.environmentInfoEnabled !== false;
+  // Projektanweisungen aus AGENTS.md (Issue #212) ebenfalls standardmaessig
+  // an: Wer eine solche Datei anlegt, will, dass sie wirkt. Abgeschaltet wird
+  // sie von dem, der einen fremden Ordner oeffnet und dessen Anweisungen
+  // nicht uebernehmen will — deshalb `!== false` statt `=== true`.
+  const projectInstructionsEnabled = data.projectInstructionsEnabled !== false;
   // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
   // weil es nichts kostet und nichts verlaesst den Rechner.
   const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
@@ -435,6 +440,7 @@ function normalizeUiPrefs(raw) {
     ...(pythonInterpreterPath ? { pythonInterpreterPath } : {}),
     shellExecutionEnabled,
     environmentInfoEnabled,
+    projectInstructionsEnabled,
   };
 }
 
@@ -504,6 +510,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.environmentInfoEnabled === 'boolean') {
     out.environmentInfoEnabled = patch.environmentInfoEnabled;
+  }
+  if (typeof patch.projectInstructionsEnabled === 'boolean') {
+    out.projectInstructionsEnabled = patch.projectInstructionsEnabled;
   }
   return out;
 }

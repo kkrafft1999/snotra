@@ -21,6 +21,12 @@ import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 
+// Projektanweisungen (Issue #212): zwei Dateien mit unterscheidbarem Inhalt,
+// damit im Systemprompt sowohl die Auswahl als auch die Reihenfolge belegbar
+// ist — die speziellere muss hinter der allgemeineren stehen.
+const WORKSPACE_AGENTS_MD = '# Projekt\n\nAnweisung-aus-der-Ordnerwurzel.\n';
+const AGENTS_DIR_AGENTS_MD = '# Nachtrag\n\nAnweisung-aus-dot-agents.\n';
+
 // Die Fragen dienen dem Fake-Modell als Schluessel: welche Antwort es schickt,
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
@@ -109,6 +115,12 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'README.md'), README, 'utf8');
   await mkdir(path.join(dir, 'notizen'));
   await writeFile(path.join(dir, 'notizen', 'liste.md'), '- eins\n', 'utf8');
+  // Beide Projekt-Stufen der AGENTS.md-Kette (Issue #212). Die beiden
+  // globalen Stufen liegen im echten Home des Ausfuehrenden und werden hier
+  // bewusst nicht angelegt — der Test schreibt nicht nach `~`.
+  await writeFile(path.join(dir, 'AGENTS.md'), WORKSPACE_AGENTS_MD, 'utf8');
+  await mkdir(path.join(dir, '.agents'));
+  await writeFile(path.join(dir, '.agents', 'AGENTS.md'), AGENTS_DIR_AGENTS_MD, 'utf8');
   return dir;
 }
 
@@ -150,7 +162,9 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     },
     { what: 'gezeichneter Dateibaum' }
   );
-  assert.deepEqual(labels, ['notizen', 'README.md']);
+  // `.agents` ist versteckt und taucht nicht auf; die AGENTS.md der
+  // Ordnerwurzel schon (Issue #212).
+  assert.deepEqual(labels, ['notizen', 'AGENTS.md', 'README.md']);
   assert.equal(await page.evaluate(() => document.getElementById('project-name').textContent),
     path.basename(workspace));
 
@@ -290,6 +304,21 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(!systemMessage.includes('Shell für shell_execute'),
     'ohne eingeschaltetes shell_execute keine Shell-Angabe');
   step('Umgebungsblock im Systemprompt geprueft');
+
+  // --- Projektanweisungen aus AGENTS.md (Issue #212) -----------------------
+  // Auch das entsteht erst im echten Main-Prozess: Welche Dateien gefunden
+  // werden, weiss nur der Adapter am Dateisystem.
+  assert.match(systemMessage, /Projektanweisungen aus AGENTS\.md/);
+  const wurzelAt = systemMessage.indexOf('Anweisung-aus-der-Ordnerwurzel.');
+  const dotAgentsAt = systemMessage.indexOf('Anweisung-aus-dot-agents.');
+  assert.ok(wurzelAt > -1, 'die AGENTS.md der Ordnerwurzel steht im Prompt');
+  assert.ok(dotAgentsAt > -1, 'die AGENTS.md aus .agents steht im Prompt');
+  assert.ok(wurzelAt < dotAgentsAt, 'die speziellere Datei steht hinter der allgemeineren');
+  // Vor dem Ordner-/Tool-Block, damit ihn keine fremde AGENTS.md ueberschreibt.
+  assert.ok(
+    systemMessage.indexOf('Projektanweisungen aus AGENTS.md') < systemMessage.indexOf('geöffneten Ordner')
+  );
+  step('AGENTS.md im Systemprompt geprueft');
 
   // --- Klick auf den Link geht bis in den Main-Prozess ----------------------
   await page.evaluate(() => {

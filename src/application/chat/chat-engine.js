@@ -45,6 +45,7 @@ const {
   createPermissionAuditEntry,
 } = require('../../shared/contracts/tool-permissions');
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
+const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
@@ -492,6 +493,7 @@ function buildStaticContextParts({
   systemPrompt,
   skillParts,
   environmentSystem,
+  projectInstructionParts,
   workspaceSystem,
   toolsPrompt,
   toolDefs,
@@ -522,6 +524,9 @@ function buildStaticContextParts({
       })
     );
   }
+  // Je geladene AGENTS.md eine eigene Zeile (Issue #212) — sie stehen im
+  // Prompt zwischen Umgebung und Ordnerkontext und hier an derselben Stelle.
+  parts.push(...(Array.isArray(projectInstructionParts) ? projectInstructionParts : []));
   const promptListChars = typeof toolsPrompt === 'string' ? toolsPrompt.length : 0;
   const workspaceChars = Math.max(0, (workspaceSystem || '').length - promptListChars);
   if (workspaceChars > 0) {
@@ -623,6 +628,7 @@ function createChatEngine({
   workspacePaths,
   skills = null,
   environment = null,
+  projectInstructions = null,
   toolPolicy = null,
   approvals = null,
   sessionGrants = createSessionGrants(),
@@ -900,10 +906,39 @@ function createChatEngine({
         }
       }
 
+      // Projektanweisungen aus AGENTS.md (Issue #212). Anders als bei den
+      // Skills gibt es hier keine Auswahl: Wer den Ordner öffnet, übernimmt
+      // seine Anweisungen — der Schalter ist die Notbremse dafür und steht
+      // wie bei #138 standardmäßig an.
+      let projectInstructionsSystem = '';
+      let projectInstructionParts = [];
+      if (projectInstructions && uiPrefs.projectInstructionsEnabled !== false) {
+        try {
+          const built = buildProjectInstructionsSystemPrompt(
+            await projectInstructions.load({ workspaceRoot })
+          );
+          projectInstructionsSystem = built.text;
+          projectInstructionParts = built.parts;
+        } catch {
+          // Eine unlesbare AGENTS.md darf den Chat nicht blockieren.
+          projectInstructionsSystem = '';
+          projectInstructionParts = [];
+        }
+      }
+
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Die
       // Umgebung ist Sachkontext wie der Ordner und steht deshalb bei ihm,
-      // hinter den Skills, die das Wie beschreiben.
-      const combinedSystem = [systemPrompt, skillsSystem, environmentSystem, workspaceSystem]
+      // hinter den Skills, die das Wie beschreiben. Die Projektanweisungen
+      // stehen bewusst *vor* dem Ordner-/Tool-Block: Der trägt die Regel, dass
+      // Tool-Ergebnisse Daten sind, und die soll nicht das Letzte sein, was
+      // eine fremde AGENTS.md überschreiben könnte.
+      const combinedSystem = [
+        systemPrompt,
+        skillsSystem,
+        environmentSystem,
+        projectInstructionsSystem,
+        workspaceSystem,
+      ]
         .filter((part) => typeof part === 'string' && part.trim())
         .join('\n\n');
 
@@ -913,6 +948,7 @@ function createChatEngine({
         systemPrompt,
         skillParts: skillContextParts,
         environmentSystem,
+        projectInstructionParts,
         workspaceSystem,
         toolsPrompt,
         toolDefs: availableToolDefs,

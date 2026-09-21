@@ -63,6 +63,7 @@ const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
+const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
@@ -495,6 +496,11 @@ function createApplication({
     describeShell: () => shellSettings.describe(),
   });
 
+  // Projektanweisungen aus AGENTS.md (Issue #212). Kein Cache, kein Watcher:
+  // Die Kette ist vier Dateien lang und wird je Anfrage frisch gelesen — eine
+  // geaenderte AGENTS.md wirkt damit ab der naechsten Nachricht.
+  const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
+
   const { engine: chatEngine, llm: chatLlm } = createChatApplication({
     llmConfigStore,
     providerRuntime,
@@ -503,6 +509,7 @@ function createApplication({
     toolRegistry,
     skillsService,
     environment,
+    projectInstructions,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,

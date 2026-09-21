@@ -26,6 +26,10 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
       if (prefs.environmentInfoEnabled === false) {
         out.environmentInfoEnabled = false;
       }
+      // Dasselbe fuer die Projektanweisungen (Issue #212).
+      if (prefs.projectInstructionsEnabled === false) {
+        out.projectInstructionsEnabled = false;
+      }
       return out;
     },
   };

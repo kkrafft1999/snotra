@@ -383,6 +383,43 @@ Die Grenzen bleiben eng gezogen:
 Ohne geöffneten Ordner gibt es überhaupt keine Tools, also auch keine
 Skill-Pfade.
 
+## Projektanweisungen: `AGENTS.md`
+
+Ein Skill beschreibt eine Arbeitsweise und wird eingeschaltet. Eine
+`AGENTS.md` beschreibt, wie in *diesem* Projekt gearbeitet wird — welcher
+Paketmanager, welche Testbefehle, welche Konventionen, welche Ordner tabu sind
+— und gilt ohne Auswahl. Snotra liest sie beim Aufbau jedes System-Prompts aus
+bis zu vier Stellen, von allgemein nach speziell:
+
+| # | Pfad | Geltung |
+|---|------|---------|
+| 1 | `~/.agents/AGENTS.md` | überall, auch für andere Agenten |
+| 2 | `~/.snotra/AGENTS.md` | überall, nur für Snotra |
+| 3 | `<ordner>/AGENTS.md` | dieses Projekt, werkzeugübergreifend |
+| 4 | `<ordner>/.agents/AGENTS.md` | dieses Projekt, Agenten-Tooling |
+
+**Alle vorhandenen** Dateien gehen mit, in dieser Reihenfolge. Widersprechen
+sie sich, gilt die weiter unten stehende — das Spezifischere gewinnt, und du
+musst nichts zusammenführen. Fehlende Dateien sind der Normalfall und kein
+Fehler. `~/.snotra/AGENTS.md` ist die Stelle für Anweisungen, die **nur**
+Snotra angehen: `~/.agents/` lesen auch andere Agenten mit.
+
+`AGENTS.md` ist der einzige Dateiname, den Snotra dafür kennt — kein
+`CLAUDE.md`, kein `.cursorrules`. Je Datei gehen höchstens 20.000 Zeichen mit;
+Längeres wird sichtbar gekürzt statt verworfen. Wie viel jede Datei am
+Kontextfenster ausmacht, steht einzeln in der Aufschlüsselung unter dem
+Eingabefeld.
+
+**Änderungen wirken sofort**, ohne Neustart und ohne Knopf: Die Kette wird bei
+jeder Nachricht frisch gelesen.
+
+**Der Inhalt ist Anweisung, keine Daten.** Anders als ein Tool-Ergebnis soll
+eine `AGENTS.md` das Verhalten des Modells ändern — sonst wäre sie sinnlos. Wer
+einen fremden Ordner öffnet, übernimmt damit auch dessen Anweisungen. Die
+Notbremse dafür ist der Schalter **Einstellungen › Allgemein ›
+„`AGENTS.md` mitschicken"** (voreingestellt an), der die ganze Kette abschaltet.
+
+
 ## MCP-Server
 
 Über das **Model Context Protocol (MCP)** bindest du Werkzeuge fremder Systeme
