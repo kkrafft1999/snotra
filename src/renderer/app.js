@@ -370,6 +370,10 @@ const fileTree = initFileTree({
     skillSuggestion.hide();
     const loaded = await chatStream.loadChatForWorkspace(folderPath);
     chatRestoredOnLoad = loaded?.restored === true;
+    // Der Verlauf ist nach Ordnern gebucht — der neue Ordner bringt eine
+    // andere Liste mit. Ohne dieses Nachziehen stuenden dort die Chats des
+    // vorigen Ordners, beim Start gar keine.
+    await chatHistory.refreshIfOpen();
   },
   onProjectOpened: () => modelPicker.updateChatChrome(),
   sendChatMessage: () => chatStream.sendChatMessage(),
@@ -420,10 +424,11 @@ void initAppVersionBadge({ api });
     // nicht erst ins Bild fahren.
     setSidebarVisible(uiPrefs.sidebarVisible !== false, { animate: false });
     // Der gemerkte Zustand ist kein neuer Wunsch — deshalb nicht zurueck-
-    // schreiben. Die Liste wird erst beim Einblenden gefuellt.
+    // schreiben. Gefuellt wird die Liste hier noch nicht: Welcher Ordner aktiv
+    // ist, entscheidet sich erst weiter unten, und vorher liefert der Verlauf
+    // nichts. Das Nachziehen uebernimmt `refreshIfOpen` nach dem Oeffnen.
     if (uiPrefs.chatHistoryVisible === true) {
       chatHistory.setHistoryOpen(true, { persist: false });
-      void chatHistory.renderHistoryList();
     }
     // Der Chat startet sichtbar, ausser der Nutzer hat ihn weggeschaltet.
     // Kein Zurueckschreiben: Der gemerkte Stand ist kein neuer Wunsch.
@@ -453,6 +458,9 @@ void initAppVersionBadge({ api });
       chatRestoredOnLoad = loaded?.restored === true;
       await fileTree.refreshWelcomeRecent();
       modelPicker.updateChatChrome();
+      // Ohne Ordner laeuft kein `onWorkspaceChanged` — die Liste der Chats
+      // ohne Workspace muss hier selbst angestossen werden.
+      await chatHistory.refreshIfOpen();
     }
   } finally {
     // Erst jetzt steht fest, ob ein Chat zurueckgekommen ist — vorher waere die
