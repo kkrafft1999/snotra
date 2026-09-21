@@ -27,13 +27,17 @@ async function setup() {
   const prefs = [];
   const visibility = [];
   let revealed = 0;
+  let historyReads = 0;
 
   appStore.currentChatId = 'chat-aktuell';
   appStore.chatMessages = [];
 
   const panel = initChatHistoryPanel({
     api: {
-      getChatHistory: async () => ({ sessions: [SESSION], activeChatId: null }),
+      getChatHistory: async () => {
+        historyReads += 1;
+        return { sessions: [SESSION], activeChatId: null };
+      },
       setActiveChatId: async () => ({ ok: true }),
       setUIPrefs: async (patch) => { prefs.push(patch); return { ok: true }; },
       deleteChatSession: async () => ({ ok: true }),
@@ -59,6 +63,7 @@ async function setup() {
     prefs,
     visibility,
     revealCount: () => revealed,
+    historyReads: () => historyReads,
     appRoot: dom.document.getElementById('app'),
     toggle: dom.document.getElementById('btn-toggle-chat-history'),
   };
@@ -130,4 +135,24 @@ test('eine Zeile im Verlauf oeffnet ihren Chat per Maus und per Tastatur', async
 
   assert.equal(appStore.currentChatId, 'chat-alt');
   assert.equal(revealCount(), 1);
+});
+
+test('nach einem Ordnerwechsel zieht die offene Spalte den Verlauf selbst nach', async () => {
+  const { dom, panel, historyReads } = await setup();
+
+  // Zugeklappt bleibt es bei der Arbeit, die man sieht: nichts.
+  await panel.refreshIfOpen();
+
+  assert.equal(historyReads(), 0);
+  assert.equal(dom.document.querySelectorAll('.chat-history-row').length, 0);
+
+  panel.setHistoryOpen(true, { persist: false });
+  await panel.refreshIfOpen();
+
+  assert.equal(historyReads(), 1);
+  assert.equal(
+    dom.document.querySelectorAll('.chat-history-row').length,
+    1,
+    'die Chats des Ordners stehen da, ohne dass jemand erst „Neuer Chat“ drueckt'
+  );
 });

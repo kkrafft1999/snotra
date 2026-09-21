@@ -117,6 +117,20 @@ export function initChatHistoryPanel({
     }
   }
 
+  /**
+   * Der Verlauf haengt am aktiven Ordner: `getChatHistory` liefert nur die
+   * Chats des Workspace, den der Main-Prozess gerade fuehrt (Issue #68).
+   * Beim Start steht der aber erst fest, nachdem der zuletzt benutzte Ordner
+   * aktiviert wurde — eine Liste, die davor gezeichnet wird, bleibt leer und
+   * fuellte sich bisher erst beim naechsten Anlass (neuer Chat, Ein- und
+   * Ausblenden). Deshalb wird sie nach jedem Ordnerwechsel nachgezogen.
+   * Ist die Spalte zu, genuegt das Rendern beim naechsten Einblenden.
+   */
+  async function refreshIfOpen() {
+    if (!isHistoryOpen()) return;
+    await renderHistoryList();
+  }
+
   async function openChatSession(id) {
     if (!id || id === appStore.currentChatId) return;
     // Erst die Spalte, dann der Inhalt: Sonst liefe das Rendern in eine
@@ -180,6 +194,7 @@ export function initChatHistoryPanel({
     isHistoryOpen,
     setHistoryOpen,
     renderHistoryList,
+    refreshIfOpen,
     openChatSession,
     removeChatFromHistory,
     startNewChatWithHistory,
