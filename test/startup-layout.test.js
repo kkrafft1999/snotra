@@ -27,11 +27,20 @@ test('ein wiederhergestellter Chat laesst die mittlere Spalte zu', async () => {
   );
 });
 
-test('ohne Chat erscheint der Startschirm wie bisher', async () => {
+test('wer die Spalte eingeblendet hat, bekommt sie ohne Chat wieder', async () => {
   const { contentPaneVisibleOnStart } = await startupLayoutPromise;
   assert.equal(contentPaneVisibleOnStart({ preference: true, chatRestored: false }), true);
   // Kein Ladeergebnis (Fehler beim Start) zaehlt nicht als Chat.
   assert.equal(contentPaneVisibleOnStart({ preference: true, chatRestored: undefined }), true);
+});
+
+test('ohne gespeicherten Wunsch bleibt die Spalte zu', async () => {
+  // Issue #255: Die frische Installation startet mit Baum und Chat. Fehlt die
+  // Praeferenz, ist das keine stille Zustimmung zur Spalte.
+  const { contentPaneVisibleOnStart } = await startupLayoutPromise;
+  assert.equal(contentPaneVisibleOnStart({ preference: undefined, chatRestored: false }), false);
+  assert.equal(contentPaneVisibleOnStart({ chatRestored: undefined }), false);
+  assert.equal(contentPaneVisibleOnStart({ preference: undefined, chatRestored: true }), false);
 });
 
 test('die weggeschaltete Spalte bleibt weggeschaltet', async () => {

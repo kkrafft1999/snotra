@@ -407,7 +407,9 @@ void initAppVersionBadge({ api });
 
 (async () => {
   let uiPrefs = {
-    contentPaneVisible: true,
+    // Faellt das Lesen der Prefs aus, gilt dieselbe Voreinstellung wie im
+    // Contract: die mittlere Anzeige bleibt zu (Issue #255).
+    contentPaneVisible: false,
     sidebarVisible: true,
     chatPanelVisible: true,
     appLocale: 'de',
@@ -456,7 +458,7 @@ void initAppVersionBadge({ api });
     // Erst jetzt steht fest, ob ein Chat zurueckgekommen ist — vorher waere die
     // Spalte nur geraten. Im `finally`, damit sie auch nach einem Fehler beim
     // Laden nicht eingeklappt haengen bleibt.
-    applyStartupContentPane(uiPrefs.contentPaneVisible !== false);
+    applyStartupContentPane(uiPrefs.contentPaneVisible === true);
   }
   syncChatInputHeight();
 })();

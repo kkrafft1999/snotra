@@ -1,20 +1,21 @@
 /**
- * Zustand der mittleren Spalte beim Start (Issue #208).
+ * Zustand der mittleren Spalte beim Start (Issue #208, #255).
  *
- * Wer die App mitten in einer Konversation verlaesst, soll genau dort wieder
- * landen — und nicht neben dem Startschirm, der fuer den kalten Start gedacht
- * ist. Wird also beim Start ein Chat wiederhergestellt, bleibt die mittlere
- * Spalte zu und der Chat bekommt die volle Breite. Ohne Chat erscheint der
- * Startschirm wie gehabt.
+ * Voreingestellt bleibt die Spalte zu: Wer nichts gespeichert hat, faengt mit
+ * Baum und Chat an (Issue #255). Aufgeklappt startet sie nur, wenn der Nutzer
+ * sie ausdruecklich eingeblendet hat — `preference` ist dann `true`, weil in
+ * den gespeicherten Prefs `contentPaneVisible: true` steht.
  *
- * Die ausdrueckliche Praeferenz aus den Einstellungen (Umschalter im
- * Titelbalken) bleibt daneben bestehen: wer die Spalte ausgeblendet hat,
- * behaelt sie ausgeblendet, egal ob ein Chat zurueckkommt.
+ * Auch dieser Wunsch tritt einmal zurueck: Wer die App mitten in einer
+ * Konversation verlaesst, soll genau dort wieder landen und nicht neben dem
+ * Startschirm, der fuer den kalten Start gedacht ist. Wird beim Start ein Chat
+ * wiederhergestellt, bleibt die Spalte deshalb zu und der Chat bekommt die
+ * volle Breite.
  *
  * DOM-frei und exportiert, damit die Entscheidung ohne Fenster pruefbar ist
  * (wie pickSessionToRestore, #78).
  */
 export function contentPaneVisibleOnStart({ preference, chatRestored }) {
-  if (preference === false) return false;
+  if (preference !== true) return false;
   return chatRestored !== true;
 }

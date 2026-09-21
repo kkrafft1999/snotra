@@ -114,6 +114,24 @@ test('normalizeUiPrefs and patch apply clamps', () => {
   assert.equal(clampSidebarWidth(999), 600);
 });
 
+test('ohne gespeicherten Wunsch startet die mittlere Anzeige zu', () => {
+  // Issue #255: Eine frische Installation hat keine ui-preferences.json — dann
+  // sollen nur Baum und Chat stehen. Erst ein ausdrueckliches `true` bringt die
+  // Spalte zurueck; alles andere (fehlend, kaputt, `false`) laesst sie zu.
+  assert.equal(normalizeUiPrefs({}).contentPaneVisible, false);
+  assert.equal(normalizeUiPrefs({ contentPaneVisible: 'ja' }).contentPaneVisible, false);
+  assert.equal(normalizeUiPrefs({ contentPaneVisible: false }).contentPaneVisible, false);
+  assert.equal(normalizeUiPrefs({ contentPaneVisible: true }).contentPaneVisible, true);
+  // Die drei Nachbarspalten behalten ihre eigene Voreinstellung: Baum und Chat
+  // sind da, der Verlauf nicht.
+  assert.equal(normalizeUiPrefs({}).sidebarVisible, true);
+  assert.equal(normalizeUiPrefs({}).chatPanelVisible, true);
+  assert.equal(normalizeUiPrefs({}).chatHistoryVisible, false);
+  // Der Patch bleibt unberuehrt: Wer nichts schaltet, schreibt nichts.
+  assert.equal('contentPaneVisible' in normalizeUiPrefsPatch({}), false);
+  assert.equal(normalizeUiPrefsPatch({ contentPaneVisible: true }).contentPaneVisible, true);
+});
+
 test('normalizeUiPrefs and patch sanitize disabledTools', () => {
   assert.deepEqual(normalizeUiPrefs({}).disabledTools, []);
   assert.deepEqual(normalizeUiPrefs({ disabledTools: 'web_search' }).disabledTools, []);
