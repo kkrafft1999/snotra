@@ -64,6 +64,14 @@ function buildPreview(toolName, args, options = {}) {
       shellLogin: options.shellLogin === true,
       cwd: typeof options.cwd === 'string' ? options.cwd : '',
     };
+  } else if (toolName === 'remember') {
+    // Der Nutzer entscheidet hier ueber einen Satz, der ab jetzt in *jeder*
+    // Anfrage steht (Issue #166). Ohne den Satz und die Reichweite waere die
+    // Freigabe eine Blankounterschrift — und ein Pfad steht nicht zur
+    // Verfuegung, weil das Tool keinen bildet.
+    kind = 'memory';
+    text = typeof args?.text === 'string' ? args.text : '';
+    extra = { memoryScope: args?.scope === 'user' ? 'user' : 'workspace' };
   } else {
     return null;
   }
@@ -229,7 +237,12 @@ function createToolCallPlanner({
       return { tool: toolName, error: descriptors.error, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
     const isWriteTool = baseClass === TOOL_RISK_CLASSES.WRITE || baseClass === TOOL_RISK_CLASSES.DELETE;
-    if (isWriteTool && descriptors.length === 0) {
+    // Ein Schreib-Tool ohne Ziel waere eines, das an der Pfadpruefung vorbei
+    // schreibt — deshalb die Ablehnung. Ausgenommen sind Tools, die gar keinen
+    // Pfad aus den Argumenten bilden: Beim Gedaechtnis (#166) waehlt das Modell
+    // nur die Ebene, und wohin die zeigt, entscheidet allein der Memory-Port.
+    // Da gibt es nichts zu pruefen, weil es nichts zu beeinflussen gibt.
+    if (isWriteTool && descriptors.length === 0 && definition.pathlessWrite !== true) {
       return { tool: toolName, error: 'Kein Zielpfad angegeben.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
 

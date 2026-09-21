@@ -358,6 +358,8 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // shell_execute ebenso: ohne erlaubte und gefundene Shell erreicht es das
   // Modell nicht (Issue #102).
   assert.equal(names.includes('shell_execute'), false);
+  // remember ebenso: ohne Memory-Port gibt es nichts zu merken (Issue #166).
+  assert.equal(names.includes('remember'), false);
 
   // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
   // web_search und fetch_url → external.
@@ -378,14 +380,18 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     'list_directory_tree',
   ];
   for (const name of readTools) assert.equal(classes[name], 'read', name);
-  for (const name of ['write_file_text', 'edit_file', 'apply_patch']) assert.equal(classes[name], 'write', name);
+  // `remember` schreibt eine Datei wie die drei anderen — dass sie der App
+  // gehoert und nicht dem Projekt, aendert an der Klasse nichts (Issue #166).
+  for (const name of ['write_file_text', 'edit_file', 'apply_patch', 'remember']) {
+    assert.equal(classes[name], 'write', name);
+  }
   assert.equal(classes.web_search, 'external');
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(classes.shell_execute, 'execute');
-  // 16 registrierte Tools minus die beiden essenziellen list_directory und
+  // 17 registrierte Tools minus die beiden essenziellen list_directory und
   // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 14);
+  assert.equal(Object.keys(classes).length, 15);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });

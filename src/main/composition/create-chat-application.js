@@ -24,6 +24,7 @@ function createChatApplication({
   skillsService,
   environment = null,
   projectInstructions = null,
+  memory = null,
   path,
   maxToolRounds,
   toolPolicyStore = null,
@@ -60,6 +61,7 @@ function createChatApplication({
     skills,
     environment,
     projectInstructions,
+    memory,
     toolPolicy,
     approvals,
     sessionGrants,
@@ -67,7 +69,7 @@ function createChatApplication({
   });
 
   return {
-    engine, llm, tools, preferences, workspacePaths, skills, environment, projectInstructions,
+    engine, llm, tools, preferences, workspacePaths, skills, environment, projectInstructions, memory,
     toolPolicy, sessionGrants,
   };
 }

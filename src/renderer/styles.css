@@ -5607,3 +5607,112 @@ select.modal-input {
   color: var(--ds-grey-strong);
   cursor: not-allowed;
 }
+
+/* Einstellungen › Gedächtnis (Issue #166).
+ *
+ * Eine Karte je Ebene, darin eine Liste aus Datum, Text und Vergessen-Knopf.
+ * Das Grid haelt die Datumsspalte ueber beide Karten hinweg auf derselben
+ * Breite — sonst flattern die Texte je nach laengstem Datum der Ebene.
+ */
+.memory-card + .memory-card {
+  margin-top: 14px;
+}
+
+.memory-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.memory-card__path {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-muted);
+  word-break: break-all;
+}
+
+.memory-card__toggle {
+  margin-top: 8px;
+}
+
+.memory-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.memory-item {
+  display: grid;
+  grid-template-columns: 6.5em 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.memory-item__date {
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-item__text {
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-prose, 1.5);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.memory-item__origin {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: var(--ds-radius-pill);
+  border: 1px solid var(--ds-grey-divider);
+  color: var(--ds-grey-muted);
+  white-space: nowrap;
+}
+
+/* Rund wie jeder andere Icon-Knopf; der Rahmen erscheint erst beim Hover,
+ * damit eine Liste mit zwanzig Eintraegen nicht zum Gitter wird. */
+.memory-item__forget {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ds-grey-muted);
+  cursor: pointer;
+  transition: color var(--ds-motion-fast, 120ms) ease, border-color var(--ds-motion-fast, 120ms) ease;
+}
+
+.memory-item__forget:hover:not(:disabled) {
+  border-color: var(--ds-grey-muted);
+  color: var(--text-primary);
+}
+
+.memory-item__forget:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.memory-empty {
+  margin: 10px 0 0;
+}
+
+.memory-meta {
+  margin: 10px 0 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-muted);
+  font-variant-numeric: tabular-nums;
+}

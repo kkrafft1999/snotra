@@ -405,6 +405,16 @@ function normalizeUiPrefs(raw) {
   // sie von dem, der einen fremden Ordner oeffnet und dessen Anweisungen
   // nicht uebernehmen will — deshalb `!== false` statt `=== true`.
   const projectInstructionsEnabled = data.projectInstructionsEnabled !== false;
+  // Gedaechtnis (Issue #166), je Ebene ein Schalter. Beide standardmaessig an:
+  // Wer nichts gemerkt hat, hat auch keine Datei, und dann kostet der Schalter
+  // nichts. Die Ordner-Ebene ist zugleich die Notbremse fuer einen fremden
+  // Ordner mit fremder `memory.md` — deshalb `!== false` wie bei #138/#212.
+  const memoryWorkspaceEnabled = data.memoryWorkspaceEnabled !== false;
+  const memoryUserEnabled = data.memoryUserEnabled !== false;
+  // Von selbst merken (Issue #166) ist ebenfalls an: Ein Gedaechtnis, das nur
+  // auf Zuruf waechst, bleibt leer, weil niemand im Arbeitsfluss daran denkt.
+  // Wer das nicht will, schaltet es ab und behaelt „bitte merke dir …".
+  const memorySelfEnabled = data.memorySelfEnabled !== false;
   // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
   // weil es nichts kostet und nichts verlaesst den Rechner.
   const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
@@ -441,6 +451,9 @@ function normalizeUiPrefs(raw) {
     shellExecutionEnabled,
     environmentInfoEnabled,
     projectInstructionsEnabled,
+    memoryWorkspaceEnabled,
+    memoryUserEnabled,
+    memorySelfEnabled,
   };
 }
 
@@ -513,6 +526,15 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.projectInstructionsEnabled === 'boolean') {
     out.projectInstructionsEnabled = patch.projectInstructionsEnabled;
+  }
+  if (typeof patch.memoryWorkspaceEnabled === 'boolean') {
+    out.memoryWorkspaceEnabled = patch.memoryWorkspaceEnabled;
+  }
+  if (typeof patch.memoryUserEnabled === 'boolean') {
+    out.memoryUserEnabled = patch.memoryUserEnabled;
+  }
+  if (typeof patch.memorySelfEnabled === 'boolean') {
+    out.memorySelfEnabled = patch.memorySelfEnabled;
   }
   return out;
 }

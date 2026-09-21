@@ -197,6 +197,17 @@ const {
   parseMcpServersBlock,
   toMcpServerInput,
 } = require('./mcp-import');
+const {
+  MEMORY_SCOPES,
+  MEMORY_SCOPE_ORDER,
+  MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_PATHS,
+  MEMORY_ORIGINS,
+  MAX_MEMORY_CHARS,
+  MAX_MEMORY_ENTRY_CHARS,
+  isMemoryScope,
+  parseMemoryEntries,
+} = require('./memory');
 
 module.exports = {
   CONTRACT_VERSION,
@@ -362,4 +373,13 @@ module.exports = {
   MCP_IMPORT_MAX_SERVERS,
   parseMcpServersBlock,
   toMcpServerInput,
+  MEMORY_SCOPES,
+  MEMORY_SCOPE_ORDER,
+  MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_PATHS,
+  MEMORY_ORIGINS,
+  MAX_MEMORY_CHARS,
+  MAX_MEMORY_ENTRY_CHARS,
+  isMemoryScope,
+  parseMemoryEntries,
 };

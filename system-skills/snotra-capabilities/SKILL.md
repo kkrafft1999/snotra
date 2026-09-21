@@ -21,7 +21,7 @@ einen Python-3-Interpreter. Nicht in der Liste = nicht möglich.
 | Klasse | Tools |
 | --- | --- |
 | `read` | `list_directory`, `list_directory_tree`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `load_skill` |
-| `write` | `write_file_text`, `edit_file`, `apply_patch` — max. 2 MB pro Datei |
+| `write` | `write_file_text`, `edit_file`, `apply_patch` — max. 2 MB pro Datei; `remember` schreibt nicht ins Projekt, sondern ins Gedächtnis |
 | `execute` | `run_python`, `shell_execute` |
 | `external` | `web_search` (nur Trefferliste, keine ganzen Seiten), `fetch_url` (genau eine http(s)-Adresse, lehnt private Adressen und Nicht-Text ab) |
 
@@ -72,6 +72,19 @@ Bestätigungskarte zeigt bei Dateiänderungen Zielpfad, Grund und Vorschau, bei
 `run_python` den vollen Quelltext, bei `shell_execute` Befehl, Shell und
 Arbeitsordner.
 
+## Gedächtnis
+
+`remember` legt einen Satz dauerhaft ab — Ebene `workspace` in
+`<Ordner>/.agents/memory.md`, Ebene `user` in `~/.snotra/memory.md`. Beide
+Dateien stehen ab der nächsten Nachricht im Systemprompt, sind im Editor
+bearbeitbar und unter Einstellungen › Gedächtnis einzeln zu löschen; je Ebene
+höchstens 8.000 Zeichen. Löschen kannst du selbst nicht — dafür die
+Einstellungen. Wie und wann gemerkt wird, steht im Skill `snotra-memory`.
+
+Drei Schalter unter Einstellungen › Gedächtnis: je Ebene das Mitschicken und
+ob Snotra ungefragt merken darf. Ist Letzteres aus, werden Einträge mit
+`origin: "self"` abgelehnt.
+
 ## Skills
 
 Ein Skill ist ein Verzeichnis mit `SKILL.md` (YAML-Frontmatter `name`,
@@ -108,6 +121,7 @@ Update-Hinweise über GitHub-Releases.
 | Thema | Ort |
 | --- | --- |
 | Modell, Anbieter, API-Keys | Anbieter |
+| Gemerktes ansehen, löschen, abschalten | Gedächtnis |
 | Eigener System-Prompt | Verhalten |
 | Berechtigungsmodus | Pille in der Chat-Leiste oder Tools |
 | Tools an/aus, Sperr-/Erlaubnisregeln, sensible Pfadmuster, Berechtigungen zurücksetzen | Tools |

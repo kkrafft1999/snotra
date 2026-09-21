@@ -27,6 +27,17 @@ const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 const WORKSPACE_ROOT_AGENTS_MD = '# Wurzel\n\nAnweisung-aus-der-Ordnerwurzel.\n';
 const AGENTS_DIR_AGENTS_MD = '# Projekt\n\nAnweisung-aus-dot-agents.\n';
 
+// Gedaechtnis (Issue #166): eine Ebene mit Eintraegen, damit die Karte in den
+// Einstellungen etwas zu zeigen hat. Der zweite Eintrag traegt die Markierung
+// „selbst gemerkt" — sie unterscheidet, was Snotra von sich aus notiert hat.
+const WORKSPACE_MEMORY_MD = [
+  '# Gedächtnis · Projekt',
+  '',
+  '- 2026-09-21 — Gemerkt-fuer-dieses-Projekt.',
+  '- 2026-09-19 (selbst gemerkt) — Von-selbst-gemerkt.',
+  '',
+].join('\n');
+
 // Die Fragen dienen dem Fake-Modell als Schluessel: welche Antwort es schickt,
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
@@ -122,6 +133,7 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'AGENTS.md'), WORKSPACE_ROOT_AGENTS_MD, 'utf8');
   await mkdir(path.join(dir, '.agents'));
   await writeFile(path.join(dir, '.agents', 'AGENTS.md'), AGENTS_DIR_AGENTS_MD, 'utf8');
+  await writeFile(path.join(dir, '.agents', 'memory.md'), WORKSPACE_MEMORY_MD, 'utf8');
   return dir;
 }
 
@@ -326,6 +338,21 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   );
   step('AGENTS.md im Systemprompt geprueft');
 
+  // --- Gedaechtnis im Systemprompt (Issue #166) ----------------------------
+  // Dieselbe Begruendung: Welche memory.md gefunden wird, entscheidet der
+  // Adapter am Dateisystem, nicht der Core.
+  assert.match(systemMessage, /Dein Gedächtnis/);
+  assert.match(systemMessage, /## Gedächtnis \(Projekt\)/);
+  assert.ok(
+    systemMessage.includes('Gemerkt-fuer-dieses-Projekt.'),
+    'die memory.md aus .agents steht im Prompt'
+  );
+  // Direkt hinter dem eigenen Prompt des Nutzers und damit vor allem Fremden.
+  assert.ok(
+    systemMessage.indexOf('Dein Gedächtnis') < systemMessage.indexOf('Projektanweisungen aus AGENTS.md')
+  );
+  step('Gedaechtnis im Systemprompt geprueft');
+
   // --- Klick auf den Link geht bis in den Main-Prozess ----------------------
   await page.evaluate(() => {
     const links = document.querySelectorAll('#chat-messages .chat-msg.assistant a');
@@ -473,6 +500,35 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Gegenprobe: die Liste ist nicht einfach leer.
   assert.ok(toolRows.includes('read_file_text'), 'read_file_text steht in der Tool-Liste');
   step('Tool-Liste ohne Grundausstattung geprueft');
+
+  // Gedaechtnis (Issue #166): beide Ebenen als eigene Karte, die Eintraege aus
+  // der Datei als Text. Hier statt im Unit-Test, weil erst die gerenderte
+  // Liste beweist, dass die Datei ueber den Main-Prozess bis ins DOM kommt —
+  // und dass der Eintragstext als Text ankommt und nicht als Markup.
+  await page.evaluate(() =>
+    document.querySelector('.settings-nav-item[data-settings-panel="memory"]').click());
+  const memory = await poll(async () => {
+    const found = await page.evaluate(() => ({
+      heading: document.getElementById('settings-panel-heading').textContent,
+      karten: [...document.querySelectorAll('#settings-memory-scopes .memory-card__path')].map(
+        (el) => el.textContent
+      ),
+      eintraege: [...document.querySelectorAll('#settings-memory-scopes .memory-item__text')].map(
+        (el) => el.textContent
+      ),
+      badges: [...document.querySelectorAll('.memory-item__origin')].map((el) => el.textContent),
+      selbstSchalter: document.getElementById('input-memory-self')?.checked,
+    }));
+    return found.eintraege.length > 0 ? found : null;
+  }, { what: 'gerendertes Gedaechtnis' });
+  assert.equal(memory.heading, 'Gedächtnis');
+  // Beide Ebenen stehen da, auch die leere globale.
+  assert.deepEqual(memory.karten, ['.agents/memory.md', '~/.snotra/memory.md']);
+  assert.ok(memory.eintraege.some((t) => t.includes('Gemerkt-fuer-dieses-Projekt.')), memory.eintraege.join(' | '));
+  assert.deepEqual(memory.badges, ['selbst gemerkt']);
+  // Der Schalter fuer selbststaendiges Merken steht voreingestellt an.
+  assert.equal(memory.selbstSchalter, true);
+  step('Gedaechtnis-Einstellungen geprueft');
 
   await page.keyboard.press('Escape');
   await poll(() => page.evaluate(() =>

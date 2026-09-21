@@ -184,7 +184,7 @@ test('createChatApplication kommt ohne Skill-Service aus', async () => {
 
 /* ── Umgebungsangaben im Systemprompt (Issue #138) ───────────────────────── */
 
-function environmentHarness({ uiPrefs = {}, environment, projectInstructions } = {}) {
+function environmentHarness({ uiPrefs = {}, environment, projectInstructions, memory } = {}) {
   const calls = [];
   const engine = createChatApplication({
     llmConfigStore: {
@@ -206,6 +206,7 @@ function environmentHarness({ uiPrefs = {}, environment, projectInstructions } =
     toolRegistry: { getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' },
     environment,
     projectInstructions,
+    memory,
     path,
     maxToolRounds: 2,
   }).engine;
@@ -362,4 +363,112 @@ test('ohne Port, ohne Dateien und bei einer werfenden Quelle läuft der Chat wei
     assert.equal(result.content, 'ok');
     assert.ok(!system().includes('Projektanweisungen aus AGENTS.md'));
   }
+});
+
+/* ── Gedächtnis im Systemprompt (Issue #166) ─────────────────────────────── */
+
+const MEM = require('../src/shared/contracts/memory').MEMORY_SCOPES;
+
+function memoryPort(files) {
+  const seen = [];
+  return {
+    seen,
+    port: {
+      load: async (options) => {
+        seen.push(options);
+        return files;
+      },
+    },
+  };
+}
+
+test('beide Gedächtnis-Ebenen stehen im Systemprompt und kennen den Ordner (#166)', async () => {
+  const { seen, port } = memoryPort([
+    { scope: MEM.WORKSPACE, text: '- 2026-09-21 — Tests mit npm test.' },
+    { scope: MEM.USER, text: '- 2026-09-20 — Anrede Du.' },
+  ]);
+  const { engine, system } = environmentHarness({ memory: port });
+  const result = await engine.send({
+    sessionId: 'mem-1',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
+  assert.match(system(), /Dein Gedächtnis/);
+  assert.match(system(), /## Gedächtnis \(Projekt\)\n\n- 2026-09-21 — Tests mit npm test\./);
+  assert.match(system(), /## Gedächtnis \(global\)\n\n- 2026-09-20 — Anrede Du\./);
+  // Je Ebene eine eigene Zeile in der Aufschlüsselung (#174).
+  const ids = result.contextBreakdown.parts.map((part) => part.id);
+  assert.ok(ids.includes('system:memory:workspace'), ids.join(', '));
+  assert.ok(ids.includes('system:memory:user'), ids.join(', '));
+});
+
+test('ein leeres Gedächtnis erzeugt keinen Block', async () => {
+  const { port } = memoryPort([]);
+  const { engine, system } = environmentHarness({ memory: port });
+  await engine.send({ sessionId: 'mem-2', payload: { messages: [{ role: 'user', content: 'hi' }] } });
+  assert.equal(/Dein Gedächtnis/.test(system()), false);
+});
+
+test('jede Ebene lässt sich einzeln abschalten', async () => {
+  const files = [
+    { scope: MEM.WORKSPACE, text: 'Projektnotiz.' },
+    { scope: MEM.USER, text: 'Globalnotiz.' },
+  ];
+  const ohneProjekt = environmentHarness({
+    memory: memoryPort(files).port,
+    uiPrefs: { memoryWorkspaceEnabled: false },
+  });
+  await ohneProjekt.engine.send({
+    sessionId: 'mem-3',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/p' },
+  });
+  assert.equal(/Projektnotiz/.test(ohneProjekt.system()), false);
+  assert.match(ohneProjekt.system(), /Globalnotiz/);
+
+  const ohneGlobal = environmentHarness({
+    memory: memoryPort(files).port,
+    uiPrefs: { memoryUserEnabled: false },
+  });
+  await ohneGlobal.engine.send({
+    sessionId: 'mem-4',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/p' },
+  });
+  assert.match(ohneGlobal.system(), /Projektnotiz/);
+  assert.equal(/Globalnotiz/.test(ohneGlobal.system()), false);
+});
+
+test('das Gedächtnis steht direkt hinter dem eigenen Prompt des Nutzers', async () => {
+  // Beides ist, was der Nutzer selbst gesagt hat — dazwischen soll sich nichts
+  // Fremdes schieben, weder ein Skill noch eine fremde AGENTS.md.
+  const { port } = memoryPort([{ scope: MEM.USER, text: 'Globalnotiz.' }]);
+  const { port: instructions } = instructionsPort([
+    { source: PI.WORKSPACE_AGENTS, text: 'Fremde Anweisung.' },
+  ]);
+  const { engine, system } = environmentHarness({
+    memory: port,
+    projectInstructions: instructions,
+    uiPrefs: { baseSystemPrompt: 'Sei knapp.' },
+  });
+  await engine.send({
+    sessionId: 'mem-5',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/p' },
+  });
+  const text = system();
+  assert.ok(text.indexOf('Sei knapp.') < text.indexOf('Globalnotiz.'), text);
+  assert.ok(text.indexOf('Globalnotiz.') < text.indexOf('Fremde Anweisung.'), text);
+});
+
+test('ein unlesbares Gedächtnis blockiert den Chat nicht', async () => {
+  const port = {
+    load: async () => {
+      throw new Error('kaputt');
+    },
+  };
+  const { engine, system } = environmentHarness({ memory: port });
+  const result = await engine.send({
+    sessionId: 'mem-6',
+    payload: { messages: [{ role: 'user', content: 'hi' }] },
+  });
+  assert.equal(result.content, 'ok');
+  assert.equal(/Dein Gedächtnis/.test(system()), false);
 });

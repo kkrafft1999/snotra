@@ -167,9 +167,13 @@ export function initToolApprovalCards({ api, appStore }) {
     fact(facts, 'Wirkung', view.classText);
     if (view.shellLabel) fact(facts, 'Shell', view.shellLabel);
     if (view.cwdLabel) fact(facts, 'Arbeitsordner', code(view.cwdLabel));
+    // Das Gedaechtnis hat kein Dateiziel, das der Nutzer beeinflussen koennte
+    // (Issue #166) — die Reichweite ist hier die Entscheidung, nicht der Pfad.
+    if (view.memoryScopeLabel) fact(facts, 'Reichweite', view.memoryScopeLabel);
     // Ein Shell-Befehl hat kein Dateiziel — die Zeile „ohne Dateiziel“ waere
-    // hier nur Rauschen neben Shell und Arbeitsordner (Issue #102).
-    if (!view.shellLabel || view.targets.length > 0) {
+    // hier nur Rauschen neben Shell und Arbeitsordner (Issue #102); beim
+    // Merken gilt dasselbe neben der Reichweite.
+    if ((!view.shellLabel && !view.memoryScopeLabel) || view.targets.length > 0) {
       fact(facts, view.targets.length === 1 ? 'Ziel' : 'Ziele', buildTargetList(view));
     }
     if (view.reason) fact(facts, 'Grund', view.reason);

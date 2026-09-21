@@ -1,6 +1,7 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -76,6 +77,11 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: Grundausstattung, die der Nutzer nicht abwaehlen kann
       // und in Einstellungen › Tools deshalb auch nicht sieht (Issue #195).
       essential: definition.essential === true,
+      // Standard false: ein Schreib-Tool ohne Ziel wird abgelehnt, weil es an
+      // der Pfadpruefung vorbei schriebe. `true` sagt, dass dieses Tool
+      // ueberhaupt keinen Pfad aus Argumenten bildet — heute nur `remember`,
+      // dessen Ziele allein im Memory-Port entstehen (Issue #166).
+      pathlessWrite: definition.pathlessWrite === true,
       // Was dieses Tool beim Durchlaufen ueberspringt (Issue #182): `hidden` =
       // Eintraege mit Punkt-Praefix, `ignored` = Muster aus der .gitignore des
       // Projektroots. Steht einmal im Konventionsblock statt in jeder
@@ -375,6 +381,7 @@ function createWorkspaceToolRegistry({
   pythonRunner = null,
   urlFetch = null,
   shellRunner = null,
+  memory = null,
 }) {
   return createToolRegistry([
     {
@@ -1239,6 +1246,94 @@ function createWorkspaceToolRegistry({
         if (result.title) out.title = result.title;
         if (result.truncated) out.truncated = true;
         return JSON.stringify(out);
+      },
+    },
+    {
+      name: 'remember',
+      // Schreibt eine Datei, also `write` — trotz kleiner Datenmenge. Die
+      // Klasse entscheidet die Rueckfrage, und ein Gedaechtniseintrag geht mit
+      // jeder kuenftigen Anfrage zum Anbieter: Das soll niemand uebersehen.
+      riskClass: TOOL_RISK_CLASSES.WRITE,
+      // Die globale Ebene braucht keinen geoeffneten Ordner. Fehlt er, lehnt
+      // der Handler nur `scope: "workspace"` ab (Issue #166).
+      requiresWorkspace: false,
+      // Das Modell benennt keinen Pfad — es waehlt eine Ebene, und wohin die
+      // zeigt, entscheidet allein der Memory-Port. Deshalb gibt es hier nichts
+      // zu pruefen, was der Pfad-Freigabe vorzulegen waere; `pathlessWrite`
+      // nimmt das Tool von der Regel aus, dass ein Schreib-Tool ohne Ziel
+      // abgelehnt wird (tool-call-planner.js).
+      targets: () => [],
+      pathlessWrite: true,
+      isAvailable: () => memory !== null,
+      description:
+        'Merkt sich einen einzelnen Satz dauerhaft, über das Ende dieser Unterhaltung hinaus. '
+        + 'Der Eintrag landet in einer memory.md — je nach Ebene im geöffneten Ordner '
+        + '(.agents/memory.md, gilt nur für dieses Projekt) oder im Benutzerverzeichnis '
+        + '(~/.snotra/memory.md, gilt überall) — und steht ab der nächsten Nachricht in jedem '
+        + 'Systemprompt. Gedacht für Dauerhaftes: Konventionen, Befehle, Vorlieben, Entscheidungen '
+        + 'samt Begründung. Nicht für den Stand von gerade eben und nichts, was in einer Datei '
+        + 'des Projekts besser aufgehoben wäre. Passwörter, Schlüssel und Zugangsdaten niemals.',
+      modelDescription:
+        'Merkt sich einen Satz dauerhaft (Ebene "workspace" = nur dieser Ordner, "user" = überall). '
+        + 'Der Eintrag steht ab der nächsten Nachricht in jedem Systemprompt. Nur Dauerhaftes, '
+        + 'niemals Passwörter oder Schlüssel. Vor dem ersten Gebrauch den Skill "snotra-memory" laden.',
+      promptDescription:
+        'Merkt sich einen Satz dauerhaft — auf Bitte des Nutzers („merk dir …") oder bei '
+        + 'Dauerhaftem, das dir auffällt. Regeln dazu im Skill „snotra-memory".',
+      parameters: {
+        type: 'object',
+        properties: {
+          scope: {
+            type: 'string',
+            enum: ['workspace', 'user'],
+            description:
+              'Reichweite: "workspace" für alles, was nur für den geöffneten Ordner gilt '
+              + '(Build-Befehle, Projektkonventionen, laufende Vorhaben); "user" für alles, was '
+              + 'unabhängig vom Projekt gilt (Anrede, Sprache, bevorzugte Werkzeuge). '
+              + 'Im Zweifel "workspace" — das Speziellere richtet weniger Schaden an.',
+          },
+          text: {
+            type: 'string',
+            maxLength: MAX_MEMORY_ENTRY_CHARS,
+            description:
+              'Der Merksatz, aus sich heraus verständlich und ohne Bezug auf diese Unterhaltung. '
+              + 'Also "Tests laufen mit npm test" statt "wie eben besprochen". Ein Gedanke je Aufruf.',
+          },
+          origin: {
+            type: 'string',
+            enum: ['requested', 'self'],
+            description:
+              'Wahrheitsgemäß: "requested", wenn der Nutzer ausdrücklich darum gebeten hat, '
+              + 'sonst "self". Der Nutzer kann selbstständiges Merken abschalten — dann werden '
+              + '"self"-Einträge abgelehnt, und ein falsch deklarierter Eintrag unterläuft seine '
+              + 'Einstellung.',
+          },
+        },
+        required: ['scope', 'text', 'origin'],
+      },
+      handler: async (args, { workspaceRoot } = {}) => {
+        if (!memory) {
+          return JSON.stringify({ error: 'Das Gedächtnis ist in dieser Installation nicht verfügbar.' });
+        }
+        try {
+          const saved = await memory.remember({
+            scope: args?.scope,
+            text: args?.text,
+            origin: args?.origin === 'self' ? MEMORY_ORIGINS.SELF : MEMORY_ORIGINS.REQUESTED,
+            workspaceRoot,
+          });
+          // Der Pfad geht mit zurueck, damit im Chat steht, *wohin* gemerkt
+          // wurde — „gemerkt" allein laesst offen, ob es den Ordner oder alle
+          // Ordner betrifft, und genau das ist der Unterschied.
+          return JSON.stringify({
+            ok: true,
+            scope: saved.scope,
+            file: saved.file,
+            remembered: saved.text,
+          });
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'Der Eintrag ließ sich nicht speichern.' });
+        }
       },
     },
   ]);

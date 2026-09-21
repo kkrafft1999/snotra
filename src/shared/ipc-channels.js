@@ -88,6 +88,10 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
   /** Passenden Skill zur Eingabe vom Modell vorschlagen lassen (Issue #125). */
   SKILLS_SUGGEST: 'skills:suggest',
+  /** Gedaechtnis beider Ebenen samt Eintraegen und Pfaden lesen (Issue #166). */
+  SETTINGS_GET_MEMORY: 'settings:getMemory',
+  /** Einen einzelnen Gedaechtnis-Eintrag vergessen (Issue #166). */
+  SETTINGS_FORGET_MEMORY: 'settings:forgetMemory',
 
   /**
    * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:
