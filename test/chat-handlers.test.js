@@ -327,8 +327,8 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
   assert.deepEqual(toolLineEvents.map((e) => e.payload.phase), ['start', 'done']);
   assert.ok(toolLineEvents.every((e) => typeof e.payload.line === 'string' && e.payload.line.length > 0));
   assert.equal(toolLineEvents[0].payload.tool, 'list_directory');
-  assert.equal(toolLineEvents[0].payload.line, 'Projektordner wird durchsucht …');
-  assert.equal(toolLineEvents[1].payload.line, 'Projektordner durchsucht');
+  assert.equal(toolLineEvents[0].payload.line, 'Searching the project folder …');
+  assert.equal(toolLineEvents[1].payload.line, 'Project folder searched');
 });
 
 test('CHAT_SEND emits a workspace fileWritten progress event after write_file_text', async () => {
@@ -410,7 +410,7 @@ test('CHAT_SEND attaches the adapter metadata to the tool trace entry', async ()
   });
 
   assert.equal(res.toolTrace[0].skill, 'traffic');
-  assert.equal(res.toolTrace[0].line, 'Skill traffic geladen');
+  assert.equal(res.toolTrace[0].line, 'Skill traffic loaded');
 });
 
 test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhausted', async () => {
@@ -534,7 +534,7 @@ test('CHAT_SEND lehnt einen Schreibaufruf ohne Freigabe-Oberflaeche sicher ab un
   assert.equal(res.toolTrace[0].permission.status, 'denied');
   assert.equal(res.toolTrace[0].permission.reason, 'request_invalidated');
   const doneLine = sent.find((s) => s.channel === PUSH.CHAT_TOOL_LINE && s.payload.phase === 'done');
-  assert.match(doneLine.payload.line, /blockiert/);
+  assert.match(doneLine.payload.line, /blocked/);
 });
 
 test('CHAT_SEND gibt dem Modell bei Nutzer-Ablehnung ein strukturiertes permission_denied zurueck (Issue #66)', async () => {

@@ -1,6 +1,7 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
 import { toolModeOptions, modeLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
+import { onLocaleChange, t } from '../i18n.js';
 
 /**
  * Modus-Pille in der Chat-Leiste (Issue #67, Konzept §3/§8): zeigt den aktiven
@@ -66,8 +67,8 @@ export function initToolModePicker({ toolPermissions }) {
     const text = modeLabel(mode);
     label.textContent = text;
     wrap.dataset.mode = mode;
-    btn.title = `Tool-Berechtigungen: ${text}. Klicken zum Wechseln.`;
-    btn.setAttribute('aria-label', `Berechtigungsmodus ${text}. Modus wechseln`);
+    btn.title = t('chat.toolMode.button.title', { mode: text });
+    btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: text }));
     if (open) rebuild(mode);
   }
 
@@ -96,14 +97,14 @@ export function initToolModePicker({ toolPermissions }) {
     setStatus('');
     const result = await toolPermissions.setMode(mode);
     if (result?.ok) {
-      setStatus(`Berechtigungsmodus: ${modeLabel(mode)}`);
+      setStatus(t('chat.toolMode.changed', { mode: modeLabel(mode) }));
       return;
     }
     if (isCancelledResult(result)) {
-      setStatus('Modus unverändert.');
+      setStatus(t('chat.toolMode.unchanged'));
       return;
     }
-    setStatus(result?.error || 'Modus konnte nicht geändert werden.');
+    setStatus(result?.error || t('chat.toolMode.failed'));
   }
 
   btn.addEventListener('click', (e) => {
@@ -143,6 +144,9 @@ export function initToolModePicker({ toolPermissions }) {
   });
 
   toolPermissions.subscribe(render);
+  // The pill, its tooltip and the open menu are built at runtime, so a
+  // language change has to redraw them (#290).
+  onLocaleChange(() => render(toolPermissions.get()));
   render(toolPermissions.get());
 
   return { close, isOpen: () => open };

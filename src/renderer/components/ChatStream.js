@@ -42,6 +42,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
 // per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
+import { getLocale, onLocaleChange, t } from '../i18n.js';
 
 const { coerceUsage, createEmptyUsage, inferChatTitle } = contracts;
 
@@ -51,26 +52,20 @@ const CHAT_SEND_ICON_HTML =
 const CHAT_STOP_ICON_HTML =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
 
-const tokenCountFormatter = new Intl.NumberFormat('de-DE');
+// A thousands separator is a dot in German and a comma in English, so the
+// formatter follows the interface language rather than the machine's (#290).
+function tokenCount(value, digits = 0) {
+  return new Intl.NumberFormat(getLocale(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
 
 function formatChatTokenUsage(total) {
   const n = Math.max(0, Math.round(Number(total) || 0));
-  if (n < 1000) {
-    return `${tokenCountFormatter.format(n)} Tokens`;
-  }
+  if (n < 1000) return t('chat.tokens', { count: tokenCount(n) });
   const inK = n / 1000;
-  if (inK < 10) {
-    const oneDecimal = new Intl.NumberFormat('de-DE', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
-    return `${oneDecimal.format(inK)} K Tokens`;
-  }
-  const wholeK = new Intl.NumberFormat('de-DE', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-  return `${wholeK.format(inK)} K Tokens`;
+  return t('chat.tokens.thousands', { count: tokenCount(inK, inK < 10 ? 1 : 0) });
 }
 
 function folderNameFromPath(p) {
@@ -88,7 +83,7 @@ function buildGreetingMessage(workspaceRoot) {
   return {
     role: 'assistant',
     greeting: true,
-    content: `Wir sind im Ordner **„${name}"**. Was möchtest du tun?`,
+    content: t('chat.greeting', { name }),
   };
 }
 
@@ -179,10 +174,10 @@ export function initChatStream({
     if (!chatTokenUsageEl) return;
     const usage = appStore.chatTokenUsage || createEmptyUsage();
     if (chatTokenUsageValueEl) chatTokenUsageValueEl.textContent = formatChatTokenUsage(usage.prompt);
-    chatTokenUsageEl.title =
-      `Kontextfenster der letzten Anfrage: ${tokenCountFormatter.format(usage.prompt)} Tokens ` +
-      `(Antwort: ${tokenCountFormatter.format(usage.completion)} Tokens). ` +
-      'Klicken für die Aufschlüsselung.';
+    chatTokenUsageEl.title = t('chat.tokens.title', {
+      prompt: tokenCount(usage.prompt),
+      completion: tokenCount(usage.completion),
+    });
     tokenBreakdownPanel.refresh();
   }
 
@@ -201,8 +196,9 @@ export function initChatStream({
     const inFlight = !!appStore.chatInFlight;
     btnChatSend.classList.toggle('chat-send--stop', inFlight);
     btnChatSend.disabled = inFlight ? false : !activeProviderConfigured();
-    btnChatSend.title = inFlight ? 'Antwort abbrechen' : 'Senden';
-    btnChatSend.setAttribute('aria-label', inFlight ? 'Antwort abbrechen' : 'Senden');
+    const sendLabel = t(inFlight ? 'chat.send.abort' : 'chat.send');
+    btnChatSend.title = sendLabel;
+    btnChatSend.setAttribute('aria-label', sendLabel);
     btnChatSend.innerHTML = inFlight ? CHAT_STOP_ICON_HTML : CHAT_SEND_ICON_HTML;
     // Die Aufschlüsselung sagt waehrend einer laufenden Anfrage dazu, dass
     // ihre Werte noch von der vorherigen stammen (Issue #174).
@@ -215,7 +211,7 @@ export function initChatStream({
     const det = document.createElement('details');
     det.className = 'chat-reasoning-details';
     const sum = document.createElement('summary');
-    sum.textContent = 'Zwischenschritte (Modell)';
+    sum.textContent = t('chat.reasoning.title');
     const body = document.createElement('pre');
     body.className = 'chat-reasoning-body';
     body.textContent = reasoningText;
@@ -367,13 +363,13 @@ export function initChatStream({
 
   function buildAttachmentTile(attachment) {
     const item = document.createElement('li');
-    const label = attachment?.name || 'Angehängtes Bild';
+    const label = attachment?.name || t('chat.attachment.fallbackName');
 
     const showImage = (src) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'chat-msg-attachment';
-      button.setAttribute('aria-label', `${label} vergrößert anzeigen`);
+      button.setAttribute('aria-label', t('chat.attachment.zoom', { label }));
       button.title = label;
       const img = document.createElement('img');
       img.className = 'chat-msg-attachment-img';
@@ -407,10 +403,10 @@ export function initChatStream({
     if (inlineUrl) {
       showImage(inlineUrl);
     } else if (attachment?.file) {
-      showNote('loading', 'Bild wird geladen…');
+      showNote('loading', t('chat.attachment.loading'));
       void loadStoredAttachment(attachment, { showImage, showNote });
     } else {
-      showNote('missing', 'Bild nicht mehr vorhanden');
+      showNote('missing', t('chat.attachment.missing'));
     }
     return item;
   }
@@ -430,7 +426,7 @@ export function initChatStream({
     // Der Nutzer kann inzwischen die Konversation gewechselt haben.
     if (sessionAtLoad !== appStore.chatSessionId) return;
     if (!result?.ok || !result.dataBase64) {
-      showNote('missing', 'Bild nicht mehr vorhanden');
+      showNote('missing', t('chat.attachment.missing'));
       return;
     }
     // Einmal geholt, bleibt das Bild am Anhang haengen: das naechste Rendern
@@ -493,7 +489,7 @@ export function initChatStream({
             const det = document.createElement('details');
             det.className = 'chat-reasoning-details';
             const sum = document.createElement('summary');
-            sum.textContent = 'Zwischenschritte (Modell)';
+            sum.textContent = t('chat.reasoning.title');
             const body = document.createElement('pre');
             body.className = 'chat-reasoning-body';
             body.textContent = m.reasoningText;
@@ -842,11 +838,13 @@ export function initChatStream({
                 const base = row.dataset.baseText || textEl?.textContent || '';
                 if (!row.dataset.baseText) row.dataset.baseText = base;
                 if (p.event === 'awaiting') {
-                  setToolLineText(row, `${base} · wartet auf Freigabe`);
+                  setToolLineText(row, `${base} · ${t('tools.line.suffix.awaiting')}`);
                   row.dataset.permission = 'awaiting';
                 } else if (p.event === 'resolved') {
                   const allowed = typeof p.response === 'string' && p.response !== 'deny';
-                  setToolLineText(row, allowed ? base : `${base} · ${p.response === 'deny' ? 'abgelehnt' : 'verfallen'}`);
+                  setToolLineText(row, allowed
+                    ? base
+                    : `${base} · ${t(p.response === 'deny' ? 'tools.line.suffix.denied' : 'tools.line.suffix.expired')}`);
                   row.dataset.permission = allowed ? 'allowed' : p.response === 'deny' ? 'denied' : 'cancelled';
                 }
                 syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
@@ -1022,7 +1020,7 @@ export function initChatStream({
       meta.className = 'chat-attachment-meta';
       const name = document.createElement('span');
       name.className = 'chat-attachment-name';
-      name.textContent = attachment.name || 'Bild';
+      name.textContent = attachment.name || t('chat.attachment.image');
       const size = document.createElement('span');
       size.className = 'chat-attachment-size';
       size.textContent = formatAttachmentSize(attachment.bytes);
@@ -1033,8 +1031,8 @@ export function initChatStream({
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'chat-attachment-remove';
-      remove.title = 'Anhang entfernen';
-      remove.setAttribute('aria-label', `Anhang ${attachment.name || 'Bild'} entfernen`);
+      remove.title = t('chat.attachment.remove');
+      remove.setAttribute('aria-label', t('chat.attachment.remove.label', { name: attachment.name || t('chat.attachment.image') }));
       remove.textContent = '\u00d7';
       remove.addEventListener('click', () => {
         pendingAttachments.splice(index, 1);
@@ -1135,20 +1133,39 @@ export function initChatStream({
     const toConsole = () => {
       console.info(json);
       toolLogDebug.record('export', { via: 'console' });
-      flashTokenUsageNote('Tool-Log-Diagnose in der Konsole');
+      flashTokenUsageNote(t('chat.debug.toConsole'));
     };
     // Über den Main-Prozess, weil der Permission-Handler der App
     // navigator.clipboard im Renderer nicht zulässt.
     const write = typeof api.writeClipboardText === 'function'
-      ? api.writeClipboardText(json).then((r) => (r?.ok ? r : Promise.reject(new Error(r?.error || 'Zwischenablage'))))
-      : Promise.reject(new Error('Zwischenablage nicht verfügbar.'));
+      ? api.writeClipboardText(json).then((r) => (r?.ok ? r : Promise.reject(new Error(r?.error || 'clipboard'))))
+      : Promise.reject(new Error('clipboard unavailable'));
     write.then(() => {
       toolLogDebug.record('export', { via: 'clipboard' });
-      flashTokenUsageNote('Tool-Log-Diagnose kopiert');
+      flashTokenUsageNote(t('chat.debug.copied'));
     }, toConsole);
   });
 
   syncChatTokenUsageDisplay();
+
+  /**
+   * A language change repaints the running chat (#290). Everything in here is
+   * built at runtime — tool lines, the greeting, the token figure — so
+   * `data-i18n` never reaches it. The greeting is display-only and is not
+   * persisted, so it can simply be written again in the new language; the
+   * conversation itself is the user's text and stays untouched.
+   */
+  onLocaleChange(() => {
+    const workspaceRoot = appStore.currentChatWorkspace;
+    for (const message of appStore.chatMessages) {
+      if (!message.greeting) continue;
+      const fresh = buildGreetingMessage(workspaceRoot);
+      if (fresh) message.content = fresh.content;
+    }
+    renderChatMessages();
+    syncChatSendButton();
+    syncChatTokenUsageDisplay();
+  });
 
   return {
     renderChatMessages,

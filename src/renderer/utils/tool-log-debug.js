@@ -72,7 +72,7 @@ export function createToolLogDebug({ capacity = DEFAULT_CAPACITY, now = () => Da
         context: context === undefined ? undefined : context,
       });
       if (logger && typeof logger.error === 'function') {
-        logger.error(`[tool-log] Fehler in ${label}:`, error, context);
+        logger.error(`[tool-log] error in ${label}:`, error, context);
       }
       return undefined;
     }

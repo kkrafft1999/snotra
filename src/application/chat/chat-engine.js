@@ -17,7 +17,6 @@ const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
   TOOL_LINE_PHASES,
-  APP_LOCALES,
   PERMISSION_PROGRESS_EVENTS,
   createChatResult,
   createCancelledChatResult,
@@ -45,6 +44,7 @@ const {
   createPermissionAuditEntry,
 } = require('../../shared/contracts/tool-permissions');
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
+const { normalizeLocale } = require('../../shared/i18n');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildMemorySystemPrompt } = require('./memory-prompt');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
@@ -107,8 +107,13 @@ const RUN_ENDED_MESSAGES = Object.freeze({
     'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',
 });
 
+/**
+ * The language the tool lines are written in. Unset means the app default, and
+ * that has been English since #277 — a fresh installation would otherwise get
+ * German lines inside an English interface (#290).
+ */
 function resolveAppLocale(uiPrefs) {
-  return uiPrefs?.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
+  return normalizeLocale(uiPrefs?.appLocale);
 }
 
 function resolveToolRoundLimit(uiPrefs, mainDefault) {
