@@ -134,6 +134,14 @@ try {
       { what: 'Freigabekarte' });
     await wait(600);
 
+    // Die Vorschau aufklappen: erst dann ist die Karte so lang, wie sie im
+    // Alltag wird — und der Schalter „Vollständig anzeigen" steht im Bild.
+    await page.evaluate(() => {
+      const details = document.querySelector('.chat-approval-card__preview');
+      if (details) details.open = true;
+    });
+    await wait(300);
+
     for (const theme of ['light', 'dark']) {
       await setTheme(theme);
       await wait(250);
