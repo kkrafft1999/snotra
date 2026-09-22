@@ -48,6 +48,3 @@ Thumbs.db
 !.claude/rules/**
 !.claude/launch.json
 
-# Lighthouse CI (lokale Laeufe und Reports, siehe .github/workflows/website-performance.yml)
-.lighthouseci/
-lighthouse-report/

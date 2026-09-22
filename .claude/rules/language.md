@@ -37,9 +37,11 @@ version that lags behind the English one is a defect, not a detail.
   shown to the user rather than logged.
 - **User-facing documentation** — `README.md` describes the app from the user's
   side and counts as user-facing. Everything under `docs/` does not.
-- **The website** (`website/`). `impressum.html` and `datenschutz.html` are the
-  exception in the other direction: they are legally binding in German, so the
-  German version governs and an English one is informational only.
+- **The website** no longer lives here. It moved to its own private repository
+  together with the rest of the promotion (#299) and carries this rule with it,
+  including the exception in the other direction: `impressum.html` and
+  `datenschutz.html` are legally binding in German, so the German version
+  governs there and an English one is informational only.
 
 German texts address the reader as **du**, never **Sie**.
 
@@ -63,9 +65,9 @@ The rule is younger than the repository, so most of it is still German:
   Until that is done, German neighbours are expected — new files are English
   anyway. Translating an unrelated file on the side does not belong in a pull
   request that was opened for something else.
-- The user-facing side is German only today: the app has no translation layer
-  at all, and `README.md` and the website are German. **#282** carries that as
-  an epic and splits it up.
+- On the user-facing side `README.md` is still German only. **#282** carries
+  that as an epic and splits it up; its website part went with the website to
+  the promotion repository.
 
 Related rules: [`task-management.md`](./task-management.md) for where issues go,
 [`git-workflow.md`](./git-workflow.md) for what a pull request looks like.
