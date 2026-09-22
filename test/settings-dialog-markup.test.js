@@ -153,18 +153,56 @@ test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () 
 // Titelleiste. Er steht jetzt unter „Allgemein" — und nur dort, sonst gaebe es
 // zwei Bedienstellen fuer eine Einstellung.
 test('das Erscheinungsbild wird unter „Allgemein“ gewählt, nicht in der Titelleiste', () => {
-  assert.equal(html.split('id="select-app-theme"').length - 1, 1);
+  assert.equal(html.split('id="choice-app-theme"').length - 1, 1);
   assert.ok(!html.includes('id="theme-toggle"'), 'in der Titelleiste steht kein Knopf mehr');
 
   const panelStart = html.indexOf('id="panel-settings-general"');
   const panel = html.slice(panelStart, html.indexOf('</section>', panelStart));
-  const selectAt = panel.indexOf('id="select-app-theme"');
-  assert.ok(selectAt > -1, 'die Auswahl liegt im Allgemein-Panel');
+  const groupAt = panel.indexOf('id="choice-app-theme"');
+  assert.ok(groupAt > -1, 'die Auswahl liegt im Allgemein-Panel');
 
-  const select = panel.slice(selectAt, panel.indexOf('</select>', selectAt));
-  assert.match(select, /value="light"/);
-  assert.match(select, /value="dark"/);
+  const group = panel.slice(groupAt, panel.indexOf('</div>', panel.indexOf('value="dark"')));
+  assert.match(group, /value="light"/);
+  assert.match(group, /value="dark"/);
 
-  // Ohne sichtbares Label braucht die Auswahl eines fuer den Screenreader.
-  assert.match(panel.slice(0, selectAt), /for="select-app-theme"[^>]*>\s*Appearance/);
+  // Segment statt Auswahlliste (#297): eine Gruppe echter Radios, deren Name
+  // fuer den Screenreader an der sichtbaren Ueberschrift haengt.
+  assert.match(group, /role="radiogroup"/);
+  assert.equal(group.split('type="radio"').length - 1, 2);
+  assert.match(group, /aria-labelledby="label-app-theme"/);
+  assert.match(panel.slice(0, groupAt), /id="label-app-theme"[^>]*>\s*Appearance/);
+});
+
+test('die Sofort-Schalter sind echte Schalter, keine Kaestchen (#297)', () => {
+  // A checkbox says "chosen, saved later" — these save on the spot, so they
+  // carry role="switch" and a label that points at them by id.
+  for (const id of [
+    'input-environment-info',
+    'input-project-instructions',
+    'input-python-enabled',
+    'input-shell-enabled',
+    'input-memory-self',
+  ]) {
+    const at = html.indexOf(`id="${id}"`);
+    assert.ok(at > -1, `${id} fehlt`);
+    const tag = html.slice(html.lastIndexOf('<input', at), html.indexOf('>', at) + 1);
+    assert.match(tag, /role="switch"/, `${id} ist kein Schalter`);
+    assert.match(tag, /class="ds-switch"/, id);
+    assert.match(html, new RegExp(`for="${id}"`), `${id} hat kein verbundenes Label`);
+  }
+
+  // Und die Rueckmeldung „Gespeichert" steht als Live-Region daneben.
+  for (const id of [
+    'status-environment-info',
+    'status-project-instructions',
+    'status-python-enabled',
+    'status-shell-enabled',
+    'status-memory-self',
+    'status-app-theme',
+    'status-app-locale',
+  ]) {
+    const at = html.indexOf(`id="${id}"`);
+    assert.ok(at > -1, `${id} fehlt`);
+    assert.match(html.slice(at, html.indexOf('>', at) + 1), /role="status"/, id);
+  }
 });
