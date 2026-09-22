@@ -20,7 +20,7 @@ procedure that creates them.
 
 ## The flow at a glance
 
-![The release flow: the version commit goes through a pull request, then a tag push triggers the pipeline](release-ablauf.svg)
+![The release flow: the version commit goes through a pull request, then a tag push triggers the pipeline](release-flow.svg)
 
 In short: the version commit goes through a pull request like every other
 change. Only the merged state is tagged, and the tag push alone starts the

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1690" width="1280" height="1690" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Snotra AI — Release-Ablauf: Versions-Commit über Pull Request, Tag-Push löst die Pipeline aus</title>
-  <desc id="desc">Aktivitätsdiagramm mit drei Bahnen. Lokal: Bump-Typ bestimmen, Pre-Flight prüfen, Zielversion bestätigen lassen, Branch release/vX.Y.Z anlegen, Version ohne Tag bumpen, committen, pushen, Pull Request öffnen. GitHub: PR offen unter Ruleset 23177645, drei Pflicht-Checks, Squash-Merge in main, Branch löschen. Lokal: main aktualisieren, Tag vX.Y.Z setzen und als Tag-Ref pushen — ohne Push auf main. GitHub Actions: release.yml startet auf den Tag, Test-Gate auf drei Plattformen, parallele Builds für macOS, Windows und Linux, Publish der Artefakte. Ein roter Abbruchpfad sammelt fehlgeschlagene Prüfungen; ein rotes Gate in der Pipeline bedeutet kein Build und kein Release.</desc>
+  <title id="title">Snotra AI — release flow: the version commit goes through a pull request, the tag push starts the pipeline</title>
+  <desc id="desc">Activity diagram with three lanes. Local: determine the bump type, run the pre-flight checks, have the target version confirmed, create the branch release/vX.Y.Z, bump the version without a tag, commit, push, open a pull request. GitHub: the pull request is open under ruleset 23177645, three required checks, squash merge into main, delete the branch. Local: update main, set the tag vX.Y.Z and push it as a tag ref — without pushing to main. GitHub Actions: release.yml starts on the tag, a test gate on three platforms, parallel builds for macOS, Windows and Linux, publishing of the artifacts. A red abort path collects failed checks; a red gate in the pipeline means no build and no release.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
       <path d="M0,0 L8,3 L0,6 Z" fill="#5a6a78"/>
@@ -47,17 +47,17 @@
 
   <rect x="0" y="0" width="1280" height="1690" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Snotra AI — Release-Ablauf</text>
-  <text class="t-sub" x="31" y="68">Der Versions-Commit geht durch einen Pull Request, erst danach wird getaggt.</text>
-  <text class="t-sub" x="31" y="85">Der Tag-Push startet die Pipeline — auf <tspan font-weight="700">main</tspan> wird nie direkt geschrieben.</text>
+  <text class="t-title" x="30" y="44">Snotra AI — release flow</text>
+  <text class="t-sub" x="31" y="68">The version commit goes through a pull request; only then is it tagged.</text>
+  <text class="t-sub" x="31" y="85">The tag push starts the pipeline — <tspan font-weight="700">main</tspan> is never written to directly.</text>
 
   <g>
-    <rect class="act"   x="742"  y="28" width="13" height="13" rx="2"/><text class="legend" x="760"  y="39">lokaler Schritt</text>
-    <rect class="check" x="742"  y="50" width="13" height="13" rx="2"/><text class="legend" x="760"  y="61">Prüfung</text>
-    <rect class="gh"    x="886"  y="28" width="13" height="13" rx="2"/><text class="legend" x="904"  y="39">GitHub / Ruleset</text>
-    <path class="dec"   d="M893,56 L900,50 L907,56 L900,62 Z"/><text class="legend" x="915" y="61">Entscheidung</text>
-    <rect class="ci"    x="1050" y="28" width="13" height="13" rx="2"/><text class="legend" x="1068" y="39">Actions-Lauf</text>
-    <rect class="stop"  x="1050" y="50" width="13" height="13" rx="2"/><text class="legend" x="1068" y="61">Abbruch</text>
+    <rect class="act"   x="742"  y="28" width="13" height="13" rx="2"/><text class="legend" x="760"  y="39">local step</text>
+    <rect class="check" x="742"  y="50" width="13" height="13" rx="2"/><text class="legend" x="760"  y="61">check</text>
+    <rect class="gh"    x="886"  y="28" width="13" height="13" rx="2"/><text class="legend" x="904"  y="39">GitHub / ruleset</text>
+    <path class="dec"   d="M893,56 L900,50 L907,56 L900,62 Z"/><text class="legend" x="915" y="61">decision</text>
+    <rect class="ci"    x="1050" y="28" width="13" height="13" rx="2"/><text class="legend" x="1068" y="39">Actions run</text>
+    <rect class="stop"  x="1050" y="50" width="13" height="13" rx="2"/><text class="legend" x="1068" y="61">abort</text>
   </g>
 
   <rect class="lane-l" x="30"  y="100" width="480" height="1445" rx="6"/>
@@ -66,95 +66,95 @@
   <rect class="head-l" x="30"  y="100" width="480" height="38" rx="6"/>
   <rect class="head-g" x="525" y="100" width="340" height="38" rx="6"/>
   <rect class="head-c" x="880" y="100" width="370" height="38" rx="6"/>
-  <text class="lane" x="46"  y="124">LOKAL<tspan class="lanesub" dx="10">Agent und Arbeitskopie</tspan></text>
-  <text class="lane" x="541" y="124">GITHUB<tspan class="lanesub" dx="10">Repo, PR und Ruleset 23177645</tspan></text>
-  <text class="lane" x="896" y="124">ACTIONS<tspan class="lanesub" dx="10">ci.yml und release.yml</tspan></text>
+  <text class="lane" x="46"  y="124">LOCAL<tspan class="lanesub" dx="10">agent and working copy</tspan></text>
+  <text class="lane" x="541" y="124">GITHUB<tspan class="lanesub" dx="10">repo, pull request and ruleset 23177645</tspan></text>
+  <text class="lane" x="896" y="124">ACTIONS<tspan class="lanesub" dx="10">ci.yml and release.yml</tspan></text>
 
 
-  <text class="hint" x="695" y="432">Bis hierher passiert auf GitHub nichts —</text>
-  <text class="hint" x="695" y="450">die Vorbereitung bleibt in der Arbeitskopie.</text>
-  <text class="hint" x="1060" y="432">Actions starten erst,</text>
-  <text class="hint" x="1060" y="450">wenn etwas gepusht wird.</text>
-  <text class="hint" x="295" y="1012">wartet, bis der PR grün ist</text>
+  <text class="hint" x="695" y="432">Nothing happens on GitHub up to here —</text>
+  <text class="hint" x="695" y="450">the preparation stays in the working copy.</text>
+  <text class="hint" x="1060" y="432">Actions only start</text>
+  <text class="hint" x="1060" y="450">once something is pushed.</text>
+  <text class="hint" x="295" y="1012">waits until the PR is green</text>
 
   <circle cx="295" cy="168" r="14" fill="#33414f"/>
 
   <rect class="act" x="120" y="196" width="350" height="48" rx="6"/>
-  <text class="btitle" x="295" y="218">Bump-Typ bestimmen</text>
-  <text class="bsub"   x="295" y="234">patch (Standard) · minor · major</text>
+  <text class="btitle" x="295" y="218">determine the bump type</text>
+  <text class="bsub"   x="295" y="234">patch (default) · minor · major</text>
 
   <rect class="check" x="120" y="268" width="350" height="92" rx="6"/>
-  <text class="btitle" x="295" y="290">Pre-Flight — alles muss zutreffen</text>
-  <text class="bsub"   x="295" y="309">auf main · Arbeitsbaum sauber</text>
-  <text class="bsub"   x="295" y="326">gleichauf mit origin/main</text>
-  <text class="bsub"   x="295" y="343">npm test und npm run test:e2e grün</text>
+  <text class="btitle" x="295" y="290">pre-flight — all of it has to hold</text>
+  <text class="bsub"   x="295" y="309">on main · working tree clean</text>
+  <text class="bsub"   x="295" y="326">level with origin/main</text>
+  <text class="bsub"   x="295" y="343">npm test and npm run test:e2e green</text>
 
   <path class="dec" d="M295,388 L445,424 L295,460 L145,424 Z"/>
-  <text class="dec" x="295" y="421">Zielversion vom</text>
-  <text class="dec" x="295" y="436">Nutzer bestätigt?</text>
+  <text class="dec" x="295" y="421">target version confirmed</text>
+  <text class="dec" x="295" y="436">by the user?</text>
 
   <rect class="act" x="120" y="488" width="350" height="48" rx="6"/>
   <text class="cmd"    x="295" y="512">git switch -c release/vX.Y.Z</text>
-  <text class="cmdsub" x="295" y="528">eigener Branch, kein Schreiben auf main</text>
+  <text class="cmdsub" x="295" y="528">a branch of its own, no writing to main</text>
 
   <rect class="act" x="120" y="556" width="350" height="60" rx="6"/>
-  <text class="cmd"    x="295" y="582">npm version &lt;typ&gt; --no-git-tag-version</text>
-  <text class="cmdsub" x="295" y="600">ändert nur package.json und package-lock.json —</text>
-  <text class="cmdsub" x="295" y="612">kein Commit, kein Tag</text>
+  <text class="cmd"    x="295" y="582">npm version &lt;type&gt; --no-git-tag-version</text>
+  <text class="cmdsub" x="295" y="600">changes only package.json and package-lock.json —</text>
+  <text class="cmdsub" x="295" y="612">no commit, no tag</text>
 
   <rect class="act" x="120" y="636" width="350" height="56" rx="6"/>
   <text class="cmd"    x="295" y="661">git commit -m "vX.Y.Z"</text>
-  <text class="cmdsub" x="295" y="680">genau diese beiden Dateien, sonst nichts</text>
+  <text class="cmdsub" x="295" y="680">exactly those two files, nothing else</text>
 
   <rect class="act" x="120" y="716" width="350" height="48" rx="6"/>
   <text class="cmd"    x="295" y="740">git push origin release/vX.Y.Z</text>
-  <text class="cmdsub" x="295" y="756">Feature-Branch — vom Ruleset nicht berührt</text>
+  <text class="cmdsub" x="295" y="756">feature branch — untouched by the ruleset</text>
 
   <rect class="act" x="120" y="784" width="350" height="60" rx="6"/>
   <text class="cmd"    x="295" y="810">gh pr create</text>
-  <text class="cmdsub" x="295" y="829">Titel: Release vX.Y.Z</text>
+  <text class="cmdsub" x="295" y="829">title: Release vX.Y.Z</text>
 
   <rect class="gh" x="545" y="784" width="300" height="60" rx="6"/>
-  <text class="btitle" x="695" y="808">Pull Request offen</text>
-  <text class="bsub"   x="695" y="826">Ruleset verlangt PR und drei grüne Checks</text>
+  <text class="btitle" x="695" y="808">pull request open</text>
+  <text class="bsub"   x="695" y="826">the ruleset demands a PR and three green checks</text>
 
   <rect class="ci" x="900" y="784" width="320" height="76" rx="6"/>
-  <text class="btitle" x="1060" y="806">ci.yml — Test-Suite</text>
+  <text class="btitle" x="1060" y="806">ci.yml — test suite</text>
   <rect class="chipbox" x="912"  y="818" width="98" height="26" rx="4"/><text class="chip" x="961"  y="835">macos-14</text>
   <rect class="chipbox" x="1016" y="818" width="98" height="26" rx="4"/><text class="chip" x="1065" y="835">windows</text>
   <rect class="chipbox" x="1120" y="818" width="88" height="26" rx="4"/><text class="chip" x="1164" y="835">ubuntu</text>
 
   <path class="dec" d="M695,882 L845,920 L695,958 L545,920 Z"/>
-  <text class="dec" x="695" y="917">alle drei</text>
-  <text class="dec" x="695" y="932">Checks grün?</text>
+  <text class="dec" x="695" y="917">all three</text>
+  <text class="dec" x="695" y="932">checks green?</text>
 
   <rect class="gh" x="545" y="990" width="300" height="60" rx="6"/>
-  <text class="btitle" x="695" y="1014">Squash-Merge in main</text>
-  <text class="bsub"   x="695" y="1032">ein Commit je PR, PR-Nummer im Titel</text>
+  <text class="btitle" x="695" y="1014">squash merge into main</text>
+  <text class="bsub"   x="695" y="1032">one commit per PR, PR number in the title</text>
 
   <rect class="gh" x="545" y="1070" width="300" height="48" rx="6"/>
-  <text class="btitle" x="695" y="1092">Branch löschen</text>
-  <text class="bsub"   x="695" y="1108">das Repo räumt nicht von selbst auf</text>
+  <text class="btitle" x="695" y="1092">delete the branch</text>
+  <text class="bsub"   x="695" y="1108">the repo does not tidy up by itself</text>
 
   <rect class="act" x="120" y="1070" width="350" height="48" rx="6"/>
   <text class="cmd"    x="295" y="1094">git switch main &amp;&amp; git pull</text>
-  <text class="cmdsub" x="295" y="1110">holt den gemergten Squash-Commit</text>
+  <text class="cmdsub" x="295" y="1110">fetches the merged squash commit</text>
 
   <rect class="act" x="120" y="1138" width="350" height="76" rx="6"/>
   <text class="cmd"    x="295" y="1163">git tag vX.Y.Z</text>
   <text class="cmd"    x="295" y="1182">git push origin vX.Y.Z</text>
-  <text class="cmdsub" x="295" y="1201">Tag-Ref — kein Push auf main, kein Bypass</text>
+  <text class="cmdsub" x="295" y="1201">tag ref — no push to main, no bypass</text>
 
   <rect class="ci" x="900" y="1138" width="320" height="52" rx="6"/>
-  <text class="btitle" x="1060" y="1161">release.yml startet</text>
+  <text class="btitle" x="1060" y="1161">release.yml starts</text>
   <text class="bsub"   x="1060" y="1178">on: push · tags: 'v*'</text>
 
   <rect class="ci" x="900" y="1210" width="320" height="52" rx="6"/>
-  <text class="btitle" x="1060" y="1233">Test-Gate</text>
-  <text class="bsub"   x="1060" y="1250">ci.yml erneut auf allen drei Plattformen</text>
+  <text class="btitle" x="1060" y="1233">test gate</text>
+  <text class="bsub"   x="1060" y="1250">ci.yml again on all three platforms</text>
 
   <rect class="ci" x="900" y="1282" width="320" height="84" rx="6"/>
-  <text class="btitle" x="1060" y="1304">Build — parallel</text>
+  <text class="btitle" x="1060" y="1304">build — in parallel</text>
   <rect class="chipbox" x="912"  y="1316" width="98" height="38" rx="4"/>
   <text class="chip" x="961" y="1332">macOS</text><text class="chip" x="961" y="1346">arm64</text>
   <rect class="chipbox" x="1016" y="1316" width="98" height="38" rx="4"/>
@@ -164,16 +164,16 @@
 
   <rect class="ci" x="900" y="1386" width="320" height="52" rx="6"/>
   <text class="btitle" x="1060" y="1409">Publish</text>
-  <text class="bsub"   x="1060" y="1426">fünf Artefakte ans Release hängen</text>
+  <text class="bsub"   x="1060" y="1426">attach five artifacts to the release</text>
 
   <rect class="stop" x="900" y="1458" width="320" height="72" rx="6"/>
-  <text class="notetitle" x="914" y="1481">Gate rot → kein Build, kein Release</text>
-  <text class="note" x="914" y="1500">Der Tag bleibt stehen. Mit dem Nutzer klären, ob</text>
-  <text class="note" x="914" y="1517">Tag und Release gelöscht und neu getaggt werden.</text>
+  <text class="notetitle" x="914" y="1481">gate red → no build, no release</text>
+  <text class="note" x="914" y="1500">The tag stays. Settle with the user whether</text>
+  <text class="note" x="914" y="1517">the tag and release are deleted and re-tagged.</text>
 
   <rect class="act" x="120" y="1458" width="350" height="48" rx="6"/>
-  <text class="btitle" x="295" y="1480">Release-Link und Assets melden</text>
-  <text class="bsub"   x="295" y="1496">ein Satz an den Nutzer, er soll nicht suchen</text>
+  <text class="btitle" x="295" y="1480">report the release link and assets</text>
+  <text class="bsub"   x="295" y="1496">one sentence to the user, so they need not look</text>
 
   <circle cx="295" cy="1522" r="14" fill="none" stroke="#33414f" stroke-width="2"/>
   <circle cx="295" cy="1522" r="8" fill="#33414f"/>
@@ -200,21 +200,21 @@
   <path class="flow" d="M900,1412 L700,1412 L700,1482 L470,1482" marker-end="url(#ah)"/>
   <path class="rail" d="M1220,1236 L1237,1236 L1237,1494 L1222,1494" marker-end="url(#ahr)"/>
 
-  <text class="arrlbl" x="304" y="480">ja</text>
-  <text class="arrlbl" x="704" y="982">ja</text>
+  <text class="arrlbl" x="304" y="480">yes</text>
+  <text class="arrlbl" x="704" y="982">yes</text>
 
   <path class="rail" d="M120,314 L70,314"/>
   <path class="rail" d="M145,424 L70,424"/>
   <path class="rail" d="M545,920 L70,920"/>
   <path class="rail" d="M70,314 L70,1607 L114,1607" marker-end="url(#ahr)"/>
-  <text class="stoplbl" x="76" y="306">nein</text>
-  <text class="stoplbl" x="76" y="416">nein</text>
-  <text class="stoplbl" x="76" y="912">nein</text>
+  <text class="stoplbl" x="76" y="306">no</text>
+  <text class="stoplbl" x="76" y="416">no</text>
+  <text class="stoplbl" x="76" y="912">no</text>
 
   <rect class="stop" x="120" y="1575" width="580" height="64" rx="6"/>
-  <text class="notetitle" x="138" y="1600">Abbruch — Stand und Ursache melden</text>
-  <text class="note" x="138" y="1620">Es wird nichts gepusht, nichts getaggt und nichts veröffentlicht. Der Nutzer entscheidet,</text>
-  <text class="note" x="138" y="1633">wie es weitergeht.</text>
+  <text class="notetitle" x="138" y="1600">abort — report the state and the cause</text>
+  <text class="note" x="138" y="1620">Nothing is pushed, tagged or published. The user decides</text>
+  <text class="note" x="138" y="1633">how to go on.</text>
 
-  <text class="stamp" x="1250" y="1668">Erstellt 2026-09-20 · Claude Opus 5 · Reasoning-Effort: xhigh</text>
+  <text class="stamp" x="1250" y="1668">Created 2026-09-20 · Claude Opus 5 · Reasoning effort: xhigh</text>
 </svg>

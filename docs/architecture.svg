@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title description">
-  <title id="title">Funktionale Architektur von Snotra AI</title>
-  <desc id="description">Statisches Architekturdiagramm der neun funktionalen Module und ihrer gerichteten Beziehungen.</desc>
+  <title id="title">Functional architecture of Snotra AI</title>
+  <desc id="description">A static architecture diagram of the nine functional modules and their directed relationships.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -66,112 +66,112 @@
 
   <rect class="canvas" width="1600" height="980"/>
 
-  <text class="page-title" x="64" y="58">Funktionale Architektur</text>
-  <text class="page-subtitle" x="64" y="88">Snotra AI &#183; Module und ihre direkten Beziehungen</text>
+  <text class="page-title" x="64" y="58">Functional architecture</text>
+  <text class="page-subtitle" x="64" y="88">Snotra AI &#183; modules and their direct relationships</text>
 
   <!-- Relationships are drawn before modules so boxes remain visually clear. -->
   <path class="flow" d="M 390 248 C 445 248, 445 220, 500 220"/>
   <path class="flow--return" d="M 500 254 C 445 254, 445 282, 390 282"/>
   <rect class="label-bg" x="412" y="205" width="66" height="20"/>
-  <text class="flow-label" x="418" y="220">Anfrage</text>
+  <text class="flow-label" x="418" y="220">request</text>
   <rect class="label-bg" x="405" y="286" width="79" height="20"/>
-  <text class="flow-label flow-label--accent" x="411" y="301">Streaming</text>
+  <text class="flow-label flow-label--accent" x="411" y="301">streaming</text>
 
   <path class="flow" d="M 830 220 C 890 220, 890 176, 950 176"/>
   <rect class="label-bg" x="853" y="184" width="79" height="20"/>
-  <text class="flow-label" x="859" y="199">Chat-Runde</text>
+  <text class="flow-label" x="859" y="199">chat round</text>
 
   <path class="flow" d="M 665 300 L 665 390"/>
   <rect class="label-bg" x="676" y="331" width="73" height="20"/>
-  <text class="flow-label" x="682" y="346">ausf&#252;hren</text>
+  <text class="flow-label" x="682" y="346">execute</text>
 
   <path class="flow" d="M 665 520 L 665 610"/>
   <rect class="label-bg" x="676" y="551" width="90" height="20"/>
-  <text class="flow-label" x="682" y="566">lesen / schreiben</text>
+  <text class="flow-label" x="682" y="566">read / write</text>
 
   <path class="flow" d="M 830 266 C 910 330, 900 790, 830 830"/>
   <rect class="label-bg" x="846" y="536" width="122" height="20"/>
-  <text class="flow-label" x="852" y="551">Config / Verlauf</text>
+  <text class="flow-label" x="852" y="551">config / history</text>
 
   <path class="flow" d="M 390 372 C 430 480, 420 660, 500 676"/>
   <rect class="label-bg" x="394" y="536" width="73" height="20"/>
-  <text class="flow-label" x="400" y="551">Explorer</text>
+  <text class="flow-label" x="400" y="551">explorer</text>
 
   <path class="flow" d="M 390 318 C 610 318, 790 436, 950 436"/>
   <rect class="label-bg" x="682" y="360" width="119" height="20"/>
-  <text class="flow-label" x="688" y="375">Ordnerauswahl</text>
+  <text class="flow-label" x="688" y="375">folder choice</text>
 
   <path class="flow" d="M 830 676 C 888 676, 890 436, 950 436"/>
   <rect class="label-bg" x="846" y="552" width="79" height="20"/>
-  <text class="flow-label" x="852" y="567">Pfadpr&#252;fung</text>
+  <text class="flow-label" x="852" y="567">path check</text>
 
   <path class="flow" d="M 390 402 C 430 556, 424 776, 500 787"/>
   <rect class="label-bg" x="392" y="657" width="72" height="20"/>
-  <text class="flow-label" x="398" y="672">Historie</text>
+  <text class="flow-label" x="398" y="672">history</text>
 
   <path class="flow" d="M 300 460 C 350 570, 800 520, 950 700"/>
   <rect class="label-bg" x="734" y="558" width="103" height="20"/>
-  <text class="flow-label" x="740" y="573">Audioeingabe</text>
+  <text class="flow-label" x="740" y="573">audio input</text>
 
   <path class="flow" d="M 390 430 C 560 930, 800 860, 950 860"/>
   <rect class="label-bg" x="705" y="890" width="103" height="20"/>
-  <text class="flow-label" x="711" y="905">Release-Check</text>
+  <text class="flow-label" x="711" y="905">release check</text>
 
   <!-- Interaction -->
   <rect class="module module--primary" x="60" y="180" width="330" height="280"/>
-  <text class="eyebrow" x="90" y="218">INTERAKTION</text>
-  <text class="heading" x="90" y="255">Benutzeroberfl&#228;che</text>
+  <text class="eyebrow" x="90" y="218">INTERACTION</text>
+  <text class="heading" x="90" y="255">User interface</text>
   <text class="description" x="90" y="292">
-    <tspan x="90" dy="0">Chat mit Tool-Aufrufen</tspan>
-    <tspan x="90" dy="28">Workspace-Explorer</tspan>
-    <tspan x="90" dy="28">Einstellungen und Verlauf</tspan>
-    <tspan x="90" dy="28">Spracheingabe und Updates</tspan>
+    <tspan x="90" dy="0">Chat with tool calls</tspan>
+    <tspan x="90" dy="28">Workspace explorer</tspan>
+    <tspan x="90" dy="28">Settings and history</tspan>
+    <tspan x="90" dy="28">Voice input and updates</tspan>
   </text>
 
   <!-- Core conversation flow -->
   <rect class="module module--primary" x="500" y="140" width="330" height="160"/>
-  <text class="eyebrow" x="530" y="178">KERNMODUL</text>
-  <text class="heading" x="530" y="215">Chat-Orchestrierung</text>
+  <text class="eyebrow" x="530" y="178">CORE MODULE</text>
+  <text class="heading" x="530" y="215">Chat orchestration</text>
   <text class="description" x="530" y="249">
     <tspan x="530" dy="0">src/application/chat/</tspan>
-    <tspan x="530" dy="26">Tool-Loop · Streaming · Verlauf</tspan>
+    <tspan x="530" dy="26">Tool loop &#183; streaming &#183; history</tspan>
   </text>
 
   <rect class="module" x="950" y="120" width="330" height="146"/>
-  <text class="eyebrow" x="980" y="158">KI-ZUGANG</text>
-  <text class="heading" x="980" y="195">LLM-Provider</text>
+  <text class="eyebrow" x="980" y="158">AI ACCESS</text>
+  <text class="heading" x="980" y="195">LLM providers</text>
   <text class="description" x="980" y="229">OpenAI &#183; Anthropic &#183; Google</text>
   <text class="description" x="980" y="253">Ollama &#183; MLX-LM</text>
 
   <!-- Workspace flow -->
   <rect class="module" x="500" y="390" width="330" height="130"/>
-  <text class="eyebrow" x="530" y="428">ARBEITSBEREICH</text>
-  <text class="heading" x="530" y="465">Workspace-Tools</text>
-  <text class="description" x="530" y="499">Auflisten &#183; Lesen &#183; Schreiben</text>
+  <text class="eyebrow" x="530" y="428">WORKSPACE</text>
+  <text class="heading" x="530" y="465">Workspace tools</text>
+  <text class="description" x="530" y="499">List &#183; read &#183; write</text>
 
   <rect class="module" x="500" y="610" width="330" height="130"/>
-  <text class="eyebrow" x="530" y="648">DATEIEN</text>
-  <text class="heading" x="530" y="685">Dateisystem-Zugriff</text>
-  <text class="description" x="530" y="719">Workspace-sichere Dateioperationen</text>
+  <text class="eyebrow" x="530" y="648">FILES</text>
+  <text class="heading" x="530" y="685">File system access</text>
+  <text class="description" x="530" y="719">Workspace-safe file operations</text>
 
   <rect class="module" x="950" y="370" width="330" height="130"/>
-  <text class="eyebrow" x="980" y="408">KONTEXT</text>
-  <text class="heading" x="980" y="445">Workspace-Zustand</text>
-  <text class="description" x="980" y="479">Aktiver Projektordner</text>
+  <text class="eyebrow" x="980" y="408">CONTEXT</text>
+  <text class="heading" x="980" y="445">Workspace state</text>
+  <text class="description" x="980" y="479">The active project folder</text>
 
   <!-- Supporting functions -->
   <rect class="module" x="500" y="770" width="330" height="120"/>
-  <text class="eyebrow" x="530" y="808">DATEN</text>
-  <text class="heading" x="530" y="845">Persistenz</text>
-  <text class="description" x="530" y="875">Keys &#183; Konfiguration &#183; Historie</text>
+  <text class="eyebrow" x="530" y="808">DATA</text>
+  <text class="heading" x="530" y="845">Persistence</text>
+  <text class="description" x="530" y="875">Keys &#183; configuration &#183; history</text>
 
   <rect class="module" x="950" y="640" width="330" height="120"/>
-  <text class="eyebrow" x="980" y="678">SPRACHE</text>
-  <text class="heading" x="980" y="715">Spracheingabe</text>
-  <text class="description" x="980" y="745">Whisper-Transkription</text>
+  <text class="eyebrow" x="980" y="678">VOICE</text>
+  <text class="heading" x="980" y="715">Voice input</text>
+  <text class="description" x="980" y="745">Whisper transcription</text>
 
   <rect class="module" x="950" y="800" width="330" height="120"/>
   <text class="eyebrow" x="980" y="838">VERSION</text>
-  <text class="heading" x="980" y="875">Update-Notifier</text>
-  <text class="description" x="980" y="905">Release-Pr&#252;fung und Hinweis</text>
+  <text class="heading" x="980" y="875">Update notifier</text>
+  <text class="description" x="980" y="905">Release check and notice</text>
 </svg>
