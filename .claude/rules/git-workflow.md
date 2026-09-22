@@ -30,7 +30,9 @@ gewöhnlicher Merge über ein grünes Gate; am selben Tag belegt.
    heißt: `npm test` **und** `npm run test:e2e` vollständig durchgelaufen,
    ohne Fehler, auf dem Arbeitsbranch. Der PR bekommt `Closes #N` auf das
    zugehörige Issue (siehe [`task-management.md`](./task-management.md)) — auf
-   Englisch, ein deutsches „Schließt #N" schließt nichts.
+   Englisch, ein deutsches „Schließt #N" schließt nichts. **Commit-Messages,
+   PR-Titel und PR-Beschreibungen sind Englisch** — siehe
+   [`language.md`](./language.md).
 2. **Mergen, sobald die Pipeline grün ist** und die Prüfung unten nichts
    findet. Per **Squash**: `main` trägt einen Commit je PR, mit der PR-Nummer
    im Titel. Danach den Branch löschen, das Repo räumt nicht von selbst auf.
