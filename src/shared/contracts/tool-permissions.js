@@ -8,6 +8,8 @@
  */
 'use strict';
 
+const { isMessage } = require('./message');
+
 const TOOL_PERMISSIONS_CONTRACT_VERSION = 1;
 
 /** Risikoklassen eines Tool-Aufrufs (Konzept §2). */
@@ -39,20 +41,20 @@ const TOOL_PERMISSION_MODES = Object.freeze({
 const DEFAULT_TOOL_PERMISSION_MODE = TOOL_PERMISSION_MODES.SMART;
 
 /** Anzeigenamen der Modi (Konzept §3) – gemeinsam für Karte, Chat-Pille und Einstellungen. */
-const TOOL_PERMISSION_MODE_LABELS = Object.freeze({
-  [TOOL_PERMISSION_MODES.SMART]: 'Intelligent',
-  [TOOL_PERMISSION_MODES.ASK_ALL]: 'Immer fragen',
-  [TOOL_PERMISSION_MODES.AUTO]: 'Auto',
+const TOOL_PERMISSION_MODE_LABEL_KEYS = Object.freeze({
+  [TOOL_PERMISSION_MODES.SMART]: 'permissions.mode.smart',
+  [TOOL_PERMISSION_MODES.ASK_ALL]: 'permissions.mode.askAll',
+  [TOOL_PERMISSION_MODES.AUTO]: 'permissions.mode.auto',
 });
 
-/** Anzeigenamen der Risikoklassen (Konzept §2). */
-const TOOL_RISK_CLASS_LABELS = Object.freeze({
-  [TOOL_RISK_CLASSES.READ]: 'Lesen',
-  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'Sensible Daten lesen',
-  [TOOL_RISK_CLASSES.WRITE]: 'Ändern',
-  [TOOL_RISK_CLASSES.DELETE]: 'Überschreiben ohne Rückweg',
-  [TOOL_RISK_CLASSES.EXECUTE]: 'Ausführen',
-  [TOOL_RISK_CLASSES.EXTERNAL]: 'Externer Dienst',
+/** Anzeigenamen der Risikoklassen (Konzept §2) — als Katalogschluessel (#290). */
+const TOOL_RISK_CLASS_LABEL_KEYS = Object.freeze({
+  [TOOL_RISK_CLASSES.READ]: 'tools.riskClass.read',
+  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'tools.riskClass.readSensitive',
+  [TOOL_RISK_CLASSES.WRITE]: 'tools.riskClass.write',
+  [TOOL_RISK_CLASSES.DELETE]: 'tools.riskClass.delete',
+  [TOOL_RISK_CLASSES.EXECUTE]: 'tools.riskClass.execute',
+  [TOOL_RISK_CLASSES.EXTERNAL]: 'tools.riskClass.external',
 });
 
 /** Ergebnis der reinen Policy. */
@@ -410,9 +412,11 @@ function createToolApprovalRequestDto({
   riskClasses,
   targets,
   reason,
+  reasonParts,
   mode,
   sessionAllowed,
   sessionScopeLabel,
+  sessionScope,
   providerLabel,
   preview,
 } = {}) {
@@ -427,6 +431,15 @@ function createToolApprovalRequestDto({
     mode: normalizeToolPermissionMode(mode),
     sessionAllowed: sessionAllowed === true,
   };
+  // The card's sentences are written where they are shown, not where they are
+  // decided (#290, the rule from #293): the reason travels as a list of
+  // descriptors and the session scope as one, so a language change while the
+  // card is on screen still says the right thing.
+  if (Array.isArray(reasonParts)) {
+    const usable = reasonParts.filter(isMessage).slice(0, 8);
+    if (usable.length > 0) dto.reasonParts = usable;
+  }
+  if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
   if (typeof sessionScopeLabel === 'string' && sessionScopeLabel) {
     dto.sessionScopeLabel = sessionScopeLabel.slice(0, 400);
   }
@@ -511,8 +524,8 @@ module.exports = {
   TOOL_RISK_CLASSES,
   TOOL_RISK_CLASS_ORDER,
   TOOL_PERMISSION_MODES,
-  TOOL_PERMISSION_MODE_LABELS,
-  TOOL_RISK_CLASS_LABELS,
+  TOOL_PERMISSION_MODE_LABEL_KEYS,
+  TOOL_RISK_CLASS_LABEL_KEYS,
   DEFAULT_TOOL_PERMISSION_MODE,
   POLICY_DECISIONS,
   APPROVAL_RESPONSES,

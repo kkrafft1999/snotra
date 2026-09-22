@@ -36,7 +36,7 @@ test('buildToolLine zeigt einen laufenden Schritt als beschäftigt an', async ()
     assert.ok(row.classList.contains('chat-tool-line--running'));
     assert.equal(row.getAttribute('role'), 'listitem');
     assert.equal(row.getAttribute('aria-busy'), 'true');
-    assert.equal(row.getAttribute('aria-label'), 'Läuft: Liest README.md');
+    assert.equal(row.getAttribute('aria-label'), 'Running: Liest README.md');
     assert.equal(row.dataset.callIndex, '2');
     assert.equal(row.dataset.category, 'read');
     assert.ok(row.querySelector('.chat-tool-line-icon'), 'Symbol der Kategorie');
@@ -50,9 +50,9 @@ test('buildToolLine schließt einen erledigten Schritt mit Marke ab', async () =
     const row = buildToolLine('Hat README.md gelesen', 'done');
     assert.ok(row.classList.contains('chat-tool-line--done'));
     assert.equal(row.hasAttribute('aria-busy'), false);
-    assert.equal(row.getAttribute('aria-label'), 'Abgeschlossen: Hat README.md gelesen');
+    assert.equal(row.getAttribute('aria-label'), 'Finished: Hat README.md gelesen');
     const status = row.querySelector('.chat-tool-line-status');
-    assert.equal(status.textContent, 'Abgeschlossen');
+    assert.equal(status.textContent, 'Finished');
     assert.ok(status.classList.contains('sr-only'), 'nur für Screenreader');
   });
 });
@@ -75,7 +75,7 @@ test('applyPermissionToRow schreibt Zustand und Begründung an die Zeile', async
       reason: 'user_denied',
     });
     assert.equal(row.dataset.permission, 'denied');
-    assert.match(row.title, /Entscheidung:/);
+    assert.match(row.title, /Decision:/);
   });
 });
 
@@ -95,7 +95,7 @@ test('promoteToolLineToRunning macht aus dem Aufruf einen laufenden Schritt', as
     assert.equal(row.classList.contains('chat-tool-line--pending'), false);
     assert.ok(row.classList.contains('chat-tool-line--running'));
     assert.equal(textOf(row), 'Schreibt notiz.md');
-    assert.equal(row.getAttribute('aria-label'), 'Läuft: Schreibt notiz.md');
+    assert.equal(row.getAttribute('aria-label'), 'Running: Schreibt notiz.md');
   });
 });
 
@@ -184,7 +184,7 @@ test('der Einzeiler ist eine Live-Region und sagt das Nachdenken an', async () =
     assert.equal(line.getAttribute('aria-live'), 'polite');
 
     syncToolLogSummary(log, { thinking: true, elapsedMs: 12_000 });
-    assert.equal(summaryTextOf(log), 'Modell denkt nach …');
+    assert.equal(summaryTextOf(log), 'Model is thinking …');
     assert.equal(line.getAttribute('aria-busy'), 'true');
     // Die tickende Dauer bleibt aus der Ansage heraus, sonst spräche der
     // Screenreader jede Sekunde.
@@ -207,7 +207,7 @@ test('finalizeAllToolLines wirft nie gelaufene Aufrufe weg und schließt den Res
     assert.deepEqual(rows.map(textOf), ['Hat a gelesen', 'Liest b']);
     assert.ok(rows.every((r) => r.classList.contains('chat-tool-line--done')));
     assert.equal(log.querySelector('.chat-tool-summary-line').getAttribute('aria-busy'), null);
-    assert.equal(summaryTextOf(log), '2 Dateien gelesen');
+    assert.equal(summaryTextOf(log), '2 files read');
   });
 });
 
@@ -268,7 +268,7 @@ test('syncPhaseLine zeigt die Phasenzeile nur vor dem ersten Tool-Schritt', asyn
     const phase = document.createElement('div');
     syncPhaseLine(phase, { streaming: true, phase: 'waiting' });
     assert.equal(phase.classList.contains('hidden'), false);
-    assert.equal(phase.textContent, 'Modell denkt nach …');
+    assert.equal(phase.textContent, 'Model is thinking …');
 
     // Sobald ein Schritt im Tool-Log steht, zeigt dessen Einzeiler das Nachdenken.
     syncPhaseLine(phase, { streaming: true, phase: 'waiting', toolTrace: ['Hat a gelesen'] });
@@ -283,11 +283,11 @@ test('ab fünf Sekunden steht die Dauer hinter der Phasenzeile', async () => {
     const message = { streaming: true, phase: 'waiting', thinkingSince: Date.now() - 65_000 };
     assert.ok(thinkingElapsedMs(message) >= 65_000);
     syncPhaseLine(phase, message);
-    assert.match(phase.textContent, /^Modell denkt nach … · 1:0\d$/);
+    assert.match(phase.textContent, /^Model is thinking … · 1:0\d$/);
 
     // Kurzes Nachdenken bleibt ohne Zahl — sonst flackerte dort eine Uhr.
     syncPhaseLine(phase, { streaming: true, phase: 'waiting', thinkingSince: Date.now() - 500 });
-    assert.equal(phase.textContent, 'Modell denkt nach …');
+    assert.equal(phase.textContent, 'Model is thinking …');
     assert.equal(thinkingElapsedMs({}), 0);
   });
 });

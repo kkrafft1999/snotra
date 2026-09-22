@@ -15,7 +15,16 @@
  *   N weitere Schritte“ zurück.
  */
 
-export const THINKING_LABEL = 'Modell denkt nach …';
+import { t } from '../i18n.js';
+
+/**
+ * A function rather than a constant: the label depends on the language and
+ * must not freeze when the module loads (#290) — same reasoning as for the
+ * mode options in `tool-approval-view.js`.
+ */
+export function thinkingLabel() {
+  return t('toolLog.thinking');
+}
 
 /**
  * Ab dieser Denkdauer zeigt die Zeile die verstrichene Zeit (Issue #87). Kurze
@@ -28,21 +37,21 @@ export const THINKING_ELAPSED_MIN_MS = 5000;
 const MAX_SUMMARY_GROUPS = 3;
 
 /**
- * Gruppen-Beschriftungen je Kategorie, als [Singular, Plural] mit „%d“ für die
- * Anzahl. Die Schlüssel sind die Werte aus TOOL_CATEGORIES
- * (`src/shared/contracts/tool-categories.js`) — hier bewusst als Strings, damit
- * dieses Modul ohne Contract-Bundle testbar bleibt.
+ * Catalogue key per category; `.one` and `.other` hang below it. The keys are
+ * the values of TOOL_CATEGORIES (`src/shared/contracts/tool-categories.js`) —
+ * written out as strings on purpose, so this module stays testable without the
+ * contract bundle.
  */
-const GROUP_LABELS = {
-  skill: ['%d Skill-Zugriff', '%d Skill-Zugriffe'],
-  read: ['%d Datei gelesen', '%d Dateien gelesen'],
-  search: ['%d Suche', '%d Suchen'],
-  list: ['%d Ordner aufgelistet', '%d Ordner aufgelistet'],
-  check: ['%d Pfad geprüft', '%d Pfade geprüft'],
-  write: ['%d Datei geschrieben', '%d Dateien geschrieben'],
-  // Seit #102 nicht mehr nur Python: die Kategorie deckt jede Ausfuehrung ab.
-  exec: ['%d Ausführung', '%d Ausführungen'],
-  other: ['%d Tool-Schritt', '%d Tool-Schritte'],
+const GROUP_KEYS = {
+  skill: 'toolLog.group.skill',
+  read: 'toolLog.group.read',
+  search: 'toolLog.group.search',
+  list: 'toolLog.group.list',
+  check: 'toolLog.group.check',
+  write: 'toolLog.group.write',
+  // Since #102 no longer only Python: the category covers every execution.
+  exec: 'toolLog.group.exec',
+  other: 'toolLog.group.other',
 };
 
 /**
@@ -77,13 +86,13 @@ export function toolLineText(entry) {
 export function formatStepCountLabel(n) {
   const count = Math.max(0, Math.floor(Number(n) || 0));
   if (count === 0) return '';
-  return count === 1 ? '1 Schritt' : `${count} Schritte`;
+  return count === 1 ? t('toolLog.steps.one', { count }) : t('toolLog.steps.other', { count });
 }
 
 export function formatMoreStepsLabel(n) {
   const count = Math.max(0, Math.floor(Number(n) || 0));
   if (count === 0) return '';
-  return count === 1 ? '1 weiterer Schritt' : `${count} weitere Schritte`;
+  return count === 1 ? t('toolLog.moreSteps.one', { count }) : t('toolLog.moreSteps.other', { count });
 }
 
 /** Verstrichene Zeit als m:ss, ab einer Stunde h:mm:ss. */
@@ -99,8 +108,8 @@ export function formatElapsedLabel(ms) {
 export function formatGroupLabel(category, n) {
   const count = Math.max(0, Math.floor(Number(n) || 0));
   if (count === 0) return '';
-  const forms = GROUP_LABELS[category] || GROUP_LABELS.other;
-  return (count === 1 ? forms[0] : forms[1]).replace('%d', String(count));
+  const key = GROUP_KEYS[category] || GROUP_KEYS.other;
+  return t(`${key}.${count === 1 ? 'one' : 'other'}`, { count });
 }
 
 /**
@@ -198,7 +207,7 @@ function computeToolLogSummary(steps, { thinking = false, elapsedMs = 0 } = {}) 
   if (thinking) {
     const ms = Number(elapsedMs) || 0;
     return {
-      text: THINKING_LABEL,
+      text: thinkingLabel(),
       state: 'running',
       extra: `· ${formatStepCountLabel(count)}`,
       elapsed: ms >= THINKING_ELAPSED_MIN_MS ? `· ${formatElapsedLabel(ms)}` : '',

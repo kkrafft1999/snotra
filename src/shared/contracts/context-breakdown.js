@@ -37,11 +37,11 @@ const CONTEXT_PART_GROUP_ORDER = Object.freeze([
   CONTEXT_PART_GROUPS.HISTORY,
 ]);
 
-const CONTEXT_PART_GROUP_LABELS = Object.freeze({
-  [CONTEXT_PART_GROUPS.SYSTEM]: 'System-Prompt',
-  [CONTEXT_PART_GROUPS.SKILLS]: 'Skills',
-  [CONTEXT_PART_GROUPS.TOOLS]: 'Tool-Definitionen',
-  [CONTEXT_PART_GROUPS.HISTORY]: 'Verlauf',
+const CONTEXT_PART_GROUP_LABEL_KEYS = Object.freeze({
+  [CONTEXT_PART_GROUPS.SYSTEM]: 'context.group.system',
+  [CONTEXT_PART_GROUPS.SKILLS]: 'context.group.skills',
+  [CONTEXT_PART_GROUPS.TOOLS]: 'context.group.tools',
+  [CONTEXT_PART_GROUPS.HISTORY]: 'context.group.history',
 });
 
 /**
@@ -186,6 +186,8 @@ function createContextPart({
   label,
   labelKey = '',
   detail = '',
+  detailKey = '',
+  params,
   chars = 0,
   contentKind = CONTEXT_CONTENT_KINDS.PROSE,
   skillName = '',
@@ -203,6 +205,10 @@ function createContextPart({
   // instead of a finished sentence; the panel translates it and falls back to
   // `label` for the producers that still hand over text (issue #293).
   if (labelKey) part.labelKey = text(labelKey);
+  // The same for the second line of a row: a key plus the values that fill it,
+  // so that "3 schemas" is counted here and worded where it is shown (#290).
+  if (detailKey) part.detailKey = text(detailKey);
+  if (params && typeof params === 'object' && Object.keys(params).length > 0) part.params = { ...params };
   if (skillName) part.skillName = text(skillName);
   if (Number.isFinite(count)) part.count = toCount(count);
   return part;
@@ -316,7 +322,7 @@ function groupContextParts(breakdown) {
     const tokens = rows.reduce((sum, part) => sum + part.tokens, 0);
     return {
       group,
-      label: CONTEXT_PART_GROUP_LABELS[group],
+      labelKey: CONTEXT_PART_GROUP_LABEL_KEYS[group],
       tokens,
       share: breakdown?.total > 0 ? tokens / breakdown.total : 0,
       parts: rows,
@@ -328,7 +334,7 @@ module.exports = {
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
   CONTEXT_PART_GROUP_ORDER,
-  CONTEXT_PART_GROUP_LABELS,
+  CONTEXT_PART_GROUP_LABEL_KEYS,
   CONTEXT_CONTENT_KINDS,
   CHARS_PER_TOKEN,
   CHARS_PER_TOKEN_PROFILES,

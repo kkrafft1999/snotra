@@ -129,7 +129,7 @@ test('jeder Skill steht einzeln, teuerster zuerst, mit Gruppen darüber', async 
   click(trigger);
 
   const groups = [...panel.querySelectorAll('.token-breakdown__group-label')].map((n) => n.textContent);
-  assert.deepEqual(groups, ['System-Prompt', 'Skills', 'Tool-Definitionen', 'Verlauf']);
+  assert.deepEqual(groups, ['System prompt', 'Skills', 'Tool definitions', 'History']);
   expandAll(panel);
   assert.deepEqual(rowLabels(panel), [
     'Eigener System-Prompt',
@@ -152,9 +152,9 @@ test('die Gesamtzahl gilt als echt, die Anteile als Schätzung', async () => {
   });
   click(trigger);
 
-  assert.ok(panel.textContent.includes('10.000 Tokens Prompt'));
-  assert.ok(panel.textContent.includes('200 Tokens Antwort'));
-  assert.match(panel.querySelector('.token-breakdown__note').textContent, /vom Anbieter.*geschätzt/s);
+  assert.ok(panel.textContent.includes('10,000 tokens prompt'));
+  assert.ok(panel.textContent.includes('200 tokens answer'));
+  assert.match(panel.querySelector('.token-breakdown__note').textContent, /from the provider.*estimated/s);
 });
 
 test('der Cache-Anteil steht bei den echten Zahlen, nicht in der Schätzung (#179)', async () => {
@@ -167,7 +167,7 @@ test('der Cache-Anteil steht bei den echten Zahlen, nicht in der Schätzung (#17
   const cache = panel.querySelector('.token-breakdown__cache');
   assert.ok(cache, 'ohne Zeile bleibt unsichtbar, ob Caching ueberhaupt greift');
   // Intl setzt vor das Prozentzeichen ein schmales geschuetztes Leerzeichen.
-  assert.match(cache.textContent, /davon 8\.704 aus dem Cache \(87\s%\)/u);
+  assert.match(cache.textContent, /of which 8,704 from the cache \(87\s?%\)/u);
   // Im Kopf, ueber der Trennlinie — also bei promptTokens und nicht zwischen
   // den geschaetzten Zeilen.
   assert.equal(cache.closest('.token-breakdown__header') !== null, true);
@@ -182,7 +182,7 @@ test('„100 %" heißt alles — fast alles rundet nicht dorthin (#179)', async 
 
   // 13.998 von 14.052 sind 99,6 % — „100 %" waere die Behauptung, es sei
   // nichts frisch gerechnet worden.
-  assert.match(panel.querySelector('.token-breakdown__cache').textContent, /\(>\s?99\s%\)/u);
+  assert.match(panel.querySelector('.token-breakdown__cache').textContent, /\(>\s?99\s?%\)/u);
 });
 
 test('ohne Cache-Treffer bleibt die Zeile weg (#179)', async () => {
@@ -200,7 +200,7 @@ test('ohne Tokenzahl des Anbieters sagt die Fläche, dass alles geschätzt ist',
     usage: { prompt: 0, completion: 0, total: 0 },
   });
   click(trigger);
-  assert.match(panel.querySelector('.token-breakdown__note').textContent, /keine Tokenzahl gemeldet/);
+  assert.match(panel.querySelector('.token-breakdown__note').textContent, /reported no token count/);
 });
 
 test('ohne Anfrage erklärt die Fläche, dass noch nichts vorliegt', async () => {
@@ -209,7 +209,7 @@ test('ohne Anfrage erklärt die Fläche, dass noch nichts vorliegt', async () =>
 
   const empty = panel.querySelector('.token-breakdown__empty');
   assert.ok(empty, 'leerer Zustand ist keine leere Fläche');
-  assert.match(empty.textContent, /Noch keine Anfrage gestellt/);
+  assert.match(empty.textContent, /No request sent yet/);
   assert.equal(panel.querySelector('.token-breakdown__list'), null);
 });
 
@@ -225,7 +225,7 @@ test('während einer laufenden Anfrage steht dran, woher die Werte stammen', asy
   api.refresh();
   assert.match(
     panel.querySelector('.token-breakdown__note--live').textContent,
-    /Anfrage läuft/
+    /A request is running/
   );
 });
 
@@ -241,7 +241,7 @@ test('eine Skill-Zeile führt zu ihrem Schalter in den Einstellungen', async () 
   const rows = [...panel.querySelectorAll('.token-breakdown__row')];
   const skillRow = rows.find((row) => row.dataset.skillName === 'grosser-skill');
   assert.equal(skillRow.tagName, 'BUTTON');
-  assert.match(skillRow.getAttribute('aria-label'), /Skill in den Einstellungen öffnen/);
+  assert.match(skillRow.getAttribute('aria-label'), /open the skill in the settings/);
   // Zeilen ohne Skill sind keine Schalter — sie führen nirgendwohin.
   const toolRow = rows.find((row) => row.textContent.includes('MCP · atlassian'));
   assert.equal(toolRow.tagName, 'DIV');
@@ -298,7 +298,7 @@ test('die Gruppen starten zugeklappt — erst die Summen, dann die Einzelposten'
   }
   // Die Summe je Gruppe muss auch zugeklappt lesbar sein.
   assert.ok(panel.textContent.includes('Skills'));
-  assert.ok(panel.textContent.includes('2 Posten'), 'zugeklappt sagt die Zeile, wie viel dahintersteckt');
+  assert.ok(panel.textContent.includes('2 items'), 'zugeklappt sagt die Zeile, wie viel dahintersteckt');
 });
 
 test('ein Klick auf die Gruppe klappt auf und wieder zu', async () => {

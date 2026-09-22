@@ -17,10 +17,10 @@ test('toolLineText akzeptiert Strings (Alt-Sessions) und Objekte', async () => {
 test('formatMoreStepsLabel dekliniert korrekt', async () => {
   const { formatMoreStepsLabel } = await load();
   assert.equal(formatMoreStepsLabel(0), '');
-  assert.equal(formatMoreStepsLabel(1), '1 weiterer Schritt');
-  assert.equal(formatMoreStepsLabel(4), '4 weitere Schritte');
+  assert.equal(formatMoreStepsLabel(1), '1 more step');
+  assert.equal(formatMoreStepsLabel(4), '4 more steps');
   assert.equal(formatMoreStepsLabel(-3), '');
-  assert.equal(formatMoreStepsLabel('2'), '2 weitere Schritte');
+  assert.equal(formatMoreStepsLabel('2'), '2 more steps');
 });
 
 test('leere Liste: nichts anzuzeigen, nicht aufklappbar', async () => {
@@ -90,7 +90,7 @@ test('alles erledigt: letzter Schritt plus „N weitere Schritte“', async () =
   assert.deepEqual(summarizeToolLog(five), {
     text: 'Datei README.md gelesen',
     state: 'done',
-    extra: '· 4 weitere Schritte',
+    extra: '· 4 more steps',
     elapsed: '',
     category: null,
     count: 5,
@@ -100,24 +100,24 @@ test('alles erledigt: letzter Schritt plus „N weitere Schritte“', async () =
     { text: 'Ordner src durchsucht', state: 'done' },
     { text: 'Datei a.js gelesen', state: 'done' },
   ]);
-  assert.equal(two.extra, '· 1 weiterer Schritt');
+  assert.equal(two.extra, '· 1 more step');
   assert.equal(two.expandable, true);
 });
 
 test('formatStepCountLabel dekliniert korrekt', async () => {
   const { formatStepCountLabel } = await load();
   assert.equal(formatStepCountLabel(0), '');
-  assert.equal(formatStepCountLabel(1), '1 Schritt');
-  assert.equal(formatStepCountLabel(5), '5 Schritte');
+  assert.equal(formatStepCountLabel(1), '1 step');
+  assert.equal(formatStepCountLabel(5), '5 steps');
 });
 
 test('Nachdenken zwischen Runden: Zeile zeigt „Modell denkt nach …“ mit Schrittzähler', async () => {
-  const { summarizeToolLog, THINKING_LABEL } = await load();
+  const { summarizeToolLog, thinkingLabel } = await load();
   const done = ['a', 'b', 'c'].map((text) => ({ text, state: 'done' }));
   assert.deepEqual(summarizeToolLog(done, { thinking: true }), {
-    text: THINKING_LABEL,
+    text: thinkingLabel(),
     state: 'running',
-    extra: '· 3 Schritte',
+    extra: '· 3 steps',
     elapsed: '',
     category: null,
     count: 3,
@@ -125,7 +125,7 @@ test('Nachdenken zwischen Runden: Zeile zeigt „Modell denkt nach …“ mit Sc
   });
   // Ein einzelner Schritt ist beim Nachdenken trotzdem aufklappbar — die Zeile zeigt ihn ja nicht.
   const one = summarizeToolLog([{ text: 'Datei a.js gelesen', state: 'done' }], { thinking: true });
-  assert.equal(one.extra, '· 1 Schritt');
+  assert.equal(one.extra, '· 1 step');
   assert.equal(one.expandable, true);
 });
 
@@ -155,18 +155,18 @@ test('zwischen zwei Schritten (nichts läuft) steht der letzte erledigte Schritt
   ]);
   assert.equal(out.text, 'Datei b.js gelesen');
   assert.equal(out.state, 'done');
-  assert.equal(out.extra, '· 2 weitere Schritte');
+  assert.equal(out.extra, '· 2 more steps');
 });
 
 test('formatGroupLabel dekliniert je Kategorie', async () => {
   const { formatGroupLabel } = await load();
-  assert.equal(formatGroupLabel('read', 1), '1 Datei gelesen');
-  assert.equal(formatGroupLabel('read', 4), '4 Dateien gelesen');
-  assert.equal(formatGroupLabel('search', 1), '1 Suche');
-  assert.equal(formatGroupLabel('search', 2), '2 Suchen');
-  assert.equal(formatGroupLabel('check', 3), '3 Pfade geprüft');
-  assert.equal(formatGroupLabel('write', 1), '1 Datei geschrieben');
-  assert.equal(formatGroupLabel('unbekannt', 2), '2 Tool-Schritte');
+  assert.equal(formatGroupLabel('read', 1), '1 file read');
+  assert.equal(formatGroupLabel('read', 4), '4 files read');
+  assert.equal(formatGroupLabel('search', 1), '1 search');
+  assert.equal(formatGroupLabel('search', 2), '2 searches');
+  assert.equal(formatGroupLabel('check', 3), '3 paths checked');
+  assert.equal(formatGroupLabel('write', 1), '1 file written');
+  assert.equal(formatGroupLabel('unbekannt', 2), '2 tool steps');
   assert.equal(formatGroupLabel('read', 0), '');
 });
 
@@ -196,7 +196,7 @@ test('abgeschlossen mit Kategorien: gruppierte Zeile, wichtigste Gruppe zuerst',
   ];
   // Rang statt Reihenfolge: Suche vor Lesen vor Auflisten.
   assert.deepEqual(summarizeToolLog(steps), {
-    text: '1 Suche · 2 Dateien gelesen · 1 Ordner aufgelistet',
+    text: '1 search · 2 files read · 1 folder listed',
     state: 'done',
     extra: '',
     elapsed: '',
@@ -217,8 +217,8 @@ test('mehr als drei Gruppen: Rest wird als „N weitere Schritte“ gezählt', a
   ];
   // Auflistung und Pfadpruefung sind die unwichtigsten und fallen in den Rest.
   const out = summarizeToolLog(steps);
-  assert.equal(out.text, '1 Datei geschrieben · 1 Suche · 1 Datei gelesen');
-  assert.equal(out.extra, '· 2 weitere Schritte');
+  assert.equal(out.text, '1 file written · 1 search · 1 file read');
+  assert.equal(out.extra, '· 2 more steps');
   assert.equal(out.category, 'write');
 });
 
@@ -230,7 +230,7 @@ test('Alt-Sessions ohne Kategorie behalten „letzter Schritt · N weitere“', 
   ];
   const out = summarizeToolLog(steps);
   assert.equal(out.text, 'Datei README.md gelesen');
-  assert.equal(out.extra, '· 1 weiterer Schritt');
+  assert.equal(out.extra, '· 1 more step');
   assert.equal(out.category, null);
 });
 
@@ -248,8 +248,8 @@ test('laufender Schritt liefert seine Kategorie fürs Symbol', async () => {
 
 test('Skill-Zugriffe stehen in der Zusammenfassung vorn', async () => {
   const { summarizeToolLog, formatGroupLabel } = await load();
-  assert.equal(formatGroupLabel('skill', 1), '1 Skill-Zugriff');
-  assert.equal(formatGroupLabel('skill', 3), '3 Skill-Zugriffe');
+  assert.equal(formatGroupLabel('skill', 1), '1 skill access');
+  assert.equal(formatGroupLabel('skill', 3), '3 skill accesses');
 
   const steps = [
     { text: 'Ordner src durchsucht', state: 'done', category: 'list' },
@@ -259,7 +259,7 @@ test('Skill-Zugriffe stehen in der Zusammenfassung vorn', async () => {
   ];
   const out = summarizeToolLog(steps);
   // Skill-Zugriff ist Rang 1, obwohl er erst als zweiter Schritt lief.
-  assert.equal(out.text, '1 Skill-Zugriff · 2 Dateien gelesen · 1 Ordner aufgelistet');
+  assert.equal(out.text, '1 skill access · 2 files read · 1 folder listed');
   assert.equal(out.extra, '');
   assert.equal(out.category, 'skill');
 });
@@ -281,7 +281,7 @@ test('Nachdenken zeigt die verstrichene Zeit erst ab fünf Sekunden (Issue #87)'
   assert.equal(summarizeToolLog(done, { thinking: true, elapsedMs: 4900 }).elapsed, '');
   const shown = summarizeToolLog(done, { thinking: true, elapsedMs: 5000 });
   assert.equal(shown.elapsed, '· 0:05');
-  assert.equal(shown.extra, '· 2 Schritte');
+  assert.equal(shown.extra, '· 2 steps');
   assert.equal(summarizeToolLog(done, { thinking: true, elapsedMs: 83000 }).elapsed, '· 1:23');
   // Ohne Nachdenken oder mit laufendem Schritt gibt es keine Zeitangabe.
   assert.equal(summarizeToolLog(done, { elapsedMs: 83000 }).elapsed, '');
@@ -296,17 +296,17 @@ test('Sicherheitsnetz: bei vorhandenen Schritten ist die Zeile nie leer (Issue #
     { text: 'Datei a.js gelesen', state: 'done', category: 'read' },
     { text: '', state: 'running' },
   ]);
-  assert.equal(active.text, '2 Schritte');
+  assert.equal(active.text, '2 steps');
   assert.equal(active.extra, '');
   assert.equal(active.state, 'running');
   assert.equal(active.expandable, true);
   // Alt-Session ohne Kategorien, letzter Schritt ohne Text.
   const legacy = summarizeToolLog([{ text: 'a', state: 'done' }, { text: '', state: 'done' }]);
-  assert.equal(legacy.text, '2 Schritte');
+  assert.equal(legacy.text, '2 steps');
   assert.equal(legacy.extra, '');
   // Ein einzelner leerer Schritt bleibt nicht aufklappbar, hat aber Text.
   const single = summarizeToolLog([{ text: '', state: 'done' }]);
-  assert.equal(single.text, '1 Schritt');
+  assert.equal(single.text, '1 step');
   assert.equal(single.expandable, false);
 });
 
@@ -314,14 +314,14 @@ test('Sicherheitsnetz: bei vorhandenen Schritten ist die Zeile nie leer (Issue #
 // Python ab — die Gruppenzeile darf das nicht mehr behaupten.
 test('ausgeführte Schritte heißen neutral „Ausführungen“ und stehen vorn', async () => {
   const { summarizeToolLog, formatGroupLabel } = await load();
-  assert.equal(formatGroupLabel('exec', 1), '1 Ausführung');
-  assert.equal(formatGroupLabel('exec', 2), '2 Ausführungen');
+  assert.equal(formatGroupLabel('exec', 1), '1 execution');
+  assert.equal(formatGroupLabel('exec', 2), '2 executions');
 
   const out = summarizeToolLog([
     { text: 'Datei a.md gelesen', state: 'done', category: 'read' },
     { text: 'Python ausgeführt (1 Zeile)', state: 'done', category: 'exec' },
     { text: 'Befehl „git status“ ausgeführt', state: 'done', category: 'exec' },
   ]);
-  assert.match(out.text, /^2 Ausführungen/, 'Ausgeführtes steht vor dem Gelesenen');
+  assert.match(out.text, /^2 executions/, 'Ausgeführtes steht vor dem Gelesenen');
   assert.doesNotMatch(out.text, /Python-L/);
 });

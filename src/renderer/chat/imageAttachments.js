@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
 /**
  * Bild-Anhaenge im Composer (Issue #84).
@@ -37,15 +38,15 @@ function formatMiB(bytes) {
 export function rejectionMessage(reason) {
   switch (reason) {
     case INTAKE_REJECTIONS.UNSUPPORTED_TYPE:
-      return 'Dieses Bildformat wird nicht unterstützt (PNG, JPEG, GIF oder WebP).';
+      return t('chat.image.error.unsupportedType');
     case INTAKE_REJECTIONS.TOO_MANY:
-      return `Mehr als ${MAX_IMAGES_PER_MESSAGE} Bilder pro Nachricht gehen nicht.`;
+      return t('chat.image.error.tooMany', { max: MAX_IMAGES_PER_MESSAGE });
     case INTAKE_REJECTIONS.TOO_LARGE:
-      return `Das Bild ist auch verkleinert größer als ${formatMiB(MAX_IMAGE_ATTACHMENT_BYTES)}.`;
+      return t('chat.image.error.tooLarge', { max: formatMiB(MAX_IMAGE_ATTACHMENT_BYTES) });
     case INTAKE_REJECTIONS.NO_IMAGE_SUPPORT:
-      return 'Das aktive Modell nimmt keine Bilder entgegen.';
+      return t('chat.image.error.noImageSupport');
     default:
-      return 'Das Bild konnte nicht übernommen werden.';
+      return t('chat.image.error.generic');
   }
 }
 
@@ -116,7 +117,7 @@ export function scaledSize(width, height, maxEdge = MAX_IMAGE_EDGE_PX) {
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error || new Error('Bild konnte nicht gelesen werden.'));
+    reader.onerror = () => reject(reader.error || new Error(t('chat.image.error.unreadable')));
     reader.onload = () => {
       const result = String(reader.result || '');
       const comma = result.indexOf(',');

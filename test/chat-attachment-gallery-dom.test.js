@@ -104,7 +104,7 @@ test('aus dem Verlauf geladener Anhang wird nachgeholt und danach gemerkt', asyn
 
   // Vor der Antwort steht ein beschrifteter Platzhalter, kein leeres Bild.
   assert.equal(tiles()[0].tagName, 'DIV');
-  assert.match(tiles()[0].textContent, /wird geladen/);
+  assert.match(tiles()[0].textContent, /Loading image/);
 
   await flush();
   assert.deepEqual(reads, [{ chatId: 'chat-a', file: STORED_FILE }]);
@@ -127,9 +127,9 @@ test('fehlende Datei endet als Platzhalter, nicht als kaputtes Bild', async () =
 
   const [tile] = tiles();
   assert.equal(tile.querySelector('img'), null);
-  assert.match(tile.textContent, /nicht mehr vorhanden/);
+  assert.match(tile.textContent, /no longer there/);
   // Der Zustand steht auch fuer Screenreader da, nicht nur als Grauton.
-  assert.match(tile.getAttribute('aria-label'), /Fehler\.png: Bild nicht mehr vorhanden/);
+  assert.match(tile.getAttribute('aria-label'), /Fehler\.png: Image no longer there/);
 });
 
 test('ein Fehler beim Nachladen wird wie eine fehlende Datei behandelt', async () => {
@@ -138,7 +138,7 @@ test('ein Fehler beim Nachladen wird wie eine fehlende Datei behandelt', async (
   show([{ kind: 'image', mediaType: 'image/png', file: STORED_FILE }]);
   await flush();
 
-  assert.match(tiles()[0].textContent, /nicht mehr vorhanden/);
+  assert.match(tiles()[0].textContent, /no longer there/);
 });
 
 test('ein Chatwechsel während des Nachladens schreibt nicht in den neuen Chat', async () => {
@@ -162,7 +162,7 @@ test('Klick auf das Thumbnail öffnet das Bild größer und gibt den Fokus zurü
   await flush();
 
   const [tile] = tiles();
-  assert.match(tile.getAttribute('aria-label'), /vergrößert anzeigen/);
+  assert.match(tile.getAttribute('aria-label'), /enlarged/);
   tile.click();
 
   assert.equal(lightbox().classList.contains('hidden'), false);

@@ -9,6 +9,13 @@ const { createChatEngine, CHAT_ENGINE_EVENTS } = require('../src/application/cha
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
 
+const { translateMessage } = require('../src/shared/i18n');
+
+// Die Begruendung der Karte reist seit #290 als Schluesselliste; zum Pruefen
+// des Wortlauts wird sie hier ausgesprochen.
+const reasonText = (request, locale = 'de') =>
+  (request.reasonParts || []).map((m) => translateMessage(locale, m)).join(' ');
+
 const WRITE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
 const ROOT = '/tmp/snotra-project';
 
@@ -133,7 +140,7 @@ test('smart: Lesen läuft ohne Karte, Schreiben fragt; vor der Freigabe keine Sc
     assert.deepEqual(request.riskClasses, ['write']);
     assert.equal(request.mode, 'smart');
     assert.equal(request.sessionAllowed, true);
-    assert.match(request.reason, /Dateiänderungen eine Freigabe/);
+    assert.match(reasonText(request), /Dateiänderungen eine Freigabe/);
     assert.equal(tools.calls.length, 1, 'bis hier nur der Lesezugriff ausgeführt');
     return 'allow-once';
   });
@@ -188,7 +195,7 @@ test('ohne Freigabe-UI verfällt die Anfrage: kein Handler, kein weiterer Provid
   assert.equal(llm.calls.length, 1);
   assert.equal(result.toolTrace.length, 1);
   assert.equal(result.toolTrace[0].permission.reason, 'request_invalidated');
-  assert.match(result.toolTrace[0].line, /blockiert/);
+  assert.match(result.toolTrace[0].line, /blocked/);
   const phases = events.filter((e) => e.type === CHAT_ENGINE_EVENTS.PROGRESS && e.payload.type === 'phase').map((e) => e.payload.phase);
   assert.equal(phases.at(-1), 'idle');
 });
@@ -207,7 +214,7 @@ test('Nutzer lehnt ab: strukturiertes Ergebnis ans Modell, Lauf geht mit der Abl
   const first = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
   assert.equal(first.reason, 'user_denied');
   assert.equal(first.message, 'Tool call denied by the user.');
-  assert.match(result.toolTrace[0].line, /abgelehnt/);
+  assert.match(result.toolTrace[0].line, /denied/);
 });
 
 test('identischer Plan nach Ablehnung: keine zweite Karte, Lauf endet ohne weiteren Provider-Request', async () => {
@@ -281,7 +288,7 @@ test('delete/execute/external gibt es nur einmalig: allow-session wird zur Einze
   assert.equal(approvals.requests[0].sessionAllowed, false);
   assert.equal(grants.count(), 0);
   assert.equal(result.toolTrace[0].permission.source, 'allow-once');
-  assert.match(approvals.requests[0].reason, /ohne dass eine Wiederherstellungskopie/);
+  assert.match(reasonText(approvals.requests[0]), /ohne dass eine Wiederherstellungskopie/);
 });
 
 test('geänderter Plan nach der Freigabe: neu bewerten, neue Karte; bleibt es instabil, verfällt der Aufruf', async () => {
@@ -362,7 +369,7 @@ test('sensibler Pfad: Karte mit Provider-Hinweis, Tool-Nachricht wird markiert u
   const result = await send(engine);
   assert.equal(approvals.requests[0].providerLabel, 'test (localhost:11434)');
   assert.equal(approvals.requests[0].providerKey, 'test|http://localhost:11434');
-  assert.match(approvals.requests[0].reason, /Zugangsdaten enthalten.*test \(localhost:11434\)/);
+  assert.match(reasonText(approvals.requests[0]), /Zugangsdaten enthalten.*test \(localhost:11434\)/);
   assert.equal(result.toolTrace[0].permission.sensitive, true);
   const wire = llm.calls[1].messages.find((m) => m.role === 'tool');
   assert.equal('sensitiveMarker' in wire, false, 'Marker geht nicht über die Leitung');
@@ -378,7 +385,7 @@ test('zweite Prüfstelle: unerwartet sensible Ausgabe wird zurückgehalten, bis 
   await send(a.engine);
   assert.equal(denied.requests.length, 1);
   assert.deepEqual(denied.requests[0].riskClasses, ['read-sensitive']);
-  assert.match(denied.requests[0].reason, /zurückgehalten/);
+  assert.match(reasonText(denied.requests[0]), /zurückgehalten/);
   const withheld = a.llm.calls[1].messages.find((m) => m.role === 'tool').content;
   assert.equal(withheld.includes('abcdefgh12345678'), false);
   assert.equal(JSON.parse(withheld).reason, 'user_denied');

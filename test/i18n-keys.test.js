@@ -47,6 +47,11 @@ const IDENTICAL_ON_PURPOSE = new Set([
   // Nothing but two placeholders and the server's own text between them —
   // there is no wording here to translate (#291).
   'tools.mcp.short',
+  // "Status" is the German word too, and the value is that word plus a
+  // placeholder (#290).
+  'approval.audit.status',
+  // A file name plus "(global)" — the same in both languages (#290).
+  'context.part.agents.user',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {
@@ -150,6 +155,25 @@ test('the key tables of the contract layer point at existing entries', () => {
     }
   }
   assert.deepEqual(missing, [], 'key table points at an entry that does not exist');
+});
+
+/**
+ * The tool lines of the chat log name their base key in a table too (#290) —
+ * four sentences hang below each one, and none of them is visible to the text
+ * scan above. Missing one means a raw `tools.line.…` in the middle of the log.
+ */
+test('every tool line carries all four sentences', () => {
+  const { LINE_VARIANTS, TOOL_LINE_KEYS } = require('../src/shared/presentation/tool-display');
+  const missing = [];
+  for (const [tool, base] of Object.entries(TOOL_LINE_KEYS)) {
+    for (const variant of LINE_VARIANTS) {
+      const key = `${base}.${variant}`;
+      if (!Object.prototype.hasOwnProperty.call(MESSAGES[DEFAULT_LOCALE], key)) {
+        missing.push(`${tool}: ${key}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], 'tool line without a sentence in the catalogue');
 });
 
 /**

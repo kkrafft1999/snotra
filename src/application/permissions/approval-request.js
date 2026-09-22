@@ -10,74 +10,83 @@ const {
   TOOL_RISK_CLASSES,
   TOOL_PERMISSION_MODES,
   SESSION_GRANTABLE_CLASSES,
-  TOOL_PERMISSION_MODE_LABELS,
-  TOOL_RISK_CLASS_LABELS,
+  TOOL_PERMISSION_MODE_LABEL_KEYS,
+  TOOL_RISK_CLASS_LABEL_KEYS,
   normalizeRiskClasses,
 } = require('../../shared/contracts/tool-permissions');
+const { createMessage } = require('../../shared/contracts/message');
 
-// Anzeigenamen kommen aus den Contracts, damit Karte, Chat-Pille und
-// Einstellungen (#67) denselben Wortlaut zeigen.
-const MODE_LABELS = TOOL_PERMISSION_MODE_LABELS;
-const CLASS_LABELS = TOOL_RISK_CLASS_LABELS;
+// Die Schluessel kommen aus den Contracts, damit Karte, Chat-Pille und
+// Einstellungen (#67) denselben Wortlaut zeigen — gesprochen wird er dort, wo
+// er auf dem Schirm steht (#290).
+const MODE_KEYS = TOOL_PERMISSION_MODE_LABEL_KEYS;
+const CLASS_KEYS = TOOL_RISK_CLASS_LABEL_KEYS;
 
-function modeLabel(mode) {
-  return MODE_LABELS[mode] || MODE_LABELS[TOOL_PERMISSION_MODES.SMART];
+function modeLabelKey(mode) {
+  return MODE_KEYS[mode] || MODE_KEYS[TOOL_PERMISSION_MODES.SMART];
 }
 
 /**
- * Begründung für die Karte. `checkpoint` ist 'access' (vor dem Handler) oder
- * 'output' (Inhalt wurde lokal als sensibel erkannt und zurückgehalten).
+ * Begründung für die Karte, als Liste von Katalogschluesseln (#290).
+ * `checkpoint` ist 'access' (vor dem Handler) oder 'output' (Inhalt wurde
+ * lokal als sensibel erkannt und zurueckgehalten).
+ *
+ * Die Begruendung entsteht im Hauptprozess und wird im Renderer gelesen, wo
+ * die aktive Sprache lebt — also reist der Schluessel, nicht der Satz (#293).
+ * Der Modusname ist selbst ein Schluessel und wird beim Anzeigen eingesetzt.
  */
 function describeApprovalReason({ mode, askClasses, providerLabel, recovery, checkpoint = 'access' } = {}) {
   const classes = normalizeRiskClasses(askClasses) || [];
   const parts = [];
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) {
-    parts.push('Der Modus „Immer fragen“ fragt bei jedem Tool-Aufruf.');
+    parts.push(createMessage('approval.reason.askAll'));
   }
   if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
-    const provider = providerLabel || 'den gewählten Provider';
-    parts.push(
-      checkpoint === 'output'
-        ? `Der gelesene Inhalt enthält offenbar Zugangsdaten und wurde zurückgehalten. Nach Freigabe wird er an ${provider} übermittelt.`
-        : `Diese Datei kann Zugangsdaten enthalten. Der freigegebene Inhalt wird an ${provider} übermittelt.`
-    );
+    parts.push(providerLabel
+      ? createMessage(checkpoint === 'output'
+        ? 'approval.reason.sensitiveOutput'
+        : 'approval.reason.sensitiveAccess', { provider: providerLabel })
+      : createMessage(checkpoint === 'output'
+        ? 'approval.reason.sensitiveOutput.plain'
+        : 'approval.reason.sensitiveAccess.plain'));
   }
   if (classes.includes(TOOL_RISK_CLASSES.DELETE)) {
-    parts.push(
-      'Die bestehende Datei wird vollständig überschrieben, ohne dass eine Wiederherstellungskopie angelegt werden konnte.'
-    );
+    parts.push(createMessage('approval.reason.delete'));
   } else if (classes.includes(TOOL_RISK_CLASSES.WRITE) && mode !== TOOL_PERMISSION_MODES.ASK_ALL) {
-    parts.push(`Im Modus „${modeLabel(mode)}“ benötigen Dateiänderungen eine Freigabe.`);
+    parts.push(createMessage('approval.reason.write', { modeKey: modeLabelKey(mode) }));
   }
   if (recovery === 'trash') {
-    parts.push('Die bisherige Fassung wird vorher als Kopie in den Papierkorb gelegt.');
+    parts.push(createMessage('approval.reason.trash'));
   }
   if (classes.includes(TOOL_RISK_CLASSES.EXECUTE)) {
-    parts.push('Das Tool führt ein Programm aus.');
+    parts.push(createMessage('approval.reason.execute'));
   }
   if (classes.includes(TOOL_RISK_CLASSES.EXTERNAL)) {
-    parts.push('Das Tool sendet Daten an einen externen Dienst.');
+    parts.push(createMessage('approval.reason.external'));
   }
   if (parts.length === 0) {
-    parts.push(`Im Modus „${modeLabel(mode)}“ benötigt dieser Aufruf eine Freigabe.`);
+    parts.push(createMessage('approval.reason.generic', { modeKey: modeLabelKey(mode) }));
   }
-  return parts.join(' ');
+  return parts;
 }
 
-/** Umfang einer Sitzungsfreigabe in Worten (Konzept §6). */
+/**
+ * Umfang einer Sitzungsfreigabe in Worten (Konzept §6) — als Schluessel mit
+ * seinen Werten (#290). Die Klassen reisen als Schluesselliste mit, damit auch
+ * „Ändern" in der Sprache steht, in der die Karte gerade gelesen wird.
+ */
 function describeSessionScope({ tool, targets, riskClasses } = {}) {
-  const classes = (normalizeRiskClasses(riskClasses) || []).map((cls) => CLASS_LABELS[cls] || cls);
+  const classKeys = (normalizeRiskClasses(riskClasses) || []).map((cls) => CLASS_KEYS[cls]).filter(Boolean);
   const paths = (Array.isArray(targets) ? targets : [])
     .map((target) => (typeof target === 'string' ? target : target?.path))
     .filter((p) => typeof p === 'string' && p);
-  const wirkung = classes.join(', ') || 'Lesen';
-  // Ohne Pfade ergäbe „auf genau ohne Dateiziel“ keinen deutschen Satz. Den
-  // Fall gibt es bei `shell_execute` (#102) und beim Merken (#166): Dort hängt
-  // die Freigabe am Tool, nicht an einem Ziel — und genau das soll dastehen.
-  if (paths.length === 0) {
-    return `Gilt in dieser Sitzung für jeden Aufruf von ${tool} (${wirkung}).`;
-  }
-  return `Gilt in dieser Sitzung für ${tool} auf genau ${paths.join(', ')} (${wirkung}).`;
+  const effectKeys = classKeys.length > 0 ? classKeys : [CLASS_KEYS[TOOL_RISK_CLASSES.READ]];
+  // Ohne Pfade ergäbe „auf genau ohne Dateiziel“ keinen Satz. Den Fall gibt es
+  // bei `shell_execute` (#102) und beim Merken (#166): Dort hängt die Freigabe
+  // am Tool, nicht an einem Ziel — und genau das soll dastehen.
+  return paths.length === 0
+    ? createMessage('approval.sessionScope.anyCall', { tool, effectKeys })
+    : createMessage('approval.sessionScope.targets', { tool, paths: paths.join(', '), effectKeys });
 }
 
 /**
@@ -114,7 +123,7 @@ function buildApprovalRequest({
       version: target.version ?? null,
       recovery: target.recovery,
     })),
-    reason: describeApprovalReason({
+    reasonParts: describeApprovalReason({
       mode,
       askClasses: classes,
       providerLabel,
@@ -128,7 +137,7 @@ function buildApprovalRequest({
     checkpoint,
   };
   if (sessionAllowed) {
-    request.sessionScopeLabel = describeSessionScope({ tool, targets, riskClasses: classes });
+    request.sessionScope = describeSessionScope({ tool, targets, riskClasses: classes });
   }
   if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
     request.providerLabel = providerLabel || providerKey || '';
@@ -142,9 +151,9 @@ function buildApprovalRequest({
 }
 
 module.exports = {
-  MODE_LABELS,
-  CLASS_LABELS,
-  modeLabel,
+  MODE_KEYS,
+  CLASS_KEYS,
+  modeLabelKey,
   describeApprovalReason,
   describeSessionScope,
   buildApprovalRequest,

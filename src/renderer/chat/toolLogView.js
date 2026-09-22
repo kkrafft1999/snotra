@@ -13,11 +13,12 @@ import {
   toolLineText,
   summarizeToolLog,
   formatElapsedLabel,
-  THINKING_LABEL,
+  thinkingLabel,
   THINKING_ELAPSED_MIN_MS,
 } from '../utils/tool-log-summary.js';
 import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
 import { toolLogDebug } from './toolLogDebug.js';
+import { t } from '../i18n.js';
 
 const { toolCategoryForEntry } = contracts;
 
@@ -25,7 +26,7 @@ const { toolCategoryForEntry } = contracts;
 export function buildToolLineStatus() {
   const status = document.createElement('span');
   status.className = 'chat-tool-line-status sr-only';
-  status.textContent = 'Abgeschlossen';
+  status.textContent = t('toolLog.line.done');
   return status;
 }
 
@@ -79,9 +80,9 @@ export function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, 
 
   if (state === 'running' || state === 'pending') {
     row.setAttribute('aria-busy', 'true');
-    row.setAttribute('aria-label', `Läuft: ${text}`);
+    row.setAttribute('aria-label', t('toolLog.line.running.label', { text }));
   } else {
-    row.setAttribute('aria-label', `Abgeschlossen: ${text}`);
+    row.setAttribute('aria-label', t('toolLog.line.done.label', { text }));
     row.appendChild(buildToolLineStatus());
   }
 
@@ -110,7 +111,7 @@ export function setToolLineDone(row, doneText) {
   const textEl = row.querySelector('.chat-tool-line-text');
   if (doneText && textEl) textEl.textContent = doneText;
   const finalText = textEl?.textContent || doneText || '';
-  if (finalText) row.setAttribute('aria-label', `Abgeschlossen: ${finalText}`);
+  if (finalText) row.setAttribute('aria-label', t('toolLog.line.done.label', { text: finalText }));
 
   if (!row.querySelector('.chat-tool-line-status')) row.appendChild(buildToolLineStatus());
 }
@@ -119,7 +120,7 @@ export function setToolLineText(row, text) {
   const textEl = row?.querySelector('.chat-tool-line-text');
   if (!textEl || !text) return;
   textEl.textContent = text;
-  row.setAttribute('aria-label', `Läuft: ${text}`);
+  row.setAttribute('aria-label', t('toolLog.line.running.label', { text }));
 }
 
 /** Vorläufige Zeile (Aufruf gestreamt) wird zur laufenden Zeile (Tool wird ausgeführt). */
@@ -228,14 +229,14 @@ export function syncToolSummaryLine(line, summary) {
   const label = extra ? `${text} ${extra}` : text;
   if (state === 'done') {
     line.removeAttribute('aria-busy');
-    line.setAttribute('aria-label', `Abgeschlossen: ${label}`);
+    line.setAttribute('aria-label', t('toolLog.line.done.label', { text: label }));
     if (!line.querySelector('.chat-tool-line-status')) {
       line.insertBefore(buildToolLineStatus(), line.querySelector('.chat-tool-chevron'));
     }
-    line.querySelector('.chat-tool-line-status').textContent = 'Abgeschlossen';
+    line.querySelector('.chat-tool-line-status').textContent = t('toolLog.line.done');
   } else {
     line.setAttribute('aria-busy', 'true');
-    line.setAttribute('aria-label', `Läuft: ${label}`);
+    line.setAttribute('aria-label', t('toolLog.line.running.label', { text: label }));
     line.querySelector('.chat-tool-line-status')?.remove();
   }
 }
@@ -355,7 +356,7 @@ export function syncPhaseLine(phaseEl, message) {
   // ab fünf Sekunden steht die Dauer dahinter (Issue #87).
   const elapsedMs = show ? thinkingElapsedMs(message) : 0;
   const suffix = elapsedMs >= THINKING_ELAPSED_MIN_MS ? ` · ${formatElapsedLabel(elapsedMs)}` : '';
-  phaseEl.textContent = show ? `${THINKING_LABEL}${suffix}` : '';
+  phaseEl.textContent = show ? `${thinkingLabel()}${suffix}` : '';
 }
 
 export function finalizeAllToolLines(wrap) {
@@ -382,7 +383,7 @@ export function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines
   const lines = document.createElement('div');
   lines.className = 'chat-tool-lines';
   lines.setAttribute('role', 'list');
-  lines.setAttribute('aria-label', 'Alle Tool-Schritte');
+  lines.setAttribute('aria-label', t('toolLog.allSteps'));
   lines.addEventListener('scroll', () => syncToolListOverflow(lines));
   log.appendChild(lines);
 

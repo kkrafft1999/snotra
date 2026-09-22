@@ -1069,13 +1069,51 @@ table is invisible to its scan for `t('…')` literals.
 
 `tMessage()` passes plain text through untouched. That is the seam to the layers
 that still hand over finished sentences — the settings handlers
-(`createSettingsError`) and most labels of the context breakdown; a context part
-that does carry a key uses `labelKey`. They follow in their own slices of
-[#277](https://github.com/kkrafft1999/snotra/issues/277).
+(`createSettingsError`) are the last of them, and they follow in their own slice
+of [#277](https://github.com/kkrafft1999/snotra/issues/277). The context
+breakdown came over in [#290](https://github.com/kkrafft1999/snotra/issues/290):
+a part names its heading with `labelKey` and its second line with `detailKey`
+plus the `params` that fill it, so that "3 schemas" is counted where it is known
+and worded where it is shown.
+
+**A parameter can be a key itself.** The permission planner knows *which* mode
+and *which* risk classes belong in a sentence, but not what they are called in
+the language the card is being read in. By convention it names such a parameter
+`…Key` (one) or `…Keys` (several) — `createMessage('approval.reason.write',
+{ modeKey: 'permissions.mode.smart' })` — and `translateMessage()` looks them up
+before it interpolates, putting the result in under the bare name. The catalogue
+entry only ever sees `{mode}` or `{effect}`.
 
 The model-facing wording is a separate thing and stays English
 (`PERMISSION_DENIED_TOOL_RESULT_MESSAGES`, `MEMORY_SCOPE_PROMPT_LABELS`,
 issue #276) — it never goes through the catalogue.
+
+### The chat: written when it is shown, not when it happens
+
+The chat surface is built at runtime from beginning to end — there is no markup
+for `data-i18n` to reach. So it goes through `t()` and repaints on
+`onLocaleChange`: `ChatStream` (greeting, token figure, send button,
+attachments), `ToolApprovalCard`, `ChatModelPicker`, `ToolModePicker` and the
+token breakdown panel. The approval card is rebuilt from the entry the queue
+still holds, so a resolved card keeps its outcome and a decision already on its
+way keeps its buttons locked ([#290](https://github.com/kkrafft1999/snotra/issues/290)).
+
+The **tool lines** are the one thing a language change does not touch. They are
+written by `src/shared/presentation/tool-display.js` in the main process, from
+the locale the chat engine hands it, and they reach the renderer as finished
+text — a trace entry keeps its `line`, not the arguments it was made from. A
+line already in the log is a record of something that happened, like the
+conversation around it; what comes after the switch comes in the new language.
+
+The locale reaches that formatter through
+`createChatPreferencesAdapter` → `uiPrefs.appLocale` → `resolveAppLocale`. The
+adapter is the whole path: anything it does not copy out of the stored
+preferences is invisible to the chat core, which is exactly how the language sat
+unused there between #289 and #290.
+
+Number formatting follows the interface language as well, not the machine's: a
+thousands separator is a dot in German and a comma in English, and the percent
+sign takes a space on one side of the border and not on the other.
 
 ### Renderer: markup declaratively, built nodes by callback
 

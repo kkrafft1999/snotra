@@ -7,6 +7,22 @@ const { pathToFileURL } = require('url');
 const load = () =>
   import(pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', 'utils', 'tool-approval-view.js')).href);
 
+// The card is built at runtime and reads the active language through `t()`;
+// switching it is how the German half is checked (#290). Always switch back —
+// the module keeps the locale, and the next test would inherit it.
+const loadI18n = () =>
+  import(pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', 'i18n.js')).href);
+
+async function inGerman(fn) {
+  const { setLocale } = await loadI18n();
+  setLocale('de');
+  try {
+    await fn();
+  } finally {
+    setLocale('en');
+  }
+}
+
 function dto(overrides = {}) {
   return {
     contractVersion: 1,
@@ -30,46 +46,63 @@ test('Modus-Optionen: drei Modi in Konzept-Reihenfolge mit Labels', async () => 
   assert.equal(modeLabel('kaputt'), 'Smart');
 });
 
-test('Karte: Änderung an bestehender Datei mit Sitzungsaktion und Reichweite', async () => {
+test('card: change to an existing file, with session action and reach', async () => {
   const { buildApprovalCardView } = await load();
   const view = buildApprovalCardView(dto());
-  assert.equal(view.title, 'Änderung bestätigen');
-  assert.equal(view.headline.text, 'Snotra möchte src/config.js ändern (edit_file).');
-  assert.equal(view.headline.verb, 'ändern');
+  assert.equal(view.title, 'Confirm change');
+  assert.equal(view.headline.text, 'Snotra wants to change src/config.js (edit_file).');
+  // The two slots stay standing so the component can render them as code.
+  assert.equal(view.headline.template, 'Snotra wants to change {target} ({tool}).');
+  assert.equal(view.headline.verb, 'change');
   assert.equal(view.classText, 'Change');
   assert.equal(view.actions.once.enabled, true);
   assert.equal(view.actions.session.enabled, true);
   assert.equal(view.actions.session.hint, '');
   assert.match(view.scopeNote, /genau src\/config\.js/);
-  assert.match(view.scopeNote, /Weitere Änderungen an genau diesen Zielen laufen dann ohne Rückfrage/);
+  assert.match(view.scopeNote, /Further changes to exactly these targets then run without asking/);
   assert.equal(view.warning, '');
   assert.equal(view.preview, null);
 });
 
-test('Karte: neue Datei heißt „anlegen“, Überschreiben warnt mit Papierkorb-Hinweis', async () => {
+test('card: German puts the target before the verb', async () => {
+  const { buildApprovalCardView } = await load();
+  await inGerman(async () => {
+    const view = buildApprovalCardView(dto());
+    assert.equal(view.title, 'Änderung bestätigen');
+    assert.equal(view.headline.text, 'Snotra möchte src/config.js ändern (edit_file).');
+    assert.equal(view.headline.template, 'Snotra möchte {target} {verb} ({tool}).'.replace('{verb}', 'ändern'));
+    assert.equal(view.headline.verb, 'ändern');
+    assert.equal(view.actions.deny.label, 'Ablehnen');
+    assert.equal(view.targets[0].kindLabel, 'Datei');
+  });
+  // Back to the default, and the sentence turns around again.
+  assert.equal(buildApprovalCardView(dto()).headline.text, 'Snotra wants to change src/config.js (edit_file).');
+});
+
+test('card: a new file is "create", overwriting warns about the trash copy', async () => {
   const { buildApprovalCardView } = await load();
   const fresh = buildApprovalCardView(
     dto({ tool: 'write_file_text', targets: [{ path: 'docs/neu.md', kind: 'file', exists: false }] })
   );
-  assert.equal(fresh.headline.verb, 'anlegen');
-  assert.ok(fresh.targets[0].notes.includes('neu'));
+  assert.equal(fresh.headline.verb, 'create');
+  assert.ok(fresh.targets[0].notes.includes('new'));
   assert.equal(fresh.warning, '');
 
   const overwrite = buildApprovalCardView(
     dto({ tool: 'write_file_text', targets: [{ path: 'docs/alt.md', kind: 'file', exists: true, recovery: 'trash' }] })
   );
-  assert.match(overwrite.warning, /Kopie im Papierkorb/);
+  assert.match(overwrite.warning, /goes to the trash as a copy/);
 
   const noRecovery = buildApprovalCardView(
     dto({ tool: 'write_file_text', riskClasses: ['delete'], sessionAllowed: false, targets: [{ path: 'docs/alt.md', kind: 'file', exists: true }] })
   );
-  assert.equal(noRecovery.headline.verb, 'ohne Rückweg überschreiben');
-  assert.match(noRecovery.warning, /ohne Wiederherstellungskopie/);
+  assert.equal(noRecovery.headline.verb, 'overwrite with no way back');
+  assert.match(noRecovery.warning, /without a recovery copy/);
   assert.equal(noRecovery.actions.session.enabled, false);
-  assert.match(noRecovery.actions.session.hint, /Overwrite with no way back.*Einzelentscheidung/);
+  assert.match(noRecovery.actions.session.hint, /Overwrite with no way back.*single decision/);
 });
 
-test('Karte: sensibles Lesen zeigt Provider, Dateistand und Titel „Dateizugriff bestätigen“', async () => {
+test('card: a sensitive read shows provider, file version and the file-access title', async () => {
   const { buildApprovalCardView } = await load();
   const view = buildApprovalCardView(
     dto({
@@ -81,71 +114,79 @@ test('Karte: sensibles Lesen zeigt Provider, Dateistand und Titel „Dateizugrif
       sessionScopeLabel: 'Gilt in dieser Sitzung für read_file_text auf genau .env (Sensible Daten lesen).',
     })
   );
-  assert.equal(view.title, 'Dateizugriff bestätigen');
-  assert.equal(view.headline.verb, 'lesen');
+  assert.equal(view.title, 'Confirm file access');
+  assert.equal(view.headline.verb, 'read');
   assert.equal(view.sensitive, true);
   assert.equal(view.providerLabel, 'OpenAI');
-  assert.ok(view.targets[0].notes.some((n) => n.startsWith('sensibel (Dateiname .env)')));
-  assert.ok(view.targets[0].notes.includes('Stand 1725000000:120'));
-  assert.match(view.scopeNote, /Dateistand und den gewählten Provider/);
+  assert.ok(view.targets[0].notes.some((n) => n.startsWith('sensitive (Dateiname .env)')));
+  assert.ok(view.targets[0].notes.includes('as of 1725000000:120'));
+  assert.match(view.scopeNote, /this file version and the chosen provider/);
 });
 
-test('Karte: im Modus „Immer fragen“ ist die Sitzungsaktion aus – mit Begründung', async () => {
+test('card: in "always ask" the session action is off – with a reason', async () => {
   const { buildApprovalCardView, sessionActionHint } = await load();
   const view = buildApprovalCardView(dto({ mode: 'ask-all', sessionAllowed: false, riskClasses: ['read'] }));
   assert.equal(view.modeLabel, 'Always ask');
   assert.equal(view.actions.session.enabled, false);
-  assert.equal(view.actions.session.hint, 'Dieser Modus fragt bei jedem Aufruf.');
-  assert.equal(sessionActionHint({ sessionAllowed: false, mode: 'smart', riskClasses: ['execute'] }), 'Für „Execute“ ist nur eine Einzelentscheidung möglich.');
+  assert.equal(view.actions.session.hint, 'This mode asks on every call.');
+  assert.equal(
+    sessionActionHint({ sessionAllowed: false, mode: 'smart', riskClasses: ['execute'] }),
+    'For “Execute” only a single decision is possible.'
+  );
   assert.equal(sessionActionHint({ sessionAllowed: true }), '');
 });
 
-test('Karte: Vorschau trägt Art, Kürzungs- und Maskierungshinweis', async () => {
+test('card: the preview carries its kind and the shortened and masked notes', async () => {
   const { buildApprovalCardView } = await load();
   const view = buildApprovalCardView(
     dto({ preview: { kind: 'replace', text: '--- alt\nfoo\n+++ neu\nbar', truncated: true, masked: true } })
   );
-  assert.equal(view.preview.kindLabel, 'Ersetzung (alt → neu)');
-  assert.equal(view.preview.summary, 'Vorschau: Ersetzung (alt → neu) (gekürzt, Geheimnisse maskiert)');
-  assert.match(view.preview.truncatedNote, /nur den Anfang/);
-  assert.match(view.preview.maskedNote, /auch aufgeklappt/);
+  assert.equal(view.preview.kindLabel, 'Replacement (old → new)');
+  assert.equal(view.preview.summary, 'Preview: Replacement (old → new) (shortened, secrets masked)');
+  assert.match(view.preview.truncatedNote, /only passes on the beginning/);
+  assert.match(view.preview.maskedNote, /stay masked when it is unfolded/);
   const plain = buildApprovalCardView(dto({ preview: { kind: 'unbekannt', text: 'x', truncated: false, masked: false } }));
-  assert.equal(plain.preview.kindLabel, 'Neuer Inhalt');
-  assert.equal(plain.preview.summary, 'Vorschau: Neuer Inhalt');
+  assert.equal(plain.preview.kindLabel, 'New content');
+  assert.equal(plain.preview.summary, 'Preview: New content');
 });
 
-test('Karte: ungültige DTOs ergeben kein Anzeige-Modell', async () => {
+test('card: invalid DTOs yield no display model', async () => {
   const { buildApprovalCardView } = await load();
   assert.equal(buildApprovalCardView(null), null);
   assert.equal(buildApprovalCardView({ requestId: 'x' }), null);
   assert.equal(buildApprovalCardView(dto({ contractVersion: 2 })), null);
 });
 
-test('Ergebnis: Entscheidung, Verfall und Abbruch getrennt vom Ausführungserfolg', async () => {
+test('outcome: decision, expiry and cancellation, apart from the execution result', async () => {
   const { describeApprovalOutcome } = await load();
-  assert.equal(describeApprovalOutcome({ response: 'deny' }).label, 'Abgelehnt');
-  // Der Grund kommt seit #293 aus dem Katalog — englisch, weil das die
-  // Vorgabesprache der Oberflaeche ist (#277).
+  assert.equal(describeApprovalOutcome({ response: 'deny' }).label, 'Denied');
+  // The reason comes from the catalogue since #293, the frame around it since
+  // #290 — both in the language of the interface.
   assert.match(describeApprovalOutcome({ response: 'deny' }).detail, /Tool call denied by you/);
   assert.equal(describeApprovalOutcome({ response: 'allow-once' }).status, 'allowed');
-  assert.equal(describeApprovalOutcome({ response: 'allow-session' }).label, 'Für diese Sitzung erlaubt');
+  assert.equal(describeApprovalOutcome({ response: 'allow-session' }).label, 'Allowed for this session');
   const gone = describeApprovalOutcome({ invalidated: true, reason: 'request_invalidated' });
-  assert.equal(gone.label, 'Anfrage verfallen');
-  assert.match(gone.detail, /file, context or rules.*Der Lauf ist beendet\./);
+  assert.equal(gone.label, 'Request expired');
+  assert.match(gone.detail, /file, context or rules.*The run has ended\./);
   assert.equal(describeApprovalOutcome({ invalidated: true, reason: 'no_approval_ui' }).status, 'invalidated');
-  assert.equal(describeApprovalOutcome({ aborted: true, invalidated: true }).label, 'Lauf abgebrochen');
+  assert.equal(describeApprovalOutcome({ aborted: true, invalidated: true }).label, 'Run cancelled');
   assert.equal(describeApprovalOutcome({}).status, 'invalidated');
+  await inGerman(async () => {
+    assert.equal(describeApprovalOutcome({ response: 'deny' }).label, 'Abgelehnt');
+    assert.match(describeApprovalOutcome({ response: 'deny' }).detail, /^Das Modell erhält: „.+“\.$/);
+    assert.equal(describeApprovalOutcome({ aborted: true, invalidated: true }).label, 'Lauf abgebrochen');
+  });
 });
 
-test('Audit-Tooltip: Entscheidung, Klasse, Status, Grund; leer für Alt-Sessions', async () => {
+test('audit tooltip: decision, class, status, reason; empty for older sessions', async () => {
   const { describePermissionAudit, permissionStatusKey } = await load();
   assert.equal(describePermissionAudit(undefined), '');
   assert.equal(describePermissionAudit('string'), '');
   const denied = describePermissionAudit({ decision: 'deny', source: 'deny', reason: 'user_denied', riskClasses: ['write'], mode: 'smart', status: 'denied' });
-  assert.equal(denied, 'Entscheidung: Abgelehnt · Klasse: Change · Status: nicht ausgeführt · Grund: Tool call denied by you · Modus: Smart');
+  assert.equal(denied, 'Decision: Denied · Class: Change · Status: not carried out · Reason: Tool call denied by you · Mode: Smart');
   const session = describePermissionAudit({ decision: 'allow', source: 'allow-session', riskClasses: ['read-sensitive'], status: 'executed', sensitive: true });
-  assert.match(session, /^Entscheidung: Erlaubt \(Sitzungsfreigabe\) · Klasse: Read sensitive data · Status: ausgeführt/);
-  assert.match(session, /Sensibler Inhalt zurückgehalten$/);
+  assert.match(session, /^Decision: Allowed \(session allowance\) · Class: Read sensitive data · Status: carried out/);
+  assert.match(session, /Sensitive content held back$/);
   assert.equal(permissionStatusKey({ status: 'awaiting-approval' }), 'awaiting');
   assert.equal(permissionStatusKey({ decision: 'deny', status: 'denied' }), 'denied');
   assert.equal(permissionStatusKey({ decision: 'allow', status: 'executed' }), 'allowed');

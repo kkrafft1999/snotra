@@ -23,7 +23,7 @@ const {
   createContextPart,
 } = require('../../shared/contracts/context-breakdown');
 const {
-  PROJECT_INSTRUCTION_SOURCE_LABELS,
+  PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS,
   PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS,
   PROJECT_INSTRUCTION_SOURCE_PATHS,
   MAX_PROJECT_INSTRUCTION_CHARS,
@@ -69,10 +69,9 @@ function buildProjectInstructionsSystemPrompt(files) {
     createContextPart({
       id: `system:agents-md:${file.source}`,
       group: CONTEXT_PART_GROUPS.SYSTEM,
-      label: PROJECT_INSTRUCTION_SOURCE_LABELS[file.source],
-      detail: file.truncated
-        ? `${PROJECT_INSTRUCTION_SOURCE_PATHS[file.source]} · gekürzt`
-        : PROJECT_INSTRUCTION_SOURCE_PATHS[file.source],
+      labelKey: PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS[file.source],
+      detailKey: file.truncated ? 'context.detail.pathTruncated' : 'context.detail.path',
+      params: { path: PROJECT_INSTRUCTION_SOURCE_PATHS[file.source] },
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
     })

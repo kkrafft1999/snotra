@@ -1,4 +1,5 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
+import { onLocaleChange, t } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
 import contracts from '../generated/contracts.js';
@@ -135,13 +136,13 @@ export function initChatModelPicker({
     const configured = activeProviderConfigured();
 
     let state = 'offline';
-    let label = 'Kein KI-Anbieter konfiguriert';
+    let label = t('chat.live.offline');
     if (streaming) {
       state = 'streaming';
-      label = 'Modell antwortet';
+      label = t('chat.live.streaming');
     } else if (configured) {
       state = 'live';
-      label = 'Verbindung aktiv';
+      label = t('chat.live.active');
     }
     chatLiveDot.dataset.state = state;
     chatLiveDot.setAttribute('aria-label', label);
@@ -202,19 +203,18 @@ export function initChatModelPicker({
 
     if (!isConfigured) {
       if (!appStore.llmState.encryptionAvailable) {
-        chatHint.textContent =
-          'Verschlüsselter Speicher ist nicht verfügbar. Ein API-Key kann hier nicht sicher gespeichert werden.';
+        chatHint.textContent = t('chat.hint.noEncryption');
       } else if (active?.keyUnreadable) {
-        chatHint.textContent =
-          'Der gespeicherte API-Key ist nach der Umbenennung zu Snotra AI nicht mehr lesbar. Bitte in den Einstellungen neu eingeben.';
+        chatHint.textContent = t('chat.hint.keyUnreadable');
       } else {
-        chatHint.textContent = 'Konfiguriere ein Sprachmodell über das Zahnrad, um zu chatten.';
+        chatHint.textContent = t('chat.hint.noModel');
       }
       chatHint.classList.remove('hidden');
       if (!appStore.chatInFlight) btnChatSend.disabled = true;
     } else if (!appStore.rootPath) {
-      chatHint.textContent =
-        `${modelHint ? `Aktiv: ${modelHint}` : 'Aktives Modell'} – Tipp: Öffne einen Ordner, damit der Assistent Dateien per Tool einlesen kann.`;
+      chatHint.textContent = modelHint
+        ? t('chat.hint.noFolder.model', { model: modelHint })
+        : t('chat.hint.noFolder');
       chatHint.classList.remove('hidden');
       if (!appStore.chatInFlight) btnChatSend.disabled = false;
     } else {
@@ -261,6 +261,13 @@ export function initChatModelPicker({
       await persistActivePreset(pid);
     });
   }
+
+  // The pill, the hint below the composer and the label of the live dot are
+  // written at runtime, so a language change has to repaint them (#290).
+  onLocaleChange(() => {
+    updateChatChrome();
+    syncLiveDot();
+  });
 
   return {
     findProviderMeta: findProviderView,

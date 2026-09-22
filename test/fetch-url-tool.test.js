@@ -108,17 +108,17 @@ test('fetch_url lässt sich per Häkchen abschalten', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('fetch_url zeigt eine deutsche Anzeige-Zeile mit dem Host', () => {
+test('fetch_url shows a display line with the host', () => {
   const args = { url: 'https://docs.example.org/a/b?x=1' };
 
-  assert.equal(summarizeToolCall('fetch_url', args, 'start'), 'Seite docs.example.org wird gelesen …');
-  assert.equal(summarizeToolCall('fetch_url', args, 'done'), 'Seite docs.example.org gelesen');
+  assert.equal(summarizeToolCall('fetch_url', args, 'start'), 'Reading page docs.example.org …');
+  assert.equal(summarizeToolCall('fetch_url', args, 'done'), 'Page docs.example.org read');
   assert.match(
     formatToolDisplayLine({ tool: 'fetch_url', args }, 'done'),
-    /Seite docs\.example\.org gelesen/
+    /Page docs\.example\.org read/
   );
 
   // Ohne brauchbare Adresse bleibt die Zeile trotzdem verständlich.
-  assert.equal(summarizeToolCall('fetch_url', {}, 'done'), 'Seite gelesen');
-  assert.equal(summarizeToolCall('fetch_url', { url: 'kein-url' }, 'done'), 'Seite kein-url gelesen');
+  assert.equal(summarizeToolCall('fetch_url', {}, 'done'), 'Page read');
+  assert.equal(summarizeToolCall('fetch_url', { url: 'kein-url' }, 'done'), 'Page kein-url read');
 });

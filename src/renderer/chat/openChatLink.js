@@ -1,4 +1,5 @@
 import { ALLOWED_LINK_PROTOS } from '../utils/helpers.js';
+import { t } from '../i18n.js';
 
 /**
  * Oeffnen von Links aus Modellantworten (Issues #82, #83).
@@ -22,16 +23,16 @@ export function isOpenableChatLink(href) {
  */
 export async function openChatLink(api, href) {
   if (!isOpenableChatLink(href)) {
-    return { ok: false, error: 'Dieser Link kann nicht geöffnet werden.' };
+    return { ok: false, error: t('chat.link.error.notOpenable') };
   }
   if (typeof api?.openExternal !== 'function') {
-    return { ok: false, error: 'Links können in dieser Umgebung nicht geöffnet werden.' };
+    return { ok: false, error: t('chat.link.error.noEnvironment') };
   }
   try {
     const result = await api.openExternal(href);
     if (result?.ok) return { ok: true };
-    return { ok: false, error: result?.error || 'Link konnte nicht geöffnet werden.' };
+    return { ok: false, error: result?.error || t('chat.link.error.failed') };
   } catch (e) {
-    return { ok: false, error: e?.message || 'Link konnte nicht geöffnet werden.' };
+    return { ok: false, error: e?.message || t('chat.link.error.failed') };
   }
 }

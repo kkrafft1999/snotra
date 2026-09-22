@@ -9,7 +9,7 @@
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
 import contracts from '../generated/contracts.js';
-import { t } from '../i18n.js';
+import { t, tMessage } from '../i18n.js';
 
 const {
   TOOL_PERMISSION_MODES,
@@ -82,141 +82,157 @@ export function riskClassLabel(riskClass) {
   return RISK_CLASS_KEYS[riskClass] ? t(RISK_CLASS_KEYS[riskClass]) : String(riskClass ?? '');
 }
 
-const TARGET_KIND_LABELS = Object.freeze({
-  file: 'Datei',
-  directory: 'Ordner',
-  tree: 'Ordnerbaum',
+/**
+ * Key tables for the values the contract enumerates. Same shape as MODE_KEYS
+ * above (#289): the contract stays the source of the *values*, the catalogue
+ * the source of the words.
+ */
+const TARGET_KIND_KEYS = Object.freeze({
+  file: 'approval.targetKind.file',
+  directory: 'approval.targetKind.directory',
+  tree: 'approval.targetKind.tree',
 });
 
-const PREVIEW_KIND_LABELS = Object.freeze({
-  text: 'Neuer Inhalt',
-  replace: 'Ersetzung (alt → neu)',
-  diff: 'Patch',
-  code: 'Python-Quelltext',
-  shell: 'Befehl',
-  memory: 'Merksatz',
+const PREVIEW_KIND_KEYS = Object.freeze({
+  text: 'approval.previewKind.text',
+  replace: 'approval.previewKind.replace',
+  diff: 'approval.previewKind.diff',
+  code: 'approval.previewKind.code',
+  shell: 'approval.previewKind.shell',
+  memory: 'approval.previewKind.memory',
 });
 
-/** Reichweite eines Gedaechtnis-Eintrags in Worten (Issue #166). */
-const MEMORY_SCOPE_TEXTS = Object.freeze({
-  workspace: 'Projekt — gilt nur im geöffneten Ordner',
-  user: 'Global — gilt in jedem Ordner',
+/** Reach of a memory entry, in words (issue #166). */
+const MEMORY_SCOPE_KEYS = Object.freeze({
+  workspace: 'approval.memoryScope.workspace',
+  user: 'approval.memoryScope.user',
 });
 
 function hasClass(classes, riskClass) {
   return Array.isArray(classes) && classes.includes(riskClass);
 }
 
-/** Titel der Karte (Konzept §6): Änderung, Ausführung, externer Zugriff oder Dateizugriff. */
+/** Title of the card (concept §6): change, execution, external access or file access. */
 export function approvalCardTitle(riskClasses) {
-  if (hasClass(riskClasses, TOOL_RISK_CLASSES.EXECUTE)) return 'Ausführung bestätigen';
-  if (hasClass(riskClasses, TOOL_RISK_CLASSES.EXTERNAL)) return 'Externen Zugriff bestätigen';
+  if (hasClass(riskClasses, TOOL_RISK_CLASSES.EXECUTE)) return t('approval.title.execute');
+  if (hasClass(riskClasses, TOOL_RISK_CLASSES.EXTERNAL)) return t('approval.title.external');
   if (hasClass(riskClasses, TOOL_RISK_CLASSES.WRITE) || hasClass(riskClasses, TOOL_RISK_CLASSES.DELETE)) {
-    return 'Änderung bestätigen';
+    return t('approval.title.change');
   }
-  return 'Dateizugriff bestätigen';
+  return t('approval.title.read');
 }
 
 /**
- * Ein Shell-Befehl hat kein Dateiziel; die Kopfzeile nennt stattdessen die
- * Shell, mit der er liefe (Issue #102) — „Snotra möchte einen Befehl in zsh
- * ausführen“ statt eines leeren „ausführen“.
+ * A shell command has no file target; the headline names the shell it would
+ * run in instead (issue #102) — "Snotra wants to run a command in zsh" rather
+ * than an empty "run".
  */
 function shellVerb(dto) {
   const shell = typeof dto?.preview?.shell === 'string' ? dto.preview.shell.trim() : '';
-  return shell ? `einen Befehl in ${shell} ausführen` : 'einen Befehl in der Shell ausführen';
+  return shell ? t('approval.verb.shell', { shell }) : t('approval.verb.shell.plain');
 }
 
 /**
- * Kopfzeile „Snotra möchte ‹Ziel› ‹Verb› (‹Tool›).“ – als Teile, damit die
- * Component Pfad und Tool-Name als Code rendern kann.
+ * Headline "Snotra wants to ‹verb› ‹target› (‹tool›)." — and in German the
+ * target comes before the verb. So the whole sentence lives in the catalogue,
+ * once per language, and the parts are filled in (#290).
+ *
+ * `template` is the same sentence with `{target}` and `{tool}` left standing,
+ * so that the component can render those two as code without knowing where in
+ * the sentence they belong.
  */
 export function approvalHeadline(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
-  let verb = 'lesen';
-  if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = 'an einen externen Dienst senden';
+  let verb = t('approval.verb.read');
+  if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = t('approval.verb.external');
   else if (dto?.tool === 'shell_execute') verb = shellVerb(dto);
-  else if (hasClass(classes, TOOL_RISK_CLASSES.EXECUTE)) verb = 'ausführen';
-  else if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) verb = 'ohne Rückweg überschreiben';
+  else if (hasClass(classes, TOOL_RISK_CLASSES.EXECUTE)) verb = t('approval.verb.execute');
+  else if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) verb = t('approval.verb.delete');
   else if (hasClass(classes, TOOL_RISK_CLASSES.WRITE)) {
-    verb = targets.length > 0 && targets.every((t) => t.exists !== true) ? 'anlegen' : 'ändern';
+    verb = targets.length > 0 && targets.every((entry) => entry.exists !== true)
+      ? t('approval.verb.create')
+      : t('approval.verb.change');
   }
   let targetLabel = '';
   if (targets.length === 1) targetLabel = targets[0].path || '';
-  else if (targets.length > 1) targetLabel = `${targets.length} Ziele`;
-  return {
-    targetLabel,
-    verb,
-    tool: typeof dto?.tool === 'string' ? dto.tool : '',
-    text: targetLabel
-      ? `Snotra möchte ${targetLabel} ${verb} (${dto?.tool || 'Tool'}).`
-      : `Snotra möchte ${verb} (${dto?.tool || 'Tool'}).`,
-  };
+  else if (targets.length > 1) targetLabel = t('approval.targets.count', { count: targets.length });
+  const tool = typeof dto?.tool === 'string' ? dto.tool : '';
+  // A placeholder without a value stays standing — that is what carries the
+  // two slots through to the component untouched.
+  const template = targetLabel
+    ? t('approval.headline.withTarget', { verb })
+    : t('approval.headline.plain', { verb });
+  const text = targetLabel
+    ? t('approval.headline.withTarget', { verb, target: targetLabel, tool: tool || t('tools.line.generic.fallbackName') })
+    : t('approval.headline.plain', { verb, tool: tool || t('tools.line.generic.fallbackName') });
+  return { targetLabel, verb, tool, template, text };
 }
 
 function describeTarget(target) {
   const out = {
     path: typeof target?.path === 'string' ? target.path : '',
-    kindLabel: TARGET_KIND_LABELS[target?.kind] || TARGET_KIND_LABELS.file,
+    kindLabel: t(TARGET_KIND_KEYS[target?.kind] || TARGET_KIND_KEYS.file),
     exists: target?.exists === true,
     sensitive: target?.sensitive === true,
     notes: [],
   };
   if (out.sensitive) {
-    out.notes.push(target.sensitiveReason ? `sensibel (${target.sensitiveReason})` : 'sensibel');
+    out.notes.push(target.sensitiveReason
+      ? t('approval.note.sensitiveReason', { reason: target.sensitiveReason })
+      : t('approval.note.sensitive'));
   }
   if (typeof target?.version === 'string' && target.version) {
     out.version = target.version;
-    out.notes.push(`Stand ${target.version}`);
+    out.notes.push(t('approval.note.version', { version: target.version }));
   }
-  if (target?.kind === 'file' && !out.exists) out.notes.push('neu');
-  if (target?.recovery === 'trash') out.notes.push('Kopie in den Papierkorb');
+  if (target?.kind === 'file' && !out.exists) out.notes.push(t('approval.note.new'));
+  if (target?.recovery === 'trash') out.notes.push(t('approval.note.trash'));
   return out;
 }
 
-/** Hinweis, warum „Für diese Sitzung erlauben“ (nicht) angeboten wird (Konzept §6). */
+/** Why "allow for this session" is (not) offered (concept §6). */
 export function sessionActionHint(dto) {
   if (dto?.sessionAllowed === true) return '';
-  if (dto?.mode === TOOL_PERMISSION_MODES.ASK_ALL) return 'Dieser Modus fragt bei jedem Aufruf.';
+  if (dto?.mode === TOOL_PERMISSION_MODES.ASK_ALL) return t('approval.sessionHint.askAll');
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   const single = classes.filter((cls) => SINGLE_DECISION_CLASSES.includes(cls));
   if (single.length > 0) {
-    return `Für „${single.map(riskClassLabel).join('“, „')}“ ist nur eine Einzelentscheidung möglich.`;
+    return t('approval.sessionHint.classes', {
+      classes: single.map(riskClassLabel).join(t('approval.sessionHint.classSeparator')),
+    });
   }
-  return 'Für diesen Aufruf ist nur eine Einzelentscheidung möglich.';
+  return t('approval.sessionHint.single');
 }
 
-/** Warnung beim Überschreiben (Konzept §6): mit oder ohne Rückweg. */
+/** Warning when overwriting (concept §6): with or without a way back. */
 export function overwriteWarning(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   if (dto?.tool === 'shell_execute') {
-    // Keine Workspace-Grenze: das muss auf der Karte stehen, nicht nur in den
-    // Einstellungen (Issue #102).
-    return 'Der Befehl läuft mit deinen Rechten und ist nicht auf den Projektordner begrenzt.';
+    // No workspace boundary: that belongs on the card, not only in the
+    // settings (issue #102).
+    return t('approval.warning.shell');
   }
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
-  const existing = targets.filter((t) => t.exists === true && (t.kind === 'file' || !t.kind));
-  if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) {
-    return 'Die bestehende Datei wird vollständig überschrieben – ohne Wiederherstellungskopie. Das lässt sich nicht rückgängig machen.';
-  }
+  const existing = targets.filter((entry) => entry.exists === true && (entry.kind === 'file' || !entry.kind));
+  if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) return t('approval.warning.delete');
   if (dto?.tool === 'write_file_text' && existing.length > 0) {
-    return existing.some((t) => t.recovery === 'trash')
-      ? 'Die bestehende Datei wird vollständig überschrieben. Die bisherige Fassung landet vorher als Kopie im Papierkorb.'
-      : 'Die bestehende Datei wird vollständig überschrieben.';
+    return existing.some((entry) => entry.recovery === 'trash')
+      ? t('approval.warning.overwriteTrash')
+      : t('approval.warning.overwrite');
   }
   return '';
 }
 
 /**
- * Vollständiges Anzeige-Modell der Karte aus dem DTO. Liefert null für
- * ungültige DTOs – dann wird nichts angezeigt und nichts beantwortet.
+ * Complete display model of the card from the DTO. Returns null for invalid
+ * DTOs — then nothing is shown and nothing is answered.
  */
 export function buildApprovalCardView(dto) {
   if (!isToolApprovalRequestDto(dto)) return null;
   const classes = dto.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls));
   const targets = dto.targets.map(describeTarget);
-  const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE) || targets.some((t) => t.sensitive);
+  const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE) || targets.some((entry) => entry.sensitive);
   const view = {
     requestId: dto.requestId,
     tool: dto.tool,
@@ -227,7 +243,12 @@ export function buildApprovalCardView(dto) {
     classes: classes.map((value) => ({ value, label: riskClassLabel(value) })),
     classText: classes.map(riskClassLabel).join(', ') || riskClassLabel(TOOL_RISK_CLASSES.READ),
     targets,
-    reason: typeof dto.reason === 'string' ? dto.reason : '',
+    // The reason arrives as a list of descriptors (#290); a producer that has
+    // not been converted still hands over a finished sentence, and `tMessage`
+    // lets that through.
+    reason: Array.isArray(dto.reasonParts) && dto.reasonParts.length > 0
+      ? dto.reasonParts.map(tMessage).filter(Boolean).join(' ')
+      : tMessage(dto.reason),
     sensitive,
     providerLabel: typeof dto.providerLabel === 'string' ? dto.providerLabel : '',
     warning: overwriteWarning(dto),
@@ -236,148 +257,170 @@ export function buildApprovalCardView(dto) {
     cwdLabel: '',
     preview: null,
     actions: {
-      once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: 'Einmal erlauben', enabled: true },
+      once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },
       session: {
         response: APPROVAL_RESPONSES.ALLOW_SESSION,
-        label: 'Für diese Sitzung erlauben',
+        label: t('approval.action.session'),
         enabled: dto.sessionAllowed === true,
         hint: sessionActionHint(dto),
       },
-      deny: { response: APPROVAL_RESPONSES.DENY, label: 'Ablehnen', enabled: true },
+      deny: { response: APPROVAL_RESPONSES.DENY, label: t('approval.action.deny'), enabled: true },
     },
     scopeNote: '',
   };
   if (dto.sessionAllowed === true) {
     const parts = [];
-    if (typeof dto.sessionScopeLabel === 'string' && dto.sessionScopeLabel) parts.push(dto.sessionScopeLabel);
+    const scope = tMessage(dto.sessionScope || dto.sessionScopeLabel);
+    if (scope) parts.push(scope);
     if (classes.includes(TOOL_RISK_CLASSES.WRITE)) {
-      // Ohne Dateiziel gilt die Freigabe dem Tool, nicht einem Ziel — „an
-      // genau diesen Zielen" widerspräche dem Satz davor (#166).
+      // Without a file target the allowance belongs to the tool, not to a
+      // target — "to exactly these targets" would contradict the sentence
+      // before it (#166).
       parts.push(
         Array.isArray(dto.targets) && dto.targets.length > 0
-          ? 'Weitere Änderungen an genau diesen Zielen laufen dann ohne Rückfrage.'
-          : 'Weitere Aufrufe laufen dann ohne Rückfrage.'
+          ? t('approval.scope.targets')
+          : t('approval.scope.calls')
       );
     }
-    if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
-      parts.push('Gilt nur für diesen Dateistand und den gewählten Provider.');
-    }
+    if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) parts.push(t('approval.scope.sensitive'));
     view.scopeNote = parts.join(' ');
   }
   if (dto.preview && typeof dto.preview.text === 'string') {
-    const kind = PREVIEW_KIND_LABELS[dto.preview.kind] ? dto.preview.kind : 'text';
+    const kind = PREVIEW_KIND_KEYS[dto.preview.kind] ? dto.preview.kind : 'text';
+    const kindLabel = t(PREVIEW_KIND_KEYS[kind]);
     const notes = [];
-    if (dto.preview.truncated === true) notes.push('gekürzt');
-    if (dto.preview.masked === true) notes.push('Geheimnisse maskiert');
+    if (dto.preview.truncated === true) notes.push(t('approval.preview.truncated'));
+    if (dto.preview.masked === true) notes.push(t('approval.preview.masked'));
     view.preview = {
       kind,
-      kindLabel: PREVIEW_KIND_LABELS[kind],
+      kindLabel,
       text: dto.preview.text,
       truncated: dto.preview.truncated === true,
       masked: dto.preview.masked === true,
-      summary: notes.length > 0 ? `Vorschau: ${PREVIEW_KIND_LABELS[kind]} (${notes.join(', ')})` : `Vorschau: ${PREVIEW_KIND_LABELS[kind]}`,
-      truncatedNote: dto.preview.truncated === true
-        ? 'Der Kern überträgt nur den Anfang der Vorschau. Ausgeführt wird der vollständige, geprüfte Plan.'
-        : '',
-      maskedNote: dto.preview.masked === true
-        ? 'Erkannte Zugangsdaten sind in der Vorschau maskiert und bleiben es auch aufgeklappt.'
-        : '',
+      summary: notes.length > 0
+        ? t('approval.preview.summaryNotes', { kind: kindLabel, notes: notes.join(', ') })
+        : t('approval.preview.summary', { kind: kindLabel }),
+      truncatedNote: dto.preview.truncated === true ? t('approval.preview.truncatedNote') : '',
+      maskedNote: dto.preview.masked === true ? t('approval.preview.maskedNote') : '',
     };
-    // Bei einem Shell-Befehl gehoert beides sichtbar auf die Karte, nicht in
-    // die Vorschau: womit er laeuft und wo (Issue #102).
+    // For a shell command both belong visibly on the card rather than in the
+    // preview: what it runs with, and where (issue #102).
     if (typeof dto.preview.shell === 'string' && dto.preview.shell) {
       view.shellLabel = dto.preview.shellLogin === true
-        ? `${dto.preview.shell} (Login-Shell)`
+        ? t('approval.shell.login', { shell: dto.preview.shell })
         : dto.preview.shell;
     }
     if (typeof dto.preview.cwd === 'string' && dto.preview.cwd) view.cwdLabel = dto.preview.cwd;
-    // Beim Merken gehoert die Reichweite auf die Karte: „Projekt" oder
-    // „global" ist der ganze Unterschied, ueber den hier entschieden wird.
-    if (MEMORY_SCOPE_TEXTS[dto.preview.memoryScope]) {
-      view.memoryScopeLabel = MEMORY_SCOPE_TEXTS[dto.preview.memoryScope];
+    // When remembering, the reach belongs on the card: "project" or "global"
+    // is the whole difference being decided here.
+    if (MEMORY_SCOPE_KEYS[dto.preview.memoryScope]) {
+      view.memoryScopeLabel = t(MEMORY_SCOPE_KEYS[dto.preview.memoryScope]);
     }
   }
   return view;
 }
 
 /**
- * Ergebnis einer Karte in Worten (Konzept §6): Entscheidung, Verfall oder
- * Abbruch – getrennt vom Ausführungserfolg, den die Tool-Zeile zeigt.
+ * Outcome of a card in words (concept §6): decision, expiry or cancellation —
+ * separate from the execution result, which the tool line shows.
  */
 export function describeApprovalOutcome({ response, invalidated, reason, aborted } = {}) {
   if (aborted === true) {
-    return { status: 'cancelled', label: 'Lauf abgebrochen', detail: 'Der Aufruf wurde nicht ausgeführt.' };
+    return {
+      status: 'cancelled',
+      label: t('approval.outcome.cancelled.label'),
+      detail: t('approval.outcome.cancelled.detail'),
+    };
   }
   if (invalidated === true) {
-    const detail = t(PERMISSION_DENIED_MESSAGE_KEYS[reason]
+    const message = t(PERMISSION_DENIED_MESSAGE_KEYS[reason]
       || PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]);
-    return { status: 'invalidated', label: 'Anfrage verfallen', detail: `${detail} Der Lauf ist beendet.` };
+    return {
+      status: 'invalidated',
+      label: t('approval.outcome.invalidated.label'),
+      detail: t('approval.outcome.invalidated.detail', { reason: message }),
+    };
   }
   if (response === APPROVAL_RESPONSES.DENY) {
     return {
       status: 'denied',
-      label: 'Abgelehnt',
-      detail: `Das Modell erhält: „${t(PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.USER_DENIED])}“.`,
+      label: t('approval.outcome.denied.label'),
+      detail: t('approval.outcome.denied.detail', {
+        message: t(PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.USER_DENIED]),
+      }),
     };
   }
   if (response === APPROVAL_RESPONSES.ALLOW_SESSION) {
     return {
       status: 'allowed',
-      label: 'Für diese Sitzung erlaubt',
-      detail: 'Gilt für genau dieses Tool und diese Ziele, bis Chat, Workspace, Modus oder Regeln wechseln. Ob der Aufruf gelang, zeigt die Tool-Zeile.',
+      label: t('approval.outcome.session.label'),
+      detail: t('approval.outcome.session.detail'),
     };
   }
   if (response === APPROVAL_RESPONSES.ALLOW_ONCE) {
-    return { status: 'allowed', label: 'Einmal erlaubt', detail: 'Ob der Aufruf gelang, zeigt die Tool-Zeile.' };
+    return {
+      status: 'allowed',
+      label: t('approval.outcome.once.label'),
+      detail: t('approval.outcome.once.detail'),
+    };
   }
-  return { status: 'invalidated', label: 'Anfrage verfallen', detail: 'Der Lauf ist beendet.' };
+  return {
+    status: 'invalidated',
+    label: t('approval.outcome.invalidated.label'),
+    detail: t('approval.outcome.invalidated.detailPlain'),
+  };
 }
 
-const DECISION_LABELS = Object.freeze({
-  [POLICY_DECISIONS.ALLOW]: 'Erlaubt',
-  [POLICY_DECISIONS.ASK]: 'Rückfrage',
-  [POLICY_DECISIONS.DENY]: 'Abgelehnt',
+const DECISION_KEYS = Object.freeze({
+  [POLICY_DECISIONS.ALLOW]: 'approval.decision.allow',
+  [POLICY_DECISIONS.ASK]: 'approval.decision.ask',
+  [POLICY_DECISIONS.DENY]: 'approval.decision.deny',
 });
 
-const SOURCE_LABELS = Object.freeze({
-  [PERMISSION_DECISION_SOURCES.AUTO]: 'Modus Auto',
-  [PERMISSION_DECISION_SOURCES.ALLOW_ONCE]: 'einmal erlaubt',
-  [PERMISSION_DECISION_SOURCES.ALLOW_SESSION]: 'Sitzungsfreigabe',
-  [PERMISSION_DECISION_SOURCES.ALLOW_RULE]: 'Erlaubnis-Regel',
-  [PERMISSION_DECISION_SOURCES.DENY]: 'abgelehnt',
+const SOURCE_KEYS = Object.freeze({
+  [PERMISSION_DECISION_SOURCES.AUTO]: 'approval.source.auto',
+  [PERMISSION_DECISION_SOURCES.ALLOW_ONCE]: 'approval.source.allowOnce',
+  [PERMISSION_DECISION_SOURCES.ALLOW_SESSION]: 'approval.source.allowSession',
+  [PERMISSION_DECISION_SOURCES.ALLOW_RULE]: 'approval.source.allowRule',
+  [PERMISSION_DECISION_SOURCES.DENY]: 'approval.source.deny',
 });
 
-const STATUS_LABELS = Object.freeze({
-  [TOOL_EXECUTION_STATUSES.AWAITING_APPROVAL]: 'wartet auf Freigabe',
-  [TOOL_EXECUTION_STATUSES.EXECUTED]: 'ausgeführt',
-  [TOOL_EXECUTION_STATUSES.FAILED]: 'fehlgeschlagen',
-  [TOOL_EXECUTION_STATUSES.DENIED]: 'nicht ausgeführt',
-  [TOOL_EXECUTION_STATUSES.CANCELLED]: 'abgebrochen',
+const STATUS_KEYS = Object.freeze({
+  [TOOL_EXECUTION_STATUSES.AWAITING_APPROVAL]: 'approval.status.awaiting',
+  [TOOL_EXECUTION_STATUSES.EXECUTED]: 'approval.status.executed',
+  [TOOL_EXECUTION_STATUSES.FAILED]: 'approval.status.failed',
+  [TOOL_EXECUTION_STATUSES.DENIED]: 'approval.status.denied',
+  [TOOL_EXECUTION_STATUSES.CANCELLED]: 'approval.status.cancelled',
 });
 
 /**
- * Bereinigtes Audit einer Tool-Zeile (Konzept §9) als Tooltip-Text:
- * Entscheidung, Quelle, Klasse, Ausführungsstatus, Grund. Leer, wenn der
- * Eintrag (Alt-Session) kein Audit trägt.
+ * Cleaned audit of a tool line (concept §9) as tooltip text: decision, source,
+ * class, execution status, reason. Empty when the entry (an older session)
+ * carries no audit.
  */
 export function describePermissionAudit(permission) {
   if (!permission || typeof permission !== 'object') return '';
   const parts = [];
-  const decision = DECISION_LABELS[permission.decision];
-  if (decision) {
-    const source = SOURCE_LABELS[permission.source];
-    parts.push(`Entscheidung: ${decision}${source && permission.source !== PERMISSION_DECISION_SOURCES.DENY ? ` (${source})` : ''}`);
+  const decisionKey = DECISION_KEYS[permission.decision];
+  if (decisionKey) {
+    const decision = t(decisionKey);
+    const sourceKey = SOURCE_KEYS[permission.source];
+    parts.push(sourceKey && permission.source !== PERMISSION_DECISION_SOURCES.DENY
+      ? t('approval.audit.decisionSource', { decision, source: t(sourceKey) })
+      : t('approval.audit.decision', { decision }));
   }
   if (Array.isArray(permission.riskClasses) && permission.riskClasses.length > 0) {
-    parts.push(`Klasse: ${permission.riskClasses.map(riskClassLabel).join(', ')}`);
+    parts.push(t('approval.audit.class', { classes: permission.riskClasses.map(riskClassLabel).join(', ') }));
   }
-  if (STATUS_LABELS[permission.status]) parts.push(`Status: ${STATUS_LABELS[permission.status]}`);
+  if (STATUS_KEYS[permission.status]) {
+    parts.push(t('approval.audit.status', { status: t(STATUS_KEYS[permission.status]) }));
+  }
   if (permission.reason && PERMISSION_DENIED_MESSAGE_KEYS[permission.reason]) {
-    parts.push(`Grund: ${t(PERMISSION_DENIED_MESSAGE_KEYS[permission.reason])}`);
+    parts.push(t('approval.audit.reason', { reason: t(PERMISSION_DENIED_MESSAGE_KEYS[permission.reason]) }));
   }
-  if (permission.ruleId) parts.push(`Regel: ${permission.ruleId}`);
-  if (permission.mode) parts.push(`Modus: ${modeLabel(permission.mode)}`);
-  if (permission.sensitive === true) parts.push('Sensibler Inhalt zurückgehalten');
+  if (permission.ruleId) parts.push(t('approval.audit.rule', { rule: permission.ruleId }));
+  if (permission.mode) parts.push(t('approval.audit.mode', { mode: modeLabel(permission.mode) }));
+  if (permission.sensitive === true) parts.push(t('approval.audit.sensitive'));
   return parts.join(' · ');
 }
 

@@ -400,24 +400,24 @@ const { formatToolDisplayLine } = require('../src/shared/presentation/tool-displ
 
 test('das Tool-Log zeigt Server und Tool statt des Namensraums', () => {
   const entry = { tool: 'mcp__github__search', args: { q: 'x' } };
-  assert.equal(formatToolDisplayLine(entry, 'start'), 'github · search wird ausgeführt …');
-  assert.equal(formatToolDisplayLine(entry, 'done'), 'github · search ausgeführt');
+  assert.equal(formatToolDisplayLine(entry, 'start'), 'Running github · search …');
+  assert.equal(formatToolDisplayLine(entry, 'done'), 'github · search run');
   // Der interne Namensraum darf nicht durchscheinen.
   assert.equal(formatToolDisplayLine(entry, 'start').includes('mcp__'), false);
 });
 
 test('die Freigabe-Zusätze gelten auch für MCP-Zeilen', () => {
   const wartend = { tool: 'mcp__github__search', args: {}, permission: { status: 'awaiting-approval' } };
-  assert.match(formatToolDisplayLine(wartend, 'start'), /· wartet auf Freigabe$/);
+  assert.match(formatToolDisplayLine(wartend, 'start'), /· waiting for approval$/);
 
   const abgelehnt = { tool: 'mcp__github__search', args: {}, permission: { status: 'denied', reason: 'user_denied' } };
-  assert.match(formatToolDisplayLine(abgelehnt, 'done'), /· abgelehnt$/);
+  assert.match(formatToolDisplayLine(abgelehnt, 'done'), /· denied$/);
 });
 
 test('eingebaute Tools behalten ihre Formulierung', () => {
   assert.equal(
     formatToolDisplayLine({ tool: 'read_file_text', args: { relative_path: 'a.js' } }, 'start'),
-    'Datei a.js wird gelesen …',
+    'Reading file a.js …',
   );
 });
 

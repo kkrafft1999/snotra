@@ -5,6 +5,11 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
     async read() {
       const prefs = await uiPrefsStore.readUIPrefs();
       const out = {
+        // The language the tool lines are written in (#290). The parameter has
+        // been threaded through to `tool-display.js` since #289, but nothing
+        // ever filled it — an interface switched to German still logged its
+        // tool lines in the default language.
+        appLocale: typeof prefs.appLocale === 'string' ? prefs.appLocale : undefined,
         baseSystemPrompt: typeof prefs.baseSystemPrompt === 'string' ? prefs.baseSystemPrompt : '',
         disabledTools: Array.isArray(prefs.disabledTools)
           ? prefs.disabledTools.filter((name) => typeof name === 'string' && name.trim())

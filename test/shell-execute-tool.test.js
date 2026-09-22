@@ -256,28 +256,28 @@ test('die Karte nennt Shell und Arbeitsordner und warnt vor der fehlenden Grenze
     preview: { kind: 'shell', text: 'npm run build', truncated: false, masked: false, shell: 'zsh', shellLogin: true, cwd: '/tmp/projekt/app' },
   });
 
-  assert.equal(view.title, 'Ausführung bestätigen');
-  assert.equal(approvalCardTitle(['execute']), 'Ausführung bestätigen');
-  assert.equal(view.headline.verb, 'einen Befehl in zsh ausführen');
-  assert.equal(view.shellLabel, 'zsh (Login-Shell)');
+  assert.equal(view.title, 'Confirm execution');
+  assert.equal(approvalCardTitle(['execute']), 'Confirm execution');
+  assert.equal(view.headline.verb, 'run a command in zsh');
+  assert.equal(view.shellLabel, 'zsh (login shell)');
   assert.equal(view.cwdLabel, '/tmp/projekt/app');
-  assert.equal(view.preview.kindLabel, 'Befehl');
+  assert.equal(view.preview.kindLabel, 'Command');
   assert.equal(view.preview.text, 'npm run build');
-  assert.match(view.warning, /nicht auf den Projektordner begrenzt/);
+  assert.match(view.warning, /not limited to the project folder/);
   // Konzept §6: fuer „Ausfuehren" gibt es nur die Einzelentscheidung.
   assert.equal(view.actions.session.enabled, false);
   assert.match(sessionActionHint({ riskClasses: ['execute'], mode: 'smart' }), /Execute/);
 });
 
-test('shell_execute hat die Kategorie „exec" und eine deutsche Anzeige-Zeile', () => {
+test('shell_execute has the category "exec" and a display line', () => {
   assert.equal(toolCategory('shell_execute'), TOOL_CATEGORIES.EXEC);
   assert.equal(
     summarizeToolCall('shell_execute', { command: 'git status --short' }, 'start'),
-    'Befehl „git status --short“ wird ausgeführt …',
+    'Running command “git status --short” …',
   );
   assert.equal(
     summarizeToolCall('shell_execute', { command: 'npm run build' }, 'done'),
-    'Befehl „npm run build“ ausgeführt',
+    'Command “npm run build” run',
   );
-  assert.equal(summarizeToolCall('shell_execute', {}, 'done'), 'Befehl ausgeführt');
+  assert.equal(summarizeToolCall('shell_execute', {}, 'done'), 'Command run');
 });
