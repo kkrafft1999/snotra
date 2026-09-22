@@ -12,6 +12,7 @@
  */
 import contracts from '../generated/contracts.js';
 import { dismissOnOutsideClick } from '../utils/helpers.js';
+import { t } from '../i18n.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
 
@@ -88,8 +89,11 @@ function buildBar(share) {
 function buildRowBody(part) {
   const body = el('span', 'token-breakdown__row-body');
   const head = el('span', 'token-breakdown__row-head');
-  const label = el('span', 'token-breakdown__row-label', part.label);
-  label.title = part.label;
+  // A part whose heading comes from a contract carries the catalogue key; the
+  // producers that still hand over finished text keep working (issue #293).
+  const heading = part.labelKey ? t(part.labelKey) : part.label;
+  const label = el('span', 'token-breakdown__row-label', heading);
+  label.title = heading;
   // Zahl und Anteil bleiben zusammen: Bei schmalem Chat-Panel rutscht das Paar
   // als Ganzes unter das Etikett, statt in zwei Zeilen zu zerfallen.
   const figures = el('span', 'token-breakdown__figures');

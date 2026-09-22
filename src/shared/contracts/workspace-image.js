@@ -34,12 +34,16 @@ const WORKSPACE_IMAGE_ERRORS = Object.freeze({
   TOO_LARGE: 'too-large',
 });
 
-const WORKSPACE_IMAGE_ERROR_MESSAGES = Object.freeze({
-  [WORKSPACE_IMAGE_ERRORS.NO_WORKSPACE]: 'Kein Arbeitsordner geöffnet',
-  [WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE]: 'Außerhalb des Arbeitsordners',
-  [WORKSPACE_IMAGE_ERRORS.NOT_FOUND]: 'Bild nicht gefunden',
-  [WORKSPACE_IMAGE_ERRORS.UNSUPPORTED_TYPE]: 'Dieses Bildformat wird nicht angezeigt',
-  [WORKSPACE_IMAGE_ERRORS.TOO_LARGE]: 'Bild zu groß zum Anzeigen',
+/**
+ * What the placeholder says, as catalogue keys (issue #293). The reason is
+ * decided in the main process, the sentence is chosen in the renderer.
+ */
+const WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS = Object.freeze({
+  [WORKSPACE_IMAGE_ERRORS.NO_WORKSPACE]: 'workspaceImage.error.noWorkspace',
+  [WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE]: 'workspaceImage.error.outsideWorkspace',
+  [WORKSPACE_IMAGE_ERRORS.NOT_FOUND]: 'workspaceImage.error.notFound',
+  [WORKSPACE_IMAGE_ERRORS.UNSUPPORTED_TYPE]: 'workspaceImage.error.unsupportedType',
+  [WORKSPACE_IMAGE_ERRORS.TOO_LARGE]: 'workspaceImage.error.tooLarge',
 });
 
 /**
@@ -161,18 +165,23 @@ function createWorkspaceImageResult({ mime, base64, mtimeMs = 0, size = 0 } = {}
   return { ok: true, mime, base64, mtimeMs, size };
 }
 
+/**
+ * Only the reason travels — the sentence is chosen where the placeholder is
+ * drawn (issue #293). Until then the result carried a finished German one
+ * that nobody on the far side read.
+ */
 function createWorkspaceImageError(reason) {
   const known = Object.values(WORKSPACE_IMAGE_ERRORS).includes(reason)
     ? reason
     : WORKSPACE_IMAGE_ERRORS.NOT_FOUND;
-  return { ok: false, reason: known, message: WORKSPACE_IMAGE_ERROR_MESSAGES[known] };
+  return { ok: false, reason: known };
 }
 
-/** Platzhalter-Text zu einem Grund — auch für unbekannte Gründe nie leer. */
-function workspaceImageErrorMessage(reason) {
+/** Katalogschlüssel zu einem Grund — auch für unbekannte Gründe nie leer. */
+function workspaceImageErrorMessageKey(reason) {
   return (
-    WORKSPACE_IMAGE_ERROR_MESSAGES[reason]
-    || WORKSPACE_IMAGE_ERROR_MESSAGES[WORKSPACE_IMAGE_ERRORS.NOT_FOUND]
+    WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS[reason]
+    || WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS[WORKSPACE_IMAGE_ERRORS.NOT_FOUND]
   );
 }
 
@@ -184,7 +193,7 @@ function workspaceImageDataUrl(result) {
 module.exports = {
   MAX_WORKSPACE_IMAGE_BYTES,
   WORKSPACE_IMAGE_ERRORS,
-  WORKSPACE_IMAGE_ERROR_MESSAGES,
+  WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS,
   WORKSPACE_IMAGE_MIME_TYPES,
   WORKSPACE_IMAGE_SNIFF_BYTES,
   sniffImageMime,
@@ -193,6 +202,6 @@ module.exports = {
   isWindowsDrivePath,
   createWorkspaceImageResult,
   createWorkspaceImageError,
-  workspaceImageErrorMessage,
+  workspaceImageErrorMessageKey,
   workspaceImageDataUrl,
 };

@@ -28,6 +28,7 @@ const {
   normalizeMcpToolCatalog,
   validateMcpServerConfig,
 } = require('../../shared/contracts/mcp');
+const { createMessage } = require('../../shared/contracts/message');
 const { createStdioTransport } = require('./mcp-stdio-transport');
 
 /** Fehlertext eines geworfenen Fehlers, ohne „[object Object]"-Überraschungen. */
@@ -108,7 +109,8 @@ function createMcpService({
    * werden geschlossen — sonst liefe die alte Konfiguration weiter, während
    * der Nutzer die neue vor sich sieht.
    *
-   * @returns {{ ok: boolean, servers: Object[], errors: Array<{ id: string, errors: string[] }> }}
+   * @returns {{ ok: boolean, servers: Object[],
+   *   errors: Array<{ id: string, errors: Array<{key: string, params?: object}> }> }}
    */
   function setServers(rawList) {
     const list = Array.isArray(rawList) ? rawList : [];
@@ -123,7 +125,7 @@ function createMcpService({
         continue;
       }
       if (seen.has(value.id)) {
-        errors.push({ id: value.id, errors: [`Die Kennung „${value.id}" ist doppelt vergeben.`] });
+        errors.push({ id: value.id, errors: [createMessage('mcp.error.idDuplicate', { id: value.id })] });
         continue;
       }
       seen.add(value.id);

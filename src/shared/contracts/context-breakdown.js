@@ -184,6 +184,7 @@ function createContextPart({
   id,
   group,
   label,
+  labelKey = '',
   detail = '',
   chars = 0,
   contentKind = CONTEXT_CONTENT_KINDS.PROSE,
@@ -191,13 +192,17 @@ function createContextPart({
   count,
 } = {}) {
   const part = {
-    id: text(id) || text(label),
+    id: text(id) || text(label) || text(labelKey),
     group: CONTEXT_PART_GROUP_ORDER.includes(group) ? group : CONTEXT_PART_GROUPS.SYSTEM,
     label: text(label),
     detail: text(detail),
     chars: toCount(chars),
     contentKind: isContentKind(contentKind) ? contentKind : CONTEXT_CONTENT_KINDS.PROSE,
   };
+  // A part whose heading comes from a contract carries the catalogue key
+  // instead of a finished sentence; the panel translates it and falls back to
+  // `label` for the producers that still hand over text (issue #293).
+  if (labelKey) part.labelKey = text(labelKey);
   if (skillName) part.skillName = text(skillName);
   if (Number.isFinite(count)) part.count = toCount(count);
   return part;

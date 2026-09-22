@@ -124,7 +124,7 @@ test('Geheimnisse und Platzhalter werden in der Zeile benannt', async () => {
   const notes = zeilen()[0].querySelector('.mcp-import__notes').textContent;
   assert.match(notes, /JIRA_TOKEN/);
   assert.match(notes, /stored encrypted/);
-  assert.match(notes, /Platzhalter/);
+  assert.match(notes, /still contains a placeholder/);
   const marken = [...zeilen()[0].querySelectorAll('.mcp-import__badge')].map((b) => b.textContent);
   assert.ok(marken.includes('geheim'));
 });
@@ -194,7 +194,7 @@ test('kaputtes JSON meldet sich am Feld, ohne die Vorschau zu behalten', async (
   await einfuegen('{ "mcpServers": { ');
   assert.deepEqual(zeilen(), [], 'die alte Vorschau darf nicht stehenbleiben');
   assert.equal(fehler().classList.contains('hidden'), false);
-  assert.match(fehler().textContent, /kein gültiges JSON/);
+  assert.match(fehler().textContent, /not valid JSON/);
   assert.equal(uebernehmen().disabled, true);
 });
 

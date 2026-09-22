@@ -1,9 +1,10 @@
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
 const {
   decodeWorkspaceImageSource,
   isWorkspaceImageSource,
-  workspaceImageErrorMessage,
+  workspaceImageErrorMessageKey,
   workspaceImageDataUrl,
   WORKSPACE_IMAGE_ERRORS,
 } = contracts;
@@ -140,7 +141,7 @@ async function resolveOne(img, { api, workspaceRoot }) {
   if (!entry) {
     if (typeof api?.readWorkspaceImage !== 'function') {
       img.replaceWith(
-        placeholderFor(altText, workspaceImageErrorMessage(WORKSPACE_IMAGE_ERRORS.NOT_FOUND))
+        placeholderFor(altText, t(workspaceImageErrorMessageKey(WORKSPACE_IMAGE_ERRORS.NOT_FOUND)))
       );
       return;
     }
@@ -152,7 +153,7 @@ async function resolveOne(img, { api, workspaceRoot }) {
     }
     entry = result?.ok
       ? { dataUrl: workspaceImageDataUrl(result) }
-      : { message: workspaceImageErrorMessage(result?.reason) };
+      : { message: t(workspaceImageErrorMessageKey(result?.reason)) };
     rememberResult(key, entry);
   }
 

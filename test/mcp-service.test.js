@@ -265,8 +265,12 @@ test('setServers meldet ungültige Einträge und doppelte Kennungen', () => {
   assert.equal(result.ok, false);
   assert.deepEqual(result.servers.map((s) => s.id), ['files']);
   assert.equal(result.errors.length, 2);
-  assert.match(result.errors.map((e) => e.errors.join(' ')).join(' '), /Kommando/);
-  assert.match(result.errors.map((e) => e.errors.join(' ')).join(' '), /doppelt/);
+  const keys = result.errors.flatMap((entry) => entry.errors.map((error) => error.key));
+  assert.ok(keys.includes('mcp.error.commandMissing'));
+  assert.deepEqual(
+    result.errors[1].errors,
+    [{ key: 'mcp.error.idDuplicate', params: { id: 'files' } }]
+  );
 });
 
 test('gleichzeitige Aufrufe starten den Server nur einmal', async (t) => {

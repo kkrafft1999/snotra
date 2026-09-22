@@ -38,15 +38,25 @@ test('eine minimale Konfiguration bekommt brauchbare Vorgaben', () => {
   });
 });
 
+/**
+ * Seit Issue #293 tragen die Fehler einen Katalogschluessel und die Werte
+ * seiner Platzhalter statt eines fertigen Satzes. Fuer die Zusicherungen, die
+ * an einem *Wert* haengen — dass ein Variablenname genannt und ein Geheimnis
+ * nicht genannt wird —, reicht diese flache Sicht.
+ */
+const flat = (errors) => errors
+  .map((error) => `${error.key} ${JSON.stringify(error.params || {})}`)
+  .join(' ');
+
 test('Kennung und Kommando sind Pflicht', () => {
   const ohneId = validateMcpServerConfig({ command: 'npx' });
   assert.equal(ohneId.ok, false);
   assert.equal(ohneId.value, null);
-  assert.match(ohneId.errors.join(' '), /Kennung/);
+  assert.deepEqual(ohneId.errors.map((e) => e.key), ['mcp.error.idMissing']);
 
   const ohneCommand = validateMcpServerConfig({ id: 'files' });
   assert.equal(ohneCommand.ok, false);
-  assert.match(ohneCommand.errors.join(' '), /Kommando/);
+  assert.deepEqual(ohneCommand.errors.map((e) => e.key), ['mcp.error.commandMissing']);
 });
 
 test('ungültige Kennungen werden abgelehnt, gültige kleingeschrieben', () => {
@@ -65,7 +75,7 @@ test('nur stdio wird angenommen', () => {
   assert.equal(validateMcpServerConfig({ ...MINIMAL, transport: 'stdio' }).ok, true);
   const http = validateMcpServerConfig({ ...MINIMAL, transport: 'http' });
   assert.equal(http.ok, false);
-  assert.match(http.errors.join(' '), /stdio/);
+  assert.deepEqual(http.errors.map((e) => e.key), ['mcp.error.transportUnsupported']);
 });
 
 test('Argumente werden gekappt, Nicht-Strings fallen still weg', () => {
@@ -83,7 +93,7 @@ test('zu viele Argumente werden gemeldet, nicht stillschweigend geschluckt', () 
     args: Array.from({ length: MCP_LIMITS.MAX_ARGS + 1 }, (_, i) => `a${i}`),
   });
   assert.equal(ok, false);
-  assert.match(errors.join(' '), new RegExp(String(MCP_LIMITS.MAX_ARGS)));
+  assert.deepEqual(errors, [{ key: 'mcp.error.tooManyArgs', params: { max: MCP_LIMITS.MAX_ARGS } }]);
 });
 
 test('Umgebungsvariablen: gültige Namen bleiben, ungültige werden gemeldet', () => {
@@ -92,8 +102,8 @@ test('Umgebungsvariablen: gültige Namen bleiben, ungültige werden gemeldet', (
     env: { API_KEY: 'geheim', '2FALSCH': 'x', OK_2: 'y', LEER: 7 },
   });
   assert.equal(ok, false);
-  assert.match(errors.join(' '), /2FALSCH/);
-  assert.match(errors.join(' '), /LEER/);
+  assert.match(flat(errors), /2FALSCH/);
+  assert.match(flat(errors), /LEER/);
 
   const value = normalizeMcpServerConfig({ ...MINIMAL, env: { API_KEY: 'geheim', OK_2: 'y' } });
   assert.deepEqual(value.env, { API_KEY: 'geheim', OK_2: 'y' });
@@ -101,7 +111,7 @@ test('Umgebungsvariablen: gültige Namen bleiben, ungültige werden gemeldet', (
 
 test('eine Fehlermeldung zu env verrät den Wert nicht', () => {
   const { errors } = validateMcpServerConfig({ ...MINIMAL, env: { '2FALSCH': 'sk-streng-geheim' } });
-  assert.equal(errors.join(' ').includes('sk-streng-geheim'), false);
+  assert.equal(flat(errors).includes('sk-streng-geheim'), false);
 });
 
 test('enabled: nur ein ausdrückliches false schaltet ab', () => {
@@ -293,7 +303,7 @@ test('ein doppelter Unterstrich im Tool-Namen bleibt beim Tool', () => {
 test('eine Serverkennung mit doppeltem Unterstrich wird abgelehnt', () => {
   const { ok, errors } = validateMcpServerConfig({ id: 'my__srv', command: 'npx' });
   assert.equal(ok, false);
-  assert.match(errors.join(' '), /doppelten Unterstrich/);
+  assert.deepEqual(errors.map((e) => e.key), ['mcp.error.idDoubleUnderscore']);
 });
 
 test('kaputte oder fremde Namen ergeben null statt halber Treffer', () => {
@@ -371,13 +381,13 @@ test('keep merkt sich „unverändert" ohne Wert', () => {
 test('ein Eintrag ohne Wert und ohne keep ist ein Fehler', () => {
   const { entries, errors } = normalizeMcpEnvInput({ TOKEN: { secret: true } });
   assert.deepEqual(entries, []);
-  assert.match(errors.join(' '), /TOKEN/);
+  assert.deepEqual(errors, [{ key: 'mcp.error.envValueNotString', params: { name: 'TOKEN' } }]);
 });
 
 test('ungültige Variablennamen werden gemeldet, ohne den Wert zu nennen', () => {
   const { errors } = normalizeMcpEnvInput({ '2FALSCH': { value: 'sk-streng-geheim' } });
-  assert.match(errors.join(' '), /2FALSCH/);
-  assert.equal(errors.join(' ').includes('sk-streng-geheim'), false);
+  assert.match(flat(errors), /2FALSCH/);
+  assert.equal(flat(errors).includes('sk-streng-geheim'), false);
 });
 
 test('die gespeicherte Form nimmt nur enc oder value', () => {
@@ -404,6 +414,6 @@ test('validateMcpServerInput prüft Server und env zusammen', () => {
   const schlecht = validateMcpServerInput({ id: 'gh', env: { '2X': { value: 'y' } } });
   assert.equal(schlecht.ok, false);
   assert.equal(schlecht.value, null);
-  assert.match(schlecht.errors.join(' '), /Kommando/);
-  assert.match(schlecht.errors.join(' '), /2X/);
+  assert.ok(schlecht.errors.some((e) => e.key === 'mcp.error.commandMissing'));
+  assert.match(flat(schlecht.errors), /2X/);
 });

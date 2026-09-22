@@ -18,6 +18,7 @@
 'use strict';
 
 const { TOOL_RISK_CLASSES } = require('./tool-permissions');
+const { createMessage } = require('./message');
 
 const MCP_CONTRACT_VERSION = 1;
 
@@ -112,13 +113,13 @@ function text(value, maxChars) {
 function normalizeArgs(raw, errors) {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
-    errors.push('„args" muss eine Liste von Zeichenketten sein.');
+    errors.push(createMessage('mcp.error.argsNotList'));
     return [];
   }
   const out = [];
   for (const value of raw) {
     if (out.length >= MCP_LIMITS.MAX_ARGS) {
-      errors.push(`Mehr als ${MCP_LIMITS.MAX_ARGS} Argumente werden nicht unterstützt.`);
+      errors.push(createMessage('mcp.error.tooManyArgs', { max: MCP_LIMITS.MAX_ARGS }));
       break;
     }
     if (typeof value !== 'string') continue;
@@ -136,22 +137,22 @@ function normalizeArgs(raw, errors) {
 function normalizeEnv(raw, errors) {
   if (raw === undefined || raw === null) return {};
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    errors.push('„env" muss ein Objekt aus Name/Wert-Paaren sein.');
+    errors.push(createMessage('mcp.error.envNotObject'));
     return {};
   }
   const out = {};
   let count = 0;
   for (const [key, value] of Object.entries(raw)) {
     if (count >= MCP_LIMITS.MAX_ENV_ENTRIES) {
-      errors.push(`Mehr als ${MCP_LIMITS.MAX_ENV_ENTRIES} Umgebungsvariablen werden nicht unterstützt.`);
+      errors.push(createMessage('mcp.error.tooManyEnv', { max: MCP_LIMITS.MAX_ENV_ENTRIES }));
       break;
     }
     if (key.length > MCP_LIMITS.ENV_KEY_MAX_CHARS || !ENV_KEY_PATTERN.test(key)) {
-      errors.push(`„${key.slice(0, 40)}" ist kein gültiger Name für eine Umgebungsvariable.`);
+      errors.push(createMessage('mcp.error.envNameInvalid', { name: key.slice(0, 40) }));
       continue;
     }
     if (typeof value !== 'string') {
-      errors.push(`Der Wert von „${key}" muss eine Zeichenkette sein.`);
+      errors.push(createMessage('mcp.error.envValueNotString', { name: key }));
       continue;
     }
     out[key] = value.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS);
@@ -197,12 +198,12 @@ function normalizeKnownTools(raw) {
  * Prüft eine Serverkonfiguration und liefert sie in Normalform.
  *
  * @param {unknown} raw
- * @returns {{ ok: boolean, value: McpServerConfig|null, errors: string[] }}
+ * @returns {{ ok: boolean, value: McpServerConfig|null, errors: Array<{key: string, params?: object}> }}
  */
 function validateMcpServerConfig(raw) {
   const errors = [];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, value: null, errors: ['Die Serverkonfiguration muss ein Objekt sein.'] };
+    return { ok: false, value: null, errors: [createMessage('mcp.error.configNotObject')] };
   }
 
   // Die Kennung wird nicht gekappt, sondern geprueft: auf sie zeigen spaeter
@@ -210,24 +211,24 @@ function validateMcpServerConfig(raw) {
   // gekuerzter Bezeichner zeigt auf etwas anderes als der eingegebene.
   const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : '';
   if (!id) {
-    errors.push('Es fehlt eine Kennung („id").');
+    errors.push(createMessage('mcp.error.idMissing'));
   } else if (id.length > MCP_LIMITS.ID_MAX_CHARS) {
-    errors.push(`Die Kennung darf höchstens ${MCP_LIMITS.ID_MAX_CHARS} Zeichen lang sein.`);
+    errors.push(createMessage('mcp.error.idTooLong', { max: MCP_LIMITS.ID_MAX_CHARS }));
   } else if (SERVER_ID_FORBIDDEN.test(id)) {
-    errors.push('Die Kennung darf keinen doppelten Unterstrich enthalten — er trennt im Tool-Namen Server und Tool.');
+    errors.push(createMessage('mcp.error.idDoubleUnderscore'));
   } else if (!isValidMcpServerId(id)) {
-    errors.push('Die Kennung darf nur Kleinbuchstaben, Ziffern, Punkt, Bindestrich und Unterstrich enthalten und muss alphanumerisch beginnen.');
+    errors.push(createMessage('mcp.error.idCharset'));
   }
 
   const transport = raw.transport === undefined || raw.transport === null
     ? MCP_TRANSPORTS.STDIO
     : raw.transport;
   if (!isMcpTransport(transport)) {
-    errors.push('Nur der Transport „stdio" wird unterstützt.');
+    errors.push(createMessage('mcp.error.transportUnsupported'));
   }
 
   const command = text(raw.command, MCP_LIMITS.COMMAND_MAX_CHARS);
-  if (!command) errors.push('Es fehlt das zu startende Kommando („command").');
+  if (!command) errors.push(createMessage('mcp.error.commandMissing'));
 
   const args = normalizeArgs(raw.args, errors);
   const env = normalizeEnv(raw.env, errors);
@@ -507,20 +508,20 @@ function normalizeMcpEnvInput(raw) {
   const errors = [];
   if (raw === undefined || raw === null) return { entries: [], errors };
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    return { entries: [], errors: ['„env" muss ein Objekt aus Name/Wert-Paaren sein.'] };
+    return { entries: [], errors: [createMessage('mcp.error.envNotObject')] };
   }
   const entries = [];
   for (const [key, spec] of Object.entries(raw)) {
     if (entries.length >= MCP_LIMITS.MAX_ENV_ENTRIES) {
-      errors.push(`Mehr als ${MCP_LIMITS.MAX_ENV_ENTRIES} Umgebungsvariablen werden nicht unterstützt.`);
+      errors.push(createMessage('mcp.error.tooManyEnv', { max: MCP_LIMITS.MAX_ENV_ENTRIES }));
       break;
     }
     if (key.length > MCP_LIMITS.ENV_KEY_MAX_CHARS || !ENV_KEY_PATTERN.test(key)) {
-      errors.push(`„${key.slice(0, 40)}" ist kein gültiger Name für eine Umgebungsvariable.`);
+      errors.push(createMessage('mcp.error.envNameInvalid', { name: key.slice(0, 40) }));
       continue;
     }
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
-      errors.push(`Der Eintrag „${key}" muss angeben, ob sein Wert geheim ist.`);
+      errors.push(createMessage('mcp.error.envNeedsSecretFlag', { name: key }));
       continue;
     }
     // Vorgabe geheim: nur ein ausdrueckliches `secret: false` macht Klartext.
@@ -531,7 +532,7 @@ function normalizeMcpEnvInput(raw) {
       continue;
     }
     if (typeof spec.value !== 'string') {
-      errors.push(`Der Wert von „${key}" muss eine Zeichenkette sein.`);
+      errors.push(createMessage('mcp.error.envValueNotString', { name: key }));
       continue;
     }
     entries.push({ key, secret, value: spec.value.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS), keep: false });

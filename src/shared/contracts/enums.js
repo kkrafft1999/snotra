@@ -87,12 +87,6 @@ const SKILL_SUGGESTION_MODES = Object.freeze({
   MODEL: 'model',
 });
 
-const SKILL_SUGGESTION_MODE_LABELS = Object.freeze({
-  [SKILL_SUGGESTION_MODES.OFF]: 'Keine Vorschläge',
-  [SKILL_SUGGESTION_MODES.LEXICAL]: 'Aus den Beschreibungen (ohne Modell)',
-  [SKILL_SUGGESTION_MODES.MODEL]: 'Das Modell fragen',
-});
-
 const DEFAULT_SKILL_SUGGESTION_MODE = SKILL_SUGGESTION_MODES.LEXICAL;
 
 function isSkillSuggestionMode(value) {
@@ -120,7 +114,6 @@ module.exports = {
   PERMISSION_PROGRESS_EVENTS,
   APP_LOCALES,
   SKILL_SUGGESTION_MODES,
-  SKILL_SUGGESTION_MODE_LABELS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,

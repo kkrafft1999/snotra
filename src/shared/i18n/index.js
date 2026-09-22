@@ -17,6 +17,7 @@
  */
 
 const { APP_LOCALES } = require('../contracts/enums');
+const { isMessage } = require('../contracts/message');
 const de = require('./messages/de');
 const en = require('./messages/en');
 
@@ -83,6 +84,18 @@ function translatePlural(locale, baseKey, count, params) {
   return translate(locale, `${baseKey}.${suffix}`, { count, ...params });
 }
 
+/**
+ * A message descriptor from the contract layer (`createMessage`) put into
+ * words. Plain text passes through untouched: the layers that have not been
+ * converted yet — the settings handlers, the context breakdown — still hand
+ * over finished sentences, and those are shown as they stand rather than
+ * swallowed (issue #293).
+ */
+function translateMessage(locale, message) {
+  if (isMessage(message)) return translate(locale, message.key, message.params);
+  return typeof message === 'string' ? message : '';
+}
+
 /** Does this key exist at all? For tests and debug output. */
 function hasKey(key) {
   return Object.prototype.hasOwnProperty.call(MESSAGES[DEFAULT_LOCALE], key);
@@ -97,6 +110,7 @@ function createTranslator(locale) {
   const lc = normalizeLocale(locale);
   const t = (key, params) => translate(lc, key, params);
   t.plural = (baseKey, count, params) => translatePlural(lc, baseKey, count, params);
+  t.message = (message) => translateMessage(lc, message);
   t.locale = lc;
   return t;
 }
@@ -110,5 +124,6 @@ module.exports = {
   hasKey,
   normalizeLocale,
   translate,
+  translateMessage,
   translatePlural,
 };

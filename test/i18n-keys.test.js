@@ -10,8 +10,11 @@ const {
   createTranslator,
   normalizeLocale,
   translate,
+  translateMessage,
   translatePlural,
 } = require('../src/shared/i18n');
+const contracts = require('../src/shared/contracts');
+const { createMessage } = require('../src/shared/contracts/message');
 
 const SRC = path.join(__dirname, '..', 'src');
 
@@ -89,8 +92,10 @@ test('every key used in the code exists', () => {
 
   // `t('…')`, `tPlural('…')`, `data-i18n="…"` — literals only. A key assembled
   // from parts escapes this check, which is why the code has none: branching
-  // happens over whole keys.
-  const literal = /\b(t|tPlural|translate|translatePlural)\(\s*'([\w.]+)'/g;
+  // happens over whole keys. `createMessage('…')` belongs in the list since
+  // #293: the contracts name their keys the same way, only far from the place
+  // that shows them.
+  const literal = /\b(t|tPlural|translate|translateMessage|translatePlural|createMessage)\(\s*'([\w.]+)'/g;
   const attribute = /data-i18n(?:-html)?="([\w.]+)"/g;
   const attrPair = /data-i18n-attr="([^"]+)"/g;
 
@@ -120,6 +125,45 @@ test('every key used in the code exists', () => {
     }
   }
   assert.deepEqual([...missing], [], 'key used in the code but missing from the catalogue');
+});
+
+/**
+ * The contracts reach for the catalogue through tables as well, and a table is
+ * invisible to the text scan above (issue #293). Every value in them is a key
+ * and has to exist — otherwise the interface quietly prints
+ * `toolPermission.denied.…` where a sentence belongs.
+ */
+test('the key tables of the contract layer point at existing entries', () => {
+  const tables = {
+    PERMISSION_DENIED_MESSAGE_KEYS: contracts.PERMISSION_DENIED_MESSAGE_KEYS,
+    WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS:
+      require('../src/shared/contracts/workspace-image').WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS,
+    MEMORY_SCOPE_LABEL_KEYS: contracts.MEMORY_SCOPE_LABEL_KEYS,
+  };
+  const missing = [];
+  for (const [name, table] of Object.entries(tables)) {
+    assert.ok(table && Object.keys(table).length > 0, `${name} is empty`);
+    for (const [entry, key] of Object.entries(table)) {
+      if (!Object.prototype.hasOwnProperty.call(MESSAGES[DEFAULT_LOCALE], key)) {
+        missing.push(`${name}.${entry}: ${key}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], 'key table points at an entry that does not exist');
+});
+
+/**
+ * A message descriptor is only worth anything if the display side can put it
+ * into words — in both languages, and with its placeholders filled.
+ */
+test('a message descriptor is translated, plain text passes through', () => {
+  const message = createMessage('mcp.error.idTooLong', { max: 64 });
+  assert.equal(translateMessage('en', message), 'The identifier may be at most 64 characters long.');
+  assert.equal(translateMessage('de', message), 'Die Kennung darf höchstens 64 Zeichen lang sein.');
+  assert.equal(createTranslator('de').message(message), translateMessage('de', message));
+  // Layers that have not been converted yet still hand over finished text.
+  assert.equal(translateMessage('de', 'schon fertig'), 'schon fertig');
+  assert.equal(translateMessage('de', null), '');
 });
 
 test('English is the default; anything unknown falls back to it', () => {

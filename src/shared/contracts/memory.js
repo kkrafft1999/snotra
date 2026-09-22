@@ -42,10 +42,13 @@ const MEMORY_SCOPES = Object.freeze({
 
 const MEMORY_SCOPE_ORDER = Object.freeze([MEMORY_SCOPES.WORKSPACE, MEMORY_SCOPES.USER]);
 
-/** Überschrift des Abschnitts in den Einstellungen und in der Aufschlüsselung. */
-const MEMORY_SCOPE_LABELS = Object.freeze({
-  [MEMORY_SCOPES.WORKSPACE]: 'Gedächtnis (Projekt)',
-  [MEMORY_SCOPES.USER]: 'Gedächtnis (global)',
+/**
+ * Heading of the section in the context breakdown, as a catalogue key — the
+ * text is chosen where it is shown, not where it is produced (issue #293).
+ */
+const MEMORY_SCOPE_LABEL_KEYS = Object.freeze({
+  [MEMORY_SCOPES.WORKSPACE]: 'memory.scope.workspace',
+  [MEMORY_SCOPES.USER]: 'memory.scope.user',
 });
 
 /**
@@ -209,7 +212,7 @@ module.exports = {
   MEMORY_FILE,
   MEMORY_SCOPES,
   MEMORY_SCOPE_ORDER,
-  MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_LABEL_KEYS,
   MEMORY_SCOPE_PROMPT_LABELS,
   MEMORY_SCOPE_PATHS,
   MEMORY_SCOPE_SHORT_PATHS,

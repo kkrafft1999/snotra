@@ -26,6 +26,7 @@
  */
 
 const { MCP_LIMITS, MCP_TRANSPORTS, isValidMcpServerId } = require('./mcp');
+const { createMessage } = require('./message');
 
 /** Wie viele Einträge ein einzelner Block liefern darf. */
 const MCP_IMPORT_MAX_SERVERS = 50;
@@ -186,25 +187,25 @@ function readEnv(raw, notes) {
   const entries = [];
   if (raw === undefined || raw === null) return entries;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    notes.push('„env" war kein Objekt und wurde übergangen.');
+    notes.push(createMessage('mcpImport.note.envNotObject'));
     return entries;
   }
   for (const [key, value] of Object.entries(raw)) {
     if (entries.length >= MCP_LIMITS.MAX_ENV_ENTRIES) {
-      notes.push(`Nur die ersten ${MCP_LIMITS.MAX_ENV_ENTRIES} Umgebungsvariablen wurden übernommen.`);
+      notes.push(createMessage('mcpImport.note.envTruncated', { max: MCP_LIMITS.MAX_ENV_ENTRIES }));
       break;
     }
     let text;
     if (typeof value === 'string') text = value;
     else if (typeof value === 'number' || typeof value === 'boolean') text = String(value);
     else {
-      notes.push(`Der Wert von „${key}" war keine Zeichenkette und wurde übergangen.`);
+      notes.push(createMessage('mcpImport.note.envValueNotString', { name: key }));
       continue;
     }
     text = text.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS);
     const secret = looksSecret(key, text);
-    if (!text) notes.push(`„${key}" hat keinen Wert — vor dem Einschalten nachtragen.`);
-    else if (PLACEHOLDER_PATTERN.test(text)) notes.push(`„${key}" enthält noch einen Platzhalter.`);
+    if (!text) notes.push(createMessage('mcpImport.note.envValueEmpty', { name: key }));
+    else if (PLACEHOLDER_PATTERN.test(text)) notes.push(createMessage('mcpImport.note.envPlaceholder', { name: key }));
     entries.push({ key, value: text, secret });
   }
   return entries;
@@ -214,18 +215,18 @@ function readEnv(raw, notes) {
 function readArgs(raw, notes) {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
-    notes.push('„args" war keine Liste und wurde übergangen.');
+    notes.push(createMessage('mcpImport.note.argsNotList'));
     return [];
   }
   const out = [];
   for (const value of raw) {
     if (out.length >= MCP_LIMITS.MAX_ARGS) {
-      notes.push(`Nur die ersten ${MCP_LIMITS.MAX_ARGS} Argumente wurden übernommen.`);
+      notes.push(createMessage('mcpImport.note.argsTruncated', { max: MCP_LIMITS.MAX_ARGS }));
       break;
     }
     if (typeof value === 'string') out.push(value.slice(0, MCP_LIMITS.ARG_MAX_CHARS));
     else if (typeof value === 'number' || typeof value === 'boolean') out.push(String(value));
-    else notes.push('Ein Argument war keine Zeichenkette und wurde übergangen.');
+    else notes.push(createMessage('mcpImport.note.argNotString'));
   }
   return out;
 }
@@ -234,10 +235,10 @@ function readArgs(raw, notes) {
 function remoteTransportReason(entry) {
   const declared = String(entry.type || entry.transport || '').trim().toLowerCase();
   if (declared && REMOTE_TRANSPORT_HINTS.includes(declared)) {
-    return `Transport „${declared}" wird noch nicht unterstützt — nur über ein lokales Kommando gestartete Server (stdio).`;
+    return createMessage('mcpImport.skippedReason.remoteTransport', { transport: declared });
   }
   if (typeof entry.url === 'string' && entry.url.trim()) {
-    return 'Der Eintrag zeigt auf eine URL. Bisher werden nur lokal gestartete Server (stdio) unterstützt.';
+    return createMessage('mcpImport.skippedReason.url');
   }
   return null;
 }
@@ -252,7 +253,9 @@ function remoteTransportReason(entry) {
  * @param {string} raw Der eingefügte Text.
  * @param {{ existingIds?: string[] }} [options] Bereits vergebene Kennungen;
  *   sie erzeugen keinen Fehler, sondern den Hinweis, dass überschrieben würde.
- * @returns {{ ok: boolean, candidates: object[], skipped: Array<{name: string, reason: string}>, errors: string[] }}
+ * @returns {{ ok: boolean, candidates: object[],
+ *   skipped: Array<{name: string, reason: {key: string, params?: object}}>,
+ *   errors: Array<{key: string, params?: object}> }}
  */
 function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
   const errors = [];
@@ -260,7 +263,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
   const candidates = [];
 
   if (typeof raw !== 'string' || !raw.trim()) {
-    return { ok: false, candidates, skipped, errors: ['Es wurde nichts eingefügt.'] };
+    return { ok: false, candidates, skipped, errors: [createMessage('mcpImport.error.empty')] };
   }
 
   let parsed;
@@ -273,23 +276,23 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
       ok: false,
       candidates,
       skipped,
-      errors: [`Das ist kein gültiges JSON: ${error.message}`],
+      errors: [createMessage('mcpImport.error.invalidJson', { detail: error.message })],
     };
   }
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return { ok: false, candidates, skipped, errors: ['Erwartet wird ein JSON-Objekt mit den Servern.'] };
+    return { ok: false, candidates, skipped, errors: [createMessage('mcpImport.error.notAnObject')] };
   }
 
   // Beide Schreibweisen: mit umschließendem `mcpServers` und ohne.
   const block = parsed.mcpServers !== undefined ? parsed.mcpServers : parsed;
   if (!block || typeof block !== 'object' || Array.isArray(block)) {
-    return { ok: false, candidates, skipped, errors: ['„mcpServers" muss ein Objekt aus Server-Einträgen sein.'] };
+    return { ok: false, candidates, skipped, errors: [createMessage('mcpImport.error.blockNotAnObject')] };
   }
 
   const names = Object.keys(block);
   if (names.length === 0) {
-    return { ok: false, candidates, skipped, errors: ['Der Block enthält keine Server.'] };
+    return { ok: false, candidates, skipped, errors: [createMessage('mcpImport.error.noServers')] };
   }
 
   const existing = new Set(existingIds.filter((id) => typeof id === 'string'));
@@ -297,12 +300,12 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
 
   for (const name of names) {
     if (candidates.length + skipped.length >= MCP_IMPORT_MAX_SERVERS) {
-      errors.push(`Es werden höchstens ${MCP_IMPORT_MAX_SERVERS} Server auf einmal gelesen.`);
+      errors.push(createMessage('mcpImport.error.tooManyServers', { max: MCP_IMPORT_MAX_SERVERS }));
       break;
     }
     const entry = block[name];
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      skipped.push({ name, reason: 'Der Eintrag ist kein Objekt.' });
+      skipped.push({ name, reason: createMessage('mcpImport.skippedReason.notAnObject') });
       continue;
     }
 
@@ -314,14 +317,14 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
 
     const command = typeof entry.command === 'string' ? entry.command.trim() : '';
     if (!command) {
-      skipped.push({ name, reason: 'Es fehlt das zu startende Kommando („command").' });
+      skipped.push({ name, reason: createMessage('mcpImport.skippedReason.commandMissing') });
       continue;
     }
 
     const notes = [];
     const baseId = toServerId(name);
     if (!baseId) {
-      skipped.push({ name, reason: 'Aus dem Namen lässt sich keine gültige Kennung bilden.' });
+      skipped.push({ name, reason: createMessage('mcpImport.skippedReason.idUnusable') });
       continue;
     }
 
@@ -331,11 +334,11 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
     const conflict = existing.has(baseId);
     const id = conflict ? baseId : uniqueId(baseId, taken);
     if (!id) {
-      skipped.push({ name, reason: 'Die Kennung ist bereits vergeben und ließ sich nicht eindeutig machen.' });
+      skipped.push({ name, reason: createMessage('mcpImport.skippedReason.idTaken') });
       continue;
     }
-    if (id !== baseId) notes.push(`Die Kennung „${baseId}" war schon vergeben, daher „${id}".`);
-    if (id !== name.trim().toLowerCase()) notes.push(`Kennung aus dem Namen abgeleitet: „${id}".`);
+    if (id !== baseId) notes.push(createMessage('mcpImport.note.idTaken', { taken: baseId, id }));
+    if (id !== name.trim().toLowerCase()) notes.push(createMessage('mcpImport.note.idDerived', { id }));
     taken.add(id);
 
     const args = readArgs(entry.args, notes);
@@ -358,7 +361,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
   }
 
   if (candidates.length === 0 && errors.length === 0 && skipped.length > 0) {
-    errors.push('Kein Eintrag aus dem Block lässt sich übernehmen.');
+    errors.push(createMessage('mcpImport.error.nothingUsable'));
   }
 
   return { ok: errors.length === 0 && candidates.length > 0, candidates, skipped, errors };

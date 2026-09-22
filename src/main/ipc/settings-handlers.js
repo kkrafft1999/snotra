@@ -15,7 +15,6 @@ const {
 const {
   MEMORY_SCOPES,
   MEMORY_SCOPE_ORDER,
-  MEMORY_SCOPE_LABELS,
   MEMORY_SCOPE_SHORT_PATHS,
   MAX_MEMORY_CHARS,
   isMemoryScope,
@@ -392,7 +391,6 @@ function registerSettingsHandlers({
         const text = file ? file.text : '';
         return {
           scope,
-          label: MEMORY_SCOPE_LABELS[scope],
           // Ohne geoeffneten Ordner gibt es die Projekt-Ebene nicht; die
           // Oberflaeche soll das sagen statt einen leeren Kasten zu zeigen.
           path: paths[scope],

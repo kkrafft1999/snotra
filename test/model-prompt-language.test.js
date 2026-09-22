@@ -18,12 +18,13 @@ const { MEMORY_SCOPES } = require('../src/shared/contracts/memory');
 const { PROJECT_INSTRUCTION_SOURCES } = require('../src/shared/contracts/project-instructions');
 const {
   PERMISSION_DENIAL_REASONS,
-  PERMISSION_DENIED_MESSAGES,
+  PERMISSION_DENIED_MESSAGE_KEYS,
   PERMISSION_DENIED_TOOL_RESULT_MESSAGES,
   TOOL_RESULTS_ARE_DATA_RULE,
   SENSITIVE_CONTENT_REDACTED_TEXT,
   createPermissionDeniedToolResult,
 } = require('../src/shared/contracts/tool-permissions');
+const { hasKey, translate } = require('../src/shared/i18n');
 
 // Menuepfade werden im Modelltext bewusst so zitiert, wie sie auf dem
 // Bildschirm stehen — sonst schickt das Modell den Nutzer zu einem Menuepunkt,
@@ -113,8 +114,12 @@ test('beide Ablehnungstabellen decken dieselben Gruende ab', () => {
   const gruende = Object.values(PERMISSION_DENIAL_REASONS).sort();
   assert.deepEqual(Object.keys(PERMISSION_DENIED_TOOL_RESULT_MESSAGES).sort(), gruende);
   // Die Oberflaechenfassung muss dieselbe Breite haben, sonst steht auf dem
-  // Bildschirm irgendwann „undefined" statt eines Grundes.
-  assert.deepEqual(Object.keys(PERMISSION_DENIED_MESSAGES).sort(), gruende);
+  // Bildschirm irgendwann „undefined" statt eines Grundes. Seit #293 traegt
+  // sie Katalogschluessel; dass die auch im Katalog stehen, gehoert dazu.
+  assert.deepEqual(Object.keys(PERMISSION_DENIED_MESSAGE_KEYS).sort(), gruende);
+  for (const grund of gruende) {
+    assert.ok(hasKey(PERMISSION_DENIED_MESSAGE_KEYS[grund]), grund);
+  }
 });
 
 test('das Ablehnungsergebnis traegt den englischen Wortlaut, die Oberflaeche den deutschen', () => {
@@ -123,8 +128,12 @@ test('das Ablehnungsergebnis traegt den englischen Wortlaut, die Oberflaeche den
     assert.equal(ergebnis.message, PERMISSION_DENIED_TOOL_RESULT_MESSAGES[grund], grund);
     assert.equal(istDeutsch(ergebnis.message), false, `${grund}: ${ergebnis.message}`);
   }
-  // Gegenprobe: Die Oberflaeche ist bewusst nicht mitgewandert.
-  assert.match(PERMISSION_DENIED_MESSAGES[PERMISSION_DENIAL_REASONS.USER_DENIED], /abgelehnt/);
+  // Gegenprobe: Die deutsche Oberflaechenfassung ist bewusst nicht
+  // mitgewandert — sie steht jetzt im Katalog statt im Vertrag (#293).
+  assert.match(
+    translate('de', PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.USER_DENIED]),
+    /abgelehnt/
+  );
 });
 
 // Die Bausteine, die nicht aus der Tool-Registry kommen. Der deutsche
