@@ -56,12 +56,12 @@ test('run_python trägt die höchste Risikoklasse und ist damit nie dauerhaft fr
 
 test('run_python läuft nicht, wenn es abgeschaltet oder nicht eingerichtet ist', async () => {
   const gesperrt = makeRegistry({ available: false });
-  assert.match(JSON.parse(await exec(gesperrt.registry, { code: 'print(1)' })).error, /nicht eingerichtet/);
+  assert.match(JSON.parse(await exec(gesperrt.registry, { code: 'print(1)' })).error, /not configured/);
   assert.equal(gesperrt.calls.length, 0);
 
   const abgewaehlt = makeRegistry();
   const out = JSON.parse(await exec(abgewaehlt.registry, { code: 'print(1)' }, { disabledNames: ['run_python'] }));
-  assert.match(out.error, /deaktiviert/);
+  assert.match(out.error, /switched off/);
   assert.equal(abgewaehlt.calls.length, 0);
 });
 

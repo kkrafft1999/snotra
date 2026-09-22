@@ -21,13 +21,14 @@ const {
 } = require('../../shared/contracts/context-breakdown');
 const {
   MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_PROMPT_LABELS,
   MEMORY_SCOPE_PATHS,
   MAX_MEMORY_CHARS,
   normalizeMemoryFiles,
 } = require('../../shared/contracts/memory');
 
 /** Hinweis unter einem abgeschnittenen Text — im Prompt wie in der Anzeige. */
-const TRUNCATION_NOTE = `… [gekürzt auf ${MAX_MEMORY_CHARS} Zeichen]`;
+const TRUNCATION_NOTE = `… [truncated to ${MAX_MEMORY_CHARS} characters]`;
 
 /**
  * @param {Array<{scope: string, text: string, truncated?: boolean}>} files
@@ -38,19 +39,19 @@ function buildMemorySystemPrompt(files) {
   if (usable.length === 0) return { text: '', parts: [] };
 
   const intro = [
-    'Dein Gedächtnis. Das hier hat der Nutzer dir in früheren Unterhaltungen '
-      + 'mitgegeben; es gilt weiter, ohne dass er es wiederholen muss.',
+    'Your memory. The user gave you this in earlier conversations; it still '
+      + 'applies, without them having to repeat it.',
   ];
   // Ohne diesen Satz behandelt das Modell alte Notizen wie frische Tatsachen
   // und widerspricht dem Nutzer mit seinen eigenen, überholten Worten.
   intro.push(
-    'Die Einträge beschreiben den Stand, als sie notiert wurden. Widerspricht '
-      + 'einer davon dem, was du jetzt siehst oder hörst, gilt das Jetzt — und '
-      + 'sag kurz, dass der Eintrag überholt ist.'
+    'The entries describe how things were when they were noted. If one of them '
+      + 'contradicts what you see or hear now, now wins — and say briefly that '
+      + 'the entry is out of date.'
   );
 
   const sections = usable.map((file) => {
-    const heading = MEMORY_SCOPE_LABELS[file.scope];
+    const heading = MEMORY_SCOPE_PROMPT_LABELS[file.scope];
     const body = file.truncated ? `${file.text}\n${TRUNCATION_NOTE}` : file.text;
     return `## ${heading}\n\n${body}`;
   });

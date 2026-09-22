@@ -70,12 +70,23 @@ const {
 const TITLE_INPUT_CHAR_LIMIT = 1200;
 const TITLE_TIMEOUT_MS = 20000;
 const TITLE_SYSTEM_PROMPT = [
-  'Du benennst Konversationen.',
-  'Gib eine knappe Ueberschrift aus, die Thema und Absicht des Gespraechs trifft.',
-  'Drei bis sechs Woerter. Dieselbe Sprache wie das Gespraech.',
-  'Keine Anfuehrungszeichen, kein Satzzeichen am Ende, keine Einleitung.',
-  'Antworte ausschliesslich mit der Ueberschrift.',
+  'You name conversations.',
+  'Produce a short heading that captures the topic and intent of the conversation.',
+  'Three to six words. The same language as the conversation.',
+  'No quotation marks, no trailing punctuation, no preamble.',
+  'Reply with the heading and nothing else.',
 ].join(' ');
+
+/**
+ * Die Sprache der Antwort haengt am Nutzer, nicht am Prompt (Issue #276). Seit
+ * die Bausteine hier englisch sind, braucht es den Satz: ohne ihn zieht ein
+ * durchgehend englischer Prompt deutsche Fragen auf englische Antworten. Der
+ * Vorbehalt zugunsten der Nutzeranweisungen steht mit drin, weil dieser
+ * Baustein hinter dem Prompt des Nutzers landet — wer dort „always answer in
+ * English" schreibt, soll das auch bekommen.
+ */
+const REPLY_LANGUAGE_RULE =
+  'Reply in the language the user writes in, unless the instructions above say otherwise.';
 
 const CHAT_ENGINE_EVENTS = Object.freeze({
   DELTA: 'delta',
@@ -119,23 +130,23 @@ function resolveToolRoundLimit(uiPrefs, mainDefault) {
  * Nutzers, und lässt sich dort nicht abschalten.
  */
 function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, selectedIsDirectory }) {
-  const parts = [`Du arbeitest im in der App geöffneten Ordner „${folderName}“.`];
+  const parts = [`You are working in the folder currently open in the app: "${folderName}".`];
   if (toolsPrompt) parts.push(toolsPrompt);
   // @-Referenzen aus der Chat-Eingabe (Issue #52): nur die Konvention erklären,
   // Inhalte werden bewusst nicht automatisch eingebettet (Token-Ziel).
   const mentionHint =
-    'Referenzen der Form „@<Pfad>“ (z. B. „@docs/roadmap.md“) bezeichnen eine Datei oder ' +
-    'einen Ordner mit diesem Pfad relativ zur Ordnerwurzel.';
+    'References of the form "@<path>" (e.g. "@docs/roadmap.md") name a file or a ' +
+    'folder at that path, relative to the folder root.';
   parts.push(
     toolsPrompt
-      ? `${mentionHint} Ihr Inhalt wird nicht automatisch mitgeschickt — lies ihn bei Bedarf mit den Lese-Tools.`
+      ? `${mentionHint} Their content is not sent along automatically — read it with the read tools when you need it.`
       : mentionHint
   );
   if (selectedRelPath) {
-    const kind = selectedIsDirectory ? 'folgenden Ordner' : 'folgende Datei';
+    const kind = selectedIsDirectory ? 'folder' : 'file';
     parts.push(
-      `Der Nutzer hat gerade ${kind} im Baum ausgewählt: „${selectedRelPath}“. ` +
-        `Beziehe dich bei Fragen ohne expliziten Pfad auf diese Auswahl.`
+      `The user has just selected this ${kind} in the tree: "${selectedRelPath}". ` +
+        `For questions without an explicit path, refer to that selection.`
     );
   }
   if (toolsPrompt) parts.push(TOOL_RESULTS_ARE_DATA_RULE);
@@ -151,9 +162,9 @@ function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, 
 function buildNoWorkspaceSystemPrompt({ toolsPrompt }) {
   if (!toolsPrompt) return '';
   return [
-    'Es ist kein Projektordner geöffnet. Du hast deshalb keinen Zugriff auf Dateien; '
-      + 'die unten genannten Tools arbeiten ohne Ordnerbezug und stehen dir trotzdem zur Verfügung. '
-      + 'Fragt der Nutzer nach Dateien, sag, dass er dafür erst einen Ordner öffnen muss.',
+    'No project folder is open. You therefore have no access to files; the tools '
+      + 'listed below work without a folder and are available to you regardless. '
+      + 'If the user asks about files, say that they need to open a folder first.',
     toolsPrompt,
     TOOL_RESULTS_ARE_DATA_RULE,
   ].join('\n\n');
@@ -233,21 +244,21 @@ function buildSkillsSystemPrompt(
   const catalogLines = lazy.map((skill) => `- ${skill.name}: ${describeSkillForCatalog(skill)}`);
   if (lazy.length > 0) {
     intro.push(
-      'Folgende Skills sind eingeschaltet. Hier steht nur, wofür jeder da ist — ' +
-        'die eigentliche Anleitung holst du dir mit „load_skill“.\n' +
+      'The following skills are switched on. This lists only what each one is for — ' +
+        'you fetch the actual instructions with "load_skill".\n' +
         catalogLines.join('\n')
     );
     intro.push(
-      'Passt die Beschreibung eines Skills zu dem, was ansteht, rufe „load_skill“ ' +
-        'mit seinem Namen auf, bevor du mit der Aufgabe beginnst, und richte dich ' +
-        'danach nach der Anleitung. Rate nicht, was darin stehen könnte, und ' +
-        'behaupte nicht, einem Skill gefolgt zu sein, den du nicht geladen hast.'
+      'If a skill\'s description matches what is at hand, call "load_skill" with ' +
+        'its name before you start on the task, and then follow those instructions. ' +
+        'Do not guess what they might say, and do not claim to have followed a ' +
+        'skill you have not loaded.'
     );
   }
   if (eager.length > 0) {
     intro.push(
-      'Die Anweisungen der folgenden Skills stehen vollständig unten und gelten ' +
-        'für diese Unterhaltung zusätzlich zu allem Übrigen in diesem Prompt.'
+      'The instructions of the following skills are included in full below and ' +
+        'apply to this conversation in addition to everything else in this prompt.'
     );
   }
 
@@ -257,9 +268,9 @@ function buildSkillsSystemPrompt(
   const invokedNames = usable.filter((skill) => skill.invoked).map((skill) => skill.name);
   if (invokedNames.length > 0) {
     intro.push(
-      `Per „/name“ in der Nachricht aufgerufen wurden: ${invokedNames.join(', ')}. ` +
-        'Diese Schreibweise ist der Aufruf selbst und keine Angabe, die du ' +
-        'beantworten oder wiederholen musst.'
+      `Invoked via "/name" in the message: ${invokedNames.join(', ')}. ` +
+        'That spelling is the invocation itself, not something you need to ' +
+        'answer or repeat.'
     );
   }
   // Ein Skill besteht oft aus mehr als der SKILL.md — verweist sie auf
@@ -269,11 +280,11 @@ function buildSkillsSystemPrompt(
   if (toolsAvailable) {
     const names = usable.map((skill) => skill.name).join(', ');
     intro.push(
-      `Verweist ein Skill auf Dateien neben seiner SKILL.md (z. B. „references/…“ oder ` +
-        `„assets/…“), liest du sie mit den Lese-Tools über den Pfad ` +
-        `„skill:<name>/<pfad>“, etwa „skill:${usable[0].name}/references/anleitung.md“. ` +
-        `Eingeschaltet sind: ${names}. Geschrieben wird dort nicht — Schreib-Tools ` +
-        `gelten weiterhin nur für den Arbeitsordner.`
+      `If a skill points to files next to its SKILL.md (e.g. "references/…" or ` +
+        `"assets/…"), read them with the read tools via the path ` +
+        `"skill:<name>/<path>", for example "skill:${usable[0].name}/references/guide.md". ` +
+        `Switched on are: ${names}. Nothing is written there — write tools still ` +
+        `apply to the workspace folder only.`
     );
   }
 
@@ -972,6 +983,11 @@ function createChatEngine({
         environmentSystem,
         projectInstructionsSystem,
         workspaceSystem,
+        // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
+        // Block oder Skill-Rahmen). Steht im Prompt ausschliesslich, was der
+        // Nutzer geschrieben hat, gibt es nichts, was die Antwortsprache
+        // verziehen koennte — dann waere der Satz nur Ballast in jeder Anfrage.
+        skillsSystem || workspaceSystem ? REPLY_LANGUAGE_RULE : '',
       ]
         .filter((part) => typeof part === 'string' && part.trim())
         .join('\n\n');
@@ -1464,7 +1480,7 @@ function createChatEngine({
               role: 'tool',
               tool_call_id: toolCall.id,
               content: JSON.stringify({
-                error: `Kein Arbeitsordner geöffnet; ${toolName} ist ohne Ordner nicht verfügbar.`,
+                error: `No workspace folder open; ${toolName} is unavailable without one.`,
               }),
             });
             continue;

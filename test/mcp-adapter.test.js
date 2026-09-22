@@ -214,7 +214,7 @@ test('abgewählte MCP-Tools verschwinden aus Definition und Ausführung', async 
   assert.equal(names.includes('mcp__github__delete_repo'), false);
 
   const output = await registry.execute('mcp__github__delete_repo', {}, { approved: true, disabledNames: options.disabledNames });
-  assert.match(JSON.parse(output).error, /deaktiviert/);
+  assert.match(JSON.parse(output).error, /switched off/);
 });
 
 test('MCP-Tools stehen im Katalog der Einstellungen', async () => {

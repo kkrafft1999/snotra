@@ -23,9 +23,9 @@ test('alle drei Quellen stehen in der Reihenfolge aus #251 im Block', () => {
     { source: SRC.USER_SNOTRA, text: 'zwei' },
   ]);
   assert.deepEqual(headings(text), [
-    'AGENTS.md (Projekt)',
+    'AGENTS.md (project)',
     'AGENTS.md (global)',
-    'AGENTS.md (global, Alt-Ort)',
+    'AGENTS.md (global, legacy location)',
   ]);
   // Die Eingabereihenfolge ist egal — maßgeblich ist die Quellenliste.
   assert.ok(text.indexOf('eins') < text.indexOf('zwei'));
@@ -37,8 +37,8 @@ test('der Block sagt, dass die Dateien einander ergänzen — und behauptet kein
     { source: SRC.WORKSPACE_AGENTS, text: 'eins' },
     { source: SRC.USER_AGENTS, text: 'zwei' },
   ]);
-  assert.match(text, /ergänzen einander/);
-  assert.match(text, /Alle gelten gemeinsam, keine ersetzt eine andere/);
+  assert.match(text, /complement each other/);
+  assert.match(text, /all of them apply together, none replaces another/);
   // Der Vorrang-Satz aus #212 darf nicht zurückkommen: Er hat das Modell
   // aufgefordert, sich eine der Dateien auszusuchen.
   assert.ok(!/gilt die weiter unten stehende|gewinnt|Vorrang/i.test(text), text);
@@ -59,13 +59,13 @@ test('jede Teilmenge funktioniert, auch eine einzelne Datei', () => {
     assert.equal(headings(text).length, 1);
     assert.equal(parts.length, 1);
     // Der Hinweis aufs Ergänzen gehört zu „mehrere", nicht zu „eine".
-    assert.ok(!text.includes('ergänzen einander'));
+    assert.ok(!text.includes('complement each other'));
   }
   const zwei = buildProjectInstructionsSystemPrompt([
     { source: SRC.USER_AGENTS, text: 'a' },
     { source: SRC.WORKSPACE_AGENTS, text: 'b' },
   ]);
-  assert.deepEqual(headings(zwei.text), ['AGENTS.md (Projekt)', 'AGENTS.md (global, Alt-Ort)']);
+  assert.deepEqual(headings(zwei.text), ['AGENTS.md (project)', 'AGENTS.md (global, legacy location)']);
 });
 
 test('ohne Dateien gibt es keinen Block und keine leere Überschrift', () => {
@@ -81,10 +81,10 @@ test('eine leere oder nur aus Leerzeichen bestehende Datei fällt weg', () => {
     { source: SRC.USER_AGENTS, text: '   \n\t ' },
     { source: SRC.WORKSPACE_AGENTS, text: '  Nutze npm.  ' },
   ]);
-  assert.deepEqual(headings(text), ['AGENTS.md (Projekt)']);
+  assert.deepEqual(headings(text), ['AGENTS.md (project)']);
   assert.equal(parts.length, 1);
   // Der Inhalt wird beschnitten, damit keine Leerzeile unter der Überschrift steht.
-  assert.match(text, /## AGENTS\.md \(Projekt\)\n\nNutze npm\.$/);
+  assert.match(text, /## AGENTS\.md \(project\)\n\nNutze npm\.$/);
 });
 
 test('gekürzte Dateien sind im Prompt und in der Aufschlüsselung als solche erkennbar', () => {

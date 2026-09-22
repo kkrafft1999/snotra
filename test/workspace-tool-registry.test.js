@@ -104,7 +104,7 @@ test('registry filters disabled tool names from tools, prompt and execution', as
   );
   assert.match(
     JSON.parse(await registry.execute('other', {}, { ...APPROVED, disabledNames: ['other'] })).error,
-    /deaktiviert/
+    /switched off/
   );
   assert.deepEqual(
     JSON.parse(await registry.execute('read', { value: 'x' }, { ...APPROVED, disabledNames: ['other'] })),
@@ -138,10 +138,10 @@ test('registry lässt den Pfad-Hinweis weg, wenn kein Datei-Tool dabei ist (#96)
     definition('web_search', { riskClass: TOOL_RISK_CLASSES.EXTERNAL, requiresWorkspace: false }),
   ]);
 
-  assert.match(registry.buildSystemPrompt(), /relativ zum Ordnerroot/);
+  assert.match(registry.buildSystemPrompt(), /relative to the folder root/);
 
   const withoutWorkspace = registry.buildSystemPrompt({ workspaceOpen: false });
-  assert.doesNotMatch(withoutWorkspace, /relativ zum Ordnerroot/);
+  assert.doesNotMatch(withoutWorkspace, /relative to the folder root/);
   // Bedingung 1 aus #182: ohne Datei-Tools bleibt der Block trotzdem gefuellt —
   // sein Rueckgabewert ist fuer die Engine das Signal „es gibt Tools".
   assert.notEqual(withoutWorkspace, '');
@@ -310,9 +310,9 @@ test('registry rejects unavailable, unknown and duplicate tools', async () => {
 
   assert.match(
     JSON.parse(await registry.execute('read', {}, { ...APPROVED, allowedNames: ['write'] })).error,
-    /nicht freigeschaltet/
+    /not enabled/
   );
-  assert.match(JSON.parse(await registry.execute('missing', {}, APPROVED)).error, /Unbekanntes Tool/);
+  assert.match(JSON.parse(await registry.execute('missing', {}, APPROVED)).error, /Unknown tool/);
   assert.throws(() => registry.register(definition('read')), /bereits registriert/);
 });
 
@@ -472,18 +472,18 @@ test('der Konventionsblock beschreibt, statt zu verallgemeinern (#182)', () => {
   const prompt = registry.buildSystemPrompt();
   // Beide überspringen Verstecktes, nur find_files zusätzlich .gitignore —
   // „alle Tools überspringen versteckte Dateien" wäre schlicht falsch.
-  assert.match(prompt, /list_directory und find_files überspringen versteckte Einträge/);
-  assert.match(prompt, /find_files zusätzlich alles, was die \.gitignore/);
+  assert.match(prompt, /list_directory and find_files skip hidden entries/);
+  assert.match(prompt, /find_files additionally skip everything excluded by the \.gitignore/);
   assert.doesNotMatch(prompt, /list_directory zusätzlich/);
   // Der gitignore-Hinweis muss bleiben: ohne ihn ist ein leeres Ergebnis nicht
   // von „gibt es nicht" zu unterscheiden (#183).
-  assert.match(prompt, /Ein leeres Ergebnis kann deshalb heißen/);
+  assert.match(prompt, /An empty result can therefore mean/);
 
   // Wer abgewählt ist, taucht im Satz nicht auf.
   const ohneFindFiles = registry.buildSystemPrompt({ disabledNames: ['find_files'] });
   assert.doesNotMatch(ohneFindFiles, /find_files/);
   assert.doesNotMatch(ohneFindFiles, /\.gitignore/);
-  assert.match(ohneFindFiles, /list_directory überspringen versteckte Einträge/);
+  assert.match(ohneFindFiles, /list_directory skip hidden entries/);
 });
 
 test('der Block steht, sobald überhaupt ein Tool sichtbar ist (#182)', () => {
@@ -527,14 +527,14 @@ test('die Ordner-Parameter behalten ihre eigene, korrekte Kurzfassung (#183)', (
   // irreführender als gar keins, deshalb ausdrücklich nicht die
   // Datei-Formulierung der übrigen Tools.
   for (const name of ['list_directory', 'find_files', 'list_directory_tree']) {
-    assert.equal(beschreibung(name), 'Startordner; leer oder "." = ganzes Projekt.', name);
+    assert.equal(beschreibung(name), 'Starting folder; empty or "." = the whole project.', name);
   }
   assert.equal(
     beschreibung('search_in_files'),
-    'Startordner oder einzelne Datei; leer oder "." = ganzes Projekt.'
+    'Starting folder or a single file; empty or "." = the whole project.'
   );
   for (const name of ['read_file_text', 'read_file_lines', 'edit_file']) {
-    assert.match(beschreibung(name), /^Dateipfad, z\. B\./, name);
+    assert.match(beschreibung(name), /^File path, e\.g\./, name);
   }
 });
 
@@ -545,8 +545,8 @@ test('der gitignore-Hinweis überlebt die Kürzung (#183)', () => {
   // System-Prompt stehen.
   const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
   assert.equal(JSON.stringify(registry.getTools()).includes('.gitignore'), false);
-  assert.match(registry.buildSystemPrompt(), /\.gitignore des Projektroots ausschließt/);
-  assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
+  assert.match(registry.buildSystemPrompt(), /\excluded by the .gitignore of the project root/);
+  assert.match(registry.buildSystemPrompt(), /An empty result can therefore mean/);
 });
 
 /* ── Die teuersten Schemata neu gefasst (Issue #184) ───────────────────────── */
@@ -595,20 +595,20 @@ test('die beiden Rettungssätze überleben die Kürzung (#184)', () => {
   // 1. Der gitignore-/Versteckt-Hinweis. Ohne ihn ist ein leeres Ergebnis
   //    nicht von „gibt es nicht" zu unterscheiden — stille Falschantwort ohne
   //    Selbstkorrektur, die teuerste Fehlerklasse.
-  assert.match(registry.buildSystemPrompt(), /Ein leeres Ergebnis kann deshalb heißen/);
+  assert.match(registry.buildSystemPrompt(), /An empty result can therefore mean/);
 
   // 2. Der Ersparnis-Satz an read_file_lines. Er kostet 9 Token; eine
   //    unnötige Volllesung von workspace-tool-registry.js kostet über 10.000.
   assert.match(
     tool('read_file_lines').function.description,
-    /Token-sparsamer als read_file_text/
+    /Cheaper in tokens than read_file_text/
   );
 
   // Die stille Teilmessung bleibt benannt: ohne Bereich liefert das Tool 200
   // Zeilen und meldet dabei truncated=false (fs-service.js:215).
   assert.match(
     tool('read_file_lines').function.parameters.properties.end_line.description,
-    /Standard start_line \+ 199/
+    /default start_line \+ 199/
   );
   // „[+N]" ist das einzige Zeichen dafür, dass der Baum unvollständig ist.
   assert.match(tool('list_directory_tree').function.description, /\[\+N\]/);
@@ -631,7 +631,7 @@ test('read_file_lines behält beide Modi im Parametersatz (#184)', () => {
     'length',
   ]);
   // Die Unvereinbarkeit steht genau einmal — am zweiten Modus.
-  assert.match(properties.start_byte.description, /nicht mit start_line\/end_line kombinierbar/);
+  assert.match(properties.start_byte.description, /cannot be combined with start_line\/end_line/);
   assert.equal(properties.start_line.description.includes('kombinierbar'), false);
 });
 

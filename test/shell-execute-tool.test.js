@@ -22,7 +22,7 @@ const WORKSPACE = nodePath.resolve('/tmp/projekt');
 function makeFsServiceStub() {
   return {
     async resolveToolPath(workspaceRoot, relativePath) {
-      if (!workspaceRoot) return { error: 'Kein Arbeitsordner geöffnet.' };
+      if (!workspaceRoot) return { error: 'No workspace folder open.' };
       const rel = typeof relativePath === 'string' ? relativePath : '';
       const absPath = nodePath.resolve(workspaceRoot, rel);
       const inside = nodePath.relative(workspaceRoot, absPath);
@@ -96,12 +96,12 @@ test('shell_execute trägt die höchste Risikoklasse und ist damit nie dauerhaft
 
 test('shell_execute läuft nicht, wenn es abgeschaltet oder nicht eingerichtet ist', async () => {
   const gesperrt = makeRegistry({ available: false });
-  assert.match(JSON.parse(await exec(gesperrt.registry, { command: 'ls' })).error, /nicht eingerichtet/);
+  assert.match(JSON.parse(await exec(gesperrt.registry, { command: 'ls' })).error, /not configured/);
   assert.equal(gesperrt.calls.length, 0);
 
   const abgewaehlt = makeRegistry();
   const out = JSON.parse(await exec(abgewaehlt.registry, { command: 'ls' }, { disabledNames: ['shell_execute'] }));
-  assert.match(out.error, /deaktiviert/);
+  assert.match(out.error, /switched off/);
   assert.equal(abgewaehlt.calls.length, 0);
 });
 

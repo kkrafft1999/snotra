@@ -42,10 +42,21 @@ const MEMORY_SCOPES = Object.freeze({
 
 const MEMORY_SCOPE_ORDER = Object.freeze([MEMORY_SCOPES.WORKSPACE, MEMORY_SCOPES.USER]);
 
-/** Überschrift des Abschnitts im Systemprompt und in den Einstellungen. */
+/** Überschrift des Abschnitts in den Einstellungen und in der Aufschlüsselung. */
 const MEMORY_SCOPE_LABELS = Object.freeze({
   [MEMORY_SCOPES.WORKSPACE]: 'Gedächtnis (Projekt)',
   [MEMORY_SCOPES.USER]: 'Gedächtnis (global)',
+});
+
+/**
+ * Dieselben Ebenen als Zwischenueberschrift **im System-Prompt** — englisch,
+ * weil sie dort beim Modell landen (Issue #276). Bis dahin trug eine Tabelle
+ * beide Leser; das war der Grund, warum die Prompt-Sprache nicht zu aendern
+ * war, ohne die Einstellungen mitzuziehen.
+ */
+const MEMORY_SCOPE_PROMPT_LABELS = Object.freeze({
+  [MEMORY_SCOPES.WORKSPACE]: 'Memory (project)',
+  [MEMORY_SCOPES.USER]: 'Memory (global)',
 });
 
 /** Pfad zur Anzeige — nie zum Auflösen; die echten Pfade baut der Adapter. */
@@ -199,6 +210,7 @@ module.exports = {
   MEMORY_SCOPES,
   MEMORY_SCOPE_ORDER,
   MEMORY_SCOPE_LABELS,
+  MEMORY_SCOPE_PROMPT_LABELS,
   MEMORY_SCOPE_PATHS,
   MEMORY_SCOPE_SHORT_PATHS,
   MEMORY_ORIGINS,

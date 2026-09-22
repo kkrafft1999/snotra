@@ -50,7 +50,7 @@ test('web_search steht im Katalog der Einstellungen, auch ohne Schlüssel', () =
 test('web_search läuft ohne Schlüssel auch dann nicht, wenn das Modell es trotzdem aufruft', async () => {
   const { registry, calls } = makeRegistry({ configured: false });
   const out = JSON.parse(await run(registry, { query: 'x' }));
-  assert.match(out.error, /nicht eingerichtet/);
+  assert.match(out.error, /not configured/);
   assert.equal(calls.length, 0);
 });
 
@@ -112,7 +112,7 @@ test('web_search lässt sich per Häkchen abschalten', async () => {
   const out = JSON.parse(
     await run(registry, { query: 'x' }, { disabledNames: ['web_search'] }),
   );
-  assert.match(out.error, /deaktiviert/);
+  assert.match(out.error, /switched off/);
   assert.equal(calls.length, 0);
 });
 

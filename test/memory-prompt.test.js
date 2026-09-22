@@ -18,13 +18,13 @@ test('beide Ebenen stehen unter eigener Ueberschrift im Block', () => {
     { scope: MEMORY_SCOPES.WORKSPACE, text: '- 2026-09-21 — Tests mit npm test.' },
     { scope: MEMORY_SCOPES.USER, text: '- 2026-09-20 — Anrede Du.' },
   ]);
-  assert.match(text, /## Gedächtnis \(Projekt\)/);
-  assert.match(text, /## Gedächtnis \(global\)/);
+  assert.match(text, /## Memory \(project\)/);
+  assert.match(text, /## Memory \(global\)/);
   assert.match(text, /Tests mit npm test/);
   assert.match(text, /Anrede Du/);
   // Der Block muss sagen, dass Eintraege altern koennen — sonst haelt das
   // Modell eine alte Notiz gegen das, was der Nutzer gerade sagt.
-  assert.match(text, /gilt das Jetzt/);
+  assert.match(text, /now wins/);
 });
 
 test('eine gekuerzte Datei sagt das im Prompt', () => {
@@ -43,6 +43,8 @@ test('je Ebene eine eigene Zeile in der Token-Aufschluesselung', () => {
     parts.map((p) => p.id),
     ['system:memory:workspace', 'system:memory:user']
   );
+  // Die Aufschluesselung steht auf dem Bildschirm und bleibt deutsch — anders
+  // als die gleichnamige Ueberschrift im Prompt (#276).
   assert.deepEqual(
     parts.map((p) => p.label),
     ['Gedächtnis (Projekt)', 'Gedächtnis (global)']

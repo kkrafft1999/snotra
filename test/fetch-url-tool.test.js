@@ -82,7 +82,7 @@ test('fetch_url erreicht das Modell ohne Abruf-Adapter nicht', async () => {
 
   assert.equal(registry.getTools().some((tool) => tool.function.name === 'fetch_url'), false);
   const out = JSON.parse(await run(registry, { url: 'https://example.org' }));
-  assert.match(out.error, /nicht eingerichtet/);
+  assert.match(out.error, /not configured/);
   assert.equal(calls.length, 0);
 });
 
@@ -104,7 +104,7 @@ test('fetch_url lässt sich per Häkchen abschalten', async () => {
     false
   );
   const out = JSON.parse(await run(registry, { url: 'https://example.org' }, { disabledNames }));
-  assert.match(out.error, /deaktiviert/);
+  assert.match(out.error, /switched off/);
   assert.equal(calls.length, 0);
 });
 

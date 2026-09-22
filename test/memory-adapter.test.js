@@ -127,7 +127,7 @@ test('ohne geoeffneten Ordner gibt es kein Projekt-Gedaechtnis', async () => {
         text: 'irgendwas',
         origin: MEMORY_ORIGINS.REQUESTED,
       }),
-    /kein Projekt-Gedächtnis/
+    /no project memory/
   );
 });
 
@@ -153,7 +153,7 @@ test('ist die Datei voll, wird nicht geschrieben statt still zu kuerzen', async 
         text: 'passt nicht mehr',
         origin: MEMORY_ORIGINS.REQUESTED,
       }),
-    /voll/
+    /full/
   );
   assert.equal(fs.files[USER_FILE], full);
 });
@@ -233,7 +233,7 @@ test('ist selbstständiges Merken abgeschaltet, wird nichts geschrieben', async 
         text: 'faellt mir gerade auf',
         origin: MEMORY_ORIGINS.SELF,
       }),
-    /abgeschaltet/
+    /switched off/
   );
   assert.equal(fs.files[USER_FILE], undefined);
   // Was der Nutzer ausdruecklich verlangt, geht weiterhin durch — der
