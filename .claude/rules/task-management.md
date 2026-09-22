@@ -65,7 +65,9 @@ veraltet sind. Also:
 - Wenn der Nutzer eine **konkrete Aufgabe, einen Bug oder eine Idee** nennt:
   Issue-Text nach dem passenden Template formulieren (Abschnitte des Templates
   als Überschriften, dazu bewährt: Ist-Zustand mit Prüfdatum, Querbezüge,
-  Definition of Done) und das Issue **direkt anlegen**:
+  Definition of Done) — **auf Englisch, auch wenn die Aufgabe auf Deutsch
+  genannt wurde**, siehe [`language.md`](./language.md) — und das Issue
+  **direkt anlegen**:
   ```sh
   gh issue create --repo kkrafft1999/snotra --label enhancement \
     --title "…" --body-file <datei>
