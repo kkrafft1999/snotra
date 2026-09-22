@@ -1,589 +1,937 @@
 # Snotra AI
 
-> Eine Electron-basierte Plattform, die per **Skills** und **Tools** zu Use-Case-spezifischen KI-Anwendungen ausgebaut werden kann.
+> 🇩🇪 **Deutsch:** [`README.de.md`](./README.de.md) — English is the project
+> language; the German version is maintained alongside it.
+
+> An Electron-based platform that grows into use-case-specific AI applications
+> through **skills** and **tools**.
 
 ## Vision
 
-`Snotra AI` ist bewusst **kein** fertig zugeschnittenes Produkt, sondern eine **Plattform**:
+`Snotra AI` is deliberately **not** a finished, pre-cut product — it is a
+**platform**:
 
-- Die Electron-App liefert das Fundament: Fenster, Datei-Explorer, Chat-UI, Provider-Anbindung, sicheres Speichern von Keys, Tool-Use-Loop.
-- Darauf aufgesetzt werden **Skills** (vorgefertigte Arbeitsweisen, Prompts, Abläufe) und **Tools** (konkrete Aktionen, die das Modell ausführen kann) – **dynamisch oder per Konfiguration**.
-- So entstehen aus *einem* Basis-Programm viele **Use-Case-spezifische Anwendungen**:
-  - 🏢 **Büroarbeit:** Angebote erstellen, Kampagnen planen, Präsentationen vorbereiten
-  - 👥 **HR:** Stellenausschreibungen, Onboarding-Pakete, Mitarbeiterkommunikation
-  - 🖥️ **IT:** Runbooks, Incident-Begleitung, Doku-Pflege
-  - 👩‍💻 **Software-Engineering:** projektbezogene Code- und Repo-Assistenz
+- The Electron app provides the foundation: window, file explorer, chat UI,
+  provider connections, secure key storage, tool-use loop.
+- On top of that sit **skills** (ready-made working methods, prompts,
+  procedures) and **tools** (concrete actions the model can perform) —
+  **dynamically or by configuration**.
+- From *one* base program, many **use-case-specific applications** emerge:
+  - 🏢 **Office work:** writing quotes, planning campaigns, preparing presentations
+  - 👥 **HR:** job postings, onboarding packages, employee communication
+  - 🖥️ **IT:** runbooks, incident support, documentation upkeep
+  - 👩‍💻 **Software engineering:** project-aware code and repository assistance
 
-Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der Klugheit und Besonnenheit. Er steht für einen Assistenten, der den Kontext seines Workspace kennt und überlegt handelt. Bis Version 1.0.4 hieß das Projekt „Weyouze Anything“.
+The name comes from Norse mythology: Snotra is the goddess of wisdom and
+prudence. It stands for an assistant that knows the context of its workspace
+and acts deliberately. Up to version 1.0.4 the project was called "Weyouze
+Anything".
 
-> Status: **persönliches Hobby- / Experimentier-Projekt.** Schnittstellen, UI und Konfiguration können sich jederzeit ändern.
+> Status: **personal hobby / experimentation project.** Interfaces, UI and
+> configuration may change at any time.
 
-## Aktueller Stand & Planung
+> **Language:** English is the project language — README, contributing guide,
+> issues, pull requests and release notes. German is a fully supported product
+> language. The application UI itself is currently German only; an i18n
+> mechanism is planned, and until then the settings paths below name the German
+> labels you will actually see.
 
-Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft über [GitHub Issues](https://github.com/kkrafft1999/snotra/issues). Den Fortschritt zeigt das zugehörige [GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban-Board: *Backlog* → *To do* → *In Progress* → *Done*).
+## Motivation
 
-## Tech-Stack
+*A word from the author.*
 
-- [Electron](https://www.electronjs.org/) (Main + Renderer + Preload)
-- [Electron Forge](https://www.electronforge.io/) für Packaging & Maker (DMG / ZIP / DEB / AppImage)
-- Vanilla JS im Renderer + [`marked`](https://github.com/markedjs/marked) und [`DOMPurify`](https://github.com/cure53/DOMPurify) für Markdown
-- [`@fontsource/inter`](https://fontsource.org/fonts/inter) als Schriftart
+I started out wanting to **understand agentic work** — agentic coding, and AI
+agents in general. So I began with a simple experiment: running chats in order to
+reproduce the exchange of information between a language model and a local
+client, the way ChatGPT or Claude Code do it, just to see for myself what
+actually travels between an LLM and an agent harness.
 
-## Voraussetzungen
+Somewhere along the way the experiment became the fun part. Trying out the
+variants and giving Snotra one more capability turned out to be something I
+enjoy, and that is largely why it kept growing.
 
-- **Node.js** ≥ 24 (Active LTS, siehe `.nvmrc`; mit nvm: `nvm use`)
-- **npm** (kommt mit Node)
-- macOS, Windows oder Linux
-- Optional: API-Key für OpenAI / Anthropic / Google, ein lokales [Ollama](https://ollama.com/) oder irgendein anderer Server mit OpenAI-kompatibler Schnittstelle (LM Studio, llama.cpp, vLLM, OpenRouter, ein Firmen-Gateway — siehe [Anbieter](#anbieter))
+The role models are obvious: **Cursor, Claude Code, ChatGPT** all take the same
+approach. What they share is that they concentrate on their own models — with
+Cursor as the exception, and even Cursor is likely to end up more firmly in the
+hands of xAI, so models from that side can be expected to be favoured there too.
+An agent harness, an agent desktop, that lets you attach **any model you like** —
+and above all local models, to experiment with — is the thing that kept me
+working on this.
 
-## Schnellstart
+And last but not least: I wanted Snotra to be a tool developers can use to try
+out agentic working for themselves, and to use this open-source foundation to
+build agents for **specific use cases** — for business departments in a corporate
+setting, and just as much for private, consumer-side purposes — on top of
+Snotra's agent harness. The architecture is cut so that the backend can be
+separated from the frontend. What else can be made of that, I happily leave to
+the developer community and its imagination.
+
+## Current state & planning
+
+Everything that is due — bugs, individual features and larger topics — runs
+through [GitHub Issues](https://github.com/kkrafft1999/snotra/issues). Progress
+is tracked on the associated
+[GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban board:
+*Backlog* → *Ready* → *In progress* → *In review* → *Done*).
+
+Want to contribute? See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## Tech stack
+
+- [Electron](https://www.electronjs.org/) (main + renderer + preload)
+- [Electron Forge](https://www.electronforge.io/) for packaging and makers (DMG / ZIP / DEB / AppImage)
+- Vanilla JS in the renderer plus [`marked`](https://github.com/markedjs/marked) and [`DOMPurify`](https://github.com/cure53/DOMPurify) for Markdown
+- [`@fontsource/inter`](https://fontsource.org/fonts/inter) as the typeface
+
+## Requirements
+
+- **Node.js** ≥ 24 (Active LTS, see `.nvmrc`; with nvm: `nvm use`)
+- **npm** (ships with Node)
+- macOS, Windows or Linux
+- Optional: an API key for OpenAI / Anthropic / Google, a local
+  [Ollama](https://ollama.com/), or any other server with an OpenAI-compatible
+  interface (LM Studio, llama.cpp, vLLM, OpenRouter, a corporate gateway — see
+  [Providers](#providers))
+
+## Quick start
 
 ```bash
-# Repository klonen
-git clone git@github.com:<dein-user>/snotra.git
+# Clone the repository
+git clone git@github.com:<your-user>/snotra.git
 cd snotra
 
-# Abhängigkeiten installieren
+# Install dependencies
 npm install
 
-# App im Entwicklungsmodus starten
+# Start the app in development mode
 npm start
 ```
 
-Beim ersten Start kannst du in den Einstellungen einen Provider wählen und deinen API-Key eintragen. Der Key wird verschlüsselt im Benutzerprofil deines Betriebssystems abgelegt – er landet **nicht** im Projektordner und nicht im Repository.
+On first start you can pick a provider in the settings and enter your API key.
+The key is stored encrypted in your operating system's user profile — it does
+**not** end up in the project folder or in the repository.
 
-## App bauen / paketieren
+## Building / packaging the app
 
 ```bash
 # macOS (Apple Silicon) – DMG + ZIP
 npm run make
 
-# Linux (x64) – DEB + AppImage; braucht dpkg, fakeroot und mksquashfs
+# Linux (x64) – DEB + AppImage; needs dpkg, fakeroot and mksquashfs
 npm run make:linux
 
-# Nur paketieren ohne Installer
+# Package only, without installers
 npm run package         # macOS arm64
 npm run package:win     # Windows x64
 npm run package:linux   # Linux x64
 ```
 
-Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen).
+The finished artifacts land in `out/` (excluded via `.gitignore`).
 
-### Linux installieren
+### Installing on Linux
 
-Die [Releases](https://github.com/kkrafft1999/snotra/releases) enthalten für
-Linux drei Dateien:
+The [releases](https://github.com/kkrafft1999/snotra/releases) contain three
+files for Linux:
 
 ```bash
-# Empfohlen (Debian, Ubuntu, Mint, Pop!_OS …): legt Menüeintrag und Icon an
+# Recommended (Debian, Ubuntu, Mint, Pop!_OS …): creates a menu entry and icon
 sudo apt install ./Snotra-AI-<version>-linux-x64.deb
 
-# Distributionsunabhängig: eine Datei, kein root nötig
+# Distribution-independent: one file, no root needed
 chmod +x Snotra-AI-<version>-linux-x64.AppImage
 ./Snotra-AI-<version>-linux-x64.AppImage
 
-# Fallback, wenn beides nicht passt
+# Fallback if neither fits
 tar -xzf Snotra-AI-<version>-linux-x64.tar.gz
 cd snotra-ai-<version>-linux-x64
 ./"Snotra AI"
 ```
 
-Das `.deb` ist der empfohlene Weg: Es ist die einzige Variante, in der die
-Chromium-Sandbox fertig eingerichtet ist (Setuid-Bit auf `chrome-sandbox`), und
-es trägt die App ins Anwendungsmenü ein. Das **AppImage** braucht dafür weder
-Installation noch root-Rechte — nach dem Download einmal ausführbar machen, das
-Ausführungsrecht überlebt den Umweg über den Browser nicht.
+The `.deb` is the recommended route: it is the only variant in which the
+Chromium sandbox comes fully set up (setuid bit on `chrome-sandbox`), and it
+registers the app in the application menu. The **AppImage** needs neither
+installation nor root privileges — make it executable once after downloading;
+the execute bit does not survive the trip through a browser.
 
-**AppImage und Tarball** verlassen sich stattdessen auf unprivilegierte
-User-Namespaces. Auf Distributionen, die diese einschränken — u. a. Ubuntu ab
-24.04 —, kann der Start fehlschlagen. Beim **Tarball** meldet sich das als
-*„The SUID sandbox helper binary was found, but is not configured correctly"*;
-dort hilft es, im entpackten Ordner einmal nachzuziehen:
+**AppImage and tarball** rely on unprivileged user namespaces instead. On
+distributions that restrict these — Ubuntu 24.04 and later among them — startup
+can fail. With the **tarball** this shows up as *"The SUID sandbox helper binary
+was found, but is not configured correctly"*; there it helps to fix things up
+once inside the extracted folder:
 
 ```bash
 cd snotra-ai-<version>-linux-x64
 sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
 ```
 
-Beim **AppImage** führt dieser Weg nicht zum Ziel: Das Image wird
-schreibgeschützt und `nosuid` eingehängt, ein Setuid-Bit hätte darin keine
-Wirkung. Dort ist das `.deb` die Lösung.
+With the **AppImage** this route leads nowhere: the image is mounted read-only
+and `nosuid`, so a setuid bit inside it would have no effect. There, the `.deb`
+is the answer.
 
-## Aktualisierung
+## Updating
 
-Snotra AI sucht beim Start still nach einer neueren Version und meldet sich nur,
-wenn es eine gibt; *Snotra AI → Nach Updates suchen…* fragt jederzeit von Hand
-nach. Ab dann führt ein Dialog durch den ganzen Weg — **jeder Schritt einzeln
-bestätigt, jeder bis zuletzt abbrechbar**:
+Snotra AI quietly checks for a newer version at startup and only speaks up if
+there is one; *Snotra AI → Nach Updates suchen…* (Check for updates…) asks
+manually at any time. From there a dialog walks through the whole path — **each
+step confirmed individually, each one cancellable until the very end**:
 
-1. **Gefunden.** Version, Größe des Pakets und „Was sich geändert hat".
-   „Herunterladen" lädt, „Überspringen" bietet genau diese Version nie wieder
-   an, „Später" fragt beim nächsten Start erneut.
-2. **Wird geladen.** Fortschritt in Prozent und Megabyte. „Abbrechen" bricht
-   den Download wirklich ab und räumt die halbe Datei weg.
-3. **Bereit.** Erst jetzt wird gefragt, ob installiert werden soll. Beim
-   Installieren beendet sich die App, wird ersetzt und startet neu — ungesendete
-   Eingaben gehen dabei verloren. „Abbrechen" verwirft die geladene Datei.
-4. **Wird installiert.** Der einzige Schritt ohne Rückweg; das steht auch so im
-   Dialog.
+1. **Found.** Version, package size and "what has changed". "Download" starts
+   the download, "Skip" never offers this exact version again, "Later" asks
+   again on the next start.
+2. **Downloading.** Progress in percent and megabytes. "Cancel" really aborts
+   the download and clears away the half-written file.
+3. **Ready.** Only now does it ask whether to install. On install the app quits,
+   is replaced and restarts — unsent input is lost in the process. "Cancel"
+   discards the downloaded file.
+4. **Installing.** The only step without a way back; the dialog says so.
 
-Geladen wird ausschließlich das Release-Asset, das GitHub selbst für die
-laufende Installation ausweist — die Adresse kommt nie aus dem Fenster. Vor dem
-Austausch prüft die App unter macOS zusätzlich die Bundle-Kennung und die
-Versionsnummer im geladenen Paket. Schlägt irgendetwas fehl, bleibt die laufende
-Version unangetastet und der Dialog nennt den Grund.
+Only the release asset that GitHub itself designates for the running
+installation is downloaded — the address never comes out of the window. Before
+replacing anything, the app additionally verifies the bundle identifier and the
+version number inside the downloaded package on macOS. If anything fails, the
+running version stays untouched and the dialog names the reason.
 
-**Wann die App sich nicht selbst aktualisiert.** Dann erklärt der Dialog, warum,
-und verweist auf die Release-Seite:
+**When the app does not update itself.** The dialog then explains why and points
+to the release page:
 
-| Fall | Grund |
+| Case | Reason |
 | --- | --- |
-| Als `.deb` nach `/opt` installiert | Der Austausch bräuchte Administratorrechte. |
-| Kein Schreibrecht am Installationsort | z. B. `C:\Program Files` oder ein Mehrbenutzer-Mac. |
-| Entwicklungs-Build (`npm start`) | Da gibt es nichts zu ersetzen. |
-| Kein passendes Paket im Release | Lieber nichts anbieten als das Falsche einspielen. |
+| Installed as `.deb` into `/opt` | Replacing it would need administrator rights. |
+| No write permission at the install location | e.g. `C:\Program Files` or a multi-user Mac. |
+| Development build (`npm start`) | There is nothing to replace. |
+| No matching package in the release | Better to offer nothing than to install the wrong thing. |
 
-Selbst aktualisieren können sich das macOS-App-Bundle, das Windows-Verzeichnis,
-ein laufendes AppImage und ein entpacktes Linux-Verzeichnis.
+What *can* update itself: the macOS app bundle, the Windows directory, a running
+AppImage and an extracted Linux directory.
 
-Weil die Artefakte **unsigniert** sind, kommt bewusst kein `electron-updater`
-bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
+Because the artifacts are **unsigned**, `electron-updater` and Squirrel are
+deliberately not used — both require a code signature.
 
+## File tree
 
-## Dateibaum
+- **Open a project folder:** via the button in the sidebar or the list of
+  recently used folders. Everything that follows always refers to this one
+  folder.
+- **Four columns, four switches:** the window consists of sidebar, content pane,
+  chat and history, and each column has its own switch in the title bar — on the
+  left the two belonging to the workspace, on the right, mirrored, the two
+  belonging to the chat side, each in the order of their columns. All four carry
+  the same image: a window with one narrow and one wide area, with the area the
+  button controls filled in. Each state survives until the next start.
+- **Hiding the sidebar:** the first button hides the sidebar together with its
+  divider, and the workspace moves over. The same via keyboard with
+  `Cmd/Ctrl+B` or through *Ansicht → Seitenleiste ein-/ausblenden* (View → Toggle
+  sidebar).
+- **Showing and hiding the middle pane:** the second button toggles the middle
+  column — the one holding the file preview and the welcome screen. As long as
+  you have not set anything, the folder decides: with a folder open the column
+  stays **closed** and the chat gets the width. With no folder open, the welcome
+  screen sits there, exactly as wide as it needs to be — the rest of the window
+  belongs to the chat. Clicking a file in the tree brings the column back by
+  itself, otherwise the click would go nowhere. Once you toggle it with the
+  button, your decision also applies at startup.
+- **Hiding the chat:** the second-to-last button takes away the chat column;
+  what remains on the right is the history, if it is open. Clicking a chat there
+  brings the column back by itself — the mirror image of clicking a file in the
+  tree. The **settings** are reachable independently through the menu bar or
+  `Cmd/Ctrl+,` — on macOS under *Snotra AI → Einstellungen…*, on Windows and
+  Linux under *Ansicht → Einstellungen…*.
+- **Showing the chat history:** the last button places the history as a column
+  next to the chat. Clicking a row loads that conversation along with its model
+  and its permission mode; the trash icon removes it. The button for a **new
+  chat** sits in the header of that column — just like "Ordner öffnen" (Open
+  folder) sits in the header of the tree. If the window becomes too narrow for
+  all columns, the history gives way by itself and returns in a wider window.
+- **Just as you left it:** at startup Snotra brings back the folder's most
+  recent conversation and you land straight in the discussion. The welcome
+  screen ("Womit fangen wir an?" — What shall we start with?) belongs to the
+  cold start: it sits in the middle column and appears when no folder is open
+  and there is nothing to continue — so on the very first start it appears by
+  itself. The window also comes back the way you last set it: size, position and
+  whether it was maximised or in full screen. On the very first start it opens
+  at 1536 × 960 points, and on smaller screens as large as the work area allows.
+  If you have unplugged the second monitor it last sat on, it comes back at the
+  same size, centred on the primary display, instead of into the void.
+- **Moving:** dragging a file or folder in the tree onto a folder row moves the
+  entry there; dropping it on the free area below the tree puts it in the project
+  folder. If the name already exists, it becomes `name (2).ext`.
+- **Referencing in chat:** dragging a file or folder into the chat input inserts
+  `@<path relative to the project root>` there; the same thing without dragging
+  is the `@` button on the right of the row (hover or Tab). Details under
+  [Chat](#chat).
+- **Context menu:** a right-click (or ⌘/Ctrl-click) on a row opens Open, "Show in
+  Finder/Explorer", "Information" and Delete. Deleting moves to the trash, after
+  a confirmation.
+- **Information:** the "Information" entry shows a file's name, full path, type,
+  size (human-readable and to the byte), modification and creation date, plus the
+  program "Open" would launch it with. For a folder, the number of its direct
+  entries takes the place of the size — counting recursively is deliberately not
+  done, as that can take arbitrarily long on `node_modules`. The **"Copy path"**
+  button puts the full path on the clipboard. Values the operating system does
+  not provide — under Linux often the creation date — show up as "unknown".
+- **Taking things in from outside:** files and folders can be dragged straight
+  from Finder or Explorer into the tree — onto a folder row, or onto the free
+  area for the project folder. They are **copied**, the original stays put;
+  multiple selection works, and name collisions end up as `name (2).ext` as
+  above.
 
-- **Projektordner öffnen:** über den Knopf in der Seitenleiste oder die Liste der zuletzt genutzten Ordner. Alles Weitere bezieht sich immer auf diesen einen Ordner.
-- **Vier Spalten, vier Schalter:** Das Fenster besteht aus Seitenleiste, Anzeige, Chat und Verlauf, und jede Spalte hat ihren eigenen Schalter in der Titelzeile — links die beiden des Arbeitsbereichs, rechts spiegelverkehrt die beiden der Chat-Seite, jeweils in der Reihenfolge ihrer Spalten. Alle vier tragen dasselbe Bild: ein Fenster mit einer schmalen und einer breiten Fläche, gefüllt ist die, die der Knopf schaltet. Jeder Zustand bleibt bis zum nächsten Start erhalten.
-- **Seitenleiste wegschalten:** Der erste Knopf blendet die Seitenleiste samt Trenner aus, der Arbeitsbereich rückt nach. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht → Seitenleiste ein-/ausblenden*.
-- **Mittlere Anzeige ein- und ausblenden:** Der zweite Knopf schaltet die mittlere Spalte — die, in der die Dateivorschau und der Startschirm stehen. Solange du nichts eingestellt hast, entscheidet der Ordner: Mit geöffnetem Ordner bleibt die Spalte **zu**, der Chat bekommt die Breite. Ist kein Ordner offen, steht dort der Startschirm, und zwar genau so breit, wie er ihn braucht — der Rest des Fensters gehört dem Chat. Klickst du eine Datei im Baum an, kommt die Spalte von selbst zurück, sonst ginge der Klick ins Leere. Schaltest du sie über den Knopf ein oder aus, gilt deine Entscheidung ab dann auch beim Start.
-- **Chat wegschalten:** Der vorletzte Knopf nimmt die Chat-Spalte weg; übrig bleibt rechts der Verlauf, falls er offen ist. Klickst du dort einen Chat an, kommt die Spalte von selbst zurück — spiegelbildlich zum Klick auf eine Datei im Baum. Die **Einstellungen** erreichst du unabhängig davon über die Menüleiste bzw. `Cmd/Strg+,` — auf dem Mac unter *Snotra AI → Einstellungen…*, unter Windows und Linux unter *Ansicht → Einstellungen…*.
-- **Chat-Verlauf einblenden:** Der letzte Knopf stellt den Verlauf als Spalte neben den Chat. Ein Klick auf eine Zeile lädt diese Konversation samt ihrem Modell und ihrem Freigabemodus, das Papierkorb-Symbol entfernt sie. Der Knopf für einen **neuen Chat** steht in der Kopfzeile dieser Spalte — so wie „Ordner öffnen“ in der Kopfzeile des Baums. Wird das Fenster zu schmal für alle Spalten, weicht der Verlauf von selbst und kommt im breiteren Fenster zurück.
-- **So, wie du die App verlassen hast:** Beim Start holt Snotra die zuletzt geführte Konversation des Ordners zurück und du landest direkt im Gespräch. Der Startschirm („Womit fangen wir an?“) gehört zum kalten Start: Er steht in der mittleren Spalte und erscheint, wenn kein Ordner offen ist und es nichts fortzusetzen gibt — beim allerersten Start also von selbst. Auch das Fenster kommt zurück, wie du es zuletzt eingestellt hast: Größe, Position und ob es maximiert oder im Vollbild lief. Beim allerersten Start geht es mit 1536 × 960 Punkten auf, auf kleineren Bildschirmen so groß, wie die Arbeitsfläche hergibt. Hast du den Zweitbildschirm abgezogen, auf dem es zuletzt stand, kommt es in derselben Größe zentriert auf dem Hauptbildschirm zurück statt im Nichts.
-- **Verschieben:** Eine Datei oder einen Ordner im Baum auf eine Ordnerzeile ziehen verschiebt den Eintrag dorthin; auf der freien Fläche unter dem Baum landet er im Projektordner. Gibt es den Namen schon, wird `name (2).ext` daraus.
-- **Im Chat referenzieren:** Eine Datei oder einen Ordner in die Chat-Eingabe ziehen fügt dort `@<pfad relativ zur Projektwurzel>` ein; derselbe Weg ohne Ziehen ist der `@`-Knopf rechts in der Zeile (Hover oder Tabulator). Details unter [Chat](#chat).
-- **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick) auf eine Zeile öffnet Öffnen, „Im Finder bzw. Explorer anzeigen“, „Informationen“ und Löschen. Gelöscht wird in den Papierkorb, nach Rückfrage.
-- **Informationen:** Der Eintrag „Informationen“ zeigt zu einer Datei Name, vollständigen Pfad, Typ, Größe (lesbar und auf das Byte genau), Änderungs- und Erstellungsdatum sowie das Programm, mit dem „Öffnen“ sie starten würde. Bei einem Ordner steht statt der Größe die Anzahl seiner direkten Einträge — rekursiv gezählt wird bewusst nicht, das kann bei `node_modules` beliebig lange dauern. Der Knopf **„Pfad kopieren“** legt den vollen Pfad in die Zwischenablage. Werte, die das Betriebssystem nicht hergibt — unter Linux oft das Erstellungsdatum —, stehen als „unbekannt“ da.
-- **Von außen übernehmen:** Dateien und Ordner aus Finder oder Explorer lassen sich direkt in den Baum ziehen — auf eine Ordnerzeile oder auf die freie Fläche für den Projektordner. Sie werden **kopiert**, das Original bleibt liegen; Mehrfachauswahl geht, Namenskollisionen enden wie oben als `name (2).ext`.
-
-  Weil damit zum ersten Mal etwas von außerhalb des Projektordners hereinkommt, fragt Snotra vorher nach: bei Ordnern immer, bei Dateien ab 20 Stück oder 10 MB — mit Anzahl, Größe und Zielordner im Klartext, „Abbrechen“ vorbelegt. Nicht übernommen werden Dateien, die nach Zugangsdaten aussehen (`.env`, `*.pem`, `id_*`, alles unter `.ssh/` …): Was das Modell später lesen könnte, soll nicht beiläufig per Drop hereinrutschen — der Weg über den Dateimanager bleibt offen. Verknüpfungen (Symlinks) werden übersprungen, und ein Drop wird ganz abgelehnt statt halb kopiert, wenn er über 2000 Einträge oder 200 MB liegt.
+  Because this is the first time something from outside the project folder comes
+  in, Snotra asks first: always for folders, and for files from 20 items or 10 MB
+  on — stating count, size and target folder in plain words, with "Cancel"
+  preselected. Files that look like credentials (`.env`, `*.pem`, `id_*`,
+  anything under `.ssh/` …) are not taken in: what the model could later read
+  should not slip in casually via a drop — the route through the file manager
+  stays open. Symlinks are skipped, and a drop is rejected outright rather than
+  half-copied if it exceeds 2000 entries or 200 MB.
 
 ## Chat
 
-- **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button.
-- **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rlse` findet z. B. `docs/release.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/release.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
-- **Dateien aus dem Baum übernehmen (Maus):** Was du im Dateibaum schon vor Augen hast, musst du nicht abtippen. Zieh die Datei oder den Ordner aus dem Baum in die Chat-Eingabe — eingefügt wird an der Cursorposition der Pfad **relativ zur Projektwurzel** (`@docs/release.md`, Ordner mit `/` am Ende), nicht der absolute Pfad. Ohne Ziehen geht es über den `@`-Knopf, der rechts in der Zeile erscheint, sobald du mit der Maus über die Zeile fährst oder den Knopf per Tabulator ansteuerst. Der einfache Klick auf eine Zeile bleibt, was er war: auswählen und Vorschau zeigen; das Verschieben im Baum per Drag & Drop ebenfalls.
-- **Screenshots einfügen:** Ein Bild in der Zwischenablage (macOS `Cmd+Ctrl+Shift+4`, Windows Snipping Tool) landet mit `Cmd/Ctrl+V` als Anhang über der Eingabezeile — mit Vorschau, Dateigröße und einem Knopf zum Entfernen. Der getippte Text bleibt dabei unberührt; ein Screenshot ohne Begleitfrage lässt sich ebenfalls abschicken. Erlaubt sind PNG, JPEG, GIF und WebP, bis zu 4 Bilder je Nachricht und 5 MB pro Bild; größere Bilder werden vor dem Senden auf 1568 px längste Kante verkleinert. Weil ein Screenshot oft mehr zeigt, als man bewusst teilen will, siehst du vor dem Senden immer die Vorschau — bei einem Cloud-Anbieter verlässt das Bild deinen Rechner. Bilder weiterreichen kann **OpenAI** und, wenn du den Schalter „Bild-Anhänge erlauben“ setzt, der Anbieter **OpenAI-kompatibel**: Ist ein anderer Anbieter aktiv, wird das Einfügen mit einem Hinweis in der Statuszeile abgelehnt, statt still zu verschwinden — und hängst du ein Bild an und wechselst danach auf ein Modell ohne Bild-Unterstützung, sagt Snotra das beim Senden, bevor die Anfrage rausgeht. Angehängte Bilder gehören zum gespeicherten Verlauf: Sie liegen als Dateien unter `chat-attachments/<Chat-ID>/` im `userData`-Ordner — unverschlüsselt, wie die Screenshots auf deiner Platte auch —, während die Verlaufsdatei nur den Dateinamen trägt und schlank bleibt. Beim Öffnen einer älteren Konversation sind die Bilder wieder da; ein Klick auf das Vorschaubild zeigt es groß. Löschst du einen Chat, verschwinden seine Bilder mit; dasselbe gilt, wenn er aus dem Verlauf herausfällt. Ist eine Datei von Hand entfernt worden, steht an ihrer Stelle ein Hinweis statt eines kaputten Bildes.
-- **Bilder aus dem Arbeitsordner in der Antwort:** Schreibt das Modell ein Bild in den Projektordner — ein gerechnetes Diagramm, einen Plot — und bettet es danach in seine Antwort ein (`![Diagramm](diagramm.png)`), zeigt Snotra es im Chat an, auf Chat-Breite verkleinert und mit erhaltenem Seitenverhältnis. Es gilt der **gerade geöffnete** Ordner: relative und absolute Pfade werden gegen ihn aufgelöst, alles außerhalb wird nicht geladen — auch keine Verknüpfung, die aus dem Ordner herauszeigt, und keine Adresse aus dem Netz. Angezeigt werden PNG, JPEG, GIF und WebP bis 10 MB, erkannt am Dateiinhalt statt an der Endung; SVG bleibt vorerst außen vor. Geht es nicht, steht dort kein kaputtes Bild, sondern ein Platzhalter mit dem Grund („Bild nicht gefunden“, „Außerhalb des Arbeitsordners“, „Bild zu groß zum Anzeigen“) und dem Alt-Text des Modells. Während die Antwort noch läuft, steht ein ruhiger Platzhalter — das Bild erscheint, wenn die Nachricht fertig ist, statt bei jedem Textstück neu zu laden. Öffnest du eine ältere Konversation in einem anderen Ordner, siehst du Platzhalter statt fremder Bilder; auf den früheren Ordner greift Snotra nie zu.
-- **Was das Modell davon sieht:** nur die Referenz im Text. Der System-Prompt erklärt die `@pfad`-Konvention; die Datei liest das Modell bei Bedarf selbst über die Lese-Tools, Inhalte werden nicht automatisch eingebettet (Token-Ziel).
+- **Sending:** `Enter` sends the message, `Shift+Enter` inserts a line break.
+  While the model is answering, the send button becomes a stop button.
+- **Referencing files with `@`:** typing `@` in the input opens a list of the
+  files and folders of the opened project folder above the text field. Typing
+  further filters — fuzzily, too: `@rlse` finds `docs/release.md`, for example.
+  `↑`/`↓` selects, `Enter` or `Tab` accepts, `Esc` closes. What gets inserted is
+  the path relative to the project root (`@docs/release.md`); for folders the
+  list stays open (`@src/`) so you can keep typing into the folder. The list
+  hides what the `find_files` tool skips as well: hidden entries, `.git` and
+  patterns from the project root's `.gitignore`. With no folder open, `@` stays
+  ordinary text.
+- **Taking files from the tree (mouse):** what you already have in front of you
+  in the file tree, you should not have to retype. Drag the file or folder from
+  the tree into the chat input — what gets inserted at the caret position is the
+  path **relative to the project root** (`@docs/release.md`, folders with a
+  trailing `/`), not the absolute path. Without dragging it works through the `@`
+  button that appears on the right of a row as soon as you hover over it or reach
+  the button with Tab. A plain click on a row remains what it was: select and
+  show the preview; so does moving things in the tree by drag and drop.
+- **Pasting screenshots:** an image on the clipboard (macOS `Cmd+Ctrl+Shift+4`,
+  Windows Snipping Tool) lands as an attachment above the input line with
+  `Cmd/Ctrl+V` — with preview, file size and a button to remove it. The typed
+  text stays untouched; a screenshot without an accompanying question can be sent
+  as well. PNG, JPEG, GIF and WebP are allowed, up to 4 images per message and
+  5 MB per image; larger images are scaled down to 1568 px on the longest edge
+  before sending. Because a screenshot often shows more than you consciously
+  meant to share, you always see the preview before sending — with a cloud
+  provider, the image leaves your machine. Images can be passed on by **OpenAI**
+  and, if you set the "Bild-Anhänge erlauben" (Allow image attachments) switch,
+  by the **OpenAI-compatible** provider: if another provider is active, pasting
+  is rejected with a note in the status line instead of silently vanishing — and
+  if you attach an image and then switch to a model without image support,
+  Snotra says so when sending, before the request goes out. Attached images are
+  part of the saved history: they live as files under
+  `chat-attachments/<chat-id>/` in the `userData` folder — unencrypted, just like
+  the screenshots on your disk — while the history file only carries the file
+  name and stays slim. When you open an older conversation the images are back; a
+  click on the thumbnail shows it large. Delete a chat and its images go with it;
+  the same applies when it drops out of the history. If a file has been removed by
+  hand, a note stands in its place instead of a broken image.
+- **Images from the working folder in the answer:** if the model writes an image
+  into the project folder — a computed diagram, a plot — and then embeds it in
+  its answer (`![Diagram](diagram.png)`), Snotra displays it in the chat, scaled
+  to chat width and with the aspect ratio preserved. The **currently open** folder
+  applies: relative and absolute paths are resolved against it, and anything
+  outside is not loaded — no symlink pointing out of the folder either, and no
+  address from the network. PNG, JPEG, GIF and WebP up to 10 MB are displayed,
+  recognised by file content rather than extension; SVG stays out for now. When
+  it does not work, what stands there is not a broken image but a placeholder
+  with the reason ("image not found", "outside the working folder", "image too
+  large to display") and the model's alt text. While the answer is still running
+  a calm placeholder stands there — the image appears once the message is
+  finished, instead of reloading on every chunk of text. If you open an older
+  conversation in a different folder, you see placeholders instead of foreign
+  images; Snotra never reaches into the earlier folder.
+- **What the model sees of it:** only the reference in the text. The system
+  prompt explains the `@path` convention; the model reads the file itself when
+  needed via the read tools, and contents are not embedded automatically (a token
+  budget decision).
 
-- **Python ausführen (standardmäßig aus):** Nach dem Einschalten unter Einstellungen › Tools › „Python ausführen“ bekommt das Modell das Tool `run_python`: es schreibt ein Python-3-Programm, Snotra führt es im geöffneten Projektordner aus und gibt Ausgabe, Fehlerausgabe und Exit-Code zurück. Damit werden Auswertungen gerechnet statt geschätzt — Summen über eine CSV, Umrechnungen, Datenumformung, Regex an echten Beispielen prüfen. Jeder Aufruf ist ein frisches Skript, es gibt keinen Zustand zwischen Aufrufen und kein `pip install`; welche Pakete verfügbar sind, bestimmst du über einen eigenen Interpreter-Pfad (z. B. ein venv). Gesucht wird der Interpreter in **deinem** PATH — Snotra liest ihn beim Start einmal aus deinem Shell-Profil, damit auch eine aus dem Finder gestartete App den Homebrew-, pyenv- oder asdf-Python findet statt des System-Python; Unterprozesse im Skript (`subprocess`) sehen denselben PATH. Welcher Interpreter gefunden wurde, steht unter Einstellungen › Tools.
+- **Running Python (off by default):** after switching it on under Settings ›
+  Tools › "Python ausführen" (Run Python), the model gets the `run_python` tool:
+  it writes a Python 3 program, Snotra runs it in the opened project folder and
+  returns output, error output and exit code. That way analyses are computed
+  instead of guessed — sums over a CSV, unit conversions, data reshaping, testing
+  a regex against real examples. Every call is a fresh script; there is no state
+  between calls and no `pip install`. Which packages are available is up to you
+  via a custom interpreter path (a venv, for example). The interpreter is looked
+  up in **your** PATH — Snotra reads it once at startup from your shell profile,
+  so that an app launched from Finder also finds the Homebrew, pyenv or asdf
+  Python instead of the system Python; subprocesses inside the script
+  (`subprocess`) see the same PATH. Which interpreter was found is shown under
+  Settings › Tools.
 
-  **Das ist die riskanteste Einstellung der App.** Der ausgeführte Code läuft mit deinen Rechten und ist *nicht* auf den Projektordner begrenzt: er kann überall lesen und schreiben, ins Netz gehen und Programme starten — eine Sandbox gibt es nicht. Der Schutz ist die Freigabe: Snotra zeigt dir vor jedem einzelnen Lauf den vollständigen Quelltext, und ein „für diese Sitzung merken“ gibt es für Ausführung bewusst nicht. Läuft ein Skript zu lange, wird es nach dem Zeitlimit (Standard 10 s) beendet; „Stop“ im Chat beendet es ebenfalls.
+  **This is the riskiest setting in the app.** The executed code runs with your
+  privileges and is *not* confined to the project folder: it can read and write
+  anywhere, reach the network and start programs — there is no sandbox. The
+  protection is the approval: Snotra shows you the complete source before every
+  single run, and there is deliberately no "remember for this session" for
+  execution. If a script runs too long it is terminated after the time limit
+  (10 s by default); "Stop" in the chat ends it as well.
 
-- **Shell-Befehle ausführen (standardmäßig aus):** Nach dem Einschalten unter Einstellungen › Tools › „Shell-Befehle ausführen“ bekommt das Modell das Tool `shell_execute`: es führt einen Befehl in der Shell deines Betriebssystems aus — macOS und Linux in deiner Login-Shell (zsh, bash, …), Windows in PowerShell bzw. `cmd.exe` — und liefert Ausgabe, Fehlerausgabe und Exit-Code zurück. Damit wird nutzbar, was ohnehin auf deinem Rechner liegt: `git status`, `npm run build`, `docker ps`, ein installiertes CLI-Werkzeug, das ein Skill beschreibt. Weil POSIX-Shells als **Login-Shell** starten und Snotra deinen PATH beim Start einmal aus dem Profil liest — interaktiv, also einschließlich `.zshrc` —, ist dein gewohnter PATH da (Homebrew, nvm, pyenv), auch wenn du die App aus dem Finder gestartet hast. Ausgeführt werden Befehle trotzdem nicht interaktiv, damit kein Prompt-Vorlauf in der Ausgabe landet. Arbeitsverzeichnis ist der Projektordner oder ein Unterordner davon; ein Befehl pro Aufruf, kein Zustand zwischen zwei Aufrufen (ein `cd` wirkt nur innerhalb desselben Befehls). Nicht interaktiv: es gibt kein Terminal, eine wartende Eingabeaufforderung läuft ins Zeitlimit (Standard 30 s, höchstens 300 s). Welche Shell benutzt wurde, steht im Ergebnis und auf der Freigabekarte.
+- **Running shell commands (off by default):** after switching it on under
+  Settings › Tools › "Shell-Befehle ausführen" (Run shell commands), the model
+  gets the `shell_execute` tool: it runs a command in your operating system's
+  shell — macOS and Linux in your login shell (zsh, bash, …), Windows in
+  PowerShell or `cmd.exe` — and returns output, error output and exit code. That
+  makes whatever is already on your machine usable: `git status`, `npm run build`,
+  `docker ps`, an installed CLI tool that a skill describes. Because POSIX shells
+  start as a **login shell** and Snotra reads your PATH once at startup from the
+  profile — interactively, so including `.zshrc` — your usual PATH is there
+  (Homebrew, nvm, pyenv), even if you launched the app from Finder. Commands are
+  nevertheless not run interactively, so no prompt preamble ends up in the
+  output. The working directory is the project folder or a subfolder of it; one
+  command per call, no state between two calls (a `cd` only takes effect within
+  the same command). Not interactive: there is no terminal, and a waiting prompt
+  runs into the time limit (30 s by default, 300 s at most). Which shell was used
+  is shown in the result and on the approval card.
 
-  **Das ist die weitreichendste Einstellung der App.** Ein Shell-Befehl kann alles, was du selbst im Terminal kannst — überall lesen und schreiben, ins Netz gehen, Programme installieren; eine Projektordner-Grenze gibt es hier *nicht*, eine Sandbox auch nicht. Der Schutz ist die Freigabe: Snotra zeigt dir vor jedem einzelnen Lauf den vollständigen Befehl, die Shell und das Arbeitsverzeichnis, und ein „für diese Sitzung merken“ gibt es für Ausführung bewusst nicht. Gesperrt sind rekursives Zwangslöschen (`rm -rf` und Entsprechungen), Datenträgeroperationen und das Umschreiben der Git-Historie — das ist eine zusätzliche Sicherung, **kein** vollständiger Schutz, denn ein Skript oder ein Interpreter dazwischen umgeht jede Musterliste. Im Modus „Auto“ läuft ein Befehl ohne Rückfrage. „Stop“ im Chat und das Zeitlimit beenden den ganzen Prozessbaum, nicht nur die Shell.
+  **This is the most far-reaching setting in the app.** A shell command can do
+  everything you can do yourself in a terminal — read and write anywhere, reach
+  the network, install programs; there is *no* project-folder boundary here, and
+  no sandbox either. The protection is the approval: Snotra shows you the
+  complete command, the shell and the working directory before every single run,
+  and there is deliberately no "remember for this session" for execution. Blocked
+  are recursive forced deletion (`rm -rf` and equivalents), disk operations and
+  rewriting Git history — that is an additional safeguard, **not** complete
+  protection, because a script or an interpreter in between bypasses any pattern
+  list. In "Auto" mode a command runs without asking. "Stop" in the chat and the
+  time limit terminate the entire process tree, not just the shell.
 
-- **Websuche:** Mit einem hinterlegten Tavily-Schlüssel (Einstellungen › Tools › Websuche) bekommt das Modell das Tool `web_search` — es liefert Titel, URL und einen kurzen Auszug je Treffer, keine ganzen Seiten. Ohne Schlüssel wird das Tool gar nicht erst angeboten. Die Suchanfrage verlässt deinen Rechner, deshalb ist das Tool als **externer Dienst** eingestuft: im Modus „Intelligent“ fragt Snotra vor jeder Suche nach. Einen kostenlosen Schlüssel gibt es unter [app.tavily.com](https://app.tavily.com); er wird wie die Modell-Schlüssel verschlüsselt abgelegt. Einen geöffneten Projektordner braucht die Suche nicht — anders als die Datei-Tools steht sie auch im leeren Chat zur Verfügung.
-- **Seiten lesen:** Was `web_search` an Adressen findet, liest das Tool `fetch_url` am Stück: es ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite statt des HTML — gekürzt, ohne Skripte und Navigation. Gedacht für das, was über den kurzen Auszug hinausgeht: ein Changelog, eine Norm, eine lange Fehlermeldung. Auch dieses Tool ist ein **externer Dienst** und braucht keinen Projektordner; einzurichten gibt es nichts. Abgelehnt werden lokale und private Adressen (`localhost`, Heimnetz, Cloud-Metadaten) — auch dann, wenn eine Weiterleitung erst dorthin führt — sowie alles, was kein Text ist: PDF, Bilder und Downloads holt Snotra nicht. **Der gelesene Text kommt von einem Fremden**: er ist für das Modell Material, kein Auftrag, und jeder Tool-Aufruf danach läuft erneut durch die Freigabe.
+- **Web search:** with a stored Tavily key (Settings › Tools › Websuche) the
+  model gets the `web_search` tool — it returns title, URL and a short excerpt per
+  hit, not whole pages. Without a key the tool is not offered at all. The query
+  leaves your machine, which is why the tool is classified as an **external
+  service**: in "smart" mode Snotra asks before every search. A free key is
+  available at [app.tavily.com](https://app.tavily.com); it is stored encrypted
+  like the model keys. The search does not need an open project folder — unlike
+  the file tools it is available in an empty chat as well.
+- **Reading pages:** what `web_search` finds in the way of addresses, the
+  `fetch_url` tool reads in one piece: it retrieves exactly one http(s) address
+  and returns the readable text of the page instead of the HTML — shortened,
+  without scripts and navigation. Meant for what goes beyond the short excerpt: a
+  changelog, a standard, a long error message. This tool is an **external
+  service** too and needs no project folder; there is nothing to set up. Local and
+  private addresses (`localhost`, home network, cloud metadata) are rejected —
+  even when a redirect only leads there — as is anything that is not text: Snotra
+  does not fetch PDFs, images or downloads. **The text that is read comes from a
+  stranger**: for the model it is material, not an instruction, and every tool
+  call after it goes through the approval again.
 
-**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Ollama und MLX-LM gelten immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
+**Network timeouts:** model listings abort after 15 seconds (cloud) or 30
+seconds (local) with an understandable error message, speech transcriptions
+after 120 seconds. Ollama and MLX-LM always count as local; for the
+"OpenAI-compatible" provider the host of the server URL decides — `localhost`,
+`127.0.0.x`, `::1` and `*.local` count as local. The timeouts cover reading the
+response as well. Closing the model or settings dialog, as well as switching
+provider, aborts a running model query. A transcription can be aborted via the
+microphone button; a context switch or hiding the app also discards the voice
+input. Late results are no longer inserted.
 
-## Anbieter
+## Providers
 
-Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten. Sechs Anbieter stehen zur Wahl:
+An **entry in the preference list** (Settings › Modelle › *Modell hinzufügen*)
+connects a provider with a model; in the chat you switch between entries via the
+pill next to the input. The chosen model stays with the conversation — a chat
+from the history comes back with its own, a new chat starts with the one last
+chosen. Six providers are available:
 
-| Anbieter | Zugang | Bemerkung |
-| -------- | ------ | --------- |
-| **OpenAI** | API-Key | Spricht die Responses-API; kann Bilder und Reasoning-Level |
-| **Anthropic** | API-Key | |
-| **Google** | API-Key | |
-| **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |
-| **MLX-LM (lokal)** | Server-URL | `mlx_lm.server` auf Apple Silicon |
-| **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle; **Verbindung je Eintrag**, mehrere Ziele nebeneinander |
+| Provider | Access | Note |
+| -------- | ------ | ---- |
+| **OpenAI** | API key | Speaks the Responses API; supports images and reasoning levels |
+| **Anthropic** | API key | |
+| **Google** | API key | |
+| **Ollama** | Server URL | Native Ollama API (`/api/tags`, `/api/chat`), not the `/v1` layer |
+| **MLX-LM (local)** | Server URL | `mlx_lm.server` on Apple Silicon |
+| **OpenAI-compatible** | Server URL, key optional | Everything else with an OpenAI-shaped interface; **connection per entry**, several targets side by side |
 
-### OpenAI-kompatibel
+### OpenAI-compatible
 
-Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks.
+For anything that offers an OpenAI-shaped HTTP interface: **LM Studio**,
+**llama.cpp** (`llama-server`), **vLLM**, an in-house gateway, router services
+such as **OpenRouter**, Together, Groq or Fireworks.
 
-**Die Verbindung gehört zum Eintrag.** Jede Zeile der Präferenzliste trägt ihre eigene Adresse, ihren eigenen Schlüssel und ihren eigenen Namen — ein lokaler LM-Studio-Server und ein Firmen-Gateway stehen also nebeneinander, ohne sich zu überschreiben. Bei den übrigen fünf Anbietern bleibt es bei einer Konfiguration je Anbieter: Der OpenAI-Schlüssel soll sich gerade *nicht* über mehrere Zeilen verteilen. Der Preis dieser Wahl ist bekannt — wer sechs OpenRouter-Modelle führt, trägt den Schlüssel sechsmal ein und ändert ihn an sechs Stellen.
+**The connection belongs to the entry.** Every row of the preference list carries
+its own address, its own key and its own name — so a local LM Studio server and a
+corporate gateway sit side by side without overwriting each other. For the other
+five providers it stays at one configuration per provider: the OpenAI key is
+precisely *not* meant to be spread across several rows. The price of that choice
+is known — anyone running six OpenRouter models enters the key six times and
+changes it in six places.
 
-Eine bestehende Zeile änderst du über das **Stift-Symbol** in der Liste (per Tabulator erreichbar, Enter öffnet). Der Dialog heißt dann *Modell bearbeiten*, der Anbieter steht fest, und **Änderungen übernehmen** ersetzt die Zeile, statt eine neue anzulegen. Gespeicherte Schlüssel und Header bleiben erhalten, solange du sie nicht überschreibst oder mit dem Papierkorb daneben löschst.
+You edit an existing row via the **pencil icon** in the list (reachable by Tab,
+Enter opens it). The dialog is then called *Modell bearbeiten* (Edit model), the
+provider is fixed, and **Änderungen übernehmen** (Apply changes) replaces the row
+instead of creating a new one. Stored keys and headers are preserved as long as
+you do not overwrite them or delete them with the trash icon next to them.
 
-Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil vor (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, „Eigener Endpunkt“); danach ist jedes Feld frei änderbar, und die Vorlage selbst wird nicht gespeichert. Die Felder:
+At the top of the dialog sits a **template**. It pre-fills the server URL and API
+style (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, "custom
+endpoint"); after that every field is freely editable, and the template itself is
+not stored. The fields:
 
-| Feld | Bedeutung |
+| Field | Meaning |
 | ---- | --------- |
-| **Server-URL** | Wurzel der API, z. B. `http://localhost:1234/v1`. Pflichtangabe; ein Schrägstrich am Ende wird abgeschnitten |
-| **API-Schlüssel** | **Optional.** Leer lassen heißt: es geht *kein* `Authorization`-Header hinaus — der Normalfall bei lokalen Servern. Mit Schlüssel: `Authorization: Bearer …` |
-| **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“) und unterscheidet die Zeilen voneinander. Leer lassen für „OpenAI-kompatibel“ |
-| **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen |
-| **API-Stil** | „Nur Chat Completions“ (Standard, passt fast immer) oder „Responses, sonst Chat Completions“. Geraten wird nichts; bei `404`/`405` auf `/responses` fällt Snotra genau einmal zurück und bleibt für die Sitzung dabei |
-| **TLS-Zertifikat ignorieren** | Wie bei Ollama, nur für selbst- oder intern signierte Zertifikate, denen du vertraust |
-| **Tools mitschicken** | Standardmäßig an. Aus lassen bei Servern, die an Tool-Schemata scheitern — dann bleibt es beim reinen Chat |
-| **Bild-Anhänge erlauben** | Standardmäßig aus. An nur, wenn das Modell dahinter Bilder versteht; sonst werden Anhänge im Chat gar nicht erst angeboten |
+| **Server URL** | Root of the API, e.g. `http://localhost:1234/v1`. Required; a trailing slash is stripped |
+| **API key** | **Optional.** Leaving it empty means *no* `Authorization` header goes out — the normal case for local servers. With a key: `Authorization: Bearer …` |
+| **Display name** | Appears in the chat before the model name ("LM Studio · qwen2.5") and distinguishes the rows from one another. Leave empty for "OpenAI-compatible" |
+| **Extra headers** | One `Name: Value` per line, for gateway tokens or tenant headers. Treated like a key: stored encrypted, no longer displayed after saving, never in logs or error messages |
+| **API style** | "Chat Completions only" (default, fits almost always) or "Responses, otherwise Chat Completions". Nothing is guessed; on `404`/`405` for `/responses` Snotra falls back exactly once and stays there for the session |
+| **Ignore TLS certificate** | As with Ollama, only for self-signed or internally signed certificates you trust |
+| **Send tools** | On by default. Turn it off for servers that choke on tool schemas — then it stays plain chat |
+| **Allow image attachments** | Off by default. Turn it on only if the model behind it understands images; otherwise attachments are not even offered in the chat |
 
-**Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt.
+**Model list:** "Modelle laden" (Load models) queries `GET {server URL}/models`.
+If that fails or the server returns an empty list, that is **not an error** — the
+model name can be entered by hand and the entry stays usable; the status line
+says why the list stayed empty. A manually entered name remains in place even if
+the list loads later after all.
 
-**Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama und MLX-LM.
+**Local or remote** is decided by the host of the server URL: `localhost`,
+`127.0.0.x`, `::1` and `*.local` count as local and get the more generous timeout
+for model listing, but the tighter history budget (see `historyCharLimit` below)
+— just like Ollama and MLX-LM.
 
-## Konfiguration
+## Configuration
 
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra AI → Einstellungen…* auf dem Mac, *Ansicht → Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,`. Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
+Most settings (provider, models, system prompt, language) are maintained
+directly in the app under **Einstellungen** (Settings) — opened via the menu bar
+(*Snotra AI → Einstellungen…* on macOS, *Ansicht → Einstellungen…* on Windows
+and Linux) or `Cmd/Ctrl+,`. There is deliberately no button for it: it used to
+sit in the chat header and was therefore gone as soon as you hid the chat column.
+Beyond that, a few JSON files live in the user profile (Electron's `userData`
+folder: macOS `~/Library/Application Support/Snotra AI`, Windows
+`%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`), among them
+`ui-preferences.json` with the following options:
 
-| Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
-| ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
-| `maxToolRounds`    | Maximale Tool-Runden pro Chat-Anfrage (auch in der App einstellbar)         | 14        | 1 – 500          |
-| `historyCharLimit` | Zeichen-Budget für den an den Provider gesendeten Chat-Verlauf (siehe unten)| 200 000   | 4 000 – 2 000 000 |
+| Key                | Meaning                                                                   | Default   | Range            |
+| ------------------ | ------------------------------------------------------------------------- | --------- | ---------------- |
+| `maxToolRounds`    | Maximum tool rounds per chat request (also settable in the app)            | 14        | 1 – 500          |
+| `historyCharLimit` | Character budget for the chat history sent to the provider (see below)     | 200,000   | 4,000 – 2,000,000 |
 
-**Umstieg von „Weyouze Anything“ (bis v1.0.4):** Beim ersten Start kopiert Snotra AI Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben.
+**Migrating from "Weyouze Anything" (up to v1.0.4):** on first start Snotra AI
+copies settings, presets, folder history and chat history from the old `userData`
+folder; the old folder stays behind unchanged as a backup. On macOS the API keys
+have to be entered once more, because the keychain entry of Electron's
+`safeStorage` is tied to the app name; the settings then show "Key neu eingeben"
+(Re-enter key). A chat history that can no longer be decrypted as a result is
+preserved as `chat-history.json.undecryptable-<timestamp>` instead of being
+overwritten.
 
-**Verlaufs-Trimming (`historyCharLimit`):** Damit lange Sessions nicht ins Token-Limit des Providers laufen, wird der Verlauf pro Anfrage budgetiert (Heuristik: 1 Token ≈ 4 Zeichen). Ältere Nachrichten jenseits des Budgets werden weggelassen, und große Tool-Ausgaben früherer Tool-Runden (z. B. gelesene Dateien) werden auf einen Platzhalter gekürzt. Die aktuelle Frage, alle User-Nachrichten im Fenster und die Tool-Ausgaben der jüngsten Runde bleiben immer vollständig erhalten.
+**History trimming (`historyCharLimit`):** so that long sessions do not run into
+the provider's token limit, the history is budgeted per request (heuristic: 1
+token ≈ 4 characters). Older messages beyond the budget are dropped, and large
+tool outputs from earlier tool rounds (files that were read, for instance) are
+shortened to a placeholder. The current question, all user messages in the window
+and the tool outputs of the most recent round are always preserved in full.
 
-**Was der Prompt kostet:** Unter dem Eingabefeld steht die Größe des Kontextfensters der letzten Anfrage. Ein Klick darauf (oder Enter/Leertaste, wenn der Fokus darauf steht) klappt auf, **woraus** sie besteht: jeder eingeschaltete Skill einzeln, die Tool-Definitionen getrennt nach eingebauten Tools und je MCP-Server, der übrige System-Prompt und der Verlauf. Die Gesamtzahl ist die echte Zahl des Anbieters, die Aufteilung darauf ist aus der Zeichenzahl geschätzt (Fließtext, Markdown und JSON-Schemas mit unterschiedlicher Dichte, und je nach Anbieter mit anderem Teiler — ein Tokenizer packt JSON dichter als der nächste) — beides steht so auch in der Fläche. Hat der Anbieter einen Teil des Prompts aus seinem Cache gelesen, steht die Zahl direkt unter der Gesamtsumme; sie kommt wie diese vom Anbieter und ist keine Schätzung. Aus einer Skill-Zeile springst du direkt zu seinem Schalter unter **Einstellungen › Skills**, um ihn abzuschalten.
+**What the prompt costs:** below the input field stands the size of the context
+window of the last request. Clicking it (or Enter/Space when it has focus)
+expands **what it consists of**: every enabled skill individually, the tool
+definitions separated into built-in tools and per MCP server, the rest of the
+system prompt, and the history. The total is the provider's real figure; the
+breakdown of it is estimated from the character count (prose, Markdown and JSON
+schemas have different densities, and the divisor differs per provider — one
+tokenizer packs JSON more densely than the next) — both of which is stated in the
+panel as well. If the provider read part of the prompt from its cache, that
+number stands directly below the total; like the total it comes from the provider
+and is not an estimate. From a skill row you jump straight to its switch under
+**Settings › Skills** to turn it off.
 
-**Tool-Berechtigungen:** Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse (`read`, `read-sensitive`, `write`, `delete`, `execute`, `external`) und Modus. Den Modus wählst du in der **Chat-Leiste** (Pille neben der Modell-Auswahl) oder unter **Einstellungen › Tools › Berechtigungen** – beide zeigen denselben Stand. „Auto“ verlangt eine Bestätigung in einem Systemdialog, der Weg zurück zu „Intelligent“ geht jederzeit ohne Rückfrage. Der Modus gehört zur Konversation: Ein Chat aus dem Verlauf bringt seinen eigenen wieder mit, ein **neuer** Chat beginnt immer bei „Intelligent“. „Auto“ überlebt außerdem keinen Neustart der App — nach dem Start läuft auch ein Auto-Chat zunächst auf „Intelligent“, bis du ihn im Verlauf ausdrücklich öffnest. Modus, Sperr-/Erlaubnisregeln und eigene sensible Pfadmuster liegen in einer eigenen, HMAC-signierten Datei `tool-policy.json` im `userData`-Ordner (Schlüssel über `safeStorage` geschützt); wird die Datei manipuliert, fällt Snotra auf den Modus „Intelligent“ zurück und verwirft Erlaubnisse, Sperren bleiben wirksam. Der bis v1.3.1 genutzte Schalter `allowWorkspaceWrite` entfällt; beide Altwerte laufen auf den Standardmodus hinaus, die Einstellungen weisen einmalig darauf hin.
+**Tool permissions:** whether a tool call runs is decided by Snotra per call,
+based on risk class (`read`, `read-sensitive`, `write`, `delete`, `execute`,
+`external`) and mode. You choose the mode in the **chat bar** (the pill next to
+the model selection) or under **Settings › Tools › Berechtigungen**
+(Permissions) — both show the same state. Switching to "Auto" requires a
+confirmation in a system dialog; the way back to "smart" is always possible
+without asking. The mode belongs to the conversation: a chat from the history
+brings its own back, and a **new** chat always starts at "smart". "Auto" also
+does not survive an app restart — after startup even an auto chat runs on "smart"
+until you explicitly open it from the history. Mode, deny/allow rules and custom
+sensitive path patterns live in their own HMAC-signed file `tool-policy.json` in
+the `userData` folder (the key protected via `safeStorage`); if the file is
+tampered with, Snotra falls back to "smart" mode and discards allowances, while
+denials remain in effect. The `allowWorkspaceWrite` switch used up to v1.3.1 is
+gone; both old values map onto the default mode, and the settings point this out
+once.
 
-| Modus | Lesen | Sensible Daten lesen, Ändern, Überschreiben ohne Rückweg, Ausführen, externe Dienste |
+| Mode | Reading | Reading sensitive data, modifying, overwriting irreversibly, executing, external services |
 | ----- | ----- | ----- |
-| **Intelligent** (`smart`, Standard) | läuft | fragt im Chat nach Freigabe |
-| **Immer fragen** (`ask-all`) | fragt | fragt |
-| **Auto** (`auto`) | läuft | läuft ohne Rückfrage |
+| **Smart** (`smart`, default) | runs | asks for approval in the chat |
+| **Always ask** (`ask-all`) | asks | asks |
+| **Auto** (`auto`) | runs | runs without asking |
 
-Harte Grenzen gelten in jedem Modus: kein Ausbruch aus dem Projektordner, Skill-Verzeichnisse bleiben schreibgeschützt, der `userData`-Ordner von Snotra ist für Tools gesperrt, und Ausgaben, die einen der eigenen Provider-Schlüssel enthalten, werden zurückgehalten. Sensible Pfade (`.env*`, `*.pem`, `*.key`, `id_*`, `credentials*`, `secrets*`, `*.p12`, `*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, Ordner `.ssh`, `.aws`, `.gnupg`, `.kube`) und Inhalte (Private-Key-Header, bekannte Token-Präfixe, Credential-Zuweisungen, Bearer-Token) werden lokal erkannt: gezielte Zugriffe brauchen eine Freigabe, breite Suchen und Listen lassen solche Einträge weg und melden nur die Anzahl (`omitted_sensitive`). Das Konzept dazu steht in [`docs/sicherheitskonzept.md`](docs/sicherheitskonzept.md).
+Hard boundaries apply in every mode: no escaping the project folder, skill
+directories stay read-only, Snotra's `userData` folder is off limits for tools,
+and outputs containing one of its own provider keys are held back. Sensitive
+paths (`.env*`, `*.pem`, `*.key`, `id_*`, `credentials*`, `secrets*`, `*.p12`,
+`*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, the folders `.ssh`, `.aws`, `.gnupg`,
+`.kube`) and contents (private-key headers, known token prefixes, credential
+assignments, bearer tokens) are detected locally: targeted access needs an
+approval, while broad searches and listings omit such entries and only report the
+count (`omitted_sensitive`). The concept behind this is written up in
+[`docs/sicherheitskonzept.md`](docs/sicherheitskonzept.md) (German).
 
-Die drei Schreib-Tools (max. 2 MB pro Datei):
+The three write tools (max. 2 MB per file):
 
-| Tool | Wofür |
+| Tool | What for |
 | ---- | ----- |
-| `write_file_text` | Textdatei anlegen oder komplett überschreiben; fehlende Zwischenordner werden automatisch erzeugt. Beim Überschreiben landet vorher eine Kopie der alten Fassung im Papierkorb (Dateiname mit Zeitstempel); gelingt das nicht, gilt der Aufruf als `delete` und braucht eine eigene Freigabe |
-| `edit_file` | Eine gezielte Ersetzung in einer bestehenden Datei (`old_string` → `new_string`), ohne die ganze Datei neu zu schreiben |
-| `apply_patch` | Mehrere zusammenhängende Änderungen in einem Aufruf — als Liste von Ersetzungen in einer Datei oder als unified diff über mehrere Dateien. Alles oder nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. Dateien anlegen, löschen oder umbenennen kann das Tool nicht |
+| `write_file_text` | Create a text file or overwrite it completely; missing intermediate folders are created automatically. When overwriting, a copy of the old version goes to the trash first (file name with timestamp); if that does not succeed, the call counts as `delete` and needs its own approval |
+| `edit_file` | One targeted replacement in an existing file (`old_string` → `new_string`), without rewriting the whole file |
+| `apply_patch` | Several related changes in one call — as a list of replacements in one file, or as a unified diff across several files. All or nothing: if a step or a hunk fails, every affected file stays unchanged. The tool cannot create, delete or rename files |
 
-Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt. Im Chat erscheint die Tool-Zeile (z. B. „Datei docs/neu.md wird geschrieben …“) bereits, während das Modell den Inhalt noch erzeugt — nicht erst nach dem eigentlichen Schreibvorgang.
+Access stays strictly limited to the project folder, as with the read tools. In
+the chat, the tool line (e.g. "Datei docs/neu.md wird geschrieben …") already
+appears while the model is still producing the content — not only after the
+actual write.
 
-**Freigabe-Karte:** Braucht ein Aufruf eine Freigabe, erscheint im Chat eine Karte („Änderung bestätigen“, „Ausführung bestätigen“ bzw. „Dateizugriff bestätigen“) mit Tool, Wirkung, allen Zielpfaden, Grund und – bei Schreib- und Ausführungs-Tools – einer maskierten Vorschau des neuen Inhalts, der Ersetzung bzw. des vollständigen Befehls; bei `shell_execute` nennt die Karte zusätzlich die erkannte Shell und das Arbeitsverzeichnis; beim Überschreiben steht dabei, ob eine Kopie in den Papierkorb wandert. Bei sensiblen Dateien nennt die Karte den Provider, an den der Inhalt ginge. Drei Aktionen: **Einmal erlauben**, **Für diese Sitzung erlauben** (nur für Lesen, sensibles Lesen und gewöhnliches Ändern; genau dieses Tool auf genau diese Ziele, nicht im Modus „Immer fragen“) und **Ablehnen**; Esc lehnt ab, kein Button ist vorbelegt, es gibt kein Zeitlimit. Wechseln Chat, Workspace, Modus oder Regeln, während eine Karte offen ist, verfällt die Anfrage und der Lauf endet sichtbar („Anfrage verfallen“). Lehnst du ab, erhält das Modell ein `permission_denied`-Ergebnis; die Tool-Zeile zeigt die Entscheidung („· abgelehnt“, „· blockiert“) mit Grund, Klasse und Status als Tooltip – auch in gespeicherten Verläufen.
+**Approval card:** if a call needs approval, a card appears in the chat
+("Änderung bestätigen", "Ausführung bestätigen" or "Dateizugriff bestätigen" —
+confirm change / execution / file access) with the tool, its effect, all target
+paths, the reason and — for write and execution tools — a masked preview of the
+new content, the replacement or the complete command; for `shell_execute` the
+card additionally names the detected shell and the working directory; when
+overwriting it states whether a copy goes to the trash. For sensitive files the
+card names the provider the content would go to. Three actions: **allow once**,
+**allow for this session** (only for reading, sensitive reading and ordinary
+modification; exactly this tool on exactly these targets, and not in "always ask"
+mode) and **deny**; Esc denies, no button is preselected, and there is no time
+limit. If chat, workspace, mode or rules change while a card is open, the request
+lapses and the run ends visibly ("request expired"). If you deny, the model
+receives a `permission_denied` result; the tool line shows the decision
+("· denied", "· blocked") with reason, class and status as a tooltip — in saved
+histories too.
 
-**Regelverwaltung (Einstellungen › Tools):** Sperren und Erlaubnisse je Tool oder Risikoklasse mit Pfadmuster (`*` innerhalb eines Ordners, `**` über Unterordner), getrennt für alle Workspaces und den geöffneten Workspace; Sperren gewinnen immer, dauerhafte Erlaubnisse gibt es nur für Lesen und gewöhnliches Ändern und sie werden – wie das Löschen einer Sperre – im Systemdialog bestätigt. Dazu eigene sensible Pfadmuster und drei Reset-Aktionen mit ausgewiesenem Umfang: Sitzungsfreigaben löschen, Workspace-Regeln zurücksetzen, alle Berechtigungen zurücksetzen (setzt auch den Modus auf „Intelligent“). Diese Einstellungen wirken sofort, unabhängig von „Übernehmen“.
+**Rule management (Settings › Tools):** denials and allowances per tool or risk
+class with path patterns (`*` within a folder, `**` across subfolders), kept
+separately for all workspaces and for the opened workspace; denials always win,
+permanent allowances exist only for reading and ordinary modification, and — like
+deleting a denial — they are confirmed in a system dialog. Alongside that, custom
+sensitive path patterns and three reset actions with a stated scope: clear
+session approvals, reset workspace rules, reset all permissions (which also sets
+the mode back to "smart"). These settings take effect immediately, independently
+of "Apply".
 
 ## Skills
 
-Ein **Skill** ist ein Verzeichnis mit einer `SKILL.md` im
-[Agent-Skills-Format](https://agentskills.io/specification): YAML-Frontmatter
-mit `name` (muss dem Verzeichnisnamen entsprechen) und `description`, darunter
-die Anweisungen als Markdown. Eingeschaltete Skills gehen als Teil des
-System-Prompts ans Modell.
+A **skill** is a directory containing a `SKILL.md` in the
+[Agent Skills format](https://agentskills.io/specification): YAML front matter
+with `name` (which must match the directory name) and `description`, followed by
+the instructions as Markdown. Enabled skills go to the model as part of the
+system prompt.
 
-**System-Skills** liegen unter `system-skills/` im App-Bundle, gehören zum
-Produkt und sind voreingestellt aktiv. Mitgeliefert wird
-`snotra-capabilities` — damit kann die App Auskunft über sich selbst geben
-(was geht, was nicht, wo etwas eingestellt wird), statt zu raten.
+**System skills** live under `system-skills/` in the app bundle, are part of the
+product and are enabled by default. Shipped with it is `snotra-capabilities` —
+with it the app can give information about itself (what works, what does not,
+where something is configured) instead of guessing.
 
-**Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus drei Quellen, in
-dieser Reihenfolge:
+**Folder skills** are read by Snotra when a folder is opened, from three sources,
+in this order:
 
-| # | Ebene | Pfad |
+| # | Level | Path |
 |---|-------|------|
-| 1 | Workspace | `<ordner>/.agents/skills/*/SKILL.md` |
-| 2 | Benutzer | `~/.snotra/skills/*/SKILL.md` |
-| 3 | Benutzer (Alt-Ort) | `~/.agents/skills/*/SKILL.md` |
+| 1 | Workspace | `<folder>/.agents/skills/*/SKILL.md` |
+| 2 | User | `~/.snotra/skills/*/SKILL.md` |
+| 3 | User (legacy location) | `~/.agents/skills/*/SKILL.md` |
 
-`~/.snotra/` ist **Snotras eigenes Benutzerverzeichnis** — die Wurzel für
-Nutzerdaten, die Snotra gehören und für die es keinen herstellerneutralen
-Standard gibt; `skills/` ist ihr erster Bewohner. Das ist der empfohlene Ort
-für globale Skills. `~/.agents/skills` wird weiterhin gelesen, damit
-bestehende Installationen nicht brechen. Angelegt wird `~/.snotra/` nicht von
-selbst, und vorhandene Skills verschiebt Snotra nirgendwohin: ein fehlendes
-Verzeichnis ist kein Fehler.
+`~/.snotra/` is **Snotra's own user directory** — the root for user data that
+belongs to Snotra and for which no vendor-neutral standard exists; `skills/` is
+its first inhabitant. It is the recommended place for global skills.
+`~/.agents/skills` is still read so that existing installations do not break.
+`~/.snotra/` is not created automatically, and Snotra does not move existing
+skills anywhere: a missing directory is not an error.
 
-Nicht zu verwechseln mit dem von Electron verwalteten `userData`-Ordner — der
-bleibt App-Zustand und ist für Tools gesperrt. `~/.snotra/` ist das Gegenteil:
-ein Ort, den du selbst öffnest, befüllst und versionierst.
+Not to be confused with the `userData` folder managed by Electron — that stays
+app state and is off limits for tools. `~/.snotra/` is the opposite: a place you
+open, fill and version yourself.
 
-Verzeichnisse anderer Werkzeuge — insbesondere `.claude/` — liest Snotra
-nicht, weder im geöffneten Ordner noch im Home-Verzeichnis. Gibt es denselben
-Namen mehrfach, gewinnt der erste Treffer — die übrigen erscheinen in den
-Einstellungen als „überdeckt“ mit Pfad. System-Skills stehen ganz vorn und lassen sich nicht
-durch ein untergeschobenes Verzeichnis ersetzen. Ungültige Einträge (kein
-Verzeichnis, fehlende `SKILL.md`, Name ≠ Verzeichnis) werden übersprungen und
-mit Grund angezeigt, statt den Scan abzubrechen.
+Directories belonging to other tools — `.claude/` in particular — are not read by
+Snotra, neither in the opened folder nor in the home directory. If the same name
+exists more than once, the first hit wins — the rest appear in the settings as
+"shadowed", with their path. System skills come first and cannot be replaced by a
+directory slipped underneath. Invalid entries (not a directory, missing
+`SKILL.md`, name ≠ directory) are skipped and shown with a reason, instead of
+aborting the scan.
 
-Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
-(beliebig viele gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
-Die Skill-Verzeichnisse werden **beobachtet**: Legst du einen Skill an, änderst
-seine `SKILL.md` oder installierst einen per `skill-manager`, merkt Snotra das
-von selbst — die Liste in den Einstellungen und die `/`-Vervollständigung im
-Chat ziehen sofort nach, ohne dass du etwas anklicken musst.
-„Skills neu laden“ bleibt als Ausweg für die Fälle, in denen das Betriebssystem
-keine Änderung meldet — etwa auf Netzlaufwerken.
+Everything is managed under **Settings › Skills**: a checkbox per skill (any
+number at once), grouped by source, plus "Skills neu laden" (Reload skills). The
+skill directories are **watched**: if you create a skill, change its `SKILL.md`
+or install one via `skill-manager`, Snotra notices by itself — the list in the
+settings and the `/` completion in the chat follow immediately, without you
+having to click anything. "Reload skills" remains as a way out for the cases in
+which the operating system reports no change — on network drives, for instance.
 
-**Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder Inhalt und damit
-ein Prompt-Injection-Risiko, deshalb braucht jeder eine ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
-maßgeblich bleiben die Tool-Häkchen unter Einstellungen › Tools.
+**Folder skills are never automatically active:** they are foreign content and
+therefore a prompt-injection risk, so each one needs an explicit selection.
+`allowed-tools` from the front matter is ignored — what counts remains the tool
+checkboxes under Settings › Tools.
 
-### Einen Skill im Chat aufrufen: `/name`
+### Invoking a skill in the chat: `/name`
 
-Für den einmaligen Einsatz musst du nicht in die Einstellungen. Tippst du im
-Eingabefeld ein **`/`**, öffnet sich — wie bei der `@`-Dateireferenz — eine
-Liste **aller verfügbaren** Skills, nicht nur der eingeschalteten; gesucht wird
-dabei über Name *und* Beschreibung. `↑`/`↓` wählt aus, `Enter` oder `Tab`
-übernimmt, `Esc` schließt. Ein offener Ordner ist nicht nötig, die
-System-Skills sind immer da.
+For one-off use you do not have to go into the settings. Type a **`/`** in the
+input field and — as with the `@` file reference — a list of **all available**
+skills opens, not just the enabled ones; the search covers name *and*
+description. `↑`/`↓` selects, `Enter` or `Tab` accepts, `Esc` closes. An open
+folder is not required, and the system skills are always there.
 
-Übernommen wird der Text `/name`, der in deiner Nachricht stehen bleibt. Er
-wirkt für den **weiteren Verlauf dieses Chats** — auch für die Folgeantworten
-und nach dem Neuladen des Chats, weil der Aufruf Teil der Nachricht ist. Deine
-Auswahl unter Einstellungen › Skills ändert sich dadurch nicht — der Aufruf
-gilt nur für diesen Chat und ist deine bewusste Einzelentscheidung.
+What gets inserted is the text `/name`, which stays in your message. It takes
+effect for the **rest of this chat** — including follow-up answers and after
+reloading the chat, because the invocation is part of the message. Your selection
+under Settings › Skills is not changed by it — the invocation applies only to this
+chat and is your deliberate one-off decision.
 
-Nur was *du* schreibst, zählt als Aufruf — ein `/name` in einer Antwort des
-Modells oder in einem Tool-Ergebnis bleibt wirkungslos. Damit kann sich weder
-das Modell selbst noch fremder Dateiinhalt einen Skill einschalten. Ein
-Schrägstrich mitten im Wort oder in einem Pfad (`/usr/bin`, `und/oder`) bleibt
-normaler Text.
+Only what *you* write counts as an invocation — a `/name` in a model answer or in
+a tool result has no effect. That way neither the model itself nor foreign file
+content can switch on a skill. A slash in the middle of a word or in a path
+(`/usr/bin`, `and/or`) stays ordinary text.
 
-### Passende Skills vorgeschlagen bekommen
+### Getting suitable skills suggested
 
-`/name` hilft nur, wenn du den Namen kennst. Deshalb schlägt Snotra dir einen
-passenden Skill vor: Schreib dein Anliegen und tipp dann ein **`/`** — unter
-dem Eingabefeld erscheint „Passt dazu: `/meeting-protocol`". Ein Klick
-übernimmt ihn, das `×` blendet ihn aus. Ohne `/` passiert nichts; der
-Vorschlag drängt sich also nie in ein normales Gespräch.
+`/name` only helps if you know the name. So Snotra suggests a fitting skill:
+write your request and then type a **`/`** — below the input field, "Passt dazu:
+`/meeting-protocol`" (Fits this) appears. A click accepts it, the `×` hides it.
+Without `/` nothing happens; the suggestion therefore never pushes itself into an
+ordinary conversation.
 
-Woher der Vorschlag kommt, stellst du unter **Einstellungen › Skills ›
-Vorschläge im Chat** ein:
+Where the suggestion comes from is configured under **Settings › Skills ›
+Vorschläge im Chat** (Suggestions in chat):
 
-- **Aus den Beschreibungen (Voreinstellung).** Snotra vergleicht deine Zeile
-  mit den Skill-Beschreibungen — auf deinem Rechner, ohne Netz und ohne
-  Kosten. Wörter, die in vielen Beschreibungen stehen, zählen dabei weniger
-  als seltene. Gemessen an 16 Skills lag der richtige Vorschlag in 10 von 13
-  Fällen vorn, und bei fünf Anfragen ohne passenden Skill kam kein einziger
-  Fehlvorschlag. Was dieses Verfahren nicht kann: Fachkürzel erkennen, die in
-  keiner Beschreibung stehen (`TTAI-421`), und zwei sehr ähnliche Skills
-  auseinanderhalten.
-- **Das Modell fragen.** Genau dafür. Kostet dann aber einen kurzen Aufruf
-  beim Anbieter, dauert einen Moment, und deine Zeile geht zusammen mit den
-  Skill-Namen dorthin.
-- **Keine Vorschläge.**
+- **From the descriptions (default).** Snotra compares your line with the skill
+  descriptions — on your machine, without the network and without cost. Words
+  that appear in many descriptions count for less than rare ones. Measured
+  against 16 skills, the correct suggestion came first in 10 of 13 cases, and for
+  five requests with no fitting skill there was not a single false suggestion.
+  What this method cannot do: recognise domain abbreviations that appear in no
+  description (`TTAI-421`), and tell two very similar skills apart.
+- **Ask the model.** Exactly right for that. But it then costs a short call to
+  the provider, takes a moment, and your line goes there together with the skill
+  names.
+- **No suggestions.**
 
-In jedem Fall gilt: Vorgeschlagen wird, eingeschaltet nie. Ein Ordner-Skill
-ist fremder Inhalt, und ihn zu übernehmen bleibt dein Klick.
+In every case: suggested, never enabled. A folder skill is foreign content, and
+accepting it remains your click.
 
-### Dateien neben der `SKILL.md`
+### Files next to the `SKILL.md`
 
-Viele Skills legen ihr eigentliches Wissen daneben ab (`references/`,
-`assets/`, `scripts/`) und verweisen aus der `SKILL.md` darauf. Das
-Verzeichnis jedes **eingeschalteten** Skills ist deshalb eine zweite
-**Lesewurzel**: Die Lese-Tools erreichen es über das Präfix
-`skill:<name>/<pfad>`, zum Beispiel `skill:meeting-protocol/references/vorlage.md`.
-Der Systemprompt nennt die Adressierung und die eingeschalteten Namen, sobald
-ein Ordner offen ist.
+Many skills put their actual knowledge alongside it (`references/`, `assets/`,
+`scripts/`) and point to it from the `SKILL.md`. The directory of every
+**enabled** skill is therefore a second **read root**: the read tools reach it
+via the prefix `skill:<name>/<path>`, for example
+`skill:meeting-protocol/references/template.md`. The system prompt names the
+addressing scheme and the enabled names as soon as a folder is open.
 
-Die Grenzen bleiben eng gezogen:
+The boundaries stay narrow:
 
-- **Nur lesend.** `write_file_text`, `edit_file` und `apply_patch` bekommen die
-  Skill-Verzeichnisse gar nicht erst zu sehen und weisen `skill:`-Pfade ab.
-- **Nur eingeschaltete Skills.** Ein nicht ausgewählter Skill ist kein Pfad;
-  die Fehlermeldung nennt die tatsächlich eingeschalteten Namen.
-- **Kein Ausbruch.** `..` und Symlinks werden gegen den echten Pfad geprüft,
-  genau wie beim Arbeitsordner.
-- **Erkennbar im Chat.** Lesezugriffe auf Skill-Dateien bekommen im Tool-Log
-  ein eigenes Symbol samt „(Skill ‹name›)“ im Text, damit sie nicht wie ein
-  Zugriff auf das Projekt aussehen; in der zugeklappten Zusammenfassung
-  stehen Skill-Zugriffe an erster Stelle.
+- **Read-only.** `write_file_text`, `edit_file` and `apply_patch` never even see
+  the skill directories and reject `skill:` paths.
+- **Enabled skills only.** A skill that is not selected is not a path; the error
+  message names the skills that actually are enabled.
+- **No escaping.** `..` and symlinks are checked against the real path, exactly as
+  with the working folder.
+- **Recognisable in the chat.** Read accesses to skill files get their own symbol
+  in the tool log plus "(Skill ‹name›)" in the text, so that they do not look like
+  access to the project; in the collapsed summary, skill accesses come first.
 
-Ohne geöffneten Ordner gibt es überhaupt keine Tools, also auch keine
-Skill-Pfade.
+Without an open folder there are no tools at all, and therefore no skill paths
+either.
 
-## Projektanweisungen: `AGENTS.md`
+## Project instructions: `AGENTS.md`
 
-Ein Skill beschreibt eine Arbeitsweise und wird eingeschaltet. Eine
-`AGENTS.md` beschreibt, wie in *diesem* Projekt gearbeitet wird — welcher
-Paketmanager, welche Testbefehle, welche Konventionen, welche Ordner tabu sind
-— und gilt ohne Auswahl. Snotra liest sie beim Aufbau jedes System-Prompts aus
-drei Stellen:
+A skill describes a way of working and gets switched on. An `AGENTS.md` describes
+how work is done in *this* project — which package manager, which test commands,
+which conventions, which folders are off limits — and applies without being
+selected. Snotra reads it from three places while building every system prompt:
 
-| # | Pfad | Geltung |
-|---|------|---------|
-| 1 | `<ordner>/.agents/AGENTS.md` | dieses Projekt |
-| 2 | `~/.snotra/AGENTS.md` | überall |
-| 3 | `~/.agents/AGENTS.md` | überall, älterer Ort, wird weiter gelesen |
+| # | Path | Scope |
+|---|------|-------|
+| 1 | `<folder>/.agents/AGENTS.md` | this project |
+| 2 | `~/.snotra/AGENTS.md` | everywhere |
+| 3 | `~/.agents/AGENTS.md` | everywhere, older location, still read |
 
-Die Reihenfolge ist dieselbe wie bei den Skills: das Projekt zuerst, dann die
-globalen Orte. **Alle vorhandenen Dateien ergänzen einander** und gelten
-gemeinsam — keine ersetzt eine andere, es gibt also nichts zu entscheiden und
-keine Rangfolge. Fehlende Dateien sind der Normalfall
-und kein Fehler.
+The order is the same as for skills: the project first, then the global places.
+**All existing files complement one another** and apply jointly — none replaces
+another, so there is nothing to decide and no precedence. Missing files are the
+normal case and not an error.
 
-**Im Projekt zählt allein `.agents/`.** Eine `AGENTS.md` direkt in der
-Ordnerwurzel liest Snotra **nicht** — auch wenn das außerhalb dieses Projekts
-die verbreitetere Form ist. So gibt es im Projekt genau einen Ort für
-KI-Anweisungen, denselben wie für Skills. Wer eine Datei aus einem anderen
-Werkzeug übernehmen will, verschiebt sie nach `.agents/`.
+**Within the project, only `.agents/` counts.** An `AGENTS.md` directly in the
+folder root is **not** read by Snotra — even though that is the more common form
+outside this project. This gives the project exactly one place for AI
+instructions, the same one as for skills. Anyone wanting to adopt a file from
+another tool moves it into `.agents/`.
 
-`AGENTS.md` ist der einzige Dateiname, den Snotra dafür kennt — kein
-`CLAUDE.md`, kein `.cursorrules`. Je Datei gehen höchstens 20.000 Zeichen mit;
-Längeres wird sichtbar gekürzt statt verworfen. Wie viel jede Datei am
-Kontextfenster ausmacht, steht einzeln in der Aufschlüsselung unter dem
-Eingabefeld.
+`AGENTS.md` is the only file name Snotra knows for this — no `CLAUDE.md`, no
+`.cursorrules`. At most 20,000 characters per file are sent along; anything
+longer is visibly truncated rather than discarded. How much each file contributes
+to the context window is listed individually in the breakdown below the input
+field.
 
-**Änderungen wirken sofort**, ohne Neustart und ohne Knopf: Die Dateien werden
-bei jeder Nachricht frisch gelesen.
+**Changes take effect immediately**, without a restart and without a button: the
+files are read afresh with every message.
 
-**Der Inhalt ist Anweisung, keine Daten.** Anders als ein Tool-Ergebnis soll
-eine `AGENTS.md` das Verhalten des Modells ändern — sonst wäre sie sinnlos. Wer
-einen fremden Ordner öffnet, übernimmt damit auch dessen Anweisungen. Die
-Notbremse dafür ist der Schalter **Einstellungen › Allgemein ›
-„`AGENTS.md` mitschicken"** (voreingestellt an), der alle drei Stellen
-abschaltet.
+**The content is instruction, not data.** Unlike a tool result, an `AGENTS.md` is
+*meant* to change the model's behaviour — otherwise it would be pointless. Whoever
+opens a foreign folder also adopts its instructions. The emergency brake for that
+is the switch **Settings › Allgemein › "`AGENTS.md` mitschicken"** (General ›
+Send `AGENTS.md`, on by default), which turns off all three places.
 
-## Gedächtnis: `memory.md`
+## Memory: `memory.md`
 
-Snotra fängt nicht jeden Chat bei null an. Sag im Chat **„bitte merke dir …"**,
-und der Satz steht ab der nächsten Nachricht wieder im Systemprompt — auch in
-einem neuen Chat, auch nach einem Neustart.
+Snotra does not start every chat from scratch. Say **"bitte merke dir …"**
+(please remember …) in the chat, and from the next message on the sentence is back
+in the system prompt — in a new chat as well, and after a restart.
 
-Es gibt zwei Ebenen, beide als gewöhnliche Markdown-Datei:
+There are two levels, both ordinary Markdown files:
 
-| Ebene | Datei | Gilt für |
+| Level | File | Applies to |
 | --- | --- | --- |
-| Projekt | `<ordner>/.agents/memory.md` | nur den geöffneten Ordner |
-| Global | `~/.snotra/memory.md` | jeden Ordner |
+| Project | `<folder>/.agents/memory.md` | only the opened folder |
+| Global | `~/.snotra/memory.md` | every folder |
 
-Dieselben zwei Orte wie bei `AGENTS.md` und den Skills. Weil es Dateien sind,
-kannst du sie im Editor lesen und bearbeiten, und das Projekt-Gedächtnis zieht
-beim Verschieben des Ordners mit um. Es liegt damit aber auch **in deinem
-Projekt** und kann in ein Repository geraten — was nur dich angeht, gehört ins
-globale Gedächtnis oder gar nicht hinein. **Passwörter, Schlüssel und
-Zugangsdaten niemals:** Das Gedächtnis geht mit jeder Anfrage an den Anbieter.
+The same two places as for `AGENTS.md` and the skills. Because they are files,
+you can read and edit them in an editor, and the project memory moves along when
+the folder moves. But it therefore also lives **inside your project** and can end
+up in a repository — what concerns only you belongs in the global memory, or
+nowhere. **Never passwords, keys or credentials:** the memory goes to the provider
+with every request.
 
-Snotra merkt sich auch **von selbst**, was dauerhaft wichtig aussieht. Jeder
-Merkvorgang ist freigabepflichtig und steht mit Ziel und Pfad im Tool-Log — und
-das selbstständige Merken lässt sich abschalten, dann bleibt es bei dem, worum
-du ausdrücklich bittest.
+Snotra also remembers **by itself** what looks permanently important. Every act of
+remembering requires approval and appears with its target and path in the tool
+log — and the self-directed remembering can be switched off, leaving only what you
+explicitly ask for.
 
-Unter **Einstellungen › Gedächtnis** siehst du beide Ebenen mit allen
-Einträgen, löschst einzelne davon und schaltest jede Ebene ab. Je Ebene gehen
-höchstens 8.000 Zeichen mit; wie viel das am Kontextfenster ausmacht, steht
-einzeln in der Aufschlüsselung unter dem Eingabefeld.
+Under **Settings › Gedächtnis** (Memory) you see both levels with all their
+entries, delete individual ones and switch off each level. At most 8,000
+characters per level are sent along; how much that contributes to the context
+window is listed individually in the breakdown below the input field.
 
-## MCP-Server
+## MCP servers
 
-Über das **Model Context Protocol (MCP)** bindest du Werkzeuge fremder Systeme
-ein — Jira, Confluence, Datenbanken, interne APIs — ohne dass Snotra dafür ein
-eigenes Tool mitbringen müsste. Eine neue Fähigkeit kommt per Konfiguration
-dazu, nicht per Release. Verwaltet wird das unter **Einstellungen › MCP**; von
-Hand in JSON-Dateien zu schreiben ist nicht nötig.
+Through the **Model Context Protocol (MCP)** you bring in tools from foreign
+systems — Jira, Confluence, databases, internal APIs — without Snotra having to
+ship a tool of its own for them. A new capability arrives by configuration, not
+by release. This is managed under **Settings › MCP**; writing JSON files by hand
+is not necessary.
 
-Unterstützt werden Server, die **lokal als Prozess** gestartet werden
-(stdio-Transport). Server, die nur über HTTP oder SSE erreichbar sind, gehen
-noch nicht.
+Supported are servers that are started **locally as a process** (stdio
+transport). Servers reachable only over HTTP or SSE do not work yet.
 
-### Einen Server eintragen
+### Adding a server
 
-„Server hinzufügen“ öffnet ein kleines Formular:
+"Server hinzufügen" (Add server) opens a small form:
 
-| Feld | Bedeutung |
+| Field | Meaning |
 | ---- | --------- |
-| **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern |
-| **Anzeigename** | Frei wählbar, nur für die Liste |
-| **Kommando** und **Argumente** | Was gestartet wird, z. B. `npx` mit `-y @modelcontextprotocol/server-github` |
-| **Arbeitsverzeichnis** | Optional; leer heißt Projektordner |
-| **Umgebungsvariablen** | Name/Wert-Paare für den Prozess |
+| **Identifier** | Lowercase letters, digits, `.`, `-`, `_`. It later sits inside the tool name and cannot be changed afterwards |
+| **Display name** | Freely chosen, only for the list |
+| **Command** and **arguments** | What gets started, e.g. `npx` with `-y @modelcontextprotocol/server-github` |
+| **Working directory** | Optional; empty means the project folder |
+| **Environment variables** | Name/value pairs for the process |
 
-**Umgebungsvariablen sind vorbelegt geheim.** Ein geheimer Wert wird über
-Electrons `safeStorage` verschlüsselt abgelegt und danach nicht mehr angezeigt
-— nur ersetzt oder gelöscht. Wer einen Wert bewusst lesbar halten will (etwa
-`LANG=de_DE`), nimmt das Häkchen weg; er steht dann im Klartext in der
-Konfiguration. Vergessen soll nicht der teure Fall sein. Lässt sich auf dem
-System nicht verschlüsseln, wird gar nicht erst gespeichert, statt ein Token
-offen abzulegen.
+**Environment variables are secret by default.** A secret value is stored
+encrypted via Electron's `safeStorage` and is not displayed afterwards — only
+replaced or deleted. Anyone who deliberately wants to keep a value readable (say
+`LANG=de_DE`) unticks the box; it then sits in the configuration in plain text.
+Forgetting should not be the expensive case. If encryption is not possible on the
+system, nothing is stored at all rather than putting a token down in the open.
 
-**„Verbindung testen“** startet den Server einmal und zeigt, ob er antwortet
-und welche Tools er anbietet — oder eine verständliche Fehlermeldung samt
-`stderr`, wenn er nicht startet. Erst danach lassen sich einzelne Tools
-abwählen.
+**"Verbindung testen"** (Test connection) starts the server once and shows whether
+it responds and which tools it offers — or an understandable error message
+including `stderr` if it does not start. Only after that can individual tools be
+deselected.
 
-### Server importieren
+### Importing servers
 
-Wer MCP schon in Claude Desktop, Claude Code oder Cursor nutzt, muss seine
-Server nicht abtippen: **„Importieren“** nimmt einen eingefügten
-`mcpServers`-Block entgegen — mit oder ohne umschließendes `mcpServers`,
-Markdown-Zäune, Kommentare und angehängte Kommas stören nicht. Während du
-einfügst, erscheint darunter, was erkannt wurde.
+Anyone already using MCP in Claude Desktop, Claude Code or Cursor does not have to
+retype their servers: **"Importieren"** (Import) accepts a pasted `mcpServers`
+block — with or without an enclosing `mcpServers`, and Markdown fences, comments
+and trailing commas do not get in the way. While you paste, what was recognised
+appears below.
 
-Die Vorschau nennt zu jedem Eintrag den Namen, die daraus abgeleitete Kennung
-und das Startkommando, dazu die Punkte, die eine Entscheidung verlangen: Werte,
-die als geheim vorgemerkt sind (Schlüsselnamen wie `*_TOKEN` oder bekannte
-Tokenformate), noch nicht ausgefüllte Platzhalter und Kennungen, die einen
-vorhandenen Server ersetzen würden. Einträge, die nicht gehen — HTTP-/SSE-
-Transport, fehlendes Kommando — stehen mit Begründung darunter, statt
-stillschweigend zu verschwinden. Jeder Eintrag ist einzeln abwählbar.
+The preview names, for each entry, the name, the identifier derived from it and
+the start command, plus the points that require a decision: values flagged as
+secret (key names such as `*_TOKEN` or known token formats), placeholders that
+have not been filled in, and identifiers that would replace an existing server.
+Entries that will not work — HTTP/SSE transport, missing command — are listed
+below with a reason, instead of quietly disappearing. Every entry can be
+deselected individually.
 
-**Importierte Server sind zunächst ausgeschaltet.** Der Import ist ein
-Abtipp-Ersatz, keine Freigabe: Einschalten startet einen Prozess und bringt
-dessen Tools ins Modell, und das bleibt ein bewusster Schritt.
+**Imported servers are switched off at first.** The import is a substitute for
+retyping, not an approval: switching one on starts a process and brings its tools
+to the model, and that remains a deliberate step.
 
-Gelesen wird ausschließlich, was du einfügst. Snotra öffnet keine fremden
-Konfigurationsdateien.
+Only what you paste is read. Snotra does not open foreign configuration files.
 
-### Wie MCP-Tools im Chat auftauchen
+### How MCP tools appear in the chat
 
-Tools eingeschalteter Server erreichen das Modell mit vorangestelltem
-Namensraum: `mcp__<kennung>__<toolname>`. Das hält sie von den eingebauten
-Tools getrennt und macht in der Tool-Zeile sichtbar, woher ein Aufruf kommt.
-Zusammengesetzte Namen über 64 Zeichen lässt Snotra aus und weist sie unter der
-Serverliste aus — ein Name, den das Modell nicht zuverlässig adressieren kann,
-nützt niemandem.
+Tools of enabled servers reach the model with a namespace prefix:
+`mcp__<identifier>__<toolname>`. That keeps them separate from the built-in tools
+and makes it visible in the tool line where a call comes from. Composite names
+over 64 characters are left out by Snotra and reported below the server list — a
+name the model cannot address reliably is of no use to anyone.
 
-Für die [Tool-Berechtigungen](#konfiguration) gelten MCP-Tools grundsätzlich als
-`execute` **und** `external`: Ein fremder Prozess läuft, und Daten verlassen
-die App. Meldet ein Server ein Tool ausdrücklich als destruktiv, kommt `delete`
-dazu. Strenger einstufen kann ein Server sich also selbst, milder nicht —
-sonst entschiede der fremde Server darüber, wie streng wir ihn behandeln.
+For [tool permissions](#configuration), MCP tools always count as `execute`
+**and** `external`: a foreign process runs, and data leaves the app. If a server
+explicitly declares a tool as destructive, `delete` is added. So a server can
+classify itself more strictly, but not more leniently — otherwise the foreign
+server would decide how strictly we treat it.
 
-Ein Server, der nicht startet oder abstürzt, macht den Chat nicht kaputt: Der
-Fehler wird gemeldet, alles andere läuft weiter.
+A server that does not start or that crashes does not break the chat: the error is
+reported and everything else keeps running.
 
-## Projektstruktur
+## Project layout
 
 ```
 .
 ├── src/
-│   ├── application/     transport-agnostischer Anwendungs-Core (Chat, Ports)
-│   │   ├── chat/        Chat-Engine, Verlaufstrim
-│   │   └── ports/       LLM-, Tool-, Preferences- und weitere Kern-Ports
-│   ├── main/            Electron Main-Prozess
-│   │   ├── composition/ Composition Root (Verdrahtung aller Adapter)
-│   │   ├── adapters/    Port-Implementierungen (LLM, Tools, Storage, FS, …)
-│   │   ├── ports/       Infrastruktur-Port-Schnittstellen
-│   │   ├── ipc/         dünne IPC-Handler
-│   │   ├── providers/   LLM-Provider-Implementierungen
-│   │   ├── services/    Infrastruktur (Storage, FS, Whisper, Updates, Präsentation)
-│   │   └── tools/       Workspace-Tool-Registry
-│   ├── preload/         sichere Bridge zwischen Main und Renderer (gebundelt)
-│   ├── renderer/        UI (HTML, CSS, JS) — reine Präsentationsschicht
-│   └── shared/          Contracts, IPC-Kanäle, gemeinsame Presentation-Helfer
-├── system-skills/       eingebaute System-Skills (je Verzeichnis eine `SKILL.md`)
-├── test/                Tests (node:test), inkl. Architektur-Grenzwächter
-├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
-├── docs/                Architektur (`architecture.md`, SVG-Diagramme), Release, Sicherheitskonzept
-├── assets/icon/         SVG-Quellen des App-Icons (macOS- und Windows-Layout)
-├── icon.icns/.ico/.png  App-Icons für macOS / Windows / Linux, erzeugt per `node scripts/build-icons.js`
+│   ├── application/     transport-agnostic application core (chat, ports)
+│   │   ├── chat/        chat engine, history trimming
+│   │   └── ports/       LLM, tool, preferences and other core ports
+│   ├── main/            Electron main process
+│   │   ├── composition/ composition root (wiring of all adapters)
+│   │   ├── adapters/    port implementations (LLM, tools, storage, FS, …)
+│   │   ├── ports/       infrastructure port interfaces
+│   │   ├── ipc/         thin IPC handlers
+│   │   ├── providers/   LLM provider implementations
+│   │   ├── services/    infrastructure (storage, FS, Whisper, updates, presentation)
+│   │   └── tools/       workspace tool registry
+│   ├── preload/         secure bridge between main and renderer (bundled)
+│   ├── renderer/        UI (HTML, CSS, JS) — pure presentation layer
+│   └── shared/          contracts, IPC channels, shared presentation helpers
+├── system-skills/       built-in system skills (one `SKILL.md` per directory)
+├── test/                tests (node:test), including architecture boundary guards
+├── e2e/                 smoke test against the running Electron app
+├── scripts/             build helpers (vendor sync for the renderer, icon build)
+├── docs/                architecture (`architecture.md`, SVG diagrams), release, security concept
+├── assets/icon/         SVG sources of the app icon (macOS and Windows layout)
+├── icon.icns/.ico/.png  app icons for macOS / Windows / Linux, generated via `node scripts/build-icons.js`
 └── package.json
 ```
 
-Details zur Schichtenarchitektur: [`docs/architecture.md`](./docs/architecture.md).
+Details on the layered architecture: [`docs/architecture.md`](./docs/architecture.md).
 
-## Sicherheitshinweise
+## Security notes
 
-- API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
-- Der Workspace-Zugriff der Datei-Tools ist auf den jeweils geöffneten Projektordner beschränkt. Ausnahmen: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…` (siehe [Skills](#skills), geschrieben wird dort nie) — und die beiden **Ausführungs**-Tools `run_python` und `shell_execute` kennen diese Grenze grundsätzlich nicht: nicht Snotra greift dort auf Dateien zu, sondern der Interpreter bzw. die Shell. Beide sind deshalb im Lieferzustand abgeschaltet und brauchen vor jedem Lauf eine Freigabe.
-- Jeder Tool-Aufruf durchläuft im Main-Prozess eine Policy (Risikoklasse × Modus, Sperr-Regeln, harte Grenzen); Dateiänderungen und der Zugriff auf sensible Dateien brauchen im Standardmodus eine Freigabe (siehe [Tool-Berechtigungen](#konfiguration)). Ein Tool-Text, eine Datei oder ein Skill kann keine Berechtigung erteilen.
-- Trotzdem gilt: lass das Modell nichts in Ordnern arbeiten, in denen sensible Daten liegen, denen du nicht traust.
+- API keys are stored **locally** and are not passed on to third parties.
+- The workspace access of the file tools is limited to the currently opened
+  project folder. Exceptions: the **read** tools additionally reach the
+  directories of the enabled skills via `skill:<name>/…` (see [Skills](#skills);
+  nothing is ever written there) — and the two **execution** tools `run_python`
+  and `shell_execute` do not know this boundary at all: it is not Snotra that
+  accesses files there, but the interpreter or the shell. Both are therefore off
+  as shipped and need an approval before every run.
+- Every tool call passes through a policy in the main process (risk class × mode,
+  deny rules, hard boundaries); file modifications and access to sensitive files
+  need an approval in the default mode (see [tool permissions](#configuration)).
+  A tool text, a file or a skill cannot grant a permission.
+- Even so: do not let the model work in folders holding sensitive data you do not
+  want it to see.
 
-## Lizenz
+## Contributing
 
-Apache License 2.0 – siehe [`LICENSE`](./LICENSE).
+Build prerequisites, test commands and the branch/PR conventions are in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## License
+
+Apache License 2.0 — see [`LICENSE`](./LICENSE).
 
 Copyright © 2026 Konrad Krafft.

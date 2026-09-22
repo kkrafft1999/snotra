@@ -1,562 +1,552 @@
-# Architektur
+# Architecture
 
-Kurzüberblick zur Schichten- und Port/Adapter-Struktur von Snotra AI
-nach Abschluss der fünf Roadmap-Etappen (Stand 2026-07-12). Diagramme:
+A short overview of the layered and port/adapter structure of Snotra AI after
+the five roadmap stages were completed (as of 2026-07-12). Diagrams:
 [`architecture-layers.svg`](./architecture-layers.svg),
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
 [`architecture.svg`](./architecture.svg).
 
-## Abhängigkeitsrichtung
+## Direction of dependencies
 
-Abhängigkeiten zeigen **immer nach innen** — vom äußeren Rand (UI, IPC,
-Infrastruktur) zum transport-agnostischen Kern:
+Dependencies always point **inwards** — from the outer edge (UI, IPC,
+infrastructure) to the transport-agnostic core:
 
 ```
-Renderer / Preload / IPC-Handler
+Renderer / preload / IPC handlers
         ↓
-Main-Adapter & Composition (src/main/adapters/, composition/)
+Main adapters & composition (src/main/adapters/, composition/)
         ↓
-Anwendungs-Core (src/application/)
+Application core (src/application/)
         ↓
-Shared Contracts & Runtime (src/shared/contracts/, runtime/)
+Shared contracts & runtime (src/shared/contracts/, runtime/)
 ```
 
-Der Anwendungs-Core (`src/application/`) importiert nur Module unter
-`src/application/` und `src/shared/`. Er kennt weder Electron noch
-Provider-Implementierungen noch das Dateisystem.
+The application core (`src/application/`) imports only modules under
+`src/application/` and `src/shared/`. It knows neither Electron nor provider
+implementations nor the file system.
 
-## Schichten
+## Layers
 
-| Schicht | Pfad | Rolle |
+| Layer | Path | Role |
 | ------- | ---- | ----- |
-| **Contracts** | `src/shared/contracts/` | Versionierte DTOs, Events, Enums, Validatoren für die IPC-Grenze und Persistenz |
-| **Presentation (shared)** | `src/shared/presentation/` | Domänennahe Anzeige-Helfer für Main-Adapter und Tests (z. B. Tool-Zeilen); nicht vom Core importiert |
-| **Application** | `src/application/chat/`, `src/application/ports/` | Chat-Orchestrierung, Tool-Schleife, Verlaufstrim — nur über injizierte Ports |
-| **Main adapters** | `src/main/adapters/` | Konkrete Port-Implementierungen (LLM, Tools, Storage, FS, Speech, Updates, …) |
-| **Main ports** | `src/main/ports/` | Schnittstellen-Typen für Infrastruktur (schmale Oberflächen, keine Leaks) |
-| **Composition root** | `src/main/composition/` | Verdrahtung: `createApplication()` baut Services, Adapter und Engine, registriert IPC |
-| **IPC** | `src/main/ipc/` | Dünne treibende Adapter: IPC ↔ Use-Case-Aufrufe, Event-Push an den Renderer |
-| **Renderer** | `src/renderer/` | Reine Präsentation: DOM, CSS, lokale Formatierung; nur `window.electronAPI` + Contracts |
+| **Contracts** | `src/shared/contracts/` | Versioned DTOs, events, enums, validators for the IPC boundary and persistence |
+| **Presentation (shared)** | `src/shared/presentation/` | Domain-adjacent display helpers for main adapters and tests (e.g. tool lines); not imported by the core |
+| **Application** | `src/application/chat/`, `src/application/ports/` | Chat orchestration, tool loop, history trimming — only through injected ports |
+| **Main adapters** | `src/main/adapters/` | Concrete port implementations (LLM, tools, storage, FS, speech, updates, …) |
+| **Main ports** | `src/main/ports/` | Interface types for infrastructure (narrow surfaces, no leaks) |
+| **Composition root** | `src/main/composition/` | Wiring: `createApplication()` builds services, adapters and engine, registers IPC |
+| **IPC** | `src/main/ipc/` | Thin driving adapters: IPC ↔ use-case calls, event push to the renderer |
+| **Renderer** | `src/renderer/` | Pure presentation: DOM, CSS, local formatting; only `window.electronAPI` + contracts |
 
-Legacy-Re-Exports unter `src/main/chat-engine.js` und
-`src/main/chat-history-trim.js` leiten auf `src/application/chat/` weiter, damit
-bestehende Importe stabil bleiben.
+Legacy re-exports under `src/main/chat-engine.js` and
+`src/main/chat-history-trim.js` forward to `src/application/chat/`, so that
+existing imports stay stable.
 
 ## Ports
 
-**Anwendungs-Ports** (`src/application/ports/`) — vom Chat-Core konsumiert:
+**Application ports** (`src/application/ports/`) — consumed by the chat core:
 
-- `llm-port` — Streaming-Runden gegen einen Provider
-- `tool-port` — Tool-Registry und Ausführung
-- `chat-preferences-port` — UI-Prefs, System-Prompt, Tool-Runden-Limit
-- `workspace-path-port` — Pfad-Helfer (z. B. `basename`)
-- `skill-port` — Bodies der eingeschalteten Skills für den Systemprompt
-- `environment-port` — Umgebungsangaben für den Environment-Block im
-  Systemprompt (Issue #138): Arbeitsverzeichnis, Git ja/nein, Plattform,
-  Systemversion, Shell und Tagesdatum. Ermittelt werden sie im
-  `main/adapters/environment-adapter.js` — der Core selbst sieht weder
-  `process.platform` noch das Dateisystem
-- `memory-port` — die beiden `memory.md`-Dateien und das Anhängen einzelner
-  Einträge (#166). Adapter: `main/adapters/memory-adapter.js`. **Die Pfade
-  entstehen ausschließlich dort**: Das Tool `remember` nennt nur die Ebene
-  (`workspace` | `user`), nie einen Pfad — deshalb weicht das Schreiben nach
-  `~/.snotra` die Workspace-Grenze der Datei-Tools nicht auf. Der Adapter
-  schreibt seriell je Datei, damit zwei Fenster im selben Ordner sich nicht
-  gegenseitig überschreiben.
-- `project-instructions-port` — die gefundenen `AGENTS.md`-Dateien für den
-  Block mit den Projektanweisungen (Issue #212). Wo sie liegen, weiß allein
-  `main/adapters/project-instructions-adapter.js`; der Core sieht weder
-  `os.homedir()` noch das Dateisystem. Bewusst **ohne Cache und ohne
-  Watcher**: Es sind drei Dateien, die je Anfrage frisch gelesen werden —
-  anders als der Skill-Katalog, der ganze Verzeichnisse scannt und Frontmatter
-  parst und deshalb beides braucht
-- `web-search-port` — Suche im Internet (Issue #63); Anbieter steckt allein im
-  Adapter (`main/adapters/tavily-web-search-adapter.js`), der Tool-Handler
-  kennt ihn nicht
-- `url-fetch-port` — eine Webseite als Text lesen (Issue #95); Adressregeln,
-  Weiterleitungen und Grenzen liegen im Adapter
-  (`main/adapters/http-url-fetch-adapter.js`), die Adressprüfung selbst in
+- `llm-port` — streaming rounds against a provider
+- `tool-port` — tool registry and execution
+- `chat-preferences-port` — UI prefs, system prompt, tool round limit
+- `workspace-path-port` — path helpers (e.g. `basename`)
+- `skill-port` — bodies of the enabled skills for the system prompt
+- `environment-port` — environment details for the environment block in the
+  system prompt (issue #138): working directory, git yes/no, platform, system
+  version, shell and today's date. They are determined in
+  `main/adapters/environment-adapter.js` — the core itself sees neither
+  `process.platform` nor the file system
+- `memory-port` — the two `memory.md` files and the appending of individual
+  entries (#166). Adapter: `main/adapters/memory-adapter.js`. **The paths are
+  formed exclusively there**: the `remember` tool names only the level
+  (`workspace` | `user`), never a path — which is why writing to `~/.snotra`
+  does not soften the workspace boundary of the file tools. The adapter writes
+  serially per file, so that two windows on the same folder do not overwrite
+  each other.
+- `project-instructions-port` — the `AGENTS.md` files that were found, for the
+  block with the project instructions (issue #212). Where they live is known
+  only to `main/adapters/project-instructions-adapter.js`; the core sees neither
+  `os.homedir()` nor the file system. Deliberately **without a cache and
+  without a watcher**: these are three files that are read afresh per request —
+  unlike the skill catalogue, which scans entire directories and parses front
+  matter, and therefore needs both
+- `web-search-port` — searching the internet (issue #63); the provider sits in
+  the adapter alone (`main/adapters/tavily-web-search-adapter.js`), and the tool
+  handler does not know it
+- `url-fetch-port` — reading a web page as text (issue #95); address rules,
+  redirects and limits live in the adapter
+  (`main/adapters/http-url-fetch-adapter.js`), the address check itself in
   `shared/runtime/url-safety.js`
-- `code-execution-port` — ein Python-Programm ausführen (Issue #86);
-  Interpreter-Erkennung, Zeitlimit und Prozessbaum-Kill liegen im
-  `main/services/python-runner-service.js`. Den PATH, mit dem gesucht und
-  ausgeführt wird, bringt der Dienst nicht selbst auf: er kommt als
-  `readShellPath` von außen herein (Issue #111)
-- `mcp-port` — Tools externer MCP-Server auflisten und aufrufen (Issue #106,
-  Teil von #62). Der Core sieht weder Prozesse noch JSON-RPC: die
-  Verbindungsverwaltung (Handshake, `tools/list`, `tools/call`, Zeitlimits,
-  Abbruch, sauberes Beenden) liegt im `main/services/mcp-service.js`, das
-  Zeilen-Framing über stdin/stdout im `main/services/mcp-stdio-transport.js`.
-  Die Trennung ist Absicht: bewusst kein `@modelcontextprotocol/sdk`, solange
-  nur stdio und nur `tools` im Spiel sind — der Transport ist die Stelle, an
-  der ein SDK später andocken könnte, ohne dass Port oder Core sich ändern.
-  Validierung der Serverkonfiguration in `shared/contracts/mcp.js`.
+- `code-execution-port` — running a Python program (issue #86); interpreter
+  detection, time limit and process-tree kill live in
+  `main/services/python-runner-service.js`. The PATH used for lookup and
+  execution is not raised by the service itself: it comes in from outside as
+  `readShellPath` (issue #111)
+- `mcp-port` — listing and calling tools of external MCP servers (issue #106,
+  part of #62). The core sees neither processes nor JSON-RPC: connection
+  management (handshake, `tools/list`, `tools/call`, timeouts, cancellation,
+  clean shutdown) lives in `main/services/mcp-service.js`, the line framing over
+  stdin/stdout in `main/services/mcp-stdio-transport.js`. The separation is
+  deliberate: consciously no `@modelcontextprotocol/sdk` as long as only stdio
+  and only `tools` are in play — the transport is the place where an SDK could
+  dock later without port or core changing. Validation of the server
+  configuration in `shared/contracts/mcp.js`.
 
-  Zum Modell kommen diese Tools über den `main/adapters/mcp-adapter.js`, der
-  sie in Registry-Definitionen übersetzt (Issue #107). Vier Regeln gelten
-  dabei:
+  These tools reach the model through `main/adapters/mcp-adapter.js`, which
+  translates them into registry definitions (issue #107). Four rules apply:
 
-  * **Namensraum** `mcp__<serverId>__<toolName>` — ein fremdes `read_file`
-    kann das eingebaute nie verdecken. Der doppelte Unterstrich ist als
-    Trenner reserviert, Serverkennungen dürfen ihn deshalb nicht enthalten.
-  * **Risikoklassen**: immer `execute` **und** `external`. Ein MCP-Tool ist
-    fremder Code mit unbekannter Wirkung — die Planung kennt seine Zielpfade
-    nicht, `targets` bleibt leer. Die Annotations des Servers dürfen nur
-    verschärfen (`destructiveHint` ergänzt `delete`); `readOnlyHint` wird
-    bewusst ignoriert, sonst entschiede der fremde Server darüber, wie streng
-    wir ihn behandeln. Folge der Klassenwahl: MCP-Aufrufe sind weder
-    sitzungsweise noch dauerhaft freigebbar — jeder einzelne wird gefragt.
-  * **Fehler sind Ergebnisse**: ein toter oder nicht startbarer Server liefert
-    eine Fehlermeldung als Tool-Ergebnis, keinen Wurf. Der Chat läuft weiter.
-  * **`title` fliegt aus dem Schema** (Issue #185): Pydantic-Server hängen an
-    jede Eigenschaft eine Beschriftung, die nur den Feldnamen wiederholt
-    (`session_id` → `"title": "Session Id"`). Sie sagt dem Modell nichts und
-    kostet in jeder Runde — beim heimat-Server 72 von 204 Schema-Token, also
-    gut ein Drittel. `stripSchemaTitles` in `shared/contracts/mcp.js` räumt
-    sie beim Übernehmen des Katalogs weg. Der Walk ist **schemabewusst**, und
-    das ist der ganze Punkt: In `properties`, `$defs` & Co. ist der Schlüssel
-    ein *Name*, kein Schlüsselwort — ein Parameter, der `title` heißt (bei
-    Atlassian vier, darunter `confluence_get_page`), bleibt unangetastet. Ein
-    naiver Walk über alle Objekte würde ihn löschen und das Tool brechen.
-    `description` bleibt in jedem Fall stehen; dort steht, was das Modell
-    wissen muss.
+  * **Namespace** `mcp__<serverId>__<toolName>` — a foreign `read_file` can
+    never shadow the built-in one. The double underscore is reserved as a
+    separator, so server identifiers must not contain it.
+  * **Risk classes**: always `execute` **and** `external`. An MCP tool is
+    foreign code with unknown effect — planning does not know its target paths,
+    so `targets` stays empty. The server's annotations may only tighten
+    (`destructiveHint` adds `delete`); `readOnlyHint` is deliberately ignored,
+    because otherwise the foreign server would decide how strictly we treat it.
+    A consequence of that class choice: MCP calls can be approved neither for a
+    session nor permanently — every single one is asked about.
+  * **Errors are results**: a dead or unstartable server returns an error
+    message as a tool result, not a throw. The chat keeps running.
+  * **`title` is stripped from the schema** (issue #185): Pydantic servers
+    attach a label to every property that merely repeats the field name
+    (`session_id` → `"title": "Session Id"`). It tells the model nothing and
+    costs in every round — on the heimat server, 72 of 204 schema tokens, a good
+    third. `stripSchemaTitles` in `shared/contracts/mcp.js` clears them away
+    when the catalogue is taken over. The walk is **schema-aware**, and that is
+    the whole point: inside `properties`, `$defs` & co. the key is a *name*, not
+    a keyword — a parameter actually called `title` (four of them at Atlassian,
+    among them `confluence_get_page`) is left untouched. A naive walk over all
+    objects would delete it and break the tool. `description` always stays; that
+    is where what the model needs to know lives.
 
-  Weil MCP-Tools erst zur Laufzeit feststehen, hat der `tool-port` das
-  optionale `prepare()`: die Engine ruft es einmal je Lauf auf, bevor
-  Systemprompt und Tool-Liste gebaut werden. Danach ist die Liste für diesen
-  Lauf fest.
+  Because MCP tools are only known at runtime, the `tool-port` has the optional
+  `prepare()`: the engine calls it once per run, before the system prompt and
+  the tool list are built. After that the list is fixed for that run.
 
-  Die Serverliste liegt in `mcp-servers.json` im userData-Verzeichnis (Issue
-  #108), eigene Datei wie beim Suchdienst. Umgebungsvariablen stehen dort je
-  Schlüssel entweder als `{ enc }` (über `safeStorage` verschlüsselt) oder als
-  `{ value }` (Klartext) — **verschlüsselt ist die Vorgabe**, Klartext die
-  bewusste Ausnahme je Schlüssel. Wer das Häkchen nicht anfasst, hat sein
-  Token geschützt; Vergessen darf nicht der teure Fall sein. Lässt sich nicht
-  verschlüsseln (Linux ohne Keyring), wird der Server **nicht** gespeichert
-  statt ein Token im Klartext abzulegen; die Klartextwerte allein ließen sich
-  weiterhin sichern.
+  The server list lives in `mcp-servers.json` in the userData directory (issue
+  #108), its own file as with the search service. Environment variables are
+  stored there per key either as `{ enc }` (encrypted via `safeStorage`) or as
+  `{ value }` (plain text) — **encrypted is the default**, plain text the
+  deliberate exception per key. Whoever does not touch the checkbox has their
+  token protected; forgetting must not be the expensive case. If encryption is
+  not possible (Linux without a keyring), the server is **not** stored rather
+  than putting a token down in plain text; the plain values alone could still be
+  saved.
 
-  Bedient wird das im Einstellungs-Dialog unter „MCP" (Issue #109). Der
-  Bereich liegt als eigene Renderer-Komponente in
-  `renderer/components/McpPanel.js`: das Panel trägt nur die Liste mit Status
-  und Schalter, angelegt und bearbeitet wird in einem Unterdialog nach dem
-  Muster von „Modell hinzufügen". Wie die Berechtigungen und anders als der
-  Rest des Dialogs wirken Änderungen dort **sofort** — die Liste gehört dem
-  Main, dort liegen die Geheimnisse, und ein Verbindungstest braucht ohnehin
-  den gespeicherten Stand. Die Fußleiste sagt das je Bereich.
+  This is operated in the settings dialog under "MCP" (issue #109). The section
+  lives as its own renderer component in `renderer/components/McpPanel.js`: the
+  panel only carries the list with status and switch, while creating and editing
+  happen in a sub-dialog following the pattern of "Modell hinzufügen". Like the
+  permissions and unlike the rest of the dialog, changes there take effect
+  **immediately** — the list belongs to main, that is where the secrets live,
+  and a connection test needs the stored state anyway. The footer says so per
+  section.
 
-  Ein gespeichertes Geheimnis erscheint im Formular nur als Platzhalter; wer
-  es nicht anfasst, schickt `{ keep: true }` statt eines Wertes, den der
-  Renderer gar nicht kennt.
+  A stored secret appears in the form only as a placeholder; whoever does not
+  touch it sends `{ keep: true }` instead of a value the renderer does not even
+  know.
 
-  Zwei Lesewege, absichtlich getrennt und in
-  `test/infrastructure-boundaries.test.js` festgenagelt:
-  `createMcpConfigStorePort` liefert die Anzeigeform ohne Geheimnisse und ist
-  das, was Handler und Renderer erreichen; `createMcpSecretsPort`
-  entschlüsselt und ist nur für den Dienst da, der die Prozesse startet.
-  MCP-Geheimnisse gehen zusätzlich in `readOwnSecrets` ein — ein MCP-Server
-  könnte sein eigenes Token sonst über ein Tool-Ergebnis zurückgeben — und
-  werden aus Fehlermeldung und stderr-Auszug maskiert
-  (`redactOwnSecrets`), bevor ein Status den Main-Prozess verlässt.
-- `shell-execution-port` — einen Befehl in der Shell des Betriebssystems
-  ausführen (Issue #102); Shell-Erkennung (POSIX als Login-Shell, damit der
-  PATH aus dem Nutzerprofil gilt), Zeitlimit und Prozessbaum-Kill liegen im
-  `main/services/shell-runner-service.js`, die gesperrten Wirkungen als reine
-  Prüfung in `shared/runtime/shell-command-guard.js`
+  Two read paths, deliberately separate and nailed down in
+  `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns
+  the display form without secrets and is what handlers and renderer reach;
+  `createMcpSecretsPort` decrypts and exists only for the service that starts
+  the processes. MCP secrets additionally feed into `readOwnSecrets` — an MCP
+  server could otherwise return its own token via a tool result — and are masked
+  out of error messages and stderr excerpts (`redactOwnSecrets`) before a status
+  leaves the main process.
+- `shell-execution-port` — running a command in the operating system's shell
+  (issue #102); shell detection (POSIX as a login shell, so that the PATH from
+  the user profile applies), time limit and process-tree kill live in
+  `main/services/shell-runner-service.js`, the blocked effects as a pure check
+  in `shared/runtime/shell-command-guard.js`
 
-Der Shell-Dienst ist zugleich die einzige Stelle, die eine Login-Shell startet
-(Issue #111). Seine Erkennung läuft auf POSIX interaktiv (`-ilc`), weil zsh
-`.zshrc` nur für interaktive Shells liest und die meisten PATH-Zeilen genau
-dort stehen; sie liest den PATH mit und merkt sich das Ergebnis für die
-Lebensdauer der App. Beide Ausführungs-Dienste geben diesen PATH an ihre
-Kindprozesse weiter — eine aus dem Finder gestartete Electron-App erbt sonst
-nur den kargen PATH des Fensterservers. Befehle laufen weiterhin
-nicht-interaktiv, damit Prompt-Ausgabe nicht im Ergebnis landet. Unter Windows
-entfällt der Profil-Lauf: der PATH kommt dort aus Registry und
-Benutzerumgebung. Die Komposition verdrahtet das in
-`main/composition/create-application.js` — der Shell-Dienst wird vor dem
-Python-Dienst gebaut, weil dieser seinen PATH von dort bezieht.
+The shell service is at the same time the only place that starts a login shell
+(issue #111). Its detection runs interactively on POSIX (`-ilc`), because zsh
+reads `.zshrc` only for interactive shells and most PATH lines sit exactly
+there; it reads the PATH along the way and remembers the result for the lifetime
+of the app. Both execution services pass this PATH on to their child processes —
+an Electron app started from Finder otherwise inherits only the sparse PATH of
+the window server. Commands still run non-interactively, so that prompt output
+does not end up in the result. On Windows the profile run is dropped: the PATH
+there comes from the registry and the user environment. Composition wires this
+in `main/composition/create-application.js` — the shell service is built before
+the Python service, because the latter draws its PATH from it.
 
-Beide Ausführungs-Ports sind bewusst gleich eng geschnitten — ein Programm
-bzw. ein Befehl rein, Ausgabe und Exit-Code raus, kein Zustand zwischen zwei
-Aufrufen — und tragen in der Registry die Klasse `execute`: keine
-Workspace-Grenze, keine Sandbox, dafür eine Freigabe vor jedem Lauf und im
-Lieferzustand abgeschaltet (siehe `docs/sicherheitskonzept.md`, Abschnitt 9).
+Both execution ports are deliberately cut equally narrow — one program or one
+command in, output and exit code out, no state between two calls — and carry the
+class `execute` in the registry: no workspace boundary, no sandbox, but an
+approval before every run and switched off as shipped (see
+`docs/sicherheitskonzept.md`, section 9).
 
-Beide Netz-Tools sind in der Registry als `requiresWorkspace: false`
-gekennzeichnet (Issue #96): die Engine baut die Tool-Liste nicht mehr pauschal
-nur mit geöffnetem Projektordner, sondern filtert je Tool.
+Both network tools are marked in the registry as `requiresWorkspace: false`
+(issue #96): the engine no longer builds the tool list wholesale only with an
+open project folder, but filters per tool.
 
-**Infrastruktur-Ports** (`src/main/ports/`) — von Adaptern implementiert,
-über Composition injiziert:
+**Infrastructure ports** (`src/main/ports/`) — implemented by adapters,
+injected via composition:
 
 - Storage: `llm-config-store-port`, `ui-prefs-store-port`,
   `chat-history-store-port`, `workspace-folder-store-port`,
   `provider-secrets-port`, `web-search-store-port`
-- Laufzeit: `provider-runtime-port`, `provider-catalog-port`,
+- Runtime: `provider-runtime-port`, `provider-catalog-port`,
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
 
-### Selbst-Update: drei Schritte, drei Module
+### Self-update: three steps, three modules
 
-Der `update-port` ist bewusst kein einzelnes „aktualisiere dich", sondern
-`checkForUpdate` / `downloadUpdate` / `installUpdate` plus Abbruch. Grund ist
-die Anforderung selbst (Issue #232): Der Nutzer bestätigt Laden und
-Installieren einzeln und kann dazwischen aussteigen — ein zusammengefasster
-Aufruf könnte das nicht abbilden.
+The `update-port` is deliberately not a single "update yourself", but
+`checkForUpdate` / `downloadUpdate` / `installUpdate` plus cancellation. The
+reason is the requirement itself (issue #232): the user confirms downloading and
+installing separately and can step out in between — a combined call could not
+express that.
 
-Dahinter liegen drei Module in `services/`, getrennt nach dem, was jeweils
-schiefgehen kann:
+Behind it sit three modules in `services/`, separated by what can go wrong in
+each:
 
-- `update-targets.js` — **rein**, ohne Dateisystem und Prozesse. Beantwortet
-  „welche Art von Installation läuft hier" (macOS-Bundle, Windows-Verzeichnis,
-  AppImage, entpacktes Linux-Verzeichnis, Systempaket, Entwicklungs-Build) und
-  „welches Release-Asset passt dazu". Diese Entscheidung fällt auf jeder
-  Plattform anders und lässt sich auf keiner gefahrlos ausprobieren, deshalb
-  steht sie als reine Funktion für sich.
-- `update-download.js` — Strom auf die Platte, mit Fortschritt und echtem
-  Abbruch. Lädt nur von `github.com` bzw. `*.githubusercontent.com` über HTTPS
-  und verwirft eine Datei, deren Länge nicht zur angekündigten passt; ein
-  Torso darf beim nächsten Versuch nicht als fertiger Download durchgehen.
-- `update-installer.js` — der Austausch. Überall dasselbe Muster: die neue
-  Version wird **neben** der alten fertig ausgepackt und geprüft, erst danach
-  übernimmt ein losgelöstes Helferskript, das auf das Ende dieses Prozesses
-  wartet, umbenennt und neu startet. Im laufenden Prozess ginge es nicht — unter
-  Windows ist die `.exe` gesperrt, unter Linux hängt das AppImage als
-  Dateisystem im eigenen Prozess. Die Skripte selbst werden als reine
-  Zeichenketten gebaut und sind damit ohne Installation prüfbar.
+- `update-targets.js` — **pure**, without file system and processes. Answers
+  "what kind of installation is running here" (macOS bundle, Windows directory,
+  AppImage, extracted Linux directory, system package, development build) and
+  "which release asset fits it". This decision comes out differently on every
+  platform and can be tried out safely on none, which is why it stands on its own
+  as a pure function.
+- `update-download.js` — stream to disk, with progress and real cancellation.
+  Downloads only from `github.com` or `*.githubusercontent.com` over HTTPS and
+  discards a file whose length does not match the announced one; a torso must not
+  pass as a finished download on the next attempt.
+- `update-installer.js` — the replacement. The same pattern everywhere: the new
+  version is fully unpacked and verified **next to** the old one, and only then
+  does a detached helper script take over that waits for this process to end,
+  renames and restarts. It would not work inside the running process — on Windows
+  the `.exe` is locked, on Linux the AppImage is mounted as a file system inside
+  its own process. The scripts themselves are built as plain strings and are
+  therefore testable without an installation.
 
-Die Adresse des Pakets verlässt den Main-Prozess nie: Der Renderer erfährt aus
-`checkForUpdate` nur Name und Größe und stößt den Download ohne Parameter an.
+The address of the package never leaves the main process: from `checkForUpdate`
+the renderer learns only name and size, and triggers the download without
+parameters.
 
-Der **Skill-Service** (`services/skills-service.js`) scannt die vier
-Skill-Quellen — die eingebauten System-Skills aus `system-skills/` im
-App-Bundle, `.agents/skills/` im Workspace sowie im Home `~/.snotra/skills/`
-und `~/.agents/skills/`; Verzeichnisse anderer Werkzeuge wie `.claude/`
-bleiben ungelesen — und wird über `adapters/skills-adapter.js` als schmaler
-`skill-port` in die Chat-Engine gereicht.
+The **skill service** (`services/skills-service.js`) scans the four skill
+sources — the built-in system skills from `system-skills/` in the app bundle,
+`.agents/skills/` in the workspace, and in the home directory `~/.snotra/skills/`
+and `~/.agents/skills/`; directories belonging to other tools such as `.claude/`
+stay unread — and is passed into the chat engine through
+`adapters/skills-adapter.js` as a narrow `skill-port`.
 
-`~/.snotra/` ist dabei Snotras **eigenes Benutzerverzeichnis**: die Wurzel für
-nutzerweite Daten, die Snotra gehören und für die es keinen
-herstellerneutralen Standard gibt (Issue #251). `.agents/` bleibt dem
-vorbehalten, worauf sich Werkzeuge geeinigt haben. Seit #251 ist
-`~/.snotra/skills/` der Standardort für globale Skills und geht in der
-Prioritätsreihenfolge dem Alt-Ort `~/.agents/skills/` vor; der Workspace
-bleibt die stärkste Ordner-Quelle. Angelegt wird nichts und migriert wird
-nichts — ein fehlendes Verzeichnis ist wie jedes andere kein Fehler. Vom
-`userData`-Ordner ist das streng getrennt: der ist von Electron verwalteter
-App-Zustand und für Tools gesperrt. Das Parsen des Frontmatters liegt als reine
-Funktion in `shared/runtime/skill-frontmatter.js`, die Enums und DTOs in
+`~/.snotra/` is Snotra's **own user directory**: the root for user-wide data that
+belongs to Snotra and for which no vendor-neutral standard exists (issue #251).
+`.agents/` stays reserved for what tools have agreed on. Since #251,
+`~/.snotra/skills/` is the standard location for global skills and takes
+precedence over the legacy location `~/.agents/skills/`; the workspace remains
+the strongest folder source. Nothing is created and nothing is migrated — a
+missing directory is no more an error than anything else. It is strictly
+separated from the `userData` folder: that is Electron-managed app state and off
+limits for tools. Parsing the front matter lives as a pure function in
+`shared/runtime/skill-frontmatter.js`, the enums and DTOs in
 `shared/contracts/skills.js`.
 
-### Ein Watcher, zwei Anwender
+### One watcher, two consumers
 
-Dass die App mitbekommt, was **neben** ihr im Dateisystem passiert, leistet ein
-einziger Dienst: `services/directory-watcher.js`. Er kapselt die teuer
-bezahlten Eigenheiten von `fs.watch` — fehlende Zielverzeichnisse, ein
-verschwindender Watch-Root (macOS verstummt, Windows feuert endlos), die
-Linux-Attrappe bei `recursive: true`, Ereignis-Lawinen (Entprellung mit
-Höchstfenster), `error`-Ereignisse ohne Listener und die Wiedervorlage nach
-einem verlorenen Ereignis (Issues
+That the app notices what happens **next to** it in the file system is the work
+of a single service: `services/directory-watcher.js`. It encapsulates the
+dearly-paid quirks of `fs.watch` — missing target directories, a disappearing
+watch root (macOS goes silent, Windows fires endlessly), the Linux sham with
+`recursive: true`, event avalanches (debouncing with a maximum window), `error`
+events without listeners, and re-arming after a lost event (issues
 [#126](https://github.com/kkrafft1999/snotra/issues/126),
 [#155](https://github.com/kkrafft1999/snotra/issues/155)).
 
-Darauf sitzen zwei dünne Hüllen, die nur noch sagen, *was* beobachtet wird:
+On top of it sit two thin shells that only say *what* is being watched:
 
-- `services/skills-watcher.js` — `.agents/skills` im Workspace sowie
-  `~/.snotra/skills` und `~/.agents/skills` im Home, jeweils mit
-  Vorfahren-Kette (die Verzeichnisse fehlen meistens). Meldet ohne Nutzlast;
-  der Skill-Katalog wird ohnehin komplett neu gelesen.
-- `services/workspace-watcher.js` — der Projektordner, rekursiv und ohne Kette
-  nach oben. Er meldet die betroffenen **Ordner**, damit der Dateibaum nicht
-  bei jedem Ereignis alles neu laden muss (Issue
-  [#158](https://github.com/kkrafft1999/snotra/issues/158)). Eine Ignorierliste
-  hält den Inhalt von `node_modules/` und `.git/` sowie Editor-Temporärdateien
-  draußen; `.git/HEAD` und `.git/index` kommen bewusst durch — sie sind das
-  Zeichen für einen Zweigwechsel und melden sich als `complete: false`, worauf
-  der Renderer einmal gröber neu lädt statt hundertfach einzeln.
+- `services/skills-watcher.js` — `.agents/skills` in the workspace as well as
+  `~/.snotra/skills` and `~/.agents/skills` in the home directory, each with an
+  ancestor chain (the directories are usually missing). Reports without a
+  payload; the skill catalogue is read completely afresh anyway.
+- `services/workspace-watcher.js` — the project folder, recursively and without a
+  chain upwards. It reports the affected **folders**, so that the file tree does
+  not have to reload everything on every event (issue
+  [#158](https://github.com/kkrafft1999/snotra/issues/158)). An ignore list keeps
+  the contents of `node_modules/` and `.git/` as well as editor temporary files
+  out; `.git/HEAD` and `.git/index` deliberately get through — they are the sign
+  of a branch switch and report as `complete: false`, whereupon the renderer
+  reloads once, more coarsely, instead of a hundred times individually.
 
-Der Weg zum Baum: `fs:tree-changed`
-(`shared/contracts/workspace-tree.js`) → `FileTree.js` lädt die gemeldeten
-Ordner neu, aber nur die gerade sichtbaren, und nur wenn sich ihr Inhalt
-wirklich geändert hat. Auswahl, Tastaturfokus und Scrollposition werden vor dem
-Neuzeichnen gesichert und danach wiederhergestellt.
+The path to the tree: `fs:tree-changed`
+(`shared/contracts/workspace-tree.js`) → `FileTree.js` reloads the reported
+folders, but only the currently visible ones, and only if their content has
+actually changed. Selection, keyboard focus and scroll position are saved before
+the redraw and restored afterwards.
 
-## Bilder aus dem Workspace im Chat
+## Workspace images in the chat
 
-Ein vom Modell erzeugtes Bild (`![Diagramm](diagramm.png)`) liegt im
-Projektordner und damit außerhalb des App-Origins. Die CSP des Renderers
-erlaubt `img-src 'self' data:` — geladen wird deshalb **nicht** über ein
-eigenes Protokoll, sondern per IPC als `data:`-URI (Issue
-[#244](https://github.com/kkrafft1999/snotra/issues/244)). Das spart sowohl
-eine CSP-Lockerung als auch eine `protocol.handle`-Registrierung; der Preis ist
-Base64 im Speicher und kein Browser-Caching, wogegen ein Größenlimit von 10 MB
-und ein kleiner Cache im Renderer stehen.
+An image produced by the model (`![Diagram](diagram.png)`) lives in the project
+folder and thus outside the app origin. The renderer's CSP allows
+`img-src 'self' data:` — so it is loaded **not** through a custom protocol, but
+over IPC as a `data:` URI (issue
+[#244](https://github.com/kkrafft1999/snotra/issues/244)). That saves both a CSP
+relaxation and a `protocol.handle` registration; the price is base64 in memory
+and no browser caching, against which stand a 10 MB size limit and a small cache
+in the renderer.
 
-Der Weg: `ChatStream.js` ruft nach dem Sanitizing `applyWorkspaceImages`
-(`renderer/chat/workspaceImages.js`) auf den fertigen `<img>`-Knoten im DOM —
-nie per String-Ersetzung im HTML, DOMPurify läuft unverändert zuerst. Das `src`
-dort ist eine **URL, kein Dateipfad**: `marked` prozent-kodiert, was in einer
-URL nicht roh stehen darf, aus `C:\ws\plot.png` wird `C:%5Cws%5Cplot.png` und
-aus `bilder/grün.png` wird `bilder/gr%C3%BCn.png`. Ohne die Rücknahme in
-`decodeWorkspaceImageSource` fände der Main-Prozess keine Datei mit Leerzeichen,
-Umlaut oder Windows-Trenner. Von dort
-geht `fs:readWorkspaceImage` an `fs-service.readWorkspaceImage`, das den Pfad
-(relativ oder absolut) gegen den aktiven Workspace auflöst, ihn lexikalisch
-**und** über `realpath` prüft, den Typ am Dateikopf bestimmt (PNG, JPEG, GIF,
-WebP — kein SVG) und die Größe begrenzt. Zurück kommt `{ mime, base64 }` oder
-ein Grund aus `shared/contracts/workspace-image.js`, zu dem der Renderer einen
-gestalteten Platzhalter baut.
+The path: after sanitizing, `ChatStream.js` calls `applyWorkspaceImages`
+(`renderer/chat/workspaceImages.js`) on the finished `<img>` nodes in the DOM —
+never by string replacement in the HTML; DOMPurify runs first, unchanged. The
+`src` there is a **URL, not a file path**: `marked` percent-encodes what must not
+stand raw in a URL, so `C:\ws\plot.png` becomes `C:%5Cws%5Cplot.png` and
+`images/grün.png` becomes `images/gr%C3%BCn.png`. Without the reversal in
+`decodeWorkspaceImageSource`, the main process would find no file containing a
+space, an umlaut or a Windows separator. From there `fs:readWorkspaceImage` goes
+to `fs-service.readWorkspaceImage`, which resolves the path (relative or
+absolute) against the active workspace, checks it lexically **and** via
+`realpath`, determines the type from the file header (PNG, JPEG, GIF, WebP — no
+SVG) and limits the size. Back comes `{ mime, base64 }` or a reason from
+`shared/contracts/workspace-image.js`, out of which the renderer builds a
+designed placeholder.
 
-**Eine Ausnahme im Sanitizer**, die einzige an dieser Stelle: DOMPurify erlaubt
-nur bekannte URL-Schemata und wirft alles andere weg. Ein Windows-Pfad
-`D:\ws\plot.png` sieht für die Prüfung aus wie ein Schema `d:` — das `src`
-verschwindet, während `/Users/…` auf macOS und Linux anstandslos durchgeht. Ein
-`uponSanitizeAttribute`-Hook in `renderer/utils/helpers.js` hält deshalb genau
-diesen einen Fall fest: nur `<img src>`, nur ein echter Laufwerkspfad
-(`isWindowsDrivePath`). Sie öffnet nichts — der Wert wird nie geladen, sondern
-durch einen `data:`-URI oder einen Platzhalter ersetzt; selbst wenn das
-ausbliebe, lässt `img-src 'self' data:` kein `d:` zu, und geprüft wird der Pfad
-ohnehin erst im Main-Prozess. Ohne sie gäbe es auf Windows nie ein Bild über
-einen absoluten Pfad.
+**One exception in the sanitizer**, the only one at this point: DOMPurify allows
+only known URL schemes and throws everything else away. A Windows path
+`D:\ws\plot.png` looks to that check like a scheme `d:` — the `src` disappears,
+while `/Users/…` passes without complaint on macOS and Linux. An
+`uponSanitizeAttribute` hook in `renderer/utils/helpers.js` therefore holds on to
+exactly this one case: only `<img src>`, only a real drive path
+(`isWindowsDrivePath`). It opens nothing — the value is never loaded but replaced
+by a `data:` URI or a placeholder; and even if that did not happen,
+`img-src 'self' data:` does not permit a `d:`, and the path is checked in the
+main process anyway. Without it there would never be an image via an absolute
+path on Windows.
 
-Zwei Eigenheiten hängen am Streaming: Während die Antwort läuft, setzt
-`scheduleStreamRender` je Animation-Frame das komplette `innerHTML` neu —
-Bilder bekommen deshalb bis zum Ende nur einen ruhigen Platzhalter. Und der
-Abschluss bestellt den noch ausstehenden Frame ab (`cancelStreamRender`), sonst
-schriebe er den Zwischenstand über das gerade geladene Bild zurück.
+Two quirks hang on streaming: while the answer is running, `scheduleStreamRender`
+sets the complete `innerHTML` anew on every animation frame — which is why images
+get only a calm placeholder until the end. And completion cancels the still
+pending frame (`cancelStreamRender`), because it would otherwise write the
+intermediate state back over the image that was just loaded.
 
-## Workspace-Verwaltung im Main-Prozess
+## Workspace management in the main process
 
-Der **aktive Workspace** ist die Vertrauensgrenze des Dateisystems: alle
-Datei-Tools und die IPC-Dateizugriffe lösen relative Pfade gegen ihn auf. Er
-liegt deshalb ausschließlich im Main-Prozess (`main/workspace-state.js`) und
-wird nur von `services/workspace-activation.js` gesetzt (Issue
+The **active workspace** is the trust boundary of the file system: all file tools
+and the IPC file accesses resolve relative paths against it. It therefore lives
+exclusively in the main process (`main/workspace-state.js`) and is set only by
+`services/workspace-activation.js` (issue
 [#68](https://github.com/kkrafft1999/snotra/issues/68)):
 
-- `activateChosenFolder` — nach einer echten Auswahl im nativen Ordnerdialog.
-  Nur dieser Weg nimmt einen bisher unbekannten Pfad an; er prüft, dass es ein
-  existierender Ordner ist, schreibt `last-folder.json` und den Verlauf und
-  aktiviert ihn. Der Dialog-Handler (`ipc/dialog-handlers.js`) liefert dem
-  Renderer erst danach den aktivierten Pfad zurück.
-- `activateKnownFolder` — für Verlaufsmenü, Welcome-Chips und die
-  Wiederherstellung beim Start (`SETTINGS_ACTIVATE_FOLDER`). Der übergebene
-  Pfad muss im erneut validierten Verlauf oder als zuletzt geöffneter Ordner
-  gespeichert sein, sonst bleibt der bisherige Root stehen.
+- `activateChosenFolder` — after a real selection in the native folder dialog.
+  Only this path accepts a previously unknown path; it checks that it is an
+  existing folder, writes `last-folder.json` and the history, and activates it.
+  Only afterwards does the dialog handler (`ipc/dialog-handlers.js`) return the
+  activated path to the renderer.
+- `activateKnownFolder` — for the history menu, the welcome chips and the restore
+  at startup (`SETTINGS_ACTIVATE_FOLDER`). The path that is passed in must be
+  stored in the re-validated history or as the last opened folder, otherwise the
+  previous root stays in place.
 
-### Import von außen: die eine bewusst asymmetrische Prüfung
+### Import from outside: the one deliberately asymmetric check
 
-Der Drop aus Finder/Explorer in den Dateibaum (Issue
-[#101](https://github.com/kkrafft1999/snotra/issues/101)) ist der erste Weg, auf
-dem ein Pfad von **außerhalb** des Workspace Wirkung hat. Er bekommt deshalb
-eigene Kanäle statt einer Erweiterung von `fs:moveItem` — dort prüft
-`adapters/filesystem-ipc-adapter.js` Quelle *und* Ziel über `boundPath()`, und
-das soll so bleiben:
+The drop from Finder/Explorer into the file tree (issue
+[#101](https://github.com/kkrafft1999/snotra/issues/101)) is the first route on
+which a path from **outside** the workspace has an effect. It therefore gets its
+own channels instead of an extension of `fs:moveItem` — there
+`adapters/filesystem-ipc-adapter.js` checks source *and* target via `boundPath()`,
+and that is meant to stay:
 
-- `fs:inspectImport` — zählt Ordner, Dateien und Bytes, ohne zu schreiben.
-- `fs:importItems` — bestätigt nativ und kopiert.
+- `fs:inspectImport` — counts folders, files and bytes, without writing.
+- `fs:importItems` — confirms natively and copies.
 
-Im Adapter läuft nur das **Ziel** über `boundPath()` (realpath-geprüft). Die
-**Quelle** wird absichtlich nicht gegen den Workspace geprüft — genau dafür gibt
-es den Kanal —, muss aber absolut sein und darf nicht auf
-`shared/runtime/sensitive-paths.js` passen; ein Treffer lehnt den Drop ab. Der
-Rest liegt in `services/fs-service.js`: `inspectImportSources` zählt rekursiv
-(Symlinks und sensible Namen werden gezählt und übersprungen, nicht verfolgt),
-`importExternalItems` kopiert mit `fs.cp` — kopiert, nicht verschoben, denn
-`fs.rename` arbeitet nur innerhalb eines Dateisystems, und die Quelle draußen zu
-löschen wäre nicht rückholbar. Das Kollisionsschema `name (2).ext` teilen sich
-beide Wege über `findFreeTargetPath`. Die Grenzen (`MAX_IMPORT_ENTRIES`,
-`MAX_IMPORT_TOTAL_BYTES`) stehen in `shared/limits.js`; eine Überschreitung
-lehnt den ganzen Drop ab, statt halb zu kopieren. Bestätigt wird in
-`ipc/fs-handlers.js` nativ über `dialog.showMessageBox` — der Renderer stößt nur
-an, siehe `docs/sicherheitskonzept.md` §5.
+In the adapter only the **target** goes through `boundPath()` (realpath-checked).
+The **source** is deliberately not checked against the workspace — that is
+exactly what the channel is for — but it must be absolute and must not match
+`shared/runtime/sensitive-paths.js`; a hit rejects the drop. The rest lives in
+`services/fs-service.js`: `inspectImportSources` counts recursively (symlinks and
+sensitive names are counted and skipped, not followed), `importExternalItems`
+copies with `fs.cp` — copies, not moves, because `fs.rename` only works within one
+file system, and deleting the source outside would not be recoverable. Both
+routes share the collision scheme `name (2).ext` via `findFreeTargetPath`. The
+limits (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`) live in
+`shared/limits.js`; exceeding one rejects the whole drop instead of copying half
+of it. Confirmation happens natively in `ipc/fs-handlers.js` via
+`dialog.showMessageBox` — the renderer only triggers it, see
+`docs/sicherheitskonzept.md` §5.
 
-### Kontextmenü des Dateibaums
+### Context menu of the file tree
 
-`services/file-context-menu.js` baut das native Menü (Öffnen, Anzeigen,
-Informationen, Löschen). Der Renderer stößt es über `fs:showFileContextMenu`
-nur an; den Pfad prüft vorher `resolveWorkspacePath()` im Handler, im Menü
-kommt also ausschließlich ein bereits geprüfter absoluter Pfad an. `isDirectory`
-aus dem Renderer schneidet lediglich das Menü zu und ist deshalb unkritisch.
+`services/file-context-menu.js` builds the native menu (open, reveal,
+information, delete). The renderer only triggers it via `fs:showFileContextMenu`;
+the path is checked beforehand by `resolveWorkspacePath()` in the handler, so
+only an already-checked absolute path arrives in the menu. `isDirectory` from the
+renderer merely tailors the menu and is therefore uncritical.
 
-Die Auskunft dahinter steht in `services/file-info.js` (Issue
-[#123](https://github.com/kkrafft1999/snotra/issues/123)) und liefert eine
-Feldliste, die das Menü als `dialog.showMessageBox` zeigt — dieselbe Machart
-wie die Lösch-Rückfrage, kein eigener Renderer-Code. Drei Entscheidungen darin
-sind bewusst:
+The information behind it lives in `services/file-info.js` (issue
+[#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns a field
+list that the menu shows as a `dialog.showMessageBox` — the same make as the
+delete confirmation, no separate renderer code. Three decisions in it are
+deliberate:
 
-- **Ordner werden nicht rekursiv gezählt.** Angezeigt wird die Anzahl der
-  *direkten* Einträge; alles darunter zu summieren kann bei `node_modules`
-  beliebig teuer werden, und ein Dialog darf darauf nicht warten.
-- **Formatierung ohne `Intl`.** Tausenderpunkte und `21.09.2026, 14:32`
-  entstehen von Hand, damit die Ausgabe nicht an der ICU-Ausstattung der
-  jeweiligen Node-Version hängt. Werte, die es nicht gibt oder die auf der
-  Epoche liegen — `birthtime` ist unter Linux/ext4 oft 0 —, werden zu
-  „unbekannt“ statt zu „01.01.1970“.
-- **„Öffnen mit“ ist best effort.** Electron kennt das Standardprogramm nicht,
-  es kostet je Plattform einen Kindprozess mit hartem Timeout; jeder Fehlschlag
-  endet als „unbekannt“, der Rest der Anzeige hängt nie daran. Unter macOS
-  fragt ein JXA-Einzeiler `NSWorkspace.URLForApplicationToOpenURL:`, **nicht**
-  den Finder: Ein Apple Event an den Finder bräuchte die
-  Automatisierungs-Freigabe und läuft bis zur Antwort ins Timeout. Unter
-  Windows löst `AssocQueryString` über die Endung auf (CRLF normalisieren),
-  unter Linux `xdg-mime` plus `Name=` aus dem `.desktop`-Eintrag.
+- **Folders are not counted recursively.** What is shown is the number of
+  *direct* entries; summing up everything below can become arbitrarily expensive
+  on `node_modules`, and a dialog must not wait for that.
+- **Formatting without `Intl`.** Thousands separators and `21.09.2026, 14:32` are
+  produced by hand, so that the output does not depend on the ICU equipment of
+  the respective Node version. Values that do not exist or that sit on the epoch
+  — `birthtime` is often 0 on Linux/ext4 — become "unbekannt" (unknown) instead of
+  "01.01.1970".
+- **"Open with" is best effort.** Electron does not know the default application;
+  it costs a child process with a hard timeout on each platform, every failure
+  ends as "unknown", and the rest of the display never depends on it. On macOS a
+  JXA one-liner asks `NSWorkspace.URLForApplicationToOpenURL:`, **not** the
+  Finder: an Apple event to the Finder would require the automation permission and
+  runs into the timeout waiting for an answer. On Windows `AssocQueryString`
+  resolves via the extension (normalising CRLF), on Linux `xdg-mime` plus `Name=`
+  from the `.desktop` entry.
 
-Damit kann der Renderer die Grenze nicht verschieben: Er benennt den Workspace
-in keinem Aufruf mehr. `CHAT_SEND`, Skill-Katalog und Chat-Verlauf bekommen den
-Root über `getActiveWorkspaceRoot()` im jeweiligen Handler injiziert; ein im
-Payload mitgeschickter Pfad wird verworfen. Beim Start setzt auch
-`main/index.js` nichts vorab — der Root entsteht erst mit der Aktivierung durch
-den Renderer, sodass Oberfläche und Vertrauensgrenze denselben Ordner meinen.
+This means the renderer cannot move the boundary: it no longer names the
+workspace in any call. `CHAT_SEND`, the skill catalogue and the chat history get
+the root injected via `getActiveWorkspaceRoot()` in the respective handler; a path
+sent along in the payload is discarded. At startup `main/index.js` does not set
+anything in advance either — the root comes into being only with the activation by
+the renderer, so that interface and trust boundary mean the same folder.
 
-Eine einzige, eng gefasste Ausnahme hat der Chat-Verlauf (Issue #131): Eine
-Konversation gehört zu dem Ordner, in dem sie geführt wurde, der Renderer sichert
-sie beim Ordnerwechsel aber erst, wenn im Main schon der neue Root aktiv ist.
-Deshalb darf eine Session in `CHAT_HISTORY_UPSERT` ihren eigenen Root nennen —
-angenommen wird er nur, wenn `workspaceActivation.isKnownFolder()` ihn als
-bereits geöffneten Ordner bestätigt, sonst gilt wieder der aktive Root. Der
-Pfad landet damit ausschließlich als Schlüssel im Verlaufs-Bucket und öffnet
-keinen Dateizugriff; die Vertrauensgrenze bleibt `getActiveWorkspaceRoot()`.
-Welchen Bucket `CHAT_HISTORY_SET_ACTIVE` trifft, entscheidet aus demselben Grund
-die Session selbst, nicht der gerade aktive Ordner.
+The chat history has a single, narrowly drawn exception (issue #131): a
+conversation belongs to the folder it was held in, but the renderer saves it on a
+folder change only once the new root is already active in main. A session is
+therefore allowed to name its own root in `CHAT_HISTORY_UPSERT` — it is accepted
+only if `workspaceActivation.isKnownFolder()` confirms it as an already opened
+folder, otherwise the active root applies again. The path thus ends up solely as
+a key in the history bucket and opens no file access; the trust boundary remains
+`getActiveWorkspaceRoot()`. Which bucket `CHAT_HISTORY_SET_ACTIVE` hits is
+decided, for the same reason, by the session itself and not by the currently
+active folder.
 
-### Bild-Anhänge im Verlauf (Issue #94)
+### Image attachments in the history (issue #94)
 
-Bilder liegen **neben** der Verlaufsdatei, nicht darin:
-`services/chat-attachment-store.js` schreibt sie nach
-`chat-attachments/<Chat-ID>/<SHA-256>.<ext>` im userData-Ordner, die Session
-trägt nur `{ kind, mediaType, file }`. Vier Screenshots in einer Nachricht
-kosten die Session-JSON damit ein paar Dutzend Zeichen statt Megabytes an
-Base64. Der Dateiname ist der Inhalts-Hash — derselbe Screenshot landet bei
-jedem Sichern unter demselben Namen, das Schreiben ist also wiederholbar.
+Images live **next to** the history file, not inside it:
+`services/chat-attachment-store.js` writes them to
+`chat-attachments/<chat-id>/<SHA-256>.<ext>` in the userData folder, and the
+session carries only `{ kind, mediaType, file }`. Four screenshots in one message
+thus cost the session JSON a few dozen characters instead of megabytes of base64.
+The file name is the content hash — the same screenshot lands under the same name
+every time it is saved, so writing is repeatable.
 
-Die Normalisierung (`chat-history-normalization.js`) nimmt über
-`normalizeStoredAttachments()` **nur** Referenzen an. Base64 kann damit auch
-dann nicht in die Verlaufsdatei geraten, wenn die Ablage fehlt oder ein
-Schreibversuch scheitert. Dateinamen aus der Verlaufsdatei werden vor jedem
-Pfad-Zusammenbau gegen `ATTACHMENT_FILE_RE` geprüft, Chat-IDs, die als
-Ordnername nicht taugen, laufen über ihren Hash — aus dem Anhang-Ordner führt
-nichts heraus.
+Normalisation (`chat-history-normalization.js`) accepts **only** references via
+`normalizeStoredAttachments()`. Base64 therefore cannot get into the history file
+even if the store is missing or a write attempt fails. File names from the history
+file are checked against `ATTACHMENT_FILE_RE` before every path assembly, and chat
+IDs that are unusable as a folder name run via their hash — nothing leads out of
+the attachment folder.
 
-Der Renderer bekommt beim Laden nur die Referenz und holt die Bilddaten erst
-beim Anzeigen über `CHAT_ATTACHMENT_READ` nach; ein Ordner mit vielen Sessions
-schickt so nicht seinen gesamten Bildbestand über IPC. Eine fehlende Datei ist
-`{ ok: false }` und wird als Platzhalter gezeigt, nicht als Fehler. Aufgeräumt
-wird unter dem Verlaufs-Lock: `CHAT_HISTORY_DELETE` entfernt den Ordner des
-Chats, jedes `CHAT_HISTORY_UPSERT` zusätzlich alles, wozu es keine Session mehr
-gibt (aus `MAX_CHAT_SESSIONS` gefallen, Reste einer quarantänisierten
-Verlaufsdatei).
+On loading, the renderer receives only the reference and fetches the image data
+only when displaying, via `CHAT_ATTACHMENT_READ`; a folder with many sessions thus
+does not send its entire image stock over IPC. A missing file is `{ ok: false }`
+and is shown as a placeholder, not as an error. Cleanup happens under the history
+lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and every
+`CHAT_HISTORY_UPSERT` additionally removes everything for which there is no longer
+a session (dropped out of `MAX_CHAT_SESSIONS`, remnants of a quarantined history
+file).
 
-### Modell und Freigabemodus gehören zum Chat (Issue #211)
+### Model and permission mode belong to the chat (issue #211)
 
-Beides lag früher nur app-weit: `activePresetId` in der LLM-Konfiguration, der
-Berechtigungsmodus in der signierten `tool-policy.json`. Ein Eintrag aus dem
-Verlauf kam deshalb mit seinen Nachrichten zurück, lief aber mit dem gerade
-eingestellten Modell und Modus weiter.
+Both used to be app-wide only: `activePresetId` in the LLM configuration, the
+permission mode in the signed `tool-policy.json`. An entry from the history
+therefore came back with its messages, but ran on with the currently configured
+model and mode.
 
-`services/chat-session-settings.js` ist der Gegenpart dazu. Er merkt sich je
-Chat `modelPresetId` und `toolPermissionMode`, schreibt beides in die Zeile des
-Chats im Verlauf und wendet es beim Wechsel wieder an. Die Werte kommen
-ausschließlich aus dem Main: `CHAT_HISTORY_ACTIVATE` nennt nur die Chat-Kennung
-und ob der Wechsel ausdrücklich war, und `CHAT_HISTORY_UPSERT` verwirft, was der
-Renderer zu diesen beiden Feldern mitschickt (Konzept §5).
+`services/chat-session-settings.js` is the counterpart to that. It remembers
+`modelPresetId` and `toolPermissionMode` per chat, writes both into the chat's row
+in the history and applies them again on a switch. The values come exclusively
+from main: `CHAT_HISTORY_ACTIVATE` names only the chat identifier and whether the
+switch was explicit, and `CHAT_HISTORY_UPSERT` discards what the renderer sends
+along for these two fields (concept §5).
 
-Zwei bewusst verschiedene Regeln für einen neuen Chat:
+Two deliberately different rules for a new chat:
 
-- **Modell**: Der zuletzt ausdrücklich gewählte Eintrag gilt weiter. Er steht
-  als `defaultPresetId` in der LLM-Konfiguration und wird nur von einer echten
-  Wahl fortgeschrieben (Pille, Einstellungen) — das Herstellen eines alten Chats
-  setzt nur `activePresetId`. Fehlt das Feld in einer älteren Konfiguration,
-  ergänzt `readLLMConfig` es einmalig aus `activePresetId`; ohne diesen Schritt
-  wanderte der Standard beim ersten Chatwechsel mit.
-- **Freigabemodus**: immer wieder `smart`. `auto` kommt nur beim ausdrücklichen
-  Wechsel im Verlauf zurück, beim automatischen Herstellen (App-Start,
-  Ordnerwechsel) fällt es auf `smart` — Details in
+- **Model**: the entry last explicitly chosen continues to apply. It sits as
+  `defaultPresetId` in the LLM configuration and is only advanced by a real
+  choice (pill, settings) — restoring an old chat sets only `activePresetId`. If
+  the field is missing in an older configuration, `readLLMConfig` fills it in once
+  from `activePresetId`; without this step the default would wander along on the
+  first chat switch.
+- **Permission mode**: `smart` again every time. `auto` comes back only on an
+  explicit switch in the history; on an automatic restore (app start, folder
+  change) it falls back to `smart` — details in
   [`sicherheitskonzept.md`](./sicherheitskonzept.md) §8.
 
-Ein Eintrag, den es nicht mehr gibt oder dessen Zugang unvollständig ist, fällt
-auf den Standard zurück (`isPresetUsable`), statt den Chat mit einem toten
-Modell zu öffnen.
+An entry that no longer exists, or whose access is incomplete, falls back to the
+default (`isPresetUsable`) instead of opening the chat with a dead model.
 
 ## Composition root
 
-`src/main/composition/create-application.js` ist der zentrale Einstieg nach dem
-Electron-Bootstrap:
+`src/main/composition/create-application.js` is the central entry point after the
+Electron bootstrap:
 
-1. Erzeugt Infrastruktur-Services (`storage-service`, `fs-service`, …)
-2. Wickelt sie in schmale Port-Adapter (`persistence-store-adapters`, …)
-3. Baut die Chat-Anwendung via `create-chat-application.js` (LLM-, Tool-,
-   Preferences-Adapter → `createChatEngine`)
-4. Registriert IPC-Handler mit injizierten Abhängigkeiten
+1. Creates infrastructure services (`storage-service`, `fs-service`, …)
+2. Wraps them in narrow port adapters (`persistence-store-adapters`, …)
+3. Builds the chat application via `create-chat-application.js` (LLM, tool and
+   preferences adapters → `createChatEngine`)
+4. Registers IPC handlers with injected dependencies
 
-`src/main/index.js` ruft vor `createApplication()` nur die einmalige
-userData-Migration auf (`services/userdata-migration.js`, Übernahme aus dem
-Ordner der Vorgänger-Identität „Weyouze Anything“) — keine verstreute
-Verdrahtung in den Handlern.
+Before `createApplication()`, `src/main/index.js` calls only the one-time
+userData migration (`services/userdata-migration.js`, taking over from the folder
+of the predecessor identity "Weyouze Anything") — no scattered wiring in the
+handlers.
 
-Die **Menüleiste** liegt als reines Template in
-`services/application-menu.js`: `createApplicationMenuTemplate()` bekommt
-Plattform, App-Name, `getMainWindow`, `shell` und die Update-Prüfung
-hereingereicht und gibt die Menüstruktur zurück. `Menu.buildFromTemplate()`
-bleibt in `index.js` — so lässt sich prüfen, was in welchem Menü steht, ohne
-Electron zu starten (`test/application-menu.test.js`).
+The **menu bar** lives as a pure template in `services/application-menu.js`:
+`createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,
+`shell` and the update check, and returns the menu structure.
+`Menu.buildFromTemplate()` stays in `index.js` — that way it is possible to check
+what is in which menu without starting Electron (`test/application-menu.test.js`).
 
-## Provider-Adapter
+## Provider adapters
 
-`src/main/providers/` hält je Anbieter ein Modul, das den Vertrag aus
-`providers/index.js` erfüllt (`listModels`, `streamChatRound`, dazu `fields`,
-`presentation`, `capabilities`). Registriert sind sechs: `openai`, `anthropic`,
-`google`, `ollama`, `mlx-lm` und `openai-compatible`.
+`src/main/providers/` holds one module per provider that fulfils the contract
+from `providers/index.js` (`listModels`, `streamChatRound`, plus `fields`,
+`presentation`, `capabilities`). Six are registered: `openai`, `anthropic`,
+`google`, `ollama`, `mlx-lm` and `openai-compatible`.
 
-Die beiden OpenAI-Protokolle liegen **einmal** da und werden geteilt, statt je
-Anbieter kopiert zu werden:
+The two OpenAI protocols exist **once** and are shared, instead of being copied
+per provider:
 
-| Modul | Protokoll | Benutzt von |
+| Module | Protocol | Used by |
 | ----- | --------- | ----------- |
 | `openai-chat-transport.js` | Chat Completions (`POST {base}/chat/completions`), SSE | `mlx-lm`, `openai-compatible` |
 | `openai-responses-transport.js` | Responses (`POST {base}/responses`), SSE | `openai`, `openai-compatible` |
 
-Die Transporte kennen weder Anbieter-IDs noch gespeicherte Konfiguration: Sie
-bekommen fertige Header, eine Base-URL und die Nachrichten. Alles
-Anbieter-Eigene — welche Header, ob Bilder, ob Tools, welcher Stil — entscheidet
-das Provider-Modul. `ollama` bleibt außen vor: Es spricht die native API
-(`/api/tags`, `/api/chat` mit NDJSON) und nicht den OpenAI-Layer unter `/v1`.
+The transports know neither provider IDs nor stored configuration: they receive
+finished headers, a base URL and the messages. Everything provider-specific —
+which headers, whether images, whether tools, which style — is decided by the
+provider module. `ollama` stays out of it: it speaks the native API (`/api/tags`,
+`/api/chat` with NDJSON) and not the OpenAI layer under `/v1`.
 
-### Was ein Anbieter über seine Felder sagt
+### What a provider says about its fields
 
-`fields` steuert Formular, Persistenz und Validierung gemeinsam — der Renderer
-zeigt genau die Felder, die ein Anbieter deklariert
-(`buildProviderFormView` in `shared/contracts/settings.js`), der
-Storage-Service liest genau sie (`getEffectiveProviderConfig`), und der
-Settings-Handler schreibt genau sie (`mergeProviderPatchIntoConfigImpl`).
-Neben `apiKey`, `baseUrl` und `insecureTls` gibt es seit Issue #193
-`displayName`, `apiStyle`, `extraHeaders`, `supportsImages` und `sendTools`.
+`fields` steers form, persistence and validation together — the renderer shows
+exactly the fields a provider declares (`buildProviderFormView` in
+`shared/contracts/settings.js`), the storage service reads exactly those
+(`getEffectiveProviderConfig`), and the settings handler writes exactly those
+(`mergeProviderPatchIntoConfigImpl`). Besides `apiKey`, `baseUrl` and
+`insecureTls`, there have been `displayName`, `apiStyle`, `extraHeaders`,
+`supportsImages` and `sendTools` since issue #193.
 
-Drei Sonderfälle deklariert ein Anbieter zusätzlich am Modul:
+A provider additionally declares three special cases on the module:
 
-- `optionalApiKey: true` — ein leerer Schlüssel ist ein **gültiger** Zustand.
-  Sonst gilt ein Anbieter mit `fields.apiKey` ohne Key als unvollständig
-  konfiguriert und lehnt Modellabruf wie Versand ab.
-- `capabilitiesFor(config)` — Fähigkeiten, die an der gespeicherten
-  Konfiguration hängen statt am Adapter. `capabilities` bleibt die
-  Voreinstellung für Anbieter ohne diese Funktion.
-- `connectionPerPreset: true` — die Verbindung gehört zum **Eintrag**, nicht
-  zum Anbieter (Issue #202). Siehe unten.
+- `optionalApiKey: true` — an empty key is a **valid** state. Otherwise a
+  provider with `fields.apiKey` and no key counts as incompletely configured and
+  refuses both model listing and sending.
+- `capabilitiesFor(config)` — capabilities that depend on the stored
+  configuration rather than on the adapter. `capabilities` remains the default
+  for providers without this function.
+- `connectionPerPreset: true` — the connection belongs to the **entry**, not to
+  the provider (issue #202). See below.
 
-Geheimnisse verlassen den Main-Prozess nicht: Der API-Schlüssel und die
-Zusatz-Header liegen `safeStorage`-verschlüsselt (`apiKeyEnc`,
-`extraHeadersEnc`), und die View meldet dem Renderer nur `hasKey`
-bzw. `hasExtraHeaders` — nie den Inhalt.
+Secrets do not leave the main process: the API key and the extra headers are
+stored `safeStorage`-encrypted (`apiKeyEnc`, `extraHeadersEnc`), and the view
+reports only `hasKey` or `hasExtraHeaders` to the renderer — never the content.
 
-### Verbindung je Eintrag
+### Connection per entry
 
-Bei `connectionPerPreset` liegt die Verbindung nicht unter
-`providers[id]`, sondern als `connection` am Preset:
+With `connectionPerPreset`, the connection sits not under `providers[id]` but as
+`connection` on the preset:
 
 ```jsonc
 {
   "version": 4,
-  "providers": { /* die übrigen fünf Anbieter */ },
+  "providers": { /* the other five providers */ },
   "presets": [
     { "id": "…", "providerId": "openai-compatible", "model": "qwen2.5",
       "connection": { "baseUrl": "…", "apiKeyEnc": "…", "displayName": "LM Studio", … } }
@@ -564,130 +554,129 @@ Bei `connectionPerPreset` liegt die Verbindung nicht unter
 }
 ```
 
-Der Grund ist ein Anwendungsfall, der vorher unmöglich war: ein lokaler Server
-**und** ein Firmen-Gateway nebeneinander. Der Preis ist, dass ein Schlüssel so
-oft in der Datei steht, wie es Einträge auf denselben Server gibt; deshalb gilt
-die Regel nur für den generischen Anbieter und nicht für die fünf festen.
+The reason is a use case that was previously impossible: a local server **and** a
+corporate gateway side by side. The price is that a key appears in the file as
+often as there are entries pointing at the same server; which is why the rule
+applies only to the generic provider and not to the five fixed ones.
 
-Daraus folgen vier Dinge, die leicht übersehen werden:
+Four things follow from it that are easily overlooked:
 
-- **Das Chat-Ziel trägt `presetId`.** Ohne die Kennung lässt sich die
-  Verbindung nicht mehr auflösen; `getEffectiveProviderConfig(providerId,
-  { presetId })` braucht sie. Bewusst nur die Kennung — das Ziel geht als DTO
-  bis in den Renderer.
-- **`configured` ist eine Eigenschaft des Eintrags**, nicht des Anbieters:
-  `buildPresetView` entscheidet es, nicht `buildProviderView`.
-- **Die Schwärzung eigener Schlüssel** (`readOwnSecrets` in
-  `create-application.js`) läuft über `providers` *und* über die Einträge —
-  sonst fiele genau der Gateway-Token durch.
-- **Der Anbieter-Eintrag darf nicht zurückkehren.** Renderer und
-  `mergeProviderPatchIntoConfigImpl` lassen `providers[id]` für solche
-  Anbieter aus; sonst stünde neben der Verbindung am Eintrag eine zweite,
-  konkurrierende Wahrheit.
+- **The chat target carries `presetId`.** Without the identifier the connection
+  can no longer be resolved; `getEffectiveProviderConfig(providerId,
+  { presetId })` needs it. Deliberately only the identifier — the target travels
+  as a DTO all the way into the renderer.
+- **`configured` is a property of the entry**, not of the provider:
+  `buildPresetView` decides it, not `buildProviderView`.
+- **The redaction of own keys** (`readOwnSecrets` in `create-application.js`)
+  runs over `providers` *and* over the entries — otherwise exactly the gateway
+  token would slip through.
+- **The provider entry must not come back.** The renderer and
+  `mergeProviderPatchIntoConfigImpl` leave out `providers[id]` for such
+  providers; otherwise there would be a second, competing truth next to the
+  connection on the entry.
 
-Die Schema-Version steht als `LLM_CONFIG_VERSION` in
-`shared/contracts/settings.js` — Main-Prozess und Settings-Handler lesen
-dieselbe Zahl. Die Migration v3 → v4 kopiert `providers['openai-compatible']`
-in jeden Eintrag dieses Anbieters und entfernt den Anbieter-Eintrag; sie ist
-idempotent und lässt eine bereits vorhandene Verbindung stehen.
+The schema version sits as `LLM_CONFIG_VERSION` in
+`shared/contracts/settings.js` — the main process and the settings handler read
+the same number. The migration v3 → v4 copies `providers['openai-compatible']`
+into every entry of that provider and removes the provider entry; it is
+idempotent and leaves an already existing connection in place.
 
-### Lokal oder entfernt: am Host, nicht an der ID
+### Local or remote: by host, not by ID
 
-Drei Stellen behandeln lokale Anbieter anders als Cloud-Anbieter: das Zeitlimit
-des Modellabrufs (`services/request-timeout.js`), das Zeichenbudget des
-Verlaufs (`application/chat/chat-history-trim.js`) und der Teiler Zeichen→Token
-der Kontext-Aufschlüsselung (`shared/contracts/context-breakdown.js`).
+Three places treat local providers differently from cloud providers: the timeout
+of the model listing (`services/request-timeout.js`), the character budget of the
+history (`application/chat/chat-history-trim.js`) and the characters→tokens
+divisor of the context breakdown (`shared/contracts/context-breakdown.js`).
 
-Bis Issue #193 hing das an einer festen Liste von Provider-IDs. Der generische
-Anbieter passt in keine solche Liste — dieselbe ID bedient LM Studio auf
-`localhost` und ein Gateway im Netz. Die Frage beantwortet deshalb
-`shared/contracts/provider-endpoint.js` am **Host der Base-URL**; die
-bestehenden ID-Einträge für `ollama` und `mlx-lm` bleiben unangetastet, die
-Host-Regel greift zusätzlich.
+Up to issue #193 this hung on a fixed list of provider IDs. The generic provider
+fits into no such list — the same ID serves LM Studio on `localhost` and a
+gateway on the network. The question is therefore answered by
+`shared/contracts/provider-endpoint.js` at the **host of the base URL**; the
+existing ID entries for `ollama` and `mlx-lm` stay untouched, and the host rule
+applies in addition.
 
-## Renderer: was verschoben wurde, was bleibt
+## Renderer: what was moved, what stays
 
-**Aus dem Renderer entfernt** (jetzt Main oder `shared/`):
+**Removed from the renderer** (now main or `shared/`):
 
-- Provider-/Preset-Formularsemantik → `settings-presentation-service` +
+- Provider/preset form semantics → `settings-presentation-service` +
   `shared/contracts/settings.js`
-- Tool-Anzeigezeilen → `shared/presentation/tool-display.js` (über Tool-Port-Adapter)
-- Verlaufs-Normalisierung (Titel, Sanitisierung, Usage) →
+- Tool display lines → `shared/presentation/tool-display.js` (via the tool port adapter)
+- History normalisation (title, sanitizing, usage) →
   `chat-history-normalization.js`
 
-**Legitim im Renderer** (Präsentation, kein Domänenwissen):
+**Legitimate in the renderer** (presentation, no domain knowledge):
 
-- Markdown-Rendering und HTML-Sanitisierung (`marked`, `DOMPurify`)
-- DOM-Aufbau für Chat, Tool-Zeilen, Modals
-- Lokale Zeit-/Datumsformatierung (`messageUtils.formatHistoryTime`)
-- Anzeige vorgefertigter DTO-Felder (`entry.line`, `providers[].presetFields`)
+- Markdown rendering and HTML sanitizing (`marked`, `DOMPurify`)
+- DOM construction for chat, tool lines, modals
+- Local time/date formatting (`messageUtils.formatHistoryTime`)
+- Display of pre-built DTO fields (`entry.line`, `providers[].presetFields`)
 
-Der Renderer **darf** Provider-IDs und Preset-Felder aus IPC-DTOs *anzeigen*,
-solange er keine Provider-Wire-Formate parst und keine Tool-/Provider-Logik
-dupliziert.
+The renderer **may** *display* provider IDs and preset fields from IPC DTOs, as
+long as it parses no provider wire formats and duplicates no tool or provider
+logic.
 
-### Aufteilung im Renderer ([#81](https://github.com/kkrafft1999/snotra/issues/81))
+### Splitting inside the renderer ([#81](https://github.com/kkrafft1999/snotra/issues/81))
 
-Die Komponenten unter `renderer/components/` sind die Verdrahtung: Sie hängen
-Handler an Elemente und zeichnen. Alles, was sich *entscheiden* lässt, ohne
-einen Knoten anzufassen, liegt daneben — und ist damit einzeln prüfbar, statt
-nur über die ganze Komponente erreichbar zu sein:
+The components under `renderer/components/` are the wiring: they attach handlers
+to elements and draw. Everything that can be *decided* without touching a node
+sits next to them — and is thereby testable on its own, instead of only being
+reachable through the whole component:
 
-| Modul | Was dort liegt | Test |
+| Module | What lives there | Test |
 | ----- | -------------- | ---- |
-| `renderer/tree/treePaths.js` | Pfad- und Baumlogik des Dateibaums: Ordner von oben nach unten sortieren, Einrückung → Baumtiefe, externer Drop und sein Zielordner, Ordnerinhalte vergleichen, was nach einem Neuzeichnen wieder aufzuklappen ist | `test/tree-paths.test.js` |
-| `renderer/chat/toolLogView.js` | Tool-Log im Chat als DOM-Schicht: Zeilen samt Zustand und Berechtigungs-Audit, der aufklappbare `<details>`-Block, der Einzeiler in der `<summary>`, das Abschließen eines abgebrochenen Laufs | `test/tool-log-view-dom.test.js` |
-| `renderer/chat/toolLogDebug.js` | Der Diagnose-Puffer des Tool-Logs ([#87](https://github.com/kkrafft1999/snotra/issues/87)) als eine Instanz je Renderer — Ansicht und `ChatStream` teilen ihn, statt ihn durch jede Signatur zu reichen | `test/tool-log-debug.test.js` |
-| `renderer/utils/tool-log-summary.js` | Was im Einzeiler *steht* — DOM-frei, älter als die Aufteilung | `test/tool-log-summary.test.js` |
+| `renderer/tree/treePaths.js` | Path and tree logic of the file tree: sorting folders top to bottom, indentation → tree depth, external drop and its target folder, comparing folder contents, what has to be re-expanded after a redraw | `test/tree-paths.test.js` |
+| `renderer/chat/toolLogView.js` | The tool log in the chat as a DOM layer: lines with state and permission audit, the expandable `<details>` block, the one-liner in the `<summary>`, finishing off an aborted run | `test/tool-log-view-dom.test.js` |
+| `renderer/chat/toolLogDebug.js` | The diagnostic buffer of the tool log ([#87](https://github.com/kkrafft1999/snotra/issues/87)) as one instance per renderer — the view and `ChatStream` share it instead of passing it through every signature | `test/tool-log-debug.test.js` |
+| `renderer/utils/tool-log-summary.js` | What the one-liner *says* — DOM-free, older than the split | `test/tool-log-summary.test.js` |
 
-`FileTree.js` und `ChatStream.js` bleiben groß, weil Verdrahtung nun einmal
-Platz braucht — die Pfad- und Tool-Log-Logik steckt aber nicht mehr darin. Die
-verbleibenden Brocken (`styles.css`, `fs-service.js`, `SettingsModal.js`)
-werden mit den Issues geteilt, die sie ohnehin anfassen; eine Umsortierung ohne
-Anlass bringt nur Konfliktfläche.
+`FileTree.js` and `ChatStream.js` stay large, because wiring simply takes space —
+but the path and tool-log logic is no longer inside them. The remaining chunks
+(`styles.css`, `fs-service.js`, `SettingsModal.js`) are split up together with
+the issues that touch them anyway; a reshuffle without cause only creates
+conflict surface.
 
-**Modulgrenze:** `src/renderer/package.json` deklariert `{ "type": "module" }`.
-Der Main-Prozess ist CommonJS, der Renderer lädt native ES-Module ohne Bundler;
-ohne diese eine Datei müsste Node jede Renderer-Datei im Testlauf zweimal
-parsen und warnte bei jedem Lauf (`MODULE_TYPELESS_PACKAGE_JSON`). Das
-Root-Paket bleibt bewusst ohne `type`. Auf das Packaging wirkt sich die Datei
-nicht aus: Die Allowlist in `config.forge.packagerConfig.ignore` lässt alles
-unter `src/` durch, und `scripts/check-asar-contents.js` prüft das nach jedem
-Build.
+**Module boundary:** `src/renderer/package.json` declares `{ "type": "module" }`.
+The main process is CommonJS, the renderer loads native ES modules without a
+bundler; without this one file Node would have to parse every renderer file twice
+during the test run and would warn on every run
+(`MODULE_TYPELESS_PACKAGE_JSON`). The root package deliberately stays without a
+`type`. The file has no effect on packaging: the allowlist in
+`config.forge.packagerConfig.ignore` lets everything under `src/` through, and
+`scripts/check-asar-contents.js` verifies that after every build.
 
-### Zwei Hälften: Arbeitsbereich und Chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
+### Two halves: workspace and chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
 
-Verzeichnisbaum und Anzeige gehören zusammen — man klickt links eine Datei an
-und sieht sie daneben. Der Chat ist die andere Hälfte. Das Markup bildete das
-bis 1.7.0 genau andersherum ab: `#workspace` klammerte Anzeige und Chat, der
-Baum stand allein daneben. Seit Phase A gilt:
+The directory tree and the content pane belong together — you click a file on the
+left and see it next to it. The chat is the other half. Up to 1.7.0 the markup
+expressed exactly the opposite: `#workspace` bracketed the content pane and the
+chat, while the tree stood alone beside it. Since phase A:
 
 ```
 #app
-├── #workspace        Arbeitsbereich: #sidebar · #divider · #content
+├── #workspace        workspace: #sidebar · #divider · #content
 ├── #chat-divider
-└── #chat-panel       Chat (in Phase B: Chat + Verlauf)
+└── #chat-panel       chat (in phase B: chat + history)
 ```
 
-Zwei Regeln hängen daran:
+Two rules hang on that:
 
-- **Alle Wegschalt-Zustände sitzen auf `#app`** — `app--no-sidebar`,
-  `app--no-preview`, `app--no-chat` und `app--no-history`. Vorher trug jede
-  Hälfte ihren eigenen Mechanismus auf
-  einem anderen Container; dieselbe Geste war zweimal beschrieben. Ohne
-  Anzeige fällt `#workspace` auf `flex: 0 0 auto` zurück, sonst teilte es sich
-  die Breite mit dem Chat, statt auf die Seitenleiste zu schrumpfen.
-- **Wird das Fenster breiter, teilen sich beide Hälften den Zuwachs je zur
-  Hälfte.** Das steht in `SidebarResizer.js` (ein `ResizeObserver` auf `#app`)
-  und nicht im CSS: Flexbox kann „zusätzliche Breite gleichmäßig verteilen"
-  nicht ausdrücken, weil ihm der Bezugspunkt fehlt — `flex-grow` verteilt den
-  Rest gegen die Basis, nicht gegen den vorherigen Stand. Geschrieben wird nur
-  die neue Chat-Breite; der Arbeitsbereich füllt als `flex: 1` den Rest von
-  selbst. Die Rechnung läuft rückwärts genauso, deshalb landet Maximieren und
-  Zurücksetzen wieder dort, wo man war.
+- **All hide states sit on `#app`** — `app--no-sidebar`, `app--no-preview`,
+  `app--no-chat` and `app--no-history`. Previously each half carried its own
+  mechanism on a different container; the same gesture was described twice.
+  Without the content pane, `#workspace` falls back to `flex: 0 0 auto`;
+  otherwise it would share the width with the chat instead of shrinking to the
+  sidebar.
+- **When the window gets wider, both halves share the growth equally.** That
+  lives in `SidebarResizer.js` (a `ResizeObserver` on `#app`) and not in the CSS:
+  flexbox cannot express "distribute additional width evenly", because it lacks
+  the reference point — `flex-grow` distributes the remainder against the basis,
+  not against the previous state. Only the new chat width is written; the
+  workspace fills the rest by itself as `flex: 1`. The calculation works the same
+  way in reverse, which is why maximising and restoring land back where you were.
 
-Seit Phase B ist auch die rechte Hälfte ein Paar: `#chat-area` klammert Chat und
-Verlauf, die Struktur ist damit symmetrisch.
+Since phase B the right half is a pair as well: `#chat-area` brackets chat and
+history, making the structure symmetric.
 
 ```
 #app
@@ -696,338 +685,328 @@ Verlauf, die Struktur ist damit symmetrisch.
 └── #chat-area        #chat-panel · #history-divider · #chat-history
 ```
 
-Der Verlauf war bis 1.7.0 ein Ausklapper über den Nachrichten: Er schob den
-Chat nach unten, ging beim Klick daneben und bei Escape wieder zu und
-verschwand nach jeder Auswahl. Als Spalte bleibt er stehen — deshalb schließt
-`ChatHistoryPanel.js` nichts mehr von selbst, `FileTree.js` hat seinen
-Escape-Haken dafür verloren und `ToolApprovalCard.js` zählt ihn nicht mehr zu
-den Overlays, die Escape für sich beanspruchen.
+Up to 1.7.0 the history was a drop-down over the messages: it pushed the chat
+down, closed again on a click beside it and on Escape, and disappeared after
+every selection. As a column it stays put — which is why `ChatHistoryPanel.js` no
+longer closes anything by itself, `FileTree.js` has lost its Escape hook for it,
+and `ToolApprovalCard.js` no longer counts it among the overlays that claim
+Escape for themselves.
 
-Seitdem ist die Symmetrie auch bedienbar: **Jede der vier Spalten hat genau
-einen Schalter, und alle vier stehen in der Titelzeile** — links die des
-Arbeitsbereichs, rechts spiegelverkehrt die der Chat-Seite, jeweils in der
-Reihenfolge ihrer Spalten und mit demselben, gespiegelten Bild. Damit gilt für
-Chat und Verlauf dasselbe Muster wie für Baum und Anzeige:
+Since then the symmetry is also operable: **each of the four columns has exactly
+one switch, and all four sit in the title bar** — on the left those of the
+workspace, on the right, mirrored, those of the chat side, each in the order of
+their columns and with the same, mirrored image. The same pattern therefore
+applies to chat and history as to tree and content pane:
 
-- Der Chat ist wegschaltbar (`app--no-chat`, `chatPanelVisible` in den
-  UI-Prefs); übrig bleibt dann der Verlauf. `SidebarResizer.js` rechnet seine
-  Breite in diesem Zustand als 0 und lässt die gemerkte Breite in Ruhe, damit
-  er so breit zurückkommt, wie er weggegangen ist.
-- **Ein Klick im Verlauf holt die Chat-Spalte zurück** (`revealChatPanel`) —
-  Spiegelbild zu `revealContentPane` beim Klick auf eine Datei im Baum. Ohne
-  das liefe der Klick in eine weggeschaltete Fläche.
-- Der Knopf für einen neuen Chat steht in der Kopfzeile des Verlaufs, so wie
-  „Ordner öffnen“ in der Kopfzeile des Baums steht: Die Aktion, die einer
-  Spalte Einträge verschafft, gehört in diese Spalte.
-- Der Einstellungsdialog hat keinen Knopf mehr. Das Zahnrad saß in der
-  Kopfzeile des Chats und war mit dessen Spalte weg; seitdem führt nur noch
-  die Menüleiste hinein (`CmdOrCtrl+,`) — ein Push auf `UI_OPEN_SETTINGS`,
-  genau wie `UI_TOGGLE_SIDEBAR` beim Kürzel `Cmd/Ctrl+B`. Wo der Eintrag
-  steht, entscheidet die Plattform (Issue #266): auf macOS im App-Menü unter
-  *Snotra AI → Einstellungen…*, gleich unter „Über“, wie es Mac-Nutzer
-  erwarten; auf Windows und Linux, wo es kein App-Menü gibt, unter
-  *Ansicht → Einstellungen…*. Nie an beiden Stellen, sonst wäre `CmdOrCtrl+,`
-  doppelt vergeben.
-  Das Kürzel hängt am Menüeintrag und nicht an einer Tastenabfrage im
-  Renderer, damit es auch in einem Eingabefeld gilt. Ein zweiter Aufruf bei
-  offenem Dialog ist ein No-op: `openSettingsModal()` merkt sich den Fokus von
-  **vor** dem Öffnen, und den überschriebe er sonst mit einem Element aus dem
-  Dialog selbst.
-- Die drei Spaltenköpfe (`#tree-header`, `#chat-header`,
-  `#chat-history-header`) bilden eine Linie. Ihre Höhe kam bisher von den
-  Icon-Knöpfen darin; der Chat-Kopf hat seit dem Entfallen des Zahnrads keine
-  mehr und trägt dieselbe Rechnung deshalb als `min-height`.
+- The chat can be hidden (`app--no-chat`, `chatPanelVisible` in the UI prefs);
+  what remains is the history. `SidebarResizer.js` computes its width as 0 in
+  this state and leaves the remembered width alone, so that it comes back as wide
+  as it went away.
+- **A click in the history brings the chat column back** (`revealChatPanel`) —
+  the mirror image of `revealContentPane` on clicking a file in the tree. Without
+  it, the click would run into a hidden area.
+- The button for a new chat sits in the header of the history, just as "Ordner
+  öffnen" (Open folder) sits in the header of the tree: the action that gives a
+  column entries belongs in that column.
+- The settings dialog no longer has a button. The gear sat in the chat header and
+  was gone with its column; since then only the menu bar leads into it
+  (`CmdOrCtrl+,`) — a push on `UI_OPEN_SETTINGS`, exactly like `UI_TOGGLE_SIDEBAR`
+  for the `Cmd/Ctrl+B` shortcut. Where the entry sits is decided by the platform
+  (issue #266): on macOS in the app menu under *Snotra AI → Einstellungen…*,
+  right below "Über" (About), as Mac users expect; on Windows and Linux, where
+  there is no app menu, under *Ansicht → Einstellungen…*. Never in both places,
+  because `CmdOrCtrl+,` would otherwise be assigned twice.
+  The shortcut hangs on the menu entry and not on a key check in the renderer, so
+  that it also applies inside an input field. A second invocation while the dialog
+  is open is a no-op: `openSettingsModal()` remembers the focus from **before**
+  opening, and would otherwise overwrite it with an element from the dialog
+  itself.
+- The three column headers (`#tree-header`, `#chat-header`,
+  `#chat-history-header`) form one line. Their height used to come from the icon
+  buttons inside them; since the gear disappeared, the chat header has none and
+  therefore carries the same calculation as a `min-height`.
 
-Drei Regeln halten die vier Spalten zusammen, alle in `SidebarResizer.js`:
+Three rules hold the four columns together, all in `SidebarResizer.js`:
 
-- **Der Arbeitsbereich behält sein Mindestmaß** (`workspaceMin()`): die
-  eingestellte Breite der Seitenleiste plus `CONTENT_MIN`, und zwar nur für
-  das, was gerade sichtbar ist. Die Seitenleiste geht mit ihrer eingestellten
-  Breite ein, nicht mit ihrem Minimum — wer sie breit gezogen hat, will sie
-  breit sehen; dann weicht lieber der Verlauf.
-- **Wird es zu eng, gibt zuerst der Chat nach, dann der Verlauf, dann klappt
-  der Verlauf weg** (`ensureRoomForWorkspace()`). Das geschieht mit
-  `persist: false`: Der gemerkte Wunsch des Nutzers bleibt stehen, damit die
-  Spalte im breiteren Fenster wiederkommt — in der Breite von vor dem
-  Zusammendrücken. Wer sie selbst zuklappt, findet sie nicht von allein wieder.
-- **Die Obergrenze des Chats** rechnet gegen `#app` und zieht die
-  Verlaufsbreite ab. Sie steht nur noch im JS, nicht mehr als `max-width` im
-  CSS: „was nach Chat und Verlauf für Baum und Anzeige übrig bleiben muss" ist
-  keine Prozentzahl.
+- **The workspace keeps its minimum** (`workspaceMin()`): the configured width of
+  the sidebar plus `CONTENT_MIN`, and only for what is currently visible. The
+  sidebar goes in with its configured width, not with its minimum — whoever
+  dragged it wide wants to see it wide; then the history gives way instead.
+- **When it gets too tight, the chat gives way first, then the history, and then
+  the history collapses** (`ensureRoomForWorkspace()`). This happens with
+  `persist: false`: the user's remembered wish stays in place, so that the column
+  returns in a wider window — at the width it had before being squeezed. Whoever
+  collapses it themselves will not find it back on its own.
+- **The upper bound of the chat** is computed against `#app` and subtracts the
+  history width. It now lives only in JS, no longer as a `max-width` in the CSS:
+  "what has to be left for tree and content pane after chat and history" is not a
+  percentage.
 
-Die Liste hängt an `onChatPersisted` aus `ChatStream.js` — eine Spalte, die
-dauerhaft danebensteht, darf nicht den Titel von vorhin zeigen.
+The list hangs on `onChatPersisted` from `ChatStream.js` — a column that stands
+beside you permanently must not show the title from earlier.
 
-### Startzustand der mittleren Spalte ([#208](https://github.com/kkrafft1999/snotra/issues/208), [#255](https://github.com/kkrafft1999/snotra/issues/255), [#258](https://github.com/kkrafft1999/snotra/issues/258))
+### Startup state of the middle column ([#208](https://github.com/kkrafft1999/snotra/issues/208), [#255](https://github.com/kkrafft1999/snotra/issues/255), [#258](https://github.com/kkrafft1999/snotra/issues/258))
 
-Ohne gespeicherten Wunsch entscheidet der Ordner: Mit Ordner bleibt die Spalte
-zu ([#255](https://github.com/kkrafft1999/snotra/issues/255)) — zu sehen gäbe
-es dort nur den Startschirm. Ohne Ordner ist genau er das Richtige
-([#258](https://github.com/kkrafft1999/snotra/issues/258)), sonst stünde die
-App beim ersten Start leer da.
+Without a stored wish, the folder decides: with a folder the column stays closed
+([#255](https://github.com/kkrafft1999/snotra/issues/255)) — there would be
+nothing to see there but the welcome screen. Without a folder, that screen is
+exactly the right thing
+([#258](https://github.com/kkrafft1999/snotra/issues/258)), because otherwise the
+app would stand there empty on first start.
 
-Dafür ist `contentPaneVisible` **dreiwertig**: `normalizeUiPrefs` lässt den
-Schlüssel weg, solange nichts gespeichert ist, statt ihn auf `false` zu
-normalisieren. „Nie eingestellt" ist etwas anderes als „ausdrücklich
-weggeschaltet" — nur so kann der Start den Startschirm zeigen, ohne die
-Entscheidung dessen zu überfahren, der die Spalte weggeklickt hat. Geschrieben
-wird der Wert allein vom Umschalter in der Titelzeile.
+For that, `contentPaneVisible` is **three-valued**: `normalizeUiPrefs` leaves the
+key out as long as nothing is stored, instead of normalising it to `false`.
+"Never set" is something different from "explicitly hidden" — only that way can
+the startup show the welcome screen without overriding the decision of someone
+who clicked the column away. The value is written by the toggle in the title bar
+alone.
 
-Und wer die App in einer Konversation verlässt, soll dort wieder landen — nicht
-neben dem Startschirm, der für den kalten Start gedacht ist. Die Entscheidung
-darüber ist auf drei Stellen verteilt, und die Reihenfolge ist der Punkt:
+And whoever leaves the app inside a conversation should land there again — not
+next to the welcome screen, which is meant for the cold start. The decision about
+that is spread over three places, and the order is the point:
 
-1. **`index.html` startet mit `app--no-preview`.** Der erste Bildaufbau
-   passiert, bevor `app.js` etwas weiß; stünde dort die offene Spalte, blitzte
-   der Startschirm auf und spränge gleich wieder weg. `test/startup-layout.test.js`
-   hält Markup und Umschalter-Zustand (`aria-pressed`) zusammen.
-2. **`loadChatForWorkspace()` meldet das Ergebnis** (`{ restored, wasActive }`)
-   statt es nur anzuwenden — der Start braucht die Auskunft, der Ordnerwechsel
-   ignoriert sie.
-3. **`contentPaneVisibleOnStart()`** (`renderer/utils/startupLayout.js`) fügt
-   beides mit der gespeicherten Einstellung und dem geöffneten Ordner zusammen:
-   ein wiederhergestellter Chat schlägt alles, danach zählt die ausdrückliche
-   Präferenz, und ohne sie der Ordner. `app.js` wendet das Ergebnis im `finally`
-   der Startsequenz an, damit ein Fehler beim Laden die Spalte nicht zugeklappt
-   hängen lässt.
+1. **`index.html` starts with `app--no-preview`.** The first paint happens before
+   `app.js` knows anything; if the open column stood there, the welcome screen
+   would flash up and jump away again. `test/startup-layout.test.js` keeps markup
+   and toggle state (`aria-pressed`) together.
+2. **`loadChatForWorkspace()` reports its result** (`{ restored, wasActive }`)
+   instead of only applying it — the startup needs the information, the folder
+   change ignores it.
+3. **`contentPaneVisibleOnStart()`** (`renderer/utils/startupLayout.js`) combines
+   both with the stored setting and the opened folder: a restored chat beats
+   everything, then the explicit preference counts, and without it the folder.
+   `app.js` applies the result in the `finally` of the startup sequence, so that
+   an error during loading does not leave the column stuck closed.
 
-Zeigt die Spalte den Startschirm, bekommt sie nur dessen Breite: `#welcome` ist
-inhaltlich auf 560 px begrenzt und hat 32 px Polsterung je Seite, macht 624 px.
-Den Rest des Fensters gibt `fitChatToWelcome()` (`SidebarResizer.js`) dem Chat —
-begrenzt durch dieselbe Deckelung bei der halben Fensterbreite wie beim Ziehen
-am Trenner. Eine gemerkte Chat-Breite bleibt unangetastet, und geschrieben wird
-hier nichts: Was der Start einrichtet, ist kein neuer Wunsch.
-`test/startup-layout.test.js` hält die 624 px mit dem CSS zusammen.
+If the column shows the welcome screen, it gets only that screen's width:
+`#welcome` is limited to 560 px of content and has 32 px of padding per side,
+making 624 px. The rest of the window is given to the chat by `fitChatToWelcome()`
+(`SidebarResizer.js`) — bounded by the same cap at half the window width as when
+dragging the divider. A remembered chat width stays untouched, and nothing is
+written here: what the startup sets up is not a new wish.
+`test/startup-layout.test.js` keeps the 624 px together with the CSS.
 
-Die Vorschau lebt in dieser Spalte, deshalb holt ein Klick auf eine Datei sie
-über `revealContentPane` zurück — sonst bliebe der Klick folgenlos.
+The preview lives in this column, which is why clicking a file brings it back via
+`revealContentPane` — otherwise the click would have no consequence.
 
-### Fensterzustand ([#209](https://github.com/kkrafft1999/snotra/issues/209))
+### Window state ([#209](https://github.com/kkrafft1999/snotra/issues/209))
 
-Größe, Position, maximiert und Vollbild liegen in `window-state.json` im
-`userData`-Ordner — bewusst neben der Ablage aus `storage-service`: der Zustand
-gehört dem Fenster allein, niemand sonst liest ihn, und er muss stehen, bevor
-irgendein Service existiert. Geschrieben wird synchron (die letzte Änderung ist
-beim Schließen fällig, danach wartet der Prozess auf nichts mehr) und während
-des Betriebs entprellt, weil Ziehen am Fensterrand sonst dutzendfach pro
-Sekunde auf die Platte ginge. Gesichert wird immer `getNormalBounds()`, also
-das Maß *unter* Maximierung und Vollbild.
+Size, position, maximised and full screen live in `window-state.json` in the
+`userData` folder — deliberately beside the store from `storage-service`: the
+state belongs to the window alone, nobody else reads it, and it has to be in
+place before any service exists. It is written synchronously (the last change is
+due at closing time, after which the process waits for nothing) and debounced
+during operation, because dragging the window edge would otherwise hit the disk
+dozens of times per second. What is saved is always `getNormalBounds()`, i.e. the
+measurement *underneath* maximisation and full screen.
 
-Die Entscheidung beim Start liegt als reine Funktion `resolveWindowBounds()` in
-`src/main/window-state.js`, weil zwischen zwei Starts Bildschirme dazukommen,
-wegfallen und ihre Auflösung ändern: Größe auf die Arbeitsfläche begrenzen,
-Position in sie einrasten, und wenn vom gespeicherten Rechteck weniger als
-100 px sichtbar wären, die Position fallen lassen — dann zentriert Electron.
-Ohne gespeicherten Zustand gilt die Startgröße aus #208 (1536 × 960).
+The decision at startup lives as the pure function `resolveWindowBounds()` in
+`src/main/window-state.js`, because between two starts displays appear, disappear
+and change their resolution: limit the size to the work area, snap the position
+into it, and if less than 100 px of the stored rectangle would be visible, drop
+the position — Electron then centres it. Without a stored state, the startup size
+from #208 applies (1536 × 960).
 
-## Automatisierte Grenzwächter
+## Automated boundary guards
 
-| Test | Was er prüft |
+| Test | What it checks |
 | ---- | ------------ |
-| `test/application-layer-imports.test.js` | `src/application/` importiert nur `application/` + `shared/` |
-| `test/infrastructure-boundaries.test.js` | Storage/Credentials ohne Provider-Registry-Leaks |
-| `test/adapter-port-shapes.test.js` | Port-Adapter exponieren nur erlaubte Methoden |
-| `test/contracts*.test.js` | Wire-Enums und Settings-DTOs an der IPC-Grenze |
-| `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalisierte Anzeige-Daten für Settings, Verlauf |
+| `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/` |
+| `test/infrastructure-boundaries.test.js` | Storage/credentials without provider registry leaks |
+| `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
+| `test/contracts*.test.js` | Wire enums and settings DTOs at the IPC boundary |
+| `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalised display data for settings and history |
 
-## Renderer-Tests am DOM
+## Renderer tests against the DOM
 
-Renderer-Komponenten werden seit [#78](https://github.com/kkrafft1999/snotra/issues/78)
-gegen ein echtes DOM getestet — `happy-dom` als einzige Testabhängigkeit,
-`node --test` bleibt der Runner, die CI braucht nichts weiter. `test/helpers/dom.js`
-baut ein Fenster aus der **echten** `src/renderer/index.html` (ohne deren
-Skript-Tags) und legt die Browser-Globals auf `globalThis`; die Komponenten
-werden als natives ESM per `await import(...)` geladen und mit gestubbtem
-`api`/`appStore` initialisiert.
+Since [#78](https://github.com/kkrafft1999/snotra/issues/78), renderer components
+are tested against a real DOM — `happy-dom` as the only test dependency,
+`node --test` remains the runner, and CI needs nothing further.
+`test/helpers/dom.js` builds a window from the **real** `src/renderer/index.html`
+(without its script tags) and puts the browser globals on `globalThis`; the
+components are loaded as native ESM via `await import(...)` and initialised with
+a stubbed `api`/`appStore`.
 
-| Test | Was er prüft |
+| Test | What it checks |
 | ---- | ------------ |
-| `test/file-tree-dom.test.js` | Baum zeichnen, Auf-/Zuklappen, Vorschau, Drop von außen ([#101](https://github.com/kkrafft1999/snotra/issues/101)): Zielordner je Trefferfläche, Lesen des `DataTransfer` vor dem ersten `await`, Busy-Sperre, Baum-Refresh |
-| `test/settings-modal-dom.test.js` | Tab-Umschaltung: Panel, `aria-selected`, Roving Tabindex, Überschrift, Escape |
-| `test/chat-links-dom.test.js` | Klick-Handler für Links aus Modellantworten ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) inkl. Fehlermeldung in der Statuszeile |
-| `test/chat-restore-report-dom.test.js` | Was `loadChatForWorkspace()` dem Start meldet ([#208](https://github.com/kkrafft1999/snotra/issues/208)): wiederhergestellte Konversation, leerer Ordner, bloße Begrüßung |
+| `test/file-tree-dom.test.js` | Drawing the tree, expanding/collapsing, preview, drop from outside ([#101](https://github.com/kkrafft1999/snotra/issues/101)): target folder per hit area, reading the `DataTransfer` before the first `await`, busy lock, tree refresh |
+| `test/settings-modal-dom.test.js` | Tab switching: panel, `aria-selected`, roving tabindex, heading, Escape |
+| `test/chat-links-dom.test.js` | Click handler for links from model answers ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) including the error message in the status line |
+| `test/chat-restore-report-dom.test.js` | What `loadChatForWorkspace()` reports to the startup ([#208](https://github.com/kkrafft1999/snotra/issues/208)): restored conversation, empty folder, plain greeting |
 
-Außerhalb des DOM-Stacks, aber zur selben Strecke: `test/window-state.test.js`
-prüft die Fensterentscheidung beim Start (Standardgröße, gemerkter Zustand,
-abgezogener Bildschirm) und das Schreiben und Lesen der Zustandsdatei.
+Outside the DOM stack, but on the same stretch: `test/window-state.test.js`
+checks the window decision at startup (default size, remembered state, unplugged
+display) as well as writing and reading the state file.
 
-Grenzen, damit die grüne Zeile nicht mehr verspricht, als sie hält: kein echtes
-Chromium, also **kein Layout** (`offsetParent`, `getBoundingClientRect`) und
-**kein Sanitizing** — DOMPurify arbeitet unter happy-dom nachweislich falsch
-(Details im Kopf von `test/helpers/dom.js`). `DataTransfer`/`DragEvent` baut der
-Helfer selbst nach. Ein echter Finder-/Explorer-Drop bleibt manuell.
+Limits, so that the green line does not promise more than it delivers: no real
+Chromium, and therefore **no layout** (`offsetParent`, `getBoundingClientRect`)
+and **no sanitizing** — DOMPurify demonstrably works incorrectly under happy-dom
+(details in the header of `test/helpers/dom.js`). `DataTransfer`/`DragEvent` are
+reproduced by the helper itself. A real Finder/Explorer drop stays manual.
 
-## Smoke-Test in der echten App
+## Smoke test in the real app
 
-Was eine DOM-Nachbildung nicht leisten kann, prüft ein Durchlauf durch die
-laufende Electron-App: `npm run test:e2e` (nicht Teil von `npm test`). Bewusst
-**ein** Test — die Electron-Ebene ist die teuerste pro gefundenem Fehler, und
-ein Lauf, der beim Start alles einmal anfasst, holt den Großteil davon. Er
-dauert rund drei Sekunden.
+What a DOM stand-in cannot deliver is checked by a run through the live Electron
+app: `npm run test:e2e` (not part of `npm test`). Deliberately **one** test — the
+Electron level is the most expensive per bug found, and a run that touches
+everything once at startup catches the bulk of it. It takes about three seconds.
 
-- **Treiber:** `playwright-core` (`_electron.launch`) als devDependency. Kein
-  Browser-Download, kein zweiter Test-Runner: `node --test` bleibt.
-- **Isolation:** eigenes `--user-data-dir`, ein per `mkdtemp` angelegter
-  Arbeitsordner. Die Einstellungen der installierten App bleiben unberührt.
-- **Modell:** `e2e/helpers/fake-model.mjs`, ein kleiner OpenAI-kompatibler
-  SSE-Server. Der Provider `mlx-lm` zeigt per `baseUrl` dorthin — kein API-Key,
-  kein Netz, und der Stream lässt sich verlangsamen, um ihn abzubrechen.
-- **Strecke:** Start mit vorgemerktem Ordner → Baum → Datei öffnen und Vorschau
-  → Chat-Runde abbrechen (der Abbruch muss bis zum Server durchschlagen) →
-  zweite Runde mit Links und gefährlichem Markup → **Sanitizing in echtem
-  Chromium** → Klick auf den Link landet im Main-Prozess → Einstellungen öffnen,
-  Tab wechseln, mit Escape schließen.
-- `shell.openExternal` wird im Main-Prozess ersetzt, damit der Test keinen
-  echten Browser aufmacht.
+- **Driver:** `playwright-core` (`_electron.launch`) as a devDependency. No
+  browser download, no second test runner: `node --test` stays.
+- **Isolation:** its own `--user-data-dir` and a working folder created via
+  `mkdtemp`. The settings of the installed app remain untouched.
+- **Model:** `e2e/helpers/fake-model.mjs`, a small OpenAI-compatible SSE server.
+  The `mlx-lm` provider points there via `baseUrl` — no API key, no network, and
+  the stream can be slowed down in order to abort it.
+- **Route:** start with a pre-set folder → tree → open a file and preview → abort
+  a chat round (the abort has to reach the server) → second round with links and
+  dangerous markup → **sanitizing in real Chromium** → a click on the link lands
+  in the main process → open settings, switch tab, close with Escape.
+- `shell.openExternal` is replaced in the main process so that the test does not
+  open a real browser.
 
-Fallstricke des Treibers stehen im Kopf von `e2e/helpers/app.mjs` — vor allem:
-Playwrights eigenes Warten hängt hier (Timer-Drosselung im Renderer), deshalb
-pollt der Treiber selbst.
+Pitfalls of the driver are documented in the header of `e2e/helpers/app.mjs` —
+above all: Playwright's own waiting hangs here (timer throttling in the
+renderer), which is why the driver polls itself.
 
-Seit [#237](https://github.com/kkrafft1999/snotra/issues/237) läuft der
-Smoke-Test auch in `ci.yml`, im selben Job wie `npm test`, auf allen drei
-Plattformen. Unter Linux fehlt dem Runner eine Anzeige — der Schritt läuft
-dort über `xvfb-run --auto-servernum`, macOS und Windows brauchen keinen
-Zusatz. Damit prüft die CI beide Testebenen, nicht nur die DOM-Nachbildung,
-und das Pflicht-Gate im Ruleset auf `main` deckt tatsächlich ab, was die
-Projektregel [`git-workflow.md`](../.claude/rules/git-workflow.md) vor dem
-Push verlangt.
+Since [#237](https://github.com/kkrafft1999/snotra/issues/237) the smoke test
+also runs in `ci.yml`, in the same job as `npm test`, on all three platforms. On
+Linux the runner has no display — the step runs there via
+`xvfb-run --auto-servernum`, while macOS and Windows need no addition. CI
+therefore checks both test levels, not just the DOM stand-in, and the required
+gate in the ruleset on `main` actually covers what the project rule
+[`git-workflow.md`](../.claude/rules/git-workflow.md) demands before a push.
 
-## Coverage: ehrlicher Nenner, getrennte Schwellen
+## Coverage: an honest denominator, separate thresholds
 
-`npm run coverage` fährt die Suite mit `--experimental-test-coverage` und
-prüft zwei Bereiche gegen eigene Schwellen. Exit-Code 1, wenn einer darunter
-liegt.
+`npm run coverage` runs the suite with `--experimental-test-coverage` and checks
+two areas against their own thresholds. Exit code 1 if one of them falls below.
 
-Stand 2026-09-14 (Node 24):
+As of 2026-09-14 (Node 24):
 
-| Bereich | Dateien im Bericht | Zeilen | Zweige | Funktionen |
+| Area | Files in the report | Lines | Branches | Functions |
 | --- | --- | --- | --- | --- |
-| Kern (`main`, `application`, `shared`, `preload`) | 119/122 | 95,7 % | 86,0 % | 89,6 % |
-| Renderer | 30/31 | 42,1 % | 74,3 % | 58,4 % |
+| Core (`main`, `application`, `shared`, `preload`) | 119/122 | 95.7 % | 86.0 % | 89.6 % |
+| Renderer | 30/31 | 42.1 % | 74.3 % | 58.4 % |
 
-Schwellen (in `scripts/coverage.js`): Kern 94 / 85 / 88, Renderer 41 / 72 / 56.
-Sie sind eine **Sperrklinke** — knapp unter dem gemessenen Stand, damit ein
-Rückschritt auffällt, ohne dass jede Änderung die Zahl nachzieht. Wer sie senkt,
-sagt im Commit warum.
+Thresholds (in `scripts/coverage.js`): core 94 / 85 / 88, renderer 41 / 72 / 56.
+They are a **ratchet** — just below the measured state, so that a regression
+stands out without every change having to move the number. Whoever lowers one
+says why in the commit.
 
-Zwei Dinge daran sind Absicht:
+Two things about it are deliberate:
 
-**Der Nenner enthält alle Quelldateien.** Node misst nur, was der Lauf lädt —
-eine Datei, die kein Test anfasst, fehlt im Bericht und drückt die Zahl nicht.
-Genau daher kam die frühere Angabe von ~94 % Zeilen: Sie beschrieb eine
-Auswahl. `test/source-files-load.test.js` lädt deshalb **jede** Datei unter
-`src/` (und findet nebenbei kaputte Importpfade in Dateien, die sonst niemand
-importiert). Was sich außerhalb von Electron nicht laden lässt, steht mit
-Begründung in `scripts/source-files.js` — vier Einstiegspunkte —, und
-`npm run coverage` listet sie im Bericht auf, statt sie zu verschweigen. Fehlt
-eine Datei ohne Begründung, schlägt der Lauf fehl.
+**The denominator contains all source files.** Node measures only what the run
+loads — a file no test touches is missing from the report and does not drag the
+number down. That is exactly where the earlier figure of ~94 % lines came from:
+it described a selection. `test/source-files-load.test.js` therefore loads
+**every** file under `src/` (and incidentally finds broken import paths in files
+nobody else imports). What cannot be loaded outside Electron is listed with a
+reason in `scripts/source-files.js` — four entry points — and `npm run coverage`
+lists them in the report instead of concealing them. If a file is missing without
+a reason, the run fails.
 
-**Die Schwellen sind getrennt.** Der Renderer ist rund ein Drittel des Codes
-und aus einem Testlauf heraus schwerer zu erreichen als der Kern; eine
-gemeinsame Schwelle müsste sich am schwächeren Teil orientieren und ließe den
-Kern verwahrlosen. Die 42 % Zeilen im Renderer sind kein Ziel, sondern der
-ehrliche Stand — was dort fehlt, fängt teilweise der Smoke-Test auf einer
-anderen Ebene ab.
+**The thresholds are separate.** The renderer is roughly a third of the code and
+harder to reach from a test run than the core; a shared threshold would have to
+orient itself on the weaker part and would let the core go to seed. The 42 % of
+lines in the renderer are not a target but the honest state — what is missing
+there is partly caught by the smoke test at a different level.
 
-Coverage ist **kein** CI-Gate: dort läuft `npm test`. Die Schwellen sind eine
-lokale Sperrklinke, keine Merge-Bedingung.
+Coverage is **not** a CI gate: there, `npm test` runs. The thresholds are a local
+ratchet, not a merge condition.
 
-## Systemprompt
+## System prompt
 
-Der Systemprompt wird pro Anfrage aus fünf Bausteinen zusammengesetzt
-(`application/chat/chat-engine.js`), in dieser Reihenfolge:
+The system prompt is assembled per request from five building blocks
+(`application/chat/chat-engine.js`), in this order:
 
-1. **Basisprompt** aus den Einstellungen — steht vorn und behält den Vorrang.
-2. **Gedächtnis-Block** (`application/chat/memory-prompt.js`,
-   [#166](https://github.com/kkrafft1999/snotra/issues/166)) — die beiden
-   `memory.md`-Dateien aus `<workspace>/.agents` und `~/.snotra`. Er steht
-   direkt hinter dem Basisprompt, weil er dasselbe ist: was der Nutzer selbst
-   gesagt hat, nur über mehrere Unterhaltungen hinweg — dazwischen soll sich
-   nichts Fremdes schieben. Je Ebene höchstens 8.000 Zeichen
-   (`MAX_MEMORY_CHARS`), Übergroßes wird sichtbar gekürzt, und jede Ebene
-   bekommt eine eigene Zeile in der Kontext-Aufschlüsselung (#174). Je Ebene
-   abschaltbar unter Einstellungen › Gedächtnis (Voreinstellung an).
-   Geschrieben wird er nur über das Tool `remember`; die Anleitung dazu steht
-   im System-Skill `snotra-memory` und wird erst bei Bedarf geladen — Inhalt
-   immer, Regelwerk auf Abruf.
-3. **Skill-Block** (`buildSkillsSystemPrompt`) — die eingeschalteten Skills;
-   sie beschreiben das *Wie*. Im Prompt steht je Skill nur Name und
-   Kurzbeschreibung, die Anleitung holt das Modell bei Bedarf mit `load_skill`
-   ([#173](https://github.com/kkrafft1999/snotra/issues/173)). Nur zwei Fälle
-   stehen sofort voll im Prompt: per `/name` gerufene Skills und der Rückfall,
-   wenn es kein `load_skill` gibt.
-4. **Environment-Block** (`application/chat/environment-prompt.js`, Issue #138)
-   — Arbeitsverzeichnis (absoluter Pfad), Git ja/nein, Plattform,
-   Systemversion, die Shell von `shell_execute` und das heutige Datum. Die
-   Shell steht nur dort, wenn das Tool eingeschaltet *und* eine Shell gefunden
-   ist; ohne offenen Ordner fallen Pfad- und Git-Zeile weg. Bewusst ohne
-   Uhrzeit, damit der Block einen Tag lang stabil bleibt und das Prompt-Caching
-   der Anbieter nicht bei jeder Nachricht bricht. Abschaltbar über
-   „Umgebungsinformationen mitschicken" in den Einstellungen (Voreinstellung
-   an) — der absolute Pfad enthält den Benutzernamen und geht an den Anbieter.
-5. **Projektanweisungen** (`application/chat/project-instructions-prompt.js`,
-   Issue #212, nachgeschärft in #253) — die `AGENTS.md`-Dateien aus
-   `<workspace>/.agents`, `~/.snotra` und `~/.agents`, alle vorhandenen
-   aneinandergehängt. Sie **ergänzen einander und gelten gemeinsam**; keine
-   schlägt eine andere, die Reihenfolge ist deshalb Lese- und keine Rangfolge.
-   Es ist dieselbe Quellenliste wie für Skills (#251) — zwei Ordnungen, die
-   man getrennt lernen müsste, wären teurer als der eine Gleichlauf. Im
-   Projekt zählt allein `.agents/`: Eine `AGENTS.md` in der Ordnerwurzel wird
-   nicht gelesen, obwohl sie außerhalb dieses Projekts die verbreitetere Form
-   ist. Je Datei höchstens 20.000 Zeichen
-   (`MAX_PROJECT_INSTRUCTION_CHARS`, gleich der Grenze für Skill-Bodies),
-   Übergroßes wird sichtbar gekürzt statt verworfen, und jede Datei bekommt
-   eine eigene Zeile in der Kontext-Aufschlüsselung (#174). Abschaltbar über
-   „`AGENTS.md` mitschicken" in den Einstellungen (Voreinstellung an).
-6. **Ordner-/Tool-Block** (`buildWorkspaceSystemPrompt`, sonst
-   `buildNoWorkspaceSystemPrompt`) — offener Ordner, Tool-Beschreibungen,
-   Baumauswahl und die Regel, dass Tool-Ergebnisse Daten sind.
+1. **Base prompt** from the settings — it stands first and keeps precedence.
+2. **Memory block** (`application/chat/memory-prompt.js`,
+   [#166](https://github.com/kkrafft1999/snotra/issues/166)) — the two
+   `memory.md` files from `<workspace>/.agents` and `~/.snotra`. It stands
+   directly behind the base prompt, because it is the same thing: what the user
+   said themselves, only across several conversations — nothing foreign should
+   push itself in between. At most 8,000 characters per level
+   (`MAX_MEMORY_CHARS`), oversized content is visibly truncated, and each level
+   gets its own line in the context breakdown (#174). Can be switched off per
+   level under Settings › Gedächtnis (Memory; on by default). It is written only
+   via the `remember` tool; the instructions for that live in the system skill
+   `snotra-memory` and are loaded only on demand — content always, rules on
+   request.
+3. **Skill block** (`buildSkillsSystemPrompt`) — the enabled skills; they
+   describe the *how*. The prompt carries only name and short description per
+   skill, and the model fetches the instructions on demand with `load_skill`
+   ([#173](https://github.com/kkrafft1999/snotra/issues/173)). Only two cases go
+   into the prompt in full immediately: skills invoked via `/name`, and the
+   fallback when there is no `load_skill`.
+4. **Environment block** (`application/chat/environment-prompt.js`, issue #138)
+   — working directory (absolute path), git yes/no, platform, system version, the
+   shell of `shell_execute` and today's date. The shell only appears there if the
+   tool is switched on *and* a shell was found; without an open folder the path
+   and git lines fall away. Deliberately without a time of day, so that the block
+   stays stable for a day and the providers' prompt caching does not break on
+   every message. Can be switched off via "Umgebungsinformationen mitschicken"
+   (Send environment information) in the settings (on by default) — the absolute
+   path contains the user name and goes to the provider.
+5. **Project instructions** (`application/chat/project-instructions-prompt.js`,
+   issue #212, sharpened in #253) — the `AGENTS.md` files from
+   `<workspace>/.agents`, `~/.snotra` and `~/.agents`, all existing ones
+   concatenated. They **complement one another and apply jointly**; none beats
+   another, so the order is a reading order and not a precedence. It is the same
+   source list as for skills (#251) — two orderings that would have to be learned
+   separately would cost more than the one alignment. Within the project only
+   `.agents/` counts: an `AGENTS.md` in the folder root is not read, even though
+   that is the more common form outside this project. At most 20,000 characters
+   per file (`MAX_PROJECT_INSTRUCTION_CHARS`, the same limit as for skill
+   bodies), oversized content is visibly truncated rather than discarded, and each
+   file gets its own line in the context breakdown (#174). Can be switched off via
+   "`AGENTS.md` mitschicken" (Send `AGENTS.md`) in the settings (on by default).
+6. **Folder/tool block** (`buildWorkspaceSystemPrompt`, otherwise
+   `buildNoWorkspaceSystemPrompt`) — the open folder, tool descriptions, the tree
+   selection and the rule that tool results are data.
 
-Die Reihenfolge der letzten beiden ist Absicht: Der Inhalt einer `AGENTS.md`
-ist **Anweisung, keine Daten** — anders als Tool-Ergebnisse, für die
-`TOOL_RESULTS_ARE_DATA_RULE` gilt. Sie soll das Verhalten des Modells ändern,
-sonst wäre sie sinnlos; vertretbar ist das, weil der Nutzer den Ordner selbst
-geöffnet hat. Genau deshalb steht sie **vor** dem Ordner-/Tool-Block und nicht
-dahinter: Die Regel, dass Tool-Ergebnisse Daten sind, soll nicht das Letzte
-sein, was eine fremde Anweisungsdatei überschreiben könnte. Die Notbremse ist
-der Schalter, nicht die Platzierung.
+The order of the last two is deliberate: the content of an `AGENTS.md` is
+**instruction, not data** — unlike tool results, for which
+`TOOL_RESULTS_ARE_DATA_RULE` applies. It is meant to change the model's
+behaviour, otherwise it would be pointless; that is defensible because the user
+opened the folder themselves. Precisely for that reason it stands **before** the
+folder/tool block and not after it: the rule that tool results are data should not
+be the last thing a foreign instruction file could overwrite. The emergency brake
+is the switch, not the placement.
 
-### Grundausstattung der Tools
+### Baseline equipment of the tools
 
-Grundsatz seit [#180](https://github.com/kkrafft1999/snotra/issues/180): Was
-in Einstellungen › Tools steht, geht an das Modell — und umgekehrt. Sonst
-kostet ein Schema in jeder Runde Tokens, das niemand abwählen kann, weil es in
-der Liste nicht auftaucht.
+Principle since [#180](https://github.com/kkrafft1999/snotra/issues/180): what is
+in Settings › Tools goes to the model — and vice versa. Otherwise a schema costs
+tokens in every round that nobody can deselect, because it does not appear in the
+list.
 
-`essential: true` ist die eine ausdrückliche Ausnahme
-([#195](https://github.com/kkrafft1999/snotra/issues/195)): nur in den
-Einstellungen versteckt, immer an das Modell. Die Häkchen des Nutzers greifen
-darauf nicht, `requiresWorkspace` und `requiresSkills` weiterhin schon. Die
-Gegenrichtung — `internal: true`, vor Nutzer *und* Modell versteckt und nur
-aus Tests auslösbar — ist mit
-[#203](https://github.com/kkrafft1999/snotra/issues/203) entfallen, nachdem ihr
-einziger Träger `debug_wait` weg war
+`essential: true` is the one explicit exception
+([#195](https://github.com/kkrafft1999/snotra/issues/195)): hidden only in the
+settings, always sent to the model. The user's checkboxes do not reach it, while
+`requiresWorkspace` and `requiresSkills` still do. The opposite direction —
+`internal: true`, hidden from user *and* model and only triggerable from tests —
+was dropped with [#203](https://github.com/kkrafft1999/snotra/issues/203), after
+its only bearer `debug_wait` was gone
 ([#197](https://github.com/kkrafft1999/snotra/issues/197)).
 
-Grundausstattung sind `list_directory` und `load_skill`. Beide sind kein
-Zusatz, sondern der Zugang zu etwas, das der Nutzer an anderer Stelle schon
-eingeschaltet hat — ein Ordner bzw. ein Skill. Abgewaehlt sparten sie ein
-kleines Schema und kosteten ein Vielfaches woanders: ohne `load_skill` fällt
-der Skill-Block auf den vollen Body jeder Anleitung zurück, ohne
-`list_directory` rät das Modell Pfade. Eine Zeile mit Häkchen wäre dort also
-kein Sparschalter, sondern eine Falle — deshalb steht sie nicht in der Liste.
+The baseline equipment consists of `list_directory` and `load_skill`. Neither is
+an add-on; they are the access to something the user has already switched on
+elsewhere — a folder and a skill respectively. Deselected, they would save a small
+schema and cost a multiple of that elsewhere: without `load_skill` the skill block
+falls back to the full body of every instruction, and without `list_directory` the
+model guesses paths. A row with a checkbox would therefore not be a saving switch
+there but a trap — which is why it is not in the list.
 
-Ein **Scratch-Verzeichnis** nennt der Block bewusst *nicht*: die Schreib-Tools
-kennen nur den Arbeitsordner als Wurzel, ein Pfad daneben wäre ein Hinweis auf
-etwas, das nicht funktioniert.
+The block deliberately does *not* mention a **scratch directory**: the write tools
+know only the working folder as their root, and a path beside it would be a hint
+at something that does not work.
 
-## Weitere funktionale Module
+## Further functional modules
 
-Das Skill-System ([#18](https://github.com/kkrafft1999/snotra/issues/18)) ist
-auf dieser Struktur aufgesetzt: Discovery und Parsing im Main-Service, Auswahl
-und Systemprompt-Zusammenbau im Core, Katalog und Umschalter über die
-bestehenden Settings-Kanäle. Erweiterte Tool-Sets und Use-Case-Profile sind
-**nicht** Teil der abgeschlossenen Architektur-Etappen — sie bauen ebenfalls
-darauf auf und werden als
-[GitHub Issues](https://github.com/kkrafft1999/snotra/issues) geführt.
+The skill system ([#18](https://github.com/kkrafft1999/snotra/issues/18)) is
+built on this structure: discovery and parsing in the main service, selection and
+system-prompt assembly in the core, catalogue and toggles over the existing
+settings channels. Extended tool sets and use-case profiles are **not** part of
+the completed architecture stages — they build on it as well and are tracked as
+[GitHub issues](https://github.com/kkrafft1999/snotra/issues).
