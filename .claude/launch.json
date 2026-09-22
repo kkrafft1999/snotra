@@ -2,12 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "website",
-      "runtimeExecutable": "firebase",
-      "runtimeArgs": ["serve", "--only", "hosting", "--port", "5055"],
-      "port": 5055
-    },
-    {
       "name": "mockup",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "5056"],

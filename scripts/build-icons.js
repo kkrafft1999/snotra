@@ -7,8 +7,10 @@
  *   assets/icon/icon-macos.svg   -> icon.icns  (16 … 512 px, jeweils 1x und @2x)
  *   assets/icon/icon-windows.svg -> icon.ico   (16, 32, 48, 64, 128, 256 px als PNG-Einträge)
  *   assets/icon/icon-windows.svg -> icon.png   (512 px, Linux: hicolor-Icon des .deb)
- *   assets/icon/icon-windows.svg -> website/favicon.ico, favicon.svg, icon.png,
- *                                   apple-touch-icon.png
+ *
+ * Die Favicons der Website entstehen seit #299 nicht mehr hier, sondern im
+ * eigenen Repository der Seite (kkrafft1999/snotra-promotion, dort
+ * `scripts/build-favicons.js`) — aus einer Kopie derselben Quelle.
  *
  * `icon.icns`/`icon.ico` findet electron-packager über `"icon": "./icon"` (ohne
  * Endung) selbst; `icon.png` wird vom deb-Maker explizit referenziert. Die
@@ -29,11 +31,6 @@ const SRC_WIN = path.join(ROOT, 'assets', 'icon', 'icon-windows.svg');
 const OUT_ICNS = path.join(ROOT, 'icon.icns');
 const OUT_ICO = path.join(ROOT, 'icon.ico');
 const OUT_PNG = path.join(ROOT, 'icon.png');
-const WEB_DIR = path.join(ROOT, 'website');
-const OUT_WEB_ICO = path.join(WEB_DIR, 'favicon.ico');
-const OUT_WEB_SVG = path.join(WEB_DIR, 'favicon.svg');
-const OUT_WEB_PNG = path.join(WEB_DIR, 'icon.png');
-const OUT_WEB_APPLE = path.join(WEB_DIR, 'apple-touch-icon.png');
 
 // Apple-Iconset: [Punktgröße, Skalierung] -> Dateiname icon_<pt>x<pt>[@2x].png
 const ICONSET = [
@@ -41,14 +38,8 @@ const ICONSET = [
   [256, 1], [256, 2], [512, 1], [512, 2],
 ];
 const ICO_SIZES = [16, 32, 48, 64, 128, 256];
-// Browser zeigen das Favicon nur in Tab- und Lesezeichengröße, größere Einträge
-// wären reines Transfergewicht. Moderne Browser nehmen ohnehin favicon.svg.
-const WEB_ICO_SIZES = [16, 32, 48];
 // Linux: eine Groesse reicht, 512 ist die groesste uebliche hicolor-Stufe.
 const PNG_SIZE = 512;
-// Apple-Touch-Icon: 180 px ist die größte Stufe, die iOS anfragt (iPhone @3x);
-// kleinere Geräte skalieren selbst herunter, deshalb genügt diese eine Datei.
-const APPLE_SIZE = 180;
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
@@ -120,35 +111,6 @@ function buildPng() {
   renderPng(SRC_WIN, PNG_SIZE, OUT_PNG);
 }
 
-/**
- * Apple-Touch-Icon: iOS rundet die Ecken selbst ab und hinterlegt alles, was
- * transparent ist, mit Schwarz. Die abgerundeten Ecken der Icon-Quelle (rx=180)
- * lägen damit als dunkler Rand außerhalb der Apple-Maske — deshalb wird der
- * Hintergrund für dieses eine Bild quadratisch gerendert.
- */
-function buildAppleTouchIcon(tmpDir) {
-  const svg = fs.readFileSync(SRC_WIN, 'utf8');
-  const squared = svg.replace('<rect width="1024" height="1024" rx="180"', '<rect width="1024" height="1024"');
-  if (squared === svg) throw new Error('Hintergrund-Rechteck in icon-windows.svg nicht gefunden');
-  const squaredPath = path.join(tmpDir, 'apple-source.svg');
-  fs.writeFileSync(squaredPath, squared);
-  renderPng(squaredPath, APPLE_SIZE, OUT_WEB_APPLE);
-}
-
-/**
- * Website-Icons für Firebase Hosting: `favicon.ico` beantwortet die Anfrage, die
- * jeder Browser ungefragt an `/favicon.ico` stellt (Issue #119), `favicon.svg`
- * bedient moderne Browser scharf in jeder Größe, `icon.png` bleibt als
- * og:image-Motiv der Seiten und `apple-touch-icon.png` beantwortet die Anfrage
- * von iOS-Lesezeichen und Home-Bildschirm-Verknüpfungen (Issue #127).
- */
-function buildWebsiteIcons(tmpDir) {
-  buildIco(tmpDir, WEB_ICO_SIZES, OUT_WEB_ICO, 'web');
-  fs.copyFileSync(SRC_WIN, OUT_WEB_SVG);
-  renderPng(SRC_WIN, PNG_SIZE, OUT_WEB_PNG);
-  buildAppleTouchIcon(tmpDir);
-}
-
 function main() {
   for (const src of [SRC_MAC, SRC_WIN]) {
     if (!fs.existsSync(src)) throw new Error(`Quelle fehlt: ${path.relative(ROOT, src)}`);
@@ -161,8 +123,6 @@ function main() {
     console.log(`✔ ${path.relative(ROOT, OUT_ICO)} (${ICO_SIZES.length} Größen)`);
     buildPng();
     console.log(`✔ ${path.relative(ROOT, OUT_PNG)} (${PNG_SIZE} px)`);
-    buildWebsiteIcons(tmpDir);
-    console.log(`✔ ${path.relative(ROOT, OUT_WEB_ICO)} (${WEB_ICO_SIZES.length} Größen), favicon.svg, icon.png, apple-touch-icon.png (${APPLE_SIZE} px)`);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
