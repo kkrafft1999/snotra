@@ -1,89 +1,87 @@
-# Task-Management
+# Task management
 
-Für dieses Projekt gilt: **Alles läuft über GitHub Issues.** Es gibt keine
-`docs/roadmap.md` und keine `docs/task.md` mehr (Entscheidung vom 2026-09-07;
-ursprüngliche Konvention vom 2026-07-01, siehe PR #16).
+In this project **everything runs through GitHub issues**. There is no
+`docs/roadmap.md` and no `docs/task.md` any more (decision from 2026-09-07; the
+original convention dates from 2026-07-01, see PR #16).
 
-- **Jede Aufgabe** — Bug, einzelnes Feature, größeres Thema — wird als
-  **GitHub Issue** erfasst: https://github.com/kkrafft1999/snotra/issues.
-  Vorlagen: `.github/ISSUE_TEMPLATE/bug_report.yml` (🐛) und
+- **Every task** — a bug, a single feature, a larger topic — is captured as a
+  **GitHub issue**: https://github.com/kkrafft1999/snotra/issues. Templates:
+  `.github/ISSUE_TEMPLATE/bug_report.yml` (🐛) and
   `.github/ISSUE_TEMPLATE/feature_request.yml` (💡).
-- Der **Fortschritt** wird im **GitHub Project „Snotra AI“** (Nummer 2,
-  Kanban-Board: Backlog → Ready → In progress → In review → Done) verfolgt —
+- **Progress** is tracked on the **GitHub project "Snotra AI"** (number 2,
+  kanban board: Backlog → Ready → In progress → In review → Done) —
   https://github.com/users/kkrafft1999/projects/2.
-- Issues werden **direkt per `gh issue create`** angelegt — `gh` ist in dieser
-  Umgebung mit Schreibzugriff eingerichtet (Token-Scopes `repo`, `workflow`,
-  `project`, `read:org`, `gist`; geprüft 2026-09-13). Der `project`-Scope
-  erlaubt auch das **Lesen und Setzen der Board-Spalte** per
-  `gh project item-list` / `gh project item-edit`. Neue Issues landen aber
-  nicht automatisch auf dem Board — nach `gh issue create` entweder selbst
-  per `gh project item-add 2 --owner kkrafft1999 --url <issue-url>`
-  einsortieren oder den Nutzer darauf hinweisen.
-- Bewusst **kein** externes Tool (Linear/Trello/Notion/Jira) und **keine**
-  Aufgabenlisten im Repo — alles bleibt in GitHub, da Solo-/Hobby-Projekt und
-  bereits vollständig GitHub-basiert.
+- Issues are created **directly with `gh issue create`** — `gh` is set up with
+  write access in this environment (token scopes `repo`, `workflow`, `project`,
+  `read:org`, `gist`; verified 2026-09-13). The `project` scope also allows
+  **reading and setting the board column** via `gh project item-list` /
+  `gh project item-edit`. New issues do not land on the board by themselves,
+  though — after `gh issue create`, either file them yourself with
+  `gh project item-add 2 --owner kkrafft1999 --url <issue-url>` or tell the user.
+- Deliberately **no** external tool (Linear/Trello/Notion/Jira) and **no** task
+  lists in the repository — everything stays in GitHub, since this is a solo
+  hobby project that is already fully GitHub-based.
 
-## Keine Task-Dateien im Repo anlegen
+## No task files in the repository
 
-Die frühere Zwischenablage `docs/task.md` und der Fahrplan `docs/roadmap.md`
-sind am 2026-09-07 ersatzlos entfernt worden, weil sie neben den Issues
-veraltet sind. Also:
+The former scratchpad `docs/task.md` and the roadmap `docs/roadmap.md` were
+removed without replacement on 2026-09-07, because they went stale next to the
+issues. So:
 
-- **Keine** neue `task.md`, `roadmap.md`, `TODO.md`, `backlog.md` o. Ä.
-  anlegen — auch nicht als „Zwischenspeicher“.
-- Kann `gh` ausnahmsweise nicht schreiben (anderer Rechner, fehlender Scope,
-  kein Netz): den fertigen Issue-Text **im Gespräch** ausgeben und den Nutzer
-  bitten, ihn anzulegen. Nicht ins Repo schreiben.
-- Der **Ist-Zustand** der App wird im `README.md` (Nutzersicht) und in
-  `docs/architecture.md` (Struktur) beschrieben, nicht in einer Statusliste.
+- **No** new `task.md`, `roadmap.md`, `TODO.md`, `backlog.md` or the like — not
+  even as a "temporary" place to put things.
+- If `gh` cannot write for once (another machine, a missing scope, no network):
+  print the finished issue text **in the conversation** and ask the user to
+  create it. Don't write it into the repository.
+- The **current state** of the app is described in `README.md` (the user's view)
+  and in `docs/architecture.md` (the structure), not in a status list.
 
-## Verhalten bei Fragen wie "Was steht an?", "Was ist der aktuelle Stand?", "Backlog?"
+## What to do when asked "What's next?", "Where do we stand?", "Backlog?"
 
-1. **Zuerst das Board abfragen**, insbesondere die Spalte **Ready** — dort
-   steht, was als Nächstes dran ist. Die flache Issue-Liste zeigt alles
-   gleichrangig, die Priorisierung steckt im Board:
+1. **Query the board first**, especially the **Ready** column — that is what
+   comes next. The flat issue list shows everything as equal; the priorities
+   live on the board:
    ```sh
    gh project item-list 2 --owner kkrafft1999 --limit 100 --format json
    ```
-2. **Danach** das übrige Backlog — entweder aus derselben Ausgabe (Spalte
-   `Backlog`) oder flach:
+2. **Then** the rest of the backlog — either from the same output (column
+   `Backlog`) or flat:
    ```sh
    gh issue list --repo kkrafft1999/snotra --state open
    ```
-   Issues ohne Board-Eintrag tauchen nur hier auf, deshalb beide Sichten
-   abgleichen.
-3. Bei Bedarf einzelne Issues nachlesen (`gh issue view <nr>`), um Abhängigkeiten
-   und Prioritäten einzuordnen.
-4. Zusätzlich den **Arbeitsbaum prüfen** (`git status`) — angefangene, noch nicht
-   committete Arbeit gehört zur Antwort auf „Was steht an?“.
-5. Zusammenfassen und eine Reihenfolge empfehlen — die Ready-Items zuerst
-   und einzeln, das Backlog dahinter nur noch gruppiert. Falls es keine
-   offenen Issues gibt, das explizit sagen statt etwas zu erfinden.
+   Issues without a board entry only show up here, so compare both views.
+3. Read individual issues where needed (`gh issue view <nr>`) to judge
+   dependencies and priorities.
+4. Also **check the working tree** (`git status`) — work that has been started
+   but not committed is part of the answer to "What's next?".
+5. Summarise and recommend an order — the Ready items first and individually,
+   the backlog behind them and only grouped. If there are no open issues, say so
+   instead of inventing something.
 
-## Verhalten bei neuen Aufgaben/Ideen im Gespräch
+## What to do with new tasks and ideas from the conversation
 
-- Wenn der Nutzer eine **konkrete Aufgabe, einen Bug oder eine Idee** nennt:
-  Issue-Text nach dem passenden Template formulieren (Abschnitte des Templates
-  als Überschriften, dazu bewährt: Ist-Zustand mit Prüfdatum, Querbezüge,
-  Definition of Done) — **auf Englisch, auch wenn die Aufgabe auf Deutsch
-  genannt wurde**, siehe [`language.md`](./language.md) — und das Issue
-  **direkt anlegen**:
+- When the user names a **concrete task, a bug or an idea**: write the issue
+  text along the matching template (the template's sections as headings, plus
+  what has proven useful: current state with the date it was checked,
+  cross-references, definition of done) — **in English, even when the task was
+  described in German**, see [`language.md`](./language.md) — and create the
+  issue **right away**:
   ```sh
   gh issue create --repo kkrafft1999/snotra --label enhancement \
-    --title "…" --body-file <datei>
+    --title "…" --body-file <file>
   ```
-  (Bugs mit `--label bug`.) Die Body-Datei in den Scratchpad legen, nicht ins
-  Repo. Den Issue-Link danach im Gespräch nennen.
-- Frisch angelegte Issues **aufs Board legen**. `item-add` hängt das Issue
-  ohne Status an, die Spalte `Backlog` wird danach per `item-edit` gesetzt
-  (nie `Ready` — was als Nächstes dran ist, entscheidet der Nutzer):
+  (Bugs with `--label bug`.) Put the body file in the scratchpad, not in the
+  repository. Mention the issue link in the conversation afterwards.
+- **Put fresh issues on the board.** `item-add` attaches the issue without a
+  status; the `Backlog` column is set afterwards with `item-edit` (never
+  `Ready` — what comes next is the user's call):
   ```sh
   gh project item-add 2 --owner kkrafft1999 --url <issue-url>
-  gh project item-edit --id <item-id aus item-add> \
+  gh project item-edit --id <item-id from item-add> \
     --project-id PVT_kwHOAQKGm84BjXUk \
     --field-id PVTSSF_lAHOAQKGm84BjXUkzhiL4mY \
     --single-select-option-id f75ad846   # = Backlog
   ```
-- **Größere/grundsätzliche Themen** (Epic-Level) bekommen ebenfalls ein Issue —
-  ausformuliert genug, dass es später in mehrere Issues aufgeteilt werden kann.
-  Es gibt keinen separaten Ort mehr für „die große Linie“.
+- **Larger, fundamental topics** (epic level) get an issue as well — written out
+  far enough that it can be split into several issues later. There is no
+  separate place for "the big picture" any more.
