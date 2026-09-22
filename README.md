@@ -568,7 +568,7 @@ paths (`.env*`, `*.pem`, `*.key`, `id_*`, `credentials*`, `secrets*`, `*.p12`,
 assignments, bearer tokens) are detected locally: targeted access needs an
 approval, while broad searches and listings omit such entries and only report the
 count (`omitted_sensitive`). The concept behind this is written up in
-[`docs/sicherheitskonzept.md`](docs/sicherheitskonzept.md) (German).
+[`docs/security-concept.md`](docs/security-concept.md).
 
 The three write tools (max. 2 MB per file):
 

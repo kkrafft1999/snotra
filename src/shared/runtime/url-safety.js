@@ -12,7 +12,7 @@
  * Was hier bewusst offen bleibt: zwischen Pruefung und Verbindungsaufbau kann
  * ein Angreifer den DNS-Eintrag wechseln (DNS-Rebinding). Das schliesst erst
  * eine Verbindung auf die geprüfte IP mit mitgegebenem Host-Header; siehe
- * docs/sicherheitskonzept.md.
+ * docs/security-concept.md.
  */
 
 /** Nur diese Schemata; alles andere traegt nichts in den Chat. */
