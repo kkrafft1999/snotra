@@ -1,94 +1,94 @@
-# Git-Workflow: pushen, PR und Merge ohne gesonderte Aufforderung
+# Git workflow: push, pull request and merge without being asked
 
-Konvention vom 2026-09-20.
+Convention from 2026-09-20.
 
-Eine fertige Aufgabe wird bis zum gemergten Pull Request durchgezogen, ohne
-dass der Nutzer die einzelnen Schritte anstößt. Die Rückfrage kostet in diesem
-Repo mehr, als sie schützt — was sie schützen soll, prüft eine Maschine
-ohnehin zuverlässiger:
+A finished task is carried through to a merged pull request without the user
+triggering each step. In this repository the confirmation costs more than it
+protects — and what it is supposed to protect, a machine checks more reliably
+anyway:
 
-**Ruleset `23177645` auf `main`** verlangt einen Pull Request, verbietet
-Force-Push und das Löschen des Branches und macht die drei Kontexte
-`Tests (macos-14)`, `Tests (windows-latest)` und `Tests (ubuntu-latest)` zur
-Pflicht. Ein roter Stand kommt damit nicht durch, auch nicht aus Versehen.
+**Ruleset `23177645` on `main`** requires a pull request, forbids force-pushing
+and deleting the branch, and makes the three contexts `Tests (macos-14)`,
+`Tests (windows-latest)` and `Tests (ubuntu-latest)` mandatory. A red state does
+not get through, not even by accident.
 
-Seit dem 2026-09-20 steht in `bypass_actors` **niemand** mehr (#240). Die
-Regeln gelten damit auch für den Owner: Ein Direkt-Push auf `main` scheitert
-hart, statt still durchzugehen. Der Preis ist ein fehlender Notausgang — läuft
-ein Pflicht-Check einmal nicht mehr an, muss erst das Ruleset angefasst
-werden, bevor wieder etwas nach `main` kann.
+Since 2026-09-20 `bypass_actors` is **empty** (#240). The rules therefore apply
+to the owner as well: a direct push to `main` fails hard instead of slipping
+through quietly. The price is a missing emergency exit — if a required check
+ever stops running, the ruleset has to be touched before anything can reach
+`main` again.
 
-Bis zum 2026-09-20 verlangte das Ruleset stattdessen ein Review. Da es in
-einem Solo-Repo niemanden gibt, der es geben könnte, war jeder Merge ein
-Admin-Bypass — und den verweigert die Agent-Umgebung als *Merge Without
-Review*, zu Recht. Mit dem Tausch Review → Pflicht-Checks ist der Merge ein
-gewöhnlicher Merge über ein grünes Gate; am selben Tag belegt.
+Until 2026-09-20 the ruleset demanded a review instead. In a solo repository
+there is nobody to give one, so every merge was an admin bypass — and the agent
+environment refuses that as *Merge Without Review*, rightly so. With review
+traded for mandatory checks, a merge is an ordinary merge through a green gate;
+proven on the same day.
 
-## Ohne Rückfrage
+## Without asking
 
-1. **Pushen und den PR anlegen, sobald die Tests lokal grün sind.** Grün
-   heißt: `npm test` **und** `npm run test:e2e` vollständig durchgelaufen,
-   ohne Fehler, auf dem Arbeitsbranch. Der PR bekommt `Closes #N` auf das
-   zugehörige Issue (siehe [`task-management.md`](./task-management.md)) — auf
-   Englisch, ein deutsches „Schließt #N" schließt nichts. **Commit-Messages,
-   PR-Titel und PR-Beschreibungen sind Englisch** — siehe
+1. **Push and open the pull request as soon as the tests are green locally.**
+   Green means: `npm test` **and** `npm run test:e2e` ran to completion, without
+   failures, on the working branch. The pull request carries `Closes #N` for the
+   matching issue (see [`task-management.md`](./task-management.md)) — in
+   English, a German "Schließt #N" closes nothing. **Commit messages, pull
+   request titles and pull request bodies are English** — see
    [`language.md`](./language.md).
-2. **Mergen, sobald die Pipeline grün ist** und die Prüfung unten nichts
-   findet. Per **Squash**: `main` trägt einen Commit je PR, mit der PR-Nummer
-   im Titel. Danach den Branch löschen, das Repo räumt nicht von selbst auf.
+2. **Merge as soon as the pipeline is green** and the review below finds
+   nothing. By **squash**: `main` carries one commit per pull request, with the
+   pull request number in the title. Delete the branch afterwards, the
+   repository does not tidy up by itself.
 
-Der Nutzer erfährt hinterher in einem Satz, was passiert ist: PR-Nummer,
-Merge, gelöschter Branch. Er muss es nicht vorher genehmigen, aber er soll es
-nicht suchen müssen.
+The user is told afterwards, in one sentence, what happened: pull request
+number, merge, deleted branch. They don't have to approve it beforehand, but
+they shouldn't have to go looking for it either.
 
-## Was vor dem Merge geprüft wird
+## What is checked before merging
 
-- **Alle Pflicht-Checks grün** — nicht übersprungen, nicht noch offen.
-  „Läuft schon durch" ist kein Ergebnis.
-- **Keine Konflikte mit `main`** (`mergeable: MERGEABLE`, Status `CLEAN`).
-- **Keine offenen Reviews oder Kommentare**, die eine Antwort verlangen —
-  auch von Bots, wenn sie einen echten Einwand tragen.
-- **Der Diff enthält nichts über den Auftrag hinaus** — keine fremden
-  Änderungen aus einer Parallel-Session, keine Zugangsdaten oder Schlüssel,
-  nichts am Release-Prozess oder an den Workflows unter `.github/`.
+- **All required checks green** — not skipped, not still running. "It's running"
+  is not a result.
+- **No conflicts with `main`** (`mergeable: MERGEABLE`, status `CLEAN`).
+- **No open reviews or comments** that call for an answer — including from bots,
+  when they carry a real objection.
+- **The diff contains nothing beyond the task** — no foreign changes from a
+  parallel session, no credentials or keys, nothing touching the release process
+  or the workflows under `.github/`.
 
-Fällt eines davon aus, wird nicht gemergt, sondern gemeldet.
+If one of these fails, don't merge — report it.
 
-Seit [#237](https://github.com/kkrafft1999/snotra/issues/237) fährt `ci.yml`
-im selben Job auch `npm run test:e2e` — das Pflicht-Gate deckt damit beide
-Testebenen ab, nicht nur die DOM-Nachbildung.
+Since [#237](https://github.com/kkrafft1999/snotra/issues/237) `ci.yml` also
+runs `npm run test:e2e` in the same job, so the required gate covers both test
+levels, not just the DOM stand-in.
 
-## Erst fragen
+## Ask first
 
-- **Tests lokal rot** oder gar nicht gelaufen — dann wird auch nicht gepusht.
-- **Konflikte, Force-Push, Rebase**, alles, was Historie umschreibt.
-- **Änderungen am Ruleset selbst** oder am Schutz von `main`. Wer das Gate
-  verstellt, verstellt die Grundlage dieser Regel.
-- **Direkt auf `main` schreiben:** nie, auch nicht mit Admin-Bypass. Das gilt
-  auch für den **Versions-Commit eines Releases** — er geht wie jede andere
-  Änderung über einen PR (Issue #238).
+- **Tests red locally**, or not run at all — then nothing gets pushed either.
+- **Conflicts, force-push, rebase** — anything that rewrites history.
+- **Changes to the ruleset itself** or to the protection of `main`. Moving the
+  gate moves the ground this rule stands on.
+- **Writing to `main` directly:** never, not even with an admin bypass. That
+  includes the **version commit of a release** — it goes through a pull request
+  like every other change (issue #238).
 
-Im Zweifel gilt der Zweifel: lieber den Stand melden und fragen, als einen
-Merge zurückdrehen.
+When in doubt, the doubt wins: report the state and ask, rather than undo a
+merge.
 
-## Tags sind nicht gemeint
+## Tags are not covered
 
-Das Push-Verbot gilt Branches. Ruleset `23177645` hat `target: branch` und
-erfasst Tag-Refs nicht — `git push origin vX.Y.Z` ist deshalb kein Bypass und
-braucht keine gesonderte Rückfrage. Die Bestätigung der Zielversion holt der
-[`release`-Skill](../skills/release/SKILL.md) ohnehin ein, bevor er taggt;
-sein Ablauf steht als Diagramm in
+The push restriction is about branches. Ruleset `23177645` has `target: branch`
+and does not catch tag refs, so `git push origin vX.Y.Z` is not a bypass and
+needs no separate confirmation. The [`release` skill](../skills/release/SKILL.md)
+confirms the target version before it tags anyway; its flow is drawn in
 [`docs/release-ablauf.svg`](../../docs/release-ablauf.svg).
 
-Bis zum 2026-09-20 lief der Bump per `npm version` direkt auf `main` und kam
-nur durch den `RepositoryRole`-Bypass durch; GitHub quittierte jedes Release
-mit `Bypassed rule violations for refs/heads/main`. Beides ist weg: der Bump
-geht über einen PR (#238), der Bypass ist entfernt (#240). Ein Direkt-Push
-wird jetzt abgelehnt — kommt so eine Ablehnung, ist etwas am Ablauf
-vorbeigelaufen, und das gehört gemeldet statt umgangen.
+Until 2026-09-20 the bump ran via `npm version` straight on `main` and only got
+through because of the `RepositoryRole` bypass; GitHub logged every release with
+`Bypassed rule violations for refs/heads/main`. Both are gone: the bump goes
+through a pull request (#238), the bypass is removed (#240). A direct push is
+now rejected — if such a rejection shows up, something has slipped past the
+process, and that is to be reported rather than worked around.
 
-## Reihenfolge
+## Order
 
-Issue → Branch → Commits → lokale Tests → Push → PR mit `Closes #N` →
-Pipeline → Prüfung oben → Squash-Merge → Branch löschen → ein Satz an den
-Nutzer.
+Issue → branch → commits → local tests → push → pull request with `Closes #N` →
+pipeline → the review above → squash merge → delete branch → one sentence to
+the user.

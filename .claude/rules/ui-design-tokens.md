@@ -1,7 +1,7 @@
 ---
-# Nur bei Arbeit an Renderer-/Style-Dateien laden. `paths` ist der
-# dokumentierte Key; `globs` zusätzlich, weil laut anthropics/claude-code#17204
-# in manchen Versionen nur `globs` greift. Unbekannte Keys werden ignoriert.
+# Load only when working on renderer or style files. `paths` is the documented
+# key; `globs` is added because, according to anthropics/claude-code#17204, some
+# versions only honour `globs`. Unknown keys are ignored.
 paths:
   - "src/renderer/**/*.html"
   - "src/renderer/**/*.js"
@@ -10,225 +10,307 @@ paths:
 globs: "src/renderer/**/*.html, src/renderer/**/*.js, **/*.css, **/*.scss"
 ---
 
-# UI-Design-Tokens (doubleSlash Mono-Blue)
+# UI design tokens (doubleSlash Mono-Blue)
 
-Du arbeitest im doubleSlash Mono-Blue System für Snotra AI. Halte dich strikt an die hier definierten Tokens, Komponenten-Specs und Workflow-Regeln. Funktionalität, State, Routing und Datenfluss bleiben bei Refactors unverändert — du veränderst ausschließlich UI-Tokens, Styles und Layout-Patterns.
+You are working in the doubleSlash Mono-Blue system for Snotra AI. Stick
+strictly to the tokens, component specs and workflow rules defined here.
+Functionality, state, routing and data flow stay untouched during refactors —
+you change UI tokens, styles and layout patterns and nothing else.
 
-## Token-Architektur
+## Token architecture
 
-Es gibt **zwei Token-Ebenen**:
+There are **two token layers**:
 
-1. **Single Source of Truth — `renderer/styles/tokens.css`**
-   Enthält alle Marken- und Design-System-Werte (Farben, Typografie, Radien, Motion, Button-Farben) als CSS-Variablen. Wird in `renderer/index.html` **vor** `styles.css` geladen.
-2. **Komponenten-Aliase — `renderer/styles.css`**
-   Mappt komponentennahe Namen (`--btn-primary-bg`, `--btn-radius`, …) auf die Design-Tokens oder definiert komponentenspezifische Geometrie (Padding, Radius, Transition).
+1. **Single source of truth — `renderer/styles/tokens.css`**
+   Holds every brand and design-system value (colours, typography, radii,
+   motion, button colours) as CSS variables. Loaded in `renderer/index.html`
+   **before** `styles.css`.
+2. **Component aliases — `renderer/styles.css`**
+   Maps component-level names (`--btn-primary-bg`, `--btn-radius`, …) onto the
+   design tokens, or defines component-specific geometry (padding, radius,
+   transition).
 
-**Neue Design-Tokens** (Farben, Status, neue Button-Variante, Spacing-Stufe …) gehören in `renderer/styles/tokens.css`, mit Light-Wert in `:root` und ggf. Dark-Wert in `[data-theme='dark']`. In `styles.css` darf zusätzlich ein semantischer Alias (`--btn-…`, `--accent-…`) angelegt werden, der auf das Token mappt — **niemals** Hex-Werte direkt in Komponenten.
+**New design tokens** (a colour, a status, a new button variant, a spacing
+step …) belong in `renderer/styles/tokens.css`, with the light value in `:root`
+and, where needed, the dark value in `[data-theme='dark']`. `styles.css` may add
+a semantic alias (`--btn-…`, `--accent-…`) that maps onto the token — **never**
+hex values directly in a component.
 
 ## Tokens
 
-### Farben
+### Colours
 
-In `tokens.css` sind dies die Kanalnamen (Light-Werte in `:root`, Dark in `[data-theme='dark']`):
+In `tokens.css` these are the channel names (light values in `:root`, dark in
+`[data-theme='dark']`):
 
-| Token | Light (Auszug) | Zweck |
+| Token | Light (excerpt) | Purpose |
 |---|---|---|
-| `--ds-blue` | `#00759E` | einzige Akzentfarbe |
-| `--ds-blue-soft` | `rgba(0,117,158,0.05)` | Hover-Wash, aktive Radio-States |
-| `--ds-blue-border` | `rgba(0,117,158,0.25)` | Active-State Borders |
-| `--ds-black` | `#000000` | Primär-Schrift, Destructive-Aktion |
-| `--ds-white` | `#FFFFFF` | **nur Tinte**: Schrift auf Blau, Häkchen, Toggle-Knob |
-| `--ds-surface` | `#FFFCF5` | primäre Fläche (Karten, Dialoge, Composer) |
-| `--ds-grey-bg` | `#F9F4ED` | Page-BG, Footer-BG |
-| `--ds-grey-card` | `#F2EDE6` | Code-BG, Inline-Code |
-| `--ds-grey-divider` | `#EFEAE3` | Borders, Trennlinien |
-| `--ds-grey-muted` | `#6F6D69` | Sekundär-Schrift, Metadaten (nur ≥ 14 px) |
-| `--ds-grey-strong` | `#5E5C59` | kleinere Sekundärschrift (< 14 px) |
-| `--ds-btn-primary-*` | siehe `tokens.css` | Primary/Save/Send: BG, FG, Hover, Active-Schatten |
+| `--ds-blue` | `#00759E` | the one accent colour |
+| `--ds-blue-soft` | `rgba(0,117,158,0.05)` | hover wash, active radio states |
+| `--ds-blue-border` | `rgba(0,117,158,0.25)` | active-state borders |
+| `--ds-black` | `#000000` | primary type, destructive action |
+| `--ds-white` | `#FFFFFF` | **ink only**: type on blue, check marks, toggle knob |
+| `--ds-surface` | `#FFFCF5` | primary surface (cards, dialogs, composer) |
+| `--ds-grey-bg` | `#F9F4ED` | page background, footer background |
+| `--ds-grey-card` | `#F2EDE6` | code background, inline code |
+| `--ds-grey-divider` | `#EFEAE3` | borders, dividing lines |
+| `--ds-grey-muted` | `#6F6D69` | secondary type, metadata (only ≥ 14 px) |
+| `--ds-grey-strong` | `#5E5C59` | smaller secondary type (< 14 px) |
+| `--ds-btn-primary-*` | see `tokens.css` | primary/save/send: background, foreground, hover, active shadow |
 
-Die drei Grautoene sind **warm getoent** (b\* +4, R-B-Spanne 12). Bis zum
-2026-09-17 war der Satz leicht kuehl, damit die Grauflaechen den Blau-Hue von
-`--ds-blue` aufnehmen; diese Regel ist bewusst **umgedreht**. Der Grund ist
-jetzt Papier, `--ds-blue` ist der einzige kuehle Ton im System — dadurch wird
-es als Akzent gelesen und nicht als Grundstimmung. Wer die Waerme zurueckdreht,
-dreht diese Entscheidung mit zurueck; keine Einzelwerte anfassen.
+The three greys are **warm-toned** (b\* +4, R–B span 12). Until 2026-09-17 the
+set was slightly cool, so that the grey surfaces would pick up the blue hue of
+`--ds-blue`; that rule is deliberately **reversed**. The ground is paper now,
+and `--ds-blue` is the only cool tone in the system — which is what makes it
+read as an accent instead of as the basic mood. Turning the warmth back down
+turns this decision back with it; don't touch the values individually.
 
-Die Skala selbst ist unveraendert: Der Helligkeitsabstand Grund → Card betraegt
-ΔL\* 2,44, Grund → Divider ΔL\* 3,49. Verschoben wurden ausschliesslich a\* und
-b\*, **nie L\***. **Wer einen der drei Werte aendert, muss die anderen beiden
-mitziehen** — sonst brechen die Ebenenabstaende.
+The scale itself is unchanged: the lightness distance ground → card is
+ΔL\* 2.44, ground → divider ΔL\* 3.49. Only a\* and b\* were shifted, **never
+L\***. **Whoever changes one of the three values has to move the other two
+along** — otherwise the layer distances break.
 
-Reines Weiss ist keine Flaeche mehr. `--ds-surface` sitzt bei L\* 99,0 statt
-100, weil warm *und* L\* 100 nicht gleichzeitig geht — auf warmem Grund liest
-`#FFFFFF` als kuehler, fast blaeulicher Fleck. Der Preis sind kleinere
-Ebenenabstaende: Flaeche → Panel-Grund ΔL\* 2,62 (vorher 2,79), Flaeche →
-Chat-Grund ΔL\* 1,23 (vorher 1,43). Untergrenze fuer den Panel-Grund ist
-`#F6F1EA`; darunter fallen `--ds-grey-muted` und `--ds-blue` unter 4,6:1 und
-verlieren jeden Kontrastpuffer.
+Pure white is no longer a surface. `--ds-surface` sits at L\* 99.0 instead of
+100, because warm *and* L\* 100 cannot both be had — on a warm ground `#FFFFFF`
+reads as a cooler, almost bluish patch. The price is smaller layer distances:
+surface → panel ground ΔL\* 2.62 (was 2.79), surface → chat ground ΔL\* 1.23
+(was 1.43). The lower bound for the panel ground is `#F6F1EA`; below that,
+`--ds-grey-muted` and `--ds-blue` drop under 4.6:1 and lose every bit of
+contrast headroom.
 
-### Typografie
+### Typography
 
-- Inter: **400** (Body), **500** (CTA, Chips, Sekundär-Button), **600** (Headlines, Pills, App-Brand), **700** (Welcome-Hero). Keine Italic, keine extrem leichten/schweren Display-Weights.
+- Inter: **400** (body), **500** (CTA, chips, secondary button), **600**
+  (headlines, pills, app brand), **700** (welcome hero). No italics, no
+  extremely light or heavy display weights.
 - Mono: `ui-monospace, 'SF Mono', Menlo, Consolas, monospace`
-- `font-variant-numeric: tabular-nums` für Zahlen in Tabellen und Timing.
+- `font-variant-numeric: tabular-nums` for numbers in tables and timings.
 
 ### Radius
 
-- Container (Card, Dialog, Input, Select, Code-Block): **6px**
-- Text-Buttons, Pills, Toggles, Avatar, Live-Dot, Radio: **999px**
-- Icon-Buttons **32×32** (Send, Mic): in der App **`border-radius: 50%`** (Kreis).
-- Mantra: *Klickbar oder Status → rund (bzw. Kreis bei quadratischen Icons). Container → 6px.*
+- Containers (card, dialog, input, select, code block): **6px**
+- Text buttons, pills, toggles, avatar, live dot, radio: **999px**
+- Icon buttons **32×32** (send, mic): in the app **`border-radius: 50%`** (a
+  circle).
+- The mantra: *clickable or status → round (a circle for square icons).
+  Container → 6px.*
 
-## Komponenten-Specs
+## Component specs
 
 ### Buttons
 
-Text-Buttons (`.btn-primary`, `.btn-secondary`) mit `border-radius: 999px`, Padding 8/18px. Vier Varianten:
+Text buttons (`.btn-primary`, `.btn-secondary`) with `border-radius: 999px`,
+padding 8/18px. Four variants:
 
-- **Primary**: BG `--ds-btn-primary-bg` (`--ds-blue`), Text `--ds-btn-primary-fg`. Hover: BG `--ds-btn-primary-bg-hover` (dunkleres Blau, nicht Schwarz). `:active`: dezentes `box-shadow` über `--ds-btn-primary-active-shadow`. CSS-Klasse `.btn-primary` für die wichtigste Aktion eines Dialogs (z. B. „Speichern & aktivieren"). Send-Icon-Button teilt dieselben Primary-Tokens.
-- **Secondary**: BG transparent/`--bg-primary`, Border `--ds-grey-divider`, Text Primärfarbe. Hover: Border `--ds-grey-muted` (neutral, nicht einladend). CSS-Klasse `.btn-secondary` _oder_ einfach ein `<button>` ohne `.btn-primary` innerhalb von `.modal-actions`. Für Begleitaktionen (z. B. „Schließen", „Anbieter zurücksetzen", „Modelle laden").
-- **Destructive**: BG `--ds-black`, Text `--ds-white`. Hover: BG `--ds-grey-muted`. **Im Regelfall keine rote Farbe** — destruktive Wirkung über Schwarz. Rot nur bei wirklich kritischer, unwiederbringlicher Aktion (siehe Ausnahmeregel unten).
-- **Icon-Button**: 32×32, `border-radius: 50%`, kein BG, Hover-BG `--ds-grey-bg`. `:active`: `--ds-icon-btn-active-shadow`. Pflicht: `aria-label`.
+- **Primary**: background `--ds-btn-primary-bg` (`--ds-blue`), text
+  `--ds-btn-primary-fg`. Hover: background `--ds-btn-primary-bg-hover` (a darker
+  blue, not black). `:active`: a restrained `box-shadow` via
+  `--ds-btn-primary-active-shadow`. The CSS class `.btn-primary` is for the most
+  important action of a dialog (e.g. "Speichern & aktivieren"). The send icon
+  button shares the same primary tokens.
+- **Secondary**: background transparent or `--bg-primary`, border
+  `--ds-grey-divider`, text in the primary colour. Hover: border
+  `--ds-grey-muted` (neutral, not inviting). The CSS class `.btn-secondary` _or_
+  simply a `<button>` without `.btn-primary` inside `.modal-actions`. For
+  accompanying actions (e.g. "Schließen", "Anbieter zurücksetzen", "Modelle
+  laden").
+- **Destructive**: background `--ds-black`, text `--ds-white`. Hover: background
+  `--ds-grey-muted`. **As a rule no red** — the destructive effect is carried by
+  black. Red only for a genuinely critical, irreversible action (see the
+  exception below).
+- **Icon button**: 32×32, `border-radius: 50%`, no background, hover background
+  `--ds-grey-bg`. `:active`: `--ds-icon-btn-active-shadow`. Mandatory:
+  `aria-label`.
 
-**Niemals** Inline-Farben für Buttons setzen — immer Tokens nutzen, sonst bricht der Dark-Mode.
+**Never** set inline colours for buttons — always use tokens, otherwise dark
+mode breaks.
 
-### Chips & Card-artige Hover-Items (einladender Hover)
+### Chips and card-like hover items (the inviting hover)
 
-Container-artige interaktive Elemente, die zur Auswahl _einladen_ (Quick-Action-Chips, Recent-Folder-Chips, Radio-Rows mit Card-Form, Welcome-CTA), nutzen ein **anderes Hover-Pattern** als `.btn-secondary`:
+Container-like interactive elements that _invite_ a choice (quick-action chips,
+recent-folder chips, radio rows in card form, the welcome CTA) use a **different
+hover pattern** from `.btn-secondary`:
 
-- Default: Border `--ds-grey-divider`, transparenter oder weißer BG.
-- **Hover**: Border `--ds-blue` + BG `--ds-blue-soft` (5%-Wash). Signal: „klickbar, hier passiert etwas Sinnvolles".
-- Aktiv (z. B. Radio gewählt): wie Hover-State.
+- Default: border `--ds-grey-divider`, transparent or white background.
+- **Hover**: border `--ds-blue` plus background `--ds-blue-soft` (a 5% wash).
+  The signal: "clickable, something useful happens here".
+- Active (a selected radio, say): the same as the hover state.
 
-Das ist die einzige erlaubte Hover-Variante mit `--ds-blue` als Border-Farbe — sie wirkt einladend, weil `--ds-blue-soft` einen sehr sanften Wash legt. `.btn-secondary` bleibt bewusst neutral (`--ds-grey-muted`), um nicht mit der Primary-Aktion zu konkurrieren.
+This is the only permitted hover variant with `--ds-blue` as the border colour —
+it feels inviting because `--ds-blue-soft` lays down a very gentle wash.
+`.btn-secondary` stays deliberately neutral (`--ds-grey-muted`) so that it does
+not compete with the primary action.
 
-### Form-Controls
+### Form controls
 
-- **Text-Input / Textarea**: Border `--ds-grey-divider`, Radius 6px, Padding 9/12px. Focus: Border `--ds-blue`, kein Outline (der globale `:focus-visible`-Ring aus `styles.css` gilt zusätzlich).
-- **Select**: wie Input + Custom-Chevron via Background-SVG in `--ds-grey-muted`.
-- **Toggle-Switch**: 40×22, BG `--ds-grey-divider`, weißer Knob 16×16. Aktiv: BG `--ds-blue`. ARIA: `role="switch"` + `aria-checked`.
-- **Radio**: 16×16, custom via `appearance: none`. Border `--ds-grey-muted`, im `:checked` Border + Inner-Dot in `--ds-blue`. Wrapper-Row mit `:has(input:checked)` zusätzlich Border + `--ds-blue-soft` BG.
-- **Checkbox**: quadratisch mit 4px Radius (klassische Konvention). Aktiv: `--ds-blue` mit weißem Häkchen.
+- **Text input / textarea**: border `--ds-grey-divider`, radius 6px, padding
+  9/12px. Focus: border `--ds-blue`, no outline (the global `:focus-visible`
+  ring from `styles.css` applies on top).
+- **Select**: like an input plus a custom chevron via a background SVG in
+  `--ds-grey-muted`.
+- **Toggle switch**: 40×22, background `--ds-grey-divider`, white knob 16×16.
+  Active: background `--ds-blue`. ARIA: `role="switch"` plus `aria-checked`.
+- **Radio**: 16×16, custom via `appearance: none`. Border `--ds-grey-muted`; when
+  `:checked`, border and inner dot in `--ds-blue`. The wrapper row adds a border
+  and a `--ds-blue-soft` background via `:has(input:checked)`.
+- **Checkbox**: square with a 4px radius (the classic convention). Active:
+  `--ds-blue` with a white check mark.
 
-### Dialoge & Modals
+### Dialogs and modals
 
-- Backdrop: `rgba(0,0,0,0.5)`, Padding 56/32px.
-- Dialog: max-width 480px, BG `--ds-surface`, Border `--ds-grey-divider`, Radius 6px.
-- Header: Padding 16/24px, Title 16px/600, Close-Icon-Button rechts. Border-bottom `--ds-grey-divider`.
-- Body: Padding 4/24/16px. Form-Rows mit Border-bottom zwischen Sections.
-- Footer: Padding 14/20px, BG `--ds-grey-bg`, rechtsbündig, 8px Gap zwischen Buttons.
-- ARIA: `role="dialog"` + `aria-modal="true"` + `aria-labelledby`. Bestätigungen: `role="alertdialog"` + `aria-describedby`.
+- Backdrop: `rgba(0,0,0,0.5)`, padding 56/32px.
+- Dialog: max-width 480px, background `--ds-surface`, border
+  `--ds-grey-divider`, radius 6px.
+- Header: padding 16/24px, title 16px/600, close icon button on the right.
+  Border-bottom `--ds-grey-divider`.
+- Body: padding 4/24/16px. Form rows with a border-bottom between sections.
+- Footer: padding 14/20px, background `--ds-grey-bg`, right-aligned, 8px gap
+  between buttons.
+- ARIA: `role="dialog"` plus `aria-modal="true"` plus `aria-labelledby`.
+  Confirmations: `role="alertdialog"` plus `aria-describedby`.
 
-### Cards & Container
+### Cards and containers
 
-- BG `--ds-surface`, Border `--ds-grey-divider`, Radius 6px, **kein dekorativen Card-Schatten** (Chat-/Panel-Flächen bleiben flach). Einzige Ausnahme ist die Composer-Karte, siehe „Composer-Lift".
-- Inneres Padding nach Inhaltstyp (Content 24px, Tool-Card 14px).
+- Background `--ds-surface`, border `--ds-grey-divider`, radius 6px, **no
+  decorative card shadow** (chat and panel surfaces stay flat). The one
+  exception is the composer card, see "The composer lift".
+- Inner padding by type of content (content 24px, tool card 14px).
 
-### Pills / Status-Badges
+### Pills and status badges
 
-- Padding 3/9px, Radius 999px, 11px, Letter-Spacing 0.6px, 600 Weight.
-- Aktiv: BG `--ds-blue`, Text `--ds-white`. Englische Status-Texte (`RUNNING`, `DONE`) mit `lang="en"`.
+- Padding 3/9px, radius 999px, 11px, letter-spacing 0.6px, weight 600.
+- Active: background `--ds-blue`, text `--ds-white`. English status texts
+  (`RUNNING`, `DONE`) carry `lang="en"`.
 
 ### Avatar
 
-- Rund (50%), BG `--ds-blue`, Text `--ds-white`, 600 Weight, Initialen.
+- Round (50%), background `--ds-blue`, text `--ds-white`, weight 600, initials.
 
-## Verbotene Muster
+## Forbidden patterns
 
-Du verwendest **niemals**:
+You **never** use:
 
-- Farbverläufe, dekorative Schatten auf Cards/Panels, Glows, 3D-Effekte (Overlays und Composer siehe Ausnahmen unten)
-- Mehr als eine Akzentfarbe (kein `#00A5E1`-Cyan mehr)
-- Cyan `#00A5E1` — vollständig durch `--ds-blue` ersetzt
-- Italic oder extrem leichte/schwere Display-Font-Weights (außerhalb der erlaubten Inter-Stufen)
-- Zentrierte Text-Layouts (außer Empty-States, Bestätigungs-Dialoge)
-- Emojis als UI-Element
-- Grüne Statusfarben — Status über Form, Position, Text
+- Gradients, decorative shadows on cards or panels, glows, 3D effects (overlays
+  and the composer are the exceptions below)
+- More than one accent colour (no more `#00A5E1` cyan)
+- Cyan `#00A5E1` — replaced entirely by `--ds-blue`
+- Italics or extremely light or heavy display font weights (outside the
+  permitted Inter steps)
+- Centred text layouts (except empty states and confirmation dialogs)
+- Emojis as a UI element
+- Green status colours — status is carried by shape, position and text
 
-**Erlaubt:** die in `tokens.css` definierten `box-shadow`-Tokens — keine freien Schatten-Werte in Komponenten:
+**Permitted:** the `box-shadow` tokens defined in `tokens.css` — no free-form
+shadow values in components:
 
-- `--ds-btn-primary-active-shadow` und `--ds-icon-btn-active-shadow` ausschließlich für den **Active-Lift** bei Primary- und Icon-Buttons.
-- `--ds-overlay-shadow` (dazu `--ds-overlay-border`) ausschließlich für **aufklappende Overlays** — Dropdown-Menüs wie Modell-Auswahl, `@`-Vervollständigung und Ordner-Verlauf. Ein Overlay schwebt über dem Inhalt, den es verdeckt; ohne Tiefenhinweis verschwimmen seine Kanten mit dem Darunterliegenden.
-- `--ds-chat-composer-shadow` / `--ds-chat-composer-shadow-focus` ausschließlich für die **Composer-Karte** (`#chat-input-row`) — siehe Abschnitt „Composer-Lift".
+- `--ds-btn-primary-active-shadow` and `--ds-icon-btn-active-shadow`
+  exclusively for the **active lift** on primary and icon buttons.
+- `--ds-overlay-shadow` (together with `--ds-overlay-border`) exclusively for
+  **overlays that open up** — dropdown menus such as the model picker, the `@`
+  completion and the folder history. An overlay floats above the content it
+  covers; without a depth cue its edges blur into what lies beneath.
+- `--ds-chat-composer-shadow` / `--ds-chat-composer-shadow-focus` exclusively
+  for the **composer card** (`#chat-input-row`) — see "The composer lift".
 
-Alle übrigen Cards, Panels und Chat-Flächen bleiben flach. Ein neuer Schatten-Token ist keine Gestaltungsfreiheit, sondern braucht denselben Begründungsweg wie die drei bestehenden: Er darf nur dort entstehen, wo eine Fläche tatsächlich über einer anderen liegt.
+Every other card, panel and chat surface stays flat. A new shadow token is not
+creative licence; it needs the same line of reasoning as the three existing
+ones, and may only appear where one surface genuinely sits above another.
 
-## Composer-Lift (Ausnahmeregel, seit 2026-09-17)
+## The composer lift (exception, since 2026-09-17)
 
-Die Eingabe-Karte im Chat (`#chat-input-row`) ist die **einzige Chat-Fläche mit
-einem Schatten**. Sie liegt als eigenes Bedienelement über dem Gesprächsverlauf,
-den sie beim Scrollen verdeckt — dieselbe Begründung wie beim Overlay, nur
-dauerhaft sichtbar.
+The input card in the chat (`#chat-input-row`) is the **only chat surface with a
+shadow**. It sits above the conversation as a control of its own, and covers it
+while scrolling — the same reasoning as for the overlay, only permanently
+visible.
 
-- Ruhezustand: `box-shadow: var(--ds-chat-composer-shadow)`
-- `:focus-within`: `box-shadow: var(--ds-chat-composer-shadow-focus)` **zusätzlich**
-  zur blauen Kante — der Zustand ist nie allein über den Schatten kodiert
-  (WCAG 1.4.1), die Kante bleibt das tragende Signal.
-- Der Schatten trägt den Hue von `--ds-blue`, nicht Neutralgrau. Ein grauer
-  Schatten wäre im Mono-Blue-System ein zweiter, stummer Farbkanal; der blaue
-  bleibt innerhalb der einen Akzentfarbe. Trotzdem gilt: **kein sichtbarer
-  Farbsaum** — die Deckkraft bleibt so niedrig, dass der Glow als Tiefe gelesen
-  wird, nicht als Leuchten.
-- Freie `box-shadow`-Werte in Komponenten bleiben verboten; wer die Stärke
-  ändert, ändert den Token in `tokens.css`.
+- At rest: `box-shadow: var(--ds-chat-composer-shadow)`
+- `:focus-within`: `box-shadow: var(--ds-chat-composer-shadow-focus)` **in
+  addition** to the blue edge — the state is never encoded by the shadow alone
+  (WCAG 1.4.1), the edge stays the load-bearing signal.
+- The shadow carries the hue of `--ds-blue`, not neutral grey. A grey shadow
+  would be a second, mute colour channel in the Mono-Blue system; the blue one
+  stays inside the single accent colour. Even so: **no visible colour fringe** —
+  the opacity stays low enough that the glow reads as depth, not as light.
+- Free-form `box-shadow` values in components remain forbidden; whoever changes
+  the strength changes the token in `tokens.css`.
 
-### Chat-Grund
+### The chat ground
 
-Der Chat hat seit derselben Änderung einen **eigenen Grund-Token**
-`--ds-chat-bg` (Light `#FAFBFC`, Dark `#313133`) statt `--ds-grey-bg`. Weil der
-Schatten die Tiefe der Composer-Karte trägt, darf der Grund heller liegen, als
-es die ΔL\*-Regel der Grau-Skala erlauben würde.
+Since the same change, the chat has a **ground token of its own**,
+`--ds-chat-bg` (light `#FAFBFC`, dark `#313133`), instead of `--ds-grey-bg`.
+Because the shadow carries the depth of the composer card, the ground may sit
+lighter than the ΔL\* rule of the grey scale would allow.
 
-`--ds-grey-bg` / `--ds-grey-card` / `--ds-grey-divider` bleiben davon
-**unberührt** — sie gelten weiter für Einstellungen, Modals, Footer und Panels,
-inklusive ihrer abgestimmten Abstände. Wer den Chat-Grund ändert, prüft nur die
-Composer-Karte gegen ihn; wer die Grau-Skala ändert, prüft weiterhin alle drei
-Stufen gemeinsam.
+`--ds-grey-bg` / `--ds-grey-card` / `--ds-grey-divider` are **untouched** by
+this — they still apply to settings, modals, the footer and the panels,
+including their tuned distances. Whoever changes the chat ground only checks the
+composer card against it; whoever changes the grey scale still checks all three
+steps together.
 
-## Rote Status-Farben (Ausnahmeregel)
+## Red status colours (exception)
 
-Rot ist **nicht generell verboten**, aber nur einsetzen, wenn die Bedeutung visuell **wirklich rot verlangt** und keine andere Lösung funktioniert. Erlaubte Fälle:
+Red is **not forbidden outright**, but only use it when the meaning visually
+**really demands red** and nothing else works. The permitted cases:
 
-- **Mic-Recording-State** (Audio-Aufnahme aktiv): Recording rot ist eine etablierte UI-Konvention, Form/Text reicht hier nicht aus.
-- **Error-Bubble / Error-Toast**: Wenn ein Fehler den Nutzer aktiv warnen muss und die Form-Variante allein zu leise wäre.
-- **Destruktive Bestätigung** (z. B. „Daten unwiederbringlich löschen"): nur wenn die schwarze Destructive-Variante zu leise ist; im Zweifel **erst Schwarz versuchen**.
+- **The mic recording state** (audio recording active): red for recording is an
+  established UI convention, shape and text are not enough here.
+- **Error bubble / error toast**: when an error has to warn the user actively
+  and the shape-only variant would be too quiet.
+- **A destructive confirmation** (e.g. "delete data irreversibly"): only when
+  the black destructive variant is too quiet; when in doubt, **try black
+  first**.
 
-Nicht erlaubt: Rot für nicht-kritische Hinweise, Validierungs-Hilfen ohne tatsächlichen Fehler, allgemeine Akzente.
+Not permitted: red for non-critical notes, for validation hints without an
+actual error, or as a general accent.
 
-Token-Konvention: Rote Tokens heißen `--ds-error`, `--ds-error-bg`, `--ds-error-border`, `--ds-mic-recording`, `--ds-mic-recording-bg`. Sie leben in `tokens.css` neben den Mono-Blue-Tokens, sind aber **klar als Status-Tokens dokumentiert**, damit niemand sie versehentlich als allgemeinen Akzent zweckentfremdet.
+Token convention: red tokens are named `--ds-error`, `--ds-error-bg`,
+`--ds-error-border`, `--ds-mic-recording`, `--ds-mic-recording-bg`. They live in
+`tokens.css` next to the Mono-Blue tokens, but are **documented clearly as
+status tokens**, so that nobody repurposes them as a general accent by accident.
 
-## Pflichtmuster (WCAG 2.1 AA)
+## Mandatory patterns (WCAG 2.1 AA)
 
-Du stellst **immer** sicher:
+You **always** make sure that:
 
-- `:focus-visible` auf jedem interaktiven Element: `outline: var(--ds-focus-ring)` mit `outline-offset: var(--ds-focus-offset)` (Light: effektiv `#00759E`)
-- Touch-Targets ≥ 32×32, idealerweise 44×44.
-- Status nie nur über Farbe — Farbe + Form + Text.
-- `prefers-reduced-motion` deaktiviert Pulse, Cursor-Blink, Spinner, Wave-Dots.
-- Icon-Buttons mit `aria-label`. Dekorative SVGs: `aria-hidden="true"`. Status-SVGs: `role="img"` + `aria-label`.
-- Englische Begriffe (`RUNNING`, `DONE`, `BAT AGENT`) mit `lang="en"`.
-- Live-Bereiche: `role="log"` + `aria-live="polite"`. Kein `assertive` außer bei Fehlern.
-- Native HTML: `<button>`, `<input>`, `<ol>`/`<ul>`. **Keine** `<div>` mit `onclick`.
+- `:focus-visible` is on every interactive element:
+  `outline: var(--ds-focus-ring)` with `outline-offset: var(--ds-focus-offset)`
+  (light: effectively `#00759E`)
+- Touch targets are ≥ 32×32, ideally 44×44.
+- Status is never carried by colour alone — colour plus shape plus text.
+- `prefers-reduced-motion` disables the pulse, the cursor blink, the spinner and
+  the wave dots.
+- Icon buttons have an `aria-label`. Decorative SVGs: `aria-hidden="true"`.
+  Status SVGs: `role="img"` plus `aria-label`.
+- English terms (`RUNNING`, `DONE`, `BAT AGENT`) carry `lang="en"`.
+- Live regions: `role="log"` plus `aria-live="polite"`. No `assertive` except
+  for errors.
+- Native HTML is used: `<button>`, `<input>`, `<ol>`/`<ul>`. **No** `<div>` with
+  an `onclick`.
 
-## Workflow-Regeln
+## Workflow rules
 
-1. Bei jedem Refactor-Auftrag: **erst Audit, dann Code**. Liefere ein Audit-Memo (Styling-Ansatz, Inventar Buttons/Form-Controls/Dialoge, Risiken). Stoppe und warte auf Freigabe.
-2. Refactor-Reihenfolge: Tokens → Buttons → Form-Controls → Dialoge → Cards → Pills → Pages.
-3. **Nach jeder Komponente: stoppe.** Du läufst nicht durch. Liefere Diff + Begründung + Risiken + Test-Vorschlag, dann warte auf Freigabe.
-4. Verwende `@codebase` für Inventar-Aufbau, `@file` für gezielte Referenzen.
-5. Wenn unklar: **stelle eine konkrete Frage**, kein vages „darf ich weitermachen?".
+1. For every refactor task: **audit first, code second**. Deliver an audit memo
+   (styling approach, inventory of buttons, form controls and dialogs, risks).
+   Stop and wait for approval.
+2. Refactor order: tokens → buttons → form controls → dialogs → cards → pills →
+   pages.
+3. **Stop after every component.** You do not run through. Deliver diff,
+   reasoning, risks and a test suggestion, then wait for approval.
+4. Use `@codebase` to build the inventory, `@file` for specific references.
+5. When something is unclear: **ask a concrete question**, not a vague "may I
+   continue?".
 
-## Output-Format pro Schritt
+## Output format per step
 
-- **Geänderte Dateien**: Diff oder vollständige neue Datei
-- **Begründung**: 2–3 Sätze, warum genau so
-- **Funktionsrisiken**: Bullet-Liste, was könnte brechen
-- **Test-Vorschlag**: visueller Smoke-Test, Storybook-Update, E2E-Pfad
-- **Status**: was fertig, was als Nächstes
+- **Changed files**: diff or the complete new file
+- **Reasoning**: 2–3 sentences on why exactly this way
+- **Functional risks**: a bullet list of what could break
+- **Test suggestion**: visual smoke test, storybook update, e2e path
+- **Status**: what is done, what comes next
 
-Direkt, knapp, präzise. Keine Floskeln, keine Entschuldigungen, kein Salesgespräch.
+Direct, brief, precise. No filler, no apologies, no sales pitch.
 
-## Beispiel: korrekt
+## Example: correct
 
 ```css
 .btn-primary {
@@ -247,7 +329,7 @@ Direkt, knapp, präzise. Keine Floskeln, keine Entschuldigungen, kein Salesgespr
 .btn-secondary {
   padding: 8px 18px;
   background: transparent;
-  color: var(--text-primary); /* aus styles.css */
+  color: var(--text-primary); /* from styles.css */
   border: 1px solid var(--ds-grey-divider);
   border-radius: 999px;
   font-weight: 600;
@@ -258,18 +340,18 @@ Direkt, knapp, präzise. Keine Floskeln, keine Entschuldigungen, kein Salesgespr
 }
 ```
 
-## Beispiel: falsch
+## Example: wrong
 
 ```css
-/* hardcoded Farben außerhalb tokens.css, rechteckig, kein Token-Bezug */
+/* hard-coded colours outside tokens.css, rectangular, no token reference */
 .my-btn { background: #0078d4; color: white; border-radius: 6px; }
 
-/* neuer Token nur in styles.css statt in tokens.css */
-:root { --btn-danger-bg: #b03030; }    /* gehört nach tokens.css */
+/* a new token only in styles.css instead of tokens.css */
+:root { --btn-danger-bg: #b03030; }    /* belongs in tokens.css */
 
-/* alte Cyan-Akzentfarbe verboten */
+/* the old cyan accent colour is forbidden */
 :root { --accent: #00A5E1; }
 
-/* destruktive Aktion in Rot — Destructive ist Schwarz */
+/* a destructive action in red — destructive is black */
 .btn-delete { background: #c0392b; }
 ```
