@@ -343,9 +343,16 @@ function registerSettingsHandlers({
 
   ipcMain.handle(REQ.SETTINGS_GET_UI_PREFS, async () => uiPrefsStore.readUIPrefs());
 
-  ipcMain.handle(REQ.SETTINGS_GET_TOOL_CATALOG, async () => ({
-    tools: typeof toolCatalog?.listCatalog === 'function' ? toolCatalog.listCatalog() : [],
-  }));
+  // Die Beschreibungen kommen seit #291 aus dem Katalog und haengen damit an
+  // der Sprache. Gelesen wird sie hier frisch aus den Einstellungen: Beim
+  // Sprachwechsel ist sie bereits geschrieben, bevor der Renderer die Liste
+  // neu holt (`writeUiPrefsPatch`), und ein gemerkter Stand koennte hier nur
+  // hinterherhinken.
+  ipcMain.handle(REQ.SETTINGS_GET_TOOL_CATALOG, async () => {
+    if (typeof toolCatalog?.listCatalog !== 'function') return { tools: [] };
+    const prefs = await uiPrefsStore.readUIPrefs();
+    return { tools: toolCatalog.listCatalog({ locale: prefs.appLocale }) };
+  });
 
   // Skill-Verzeichnisse haengen am Workspace und sind damit Teil der
   // Vertrauensgrenze: der Root kommt aus dem Main, nicht aus dem Aufruf.

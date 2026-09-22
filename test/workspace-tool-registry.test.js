@@ -636,37 +636,83 @@ test('read_file_lines behält beide Modi im Parametersatz (#184)', () => {
 });
 
 test('der Aufklapptext in den Einstellungen bleibt der ausführliche (#184)', () => {
-  // `modelDescription` ist gekürzt, `description` nicht: In Einstellungen ›
-  // Tools ist der Volltext die einzige Stelle, an der ein Nutzer erfährt, was
-  // ein Tool wirklich tut — und er muss länger sein als die Kurzzeile darüber.
+  // `modelDescription` ist gekürzt, der Volltext nicht: In Einstellungen ›
+  // Tools ist er die einzige Stelle, an der ein Nutzer erfährt, was ein Tool
+  // wirklich tut — und er muss länger sein als die Kurzzeile darüber. Seit
+  // #291 gilt das in beiden Sprachen, sonst verkommt eine davon zur Notlösung.
   const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
-  const katalog = new Map(registry.listCatalog().map((eintrag) => [eintrag.name, eintrag]));
   const schema = new Map(registry.getTools().map((tool) => [tool.function.name, tool.function]));
 
-  for (const name of [
-    'apply_patch',
-    'search_in_files',
-    'read_file_lines',
-    'list_directory_tree',
-    'find_files',
-    'edit_file',
-  ]) {
-    const eintrag = katalog.get(name);
-    assert.ok(
-      eintrag.description.length > eintrag.shortDescription.length,
-      `${name}: der Volltext ist nicht länger als die Kurzzeile darüber`
-    );
-    assert.ok(
-      eintrag.description.length > schema.get(name).description.length,
-      `${name}: der Volltext ist nicht länger als der Schema-Text`
-    );
+  for (const locale of ['en', 'de']) {
+    const katalog = new Map(registry.listCatalog({ locale }).map((eintrag) => [eintrag.name, eintrag]));
+    for (const name of [
+      'apply_patch',
+      'search_in_files',
+      'read_file_lines',
+      'list_directory_tree',
+      'find_files',
+      'edit_file',
+    ]) {
+      const eintrag = katalog.get(name);
+      assert.ok(
+        eintrag.description.length > eintrag.shortDescription.length,
+        `${locale}/${name}: der Volltext ist nicht länger als die Kurzzeile darüber`
+      );
+      assert.ok(
+        eintrag.description.length > schema.get(name).description.length,
+        `${locale}/${name}: der Volltext ist nicht länger als der Schema-Text`
+      );
+    }
   }
 
-  // Was aus dem Schema gestrichen wurde, steht im Aufklapptext weiterhin.
-  assert.match(katalog.get('apply_patch').description, /Alles oder nichts/);
-  assert.match(katalog.get('edit_file').description, /inklusive Einrückung und Zeilenumbrüchen/);
-  assert.match(katalog.get('list_directory_tree').description, /Breitensuche/);
-  assert.match(katalog.get('search_in_files').description, /Zeitbudget von 5 s/);
+  // Was aus dem Schema gestrichen wurde, steht im Aufklapptext weiterhin —
+  // in beiden Sprachen, nicht nur in der Quellfassung.
+  const de = new Map(registry.listCatalog({ locale: 'de' }).map((e) => [e.name, e]));
+  const en = new Map(registry.listCatalog({ locale: 'en' }).map((e) => [e.name, e]));
+  assert.match(de.get('apply_patch').description, /Alles oder nichts/);
+  assert.match(en.get('apply_patch').description, /All or nothing/);
+  assert.match(de.get('edit_file').description, /inklusive Einrückung und Zeilenumbrüchen/);
+  assert.match(en.get('edit_file').description, /indentation and line breaks included/);
+  assert.match(de.get('list_directory_tree').description, /Breitensuche/);
+  assert.match(en.get('list_directory_tree').description, /Breadth first/);
+  assert.match(de.get('search_in_files').description, /Zeitbudget von 5 s/);
+  assert.match(en.get('search_in_files').description, /time budget of 5 s/);
+});
+
+test('der Katalog spricht die uebergebene Sprache, ohne Angabe die Voreinstellung (#291)', () => {
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  const eintrag = (locale) => registry.listCatalog(locale === undefined ? undefined : { locale })
+    .find((e) => e.name === 'read_file_text');
+
+  assert.equal(eintrag('de').shortDescription, 'Liest Textdateien innerhalb des Projektordners.');
+  assert.equal(eintrag('en').shortDescription, 'Reads text files inside the project folder.');
+  // Ohne Angabe gilt die Voreinstellung des Katalogs, nicht die letzte Wahl.
+  assert.equal(eintrag(undefined).shortDescription, eintrag('en').shortDescription);
+  // Eine unbekannte Sprache faellt zurueck, statt den Schluessel zu zeigen.
+  assert.equal(eintrag('kl').shortDescription, eintrag('en').shortDescription);
+});
+
+test('jedes Tool im Katalog traegt beide Texte in beiden Sprachen (#291)', () => {
+  const registry = createWorkspaceToolRegistry({
+    fsService: makeFsServiceStub(),
+    webSearch: { isConfigured: () => true, search: async () => ({ ok: true, query: '', results: [] }) },
+    urlFetch: { fetchUrl: async () => ({ ok: true, url: 'https://example.org', text: '', truncated: false }) },
+    pythonRunner: { isAvailable: () => true, run: async () => ({}) },
+    shellRunner: { isAvailable: () => true, run: async () => ({}) },
+    memory: { remember: async () => ({}) },
+  });
+  for (const locale of ['de', 'en']) {
+    for (const eintrag of registry.listCatalog({ locale })) {
+      for (const feld of ['description', 'shortDescription']) {
+        const text = eintrag[feld];
+        assert.equal(typeof text, 'string', `${locale}/${eintrag.name}.${feld}`);
+        assert.notEqual(text.trim(), '', `${locale}/${eintrag.name}.${feld} ist leer`);
+        // Ein fehlender Katalogeintrag faellt auf den Schluessel zurueck —
+        // sichtbar, aber eben doch nur ein Schluessel.
+        assert.doesNotMatch(text, /^tools\.(desc|short)\./, `${locale}/${eintrag.name}.${feld}`);
+      }
+    }
+  }
 });
 
 test('workspace registry bindet alle Datei-Tools an den Ordner, web_search nicht (#96)', () => {

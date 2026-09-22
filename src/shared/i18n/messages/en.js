@@ -517,6 +517,73 @@ module.exports = {
   'tools.gate.webSearch': 'Without a Tavily key the tool is not offered to the model (see “Web search” below).',
   'tools.gate.keyMissing': 'key missing',
 
+  // ── Tool catalogue (descriptions, Settings › Tools) ──────────────────────
+  // Per tool a short line for the collapsed row (`tools.short.…`) and the full
+  // text behind the chevron (`tools.desc.…`). What the *model* reads is a
+  // third text and lives in `workspace-tool-registry.js` as `modelDescription`
+  // — English for a different reason (#276), and deliberately shorter.
+  'tools.short.read_file_text': 'Reads text files inside the project folder.',
+  'tools.desc.read_file_text': 'Reads the text content of a file as UTF-8 (only inside the project folder). Maximum file size: 2 MB — anything larger returns an error.',
+
+  'tools.short.read_file_lines': 'Reads specific line or byte ranges from text files in the project folder (lines numbered).',
+  'tools.desc.read_file_lines': 'Reads a specific slice of a text file (UTF-8, only inside the project folder): either a line range (start_line/end_line, 1-based, inclusive) or a byte range (start_byte/length). In line mode every line is prefixed with its line number and a tab — matching the hits from search_in_files. Cheaper in tokens than read_file_text when only part of the file is needed. Maximum file size: 2 MB.',
+
+  'tools.short.search_in_files': 'Searches text or a regular expression in files of the project folder and returns the file, the line and the context of each hit.',
+  'tools.desc.search_in_files': 'Searches text files in the project folder recursively for a search text or a regular expression and returns only the matching lines with their line number and context — instead of whole files. Skips hidden entries, patterns from the .gitignore of the project root, and binary or oversized files. Every line is checked up to 10,000 characters only; regular expressions run with a time budget of 5 s per search.',
+
+  'tools.short.find_files': 'Finds file and folder paths in the project folder by glob pattern (e.g. "**/*.js").',
+  'tools.desc.find_files': 'Finds files and folders in the project folder recursively by glob pattern and returns the paths only — one call instead of many list_directory rounds. Patterns in gitignore syntax (*, ?, **); patterns containing / are anchored at the project root, a trailing / finds folders only. Skips hidden entries, patterns from the .gitignore of the project root, and .git.',
+
+  'tools.short.stat_path': 'Returns metadata (existence, type, size, modification time, optionally the line count) for paths in the project folder, without the file content.',
+  'tools.desc.stat_path': 'Returns metadata for a path in the project folder without reading the file: existence, type (file/folder), size in bytes, modification time (ISO 8601) and, on request, the line count. Cheap in tokens, to decide before reading whether and how to read — read_file_lines instead of read_file_text for large files, say.',
+
+  'tools.short.outline_file': 'Returns the outline of a file (Markdown headings or function/class signatures) with line numbers, without the full text.',
+  'tools.desc.outline_file': 'Returns the outline of a file in the project folder with line numbers, without reading the content: for Markdown the headings (level 1–6), for code the function, method, class and type signatures (level taken from the indentation, generic heuristic). A cheap map, to then read only the matching section with read_file_lines. max_depth hides the deeper levels.',
+
+  'tools.short.list_directory_tree': 'Returns a compact recursive folder tree of the project folder (depth and extent can be limited) in a single call.',
+  'tools.desc.list_directory_tree': 'Returns a compact recursive folder tree of the project folder in a single call instead of many list_directory rounds. A text tree with indentation; folders end in "/". "[+N]" behind a folder means: N direct entries are not shown (max_depth or max_entries reached). Breadth first, so that with a tight budget the upper levels are complete first. Skips hidden entries, patterns from the .gitignore of the project root, and .git; does not follow symlinks.',
+
+  'tools.short.write_file_text': 'Creates or overwrites text files in the project folder.',
+  'tools.desc.write_file_text': 'Creates or overwrites a text file (UTF-8) inside the open project folder. Missing intermediate folders are created automatically. Overwrites existing content completely. Maximum content size: 2 MB.',
+
+  'tools.short.edit_file': 'Replaces specific passages in files of the project folder (old_string → new_string), without rewriting the whole file.',
+  'tools.desc.edit_file': 'Replaces a specific passage in a text file (UTF-8, only inside the project folder): old_string is replaced by new_string, without rewriting the file completely. old_string has to occur exactly and unambiguously — indentation and line breaks included; with several hits, give more context or set replace_all=true. Maximum file size: 2 MB.',
+
+  'tools.short.apply_patch': 'Applies several related changes (an edits list or a unified diff) to files of the project folder atomically.',
+  'tools.desc.apply_patch': 'Changes existing text files (UTF-8, only inside the project folder) with several related changes in one call — either as a list of replacements (edits, all in the same file, applied in that order) or as a unified diff (patch, across several files as well). All or nothing: if one step or one hunk fails, every file involved stays unchanged. Each file is replaced atomically in itself (never written by halves); across several files that does not hold — if one write fails, the files already written are rolled back. For a single replacement, edit_file is simpler. Creating files (write_file_text), deleting them or renaming them is not something apply_patch can do. Maximum file size: 2 MB.',
+
+  'tools.short.run_python': 'Runs Python 3 code and returns the output and the exit code. To be used for calculating and checking, instead of estimating results.',
+  'tools.desc.run_python': 'Runs a Python 3 program and returns standard output, error output and the exit code. The working directory is the open project folder, so “open(\'data.csv\')” works directly. Use the tool instead of calculating or guessing: evaluations over files, conversions, reshaping data, checking regular expressions or data formats. Every call is a fresh script — there is no state between two calls, and only the standard library is guaranteed to be there. No “pip install”.',
+
+  'tools.short.shell_execute': 'Runs a command in the shell of the operating system (git, npm, installed CLI tools) and returns the output and the exit code.',
+  'tools.desc.shell_execute': 'Runs a command in the shell of the operating system (macOS/Linux in the user’s login shell, Windows in PowerShell or cmd.exe) and returns standard output, error output and the exit code. That reaches everything the user would do in a terminal themselves: “git status”, “npm run build”, “docker ps”, an installed CLI tool. The working directory is the open project folder or a subfolder of it. One command per call and no state between two calls: a “cd” only takes effect inside the same command (chain with && instead, or set cwd). Not interactive — there is no terminal, waiting for a prompt runs into the time limit; use non-interactive switches and pass input via stdin. Background processes and servers meant to outlive the call are not possible. Recursive force-delete, disk operations and rewriting the Git history are blocked. Every run needs the user’s approval.',
+
+  'tools.short.web_search': 'Searches the internet and returns a title, a URL and a short excerpt per hit. It is not meant for reading a page in full.',
+  'tools.desc.web_search': 'Searches the internet and returns a compact list of hits (title, URL, short excerpt, a date where available) — not whole pages. Use the tool for anything more recent than your knowledge, or anything you are asked to back up: versions, prices, news, error messages, standards. The query leaves the machine and goes to an external search service.',
+
+  'tools.short.fetch_url': 'Reads a web page as text. For content that goes beyond the short excerpt from web_search.',
+  'tools.desc.fetch_url': 'Fetches exactly one http(s) address and returns the readable text of the page as Markdown-like running text, cut to the requested length. Meant as a companion to web_search: find the address there, read the page in one piece here. Local and private addresses are rejected, as is anything that is not text (PDF, images, downloads). The fetch leaves the machine.',
+
+  'tools.short.remember': 'Remembers a sentence permanently — at the user’s request (“remember …”) or for something lasting that you notice. The rules for it are in the “snotra-memory” skill.',
+  'tools.desc.remember': 'Remembers a single sentence permanently, beyond the end of this conversation. The entry ends up in a memory.md — depending on the level in the open folder (.agents/memory.md, applies to this project only) or in the user directory (~/.snotra/memory.md, applies everywhere) — and sits in every system prompt from the next message on. Meant for what lasts: conventions, commands, preferences, decisions together with their reasons. Not for the state of a moment ago, and not for anything better kept in a file of the project. Passwords, keys and credentials never.',
+
+  // Grundausstattung (#195): steht nicht in der Tool-Liste, traegt die Texte
+  // aber mit, damit ein wieder abwaehlbares Tool nicht ohne Beschreibung
+  // dasteht.
+  'tools.short.list_directory': 'Lists files and subfolders in the project folder.',
+  'tools.desc.list_directory': 'Lists files and subfolders in a directory relative to the open project folder (without hidden entries, the ones starting with a dot).',
+
+  'tools.short.load_skill': 'Fetches the instructions of a skill that is switched on.',
+  'tools.desc.load_skill': 'Loads the full instructions of a skill that is switched on. The prompt carries only a short description per skill — if it matches what is at hand, fetch the instructions with this tool before you start on the task, and then follow them. Do not guess what a set of instructions might say.',
+
+  // MCP tools carry the text of their server, which nobody here can translate.
+  // What is translated is the frame around it — and only for the screen: the
+  // model gets the same frame in English via `modelDescription`.
+  'tools.mcp.desc': 'Via the MCP server “{server}”. {text}',
+  'tools.mcp.desc.empty': 'Via the MCP server “{server}”. No description text from the server.',
+  'tools.mcp.short': '{text} (MCP: {server})',
+  'tools.mcp.short.empty': 'Tool of the MCP server “{server}”.',
+
   // ── Application menu (main process) ──────────────────────────────────────
   'menu.settings': 'Settings…',
   'menu.app.hide': 'Hide {appName}',

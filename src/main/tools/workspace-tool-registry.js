@@ -2,6 +2,7 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
+const { createTranslator } = require('../../shared/i18n');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -30,24 +31,36 @@ function createToolRegistry(initialDefinitions = []) {
   /**
    * Prueft und ergaenzt eine Tool-Definition.
    *
-   * Drei Beschreibungsfelder mit je eigenem Leser — wer eines aendert, sollte
-   * wissen, wen er trifft (Issue #181):
-   *  - `description` (Pflicht): Volltext fuer Einstellungen › Tools, aufklappbar.
-   *    Deutsch wie die uebrige Oberflaeche. Ohne `modelDescription` ginge er
-   *    zugleich als Schema-Text an das Modell — deshalb hat seit #276 jedes
-   *    Tool eine, und ein Test haelt das fest.
-   *  - `modelDescription` (Pflicht in der Praxis): Schema-Text ausschliesslich
-   *    fuer das Modell, englisch (#276). Gesetzt schlaegt er `description` in
-   *    `getTools()`.
-   *  - `promptDescription` (optional): Kurzzeile fuer die zugeklappte Zeile in
-   *    den Einstellungen. Der Name stammt aus einer Zeit, in der sie auch im
-   *    System-Prompt stand; heute liest sie nur `listCatalog()`, deshalb
-   *    deutsch.
+   * Zwei Leser, drei Texte — wer einen aendert, sollte wissen, wen er trifft
+   * (Issue #181, seit #291 zweisprachig):
+   *  - **Volltext** fuer Einstellungen › Tools, aufklappbar. Die eingebauten
+   *    Tools tragen ihn als Katalogschluessel (`descriptionKey`, aufgeloest in
+   *    `listCatalog()`); ein MCP-Tool hat statt dessen einen fertigen
+   *    `description`-String, weil sein Text vom Server kommt.
+   *  - **Kurzzeile** fuer die zugeklappte Zeile in den Einstellungen:
+   *    `shortDescriptionKey` bzw. `promptDescription`. Der alte Name stammt aus
+   *    einer Zeit, in der sie auch im System-Prompt stand; heute liest sie nur
+   *    `listCatalog()`.
+   *  - `modelDescription`: Schema-Text ausschliesslich fuer das Modell,
+   *    englisch (#276). Gesetzt schlaegt er `description` in `getTools()` —
+   *    und ohne festen `description`-String ist er Pflicht, sonst ginge an das
+   *    Modell gar nichts mehr.
    */
   function normalizeDefinition(definition) {
-    const { name, description, modelDescription, parameters, handler, riskClass, additionalRiskClasses } = definition || {};
-    if (!name || typeof description !== 'string' || !parameters || typeof handler !== 'function') {
-      throw new TypeError('Tool benötigt name, description, parameters und handler.');
+    const {
+      name, description, descriptionKey, modelDescription,
+      parameters, handler, riskClass, additionalRiskClasses,
+    } = definition || {};
+    const hasText = typeof description === 'string';
+    const hasKey = typeof descriptionKey === 'string' && descriptionKey !== '';
+    if (!name || (!hasText && !hasKey) || !parameters || typeof handler !== 'function') {
+      throw new TypeError('Tool benötigt name, description bzw. descriptionKey, parameters und handler.');
+    }
+    // Ohne festen Text traegt allein `modelDescription` den Modell-Kanal: der
+    // Katalogschluessel loest in die Sprache der Oberflaeche auf und darf dort
+    // nie landen (#276/#291).
+    if (!hasText && !(typeof modelDescription === 'string' && modelDescription.trim())) {
+      throw new TypeError(`Tool ${name}: ohne description braucht es eine modelDescription.`);
     }
     // Ein Feld vom falschen Typ faellt sonst erst beim Anbieter auf — und dort
     // als unverstaendlicher Schema-Fehler statt als Tippfehler hier.
@@ -182,22 +195,37 @@ function createToolRegistry(initialDefinitions = []) {
   }
 
   /**
-   * Katalog für die Einstellungen (Issue #98). Liefert neben der vollen
-   * `description` die kurze `promptDescription` als `shortDescription`: die
-   * Liste zeigt den Kurztext, den Volltext klappt der Nutzer bei Bedarf auf.
+   * Katalog für die Einstellungen (Issue #98). Liefert neben dem Volltext den
+   * Kurztext als `shortDescription`: die Liste zeigt den Kurztext, den
+   * Volltext klappt der Nutzer bei Bedarf auf.
+   *
+   * Seit #291 ist das der einzige Ort, an dem die beiden Texte entstehen — die
+   * eingebauten Tools tragen Katalogschluessel, die hier in die uebergebene
+   * Sprache aufgeloest werden. Ohne `locale` gilt die Voreinstellung des
+   * Katalogs; der Renderer holt die Liste bei jedem Sprachwechsel neu.
+   *
    * Die Grundausstattung (`essential: true`) fehlt hier: Sie geht immer an das
    * Modell, also gibt es nichts zu entscheiden, und eine Zeile ohne Wahl waere
    * nur ein taubes Haekchen (#195). Sonst gilt Katalog = Schemas (#180).
    */
-  function listCatalog() {
+  function listCatalog({ locale } = {}) {
+    const t = createTranslator(locale);
     return allDefinitions()
       .filter((definition) => definition.essential !== true)
-      .map((definition) => ({
-        name: definition.name,
-        description: definition.description,
-        shortDescription: definition.promptDescription || definition.description,
-        riskClass: definition.riskClass,
-      }));
+      .map((definition) => {
+        const description = definition.descriptionKey
+          ? t(definition.descriptionKey, definition.descriptionParams)
+          : definition.description;
+        const shortDescription = definition.shortDescriptionKey
+          ? t(definition.shortDescriptionKey, definition.shortDescriptionParams)
+          : definition.promptDescription || description;
+        return {
+          name: definition.name,
+          description,
+          shortDescription,
+          riskClass: definition.riskClass,
+        };
+      });
   }
 
   /**
@@ -216,6 +244,10 @@ function createToolRegistry(initialDefinitions = []) {
       type: 'function',
       function: {
         name: definition.name,
+        // `description` ist hier der feste String eines MCP-Tools; die
+        // eingebauten haben statt dessen einen Katalogschluessel, der niemals
+        // an das Modell geht — deshalb verlangt `normalizeDefinition` dort
+        // eine `modelDescription` (#291).
         description: definition.modelDescription?.trim() || definition.description,
         // Ein Tool darf sein Schema je Anfrage schaerfen (Issue #173:
         // `load_skill` traegt die eingeschalteten Skills als enum).
@@ -377,12 +409,14 @@ function createToolRegistry(initialDefinitions = []) {
  * 2026-09-18 (o200k, 16 Tools): 15.421 → 13.935 Zeichen,
  * 3.696 → 3.326 Token, rund 370 Token je Runde.
  *
- * Der Volltext in `description` bleibt dabei unangetastet — er ist der
- * Aufklapptext in Einstellungen › Tools und die einzige Stelle, an der ein
- * Nutzer erfaehrt, was ein Tool wirklich tut. Er ist deshalb laenger als die
- * `modelDescription` daneben und laenger als die `promptDescription`, die in
- * den Einstellungen als Kurzzeile darueber steht — beides gehoert nach einer
- * Kuerzung einmal angesehen.
+ * Der Volltext bleibt dabei unangetastet — er ist der Aufklapptext in
+ * Einstellungen › Tools und die einzige Stelle, an der ein Nutzer erfaehrt,
+ * was ein Tool wirklich tut. Er ist deshalb laenger als die
+ * `modelDescription` daneben und laenger als die Kurzzeile, die in den
+ * Einstellungen darueber steht — beides gehoert nach einer Kuerzung einmal
+ * angesehen. Seit #291 stehen beide zweisprachig im Katalog
+ * (`tools.desc.<name>`, `tools.short.<name>`); hier bleiben nur die
+ * Schluessel.
  */
 function createWorkspaceToolRegistry({
   fsService,
@@ -401,10 +435,9 @@ function createWorkspaceToolRegistry({
       essential: true,
       skips: ['hidden'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
-      description:
-        'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
+      descriptionKey: 'tools.desc.list_directory',
       modelDescription: 'Lists the files and subfolders of a directory.',
-      promptDescription: 'Listet Dateien und Unterordner im Projektordner auf.',
+      shortDescriptionKey: 'tools.short.list_directory',
       parameters: {
         type: 'object',
         properties: {
@@ -440,17 +473,13 @@ function createWorkspaceToolRegistry({
         if (!name) return { error: 'name ist erforderlich.' };
         return [{ path: formatSkillPath(name, 'SKILL.md'), kind: 'file', access: 'read' }];
       },
-      description:
-        'Lädt die vollständige Anleitung eines eingeschalteten Skills. Im Prompt steht je Skill nur '
-        + 'eine kurze Beschreibung — passt sie zu dem, was ansteht, hole dir hiermit die Anleitung, '
-        + 'bevor du mit der Aufgabe beginnst, und richte dich danach. Rate nicht, was in einer '
-        + 'Anleitung stehen könnte.',
+      descriptionKey: 'tools.desc.load_skill',
       modelDescription:
         'Loads the full instructions of a skill that is switched on. The prompt carries only a '
         + 'short description per skill — if it matches what is at hand, fetch the instructions '
         + 'with this tool before you start on the task, and then follow them. Do not guess what '
         + 'a set of instructions might say.',
-      promptDescription: 'Lädt die Anleitung eines eingeschalteten Skills nach.',
+      shortDescriptionKey: 'tools.short.load_skill',
       parameters: {
         type: 'object',
         properties: {
@@ -489,11 +518,9 @@ function createWorkspaceToolRegistry({
       name: 'read_file_text',
       riskClass: TOOL_RISK_CLASSES.READ,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
-      description:
-        'Liest den Textinhalt einer Datei als UTF-8 (nur innerhalb des Projektordners). ' +
-        'Maximale Dateigröße: 2 MB — größere Dateien liefern einen Fehler.',
+      descriptionKey: 'tools.desc.read_file_text',
       modelDescription: 'Reads the text content of a file as UTF-8.',
-      promptDescription: 'Liest Textdateien innerhalb des Projektordners.',
+      shortDescriptionKey: 'tools.short.read_file_text',
       parameters: {
         type: 'object',
         properties: {
@@ -517,11 +544,7 @@ function createWorkspaceToolRegistry({
       name: 'read_file_lines',
       riskClass: TOOL_RISK_CLASSES.READ,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
-      description:
-        'Liest gezielt einen Ausschnitt einer Textdatei (UTF-8, nur innerhalb des Projektordners): ' +
-        'entweder einen Zeilenbereich (start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). ' +
-        'Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu Treffern aus search_in_files. ' +
-        'Token-sparsamer als read_file_text, wenn nur ein Teil der Datei gebraucht wird. Maximale Dateigröße: 2 MB.',
+      descriptionKey: 'tools.desc.read_file_lines',
       // Der Satz zur Token-Ersparnis bleibt ausdruecklich stehen (Issue #184):
       // er kostet 9 Token, eine unnoetige Volllesung dieser Datei kostet ueber
       // 10.000. Der Verweis auf search_in_files faellt weg — das Zeilenformat
@@ -531,8 +554,7 @@ function createWorkspaceToolRegistry({
         'inclusive) or a byte range (start_byte/length). In line mode each line is prefixed with ' +
         'its number and a tab. Cheaper in tokens than read_file_text when only part of the file ' +
         'is needed.',
-      promptDescription:
-        'Liest gezielt Zeilen- oder Byte-Ausschnitte aus Textdateien des Projektordners (Zeilen nummeriert).',
+      shortDescriptionKey: 'tools.short.read_file_lines',
       parameters: {
         type: 'object',
         properties: {
@@ -575,11 +597,7 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.READ,
       skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
-      description:
-        'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck ' +
-        'und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. ' +
-        'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien. ' +
-        'Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen mit einem Zeitbudget von 5 s pro Suche.',
+      descriptionKey: 'tools.desc.search_in_files',
       // Ohne die Randbedingungen (binaer, zu gross, 10.000 Zeichen je Zeile,
       // 5-s-Zeitbudget): Sie aendern die Wahl des Tools nicht, und wo sie
       // greifen, meldet sich die Suche selbst — das Zeitbudget als Fehler,
@@ -587,8 +605,7 @@ function createWorkspaceToolRegistry({
       modelDescription:
         'Searches text files recursively for a string or regular expression and returns only ' +
         'the matching lines with line number and context — instead of whole files.',
-      promptDescription:
-        'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
+      shortDescriptionKey: 'tools.short.search_in_files',
       parameters: {
         type: 'object',
         properties: {
@@ -654,19 +671,14 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.READ,
       skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
-      description:
-        'Findet Dateien und Ordner im Projektordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
-        'ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); ' +
-        'Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner. ' +
-        'Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git.',
+      descriptionKey: 'tools.desc.find_files',
       // Die Muster-Syntax stand doppelt — hier und am Parameter `pattern`,
       // der sie ohnehin tragen muss. Sie bleibt dort, die Beschreibung sagt
       // nur noch, wofuer man das Tool nimmt (#184).
       modelDescription:
         'Finds files and folders recursively by glob pattern and returns the paths only — ' +
         'one call instead of many list_directory rounds.',
-      promptDescription:
-        'Findet Datei- und Ordnerpfade im Projektordner per Glob-Muster (z. B. "**/*.js").',
+      shortDescriptionKey: 'tools.short.find_files',
       parameters: {
         type: 'object',
         properties: {
@@ -701,18 +713,13 @@ function createWorkspaceToolRegistry({
       name: 'stat_path',
       riskClass: TOOL_RISK_CLASSES.READ,
       targets: (args) => [{ path: args.relative_path, kind: 'any', access: 'read' }],
-      description:
-        'Liefert Metadaten zu einem Pfad im Projektordner, ohne die Datei zu lesen: ' +
-        'Existenz, Typ (Datei/Ordner), Größe in Bytes, Änderungszeitpunkt (ISO 8601) und ' +
-        'auf Wunsch die Zeilenzahl. Token-sparsam, um vor dem Lesen zu entscheiden, ' +
-        'ob und wie gelesen werden sollte — z. B. bei großen Dateien read_file_lines statt read_file_text.',
+      descriptionKey: 'tools.desc.stat_path',
       modelDescription:
         'Returns metadata about a path without reading the file: existence, type (file/folder), ' +
         'size in bytes, modification time (ISO 8601) and, on request, the line count. Cheap in ' +
         'tokens for deciding whether and how to read before reading — e.g. read_file_lines instead ' +
         'of read_file_text for large files.',
-      promptDescription:
-        'Liefert Metadaten (Existenz, Typ, Größe, Änderungszeit, optional Zeilenzahl) zu Pfaden im Projektordner, ohne Dateiinhalt.',
+      shortDescriptionKey: 'tools.short.stat_path',
       parameters: {
         type: 'object',
         properties: {
@@ -735,18 +742,13 @@ function createWorkspaceToolRegistry({
       name: 'outline_file',
       riskClass: TOOL_RISK_CLASSES.READ,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
-      description:
-        'Liefert die Gliederung einer Datei im Projektordner mit Zeilennummern, ohne den Inhalt zu lesen: ' +
-        'bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
-        '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines ' +
-        'gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
+      descriptionKey: 'tools.desc.outline_file',
       modelDescription:
         'Returns the outline of a file with line numbers without reading its content: for ' +
         'Markdown the headings (levels 1-6), for code the function, method, class and type ' +
         'signatures (level derived from indentation, generic heuristic). A cheap map for then ' +
         'reading just the relevant section with read_file_lines.',
-      promptDescription:
-        'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
+      shortDescriptionKey: 'tools.short.outline_file',
       parameters: {
         type: 'object',
         properties: {
@@ -776,12 +778,7 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.READ,
       skips: ['hidden', 'ignored'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
-      description:
-        'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler ' +
-        'list_directory-Runden. Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner ' +
-        'heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, ' +
-        'damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, ' +
-        'Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
+      descriptionKey: 'tools.desc.list_directory_tree',
       // Ohne die Erklaerung der Breitensuche, ohne "folgt keinen Symlinks" und
       // ohne die Beschreibung des Baumformats — Einrueckung und "/" liest man
       // an der Antwort ab. "[+N]" bleibt: es ist das einzige Zeichen dafuer,
@@ -790,8 +787,7 @@ function createWorkspaceToolRegistry({
         'Returns a compact recursive folder tree in one call instead of many list_directory ' +
         'rounds. "[+N]" after a folder means: N direct entries are not shown (max_depth or ' +
         'max_entries reached).',
-      promptDescription:
-        'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
+      shortDescriptionKey: 'tools.short.list_directory_tree',
       parameters: {
         type: 'object',
         properties: {
@@ -824,14 +820,11 @@ function createWorkspaceToolRegistry({
     {
       name: 'write_file_text',
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write', overwrite: true }],
-      description:
-        'Erstellt oder überschreibt eine Textdatei (UTF-8) innerhalb des geöffneten Projektordners. ' +
-        'Fehlende Zwischenordner werden automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig. ' +
-        'Maximale Inhaltsgröße: 2 MB.',
+      descriptionKey: 'tools.desc.write_file_text',
       modelDescription:
         'Creates or overwrites a text file (UTF-8). Missing intermediate folders are created ' +
         'automatically. Replaces any existing content entirely.',
-      promptDescription: 'Erstellt oder überschreibt Textdateien im Projektordner.',
+      shortDescriptionKey: 'tools.short.write_file_text',
       parameters: {
         type: 'object',
         properties: {
@@ -853,11 +846,7 @@ function createWorkspaceToolRegistry({
     {
       name: 'edit_file',
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write' }],
-      description:
-        'Ersetzt in einer Textdatei (UTF-8, nur innerhalb des Projektordners) gezielt eine Textstelle: ' +
-        'old_string wird durch new_string ersetzt, ohne die Datei komplett neu zu schreiben. ' +
-        'old_string muss exakt und eindeutig vorkommen — inklusive Einrückung und Zeilenumbrüchen; ' +
-        'bei mehreren Treffern mehr Kontext angeben oder replace_all=true setzen. Maximale Dateigröße: 2 MB.',
+      descriptionKey: 'tools.desc.edit_file',
       // Die Eindeutigkeitsregel samt "inklusive Einrueckung und
       // Zeilenumbruechen" steht woertlich in den beiden Fehlermeldungen
       // (fs-service.js:1288/1293) und am Parameter `old_string` — sie muss
@@ -865,8 +854,7 @@ function createWorkspaceToolRegistry({
       modelDescription:
         'Replaces one specific passage in a text file: old_string is replaced by new_string, ' +
         'without rewriting the whole file.',
-      promptDescription:
-        'Ersetzt gezielt Textstellen in Dateien des Projektordners (old_string → new_string), ohne die ganze Datei neu zu schreiben.',
+      shortDescriptionKey: 'tools.short.edit_file',
       parameters: {
         type: 'object',
         properties: {
@@ -898,16 +886,7 @@ function createWorkspaceToolRegistry({
       name: 'apply_patch',
       targets: (args) =>
         fsService.listApplyPatchTargets(args).map((p) => ({ path: p, kind: 'file', access: 'write' })),
-      description:
-        'Ändert bestehende Textdateien (UTF-8, nur innerhalb des Projektordners) mit mehreren ' +
-        'zusammenhängenden Änderungen in einem Aufruf — entweder als Liste von Ersetzungen ' +
-        '(edits, alle in derselben Datei, in dieser Reihenfolge angewendet) oder als unified diff ' +
-        '(patch, auch über mehrere Dateien hinweg). Alles oder nichts: schlägt ein Schritt bzw. ein ' +
-        'Hunk fehl, bleibt jede betroffene Datei unverändert. Jede Datei wird für sich atomar ' +
-        'ersetzt (nie halb geschrieben); über mehrere Dateien hinweg gilt das nicht — scheitert ' +
-        'ein Schreibvorgang, werden bereits geschriebene Dateien zurückgesetzt. Für eine einzelne Ersetzung ist ' +
-        'edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann ' +
-        'apply_patch nicht. Maximale Dateigröße: 2 MB.',
+      descriptionKey: 'tools.desc.apply_patch',
       // Ohne die Atomaritaets- und Rollback-Prosa (Issue #184): Sie aendert
       // die Wahl des Tools nicht und nicht die Form des Aufrufs. Was das
       // Modell dabei verliert, bekommt es im Fehlerfall zurueck — die Datei
@@ -924,8 +903,7 @@ function createWorkspaceToolRegistry({
         'of replacements (edits, all in the same file) or as a unified diff (patch, across several ' +
         'files). For a single replacement edit_file is simpler. apply_patch cannot create files ' +
         '(use write_file_text), delete them or rename them.',
-      promptDescription:
-        'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
+      shortDescriptionKey: 'tools.short.apply_patch',
       parameters: {
         type: 'object',
         properties: {
@@ -987,13 +965,7 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.EXECUTE,
       targets: () => [],
       isAvailable: () => pythonRunner?.isAvailable() === true,
-      description:
-        'Führt ein Python-3-Programm aus und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. '
-        + 'Arbeitsverzeichnis ist der geöffnete Projektordner, „open(\'daten.csv\')“ funktioniert also direkt. '
-        + 'Nutze das Tool, statt zu rechnen oder zu raten: Auswertungen über Dateien, Umrechnungen, '
-        + 'Datenumformung, das Prüfen von regulären Ausdrücken oder Datenformaten. '
-        + 'Jeder Aufruf ist ein frisches Skript — es gibt keinen Zustand zwischen zwei Aufrufen, '
-        + 'und nur die Standardbibliothek ist garantiert vorhanden. Kein „pip install“.',
+      descriptionKey: 'tools.desc.run_python',
       modelDescription:
         'Runs a Python 3 program and returns stdout, stderr and the exit code. The working '
         + 'directory is the open project folder, so open(\'data.csv\') works directly. Use this '
@@ -1001,9 +973,7 @@ function createWorkspaceToolRegistry({
         + 'checking regular expressions or data formats. Every call is a fresh script — there is '
         + 'no state between two calls, and only the standard library is guaranteed to be present. '
         + 'No pip install.',
-      promptDescription:
-        'Führt Python-3-Code aus und liefert Ausgabe und Exit-Code zurück. '
-        + 'Zum Rechnen und Prüfen benutzen, statt Ergebnisse selbst zu schätzen.',
+      shortDescriptionKey: 'tools.short.run_python',
       parameters: {
         type: 'object',
         properties: {
@@ -1072,19 +1042,7 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.EXECUTE,
       targets: () => [],
       isAvailable: () => shellRunner?.isAvailable() === true,
-      description:
-        'Führt einen Befehl in der Shell des Betriebssystems aus (macOS/Linux in der Login-Shell des '
-        + 'Nutzers, Windows in PowerShell bzw. cmd.exe) und gibt Standardausgabe, Fehlerausgabe und '
-        + 'Exit-Code zurück. Damit ist alles erreichbar, was der Nutzer im Terminal tun würde: '
-        + '„git status“, „npm run build“, „docker ps“, ein installiertes CLI-Werkzeug. '
-        + 'Arbeitsverzeichnis ist der geöffnete Projektordner oder ein Unterordner davon. '
-        + 'Ein Befehl pro Aufruf und kein Zustand zwischen zwei Aufrufen: ein „cd“ wirkt nur innerhalb '
-        + 'desselben Befehls (verkette stattdessen mit && oder setze cwd). '
-        + 'Nicht interaktiv — es gibt kein Terminal, auf eine Eingabeaufforderung zu warten läuft ins '
-        + 'Zeitlimit; nutze nicht-interaktive Schalter und gib Eingaben über stdin mit. '
-        + 'Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht '
-        + 'möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie '
-        + 'sind gesperrt. Jeder Lauf braucht die Freigabe des Nutzers.',
+      descriptionKey: 'tools.desc.shell_execute',
       modelDescription:
         'Runs a command in the operating system shell (macOS/Linux in the user\'s login shell, '
         + 'Windows in PowerShell or cmd.exe) and returns stdout, stderr and the exit code. That '
@@ -1096,9 +1054,7 @@ function createWorkspaceToolRegistry({
         + 'and pass input via stdin. Background processes and servers meant to outlive the call are '
         + 'not possible. Recursive force-deletes, disk operations and rewriting git history are '
         + 'blocked. Every run needs the user\'s approval.',
-      promptDescription:
-        'Führt einen Befehl in der Shell des Betriebssystems aus (git, npm, installierte CLI-Werkzeuge) '
-        + 'und liefert Ausgabe und Exit-Code zurück.',
+      shortDescriptionKey: 'tools.short.shell_execute',
       parameters: {
         type: 'object',
         properties: {
@@ -1180,19 +1136,13 @@ function createWorkspaceToolRegistry({
       requiresWorkspace: false,
       targets: () => [],
       isAvailable: () => webSearch?.isConfigured() === true,
-      description:
-        'Sucht im Internet und liefert eine kompakte Trefferliste (Titel, URL, kurzer Auszug, ggf. Datum) — '
-        + 'keine ganzen Seiten. Nutze das Tool für alles, was aktueller ist als dein Wissensstand oder was du '
-        + 'belegen sollst: Versionen, Preise, Nachrichten, Fehlermeldungen, Normen. Die Suchanfrage verlässt '
-        + 'den Rechner und geht an einen externen Suchdienst.',
+      descriptionKey: 'tools.desc.web_search',
       modelDescription:
         'Searches the web and returns a compact list of hits (title, URL, short excerpt, date '
         + 'where available) — not whole pages. Use it for anything more recent than your knowledge '
         + 'cut-off or anything you are asked to back up: versions, prices, news, error messages, '
         + 'standards. The query leaves the machine and goes to an external search service.',
-      promptDescription:
-        'Sucht im Internet und liefert Titel, URL und einen kurzen Auszug je Treffer. '
-        + 'Zum Lesen einer Seite im Volltext ist es nicht gedacht.',
+      shortDescriptionKey: 'tools.short.web_search',
       parameters: {
         type: 'object',
         properties: {
@@ -1244,19 +1194,14 @@ function createWorkspaceToolRegistry({
       requiresWorkspace: false,
       targets: () => [],
       isAvailable: () => urlFetch !== null,
-      description:
-        'Ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite als Markdown-nahen '
-        + 'Fliesstext, gekürzt auf die gewünschte Länge. Gedacht als Ergänzung zu web_search: dort die '
-        + 'Adresse finden, hier die Seite am Stück lesen. Lokale und private Adressen werden abgelehnt, '
-        + 'ebenso alles, was kein Text ist (PDF, Bilder, Downloads). Der Abruf verlässt den Rechner.',
+      descriptionKey: 'tools.desc.fetch_url',
       modelDescription:
         'Fetches exactly one http(s) address and returns the readable text of the page as '
         + 'Markdown-like prose, truncated to the requested length. Meant as a companion to '
         + 'web_search: find the address there, read the page in one piece here. Local and private '
         + 'addresses are rejected, as is anything that is not text (PDF, images, downloads). The '
         + 'request leaves the machine.',
-      promptDescription:
-        'Liest eine Webseite als Text. Für Inhalte, die über den kurzen Auszug aus web_search hinausgehen.',
+      shortDescriptionKey: 'tools.short.fetch_url',
       parameters: {
         type: 'object',
         properties: {
@@ -1308,21 +1253,12 @@ function createWorkspaceToolRegistry({
       targets: () => [],
       pathlessWrite: true,
       isAvailable: () => memory !== null,
-      description:
-        'Merkt sich einen einzelnen Satz dauerhaft, über das Ende dieser Unterhaltung hinaus. '
-        + 'Der Eintrag landet in einer memory.md — je nach Ebene im geöffneten Ordner '
-        + '(.agents/memory.md, gilt nur für dieses Projekt) oder im Benutzerverzeichnis '
-        + '(~/.snotra/memory.md, gilt überall) — und steht ab der nächsten Nachricht in jedem '
-        + 'Systemprompt. Gedacht für Dauerhaftes: Konventionen, Befehle, Vorlieben, Entscheidungen '
-        + 'samt Begründung. Nicht für den Stand von gerade eben und nichts, was in einer Datei '
-        + 'des Projekts besser aufgehoben wäre. Passwörter, Schlüssel und Zugangsdaten niemals.',
+      descriptionKey: 'tools.desc.remember',
       modelDescription:
         'Remembers a statement permanently (level "workspace" = this folder only, "user" = '
         + 'everywhere). From the next message on, the entry is part of every system prompt. Only '
         + 'lasting facts, never passwords or keys. Load the skill "snotra-memory" before first use.',
-      promptDescription:
-        'Merkt sich einen Satz dauerhaft — auf Bitte des Nutzers („merk dir …") oder bei '
-        + 'Dauerhaftem, das dir auffällt. Regeln dazu im Skill „snotra-memory".',
+      shortDescriptionKey: 'tools.short.remember',
       parameters: {
         type: 'object',
         properties: {

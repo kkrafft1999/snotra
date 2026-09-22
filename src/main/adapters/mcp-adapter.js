@@ -58,13 +58,22 @@ function renderContent(content) {
 }
 
 /**
- * Beschreibung fuer Modell und Systemprompt. Der Server-Label steht vorn,
- * damit das Modell bei mehreren Servern erkennt, wen es da eigentlich fragt.
+ * Beschreibung fuer das Modell. Der Server-Label steht vorn, damit das Modell
+ * bei mehreren Servern erkennt, wen es da eigentlich fragt.
+ *
+ * Englisch wie alles im Modell-Kanal (#276) — der Text des Servers bleibt
+ * dabei unangetastet, der ist nicht unserer. Die Fassung fuer den Bildschirm
+ * entsteht getrennt davon aus `tools.mcp.*` (#291).
  */
+/** Erster Satz eines Servertexts — mehr traegt die Zeile in der Liste nicht. */
+function firstSentence(text) {
+  return String(text ?? '').split(/(?<=[.!?])\s/)[0];
+}
+
 function describeTool(tool, serverLabel) {
   const own = tool.description || tool.title || '';
-  const origin = `Über den MCP-Server „${serverLabel}".`;
-  return own ? `${origin} ${own}` : `${origin} Kein Beschreibungstext vom Server.`;
+  const origin = `Via the MCP server "${serverLabel}".`;
+  return own ? `${origin} ${own}` : `${origin} No description text from the server.`;
 }
 
 /**
@@ -106,6 +115,7 @@ function createMcpAdapter({ mcpService } = {}) {
     const status = describeConnections().find((s) => s.serverId === tool.serverId);
     const serverLabel = status?.label || tool.serverId;
     const [riskClass, ...additionalRiskClasses] = mcpRiskClassesFor(tool.annotations);
+    const own = tool.description || tool.title || '';
 
     return {
       name,
@@ -117,10 +127,16 @@ function createMcpAdapter({ mcpService } = {}) {
       // Die Planung kann die Ziele eines fremden Tools nicht kennen. Das ist
       // kein Versehen, sondern der Grund fuer die harte Mindesteinstufung.
       targets: () => [],
-      description: describeTool(tool, serverLabel),
-      promptDescription: tool.description
-        ? `${tool.description.split(/(?<=[.!?])\s/)[0]} (MCP: ${serverLabel})`
-        : `Tool des MCP-Servers „${serverLabel}".`,
+      // Der Bildschirm bekommt den Rahmen aus dem Katalog, das Modell
+      // denselben Rahmen auf Englisch (#291). Getrennt, weil `listCatalog()`
+      // in der Sprache der Oberflaeche aufloest und die nie an das Modell darf.
+      modelDescription: describeTool(tool, serverLabel),
+      descriptionKey: own ? 'tools.mcp.desc' : 'tools.mcp.desc.empty',
+      descriptionParams: { server: serverLabel, text: own },
+      // Im Systemprompt stand nur der erste Satz — die Liste soll lesbar
+      // bleiben; das gilt fuer die Kurzzeile unveraendert weiter.
+      shortDescriptionKey: own ? 'tools.mcp.short' : 'tools.mcp.short.empty',
+      shortDescriptionParams: { server: serverLabel, text: firstSentence(own) },
       parameters: tool.inputSchema,
       mcp: { serverId: tool.serverId, toolName: tool.name },
       handler: async (args, context = {}) => {

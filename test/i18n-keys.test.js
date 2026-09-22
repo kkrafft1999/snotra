@@ -41,6 +41,9 @@ test('every language carries exactly the same keys', () => {
 const IDENTICAL_ON_PURPOSE = new Set([
   'settings.version.known',
   'settings.version.unknown',
+  // Nothing but two placeholders and the server's own text between them —
+  // there is no wording here to translate (#291).
+  'tools.mcp.short',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {
