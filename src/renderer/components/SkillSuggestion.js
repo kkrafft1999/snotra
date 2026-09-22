@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
 const {
   SKILL_SUGGESTION_MODES,
@@ -122,7 +123,7 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
 
     const label = document.createElement('span');
     label.className = 'chat-skill-suggestion-label';
-    label.textContent = 'Passt dazu:';
+    label.textContent = t('chat.skillSuggestion.label');
     row.appendChild(label);
 
     const btn = document.createElement('button');
@@ -143,7 +144,7 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
     const dismiss = document.createElement('button');
     dismiss.type = 'button';
     dismiss.className = 'chat-skill-suggestion-dismiss';
-    dismiss.setAttribute('aria-label', 'Vorschlag ausblenden');
+    dismiss.setAttribute('aria-label', t('chat.skillSuggestion.dismiss'));
     dismiss.textContent = '×';
     dismiss.addEventListener('click', () => {
       dismissedFor = anliegenVor(found);

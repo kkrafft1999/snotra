@@ -50,6 +50,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   // "Status" is the German word too, and the value is that word plus a
   // placeholder (#290).
   'approval.audit.status',
+  // A file name plus "(global)" — the same in both languages (#290).
+  'context.part.agents.user',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

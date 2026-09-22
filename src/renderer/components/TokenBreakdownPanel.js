@@ -12,20 +12,22 @@
  */
 import contracts from '../generated/contracts.js';
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { t } from '../i18n.js';
+import { getLocale, onLocaleChange, t } from '../i18n.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
 
-const tokenFormatter = new Intl.NumberFormat('de-DE');
-const oneDecimalFormatter = new Intl.NumberFormat('de-DE', {
+// Separators and the space before the percent sign differ between the two
+// languages, so the formatters follow the interface language (#290).
+const tokenFormatter = () => new Intl.NumberFormat(getLocale());
+const oneDecimalFormatter = () => new Intl.NumberFormat(getLocale(), {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
-const percentFormatter = new Intl.NumberFormat('de-DE', {
+const percentFormatter = () => new Intl.NumberFormat(getLocale(), {
   style: 'percent',
   maximumFractionDigits: 1,
 });
-const percentWholeFormatter = new Intl.NumberFormat('de-DE', {
+const percentWholeFormatter = () => new Intl.NumberFormat(getLocale(), {
   style: 'percent',
   maximumFractionDigits: 0,
 });
@@ -33,10 +35,10 @@ const percentWholeFormatter = new Intl.NumberFormat('de-DE', {
 /** Kompakte Tokenzahl für die Zeilen: „980", „3,1 K", „17 K". */
 export function formatTokensShort(value) {
   const n = Math.max(0, Math.round(Number(value) || 0));
-  if (n < 1000) return tokenFormatter.format(n);
+  if (n < 1000) return tokenFormatter().format(n);
   const inK = n / 1000;
-  if (inK < 10) return `${oneDecimalFormatter.format(inK)} K`;
-  return `${tokenFormatter.format(Math.round(inK))} K`;
+  if (inK < 10) return `${oneDecimalFormatter().format(inK)} K`;
+  return `${tokenFormatter().format(Math.round(inK))} K`;
 }
 
 /**
@@ -48,11 +50,11 @@ export function formatTokensShort(value) {
 export function formatShare(share) {
   const value = Number(share);
   if (!Number.isFinite(value) || value <= 0) return '0 %';
-  if (value < 0.01) return `< ${percentWholeFormatter.format(0.01)}`;
-  if (value < 0.1) return percentFormatter.format(value);
-  if (value < 0.995) return percentWholeFormatter.format(value);
-  if (value < 1) return `> ${percentWholeFormatter.format(0.99)}`;
-  return percentWholeFormatter.format(value);
+  if (value < 0.01) return `< ${percentWholeFormatter().format(0.01)}`;
+  if (value < 0.1) return percentFormatter().format(value);
+  if (value < 0.995) return percentWholeFormatter().format(value);
+  if (value < 1) return `> ${percentWholeFormatter().format(0.99)}`;
+  return percentWholeFormatter().format(value);
 }
 
 /**
@@ -104,7 +106,8 @@ function buildRowBody(part) {
   head.append(label, figures);
   body.appendChild(head);
   body.appendChild(buildBar(part.share));
-  if (part.detail) body.appendChild(el('span', 'token-breakdown__row-detail', part.detail));
+  const detail = part.detailKey ? t(part.detailKey, part.params) : part.detail;
+  if (detail) body.appendChild(el('span', 'token-breakdown__row-detail', detail));
   return body;
 }
 
@@ -131,7 +134,7 @@ export function initTokenBreakdownPanel({
 
   function renderSkillAction(row) {
     // Der Hinweis ist Beiwerk: Was der Klick tut, steht im aria-label der Zeile.
-    const action = el('span', 'token-breakdown__row-action', 'Einstellungen');
+    const action = el('span', 'token-breakdown__row-action', t('context.row.skillAction'));
     action.setAttribute('aria-hidden', 'true');
     row.appendChild(action);
   }
@@ -145,10 +148,11 @@ export function initTokenBreakdownPanel({
       row.classList.add('token-breakdown__row--action');
       row.dataset.skillName = part.skillName;
       // Wer sieht, was ein Skill kostet, will ihn sofort abschalten können.
-      row.setAttribute(
-        'aria-label',
-        `${part.label}, ${formatTokensShort(part.tokens)} Tokens, ${formatShare(part.share)} — Skill in den Einstellungen öffnen`
-      );
+      row.setAttribute('aria-label', t('context.row.skillAction.label', {
+        label: part.labelKey ? t(part.labelKey) : part.label,
+        tokens: formatTokensShort(part.tokens),
+        share: formatShare(part.share),
+      }));
     }
     row.appendChild(buildRowBody(part));
     if (canJump) renderSkillAction(row);
@@ -184,11 +188,13 @@ export function initTokenBreakdownPanel({
       el('span', 'token-breakdown__group-share', formatShare(group.share))
     );
     headLine.append(
-      el('span', 'token-breakdown__group-label', group.label),
+      el('span', 'token-breakdown__group-label', group.labelKey ? t(group.labelKey) : group.label),
       el(
         'span',
         'token-breakdown__group-count',
-        group.parts.length === 1 ? '1 Posten' : `${group.parts.length} Posten`
+        group.parts.length === 1
+          ? t('context.items.one', { count: group.parts.length })
+          : t('context.items.other', { count: group.parts.length })
       ),
       groupFigures
     );
@@ -213,16 +219,13 @@ export function initTokenBreakdownPanel({
     panel.textContent = '';
 
     const header = el('div', 'token-breakdown__header');
-    const title = el('h2', 'token-breakdown__title', 'Kontextfenster der letzten Anfrage');
+    const title = el('h2', 'token-breakdown__title', t('context.title'));
     title.id = 'chat-token-breakdown-title';
     header.appendChild(title);
-    const sum = el(
-      'p',
-      'token-breakdown__sum',
-      `${tokenFormatter.format(usage.prompt || 0)} Tokens Prompt · ${tokenFormatter.format(
-        usage.completion || 0
-      )} Tokens Antwort`
-    );
+    const sum = el('p', 'token-breakdown__sum', t('context.sum', {
+      prompt: tokenFormatter().format(usage.prompt || 0),
+      completion: tokenFormatter().format(usage.completion || 0),
+    }));
     header.appendChild(sum);
     // Der Cache-Anteil gehoert in den Kopf zu den echten Zahlen des Anbieters
     // und nicht in die geschaetzte Liste darunter (Issue #179). Ohne Treffer
@@ -230,15 +233,12 @@ export function initTokenBreakdownPanel({
     // niemand gestellt hat.
     const cached = Math.max(0, Math.round(Number(usage.cached) || 0));
     if (cached > 0) {
-      header.appendChild(
-        el(
-          'p',
-          'token-breakdown__cache',
-          `davon ${tokenFormatter.format(cached)} aus dem Cache${
-            usage.prompt > 0 ? ` (${formatShare(cached / usage.prompt)})` : ''
-          }`
-        )
-      );
+      header.appendChild(el('p', 'token-breakdown__cache', usage.prompt > 0
+        ? t('context.cached.share', {
+          count: tokenFormatter().format(cached),
+          share: formatShare(cached / usage.prompt),
+        })
+        : t('context.cached', { count: tokenFormatter().format(cached) })));
     }
     panel.appendChild(header);
 
@@ -247,16 +247,14 @@ export function initTokenBreakdownPanel({
         el(
           'p',
           'token-breakdown__note token-breakdown__note--live',
-          'Eine Anfrage läuft — die Werte stammen noch von der vorherigen.'
+          t('context.inFlight')
         )
       );
     }
 
     if (!breakdown) {
       renderEmpty(
-        usage.prompt > 0
-          ? 'Für diese Anfrage liegt keine Aufschlüsselung vor. Sie entsteht beim nächsten Absenden.'
-          : 'Noch keine Anfrage gestellt. Sobald eine Antwort da ist, steht hier, woraus der Prompt bestand — je Skill, Tool-Gruppe und Verlauf.'
+        usage.prompt > 0 ? t('context.empty.noBreakdown') : t('context.empty.noRequest')
       );
       return;
     }
@@ -270,9 +268,7 @@ export function initTokenBreakdownPanel({
       el(
         'p',
         'token-breakdown__note',
-        breakdown.scaled
-          ? 'Die Gesamtzahl kommt vom Anbieter, die Aufteilung ist aus der Zeichenzahl geschätzt.'
-          : 'Der Anbieter hat keine Tokenzahl gemeldet — alle Werte sind geschätzt.'
+        breakdown.scaled ? t('context.note.scaled') : t('context.note.estimated')
       )
     );
   }
@@ -304,6 +300,9 @@ export function initTokenBreakdownPanel({
   function refresh() {
     if (open) render();
   }
+
+  // Same for a language change: the whole panel is written at runtime (#290).
+  onLocaleChange(refresh);
 
   // Klick daneben schliesst — dasselbe Muster wie Modell-Auswahl und
   // @-Vervollstaendigung.

@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 /**
  * Geteilter Stand der Tool-Berechtigungen im Renderer (Issue #67).
  *
@@ -51,7 +52,7 @@ export function initToolPermissionState({ api }) {
 
   /** Antwortform des Main: { ok, error?, code? }. `cancelled` = Systemdialog abgebrochen. */
   async function call(name, ...args) {
-    if (typeof api?.[name] !== 'function') return { ok: false, error: 'Funktion nicht verfügbar.' };
+    if (typeof api?.[name] !== 'function') return { ok: false, error: t('chat.toolMode.unavailable') };
     let result;
     try {
       result = await api[name](...args);

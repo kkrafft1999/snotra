@@ -32,7 +32,7 @@ const PLACEHOLDER_ICON_HTML =
   + '<path d="M3.5 16.5 8.5 11l3.5 3.5"/><circle cx="15.5" cy="9" r="1.4"/></svg>';
 
 /** Grund für Bildquellen, die gar nicht erst gegen den Workspace laufen. */
-const EXTERNAL_SOURCE_MESSAGE = 'Nur Bilder aus dem Arbeitsordner werden angezeigt';
+const externalSourceMessage = () => t('chat.image.externalSource');
 
 /**
  * Einmal geholte Bilder bleiben liegen: Ein erneut gerenderter Verlauf soll
@@ -107,7 +107,7 @@ function placeholderFor(altText, message) {
  * halb angekommenes `![Diagramm](diagr` wanderte unterwegs von Text zu Bild.
  */
 function pendingFor(altText) {
-  const box = placeholderFor(altText, 'Bild erscheint nach der Antwort');
+  const box = placeholderFor(altText, t('chat.image.pending'));
   box.classList.remove('chat-md-image--placeholder');
   box.classList.add('chat-md-image--pending');
   return box;
@@ -132,7 +132,7 @@ async function resolveOne(img, { api, workspaceRoot }) {
     // stehen. Alles andere (http(s), file://) lädt unter dieser CSP nichts;
     // statt eines kaputten Bildes steht dort, warum.
     if (/^data:image\//i.test(src.trim())) return;
-    img.replaceWith(placeholderFor(altText, EXTERNAL_SOURCE_MESSAGE));
+    img.replaceWith(placeholderFor(altText, externalSourceMessage()));
     return;
   }
 

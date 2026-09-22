@@ -80,5 +80,5 @@ test('openChatLink meldet eine fehlende Bruecke, statt zu werfen', async () => {
 
   const result = await openChatLink({}, 'https://example.com');
   assert.equal(result.ok, false);
-  assert.match(result.error, /nicht geöffnet werden/);
+  assert.match(result.error, /cannot be opened/);
 });

@@ -310,7 +310,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detail: 'nur Kurzbeschreibung',
+        detailKey: 'context.detail.skill.short',
         chars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
         skillName: skill.name,
@@ -323,7 +323,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detail: 'vollständige Anleitung im Prompt',
+        detailKey: 'context.detail.skill.full',
         chars: sections[index].length,
         contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
         skillName: skill.name,
@@ -336,8 +336,8 @@ function buildSkillsSystemPrompt(
       createContextPart({
         id: 'skills:intro',
         group: CONTEXT_PART_GROUPS.SKILLS,
-        label: 'Hinweise zu den Skills',
-        detail: 'gilt für alle eingeschalteten Skills',
+        labelKey: 'context.part.skills.intro',
+        detailKey: 'context.detail.skills.intro',
         chars: introChars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
@@ -392,8 +392,9 @@ function buildToolContextParts(toolDefs) {
       createContextPart({
         id: 'tools:builtin',
         group: CONTEXT_PART_GROUPS.TOOLS,
-        label: 'Eingebaute Tools',
-        detail: `${builtinCount} Schemas`,
+        labelKey: 'context.part.tools.builtin',
+        detailKey: 'context.detail.schemas',
+        params: { count: builtinCount },
         chars: builtinChars,
         contentKind: CONTEXT_CONTENT_KINDS.JSON,
         count: builtinCount,
@@ -406,7 +407,8 @@ function buildToolContextParts(toolDefs) {
         id: `tools:mcp:${serverId}`,
         group: CONTEXT_PART_GROUPS.TOOLS,
         label: `MCP · ${serverId}`,
-        detail: `${entry.count} Schemas`,
+        detailKey: 'context.detail.schemas',
+        params: { count: entry.count },
         chars: entry.chars,
         contentKind: CONTEXT_CONTENT_KINDS.JSON,
         count: entry.count,
@@ -465,8 +467,9 @@ function buildHistoryContextParts(messages) {
       createContextPart({
         id: 'history:messages',
         group: CONTEXT_PART_GROUPS.HISTORY,
-        label: 'Nachrichten',
-        detail: `${messageCount} im Kontextfenster`,
+        labelKey: 'context.part.history.messages',
+        detailKey: 'context.detail.inContextWindow',
+        params: { count: messageCount },
         chars: messageChars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
         count: messageCount,
@@ -478,8 +481,9 @@ function buildHistoryContextParts(messages) {
       createContextPart({
         id: 'history:tool-results',
         group: CONTEXT_PART_GROUPS.HISTORY,
-        label: 'Tool-Aufrufe und -Ergebnisse',
-        detail: `${toolCount} Ergebnisse`,
+        labelKey: 'context.part.history.toolResults',
+        detailKey: 'context.detail.results',
+        params: { count: toolCount },
         chars: toolChars,
         contentKind: CONTEXT_CONTENT_KINDS.JSON,
         count: toolCount,
@@ -491,8 +495,8 @@ function buildHistoryContextParts(messages) {
       createContextPart({
         id: 'history:images',
         group: CONTEXT_PART_GROUPS.HISTORY,
-        label: 'Bildanhänge',
-        detail: 'geschätzter Anteil',
+        labelKey: 'context.part.history.images',
+        detailKey: 'context.detail.estimatedShare',
         chars: imageChars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
@@ -523,8 +527,8 @@ function buildStaticContextParts({
       createContextPart({
         id: 'system:base',
         group: CONTEXT_PART_GROUPS.SYSTEM,
-        label: 'Eigener System-Prompt',
-        detail: 'Einstellungen › Allgemein',
+        labelKey: 'context.part.system.base',
+        detailKey: 'context.detail.settingsGeneral',
         chars: systemPrompt.length,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
@@ -539,8 +543,8 @@ function buildStaticContextParts({
       createContextPart({
         id: 'system:environment',
         group: CONTEXT_PART_GROUPS.SYSTEM,
-        label: 'Umgebungsangaben',
-        detail: 'Einstellungen › Allgemein',
+        labelKey: 'context.part.system.environment',
+        detailKey: 'context.detail.settingsGeneral',
         chars: environmentSystem.length,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
@@ -556,8 +560,8 @@ function buildStaticContextParts({
       createContextPart({
         id: 'system:workspace',
         group: CONTEXT_PART_GROUPS.SYSTEM,
-        label: 'Ordnerkontext',
-        detail: 'Ordner, Auswahl, Regeln',
+        labelKey: 'context.part.system.workspace',
+        detailKey: 'context.detail.workspace',
         chars: workspaceChars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
@@ -568,8 +572,8 @@ function buildStaticContextParts({
       createContextPart({
         id: 'tools:prompt-list',
         group: CONTEXT_PART_GROUPS.TOOLS,
-        label: 'Tool-Liste im Prompttext',
-        detail: 'Namen und Kurzbeschreibungen',
+        labelKey: 'context.part.tools.promptList',
+        detailKey: 'context.detail.namesAndShort',
         chars: promptListChars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
       })
