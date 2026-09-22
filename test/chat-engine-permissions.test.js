@@ -188,7 +188,7 @@ test('ohne Freigabe-UI verfällt die Anfrage: kein Handler, kein weiterer Provid
   assert.equal(llm.calls.length, 1);
   assert.equal(result.toolTrace.length, 1);
   assert.equal(result.toolTrace[0].permission.reason, 'request_invalidated');
-  assert.match(result.toolTrace[0].line, /blockiert/);
+  assert.match(result.toolTrace[0].line, /blocked/);
   const phases = events.filter((e) => e.type === CHAT_ENGINE_EVENTS.PROGRESS && e.payload.type === 'phase').map((e) => e.payload.phase);
   assert.equal(phases.at(-1), 'idle');
 });
@@ -207,7 +207,7 @@ test('Nutzer lehnt ab: strukturiertes Ergebnis ans Modell, Lauf geht mit der Abl
   const first = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
   assert.equal(first.reason, 'user_denied');
   assert.equal(first.message, 'Tool call denied by the user.');
-  assert.match(result.toolTrace[0].line, /abgelehnt/);
+  assert.match(result.toolTrace[0].line, /denied/);
 });
 
 test('identischer Plan nach Ablehnung: keine zweite Karte, Lauf endet ohne weiteren Provider-Request', async () => {

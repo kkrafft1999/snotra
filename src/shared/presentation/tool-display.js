@@ -1,214 +1,203 @@
 /**
- * Workspace-Tool-Anzeigezeilen (Stage 5 — Tool-Präsentation).
+ * Workspace tool display lines (stage 5 — tool presentation).
  *
- * Single Source of Truth für deutschsprachige Tool-Zeilen im Chat. Wird vom
- * Main-seitigen ToolPort-Adapter genutzt; der Renderer zeigt nur noch `line`.
+ * Single source of truth for the tool lines in the chat. Used by the ToolPort
+ * adapter in the main process; the renderer only ever shows `line`.
+ *
+ * The wording comes from the catalogue (epic #277). This module runs in the
+ * main process, so it cannot reach for the renderer's `t()` — it binds a
+ * translator to the locale it is handed. That locale has been threaded through
+ * since #289; until #290 nothing looked at it.
  */
 'use strict';
 
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
-const { APP_LOCALES } = require('../contracts/enums');
 const { parseSkillPath } = require('../runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../contracts/skills');
+const { DEFAULT_LOCALE, createTranslator } = require('../i18n');
 
-function truncateToolLabel(s, max = 48) {
-  const t = String(s ?? '');
-  if (t.length <= max) return t;
-  return `${t.slice(0, max - 1)}…`;
+function truncateToolLabel(value, max = 48) {
+  const text = String(value ?? '');
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
 }
 
 /**
- * Pfad-Beschriftung einer Tool-Zeile. Ein Skill-Pfad („skill:name/rest“,
- * Issue #61) wird lesbar aufgelöst, damit im Chat erkennbar bleibt, dass aus
- * einem Skill-Verzeichnis gelesen wurde und nicht aus dem Projektordner.
+ * Path label of a tool line. A skill path (`skill:name/rest`, issue #61) is
+ * resolved into something readable, so that the chat still shows a read came
+ * out of a skill directory rather than out of the project folder.
  */
-function formatRelativePathForLabel(relativePath) {
+function formatRelativePathForLabel(relativePath, t) {
   const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
   if (!raw || raw === '.') return null;
   const skill = parseSkillPath(raw);
   if (skill) {
     const name = truncateToolLabel(skill.name, 24);
-    if (!skill.rest || skill.rest === '.') return `Skill ${name}`;
-    return `${truncateToolLabel(skill.rest)} (Skill ${name})`;
+    if (!skill.rest || skill.rest === '.') return t('tools.path.skill', { name });
+    return t('tools.path.skillFile', { path: truncateToolLabel(skill.rest), name });
   }
   return truncateToolLabel(raw);
 }
 
 /**
- * Anzeige-Zeile für einen Tool-Aufruf. phase 'pending' (Aufruf wird noch vom
- * Modell gestreamt) nutzt bewusst dieselbe Formulierung wie 'start' — für den
- * Nutzer ist „Datei X wird geschrieben …“ ab dem ersten Token zutreffend.
+ * Base key per tool. The four sentences of a line — start and done, each with
+ * and without a target — hang below it. They sit in a table rather than at the
+ * call sites because the alternative is the same five lines fourteen times
+ * over; `test/i18n-keys.test.js` walks this table the way it walks the key
+ * tables of the contract layer (#293), so nothing escapes the check.
  */
-function summarizeToolCall(toolName, args, phase = 'start', locale = APP_LOCALES.DE) {
+const TOOL_LINE_KEYS = Object.freeze({
+  list_directory: 'tools.line.listDirectory',
+  read_file_text: 'tools.line.readFileText',
+  read_file_lines: 'tools.line.readFileLines',
+  write_file_text: 'tools.line.writeFileText',
+  edit_file: 'tools.line.editFile',
+  apply_patch: 'tools.line.applyPatch',
+  search_in_files: 'tools.line.searchInFiles',
+  find_files: 'tools.line.findFiles',
+  stat_path: 'tools.line.statPath',
+  outline_file: 'tools.line.outlineFile',
+  list_directory_tree: 'tools.line.listDirectoryTree',
+  run_python: 'tools.line.runPython',
+  shell_execute: 'tools.line.shellExecute',
+  web_search: 'tools.line.webSearch',
+  fetch_url: 'tools.line.fetchUrl',
+});
+
+/** The four suffixes every entry of TOOL_LINE_KEYS carries. */
+const LINE_VARIANTS = Object.freeze(['start', 'done', 'start.plain', 'done.plain']);
+
+/**
+ * One tool line: the sentence with a target, or the one without when the
+ * target is missing. Which of the two applies is all the callers decide — the
+ * wording is entirely in the catalogue, so that German word order is never
+ * assembled out of English parts (#290).
+ */
+function lineFor(t, tool, isDone, params) {
+  const base = TOOL_LINE_KEYS[tool];
+  const phase = isDone ? 'done' : 'start';
+  const plain = !params || Object.values(params).every((value) => !value);
+  return plain ? t(`${base}.${phase}.plain`) : t(`${base}.${phase}`, params);
+}
+
+function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOCALE) {
+  const t = createTranslator(locale);
   const isDone = phase === 'done';
-  // Vor den Datei-Tools: Nachladen einer Anleitung soll im Verlauf als
-  // Skill-Schritt lesbar sein und nicht als „Datei gelesen" (Issue #173).
+  const pathOf = () => formatRelativePathForLabel(args?.relative_path, t);
+  // Ahead of the file tools: loading an instruction should read as a skill step
+  // in the log, not as "file read" (issue #173).
   if (toolName === LOAD_SKILL_TOOL) {
     const name = typeof args?.name === 'string' ? args.name.trim() : '';
-    const label = name ? `Skill ${truncateToolLabel(name, 24)}` : 'Skill';
-    return isDone ? `${label} geladen` : `${label} wird geladen …`;
+    return isDone
+      ? (name ? t('tools.line.loadSkill.done', { name: truncateToolLabel(name, 24) }) : t('tools.line.loadSkill.done.plain'))
+      : (name ? t('tools.line.loadSkill.start', { name: truncateToolLabel(name, 24) }) : t('tools.line.loadSkill.start.plain'));
   }
-  if (toolName === 'list_directory') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Ordner ${pathLabel} durchsucht` : `Ordner ${pathLabel} wird durchsucht …`;
-    }
-    return isDone ? 'Projektordner durchsucht' : 'Projektordner wird durchsucht …';
-  }
-  if (toolName === 'read_file_text') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Datei ${pathLabel} gelesen` : `Datei ${pathLabel} wird gelesen …`;
-    }
-    return isDone ? 'Datei gelesen' : 'Datei wird gelesen …';
-  }
+  if (toolName === 'list_directory') return lineFor(t, 'list_directory', isDone, { path: pathOf() });
+  if (toolName === 'read_file_text') return lineFor(t, 'read_file_text', isDone, { path: pathOf() });
   if (toolName === 'read_file_lines') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
     const start = Number.isFinite(args?.start_line) ? Math.floor(args.start_line) : null;
     const end = Number.isFinite(args?.end_line) ? Math.floor(args.end_line) : null;
-    let rangeLabel = null;
-    if (start !== null && end !== null) rangeLabel = ` (Zeilen ${start}–${end})`;
-    else if (start !== null) rangeLabel = ` (ab Zeile ${start})`;
-    const target = `Datei${pathLabel ? ` ${pathLabel}` : ''}${rangeLabel || ''}`;
-    return isDone ? `${target} gelesen` : `${target} wird gelesen …`;
+    let range = '';
+    if (start !== null && end !== null) range = t('tools.line.readFileLines.range', { start, end });
+    else if (start !== null) range = t('tools.line.readFileLines.rangeFrom', { start });
+    // Path and range in that order in both languages; the word "file" and the
+    // rest of the sentence around them come from the catalogue.
+    const target = [pathOf(), range].filter(Boolean).join(' ');
+    return lineFor(t, 'read_file_lines', isDone, { target });
   }
-  if (toolName === 'write_file_text') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Datei ${pathLabel} geschrieben` : `Datei ${pathLabel} wird geschrieben …`;
-    }
-    return isDone ? 'Datei geschrieben' : 'Datei wird geschrieben …';
-  }
-  if (toolName === 'edit_file') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Datei ${pathLabel} geändert` : `Datei ${pathLabel} wird geändert …`;
-    }
-    return isDone ? 'Datei geändert' : 'Datei wird geändert …';
-  }
-  if (toolName === 'apply_patch') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Datei ${pathLabel} gepatcht` : `Datei ${pathLabel} wird gepatcht …`;
-    }
-    return isDone ? 'Patch angewendet' : 'Patch wird angewendet …';
-  }
+  if (toolName === 'write_file_text') return lineFor(t, 'write_file_text', isDone, { path: pathOf() });
+  if (toolName === 'edit_file') return lineFor(t, 'edit_file', isDone, { path: pathOf() });
+  if (toolName === 'apply_patch') return lineFor(t, 'apply_patch', isDone, { path: pathOf() });
   if (toolName === 'search_in_files') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
-    if (raw) {
-      const queryLabel = `„${truncateToolLabel(raw, 32)}“`;
-      return isDone ? `Nach ${queryLabel} gesucht` : `Suche nach ${queryLabel} …`;
-    }
-    return isDone ? 'Dateien durchsucht' : 'Dateien werden durchsucht …';
+    return lineFor(t, 'search_in_files', isDone, { query: raw ? truncateToolLabel(raw, 32) : '' });
   }
   if (toolName === 'find_files') {
     const raw = typeof args?.pattern === 'string' ? args.pattern.trim() : '';
-    if (raw) {
-      const patternLabel = `„${truncateToolLabel(raw, 32)}“`;
-      return isDone ? `Dateien zu ${patternLabel} gesucht` : `Suche Dateien zu ${patternLabel} …`;
-    }
-    return isDone ? 'Dateien gesucht' : 'Dateien werden gesucht …';
+    return lineFor(t, 'find_files', isDone, { pattern: raw ? truncateToolLabel(raw, 32) : '' });
   }
-  if (toolName === 'stat_path') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Pfad ${pathLabel} geprüft` : `Pfad ${pathLabel} wird geprüft …`;
-    }
-    return isDone ? 'Pfad geprüft' : 'Pfad wird geprüft …';
-  }
-  if (toolName === 'outline_file') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone
-        ? `Gliederung von ${pathLabel} ermittelt`
-        : `Gliederung von ${pathLabel} wird ermittelt …`;
-    }
-    return isDone ? 'Gliederung ermittelt' : 'Gliederung wird ermittelt …';
-  }
-  if (toolName === 'list_directory_tree') {
-    const pathLabel = formatRelativePathForLabel(args?.relative_path);
-    if (pathLabel) {
-      return isDone ? `Ordnerbaum ${pathLabel} gelesen` : `Ordnerbaum ${pathLabel} wird gelesen …`;
-    }
-    return isDone ? 'Ordnerbaum gelesen' : 'Ordnerbaum wird gelesen …';
-  }
+  if (toolName === 'stat_path') return lineFor(t, 'stat_path', isDone, { path: pathOf() });
+  if (toolName === 'outline_file') return lineFor(t, 'outline_file', isDone, { path: pathOf() });
+  if (toolName === 'list_directory_tree') return lineFor(t, 'list_directory_tree', isDone, { path: pathOf() });
   if (toolName === 'run_python') {
-    const lines = String(args?.code ?? '').split('\n').filter((line) => line.trim()).length;
-    const count = lines > 0 ? ` (${lines} ${lines === 1 ? 'Zeile' : 'Zeilen'})` : '';
-    return isDone ? `Python ausgeführt${count}` : `Python wird ausgeführt${count} …`;
+    const count = String(args?.code ?? '').split('\n').filter((line) => line.trim()).length;
+    // Spelled out rather than through `t.plural`, so that both forms stay
+    // visible to the key scan in `test/i18n-keys.test.js`.
+    const lines = count === 1
+      ? t('tools.line.runPython.lines.one', { count })
+      : t('tools.line.runPython.lines.other', { count });
+    return lineFor(t, 'run_python', isDone, { lines: count > 0 ? lines : '' });
   }
   if (toolName === 'shell_execute') {
-    // Der Befehl selbst ist die Information — gekuerzt, damit die Zeile haelt.
+    // The command itself is the information — shortened so the line holds.
     const raw = typeof args?.command === 'string' ? args.command.trim().split('\n')[0] : '';
-    if (raw) {
-      const label = `„${truncateToolLabel(raw, 48)}“`;
-      return isDone ? `Befehl ${label} ausgeführt` : `Befehl ${label} wird ausgeführt …`;
-    }
-    return isDone ? 'Befehl ausgeführt' : 'Befehl wird ausgeführt …';
+    return lineFor(t, 'shell_execute', isDone, { command: raw ? truncateToolLabel(raw, 48) : '' });
   }
   if (toolName === 'web_search') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
-    if (raw) {
-      const queryLabel = `„${truncateToolLabel(raw, 40)}“`;
-      return isDone ? `Im Internet nach ${queryLabel} gesucht` : `Suche im Internet nach ${queryLabel} …`;
-    }
-    return isDone ? 'Im Internet gesucht' : 'Suche im Internet …';
+    return lineFor(t, 'web_search', isDone, { query: raw ? truncateToolLabel(raw, 40) : '' });
   }
   if (toolName === 'fetch_url') {
-    // Der Host genuegt: die volle Adresse sprengt jede Zeile (Issue #95).
+    // The host is enough: the full address blows up any line (issue #95).
     const raw = typeof args?.url === 'string' ? args.url.trim() : '';
-    let label = '';
+    let host = '';
     if (raw) {
       try {
-        label = new URL(raw).hostname || '';
+        host = new URL(raw).hostname || '';
       } catch {
-        label = truncateToolLabel(raw, 40);
+        host = truncateToolLabel(raw, 40);
       }
     }
-    if (label) {
-      return isDone ? `Seite ${label} gelesen` : `Seite ${label} wird gelesen …`;
-    }
-    return isDone ? 'Seite gelesen' : 'Seite wird gelesen …';
+    return lineFor(t, 'fetch_url', isDone, { host });
   }
-  // MCP-Tools (Issue #107): der Namensraum `mcp__<server>__<tool>` ist eine
-  // interne Angelegenheit — im Log steht der Server vor dem Tool, damit man
-  // sieht, wessen Werkzeug da gerade laeuft, ohne die Maschinerie zu lesen.
+  // MCP tools (issue #107): the namespace `mcp__<server>__<tool>` is an
+  // internal affair — in the log the server stands in front of the tool, so
+  // that one can see whose tool is running without reading the machinery.
   const mcp = parseQualifiedMcpToolName(toolName);
   if (mcp) {
-    const label = `${truncateToolLabel(mcp.serverId)} · ${truncateToolLabel(mcp.name)}`;
-    return isDone ? `${label} ausgeführt` : `${label} wird ausgeführt …`;
+    const params = { server: truncateToolLabel(mcp.serverId), name: truncateToolLabel(mcp.name) };
+    return isDone ? t('tools.line.mcp.done', params) : t('tools.line.mcp.start', params);
   }
-  const name = truncateToolLabel(toolName || 'Tool');
-  return isDone ? `${name} ausgeführt` : `${name} wird ausgeführt …`;
+  const name = toolName ? truncateToolLabel(toolName) : t('tools.line.generic.fallbackName');
+  return isDone ? t('tools.line.generic.done', { name }) : t('tools.line.generic.start', { name });
 }
 
 /**
- * Formatiert einen Tool-Trace-Eintrag zur Anzeige-Zeile.
- * Bereits formatierte Strings (persistierte Alt-Sessions) gehen unverändert durch.
+ * Addition from the permission audit (issue #66): a denial or a pending
+ * approval should be recognisable in the chat without the renderer having to
+ * interpret the decision itself.
  */
-/**
- * Zusatz aus dem Berechtigungs-Audit (Issue #66): eine Ablehnung oder eine
- * wartende Freigabe soll im Chat erkennbar sein, ohne dass der Renderer die
- * Entscheidung selbst interpretieren muss.
- */
-function permissionSuffix(entry, phase) {
+function permissionSuffix(entry, phase, t) {
   const permission = entry?.permission;
   if (!permission || typeof permission !== 'object') return '';
   if (phase === 'done' && permission.status === 'denied') {
-    return permission.reason === 'user_denied' ? ' · abgelehnt' : ' · blockiert';
+    return permission.reason === 'user_denied'
+      ? t('tools.line.suffix.denied')
+      : t('tools.line.suffix.blocked');
   }
-  if (phase !== 'done' && permission.status === 'awaiting-approval') return ' · wartet auf Freigabe';
+  if (phase !== 'done' && permission.status === 'awaiting-approval') {
+    return t('tools.line.suffix.awaiting');
+  }
   return '';
 }
 
-function formatToolDisplayLine(entry, phase = 'start', locale = APP_LOCALES.DE) {
+/**
+ * Formats a tool trace entry into a display line. Strings that are already
+ * formatted (persisted older sessions) pass through unchanged.
+ */
+function formatToolDisplayLine(entry, phase = 'start', locale = DEFAULT_LOCALE) {
   if (typeof entry === 'string') return entry;
-  const line = summarizeToolCall(entry?.tool, entry?.args, phase, locale);
-  const withPermission = `${line}${permissionSuffix(entry, phase)}`;
-  return entry?.noWorkspace ? `${withPermission} · kein Ordner geöffnet` : withPermission;
+  const t = createTranslator(locale);
+  const parts = [summarizeToolCall(entry?.tool, entry?.args, phase, locale)];
+  const suffix = permissionSuffix(entry, phase, t);
+  if (suffix) parts.push(suffix);
+  if (entry?.noWorkspace) parts.push(t('tools.line.suffix.noWorkspace'));
+  return parts.join(' · ');
 }
 
 module.exports = {
+  LINE_VARIANTS,
+  TOOL_LINE_KEYS,
   truncateToolLabel,
   formatToolDisplayLine,
   summarizeToolCall,

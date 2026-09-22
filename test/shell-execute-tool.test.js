@@ -273,11 +273,11 @@ test('shell_execute hat die Kategorie „exec" und eine deutsche Anzeige-Zeile',
   assert.equal(toolCategory('shell_execute'), TOOL_CATEGORIES.EXEC);
   assert.equal(
     summarizeToolCall('shell_execute', { command: 'git status --short' }, 'start'),
-    'Befehl „git status --short“ wird ausgeführt …',
+    'Running command “git status --short” …',
   );
   assert.equal(
     summarizeToolCall('shell_execute', { command: 'npm run build' }, 'done'),
-    'Befehl „npm run build“ ausgeführt',
+    'Command “npm run build” run',
   );
-  assert.equal(summarizeToolCall('shell_execute', {}, 'done'), 'Befehl ausgeführt');
+  assert.equal(summarizeToolCall('shell_execute', {}, 'done'), 'Command run');
 });

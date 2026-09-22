@@ -153,6 +153,25 @@ test('the key tables of the contract layer point at existing entries', () => {
 });
 
 /**
+ * The tool lines of the chat log name their base key in a table too (#290) —
+ * four sentences hang below each one, and none of them is visible to the text
+ * scan above. Missing one means a raw `tools.line.…` in the middle of the log.
+ */
+test('every tool line carries all four sentences', () => {
+  const { LINE_VARIANTS, TOOL_LINE_KEYS } = require('../src/shared/presentation/tool-display');
+  const missing = [];
+  for (const [tool, base] of Object.entries(TOOL_LINE_KEYS)) {
+    for (const variant of LINE_VARIANTS) {
+      const key = `${base}.${variant}`;
+      if (!Object.prototype.hasOwnProperty.call(MESSAGES[DEFAULT_LOCALE], key)) {
+        missing.push(`${tool}: ${key}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], 'tool line without a sentence in the catalogue');
+});
+
+/**
  * A message descriptor is only worth anything if the display side can put it
  * into words — in both languages, and with its placeholders filled.
  */

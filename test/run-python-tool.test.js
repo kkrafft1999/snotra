@@ -142,12 +142,12 @@ test('die Freigabe-Karte bekommt den vollständigen Quelltext als Vorschau', asy
   assert.deepEqual(plan.riskClasses, ['execute']);
 });
 
-test('run_python hat eine eigene Kategorie und eine deutsche Anzeige-Zeile', () => {
+test('run_python has a category of its own and a display line', () => {
   assert.equal(toolCategory('run_python'), TOOL_CATEGORIES.EXEC);
-  assert.equal(summarizeToolCall('run_python', { code: 'print(1)' }, 'start'), 'Python wird ausgeführt (1 Zeile) …');
+  assert.equal(summarizeToolCall('run_python', { code: 'print(1)' }, 'start'), 'Running Python (1 line) …');
   assert.equal(
     summarizeToolCall('run_python', { code: 'a = 1\n\nprint(a)' }, 'done'),
-    'Python ausgeführt (2 Zeilen)',
+    'Python run (2 lines)',
   );
-  assert.equal(summarizeToolCall('run_python', {}, 'done'), 'Python ausgeführt');
+  assert.equal(summarizeToolCall('run_python', {}, 'done'), 'Python run');
 });

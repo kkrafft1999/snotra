@@ -116,14 +116,14 @@ test('web_search lässt sich per Häkchen abschalten', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('web_search zeigt eine deutsche Anzeige-Zeile mit der Suchanfrage', () => {
+test('web_search shows a display line with the query', () => {
   assert.equal(
     summarizeToolCall('web_search', { query: 'Electron 40' }, 'start'),
-    'Suche im Internet nach „Electron 40“ …',
+    'Searching the web for “Electron 40” …',
   );
   assert.equal(
     summarizeToolCall('web_search', { query: 'Electron 40' }, 'done'),
-    'Im Internet nach „Electron 40“ gesucht',
+    'Searched the web for “Electron 40”',
   );
-  assert.equal(summarizeToolCall('web_search', {}, 'start'), 'Suche im Internet …');
+  assert.equal(summarizeToolCall('web_search', {}, 'start'), 'Searching the web …');
 });

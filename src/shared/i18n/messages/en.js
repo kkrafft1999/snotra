@@ -655,6 +655,105 @@ module.exports = {
   'tools.mcp.short': '{text} (MCP: {server})',
   'tools.mcp.short.empty': 'Tool of the MCP server “{server}”.',
 
+  // ── Tool lines in the chat log ───────────────────────────────────────────
+  'tools.path.skill': 'Skill {name}',
+  'tools.path.skillFile': '{path} (skill {name})',
+
+  'tools.line.loadSkill.start': 'Loading skill {name} …',
+  'tools.line.loadSkill.done': 'Skill {name} loaded',
+  'tools.line.loadSkill.start.plain': 'Loading skill …',
+  'tools.line.loadSkill.done.plain': 'Skill loaded',
+
+  'tools.line.listDirectory.start': 'Searching folder {path} …',
+  'tools.line.listDirectory.done': 'Folder {path} searched',
+  'tools.line.listDirectory.start.plain': 'Searching the project folder …',
+  'tools.line.listDirectory.done.plain': 'Project folder searched',
+
+  'tools.line.readFileText.start': 'Reading file {path} …',
+  'tools.line.readFileText.done': 'File {path} read',
+  'tools.line.readFileText.start.plain': 'Reading file …',
+  'tools.line.readFileText.done.plain': 'File read',
+
+  'tools.line.readFileLines.start': 'Reading file {target} …',
+  'tools.line.readFileLines.done': 'File {target} read',
+  'tools.line.readFileLines.start.plain': 'Reading file …',
+  'tools.line.readFileLines.done.plain': 'File read',
+  'tools.line.readFileLines.range': '(lines {start}–{end})',
+  'tools.line.readFileLines.rangeFrom': '(from line {start})',
+
+  'tools.line.writeFileText.start': 'Writing file {path} …',
+  'tools.line.writeFileText.done': 'File {path} written',
+  'tools.line.writeFileText.start.plain': 'Writing file …',
+  'tools.line.writeFileText.done.plain': 'File written',
+
+  'tools.line.editFile.start': 'Changing file {path} …',
+  'tools.line.editFile.done': 'File {path} changed',
+  'tools.line.editFile.start.plain': 'Changing file …',
+  'tools.line.editFile.done.plain': 'File changed',
+
+  'tools.line.applyPatch.start': 'Patching file {path} …',
+  'tools.line.applyPatch.done': 'File {path} patched',
+  'tools.line.applyPatch.start.plain': 'Applying patch …',
+  'tools.line.applyPatch.done.plain': 'Patch applied',
+
+  'tools.line.searchInFiles.start': 'Searching for “{query}” …',
+  'tools.line.searchInFiles.done': 'Searched for “{query}”',
+  'tools.line.searchInFiles.start.plain': 'Searching files …',
+  'tools.line.searchInFiles.done.plain': 'Files searched',
+
+  'tools.line.findFiles.start': 'Looking for files matching “{pattern}” …',
+  'tools.line.findFiles.done': 'Looked for files matching “{pattern}”',
+  'tools.line.findFiles.start.plain': 'Looking for files …',
+  'tools.line.findFiles.done.plain': 'File search finished',
+
+  'tools.line.statPath.start': 'Checking path {path} …',
+  'tools.line.statPath.done': 'Path {path} checked',
+  'tools.line.statPath.start.plain': 'Checking path …',
+  'tools.line.statPath.done.plain': 'Path checked',
+
+  'tools.line.outlineFile.start': 'Working out the outline of {path} …',
+  'tools.line.outlineFile.done': 'Outline of {path} worked out',
+  'tools.line.outlineFile.start.plain': 'Working out the outline …',
+  'tools.line.outlineFile.done.plain': 'Outline worked out',
+
+  'tools.line.listDirectoryTree.start': 'Reading folder tree {path} …',
+  'tools.line.listDirectoryTree.done': 'Folder tree {path} read',
+  'tools.line.listDirectoryTree.start.plain': 'Reading the folder tree …',
+  'tools.line.listDirectoryTree.done.plain': 'Folder tree read',
+
+  'tools.line.runPython.start': 'Running Python ({lines}) …',
+  'tools.line.runPython.done': 'Python run ({lines})',
+  'tools.line.runPython.start.plain': 'Running Python …',
+  'tools.line.runPython.done.plain': 'Python run',
+  'tools.line.runPython.lines.one': '{count} line',
+  'tools.line.runPython.lines.other': '{count} lines',
+
+  'tools.line.shellExecute.start': 'Running command “{command}” …',
+  'tools.line.shellExecute.done': 'Command “{command}” run',
+  'tools.line.shellExecute.start.plain': 'Running command …',
+  'tools.line.shellExecute.done.plain': 'Command run',
+
+  'tools.line.webSearch.start': 'Searching the web for “{query}” …',
+  'tools.line.webSearch.done': 'Searched the web for “{query}”',
+  'tools.line.webSearch.start.plain': 'Searching the web …',
+  'tools.line.webSearch.done.plain': 'Searched the web',
+
+  'tools.line.fetchUrl.start': 'Reading page {host} …',
+  'tools.line.fetchUrl.done': 'Page {host} read',
+  'tools.line.fetchUrl.start.plain': 'Reading page …',
+  'tools.line.fetchUrl.done.plain': 'Page read',
+
+  'tools.line.mcp.start': 'Running {server} · {name} …',
+  'tools.line.mcp.done': '{server} · {name} run',
+  'tools.line.generic.start': 'Running {name} …',
+  'tools.line.generic.done': '{name} run',
+  'tools.line.generic.fallbackName': 'Tool',
+
+  'tools.line.suffix.denied': 'denied',
+  'tools.line.suffix.blocked': 'blocked',
+  'tools.line.suffix.awaiting': 'waiting for approval',
+  'tools.line.suffix.noWorkspace': 'no folder open',
+
   // ── Application menu (main process) ──────────────────────────────────────
   'menu.settings': 'Settings…',
   'menu.app.hide': 'Hide {appName}',

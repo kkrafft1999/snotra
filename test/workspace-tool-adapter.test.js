@@ -58,14 +58,14 @@ test('workspace tool adapter adds display lines and skill metadata via the port 
   assert.equal(entry.skill, 'traffic');
   assert.equal(
     adapter.formatDisplayLine(entry, 'start'),
-    'Skill traffic wird geladen …'
+    'Loading skill traffic …'
   );
   assert.equal(
     adapter.formatDisplayLine(
       { tool: 'read_file_text', args: { relative_path: 'a.js' } },
       'done'
     ),
-    'Datei a.js gelesen'
+    'File a.js read'
   );
 });
 

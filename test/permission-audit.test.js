@@ -8,12 +8,12 @@ const { toolTraceEntryForStore, sanitizeChatMessagesForStore, normalizeLoadedMes
 
 test('Tool-Zeile zeigt Ablehnung, Blockade und Warten', () => {
   const base = { tool: 'edit_file', args: { relative_path: 'a.js' } };
-  assert.equal(formatToolDisplayLine(base, 'done'), 'Datei a.js geändert');
-  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'denied', reason: 'user_denied' } }, 'done'), 'Datei a.js geändert · abgelehnt');
-  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'denied', reason: 'hard_limit' } }, 'done'), 'Datei a.js geändert · blockiert');
-  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'awaiting-approval' } }, 'start'), 'Datei a.js wird geändert … · wartet auf Freigabe');
-  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'executed' } }, 'done'), 'Datei a.js geändert');
-  assert.equal(formatToolDisplayLine({ ...base, noWorkspace: true, permission: { status: 'denied' } }, 'done'), 'Datei a.js geändert · blockiert · kein Ordner geöffnet');
+  assert.equal(formatToolDisplayLine(base, 'done'), 'File a.js changed');
+  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'denied', reason: 'user_denied' } }, 'done'), 'File a.js changed · denied');
+  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'denied', reason: 'hard_limit' } }, 'done'), 'File a.js changed · blocked');
+  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'awaiting-approval' } }, 'start'), 'Changing file a.js … · waiting for approval');
+  assert.equal(formatToolDisplayLine({ ...base, permission: { status: 'executed' } }, 'done'), 'File a.js changed');
+  assert.equal(formatToolDisplayLine({ ...base, noWorkspace: true, permission: { status: 'denied' } }, 'done'), 'File a.js changed · blocked · no folder open');
 });
 
 test('Verlauf speichert den bereinigten Audit-Eintrag und verwirft Rohdaten', () => {
@@ -54,10 +54,10 @@ test('Verlauf speichert den bereinigten Audit-Eintrag und verwirft Rohdaten', ()
 test('Audit überlebt Speichern und Laden einer Session', () => {
   const stored = sanitizeChatMessagesForStore([
     { role: 'user', content: 'frage' },
-    { role: 'assistant', content: '', toolTrace: [{ tool: 'edit_file', line: 'Datei a.js geändert · abgelehnt', permission: { decision: 'deny', reason: 'user_denied', status: 'denied', mode: 'smart', riskClasses: ['write'] } }] },
+    { role: 'assistant', content: '', toolTrace: [{ tool: 'edit_file', line: 'File a.js changed · denied', permission: { decision: 'deny', reason: 'user_denied', status: 'denied', mode: 'smart', riskClasses: ['write'] } }] },
   ]);
   assert.equal(stored[1].toolTrace[0].permission.reason, 'user_denied');
   const loaded = normalizeLoadedMessages(stored);
   assert.equal(loaded[1].toolTrace[0].permission.decision, 'deny');
-  assert.equal(loaded[1].toolTrace[0].line, 'Datei a.js geändert · abgelehnt');
+  assert.equal(loaded[1].toolTrace[0].line, 'File a.js changed · denied');
 });

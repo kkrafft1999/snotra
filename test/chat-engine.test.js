@@ -606,7 +606,7 @@ test('engine preserves tool-trace metadata from the adapter', async () => {
 
   assert.equal(result.content, 'Fertig.');
   assert.equal(result.toolTrace[0].skill, 'traffic');
-  assert.equal(result.toolTrace[0].line, 'Skill traffic geladen');
+  assert.equal(result.toolTrace[0].line, 'Skill traffic loaded');
 });
 
 test('engine stops at its configured tool-round limit', async () => {
@@ -737,7 +737,7 @@ test('engine preserves start display lines on tool trace when aborted during exe
   assert.equal(result.cancelled, true);
   assert.equal(result.toolTrace.length, 1);
   assert.equal(result.toolTrace[0].tool, 'list_directory');
-  assert.equal(result.toolTrace[0].line, 'Ordner src wird durchsucht …');
+  assert.equal(result.toolTrace[0].line, 'Searching folder src …');
 });
 
 test('engine aborts only the targeted in-flight session', async () => {
@@ -870,14 +870,14 @@ test('engine emits pending tool lines while the model still streams a tool call'
     .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE)
     .map((event) => [event.payload.phase, event.payload.callIndex, event.payload.line]);
   assert.deepEqual(toolEvents, [
-    [TOOL_LINE_PHASES.PENDING, 0, 'Datei wird geschrieben …'],
-    [TOOL_LINE_PHASES.PENDING, 0, 'Datei docs/neu.md wird geschrieben …'],
-    [TOOL_LINE_PHASES.START, 0, 'Datei docs/neu.md wird geschrieben …'],
-    [TOOL_LINE_PHASES.DONE, 0, 'Datei docs/neu.md geschrieben'],
+    [TOOL_LINE_PHASES.PENDING, 0, 'Writing file …'],
+    [TOOL_LINE_PHASES.PENDING, 0, 'Writing file docs/neu.md …'],
+    [TOOL_LINE_PHASES.START, 0, 'Writing file docs/neu.md …'],
+    [TOOL_LINE_PHASES.DONE, 0, 'File docs/neu.md written'],
   ]);
   // Vorläufige Zeilen landen nicht im Trace, der persistiert wird.
   assert.equal(result.toolTrace.length, 1);
-  assert.equal(result.toolTrace[0].line, 'Datei docs/neu.md geschrieben');
+  assert.equal(result.toolTrace[0].line, 'File docs/neu.md written');
   assert.equal(result.toolTrace[0].callIndex, undefined);
 });
 
@@ -959,13 +959,13 @@ test('engine pending tool lines: complete arguments, repeated starts and paralle
     .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE)
     .map((event) => [event.payload.phase, event.payload.callIndex, event.payload.line]);
   assert.deepEqual(toolEvents, [
-    [TOOL_LINE_PHASES.PENDING, 0, 'Datei a.js wird gelesen …'],
-    [TOOL_LINE_PHASES.PENDING, 1, 'Dateien werden durchsucht …'],
-    [TOOL_LINE_PHASES.PENDING, 1, 'Suche nach „TODO“ …'],
-    [TOOL_LINE_PHASES.START, 0, 'Datei a.js wird gelesen …'],
-    [TOOL_LINE_PHASES.DONE, 0, 'Datei a.js gelesen'],
-    [TOOL_LINE_PHASES.START, 1, 'Suche nach „TODO“ …'],
-    [TOOL_LINE_PHASES.DONE, 1, 'Nach „TODO“ gesucht'],
+    [TOOL_LINE_PHASES.PENDING, 0, 'Reading file a.js …'],
+    [TOOL_LINE_PHASES.PENDING, 1, 'Searching files …'],
+    [TOOL_LINE_PHASES.PENDING, 1, 'Searching for “TODO” …'],
+    [TOOL_LINE_PHASES.START, 0, 'Reading file a.js …'],
+    [TOOL_LINE_PHASES.DONE, 0, 'File a.js read'],
+    [TOOL_LINE_PHASES.START, 1, 'Searching for “TODO” …'],
+    [TOOL_LINE_PHASES.DONE, 1, 'Searched for “TODO”'],
   ]);
 });
 
@@ -996,10 +996,10 @@ test('engine resets pending tool calls between rounds', async () => {
     .map((event) => [event.payload.callIndex, event.payload.line]);
   // Ohne Reset würde der Aufruf der zweiten Runde als „bereits gemeldet“ verschluckt.
   assert.deepEqual(pendingLines, [
-    [0, 'Projektordner wird durchsucht …'],
-    [0, 'Ordner src wird durchsucht …'],
-    [0, 'Projektordner wird durchsucht …'],
-    [0, 'Ordner docs wird durchsucht …'],
+    [0, 'Searching the project folder …'],
+    [0, 'Searching folder src …'],
+    [0, 'Searching the project folder …'],
+    [0, 'Searching folder docs …'],
   ]);
 });
 
