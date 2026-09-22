@@ -13,12 +13,14 @@
  *
  * Das Vergessen wirkt **sofort** und nicht erst mit „Übernehmen": Es schreibt
  * eine Datei, die dem Main gehört, und der liefert den neuen Stand gleich
- * zurück. Die Mitschick-Schalter dagegen sind gewöhnliche Einstellungen und
- * werden mit dem Rest des Dialogs gespeichert.
+ * zurück. Since issue #297 the send-along switches and "remember on its own"
+ * take effect at once as well — they are written through setUIPrefs the
+ * moment they are flipped.
  */
 
 import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
+import { bindInstantSwitch } from './InstantSetting.js';
 
 const { MEMORY_SCOPES, MEMORY_ORIGINS, MAX_MEMORY_CHARS } = contracts;
 
@@ -38,17 +40,26 @@ function formatChars(count) {
 export function initMemoryPanel({ api }) {
   const host = document.getElementById('settings-memory-scopes');
   const selfToggle = document.getElementById('input-memory-self');
-  if (!host) return { refresh: async () => {}, readPrefs: () => ({}) };
+  if (!host) return { refresh: async () => {} };
 
-  /** Zuletzt geladener Stand — Grundlage für die Schalter beim Speichern. */
+  /** Zuletzt geladener Stand. */
   let state = { available: false, scopes: [] };
-  /** Vom Nutzer im offenen Dialog geänderte Schalter, je Ebene. */
-  const pendingEnabled = new Map();
 
-  function enabledFor(scope) {
-    if (pendingEnabled.has(scope.scope)) return pendingEnabled.get(scope.scope);
-    return scope.enabled !== false;
+  const PREF_KEYS = {
+    [MEMORY_SCOPES.WORKSPACE]: 'memoryWorkspaceEnabled',
+    [MEMORY_SCOPES.USER]: 'memoryUserEnabled',
+  };
+
+  async function savePref(key, value) {
+    const prefs = await api.setUIPrefs({ [key]: value });
+    return prefs?.[key] === value;
   }
+
+  const selfSwitch = bindInstantSwitch(
+    selfToggle,
+    document.getElementById('status-memory-self'),
+    (value) => savePref('memorySelfEnabled', value)
+  );
 
   function renderEntry(scope, entry) {
     const item = document.createElement('li');
@@ -117,18 +128,36 @@ export function initMemoryPanel({ api }) {
     head.appendChild(pathEl);
     card.appendChild(head);
 
-    const label = document.createElement('label');
-    label.className = 'modal-checkbox memory-card__toggle';
+    // Two cards carry the same switch label, so its name includes the card
+    // title — "Send along" alone does not say which memory.
+    const titleId = `memory-title-${scope.scope}`;
+    title.id = titleId;
+    const row = document.createElement('div');
+    row.className = 'settings-switch-row memory-card__toggle';
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.checked = enabledFor(scope);
+    box.setAttribute('role', 'switch');
+    box.className = 'ds-switch';
+    box.id = `memory-send-${scope.scope}`;
+    const label = document.createElement('label');
+    label.className = 'settings-switch-row__label';
+    label.htmlFor = box.id;
+    label.id = `${box.id}-label`;
+    label.textContent = t('settings.memory.scope.send');
+    box.setAttribute('aria-labelledby', `${label.id} ${titleId}`);
+    box.checked = scope.enabled !== false;
     box.disabled = !scope.path;
-    box.addEventListener('change', () => pendingEnabled.set(scope.scope, box.checked));
-    label.appendChild(box);
-    const labelText = document.createElement('span');
-    labelText.textContent = 'Mitschicken';
-    label.appendChild(labelText);
-    card.appendChild(label);
+    const status = document.createElement('span');
+    status.className = 'settings-instant-status';
+    status.setAttribute('role', 'status');
+    const key = PREF_KEYS[scope.scope];
+    bindInstantSwitch(box, status, async (value) => {
+      const ok = key ? await savePref(key, value) : false;
+      if (ok) scope.enabled = value;
+      return ok;
+    });
+    row.append(label, status, box);
+    card.appendChild(row);
 
     if (scope.entries.length > 0) {
       const list = document.createElement('ul');
@@ -176,24 +205,14 @@ export function initMemoryPanel({ api }) {
   return {
     /** Stand vom Main holen und neu zeichnen — beim Öffnen des Dialogs. */
     async refresh() {
-      pendingEnabled.clear();
+      selfSwitch.status.clear();
       try {
         state = (await api.getMemory()) || { available: false, scopes: [] };
       } catch {
         state = { available: false, scopes: [] };
       }
-      if (selfToggle) selfToggle.checked = state.selfEnabled !== false;
+      selfSwitch.set(state.selfEnabled !== false);
       render();
-    },
-    /** Die drei Schalter für das Speichern des Dialogs. */
-    readPrefs() {
-      const workspace = state.scopes.find((s) => s.scope === MEMORY_SCOPES.WORKSPACE);
-      const user = state.scopes.find((s) => s.scope === MEMORY_SCOPES.USER);
-      return {
-        memorySelfEnabled: selfToggle ? selfToggle.checked !== false : true,
-        memoryWorkspaceEnabled: workspace ? enabledFor(workspace) : true,
-        memoryUserEnabled: user ? enabledFor(user) : true,
-      };
     },
   };
 }

@@ -2817,6 +2817,168 @@ button.chat-msg-attachment:hover {
   margin: 0;
 }
 
+/* ── Instant settings (issue #297) ────────────────────────────────────────
+ * On/off settings are switches and two-way choices are segmented controls;
+ * both save the moment they change. Built on native inputs, so Space, the
+ * arrow keys, the label click and the screen reader's "switch, on" come for
+ * free. */
+
+.settings-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--ds-touch-min);
+}
+
+.settings-switch-row__label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+}
+
+.settings-switch-row:has(.ds-switch:disabled) .settings-switch-row__label {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Spec from ui-design-tokens.md: 40×22, white 16×16 knob, blue when on. The
+ * borders keep the off state visible (3.4:1) — the divider grey alone would
+ * all but vanish on the dialog surface, and a knob shadow is not allowed. */
+.ds-switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid var(--ds-grey-control-border);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-divider);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.ds-switch::before {
+  content: '';
+  box-sizing: border-box;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  /* --ds-grey-muted as the knob's edge, the same way the radio uses it: on
+   * the grey off-track the control border only reaches 2.9:1. */
+  border: 1px solid var(--ds-grey-muted);
+  border-radius: 50%;
+  /* The knob follows the surface rather than staying --ds-white: on the
+   * lightened dark-mode blue a white knob reaches only 2.3:1, and the knob's
+   * position is what says on or off (WCAG 1.4.11). --ds-surface gives 5.1:1
+   * in light and 7.3:1 in dark. */
+  background: var(--ds-surface);
+  transition: transform var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.ds-switch:checked {
+  background: var(--ds-blue);
+  border-color: var(--ds-blue);
+}
+
+.ds-switch:checked::before {
+  border-color: var(--ds-blue);
+  transform: translateX(18px);
+}
+
+.ds-switch:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.ds-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Equal-width segments; the chosen one carries a blue edge, which is what
+ * makes the selection readable (5:1) rather than a surface shade alone.
+ * Clickable, so round — like the switch and the text buttons. */
+.ds-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-bg);
+}
+
+.ds-segmented__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  min-height: calc(var(--ds-touch-min) - 4px);
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-md);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.ds-segmented__input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ds-segmented__option:hover:not(:has(:checked)) {
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
+.ds-segmented__option:has(:checked) {
+  border-color: var(--ds-blue);
+  background: var(--ds-surface);
+  color: var(--ds-blue);
+}
+
+.ds-segmented__option:has(:focus-visible) {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+/* "Saved" fades after a moment; "Not saved" stays until the next attempt. */
+.settings-instant-status {
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-blue);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--ds-motion-fast);
+}
+
+.settings-instant-status.is-visible {
+  opacity: 1;
+}
+
+.settings-instant-status.is-error {
+  color: var(--ds-error);
+}
+
 .modal-hint {
   margin-top: 4px;
   font-size: var(--ds-font-size-md);

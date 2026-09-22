@@ -428,10 +428,11 @@
                   </p>
                 </div>
               </details>
-              <label class="modal-checkbox settings-exec-toggle">
-                <input type="checkbox" id="input-python-enabled">
-                <span data-i18n="settings.python.toggle">Allow Python execution</span>
-              </label>
+              <div class="settings-switch-row settings-exec-toggle">
+                <label for="input-python-enabled" class="settings-switch-row__label" data-i18n="settings.python.toggle">Allow Python execution</label>
+                <span id="status-python-enabled" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-python-enabled">
+              </div>
               <div class="modal-field-group">
                 <label for="input-python-interpreter" class="modal-field-label eyebrow-row" data-i18n="settings.python.interpreter.label">
                   Your own interpreter (optional)
@@ -469,10 +470,11 @@
                   </p>
                 </div>
               </details>
-              <label class="modal-checkbox settings-exec-toggle">
-                <input type="checkbox" id="input-shell-enabled">
-                <span data-i18n="settings.shell.toggle">Allow shell commands</span>
-              </label>
+              <div class="settings-switch-row settings-exec-toggle">
+                <label for="input-shell-enabled" class="settings-switch-row__label" data-i18n="settings.shell.toggle">Allow shell commands</label>
+                <span id="status-shell-enabled" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-shell-enabled">
+              </div>
               <p id="settings-shell-status" class="modal-hint" role="status"></p>
             </div>
 
@@ -707,10 +709,11 @@
               </div>
             </details>
             <div class="settings-tools-card">
-              <label class="modal-checkbox">
-                <input type="checkbox" id="input-memory-self" aria-describedby="hint-memory-self">
-                <span data-i18n="settings.memory.self.toggle">Snotra may remember things on its own</span>
-              </label>
+              <div class="settings-switch-row">
+                <label for="input-memory-self" class="settings-switch-row__label" data-i18n="settings.memory.self.toggle">Snotra may remember things on its own</label>
+                <span id="status-memory-self" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-memory-self" aria-describedby="hint-memory-self">
+              </div>
               <p class="modal-hint" id="hint-memory-self" data-i18n="settings.memory.self.hint">
                 With this off, Snotra only remembers what you explicitly ask it to
                 (&ldquo;please remember &hellip;&rdquo;). Every act of remembering still needs approval
@@ -765,10 +768,11 @@
             </div>
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" data-i18n="settings.general.environment.label">Environment</div>
-              <label class="modal-checkbox">
-                <input type="checkbox" id="input-environment-info" aria-describedby="hint-environment-info">
-                <span data-i18n="settings.general.environment.toggle">Send environment information</span>
-              </label>
+              <div class="settings-switch-row">
+                <label for="input-environment-info" class="settings-switch-row__label" data-i18n="settings.general.environment.toggle">Send environment information</label>
+                <span id="status-environment-info" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-environment-info" aria-describedby="hint-environment-info">
+              </div>
               <details id="hint-environment-info" class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n="settings.general.environment.note.summary">Gives the model the working directory, platform, shell and today&rsquo;s date.</span>
@@ -786,10 +790,11 @@
             </div>
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" data-i18n="settings.general.projectInstructions.label">Project instructions</div>
-              <label class="modal-checkbox">
-                <input type="checkbox" id="input-project-instructions" aria-describedby="hint-project-instructions">
-                <span data-i18n-html="settings.general.projectInstructions.toggle">Send <code lang="en">AGENTS.md</code></span>
-              </label>
+              <div class="settings-switch-row">
+                <label for="input-project-instructions" class="settings-switch-row__label" data-i18n-html="settings.general.projectInstructions.toggle">Send <code lang="en">AGENTS.md</code></label>
+                <span id="status-project-instructions" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-project-instructions" aria-describedby="hint-project-instructions">
+              </div>
               <details id="hint-project-instructions" class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n-html="settings.general.projectInstructions.note.summary">Puts the project instructions from <code lang="en">AGENTS.md</code> into the system prompt.</span>
@@ -818,12 +823,20 @@
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.theme.label">Appearance</div>
-              <label class="visually-hidden" for="select-app-theme" data-i18n="settings.general.theme.label">Appearance</label>
-              <select id="select-app-theme" class="modal-input">
-                <option value="light" data-i18n="settings.general.theme.light">Light</option>
-                <option value="dark" data-i18n="settings.general.theme.dark">Dark</option>
-              </select>
+              <div class="modal-field-label eyebrow-row" id="label-app-theme" data-i18n="settings.general.theme.label">Appearance</div>
+              <div class="settings-choice-row">
+                <div class="ds-segmented" id="choice-app-theme" role="radiogroup" aria-labelledby="label-app-theme">
+                  <label class="ds-segmented__option">
+                    <input type="radio" class="ds-segmented__input" name="app-theme" value="light">
+                    <span data-i18n="settings.general.theme.light">Light</span>
+                  </label>
+                  <label class="ds-segmented__option">
+                    <input type="radio" class="ds-segmented__input" name="app-theme" value="dark">
+                    <span data-i18n="settings.general.theme.dark">Dark</span>
+                  </label>
+                </div>
+                <span id="status-app-theme" class="settings-instant-status" role="status"></span>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light or dark interface &mdash; a button in the title bar up to v1.7.3.</span></summary>
                 <div class="settings-note__body" data-i18n-html="settings.general.theme.note.body">
@@ -835,12 +848,20 @@
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.locale.label">Interface language</div>
-              <label class="visually-hidden" for="select-app-locale" data-i18n="settings.general.locale.select">Language</label>
-              <select id="select-app-locale" class="modal-input">
-                <option value="de" lang="de" data-i18n="settings.general.locale.de">Deutsch</option>
-                <option value="en" lang="en" data-i18n="settings.general.locale.en">English</option>
-              </select>
+              <div class="modal-field-label eyebrow-row" id="label-app-locale" data-i18n="settings.general.locale.label">Interface language</div>
+              <div class="settings-choice-row">
+                <div class="ds-segmented" id="choice-app-locale" role="radiogroup" aria-labelledby="label-app-locale">
+                  <label class="ds-segmented__option" lang="en">
+                    <input type="radio" class="ds-segmented__input" name="app-locale" value="en">
+                    <span data-i18n="settings.general.locale.en">English</span>
+                  </label>
+                  <label class="ds-segmented__option" lang="de">
+                    <input type="radio" class="ds-segmented__input" name="app-locale" value="de">
+                    <span data-i18n="settings.general.locale.de">Deutsch</span>
+                  </label>
+                </div>
+                <span id="status-app-locale" class="settings-instant-status" role="status"></span>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary"><span data-i18n="settings.general.locale.note.summary">Takes effect at once &mdash; the interface switches language without a restart.</span></summary>
                 <div class="settings-note__body" data-i18n-html="settings.general.locale.note.body">

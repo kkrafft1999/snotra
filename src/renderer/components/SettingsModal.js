@@ -8,25 +8,28 @@ import {
   toolDetailText,
   toolStatusBadge,
 } from '../utils/tool-catalog-view.js';
+import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 
 /**
- * Bereiche, die **sofort** wirken statt erst mit „Uebernehmen": Berechtigungen
- * (Issue #67) und MCP (Issue #109). Beide gehoeren dem Main-Prozess, beide
- * schreiben beim Klick. Der Hinweis in der Fussleiste muss das sagen — sonst
- * verspricht er eine Sicherheit, die es hier nicht gibt.
+ * Sections that take effect **at once** rather than on Apply: permissions
+ * (issue #67), MCP (issue #109) and, since issue #297, memory. All of them
+ * write on the click. The hint in the footer has to say so — otherwise it
+ * promises a safety net that is not there.
  */
-const IMMEDIATE_PANELS = new Set(['permissions', 'mcp']);
+const IMMEDIATE_PANELS = new Set(['permissions', 'mcp', 'memory']);
 
 /**
- * The hint in the footer depends on the section. Memory is split (issue #166):
- * forgetting writes to the file at once, the switches belong to the draft.
- * Either standard sentence would be half the truth here — and the wrong half is
- * the one somebody reads before trying to get an entry back.
+ * The hint in the footer depends on the section. Since issue #297 memory is
+ * immediate throughout (forgetting and its switches), while tools and general
+ * are split: their switches — and in general the appearance and language —
+ * save at once, their text fields and lists wait for Apply. Either standard
+ * sentence would be half the truth there.
  */
 const APPLY_HINT_KEYS = {
   deferred: 'settings.applyHint.deferred',
   immediate: 'settings.applyHint.immediate',
-  memory: 'settings.applyHint.memory',
+  tools: 'settings.applyHint.tools',
+  general: 'settings.applyHint.general',
 };
 
 const SETTINGS_NAV_KEYS = ['models', 'tools', 'permissions', 'skills', 'memory', 'mcp', 'general'];
@@ -126,8 +129,9 @@ export function initSettingsModal(deps) {
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const btnSettingsFooterClose = document.getElementById('btn-settings-footer-close');
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
-  const selectAppLocale = document.getElementById('select-app-locale');
-  const selectAppTheme = document.getElementById('select-app-theme');
+  // Appearance and interface language take effect at once (issue #297).
+  const choiceAppLocale = document.getElementById('choice-app-locale');
+  const choiceAppTheme = document.getElementById('choice-app-theme');
   const selectSkillSuggestionMode = document.getElementById('settings-skill-suggestion-mode');
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
   const settingsToolList = document.getElementById('settings-tool-list');
@@ -139,9 +143,9 @@ export function initSettingsModal(deps) {
   const btnWebSearchClear = document.getElementById('btn-web-search-clear');
   const webSearchStatusEl = document.getElementById('settings-web-search-status');
   let webSearchHasKey = false;
-  // Python-Ausfuehrung (Issue #86): Schalter und Interpreter-Pfad haengen am
-  // Entwurf und werden mit „Uebernehmen" gespeichert; der gefundene
-  // Interpreter kommt direkt vom Main.
+  // Python execution (issue #86). The switch saves at once (issue #297); the
+  // interpreter path is still part of the draft that Apply saves. The
+  // interpreter that was found comes straight from main.
   const inputPythonEnabled = document.getElementById('input-python-enabled');
   const inputPythonInterpreter = document.getElementById('input-python-interpreter');
   const pythonStatusEl = document.getElementById('settings-python-status');
@@ -1341,8 +1345,8 @@ export function initSettingsModal(deps) {
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
       let hintKey = APPLY_HINT_KEYS.deferred;
-      if (activePanelKey === 'memory') hintKey = APPLY_HINT_KEYS.memory;
-      else if (IMMEDIATE_PANELS.has(activePanelKey)) hintKey = APPLY_HINT_KEYS.immediate;
+      if (IMMEDIATE_PANELS.has(activePanelKey)) hintKey = APPLY_HINT_KEYS.immediate;
+      else if (APPLY_HINT_KEYS[activePanelKey]) hintKey = APPLY_HINT_KEYS[activePanelKey];
       // The key moves into the attribute so that a language change with the
       // dialog open hits the same hint in the new language.
       applyHint.setAttribute('data-i18n-html', hintKey);
@@ -1370,15 +1374,6 @@ export function initSettingsModal(deps) {
    */
   function applyShellLocale(lc) {
     setLocale(lc);
-  }
-
-  /**
-   * Erscheinungsbild aus der Auswahl uebernehmen — wie die Sprache erst mit
-   * „Uebernehmen", damit ein abgebrochener Dialog nichts hinterlaesst.
-   */
-  function applyDraftTheme() {
-    if (!selectAppTheme || !setTheme) return;
-    setTheme(selectAppTheme.value === 'dark' ? 'dark' : 'light');
   }
 
   /**
@@ -1543,13 +1538,14 @@ export function initSettingsModal(deps) {
     }
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
     activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
+    for (const setting of instantSettings) setting.status.clear();
+    // The appearance is not in the UI prefs but in the renderer's
+    // localStorage (see ThemeManager.js).
+    themeChoice.set(getTheme?.() === 'dark' ? 'dark' : 'light');
     try {
       const up = await api.getUIPrefs();
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
-      selectAppLocale.value = up.appLocale === 'de' ? 'de' : 'en';
-      // Das Erscheinungsbild steht nicht in den UI-Prefs, sondern im
-      // localStorage des Renderers (siehe ThemeManager.js).
-      if (selectAppTheme) selectAppTheme.value = getTheme?.() === 'dark' ? 'dark' : 'light';
+      localeChoice.set(up.appLocale === 'de' ? 'de' : 'en');
       if (selectSkillSuggestionMode) {
         selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
           ? up.skillSuggestionMode
@@ -1563,30 +1559,28 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set(
         Array.isArray(up.disabledTools) ? up.disabledTools.filter((n) => typeof n === 'string') : []
       );
-      if (inputPythonEnabled) inputPythonEnabled.checked = up.pythonExecutionEnabled === true;
+      pythonSwitch.set(up.pythonExecutionEnabled === true);
       if (inputPythonInterpreter) {
         inputPythonInterpreter.value =
           typeof up.pythonInterpreterPath === 'string' ? up.pythonInterpreterPath : '';
       }
-      if (inputShellEnabled) inputShellEnabled.checked = up.shellExecutionEnabled === true;
-      if (inputEnvironmentInfo) inputEnvironmentInfo.checked = up.environmentInfoEnabled !== false;
-      if (inputProjectInstructions) {
-        inputProjectInstructions.checked = up.projectInstructionsEnabled !== false;
-      }
+      shellSwitch.set(up.shellExecutionEnabled === true);
+      environmentSwitch.set(up.environmentInfoEnabled !== false);
+      projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
     } catch {
       inputGlobalSystemPrompt.value = '';
       // Without readable preferences the dialog shows the language it is
       // currently standing in — not a third one nobody picked.
-      selectAppLocale.value = getLocale();
+      localeChoice.set(getLocale());
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(DEFAULT_MAX_TOOL_ROUNDS);
       settingsDisabledToolsDraft = new Set();
-      if (inputPythonEnabled) inputPythonEnabled.checked = false;
+      pythonSwitch.set(false);
       if (inputPythonInterpreter) inputPythonInterpreter.value = '';
-      if (inputShellEnabled) inputShellEnabled.checked = false;
-      // Beim Lesefehler die Voreinstellung zeigen, nicht „aus" — sonst
-      // schaltet ein blosses Oeffnen-und-Speichern den Block unbemerkt ab.
-      if (inputEnvironmentInfo) inputEnvironmentInfo.checked = true;
-      if (inputProjectInstructions) inputProjectInstructions.checked = true;
+      shellSwitch.set(false);
+      // On a read error show the default, not "off": the switch should not
+      // claim a state nobody chose.
+      environmentSwitch.set(true);
+      projectInstructionsSwitch.set(true);
     }
     await loadPythonState();
     await loadShellState();
@@ -1891,7 +1885,6 @@ export function initSettingsModal(deps) {
         providerPatches,
         uiPrefs: {
           baseSystemPrompt: inputGlobalSystemPrompt.value || '',
-          appLocale: selectAppLocale.value === 'de' ? 'de' : 'en',
           skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
           maxToolRounds: (() => {
             const n = parseInt(inputMaxToolRounds?.value || '', 10);
@@ -1899,12 +1892,7 @@ export function initSettingsModal(deps) {
           })(),
           disabledTools: [...settingsDisabledToolsDraft],
           activeSkills: [...settingsActiveSkillsDraft],
-          pythonExecutionEnabled: inputPythonEnabled?.checked === true,
           pythonInterpreterPath: inputPythonInterpreter?.value || '',
-          shellExecutionEnabled: inputShellEnabled?.checked === true,
-          environmentInfoEnabled: inputEnvironmentInfo?.checked !== false,
-          projectInstructionsEnabled: inputProjectInstructions?.checked !== false,
-          ...(memoryPanel?.readPrefs?.() || {}),
         },
       });
       if (res?.ok || res?.uiPrefsSaved) {
@@ -1914,18 +1902,9 @@ export function initSettingsModal(deps) {
         );
       }
       if (!res?.ok) {
-        // Der Modellteil kann scheitern, waehrend die uebrigen Einstellungen
-        // geschrieben wurden. Die Sprache muss dann auch sofort umschalten,
-        // obwohl der Dialog mit der Meldung offen bleibt (Issue #97).
-        if (res?.uiPrefsSaved) {
-          applyShellLocale(selectAppLocale.value);
-          applyDraftTheme();
-        }
         setModalError(res?.error || t('settings.saveFailed'));
         return;
       }
-      applyShellLocale(selectAppLocale.value);
-      applyDraftTheme();
       await refreshLLMState();
       closeSettingsModal();
     } finally {
@@ -2105,6 +2084,66 @@ export function initSettingsModal(deps) {
     }
   });
 
+  // Instant settings (issue #297): each one is written on its own through
+  // setUIPrefs, and the answer is checked — a store that did not take the
+  // value must not leave the switch saying it did.
+  async function saveUiPref(key, value) {
+    const prefs = await api.setUIPrefs({ [key]: value });
+    return prefs?.[key] === value;
+  }
+
+  function bindPrefSwitch(input, statusId, key, after) {
+    return bindInstantSwitch(input, document.getElementById(statusId), async (value) => {
+      const ok = await saveUiPref(key, value);
+      if (ok) await after?.();
+      return ok;
+    });
+  }
+
+  const localeChoice = bindInstantChoice(
+    choiceAppLocale,
+    document.getElementById('status-app-locale'),
+    async (lc) => {
+      const ok = await saveUiPref('appLocale', lc);
+      // Switch first, then report — the status speaks the new language.
+      if (ok) applyShellLocale(lc);
+      return ok;
+    }
+  );
+  const themeChoice = bindInstantChoice(
+    choiceAppTheme,
+    document.getElementById('status-app-theme'),
+    (mode) => (setTheme ? setTheme(mode) === mode : false)
+  );
+  const environmentSwitch = bindPrefSwitch(
+    inputEnvironmentInfo, 'status-environment-info', 'environmentInfoEnabled'
+  );
+  const projectInstructionsSwitch = bindPrefSwitch(
+    inputProjectInstructions, 'status-project-instructions', 'projectInstructionsEnabled'
+  );
+  // Both decide whether run_python / shell_execute are offered; the status
+  // line and the tool list follow what main now reports.
+  const pythonSwitch = bindPrefSwitch(
+    inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async () => {
+      await loadPythonState();
+      renderToolList();
+    }
+  );
+  const shellSwitch = bindPrefSwitch(
+    inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async () => {
+      await loadShellState();
+      renderToolList();
+    }
+  );
+  const instantSettings = [
+    localeChoice,
+    themeChoice,
+    environmentSwitch,
+    projectInstructionsSwitch,
+    pythonSwitch,
+    shellSwitch,
+  ];
+
   settingsToolList?.addEventListener('change', (e) => {
     const input = e.target.closest('input[type="checkbox"][data-tool-name]');
     if (!input) return;
@@ -2184,6 +2223,13 @@ export function initSettingsModal(deps) {
     // The open popup keeps its mode by itself: `setDialogMode` puts the key
     // into `data-i18n`, `applyTranslations` does the rest.
     applyTranslations(modalSettings);
+    // A "Not saved" left standing would keep the language it was written in;
+    // it belongs to an attempt that is over, so it goes rather than lingering
+    // half-translated. The one next to the language itself is written after
+    // the switch and is already in the new language — it stays.
+    for (const setting of instantSettings) {
+      if (setting !== localeChoice) setting.status.clear();
+    }
   });
 
   return { openSettingsModal, closeSettingsModal, applyShellLocale };

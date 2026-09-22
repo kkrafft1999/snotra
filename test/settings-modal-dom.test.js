@@ -13,6 +13,10 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   const dom = setupRendererDom();
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
   const { appStore } = await importRenderer('state', 'store.js');
+  // The fixture prefs say German, and the app starts in the stored language.
+  // Set it here: until #297 it leaked in from whichever test pressed Apply.
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('de', { force: true });
 
   appStore.llmState = {
     encryptionAvailable: true,
@@ -538,9 +542,18 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
   await flush();
   assert.match(hint(), /wirken sofort/);
 
+  // Memory is immediate throughout since #297; tools and general are split.
+  tabFor('memory').click();
+  await flush();
+  assert.match(hint(), /wirken sofort/);
+
+  tabFor('tools').click();
+  await flush();
+  assert.match(hint(), /Schalter wirken sofort, alles andere erst mit Übernehmen/);
+
   tabFor('general').click();
   await flush();
-  assert.match(hint(), /erst mit Übernehmen/);
+  assert.match(hint(), /Schalter, Erscheinungsbild und Sprache wirken sofort/);
 });
 
 test('der Dialog haengt am Menueeintrag statt an einem Knopf im Chat', async (t) => {
@@ -605,55 +618,154 @@ function mountMitTheme({ theme = 'light', ...overrides } = {}) {
   return { mounted, gesetzt };
 }
 
+/** Pick a segment the way a click does: check the radio, fire change. */
+function pick(name, value) {
+  const radio = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  radio.checked = true;
+  radio.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+const checkedValue = (name) => document.querySelector(`input[name="${name}"]:checked`)?.value;
+
 test('der Dialog zeigt das geltende Erscheinungsbild', async (t) => {
   const { mounted } = mountMitTheme({ theme: 'dark' });
   const { dom } = await mounted;
   t.after(dom.cleanup);
 
-  assert.equal(document.getElementById('select-app-theme').value, 'dark');
+  assert.equal(checkedValue('app-theme'), 'dark');
 });
 
-test('das gewaehlte Erscheinungsbild gilt erst mit „Uebernehmen"', async (t) => {
-  const { mounted, gesetzt } = mountMitTheme({ theme: 'light' });
-  const { dom } = await mounted;
-  t.after(dom.cleanup);
-
-  document.getElementById('select-app-theme').value = 'dark';
-  await flush();
-  assert.deepEqual(gesetzt, [], 'die Auswahl allein darf noch nichts umschalten');
-
-  document.getElementById('btn-settings-save').click();
-  await flush();
-  assert.deepEqual(gesetzt, ['dark']);
-});
-
-test('ein abgebrochener Dialog laesst das Erscheinungsbild in Ruhe', async (t) => {
-  const { mounted, gesetzt } = mountMitTheme({ theme: 'light' });
-  const { dom, modal } = await mounted;
-  t.after(dom.cleanup);
-
-  document.getElementById('select-app-theme').value = 'dark';
-  modal.closeSettingsModal();
-  await flush();
-
-  assert.deepEqual(gesetzt, []);
-});
-
-test('scheitert nur der Modellteil, schaltet das Erscheinungsbild trotzdem um', async (t) => {
-  // Wie bei der Sprache (Issue #97): Die UI-Einstellungen sind geschrieben,
-  // der Dialog bleibt mit der Meldung offen — dann muss das Fenster auch so
-  // aussehen, wie es gerade gespeichert wurde.
+test('das Erscheinungsbild wechselt sofort, ohne „Uebernehmen" (#297)', async (t) => {
+  let committed = 0;
   const { mounted, gesetzt } = mountMitTheme({
     theme: 'light',
-    commitSettings: async () => ({ ok: false, uiPrefsSaved: true, error: 'Modell kaputt' }),
+    commitSettings: async () => { committed += 1; return { ok: true }; },
   });
   const { dom } = await mounted;
   t.after(dom.cleanup);
 
-  document.getElementById('select-app-theme').value = 'dark';
-  document.getElementById('btn-settings-save').click();
+  pick('app-theme', 'dark');
   await flush();
 
   assert.deepEqual(gesetzt, ['dark']);
-  assert.match(document.getElementById('modal-save-error').textContent, /Modell kaputt/);
+  assert.equal(committed, 0, 'no Apply involved');
+  const status = document.getElementById('status-app-theme');
+  assert.equal(status.textContent, 'Gespeichert');
+  assert.ok(status.classList.contains('is-visible'));
+});
+
+test('die Sprache wird sofort gespeichert und umgeschaltet (#297)', async (t) => {
+  const patches = [];
+  const { dom } = await mountSettings({
+    setUIPrefs: async (patch) => { patches.push(patch); return { appLocale: 'de', ...patch }; },
+  });
+  t.after(dom.cleanup);
+  assert.equal(checkedValue('app-locale'), 'de');
+
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.deepEqual(patches, [{ appLocale: 'en' }]);
+  assert.equal(document.getElementById('settings-panel-heading').textContent, 'Models');
+  // The confirmation speaks the language that was just chosen.
+  assert.equal(document.getElementById('status-app-locale').textContent, 'Saved');
+});
+
+test('scheitert das Speichern der Sprache, springt die Auswahl zurueck (#297)', async (t) => {
+  const { dom } = await mountSettings({
+    setUIPrefs: async () => { throw new Error('disk full'); },
+  });
+  t.after(dom.cleanup);
+
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.equal(checkedValue('app-locale'), 'de');
+  assert.equal(document.getElementById('settings-panel-heading').textContent, 'Modelle');
+  const status = document.getElementById('status-app-locale');
+  assert.equal(status.textContent, 'Nicht gespeichert');
+  assert.ok(status.classList.contains('is-error'));
+});
+
+for (const [id, key] of [
+  ['input-environment-info', 'environmentInfoEnabled'],
+  ['input-project-instructions', 'projectInstructionsEnabled'],
+  ['input-python-enabled', 'pythonExecutionEnabled'],
+  ['input-shell-enabled', 'shellExecutionEnabled'],
+]) {
+  test(`der Schalter ${id} speichert sofort (#297)`, async (t) => {
+    const patches = [];
+    const { dom } = await mountSettings({
+      setUIPrefs: async (patch) => { patches.push(patch); return { ...patch }; },
+    });
+    t.after(dom.cleanup);
+    const input = document.getElementById(id);
+    assert.equal(input.getAttribute('role'), 'switch');
+
+    const before = input.checked;
+    input.click();
+    await flush();
+
+    assert.deepEqual(patches, [{ [key]: !before }]);
+    assert.equal(input.checked, !before);
+    assert.equal(document.getElementById(id.replace('input-', 'status-')).textContent, 'Gespeichert');
+  });
+}
+
+test('ein Schalter, den der Speicher nicht annimmt, springt zurueck (#297)', async (t) => {
+  // The store answers with the old value: no exception, but not stored either.
+  const { dom } = await mountSettings({
+    setUIPrefs: async () => ({ environmentInfoEnabled: true }),
+  });
+  t.after(dom.cleanup);
+  const input = document.getElementById('input-environment-info');
+  assert.equal(input.checked, true);
+
+  input.click();
+  await flush();
+
+  assert.equal(input.checked, true, 'back to what is stored');
+  assert.equal(document.getElementById('status-environment-info').textContent, 'Nicht gespeichert');
+});
+
+test('nach einem Fehlschlag steht der Schalter auf dem geladenen Wert (#297)', async (t) => {
+  // Not on the one the markup happened to carry: the dialog loaded "on", so
+  // that is where a rejected flip has to land.
+  const { dom } = await mountSettings({
+    getUIPrefs: async () => ({ baseSystemPrompt: '', appLocale: 'de', disabledTools: [], pythonExecutionEnabled: true }),
+    setUIPrefs: async () => { throw new Error('disk full'); },
+  });
+  t.after(dom.cleanup);
+  const input = document.getElementById('input-python-enabled');
+  assert.equal(input.checked, true, 'geladen: an');
+
+  input.click();
+  await flush();
+
+  assert.equal(input.checked, true);
+  assert.equal(document.getElementById('status-python-enabled').textContent, 'Nicht gespeichert');
+});
+
+test('„Uebernehmen" schickt die Sofort-Einstellungen nicht noch einmal mit (#297)', async (t) => {
+  let gesendet = null;
+  const { dom } = await mountSettings({
+    commitSettings: async (payload) => { gesendet = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  for (const key of [
+    'appLocale',
+    'environmentInfoEnabled',
+    'projectInstructionsEnabled',
+    'pythonExecutionEnabled',
+    'shellExecutionEnabled',
+    'memorySelfEnabled',
+    'memoryWorkspaceEnabled',
+    'memoryUserEnabled',
+  ]) {
+    assert.equal(key in gesendet.uiPrefs, false, `${key} must not travel with Apply`);
+  }
 });
