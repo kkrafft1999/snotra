@@ -24,8 +24,7 @@
 
 The name comes from Norse mythology: Snotra is the goddess of wisdom and
 prudence. It stands for an assistant that knows the context of its workspace
-and acts deliberately. Up to version 1.0.4 the project was called "Weyouze
-Anything".
+and acts deliberately.
 
 > Status: **personal hobby / experimentation project.** Interfaces, UI and
 > configuration may change at any time.

@@ -17,7 +17,7 @@
   - 🖥️ **IT:** Runbooks, Incident-Begleitung, Doku-Pflege
   - 👩‍💻 **Software-Engineering:** projektbezogene Code- und Repo-Assistenz
 
-Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der Klugheit und Besonnenheit. Er steht für einen Assistenten, der den Kontext seines Workspace kennt und überlegt handelt. Bis Version 1.0.4 hieß das Projekt „Weyouze Anything“.
+Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der Klugheit und Besonnenheit. Er steht für einen Assistenten, der den Kontext seines Workspace kennt und überlegt handelt.
 
 > Status: **persönliches Hobby- / Experimentier-Projekt.** Schnittstellen, UI und Konfiguration können sich jederzeit ändern.
 
