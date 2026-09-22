@@ -111,9 +111,14 @@ test('die Beschreibung fuer das Modell nennt die Grenze und den Skill', () => {
   const def = registryWith(makeMemoryStub()).getDefinition('remember');
   assert.match(def.modelDescription, /never passwords/i);
   assert.match(def.modelDescription, /snotra-memory/);
-  // Die Prompt-Zeile steht bei *jeder* Anfrage in der Tool-Liste und muss
-  // deshalb schon ohne den Skill sagen, wann das Tool gemeint ist.
-  assert.match(def.promptDescription, /merk dir/i);
+  // Die Kurzzeile in Einstellungen › Tools muss schon ohne den Skill sagen,
+  // wann das Tool gemeint ist — seit #291 in beiden Sprachen.
+  const kurz = (locale) => registryWith(makeMemoryStub())
+    .listCatalog({ locale })
+    .find((eintrag) => eintrag.name === 'remember')
+    .shortDescription;
+  assert.match(kurz('de'), /merk dir/i);
+  assert.match(kurz('en'), /remember/i);
 });
 
 /* ── Freigabekarte (Issue #166) ──────────────────────────────────────────── */

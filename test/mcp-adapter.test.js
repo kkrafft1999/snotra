@@ -70,18 +70,32 @@ test('Tools kommen mit Namensraum und beiden Mindestklassen', async () => {
 
 test('die Beschreibung nennt den Server, damit das Modell die Herkunft sieht', async () => {
   const [suche] = await definitionsOf(fakeService());
-  assert.match(suche.description, /MCP-Server „GitHub"/);
-  assert.match(suche.description, /Sucht in Repositories/);
-  // Im Systemprompt steht nur der erste Satz — die Liste soll lesbar bleiben.
-  assert.equal(suche.promptDescription, 'Sucht in Repositories. (MCP: GitHub)');
+  // Der Modell-Kanal ist englisch (#276) — der Text des Servers bleibt, wie er
+  // ist, nur der Rahmen darum ist unserer.
+  assert.match(suche.modelDescription, /Via the MCP server "GitHub"/);
+  assert.match(suche.modelDescription, /Sucht in Repositories/);
+
+  // Der Bildschirm bekommt denselben Rahmen aus dem Katalog (#291).
+  const katalog = (locale) => createToolRegistry([{ ...suche, handler: async () => '' }])
+    .listCatalog({ locale })[0];
+  assert.match(katalog('de').description, /Über den MCP-Server „GitHub“/);
+  assert.match(katalog('en').description, /Via the MCP server “GitHub”/);
+  assert.match(katalog('de').description, /Sucht in Repositories/);
+  // In der Liste steht nur der erste Satz — sie soll lesbar bleiben.
+  assert.equal(katalog('de').shortDescription, 'Sucht in Repositories. (MCP: GitHub)');
 });
 
 test('ein Tool ohne Beschreibung bekommt trotzdem einen brauchbaren Text', async () => {
   const [tool] = await definitionsOf(
     fakeService({ tools: [{ serverId: 'github', name: 'x', description: '', inputSchema: {} }] }),
   );
-  assert.match(tool.description, /Kein Beschreibungstext vom Server/);
-  assert.match(tool.promptDescription, /MCP-Servers „GitHub"/);
+  assert.match(tool.modelDescription, /No description text from the server/);
+  const katalog = (locale) => createToolRegistry([{ ...tool, handler: async () => '' }])
+    .listCatalog({ locale })[0];
+  assert.match(katalog('de').description, /Kein Beschreibungstext vom Server/);
+  assert.match(katalog('en').description, /No description text from the server/);
+  assert.match(katalog('de').shortDescription, /MCP-Servers „GitHub“/);
+  assert.match(katalog('en').shortDescription, /MCP server “GitHub”/);
 });
 
 test('zu lange Namen werden ausgelassen und benannt, nicht gekürzt', async () => {

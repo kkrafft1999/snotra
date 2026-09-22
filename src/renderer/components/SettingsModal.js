@@ -2172,7 +2172,11 @@ export function initSettingsModal(deps) {
     if (modalSettings.classList.contains('hidden')) return;
     activateSettingsPanel(activePanelKey);
     renderDraftPresetList();
-    renderToolList();
+    // Die Tool-Beschreibungen stehen im Main-Prozess und kommen in der
+    // gespeicherten Sprache zurueck (#291) — hier reicht kein Neuzeichnen, die
+    // Liste muss neu geholt werden. Der Main hat die neue Sprache bereits
+    // geschrieben, bevor dieser Rueckruf laeuft.
+    void loadToolCatalog();
     renderSkillList();
     syncWebSearchUI({ encryptionAvailable: appStore.llmState.encryptionAvailable !== false });
     void loadPythonState();

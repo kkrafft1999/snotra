@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
 const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'js', 'ts', 'jsx', 'tsx', 'json', 'html', 'htm', 'css',
@@ -27,11 +28,39 @@ export function isTextFile(filename) {
   return TEXT_EXTENSIONS.has(ext);
 }
 
+/**
+ * Dateigröße für die Oberfläche. Die Einheiten heißen in beiden Sprachen
+ * gleich; das Dezimaltrennzeichen nicht, und das kommt seit #292 aus dem
+ * Katalog. Gegenstück im Main-Prozess: `shared/runtime/format-bytes.js`.
+ */
 export function formatSize(bytes) {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  const value = (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1);
+  return `${value.replace('.', t('format.decimal'))} ${units[i]}`;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * Zeitpunkt für die Oberfläche: „21.09.2026, 14:32“ auf Deutsch,
+ * „2026-09-21, 14:32“ auf Englisch. Von Hand statt über `toLocaleString`, wie
+ * im Main-Prozess (`main/services/file-info.js`) — beide Stellen zeigen
+ * denselben Zeitpunkt, und dann sollen sie ihn auch gleich schreiben (#292).
+ */
+export function formatTimestamp(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  const ms = date.getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return t('fileInfo.unknown');
+  const day = t('format.date', {
+    day: pad2(date.getDate()),
+    month: pad2(date.getMonth() + 1),
+    year: String(date.getFullYear()),
+  });
+  return `${day}, ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 /**

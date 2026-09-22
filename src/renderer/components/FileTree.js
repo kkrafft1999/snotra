@@ -1,7 +1,9 @@
+import { t, onLocaleChange } from '../i18n.js';
 import {
   isTextFile,
   getExtension,
   formatSize,
+  formatTimestamp,
   svgAt,
   svgChevron,
   svgFolder,
@@ -82,6 +84,11 @@ export function initFileTree(deps) {
   // Laeuft gerade ein Import von aussen? Verhindert einen zweiten Drop,
   // waehrend noch kopiert wird (#101).
   let importInFlight = false;
+  // Was gerade in der mittleren Spalte steht. Gemerkt, weil ein Sprachwechsel
+  // Groesse, Datum und Typ neu schreiben muss und die Werte sonst nur noch im
+  // DOM stuenden — als fertiger Text in der alten Sprache (#292).
+  let shownInfo = null;
+  let shownPreviewSize = null;
 
   function resetDragState() {
     clearDragVisualState();
@@ -206,7 +213,7 @@ export function initFileTree(deps) {
     if (!paths.length) {
       const empty = document.createElement('div');
       empty.className = 'folder-history-empty';
-      empty.textContent = 'Noch keine zuletzt geöffneten Ordner.';
+      empty.textContent = t('sidebar.history.empty');
       folderHistoryMenu.appendChild(empty);
       return;
     }
@@ -240,8 +247,8 @@ export function initFileTree(deps) {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'folder-history-item-remove';
-      remove.title = 'Aus Verlauf entfernen';
-      remove.setAttribute('aria-label', `${displayName} aus Verlauf entfernen`);
+      remove.title = t('sidebar.history.remove');
+      remove.setAttribute('aria-label', t('sidebar.history.remove.label', { name: displayName }));
       remove.innerHTML =
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
@@ -511,8 +518,9 @@ export function initFileTree(deps) {
     btn.type = 'button';
     btn.className = 'tree-item-reference';
     btn.draggable = false;
-    btn.setAttribute('aria-label', `${item.name} im Chat referenzieren`);
-    btn.title = 'Im Chat referenzieren';
+    btn.dataset.itemName = item.name;
+    btn.setAttribute('aria-label', t('tree.reference.label', { name: item.name }));
+    btn.title = t('tree.reference');
     btn.innerHTML = svgAt();
     btn.addEventListener('click', (e) => {
       // Ohne stopPropagation würde die Zeile zusätzlich auswählen bzw. aufklappen.
@@ -782,6 +790,7 @@ export function initFileTree(deps) {
     filePreview.classList.remove('hidden');
     fileInfo.classList.add('hidden');
     previewFilename.textContent = basenameOf(absPath);
+    shownPreviewSize = result.size;
     previewMeta.textContent = formatSize(result.size);
     previewContent.textContent = result.content;
   }
@@ -1015,6 +1024,8 @@ export function initFileTree(deps) {
       filePreview.classList.remove('hidden');
       fileInfo.classList.add('hidden');
       previewFilename.textContent = item.name;
+      shownInfo = null;
+      shownPreviewSize = result.size;
       previewMeta.textContent = formatSize(result.size);
       previewContent.textContent = result.content;
     } else {
@@ -1025,11 +1036,39 @@ export function initFileTree(deps) {
   function showFileInfo(item, errorMsg) {
     filePreview.classList.add('hidden');
     fileInfo.classList.remove('hidden');
+    shownInfo = { item, errorMsg };
+    shownPreviewSize = null;
     infoFilename.textContent = item.name;
+    // Ein Fehlertext kommt aus dem Main-Prozess und steht schon in der
+    // richtigen Sprache — der Sprachwechsel unten holt ihn deshalb neu.
     infoSize.textContent = errorMsg || formatSize(item.size);
-    infoModified.textContent = new Date(item.modified).toLocaleString('de-DE');
-    infoType.textContent = getExtension(item.name) || 'Unbekannt';
+    infoModified.textContent = formatTimestamp(item.modified);
+    infoType.textContent = getExtension(item.name) || t('fileInfo.type.unknown');
   }
+
+  /**
+   * Sprachwechsel (Epic #277). Der Rahmen des Baums traegt `data-i18n` und
+   * wird von `applyTranslations` erledigt; hier stehen die Stellen, die zur
+   * Laufzeit gebaut werden — die Beschriftungen der Zeilen, das Verlaufsmenue
+   * und die mittlere Spalte, deren Zahlen und Datumsangaben der Sprache folgen.
+   */
+  onLocaleChange(() => {
+    if (!appStore.rootPath) projectName.textContent = t('sidebar.noFolder');
+    for (const btn of treeContainer.querySelectorAll('.tree-item-reference')) {
+      const name = btn.dataset.itemName || '';
+      btn.setAttribute('aria-label', t('tree.reference.label', { name }));
+      btn.title = t('tree.reference');
+    }
+    if (!folderHistoryMenu.classList.contains('hidden')) void refreshFolderHistory();
+    if (shownInfo) {
+      // Der Fehlertext kam aus dem Main-Prozess: neu lesen statt den alten
+      // Wortlaut stehen zu lassen. Ohne Fehler kostet das Neuzeichnen nichts.
+      if (shownInfo.errorMsg) void showFileContent(shownInfo.item);
+      else showFileInfo(shownInfo.item);
+    } else if (shownPreviewSize !== null) {
+      previewMeta.textContent = formatSize(shownPreviewSize);
+    }
+  });
 
   return {
     openProject,

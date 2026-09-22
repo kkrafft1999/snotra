@@ -32,6 +32,12 @@ module.exports = {
   'sidebar.recentFolders': 'Zuletzt geöffnete Ordner',
   'sidebar.openFolder': 'Ordner öffnen',
   'sidebar.resize': 'Breite der Seitenleiste',
+  'sidebar.history.empty': 'Noch keine zuletzt geöffneten Ordner.',
+  'sidebar.history.remove': 'Aus Verlauf entfernen',
+  'sidebar.history.remove.label': '{name} aus dem Verlauf entfernen',
+  'tree.reference': 'Im Chat referenzieren',
+  'tree.reference.label': '{name} im Chat referenzieren',
+  'fileInfo.type.unknown': 'Unbekannt',
 
   // ── Welcome screen ─────────────────────────────────────────────────────────
   'welcome.headline': 'Womit fangen wir an?',
@@ -45,10 +51,73 @@ module.exports = {
   'welcome.action.test': 'Tests vorschlagen',
   'welcome.action.doc': 'Doku zusammenfassen',
 
-  // ── File info ──────────────────────────────────────────────────────────────
-  'fileInfo.size': 'Größe',
-  'fileInfo.modified': 'Geändert',
-  'fileInfo.type': 'Typ',
+
+  // ── File information (native dialog, main process) ───────────────────────
+  // Numbers and dates are formatted by hand rather than through Intl/ICU, so
+  // the output does not depend on the ICU build of the Node version in use
+  // (#123). What differs per language therefore lives here: the group
+  // separator, the decimal separator and the shape of the date.
+  'fileInfo.unknown': 'unbekannt',
+  'fileInfo.field.name': 'Name',
+  'fileInfo.field.path': 'Pfad',
+  'fileInfo.field.type': 'Typ',
+  'fileInfo.field.contents': 'Inhalt',
+  'fileInfo.field.size': 'Größe',
+  'fileInfo.field.modified': 'Geändert',
+  'fileInfo.field.created': 'Erstellt',
+  'fileInfo.field.openWith': 'Öffnen mit',
+  'fileInfo.type.folder': 'Ordner',
+  'fileInfo.type.file': 'Datei',
+  'fileInfo.type.fileWithExtension': 'Datei (.{extension})',
+  'fileInfo.type.symlink.toFolder': 'Verknüpfung → {target} auf Ordner',
+  'fileInfo.type.symlink.toFile': 'Verknüpfung → {target} auf Datei',
+  'fileInfo.type.symlink.broken': 'Verknüpfung → {target} (Ziel nicht erreichbar)',
+  'fileInfo.type.symlink.plain.toFolder': 'Verknüpfung auf Ordner',
+  'fileInfo.type.symlink.plain.toFile': 'Verknüpfung auf Datei',
+  'fileInfo.type.symlink.plain.broken': 'Verknüpfung (Ziel nicht erreichbar)',
+  'fileInfo.entries.one': '{count} Eintrag (direkt)',
+  'fileInfo.entries.other': '{count} Einträge (direkt)',
+  'fileInfo.bytes.one': '{count} Byte',
+  'fileInfo.bytes.other': '{count} Bytes',
+  // Thousands separator, decimal separator, and the date: English keeps the
+  // ISO order, which is the only spelling nobody misreads as month-first.
+  'format.group': '.',
+  'format.decimal': ',',
+  'format.date': '{day}.{month}.{year}',
+
+  // ── File tree: file system errors and the import dialog ──────────────────
+  // What the *model* gets back from a tool call is a different channel and
+  // stays English for its own reason (#276) — these are the messages the user
+  // sees in the tree, in the preview and in the native import dialog.
+  'fs.error.destNotFolder': 'Das Ziel ist kein Ordner.',
+  'fs.error.alreadyInFolder': 'Die Quelle liegt bereits in diesem Ordner.',
+  'fs.error.moveIntoItself': 'Ein Ordner kann nicht in sich selbst verschoben werden.',
+  'fs.error.copyIntoItself': 'Ein Ordner kann nicht in sich selbst kopiert werden.',
+  'fs.error.noSource': 'Nichts zum Übernehmen da.',
+  'fs.error.sourceNotAbsolute': 'Die Quelle ist kein absoluter Pfad: {path}',
+  'fs.error.sourceNotFound': 'Quelle nicht gefunden: {path}',
+  'fs.error.tooManyEntries': 'Zu viele Einträge auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
+  'fs.error.tooMuchData': 'Zu viele Daten auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
+  'fs.error.copyFailed': 'Kopieren fehlgeschlagen: {error}',
+  'fs.error.previewTooLarge': 'Datei zu groß für die Vorschau',
+
+  'import.count.dirs.one': '{count} Ordner',
+  'import.count.dirs.other': '{count} Ordner',
+  'import.count.files.one': '{count} Datei',
+  'import.count.files.other': '{count} Dateien',
+  'import.summary.join': ' und ',
+  'import.skipped.symlinks.one': '{count} Verknüpfung wird übersprungen.',
+  'import.skipped.symlinks.other': '{count} Verknüpfungen werden übersprungen.',
+  'import.skipped.sensitive.one': '{count} Datei sieht nach Zugangsdaten aus und wird übersprungen.',
+  'import.skipped.sensitive.other': '{count} Dateien sehen nach Zugangsdaten aus und werden übersprungen.',
+  'import.confirm.message': '{summary} nach „{target}“ kopieren?',
+  'import.confirm.copy': 'Kopieren',
+  'import.confirm.cancel': 'Abbrechen',
+  'import.ok': 'OK',
+  'import.failed.title': 'Übernehmen fehlgeschlagen',
+  'import.impossible.title': 'Übernehmen nicht möglich',
+  'import.noDialog': 'Bestätigung nicht verfügbar.',
+  'import.noContextMenu': 'Kontextmenü nicht verfügbar.',
 
   // ── Chat column ────────────────────────────────────────────────────────────
   'chat.resize': 'Breite des Chat-Bereichs',
@@ -521,6 +590,73 @@ module.exports = {
   'tools.gate.shell': 'Ohne erlaubte und gefundene Shell wird das Tool dem Modell nicht angeboten (siehe „Shell-Befehle ausführen“).',
   'tools.gate.webSearch': 'Ohne Tavily-Schlüssel wird das Tool dem Modell nicht angeboten (siehe „Websuche“ weiter unten).',
   'tools.gate.keyMissing': 'Schlüssel fehlt',
+
+  // ── Tool catalogue (descriptions, Settings › Tools) ──────────────────────
+  // Per tool a short line for the collapsed row (`tools.short.…`) and the full
+  // text behind the chevron (`tools.desc.…`). What the *model* reads is a
+  // third text and lives in `workspace-tool-registry.js` as `modelDescription`
+  // — English for a different reason (#276), and deliberately shorter.
+  'tools.short.read_file_text': 'Liest Textdateien innerhalb des Projektordners.',
+  'tools.desc.read_file_text': 'Liest den Textinhalt einer Datei als UTF-8 (nur innerhalb des Projektordners). Maximale Dateigröße: 2 MB — größere Dateien liefern einen Fehler.',
+
+  'tools.short.read_file_lines': 'Liest gezielt Zeilen- oder Byte-Ausschnitte aus Textdateien des Projektordners (Zeilen nummeriert).',
+  'tools.desc.read_file_lines': 'Liest gezielt einen Ausschnitt einer Textdatei (UTF-8, nur innerhalb des Projektordners): entweder einen Zeilenbereich (start_line/end_line, 1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). Im Zeilenmodus ist jeder Zeile ihre Zeilennummer plus Tabulator vorangestellt — passend zu Treffern aus search_in_files. Token-sparsamer als read_file_text, wenn nur ein Teil der Datei gebraucht wird. Maximale Dateigröße: 2 MB.',
+
+  'tools.short.search_in_files': 'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
+  'tools.desc.search_in_files': 'Durchsucht Textdateien im Projektordner rekursiv nach einem Suchtext oder regulären Ausdruck und liefert nur Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien. Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie binäre und zu große Dateien. Jede Zeile wird nur bis 10.000 Zeichen geprüft; reguläre Ausdrücke laufen mit einem Zeitbudget von 5 s pro Suche.',
+
+  'tools.short.find_files': 'Findet Datei- und Ordnerpfade im Projektordner per Glob-Muster (z. B. "**/*.js").',
+  'tools.desc.find_files': 'Findet Dateien und Ordner im Projektordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ein Aufruf statt vieler list_directory-Runden. Muster in gitignore-Syntax (*, ?, **); Muster mit / sind am Projektroot verankert, ein abschließendes / findet nur Ordner. Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git.',
+
+  'tools.short.stat_path': 'Liefert Metadaten (Existenz, Typ, Größe, Änderungszeit, optional Zeilenzahl) zu Pfaden im Projektordner, ohne Dateiinhalt.',
+  'tools.desc.stat_path': 'Liefert Metadaten zu einem Pfad im Projektordner, ohne die Datei zu lesen: Existenz, Typ (Datei/Ordner), Größe in Bytes, Änderungszeitpunkt (ISO 8601) und auf Wunsch die Zeilenzahl. Token-sparsam, um vor dem Lesen zu entscheiden, ob und wie gelesen werden sollte — z. B. bei großen Dateien read_file_lines statt read_file_text.',
+
+  'tools.short.outline_file': 'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
+  'tools.desc.outline_file': 'Liefert die Gliederung einer Datei im Projektordner mit Zeilennummern, ohne den Inhalt zu lesen: bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen (Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
+
+  'tools.short.list_directory_tree': 'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
+  'tools.desc.list_directory_tree': 'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler list_directory-Runden. Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
+
+  'tools.short.write_file_text': 'Erstellt oder überschreibt Textdateien im Projektordner.',
+  'tools.desc.write_file_text': 'Erstellt oder überschreibt eine Textdatei (UTF-8) innerhalb des geöffneten Projektordners. Fehlende Zwischenordner werden automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig. Maximale Inhaltsgröße: 2 MB.',
+
+  'tools.short.edit_file': 'Ersetzt gezielt Textstellen in Dateien des Projektordners (old_string → new_string), ohne die ganze Datei neu zu schreiben.',
+  'tools.desc.edit_file': 'Ersetzt in einer Textdatei (UTF-8, nur innerhalb des Projektordners) gezielt eine Textstelle: old_string wird durch new_string ersetzt, ohne die Datei komplett neu zu schreiben. old_string muss exakt und eindeutig vorkommen — inklusive Einrückung und Zeilenumbrüchen; bei mehreren Treffern mehr Kontext angeben oder replace_all=true setzen. Maximale Dateigröße: 2 MB.',
+
+  'tools.short.apply_patch': 'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
+  'tools.desc.apply_patch': 'Ändert bestehende Textdateien (UTF-8, nur innerhalb des Projektordners) mit mehreren zusammenhängenden Änderungen in einem Aufruf — entweder als Liste von Ersetzungen (edits, alle in derselben Datei, in dieser Reihenfolge angewendet) oder als unified diff (patch, auch über mehrere Dateien hinweg). Alles oder nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. Jede Datei wird für sich atomar ersetzt (nie halb geschrieben); über mehrere Dateien hinweg gilt das nicht — scheitert ein Schreibvorgang, werden bereits geschriebene Dateien zurückgesetzt. Für eine einzelne Ersetzung ist edit_file einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann apply_patch nicht. Maximale Dateigröße: 2 MB.',
+
+  'tools.short.run_python': 'Führt Python-3-Code aus und liefert Ausgabe und Exit-Code zurück. Zum Rechnen und Prüfen benutzen, statt Ergebnisse selbst zu schätzen.',
+  'tools.desc.run_python': 'Führt ein Python-3-Programm aus und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. Arbeitsverzeichnis ist der geöffnete Projektordner, „open(\'daten.csv\')“ funktioniert also direkt. Nutze das Tool, statt zu rechnen oder zu raten: Auswertungen über Dateien, Umrechnungen, Datenumformung, das Prüfen von regulären Ausdrücken oder Datenformaten. Jeder Aufruf ist ein frisches Skript — es gibt keinen Zustand zwischen zwei Aufrufen, und nur die Standardbibliothek ist garantiert vorhanden. Kein „pip install“.',
+
+  'tools.short.shell_execute': 'Führt einen Befehl in der Shell des Betriebssystems aus (git, npm, installierte CLI-Werkzeuge) und liefert Ausgabe und Exit-Code zurück.',
+  'tools.desc.shell_execute': 'Führt einen Befehl in der Shell des Betriebssystems aus (macOS/Linux in der Login-Shell des Nutzers, Windows in PowerShell bzw. cmd.exe) und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. Damit ist alles erreichbar, was der Nutzer im Terminal tun würde: „git status“, „npm run build“, „docker ps“, ein installiertes CLI-Werkzeug. Arbeitsverzeichnis ist der geöffnete Projektordner oder ein Unterordner davon. Ein Befehl pro Aufruf und kein Zustand zwischen zwei Aufrufen: ein „cd“ wirkt nur innerhalb desselben Befehls (verkette stattdessen mit && oder setze cwd). Nicht interaktiv — es gibt kein Terminal, auf eine Eingabeaufforderung zu warten läuft ins Zeitlimit; nutze nicht-interaktive Schalter und gib Eingaben über stdin mit. Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Jeder Lauf braucht die Freigabe des Nutzers.',
+
+  'tools.short.web_search': 'Sucht im Internet und liefert Titel, URL und einen kurzen Auszug je Treffer. Zum Lesen einer Seite im Volltext ist es nicht gedacht.',
+  'tools.desc.web_search': 'Sucht im Internet und liefert eine kompakte Trefferliste (Titel, URL, kurzer Auszug, ggf. Datum) — keine ganzen Seiten. Nutze das Tool für alles, was aktueller ist als dein Wissensstand oder was du belegen sollst: Versionen, Preise, Nachrichten, Fehlermeldungen, Normen. Die Suchanfrage verlässt den Rechner und geht an einen externen Suchdienst.',
+
+  'tools.short.fetch_url': 'Liest eine Webseite als Text. Für Inhalte, die über den kurzen Auszug aus web_search hinausgehen.',
+  'tools.desc.fetch_url': 'Ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite als Markdown-nahen Fliesstext, gekürzt auf die gewünschte Länge. Gedacht als Ergänzung zu web_search: dort die Adresse finden, hier die Seite am Stück lesen. Lokale und private Adressen werden abgelehnt, ebenso alles, was kein Text ist (PDF, Bilder, Downloads). Der Abruf verlässt den Rechner.',
+
+  'tools.short.remember': 'Merkt sich einen Satz dauerhaft — auf Bitte des Nutzers („merk dir …“) oder bei Dauerhaftem, das dir auffällt. Regeln dazu im Skill „snotra-memory“.',
+  'tools.desc.remember': 'Merkt sich einen einzelnen Satz dauerhaft, über das Ende dieser Unterhaltung hinaus. Der Eintrag landet in einer memory.md — je nach Ebene im geöffneten Ordner (.agents/memory.md, gilt nur für dieses Projekt) oder im Benutzerverzeichnis (~/.snotra/memory.md, gilt überall) — und steht ab der nächsten Nachricht in jedem Systemprompt. Gedacht für Dauerhaftes: Konventionen, Befehle, Vorlieben, Entscheidungen samt Begründung. Nicht für den Stand von gerade eben und nichts, was in einer Datei des Projekts besser aufgehoben wäre. Passwörter, Schlüssel und Zugangsdaten niemals.',
+
+  // Grundausstattung (#195): steht nicht in der Tool-Liste, traegt die Texte
+  // aber mit, damit ein wieder abwaehlbares Tool nicht ohne Beschreibung
+  // dasteht.
+  'tools.short.list_directory': 'Listet Dateien und Unterordner im Projektordner auf.',
+  'tools.desc.list_directory': 'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
+
+  'tools.short.load_skill': 'Lädt die Anleitung eines eingeschalteten Skills nach.',
+  'tools.desc.load_skill': 'Lädt die vollständige Anleitung eines eingeschalteten Skills. Im Prompt steht je Skill nur eine kurze Beschreibung — passt sie zu dem, was ansteht, hole dir hiermit die Anleitung, bevor du mit der Aufgabe beginnst, und richte dich danach. Rate nicht, was in einer Anleitung stehen könnte.',
+
+  // MCP tools carry the text of their server, which nobody here can translate.
+  // What is translated is the frame around it — and only for the screen: the
+  // model gets the same frame in English via `modelDescription`.
+  'tools.mcp.desc': 'Über den MCP-Server „{server}“. {text}',
+  'tools.mcp.desc.empty': 'Über den MCP-Server „{server}“. Kein Beschreibungstext vom Server.',
+  'tools.mcp.short': '{text} (MCP: {server})',
+  'tools.mcp.short.empty': 'Tool des MCP-Servers „{server}“.',
 
   // ── Application menu (main process) ────────────────────────────────────────
   'menu.settings': 'Einstellungen…',
