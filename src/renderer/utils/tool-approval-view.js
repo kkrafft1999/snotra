@@ -9,7 +9,7 @@
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
 import contracts from '../generated/contracts.js';
-import { t } from '../i18n.js';
+import { t, tMessage } from '../i18n.js';
 
 const {
   TOOL_PERMISSION_MODES,
@@ -243,7 +243,12 @@ export function buildApprovalCardView(dto) {
     classes: classes.map((value) => ({ value, label: riskClassLabel(value) })),
     classText: classes.map(riskClassLabel).join(', ') || riskClassLabel(TOOL_RISK_CLASSES.READ),
     targets,
-    reason: typeof dto.reason === 'string' ? dto.reason : '',
+    // The reason arrives as a list of descriptors (#290); a producer that has
+    // not been converted still hands over a finished sentence, and `tMessage`
+    // lets that through.
+    reason: Array.isArray(dto.reasonParts) && dto.reasonParts.length > 0
+      ? dto.reasonParts.map(tMessage).filter(Boolean).join(' ')
+      : tMessage(dto.reason),
     sensitive,
     providerLabel: typeof dto.providerLabel === 'string' ? dto.providerLabel : '',
     warning: overwriteWarning(dto),
@@ -265,7 +270,8 @@ export function buildApprovalCardView(dto) {
   };
   if (dto.sessionAllowed === true) {
     const parts = [];
-    if (typeof dto.sessionScopeLabel === 'string' && dto.sessionScopeLabel) parts.push(dto.sessionScopeLabel);
+    const scope = tMessage(dto.sessionScope || dto.sessionScopeLabel);
+    if (scope) parts.push(scope);
     if (classes.includes(TOOL_RISK_CLASSES.WRITE)) {
       // Without a file target the allowance belongs to the tool, not to a
       // target — "to exactly these targets" would contradict the sentence

@@ -46,16 +46,20 @@ async function openSettings() {
   await wait(600);
 }
 
-/** Sprache umstellen: Die Wahl wirkt erst mit „Übernehmen“ — das schliesst den Dialog. */
 async function applyLocale(locale) {
   await openSettings();
   await page.evaluate(() =>
     document.querySelector('.settings-nav-item[data-settings-panel="general"]').click());
   await wait(200);
+  // Seit #298 ist die Sprache ein Segmented Control und wirkt sofort — kein
+  // „Übernehmen" mehr, der Dialog wird einfach wieder geschlossen.
   await page.evaluate((value) => {
-    document.getElementById('select-app-locale').value = value;
+    const input = document.querySelector(`#choice-app-locale input[value="${value}"]`);
+    input.checked = true;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   }, locale);
-  await page.evaluate(() => document.getElementById('btn-settings-save').click());
+  await wait(400);
+  await page.evaluate(() => document.getElementById('btn-settings-close').click());
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geschlossener Einstellungsdialog' });

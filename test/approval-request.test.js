@@ -14,36 +14,53 @@ const {
   redactedToolContent,
 } = require('../src/application/permissions/sensitive-redaction');
 const { SENSITIVE_CONTENT_REDACTED_TEXT } = require('../src/shared/contracts/tool-permissions');
+const { translateMessage } = require('../src/shared/i18n');
+
+// Seit #290 liefern die beiden Beschreiber Katalogschluessel statt Saetze —
+// gesprochen wird erst beim Anzeigen. Der Test liest sie hier in beiden
+// Sprachen aus, damit der Wortlaut geprueft bleibt.
+const reasonIn = (locale, options) =>
+  describeApprovalReason(options).map((m) => translateMessage(locale, m)).join(' ');
+const scopeIn = (locale, options) => translateMessage(locale, describeSessionScope(options));
 
 test('Begründung folgt dem Wortlaut des Konzepts je Modus und Klasse', () => {
+  // Der Modusname steckt als Schluessel in den Parametern und wird beim
+  // Uebersetzen eingesetzt — deshalb steht „Smart" englisch und „Intelligent"
+  // deutsch im selben Satz.
+  assert.deepEqual(describeApprovalReason({ mode: 'smart', askClasses: ['write'] }), [
+    { key: 'approval.reason.write', params: { modeKey: 'permissions.mode.smart' } },
+  ]);
   assert.equal(
-    describeApprovalReason({ mode: 'smart', askClasses: ['write'] }),
+    reasonIn('en', { mode: 'smart', askClasses: ['write'] }),
+    'In “Smart” mode, file changes need an approval.'
+  );
+  assert.equal(
+    reasonIn('de', { mode: 'smart', askClasses: ['write'] }),
     'Im Modus „Intelligent“ benötigen Dateiänderungen eine Freigabe.'
   );
-  assert.match(describeApprovalReason({ mode: 'ask-all', askClasses: ['read'] }), /Der Modus „Immer fragen“ fragt bei jedem Tool-Aufruf\./);
+  assert.match(reasonIn('de', { mode: 'ask-all', askClasses: ['read'] }), /Der Modus „Immer fragen“ fragt bei jedem Tool-Aufruf\./);
   assert.equal(
-    describeApprovalReason({ mode: 'smart', askClasses: ['read-sensitive'], providerLabel: 'openai' }),
+    reasonIn('de', { mode: 'smart', askClasses: ['read-sensitive'], providerLabel: 'openai' }),
     'Diese Datei kann Zugangsdaten enthalten. Der freigegebene Inhalt wird an openai übermittelt.'
   );
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: ['read-sensitive'], checkpoint: 'output' }), /zurückgehalten/);
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: ['delete'] }), /ohne dass eine Wiederherstellungskopie/);
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: ['write'], recovery: 'trash' }), /Papierkorb/);
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: ['execute'] }), /Programm/);
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: ['external'] }), /externen Dienst/);
-  assert.match(describeApprovalReason({ mode: 'smart', askClasses: [] }), /benötigt dieser Aufruf eine Freigabe/);
+  assert.match(reasonIn('en', { mode: 'smart', askClasses: ['read-sensitive'] }), /the chosen provider/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: ['read-sensitive'], checkpoint: 'output' }), /zurückgehalten/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: ['delete'] }), /ohne dass eine Wiederherstellungskopie/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: ['write'], recovery: 'trash' }), /Papierkorb/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: ['execute'] }), /Programm/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: ['external'] }), /externen Dienst/);
+  assert.match(reasonIn('de', { mode: 'smart', askClasses: [] }), /benötigt dieser Aufruf eine Freigabe/);
 });
 
 test('Sitzungsumfang nennt Tool, exakte Ziele und Klassen', () => {
-  assert.equal(
-    describeSessionScope({ tool: 'edit_file', targets: [{ path: 'a.js' }, 'b.js'], riskClasses: ['write'] }),
-    'Gilt in dieser Sitzung für edit_file auf genau a.js, b.js (Ändern).'
-  );
+  const write = { tool: 'edit_file', targets: [{ path: 'a.js' }, 'b.js'], riskClasses: ['write'] };
+  assert.equal(scopeIn('de', write), 'Gilt in dieser Sitzung für edit_file auf genau a.js, b.js (Ändern).');
+  assert.equal(scopeIn('en', write), 'Applies in this session to edit_file on exactly a.js, b.js (Change).');
   // Ohne Pfade haengt die Freigabe am Tool statt an einem Ziel — „auf genau
   // ohne Dateiziel" waere kein deutscher Satz (#166).
-  assert.equal(
-    describeSessionScope({ tool: 'web_search', targets: [], riskClasses: ['read'] }),
-    'Gilt in dieser Sitzung für jeden Aufruf von web_search (Lesen).'
-  );
+  const anyCall = { tool: 'web_search', targets: [], riskClasses: ['read'] };
+  assert.equal(scopeIn('de', anyCall), 'Gilt in dieser Sitzung für jeden Aufruf von web_search (Lesen).');
+  assert.equal(scopeIn('en', anyCall), 'Applies in this session to every call of web_search (Read).');
 });
 
 test('buildApprovalRequest bindet Plan, Policy-Version und bietet Sitzung nur für freigebbare Klassen', () => {
@@ -56,7 +73,8 @@ test('buildApprovalRequest bindet Plan, Policy-Version und bietet Sitzung nur f�
   };
   const request = buildApprovalRequest({ tool: 'write_file_text', plan, askClasses: ['write'], mode: 'smart', providerKey: 'openai', providerLabel: 'openai', policyVersion: '3:ok', chatId: 'c1' });
   assert.equal(request.sessionAllowed, true);
-  assert.match(request.sessionScopeLabel, /write_file_text auf genau a\.md/);
+  assert.match(scopeIn('de', { tool: request.tool, targets: plan.targets, riskClasses: request.riskClasses }), /write_file_text auf genau a\.md/);
+  assert.equal(request.sessionScope.key, 'approval.sessionScope.targets');
   assert.equal(request.planKey, 'plan-1');
   assert.equal(request.policyVersion, '3:ok');
   assert.equal(request.chatId, 'c1');

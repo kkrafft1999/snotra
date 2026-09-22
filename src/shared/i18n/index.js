@@ -91,8 +91,33 @@ function translatePlural(locale, baseKey, count, params) {
  * over finished sentences, and those are shown as they stand rather than
  * swallowed (issue #293).
  */
+/**
+ * Parameters that are themselves catalogue keys (#290). A layer far from the
+ * screen — the permission planner, say — knows *which* mode or which risk
+ * classes belong in the sentence, but not what they are called in the language
+ * the card is being read in. By convention it names them `…Key` (one) or
+ * `…Keys` (several); both are looked up here and put in under the bare name,
+ * so the entry itself only ever sees `{mode}` or `{effect}`.
+ */
+function resolveKeyParams(locale, params) {
+  if (!params) return params;
+  let out = params;
+  for (const [name, value] of Object.entries(params)) {
+    if (name.endsWith('Keys') && Array.isArray(value)) {
+      if (out === params) out = { ...params };
+      out[name.slice(0, -4)] = value.map((key) => translate(locale, key)).join(', ');
+      delete out[name];
+    } else if (name.endsWith('Key') && typeof value === 'string') {
+      if (out === params) out = { ...params };
+      out[name.slice(0, -3)] = translate(locale, value);
+      delete out[name];
+    }
+  }
+  return out;
+}
+
 function translateMessage(locale, message) {
-  if (isMessage(message)) return translate(locale, message.key, message.params);
+  if (isMessage(message)) return translate(locale, message.key, resolveKeyParams(locale, message.params));
   return typeof message === 'string' ? message : '';
 }
 
