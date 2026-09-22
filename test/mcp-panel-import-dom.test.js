@@ -102,7 +102,7 @@ test('ein eingefügter Block erscheint sofort als Vorschau', async () => {
     zeilen()[0].querySelector('.mcp-import__cmd').textContent,
     'docker run --rm -i mcp-atlassian:latest'
   );
-  assert.match(document.getElementById('mcp-import-count').textContent, /2 von 3/);
+  assert.match(document.getElementById('mcp-import-count').textContent, /2 of 3/);
 });
 
 test('der übersprungene Eintrag steht mit Begründung da, nicht bloß weg', async () => {
@@ -123,7 +123,7 @@ test('Geheimnisse und Platzhalter werden in der Zeile benannt', async () => {
 
   const notes = zeilen()[0].querySelector('.mcp-import__notes').textContent;
   assert.match(notes, /JIRA_TOKEN/);
-  assert.match(notes, /verschlüsselt/);
+  assert.match(notes, /stored encrypted/);
   assert.match(notes, /Platzhalter/);
   const marken = [...zeilen()[0].querySelectorAll('.mcp-import__badge')].map((b) => b.textContent);
   assert.ok(marken.includes('geheim'));
@@ -135,7 +135,7 @@ test('eine Kennung, die es schon gibt, wird als Ersetzen ausgewiesen', async () 
   await einfuegen(JSON.stringify({ mcpServers: { github: { command: 'npx' } } }));
 
   const zeile = zeilen()[0];
-  assert.match(zeile.textContent, /ersetzt ihn/);
+  assert.match(zeile.textContent, /replaces it/);
   const warn = zeile.querySelector('.mcp-import__badge--warn');
   assert.equal(warn.textContent, 'ersetzt');
 });
@@ -144,11 +144,11 @@ test('der Knopf nennt die Zahl und folgt dem Abwählen', async () => {
   await mount();
   await oeffnen();
   await einfuegen(BLOCK);
-  assert.equal(uebernehmen().textContent, '2 Server übernehmen');
+  assert.equal(uebernehmen().textContent, 'Import 2 servers');
 
   zeilen()[0].querySelector('.mcp-import__check').click();
   await flush();
-  assert.equal(uebernehmen().textContent, '1 Server übernehmen');
+  assert.equal(uebernehmen().textContent, 'Import 1 server');
   assert.equal(uebernehmen().disabled, false);
 
   zeilen()[1].querySelector('.mcp-import__check').click();

@@ -375,7 +375,11 @@ function normalizeUiPrefs(raw) {
   if (typeof data.baseSystemPrompt === 'string') {
     baseSystemPrompt = data.baseSystemPrompt;
   }
-  const appLocale = data.appLocale === APP_LOCALES.EN ? APP_LOCALES.EN : APP_LOCALES.DE;
+  // English has been the default since epic #277. Existing installations stay
+  // on German all the same: the store slips `appLocale: 'de'` in when it reads
+  // a preferences file without the field (see storage-service). Anyone who
+  // never had one starts out in English here.
+  const appLocale = isAppLocale(data.appLocale) ? data.appLocale : APP_LOCALES.EN;
   let maxToolRounds;
   if (typeof data.maxToolRounds === 'number' && Number.isFinite(data.maxToolRounds)) {
     maxToolRounds = Math.round(data.maxToolRounds);

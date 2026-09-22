@@ -9,20 +9,27 @@
  * gibt es das App-Menue neben dem Apfel, auf Windows und Linux nicht.
  */
 
+const { createTranslator } = require('../../shared/i18n');
+
 /**
  * „Einstellungen…“ hat auf jeder Plattform dasselbe Kuerzel, aber nicht
  * denselben Platz: Auf dem Mac gehoert der Eintrag ins App-Menue gleich unter
  * „Ueber“, sonst ins Menue „Ansicht“. Genau einmal — zweimal dasselbe Label in
  * der Leiste hiesse auch `CmdOrCtrl+,` zweimal vergeben.
  */
-function createSettingsItem(openSettings) {
+function createSettingsItem(openSettings, t) {
   return {
-    label: 'Einstellungen\u2026',
+    label: t('menu.settings'),
     accelerator: 'CmdOrCtrl+,',
     click: openSettings,
   };
 }
 
+/**
+ * `locale` decides the labels (epic #277). The menu belongs to the main process
+ * and is rebuilt on a language change — Electron cannot rename an item after
+ * the fact.
+ */
 function createApplicationMenuTemplate({
   appName,
   platform = process.platform,
@@ -30,7 +37,9 @@ function createApplicationMenuTemplate({
   shell,
   PUSH,
   onCheckForUpdates,
+  locale,
 }) {
+  const t = createTranslator(locale);
   // Auf macOS muss das ERSTE Submenu den App-Namen als label tragen — das ist
   // der fett gedruckte Eintrag rechts neben dem Apfel. Auf Windows/Linux gibt
   // es kein App-Menue, dort beginnen wir direkt mit Datei/Bearbeiten.
@@ -39,7 +48,7 @@ function createApplicationMenuTemplate({
   const send = (channel) => getMainWindow()?.webContents.send(channel);
   // Der einzige Weg in die Einstellungen ist das Menue — das Zahnrad im
   // Chat-Kopf ist weg, und mit der Chat-Spalte waere es ohnehin weggeschaltet.
-  const settingsItem = createSettingsItem(() => send(PUSH.UI_OPEN_SETTINGS));
+  const settingsItem = createSettingsItem(() => send(PUSH.UI_OPEN_SETTINGS), t);
 
   const macAppMenu = {
     label: appName,
@@ -50,73 +59,75 @@ function createApplicationMenuTemplate({
       { type: 'separator' },
       { role: 'services' },
       { type: 'separator' },
-      { role: 'hide', label: `${appName} ausblenden` },
-      { role: 'hideOthers', label: 'Andere ausblenden' },
-      { role: 'unhide', label: 'Alle einblenden' },
+      { role: 'hide', label: t('menu.app.hide', { appName }) },
+      { role: 'hideOthers', label: t('menu.app.hideOthers') },
+      { role: 'unhide', label: t('menu.app.unhide') },
       { type: 'separator' },
-      { role: 'quit', label: `${appName} beenden` },
+      { role: 'quit', label: t('menu.app.quit', { appName }) },
     ],
   };
 
   const editMenu = {
-    label: 'Bearbeiten',
+    label: t('menu.edit'),
     submenu: [
-      { role: 'undo', label: 'Rueckgaengig' },
-      { role: 'redo', label: 'Wiederholen' },
+      { role: 'undo', label: t('menu.edit.undo') },
+      { role: 'redo', label: t('menu.edit.redo') },
       { type: 'separator' },
-      { role: 'cut', label: 'Ausschneiden' },
-      { role: 'copy', label: 'Kopieren' },
-      { role: 'paste', label: 'Einfuegen' },
-      { role: 'selectAll', label: 'Alles auswaehlen' },
+      { role: 'cut', label: t('menu.edit.cut') },
+      { role: 'copy', label: t('menu.edit.copy') },
+      { role: 'paste', label: t('menu.edit.paste') },
+      { role: 'selectAll', label: t('menu.edit.selectAll') },
     ],
   };
 
   const viewMenu = {
-    label: 'Ansicht',
+    label: t('menu.view'),
     submenu: [
       // Issue #167: das Kuerzel haengt bewusst am Menueeintrag statt an einer
       // Tastenabfrage im Renderer — so steht es sichtbar im Menue und gilt
       // auch, wenn der Fokus in einem Eingabefeld liegt.
       {
-        label: 'Seitenleiste ein-/ausblenden',
+        label: t('menu.view.toggleSidebar'),
         accelerator: 'CmdOrCtrl+B',
         click: () => send(PUSH.UI_TOGGLE_SIDEBAR),
       },
       { type: 'separator' },
       ...(isMac ? [] : [settingsItem, { type: 'separator' }]),
-      { role: 'reload', label: 'Neu laden' },
-      { role: 'forceReload', label: 'Hart neu laden' },
-      { role: 'toggleDevTools', label: 'Entwicklertools' },
+      { role: 'reload', label: t('menu.view.reload') },
+      { role: 'forceReload', label: t('menu.view.forceReload') },
+      { role: 'toggleDevTools', label: t('menu.view.devTools') },
       { type: 'separator' },
-      { role: 'resetZoom', label: 'Zoom zuruecksetzen' },
-      { role: 'zoomIn', label: 'Vergroessern' },
-      { role: 'zoomOut', label: 'Verkleinern' },
+      { role: 'resetZoom', label: t('menu.view.resetZoom') },
+      { role: 'zoomIn', label: t('menu.view.zoomIn') },
+      { role: 'zoomOut', label: t('menu.view.zoomOut') },
       { type: 'separator' },
-      { role: 'togglefullscreen', label: 'Vollbild' },
+      { role: 'togglefullscreen', label: t('menu.view.fullscreen') },
     ],
   };
 
   const windowMenu = {
-    label: 'Fenster',
+    label: t('menu.window'),
     role: 'window',
     submenu: [
-      { role: 'minimize', label: 'Im Dock ablegen' },
-      { role: 'zoom', label: 'Vollbild Fenster' },
-      ...(isMac ? [{ type: 'separator' }, { role: 'front', label: 'Alle nach vorne' }] : [{ role: 'close', label: 'Schliessen' }]),
+      { role: 'minimize', label: t('menu.window.minimize') },
+      { role: 'zoom', label: t('menu.window.zoom') },
+      ...(isMac
+        ? [{ type: 'separator' }, { role: 'front', label: t('menu.window.front') }]
+        : [{ role: 'close', label: t('menu.window.close') }]),
     ],
   };
 
   const helpMenu = {
-    label: 'Hilfe',
+    label: t('menu.help'),
     role: 'help',
     submenu: [
       {
-        label: 'Nach Updates suchen…',
+        label: t('menu.help.checkUpdates'),
         click: () => { onCheckForUpdates(); },
       },
       { type: 'separator' },
       {
-        label: 'Projekt auf GitHub',
+        label: t('menu.help.github'),
         click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),
       },
     ],

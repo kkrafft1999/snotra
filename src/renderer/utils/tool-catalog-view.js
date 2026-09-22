@@ -9,26 +9,33 @@
  * Rückfragen bedeutet (Konzept §2/§3).
  */
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
-const { TOOL_RISK_CLASSES, TOOL_RISK_CLASS_LABELS, TOOL_RISK_CLASS_ORDER } = contracts;
+const { TOOL_RISK_CLASSES, TOOL_RISK_CLASS_ORDER } = contracts;
 
 /**
- * Überschriften der Gruppen. Die Contract-Labels beschreiben einen einzelnen
- * Aufruf („Externer Dienst“) und werden von der Freigabekarte mitbenutzt; als
- * Überschrift über mehreren Tools steht hier der Plural.
+ * Headings of the groups. The contract label describes a single call ("external
+ * service") and is shared with the approval card; as a heading above several
+ * tools the plural stands here. Since epic #277 both forms come from the
+ * catalogue rather than from the contract.
  */
-export const TOOL_GROUP_LABELS = Object.freeze({
-  [TOOL_RISK_CLASSES.EXTERNAL]: 'Externe Dienste',
+export const TOOL_GROUP_LABEL_KEYS = Object.freeze({
+  [TOOL_RISK_CLASSES.READ]: 'tools.riskClass.read',
+  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'tools.riskClass.readSensitive',
+  [TOOL_RISK_CLASSES.WRITE]: 'tools.riskClass.write',
+  [TOOL_RISK_CLASSES.DELETE]: 'tools.riskClass.delete',
+  [TOOL_RISK_CLASSES.EXECUTE]: 'tools.riskClass.execute',
+  [TOOL_RISK_CLASSES.EXTERNAL]: 'tools.riskClass.external',
 });
 
 /** Was die Klasse im Modus „Intelligent“ bedeutet — Halbsatz für den Gruppenkopf. */
-export const TOOL_GROUP_NOTES = Object.freeze({
-  [TOOL_RISK_CLASSES.READ]: 'läuft ohne Rückfrage',
-  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'fragt vor sensiblen Dateien nach',
-  [TOOL_RISK_CLASSES.WRITE]: 'fragt vor Änderungen nach',
-  [TOOL_RISK_CLASSES.DELETE]: 'fragt vor jedem Überschreiben nach',
-  [TOOL_RISK_CLASSES.EXECUTE]: 'fragt vor jedem Lauf nach',
-  [TOOL_RISK_CLASSES.EXTERNAL]: 'verlässt deinen Rechner, fragt vorher nach',
+export const TOOL_GROUP_NOTE_KEYS = Object.freeze({
+  [TOOL_RISK_CLASSES.READ]: 'tools.class.safe',
+  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'tools.class.sensitiveRead',
+  [TOOL_RISK_CLASSES.WRITE]: 'tools.class.write',
+  [TOOL_RISK_CLASSES.DELETE]: 'tools.class.overwrite',
+  [TOOL_RISK_CLASSES.EXECUTE]: 'tools.class.execute',
+  [TOOL_RISK_CLASSES.EXTERNAL]: 'tools.class.external',
 });
 
 /**
@@ -47,8 +54,8 @@ export function groupToolCatalog(tools) {
     if (members.length === 0) continue;
     groups.push({
       riskClass,
-      label: TOOL_GROUP_LABELS[riskClass] || TOOL_RISK_CLASS_LABELS[riskClass] || riskClass,
-      note: TOOL_GROUP_NOTES[riskClass] || '',
+      label: TOOL_GROUP_LABEL_KEYS[riskClass] ? t(TOOL_GROUP_LABEL_KEYS[riskClass]) : riskClass,
+      note: TOOL_GROUP_NOTE_KEYS[riskClass] ? t(TOOL_GROUP_NOTE_KEYS[riskClass]) : '',
       tools: members,
     });
   }
@@ -84,23 +91,20 @@ export function toolDetailText(tool) {
 export function toolStatusBadge(tool, { pythonReady = true, shellReady = true, webSearchHasKey = true } = {}) {
   if (tool?.name === 'run_python' && !pythonReady) {
     return {
-      text: 'Nicht eingerichtet',
-      title:
-        'Ohne erlaubte und gefundene Python-Installation wird das Tool dem Modell nicht angeboten (siehe „Python ausführen“).',
+      text: t('tools.gate.notConfigured'),
+      title: t('tools.gate.python'),
     };
   }
   if (tool?.name === 'shell_execute' && !shellReady) {
     return {
-      text: 'Nicht eingerichtet',
-      title:
-        'Ohne erlaubte und gefundene Shell wird das Tool dem Modell nicht angeboten (siehe „Shell-Befehle ausführen“).',
+      text: t('tools.gate.notConfigured'),
+      title: t('tools.gate.shell'),
     };
   }
   if (tool?.name === 'web_search' && !webSearchHasKey) {
     return {
-      text: 'Schlüssel fehlt',
-      title:
-        'Ohne Tavily-Schlüssel wird das Tool dem Modell nicht angeboten (siehe „Websuche“ weiter unten).',
+      text: t('tools.gate.keyMissing'),
+      title: t('tools.gate.webSearch'),
     };
   }
   return null;
@@ -108,10 +112,10 @@ export function toolStatusBadge(tool, { pythonReady = true, shellReady = true, w
 
 /** „8 von 9 aktiv“ für den Gruppenkopf. */
 export function groupCountLabel(total, active) {
-  return `${active} von ${total} aktiv`;
+  return t('settings.tools.count', { active, total });
 }
 
 /** Beschriftung des Gruppen-Schalters: erst anschalten, was noch aus ist. */
 export function groupToggleLabel(total, active) {
-  return active < total ? 'alle an' : 'alle aus';
+  return t(active < total ? 'tools.group.allOn' : 'tools.group.allOff');
 }

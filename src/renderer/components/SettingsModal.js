@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { t, tPlural, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
 import {
   groupToolCatalog,
   groupCountLabel,
@@ -16,27 +17,19 @@ import {
  */
 const IMMEDIATE_PANELS = new Set(['permissions', 'mcp']);
 
-const APPLY_HINT_DEFERRED = 'Änderungen gelten erst mit <strong>Übernehmen</strong>.';
-const APPLY_HINT_IMMEDIATE = 'Änderungen in diesem Bereich wirken <strong>sofort</strong>.';
 /**
- * Das Gedaechtnis ist geteilt (Issue #166): Vergessen schreibt sofort in die
- * Datei, die Schalter gehoeren zum Entwurf. Beide Standardsaetze waeren hier
- * die Haelfte der Wahrheit — und die falsche Haelfte ist die, nach der jemand
- * einen Eintrag zurueckholen will.
+ * The hint in the footer depends on the section. Memory is split (issue #166):
+ * forgetting writes to the file at once, the switches belong to the draft.
+ * Either standard sentence would be half the truth here — and the wrong half is
+ * the one somebody reads before trying to get an entry back.
  */
-const APPLY_HINT_MEMORY =
-  'Vergessene Einträge sind <strong>sofort</strong> weg; die Schalter gelten erst mit '
-  + '<strong>Übernehmen</strong>.';
-
-const SETTINGS_NAV_LABELS = {
-  models: 'Modelle',
-  tools: 'Tools',
-  permissions: 'Berechtigungen',
-  skills: 'Skills',
-  memory: 'Gedächtnis',
-  mcp: 'MCP',
-  general: 'Allgemein',
+const APPLY_HINT_KEYS = {
+  deferred: 'settings.applyHint.deferred',
+  immediate: 'settings.applyHint.immediate',
+  memory: 'settings.applyHint.memory',
 };
+
+const SETTINGS_NAV_KEYS = ['models', 'tools', 'permissions', 'skills', 'memory', 'mcp', 'general'];
 
 /** Aufklapp-Pfeil der Tool-Zeilen (Issue #98); dreht sich per CSS. */
 const CHEVRON_ICON_HTML =
@@ -60,6 +53,8 @@ let settingsToolCatalog = [];
 let settingsDisabledToolsDraft = new Set();
 let settingsSkillCatalog = [];
 let settingsActiveSkillsDraft = new Set();
+/** Which section is open — needed to relabel it after a language change. */
+let activePanelKey = 'models';
 
 export function initSettingsModal(deps) {
   const {
@@ -554,7 +549,7 @@ export function initSettingsModal(deps) {
     if (selectModel.children.length === 0) {
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = '— noch keine Modelle geladen —';
+      opt.textContent = t('addModel.model.empty');
       opt.disabled = true;
       selectModel.appendChild(opt);
     } else if (currentValue) {
@@ -575,7 +570,7 @@ export function initSettingsModal(deps) {
     selectProviderTemplate.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = '— Vorlage wählen —';
+    placeholder.textContent = t('addModel.template.placeholder');
     selectProviderTemplate.appendChild(placeholder);
     for (const template of templates) {
       const opt = document.createElement('option');
@@ -585,7 +580,7 @@ export function initSettingsModal(deps) {
     }
     selectProviderTemplate.value = '';
     providerTemplateHint.textContent =
-      'Belegt Server-URL und API-Stil vor; danach ist jedes Feld frei änderbar. Die Vorlage selbst wird nicht gespeichert.';
+      t('addModel.template.hint');
   }
 
   function applyProviderTemplate(providerId, templateId) {
@@ -600,7 +595,7 @@ export function initSettingsModal(deps) {
     // kommen — gespeichert wird sie nicht.
     selectProviderTemplate.value = templateId;
     providerTemplateHint.textContent = template.hint
-      || 'Werte übernommen; jedes Feld lässt sich jetzt überschreiben.';
+      || t('addModel.template.applied');
     renderDraftPresetList();
   }
 
@@ -641,9 +636,9 @@ export function initSettingsModal(deps) {
       providerKeyRow.classList.remove('hidden');
       inputApiKey.value = draft.apiKey || '';
       if (draft.removeApiKey && stored.hasKey) {
-        inputApiKey.placeholder = 'Key wird beim Speichern entfernt';
+        inputApiKey.placeholder = t('settings.models.row.keyWillBeRemoved');
       } else if (stored.hasKey) {
-        inputApiKey.placeholder = 'Gespeicherter Key bleibt erhalten';
+        inputApiKey.placeholder = t('settings.models.row.keyKept');
       } else {
         inputApiKey.placeholder = form.apiKeyPlaceholder || '••••••';
       }
@@ -664,9 +659,9 @@ export function initSettingsModal(deps) {
       providerExtraHeadersRow.classList.remove('hidden');
       inputExtraHeaders.value = draft.extraHeaders || '';
       if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
-        inputExtraHeaders.placeholder = 'Header werden beim Speichern entfernt';
+        inputExtraHeaders.placeholder = t('settings.models.row.headersWillBeRemoved');
       } else if (stored.hasExtraHeaders) {
-        inputExtraHeaders.placeholder = 'Gespeicherte Header bleiben erhalten';
+        inputExtraHeaders.placeholder = t('settings.models.row.headersKept');
       } else {
         inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
       }
@@ -743,30 +738,30 @@ export function initSettingsModal(deps) {
     // die Standard-URL waere bei einem geaenderten Ziel schlicht falsch.
     const shownApiBase = form.showBaseUrl ? (draft.baseUrl || pv.apiBase) : pv.apiBase;
     if (shownApiBase) lines.push(`API: ${shownApiBase}`);
-    if (pv.isActiveChatProvider) lines.push('Aktueller Chat-Anbieter');
+    if (pv.isActiveChatProvider) lines.push(t('settings.models.row.activeProvider'));
     if (form.showApiKey) {
       if (draft.removeApiKey && stored.hasKey) {
-        lines.push('Key wird beim Speichern entfernt');
+        lines.push(t('settings.models.row.keyWillBeRemoved'));
       } else if (stored.keyUnreadable && !draft.apiKey) {
-        lines.push('Gespeicherter API-Key kann nicht mehr entschlüsselt werden (z. B. nach der Umbenennung der App in Snotra AI). Bitte den Key neu eingeben.');
+        lines.push(t('settings.models.row.keyUndecryptable'));
       } else if (stored.hasKey && !draft.apiKey) {
-        lines.push('Key gespeichert');
+        lines.push(t('settings.models.row.keyStored'));
       } else if (draft.apiKey) {
-        lines.push('Neuer Key wird beim Speichern gesetzt');
+        lines.push(t('settings.models.row.keyWillBeSet'));
       } else if (form.apiKeyOptional) {
         // Kein Key ist hier ein gueltiger Zustand und soll auch so dastehen.
-        lines.push('Ohne API-Schlüssel');
+        lines.push(t('settings.models.row.noKey'));
       }
     } else if (pv.configured) {
-      lines.push('Konfiguriert');
+      lines.push(t('settings.models.row.configured'));
     }
     if (form.showExtraHeaders) {
       if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
-        lines.push('Header werden beim Speichern entfernt');
+        lines.push(t('settings.models.row.headersWillBeRemoved'));
       } else if ((draft.extraHeaders || '').trim()) {
-        lines.push('Neue Header werden beim Speichern gesetzt');
+        lines.push(t('settings.models.row.headersWillBeSet'));
       } else if (stored.hasExtraHeaders) {
-        lines.push('Header gespeichert');
+        lines.push(t('settings.models.row.headersStored'));
       }
     }
     setProviderStatus(lines.join(' · '), false);
@@ -821,7 +816,7 @@ export function initSettingsModal(deps) {
       sw.setAttribute('aria-checked', pr.menuVisible !== false ? 'true' : 'false');
       sw.setAttribute(
         'aria-label',
-        `${pr.label || pv.name} — ${pr.menuVisible !== false ? 'im Chat-Modellmenü sichtbar' : 'im Chat ausgeblendet'}`
+        t(pr.menuVisible !== false ? 'settings.models.row.visible' : 'settings.models.row.hidden', { name: pr.label || pv.name })
       );
       sw.dataset.presetId = pr.id;
       const track = document.createElement('span');
@@ -837,7 +832,7 @@ export function initSettingsModal(deps) {
       rm.className = 'settings-icon-trash';
       rm.setAttribute(
         'aria-label',
-        `${pr.label || pv.name} aus der Liste entfernen`
+        t('settings.models.row.remove', { name: pr.label || pv.name })
       );
       rm.dataset.presetId = pr.id;
       rm.innerHTML = trashSvg;
@@ -1073,7 +1068,7 @@ export function initSettingsModal(deps) {
     if (!usable) {
       const badge = document.createElement('span');
       badge.className = 'settings-tool-item__badge';
-      badge.textContent = skill.status === SKILL_STATUS.SHADOWED ? 'überdeckt' : 'ungültig';
+      badge.textContent = skill.status === SKILL_STATUS.SHADOWED ? t('settings.rules.state.shadowed') : t('settings.rules.state.invalid');
       if (skill.detail) badge.title = skill.detail;
       main.appendChild(badge);
     }
@@ -1190,12 +1185,12 @@ export function initSettingsModal(deps) {
   function syncWebSearchUI({ encryptionAvailable = true } = {}) {
     if (!inputWebSearchKey) return;
     inputWebSearchKey.value = '';
-    inputWebSearchKey.placeholder = webSearchHasKey ? '••••••••  (gespeichert)' : 'tvly-…';
+    inputWebSearchKey.placeholder = webSearchHasKey ? t('settings.webSearch.key.stored') : 'tvly-…';
     if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey;
     if (!encryptionAvailable) {
       if (btnWebSearchSave) btnWebSearchSave.disabled = true;
       setWebSearchStatus(
-        'Verschlüsselter Speicher ist auf diesem System nicht verfügbar — ein Schlüssel kann nicht sicher abgelegt werden.',
+        t('settings.webSearch.status.noEncryption'),
         true,
       );
       return;
@@ -1203,33 +1198,33 @@ export function initSettingsModal(deps) {
     if (btnWebSearchSave) btnWebSearchSave.disabled = false;
     setWebSearchStatus(
       webSearchHasKey
-        ? 'Ein Schlüssel ist hinterlegt; web_search wird dem Modell angeboten.'
-        : 'Kein Schlüssel hinterlegt — web_search wird dem Modell nicht angeboten.',
+        ? t('settings.webSearch.status.present')
+        : t('settings.webSearch.status.missing'),
     );
   }
 
   function describePythonState(state) {
     if (!state || state.available === false) {
-      return { text: 'Python-Ausführung ist in dieser Installation nicht verfügbar.', isError: true };
+      return { text: t('settings.python.status.unavailable'), isError: true };
     }
     if (!state.found) {
-      const grund = state.error ? ` (${state.error})` : '';
+      const reason = state.error ? ` (${state.error})` : '';
       return state.source === 'override'
-        ? { text: `Der angegebene Interpreter lässt sich nicht starten${grund}.`, isError: true }
-        : { text: `Kein Python 3 gefunden${grund}. run_python wird nicht angeboten.`, isError: true };
+        ? { text: t('settings.python.status.startFailed', { reason }), isError: true }
+        : { text: t('settings.python.status.notFound', { reason }), isError: true };
     }
-    const wo = state.source === 'override' ? 'Eigener Interpreter' : 'Gefunden';
+    const wo = t(state.source === 'override' ? 'settings.python.status.custom' : 'settings.python.status.found');
     const version = state.version ? ` — ${state.version}` : '';
     // Woher der PATH kam, gehoert sichtbar dazu (Issue #111): aus dem Finder
     // gestartet faende die App sonst still einen anderen Python als im
     // Terminal, und niemand koennte sich erklaeren, warum.
     const woher = state.pathSource === 'login-shell'
-      ? ' (gesucht im PATH aus deinem Shell-Profil)'
+      ? t('settings.python.status.pathFromProfile')
       : '';
-    if (!state.enabled) {
-      return { text: `${wo}: ${state.command}${version}${woher}. Noch nicht erlaubt, run_python wird nicht angeboten.` };
-    }
-    return { text: `${wo}: ${state.command}${version}${woher}. run_python wird dem Modell angeboten.` };
+    const params = { where: wo, command: state.command, version, origin: woher };
+    return {
+      text: t(state.enabled ? 'settings.python.status.enabled' : 'settings.python.status.disabled', params),
+    };
   }
 
   function setPythonStatus({ text, isError = false }) {
@@ -1251,25 +1246,22 @@ export function initSettingsModal(deps) {
 
   function describeShellState(state) {
     if (!state || state.available === false) {
-      return { text: 'Shell-Ausführung ist in dieser Installation nicht verfügbar.', isError: true };
+      return { text: t('settings.shell.status.unavailable'), isError: true };
     }
     if (!state.found) {
-      const grund = state.error ? ` (${state.error})` : '';
-      return { text: `Keine Shell gefunden${grund}. shell_execute wird nicht angeboten.`, isError: true };
+      const reason = state.error ? ` (${state.error})` : '';
+      return { text: t('settings.shell.status.notFound', { reason }), isError: true };
     }
     // Login-Shell heisst: dein Profil wird gelesen, Homebrew & Co. sind da.
     // Interaktiv erkannt heisst zusaetzlich: auch `.zshrc` war dabei (#111).
-    const wie = state.login ? ' als Login-Shell' : '';
+    const wie = state.login ? t('settings.shell.status.asLoginShell') : '';
     const path = state.path
-      ? state.interactive
-        ? ' — dein PATH aus dem Profil inkl. .zshrc, einmal beim Start gelesen'
-        : ' — dein PATH aus dem Profil, einmal beim Start gelesen'
+      ? t(state.interactive ? 'settings.shell.status.loginShell' : 'settings.shell.status.plainShell')
       : '';
-    const wo = `Gefunden: ${state.label || state.command}${wie}${path}`;
-    if (!state.enabled) {
-      return { text: `${wo}. Noch nicht erlaubt, shell_execute wird nicht angeboten.` };
-    }
-    return { text: `${wo}. shell_execute wird dem Modell angeboten.` };
+    const wo = t('settings.shell.status.found', { shell: `${state.label || state.command}${wie}${path}` });
+    return {
+      text: t(state.enabled ? 'settings.shell.status.enabled' : 'settings.shell.status.disabled', { where: wo }),
+    };
   }
 
   function setShellStatus({ text, isError = false }) {
@@ -1306,11 +1298,11 @@ export function initSettingsModal(deps) {
     try {
       result = await api.setWebSearchApiKey(value);
     } catch (e) {
-      setWebSearchStatus(e?.message || 'Der Schlüssel konnte nicht gespeichert werden.', true);
+      setWebSearchStatus(e?.message || t('settings.webSearch.saveFailed'), true);
       return;
     }
     if (!result?.ok) {
-      setWebSearchStatus(result?.error || 'Der Schlüssel konnte nicht gespeichert werden.', true);
+      setWebSearchStatus(result?.error || t('settings.webSearch.saveFailed'), true);
       return;
     }
     webSearchHasKey = result.hasApiKey === true;
@@ -1322,7 +1314,7 @@ export function initSettingsModal(deps) {
   btnWebSearchSave?.addEventListener('click', () => {
     const value = String(inputWebSearchKey?.value ?? '').trim();
     if (!value) {
-      setWebSearchStatus('Bitte zuerst einen Schlüssel eingeben.', true);
+      setWebSearchStatus(t('settings.webSearch.needKey'), true);
       return;
     }
     saveWebSearchApiKey(value);
@@ -1344,12 +1336,17 @@ export function initSettingsModal(deps) {
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
       tab.tabIndex = on ? 0 : -1;
     });
-    settingsPanelHeadingEl.textContent =
-      SETTINGS_NAV_LABELS[panelKey] || SETTINGS_NAV_LABELS.models;
+    activePanelKey = SETTINGS_NAV_KEYS.includes(panelKey) ? panelKey : 'models';
+    settingsPanelHeadingEl.textContent = t(`settings.nav.${activePanelKey}`);
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
-      if (panelKey === 'memory') applyHint.innerHTML = APPLY_HINT_MEMORY;
-      else applyHint.innerHTML = IMMEDIATE_PANELS.has(panelKey) ? APPLY_HINT_IMMEDIATE : APPLY_HINT_DEFERRED;
+      let hintKey = APPLY_HINT_KEYS.deferred;
+      if (activePanelKey === 'memory') hintKey = APPLY_HINT_KEYS.memory;
+      else if (IMMEDIATE_PANELS.has(activePanelKey)) hintKey = APPLY_HINT_KEYS.immediate;
+      // The key moves into the attribute so that a language change with the
+      // dialog open hits the same hint in the new language.
+      applyHint.setAttribute('data-i18n-html', hintKey);
+      applyHint.innerHTML = t(hintKey);
     }
   }
 
@@ -1366,8 +1363,13 @@ export function initSettingsModal(deps) {
     popupPresetFieldValues = {};
   }
 
+  /**
+   * Applies the language. This used to set `lang` on `<html>` and nothing else;
+   * since epic #277 `setLocale` genuinely redraws the interface — inside the
+   * dialog and outside it, without a restart.
+   */
   function applyShellLocale(lc) {
-    document.documentElement.lang = lc === 'en' ? 'en' : 'de';
+    setLocale(lc);
   }
 
   /**
@@ -1473,19 +1475,20 @@ export function initSettingsModal(deps) {
 
   /** Beschriftungen des Popups: anlegen oder bearbeiten. */
   function setDialogMode(editing) {
-    if (addModelTitle) {
-      addModelTitle.textContent = editing ? 'Modell bearbeiten' : 'Modell hinzufügen';
-    }
-    if (btnAddPresetRow) {
-      btnAddPresetRow.textContent = editing ? 'Änderungen übernehmen' : 'Übernehmen';
-    }
+    // The three strings depend on the mode, not on the markup — the key
+    // therefore travels into `data-i18n` so that a language change with the
+    // popup open does not lose the mode (epic #277).
+    const setKey = (el, key, html = false) => {
+      if (!el) return;
+      el.setAttribute(html ? 'data-i18n-html' : 'data-i18n', key);
+      if (html) el.innerHTML = t(key);
+      else el.textContent = t(key);
+    };
+    setKey(addModelTitle, editing ? 'addModel.title.edit' : 'addModel.title.add');
+    setKey(btnAddPresetRow, editing ? 'addModel.apply.edit' : 'addModel.apply');
     // Die Einleitung spricht sonst weiter vom Hinzufuegen, waehrend man
     // gerade eine bestehende Zeile aendert.
-    if (addModelIntroLead) {
-      addModelIntroLead.innerHTML = editing
-        ? 'Zugang und Modell dieses Eintrags ändern; <strong>Änderungen übernehmen</strong> ersetzt die Zeile.'
-        : 'Zugang und Modell gemeinsam einstellen und mit <strong>Übernehmen</strong> in die Präferenzliste legen.';
-    }
+    setKey(addModelIntroLead, editing ? 'addModel.intro.edit' : 'addModel.intro.add', true);
   }
 
   let modelRequestGeneration = 0;
@@ -1532,18 +1535,18 @@ export function initSettingsModal(deps) {
       await refreshLLMState();
       setupDraftFromServerState();
     } catch (err) {
-      setModalError(`Einstellungen konnten nicht geladen werden: ${err.message || 'Unbekannter Fehler'}`);
+      setModalError(t('settings.loadFailed', { error: err.message || t('settings.loadFailed.unknown') }));
       modalEncryptionWarning.classList.add('hidden');
       return;
     } finally {
       btnSettingsSave.disabled = false;
     }
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
-    activateSettingsPanel(jump && SETTINGS_NAV_LABELS[jump.panel] ? jump.panel : 'models');
+    activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
     try {
       const up = await api.getUIPrefs();
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
-      selectAppLocale.value = up.appLocale === 'en' ? 'en' : 'de';
+      selectAppLocale.value = up.appLocale === 'de' ? 'de' : 'en';
       // Das Erscheinungsbild steht nicht in den UI-Prefs, sondern im
       // localStorage des Renderers (siehe ThemeManager.js).
       if (selectAppTheme) selectAppTheme.value = getTheme?.() === 'dark' ? 'dark' : 'light';
@@ -1572,7 +1575,9 @@ export function initSettingsModal(deps) {
       }
     } catch {
       inputGlobalSystemPrompt.value = '';
-      selectAppLocale.value = 'de';
+      // Without readable preferences the dialog shows the language it is
+      // currently standing in — not a third one nobody picked.
+      selectAppLocale.value = getLocale();
       if (inputMaxToolRounds) inputMaxToolRounds.value = String(DEFAULT_MAX_TOOL_ROUNDS);
       settingsDisabledToolsDraft = new Set();
       if (inputPythonEnabled) inputPythonEnabled.checked = false;
@@ -1661,16 +1666,16 @@ export function initSettingsModal(deps) {
     // Ein optionaler Key darf fehlen (Issue #193) — dort ist die Server-URL die
     // einzige Voraussetzung.
     if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!pv.hasKey || d.removeApiKey)) {
-      setModelStatus('Bitte zuerst einen API-Key eingeben.', true);
+      setModelStatus(t('addModel.needKey'), true);
       return;
     }
     if (form.showBaseUrl && !baseUrl && !pv.baseUrl) {
-      setModelStatus('Bitte eine Server-URL angeben.', true);
+      setModelStatus(t('addModel.needBaseUrl'), true);
       return;
     }
 
     btnLoadModels.disabled = true;
-    setModelStatus('Lade Modelle …');
+    setModelStatus(t('addModel.models.loading'));
     try {
       const result = await api.listModels({
         providerId,
@@ -1687,8 +1692,8 @@ export function initSettingsModal(deps) {
       if (result?.error) {
         setModelStatus(
           manual
-            ? `Keine Modellliste: ${result.error} — Modellnamen von Hand eintragen.`
-            : `Fehler: ${result.error}`,
+            ? t('addModel.models.errorManual', { error: result.error })
+            : t('addModel.models.error', { error: result.error }),
           !manual
         );
         return;
@@ -1697,8 +1702,8 @@ export function initSettingsModal(deps) {
       if (models.length === 0) {
         setModelStatus(
           manual
-            ? 'Der Server hat eine leere Modellliste geliefert — Modellnamen von Hand eintragen.'
-            : 'Keine Modelle gefunden.',
+            ? t('addModel.models.emptyManual')
+            : t('addModel.models.emptyList'),
           !manual
         );
         renderModelSelect(currentModelValue(pv) || pv.model || pv.defaultModel || '', null, pv);
@@ -1713,10 +1718,10 @@ export function initSettingsModal(deps) {
           selectModel.value = models[0].id;
         }
       }
-      setModelStatus(`${models.length} Modelle gefunden.`, false);
+      setModelStatus(tPlural('addModel.models.found', models.length), false);
     } catch (err) {
       if (generation !== modelRequestGeneration) return;
-      setModelStatus(`Fehler: ${err.message || 'Modelle konnten nicht geladen werden.'}`, true);
+      setModelStatus(t('addModel.models.error', { error: err.message || t('addModel.models.loadFailed') }), true);
     } finally {
       if (generation === modelRequestGeneration) btnLoadModels.disabled = false;
     }
@@ -1751,7 +1756,7 @@ export function initSettingsModal(deps) {
     // einen Wert erzwingt — ein leerer Eintrag waere im Chat-Menue eine Zeile
     // ohne Modell und beim Senden ein Fehler.
     if (allowsManualModel(providerView) && !candidate.model) {
-      setModelStatus('Bitte einen Modellnamen eintragen.', true);
+      setModelStatus(t('addModel.needModelName'), true);
       inputModel.focus();
       return false;
     }
@@ -1764,7 +1769,7 @@ export function initSettingsModal(deps) {
       return presetIdentityKey(presetToWireRow(row), rowProvider) === presetIdentityKey(candidate, providerView);
     });
     if (dup) {
-      setModelStatus('Diese Kombination gibt es bereits in der Liste.', true);
+      setModelStatus(t('addModel.duplicate'), true);
       return false;
     }
     setModalError('');
@@ -1886,7 +1891,7 @@ export function initSettingsModal(deps) {
         providerPatches,
         uiPrefs: {
           baseSystemPrompt: inputGlobalSystemPrompt.value || '',
-          appLocale: selectAppLocale.value === 'en' ? 'en' : 'de',
+          appLocale: selectAppLocale.value === 'de' ? 'de' : 'en',
           skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
           maxToolRounds: (() => {
             const n = parseInt(inputMaxToolRounds?.value || '', 10);
@@ -1913,13 +1918,13 @@ export function initSettingsModal(deps) {
         // geschrieben wurden. Die Sprache muss dann auch sofort umschalten,
         // obwohl der Dialog mit der Meldung offen bleibt (Issue #97).
         if (res?.uiPrefsSaved) {
-          applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
+          applyShellLocale(selectAppLocale.value);
           applyDraftTheme();
         }
-        setModalError(res?.error || 'Speichern fehlgeschlagen.');
+        setModalError(res?.error || t('settings.saveFailed'));
         return;
       }
-      applyShellLocale(selectAppLocale.value === 'en' ? 'en' : 'de');
+      applyShellLocale(selectAppLocale.value);
       applyDraftTheme();
       await refreshLLMState();
       closeSettingsModal();
@@ -1936,10 +1941,10 @@ export function initSettingsModal(deps) {
     api.getAppVersion()
       .then((info) => {
         if (info && typeof info.version === 'string') {
-          settingsVersionLabel.textContent = `Version ${info.version}`;
+          settingsVersionLabel.textContent = t('settings.version.known', { version: info.version });
         }
       })
-      .catch(() => { /* Label bleibt auf "Version —" */ });
+      .catch(() => { /* Label bleibt auf t('settings.version.unknown') */ });
   }
 
   btnCheckUpdates?.addEventListener('click', () => {
@@ -2158,6 +2163,23 @@ export function initSettingsModal(deps) {
   api.onOpenSettings?.(() => {
     if (!modalSettings.classList.contains('hidden')) return;
     void openSettingsModal();
+  });
+
+  // Language change with the dialog open (epic #277): `applyTranslations`
+  // covers the static markup, nothing built here. With the dialog closed this
+  // costs nothing — the next open draws afresh anyway.
+  onLocaleChange(() => {
+    if (modalSettings.classList.contains('hidden')) return;
+    activateSettingsPanel(activePanelKey);
+    renderDraftPresetList();
+    renderToolList();
+    renderSkillList();
+    syncWebSearchUI({ encryptionAvailable: appStore.llmState.encryptionAvailable !== false });
+    void loadPythonState();
+    void loadShellState();
+    // The open popup keeps its mode by itself: `setDialogMode` puts the key
+    // into `data-i18n`, `applyTranslations` does the rest.
+    applyTranslations(modalSettings);
   });
 
   return { openSettingsModal, closeSettingsModal, applyShellLocale };

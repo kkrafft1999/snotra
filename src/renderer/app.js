@@ -20,6 +20,7 @@ import { initMcpPanel } from './components/McpPanel.js';
 import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
+import { t, setLocale, onLocaleChange } from './i18n.js';
 
 const api = window.electronAPI;
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
@@ -76,13 +77,13 @@ window.addEventListener('beforeunload', () => {
 function setContentPaneVisible(visible) {
   if (visible) {
     appRoot.classList.remove('app--no-preview');
-    btnToggleContentPane.title = 'Mittlere Vorschau ausblenden';
-    btnToggleContentPane.setAttribute('aria-label', 'Mittlere Vorschau ausblenden');
+    btnToggleContentPane.title = t('titlebar.preview.hide');
+    btnToggleContentPane.setAttribute('aria-label', t('titlebar.preview.hide'));
     btnToggleContentPane.setAttribute('aria-pressed', 'true');
   } else {
     appRoot.classList.add('app--no-preview');
-    btnToggleContentPane.title = 'Mittlere Vorschau einblenden';
-    btnToggleContentPane.setAttribute('aria-label', 'Mittlere Vorschau einblenden');
+    btnToggleContentPane.title = t('titlebar.preview.show');
+    btnToggleContentPane.setAttribute('aria-label', t('titlebar.preview.show'));
     btnToggleContentPane.setAttribute('aria-pressed', 'false');
   }
 }
@@ -131,7 +132,7 @@ btnToggleContentPane.addEventListener('click', async () => {
 // #app, derselbe Knopf — nur auf der anderen Seite der Titelzeile. Bleibt der
 // Chat weg, steht rechts nur noch der Verlauf.
 function setChatPanelVisible(visible) {
-  const label = visible ? 'Chat ausblenden' : 'Chat einblenden';
+  const label = t(visible ? 'titlebar.chat.hide' : 'titlebar.chat.show');
   appRoot.classList.toggle('app--no-chat', !visible);
   btnToggleChatPanel.title = label;
   btnToggleChatPanel.setAttribute('aria-label', label);
@@ -185,7 +186,7 @@ function runSidebarTransition() {
 function setSidebarVisible(visible, { animate = true } = {}) {
   if (animate) runSidebarTransition();
   appRoot.classList.toggle('app--no-sidebar', !visible);
-  const label = visible ? 'Seitenleiste ausblenden' : 'Seitenleiste einblenden';
+  const label = t(visible ? 'titlebar.sidebar.hide' : 'titlebar.sidebar.show');
   btnToggleSidebar.title = `${label} (${SIDEBAR_SHORTCUT})`;
   btnToggleSidebar.setAttribute('aria-label', label);
   btnToggleSidebar.setAttribute('aria-pressed', visible ? 'true' : 'false');
@@ -209,6 +210,15 @@ btnToggleSidebar.addEventListener('click', () => {
 // Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B.
 api.onToggleSidebar?.(() => {
   void toggleSidebar();
+});
+
+// The three column toggles carry their text in JavaScript, not in the markup —
+// it depends on state. `applyTranslations` therefore does not catch them on a
+// language change; this follow-up does (epic #277).
+onLocaleChange(() => {
+  setContentPaneVisible(!appRoot.classList.contains('app--no-preview'));
+  setChatPanelVisible(!appRoot.classList.contains('app--no-chat'));
+  setSidebarVisible(!appRoot.classList.contains('app--no-sidebar'), { animate: false });
 });
 
 const modelPicker = initChatModelPicker({ api, appStore });
@@ -428,7 +438,6 @@ void initAppVersionBadge({ api });
     // Der Start entscheidet dann am Ordner.
     sidebarVisible: true,
     chatPanelVisible: true,
-    appLocale: 'de',
   };
   try {
     uiPrefs = await api.getUIPrefs();
@@ -446,7 +455,7 @@ void initAppVersionBadge({ api });
     // Kein Zurueckschreiben: Der gemerkte Stand ist kein neuer Wunsch.
     setChatPanelVisible(uiPrefs.chatPanelVisible !== false);
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
-    settingsModal.applyShellLocale(uiPrefs.appLocale === 'en' ? 'en' : 'de');
+    setLocale(uiPrefs.appLocale);
   } catch {
     setSidebarVisible(true, { animate: false });
   }

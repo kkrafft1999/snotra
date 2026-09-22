@@ -2,6 +2,7 @@
 
 const path = require('path');
 const { createFileInfo, formatFields } = require('./file-info');
+const { createTranslator } = require('../../shared/i18n');
 
 /**
  * Kontextmenü für Dateien und Ordner im Dateibaum (Issues #58, #59, #120, #123).
@@ -15,13 +16,13 @@ const { createFileInfo, formatFields } = require('./file-info');
  * einen Ordner keine sinnvolle Bedeutung.
  */
 
-const REVEAL_LABELS = Object.freeze({
-  darwin: 'Im Finder anzeigen',
-  win32: 'Im Explorer anzeigen',
+const REVEAL_KEYS = Object.freeze({
+  darwin: 'contextMenu.reveal.darwin',
+  win32: 'contextMenu.reveal.win32',
 });
 
-function revealLabelForPlatform(platform) {
-  return REVEAL_LABELS[platform] || 'Im Dateimanager anzeigen';
+function revealLabelForPlatform(platform, locale) {
+  return createTranslator(locale)(REVEAL_KEYS[platform] || 'contextMenu.reveal.other');
 }
 
 function createFileContextMenu({
@@ -32,8 +33,10 @@ function createFileContextMenu({
   platform = process.platform,
   logger = console,
   fileInfo = null,
+  // The language is read afresh every time the menu opens (epic #277): a
+  // context menu lives only until the click, so a rebuild is unnecessary.
+  getLocale = () => undefined,
 }) {
-  const revealLabel = revealLabelForPlatform(platform);
   const info = fileInfo || createFileInfo({ platform, logger });
 
   async function openWithDefaultApp(filePath) {
@@ -56,17 +59,16 @@ function createFileContextMenu({
    * Ergebnis: { cancelled } | { deleted } | { error }.
    */
   async function deleteWithConfirmation(filePath, window, { isDirectory = false } = {}) {
-    if (!dialog) return { error: 'Kein Dialog verfügbar.' };
-    const hint = isDirectory
-      ? 'Der Ordner wird mit seinem gesamten Inhalt in den Papierkorb verschoben.'
-      : 'Die Datei wird in den Papierkorb verschoben.';
+    const t = createTranslator(getLocale());
+    if (!dialog) return { error: t('contextMenu.noDialog') };
+    const hint = t(isDirectory ? 'contextMenu.delete.directory' : 'contextMenu.delete.file');
     const { response } = await showMessageBox(window, {
       type: 'warning',
-      buttons: ['Löschen', 'Abbrechen'],
+      buttons: [t('contextMenu.delete.confirm'), t('contextMenu.delete.cancel')],
       defaultId: 1,
       cancelId: 1,
       noLink: true,
-      message: `„${path.basename(filePath)}“ löschen?`,
+      message: t('contextMenu.delete.confirmTitle', { name: path.basename(filePath) }),
       detail: `${filePath}\n\n${hint}`,
     });
     if (response !== 0) return { cancelled: true };
@@ -79,8 +81,8 @@ function createFileContextMenu({
       logger.warn('Datei konnte nicht gelöscht werden:', message);
       await showMessageBox(window, {
         type: 'error',
-        buttons: ['OK'],
-        message: 'Löschen fehlgeschlagen',
+        buttons: [t('contextMenu.ok')],
+        message: t('contextMenu.delete.failedTitle'),
         detail: `${filePath}\n\n${message}`,
       });
       return { error: message };
@@ -97,16 +99,17 @@ function createFileContextMenu({
    * Ergebnis: { shown } | { copied } | { error }.
    */
   async function showInfo(filePath, window, { isDirectory = false } = {}) {
-    if (!dialog) return { error: 'Kein Dialog verfügbar.' };
+    const t = createTranslator(getLocale());
+    if (!dialog) return { error: t('contextMenu.noDialog') };
 
     const described = await info.describe(filePath, { isDirectory });
     if (described.error) {
       logger.warn('Informationen konnten nicht gelesen werden:', described.error);
       await showMessageBox(window, {
         type: 'error',
-        buttons: ['OK'],
+        buttons: [t('contextMenu.ok')],
         noLink: true,
-        message: 'Informationen nicht verfügbar',
+        message: t('contextMenu.info.unavailable'),
         detail: `${filePath}\n\n${described.error}`,
       });
       return { error: described.error };
@@ -115,11 +118,11 @@ function createFileContextMenu({
     const canCopy = Boolean(clipboard && typeof clipboard.writeText === 'function');
     const { response } = await showMessageBox(window, {
       type: 'info',
-      buttons: canCopy ? ['OK', 'Pfad kopieren'] : ['OK'],
+      buttons: canCopy ? [t('contextMenu.ok'), t('contextMenu.info.copyPath')] : [t('contextMenu.ok')],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
-      message: `Informationen zu „${described.name}“`,
+      message: t('contextMenu.info.title', { name: described.name }),
       detail: formatFields(described.fields),
     });
 
@@ -131,11 +134,12 @@ function createFileContextMenu({
   }
 
   function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false } = {}) {
+    const t = createTranslator(getLocale());
     return [
-      ...(isDirectory ? [] : [{ label: 'Öffnen', click: () => openWithDefaultApp(filePath) }]),
-      { label: revealLabel, click: () => revealInFileManager(filePath) },
+      ...(isDirectory ? [] : [{ label: t('contextMenu.open'), click: () => openWithDefaultApp(filePath) }]),
+      { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
       {
-        label: 'Informationen',
+        label: t('contextMenu.info'),
         // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
         // das Fenster während des Dialogs zugeht — wäre sonst eine
         // unbehandelte Rejection und damit ein Absturz des Main-Prozesses.
@@ -147,7 +151,7 @@ function createFileContextMenu({
       },
       { type: 'separator' },
       {
-        label: 'Löschen…',
+        label: t('contextMenu.delete'),
         click: async () => {
           const result = await deleteWithConfirmation(filePath, window, { isDirectory });
           if (result.deleted && typeof onDeleted === 'function') onDeleted(filePath);
@@ -163,7 +167,13 @@ function createFileContextMenu({
     return menu;
   }
 
-  return { buildTemplate, popup, revealLabel, deleteWithConfirmation, showInfo };
+  return {
+    buildTemplate,
+    popup,
+    get revealLabel() { return revealLabelForPlatform(platform, getLocale()); },
+    deleteWithConfirmation,
+    showInfo,
+  };
 }
 
 module.exports = { createFileContextMenu, revealLabelForPlatform };

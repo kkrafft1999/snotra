@@ -79,12 +79,12 @@ test('ein gefundenes Update wird gezeigt, aber noch nichts geladen', async (t) =
   await ui.push({ ...AVAILABLE });
 
   assert.equal(ui.isOpen(), true);
-  assert.equal(ui.title(), 'Version 1.8.0 ist verfügbar');
-  assert.match(ui.summary(), /Du hast Version 1\.7\.1/);
+  assert.equal(ui.title(), 'Version 1.8.0 is available');
+  assert.match(ui.summary(), /You have version 1\.7\.1/);
   // Die Groesse steht im Text — der Nutzer entscheidet mit Kenntnis darueber,
   // was der Klick kostet, ohne dass die Knopfzeile umbricht.
-  assert.match(ui.summary(), /die neue Version \(92,0 MB\) herunter/);
-  assert.deepEqual(ui.labels(), ['Herunterladen', 'Später erinnern', 'Diese Version überspringen']);
+  assert.match(ui.summary(), /the new version \(92,0 MB\)/);
+  assert.deepEqual(ui.labels(), ['Download', 'Remind me later', 'Skip this version']);
   assert.deepEqual(ui.calls, [], 'ohne Klick wird nichts geladen');
   assert.match(ui.dom.document.getElementById('modal-update-notes-body').textContent, /Selbst-Update/);
 });
@@ -93,7 +93,7 @@ test('eine Vorab-Version wird als solche benannt', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);
   await ui.push({ ...AVAILABLE, isPrerelease: true });
-  assert.equal(ui.title(), 'Version 1.8.0 ist verfügbar (Vorab-Version)');
+  assert.equal(ui.title(), 'Version 1.8.0 is available (pre-release)');
 });
 
 test('„Später erinnern" schliesst nur, „überspringen" merkt sich die Version', async (t) => {
@@ -101,12 +101,12 @@ test('„Später erinnern" schliesst nur, „überspringen" merkt sich die Versi
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Später erinnern');
+  await ui.click('Remind me later');
   assert.equal(ui.isOpen(), false);
   assert.deepEqual(ui.calls, []);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Diese Version überspringen');
+  await ui.click('Skip this version');
   assert.equal(ui.isOpen(), false);
   assert.deepEqual(ui.calls, ['ignore:1.8.0']);
 });
@@ -121,7 +121,7 @@ test('die dauerhafte Wirkung steht in der Beschriftung, nicht im Titel-Text', as
   assert.deepEqual(ui.buttons().map((b) => b.title), ['', '', '']);
   // Nur einer der beiden Abbrecher wirkt dauerhaft; der steht als dritte
   // Stufe da, nicht als gleichwertiger Nachbar der Hauptaktion.
-  const skip = ui.buttons().find((b) => b.textContent.includes('überspringen'));
+  const skip = ui.buttons().find((b) => b.textContent.includes('Skip'));
   assert.equal(skip.className, 'btn-tertiary');
   assert.equal(ui.buttons()[0].className, 'btn-primary', 'Hauptaktion bleibt vorn');
   assert.equal(ui.dom.document.activeElement, ui.buttons()[0], 'und behaelt den Fokus');
@@ -142,12 +142,12 @@ test('der ganze Weg: laden bestaetigen, dann noch einmal installieren bestaetige
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
+  await ui.click('Download');
 
   // Waehrend des Downloads: Fortschritt sichtbar, nur noch „Abbrechen", und
   // der Dialog laesst sich nicht wegklicken.
-  assert.equal(ui.title(), 'Version 1.8.0 wird geladen');
-  assert.deepEqual(ui.labels(), ['Abbrechen']);
+  assert.equal(ui.title(), 'Downloading version 1.8.0');
+  assert.deepEqual(ui.labels(), ['Cancel']);
   assert.equal(ui.$('modal-update-progress').classList.contains('hidden'), false);
   assert.equal(ui.$('modal-update-close').disabled, true);
   ui.$('modal-update-backdrop').click();
@@ -156,21 +156,21 @@ test('der ganze Weg: laden bestaetigen, dann noch einmal installieren bestaetige
 
   await ui.progress({ receivedBytes: 46 * 1024 * 1024, totalBytes: 92 * 1024 * 1024 });
   assert.equal(ui.$('modal-update-track').getAttribute('aria-valuenow'), '50');
-  assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46,0 MB von 92,0 MB$/);
+  assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46,0 MB of 92,0 MB$/);
   assert.equal(ui.$('modal-update-bar').style.width, '50%');
 
   resolveDownload({ ok: true });
   await flush();
 
   // Geladen heisst noch nicht installiert — es wird erneut gefragt.
-  assert.equal(ui.title(), 'Version 1.8.0 ist bereit');
-  assert.deepEqual(ui.labels(), ['Installieren und neu starten', 'Abbrechen']);
+  assert.equal(ui.title(), 'Version 1.8.0 is ready');
+  assert.deepEqual(ui.labels(), ['Install and restart', 'Cancel']);
   assert.deepEqual(calls, ['download'], 'noch nichts installiert');
 
-  await ui.click('Installieren und neu starten');
+  await ui.click('Install and restart');
   assert.deepEqual(calls, ['download', 'install']);
-  assert.equal(ui.title(), 'Version 1.8.0 wird installiert');
-  assert.match(ui.summary(), /lässt sich nicht mehr abbrechen/);
+  assert.equal(ui.title(), 'Installing version 1.8.0');
+  assert.match(ui.summary(), /can no longer be cancelled/);
   assert.deepEqual(ui.labels(), [], 'ab hier gibt es keinen wirkungslosen Knopf');
 });
 
@@ -182,15 +182,15 @@ test('Abbrechen im Download fuehrt zurueck auf „verfuegbar"', async (t) => {
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
-  await ui.click('Abbrechen');
+  await ui.click('Download');
+  await ui.click('Cancel');
   assert.deepEqual(ui.calls, ['cancel']);
 
   resolveDownload({ ok: false, canceled: true });
   await flush();
 
-  assert.equal(ui.title(), 'Version 1.8.0 ist verfügbar');
-  assert.ok(ui.labels()[0].startsWith('Herunterladen'), 'der Weg steht wieder offen');
+  assert.equal(ui.title(), 'Version 1.8.0 is available');
+  assert.ok(ui.labels()[0].startsWith('Download'), 'der Weg steht wieder offen');
   assert.equal(ui.$('modal-update-close').disabled, false);
 });
 
@@ -199,10 +199,10 @@ test('Abbrechen nach dem Laden verwirft die Datei und schliesst', async (t) => {
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
-  assert.equal(ui.title(), 'Version 1.8.0 ist bereit');
+  await ui.click('Download');
+  assert.equal(ui.title(), 'Version 1.8.0 is ready');
 
-  await ui.click('Abbrechen');
+  await ui.click('Cancel');
   assert.deepEqual(ui.calls, ['download', 'discard']);
   assert.equal(ui.isOpen(), false);
 });
@@ -225,7 +225,7 @@ test('Escape schliesst den Dialog, solange nichts laeuft', async (t) => {
   assert.equal(ui.isOpen(), false);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
+  await ui.click('Download');
   escape();
   await flush();
   assert.equal(ui.isOpen(), true, 'waehrend des Downloads bleibt der Dialog stehen');
@@ -240,17 +240,17 @@ test('ein fehlgeschlagener Download bietet Wiederholung und den Handweg an', asy
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
+  await ui.click('Download');
 
-  assert.equal(ui.title(), 'Die Aktualisierung hat nicht geklappt');
+  assert.equal(ui.title(), 'The update did not work');
   assert.equal(ui.summary(), 'Netzwerk weg.');
   assert.equal(ui.$('modal-update-notes').classList.contains('hidden'), true,
     'im Fehlerfall lenkt die Änderungsliste nur ab');
-  assert.match(ui.hint().textContent, /laufende Version ist unverändert/);
+  assert.match(ui.hint().textContent, /running version is unchanged/);
   assert.equal(ui.hint().classList.contains('hidden'), false);
-  assert.deepEqual(ui.labels(), ['Erneut versuchen', 'Release-Seite öffnen', 'Schließen']);
+  assert.deepEqual(ui.labels(), ['Try again', 'Open release page', 'Close']);
 
-  await ui.click('Release-Seite öffnen');
+  await ui.click('Open release page');
   assert.ok(ui.calls.includes('open:https://example.test/releases/v1.8.0'));
 });
 
@@ -261,10 +261,10 @@ test('eine gescheiterte Installation meldet sich, statt stumm haengenzubleiben',
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE });
-  await ui.click('Herunterladen');
-  await ui.click('Installieren und neu starten');
+  await ui.click('Download');
+  await ui.click('Install and restart');
 
-  assert.equal(ui.title(), 'Die Aktualisierung hat nicht geklappt');
+  assert.equal(ui.title(), 'The update did not work');
   assert.equal(ui.summary(), 'Keine Schreibrechte für /Applications.');
   assert.equal(ui.$('modal-update-close').disabled, false, 'der Dialog ist wieder bedienbar');
 });
@@ -282,9 +282,9 @@ test('ohne moegliches Selbst-Update erklaert der Dialog den Grund und verlinkt',
   });
 
   assert.equal(ui.hint().textContent, 'Snotra AI wurde als Systempaket installiert.');
-  assert.deepEqual(ui.labels(), ['Release-Seite öffnen', 'Später erinnern', 'Diese Version überspringen']);
+  assert.deepEqual(ui.labels(), ['Open release page', 'Remind me later', 'Skip this version']);
 
-  await ui.click('Release-Seite öffnen');
+  await ui.click('Open release page');
   assert.deepEqual(ui.calls, ['open:https://example.test/releases/v1.8.0']);
 });
 
@@ -298,9 +298,9 @@ test('der manuelle Check meldet auch, wenn es nichts Neues gibt', async (t) => {
   await flush();
 
   assert.equal(ui.isOpen(), true);
-  assert.equal(ui.title(), 'Keine neue Version');
-  assert.match(ui.summary(), /bereits die neueste Version \(1\.8\.0\)/);
-  assert.deepEqual(ui.labels(), ['Schließen']);
+  assert.equal(ui.title(), 'No new version');
+  assert.match(ui.summary(), /already have the latest version \(1\.8\.0\)/);
+  assert.deepEqual(ui.labels(), ['Close']);
 });
 
 test('eine fehlgeschlagene Pruefung wird als solche benannt', async (t) => {
@@ -311,7 +311,7 @@ test('eine fehlgeschlagene Pruefung wird als solche benannt', async (t) => {
 
   await ui.dialog.checkNow();
   await flush();
-  assert.match(ui.summary(), /Prüfung ist fehlgeschlagen: Server nicht erreichbar\./);
+  assert.match(ui.summary(), /check failed: Server nicht erreichbar\./);
 });
 
 test('ohne bekannte Gesamtgroesse laeuft ein unbestimmter Balken statt einer erfundenen Zahl', async (t) => {
@@ -322,7 +322,7 @@ test('ohne bekannte Gesamtgroesse laeuft ein unbestimmter Balken statt einer erf
   t.after(ui.dom.cleanup);
 
   await ui.push({ ...AVAILABLE, asset: null, canSelfUpdate: true });
-  await ui.click('Herunterladen');
+  await ui.click('Download');
   await ui.progress({ receivedBytes: 1024 * 1024, totalBytes: 0 });
 
   assert.equal(

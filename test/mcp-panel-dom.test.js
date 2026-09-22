@@ -110,7 +110,7 @@ test('„Bearbeiten" fuellt den Unterdialog, ohne das Geheimnis zu zeigen', asyn
   await flush();
 
   assert.equal(dialogOffen(), true);
-  assert.equal(document.getElementById('dialog-mcp-server-title').textContent, 'Server bearbeiten');
+  assert.equal(document.getElementById('dialog-mcp-server-title').textContent, 'Edit server');
   assert.equal(document.getElementById('mcp-field-id').value, 'github');
   // Die Kennung steckt im Tool-Namen und ist nachtraeglich nicht aenderbar.
   assert.equal(document.getElementById('mcp-field-id').disabled, true);
@@ -185,7 +185,7 @@ test('Tools sind einzeln abwaehlbar und landen in disabledTools', async () => {
   const boxen = [...document.querySelectorAll('#mcp-tools-list input[type="checkbox"]')];
   assert.deepEqual(boxen.map((b) => b.value), ['search', 'delete_repository']);
   assert.deepEqual(boxen.map((b) => b.checked), [true, false], 'abgewaehltes Tool kommt ohne Haken');
-  assert.equal(document.getElementById('mcp-tools-count').textContent, '1 von 2 aktiv');
+  assert.equal(document.getElementById('mcp-tools-count').textContent, '1 of 2 active');
 
   boxen[0].checked = false;
   document.getElementById('btn-mcp-server-save').click();
@@ -237,7 +237,7 @@ test('der gespeicherte Katalog traegt den Dialog ohne Verbindung (#170)', async 
   const boxen = [...document.querySelectorAll('#mcp-tools-list input[type="checkbox"]')];
   assert.deepEqual(boxen.map((b) => b.value), ['search', 'delete_repository', 'create_issue']);
   assert.deepEqual(boxen.map((b) => b.checked), [true, false, true]);
-  assert.equal(document.getElementById('mcp-tools-count').textContent, '2 von 3 aktiv');
+  assert.equal(document.getElementById('mcp-tools-count').textContent, '2 of 3 active');
 
   boxen[2].checked = false;
   document.getElementById('btn-mcp-server-save').click();
@@ -300,7 +300,7 @@ test('ein fehlgeschlagener Server zeigt Grund und stderr in der Liste', async ()
     }),
   });
   const zeile = rows()[0];
-  assert.match(zeile.querySelector('.mcp-status').textContent, /Fehler beim Start/);
+  assert.match(zeile.querySelector('.mcp-status').textContent, /Failed to start/);
   assert.match(zeile.querySelector('.mcp-row__error').textContent, /Start fehlgeschlagen/);
   assert.match(zeile.querySelector('.mcp-row__error pre').textContent, /npx: not found/);
 });

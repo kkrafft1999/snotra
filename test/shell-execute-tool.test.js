@@ -266,7 +266,7 @@ test('die Karte nennt Shell und Arbeitsordner und warnt vor der fehlenden Grenze
   assert.match(view.warning, /nicht auf den Projektordner begrenzt/);
   // Konzept §6: fuer „Ausfuehren" gibt es nur die Einzelentscheidung.
   assert.equal(view.actions.session.enabled, false);
-  assert.match(sessionActionHint({ riskClasses: ['execute'], mode: 'smart' }), /Ausführen/);
+  assert.match(sessionActionHint({ riskClasses: ['execute'], mode: 'smart' }), /Execute/);
 });
 
 test('shell_execute hat die Kategorie „exec" und eine deutsche Anzeige-Zeile', () => {

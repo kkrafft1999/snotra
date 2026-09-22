@@ -34,6 +34,18 @@ esbuild.buildSync({
   outfile: path.join(generatedDir, 'contracts.js'),
 });
 
+// ── Message catalogues as ESM for the renderer ──────────────────────────────
+// Same reasoning as for the contracts (epic #277): `src/shared/i18n` is
+// CommonJS and is used by main *and* renderer. The renderer gets an ESM bundle
+// out of it instead of a second, diverging copy of the strings.
+esbuild.buildSync({
+  entryPoints: [path.join(root, 'src', 'shared', 'i18n', 'index.js')],
+  bundle: true,
+  format: 'esm',
+  platform: 'neutral',
+  outfile: path.join(generatedDir, 'i18n.js'),
+});
+
 // ── JS-Vendor-Bibliotheken ──────────────────────────────────────────────────
 fs.copyFileSync(
   path.join(root, 'node_modules', 'marked', 'lib', 'marked.umd.js'),

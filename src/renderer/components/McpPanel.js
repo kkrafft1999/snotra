@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { t, tPlural, onLocaleChange } from '../i18n.js';
 
 const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contracts;
 
@@ -65,12 +66,12 @@ export function describeConnection(server, connection) {
     return { kind: 'on', text: `verbunden · ${count} ${count === 1 ? 'Tool' : 'Tools'}` };
   }
   if (state === MCP_CONNECTION_STATES.FAILED) {
-    return { kind: 'error', text: 'Fehler beim Start', detail: connection.error, stderr: connection.stderr };
+    return { kind: 'error', text: t('settings.mcp.state.startFailed'), detail: connection.error, stderr: connection.stderr };
   }
-  if (state === MCP_CONNECTION_STATES.STARTING) return { kind: 'off', text: 'wird gestartet …' };
+  if (state === MCP_CONNECTION_STATES.STARTING) return { kind: 'off', text: t('settings.mcp.state.starting') };
   // IDLE heisst: eingeschaltet, aber noch nie gebraucht. Traeges Verbinden
   // ist Absicht (#106) — das soll hier nicht wie ein Fehler aussehen.
-  return { kind: 'off', text: 'noch nicht verbunden' };
+  return { kind: 'off', text: t('settings.mcp.state.notConnected') };
 }
 
 function el(tag, className, text) {
@@ -177,7 +178,7 @@ export function initMcpPanel({ api }) {
       row.append(statusNode(status));
 
       const actions = el('div', 'mcp-row__actions');
-      const edit = el('button', 'btn-secondary btn-compact', 'Bearbeiten');
+      const edit = el('button', 'btn-secondary btn-compact', t('settings.mcp.edit'));
       edit.type = 'button';
       edit.setAttribute('aria-label', `${server.label || server.id} bearbeiten`);
       edit.addEventListener('click', () => openDialog(server));
@@ -204,8 +205,7 @@ export function initMcpPanel({ api }) {
     if (skipped.length > 0) {
       const note = el('li', 'mcp-row mcp-row--note');
       note.append(el('p', null,
-        `${skipped.length} ${skipped.length === 1 ? 'Tool wurde' : 'Tools wurden'} ausgelassen, `
-        + 'weil der zusammengesetzte Name zu lang ist: '
+        `${tPlural('settings.mcp.skippedTools', skipped.length)} `
         + skipped.map((entry) => `${entry.serverId}/${entry.name}`).join(', ')));
       list.append(note);
     }
@@ -224,7 +224,7 @@ export function initMcpPanel({ api }) {
       setError(errorEl, '');
     } catch {
       adopt(null);
-      setError(errorEl, 'Die MCP-Konfiguration konnte nicht gelesen werden.');
+      setError(errorEl, t('settings.mcp.readFailed'));
     }
   }
 
@@ -235,10 +235,10 @@ export function initMcpPanel({ api }) {
         adopt(result);
         setError(errorEl, '');
       } else {
-        setError(errorEl, result?.error || 'Neu laden ist fehlgeschlagen.');
+        setError(errorEl, result?.error || t('settings.mcp.reloadFailed'));
       }
     } catch {
-      setError(errorEl, 'Neu laden ist fehlgeschlagen.');
+      setError(errorEl, t('settings.mcp.reloadFailed'));
     }
   }
 
@@ -250,7 +250,7 @@ export function initMcpPanel({ api }) {
       adopt(result);
       setError(errorEl, '');
     } else {
-      setError(errorEl, result?.errors?.[0] || result?.error || 'Der Server konnte nicht geändert werden.');
+      setError(errorEl, result?.errors?.[0] || result?.error || t('settings.mcp.updateFailed'));
     }
   }
 
@@ -285,11 +285,11 @@ export function initMcpPanel({ api }) {
     key.type = 'text';
     key.value = entry.key || '';
     key.placeholder = 'NAME';
-    key.setAttribute('aria-label', 'Name der Umgebungsvariable');
+    key.setAttribute('aria-label', t('mcpDialog.env.name'));
 
     const value = el('input', 'modal-input modal-input--mono');
     value.type = 'text';
-    value.setAttribute('aria-label', 'Wert der Umgebungsvariable');
+    value.setAttribute('aria-label', t('mcpDialog.env.value'));
     // Ein gespeichertes Geheimnis kommt nicht zurueck — es steht als
     // Platzhalter da und bleibt unangetastet, solange niemand hineinschreibt.
     if (entry.secret && entry.hasValue) {
@@ -369,7 +369,7 @@ export function initMcpPanel({ api }) {
     }
     if (toolsCount) {
       const active = known.length - known.filter((name) => disabled.has(name)).length;
-      toolsCount.textContent = `${active} von ${known.length} aktiv`;
+      toolsCount.textContent = t('settings.mcp.state.toolsActive', { active, total: known.length });
     }
   }
 
@@ -391,7 +391,7 @@ export function initMcpPanel({ api }) {
     setError(formError, '');
     if (testResult) testResult.replaceChildren();
 
-    dialogTitle.textContent = server ? 'Server bearbeiten' : 'Server hinzufügen';
+    dialogTitle.textContent = server ? t('mcpDialog.title.edit') : t('mcpDialog.title.add');
     fieldId.value = server?.id || '';
     fieldId.disabled = Boolean(server);
     fieldLabel.value = server?.label || '';
@@ -439,7 +439,7 @@ export function initMcpPanel({ api }) {
       setError(errorEl, '');
       return;
     }
-    setError(formError, result?.errors?.[0] || result?.error || 'Der Server konnte nicht gespeichert werden.');
+    setError(formError, result?.errors?.[0] || result?.error || t('settings.mcp.saveFailed'));
   }
 
   async function remove() {
@@ -450,16 +450,16 @@ export function initMcpPanel({ api }) {
       closeDialog();
       return;
     }
-    setError(formError, result?.errors?.[0] || result?.error || 'Der Server konnte nicht gelöscht werden.');
+    setError(formError, result?.errors?.[0] || result?.error || t('settings.mcp.deleteFailed'));
   }
 
   async function test() {
     if (!editing || !testResult) return;
-    testResult.replaceChildren(el('p', 'mcp-test__pending', 'Verbindung wird getestet …'));
+    testResult.replaceChildren(el('p', 'mcp-test__pending', t('mcpDialog.test.running')));
     const result = await api.testMcpServer?.(editing.id);
     testResult.replaceChildren();
     if (!result?.ok || !result.status) {
-      testResult.append(el('p', 'mcp-test__fail', result?.error || 'Der Test ist fehlgeschlagen.'));
+      testResult.append(el('p', 'mcp-test__fail', result?.error || t('mcpDialog.test.failed')));
       return;
     }
     const status = result.status;
@@ -471,7 +471,7 @@ export function initMcpPanel({ api }) {
       // Der Katalog des Servers ist jetzt bekannt — Haekchen anbieten.
       renderTools({ ...editing, knownTools: result.tools || [] });
     } else {
-      testResult.append(el('p', 'mcp-test__fail', status.error || 'Der Server hat nicht geantwortet.'));
+      testResult.append(el('p', 'mcp-test__fail', status.error || t('mcpDialog.test.noAnswer')));
       if (status.stderr) testResult.append(el('pre', null, status.stderr));
     }
     await load();
@@ -506,16 +506,16 @@ export function initMcpPanel({ api }) {
     const notes = [];
     if (candidate.conflict) {
       notes.push(importNoteRow(
-        `Es gibt bereits einen Server „${candidate.id}“ — Übernehmen ersetzt ihn.`, 'ersetzt', true));
+        t('mcpImport.candidate.duplicate', { id: candidate.id }), 'ersetzt', true));
     }
     const secrets = candidate.env.filter((entry) => entry.secret).map((entry) => entry.key);
     if (secrets.length > 0) {
       notes.push(importNoteRow(
-        `${secrets.join(', ')} ${secrets.length === 1 ? 'wird' : 'werden'} verschlüsselt abgelegt.`, 'geheim'));
+        tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), 'geheim'));
     }
     for (const note of candidate.notes) {
-      const warn = note.includes('Platzhalter') || note.includes('keinen Wert');
-      notes.push(importNoteRow(note, warn ? 'prüfen' : null, warn));
+      const warn = note.includes('Platzhalter') || note.includes(t('mcpImport.candidate.noValue'));
+      notes.push(importNoteRow(note, warn ? t('mcpImport.candidate.check') : null, warn));
     }
     return notes;
   }
@@ -531,7 +531,7 @@ export function initMcpPanel({ api }) {
       check.type = 'checkbox';
       check.className = 'mcp-import__check';
       check.checked = !importUnchecked.has(candidate.id);
-      check.setAttribute('aria-label', `${candidate.label} übernehmen`);
+      check.setAttribute('aria-label', t('mcpImport.candidate.apply', { name: candidate.label }));
       check.addEventListener('change', () => {
         if (check.checked) importUnchecked.delete(candidate.id);
         else importUnchecked.add(candidate.id);
@@ -568,7 +568,7 @@ export function initMcpPanel({ api }) {
     if (skippedEntries.length === 0) return;
 
     importSkipped.append(el('h4', null,
-      `${skippedEntries.length} ${skippedEntries.length === 1 ? 'Eintrag wird' : 'Einträge werden'} nicht übernommen`));
+      tPlural('mcpImport.skipped', skippedEntries.length)));
     const list = el('ul', null);
     for (const entry of skippedEntries) {
       const item = el('li', null);
@@ -588,8 +588,8 @@ export function initMcpPanel({ api }) {
     const count = selectedImportCandidates().length;
     btnImportApply.disabled = count === 0;
     btnImportApply.textContent = count === 0
-      ? 'Übernehmen'
-      : `${count} ${count === 1 ? 'Server' : 'Server'} übernehmen`;
+      ? t('mcpImport.apply')
+      : tPlural('mcpImport.apply.count', count);
   }
 
   /** Bei jeder Eingabe neu lesen — der Block ist klein, das kostet nichts. */
@@ -610,8 +610,8 @@ export function initMcpPanel({ api }) {
       importCount.textContent = gesamt === 0
         ? ''
         : gefunden === gesamt
-          ? `${gefunden} ${gefunden === 1 ? 'Eintrag' : 'Einträge'} erkannt.`
-          : `${gefunden} von ${gesamt} Einträgen können übernommen werden.`;
+          ? tPlural('mcpImport.count.all', gefunden)
+          : t('mcpImport.count.partial', { count: gefunden, total: gesamt });
     }
     renderImportPreview();
     renderImportSkipped(result.skipped);
@@ -664,7 +664,7 @@ export function initMcpPanel({ api }) {
         result = null;
       }
       if (result?.ok) letztes = result;
-      else gescheitert.push(`${candidate.label}: ${result?.errors?.[0] || result?.error || 'unbekannter Fehler'}`);
+      else gescheitert.push(`${candidate.label}: ${result?.errors?.[0] || result?.error || t('mcpImport.failed.unknown')}`);
     }
 
     if (letztes) adopt(letztes);
@@ -681,7 +681,7 @@ export function initMcpPanel({ api }) {
     // loeschen. Nebenbei stehen die eben gespeicherten Server jetzt als
     // „ersetzt" da, was sie ab sofort ja auch sind.
     refreshImportPreview();
-    setError(importError, `Nicht übernommen — ${gescheitert.join(' · ')}`);
+    setError(importError, t('mcpImport.failed', { details: gescheitert.join(' · ') }));
   }
 
   btnReload?.addEventListener('click', reload);
@@ -715,6 +715,13 @@ export function initMcpPanel({ api }) {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
     closeDialog();
+  });
+
+  // Language change (epic #277): the server list and the import preview are
+  // built entirely here, out of reach of `applyTranslations`.
+  onLocaleChange(() => {
+    render();
+    renderImportPreview();
   });
 
   return {
