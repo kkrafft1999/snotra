@@ -47,6 +47,9 @@ const IDENTICAL_ON_PURPOSE = new Set([
   // Nothing but two placeholders and the server's own text between them —
   // there is no wording here to translate (#291).
   'tools.mcp.short',
+  // "Status" is the German word too, and the value is that word plus a
+  // placeholder (#290).
+  'approval.audit.status',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

@@ -75,7 +75,7 @@ test('applyPermissionToRow schreibt Zustand und Begründung an die Zeile', async
       reason: 'user_denied',
     });
     assert.equal(row.dataset.permission, 'denied');
-    assert.match(row.title, /Entscheidung:/);
+    assert.match(row.title, /Decision:/);
   });
 });
 

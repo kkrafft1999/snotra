@@ -173,8 +173,8 @@ test('die Karte nennt die Reichweite und den Merksatz statt eines Dateiziels', a
   });
   // Worüber hier entschieden wird, ist die Reichweite — nicht ein Pfad, den
   // der Nutzer ohnehin nicht beeinflussen kann.
-  assert.match(view.memoryScopeLabel, /Projekt/);
-  assert.equal(view.preview.kindLabel, 'Merksatz');
+  assert.match(view.memoryScopeLabel, /^Project —/);
+  assert.equal(view.preview.kindLabel, 'Note');
   assert.equal(view.preview.text, 'Tests laufen mit npm test.');
 
   const global = buildApprovalCardView({

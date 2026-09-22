@@ -1,5 +1,6 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
+import { onLocaleChange, t } from '../i18n.js';
 
 /**
  * Bestätigungskarte im Chat (Issue #67, Konzept §4/§6).
@@ -79,17 +80,21 @@ export function initToolApprovalCards({ api, appStore }) {
     for (const target of view.targets) {
       const li = el('li');
       li.appendChild(el('span', 'chat-approval-card__target-kind', target.kindLabel));
-      li.appendChild(code(target.path || '(ohne Pfad)'));
+      li.appendChild(code(target.path || t('approval.target.noPath')));
       if (target.sensitive) {
-        const badge = el('span', 'chat-approval-card__badge', 'sensibel');
-        badge.title = 'Diese Datei kann Zugangsdaten enthalten.';
+        const badge = el('span', 'chat-approval-card__badge', t('approval.badge.sensitive'));
+        badge.title = t('approval.badge.sensitive.title');
         li.appendChild(badge);
       }
-      const notes = target.notes.filter((n) => !n.startsWith('sensibel'));
+      // The sensitivity already has its own badge; the note would repeat it.
+      const sensitiveNote = t('approval.note.sensitive');
+      const notes = target.notes.filter((n) => !n.startsWith(sensitiveNote));
       if (notes.length > 0) li.appendChild(el('span', 'chat-approval-card__target-note', notes.join(' · ')));
       list.appendChild(li);
     }
-    if (view.targets.length === 0) list.appendChild(el('li', 'chat-approval-card__target-note', 'ohne Dateiziel'));
+    if (view.targets.length === 0) {
+      list.appendChild(el('li', 'chat-approval-card__target-note', t('approval.target.none')));
+    }
     return list;
   }
 
@@ -105,14 +110,14 @@ export function initToolApprovalCards({ api, appStore }) {
     pre.dataset.kind = preview.kind;
     pre.textContent = preview.text;
     details.appendChild(pre);
-    // Lange Vorschauen sind zunächst höhenbegrenzt; „Vollständig anzeigen“
-    // hebt die Grenze auf. Der Text bleibt derselbe – maskiert bleibt maskiert.
-    const expand = el('button', 'chat-approval-card__preview-toggle', 'Vollständig anzeigen');
+    // Long previews are height-limited at first; "show in full" lifts the
+    // limit. The text stays the same — masked stays masked.
+    const expand = el('button', 'chat-approval-card__preview-toggle', t('approval.preview.expand'));
     expand.type = 'button';
     expand.setAttribute('aria-expanded', 'false');
     expand.addEventListener('click', () => {
       const clamped = pre.classList.toggle('chat-approval-card__preview-text--clamped');
-      expand.textContent = clamped ? 'Vollständig anzeigen' : 'Vorschau einklappen';
+      expand.textContent = clamped ? t('approval.preview.expand') : t('approval.preview.collapse');
       expand.setAttribute('aria-expanded', clamped ? 'false' : 'true');
     });
     details.appendChild(expand);
@@ -137,6 +142,25 @@ export function initToolApprovalCards({ api, appStore }) {
     return { actions, hintId };
   }
 
+  /**
+   * The headline as a sentence with two slots. `template` still carries
+   * `{target}` and `{tool}` so that the path and the tool name can be rendered
+   * as code — wherever the language puts them (#290). The order is the
+   * catalogue's business, not this component's.
+   */
+  function appendHeadline(node, headline) {
+    const slots = {
+      '{target}': () => code(headline.targetLabel),
+      '{tool}': () => code(headline.tool || 'Tool', 'en'),
+    };
+    for (const part of headline.template.split(/(\{target\}|\{tool\})/)) {
+      if (!part) continue;
+      const slot = slots[part];
+      if (slot) node.appendChild(slot());
+      else node.append(part);
+    }
+  }
+
   function buildCard(entry, view) {
     const requestId = entry.dto.requestId;
     const card = el('section', 'chat-approval-card');
@@ -153,38 +177,31 @@ export function initToolApprovalCards({ api, appStore }) {
 
     const headline = el('p', 'chat-approval-card__headline');
     headline.id = domId(requestId, 'headline');
-    headline.append('Snotra möchte ');
-    if (view.headline.targetLabel) {
-      headline.appendChild(code(view.headline.targetLabel));
-      headline.append(' ');
-    }
-    headline.append(`${view.headline.verb} (`);
-    headline.appendChild(code(view.headline.tool || 'Tool', 'en'));
-    headline.append(').');
+    appendHeadline(headline, view.headline);
     card.appendChild(headline);
 
     const facts = el('dl', 'chat-approval-card__facts');
-    fact(facts, 'Wirkung', view.classText);
-    if (view.shellLabel) fact(facts, 'Shell', view.shellLabel);
-    if (view.cwdLabel) fact(facts, 'Arbeitsordner', code(view.cwdLabel));
-    // Das Gedaechtnis hat kein Dateiziel, das der Nutzer beeinflussen koennte
-    // (Issue #166) — die Reichweite ist hier die Entscheidung, nicht der Pfad.
-    if (view.memoryScopeLabel) fact(facts, 'Reichweite', view.memoryScopeLabel);
-    // Ein Shell-Befehl hat kein Dateiziel — die Zeile „ohne Dateiziel“ waere
-    // hier nur Rauschen neben Shell und Arbeitsordner (Issue #102); beim
-    // Merken gilt dasselbe neben der Reichweite.
+    fact(facts, t('approval.fact.effect'), view.classText);
+    if (view.shellLabel) fact(facts, t('approval.fact.shell'), view.shellLabel);
+    if (view.cwdLabel) fact(facts, t('approval.fact.cwd'), code(view.cwdLabel));
+    // The memory has no file target the user could influence (issue #166) —
+    // the reach is the decision here, not the path.
+    if (view.memoryScopeLabel) fact(facts, t('approval.fact.memoryScope'), view.memoryScopeLabel);
+    // A shell command has no file target — the line "no file target" would be
+    // noise next to the shell and the working folder (issue #102); the same
+    // holds for remembering, next to the reach.
     if ((!view.shellLabel && !view.memoryScopeLabel) || view.targets.length > 0) {
-      fact(facts, view.targets.length === 1 ? 'Ziel' : 'Ziele', buildTargetList(view));
+      fact(facts, t(view.targets.length === 1 ? 'approval.fact.target' : 'approval.fact.targets'), buildTargetList(view));
     }
-    if (view.reason) fact(facts, 'Grund', view.reason);
-    if (view.sensitive && view.providerLabel) fact(facts, 'Empfänger', view.providerLabel);
-    if (view.scopeNote) fact(facts, 'Sitzungsumfang', view.scopeNote);
-    fact(facts, 'Modus', view.modeLabel);
+    if (view.reason) fact(facts, t('approval.fact.reason'), view.reason);
+    if (view.sensitive && view.providerLabel) fact(facts, t('approval.fact.recipient'), view.providerLabel);
+    if (view.scopeNote) fact(facts, t('approval.fact.sessionScope'), view.scopeNote);
+    fact(facts, t('approval.fact.mode'), view.modeLabel);
     card.appendChild(facts);
 
     if (view.warning) {
       const warning = el('p', 'chat-approval-card__warning');
-      warning.appendChild(el('strong', null, 'Achtung: '));
+      warning.appendChild(el('strong', null, t('approval.warning.prefix')));
       warning.append(view.warning);
       card.appendChild(warning);
     }
@@ -200,7 +217,7 @@ export function initToolApprovalCards({ api, appStore }) {
       card.appendChild(hint);
     }
 
-    const status = el('p', 'chat-approval-card__status', 'Wartet auf deine Entscheidung. Esc lehnt ab.');
+    const status = el('p', 'chat-approval-card__status', t('approval.status.waiting'));
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     card.appendChild(status);
@@ -241,7 +258,7 @@ export function initToolApprovalCards({ api, appStore }) {
     if (outcome.detail) result.append(` ${outcome.detail}`);
     card.querySelector('.chat-approval-card__result')?.remove();
     card.insertBefore(result, card.querySelector('.chat-approval-card__status'));
-    setStatus(card, `${outcome.label}.`);
+    setStatus(card, t('approval.status.resolved', { label: outcome.label }));
   }
 
   async function respond(requestId, response) {
@@ -251,22 +268,22 @@ export function initToolApprovalCards({ api, appStore }) {
     const view = card?.__approvalView;
     if (card && view) {
       setButtonsEnabled(card, view, false);
-      setStatus(card, 'Entscheidung wird übermittelt …');
+      setStatus(card, t('approval.status.sending'));
     }
     let result;
     try {
       result = typeof api.respondToolApproval === 'function'
         ? await api.respondToolApproval(requestId, response)
-        : { ok: false, error: 'Freigaben sind nicht verfügbar.' };
+        : { ok: false, error: t('approval.error.unavailable') };
     } catch (error) {
-      result = { ok: false, error: error?.message || 'Unbekannter Fehler.' };
+      result = { ok: false, error: error?.message || t('approval.error.unknown') };
     }
     if (result?.ok) return; // Auflösung kommt per Push vom Main.
     if (entry?.state === APPROVAL_ENTRY_STATES.RESOLVED) return; // inzwischen verfallen
     queue.failResponse(requestId);
     if (card && view) {
       setButtonsEnabled(card, view, true);
-      setStatus(card, `Antwort nicht angenommen: ${result?.error || 'unbekannter Fehler'}. Du kannst erneut entscheiden.`);
+      setStatus(card, t('approval.error.rejected', { error: result?.error || t('approval.error.unknown.short') }));
     }
   }
 
@@ -291,6 +308,32 @@ export function initToolApprovalCards({ api, appStore }) {
     const card = cards.get(entry.dto.requestId);
     if (card) applyOutcome(card, entry);
   }
+
+  /**
+   * A language change repaints an open card as well (#290): the sentence, the
+   * labels and the buttons are built at runtime, so `data-i18n` cannot reach
+   * them. The decision itself is untouched — the card is rebuilt from the
+   * entry the queue still holds, including the outcome of a resolved one.
+   */
+  onLocaleChange(() => {
+    for (const [requestId, card] of [...cards]) {
+      const entry = queue.get(requestId);
+      if (!entry) continue;
+      const view = buildApprovalCardView(entry.dto);
+      if (!view) continue;
+      const fresh = buildCard(entry, view);
+      fresh.__approvalView = view;
+      card.replaceWith(fresh);
+      cards.set(requestId, fresh);
+      if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED) applyOutcome(fresh, entry);
+      // A decision already on its way keeps its buttons locked; the answer
+      // arrives for the request, not for the DOM node it was clicked in.
+      else if (entry.state === APPROVAL_ENTRY_STATES.RESPONDING) {
+        setButtonsEnabled(fresh, view, false);
+        setStatus(fresh, t('approval.status.sending'));
+      }
+    }
+  });
 
   /** Sichtbar heißt: nimmt Platz im Layout ein – Klassen allein sagen bei verschachtelten Overlays nichts. */
   function isVisible(node) {
