@@ -1,83 +1,82 @@
 ---
 name: install
 description: >-
-  Baut Snotra AI lokal (electron-forge package, macOS/arm64) und ersetzt die
-  installierte App unter /Applications/Snotra AI.app durch den frischen Build.
-  Auslösen bei Sätzen wie "bau die App und kopier sie nach Programme",
+  Builds Snotra AI locally (electron-forge package, macOS/arm64) and replaces
+  the installed app at /Applications/Snotra AI.app with the fresh build.
+  Triggers on sentences like "bau die App und kopier sie nach Programme",
   "installier die App lokal", "App neu bauen und installieren", "lokalen Build
-  nach Applications", "install the app". Nur in diesem Repo (snotra) und auf
-  einem Apple-Silicon-Mac sinnvoll.
+  nach Applications", "build the app and copy it to Applications", "install the
+  app locally", "rebuild and install the app". Only makes sense in this
+  repository (snotra) and on an Apple Silicon Mac.
 ---
 
-# App lokal bauen und nach Programme installieren
+# Build the app locally and install it into Applications
 
-Dieser Skill erzeugt einen lokalen, unsignierten Build und ersetzt damit die
-installierte App. Es wird nichts committet, gepusht oder veröffentlicht.
+This skill produces a local, unsigned build and replaces the installed app with
+it. Nothing is committed, pushed or published.
 
-## Schritt 1 — Pre-Flight (kurz, kein Nachfragen)
+## Step 1 — pre-flight (brief, without asking)
 
-1. Node ≥ 24 sicherstellen (`node -v`). Normalerweise liefert die Shell
-   über nvm bereits v24. Falls nicht, den nvm-Pfad in **jedem** Bash-Aufruf
-   voranstellen:
+1. Make sure Node is ≥ 24 (`node -v`). Usually the shell already provides v24
+   through nvm. If it doesn't, put the nvm path in front of **every** bash call:
    ```sh
    export PATH="$HOME/.nvm/versions/node/v24.18.1/bin:$PATH"
    ```
-   (Falls die Version nicht existiert: `ls ~/.nvm/versions/node/` und die
-   neueste v24 nehmen.) Ursache einer falschen Version ist erfahrungsgemäß
-   eine absolute `export PATH=...`-Zeile in `~/.zshrc`, die ein Tool
-   eingetragen hat. Das dem Nutzer kurz melden.
-2. Läuft die App gerade? `pgrep -x "Snotra AI"`. Wenn ja, den Nutzer nicht
-   fragen, sondern nach dem Kopieren darauf hinweisen, dass er die alte
-   Instanz neu starten muss. Nur beenden (`osascript -e 'quit app "Snotra AI"'`),
-   wenn der Nutzer das ausdrücklich möchte.
-3. Uncommittete Änderungen sind **erlaubt**. Genau dafür ist der lokale
-   Build da (Stand ausprobieren, bevor er committet wird). Kurz erwähnen,
-   dass der Build den Arbeitsstand inkl. uncommitteter Änderungen enthält.
+   (If that version doesn't exist: `ls ~/.nvm/versions/node/` and take the
+   newest v24.) Experience says a wrong version comes from an absolute
+   `export PATH=...` line in `~/.zshrc` that some tool wrote there. Mention that
+   to the user briefly.
+2. Is the app running right now? `pgrep -x "Snotra AI"`. If it is, don't ask the
+   user — point out after copying that they have to restart the old instance.
+   Only quit it (`osascript -e 'quit app "Snotra AI"'`) if the user explicitly
+   wants that.
+3. Uncommitted changes are **allowed**. That is exactly what the local build is
+   for: trying out a state before committing it. Mention briefly that the build
+   contains the working state, uncommitted changes included.
 
-## Schritt 2 — Bauen
+## Step 2 — build
 
 ```sh
 npm run package
 ```
 
-`npm run package` (siehe `package.json`) synchronisiert zuerst die
-Renderer-Vendor-Dateien und ruft dann `electron-forge package --arch arm64
---platform darwin` auf. Ergebnis:
+`npm run package` (see `package.json`) first syncs the renderer vendor files and
+then calls `electron-forge package --arch arm64 --platform darwin`. The result:
 
 ```
 out/Snotra AI-darwin-arm64/Snotra AI.app
 ```
 
-Bei Fehlern abbrechen und die relevante Ausgabe zeigen. Nicht auf Verdacht
-`node_modules` löschen oder `npm install` ausführen. Erst wenn die Fehlermeldung
-eindeutig auf fehlende Abhängigkeiten zeigt, `npm install` vorschlagen.
+On errors, stop and show the relevant output. Don't delete `node_modules` or run
+`npm install` on suspicion. Only suggest `npm install` once the error message
+points clearly at missing dependencies.
 
-## Schritt 3 — Installieren
+## Step 3 — install
 
 ```sh
 rm -rf "/Applications/Snotra AI.app" && cp -R "out/Snotra AI-darwin-arm64/Snotra AI.app" /Applications/
 ```
 
-Das Löschen betrifft nur die App-Bundle-Kopie unter `/Applications`, keine
-Nutzerdaten (Settings liegen unter `~/Library/Application Support/`). Deshalb
-keine Rückfrage nötig.
+The deletion only affects the copy of the app bundle in `/Applications`, no user
+data (the settings live in `~/Library/Application Support/`). No confirmation
+needed, therefore.
 
-## Schritt 4 — Verifizieren und melden
+## Step 4 — verify and report
 
 ```sh
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Snotra AI.app/Contents/Info.plist"
 ```
 
-Kurz melden: installierte Version, Git-Commit des Builds
-(`git rev-parse --short HEAD`, plus Hinweis „mit uncommitteten Änderungen“,
-falls `git status --porcelain` nicht leer ist) und ob eine laufende Instanz
-neu gestartet werden muss. Die App nur starten (`open -a "Snotra AI"`), wenn
-der Nutzer das gesagt hat.
+Report briefly: the installed version, the git commit of the build
+(`git rev-parse --short HEAD`, plus a note "with uncommitted changes" when
+`git status --porcelain` isn't empty), and whether a running instance has to be
+restarted. Only start the app (`open -a "Snotra AI"`) when the user asked for
+that.
 
-## Hinweise
+## Notes
 
-- Der Build ist **unsigniert**. Beim ersten Start kann Gatekeeper meckern.
-  Das ist erwartbar (Stufe 1, siehe `docs/release.md`).
-- Für ein veröffentlichtes Release gibt es den separaten Skill `release`.
-  Dieser Skill hier ersetzt ihn nicht.
-- Windows-Build (`npm run package:win`) ist nicht Teil dieses Skills.
+- The build is **unsigned**. Gatekeeper may complain on first launch. That is
+  expected (stage 1, see `docs/release.md`).
+- For a published release there is the separate `release` skill. This skill does
+  not replace it.
+- A Windows build (`npm run package:win`) is not part of this skill.
