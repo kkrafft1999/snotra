@@ -85,3 +85,25 @@ issues. So:
 - **Larger, fundamental topics** (epic level) get an issue as well — written out
   far enough that it can be split into several issues later. There is no
   separate place for "the big picture" any more.
+
+## What does not belong here: the promotion
+
+Since #299 the landing page, its hosting, the workflows that publish and
+measure it and the `traffic` skill live in **`kkrafft1999/snotra-promotion`**, a
+private repository of their own. Two consequences for the work here:
+
+- **Tasks about the website go into that repository's issues**, not onto this
+  board. A bug in the page, a wording change, a new section — all of it is
+  raised over there. What stays here is the app, its documentation and its
+  releases.
+- **Nothing here may depend on that repository.** No workflow that deploys the
+  site, no file it has to provide, no path pointing into it. It is private, so
+  such a dependency would break for everyone but the owner — and it would turn
+  a failed release over there into a failed release here. The direction runs
+  the other way: the promotion reads this repository, this repository does not
+  know it exists.
+
+A prose reference to it, as in `language.md` or in the header of
+`scripts/build-icons.js`, is not a dependency and is fine. A bare `#123` in a
+text here means an issue here — when referring to one over there, write it out
+as `kkrafft1999/snotra-promotion#123`.
