@@ -32,6 +32,12 @@ module.exports = {
   'sidebar.recentFolders': 'Zuletzt geöffnete Ordner',
   'sidebar.openFolder': 'Ordner öffnen',
   'sidebar.resize': 'Breite der Seitenleiste',
+  'sidebar.history.empty': 'Noch keine zuletzt geöffneten Ordner.',
+  'sidebar.history.remove': 'Aus Verlauf entfernen',
+  'sidebar.history.remove.label': '{name} aus dem Verlauf entfernen',
+  'tree.reference': 'Im Chat referenzieren',
+  'tree.reference.label': '{name} im Chat referenzieren',
+  'fileInfo.type.unknown': 'Unbekannt',
 
   // ── Welcome screen ─────────────────────────────────────────────────────────
   'welcome.headline': 'Womit fangen wir an?',
@@ -45,10 +51,73 @@ module.exports = {
   'welcome.action.test': 'Tests vorschlagen',
   'welcome.action.doc': 'Doku zusammenfassen',
 
-  // ── File info ──────────────────────────────────────────────────────────────
-  'fileInfo.size': 'Größe',
-  'fileInfo.modified': 'Geändert',
-  'fileInfo.type': 'Typ',
+
+  // ── File information (native dialog, main process) ───────────────────────
+  // Numbers and dates are formatted by hand rather than through Intl/ICU, so
+  // the output does not depend on the ICU build of the Node version in use
+  // (#123). What differs per language therefore lives here: the group
+  // separator, the decimal separator and the shape of the date.
+  'fileInfo.unknown': 'unbekannt',
+  'fileInfo.field.name': 'Name',
+  'fileInfo.field.path': 'Pfad',
+  'fileInfo.field.type': 'Typ',
+  'fileInfo.field.contents': 'Inhalt',
+  'fileInfo.field.size': 'Größe',
+  'fileInfo.field.modified': 'Geändert',
+  'fileInfo.field.created': 'Erstellt',
+  'fileInfo.field.openWith': 'Öffnen mit',
+  'fileInfo.type.folder': 'Ordner',
+  'fileInfo.type.file': 'Datei',
+  'fileInfo.type.fileWithExtension': 'Datei (.{extension})',
+  'fileInfo.type.symlink.toFolder': 'Verknüpfung → {target} auf Ordner',
+  'fileInfo.type.symlink.toFile': 'Verknüpfung → {target} auf Datei',
+  'fileInfo.type.symlink.broken': 'Verknüpfung → {target} (Ziel nicht erreichbar)',
+  'fileInfo.type.symlink.plain.toFolder': 'Verknüpfung auf Ordner',
+  'fileInfo.type.symlink.plain.toFile': 'Verknüpfung auf Datei',
+  'fileInfo.type.symlink.plain.broken': 'Verknüpfung (Ziel nicht erreichbar)',
+  'fileInfo.entries.one': '{count} Eintrag (direkt)',
+  'fileInfo.entries.other': '{count} Einträge (direkt)',
+  'fileInfo.bytes.one': '{count} Byte',
+  'fileInfo.bytes.other': '{count} Bytes',
+  // Thousands separator, decimal separator, and the date: English keeps the
+  // ISO order, which is the only spelling nobody misreads as month-first.
+  'format.group': '.',
+  'format.decimal': ',',
+  'format.date': '{day}.{month}.{year}',
+
+  // ── File tree: file system errors and the import dialog ──────────────────
+  // What the *model* gets back from a tool call is a different channel and
+  // stays English for its own reason (#276) — these are the messages the user
+  // sees in the tree, in the preview and in the native import dialog.
+  'fs.error.destNotFolder': 'Das Ziel ist kein Ordner.',
+  'fs.error.alreadyInFolder': 'Die Quelle liegt bereits in diesem Ordner.',
+  'fs.error.moveIntoItself': 'Ein Ordner kann nicht in sich selbst verschoben werden.',
+  'fs.error.copyIntoItself': 'Ein Ordner kann nicht in sich selbst kopiert werden.',
+  'fs.error.noSource': 'Nichts zum Übernehmen da.',
+  'fs.error.sourceNotAbsolute': 'Die Quelle ist kein absoluter Pfad: {path}',
+  'fs.error.sourceNotFound': 'Quelle nicht gefunden: {path}',
+  'fs.error.tooManyEntries': 'Zu viele Einträge auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
+  'fs.error.tooMuchData': 'Zu viele Daten auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
+  'fs.error.copyFailed': 'Kopieren fehlgeschlagen: {error}',
+  'fs.error.previewTooLarge': 'Datei zu groß für die Vorschau',
+
+  'import.count.dirs.one': '{count} Ordner',
+  'import.count.dirs.other': '{count} Ordner',
+  'import.count.files.one': '{count} Datei',
+  'import.count.files.other': '{count} Dateien',
+  'import.summary.join': ' und ',
+  'import.skipped.symlinks.one': '{count} Verknüpfung wird übersprungen.',
+  'import.skipped.symlinks.other': '{count} Verknüpfungen werden übersprungen.',
+  'import.skipped.sensitive.one': '{count} Datei sieht nach Zugangsdaten aus und wird übersprungen.',
+  'import.skipped.sensitive.other': '{count} Dateien sehen nach Zugangsdaten aus und werden übersprungen.',
+  'import.confirm.message': '{summary} nach „{target}“ kopieren?',
+  'import.confirm.copy': 'Kopieren',
+  'import.confirm.cancel': 'Abbrechen',
+  'import.ok': 'OK',
+  'import.failed.title': 'Übernehmen fehlgeschlagen',
+  'import.impossible.title': 'Übernehmen nicht möglich',
+  'import.noDialog': 'Bestätigung nicht verfügbar.',
+  'import.noContextMenu': 'Kontextmenü nicht verfügbar.',
 
   // ── Chat column ────────────────────────────────────────────────────────────
   'chat.resize': 'Breite des Chat-Bereichs',

@@ -4,9 +4,9 @@ const {
   createFileInfo,
   createDefaultAppResolver,
   formatFields,
-  formatSizeDe,
-  formatTimestampDe,
-  groupDigitsDe,
+  formatSize,
+  formatTimestamp,
+  groupDigits,
 } = require('../src/main/services/file-info');
 
 /** Minimaler Stat-Doppelgänger — nur das, was describe() anfasst. */
@@ -44,35 +44,54 @@ function fsStub(map) {
 
 const noApp = { resolve: async () => null };
 
-test('groupDigitsDe: deutsche Tausenderpunkte', () => {
-  assert.equal(groupDigitsDe(0), '0');
-  assert.equal(groupDigitsDe(999), '999');
-  assert.equal(groupDigitsDe(1000), '1.000');
-  assert.equal(groupDigitsDe(1468006), '1.468.006');
+test('groupDigits: Punkte auf Deutsch, Kommas auf Englisch (#292)', () => {
+  assert.equal(groupDigits(0, 'de'), '0');
+  assert.equal(groupDigits(999, 'de'), '999');
+  assert.equal(groupDigits(1000, 'de'), '1.000');
+  assert.equal(groupDigits(1468006, 'de'), '1.468.006');
+
+  assert.equal(groupDigits(1000, 'en'), '1,000');
+  assert.equal(groupDigits(1468006, 'en'), '1,468,006');
 });
 
-test('formatSizeDe: lesbar plus exakt, unter 1 KB nur die Byte-Zahl (#123)', () => {
-  assert.equal(formatSizeDe(1468006), '1,4 MB (1.468.006 Bytes)');
-  assert.equal(formatSizeDe(0), '0 Bytes');
-  assert.equal(formatSizeDe(1), '1 Byte');
-  assert.equal(formatSizeDe(512), '512 Bytes');
-  assert.equal(formatSizeDe(1024), '1,0 KB (1.024 Bytes)');
+test('formatSize: lesbar plus exakt, unter 1 KB nur die Byte-Zahl (#123)', () => {
+  assert.equal(formatSize(1468006, 'de'), '1,4 MB (1.468.006 Bytes)');
+  assert.equal(formatSize(0, 'de'), '0 Bytes');
+  assert.equal(formatSize(1, 'de'), '1 Byte');
+  assert.equal(formatSize(512, 'de'), '512 Bytes');
+  assert.equal(formatSize(1024, 'de'), '1,0 KB (1.024 Bytes)');
 });
 
-test('formatSizeDe: unbrauchbare Werte werden „unbekannt“, nicht NaN (#123)', () => {
-  assert.equal(formatSizeDe(undefined), 'unbekannt');
-  assert.equal(formatSizeDe(NaN), 'unbekannt');
-  assert.equal(formatSizeDe(-1), 'unbekannt');
+test('formatSize: auf Englisch wandern Trennzeichen und Einheit mit (#292)', () => {
+  assert.equal(formatSize(1468006, 'en'), '1.4 MB (1,468,006 bytes)');
+  assert.equal(formatSize(0, 'en'), '0 bytes');
+  assert.equal(formatSize(1, 'en'), '1 byte');
+  assert.equal(formatSize(512, 'en'), '512 bytes');
+  assert.equal(formatSize(1024, 'en'), '1.0 KB (1,024 bytes)');
 });
 
-test('formatTimestampDe: deutsches Datum, kein „Invalid Date“ (#123)', () => {
-  assert.equal(formatTimestampDe(new Date(2026, 8, 21, 14, 32)), '21.09.2026, 14:32');
-  assert.equal(formatTimestampDe(new Date(2026, 0, 5, 9, 7)), '05.01.2026, 09:07');
+test('formatSize: unbrauchbare Werte werden „unbekannt“, nicht NaN (#123)', () => {
+  assert.equal(formatSize(undefined, 'de'), 'unbekannt');
+  assert.equal(formatSize(NaN, 'de'), 'unbekannt');
+  assert.equal(formatSize(-1, 'de'), 'unbekannt');
+  assert.equal(formatSize(NaN, 'en'), 'unknown');
+});
+
+test('formatTimestamp: deutsches Datum, kein „Invalid Date“ (#123)', () => {
+  assert.equal(formatTimestamp(new Date(2026, 8, 21, 14, 32), 'de'), '21.09.2026, 14:32');
+  assert.equal(formatTimestamp(new Date(2026, 0, 5, 9, 7), 'de'), '05.01.2026, 09:07');
   // birthtime ist unter Linux/ext4 oft 0 bzw. die Epoche.
-  assert.equal(formatTimestampDe(new Date(0)), 'unbekannt');
-  assert.equal(formatTimestampDe(null), 'unbekannt');
-  assert.equal(formatTimestampDe(undefined), 'unbekannt');
-  assert.equal(formatTimestampDe(new Date('quatsch')), 'unbekannt');
+  assert.equal(formatTimestamp(new Date(0), 'de'), 'unbekannt');
+  assert.equal(formatTimestamp(null, 'de'), 'unbekannt');
+  assert.equal(formatTimestamp(undefined, 'de'), 'unbekannt');
+  assert.equal(formatTimestamp(new Date('quatsch'), 'de'), 'unbekannt');
+});
+
+test('formatTimestamp: englisch in ISO-Reihenfolge, damit der Tag eindeutig bleibt (#292)', () => {
+  assert.equal(formatTimestamp(new Date(2026, 8, 21, 14, 32), 'en'), '2026-09-21, 14:32');
+  assert.equal(formatTimestamp(new Date(2026, 0, 5, 9, 7), 'en'), '2026-01-05, 09:07');
+  assert.equal(formatTimestamp(new Date(0), 'en'), 'unknown');
+  assert.equal(formatTimestamp(null, 'en'), 'unknown');
 });
 
 test('formatFields: eine Zeile je Feld, Label mit Doppelpunkt', () => {
@@ -86,7 +105,7 @@ test('describe für eine Datei: Name, Pfad, Typ, Größe, Daten, Öffnen mit (#1
     },
   });
   const info = createFileInfo({ fs, defaultAppResolver: { resolve: async () => 'TextEdit' } });
-  const result = await info.describe('/ws/notiz.md');
+  const result = await info.describe('/ws/notiz.md', { locale: 'de' });
   assert.deepEqual(result.fields, [
     ['Name', 'notiz.md'],
     ['Pfad', '/ws/notiz.md'],
@@ -100,6 +119,29 @@ test('describe für eine Datei: Name, Pfad, Typ, Größe, Daten, Öffnen mit (#1
   assert.equal(result.path, '/ws/notiz.md');
 });
 
+test('describe auf Englisch: Feldnamen, Typ, Zahlen und Datum wandern mit (#292)', async () => {
+  const fs = fsStub({
+    '/ws/notiz.md': {
+      lstat: statLike({ size: 1468006, mtime: new Date(2026, 8, 21, 14, 32), birthtime: new Date(2026, 8, 20, 9, 1) }),
+    },
+  });
+  const info = createFileInfo({ fs, defaultAppResolver: { resolve: async () => 'TextEdit' } });
+  assert.deepEqual((await info.describe('/ws/notiz.md', { locale: 'en' })).fields, [
+    ['Name', 'notiz.md'],
+    ['Path', '/ws/notiz.md'],
+    ['Type', 'File (.md)'],
+    ['Size', '1.4 MB (1,468,006 bytes)'],
+    ['Modified', '2026-09-21, 14:32'],
+    ['Created', '2026-09-20, 09:01'],
+    ['Opens with', 'TextEdit'],
+  ]);
+  // Ohne Angabe gilt die Voreinstellung des Katalogs, nicht die letzte Wahl.
+  assert.deepEqual(
+    (await info.describe('/ws/notiz.md')).fields,
+    (await info.describe('/ws/notiz.md', { locale: 'en' })).fields,
+  );
+});
+
 test('describe für einen Ordner: Anzahl direkter Einträge statt Größe, kein „Öffnen mit“ (#123)', async () => {
   const fs = fsStub({
     '/ws/unterlagen': {
@@ -108,7 +150,7 @@ test('describe für einen Ordner: Anzahl direkter Einträge statt Größe, kein 
     },
   });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
-  const result = await info.describe('/ws/unterlagen', { isDirectory: true });
+  const result = await info.describe('/ws/unterlagen', { isDirectory: true, locale: 'de' });
   assert.deepEqual(result.fields, [
     ['Name', 'unterlagen'],
     ['Pfad', '/ws/unterlagen'],
@@ -117,13 +159,28 @@ test('describe für einen Ordner: Anzahl direkter Einträge statt Größe, kein 
     ['Geändert', '21.09.2026, 08:00'],
     ['Erstellt', '01.08.2026, 12:00'],
   ]);
+
+  const english = await info.describe('/ws/unterlagen', { isDirectory: true, locale: 'en' });
+  assert.deepEqual(english.fields[2], ['Type', 'Folder']);
+  assert.deepEqual(english.fields[3], ['Contents', '3 entries (direct)']);
+});
+
+test('describe: der Zähler folgt dem Numerus, in beiden Sprachen (#292)', async () => {
+  const fs = fsStub({ '/ws/einer': { lstat: statLike({ directory: true }), entries: ['a'] } });
+  const info = createFileInfo({ fs, defaultAppResolver: noApp });
+  const contents = async (locale) => (await info.describe('/ws/einer', { isDirectory: true, locale }))
+    .fields[3][1];
+  assert.equal(await contents('de'), '1 Eintrag (direkt)');
+  assert.equal(await contents('en'), '1 entry (direct)');
 });
 
 test('describe: nicht lesbares Verzeichnis meldet „unbekannt“ statt zu werfen (#123)', async () => {
   const fs = fsStub({ '/ws/gesperrt': { lstat: statLike({ directory: true }) } });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
-  const result = await info.describe('/ws/gesperrt', { isDirectory: true });
+  const result = await info.describe('/ws/gesperrt', { isDirectory: true, locale: 'de' });
   assert.deepEqual(result.fields.find(([l]) => l === 'Inhalt'), ['Inhalt', 'unbekannt']);
+  const english = await info.describe('/ws/gesperrt', { isDirectory: true, locale: 'en' });
+  assert.deepEqual(english.fields.find(([l]) => l === 'Contents'), ['Contents', 'unknown']);
 });
 
 test('describe: Symlink nennt das Ziel, Größe kommt vom Ziel (#123)', async () => {
@@ -135,9 +192,13 @@ test('describe: Symlink nennt das Ziel, Größe kommt vom Ziel (#123)', async ()
     },
   });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
-  const result = await info.describe('/ws/link');
+  const result = await info.describe('/ws/link', { locale: 'de' });
   assert.deepEqual(result.fields[2], ['Typ', 'Verknüpfung → ../ziel.txt auf Datei']);
   assert.deepEqual(result.fields[3], ['Größe', '2,0 KB (2.048 Bytes)']);
+
+  const english = await info.describe('/ws/link', { locale: 'en' });
+  assert.deepEqual(english.fields[2], ['Type', 'Symlink → ../ziel.txt, to a file']);
+  assert.deepEqual(english.fields[3], ['Size', '2.0 KB (2,048 bytes)']);
 });
 
 test('describe: toter Symlink bleibt auskunftsfähig, Größe „unbekannt“ (#123)', async () => {
@@ -145,10 +206,21 @@ test('describe: toter Symlink bleibt auskunftsfähig, Größe „unbekannt“ (#
     '/ws/tot': { lstat: statLike({ symlink: true, mtime: new Date(2026, 8, 2, 11, 0) }), link: '/weg' },
   });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
-  const result = await info.describe('/ws/tot');
+  const result = await info.describe('/ws/tot', { locale: 'de' });
   assert.deepEqual(result.fields[2], ['Typ', 'Verknüpfung → /weg (Ziel nicht erreichbar)']);
   assert.deepEqual(result.fields[3], ['Größe', 'unbekannt']);
   assert.deepEqual(result.fields.at(-1), ['Öffnen mit', 'unbekannt']);
+
+  const english = await info.describe('/ws/tot', { locale: 'en' });
+  assert.deepEqual(english.fields[2], ['Type', 'Symlink → /weg (target unreachable)']);
+});
+
+test('describe: ein Symlink ohne lesbares Ziel bleibt ein ganzer Satz (#292)', async () => {
+  // readlink liefert '' — ein „→“ ins Leere sähe nach einem Fehler aus.
+  const fs = fsStub({ '/ws/ohne': { lstat: statLike({ symlink: true }), stat: statLike({ size: 8 }) } });
+  const info = createFileInfo({ fs, defaultAppResolver: noApp });
+  assert.deepEqual((await info.describe('/ws/ohne', { locale: 'de' })).fields[2], ['Typ', 'Verknüpfung auf Datei']);
+  assert.deepEqual((await info.describe('/ws/ohne', { locale: 'en' })).fields[2], ['Type', 'Symlink to a file']);
 });
 
 test('describe: fehlgeschlagenes stat liefert error statt einer Exception (#123)', async () => {
@@ -161,7 +233,7 @@ test('describe: fehlgeschlagenes stat liefert error statt einer Exception (#123)
 test('describe: nicht ermittelbares Standardprogramm wird „unbekannt“ (#123)', async () => {
   const fs = fsStub({ '/ws/a.bin': { lstat: statLike({ size: 4 }) } });
   const info = createFileInfo({ fs, defaultAppResolver: { resolve: async () => null } });
-  const result = await info.describe('/ws/a.bin');
+  const result = await info.describe('/ws/a.bin', { locale: 'de' });
   assert.deepEqual(result.fields.at(-1), ['Öffnen mit', 'unbekannt']);
   assert.deepEqual(result.fields[2], ['Typ', 'Datei (.bin)']);
 });
@@ -169,8 +241,8 @@ test('describe: nicht ermittelbares Standardprogramm wird „unbekannt“ (#123)
 test('describe: Datei ohne Endung bekommt keinen leeren Klammerzusatz', async () => {
   const fs = fsStub({ '/ws/LICENSE': { lstat: statLike({ size: 10 }) } });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
-  const result = await info.describe('/ws/LICENSE');
-  assert.deepEqual(result.fields[2], ['Typ', 'Datei']);
+  assert.deepEqual((await info.describe('/ws/LICENSE', { locale: 'de' })).fields[2], ['Typ', 'Datei']);
+  assert.deepEqual((await info.describe('/ws/LICENSE', { locale: 'en' })).fields[2], ['Type', 'File']);
 });
 
 test('Standardprogramm macOS: NSWorkspace statt Finder, Ergebnis ohne „.app“ (#123)', async () => {

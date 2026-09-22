@@ -250,6 +250,9 @@ function createApplication({
     path,
     maxReadFileBytes: LIMITS.MAX_READ_FILE_BYTES,
     maxWriteFileBytes: LIMITS.MAX_WRITE_FILE_BYTES,
+    // Nur für die Wege, die beim Nutzer enden — Baum, Vorschau, Drag & Drop
+    // (#292). Was an das Modell zurückgeht, bleibt englisch.
+    getLocale: getAppLocale,
   });
   const filesystem = createFilesystemIpcAdapter({
     fsService,
@@ -580,7 +583,9 @@ function createApplication({
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
     : null;
   // dialog: der Import von außen (#101) wird nativ bestätigt, nicht im Renderer.
-  registerFsHandlers({ ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog });
+  registerFsHandlers({
+    ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale,
+  });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({
     ipcMain,

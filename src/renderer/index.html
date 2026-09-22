@@ -71,7 +71,11 @@
     <div id="workspace">
       <aside id="sidebar">
         <div id="tree-header">
-          <span id="project-name" data-i18n="sidebar.noFolder">No folder open</span>
+          <!-- Kein `data-i18n`: Steht ein Ordner offen, traegt dieses Feld seinen
+               Namen, und `applyTranslations` wuerde ihn beim Sprachwechsel durch
+               „Kein Ordner geoeffnet" ersetzen (#292). Den Platzhalter setzt
+               deshalb FileTree selbst. -->
+          <span id="project-name">No folder open</span>
           <div class="icon-btn-row">
             <div id="folder-history-wrapper">
               <button id="btn-folder-history" type="button" title="Recently opened folders" aria-label="Recently opened folders" aria-haspopup="menu" aria-expanded="false" data-i18n-attr="title:sidebar.recentFolders;aria-label:sidebar.recentFolders">
@@ -174,9 +178,9 @@
           </div>
           <h2 id="info-filename"></h2>
           <table id="info-table">
-            <tr><td data-i18n="fileInfo.size">Size</td><td id="info-size"></td></tr>
-            <tr><td data-i18n="fileInfo.modified">Modified</td><td id="info-modified"></td></tr>
-            <tr><td data-i18n="fileInfo.type">Type</td><td id="info-type"></td></tr>
+            <tr><td data-i18n="fileInfo.field.size">Size</td><td id="info-size"></td></tr>
+            <tr><td data-i18n="fileInfo.field.modified">Modified</td><td id="info-modified"></td></tr>
+            <tr><td data-i18n="fileInfo.field.type">Type</td><td id="info-type"></td></tr>
           </table>
         </div>
       </section>

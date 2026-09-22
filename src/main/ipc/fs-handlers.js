@@ -1,6 +1,7 @@
 const path = require('path');
 const { LIMITS } = require('../../shared/limits');
-const { formatBytesDe } = require('../../shared/runtime/format-bytes');
+const { formatBytes } = require('../../shared/runtime/format-bytes');
+const { createTranslator } = require('../../shared/i18n');
 
 /**
  * Entscheidet, ob ein Import nativ bestätigt werden muss (Issue #101).
@@ -16,30 +17,23 @@ function needsImportConfirmation(inspection, limits = LIMITS) {
   return (inspection.bytes || 0) >= limits.IMPORT_CONFIRM_MIN_BYTES;
 }
 
-function countPhrase(count, singular, plural) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 /** Klartext für den Bestätigungsdialog: „3 Ordner und 128 Dateien (4,2 MB)“. */
-function formatImportSummary(inspection) {
+function formatImportSummary(inspection, t) {
   const parts = [];
-  if (inspection.dirs > 0) parts.push(countPhrase(inspection.dirs, 'Ordner', 'Ordner'));
+  if (inspection.dirs > 0) parts.push(t.plural('import.count.dirs', inspection.dirs));
   if (inspection.files > 0 || parts.length === 0) {
-    parts.push(countPhrase(inspection.files || 0, 'Datei', 'Dateien'));
+    parts.push(t.plural('import.count.files', inspection.files || 0));
   }
-  return `${parts.join(' und ')} (${formatBytesDe(inspection.bytes || 0)})`;
+  return `${parts.join(t('import.summary.join'))} (${formatBytes(inspection.bytes || 0, t.locale)})`;
 }
 
-function formatSkipNote(inspection) {
+function formatSkipNote(inspection, t) {
   const notes = [];
   if (inspection.skippedSymlinks > 0) {
-    notes.push(`${countPhrase(inspection.skippedSymlinks, 'Verknüpfung wird', 'Verknüpfungen werden')} übersprungen.`);
+    notes.push(t.plural('import.skipped.symlinks', inspection.skippedSymlinks));
   }
   if (inspection.skippedSensitive > 0) {
-    notes.push(
-      `${countPhrase(inspection.skippedSensitive, 'Datei sieht', 'Dateien sehen')} nach Zugangsdaten aus und `
-      + `${inspection.skippedSensitive === 1 ? 'wird' : 'werden'} übersprungen.`
-    );
+    notes.push(t.plural('import.skipped.sensitive', inspection.skippedSensitive));
   }
   return notes.join(' ');
 }
@@ -53,6 +47,9 @@ function registerFsHandlers({
   getMainWindow = () => null,
   dialog = null,
   limits = LIMITS,
+  // Sprache der Oberfläche (#292). Wie beim Kontextmenü bei jedem Dialog neu
+  // gelesen — er lebt nur bis zum Klick, ein Neuaufbau erübrigt sich.
+  getLocale = () => undefined,
 }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath) =>
     filesystem.readDirectory(dirPath));
@@ -88,14 +85,15 @@ function registerFsHandlers({
   // bestätigt nativ, weil der Renderer keine Sicherheitsgrenze ist
   // (docs/security-concept.md §5).
   ipcMain.handle(REQ.FS_IMPORT_ITEMS, async (_event, sourcePaths, destDir) => {
+    const t = createTranslator(getLocale());
     const inspection = await filesystem.inspectImport(sourcePaths, destDir);
     if (inspection.error) {
       if (dialog) {
         await showMessageBox({
           type: 'error',
-          buttons: ['OK'],
+          buttons: [t('import.ok')],
           noLink: true,
-          message: 'Übernehmen nicht möglich',
+          message: t('import.impossible.title'),
           detail: inspection.error,
         });
       }
@@ -107,19 +105,22 @@ function registerFsHandlers({
     }
 
     if (needsImportConfirmation(inspection, limits)) {
-      if (!dialog) return { error: 'Bestätigung nicht verfügbar.' };
-      const skipNote = formatSkipNote(inspection);
+      if (!dialog) return { error: t('import.noDialog') };
+      const skipNote = formatSkipNote(inspection, t);
       // Der aufgelöste Zielpfad aus der Prüfung, nicht der Rohwert aus dem
       // Renderer — im Dialog soll stehen, wohin wirklich kopiert wird.
       const target = inspection.destDir || destDir;
       const { response } = await showMessageBox({
         type: 'question',
-        buttons: ['Kopieren', 'Abbrechen'],
+        buttons: [t('import.confirm.copy'), t('import.confirm.cancel')],
         // „Abbrechen“ als Standard- und Escape-Antwort, damit Enter nichts kopiert (#59).
         defaultId: 1,
         cancelId: 1,
         noLink: true,
-        message: `${formatImportSummary(inspection)} nach „${path.basename(target)}“ kopieren?`,
+        message: t('import.confirm.message', {
+          summary: formatImportSummary(inspection, t),
+          target: path.basename(target),
+        }),
         detail: `${target}${skipNote ? `\n\n${skipNote}` : ''}`,
       });
       if (response !== 0) return { cancelled: true };
@@ -129,9 +130,9 @@ function registerFsHandlers({
     if (result.error && dialog) {
       await showMessageBox({
         type: 'error',
-        buttons: ['OK'],
+        buttons: [t('import.ok')],
         noLink: true,
-        message: 'Übernehmen fehlgeschlagen',
+        message: t('import.failed.title'),
         detail: result.error,
       });
     }
@@ -143,7 +144,7 @@ function registerFsHandlers({
   // isDirectory steuert nur den Zuschnitt des Menüs (#120) — die Pfadprüfung
   // hängt nicht daran, das Flag aus dem Renderer ist also unkritisch.
   ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath, { isDirectory = false } = {}) => {
-    if (!fileContextMenu) return { error: 'Kontextmenü nicht verfügbar.' };
+    if (!fileContextMenu) return { error: createTranslator(getLocale())('import.noContextMenu') };
     const { absPath, error } = await filesystem.resolveWorkspacePath(filePath);
     if (error) return { error };
     const win = getMainWindow();

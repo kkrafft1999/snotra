@@ -27,6 +27,12 @@ module.exports = {
   'sidebar.recentFolders': 'Recently opened folders',
   'sidebar.openFolder': 'Open folder',
   'sidebar.resize': 'Sidebar width',
+  'sidebar.history.empty': 'No recently opened folders yet.',
+  'sidebar.history.remove': 'Remove from history',
+  'sidebar.history.remove.label': 'Remove {name} from the history',
+  'tree.reference': 'Reference in the chat',
+  'tree.reference.label': 'Reference {name} in the chat',
+  'fileInfo.type.unknown': 'Unknown',
 
   // ── Welcome screen ───────────────────────────────────────────────────────
   'welcome.headline': 'Where shall we start?',
@@ -40,10 +46,73 @@ module.exports = {
   'welcome.action.test': 'Suggest tests',
   'welcome.action.doc': 'Summarise the docs',
 
-  // ── File info ────────────────────────────────────────────────────────────
-  'fileInfo.size': 'Size',
-  'fileInfo.modified': 'Modified',
-  'fileInfo.type': 'Type',
+
+  // ── File information (native dialog, main process) ───────────────────────
+  // Numbers and dates are formatted by hand rather than through Intl/ICU, so
+  // the output does not depend on the ICU build of the Node version in use
+  // (#123). What differs per language therefore lives here: the group
+  // separator, the decimal separator and the shape of the date.
+  'fileInfo.unknown': 'unknown',
+  'fileInfo.field.name': 'Name',
+  'fileInfo.field.path': 'Path',
+  'fileInfo.field.type': 'Type',
+  'fileInfo.field.contents': 'Contents',
+  'fileInfo.field.size': 'Size',
+  'fileInfo.field.modified': 'Modified',
+  'fileInfo.field.created': 'Created',
+  'fileInfo.field.openWith': 'Opens with',
+  'fileInfo.type.folder': 'Folder',
+  'fileInfo.type.file': 'File',
+  'fileInfo.type.fileWithExtension': 'File (.{extension})',
+  'fileInfo.type.symlink.toFolder': 'Symlink → {target}, to a folder',
+  'fileInfo.type.symlink.toFile': 'Symlink → {target}, to a file',
+  'fileInfo.type.symlink.broken': 'Symlink → {target} (target unreachable)',
+  'fileInfo.type.symlink.plain.toFolder': 'Symlink to a folder',
+  'fileInfo.type.symlink.plain.toFile': 'Symlink to a file',
+  'fileInfo.type.symlink.plain.broken': 'Symlink (target unreachable)',
+  'fileInfo.entries.one': '{count} entry (direct)',
+  'fileInfo.entries.other': '{count} entries (direct)',
+  'fileInfo.bytes.one': '{count} byte',
+  'fileInfo.bytes.other': '{count} bytes',
+  // Thousands separator, decimal separator, and the date: English keeps the
+  // ISO order, which is the only spelling nobody misreads as month-first.
+  'format.group': ',',
+  'format.decimal': '.',
+  'format.date': '{year}-{month}-{day}',
+
+  // ── File tree: file system errors and the import dialog ──────────────────
+  // What the *model* gets back from a tool call is a different channel and
+  // stays English for its own reason (#276) — these are the messages the user
+  // sees in the tree, in the preview and in the native import dialog.
+  'fs.error.destNotFolder': 'The target is not a folder.',
+  'fs.error.alreadyInFolder': 'The source is already in that folder.',
+  'fs.error.moveIntoItself': 'A folder cannot be moved into itself.',
+  'fs.error.copyIntoItself': 'A folder cannot be copied into itself.',
+  'fs.error.noSource': 'Nothing to take over.',
+  'fs.error.sourceNotAbsolute': 'The source is not an absolute path: {path}',
+  'fs.error.sourceNotFound': 'Source not found: {path}',
+  'fs.error.tooManyEntries': 'Too many entries at once (limit: {limit}). Please take them over in smaller parts.',
+  'fs.error.tooMuchData': 'Too much data at once (limit: {limit}). Please take it over in smaller parts.',
+  'fs.error.copyFailed': 'Copying failed: {error}',
+  'fs.error.previewTooLarge': 'File too large for preview',
+
+  'import.count.dirs.one': '{count} folder',
+  'import.count.dirs.other': '{count} folders',
+  'import.count.files.one': '{count} file',
+  'import.count.files.other': '{count} files',
+  'import.summary.join': ' and ',
+  'import.skipped.symlinks.one': '{count} symlink will be skipped.',
+  'import.skipped.symlinks.other': '{count} symlinks will be skipped.',
+  'import.skipped.sensitive.one': '{count} file looks like credentials and will be skipped.',
+  'import.skipped.sensitive.other': '{count} files look like credentials and will be skipped.',
+  'import.confirm.message': 'Copy {summary} into “{target}”?',
+  'import.confirm.copy': 'Copy',
+  'import.confirm.cancel': 'Cancel',
+  'import.ok': 'OK',
+  'import.failed.title': 'Taking over failed',
+  'import.impossible.title': 'Cannot take this over',
+  'import.noDialog': 'No confirmation available.',
+  'import.noContextMenu': 'No context menu available.',
 
   // ── Chat column ──────────────────────────────────────────────────────────
   'chat.resize': 'Chat area width',

@@ -20,17 +20,29 @@
 
 const nodePath = require('path');
 const { execFile: nodeExecFile } = require('child_process');
-const { formatBytesDe } = require('../../shared/runtime/format-bytes');
+const { formatBytes } = require('../../shared/runtime/format-bytes');
+const { createTranslator, translate, translatePlural } = require('../../shared/i18n');
 
-const UNKNOWN = 'unbekannt';
 const DEFAULT_APP_TIMEOUT_MS = 1500;
 
-/** 1468006 → „1.468.006“ (deutsche Tausenderpunkte, ohne Intl/ICU-Abhängigkeit). */
-function groupDigitsDe(value) {
+/** „unbekannt“ bzw. „unknown“ — das Wort, mit dem hier jeder Fehlschlag endet. */
+function unknown(locale) {
+  return translate(locale, 'fileInfo.unknown');
+}
+
+/**
+ * 1468006 → „1.468.006“ (deutsch) bzw. „1,468,006“ (englisch).
+ *
+ * Von Hand statt über `Intl.NumberFormat`: Die Ausgabe soll nicht an der
+ * ICU-Ausstattung der jeweiligen Node-Version hängen (#123). Das Trennzeichen
+ * kommt deshalb aus dem Katalog, nicht aus der Laufzeit.
+ */
+function groupDigits(value, locale) {
+  const separator = translate(locale, 'format.group');
   const digits = String(Math.trunc(Math.abs(value)));
   let out = '';
   for (let i = 0; i < digits.length; i += 1) {
-    if (i > 0 && (digits.length - i) % 3 === 0) out += '.';
+    if (i > 0 && (digits.length - i) % 3 === 0) out += separator;
     out += digits[i];
   }
   return value < 0 ? `-${out}` : out;
@@ -40,11 +52,11 @@ function groupDigitsDe(value) {
  * Lesbar **und** exakt: „1,4 MB (1.468.006 Bytes)“. Unter 1 KB wäre die
  * Klammer eine Wiederholung, deshalb dort nur die Byte-Zahl.
  */
-function formatSizeDe(bytes) {
-  if (!Number.isFinite(bytes) || bytes < 0) return UNKNOWN;
-  const exact = `${groupDigitsDe(bytes)} ${bytes === 1 ? 'Byte' : 'Bytes'}`;
+function formatSize(bytes, locale) {
+  if (!Number.isFinite(bytes) || bytes < 0) return unknown(locale);
+  const exact = translatePlural(locale, 'fileInfo.bytes', bytes, { count: groupDigits(bytes, locale) });
   if (bytes < 1024) return exact;
-  return `${formatBytesDe(bytes)} (${exact})`;
+  return `${formatBytes(bytes, locale)} (${exact})`;
 }
 
 function pad2(n) {
@@ -52,18 +64,30 @@ function pad2(n) {
 }
 
 /**
- * „21.09.2026, 14:32“ — bewusst von Hand statt über `toLocaleString`, damit
- * die Ausgabe nicht von der ICU-Ausstattung der jeweiligen Node-Version
- * abhängt. `birthtime` ist unter Linux/ext4 oft 0 bzw. die Epoche; solche
- * Werte gelten als unbekannt, statt als „01.01.1970“ zu erscheinen.
+ * „21.09.2026, 14:32“ auf Deutsch, „2026-09-21, 14:32“ auf Englisch — die
+ * Reihenfolge der Datumsteile kommt aus dem Katalog, gebaut wird sie wie die
+ * Zahlen von Hand statt über `toLocaleString`, damit die Ausgabe nicht von der
+ * ICU-Ausstattung der jeweiligen Node-Version abhängt.
+ *
+ * Englisch bekommt bewusst die ISO-Reihenfolge und keine Schreibweise mit
+ * Schrägstrichen: „09/21/2026“ und „21/09/2026“ sehen gleich aus und meinen
+ * verschiedene Tage. Die Uhrzeit bleibt in beiden Sprachen 24-stündig, passend
+ * dazu.
+ *
+ * `birthtime` ist unter Linux/ext4 oft 0 bzw. die Epoche; solche Werte gelten
+ * als unbekannt, statt als „01.01.1970“ zu erscheinen.
  */
-function formatTimestampDe(value) {
-  if (value === null || value === undefined) return UNKNOWN;
+function formatTimestamp(value, locale) {
+  if (value === null || value === undefined) return unknown(locale);
   const date = value instanceof Date ? value : new Date(value);
   const ms = date.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return UNKNOWN;
-  return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}.${date.getFullYear()}`
-    + `, ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  if (!Number.isFinite(ms) || ms <= 0) return unknown(locale);
+  const day = translate(locale, 'format.date', {
+    day: pad2(date.getDate()),
+    month: pad2(date.getMonth() + 1),
+    year: String(date.getFullYear()),
+  });
+  return `${day}, ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 /** Endung ohne Punkt, kleingeschrieben; '' für Dotfiles und Namen ohne Endung. */
@@ -247,9 +271,14 @@ function createFileInfo({
   }
 
   /**
+   * @param {string} absPath
+   * @param {{isDirectory?: boolean, locale?: string}} [options]
+   *   `locale` ist die Sprache der Oberfläche; der Dialog wird bei jedem
+   *   Öffnen neu gebaut, deshalb reicht der Wert von genau diesem Moment (#292).
    * @returns {Promise<{fields: Array<[string,string]>, name: string, path: string}|{error: string}>}
    */
-  async function describe(absPath, { isDirectory = false } = {}) {
+  async function describe(absPath, { isDirectory = false, locale } = {}) {
+    const t = createTranslator(locale);
     let link = null;
     try {
       link = await fs.lstat(absPath);
@@ -274,36 +303,41 @@ function createFileInfo({
     const name = nodePath.basename(absPath);
     const ext = extensionOf(absPath);
 
-    let type = directory ? 'Ordner' : 'Datei';
-    if (!directory && ext) type += ` (.${ext})`;
+    let type = directory
+      ? t('fileInfo.type.folder')
+      : (ext ? t('fileInfo.type.fileWithExtension', { extension: ext }) : t('fileInfo.type.file'));
     if (isSymlink) {
+      // Ohne lesbares Ziel bleibt nur die kurze Fassung — ein „→“ ins Leere
+      // sähe nach einem abgeschnittenen Satz aus.
       const target = await symlinkTarget(absPath);
-      type = `Verknüpfung${target ? ` → ${target}` : ''}`
-        + (brokenLink ? ' (Ziel nicht erreichbar)' : ` auf ${directory ? 'Ordner' : 'Datei'}`);
+      const kind = brokenLink ? 'broken' : (directory ? 'toFolder' : 'toFile');
+      type = target
+        ? t(`fileInfo.type.symlink.${kind}`, { target })
+        : t(`fileInfo.type.symlink.plain.${kind}`);
     }
 
     const fields = [
-      ['Name', name],
-      ['Pfad', absPath],
-      ['Typ', type],
+      [t('fileInfo.field.name'), name],
+      [t('fileInfo.field.path'), absPath],
+      [t('fileInfo.field.type'), type],
     ];
 
     if (directory) {
       const count = await countEntries(absPath);
       fields.push([
-        'Inhalt',
-        count === null ? UNKNOWN : `${groupDigitsDe(count)} ${count === 1 ? 'Eintrag' : 'Einträge'} (direkt)`,
+        t('fileInfo.field.contents'),
+        count === null ? unknown(t.locale) : t.plural('fileInfo.entries', count, { count: groupDigits(count, t.locale) }),
       ]);
     } else {
-      fields.push(['Größe', brokenLink ? UNKNOWN : formatSizeDe(stats.size)]);
+      fields.push([t('fileInfo.field.size'), brokenLink ? unknown(t.locale) : formatSize(stats.size, t.locale)]);
     }
 
-    fields.push(['Geändert', formatTimestampDe(stats.mtime)]);
-    fields.push(['Erstellt', formatTimestampDe(stats.birthtime)]);
+    fields.push([t('fileInfo.field.modified'), formatTimestamp(stats.mtime, t.locale)]);
+    fields.push([t('fileInfo.field.created'), formatTimestamp(stats.birthtime, t.locale)]);
 
     if (!directory) {
       const app = brokenLink ? null : await resolver.resolve(absPath, { fs });
-      fields.push(['Öffnen mit', app || UNKNOWN]);
+      fields.push([t('fileInfo.field.openWith'), app || unknown(t.locale)]);
     }
 
     return { name, path: absPath, fields };
@@ -325,8 +359,7 @@ module.exports = {
   createFileInfo,
   createDefaultAppResolver,
   formatFields,
-  formatSizeDe,
-  formatTimestampDe,
-  groupDigitsDe,
-  UNKNOWN,
+  formatSize,
+  formatTimestamp,
+  groupDigits,
 };

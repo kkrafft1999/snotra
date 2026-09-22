@@ -6,8 +6,14 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 
-function makeFsService() {
-  return createFsService({ fs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 });
+function makeFsService({ locale } = {}) {
+  return createFsService({
+    fs,
+    path,
+    maxReadFileBytes: 1024 * 1024,
+    maxWriteFileBytes: 1024 * 1024,
+    ...(locale ? { getLocale: () => locale } : {}),
+  });
 }
 
 // Die Freigabe eines Aufrufs trifft seit Issue #66 die Policy in der Engine;
@@ -2638,7 +2644,10 @@ async function makeImportFixture(t) {
   await fs.mkdir(path.join(outside, 'bilder'), { recursive: true });
   await fs.writeFile(path.join(outside, 'notiz.txt'), 'hallo', 'utf8');
   await fs.writeFile(path.join(outside, 'bilder', 'a.png'), 'png', 'utf8');
-  return { tmpRoot, workspace, outside, svc: makeFsService() };
+  // Die Fehlertexte des Imports gehen an den Nutzer und stehen seit #292 im
+  // Katalog. Geprüft wird auf Deutsch, weil die Sätze dort am längsten
+  // gewachsen sind; dass Englisch danebensteht, hält der Test darunter fest.
+  return { tmpRoot, workspace, outside, svc: makeFsService({ locale: 'de' }) };
 }
 
 const sensitiveName = (name) => /^\.env|\.pem$|^id_/.test(name);
@@ -2762,6 +2771,15 @@ test('importExternalItems lehnt Selbst- und Vorfahrenfälle ab (#101)', async (t
   assert.match(ontoItself.error, /in sich selbst/);
 });
 
+test('die Fehlertexte des Imports folgen der Sprache der Oberfläche (#292)', async (t) => {
+  const { workspace, outside } = await makeImportFixture(t);
+  const errorFor = async (locale) => (await makeFsService({ locale })
+    .importExternalItems([path.join(outside, 'weg.txt')], workspace)).error;
+
+  assert.match(await errorFor('de'), /Quelle nicht gefunden/);
+  assert.match(await errorFor('en'), /Source not found/);
+});
+
 test('importExternalItems lehnt fehlende, relative und nicht-Ordner-Ziele ab (#101)', async (t) => {
   const { workspace, outside, svc } = await makeImportFixture(t);
   await fs.writeFile(path.join(workspace, 'datei.txt'), 'x', 'utf8');
@@ -2778,5 +2796,5 @@ test('importExternalItems lehnt fehlende, relative und nicht-Ordner-Ziele ab (#1
     (await svc.importExternalItems([path.join(outside, 'notiz.txt')], path.join(workspace, 'datei.txt'))).error,
     /kein Ordner/
   );
-  assert.match((await svc.importExternalItems([], workspace)).error, /Keine Quelle/);
+  assert.match((await svc.importExternalItems([], workspace)).error, /Nichts zum Übernehmen/);
 });

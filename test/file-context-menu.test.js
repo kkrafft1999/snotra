@@ -268,7 +268,11 @@ test('„Informationen“: isDirectory wird an die Auskunft durchgereicht (#123)
   await menu.buildTemplate('/ws/unterlagen', { isDirectory: true })[1].click();
   // Der Klick-Handler ist nicht awaitbar; ein Tick reicht für die Zusage.
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(calls.described, [{ path: '/ws/unterlagen', opts: { isDirectory: true } }]);
+  // Die Sprache geht mit, sonst käme die Tabelle in der Voreinstellung zurück
+  // statt in der Sprache, in der das Menü gerade steht (#292).
+  assert.deepEqual(calls.described, [
+    { path: '/ws/unterlagen', opts: { isDirectory: true, locale: 'en' } },
+  ]);
   assert.match(calls.dialogs[0].message, /Information about “unterlagen”/);
 });
 

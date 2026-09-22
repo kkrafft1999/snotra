@@ -11,7 +11,8 @@ const {
   collectLineMatches,
   validateRegexPattern,
 } = require('./search-line-matcher');
-const { formatBytesDe } = require('../../shared/runtime/format-bytes');
+const { formatBytes } = require('../../shared/runtime/format-bytes');
+const { createTranslator } = require('../../shared/i18n');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
   WORKSPACE_IMAGE_ERRORS,
@@ -778,7 +779,18 @@ function createFsService({
   maxSearchScannedFiles,
   maxReadSliceChars,
   regexSearchTimeBudgetMs,
+  /**
+   * Sprache der Oberfläche (#292). Sie gilt nur für die Wege, die beim Nutzer
+   * enden — Baum, Vorschau, Drag & Drop. Was ein Tool dem Modell zurückgibt,
+   * ist ein anderer Kanal und bleibt englisch (#276); dort wird `ui()` nicht
+   * aufgerufen. Gelesen wird die Sprache bei jedem Aufruf frisch, damit ein
+   * Wechsel ohne Neustart greift.
+   */
+  getLocale = () => undefined,
 }) {
+  /** Übersetzer für genau diesen Aufruf, in der gerade eingestellten Sprache. */
+  const ui = () => createTranslator(getLocale());
+
   const MAX_READ_FILE_BYTES = maxReadFileBytes;
   const MAX_WRITE_FILE_BYTES = maxWriteFileBytes || maxReadFileBytes;
   const MAX_SEARCH_SCANNED_FILES = maxSearchScannedFiles || SEARCH_DEFAULT_MAX_SCANNED_FILES;
@@ -2127,18 +2139,19 @@ function createFsService({
   async function moveItem(sourcePath, destDir) {
     const srcStat = await fs.stat(sourcePath);
     const dstStat = await fs.stat(destDir);
+    const t = ui();
     if (!dstStat.isDirectory()) {
-      return { error: 'Ziel ist kein Ordner.' };
+      return { error: t('fs.error.destNotFolder') };
     }
     const baseName = path.basename(sourcePath);
 
     const srcParent = path.dirname(sourcePath);
     if (path.resolve(srcParent) === path.resolve(destDir)) {
-      return { error: 'Quelle liegt bereits in diesem Ordner.' };
+      return { error: t('fs.error.alreadyInFolder') };
     }
 
     if (srcStat.isDirectory() && path.resolve(destDir).startsWith(path.resolve(sourcePath) + path.sep)) {
-      return { error: 'Ordner kann nicht in sich selbst verschoben werden.' };
+      return { error: t('fs.error.moveIntoItself') };
     }
 
     const targetPath = await findFreeTargetPath(destDir, baseName);
@@ -2209,16 +2222,17 @@ function createFsService({
       isSensitiveName = null,
     } = options;
 
+    const t = ui();
     const sources = Array.isArray(sourcePaths) ? sourcePaths.filter((p) => typeof p === 'string' && p) : [];
-    if (sources.length === 0) return { error: 'Keine Quelle zum Übernehmen.' };
+    if (sources.length === 0) return { error: t('fs.error.noSource') };
 
     let dstStat;
     try {
       dstStat = await fs.stat(destDir);
     } catch {
-      return { error: 'Ziel ist kein Ordner.' };
+      return { error: t('fs.error.destNotFolder') };
     }
-    if (!dstStat.isDirectory()) return { error: 'Ziel ist kein Ordner.' };
+    if (!dstStat.isDirectory()) return { error: t('fs.error.destNotFolder') };
 
     const resolvedDest = path.resolve(destDir);
     const acc = {
@@ -2234,24 +2248,24 @@ function createFsService({
     const claimed = new Set();
 
     for (const source of sources) {
-      if (!path.isAbsolute(source)) return { error: `Quelle ist kein absoluter Pfad: ${source}` };
+      if (!path.isAbsolute(source)) return { error: t('fs.error.sourceNotAbsolute', { path: source }) };
       const resolvedSource = path.resolve(source);
 
       let srcStat;
       try {
         srcStat = await fs.lstat(resolvedSource);
       } catch {
-        return { error: `Quelle nicht gefunden: ${source}` };
+        return { error: t('fs.error.sourceNotFound', { path: source }) };
       }
 
       if (resolvedSource === resolvedDest) {
-        return { error: 'Ordner kann nicht in sich selbst kopiert werden.' };
+        return { error: t('fs.error.copyIntoItself') };
       }
       if (path.dirname(resolvedSource) === resolvedDest) {
-        return { error: 'Quelle liegt bereits in diesem Ordner.' };
+        return { error: t('fs.error.alreadyInFolder') };
       }
       if (srcStat.isDirectory() && resolvedDest.startsWith(resolvedSource + path.sep)) {
-        return { error: 'Ordner kann nicht in sich selbst kopiert werden.' };
+        return { error: t('fs.error.copyIntoItself') };
       }
 
       if (srcStat.isSymbolicLink()) {
@@ -2261,14 +2275,10 @@ function createFsService({
 
       await countImportSource(resolvedSource, srcStat, acc, isSensitiveName);
       if (acc.dirs + acc.files > maxEntries) {
-        return {
-          error: `Zu viele Einträge auf einmal (Grenze: ${maxEntries}). Bitte in kleineren Teilen übernehmen.`,
-        };
+        return { error: t('fs.error.tooManyEntries', { limit: maxEntries }) };
       }
       if (acc.bytes > maxTotalBytes) {
-        return {
-          error: `Zu viele Daten auf einmal (Grenze: ${formatBytesDe(maxTotalBytes)}). Bitte in kleineren Teilen übernehmen.`,
-        };
+        return { error: t('fs.error.tooMuchData', { limit: formatBytes(maxTotalBytes, t.locale) }) };
       }
 
       targets.push({
@@ -2321,7 +2331,7 @@ function createFsService({
         });
       } catch (err) {
         return {
-          error: `Kopieren fehlgeschlagen: ${err?.message ?? String(err)}`,
+          error: ui()('fs.error.copyFailed', { error: err?.message ?? String(err) }),
           copied,
         };
       }
@@ -2410,7 +2420,7 @@ function createFsService({
     const stats = await fs.stat(filePath);
     const MAX_SIZE = 1024 * 1024; // 1 MB limit for preview
     if (stats.size > MAX_SIZE) {
-      return { error: 'File too large for preview', size: stats.size };
+      return { error: ui()('fs.error.previewTooLarge'), size: stats.size };
     }
     const content = await fs.readFile(filePath, 'utf-8');
     return { content, size: stats.size, modified: stats.mtimeMs };

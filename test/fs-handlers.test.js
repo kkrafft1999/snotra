@@ -346,7 +346,7 @@ test('FS_SHOW_FILE_CONTEXT_MENU: ohne Menü-Service kommt ein Fehler statt einer
   const filesystem = createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot: () => workspace });
   registerFsHandlers({ ipcMain, filesystem, REQ });
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(workspace, 'inside.txt'));
-  assert.match(result.error, /nicht verfügbar/);
+  assert.match(result.error, /No context menu available/);
 });
 
 // ── Import von außen per Drag & Drop (Issue #101) ──────────────────────────
@@ -371,10 +371,32 @@ test('FS_IMPORT_ITEMS: ein Ordner wird immer nativ bestätigt (#101)', async (t)
 
   assert.equal(result.ok, true);
   assert.equal(messageBoxes.length, 1);
-  assert.match(messageBoxes[0].message, /1 Ordner und 1 Datei .* kopieren\?/);
+  assert.match(messageBoxes[0].message, /Copy 1 folder and 1 file .* into “workspace”\?/);
   assert.equal(messageBoxes[0].defaultId, 1, '„Abbrechen“ ist Standardantwort');
   assert.equal(messageBoxes[0].cancelId, 1, '„Abbrechen“ ist Escape-Antwort');
   assert.equal(await fs.readFile(path.join(workspace, 'unterlagen', 'a.txt'), 'utf8'), 'a');
+});
+
+test('FS_IMPORT_ITEMS: der Bestätigungsdialog folgt der Sprache (#292)', async (t) => {
+  const { fsService, workspace, outside } = await setup(t);
+  await fs.mkdir(path.join(outside, 'unterlagen'));
+  await fs.writeFile(path.join(outside, 'unterlagen', 'a.txt'), 'a', 'utf8');
+
+  const boxes = [];
+  const ipcMain = createMockIpcMain();
+  registerFsHandlers({
+    ipcMain,
+    filesystem: createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot: () => workspace }),
+    REQ,
+    // „Abbrechen“: der Dialog soll geprüft werden, nicht das Kopieren.
+    dialog: { showMessageBox: async (options) => { boxes.push(options); return { response: 1 }; } },
+    getLocale: () => 'de',
+  });
+
+  await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'unterlagen')], workspace);
+
+  assert.match(boxes[0].message, /1 Ordner und 1 Datei .* kopieren\?/);
+  assert.deepEqual(boxes[0].buttons, ['Kopieren', 'Abbrechen']);
 });
 
 test('FS_IMPORT_ITEMS: abgelehnte Bestätigung kopiert nichts (#101)', async (t) => {
@@ -432,7 +454,7 @@ test('FS_IMPORT_ITEMS: sensible Datei in einem Ordner wird übersprungen, der Re
 
   assert.equal(result.ok, true);
   assert.equal(result.skippedSensitive, 1);
-  assert.match(messageBoxes[0].detail, /Zugangsdaten/);
+  assert.match(messageBoxes[0].detail, /looks like credentials/);
   assert.deepEqual(await fs.readdir(path.join(workspace, 'projekt')), ['index.js']);
 });
 
@@ -452,7 +474,7 @@ test('FS_IMPORT_ITEMS: Limitüberschreitung lehnt den ganzen Drop ab (#101)', as
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'viele')], workspace);
 
-  assert.match(result.error, /Zu viele Einträge/);
+  assert.match(result.error, /Too many entries at once/);
   assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
 });
 

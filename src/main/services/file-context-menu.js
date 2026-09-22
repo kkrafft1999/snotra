@@ -102,7 +102,9 @@ function createFileContextMenu({
     const t = createTranslator(getLocale());
     if (!dialog) return { error: t('contextMenu.noDialog') };
 
-    const described = await info.describe(filePath, { isDirectory });
+    // Die Sprache geht mit: Die Feldnamen, die Typangaben und die Zahlen- und
+    // Datumsformate der Tabelle entstehen erst in `describe()` (#292).
+    const described = await info.describe(filePath, { isDirectory, locale: t.locale });
     if (described.error) {
       logger.warn('Informationen konnten nicht gelesen werden:', described.error);
       await showMessageBox(window, {
