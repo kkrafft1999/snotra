@@ -1,144 +1,147 @@
 ---
 name: traffic
 description: >-
-  Ruft den Traffic-Report für snotra-ai.dev aus den Firebase-Hosting-Logs ab
-  (per gcloud), gibt ihn aus und erzeugt daraus grundsätzlich einen HTML-Report
-  mit den Charts — sonst nichts, keine Einordnung in Prosa und keine
-  Folgeaktionen. Auslösen bei Sätzen wie "wie läuft die Website",
-  "Traffic-Report", "wie viele Besucher hatte die Seite", "Zugriffszahlen",
-  "Website-Statistik", "wer war auf snotra-ai.dev", "schau mal, was auf der
-  Seite los ist", "Besucher letzte Woche", "Traffic-Chart" oder "Diagramm zum
-  Traffic". Nur in diesem Repo (snotra) sinnvoll.
+  Pulls the traffic report for snotra-ai.dev from the Firebase Hosting logs (via
+  gcloud), prints it, and always builds an HTML report with the charts out of
+  it — nothing else, no prose interpretation and no follow-up actions. Triggers
+  on sentences like "wie läuft die Website", "Traffic-Report", "wie viele
+  Besucher hatte die Seite", "Zugriffszahlen", "Website-Statistik", "wer war auf
+  snotra-ai.dev", "schau mal, was auf der Seite los ist", "Besucher letzte
+  Woche", "Traffic-Chart", "Diagramm zum Traffic", "how is the website doing",
+  "traffic report", "how many visitors did the site have", "website stats" or
+  "traffic chart". Only makes sense in this repository (snotra).
 ---
 
-# Traffic-Report für snotra-ai.dev
+# Traffic report for snotra-ai.dev
 
-Dieser Skill tut zwei Dinge: den Report ziehen und ausgeben (Schritte 1–2) und
-daraus einen HTML-Report mit den Charts bauen (Schritt 3). Sonst nichts — keine
-Einordnung der Zahlen in Prosa, keine Anomalie-Prüfung, kein Issue-Anlegen,
-keine Gegenrecherche auf der Live-Seite. Dafür gibt es keinen Auftrag, außer der
-Nutzer verlangt es in der jeweiligen Nachricht ausdrücklich.
+This skill does two things: pull the report and print it (steps 1–2), and build
+an HTML report with the charts out of it (step 3). Nothing else — no prose
+interpretation of the numbers, no anomaly check, no creating issues, no
+cross-checking against the live site. There is no mandate for that unless the
+user explicitly asks for it in the message at hand.
 
-Die Maschine dahinter ist [`scripts/traffic-report.js`](../../../scripts/traffic-report.js),
-Hintergrund steht in Issue
+The machinery behind it is
+[`scripts/traffic-report.js`](../../../scripts/traffic-report.js); the
+background is in issue
 [#115](https://github.com/kkrafft1999/snotra/issues/115).
 
-## Schritt 1 — Zeitraum bestimmen
+## Step 1 — determine the period
 
-Leite ihn aus der Nutzeräußerung ab, frage nicht nach:
+Derive it from what the user said, don't ask:
 
-- „heute", „gerade", „aktuell" → `--tage=1`
-- „diese Woche", „letzte Woche", nichts gesagt → `--tage=7` (Standard)
-- „diesen Monat", „insgesamt", „seit dem Start" → `--tage=30`
+- "heute", "gerade", "aktuell", "today", "right now" → `--tage=1`
+- "diese Woche", "letzte Woche", "this week", "last week", nothing said →
+  `--tage=7` (the default)
+- "diesen Monat", "insgesamt", "seit dem Start", "this month", "overall",
+  "since launch" → `--tage=30`
 
-**Mehr als 30 Tage gibt es nicht.** Cloud Logging hält die Einträge 30 Tage im
-Standard-Bucket, und protokolliert wird ohnehin erst seit dem **13.09.2026** —
-dem Tag, an dem das Logging aktiviert wurde. Vorher existiert nichts, und das
-lässt sich nicht nachholen. Sag das klar, wenn jemand nach früheren Zahlen
-fragt, statt eine leere Auswertung zu zeigen.
+**There is nothing beyond 30 days.** Cloud Logging keeps the entries for 30 days
+in the standard bucket, and logging has only been on since **2026-09-13** — the
+day it was enabled. Nothing exists before that, and it cannot be recovered. Say
+so plainly when somebody asks for earlier numbers, instead of showing an empty
+evaluation.
 
-## Schritt 2 — Report ziehen
+## Step 2 — pull the report
 
 ```sh
 npm run traffic -- --tage=7
 ```
 
-Läuft rund 10 bis 30 Sekunden, weil `gcloud` die Logs seitenweise holt.
+It takes roughly 10 to 30 seconds, because `gcloud` fetches the logs page by
+page.
 
-Schlägt der Aufruf fehl, sagt das Skript selbst, was zu tun ist. Die beiden
-häufigen Fälle:
+If the call fails, the script itself says what to do. The two common cases:
 
-- **„Die gcloud-Anmeldung ist abgelaufen"** — der Nutzer muss selbst
-  `gcloud auth login` ausführen. Melde dich **nicht** für ihn an und gib keine
-  Zugangsdaten ein; reiche den Befehl weiter.
-- **„Keine Leserechte auf das Projekt snotra-ai"** — meist ist das falsche
-  Konto aktiv. Auf diesem Rechner sind zwei angemeldet; nötig ist das
-  **private** Konto, nicht das doubleSlash-Konto. Prüfen mit `gcloud auth list`,
-  wechseln mit `gcloud config set account <konto>`.
+- **"Die gcloud-Anmeldung ist abgelaufen"** — the user has to run
+  `gcloud auth login` themselves. Do **not** sign in for them and do not enter
+  any credentials; pass the command on.
+- **"Keine Leserechte auf das Projekt snotra-ai"** — usually the wrong account
+  is active. Two are signed in on this machine; the one needed is the
+  **private** account, not the doubleSlash one. Check with `gcloud auth list`,
+  switch with `gcloud config set account <account>`.
 
-Gib die Ausgabe des Skripts unverändert weiter — nicht umformulieren, nicht
-einordnen, nicht kommentieren, keine Folgeaktionen ableiten.
+Pass the script's output on unchanged — don't rephrase it, don't interpret it,
+don't comment on it, don't derive follow-up actions from it.
 
-Für den HTML-Report in Schritt 3 dieselbe Auswertung maschinenlesbar ziehen und
-gleich wegschreiben, damit die Zahlen nicht abgetippt werden müssen:
+For the HTML report in step 3, pull the same evaluation in machine-readable form
+and write it out right away, so that no numbers have to be typed over:
 
 ```sh
 mkdir -p out/traffic && node scripts/traffic-report.js --json --tage=7 > out/traffic/report.json
 ```
 
-`--ohne-downloads` **nicht** setzen: die Release-Downloads gehören fest in den
-Report.
+Do **not** pass `--ohne-downloads`: the release downloads are a fixed part of
+the report.
 
-Eigene Zugriffe lassen sich ausblenden:
-`npm run traffic -- --eigene-ips=1.2.3.4` oder über `TRAFFIC_EIGENE_IPS`.
+Your own visits can be filtered out:
+`npm run traffic -- --eigene-ips=1.2.3.4`, or through `TRAFFIC_EIGENE_IPS`.
 
-## Schritt 3 — HTML-Report erstellen
+## Step 3 — build the HTML report
 
-**Grundsätzlich, immer, ohne dass der Nutzer danach fragen muss.** Der
-HTML-Report ist das Ergebnis dieses Skills; die Terminal-Ausgabe aus Schritt 2
-bleibt daneben stehen, ersetzt ihn aber nicht.
+**Always, without the user having to ask for it.** The HTML report is the
+outcome of this skill; the terminal output from step 2 stays alongside it, but
+does not replace it.
 
-### Ablageort
+### Where it goes
 
-Eine einzelne, in sich geschlossene HTML-Datei:
+A single, self-contained HTML file:
 
 ```
-out/traffic/traffic-<YYYY-MM-DD>-<tage>t.html
+out/traffic/traffic-<YYYY-MM-DD>-<days>t.html
 ```
 
-`out/` ist gitignored — der Report wird **nicht** committet. Die Datei muss
-**innerhalb des Projekts** liegen, sonst rendert der Preview-Pane sie nur
-statisch ohne JavaScript. Kein Artifact veröffentlichen: die Logdaten sind
-nichts, was nach außen gehört, außer der Nutzer bittet ausdrücklich darum.
+`out/` is gitignored — the report is **not** committed. The file has to live
+**inside the project**, otherwise the preview pane renders it statically,
+without JavaScript. Don't publish an artifact: the log data is not something
+that belongs outside, unless the user explicitly asks for it.
 
-Kein externes CSS, kein CDN-Skript, keine Build-Schritte — Styles und, falls
-nötig, Skript inline. Die Charts als reines HTML/CSS oder inline-SVG aus den
-Zahlen bauen; eine Chart-Bibliothek braucht es dafür nicht.
+No external CSS, no CDN script, no build steps — styles and, where needed, the
+script inline. Build the charts as plain HTML/CSS or inline SVG from the
+numbers; no charting library is needed for that.
 
-### Inhalt
+### What goes in it
 
-1. **Kopf** — Titel „Traffic-Report snotra-ai.dev", der **tatsächlich
-   abgedeckte Zeitraum** aus `zeitraum.von`/`zeitraum.bis` (nicht der
-   angefragte), Gesamtzahl der Anfragen.
-2. **Kennzahlen** — Sitzungen, Seitenaufrufe und Anfragen echter Besucher als
-   hervorgehobene Zahlen ganz oben.
-3. **Anfragen nach Kategorie** — horizontales Balkendiagramm über alle
-   Kategorien aus `kategorien` (Echte Besucher, Abrufe ohne Mitladen,
-   KI-Crawler, Suchmaschinen, Link-Vorschau, Eigene CI und Tests,
-   Zertifikats-Prüfung, Scanner und Angriffsversuche, Fehlende Standarddatei).
-   Direkt beschriftet mit Anzahl und Anteil. Die Kategorien sind disjunkt und
-   ergeben zusammen `gesamt`.
-4. **Echte Besucher im Detail** — Sitzungen, Seitenaufrufe und die
-   aufgerufenen Seiten (`besucher.seiten`), dazu Länder und externe Referrer,
-   sofern vorhanden. Das ist die Zahl, um die es geht; sie geht im großen
-   Balkendiagramm sonst unter.
-5. **Verlauf pro Tag** — `proTag` als kleines Balken- oder Liniendiagramm, wenn
-   der Zeitraum mehr als einen Tag umfasst.
-6. **Release-Downloads** — `downloads` aus der JSON-Ausgabe, **immer**, als
-   eigener Abschnitt mit Version, Datum und Anzahl je Release und einer Summe.
-   Dazu der Hinweis, dass das der **Gesamtstand seit Veröffentlichung** ist und
-   nicht die Downloads im ausgewerteten Zeitraum — die beiden Zahlen gehören
-   nicht nebeneinander gelesen. Ist `downloads` leer oder `null` (dann hat
-   `gh api` nicht funktioniert), steht das als kurzer Satz im Abschnitt, statt
-   ihn wegzulassen.
-7. **Weitere Tabellen**, nur wenn nicht leer: `kiBots`, `suchBots`,
+1. **The header** — the title "Traffic-Report snotra-ai.dev", the period
+   **actually covered**, from `zeitraum.von`/`zeitraum.bis` (not the one that
+   was asked for), and the total number of requests.
+2. **The key figures** — sessions, page views and requests by real visitors as
+   highlighted numbers right at the top.
+3. **Requests by category** — a horizontal bar chart across every category in
+   `kategorien` (Echte Besucher, Abrufe ohne Mitladen, KI-Crawler,
+   Suchmaschinen, Link-Vorschau, Eigene CI und Tests, Zertifikats-Prüfung,
+   Scanner und Angriffsversuche, Fehlende Standarddatei). Labelled directly with
+   the count and the share. The categories are disjoint and add up to `gesamt`.
+4. **Real visitors in detail** — sessions, page views and the pages that were
+   opened (`besucher.seiten`), plus countries and external referrers where
+   present. That is the number this is about; it drowns in the big bar chart
+   otherwise.
+5. **The daily trend** — `proTag` as a small bar or line chart, when the period
+   covers more than one day.
+6. **Release downloads** — `downloads` from the JSON output, **always**, as a
+   section of its own with the version, the date and the count per release, plus
+   a total. Along with the note that this is the **total since publication** and
+   not the downloads within the evaluated period — those two numbers are not to
+   be read side by side. If `downloads` is empty or `null` (which means `gh api`
+   didn't work), say so in a short sentence inside the section instead of
+   dropping it.
+7. **Further tables**, only when they aren't empty: `kiBots`, `suchBots`,
    `scannerZiele`, `fehlend`, `fehler`.
 
-### Regeln
+### The rules
 
-- **Echte Besucher** visuell hervorheben; die übrigen Kategorien bleiben
-  trotzdem einzeln unterscheidbar, nicht zu „Rest" zusammenfassen.
-- Nur Zahlen aus dem Report übernehmen. Keine IP-Adressen, keine erfundenen
-  Trends, keine Vergleiche mit Zeiträumen, die nicht abgefragt wurden.
-- Leere Abschnitte weglassen statt mit Nullen zu füllen — ausgenommen die
-  Release-Downloads, die immer stehen bleiben.
-- Hell und dunkel lesbar (`prefers-color-scheme`), Tabellen mit eigenem
-  `overflow-x: auto`, die Seite selbst scrollt nicht seitwärts.
-- Der Report trägt eine sichtbare Überschrift und einen Erstellungsstempel mit
-  Datum, Modell und Reasoning-Effort.
+- Highlight **real visitors** visually; the other categories still stay
+  individually distinguishable, don't collapse them into an "other" bucket.
+- Only carry over numbers from the report. No IP addresses, no invented trends,
+  no comparisons with periods that weren't queried.
+- Leave empty sections out rather than filling them with zeros — except the
+  release downloads, which always stay.
+- Readable in light and dark (`prefers-color-scheme`), tables with their own
+  `overflow-x: auto`, and the page itself never scrolls sideways.
+- The report carries a visible heading and a creation stamp with the date, the
+  model and the reasoning effort.
 
-### Zeigen
+### Showing it
 
-Nach dem Schreiben die Datei im Browser-Pane öffnen (`preview_start` mit der
-`file://`-URL der erzeugten Datei) und den Pfad im Gespräch nennen. Keine
-Zusammenfassung des Reports hinterherschieben.
+After writing the file, open it in the browser pane (`preview_start` with the
+`file://` URL of the generated file) and name the path in the conversation.
+Don't add a summary of the report afterwards.

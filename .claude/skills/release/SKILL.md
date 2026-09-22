@@ -1,75 +1,75 @@
 ---
 name: release
 description: >-
-  Erstellt ein neues Release von Snotra AI: bumpt die Version in
-  package.json über einen Pull Request, legt danach den Git-Tag vX.Y.Z an
-  und pusht ihn, womit die GitHub-Actions-Pipeline
-  (.github/workflows/release.yml) macOS-, Windows- und Linux-Builds baut und
-  das Release veröffentlicht. Auslösen bei Sätzen wie
-  "erstelle ein Release", "erstell ein neues Release", "Release erstellen",
-  "mach ein Release", "neues Release", "release this", "cut a release",
-  "Version veröffentlichen". Nur in diesem Repo (snotra) sinnvoll.
+  Publishes a new release of Snotra AI: bumps the version in package.json
+  through a pull request, then creates the git tag vX.Y.Z and pushes it, which
+  makes the GitHub Actions pipeline (.github/workflows/release.yml) build the
+  macOS, Windows and Linux artifacts and publish the release. Triggers on
+  sentences like "erstelle ein Release", "erstell ein neues Release", "Release
+  erstellen", "mach ein Release", "neues Release", "Version veröffentlichen",
+  "release this", "cut a release", "create a release", "publish a new version".
+  Only makes sense in this repository (snotra).
 ---
 
-# Release erstellen
+# Cut a release
 
-Dieser Skill veröffentlicht eine neue Version, indem er einen `v*`-Tag pusht.
-Das Bauen und Hochladen der Artefakte übernimmt die Pipeline
-(`.github/workflows/release.yml`). Hintergrund und manueller Ablauf stehen in
-[docs/release.md](../../../docs/release.md), der Ablauf als Diagramm in
+This skill publishes a new version by pushing a `v*` tag. Building and uploading
+the artifacts is the pipeline's job
+(`.github/workflows/release.yml`). The background and the manual procedure are
+in [docs/release.md](../../../docs/release.md), the flow as a diagram in
 [docs/release-ablauf.svg](../../../docs/release-ablauf.svg).
 
-**Wichtig:** Ein gepushter Tag löst ein **öffentliches** GitHub-Release aus —
-das ist nach außen gerichtet und nicht trivial rückgängig zu machen. Hole dir
-deshalb vor dem Tag-Push **eine** explizite Bestätigung der Zielversion.
+**Important:** a pushed tag triggers a **public** GitHub release — that is
+outward-facing and not trivial to undo. So get **one** explicit confirmation of
+the target version before pushing the tag.
 
-**Ebenso wichtig:** Der Versions-Commit geht über einen **Pull Request**, nicht
-direkt auf `main`. `npm version` ohne `--no-git-tag-version` würde auf dem
-aktuellen Branch committen — beim Release also auf `main`, was nur per
-Ruleset-Bypass durchgeht und [`git-workflow.md`](../../rules/git-workflow.md)
-widerspricht (Issue #238). Seit #240 steht in `bypass_actors` niemand mehr — ein
-Direkt-Push wird also abgelehnt, nicht nur protokolliert. Der Tag-Push selbst
-ist unkritisch: Ruleset `23177645` hat `target: branch` und erfasst Tags nicht.
+**Just as important:** the version commit goes through a **pull request**, not
+straight onto `main`. `npm version` without `--no-git-tag-version` would commit
+to the current branch — which during a release means `main`, which only gets
+through with a ruleset bypass and contradicts
+[`git-workflow.md`](../../rules/git-workflow.md) (issue #238). Since #240 nobody
+is left in `bypass_actors` — so a direct push is rejected, not merely logged.
+The tag push itself is uncritical: ruleset `23177645` has `target: branch` and
+does not cover tags.
 
-## Schritt 1 — Bump-Typ bestimmen
+## Step 1 — determine the bump type
 
-Standard ist **patch**. Leite den Typ aus der Nutzeräußerung ab:
+The default is **patch**. Derive the type from what the user said:
 
-- "patch" / "Bugfix" / nichts gesagt → `patch`
-- "minor" / "neue Funktion" / "Feature-Release" → `minor`
-- "major" / "Breaking" / "großes Release" → `major`
+- "patch" / "bugfix" / nothing said → `patch`
+- "minor" / "new feature" / "feature release" → `minor`
+- "major" / "breaking" / "big release" → `major`
 
-Bei Unklarheit kurz nachfragen, sonst `patch` annehmen. Hilfreich für die
-Einordnung: `git log --oneline vX.Y.Z..HEAD` seit dem letzten Tag.
+When it's unclear, ask briefly; otherwise assume `patch`. Helpful for judging
+it: `git log --oneline vX.Y.Z..HEAD` since the last tag.
 
-## Schritt 2 — Pre-Flight-Checks (Abbruch bei Fehler)
+## Step 2 — pre-flight checks (stop on failure)
 
-Führe der Reihe nach aus und brich mit klarer Meldung ab, wenn etwas nicht passt:
+Run these in order and stop with a clear message when something doesn't fit:
 
-1. Auf `main`? — `git rev-parse --abbrev-ref HEAD`. Wenn nicht, den Nutzer
-   fragen, ob trotzdem von diesem Branch released werden soll (die Pipeline
-   baut vom Tag-Commit, üblich ist `main`).
-2. Arbeitsverzeichnis sauber? — `git status --porcelain`. Wenn nicht leer:
-   abbrechen. Dem Nutzer sagen, dass uncommittete Änderungen erst
-   committet/gestasht werden müssen.
-3. Lokal aktuell? — `git fetch` und prüfen, dass `main` nicht hinter
-   `origin/main` liegt. Wenn hinterher, zum `git pull` raten.
-4. Tests grün? — `npm test` **und** `npm run test:e2e`. Bei rotem Test
-   abbrechen und Ausgabe zeigen.
+1. On `main`? — `git rev-parse --abbrev-ref HEAD`. If not, ask the user whether
+   to release from this branch anyway (the pipeline builds from the tagged
+   commit; `main` is the usual one).
+2. Working tree clean? — `git status --porcelain`. If it isn't empty: stop. Tell
+   the user that uncommitted changes have to be committed or stashed first.
+3. Up to date locally? — `git fetch`, then check that `main` isn't behind
+   `origin/main`. If it is, advise a `git pull`.
+4. Tests green? — `npm test` **and** `npm run test:e2e`. On a red test, stop and
+   show the output.
 
-## Schritt 3 — Zielversion berechnen und bestätigen
+## Step 3 — compute the target version and confirm it
 
-Aktuelle Version aus `package.json` lesen (`node -p "require('./package.json').version"`)
-und die resultierende Version für den gewählten Bump nennen. Dann **bestätigen
-lassen**, z. B.:
+Read the current version from `package.json`
+(`node -p "require('./package.json').version"`) and name the version that
+results from the chosen bump. Then **have it confirmed**, for example:
 
-> „Aktuell 1.0.0 → neues Release **v1.0.1** (patch). Der Bump geht über einen
-> PR, danach wird getaggt und ein öffentliches Release veröffentlicht.
-> Fortfahren?"
+> "Currently 1.0.0 → new release **v1.0.1** (patch). The bump goes through a
+> pull request, after which it is tagged and a public release is published.
+> Proceed?"
 
-Erst nach Zustimmung weiter.
+Only continue after agreement.
 
-## Schritt 4 — Bump auf einem eigenen Branch (lokal, reversibel)
+## Step 4 — the bump on a branch of its own (local, reversible)
 
 ```sh
 git switch -c release/vX.Y.Z
@@ -78,81 +78,81 @@ git commit -am "vX.Y.Z"
 git push origin release/vX.Y.Z
 ```
 
-`--no-git-tag-version` ist der springende Punkt: `npm version` ändert damit nur
-`package.json` und `package-lock.json` und legt **weder Commit noch Tag** an.
-Der Commit enthält genau diese beiden Dateien, sonst nichts.
+`--no-git-tag-version` is the crucial part: with it, `npm version` only changes
+`package.json` and `package-lock.json` and creates **neither a commit nor a
+tag**. The commit holds exactly those two files and nothing else.
 
-## Schritt 5 — Pull Request und Pflicht-Checks
+## Step 5 — pull request and required checks
 
 ```sh
 gh pr create --title "Release vX.Y.Z" --body "…"
 ```
 
-Der Release-PR schließt kein Issue, braucht also kein `Closes #N`. Warten, bis
-die drei Pflicht-Checks `Tests (macos-14)`, `Tests (windows-latest)` und
-`Tests (ubuntu-latest)` grün sind:
+The release pull request closes no issue, so it needs no `Closes #N`. Wait until
+the three required checks `Tests (macos-14)`, `Tests (windows-latest)` and
+`Tests (ubuntu-latest)` are green:
 
 ```sh
 gh pr checks --watch
 ```
 
-Rot heißt: nicht mergen, Ursache beheben, erneut pushen.
+Red means: don't merge, fix the cause, push again.
 
-## Schritt 6 — Mergen und `main` holen
+## Step 6 — merge and fetch `main`
 
 ```sh
 gh pr merge --squash --delete-branch
 git switch main && git pull
-node -p "require('./package.json').version"   # muss X.Y.Z zeigen
+node -p "require('./package.json').version"   # has to show X.Y.Z
 ```
 
-Die letzte Zeile ist die Kontrolle, dass der Tag gleich auf den richtigen Stand
-zeigt.
+That last line is the check that the tag is about to point at the right state.
 
-## Schritt 7 — Taggen und pushen (Punkt ohne Wiederkehr)
+## Step 7 — tag and push (the point of no return)
 
 ```sh
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-Nur der Tag-Ref wird gepusht — **kein** `git push origin main`, der Stand liegt
-ja bereits über den Merge dort. Der Push über SSH braucht
-`dangerouslyDisableSandbox: true` (Lesezugriff auf `~/.ssh/known_hosts`).
+Only the tag ref is pushed — **no** `git push origin main`, that state is
+already there through the merge. Pushing over SSH needs
+`dangerouslyDisableSandbox: true` (read access to `~/.ssh/known_hosts`).
 
-Lehnt GitHub den Push ab, weil er auf `main` zielt, ist etwas schiefgelaufen —
-seit dem Entzug des Bypass (#240) gibt es dafür keinen Durchschlupf mehr.
-Melden, nicht umgehen.
+If GitHub rejects the push because it aimed at `main`, something went wrong —
+since the bypass was removed (#240) there is no way through for that any more.
+Report it, don't work around it.
 
-## Schritt 8 — Pipeline beobachten und Ergebnis melden
+## Step 8 — watch the pipeline and report the result
 
 ```sh
 gh run list --workflow=release.yml --limit 1
 gh run watch <RUN_ID> --exit-status
 ```
 
-Nach Erfolg den Release-Link nennen:
+Once it succeeds, name the release link:
 
 ```sh
 gh release view vX.Y.Z --json url,assets -q '.url, (.assets[].name)'
 ```
 
-Bei rotem Run die fehlgeschlagenen Jobs benennen und auf
-`gh run view <RUN_ID> --log-failed` verweisen. Der Tag bleibt in dem Fall
-bestehen; ein erneuter Push desselben Tags baut nicht automatisch neu — dann
-mit dem Nutzer klären, ob Tag/Release gelöscht und nach Fix neu getaggt wird.
+On a red run, name the failed jobs and point to
+`gh run view <RUN_ID> --log-failed`. The tag stays in place in that case; pushing
+the same tag again does not rebuild automatically — then settle with the user
+whether the tag and release are deleted and re-tagged after a fix.
 
-## Hinweise
+## Notes
 
-- Versionierung ist Single Source of Truth in `package.json`; die Pipeline baut
-  nur, sie taggt nicht. Die App vergleicht `app.getVersion()` (also
-  `package.json`) mit dem `latest`-Release — deshalb muss der getaggte Commit
-  die passende Version tragen.
-- Artefakte sind **unsigniert** (Gatekeeper/SmartScreen erwartbar) — Stufe 1.
-- Die Pipeline beginnt mit einem **Test-Gate** (Job `Test-Gate`, ruft
-  `ci.yml` auf: `npm test` auf macOS, Windows und Linux). Rot dort heißt: kein
-  Build, kein Release — lokal `npm test` reproduzieren, fixen, neu taggen.
-- Keine zusätzlichen Assets von Hand hochladen; das erledigt die Pipeline.
-- Solange der Bump über den PR läuft, laufen die Tests zweimal (PR und
-  Test-Gate). Das ist gewollt: Der getaggte Commit hat das Gate bestanden,
-  **bevor** er auf `main` lag.
+- Versioning has its single source of truth in `package.json`; the pipeline only
+  builds, it does not tag. The app compares `app.getVersion()` (that is,
+  `package.json`) against the `latest` release — which is why the tagged commit
+  has to carry the matching version.
+- The artifacts are **unsigned** (Gatekeeper and SmartScreen warnings are
+  expected) — stage 1.
+- The pipeline starts with a **test gate** (the job `Test-Gate`, calling
+  `ci.yml`: `npm test` on macOS, Windows and Linux). Red there means: no build,
+  no release — reproduce `npm test` locally, fix it, tag anew.
+- Don't upload additional assets by hand; the pipeline does that.
+- As long as the bump goes through the pull request, the tests run twice (the
+  pull request and the test gate). That is intended: the tagged commit passed
+  the gate **before** it landed on `main`.
