@@ -9,12 +9,11 @@
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
 import contracts from '../generated/contracts.js';
+import { t } from '../i18n.js';
 
 const {
   TOOL_PERMISSION_MODES,
-  TOOL_PERMISSION_MODE_LABELS,
   TOOL_RISK_CLASSES,
-  TOOL_RISK_CLASS_LABELS,
   APPROVAL_RESPONSES,
   PERMISSION_DENIAL_REASONS,
   PERMISSION_DENIED_MESSAGES,
@@ -29,24 +28,44 @@ const {
   normalizeRulePathPattern,
 } = contracts;
 
-/** Reihenfolge und Beschreibung der Modi für Chat-Pille und Einstellungen (Konzept §3). */
-export const TOOL_MODE_OPTIONS = Object.freeze([
-  {
-    value: TOOL_PERMISSION_MODES.SMART,
-    label: TOOL_PERMISSION_MODE_LABELS[TOOL_PERMISSION_MODES.SMART],
-    description: 'Lesen läuft ohne Rückfrage. Dateiänderungen und sensible Dateien fragen nach. Standard.',
-  },
-  {
-    value: TOOL_PERMISSION_MODES.ASK_ALL,
-    label: TOOL_PERMISSION_MODE_LABELS[TOOL_PERMISSION_MODES.ASK_ALL],
-    description: 'Jeder Tool-Aufruf fragt nach, auch Lesen. Gemerkte Erlaubnisse gelten nicht.',
-  },
-  {
-    value: TOOL_PERMISSION_MODES.AUTO,
-    label: TOOL_PERMISSION_MODE_LABELS[TOOL_PERMISSION_MODES.AUTO],
-    description: 'Keine Rückfragen zu Tool-Aufrufen. Workspace-Grenzen, Sperren und der Schutz der Snotra-Schlüssel bleiben. Bewusst zu aktivieren.',
-  },
+/**
+ * One key per mode (epic #277). Since the language switch the labels come from
+ * the catalogue rather than from the contract — the contract remains the source
+ * of the *values*, not of the words.
+ */
+const MODE_ORDER = Object.freeze([
+  TOOL_PERMISSION_MODES.SMART,
+  TOOL_PERMISSION_MODES.ASK_ALL,
+  TOOL_PERMISSION_MODES.AUTO,
 ]);
+
+const MODE_KEYS = Object.freeze({
+  [TOOL_PERMISSION_MODES.SMART]: 'permissions.mode.smart',
+  [TOOL_PERMISSION_MODES.ASK_ALL]: 'permissions.mode.askAll',
+  [TOOL_PERMISSION_MODES.AUTO]: 'permissions.mode.auto',
+});
+
+const RISK_CLASS_KEYS = Object.freeze({
+  [TOOL_RISK_CLASSES.READ]: 'tools.riskClass.read',
+  [TOOL_RISK_CLASSES.READ_SENSITIVE]: 'tools.riskClass.readSensitive',
+  [TOOL_RISK_CLASSES.WRITE]: 'tools.riskClass.write',
+  [TOOL_RISK_CLASSES.DELETE]: 'tools.riskClass.delete',
+  [TOOL_RISK_CLASSES.EXECUTE]: 'tools.riskClass.execute',
+  [TOOL_RISK_CLASSES.EXTERNAL]: 'tools.riskClass.external',
+});
+
+/**
+ * Order and description of the modes for the chat pill and the settings
+ * (concept §3). A function rather than a constant: the strings depend on the
+ * language and must not freeze when the module loads.
+ */
+export function toolModeOptions() {
+  return MODE_ORDER.map((value) => ({
+    value,
+    label: t(MODE_KEYS[value]),
+    description: t(`${MODE_KEYS[value]}.desc`),
+  }));
+}
 
 /** Klassen, für die es keine Sitzungsfreigabe gibt (Konzept §6). */
 const SINGLE_DECISION_CLASSES = Object.freeze([
@@ -56,11 +75,11 @@ const SINGLE_DECISION_CLASSES = Object.freeze([
 ]);
 
 export function modeLabel(mode) {
-  return TOOL_PERMISSION_MODE_LABELS[mode] || TOOL_PERMISSION_MODE_LABELS[TOOL_PERMISSION_MODES.SMART];
+  return t(MODE_KEYS[mode] || MODE_KEYS[TOOL_PERMISSION_MODES.SMART]);
 }
 
 export function riskClassLabel(riskClass) {
-  return TOOL_RISK_CLASS_LABELS[riskClass] || String(riskClass ?? '');
+  return RISK_CLASS_KEYS[riskClass] ? t(RISK_CLASS_KEYS[riskClass]) : String(riskClass ?? '');
 }
 
 const TARGET_KIND_LABELS = Object.freeze({
@@ -373,15 +392,19 @@ export function permissionStatusKey(permission) {
 
 // ── Regelverwaltung (Konzept §7) ─────────────────────────────────────────────
 
-export const RULE_EFFECT_OPTIONS = Object.freeze([
-  { value: PERMISSION_RULE_EFFECTS.DENY, label: 'Sperren', description: 'Der Aufruf wird in jedem Modus blockiert. Sperren gewinnen immer.' },
-  { value: PERMISSION_RULE_EFFECTS.ALLOW, label: 'Erlauben', description: 'Keine Rückfrage im Modus „Intelligent“. Nur für Lesen und Ändern; verlangt eine Bestätigung im Systemdialog.' },
-]);
+export function ruleEffectOptions() {
+  return [
+    { value: PERMISSION_RULE_EFFECTS.DENY, label: t('permissions.rule.effect.deny'), description: t('permissions.rule.effect.deny.desc') },
+    { value: PERMISSION_RULE_EFFECTS.ALLOW, label: t('permissions.rule.effect.allow'), description: t('permissions.rule.effect.allow.desc') },
+  ];
+}
 
-export const RULE_SCOPE_OPTIONS = Object.freeze([
-  { value: PERMISSION_RULE_SCOPES.WORKSPACE, label: 'Dieser Workspace' },
-  { value: PERMISSION_RULE_SCOPES.GLOBAL, label: 'Alle Workspaces' },
-]);
+export function ruleScopeOptions() {
+  return [
+    { value: PERMISSION_RULE_SCOPES.WORKSPACE, label: t('permissions.rule.scope.workspace') },
+    { value: PERMISSION_RULE_SCOPES.GLOBAL, label: t('permissions.rule.scope.global') },
+  ];
+}
 
 /** Klassen, die als Regelgegenstand wählbar sind – bei Erlauben nur read/write. */
 export function ruleClassOptions(effect) {
@@ -391,19 +414,26 @@ export function ruleClassOptions(effect) {
 
 export function describeRule(rule) {
   if (!rule || typeof rule !== 'object') return null;
-  const effectLabel = rule.effect === PERMISSION_RULE_EFFECTS.ALLOW ? 'Erlaubnis' : 'Sperre';
-  const subject = rule.tool ? `Tool ${rule.tool}` : `Klasse ${riskClassLabel(rule.riskClass)}`;
+  const effectLabel = t(rule.effect === PERMISSION_RULE_EFFECTS.ALLOW
+    ? 'permissions.rule.label.allow'
+    : 'permissions.rule.label.deny');
+  const subject = rule.tool
+    ? t('permissions.rule.subject.tool', { tool: rule.tool })
+    : t('permissions.rule.subject.class', { label: riskClassLabel(rule.riskClass) });
   const pattern = rule.pathPattern || '**';
-  const scopeLabel = rule.scope === PERMISSION_RULE_SCOPES.GLOBAL ? 'Alle Workspaces' : 'Dieser Workspace';
+  const scopeLabel = t(rule.scope === PERMISSION_RULE_SCOPES.GLOBAL
+    ? 'permissions.rule.scope.global'
+    : 'permissions.rule.scope.workspace');
+  const patternLabel = pattern === '**' ? t('permissions.rule.allPaths') : pattern;
   return {
     id: rule.id,
     effect: rule.effect,
     effectLabel,
     subject,
     pattern,
-    patternLabel: pattern === '**' ? 'alle Pfade' : pattern,
+    patternLabel,
     scopeLabel,
-    text: `${effectLabel}: ${subject} auf ${pattern === '**' ? 'alle Pfade' : pattern} (${scopeLabel})`,
+    text: t('permissions.rule.text', { effect: effectLabel, subject, pattern: patternLabel, scope: scopeLabel }),
   };
 }
 
@@ -414,26 +444,26 @@ export function describeRule(rule) {
  */
 export function validateRuleDraft({ effect, scope, subjectType, tool, riskClass, pathPattern, hasWorkspace } = {}) {
   if (effect !== PERMISSION_RULE_EFFECTS.ALLOW && effect !== PERMISSION_RULE_EFFECTS.DENY) {
-    return { ok: false, error: 'Wirkung wählen (Sperren oder Erlauben).' };
+    return { ok: false, error: t('permissions.rule.error.effect') };
   }
   const ruleScope = scope === PERMISSION_RULE_SCOPES.GLOBAL ? PERMISSION_RULE_SCOPES.GLOBAL : PERMISSION_RULE_SCOPES.WORKSPACE;
   if (ruleScope === PERMISSION_RULE_SCOPES.WORKSPACE && hasWorkspace !== true) {
-    return { ok: false, error: 'Kein Workspace geöffnet – wähle „Alle Workspaces“ oder öffne einen Ordner.' };
+    return { ok: false, error: t('permissions.rule.error.noWorkspace') };
   }
   const rule = { effect, scope: ruleScope };
   if (subjectType === 'tool') {
     const name = typeof tool === 'string' ? tool.trim() : '';
-    if (!name) return { ok: false, error: 'Tool wählen.' };
+    if (!name) return { ok: false, error: t('permissions.rule.error.tool') };
     rule.tool = name;
   } else {
-    if (!TOOL_RISK_CLASS_ORDER.includes(riskClass)) return { ok: false, error: 'Klasse wählen.' };
+    if (!TOOL_RISK_CLASS_ORDER.includes(riskClass)) return { ok: false, error: t('permissions.rule.error.class') };
     if (effect === PERMISSION_RULE_EFFECTS.ALLOW && !PERSISTENT_ALLOW_CLASSES.includes(riskClass)) {
-      return { ok: false, error: 'Dauerhafte Erlaubnisse gibt es nur für „Lesen“ und „Ändern“.' };
+      return { ok: false, error: t('permissions.rule.error.allowClass') };
     }
     rule.riskClass = riskClass;
   }
   const pattern = normalizeRulePathPattern(pathPattern);
-  if (pattern === null) return { ok: false, error: 'Pfadmuster darf kein „..“ enthalten.' };
+  if (pattern === null) return { ok: false, error: t('permissions.rule.error.pattern') };
   rule.pathPattern = pattern;
   return { ok: true, rule };
 }
@@ -441,41 +471,27 @@ export function validateRuleDraft({ effect, scope, subjectType, tool, riskClass,
 /** Prüft ein sensibles Pfadmuster aus dem Formular (Konzept §4). */
 export function validateSensitivePattern(raw, existing = []) {
   const pattern = normalizeRulePathPattern(raw);
-  if (pattern === null) return { ok: false, error: 'Muster darf kein „..“ enthalten.' };
-  if (!pattern || pattern === '**') return { ok: false, error: 'Ein Muster für alle Pfade ist nicht sinnvoll – nenne Ordner oder Dateinamen, z. B. „personal/**“.' };
-  if (Array.isArray(existing) && existing.includes(pattern)) return { ok: false, error: 'Dieses Muster gibt es schon.' };
+  if (pattern === null) return { ok: false, error: t('permissions.sensitive.error.pattern') };
+  if (!pattern || pattern === '**') return { ok: false, error: t('permissions.sensitive.error.tooBroad') };
+  if (Array.isArray(existing) && existing.includes(pattern)) return { ok: false, error: t('permissions.sensitive.error.duplicate') };
   return { ok: true, pattern };
 }
 
 /** Sichtbarer Umfang der Reset-Aktionen (Konzept §7). */
-export const RESET_ACTIONS = Object.freeze([
-  {
-    key: 'session',
-    label: 'Sitzungsfreigaben löschen',
-    description: 'Vergisst alle „Für diese Sitzung erlauben“-Entscheidungen. Regeln und Modus bleiben.',
-  },
-  {
-    key: 'workspace',
-    label: 'Workspace-Regeln zurücksetzen',
-    description: 'Löscht Sperren und Erlaubnisse, die nur für den geöffneten Workspace gelten. Globale Regeln, Muster und Modus bleiben.',
-  },
-  {
-    key: 'all',
-    label: 'Alle Berechtigungen zurücksetzen',
-    description: 'Löscht alle Regeln, eigene sensible Pfadmuster und Sitzungsfreigaben und stellt den Modus „Intelligent“ wieder her.',
-    confirm: true,
-  },
-]);
+export function resetActions() {
+  return [
+    { key: 'session', label: t('permissions.reset.session'), description: t('permissions.reset.session.desc') },
+    { key: 'workspace', label: t('permissions.reset.workspace'), description: t('permissions.reset.workspace.desc') },
+    { key: 'all', label: t('permissions.reset.all'), description: t('permissions.reset.all.desc'), confirm: true },
+  ];
+}
 
 export function integrityWarning(integrity) {
-  if (integrity === 'invalid') {
-    return 'Die Berechtigungsdatei war beschädigt oder verändert. Snotra läuft im Modus „Intelligent“; Erlaubnisse wurden verworfen, Sperren bleiben wirksam.';
-  }
-  if (integrity === 'unsigned') {
-    return 'Verschlüsselter Speicher ist nicht verfügbar. Modus „Auto“ und dauerhafte Erlaubnisse lassen sich deshalb nicht speichern.';
-  }
+  if (integrity === 'invalid') return t('permissions.integrity.invalid');
+  if (integrity === 'unsigned') return t('permissions.integrity.unsigned');
   return '';
 }
 
-export const LEGACY_WRITE_MIGRATION_HINT =
-  'Dateiänderungen fragen jetzt nach deiner Freigabe. Den Modus kannst du jederzeit im Chat ändern.';
+export function legacyWriteMigrationHint() {
+  return t('permissions.legacyWriteHint');
+}

@@ -10,6 +10,7 @@ const {
   normalizeStoredPresetConnection,
   LLM_CONFIG_VERSION,
 } = require('../../shared/contracts/settings');
+const { APP_LOCALES } = require('../../shared/contracts/enums');
 const {
   maskStoredMcpEnv,
   normalizeKnownTools,
@@ -727,10 +728,26 @@ function createStorageService({
     return path.join(app.getPath('userData'), UI_PREFS_FILENAME);
   }
 
+  /**
+   * Existing installations stay on German (epic #277).
+   *
+   * The contract's default has been English since the language switch landed.
+   * An already existing preferences file without `appLocale`, however, comes
+   * from a time when there was only German — quietly turning it to English
+   * would be a language change nobody asked for. A missing *file*, in contrast,
+   * means a new installation and therefore English.
+   *
+   * Deliberately without writing: the addition happens on every read and holds
+   * even if the migration never gets around to saving. The next
+   * `updateUIPrefs` persists it anyway.
+   */
   async function readUIPrefs() {
     try {
       const raw = await fs.readFile(getUIPrefsPath(), 'utf8');
       const data = JSON.parse(raw);
+      if (data && typeof data === 'object' && !('appLocale' in data)) {
+        return normalizeUiPrefs({ ...data, appLocale: APP_LOCALES.DE });
+      }
       return normalizeUiPrefs(data);
     } catch {
       return normalizeUiPrefs({});

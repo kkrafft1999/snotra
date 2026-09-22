@@ -17,6 +17,8 @@
  * ausschliesslich, was der Main-Prozess selbst bei GitHub nachgeschlagen hat.
  */
 
+import { t, onLocaleChange } from '../i18n.js';
+
 const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])';
 
 /** Bytes als „12,4 MB" — eine Nachkommastelle reicht, um Bewegung zu sehen. */
@@ -157,7 +159,7 @@ export function initUpdateDialog({ api }) {
     if (known) {
       trackEl.setAttribute('aria-valuenow', String(percent));
       progressTextEl.textContent =
-        `${percent} % – ${formatBytes(receivedBytes)} von ${formatBytes(totalBytes)}`;
+        t('update.progress', { percent, received: formatBytes(receivedBytes), total: formatBytes(totalBytes) });
     } else {
       trackEl.removeAttribute('aria-valuenow');
       progressTextEl.textContent = `${formatBytes(receivedBytes)} geladen`;
@@ -175,10 +177,10 @@ export function initUpdateDialog({ api }) {
     try {
       const result = await api.openExternal(info.releaseUrl);
       if (result && result.ok === false) {
-        render('error', `Die Release-Seite ließ sich nicht öffnen: ${result.error || 'unbekannter Fehler'}`);
+        render('error', t('update.releasePage.failed', { error: result.error || t('mcpImport.failed.unknown') }));
       }
     } catch {
-      render('error', 'Die Release-Seite ließ sich nicht öffnen.');
+      render('error', t('update.releasePage.failedPlain'));
     }
   }
 
@@ -194,14 +196,14 @@ export function initUpdateDialog({ api }) {
     try {
       result = await api.downloadUpdate();
     } catch (err) {
-      result = { ok: false, error: err?.message || 'Der Download ist fehlgeschlagen.' };
+      result = { ok: false, error: err?.message || t('update.download.failed') };
     }
     if (result?.canceled) {
       render('available');
       return;
     }
     if (!result?.ok) {
-      render('error', result?.error || 'Der Download ist fehlgeschlagen.');
+      render('error', result?.error || t('update.download.failed'));
       return;
     }
     render('ready');
@@ -225,10 +227,10 @@ export function initUpdateDialog({ api }) {
     try {
       result = await api.installUpdate();
     } catch (err) {
-      result = { ok: false, error: err?.message || 'Die Installation ist fehlgeschlagen.' };
+      result = { ok: false, error: err?.message || t('update.install.failed') };
     }
     // Im Erfolgsfall beendet sich die App — hierher kommt nur der Fehlerfall.
-    if (!result?.ok) render('error', result?.error || 'Die Installation ist fehlgeschlagen.');
+    if (!result?.ok) render('error', result?.error || t('update.install.failed'));
   }
 
   /** Baut Titel, Text und Knoepfe fuer den aktuellen Schritt neu auf. */
@@ -254,22 +256,21 @@ export function initUpdateDialog({ api }) {
     closeBtn.disabled = !isDismissable();
 
     if (next === 'available') {
-      const tag = info?.isPrerelease ? ' (Vorab-Version)' : '';
+      const tag = info?.isPrerelease ? t('update.prerelease') : '';
       const size = info?.asset?.size ? ` (${formatBytes(info.asset.size)})` : '';
-      titleEl.textContent = `Version ${version} ist verfügbar${tag}`;
+      titleEl.textContent = t('update.available.title', { version, tag });
       // Die Groesse steht im Text, nicht auf dem Knopf: drei Knoepfe muessen
       // in eine Zeile passen, sonst rutscht der letzte allein in die zweite.
       summaryEl.textContent = canSelfUpdate
-        ? `Du hast Version ${current}. Snotra AI lädt die neue Version${size} herunter und `
-          + 'installiert sie selbst – vor dem Neustart wirst du noch einmal gefragt.'
-        : `Du hast Version ${current}. Diese Installation muss von Hand ersetzt werden.`;
+        ? t('update.available.selfUpdate', { current, size })
+        : t('update.available.manual', { current });
       if (!canSelfUpdate) {
         hintEl.textContent = info?.selfUpdateBlockedReason
-          || 'Diese Installation kann sich nicht selbst aktualisieren.';
+          || t('update.available.manualHint');
         hintEl.classList.remove('hidden');
-        actionsEl.appendChild(makeButton('Release-Seite öffnen', 'btn-primary', openReleasePage));
+        actionsEl.appendChild(makeButton(t('update.openReleasePage'), 'btn-primary', openReleasePage));
       } else {
-        actionsEl.appendChild(makeButton('Herunterladen', 'btn-primary', startDownload));
+        actionsEl.appendChild(makeButton(t('update.download'), 'btn-primary', startDownload));
       }
       // Beide Knoepfe schliessen den Dialog, aber nur einer davon fuer immer.
       // Das steht jetzt in der Beschriftung statt in einem Titel-Text, den
@@ -277,46 +278,43 @@ export function initUpdateDialog({ api }) {
       // dauerhaft und steht deshalb leise und abgesetzt links — auffindbar
       // fuer den, der es sucht, kein Nachbar der Hauptaktion fuer den, der
       // nur wegklicken will (die Reihenfolge macht das CSS).
-      actionsEl.appendChild(makeButton('Später erinnern', 'btn-secondary', close));
-      actionsEl.appendChild(makeButton('Diese Version überspringen', 'btn-tertiary', skipVersion));
+      actionsEl.appendChild(makeButton(t('update.remindLater'), 'btn-secondary', close));
+      actionsEl.appendChild(makeButton(t('update.skipVersion'), 'btn-tertiary', skipVersion));
     } else if (next === 'downloading') {
-      titleEl.textContent = `Version ${version} wird geladen`;
-      summaryEl.textContent = 'Du kannst weiterarbeiten – die Installation beginnt erst, wenn du sie bestätigst.';
+      titleEl.textContent = t('update.downloading.title', { version });
+      summaryEl.textContent = t('update.downloading.body');
       progressEl.classList.remove('hidden');
-      actionsEl.appendChild(makeButton('Abbrechen', 'btn-secondary', cancelDownload));
+      actionsEl.appendChild(makeButton(t('update.cancel'), 'btn-secondary', cancelDownload));
     } else if (next === 'ready') {
-      titleEl.textContent = `Version ${version} ist bereit`;
-      summaryEl.textContent = 'Beim Installieren wird Snotra AI beendet, ersetzt und neu gestartet. '
-        + 'Beende vorher, was du gerade tippst – ungesendete Eingaben gehen verloren.';
-      actionsEl.appendChild(makeButton('Installieren und neu starten', 'btn-primary', startInstall));
-      actionsEl.appendChild(makeButton('Abbrechen', 'btn-secondary', discardDownload));
+      titleEl.textContent = t('update.ready.title', { version });
+      summaryEl.textContent = t('update.ready.body');
+      actionsEl.appendChild(makeButton(t('update.ready.install'), 'btn-primary', startInstall));
+      actionsEl.appendChild(makeButton(t('update.cancel'), 'btn-secondary', discardDownload));
     } else if (next === 'installing') {
-      titleEl.textContent = `Version ${version} wird installiert`;
-      summaryEl.textContent = 'Die neue Version wird eingespielt. Gleich startet Snotra AI neu – '
-        + 'dieser Schritt lässt sich nicht mehr abbrechen.';
+      titleEl.textContent = t('update.installing.title', { version });
+      summaryEl.textContent = t('update.installing.body');
       progressEl.classList.remove('hidden');
       trackEl.classList.add('update-progress__track--indeterminate');
       trackEl.removeAttribute('aria-valuenow');
       barEl.style.width = '';
-      progressTextEl.textContent = 'Programm wird ausgetauscht …';
+      progressTextEl.textContent = t('update.installing.progress');
     } else if (next === 'error') {
-      titleEl.textContent = 'Die Aktualisierung hat nicht geklappt';
+      titleEl.textContent = t('update.error.title');
       summaryEl.textContent = lastMessage;
-      hintEl.textContent = 'Deine laufende Version ist unverändert. '
-        + 'Du kannst es erneut versuchen oder die neue Version von Hand laden.';
+      hintEl.textContent = t('update.error.body');
       hintEl.classList.remove('hidden');
       if (canSelfUpdate) {
-        actionsEl.appendChild(makeButton('Erneut versuchen', 'btn-primary', startDownload));
+        actionsEl.appendChild(makeButton(t('update.retry'), 'btn-primary', startDownload));
       }
       if (info?.releaseUrl) {
-        actionsEl.appendChild(makeButton('Release-Seite öffnen', canSelfUpdate ? 'btn-secondary' : 'btn-primary', openReleasePage));
+        actionsEl.appendChild(makeButton(t('update.openReleasePage'), canSelfUpdate ? 'btn-secondary' : 'btn-primary', openReleasePage));
       }
-      actionsEl.appendChild(makeButton('Schließen', 'btn-secondary', close));
+      actionsEl.appendChild(makeButton(t('update.closeButton'), 'btn-secondary', close));
     } else if (next === 'info') {
-      titleEl.textContent = 'Keine neue Version';
+      titleEl.textContent = t('update.none.title');
       summaryEl.textContent = lastMessage;
       notesEl.classList.add('hidden');
-      actionsEl.appendChild(makeButton('Schließen', 'btn-primary', close));
+      actionsEl.appendChild(makeButton(t('update.closeButton'), 'btn-primary', close));
     }
 
     // Waehrend der Installation gibt es nichts zu entscheiden. Eine leere
@@ -347,8 +345,8 @@ export function initUpdateDialog({ api }) {
     info = payload;
     open();
     render('info', payload.error
-      ? `Die Prüfung ist fehlgeschlagen: ${payload.error}`
-      : `Du hast bereits die neueste Version (${payload.currentVersion}).`);
+      ? t('update.check.failed', { error: payload.error })
+      : t('update.check.upToDate', { version: payload.currentVersion }));
   }
 
   api.onUpdateAvailable(handlePayload);
@@ -395,9 +393,16 @@ export function initUpdateDialog({ api }) {
     } catch {
       info = null;
       open();
-      render('info', 'Die Prüfung ist fehlgeschlagen.');
+      render('info', t('update.check.failedPlain'));
     }
   }
+
+  // Language change (epic #277): the dialog builds title, text and buttons
+  // itself. Closed, there is nothing to draw — the next step does it anyway.
+  onLocaleChange(() => {
+    if (!isOpen()) return;
+    render(state, lastMessage);
+  });
 
   return { checkNow, isOpen };
 }

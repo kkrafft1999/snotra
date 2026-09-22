@@ -45,6 +45,12 @@ function registerSettingsHandlers({
   // ausdrueckliche Wahl gilt fuer den laufenden Chat *und* wird der Standard
   // fuer neue. Fehlt der Dienst (Tests), bleibt es beim bisherigen Verhalten.
   chatSessionSettings = null,
+  /**
+   * Reports a language change to the composition root (epic #277). The main
+   * process keeps the language in memory and rebuilds its menu — neither
+   * belongs here; this handler only knows when it happens.
+   */
+  onAppLocaleChanged = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -106,6 +112,7 @@ function registerSettingsHandlers({
   async function writeUiPrefsPatch(uiPatch) {
     try {
       await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+      if ('appLocale' in uiPatch) onAppLocaleChanged?.(uiPatch.appLocale);
       // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
       // und muss sofort greifen, nicht erst beim naechsten App-Start.
       if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
@@ -518,6 +525,7 @@ function registerSettingsHandlers({
       return uiPrefsStore.readUIPrefs();
     }
     const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
+    if ('appLocale' in patch) onAppLocaleChanged?.(patch.appLocale);
     // Beides entscheidet ueber die Sichtbarkeit von run_python und muss
     // sofort greifen, nicht erst beim naechsten App-Start.
     if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {

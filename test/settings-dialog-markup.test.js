@@ -40,7 +40,8 @@ test('lange Erklaertexte stehen hinter einem Aufklapper mit Kurzsatz (#104)', ()
   const summaries = html.match(/<summary class="settings-note__summary"/g) || [];
   assert.equal(summaries.length, notes.length, 'jeder Aufklapper hat genau eine sichtbare Zeile');
 
-  const bodies = html.match(/<div class="settings-note__body">/g) || [];
+  // Seit Epic #277 traegt der Textkoerper zusaetzlich `data-i18n-html`.
+  const bodies = html.match(/<div class="settings-note__body"/g) || [];
   assert.equal(bodies.length, notes.length, 'jeder Aufklapper hat genau einen Textkoerper');
 });
 
@@ -67,7 +68,7 @@ test('der Skills-Bereich nennt .claude nicht mehr als Quelle (#103)', () => {
 test('der Skills-Bereich nennt ~/.snotra/skills als Standardort (#251)', () => {
   assert.ok(html.includes('~/.snotra/skills'), 'der neue Standardort steht im Dialog');
   assert.ok(html.includes('~/.agents/skills'), 'der Alt-Ort steht weiterhin im Dialog');
-  assert.match(html, /Benutzerverzeichnis/, '~/.snotra ist als eigenes Verzeichnis beschrieben');
+  assert.match(html, /own user directory/, '~/.snotra ist als eigenes Verzeichnis beschrieben');
 });
 
 // Issue #102: Die Shell-Ausfuehrung ist die weitreichendste Einstellung der
@@ -82,7 +83,7 @@ test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis
   const card = html.slice(cardStart, cardEnd);
   assert.match(card, /settings-note--warning/, 'die Warnung ist als solche ausgezeichnet');
   assert.match(card, /shell_execute/);
-  assert.match(card, /keine<\/strong> Projektordner-Grenze/);
+  assert.match(card, /no<\/strong> project folder boundary/);
 });
 
 // Issue #138: Der Schalter steht im Bereich „Allgemein“ neben dem
@@ -107,8 +108,8 @@ test('der Bereich „Allgemein“ hat einen Schalter für Umgebungsinformationen
   assert.match(panel.slice(toggleAt, hintAt + 400), /aria-describedby="hint-environment-info"/);
   const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
   assert.match(hint, /absolute[rn]? Pfad|absolute<\/strong>|<strong>absolute/i);
-  assert.match(hint, /Benutzernamen/, 'die Preisgabe wird benannt');
-  assert.match(hint, /Anbieter/, 'und wohin sie geht');
+  assert.match(hint, /user name/, 'die Preisgabe wird benannt');
+  assert.match(hint, /provider/, 'und wohin sie geht');
 });
 
 // Issue #212: Derselbe Platz, dieselbe Begruendungspflicht — der Schalter
@@ -135,16 +136,16 @@ test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () 
   const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
   // Alle drei Quellen müssen dort stehen — sonst sucht der Nutzer die Datei
   // an der falschen Stelle.
-  for (const pfad of ['&lt;Ordner&gt;/.agents/AGENTS.md', '~/.snotra/AGENTS.md', '~/.agents/AGENTS.md']) {
+  for (const pfad of ['&lt;folder&gt;/.agents/AGENTS.md', '~/.snotra/AGENTS.md', '~/.agents/AGENTS.md']) {
     assert.ok(hint.includes(pfad), `der Erklärtext nennt ${pfad}`);
   }
   // Und der Wegfall der Ordnerwurzel gehört benannt (#253): Wer dort eine
   // Datei liegen hat, soll nicht raten müssen, warum sie nichts tut.
-  assert.match(hint, /Im Projekt zählt allein/);
-  assert.match(hint, /Ordnerwurzel liest Snotra/);
-  assert.match(hint, /ergänzen einander/,
+  assert.match(hint, /Inside the project only/);
+  assert.match(hint, /folder root is <strong>not<\/strong> read/);
+  assert.match(hint, /add to each other/,
     'der Text behauptet keine Rangfolge, sondern sagt, dass alles gemeinsam gilt');
-  assert.match(hint, /Anweisung, keine Daten|Anweisung<\/strong>, keine Daten/,
+  assert.match(hint, /instruction, not data|instruction<\/strong>, not data/,
     'und sagt, dass der Inhalt das Verhalten ändert');
 });
 
@@ -165,5 +166,5 @@ test('das Erscheinungsbild wird unter „Allgemein“ gewählt, nicht in der Tit
   assert.match(select, /value="dark"/);
 
   // Ohne sichtbares Label braucht die Auswahl eines fuer den Screenreader.
-  assert.match(panel.slice(0, selectAt), /for="select-app-theme"[^>]*>Erscheinungsbild/);
+  assert.match(panel.slice(0, selectAt), /for="select-app-theme"[^>]*>\s*Appearance/);
 });

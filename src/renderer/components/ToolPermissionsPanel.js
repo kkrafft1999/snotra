@@ -1,9 +1,9 @@
 import {
-  TOOL_MODE_OPTIONS,
-  RULE_EFFECT_OPTIONS,
-  RULE_SCOPE_OPTIONS,
-  RESET_ACTIONS,
-  LEGACY_WRITE_MIGRATION_HINT,
+  toolModeOptions,
+  ruleEffectOptions,
+  ruleScopeOptions,
+  resetActions as resetActionOptions,
+  legacyWriteMigrationHint,
   ruleClassOptions,
   describeRule,
   validateRuleDraft,
@@ -12,6 +12,7 @@ import {
   modeLabel,
 } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
+import { t, onLocaleChange } from '../i18n.js';
 
 const TRASH_ICON_HTML =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
@@ -56,6 +57,8 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   let isOpen = false;
   let unsubscribe = null;
   let resetConfirmKey = null;
+  /** The last state drawn — needed to redraw after a language change. */
+  let lastState = null;
 
   function setError(target, text) {
     if (!target) return;
@@ -69,7 +72,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       return true;
     }
     if (isCancelledResult(result)) {
-      setError(target, 'Im Systemdialog abgebrochen – nichts geändert.');
+      setError(target, t('settings.permissions.dialogCancelled'));
       return false;
     }
     setError(target, result?.error || successText || 'Aktion fehlgeschlagen.');
@@ -86,7 +89,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     legend.textContent = 'Modus';
     modeGroup.appendChild(legend);
     const active = state?.mode || 'smart';
-    for (const option of TOOL_MODE_OPTIONS) {
+    for (const option of toolModeOptions()) {
       const label = document.createElement('label');
       label.className = 'settings-mode-option';
       const input = document.createElement('input');
@@ -146,8 +149,8 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     remove.type = 'button';
     remove.className = 'settings-icon-trash settings-rule-item__remove';
     remove.dataset.ruleId = rule.id;
-    remove.setAttribute('aria-label', `${desc.text} löschen`);
-    remove.title = rule.effect === 'deny' ? 'Sperre löschen (Bestätigung im Systemdialog)' : 'Erlaubnis löschen';
+    remove.setAttribute('aria-label', t('settings.rules.delete', { rule: desc.text }));
+    remove.title = rule.effect === 'deny' ? t('settings.rules.delete.deny') : t('settings.rules.delete.allow');
     remove.innerHTML = TRASH_ICON_HTML;
     li.appendChild(remove);
     return li;
@@ -166,9 +169,9 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       for (const rule of workspaceRules) rulesWorkspace.appendChild(ruleRow(rule));
     }
     const root = typeof state?.workspaceRoot === 'string' ? state.workspaceRoot : '';
-    if (rulesWorkspaceName) rulesWorkspaceName.textContent = root || 'kein Workspace geöffnet';
+    if (rulesWorkspaceName) rulesWorkspaceName.textContent = root || t('settings.rules.workspace.none');
     if (rulesWorkspaceEmpty) {
-      rulesWorkspaceEmpty.textContent = root ? 'Keine Workspace-Regeln.' : 'Öffne einen Ordner, um Workspace-Regeln anzulegen.';
+      rulesWorkspaceEmpty.textContent = root ? t('settings.rules.workspace.empty') : t('settings.rules.workspace.hint');
       rulesWorkspaceEmpty.classList.toggle('hidden', workspaceRules.length > 0);
     }
   }
@@ -200,8 +203,8 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   }
 
   function renderRuleForm(state) {
-    fillSelect(ruleEffect, RULE_EFFECT_OPTIONS);
-    fillSelect(ruleScope, RULE_SCOPE_OPTIONS);
+    fillSelect(ruleEffect, ruleEffectOptions());
+    fillSelect(ruleScope, ruleScopeOptions());
     if (ruleScope) {
       const hasWorkspace = typeof state?.workspaceRoot === 'string' && state.workspaceRoot;
       const workspaceOption = ruleScope.querySelector('option[value="workspace"]');
@@ -305,7 +308,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     resetActions.innerHTML = '';
     const grants = Number.isInteger(state?.sessionGrantCount) ? state.sessionGrantCount : 0;
     const hasWorkspace = typeof state?.workspaceRoot === 'string' && !!state.workspaceRoot;
-    for (const action of RESET_ACTIONS) {
+    for (const action of resetActionOptions()) {
       const row = document.createElement('div');
       row.className = 'settings-reset-row';
       const text = document.createElement('div');
@@ -327,12 +330,12 @@ export function initToolPermissionsPanel({ toolPermissions }) {
         confirm.className = 'btn-destructive';
         confirm.dataset.reset = action.key;
         confirm.dataset.confirmed = 'true';
-        confirm.textContent = 'Ja, alles zurücksetzen';
+        confirm.textContent = t('settings.reset.confirm');
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'btn-secondary';
         cancel.dataset.resetCancel = 'true';
-        cancel.textContent = 'Abbrechen';
+        cancel.textContent = t('settings.reset.cancel');
         controls.appendChild(confirm);
         controls.appendChild(cancel);
       } else {
@@ -340,7 +343,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
         button.type = 'button';
         button.className = 'btn-secondary';
         button.dataset.reset = action.key;
-        button.textContent = action.confirm ? 'Zurücksetzen …' : 'Ausführen';
+        button.textContent = action.confirm ? t('settings.reset.running') : t('settings.reset.run');
         button.disabled = !state || (action.key === 'session' && grants === 0) || (action.key === 'workspace' && !hasWorkspace);
         controls.appendChild(button);
       }
@@ -359,7 +362,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     const button = e.target.closest('button[data-reset]');
     if (!button) return;
     const key = button.dataset.reset;
-    const action = RESET_ACTIONS.find((a) => a.key === key);
+    const action = resetActionOptions().find((a) => a.key === key);
     if (!action) return;
     if (action.confirm && button.dataset.confirmed !== 'true') {
       resetConfirmKey = key;
@@ -379,19 +382,28 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   // ── Gesamt ───────────────────────────────────────────────────────────────
   function render(state) {
     if (!isOpen) return;
+    lastState = state;
     renderMode(state);
     renderRules(state);
     renderRuleForm(state);
     renderSensitive(state);
     renderResets(state);
     if (migrationHint) {
-      migrationHint.textContent = LEGACY_WRITE_MIGRATION_HINT;
+      migrationHint.textContent = legacyWriteMigrationHint();
       migrationHint.classList.toggle('hidden', state?.legacyWriteMigrated !== true);
     }
     setError(integrityHint, integrityWarning(state?.integrity));
-    if (!state) setError(errorEl, 'Berechtigungen konnten nicht geladen werden.');
-    else if (errorEl?.textContent === 'Berechtigungen konnten nicht geladen werden.') setError(errorEl, '');
+    if (!state) setError(errorEl, t('settings.permissions.loadFailed'));
+    else if (errorEl?.textContent === t('settings.permissions.loadFailed')) setError(errorEl, '');
   }
+
+  // Language change (epic #277): the mode list, the rules and the reset actions
+  // take their text from `tool-approval-view` and are built here. With the
+  // section closed nothing happens — `open()` draws afresh anyway.
+  onLocaleChange(() => {
+    if (!isOpen) return;
+    render(lastState);
+  });
 
   return {
     async open(catalog) {

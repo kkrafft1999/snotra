@@ -51,6 +51,7 @@ const { createUpdateAdapter } = require('../adapters/update-adapter');
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
+const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const {
   registerSettingsHandlers,
@@ -104,6 +105,11 @@ function createApplication({
    * 8.3-Kurznamen abstuerzen zu lassen (Issue #158).
    */
   realpathNative = null,
+  /**
+   * Called when the user switches the language (epic #277). The caller rebuilds
+   * the menu bar from it — the menu belongs to them, not here.
+   */
+  onAppLocaleChanged = null,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -129,6 +135,25 @@ function createApplication({
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
   const webSearchStore = createWebSearchStorePort(storage);
+
+  // ── Interface language in the main process (epic #277) ────────────────────
+  // The menu bar and the context menu are built synchronously; an `await` on
+  // the preferences would mean a menu opening without labels. Hence a
+  // remembered value, written forward by startup and by saving the settings —
+  // the same construction as the web search key above.
+  let appLocale = DEFAULT_LOCALE;
+  const getAppLocale = () => appLocale;
+  void uiPrefsStore.readUIPrefs()
+    .then((prefs) => {
+      const stored = normalizeLocale(prefs.appLocale);
+      if (stored === appLocale) return;
+      appLocale = stored;
+      // The first menu is already in place while the file is still being read.
+      // If the stored language differs, the caller rebuilds it now — long
+      // before anyone opens it.
+      onAppLocaleChanged?.(appLocale);
+    })
+    .catch(() => {});
 
   // Websuche (Issue #63). Ob ein Schluessel hinterlegt ist, muss beim Bauen der
   // Tool-Liste synchron feststehen — deshalb ein gemerkter Stand, den nur der
@@ -552,7 +577,7 @@ function createApplication({
   registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
-    ? createFileContextMenu({ Menu, shell, dialog, clipboard })
+    ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
     : null;
   // dialog: der Import von außen (#101) wird nativ bestätigt, nicht im Renderer.
   registerFsHandlers({ ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog });
@@ -573,6 +598,12 @@ function createApplication({
     skillCatalog: skillsService,
     memory,
     webSearchSettings,
+    // A language change takes effect at once: the remembered value follows and
+    // the application menu is rebuilt — Electron cannot rename an item.
+    onAppLocaleChanged: (next) => {
+      appLocale = normalizeLocale(next);
+      onAppLocaleChanged?.(appLocale);
+    },
     mcpSettings,
     pythonSettings,
     shellSettings,
@@ -665,6 +696,7 @@ function createApplication({
         reloadMcpServers(),
       ]),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
+    getAppLocale,
   };
 }
 

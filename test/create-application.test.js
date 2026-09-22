@@ -84,7 +84,7 @@ test('createApplication exposes lifecycle API only', async (t) => {
 
   assert.deepEqual(
     Object.keys(app).sort(),
-    ['dispose', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck'].sort(),
+    ['dispose', 'getAppLocale', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck'].sort(),
   );
   assert.equal(typeof app.runUpdateCheck, 'function');
   assert.equal(typeof app.dispose, 'function');

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,7 +13,7 @@
   <header id="titlebar">
     <div class="titlebar-drag"></div>
     <div class="icon-btn-row">
-      <button type="button" id="btn-toggle-sidebar" title="Seitenleiste ausblenden" aria-label="Seitenleiste ausblenden" aria-pressed="true" aria-controls="sidebar">
+      <button type="button" id="btn-toggle-sidebar" title="Hide sidebar" aria-label="Hide sidebar" aria-pressed="true" aria-controls="sidebar">
         <!-- Beide Spalten-Schalter tragen dasselbe Bild: ein Fenster mit einer
              schmalen linken und einer breiten rechten Flaeche. Gefuellt ist die,
              die der Knopf schaltet — hier die Seitenleiste. -->
@@ -28,7 +28,7 @@
            umgekehrt blitzte der Startschirm auf und spraenge wieder weg. Wer
            das aendert, aendert auch den Aufruf von setContentPaneVisible()
            ganz oben in app.js. -->
-      <button type="button" id="btn-toggle-content-pane" title="Mittlere Vorschau einblenden" aria-label="Mittlere Vorschau einblenden" aria-pressed="false">
+      <button type="button" id="btn-toggle-content-pane" title="Show preview pane" aria-label="Show preview pane" aria-pressed="false">
         <!-- Dasselbe Bild wie beim Nachbarn, gefuellt ist die Anzeige. -->
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M6 2.5h7.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6z" fill="currentColor" stroke="none"/>
@@ -48,7 +48,7 @@
          Trennlinie sitzt bei x=10 statt bei x=6, gefuellt ist die Flaeche, die
          der Knopf schaltet. -->
     <div class="icon-btn-row">
-      <button type="button" id="btn-toggle-chat-panel" title="Chat ausblenden" aria-label="Chat ausblenden" aria-pressed="true" aria-controls="chat-panel">
+      <button type="button" id="btn-toggle-chat-panel" title="Hide chat" aria-label="Hide chat" aria-pressed="true" aria-controls="chat-panel">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M10 2.5H2.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H10z" fill="currentColor" stroke="none"/>
           <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
@@ -57,7 +57,7 @@
       </button>
       <!-- Startzustand: eingeklappt — genau wie die Klasse app--no-history an
            #app. Wer das aendert, aendert beides. -->
-      <button type="button" id="btn-toggle-chat-history" title="Chat-Verlauf einblenden" aria-label="Chat-Verlauf einblenden" aria-pressed="false" aria-controls="chat-history">
+      <button type="button" id="btn-toggle-chat-history" title="Show chat history" aria-label="Show chat history" aria-pressed="false" aria-controls="chat-history">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M10 2.5h3.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10z" fill="currentColor" stroke="none"/>
           <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
@@ -71,10 +71,10 @@
     <div id="workspace">
       <aside id="sidebar">
         <div id="tree-header">
-          <span id="project-name">Kein Ordner geöffnet</span>
+          <span id="project-name" data-i18n="sidebar.noFolder">No folder open</span>
           <div class="icon-btn-row">
             <div id="folder-history-wrapper">
-              <button id="btn-folder-history" type="button" title="Zuletzt geöffnete Ordner" aria-label="Zuletzt geöffnete Ordner" aria-haspopup="menu" aria-expanded="false">
+              <button id="btn-folder-history" type="button" title="Recently opened folders" aria-label="Recently opened folders" aria-haspopup="menu" aria-expanded="false" data-i18n-attr="title:sidebar.recentFolders;aria-label:sidebar.recentFolders">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9"/>
                   <polyline points="12 7 12 12 15 14"/>
@@ -82,7 +82,7 @@
               </button>
               <div id="folder-history-menu" class="hidden" role="menu" aria-hidden="true"></div>
             </div>
-            <button id="btn-open-folder" title="Ordner öffnen" aria-label="Ordner öffnen">
+            <button id="btn-open-folder" title="Open folder" aria-label="Open folder" data-i18n-attr="title:sidebar.openFolder;aria-label:sidebar.openFolder">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
@@ -93,20 +93,20 @@
       </aside>
 
       <div id="divider" class="pane-divider" role="separator" aria-orientation="vertical"
-           tabindex="0" aria-label="Breite der Seitenleiste"></div>
+           tabindex="0" aria-label="Sidebar width" data-i18n-attr="aria-label:sidebar.resize"></div>
 
       <section id="content">
         <div id="welcome">
           <p class="welcome-eyebrow">
             <span class="eyebrow-prefix" aria-hidden="true">//</span><span class="eyebrow-label">Snotra AI</span>
           </p>
-          <h1 class="welcome-headline">Womit fangen wir an?</h1>
-          <p class="welcome-sub">Oeffne einen Ordner und starte einen Chat ueber den Inhalt.</p>
+          <h1 class="welcome-headline" data-i18n="welcome.headline">Where shall we start?</h1>
+          <p class="welcome-sub" data-i18n="welcome.sub">Open a folder and start a chat about what is in it.</p>
           <button type="button" id="welcome-cta" class="welcome-cta">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
-            <span>Ordner oeffnen</span>
+            <span data-i18n="welcome.cta">Open folder</span>
             <span class="welcome-cta-arrow" aria-hidden="true">&rarr;</span>
           </button>
 
@@ -116,7 +116,7 @@
             aria-labelledby="welcome-recent-label"
           >
             <h2 id="welcome-recent-label" class="welcome-section-label">
-              <span class="eyebrow-prefix" aria-hidden="true">//</span><span class="eyebrow-label">zuletzt geoeffnet</span>
+              <span class="eyebrow-prefix" aria-hidden="true">//</span><span class="eyebrow-label" data-i18n="welcome.recent.label">recently opened</span>
             </h2>
             <div id="welcome-recent-list" class="chip-list" role="list"></div>
           </section>
@@ -127,32 +127,33 @@
             aria-labelledby="welcome-actions-label"
           >
             <h2 id="welcome-actions-label" class="welcome-section-label">
-              <span class="eyebrow-prefix" aria-hidden="true">//</span><span class="eyebrow-label">schnellstart</span>
+              <span class="eyebrow-prefix" aria-hidden="true">//</span><span class="eyebrow-label" data-i18n="welcome.quickstart.label">quick start</span>
             </h2>
             <div
               id="welcome-actions-list"
               class="chip-list"
               role="group"
-              aria-label="Schnellstart-Aktionen"
+              aria-label="Quick start actions"
+              data-i18n-attr="aria-label:welcome.quickstart.group"
             >
               <button type="button" class="chip" data-action="analyse">
                 <span class="chip-cmd" lang="en">analyse</span>
-                <span class="chip-desc">Repo-Struktur erklaeren</span>
+                <span class="chip-desc" data-i18n="welcome.action.analyse">Explain the repo structure</span>
                 <span class="chip-arrow" aria-hidden="true">&rarr;</span>
               </button>
               <button type="button" class="chip" data-action="review">
                 <span class="chip-cmd" lang="en">review</span>
-                <span class="chip-desc">Code-Review starten</span>
+                <span class="chip-desc" data-i18n="welcome.action.review">Start a code review</span>
                 <span class="chip-arrow" aria-hidden="true">&rarr;</span>
               </button>
               <button type="button" class="chip" data-action="test">
                 <span class="chip-cmd" lang="en">test</span>
-                <span class="chip-desc">Tests vorschlagen</span>
+                <span class="chip-desc" data-i18n="welcome.action.test">Suggest tests</span>
                 <span class="chip-arrow" aria-hidden="true">&rarr;</span>
               </button>
               <button type="button" class="chip" data-action="doc">
                 <span class="chip-cmd" lang="en">doc</span>
-                <span class="chip-desc">Doku zusammenfassen</span>
+                <span class="chip-desc" data-i18n="welcome.action.doc">Summarise the docs</span>
                 <span class="chip-arrow" aria-hidden="true">&rarr;</span>
               </button>
             </div>
@@ -173,36 +174,36 @@
           </div>
           <h2 id="info-filename"></h2>
           <table id="info-table">
-            <tr><td>Größe</td><td id="info-size"></td></tr>
-            <tr><td>Geändert</td><td id="info-modified"></td></tr>
-            <tr><td>Typ</td><td id="info-type"></td></tr>
+            <tr><td data-i18n="fileInfo.size">Size</td><td id="info-size"></td></tr>
+            <tr><td data-i18n="fileInfo.modified">Modified</td><td id="info-modified"></td></tr>
+            <tr><td data-i18n="fileInfo.type">Type</td><td id="info-type"></td></tr>
           </table>
         </div>
       </section>
     </div>
 
     <div id="chat-divider" class="pane-divider" role="separator" aria-orientation="vertical"
-         tabindex="0" aria-label="Breite des Chat-Bereichs"></div>
+         tabindex="0" aria-label="Chat area width" data-i18n-attr="aria-label:chat.resize"></div>
 
     <div id="chat-area">
       <aside id="chat-panel">
         <div id="chat-header">
           <div class="chat-header-meta">
-            <span id="chat-live-dot" class="chat-live-dot" role="img" aria-label="Verbindung aktiv"></span>
-            <span id="chat-title">Chat</span>
+            <span id="chat-live-dot" class="chat-live-dot" role="img" aria-label="Connection active" data-i18n-attr="aria-label:chat.connectionActive"></span>
+            <span id="chat-title" data-i18n="chat.title">Chat</span>
           </div>
         </div>
-        <ol id="chat-messages" role="log" aria-label="Konversation" aria-live="polite" aria-busy="false"></ol>
+        <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="polite" aria-busy="false"></ol>
         <div id="chat-hint" class="hidden"></div>
         <div id="chat-input-row">
-          <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Dateien und Ordner im Projekt"></ul>
-          <ul id="chat-skill-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Verfügbare Skills"></ul>
-          <ul id="chat-attachments" class="chat-attachments hidden" aria-label="Angehängte Bilder"></ul>
-          <textarea id="chat-input" rows="1" placeholder="Nachricht…" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu chat-skill-menu"></textarea>
+          <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Files and folders in the project" data-i18n-attr="aria-label:chat.mentionMenu"></ul>
+          <ul id="chat-skill-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Available skills" data-i18n-attr="aria-label:chat.skillMenu"></ul>
+          <ul id="chat-attachments" class="chat-attachments hidden" aria-label="Attached images" data-i18n-attr="aria-label:chat.attachments"></ul>
+          <textarea id="chat-input" rows="1" placeholder="Message…" data-i18n-attr="placeholder:chat.input.placeholder" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu chat-skill-menu"></textarea>
           <p id="chat-skill-suggestion" class="chat-skill-suggestion hidden" aria-live="polite"></p>
-          <div class="chat-composer-bar" role="toolbar" aria-label="Eingabe-Werkzeuge">
+          <div class="chat-composer-bar" role="toolbar" aria-label="Composer tools" data-i18n-attr="aria-label:chat.composer.toolbar">
             <div class="chat-composer-bar-start">
-              <button type="button" id="btn-chat-mic" title="Spracheingabe" aria-pressed="false" aria-label="Spracheingabe starten">
+              <button type="button" id="btn-chat-mic" title="Voice input" aria-pressed="false" aria-label="Start voice input" data-i18n-attr="title:chat.mic.title;aria-label:chat.mic.label">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
@@ -218,13 +219,14 @@
                   aria-haspopup="listbox"
                   aria-expanded="false"
                   aria-controls="chat-model-menu"
-                  aria-label="Aktives Modell wählen">
+                  data-i18n-attr="aria-label:chat.modelPicker.label"
+                  aria-label="Choose the active model">
                   <span id="chat-model-pill-label">—</span>
                   <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
                     <path fill="currentColor" d="M0 0l5 6 5-6z"/>
                   </svg>
                 </button>
-                <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Verfügbare Modelle"></ul>
+                <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Available models" data-i18n-attr="aria-label:chat.modelPicker.menu"></ul>
               </span>
               <span class="chat-model-picker-wrap chat-tool-mode-wrap" id="chat-tool-mode-wrap" data-mode="smart">
                 <button
@@ -234,17 +236,18 @@
                   aria-haspopup="listbox"
                   aria-expanded="false"
                   aria-controls="chat-tool-mode-menu"
-                  aria-label="Berechtigungsmodus wählen"
-                  title="Tool-Berechtigungen">
+                  aria-label="Choose the permission mode"
+                  title="Tool permissions"
+                  data-i18n-attr="aria-label:chat.toolMode.label;title:chat.toolMode.title">
                   <svg class="chat-tool-mode-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
                   </svg>
-                  <span id="chat-tool-mode-label">Intelligent</span>
+                  <span id="chat-tool-mode-label" data-i18n="chat.toolMode.smart">Smart</span>
                   <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
                     <path fill="currentColor" d="M0 0l5 6 5-6z"/>
                   </svg>
                 </button>
-                <ul id="chat-tool-mode-menu" class="chat-model-menu chat-tool-mode-menu hidden" role="listbox" tabindex="-1" aria-label="Berechtigungsmodus"></ul>
+                <ul id="chat-tool-mode-menu" class="chat-model-menu chat-tool-mode-menu hidden" role="listbox" tabindex="-1" aria-label="Permission mode" data-i18n-attr="aria-label:chat.toolMode.menu"></ul>
               </span>
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
             </div>
@@ -257,7 +260,7 @@
                   aria-haspopup="dialog"
                   aria-expanded="false"
                   aria-controls="chat-token-breakdown">
-                  <span id="chat-token-usage-value" aria-live="polite">0 Tokens</span>
+                  <span id="chat-token-usage-value" aria-live="polite">0 tokens</span>
                 </button>
                 <div
                   id="chat-token-breakdown"
@@ -266,7 +269,7 @@
                   aria-labelledby="chat-token-breakdown-title"
                   tabindex="-1"></div>
               </span>
-              <button type="button" id="btn-chat-send" title="Senden" aria-label="Senden">
+              <button type="button" id="btn-chat-send" title="Send" aria-label="Send" data-i18n-attr="title:chat.send;aria-label:chat.send">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="12" y1="19" x2="12" y2="5"/>
                   <polyline points="5 12 12 5 19 12"/>
@@ -278,16 +281,16 @@
       </aside>
 
       <div id="history-divider" class="pane-divider" role="separator" aria-orientation="vertical"
-           tabindex="0" aria-label="Breite des Verlaufs"></div>
+           tabindex="0" aria-label="History width" data-i18n-attr="aria-label:history.resize"></div>
 
-      <aside id="chat-history" role="region" aria-label="Chat-Verlauf">
+      <aside id="chat-history" role="region" aria-label="Chat history" data-i18n-attr="aria-label:history.region">
         <div id="chat-history-header">
-          <span id="chat-history-title">Verlauf</span>
+          <span id="chat-history-title" data-i18n="history.title">History</span>
           <!-- Gegenstueck zu "Ordner oeffnen" in der Kopfzeile des Baums: Die
                Aktion, die der Spalte neue Eintraege verschafft, steht in der
                Spalte. Weggeschaltet wird sie ueber die Titelzeile. -->
           <div class="icon-btn-row">
-            <button type="button" id="btn-chat-new" title="Neuer Chat" aria-label="Neuer Chat">
+            <button type="button" id="btn-chat-new" title="New chat" aria-label="New chat" data-i18n-attr="title:history.new;aria-label:history.new">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
@@ -295,7 +298,7 @@
             </button>
           </div>
         </div>
-        <p id="chat-history-empty" class="chat-history-empty hidden">Noch keine gespeicherten Chats.</p>
+        <p id="chat-history-empty" class="chat-history-empty hidden" data-i18n="history.empty">No saved chats yet.</p>
         <div id="chat-history-list" class="chat-history-list"></div>
       </aside>
     </div>
@@ -311,12 +314,12 @@
       aria-describedby="modal-settings-desc">
       <header class="settings-dialog__header">
         <div>
-          <h2 id="modal-settings-title" class="settings-dialog__title">Einstellungen</h2>
+          <h2 id="modal-settings-title" class="settings-dialog__title" data-i18n="settings.title">Settings</h2>
           <p id="modal-settings-desc" class="settings-dialog__subtitle">
-            Bereich: <span id="settings-panel-heading">Modelle</span>
+            <span data-i18n="settings.area">Section:</span> <span id="settings-panel-heading">Models</span>
           </p>
         </div>
-        <button type="button" id="btn-settings-close" class="settings-dialog__icon-close" aria-label="Einstellungen schließen">
+        <button type="button" id="btn-settings-close" class="settings-dialog__icon-close" aria-label="Close settings" data-i18n-attr="aria-label:settings.close">
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
             <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
           </svg>
@@ -324,120 +327,120 @@
       </header>
 
       <div class="settings-dialog__body">
-        <nav class="settings-dialog__nav" role="tablist" aria-label="Einstellungsbereiche">
+        <nav class="settings-dialog__nav" role="tablist" aria-label="Settings sections" data-i18n-attr="aria-label:settings.nav.label">
           <button type="button" class="settings-nav-item" role="tab" aria-selected="true" aria-controls="panel-settings-models" id="tab-settings-models" data-settings-panel="models">
-            Modelle
-            <span class="settings-nav-item__desc">API, Anbindung, Präferenzen</span>
+            <span data-i18n="settings.nav.models">Models</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.models.desc">API, connection, preferences</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools">
-            Tools
-            <span class="settings-nav-item__desc">Werkzeuge fürs Sprachmodell</span>
+            <span data-i18n="settings.nav.tools">Tools</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">What the model can use</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-permissions" id="tab-settings-permissions" data-settings-panel="permissions">
-            Berechtigungen
-            <span class="settings-nav-item__desc">Wann ein Tool laufen darf</span>
+            <span data-i18n="settings.nav.permissions">Permissions</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.permissions.desc">When a tool may run</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
-            Skills
-            <span class="settings-nav-item__desc">Arbeitsweisen für das Sprachmodell</span>
+            <span data-i18n="settings.nav.skills">Skills</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.skills.desc">Ways of working for the model</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-memory" id="tab-settings-memory" data-settings-panel="memory">
-            Gedächtnis
-            <span class="settings-nav-item__desc">Was Snotra über Chats hinweg behält</span>
+            <span data-i18n="settings.nav.memory">Memory</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">What Snotra keeps across chats</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-mcp" id="tab-settings-mcp" data-settings-panel="mcp">
-            MCP
-            <span class="settings-nav-item__desc">Server externer Werkzeuge</span>
+            <span data-i18n="settings.nav.mcp">MCP</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.mcp.desc">External tool servers</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
-            Allgemein
-            <span class="settings-nav-item__desc">Darstellung, Texte, Verhalten</span>
+            <span data-i18n="settings.nav.general">General</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.general.desc">Appearance, text, behaviour</span>
           </button>
         </nav>
 
         <div class="settings-dialog__panel-wrap">
           <section class="settings-panel settings-panel--active" id="panel-settings-models" role="tabpanel" aria-labelledby="tab-settings-models">
-            <p id="modal-encryption-warning" class="modal-warning hidden">Verschlüsselter Speicher ist auf diesem System nicht verfügbar. Ein Key kann nicht sicher gespeichert werden.</p>
+            <p id="modal-encryption-warning" class="modal-warning hidden" data-i18n="settings.models.encryptionWarning">Encrypted storage is not available on this system. A key cannot be stored safely.</p>
 
             <div class="settings-panel-models__head">
-              <h3 class="settings-subsection-title" id="heading-pref-models">Präferierte Modelle</h3>
-              <button type="button" id="btn-open-add-model" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-add-model">
-                Modell hinzufügen
+              <h3 class="settings-subsection-title" id="heading-pref-models" data-i18n="settings.models.heading">Preferred models</h3>
+              <button type="button" id="btn-open-add-model" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-add-model" data-i18n="settings.models.add">
+                Add model
               </button>
             </div>
             <details class="settings-note">
-              <summary class="settings-note__summary"><span>Gespeicherte Kombinationen aus Anbieter, Modell und Parametern.</span></summary>
-              <div class="settings-note__body">
+              <summary class="settings-note__summary"><span data-i18n="settings.models.note.summary">Saved combinations of provider, model and parameters.</span></summary>
+              <div class="settings-note__body" data-i18n-html="settings.models.note.body">
                 <p>
-                  Der Schalter steuert, ob der Eintrag im Chat im <strong>Modellmenü</strong> angeboten wird. Die
-                  Auswahl für eine Konversation triffst du dort.
+                  The switch controls whether the entry is offered in the chat&rsquo;s <strong>model menu</strong>. You
+                  pick the one for a conversation there.
                 </p>
                 <p>
-                  Das gewählte Modell bleibt bei der Konversation: Ein Chat aus dem Verlauf kommt mit seinem eigenen
-                  zurück. Ein neuer Chat startet mit dem zuletzt gewählten.
+                  The chosen model stays with the conversation: a chat from the history comes back with its own. A new
+                  chat starts with the one you picked last.
                 </p>
               </div>
             </details>
 
             <ul id="pref-model-list" class="settings-pref-list" aria-labelledby="heading-pref-models"></ul>
 
-            <p id="pref-list-empty" class="settings-empty-hint hidden">Noch keine Einträge – „Modell hinzufügen“ öffnen.</p>
+            <p id="pref-list-empty" class="settings-empty-hint hidden" data-i18n="settings.models.empty">No entries yet &ndash; open &ldquo;Add model&rdquo;.</p>
           </section>
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
             <details class="settings-note">
-              <summary class="settings-note__summary"><span>Diese Tools kann das Sprachmodell im geöffneten Projektordner nutzen.</span></summary>
-              <div class="settings-note__body">
-                <p>Nur angehakte Tools werden dem Modell angeboten — standardmäßig sind alle aktiv.</p>
+              <summary class="settings-note__summary"><span data-i18n="settings.tools.note.summary">These are the tools the model can use inside the open project folder.</span></summary>
+              <div class="settings-note__body" data-i18n-html="settings.tools.note.body">
+                <p>Only ticked tools are offered to the model &mdash; by default all of them are on.</p>
                 <p>
-                  Zwei Tools stehen nicht in der Liste, weil sie zur Grundausstattung gehören:
-                  <code>list_directory</code> ist der Blick in den geöffneten Ordner,
-                  <code>load_skill</code> holt die Anleitung eines eingeschalteten Skills. Sie
-                  abzuwählen würde mehr kosten als sparen — ohne <code>load_skill</code> läge jede
-                  Skill-Anleitung wieder in voller Länge in jeder Anfrage. Skills selbst schaltest
-                  du unter „Skills“ ab.
+                  Two tools are not in the list because they are part of the basic equipment:
+                  <code>list_directory</code> is the look into the open folder,
+                  <code>load_skill</code> fetches the instructions of an enabled skill. Turning them
+                  off would cost more than it saves &mdash; without <code>load_skill</code>, every
+                  skill&rsquo;s instructions would sit in every request at full length again. Skills
+                  themselves are switched off under &ldquo;Skills&rdquo;.
                 </p>
               </div>
             </details>
             <div class="settings-tools-card">
-              <h3 class="settings-subsection-title" id="heading-tool-catalog">Verfügbare Tools</h3>
+              <h3 class="settings-subsection-title" id="heading-tool-catalog" data-i18n="settings.tools.catalog.heading">Available tools</h3>
               <div id="settings-tool-list" class="settings-tool-groups" role="group" aria-labelledby="heading-tool-catalog"></div>
-              <p id="settings-tool-list-empty" class="settings-empty-hint hidden">
-                Tool-Liste konnte nicht geladen werden.
+              <p id="settings-tool-list-empty" class="settings-empty-hint hidden" data-i18n="settings.tools.catalog.empty">
+                The tool list could not be loaded.
               </p>
             </div>
             <div class="settings-tools-card" id="settings-python-card">
-              <h3 class="settings-subsection-title" id="heading-python">Python ausführen</h3>
+              <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.heading">Run Python</h3>
               <details class="settings-note settings-note--warning">
                 <summary class="settings-note__summary">
-                  <span><strong>Achtung:</strong> <code>run_python</code> führt Code des Sprachmodells mit deinen
-                  Rechten aus — ohne Sandbox.</span>
+                  <span data-i18n-html="settings.python.warning.summary"><strong>Careful:</strong> <code>run_python</code> runs the model&rsquo;s code with
+                  your rights &mdash; no sandbox.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.python.warning.body">
                   <p>
-                    Der Code ist <strong>nicht</strong> auf den Projektordner begrenzt — er kann überall lesen und
-                    schreiben, ins Netz gehen und Programme starten. Snotra zeigt dir vor <em>jedem</em> Lauf den
-                    vollständigen Quelltext zur Freigabe. Nur einschalten, wenn dir das bewusst ist.
+                    The code is <strong>not</strong> confined to the project folder &mdash; it can read and write
+                    anywhere, reach the network and start programs. Snotra shows you the full source before
+                    <em>every</em> run for approval. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
               <label class="modal-checkbox settings-exec-toggle">
                 <input type="checkbox" id="input-python-enabled">
-                <span>Python-Ausführung erlauben</span>
+                <span data-i18n="settings.python.toggle">Allow Python execution</span>
               </label>
               <div class="modal-field-group">
-                <label for="input-python-interpreter" class="modal-field-label eyebrow-row">
-                  Eigener Interpreter (optional)
+                <label for="input-python-interpreter" class="modal-field-label eyebrow-row" data-i18n="settings.python.interpreter.label">
+                  Your own interpreter (optional)
                 </label>
                 <input type="text" id="input-python-interpreter" autocomplete="off" spellcheck="false"
-                  placeholder="z. B. /Users/du/venv/bin/python3">
+                  placeholder="e.g. /Users/you/venv/bin/python3" data-i18n-attr="placeholder:settings.python.interpreter.placeholder">
               </div>
               <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span>Leer lassen, um automatisch nach Python 3 zu suchen.</span></summary>
-                <div class="settings-note__body">
+                <summary class="settings-note__summary"><span data-i18n="settings.python.interpreter.note.summary">Leave empty to search for Python 3 automatically.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.python.interpreter.note.body">
                   <p>
-                    Ein eigener Pfad — etwa ein venv mit <code lang="en">pandas</code> — bestimmt, welche Pakete dem
-                    Modell zur Verfügung stehen. Snotra installiert selbst nichts nach.
+                    Your own path &mdash; a venv with <code lang="en">pandas</code>, say &mdash; decides which packages
+                    the model has. Snotra never installs anything itself.
                   </p>
                 </div>
               </details>
@@ -445,54 +448,52 @@
             </div>
 
             <div class="settings-tools-card" id="settings-shell-card">
-              <h3 class="settings-subsection-title" id="heading-shell">Shell-Befehle ausführen</h3>
+              <h3 class="settings-subsection-title" id="heading-shell" data-i18n="settings.shell.heading">Run shell commands</h3>
               <details class="settings-note settings-note--warning">
                 <summary class="settings-note__summary">
-                  <span><strong>Achtung:</strong> <code>shell_execute</code> führt Befehle des Sprachmodells mit
-                  deinen Rechten aus — ohne Sandbox.</span>
+                  <span data-i18n-html="settings.shell.warning.summary"><strong>Careful:</strong> <code>shell_execute</code> runs the model&rsquo;s commands
+                  with your rights &mdash; no sandbox.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.shell.warning.body">
                   <p>
-                    Ein Shell-Befehl kann <strong>alles</strong>, was du selbst im Terminal kannst: überall lesen und
-                    schreiben, ins Netz gehen, Programme installieren. Es gibt <strong>keine</strong> Projektordner-Grenze.
-                    Snotra zeigt dir vor <em>jedem</em> Lauf den vollständigen Befehl, die Shell und das
-                    Arbeitsverzeichnis zur Freigabe; rekursives Zwangslöschen, Datenträgeroperationen und das
-                    Umschreiben der Git-Historie sind gesperrt. Diese Sperre ist eine zusätzliche Sicherung, kein
-                    vollständiger Schutz — im Modus „Auto“ läuft ein Befehl ohne Rückfrage. Nur einschalten, wenn dir
-                    das bewusst ist.
+                    A shell command can do <strong>everything</strong> you can do in a terminal yourself: read and write
+                    anywhere, reach the network, install programs. There is <strong>no</strong> project folder boundary.
+                    Snotra shows you the full command, the shell and the working directory before <em>every</em> run for
+                    approval; recursive force-delete, disk operations and rewriting Git history are blocked. That block
+                    is an extra safeguard, not complete protection &mdash; in &ldquo;Auto&rdquo; mode a command runs
+                    without asking. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
               <label class="modal-checkbox settings-exec-toggle">
                 <input type="checkbox" id="input-shell-enabled">
-                <span>Shell-Befehle erlauben</span>
+                <span data-i18n="settings.shell.toggle">Allow shell commands</span>
               </label>
               <p id="settings-shell-status" class="modal-hint" role="status"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">
-              <h3 class="settings-subsection-title" id="heading-web-search">Websuche</h3>
+              <h3 class="settings-subsection-title" id="heading-web-search" data-i18n="settings.webSearch.heading">Web search</h3>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span><code>web_search</code> fragt <strong>Tavily</strong> — ohne Schlüssel wird das Tool dem
-                  Modell gar nicht erst angeboten.</span>
+                  <span data-i18n-html="settings.webSearch.note.summary"><code>web_search</code> asks <strong>Tavily</strong> &mdash; without a key the tool
+                  is not offered to the model at all.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.webSearch.note.body">
                   <p>
-                    Geliefert werden Titel, URL und ein kurzer Auszug je Treffer. Die Suchanfrage verlässt deinen
-                    Rechner — im Modus „Intelligent“ fragt Snotra deshalb vor jeder Suche nach. Einen Schlüssel
-                    bekommst du kostenlos unter
+                    You get a title, a URL and a short excerpt per hit. The query leaves your machine &mdash; which is
+                    why Snotra asks before every search in &ldquo;Smart&rdquo; mode. You can get a key for free at
                     <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a>.
                   </p>
                 </div>
               </details>
               <div class="modal-field-group">
-                <label for="input-web-search-key" class="modal-field-label eyebrow-row">Tavily-API-Schlüssel</label>
+                <label for="input-web-search-key" class="modal-field-label eyebrow-row" data-i18n="settings.webSearch.key.label">Tavily API key</label>
                 <input type="password" id="input-web-search-key" autocomplete="off" spellcheck="false" placeholder="tvly-…">
               </div>
               <div class="settings-web-search-actions">
-                <button type="button" id="btn-web-search-save" class="btn-primary">Schlüssel speichern</button>
-                <button type="button" id="btn-web-search-clear" class="btn-secondary">Schlüssel entfernen</button>
+                <button type="button" id="btn-web-search-save" class="btn-primary" data-i18n="settings.webSearch.save">Save key</button>
+                <button type="button" id="btn-web-search-clear" class="btn-secondary" data-i18n="settings.webSearch.clear">Remove key</button>
               </div>
               <p id="settings-web-search-status" class="modal-hint" role="status"></p>
             </div>
@@ -501,35 +502,35 @@
           <section class="settings-panel" id="panel-settings-permissions" role="tabpanel" aria-labelledby="tab-settings-permissions" hidden>
             <details class="settings-note">
               <summary class="settings-note__summary">
-                <span>Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf — Änderungen hier wirken
-                <strong>sofort</strong> und für alle Chats.</span>
+                <span data-i18n-html="settings.permissions.note.summary">Snotra decides per call whether a tool call runs &mdash; changes here take
+                effect <strong>immediately</strong> and for every chat.</span>
               </summary>
-              <div class="settings-note__body">
+              <div class="settings-note__body" data-i18n-html="settings.permissions.note.body">
                 <p>
-                  Entschieden wird nach Risikoklasse und Modus. Harte Grenzen (Projektordner, Skill-Verzeichnisse nur
-                  lesbar, Snotra-Schlüssel) gelten in jedem Modus. Anders als in den übrigen Bereichen brauchen
-                  Änderungen hier kein „Übernehmen“.
+                  The decision follows the risk class and the mode. Hard limits (project folder, skill directories
+                  read-only, Snotra&rsquo;s own keys) hold in every mode. Unlike the other sections, changes here need
+                  no &ldquo;Apply&rdquo;.
                 </p>
               </div>
             </details>
             <div class="settings-tools-card" id="settings-permissions-card">
-              <h3 class="settings-subsection-title" id="heading-tool-permissions">Modus</h3>
+              <h3 class="settings-subsection-title" id="heading-tool-permissions" data-i18n="settings.permissions.mode.heading">Mode</h3>
               <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
               <p id="settings-permissions-integrity" class="modal-warning hidden" role="alert"></p>
               <fieldset class="settings-mode-group" id="settings-tool-mode-group" aria-describedby="hint-tool-mode">
-                <legend class="settings-mode-group__legend visually-hidden">Modus</legend>
+                <legend class="settings-mode-group__legend visually-hidden" data-i18n="settings.permissions.mode.legend">Mode</legend>
               </fieldset>
               <details id="hint-tool-mode" class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span>Derselbe Modus steht in der Chat-Leiste.</span></summary>
-                <div class="settings-note__body">
+                <summary class="settings-note__summary"><span data-i18n="settings.permissions.mode.note.summary">The same mode sits in the chat bar.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.permissions.mode.note.body">
                   <p>
-                    Der Modus gehört zur Konversation: Ein Chat aus dem Verlauf bringt seinen eigenen wieder mit, ein
-                    neuer Chat beginnt bei „Intelligent“.
+                    The mode belongs to the conversation: a chat from the history brings its own back, a new chat starts
+                    at &ldquo;Smart&rdquo;.
                   </p>
                   <p>
-                    „Auto“ verlangt eine Bestätigung im Systemdialog; zurück zu „Intelligent“ geht jederzeit ohne
-                    Rückfrage. Nach einem Neustart der App gilt „Auto“ erst wieder, wenn du den Chat im Verlauf
-                    ausdrücklich öffnest.
+                    &ldquo;Auto&rdquo; needs a confirmation in the system dialog; going back to &ldquo;Smart&rdquo; is
+                    always possible without being asked. After an app restart, &ldquo;Auto&rdquo; applies again only
+                    once you open that chat from the history yourself.
                   </p>
                 </div>
               </details>
@@ -537,98 +538,98 @@
             </div>
 
             <div class="settings-tools-card" id="settings-rules-card">
-              <h3 class="settings-subsection-title" id="heading-tool-rules">Regeln</h3>
+              <h3 class="settings-subsection-title" id="heading-tool-rules" data-i18n="settings.rules.heading">Rules</h3>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span>Sperren gewinnen immer; Erlaubnisse ersparen die Rückfrage im Modus „Intelligent“.</span>
+                  <span data-i18n="settings.rules.note.summary">Blocks always win; allowances save you the question in &ldquo;Smart&rdquo; mode.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.rules.note.body">
                   <p>
-                    Eine Sperre blockiert den Aufruf in jedem Modus. Dauerhaft erlauben lässt sich nur Lesen und
-                    Ändern; sensibles Lesen nur einmal oder für eine Sitzung, Überschreiben ohne Rückweg, Ausführen
-                    und externe Dienste nur einzeln.
+                    A block stops the call in every mode. Only reading and changing can be allowed permanently;
+                    sensitive reads only once or for a session, overwriting without a way back, execution and external
+                    services only one at a time.
                   </p>
                 </div>
               </details>
-              <h4 class="settings-rules-heading">Alle Workspaces</h4>
-              <ul id="settings-rules-global" class="settings-rule-list" aria-label="Regeln für alle Workspaces"></ul>
-              <p id="settings-rules-global-empty" class="settings-empty-hint">Keine globalen Regeln.</p>
-              <h4 class="settings-rules-heading">Dieser Workspace <code id="settings-rules-workspace-name" class="settings-rules-heading__root"></code></h4>
-              <ul id="settings-rules-workspace" class="settings-rule-list" aria-label="Regeln für diesen Workspace"></ul>
-              <p id="settings-rules-workspace-empty" class="settings-empty-hint">Keine Workspace-Regeln.</p>
+              <h4 class="settings-rules-heading" data-i18n="settings.rules.global.heading">All workspaces</h4>
+              <ul id="settings-rules-global" class="settings-rule-list" aria-label="Rules for all workspaces" data-i18n-attr="aria-label:settings.rules.global.list"></ul>
+              <p id="settings-rules-global-empty" class="settings-empty-hint" data-i18n="settings.rules.global.empty">No global rules.</p>
+              <h4 class="settings-rules-heading"><span data-i18n="settings.rules.workspace.heading">This workspace</span> <code id="settings-rules-workspace-name" class="settings-rules-heading__root"></code></h4>
+              <ul id="settings-rules-workspace" class="settings-rule-list" aria-label="Rules for this workspace" data-i18n-attr="aria-label:settings.rules.workspace.list"></ul>
+              <p id="settings-rules-workspace-empty" class="settings-empty-hint" data-i18n="settings.rules.workspace.empty">No workspace rules.</p>
               <form id="settings-rule-form" class="settings-rule-form" aria-labelledby="heading-rule-form">
-                <h4 id="heading-rule-form" class="settings-rules-heading">Regel anlegen</h4>
+                <h4 id="heading-rule-form" class="settings-rules-heading" data-i18n="settings.rules.form.heading">Create rule</h4>
                 <div class="settings-rule-form__grid">
                   <div class="settings-rule-form__field">
-                    <label for="rule-effect" class="modal-field-label eyebrow-row">Wirkung</label>
+                    <label for="rule-effect" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.effect">Effect</label>
                     <select id="rule-effect" class="modal-input"></select>
                   </div>
                   <div class="settings-rule-form__field">
-                    <label for="rule-scope" class="modal-field-label eyebrow-row">Geltung</label>
+                    <label for="rule-scope" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.scope">Scope</label>
                     <select id="rule-scope" class="modal-input"></select>
                   </div>
                   <div class="settings-rule-form__field">
-                    <label for="rule-subject-type" class="modal-field-label eyebrow-row">Gegenstand</label>
+                    <label for="rule-subject-type" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.subject">Subject</label>
                     <select id="rule-subject-type" class="modal-input">
-                      <option value="tool">Einzelnes Tool</option>
-                      <option value="class">Risikoklasse</option>
+                      <option value="tool" data-i18n="settings.rules.form.subject.tool">A single tool</option>
+                      <option value="class" data-i18n="settings.rules.form.subject.class">Risk class</option>
                     </select>
                   </div>
                   <div class="settings-rule-form__field">
-                    <label for="rule-tool" class="modal-field-label eyebrow-row">Tool</label>
+                    <label for="rule-tool" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.tool">Tool</label>
                     <select id="rule-tool" class="modal-input" lang="en"></select>
                   </div>
                   <div class="settings-rule-form__field hidden">
-                    <label for="rule-class" class="modal-field-label eyebrow-row">Klasse</label>
+                    <label for="rule-class" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.class">Class</label>
                     <select id="rule-class" class="modal-input"></select>
                   </div>
                   <div class="settings-rule-form__field settings-rule-form__field--wide">
-                    <label for="rule-pattern" class="modal-field-label eyebrow-row">Pfadmuster</label>
-                    <input type="text" id="rule-pattern" class="modal-input" placeholder="z. B. docs/** oder *.md – leer = alle Pfade" autocomplete="off" spellcheck="false" aria-describedby="hint-rule-pattern" />
+                    <label for="rule-pattern" class="modal-field-label eyebrow-row" data-i18n="settings.rules.form.pattern">Path pattern</label>
+                    <input type="text" id="rule-pattern" class="modal-input" placeholder="e.g. docs/** or *.md – empty = all paths" data-i18n-attr="placeholder:settings.rules.form.pattern.placeholder" autocomplete="off" spellcheck="false" aria-describedby="hint-rule-pattern" />
                   </div>
                 </div>
                 <details id="hint-rule-pattern" class="settings-note settings-note--tight">
                   <summary class="settings-note__summary">
-                    <span><code>*</code> gilt innerhalb eines Ordners, <code>**</code> auch über Unterordner.</span>
+                    <span data-i18n-html="settings.rules.form.pattern.note.summary"><code>*</code> stays inside one folder, <code>**</code> also crosses subfolders.</span>
                   </summary>
-                  <div class="settings-note__body">
-                    <p>Erlaubnisse und das Löschen von Sperren bestätigst du zusätzlich im Systemdialog.</p>
+                  <div class="settings-note__body" data-i18n-html="settings.rules.form.pattern.note.body">
+                    <p>Allowances, and deleting a block, are confirmed in the system dialog as well.</p>
                   </div>
                 </details>
                 <div class="settings-rule-form__actions">
-                  <button type="submit" id="btn-rule-add" class="btn-secondary">Regel anlegen</button>
+                  <button type="submit" id="btn-rule-add" class="btn-secondary" data-i18n="settings.rules.form.submit">Create rule</button>
                 </div>
                 <p id="settings-rule-error" class="modal-hint error hidden" role="alert"></p>
               </form>
             </div>
 
             <div class="settings-tools-card" id="settings-sensitive-card">
-              <h3 class="settings-subsection-title" id="heading-sensitive-paths">Sensible Pfadmuster</h3>
+              <h3 class="settings-subsection-title" id="heading-sensitive-paths" data-i18n="settings.sensitive.heading">Sensitive path patterns</h3>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span>Zusätzlich zu den eingebauten Mustern (<code lang="en">.env*</code>,
-                  <code lang="en">*.pem</code>, <code lang="en">*.key</code> …).</span>
+                  <span data-i18n-html="settings.sensitive.note.summary">In addition to the built-in patterns (<code lang="en">.env*</code>,
+                  <code lang="en">*.pem</code>, <code lang="en">*.key</code> &hellip;).</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.sensitive.note.body">
                   <p>
-                    Eingebaut sind außerdem <code lang="en">credentials*</code> und Ordner wie
-                    <code lang="en">.ssh</code>. Gezielte Zugriffe auf Treffer brauchen eine Freigabe; breite Suchen
-                    und Listen lassen sie weg.
+                    Also built in are <code lang="en">credentials*</code> and folders such as
+                    <code lang="en">.ssh</code>. Targeted access to a match needs approval; broad searches and listings
+                    leave them out.
                   </p>
                 </div>
               </details>
               <ul id="settings-sensitive-list" class="settings-rule-list" aria-labelledby="heading-sensitive-paths"></ul>
-              <p id="settings-sensitive-empty" class="settings-empty-hint">Keine eigenen Muster.</p>
+              <p id="settings-sensitive-empty" class="settings-empty-hint" data-i18n="settings.sensitive.empty">No patterns of your own.</p>
               <div class="modal-row settings-sensitive-row">
-                <label class="visually-hidden" for="input-sensitive-pattern">Neues sensibles Pfadmuster</label>
-                <input type="text" id="input-sensitive-pattern" class="modal-input modal-input--grow" placeholder="z. B. personal/** oder *.kdbx" autocomplete="off" spellcheck="false" />
-                <button type="button" id="btn-sensitive-add" class="btn-secondary">Hinzufügen</button>
+                <label class="visually-hidden" for="input-sensitive-pattern" data-i18n="settings.sensitive.input.label">New sensitive path pattern</label>
+                <input type="text" id="input-sensitive-pattern" class="modal-input modal-input--grow" placeholder="e.g. personal/** or *.kdbx" data-i18n-attr="placeholder:settings.sensitive.input.placeholder" autocomplete="off" spellcheck="false" />
+                <button type="button" id="btn-sensitive-add" class="btn-secondary" data-i18n="settings.sensitive.add">Add</button>
               </div>
               <p id="settings-sensitive-error" class="modal-hint error hidden" role="alert"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-reset-card">
-              <h3 class="settings-subsection-title" id="heading-permission-reset">Zurücksetzen</h3>
+              <h3 class="settings-subsection-title" id="heading-permission-reset" data-i18n="settings.reset.heading">Reset</h3>
               <div id="settings-reset-actions" class="settings-reset-actions" aria-labelledby="heading-permission-reset"></div>
             </div>
           </section>
@@ -636,52 +637,52 @@
           <section class="settings-panel" id="panel-settings-skills" role="tabpanel" aria-labelledby="tab-settings-skills" hidden>
             <details class="settings-note">
               <summary class="settings-note__summary">
-                <span>Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten
-                soll — angehakte Skills stehen im System-Prompt.</span>
+                <span data-i18n-html="settings.skills.note.summary">A skill is a <code lang="en">SKILL.md</code> with instructions on how the model
+                should work &mdash; ticked skills go into the system prompt.</span>
               </summary>
-              <div class="settings-note__body">
+              <div class="settings-note__body" data-i18n-html="settings.skills.note.body">
                 <p>
-                  <strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv.
-                  <strong>Ordner-Skills</strong> liest Snotra aus drei Orten: aus
-                  <code lang="en">.agents/skills</code> im geöffneten Ordner, global aus
-                  <code lang="en">~/.snotra/skills</code> — dem empfohlenen Ort — und weiterhin aus dem
-                  Alt-Ort <code lang="en">~/.agents/skills</code>. Bei gleichem Namen gewinnt der
-                  geöffnete Ordner, danach <code lang="en">~/.snotra/skills</code>.
-                  Verzeichnisse anderer Werkzeuge, etwa <code lang="en">.claude</code>, liest Snotra nicht.
-                  Ordner-Skills sind fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.
+                  <strong>System skills</strong> ship with the app and are on by default.
+                  <strong>Folder skills</strong> are read from three places:
+                  <code lang="en">.agents/skills</code> in the open folder, globally from
+                  <code lang="en">~/.snotra/skills</code> &mdash; the recommended place &mdash; and still from the old
+                  location <code lang="en">~/.agents/skills</code>. On a name clash the open folder wins, then
+                  <code lang="en">~/.snotra/skills</code>. Directories belonging to other tools,
+                  <code lang="en">.claude</code> for instance, are not read. Folder skills are somebody
+                  else&rsquo;s content and are loaded only after you pick them.
                 </p>
                 <p>
-                  <code lang="en">~/.snotra</code> ist Snotras eigenes Benutzerverzeichnis — die Wurzel für
-                  Nutzerdaten, die Snotra gehören; <code lang="en">skills</code> ist ihr erster Bewohner.
-                  Snotra legt das Verzeichnis nicht selbst an und verschiebt auch nichts dorthin.
+                  <code lang="en">~/.snotra</code> is Snotra&rsquo;s own user directory &mdash; the root for user data
+                  that belongs to Snotra; <code lang="en">skills</code> is its first inhabitant. Snotra neither creates
+                  the directory nor moves anything into it.
                 </p>
               </div>
             </details>
             <div class="settings-tools-card">
               <div class="settings-rule-form__field">
-                <label for="settings-skill-suggestion-mode" class="modal-field-label eyebrow-row">
-                  Vorschläge im Chat
+                <label for="settings-skill-suggestion-mode" class="modal-field-label eyebrow-row" data-i18n="settings.skills.suggestion.label">
+                  Suggestions in the chat
                 </label>
                 <select id="settings-skill-suggestion-mode" class="modal-input">
-                  <option value="lexical">Aus den Beschreibungen (ohne Modell)</option>
-                  <option value="model">Das Modell fragen</option>
-                  <option value="off">Keine Vorschläge</option>
+                  <option value="lexical" data-i18n="settings.skills.suggestion.lexical">From the descriptions (no model)</option>
+                  <option value="model" data-i18n="settings.skills.suggestion.model">Ask the model</option>
+                  <option value="off" data-i18n="settings.skills.suggestion.off">No suggestions</option>
                 </select>
-                <p class="modal-hint">
-                  Tippst du im Chat ein <code>/</code>, schlägt Snotra unter dem Eingabefeld einen
-                  passenden Skill zu dem vor, was du bis dahin geschrieben hast. Das Übernehmen
-                  bleibt dein Klick. „Aus den Beschreibungen“ rechnet auf deinem Rechner und kostet
-                  nichts; „Das Modell fragen“ versteht auch Fachkürzel, schickt dafür aber die
-                  Zeile und die Skill-Namen an den Anbieter und braucht einen Moment.
+                <p class="modal-hint" data-i18n-html="settings.skills.suggestion.hint">
+                  Type a <code>/</code> in the chat and Snotra suggests a fitting skill below the input,
+                  based on what you have written so far. Taking it up stays your click.
+                  &ldquo;From the descriptions&rdquo; runs on your machine and costs nothing;
+                  &ldquo;Ask the model&rdquo; also understands jargon, but sends the line and the skill
+                  names to the provider and takes a moment.
                 </p>
               </div>
               <div class="settings-panel-models__head">
-                <h3 class="settings-subsection-title" id="heading-skill-catalog">Verfügbare Skills</h3>
-                <button type="button" id="btn-reload-skills" class="btn-secondary">Skills neu laden</button>
+                <h3 class="settings-subsection-title" id="heading-skill-catalog" data-i18n="settings.skills.catalog.heading">Available skills</h3>
+                <button type="button" id="btn-reload-skills" class="btn-secondary" data-i18n="settings.skills.reload">Reload skills</button>
               </div>
               <ul id="settings-skill-list" class="settings-tool-list" aria-labelledby="heading-skill-catalog"></ul>
-              <p id="settings-skill-list-empty" class="settings-empty-hint hidden">
-                Keine Skills gefunden.
+              <p id="settings-skill-list-empty" class="settings-empty-hint hidden" data-i18n="settings.skills.empty">
+                No skills found.
               </p>
             </div>
           </section>
@@ -689,28 +690,27 @@
           <section class="settings-panel" id="panel-settings-memory" role="tabpanel" aria-labelledby="tab-settings-memory" hidden>
             <details class="settings-note">
               <summary class="settings-note__summary">
-                <span>Was Snotra sich merkt, steht in einer <code lang="en">memory.md</code> und geht
-                mit jeder Anfrage an den Anbieter.</span>
+                <span data-i18n-html="settings.memory.note.summary">What Snotra remembers lives in a <code lang="en">memory.md</code> and goes to
+                the provider with every request.</span>
               </summary>
-              <div class="settings-note__body">
+              <div class="settings-note__body" data-i18n-html="settings.memory.note.body">
                 <p>
-                  Das <strong>Projekt-Gedächtnis</strong> liegt im geöffneten Ordner und zieht mit ihm
-                  um; es gehört zum Projekt und kann in ein Repository geraten. Das
-                  <strong>globale Gedächtnis</strong> gilt über alle Ordner hinweg. Beide Dateien
-                  kannst du auch im Editor bearbeiten — Snotra liest sie bei der nächsten Nachricht
-                  neu. Passwörter, Schlüssel und Zugangsdaten gehören nicht hinein.
+                  The <strong>project memory</strong> sits in the open folder and travels with it; it belongs to the
+                  project and can end up in a repository. The <strong>global memory</strong> applies across all
+                  folders. You can edit both files in your editor as well &mdash; Snotra re-reads them with the next
+                  message. Passwords, keys and credentials do not belong in there.
                 </p>
               </div>
             </details>
             <div class="settings-tools-card">
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-memory-self" aria-describedby="hint-memory-self">
-                <span>Snotra darf sich von selbst etwas merken</span>
+                <span data-i18n="settings.memory.self.toggle">Snotra may remember things on its own</span>
               </label>
-              <p class="modal-hint" id="hint-memory-self">
-                Ist das aus, merkt sich Snotra nur, worum du ausdrücklich bittest
-                („bitte merke dir …“). Jeder Merkvorgang bleibt freigabepflichtig und steht
-                im Tool-Log.
+              <p class="modal-hint" id="hint-memory-self" data-i18n="settings.memory.self.hint">
+                With this off, Snotra only remembers what you explicitly ask it to
+                (&ldquo;please remember &hellip;&rdquo;). Every act of remembering still needs approval
+                and shows up in the tool log.
               </p>
             </div>
             <div id="settings-memory-scopes"></div>
@@ -719,132 +719,138 @@
           <section class="settings-panel" id="panel-settings-mcp" role="tabpanel" aria-labelledby="tab-settings-mcp" hidden>
             <div class="settings-mcp-warning">
               <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
-              <p>
-                <strong>Ein MCP-Server ist fremder Code, der auf deinem Rechner gestartet wird.</strong>
-                Er läuft mit deinen Rechten und kann alles tun, was du auch könntest. Im Lieferzustand
-                ist keiner eingetragen — es läuft nichts von selbst. Trag nur Server ein, deren
-                Herkunft du kennst.
+              <p data-i18n-html="settings.mcp.warning">
+                <strong>An MCP server is somebody else&rsquo;s code, started on your machine.</strong>
+                It runs with your rights and can do anything you could. Out of the box none is entered
+                &mdash; nothing runs by itself. Only enter servers whose origin you know.
               </p>
             </div>
             <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
             <div class="settings-panel-models__head">
-              <h3 class="settings-subsection-title" id="heading-mcp-servers">Eingetragene Server</h3>
+              <h3 class="settings-subsection-title" id="heading-mcp-servers" data-i18n="settings.mcp.heading">Configured servers</h3>
               <div class="settings-mcp-head__actions">
-                <button type="button" id="btn-reload-mcp" class="btn-secondary">Neu laden</button>
-                <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import">
-                  Importieren
+                <button type="button" id="btn-reload-mcp" class="btn-secondary" data-i18n="settings.mcp.reload">Reload</button>
+                <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import" data-i18n="settings.mcp.import">
+                  Import
                 </button>
-                <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server">
-                  Server hinzufügen
+                <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server" data-i18n="settings.mcp.add">
+                  Add server
                 </button>
               </div>
             </div>
             <ul id="settings-mcp-list" class="settings-mcp-list" aria-labelledby="heading-mcp-servers"></ul>
-            <p id="settings-mcp-empty" class="settings-empty-hint hidden">
-              Noch kein Server eingetragen — „Server hinzufügen“ öffnen.
+            <p id="settings-mcp-empty" class="settings-empty-hint hidden" data-i18n="settings.mcp.empty">
+              No server configured yet &mdash; open &ldquo;Add server&rdquo;.
             </p>
           </section>
 
           <section class="settings-panel" id="panel-settings-general" role="tabpanel" aria-labelledby="tab-settings-general" hidden>
-            <p class="settings-form-hint">
-              Darstellung, Texte und Prompts für das gesamte Verhalten der App — getrennt von modellspezifischen Angaben beim Anbieter.
+            <p class="settings-form-hint" data-i18n="settings.general.hint">
+              Appearance, text and prompts for how the app behaves overall &mdash; separate from anything model-specific at the provider.
             </p>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">System-Prompt</div>
-              <label class="visually-hidden" for="input-global-system-prompt">System-Prompt</label>
-              <textarea id="input-global-system-prompt" class="modal-input modal-textarea" rows="5" placeholder="Optional: Rolle, Ton, feste Regeln für alle Konversationen …"></textarea>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.systemPrompt.label">System prompt</div>
+              <label class="visually-hidden" for="input-global-system-prompt" data-i18n="settings.general.systemPrompt.label">System prompt</label>
+              <textarea id="input-global-system-prompt" class="modal-input modal-textarea" rows="5" placeholder="Optional: role, tone, fixed rules for every conversation …" data-i18n-attr="placeholder:settings.general.systemPrompt.placeholder"></textarea>
               <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span>Wird unverändert als System-Prompt an das Modell geschickt.</span></summary>
-                <div class="settings-note__body">
-                  <p>Standardmäßig leer — die App setzt keinen eigenen System-Prompt.</p>
+                <summary class="settings-note__summary"><span data-i18n="settings.general.systemPrompt.note.summary">Sent to the model as the system prompt, unchanged.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.systemPrompt.note.body">
+                  <p>Empty by default &mdash; the app sets no system prompt of its own.</p>
                 </div>
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">Umgebung</div>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.environment.label">Environment</div>
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-environment-info" aria-describedby="hint-environment-info">
-                <span>Umgebungsinformationen mitschicken</span>
+                <span data-i18n="settings.general.environment.toggle">Send environment information</span>
               </label>
               <details id="hint-environment-info" class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span>Gibt dem Modell Arbeitsverzeichnis, Plattform, Shell und das heutige Datum mit.</span>
+                  <span data-i18n="settings.general.environment.note.summary">Gives the model the working directory, platform, shell and today&rsquo;s date.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.general.environment.note.body">
                   <p>
-                    Ohne diese Angaben rät das Modell bei Shell-Befehlen die Plattform und datiert „letzte Woche“
-                    nach seinem Trainingsstand. Mitgeschickt werden der <strong>absolute Pfad</strong> des
-                    geöffneten Ordners — er enthält deinen Benutzernamen —, ob dort ein Git-Repository liegt,
-                    Plattform und Systemversion, die Shell von <code lang="en">shell_execute</code> (nur wenn
-                    eingeschaltet), das heutige Datum und die Snotra-Version. Das alles geht mit jeder Anfrage an
-                    den Anbieter.
+                    Without this, the model guesses the platform for shell commands and dates &ldquo;last week&rdquo;
+                    by its training cut-off. What is sent: the <strong>absolute path</strong> of the open folder
+                    &mdash; it contains your user name &mdash;, whether there is a Git repository in it, platform and
+                    system version, the shell used by <code lang="en">shell_execute</code> (only when that is on),
+                    today&rsquo;s date and the Snotra version. All of it goes to the provider with every request.
                   </p>
                 </div>
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">Projektanweisungen</div>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.projectInstructions.label">Project instructions</div>
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-project-instructions" aria-describedby="hint-project-instructions">
-                <span><code lang="en">AGENTS.md</code> mitschicken</span>
+                <span data-i18n-html="settings.general.projectInstructions.toggle">Send <code lang="en">AGENTS.md</code></span>
               </label>
               <details id="hint-project-instructions" class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span>Legt die Projektanweisungen aus <code lang="en">AGENTS.md</code> in den System-Prompt.</span>
+                  <span data-i18n-html="settings.general.projectInstructions.note.summary">Puts the project instructions from <code lang="en">AGENTS.md</code> into the system prompt.</span>
                 </summary>
-                <div class="settings-note__body">
+                <div class="settings-note__body" data-i18n-html="settings.general.projectInstructions.note.body">
                   <p>
-                    Gelesen werden bis zu drei Dateien:
-                    <code>&lt;Ordner&gt;/.agents/AGENTS.md</code> aus dem geöffneten Projekt,
-                    <code>~/.snotra/AGENTS.md</code> (gilt überall) und
-                    <code>~/.agents/AGENTS.md</code> (gilt überall, älterer Ort, wird weiter
-                    gelesen). Alle vorhandenen <strong>ergänzen einander</strong> und gelten
-                    gemeinsam — keine ersetzt eine andere. Je Datei gehen höchstens 20.000 Zeichen
-                    mit, Längeres wird sichtbar gekürzt.
+                    Up to three files are read:
+                    <code>&lt;folder&gt;/.agents/AGENTS.md</code> from the open project,
+                    <code>~/.snotra/AGENTS.md</code> (applies everywhere) and
+                    <code>~/.agents/AGENTS.md</code> (applies everywhere, the older place, still read).
+                    All that exist <strong>add to each other</strong> and apply together &mdash; none
+                    replaces another. Each file contributes at most 20,000 characters; anything longer
+                    is visibly truncated.
                   </p>
                   <p>
-                    Im Projekt zählt allein <code>.agents/</code>. Eine <code lang="en">AGENTS.md</code>
-                    direkt in der Ordnerwurzel liest Snotra <strong>nicht</strong>, auch wenn das
-                    anderswo die verbreitetere Form ist.
+                    Inside the project only <code>.agents/</code> counts. An <code lang="en">AGENTS.md</code>
+                    directly in the folder root is <strong>not</strong> read, even though that is the more
+                    common form elsewhere.
                   </p>
                   <p>
-                    Der Inhalt ist <strong>Anweisung, keine Daten</strong> — anders als Tool-Ergebnisse
-                    verändert er das Verhalten des Modells. Wer einen fremden Ordner öffnet, übernimmt
-                    damit auch dessen Anweisungen; dieser Schalter ist die Notbremse dafür.
+                    The content is <strong>instruction, not data</strong> &mdash; unlike tool results it
+                    changes how the model behaves. Open somebody else&rsquo;s folder and you take on their
+                    instructions too; this switch is the emergency brake for that.
                   </p>
                 </div>
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">Erscheinungsbild</div>
-              <label class="visually-hidden" for="select-app-theme">Erscheinungsbild</label>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.theme.label">Appearance</div>
+              <label class="visually-hidden" for="select-app-theme" data-i18n="settings.general.theme.label">Appearance</label>
               <select id="select-app-theme" class="modal-input">
-                <option value="light">Hell</option>
-                <option value="dark">Dunkel</option>
+                <option value="light" data-i18n="settings.general.theme.light">Light</option>
+                <option value="dark" data-i18n="settings.general.theme.dark">Dark</option>
               </select>
               <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span>Helle oder dunkle Oberfläche — bis v1.7.3 ein Knopf in der Titelleiste.</span></summary>
-                <div class="settings-note__body">
+                <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light or dark interface &mdash; a button in the title bar up to v1.7.3.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.theme.note.body">
                   <p>
-                    Anders als die übrigen Einstellungen bleibt die Wahl <strong>auf diesem Gerät</strong>: Sie muss
-                    schon beim Aufbau des Fensters feststehen, sonst blitzte bei jedem Start kurz die helle
-                    Oberfläche auf.
+                    Unlike the other settings, this choice stays <strong>on this device</strong>: it has to be settled
+                    before the window is built, or the light interface would flash up briefly at every start.
                   </p>
                 </div>
               </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">UI-Sprache</div>
-              <label class="visually-hidden" for="select-app-locale">Sprache</label>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.locale.label">Interface language</div>
+              <label class="visually-hidden" for="select-app-locale" data-i18n="settings.general.locale.select">Language</label>
               <select id="select-app-locale" class="modal-input">
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
+                <option value="de" lang="de" data-i18n="settings.general.locale.de">Deutsch</option>
+                <option value="en" lang="en" data-i18n="settings.general.locale.en">English</option>
               </select>
-              <p class="modal-hint">Steuert <code lang="en">lang</code> der App-Oberfläche; Übersetzungen werden nach und nach ergänzt.</p>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span data-i18n="settings.general.locale.note.summary">Takes effect at once &mdash; the interface switches language without a restart.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.locale.note.body">
+                  <p>
+                    This covers the app&rsquo;s interface and the menu bar. What goes to the language model &mdash;
+                    system prompt, tool descriptions &mdash; is independent of it and always English. New installations
+                    start in English; anyone who used Snotra before stays on German until they switch here.
+                  </p>
+                </div>
+              </details>
             </div>
             <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row">Max. Tool-Runden</div>
-              <label class="visually-hidden" for="input-max-tool-rounds">Maximale Tool-Runden</label>
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.maxToolRounds.label">Max. tool rounds</div>
+              <label class="visually-hidden" for="input-max-tool-rounds" data-i18n="settings.general.maxToolRounds.select">Maximum tool rounds</label>
               <input
                 type="number"
                 id="input-max-tool-rounds"
@@ -857,10 +863,10 @@
               />
               <details id="hint-max-tool-rounds" class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
-                  <span>Wie oft das Modell hintereinander Tools aufrufen darf, bevor der Chat abbricht.</span>
+                  <span data-i18n="settings.general.maxToolRounds.note.summary">How often the model may call tools in a row before the chat stops.</span>
                 </summary>
-                <div class="settings-note__body">
-                  <p>Schutz vor Endlosschleifen. Standard 14, höchstens 500.</p>
+                <div class="settings-note__body" data-i18n-html="settings.general.maxToolRounds.note.body">
+                  <p>Protection against endless loops. Default 14, at most 500.</p>
                 </div>
               </details>
             </div>
@@ -870,11 +876,11 @@
 
       <div class="settings-dialog__hint-bar">
         <details class="settings-note settings-note--bar">
-          <summary class="settings-note__summary"><span id="settings-apply-hint">Änderungen gelten erst mit <strong>Übernehmen</strong>.</span></summary>
-          <div class="settings-note__body">
+          <summary class="settings-note__summary"><span id="settings-apply-hint" data-i18n-html="settings.applyHint.deferred">Changes take effect on <strong>Apply</strong>.</span></summary>
+          <div class="settings-note__body" data-i18n-html="settings.applyHint.body">
             <p>
-              API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den
-              Anbieter. Das gilt für alle Einstellungsbereiche.
+              API keys are stored encrypted on this device and leave the app only in requests to the provider. That
+              holds for every settings section.
             </p>
           </div>
         </details>
@@ -887,11 +893,11 @@
         <div class="settings-dialog__footer-row">
           <div class="settings-version">
             <span id="settings-version-label">Version —</span>
-            <button type="button" id="btn-check-updates" class="settings-version-link">Nach Updates suchen</button>
+            <button type="button" id="btn-check-updates" class="settings-version-link" data-i18n="settings.checkUpdates">Check for updates</button>
           </div>
           <div class="modal-actions">
-            <button type="button" id="btn-settings-footer-close" class="btn-secondary">Schließen</button>
-            <button type="button" id="btn-settings-save" class="btn-primary">Übernehmen</button>
+            <button type="button" id="btn-settings-footer-close" class="btn-secondary" data-i18n="settings.footer.close">Close</button>
+            <button type="button" id="btn-settings-save" class="btn-primary" data-i18n="settings.footer.save">Apply</button>
           </div>
         </div>
       </footer>
@@ -904,8 +910,8 @@
           id="dialog-mcp-server"
           aria-labelledby="dialog-mcp-server-title">
           <header class="add-model-dialog__header">
-            <h2 id="dialog-mcp-server-title" class="add-model-dialog__title">Server hinzufügen</h2>
-            <button type="button" id="btn-mcp-server-close" class="settings-dialog__icon-close" aria-label="Popup schließen">
+            <h2 id="dialog-mcp-server-title" class="add-model-dialog__title" data-i18n="mcpDialog.title.add">Add server</h2>
+            <button type="button" id="btn-mcp-server-close" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:mcpDialog.close">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                 <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
               </svg>
@@ -914,43 +920,42 @@
           <div class="add-model-dialog__body modal-dialog__body">
             <p id="mcp-form-error" class="modal-warning hidden" role="alert"></p>
             <div class="modal-field-group">
-              <label for="mcp-field-id" class="modal-field-label">Kennung</label>
+              <label for="mcp-field-id" class="modal-field-label" data-i18n="mcpDialog.id.label">Identifier</label>
               <input type="text" id="mcp-field-id" class="modal-input modal-input--mono" placeholder="github" autocomplete="off" spellcheck="false">
-              <p class="modal-hint">
-                Kleinbuchstaben, Ziffern, Punkt, Bindestrich, Unterstrich. Sie steckt im Tool-Namen
-                (<code lang="en">mcp__github__…</code>) und lässt sich später nicht ändern.
+              <p class="modal-hint" data-i18n-html="mcpDialog.id.hint">
+                Lower-case letters, digits, dot, hyphen, underscore. It is part of the tool name
+                (<code lang="en">mcp__github__&hellip;</code>) and cannot be changed later.
               </p>
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-label" class="modal-field-label">Anzeigename</label>
+              <label for="mcp-field-label" class="modal-field-label" data-i18n="mcpDialog.label.label">Display name</label>
               <input type="text" id="mcp-field-label" class="modal-input" placeholder="GitHub" autocomplete="off">
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-command" class="modal-field-label">Kommando</label>
+              <label for="mcp-field-command" class="modal-field-label" data-i18n="mcpDialog.command.label">Command</label>
               <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-args" class="modal-field-label">Argumente</label>
+              <label for="mcp-field-args" class="modal-field-label" data-i18n="mcpDialog.args.label">Arguments</label>
               <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
-              <p class="modal-hint">Durch Leerzeichen getrennt wie in der Kommandozeile; Anführungszeichen halten zusammen.</p>
+              <p class="modal-hint" data-i18n="mcpDialog.args.hint">Separated by spaces as on the command line; quotes hold things together.</p>
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-cwd" class="modal-field-label">Arbeitsverzeichnis</label>
-              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(Projektordner)" autocomplete="off" spellcheck="false">
+              <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
+              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(project folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
             </div>
             <div class="modal-field-group">
-              <span class="modal-field-label" id="heading-mcp-env">Umgebungsvariablen</span>
+              <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
               <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
-              <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact">Variable hinzufügen</button>
-              <p class="modal-hint">
-                Werte sind vorbelegt <strong>geheim</strong> und liegen verschlüsselt im
-                Systemschlüsselbund. Ein geheimer Wert wird nach dem Speichern nicht mehr angezeigt —
-                nur ersetzt oder gelöscht.
+              <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
+              <p class="modal-hint" data-i18n-html="mcpDialog.env.hint">
+                Values are <strong>secret</strong> by default and are stored encrypted in the system
+                keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
               </p>
             </div>
             <div class="modal-field-group hidden" id="mcp-tools-block">
               <div class="settings-panel-models__head">
-                <span class="modal-field-label" id="heading-mcp-tools">Angebotene Tools</span>
+                <span class="modal-field-label" id="heading-mcp-tools" data-i18n="mcpDialog.tools.label">Tools on offer</span>
                 <span id="mcp-tools-count" class="settings-tool-count"></span>
               </div>
               <div id="mcp-tools-list" class="mcp-tool-list" role="group" aria-labelledby="heading-mcp-tools"></div>
@@ -958,10 +963,10 @@
             <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>
           </div>
           <footer class="modal-actions">
-            <button type="button" id="btn-mcp-server-delete" class="btn-destructive hidden">Server entfernen</button>
-            <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden">Verbindung testen</button>
-            <button type="button" id="btn-mcp-server-cancel" class="btn-secondary">Abbrechen</button>
-            <button type="button" id="btn-mcp-server-save" class="btn-primary">Speichern</button>
+            <button type="button" id="btn-mcp-server-delete" class="btn-destructive hidden" data-i18n="mcpDialog.delete">Remove server</button>
+            <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden" data-i18n="mcpDialog.test">Test connection</button>
+            <button type="button" id="btn-mcp-server-cancel" class="btn-secondary" data-i18n="mcpDialog.cancel">Cancel</button>
+            <button type="button" id="btn-mcp-server-save" class="btn-primary" data-i18n="mcpDialog.save">Save</button>
           </footer>
         </div>
       </div>
@@ -974,8 +979,8 @@
           id="dialog-mcp-import"
           aria-labelledby="dialog-mcp-import-title">
           <header class="add-model-dialog__header">
-            <h2 id="dialog-mcp-import-title" class="add-model-dialog__title">Server importieren</h2>
-            <button type="button" id="btn-mcp-import-close" class="settings-dialog__icon-close" aria-label="Popup schließen">
+            <h2 id="dialog-mcp-import-title" class="add-model-dialog__title" data-i18n="mcpImport.title">Import servers</h2>
+            <button type="button" id="btn-mcp-import-close" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:mcpDialog.close">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                 <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
               </svg>
@@ -983,28 +988,28 @@
           </header>
           <div class="add-model-dialog__body modal-dialog__body">
             <div class="modal-field-group">
-              <label for="mcp-import-input" class="modal-field-label">Konfiguration einfügen</label>
+              <label for="mcp-import-input" class="modal-field-label" data-i18n="mcpImport.input.label">Paste configuration</label>
               <textarea id="mcp-import-input" class="modal-input modal-input--mono mcp-import__paste" rows="6"
                 spellcheck="false" autocomplete="off"
                 placeholder='{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] } } }'></textarea>
-              <p class="modal-hint">
-                Der Block aus Claude Desktop, Claude Code oder Cursor — mit oder ohne umschließendes
-                <code lang="en">mcpServers</code>. Kommentare und angehängte Kommas stören nicht.
-                Gelesen wird nur, was hier steht; es wird keine fremde Konfigurationsdatei geöffnet.
+              <p class="modal-hint" data-i18n-html="mcpImport.input.hint">
+                The block from Claude Desktop, Claude Code or Cursor &mdash; with or without the surrounding
+                <code lang="en">mcpServers</code>. Comments and trailing commas do no harm.
+                Only what is here is read; no external configuration file is opened.
               </p>
             </div>
             <p id="mcp-import-error" class="modal-warning hidden" role="alert"></p>
             <p id="mcp-import-count" class="mcp-import__count" aria-live="polite"></p>
-            <ul id="mcp-import-list" class="mcp-import__list" aria-label="Erkannte Server"></ul>
+            <ul id="mcp-import-list" class="mcp-import__list" aria-label="Detected servers" data-i18n-attr="aria-label:mcpImport.list.label"></ul>
             <div id="mcp-import-skipped" class="mcp-import__skipped hidden"></div>
-            <p id="mcp-import-note" class="modal-hint hidden">
-              Übernommene Server sind zunächst <strong>ausgeschaltet</strong>. Einschalten startet einen
-              Prozess und bringt dessen Tools ins Modell — das bleibt ein bewusster Schritt.
+            <p id="mcp-import-note" class="modal-hint hidden" data-i18n-html="mcpImport.note">
+              Imported servers start out <strong>switched off</strong>. Switching one on starts a process
+              and brings its tools to the model &mdash; that stays a deliberate step.
             </p>
           </div>
           <footer class="modal-actions">
-            <button type="button" id="btn-mcp-import-cancel" class="btn-secondary">Abbrechen</button>
-            <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled>Übernehmen</button>
+            <button type="button" id="btn-mcp-import-cancel" class="btn-secondary" data-i18n="mcpImport.cancel">Cancel</button>
+            <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled data-i18n="mcpImport.apply">Apply</button>
           </footer>
         </div>
       </div>
@@ -1018,8 +1023,8 @@
         aria-labelledby="dialog-add-model-title"
         aria-describedby="add-model-intro-text">
         <header class="add-model-dialog__header">
-          <h2 id="dialog-add-model-title" class="add-model-dialog__title">Modell hinzufügen</h2>
-          <button type="button" id="btn-add-model-close-x" class="settings-dialog__icon-close" aria-label="Popup schließen">
+          <h2 id="dialog-add-model-title" class="add-model-dialog__title" data-i18n="addModel.title.add">Add model</h2>
+          <button type="button" id="btn-add-model-close-x" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:addModel.close">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
               <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
             </svg>
@@ -1028,119 +1033,119 @@
         <div class="add-model-dialog__body modal-dialog__body">
           <details class="settings-note settings-note--tight" id="add-model-intro-text">
             <summary class="settings-note__summary">
-              <span id="add-model-intro-lead">Zugang und Modell gemeinsam einstellen und mit <strong>Übernehmen</strong> in die
-              Präferenzliste legen.</span>
+              <span id="add-model-intro-lead" data-i18n-html="addModel.intro.add">Set up access and model together and put them on the preference list with
+              <strong>Apply</strong>.</span>
             </summary>
-            <div class="settings-note__body">
-              <p>Server-URL und Modell teilen sich eine Zeile, wenn das Fenster breit genug ist.</p>
+            <div class="settings-note__body" data-i18n-html="addModel.intro.body">
+              <p>Server URL and model share a row when the window is wide enough.</p>
             </div>
           </details>
           <div class="provider-flow-card">
-            <p id="popup-form-flow-lead" class="popup-form-hint popup-form-hint--tight">
-              Die Anbieterwahl steuert Verbindungsfelder und Modellkatalog.
+            <p id="popup-form-flow-lead" class="popup-form-hint popup-form-hint--tight" data-i18n="addModel.flow.lead">
+              The choice of provider drives the connection fields and the model catalogue.
             </p>
 
-            <div class="popup-flow-subhead">Anbieter</div>
-            <label class="visually-hidden" for="select-provider">Anbieter auswählen</label>
+            <div class="popup-flow-subhead" data-i18n="addModel.provider.subhead">Provider</div>
+            <label class="visually-hidden" for="select-provider" data-i18n="addModel.provider.select">Choose provider</label>
             <select id="select-provider" class="modal-input" aria-describedby="provider-status"></select>
             <p id="provider-status" class="modal-hint"></p>
 
             <div id="provider-template-row" class="hidden provider-flow-group">
-              <div class="popup-flow-subhead">Vorlage</div>
-              <label class="visually-hidden" for="select-provider-template">Vorlage auswählen</label>
+              <div class="popup-flow-subhead" data-i18n="addModel.template.subhead">Template</div>
+              <label class="visually-hidden" for="select-provider-template" data-i18n="addModel.template.select">Choose template</label>
               <select id="select-provider-template" class="modal-input" aria-describedby="provider-template-hint"></select>
               <p id="provider-template-hint" class="modal-hint"></p>
             </div>
 
             <div id="provider-display-name-row" class="hidden provider-flow-group">
-              <div class="popup-flow-subhead">Anzeigename</div>
-              <label class="visually-hidden" for="input-display-name">Anzeigename</label>
+              <div class="popup-flow-subhead" data-i18n="addModel.displayName.subhead">Display name</div>
+              <label class="visually-hidden" for="input-display-name" data-i18n="addModel.displayName.subhead">Display name</label>
               <input type="text" id="input-display-name" class="modal-input" autocomplete="off" aria-describedby="provider-display-name-hint" />
-              <p id="provider-display-name-hint" class="modal-hint">Steht im Chat vor dem Modellnamen. Leer lassen für den Standardnamen.</p>
+              <p id="provider-display-name-hint" class="modal-hint" data-i18n="addModel.displayName.hint">Shown in the chat in front of the model name. Leave empty for the default name.</p>
             </div>
 
             <div id="provider-key-row" class="provider-flow-group">
-              <div class="popup-flow-subhead">API-Schlüssel</div>
+              <div class="popup-flow-subhead" data-i18n="addModel.key.subhead">API key</div>
               <div class="modal-row">
-                <label class="visually-hidden" for="input-api-key">API-Key</label>
+                <label class="visually-hidden" for="input-api-key" data-i18n="addModel.key.label">API key</label>
                 <input type="password" id="input-api-key" class="modal-input modal-input--grow" placeholder="sk-…" autocomplete="off" />
-                <button type="button" id="btn-remove-api-key" class="settings-icon-trash hidden" aria-label="API-Schlüssel entfernen">
+                <button type="button" id="btn-remove-api-key" class="settings-icon-trash hidden" aria-label="Remove API key" data-i18n-attr="aria-label:addModel.key.remove">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </div>
-              <p id="provider-key-hint" class="modal-hint hidden">Leer lassen, wenn der Server keinen Schlüssel verlangt — dann geht kein <code>Authorization</code>-Header hinaus.</p>
+              <p id="provider-key-hint" class="modal-hint hidden" data-i18n-html="addModel.key.hint">Leave empty if the server needs no key &mdash; then no <code>Authorization</code> header goes out.</p>
             </div>
 
             <div id="provider-extra-headers-row" class="hidden provider-flow-group">
-              <div class="popup-flow-subhead">Zusätzliche Header</div>
+              <div class="popup-flow-subhead" data-i18n="addModel.headers.subhead">Extra headers</div>
               <div class="modal-row">
-                <label class="visually-hidden" for="input-extra-headers">Zusätzliche Header, eine Zeile je „Name: Wert“</label>
+                <label class="visually-hidden" for="input-extra-headers" data-i18n="addModel.headers.label">Extra headers, one &ldquo;Name: value&rdquo; per line</label>
                 <textarea id="input-extra-headers" class="modal-input modal-input--grow modal-textarea modal-textarea--short" rows="3" autocomplete="off" spellcheck="false" aria-describedby="provider-extra-headers-hint"></textarea>
-                <button type="button" id="btn-remove-extra-headers" class="settings-icon-trash hidden" aria-label="Zusätzliche Header entfernen">
+                <button type="button" id="btn-remove-extra-headers" class="settings-icon-trash hidden" aria-label="Remove extra headers" data-i18n-attr="aria-label:addModel.headers.remove">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
               </div>
-              <p id="provider-extra-headers-hint" class="modal-hint">Eine Zeile je <code>Name: Wert</code>. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert und nach dem Speichern nicht mehr angezeigt.</p>
+              <p id="provider-extra-headers-hint" class="modal-hint" data-i18n-html="addModel.headers.hint">One <code>Name: value</code> per line. Treated like a key: stored encrypted and no longer shown once saved.</p>
             </div>
 
             <div id="provider-api-style-row" class="hidden provider-flow-group">
-              <div class="popup-flow-subhead">API-Stil</div>
-              <label class="visually-hidden" for="select-api-style">API-Stil</label>
+              <div class="popup-flow-subhead" data-i18n="addModel.apiStyle.subhead">API style</div>
+              <label class="visually-hidden" for="select-api-style" data-i18n="addModel.apiStyle.subhead">API style</label>
               <select id="select-api-style" class="modal-input" aria-describedby="provider-api-style-hint"></select>
-              <p id="provider-api-style-hint" class="modal-hint">Die meisten Server können nur <code>/chat/completions</code>. <code>/responses</code> nur wählen, wenn der Dienst es ausdrücklich anbietet.</p>
+              <p id="provider-api-style-hint" class="modal-hint" data-i18n-html="addModel.apiStyle.hint">Most servers only speak <code>/chat/completions</code>. Only pick <code>/responses</code> if the service explicitly offers it.</p>
             </div>
 
             <div id="provider-insecure-row" class="hidden modal-checkbox-row">
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-insecure-tls" />
-                <span>TLS-Zertifikat ignorieren (insecure)</span>
+                <span data-i18n="addModel.insecure.toggle">Ignore TLS certificate (insecure)</span>
               </label>
-              <p class="modal-hint">Nur bei selbstsigniertem oder intern signiertem Zertifikat, dem du vertraust.</p>
+              <p class="modal-hint" data-i18n="addModel.insecure.hint">Only for a self-signed or internally signed certificate that you trust.</p>
             </div>
 
             <div id="provider-send-tools-row" class="hidden modal-checkbox-row">
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-send-tools" />
-                <span>Tools mitschicken</span>
+                <span data-i18n="addModel.sendTools.toggle">Send tools along</span>
               </label>
-              <p class="modal-hint">Abschalten, wenn der Server an Tool-Schemata scheitert — dann bleibt es beim reinen Chat.</p>
+              <p class="modal-hint" data-i18n="addModel.sendTools.hint">Switch off if the server chokes on tool schemas &mdash; then it stays a plain chat.</p>
             </div>
 
             <div id="provider-supports-images-row" class="hidden modal-checkbox-row">
               <label class="modal-checkbox">
                 <input type="checkbox" id="input-supports-images" />
-                <span>Bild-Anhänge erlauben</span>
+                <span data-i18n="addModel.images.toggle">Allow image attachments</span>
               </label>
-              <p class="modal-hint">Nur einschalten, wenn das Modell dahinter Bilder versteht. Sonst werden Anhänge im Chat gar nicht erst angeboten.</p>
+              <p class="modal-hint" data-i18n="addModel.images.hint">Only switch on if the model behind it understands images. Otherwise attachments are not offered in the chat at all.</p>
             </div>
 
             <div class="provider-form-grid-popup">
               <div id="provider-baseurl-row" class="hidden provider-baseurl-slot">
-                <div class="popup-flow-subhead">Server-URL</div>
-                <label class="visually-hidden" for="input-base-url">Server-URL</label>
+                <div class="popup-flow-subhead" data-i18n="addModel.baseUrl.subhead">Server URL</div>
+                <label class="visually-hidden" for="input-base-url" data-i18n="addModel.baseUrl.subhead">Server URL</label>
                 <input type="text" id="input-base-url" class="modal-input" placeholder="http://localhost:11434" autocomplete="off" />
               </div>
               <div class="popup-model-slot">
-                <div class="popup-flow-subhead">Modell</div>
+                <div class="popup-flow-subhead" data-i18n="addModel.model.subhead">Model</div>
                 <div class="modal-row">
                   <select id="select-model" class="modal-input modal-input--grow"></select>
-                  <label class="visually-hidden" for="input-model">Modellname</label>
+                  <label class="visually-hidden" for="input-model" data-i18n="addModel.model.name">Model name</label>
                   <input type="text" id="input-model" class="modal-input modal-input--grow hidden" list="model-name-options" autocomplete="off" spellcheck="false" aria-describedby="model-status" />
                   <datalist id="model-name-options"></datalist>
-                  <button type="button" id="btn-load-models" class="btn-secondary">Modelle laden</button>
+                  <button type="button" id="btn-load-models" class="btn-secondary" data-i18n="addModel.model.load">Load models</button>
                 </div>
                 <p id="model-status" class="modal-hint"></p>
               </div>
               <div id="preset-fields-popup" class="provider-form-grid-popup"></div>
             </div>
 
-            <p id="popup-model-catalog-hint" class="modal-hint">Modellliste bezieht sich auf <strong id="model-load-provider-label">Ollama</strong>.</p>
+            <p id="popup-model-catalog-hint" class="modal-hint"><span data-i18n="addModel.catalogHint.prefix">The model list refers to</span> <strong id="model-load-provider-label">Ollama</strong><span data-i18n="addModel.catalogHint.suffix">.</span></p>
           </div>
         </div>
         <footer class="add-model-dialog__bottom">
           <div class="modal-actions">
-            <button type="button" id="btn-add-model-close" class="btn-secondary">Schließen</button>
-            <button type="button" id="btn-add-preset-row" class="btn-primary">Übernehmen</button>
+            <button type="button" id="btn-add-model-close" class="btn-secondary" data-i18n="addModel.close.footer">Close</button>
+            <button type="button" id="btn-add-preset-row" class="btn-primary" data-i18n="addModel.apply">Apply</button>
           </div>
         </footer>
       </div>
@@ -1157,7 +1162,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="image-lightbox-caption">
-      <button type="button" id="image-lightbox-close" class="image-lightbox__close" aria-label="Bild schließen">
+      <button type="button" id="image-lightbox-close" class="image-lightbox__close" aria-label="Close image" data-i18n-attr="aria-label:lightbox.close">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
           <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
         </svg>
@@ -1180,8 +1185,8 @@
       aria-labelledby="modal-update-title"
       aria-describedby="modal-update-summary">
       <header class="modal-dialog__header">
-        <h2 id="modal-update-title" class="modal-dialog__title">Aktualisierung</h2>
-        <button type="button" id="modal-update-close" class="modal-dialog__close" aria-label="Dialog schließen">
+        <h2 id="modal-update-title" class="modal-dialog__title" data-i18n="update.title">Update</h2>
+        <button type="button" id="modal-update-close" class="modal-dialog__close" aria-label="Close dialog" data-i18n-attr="aria-label:update.close">
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
             <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
           </svg>
@@ -1203,7 +1208,7 @@
         </div>
         <p id="modal-update-hint" class="modal-hint update-dialog__hint hidden"></p>
         <details id="modal-update-notes" class="update-notes hidden">
-          <summary class="update-notes__summary">Was sich geändert hat</summary>
+          <summary class="update-notes__summary" data-i18n="update.notes.summary">What has changed</summary>
           <div id="modal-update-notes-body" class="update-notes__body"></div>
         </details>
       </div>

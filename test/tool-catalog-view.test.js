@@ -45,8 +45,8 @@ test('Gruppen tragen Label und Rückfrage-Hinweis, leere Klassen entfallen', asy
   const groups = groupToolCatalog([tool('read_file_text', 'read')]);
 
   assert.equal(groups.length, 1);
-  assert.equal(groups[0].label, 'Lesen');
-  assert.match(groups[0].note, /ohne Rückfrage/);
+  assert.equal(groups[0].label, 'Read');
+  assert.match(groups[0].note, /without asking/);
 });
 
 test('Einträge ohne gültige Klasse landen unter Lesen statt zu verschwinden', async () => {
@@ -96,17 +96,17 @@ test('Status-Badge nur für nicht eingerichtete Tools, nie für die Risikoklasse
   assert.equal(toolStatusBadge(tool('run_python', 'execute'), { pythonReady: true }), null);
   assert.match(
     toolStatusBadge(tool('run_python', 'execute'), { pythonReady: false }).text,
-    /Nicht eingerichtet/
+    /Not set up/
   );
   assert.equal(toolStatusBadge(tool('shell_execute', 'execute'), { shellReady: true }), null);
   assert.match(
     toolStatusBadge(tool('shell_execute', 'execute'), { shellReady: false }).title,
-    /Shell-Befehle ausführen/
+    /Run shell commands/
   );
   assert.equal(toolStatusBadge(tool('web_search', 'external'), { webSearchHasKey: true }), null);
   assert.match(
     toolStatusBadge(tool('web_search', 'external'), { webSearchHasKey: false }).text,
-    /Schlüssel fehlt/
+    /key missing/
   );
   // Ein Schreib-Tool bekommt keinen Hinweis mehr — die Klasse steht im Gruppenkopf.
   assert.equal(toolStatusBadge(tool('edit_file', 'write'), {}), null);
@@ -115,10 +115,10 @@ test('Status-Badge nur für nicht eingerichtete Tools, nie für die Risikoklasse
 test('Gruppenkopf zeigt Zähler und passende Schalterbeschriftung', async () => {
   const { groupCountLabel, groupToggleLabel } = await load();
 
-  assert.equal(groupCountLabel(9, 8), '8 von 9 aktiv');
-  assert.equal(groupToggleLabel(9, 8), 'alle an');
-  assert.equal(groupToggleLabel(9, 9), 'alle aus');
-  assert.equal(groupToggleLabel(9, 0), 'alle an');
+  assert.equal(groupCountLabel(9, 8), '8 of 9 active');
+  assert.equal(groupToggleLabel(9, 8), 'all on');
+  assert.equal(groupToggleLabel(9, 9), 'all off');
+  assert.equal(groupToggleLabel(9, 0), 'all on');
 });
 
 test('Gruppenüberschrift nennt externe Dienste im Plural', async () => {
@@ -128,5 +128,5 @@ test('Gruppenüberschrift nennt externe Dienste im Plural', async () => {
 
   // Das Contract-Label „Externer Dienst“ beschreibt einen einzelnen Aufruf und
   // bleibt der Freigabekarte vorbehalten.
-  assert.equal(group.label, 'Externe Dienste');
+  assert.equal(group.label, 'External services');
 });

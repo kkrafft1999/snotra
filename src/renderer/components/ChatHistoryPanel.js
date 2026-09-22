@@ -1,4 +1,5 @@
 import { formatHistoryTime } from '../chat/messageUtils.js';
+import { t, onLocaleChange } from '../i18n.js';
 
 /**
  * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
@@ -52,7 +53,7 @@ export function initChatHistoryPanel({
    */
   function setHistoryOpen(open, { persist = true } = {}) {
     appRoot.classList.toggle('app--no-history', !open);
-    const label = open ? 'Chat-Verlauf ausblenden' : 'Chat-Verlauf einblenden';
+    const label = open ? t('titlebar.history.hide') : t('titlebar.history.show');
     // aria-pressed statt aria-expanded: Der Knopf schaltet eine Spalte, er
     // klappt nichts aus — genau wie seine drei Nachbarn in der Titelzeile.
     btnChatHistory?.setAttribute('aria-pressed', open ? 'true' : 'false');
@@ -82,7 +83,7 @@ export function initChatHistoryPanel({
       main.className = 'chat-history-row-main';
       const titleEl = document.createElement('span');
       titleEl.className = 'chat-history-row-title';
-      titleEl.textContent = s.title || 'Chat';
+      titleEl.textContent = s.title || t('history.entry.fallbackTitle');
       const meta = document.createElement('span');
       meta.className = 'chat-history-row-meta';
       meta.textContent = formatHistoryTime(s.updatedAt);
@@ -91,8 +92,8 @@ export function initChatHistoryPanel({
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'chat-history-row-delete';
-      del.title = 'Aus Verlauf entfernen';
-      del.setAttribute('aria-label', 'Aus Verlauf entfernen');
+      del.title = t('history.entry.remove');
+      del.setAttribute('aria-label', t('history.entry.remove'));
       del.innerHTML =
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
       row.appendChild(main);
@@ -188,6 +189,13 @@ export function initChatHistoryPanel({
     const open = !isHistoryOpen();
     if (open) await renderHistoryList();
     setHistoryOpen(open);
+  });
+
+  // Language change (epic #277): the button text depends on state and the rows
+  // are built here — `applyTranslations` reaches neither.
+  onLocaleChange(() => {
+    setHistoryOpen(isHistoryOpen(), { persist: false });
+    void refreshIfOpen();
   });
 
   return {

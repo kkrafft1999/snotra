@@ -1,5 +1,5 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { TOOL_MODE_OPTIONS, modeLabel } from '../utils/tool-approval-view.js';
+import { toolModeOptions, modeLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 
 /**
@@ -36,7 +36,7 @@ export function initToolModePicker({ toolPermissions }) {
 
   function rebuild(activeMode) {
     menu.innerHTML = '';
-    for (const option of TOOL_MODE_OPTIONS) {
+    for (const option of toolModeOptions()) {
       const li = document.createElement('li');
       li.setAttribute('role', 'none');
       const opt = document.createElement('button');

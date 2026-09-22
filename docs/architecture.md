@@ -1002,6 +1002,93 @@ The block deliberately does *not* mention a **scratch directory**: the write too
 know only the working folder as their root, and a path beside it would be a hint
 at something that does not work.
 
+## Interface language
+
+The interface speaks English **or** German. It is switched in Settings >
+General, and the switch takes effect at once — no restart
+([#277](https://github.com/kkrafft1999/snotra/issues/277)).
+
+This does not mean the channel to the model. System prompt, tool schemas and
+tool results have been English throughout since
+[#276](https://github.com/kkrafft1999/snotra/issues/276) and stay that way
+whatever the user picks; `test/model-prompt-language.test.js` guards the line.
+Anyone who writes a translation and turns that test red has edited the wrong
+half.
+
+Per the project language rule
+([`.claude/rules/language.md`](../.claude/rules/language.md)), **English is the
+source version and German is derived from it** — and both are held to the same
+standard. A German string that lags behind its English original is a defect.
+
+### One catalogue for all three layers
+
+`src/shared/i18n/` is CommonJS and therefore belongs to main **and** renderer,
+just like the contracts next to it:
+
+- `messages/en.js` and `messages/de.js` — flat catalogues with dotted keys
+  (`settings.general.locale.label`).
+- `index.js` — `translate(locale, key, params)`, `translatePlural(…)` and
+  `createTranslator(locale)`. Placeholders look like `{name}`; plurals use the
+  suffixes `.one` / `.other`.
+
+The renderer loads native ESM and cannot import CommonJS directly.
+`scripts/sync-renderer-vendor.js` therefore builds an ESM bundle into
+`src/renderer/generated/i18n.js` — exactly as it does for the contract layer.
+There is no second, diverging copy of the strings.
+
+When a key is missing, the default locale answers first and the key itself
+last. Visibly wrong beats silently German: a German sentence in an English
+interface goes unnoticed, `settings.title` does not. That it never gets that
+far is what `test/i18n-keys.test.js` is for — both languages carry the same
+keys and the same placeholders, and every key used in the code exists.
+
+### Renderer: markup declaratively, built nodes by callback
+
+`src/renderer/i18n.js` holds the active locale and knows three routes:
+
+| Case | Means |
+| --- | --- |
+| Static markup | `data-i18n="key"` (text), `data-i18n-html="key"` (with `<strong>`/`<code>`), `data-i18n-attr="title:key;aria-label:key"` |
+| Nodes built at runtime | `t('key', params)` or `tPlural('key', n)` |
+| Components with state of their own | `onLocaleChange(() => …)` and redraw themselves |
+
+`index.html` carries the **English** strings in its source — the default should
+already be right before the first line of JavaScript runs. `setLocale()` sets
+`lang` on `<html>`, walks the document once and only then notifies subscribers.
+
+`data-i18n-html` assigns `innerHTML` and is therefore reserved for the
+catalogues: those values live in the app's own source, never in an input.
+Anything coming from a file, a model answer or a text field still goes through
+`textContent`.
+
+### Main process: a remembered locale and a rebuilt menu
+
+The menu bar and the context menu are built **synchronously**; an `await` on
+the preferences would mean a menu opening without labels. `create-application`
+therefore keeps the locale in memory (the same construction as the web search
+key) and hands `getAppLocale()` around. A language change runs like this:
+
+```
+Renderer: Apply
+  -> settings-handlers writes appLocale
+  -> onAppLocaleChanged -> create-application remembers the locale
+                        -> main/index.js rebuilds the menu bar
+  -> Renderer: setLocale() redraws the interface
+```
+
+Electron cannot rename a menu item after the fact — the menu is set anew as a
+whole on every change. The file tree's context menu needs none of this: it
+lives only until the click and reads the locale as it opens.
+
+### English by default, existing installations stay German
+
+`normalizeUiPrefs` falls back to `en`. An **existing** `ui-preferences.json`
+without `appLocale`, however, comes from a time when there was only German;
+`storage-service.readUIPrefs` slips `de` in before normalising. A missing
+*file* means a new installation and therefore English, a missing *field* means
+an existing one. The addition happens on every read and needs no migration step
+of its own.
+
 ## Further functional modules
 
 The skill system ([#18](https://github.com/kkrafft1999/snotra/issues/18)) is

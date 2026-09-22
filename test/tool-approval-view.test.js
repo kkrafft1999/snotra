@@ -23,11 +23,11 @@ function dto(overrides = {}) {
 }
 
 test('Modus-Optionen: drei Modi in Konzept-Reihenfolge mit Labels', async () => {
-  const { TOOL_MODE_OPTIONS, modeLabel } = await load();
-  assert.deepEqual(TOOL_MODE_OPTIONS.map((o) => o.value), ['smart', 'ask-all', 'auto']);
-  assert.deepEqual(TOOL_MODE_OPTIONS.map((o) => o.label), ['Intelligent', 'Immer fragen', 'Auto']);
+  const { toolModeOptions, modeLabel } = await load();
+  assert.deepEqual(toolModeOptions().map((o) => o.value), ['smart', 'ask-all', 'auto']);
+  assert.deepEqual(toolModeOptions().map((o) => o.label), ['Smart', 'Always ask', 'Auto']);
   assert.equal(modeLabel('auto'), 'Auto');
-  assert.equal(modeLabel('kaputt'), 'Intelligent');
+  assert.equal(modeLabel('kaputt'), 'Smart');
 });
 
 test('Karte: Änderung an bestehender Datei mit Sitzungsaktion und Reichweite', async () => {
@@ -36,7 +36,7 @@ test('Karte: Änderung an bestehender Datei mit Sitzungsaktion und Reichweite', 
   assert.equal(view.title, 'Änderung bestätigen');
   assert.equal(view.headline.text, 'Snotra möchte src/config.js ändern (edit_file).');
   assert.equal(view.headline.verb, 'ändern');
-  assert.equal(view.classText, 'Ändern');
+  assert.equal(view.classText, 'Change');
   assert.equal(view.actions.once.enabled, true);
   assert.equal(view.actions.session.enabled, true);
   assert.equal(view.actions.session.hint, '');
@@ -66,7 +66,7 @@ test('Karte: neue Datei heißt „anlegen“, Überschreiben warnt mit Papierkor
   assert.equal(noRecovery.headline.verb, 'ohne Rückweg überschreiben');
   assert.match(noRecovery.warning, /ohne Wiederherstellungskopie/);
   assert.equal(noRecovery.actions.session.enabled, false);
-  assert.match(noRecovery.actions.session.hint, /Überschreiben ohne Rückweg.*Einzelentscheidung/);
+  assert.match(noRecovery.actions.session.hint, /Overwrite with no way back.*Einzelentscheidung/);
 });
 
 test('Karte: sensibles Lesen zeigt Provider, Dateistand und Titel „Dateizugriff bestätigen“', async () => {
@@ -93,10 +93,10 @@ test('Karte: sensibles Lesen zeigt Provider, Dateistand und Titel „Dateizugrif
 test('Karte: im Modus „Immer fragen“ ist die Sitzungsaktion aus – mit Begründung', async () => {
   const { buildApprovalCardView, sessionActionHint } = await load();
   const view = buildApprovalCardView(dto({ mode: 'ask-all', sessionAllowed: false, riskClasses: ['read'] }));
-  assert.equal(view.modeLabel, 'Immer fragen');
+  assert.equal(view.modeLabel, 'Always ask');
   assert.equal(view.actions.session.enabled, false);
   assert.equal(view.actions.session.hint, 'Dieser Modus fragt bei jedem Aufruf.');
-  assert.equal(sessionActionHint({ sessionAllowed: false, mode: 'smart', riskClasses: ['execute'] }), 'Für „Ausführen“ ist nur eine Einzelentscheidung möglich.');
+  assert.equal(sessionActionHint({ sessionAllowed: false, mode: 'smart', riskClasses: ['execute'] }), 'Für „Execute“ ist nur eine Einzelentscheidung möglich.');
   assert.equal(sessionActionHint({ sessionAllowed: true }), '');
 });
 
@@ -140,9 +140,9 @@ test('Audit-Tooltip: Entscheidung, Klasse, Status, Grund; leer für Alt-Sessions
   assert.equal(describePermissionAudit(undefined), '');
   assert.equal(describePermissionAudit('string'), '');
   const denied = describePermissionAudit({ decision: 'deny', source: 'deny', reason: 'user_denied', riskClasses: ['write'], mode: 'smart', status: 'denied' });
-  assert.equal(denied, 'Entscheidung: Abgelehnt · Klasse: Ändern · Status: nicht ausgeführt · Grund: Tool-Aufruf vom Nutzer abgelehnt · Modus: Intelligent');
+  assert.equal(denied, 'Entscheidung: Abgelehnt · Klasse: Change · Status: nicht ausgeführt · Grund: Tool-Aufruf vom Nutzer abgelehnt · Modus: Smart');
   const session = describePermissionAudit({ decision: 'allow', source: 'allow-session', riskClasses: ['read-sensitive'], status: 'executed', sensitive: true });
-  assert.match(session, /^Entscheidung: Erlaubt \(Sitzungsfreigabe\) · Klasse: Sensible Daten lesen · Status: ausgeführt/);
+  assert.match(session, /^Entscheidung: Erlaubt \(Sitzungsfreigabe\) · Klasse: Read sensitive data · Status: ausgeführt/);
   assert.match(session, /Sensibler Inhalt zurückgehalten$/);
   assert.equal(permissionStatusKey({ status: 'awaiting-approval' }), 'awaiting');
   assert.equal(permissionStatusKey({ decision: 'deny', status: 'denied' }), 'denied');
@@ -153,10 +153,10 @@ test('Audit-Tooltip: Entscheidung, Klasse, Status, Grund; leer für Alt-Sessions
 test('Regeln: Beschreibung und Formularprüfung folgen dem Konzept', async () => {
   const { describeRule, validateRuleDraft, ruleClassOptions } = await load();
   const text = describeRule({ id: 'r1', effect: 'deny', scope: 'global', tool: 'write_file_text', pathPattern: 'secrets/**' }).text;
-  assert.equal(text, 'Sperre: Tool write_file_text auf secrets/** (Alle Workspaces)');
+  assert.equal(text, 'Block: Tool write_file_text on secrets/** (All workspaces)');
   assert.equal(
     describeRule({ id: 'r2', effect: 'allow', scope: 'workspace', root: '/p', riskClass: 'read', pathPattern: '**' }).text,
-    'Erlaubnis: Klasse Lesen auf alle Pfade (Dieser Workspace)'
+    'Allowance: Class Read on all paths (This workspace)'
   );
   assert.deepEqual(ruleClassOptions('allow').map((o) => o.value), ['read', 'write']);
   assert.equal(ruleClassOptions('deny').length, 6);
@@ -166,7 +166,7 @@ test('Regeln: Beschreibung und Formularprüfung folgen dem Konzept', async () =>
     { ok: true, rule: { effect: 'deny', scope: 'workspace', tool: 'write_file_text', pathPattern: 'docs/**' } }
   );
   assert.equal(validateRuleDraft({ effect: 'deny', scope: 'workspace', subjectType: 'tool', tool: 'x', hasWorkspace: false }).ok, false);
-  assert.match(validateRuleDraft({ effect: 'allow', scope: 'global', subjectType: 'class', riskClass: 'delete' }).error, /nur für „Lesen“ und „Ändern“/);
+  assert.match(validateRuleDraft({ effect: 'allow', scope: 'global', subjectType: 'class', riskClass: 'delete' }).error, /only for “Read” and “Change”/);
   assert.match(validateRuleDraft({ effect: 'deny', scope: 'global', subjectType: 'class', riskClass: 'read', pathPattern: '../x' }).error, /\.\./);
   assert.equal(validateRuleDraft({ effect: 'deny', scope: 'global', subjectType: 'class', riskClass: 'read', pathPattern: '' }).rule.pathPattern, '**');
   assert.equal(validateRuleDraft({ effect: 'nope' }).ok, false);
@@ -178,15 +178,15 @@ test('Sensible Pfadmuster: kein „..“, kein Alles-Muster, keine Duplikate', a
   assert.equal(validateSensitivePattern('**', []).ok, false);
   assert.equal(validateSensitivePattern('', []).ok, false);
   assert.equal(validateSensitivePattern('../x', []).ok, false);
-  assert.match(validateSensitivePattern('personal/**', ['personal/**']).error, /schon/);
+  assert.match(validateSensitivePattern('personal/**', ['personal/**']).error, /already exists/);
 });
 
 test('Integritätswarnung und Reset-Umfang sind benannt', async () => {
-  const { integrityWarning, RESET_ACTIONS } = await load();
-  assert.match(integrityWarning('invalid'), /beschädigt oder verändert.*Sperren bleiben/);
-  assert.match(integrityWarning('unsigned'), /Auto.*dauerhafte Erlaubnisse/);
+  const { integrityWarning, resetActions } = await load();
+  assert.match(integrityWarning('invalid'), /damaged or altered.*blocks remain in force/);
+  assert.match(integrityWarning('unsigned'), /Auto.*permanent allowances/);
   assert.equal(integrityWarning('ok'), '');
-  assert.deepEqual(RESET_ACTIONS.map((a) => a.key), ['session', 'workspace', 'all']);
-  assert.equal(RESET_ACTIONS[2].confirm, true);
-  assert.match(RESET_ACTIONS[2].description, /Modus „Intelligent“/);
+  assert.deepEqual(resetActions().map((a) => a.key), ['session', 'workspace', 'all']);
+  assert.equal(resetActions()[2].confirm, true);
+  assert.match(resetActions()[2].description, /“Smart” mode/);
 });

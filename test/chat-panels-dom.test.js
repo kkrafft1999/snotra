@@ -80,7 +80,7 @@ test('der Schalter aus der Titelzeile blendet die Verlaufsspalte ein und wieder 
 
   assert.ok(!appRoot.classList.contains('app--no-history'));
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
-  assert.equal(toggle.getAttribute('aria-label'), 'Chat-Verlauf ausblenden');
+  assert.equal(toggle.getAttribute('aria-label'), 'Hide chat history');
   assert.deepEqual(prefs, [{ chatHistoryVisible: true }]);
 
   toggle.click();

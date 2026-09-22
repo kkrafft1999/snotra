@@ -18,6 +18,7 @@
  */
 
 import contracts from '../generated/contracts.js';
+import { t, tPlural, onLocaleChange } from '../i18n.js';
 
 const { MEMORY_SCOPES, MEMORY_ORIGINS, MAX_MEMORY_CHARS } = contracts;
 
@@ -104,13 +105,13 @@ export function initMemoryPanel({ api }) {
     title.textContent =
       scope.scope === MEMORY_SCOPES.WORKSPACE
         ? `Projekt${scope.folderName ? ` · ${scope.folderName}` : ''}`
-        : 'Global · gilt in jedem Ordner';
+        : t('settings.memory.scope.global');
     head.appendChild(title);
     const pathEl = document.createElement('span');
     pathEl.className = 'memory-card__path';
     // Ohne geöffneten Ordner gibt es die Projekt-Ebene gerade nicht. Das zu
     // sagen ist ehrlicher als ein leerer Kasten ohne Erklärung.
-    pathEl.textContent = scope.path ? scope.shortPath : 'Kein Ordner geöffnet';
+    pathEl.textContent = scope.path ? scope.shortPath : t('settings.memory.scope.noFolder');
     // Der volle Pfad bleibt erreichbar, ohne die Zeile zu sprengen.
     if (scope.path) pathEl.title = scope.path;
     head.appendChild(pathEl);
@@ -138,8 +139,8 @@ export function initMemoryPanel({ api }) {
       const empty = document.createElement('p');
       empty.className = 'settings-empty-hint memory-empty';
       empty.textContent = scope.path
-        ? 'Noch nichts gemerkt. Sag im Chat „bitte merke dir …“.'
-        : 'Öffne einen Ordner, damit Snotra sich Projektbezogenes merken kann.';
+        ? t('settings.memory.empty')
+        : t('settings.memory.empty.noFolder');
       card.appendChild(empty);
     }
 
@@ -147,10 +148,10 @@ export function initMemoryPanel({ api }) {
     meta.className = 'memory-meta';
     const count = scope.entries.length;
     const parts = [
-      count === 1 ? '1 Eintrag' : `${count} Einträge`,
-      `${formatChars(scope.chars)} von ${formatChars(scope.maxChars || MAX_MEMORY_CHARS)} Zeichen`,
+      count === 1 ? '1 Eintrag' : tPlural('settings.memory.entries', count),
+      t('settings.memory.chars', { used: formatChars(scope.chars), max: formatChars(scope.maxChars || MAX_MEMORY_CHARS) }),
     ];
-    if (scope.truncated) parts.push('gekürzt — nur der Anfang wird mitgeschickt');
+    if (scope.truncated) parts.push(t('settings.memory.truncated'));
     meta.textContent = parts.join(' · ');
     card.appendChild(meta);
 
@@ -162,12 +163,15 @@ export function initMemoryPanel({ api }) {
     if (!state.available) {
       const hint = document.createElement('p');
       hint.className = 'settings-empty-hint';
-      hint.textContent = 'Das Gedächtnis ist in dieser Installation nicht verfügbar.';
+      hint.textContent = t('settings.memory.unavailable');
       host.appendChild(hint);
       return;
     }
     for (const scope of state.scopes) host.appendChild(renderScope(scope));
   }
+
+  // Language change (epic #277): the cards are built here, not in the markup.
+  onLocaleChange(() => { render(); });
 
   return {
     /** Stand vom Main holen und neu zeichnen — beim Öffnen des Dialogs. */

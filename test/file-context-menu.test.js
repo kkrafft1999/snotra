@@ -43,9 +43,12 @@ function createFakes() {
 }
 
 test('revealLabelForPlatform: Finder auf macOS, Explorer auf Windows, sonst Dateimanager', () => {
-  assert.equal(revealLabelForPlatform('darwin'), 'Im Finder anzeigen');
-  assert.equal(revealLabelForPlatform('win32'), 'Im Explorer anzeigen');
-  assert.equal(revealLabelForPlatform('linux'), 'Im Dateimanager anzeigen');
+  assert.equal(revealLabelForPlatform('darwin'), 'Reveal in Finder');
+  assert.equal(revealLabelForPlatform('win32'), 'Show in Explorer');
+  assert.equal(revealLabelForPlatform('linux'), 'Show in file manager');
+  // Auf Deutsch dieselbe Unterscheidung (Epic #277).
+  assert.equal(revealLabelForPlatform('darwin', 'de'), 'Im Finder anzeigen');
+  assert.equal(revealLabelForPlatform('linux', 'de'), 'Im Dateimanager anzeigen');
 });
 
 test('buildTemplate: „Öffnen“, plattformabhängiges „anzeigen“, Separator, „Löschen…“', () => {
@@ -54,7 +57,7 @@ test('buildTemplate: „Öffnen“, plattformabhängiges „anzeigen“, Separat
   const template = menu.buildTemplate('/ws/a.txt');
   assert.deepEqual(
     template.map((t) => t.label ?? t.type),
-    ['Öffnen', 'Im Explorer anzeigen', 'Informationen', 'separator', 'Löschen…'],
+    ['Open', 'Show in Explorer', 'Information', 'separator', 'Delete…'],
   );
 });
 
@@ -64,7 +67,7 @@ test('buildTemplate für Ordner: kein „Öffnen“, nur anzeigen und löschen (
   const template = menu.buildTemplate('/ws/unterlagen', { isDirectory: true });
   assert.deepEqual(
     template.map((t) => t.label ?? t.type),
-    ['Im Finder anzeigen', 'Informationen', 'separator', 'Löschen…'],
+    ['Reveal in Finder', 'Information', 'separator', 'Delete…'],
   );
 });
 
@@ -91,8 +94,8 @@ test('Löschen eines Ordners: Hinweistext nennt den Inhalt, Papierkorb statt har
   assert.deepEqual(result, { cancelled: true });
   assert.deepEqual(calls.trashItem, []);
   const box = calls.dialogs[0];
-  assert.match(box.message, /„unterlagen“ löschen\?/);
-  assert.match(box.detail, /Ordner wird mit seinem gesamten Inhalt in den Papierkorb/);
+  assert.match(box.message, /Delete “unterlagen”\?/);
+  assert.match(box.detail, /folder and everything in it will be moved to the trash/);
 });
 
 test('popup reicht isDirectory an das Template durch (#120)', () => {
@@ -101,7 +104,7 @@ test('popup reicht isDirectory an das Template durch (#120)', () => {
   const built = menu.popup('/ws/unterlagen', { id: 1 }, { isDirectory: true });
   assert.deepEqual(
     built.template.map((t) => t.label ?? t.type),
-    ['Im Finder anzeigen', 'Informationen', 'separator', 'Löschen…'],
+    ['Reveal in Finder', 'Information', 'separator', 'Delete…'],
   );
 });
 
@@ -148,11 +151,11 @@ test('Löschen: Sicherheitsabfrage mit Dateiname, „Abbrechen“ ist Standard u
   assert.deepEqual(calls.trashItem, []);
   const box = calls.dialogs[0];
   assert.equal(box.type, 'warning');
-  assert.match(box.message, /„notiz\.md“ löschen\?/);
-  assert.deepEqual(box.buttons, ['Löschen', 'Abbrechen']);
+  assert.match(box.message, /Delete “notiz\.md”\?/);
+  assert.deepEqual(box.buttons, ['Delete', 'Cancel']);
   assert.equal(box.defaultId, 1);
   assert.equal(box.cancelId, 1);
-  assert.match(box.detail, /Papierkorb/);
+  assert.match(box.detail, /moved to the trash/);
 });
 
 test('Löschen: Bestätigung verschiebt in den Papierkorb und meldet deleted (#59)', async () => {
@@ -198,7 +201,7 @@ test('Löschen ohne Dialog-Objekt liefert Fehler statt zu löschen (#59)', async
   const { shell, Menu, calls } = createFakes();
   const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
   const result = await menu.deleteWithConfirmation('/ws/a.txt', null);
-  assert.match(result.error, /Dialog/);
+  assert.match(result.error, /dialog/i);
   assert.deepEqual(calls.trashItem, []);
 });
 
@@ -220,9 +223,9 @@ test('„Informationen“: Dialog mit Name im Titel und den Feldern als Detailte
   assert.deepEqual(result, { shown: true });
   const box = calls.dialogs[0];
   assert.equal(box.type, 'info');
-  assert.match(box.message, /Informationen zu „notiz\.md“/);
+  assert.match(box.message, /Information about “notiz\.md”/);
   assert.equal(box.detail, 'Name: notiz.md\nPfad: /ws/notiz.md\nGröße: 1,4 MB (1.468.006 Bytes)');
-  assert.deepEqual(box.buttons, ['OK', 'Pfad kopieren']);
+  assert.deepEqual(box.buttons, ['OK', 'Copy path']);
   assert.equal(box.defaultId, 0);
   assert.equal(box.cancelId, 0);
   assert.deepEqual(calls.copied, []);
@@ -266,7 +269,7 @@ test('„Informationen“: isDirectory wird an die Auskunft durchgereicht (#123)
   // Der Klick-Handler ist nicht awaitbar; ein Tick reicht für die Zusage.
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(calls.described, [{ path: '/ws/unterlagen', opts: { isDirectory: true } }]);
-  assert.match(calls.dialogs[0].message, /Informationen zu „unterlagen“/);
+  assert.match(calls.dialogs[0].message, /Information about “unterlagen”/);
 });
 
 test('„Informationen“: fehlgeschlagenes stat wird als Fehlerdialog gemeldet, nicht geworfen (#123)', async () => {
@@ -284,7 +287,7 @@ test('„Informationen“: fehlgeschlagenes stat wird als Fehlerdialog gemeldet,
   const result = await menu.showInfo('/ws/weg.txt', null);
   assert.deepEqual(result, { error: 'ENOENT: no such file or directory' });
   assert.equal(calls.dialogs[0].type, 'error');
-  assert.match(calls.dialogs[0].message, /Informationen nicht verfügbar/);
+  assert.match(calls.dialogs[0].message, /Information not available/);
   assert.match(calls.dialogs[0].detail, /ENOENT/);
   assert.match(warnings.join(' '), /ENOENT/);
   assert.deepEqual(calls.copied, []);
@@ -294,7 +297,7 @@ test('„Informationen“ ohne Dialog-Objekt liefert einen Fehler statt zu werfe
   const { shell, Menu, makeFileInfo } = createFakes();
   const menu = createFileContextMenu({ Menu, shell, platform: 'darwin', fileInfo: makeFileInfo() });
   const result = await menu.showInfo('/ws/a.txt', null);
-  assert.match(result.error, /Dialog/);
+  assert.match(result.error, /dialog/i);
 });
 
 test('„Informationen“: ein abstürzender Dialog reißt den Main-Prozess nicht mit (#123)', async () => {

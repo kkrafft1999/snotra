@@ -42,6 +42,20 @@ app.whenReady().then(async () => {
     meta: { appVersion: app.getVersion(), platform: process.platform },
   });
 
+  // The menu bar is rebuilt on every language change (epic #277) — Electron
+  // cannot rename an item after the fact. The function sits before
+  // createApplication because it is handed to it as a callback.
+  function applyApplicationMenu() {
+    Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
+      appName: app.getName(),
+      getMainWindow,
+      shell,
+      PUSH,
+      onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
+      locale: application?.getAppLocale?.(),
+    })));
+  }
+
   application = createApplication({
     app,
     ipcMain,
@@ -62,15 +76,13 @@ app.whenReady().then(async () => {
     defaultProviderId: DEFAULT_PROVIDER,
     watchFile,
     realpathNative: realpathSync.native,
+    onAppLocaleChanged: () => applyApplicationMenu(),
   });
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
-    appName: app.getName(),
-    getMainWindow,
-    shell,
-    PUSH,
-    onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
-  })));
+  // The stored language is only known once the preferences have been read.
+  // Until then the menu carries the default; if the stored one differs,
+  // createApplication calls `onAppLocaleChanged` and it is rebuilt.
+  applyApplicationMenu();
 
   // Der aktive Workspace wird nicht vorab gesetzt: er entsteht erst, wenn der
   // Renderer den zuletzt geoeffneten Ordner ueber SETTINGS_ACTIVATE_FOLDER
