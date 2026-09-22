@@ -78,7 +78,7 @@ The push restriction is about branches. Ruleset `23177645` has `target: branch`
 and does not catch tag refs, so `git push origin vX.Y.Z` is not a bypass and
 needs no separate confirmation. The [`release` skill](../skills/release/SKILL.md)
 confirms the target version before it tags anyway; its flow is drawn in
-[`docs/release-ablauf.svg`](../../docs/release-ablauf.svg).
+[`docs/release-flow.svg`](../../docs/release-flow.svg).
 
 Until 2026-09-20 the bump ran via `npm version` straight on `main` and only got
 through because of the `RepositoryRole` bypass; GitHub logged every release with

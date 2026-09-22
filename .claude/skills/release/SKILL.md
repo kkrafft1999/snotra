@@ -17,7 +17,7 @@ This skill publishes a new version by pushing a `v*` tag. Building and uploading
 the artifacts is the pipeline's job
 (`.github/workflows/release.yml`). The background and the manual procedure are
 in [docs/release.md](../../../docs/release.md), the flow as a diagram in
-[docs/release-ablauf.svg](../../../docs/release-ablauf.svg).
+[docs/release-flow.svg](../../../docs/release-flow.svg).
 
 **Important:** a pushed tag triggers a **public** GitHub release — that is
 outward-facing and not trivial to undo. So get **one** explicit confirmation of
