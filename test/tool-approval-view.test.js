@@ -124,12 +124,14 @@ test('Karte: ungültige DTOs ergeben kein Anzeige-Modell', async () => {
 test('Ergebnis: Entscheidung, Verfall und Abbruch getrennt vom Ausführungserfolg', async () => {
   const { describeApprovalOutcome } = await load();
   assert.equal(describeApprovalOutcome({ response: 'deny' }).label, 'Abgelehnt');
-  assert.match(describeApprovalOutcome({ response: 'deny' }).detail, /Tool-Aufruf vom Nutzer abgelehnt/);
+  // Der Grund kommt seit #293 aus dem Katalog — englisch, weil das die
+  // Vorgabesprache der Oberflaeche ist (#277).
+  assert.match(describeApprovalOutcome({ response: 'deny' }).detail, /Tool call denied by you/);
   assert.equal(describeApprovalOutcome({ response: 'allow-once' }).status, 'allowed');
   assert.equal(describeApprovalOutcome({ response: 'allow-session' }).label, 'Für diese Sitzung erlaubt');
   const gone = describeApprovalOutcome({ invalidated: true, reason: 'request_invalidated' });
   assert.equal(gone.label, 'Anfrage verfallen');
-  assert.match(gone.detail, /Datei, Kontext oder Regeln.*Der Lauf ist beendet\./);
+  assert.match(gone.detail, /file, context or rules.*Der Lauf ist beendet\./);
   assert.equal(describeApprovalOutcome({ invalidated: true, reason: 'no_approval_ui' }).status, 'invalidated');
   assert.equal(describeApprovalOutcome({ aborted: true, invalidated: true }).label, 'Lauf abgebrochen');
   assert.equal(describeApprovalOutcome({}).status, 'invalidated');
@@ -140,7 +142,7 @@ test('Audit-Tooltip: Entscheidung, Klasse, Status, Grund; leer für Alt-Sessions
   assert.equal(describePermissionAudit(undefined), '');
   assert.equal(describePermissionAudit('string'), '');
   const denied = describePermissionAudit({ decision: 'deny', source: 'deny', reason: 'user_denied', riskClasses: ['write'], mode: 'smart', status: 'denied' });
-  assert.equal(denied, 'Entscheidung: Abgelehnt · Klasse: Change · Status: nicht ausgeführt · Grund: Tool-Aufruf vom Nutzer abgelehnt · Modus: Smart');
+  assert.equal(denied, 'Entscheidung: Abgelehnt · Klasse: Change · Status: nicht ausgeführt · Grund: Tool call denied by you · Modus: Smart');
   const session = describePermissionAudit({ decision: 'allow', source: 'allow-session', riskClasses: ['read-sensitive'], status: 'executed', sensitive: true });
   assert.match(session, /^Entscheidung: Erlaubt \(Sitzungsfreigabe\) · Klasse: Read sensitive data · Status: ausgeführt/);
   assert.match(session, /Sensibler Inhalt zurückgehalten$/);

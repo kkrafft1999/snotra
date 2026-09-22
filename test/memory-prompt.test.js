@@ -43,11 +43,12 @@ test('je Ebene eine eigene Zeile in der Token-Aufschluesselung', () => {
     parts.map((p) => p.id),
     ['system:memory:workspace', 'system:memory:user']
   );
-  // Die Aufschluesselung steht auf dem Bildschirm und bleibt deutsch — anders
-  // als die gleichnamige Ueberschrift im Prompt (#276).
+  // Die Aufschluesselung steht auf dem Bildschirm und traegt deshalb den
+  // Katalogschluessel, nicht den fertigen Satz (#293) — anders als die
+  // gleichnamige Ueberschrift im Prompt, die englisch bleibt (#276).
   assert.deepEqual(
-    parts.map((p) => p.label),
-    ['Gedächtnis (Projekt)', 'Gedächtnis (global)']
+    parts.map((p) => p.labelKey),
+    ['memory.scope.workspace', 'memory.scope.user']
   );
   // Gezaehlt wird der Dateitext, nicht Ueberschrift und Vorspann — sonst
   // waere nicht zu erkennen, welche Datei den Prompt aufblaeht.

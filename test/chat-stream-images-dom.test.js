@@ -122,7 +122,9 @@ test('ein Verlauf im falschen Ordner zeigt den Platzhalter, nicht fremde Bilder'
   assert.equal(!!blase.querySelector('img'), false);
   const box = blase.querySelector('.chat-md-image--placeholder');
   assert.ok(box);
-  assert.equal(box.querySelector('.chat-md-image-reason').textContent, 'Bild nicht gefunden');
+  // English is the default language of the interface (#277); the reason comes
+  // from the catalogue now, not from the contract (#293).
+  assert.equal(box.querySelector('.chat-md-image-reason').textContent, 'Image not found');
 });
 
 test('waehrend die Antwort laeuft, wird nichts geholt', async () => {

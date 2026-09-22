@@ -94,8 +94,9 @@ test('Einträge mit HTTP- oder SSE-Transport werden mit Begründung übersprunge
   assert.equal(ok, true, 'der brauchbare Eintrag rettet den Import');
   assert.deepEqual(candidates.map((c) => c.id), ['nah']);
   assert.deepEqual(skipped.map((s) => s.name), ['fern', 'auchfern']);
-  assert.match(skipped[0].reason, /sse/i);
-  assert.match(skipped[1].reason, /URL/);
+  assert.deepEqual(skipped[0].reason,
+    { key: 'mcpImport.skippedReason.remoteTransport', params: { transport: 'sse' } });
+  assert.equal(skipped[1].reason.key, 'mcpImport.skippedReason.url');
 });
 
 test('ein Eintrag ohne Kommando wird übersprungen, nicht stillschweigend übernommen', () => {
@@ -103,7 +104,7 @@ test('ein Eintrag ohne Kommando wird übersprungen, nicht stillschweigend übern
   const { ok, candidates, skipped, errors } = parseMcpServersBlock(block);
   assert.equal(ok, false);
   assert.deepEqual(candidates, []);
-  assert.match(skipped[0].reason, /command/);
+  assert.equal(skipped[0].reason.key, 'mcpImport.skippedReason.commandMissing');
   assert.equal(errors.length, 1, 'und es bleibt nicht bei einer leeren Liste ohne Wort');
 });
 
@@ -121,7 +122,8 @@ test('der abgeleitete Name steht als Hinweis am Kandidaten', () => {
   const { candidates } = parseMcpServersBlock(block);
   assert.equal(candidates[0].id, 'atlassian-jira');
   assert.equal(candidates[0].label, 'Atlassian Jira', 'der Anzeigename bleibt der Originalname');
-  assert.ok(candidates[0].notes.some((n) => n.includes('atlassian-jira')));
+  assert.ok(candidates[0].notes.some(
+    (n) => n.key === 'mcpImport.note.idDerived' && n.params.id === 'atlassian-jira'));
 });
 
 test('eine schon vergebene Kennung wird gemeldet, nicht heimlich überschrieben', () => {
@@ -172,8 +174,10 @@ test('leere Werte und Platzhalter werden angesprochen', () => {
     mcpServers: { x: { command: 'npx', env: { A_TOKEN: '', B_TOKEN: '<dein-token>' } } },
   });
   const { candidates } = parseMcpServersBlock(block);
-  assert.ok(candidates[0].notes.some((n) => n.includes('A_TOKEN') && n.includes('Wert')));
-  assert.ok(candidates[0].notes.some((n) => n.includes('B_TOKEN') && n.includes('Platzhalter')));
+  assert.ok(candidates[0].notes.some(
+    (n) => n.key === 'mcpImport.note.envValueEmpty' && n.params.name === 'A_TOKEN'));
+  assert.ok(candidates[0].notes.some(
+    (n) => n.key === 'mcpImport.note.envPlaceholder' && n.params.name === 'B_TOKEN'));
 });
 
 test('kaputtes JSON erzeugt eine verständliche Meldung statt eines stillen Fehlschlags', () => {
@@ -181,14 +185,16 @@ test('kaputtes JSON erzeugt eine verständliche Meldung statt eines stillen Fehl
   assert.equal(ok, false);
   assert.deepEqual(candidates, []);
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /kein gültiges JSON/);
+  assert.equal(errors[0].key, 'mcpImport.error.invalidJson');
+  assert.match(errors[0].params.detail, /JSON/, 'die Meldung der Engine bleibt erhalten');
 });
 
 test('nichts eingefügt, leerer Block und falscher Typ sagen jeweils, was fehlt', () => {
-  assert.match(parseMcpServersBlock('').errors[0], /nichts eingefügt/i);
-  assert.match(parseMcpServersBlock('[]').errors[0], /Objekt/);
-  assert.match(parseMcpServersBlock('{"mcpServers":{}}').errors[0], /keine Server/);
-  assert.match(parseMcpServersBlock('{"mcpServers":[]}').errors[0], /mcpServers/);
+  assert.equal(parseMcpServersBlock('').errors[0].key, 'mcpImport.error.empty');
+  assert.equal(parseMcpServersBlock('[]').errors[0].key, 'mcpImport.error.notAnObject');
+  assert.equal(parseMcpServersBlock('{"mcpServers":{}}').errors[0].key, 'mcpImport.error.noServers');
+  assert.equal(parseMcpServersBlock('{"mcpServers":[]}').errors[0].key,
+    'mcpImport.error.blockNotAnObject');
 });
 
 test('mehr als die Obergrenze an Servern wird nicht klammheimlich gekappt', () => {
@@ -196,7 +202,8 @@ test('mehr als die Obergrenze an Servern wird nicht klammheimlich gekappt', () =
   for (let i = 0; i < MCP_IMPORT_MAX_SERVERS + 5; i += 1) viele[`srv${i}`] = { command: 'npx' };
   const { candidates, errors } = parseMcpServersBlock(JSON.stringify({ mcpServers: viele }));
   assert.equal(candidates.length, MCP_IMPORT_MAX_SERVERS);
-  assert.match(errors[0], new RegExp(String(MCP_IMPORT_MAX_SERVERS)));
+  assert.deepEqual(errors[0],
+    { key: 'mcpImport.error.tooManyServers', params: { max: MCP_IMPORT_MAX_SERVERS } });
 });
 
 test('zu lange Argumentlisten und env-Blöcke werden gekappt und gemeldet', () => {
@@ -209,7 +216,9 @@ test('zu lange Argumentlisten und env-Blöcke werden gekappt und gemeldet', () =
   const { candidates } = parseMcpServersBlock(JSON.stringify(block));
   assert.equal(candidates[0].args.length, MCP_LIMITS.MAX_ARGS);
   assert.equal(candidates[0].env.length, MCP_LIMITS.MAX_ENV_ENTRIES);
-  assert.equal(candidates[0].notes.filter((n) => n.includes('ersten')).length, 2);
+  assert.equal(candidates[0].notes.filter(
+    (n) => n.key === 'mcpImport.note.argsTruncated' || n.key === 'mcpImport.note.envTruncated'
+  ).length, 2);
 });
 
 test('importierte Server sind aus — der Import ist keine Freigabe', () => {

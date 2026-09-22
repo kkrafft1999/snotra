@@ -25,6 +25,15 @@ export function t(key, params) {
   return translator(key, params);
 }
 
+/**
+ * A message descriptor from the contract layer (`createMessage`) in the active
+ * language. Plain text passes through unchanged — the layers that still hand
+ * over finished sentences are shown as they stand (issue #293).
+ */
+export function tMessage(message) {
+  return translator.message(message);
+}
+
 /** One string in the active language, singular or plural by `count`. */
 export function tPlural(baseKey, count, params) {
   return translator.plural(baseKey, count, params);

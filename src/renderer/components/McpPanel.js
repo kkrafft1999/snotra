@@ -1,5 +1,5 @@
 import contracts from '../generated/contracts.js';
-import { t, tPlural, onLocaleChange } from '../i18n.js';
+import { t, tPlural, tMessage, onLocaleChange } from '../i18n.js';
 
 const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contracts;
 
@@ -250,7 +250,7 @@ export function initMcpPanel({ api }) {
       adopt(result);
       setError(errorEl, '');
     } else {
-      setError(errorEl, result?.errors?.[0] || result?.error || t('settings.mcp.updateFailed'));
+      setError(errorEl, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.updateFailed'));
     }
   }
 
@@ -439,7 +439,7 @@ export function initMcpPanel({ api }) {
       setError(errorEl, '');
       return;
     }
-    setError(formError, result?.errors?.[0] || result?.error || t('settings.mcp.saveFailed'));
+    setError(formError, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.saveFailed'));
   }
 
   async function remove() {
@@ -450,7 +450,7 @@ export function initMcpPanel({ api }) {
       closeDialog();
       return;
     }
-    setError(formError, result?.errors?.[0] || result?.error || t('settings.mcp.deleteFailed'));
+    setError(formError, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.deleteFailed'));
   }
 
   async function test() {
@@ -513,9 +513,13 @@ export function initMcpPanel({ api }) {
       notes.push(importNoteRow(
         tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), 'geheim'));
     }
+    // A placeholder or a missing value has to be dealt with before the server
+    // is switched on — that is what the loud mark is for. Recognised by the
+    // key, not by the wording (issue #293).
     for (const note of candidate.notes) {
-      const warn = note.includes('Platzhalter') || note.includes(t('mcpImport.candidate.noValue'));
-      notes.push(importNoteRow(note, warn ? t('mcpImport.candidate.check') : null, warn));
+      const warn = note?.key === 'mcpImport.note.envPlaceholder'
+        || note?.key === 'mcpImport.note.envValueEmpty';
+      notes.push(importNoteRow(tMessage(note), warn ? t('mcpImport.candidate.check') : null, warn));
     }
     return notes;
   }
@@ -573,7 +577,7 @@ export function initMcpPanel({ api }) {
     for (const entry of skippedEntries) {
       const item = el('li', null);
       item.append(el('strong', null, entry.name));
-      item.append(document.createTextNode(` — ${entry.reason}`));
+      item.append(document.createTextNode(` — ${tMessage(entry.reason)}`));
       list.append(item);
     }
     importSkipped.append(list);
@@ -603,7 +607,7 @@ export function initMcpPanel({ api }) {
       (id) => importCandidates.some((candidate) => candidate.id === id)));
 
     // Ein leeres Feld ist kein Fehler, sondern der Ausgangszustand.
-    setError(importError, text.trim() ? (result.errors[0] || '') : '');
+    setError(importError, text.trim() ? tMessage(result.errors[0]) : '');
     if (importCount) {
       const gefunden = result.candidates.length;
       const gesamt = gefunden + result.skipped.length;

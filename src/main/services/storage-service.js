@@ -18,6 +18,7 @@ const {
   validateMcpServerConfig,
   validateMcpServerInput,
 } = require('../../shared/contracts/mcp');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   inferChatTitle,
   sanitizeChatMessagesForStore,
@@ -614,12 +615,7 @@ function createStorageService({
         // Meldung nennt die Schluessel, niemals die Werte.
         return {
           ok: false,
-          errors: [
-            `Verschlüsselter Speicher ist auf diesem System nicht verfügbar. `
-            + `Diese Werte können deshalb nicht gespeichert werden: ${unencryptable.join(', ')}. `
-            + `Entweder das Häkchen „geheim“ entfernen (dann stehen sie im Klartext in der Konfiguration) `
-            + `oder den Wert weglassen.`,
-          ],
+          errors: [createMessage('mcp.error.noSecureStorage', { names: unencryptable.join(', ') })],
         };
       }
 
@@ -662,11 +658,13 @@ function createStorageService({
 
   async function deleteMcpServer(id) {
     const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
-    if (!wanted) return { ok: false, errors: ['Es fehlt die Kennung des Servers.'] };
+    if (!wanted) return { ok: false, errors: [createMessage('mcp.error.idMissingForDelete')] };
     return withFileLock(getMcpConfigPath(), async () => {
       const servers = await readMcpStoredServers();
       const next = servers.filter((server) => server.id !== wanted);
-      if (next.length === servers.length) return { ok: false, errors: [`Unbekannter MCP-Server „${wanted}".`] };
+      if (next.length === servers.length) {
+        return { ok: false, errors: [createMessage('mcp.error.unknownServer', { id: wanted })] };
+      }
       await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
       return { ok: true, errors: [] };
     });

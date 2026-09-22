@@ -35,7 +35,7 @@ const {
   APPROVAL_RESPONSES,
   PERMISSION_DECISION_SOURCES,
   PERMISSION_DENIAL_REASONS,
-  PERMISSION_DENIED_MESSAGES,
+  PERMISSION_DENIED_TOOL_RESULT_MESSAGES,
   TOOL_EXECUTION_STATUSES,
   TOOL_RESULTS_ARE_DATA_RULE,
   DEFAULT_TOOL_PERMISSION_MODE,
@@ -1243,7 +1243,7 @@ function createChatEngine({
           if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
             if (answer.invalidated) {
-              return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
+              return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
             }
             if (answer.response === APPROVAL_RESPONSES.DENY) {
               const denied = permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
@@ -1340,7 +1340,7 @@ function createChatEngine({
             if (outputVerdict.decision === POLICY_DECISIONS.ASK) {
               const answer = await askUser({ entry, callIndex, toolName, plan: escalatedPlan, verdict: outputVerdict, policy, checkpoint: 'output' });
               if (answer.invalidated) {
-                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses: escalated, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
+                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses: escalated, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
               }
               if (answer.response === APPROVAL_RESPONSES.DENY) {
                 return permissionDenied(entry, { reason: answer.reason, riskClasses: escalated, mode: policy.mode, targets: plan.targets });

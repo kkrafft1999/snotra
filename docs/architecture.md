@@ -1042,6 +1042,41 @@ interface goes unnoticed, `settings.title` does not. That it never gets that
 far is what `test/i18n-keys.test.js` is for — both languages carry the same
 keys and the same placeholders, and every key used in the code exists.
 
+### Contracts: errors carry a key, not a sentence
+
+The contract layer is the one that belongs to both sides, and the two do not
+agree on a language: a validation error arises where the file is written and is
+read where the interface lives. So a contract answers with the *key* and the
+values that fill it — `createMessage('mcp.error.idMissing')`,
+`createMessage('mcp.error.idTooLong', { max: 64 })` — and the side that shows it
+looks the sentence up with `tMessage()` / `translateMessage()`. Decided in
+[#293](https://github.com/kkrafft1999/snotra/issues/293).
+
+The alternative was to let the contract translate for itself: `src/shared/i18n`
+sits right next to it and is CommonJS as well. It was turned down because the
+active language does not live in the contract layer — it would have to be
+threaded through every validator — and because a sentence chosen at the far end
+of the IPC hop freezes: switch the language while the error is still on screen
+and it stays in the old one. A key does not freeze.
+
+The shape lives in `src/shared/contracts/message.js` rather than in the
+catalogue, so that a contract never has to require `src/shared/i18n` — the two
+modules would otherwise require each other in a circle. Where a reason is
+already an enumerated value, the contract keeps a **table of keys** instead
+(`PERMISSION_DENIED_MESSAGE_KEYS`, `WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS`,
+`MEMORY_SCOPE_LABEL_KEYS`); `test/i18n-keys.test.js` walks those tables, since a
+table is invisible to its scan for `t('…')` literals.
+
+`tMessage()` passes plain text through untouched. That is the seam to the layers
+that still hand over finished sentences — the settings handlers
+(`createSettingsError`) and most labels of the context breakdown; a context part
+that does carry a key uses `labelKey`. They follow in their own slices of
+[#277](https://github.com/kkrafft1999/snotra/issues/277).
+
+The model-facing wording is a separate thing and stays English
+(`PERMISSION_DENIED_TOOL_RESULT_MESSAGES`, `MEMORY_SCOPE_PROMPT_LABELS`,
+issue #276) — it never goes through the catalogue.
+
 ### Renderer: markup declaratively, built nodes by callback
 
 `src/renderer/i18n.js` holds the active locale and knows three routes:

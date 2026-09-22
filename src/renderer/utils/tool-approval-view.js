@@ -16,7 +16,7 @@ const {
   TOOL_RISK_CLASSES,
   APPROVAL_RESPONSES,
   PERMISSION_DENIAL_REASONS,
-  PERMISSION_DENIED_MESSAGES,
+  PERMISSION_DENIED_MESSAGE_KEYS,
   TOOL_EXECUTION_STATUSES,
   POLICY_DECISIONS,
   PERMISSION_DECISION_SOURCES,
@@ -309,14 +309,15 @@ export function describeApprovalOutcome({ response, invalidated, reason, aborted
     return { status: 'cancelled', label: 'Lauf abgebrochen', detail: 'Der Aufruf wurde nicht ausgeführt.' };
   }
   if (invalidated === true) {
-    const detail = PERMISSION_DENIED_MESSAGES[reason] || PERMISSION_DENIED_MESSAGES[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED];
+    const detail = t(PERMISSION_DENIED_MESSAGE_KEYS[reason]
+      || PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]);
     return { status: 'invalidated', label: 'Anfrage verfallen', detail: `${detail} Der Lauf ist beendet.` };
   }
   if (response === APPROVAL_RESPONSES.DENY) {
     return {
       status: 'denied',
       label: 'Abgelehnt',
-      detail: `Das Modell erhält: „${PERMISSION_DENIED_MESSAGES[PERMISSION_DENIAL_REASONS.USER_DENIED]}“.`,
+      detail: `Das Modell erhält: „${t(PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.USER_DENIED])}“.`,
     };
   }
   if (response === APPROVAL_RESPONSES.ALLOW_SESSION) {
@@ -371,8 +372,8 @@ export function describePermissionAudit(permission) {
     parts.push(`Klasse: ${permission.riskClasses.map(riskClassLabel).join(', ')}`);
   }
   if (STATUS_LABELS[permission.status]) parts.push(`Status: ${STATUS_LABELS[permission.status]}`);
-  if (permission.reason && PERMISSION_DENIED_MESSAGES[permission.reason]) {
-    parts.push(`Grund: ${PERMISSION_DENIED_MESSAGES[permission.reason]}`);
+  if (permission.reason && PERMISSION_DENIED_MESSAGE_KEYS[permission.reason]) {
+    parts.push(`Grund: ${t(PERMISSION_DENIED_MESSAGE_KEYS[permission.reason])}`);
   }
   if (permission.ruleId) parts.push(`Regel: ${permission.ruleId}`);
   if (permission.mode) parts.push(`Modus: ${modeLabel(permission.mode)}`);

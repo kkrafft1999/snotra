@@ -165,7 +165,7 @@ test('löschen entfernt genau einen Server', async (t) => {
 
   const nochmal = await storage.deleteMcpServer('github');
   assert.equal(nochmal.ok, false);
-  assert.match(nochmal.errors.join(' '), /Unbekannter MCP-Server/);
+  assert.deepEqual(nochmal.errors, [{ key: 'mcp.error.unknownServer', params: { id: 'github' } }]);
 });
 
 test('ausschalten übersteht das Speichern', async (t) => {
@@ -185,9 +185,10 @@ test('ohne verfügbare Verschlüsselung wird ein Geheimnis nicht gespeichert', a
   const result = await storage.saveMcpServer(GITHUB);
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join(' '), /GITHUB_TOKEN/);
+  assert.deepEqual(result.errors,
+    [{ key: 'mcp.error.noSecureStorage', params: { names: 'GITHUB_TOKEN' } }]);
   // Die Meldung nennt den Schlüssel, niemals den Wert.
-  assert.equal(result.errors.join(' ').includes(TOKEN), false);
+  assert.equal(JSON.stringify(result.errors).includes(TOKEN), false);
   await assert.rejects(() => fs.readFile(file(), 'utf8'), 'es darf gar keine Datei entstehen');
 });
 
