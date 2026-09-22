@@ -1,20 +1,20 @@
 name: 🐛 Bug Report
-description: Etwas funktioniert nicht wie erwartet.
+description: Something does not work as expected.
 labels: ["bug"]
 body:
   - type: textarea
     id: description
     attributes:
-      label: Was ist passiert?
-      description: Kurze Beschreibung des Problems.
+      label: What happened?
+      description: A short description of the problem.
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: Schritte zur Reproduktion
-      description: Wie kann man den Bug nachstellen?
+      label: Steps to reproduce
+      description: How can the bug be reproduced?
       placeholder: |
         1. ...
         2. ...
@@ -25,46 +25,49 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: Erwartetes Verhalten
+      label: Expected behaviour
     validations:
       required: false
 
   - type: input
     id: version
     attributes:
-      label: App-Version
-      placeholder: z. B. 1.0.1 (siehe Einstellungen › Über)
+      label: App version
+      placeholder: e.g. 1.0.1 (see Settings › About)
     validations:
       required: false
 
   - type: dropdown
     id: os
     attributes:
-      label: Betriebssystem
+      label: Operating system
       options:
         - macOS (Apple Silicon)
         - Windows
-        - Sonstiges
+        - Linux
+        - Other
     validations:
       required: false
 
   - type: dropdown
     id: provider
     attributes:
-      label: Betroffener Provider (falls relevant)
+      label: Affected provider (if relevant)
       options:
         - OpenAI
         - Anthropic
         - Google (Gemini)
         - Ollama
-        - Nicht relevant
+        - MLX-LM (local)
+        - OpenAI-compatible
+        - Not relevant
     validations:
       required: false
 
   - type: textarea
     id: logs
     attributes:
-      label: Logs / Screenshots
-      description: Fehlermeldungen, Konsolen-Output oder Screenshots, falls vorhanden.
+      label: Logs / screenshots
+      description: Error messages, console output or screenshots, if available.
     validations:
       required: false

@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
-  - name: 🗺️ Offene Issues / Backlog
+  - name: 🗺️ Open issues / backlog
     url: https://github.com/kkrafft1999/snotra/issues
-    about: Überblick über bereits erfasste Themen, bevor du ein neues Issue anlegst.
+    about: An overview of what has already been filed, before you open a new issue.
+  - name: 🤝 Contributing guide
+    url: https://github.com/kkrafft1999/snotra/blob/main/CONTRIBUTING.md
+    about: Build prerequisites, tests, and the branch and pull request conventions.
