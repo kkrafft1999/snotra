@@ -243,12 +243,12 @@ test('Umgebungsangaben stehen im Systemprompt und kennen den offenen Ordner', as
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
-  assert.match(system(), /Umgebung, in der du gerade läufst \(Snotra AI 1\.5\.3\):/);
-  assert.match(system(), /- Arbeitsverzeichnis: /);
-  assert.match(system(), /- Plattform: darwin \(macOS\)/);
-  assert.match(system(), /- Heutiges Datum: Dienstag, 2026-09-15/);
+  assert.match(system(), /The environment you are running in \(Snotra AI 1\.5\.3\):/);
+  assert.match(system(), /- Working directory: /);
+  assert.match(system(), /- Platform: darwin \(macOS\)/);
+  assert.match(system(), /- Today's date: Tuesday, 2026-09-15/);
   // Der Ordnerkontext bleibt daneben bestehen — er nennt den Ordner im Satz.
-  assert.match(system(), /geöffneten Ordner/);
+  assert.match(system(), /currently open in the app/);
 });
 
 test('der Schalter „Umgebungsinformationen" schaltet den Block ab', async () => {
@@ -267,8 +267,8 @@ test('der Schalter „Umgebungsinformationen" schaltet den Block ab', async () =
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.equal(asked, false, 'abgeschaltet wird gar nicht erst gefragt');
-  assert.ok(!system().includes('Umgebung, in der du gerade läufst'));
-  assert.match(system(), /geöffneten Ordner/);
+  assert.ok(!system().includes('The environment you are running in'));
+  assert.match(system(), /currently open in the app/);
 });
 
 test('ohne Environment-Port und bei einer werfenden Quelle läuft der Chat weiter', async () => {
@@ -279,11 +279,11 @@ test('ohne Environment-Port und bei einer werfenden Quelle läuft der Chat weite
       payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
     });
     assert.equal(result.content, 'ok');
-    assert.ok(!system().includes('Umgebung, in der du gerade läufst'));
+    assert.ok(!system().includes('The environment you are running in'));
   }
 });
 
-/* ── Projektanweisungen aus AGENTS.md (Issue #212) ───────────────────────── */
+/* ── Project instructions from AGENTS.md (Issue #212) ───────────────────────── */
 
 const { PROJECT_INSTRUCTION_SOURCES: PI } = require('../src/shared/contracts/project-instructions');
 
@@ -311,11 +311,11 @@ test('AGENTS.md steht im Systemprompt und kennt den offenen Ordner (#212)', asyn
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
-  assert.match(system(), /Projektanweisungen aus AGENTS\.md/);
-  assert.match(system(), /## AGENTS\.md \(Projekt\)\n\nNutze npm\./);
-  assert.match(system(), /## AGENTS\.md \(global, Alt-Ort\)\n\nDuze mich\./);
+  assert.match(system(), /Project instructions from AGENTS\.md/);
+  assert.match(system(), /## AGENTS\.md \(project\)\n\nNutze npm\./);
+  assert.match(system(), /## AGENTS\.md \(global, legacy location\)\n\nDuze mich\./);
   // Sie ergaenzen einander — der Prompt stellt keine zur Wahl (#253).
-  assert.match(system(), /ergänzen einander/);
+  assert.match(system(), /complement each other/);
   // Jede Datei taucht einzeln in der Aufschlüsselung auf (#174).
   const ids = result.contextBreakdown.parts.map((part) => part.id);
   assert.ok(ids.includes('system:agents-md:workspace-agents'), ids.join(', '));
@@ -332,7 +332,7 @@ test('die Projektanweisungen stehen vor dem Ordner-/Tool-Block', async () => {
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   const text = system();
-  assert.ok(text.indexOf('Projektanweisungen aus AGENTS.md') < text.indexOf('geöffneten Ordner'));
+  assert.ok(text.indexOf('Project instructions from AGENTS.md') < text.indexOf('currently open in the app'));
 });
 
 test('der Schalter „AGENTS.md mitschicken" schaltet die ganze Kette ab', async () => {
@@ -346,9 +346,9 @@ test('der Schalter „AGENTS.md mitschicken" schaltet die ganze Kette ab', async
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.deepEqual(seen, [], 'abgeschaltet wird gar nicht erst gelesen');
-  assert.ok(!system().includes('Projektanweisungen aus AGENTS.md'));
+  assert.ok(!system().includes('Project instructions from AGENTS.md'));
   assert.ok(!result.contextBreakdown.parts.some((part) => part.id.startsWith('system:agents-md:')));
-  assert.match(system(), /geöffneten Ordner/);
+  assert.match(system(), /currently open in the app/);
 });
 
 test('ohne Port, ohne Dateien und bei einer werfenden Quelle läuft der Chat weiter', async () => {
@@ -361,7 +361,7 @@ test('ohne Port, ohne Dateien und bei einer werfenden Quelle läuft der Chat wei
       payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
     });
     assert.equal(result.content, 'ok');
-    assert.ok(!system().includes('Projektanweisungen aus AGENTS.md'));
+    assert.ok(!system().includes('Project instructions from AGENTS.md'));
   }
 });
 
@@ -393,9 +393,9 @@ test('beide Gedächtnis-Ebenen stehen im Systemprompt und kennen den Ordner (#16
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
-  assert.match(system(), /Dein Gedächtnis/);
-  assert.match(system(), /## Gedächtnis \(Projekt\)\n\n- 2026-09-21 — Tests mit npm test\./);
-  assert.match(system(), /## Gedächtnis \(global\)\n\n- 2026-09-20 — Anrede Du\./);
+  assert.match(system(), /Your memory/);
+  assert.match(system(), /## Memory \(project\)\n\n- 2026-09-21 — Tests mit npm test\./);
+  assert.match(system(), /## Memory \(global\)\n\n- 2026-09-20 — Anrede Du\./);
   // Je Ebene eine eigene Zeile in der Aufschlüsselung (#174).
   const ids = result.contextBreakdown.parts.map((part) => part.id);
   assert.ok(ids.includes('system:memory:workspace'), ids.join(', '));
@@ -406,7 +406,7 @@ test('ein leeres Gedächtnis erzeugt keinen Block', async () => {
   const { port } = memoryPort([]);
   const { engine, system } = environmentHarness({ memory: port });
   await engine.send({ sessionId: 'mem-2', payload: { messages: [{ role: 'user', content: 'hi' }] } });
-  assert.equal(/Dein Gedächtnis/.test(system()), false);
+  assert.equal(/Your memory/.test(system()), false);
 });
 
 test('jede Ebene lässt sich einzeln abschalten', async () => {
@@ -470,5 +470,5 @@ test('ein unlesbares Gedächtnis blockiert den Chat nicht', async () => {
     payload: { messages: [{ role: 'user', content: 'hi' }] },
   });
   assert.equal(result.content, 'ok');
-  assert.equal(/Dein Gedächtnis/.test(system()), false);
+  assert.equal(/Your memory/.test(system()), false);
 });

@@ -33,11 +33,16 @@ function createToolRegistry(initialDefinitions = []) {
    * Drei Beschreibungsfelder mit je eigenem Leser — wer eines aendert, sollte
    * wissen, wen er trifft (Issue #181):
    *  - `description` (Pflicht): Volltext fuer Einstellungen › Tools, aufklappbar.
-   *    Ohne `modelDescription` geht er zugleich als Schema-Text an das Modell.
-   *  - `modelDescription` (optional): Schema-Text ausschliesslich fuer das
-   *    Modell. Gesetzt schlaegt er `description` in `getTools()`, sonst nichts.
-   *  - `promptDescription` (optional): Kurzzeile fuer die Tool-Liste im
-   *    System-Prompt und fuer die zugeklappte Zeile in den Einstellungen.
+   *    Deutsch wie die uebrige Oberflaeche. Ohne `modelDescription` ginge er
+   *    zugleich als Schema-Text an das Modell — deshalb hat seit #276 jedes
+   *    Tool eine, und ein Test haelt das fest.
+   *  - `modelDescription` (Pflicht in der Praxis): Schema-Text ausschliesslich
+   *    fuer das Modell, englisch (#276). Gesetzt schlaegt er `description` in
+   *    `getTools()`.
+   *  - `promptDescription` (optional): Kurzzeile fuer die zugeklappte Zeile in
+   *    den Einstellungen. Der Name stammt aus einer Zeit, in der sie auch im
+   *    System-Prompt stand; heute liest sie nur `listCatalog()`, deshalb
+   *    deutsch.
    */
   function normalizeDefinition(definition) {
     const { name, description, modelDescription, parameters, handler, riskClass, additionalRiskClasses } = definition || {};
@@ -223,9 +228,11 @@ function createToolRegistry(initialDefinitions = []) {
   }
 
   /** Namen einer Liste als Aufzaehlung: „a, b und c". */
+  // Verbindet mit „and": die Namen stehen im Konventionsblock, und der geht an
+  // das Modell, nicht auf den Bildschirm (Issue #276).
   function joinNames(names) {
     if (names.length <= 1) return names.join('');
-    return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`;
+    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   }
 
   /**
@@ -257,15 +264,15 @@ function createToolRegistry(initialDefinitions = []) {
     const available = getAvailableDefinitions(options);
     if (available.length === 0) return '';
 
-    const parts = ['Deine Tools stehen mit vollständigem Schema im tools-Feld dieser Anfrage.'];
+    const parts = ['Your tools are listed with their full schema in the tools field of this request.'];
 
     // Ohne Datei-Tools waeren Pfad- und Groessenregel sinnlos — ohne geoeffneten
     // Ordner stehen nur die Tools ohne Ordnerbezug zur Verfuegung (Issue #96).
     if (available.some((definition) => definition.requiresWorkspace !== false)) {
       parts.push(
-        'Pfade der Datei-Tools sind immer relativ zum Ordnerroot ' +
-          '("" oder "." für die Wurzel, "src/index.js" für eine Datei); ' +
-          'sie verarbeiten Dateien bis 2 MB und melden darüber einen Fehler.'
+        'Paths for the file tools are always relative to the folder root ' +
+          '("" or "." for the root, "src/index.js" for a file); ' +
+          'they handle files up to 2 MB and report an error beyond that.'
       );
     }
 
@@ -273,22 +280,22 @@ function createToolRegistry(initialDefinitions = []) {
     const skipsHidden = available.filter((definition) => definition.skips.includes('hidden'));
     const skipsIgnored = available.filter((definition) => definition.skips.includes('ignored'));
     if (skipsHidden.length > 0) {
-      let sentence = `${joinNames(skipsHidden.map((d) => d.name))} überspringen versteckte Einträge (Punkt-Präfix)`;
+      let sentence = `${joinNames(skipsHidden.map((d) => d.name))} skip hidden entries (dot prefix)`;
       if (skipsIgnored.length > 0) {
         sentence +=
-          `, ${joinNames(skipsIgnored.map((d) => d.name))} zusätzlich alles, was die .gitignore ` +
-          'des Projektroots ausschließt; .git bleibt immer außen vor';
+          `, ${joinNames(skipsIgnored.map((d) => d.name))} additionally skip everything excluded by ` +
+          'the .gitignore of the project root; .git is always left out';
       }
       parts.push(
         // Ohne diesen Hinweis ist ein leeres Ergebnis nicht von „gibt es
         // nicht" zu unterscheiden — eine stille Falschantwort ohne
         // Selbstkorrektur, die teuerste Fehlerklasse (Issue #183).
-        `${sentence}. Ein leeres Ergebnis kann deshalb heißen, dass es Treffer gibt, ` +
-          'sie aber übersprungen wurden.'
+        `${sentence}. An empty result can therefore mean that there are matches ` +
+          'but they were skipped.'
       );
     }
     if (available.some((definition) => definition.parameters?.properties?.include_hidden)) {
-      parts.push('Wo ein Tool den Parameter include_hidden hat, nimmt true die versteckten Einträge hinzu.');
+      parts.push('Where a tool has the include_hidden parameter, true adds the hidden entries.');
     }
 
     // Hier stand bis #268 ein Vorbehalt gegen Schreib-Tools („nutze sie
@@ -310,7 +317,7 @@ function createToolRegistry(initialDefinitions = []) {
   async function execute(name, args, context = {}) {
     const definition = getDefinition(name);
     if (!definition) {
-      return JSON.stringify({ error: `Unbekanntes Tool: ${name}` });
+      return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
     // Defense in depth (Issue #66): kein Handler ohne vorherige Freigabe durch
     // die Policy. Die Engine setzt approved erst nach allow/Nutzerfreigabe.
@@ -319,17 +326,17 @@ function createToolRegistry(initialDefinitions = []) {
     }
     const allowed = toAllowedNameSet(context.allowedNames);
     if (allowed && !allowed.has(name)) {
-      return JSON.stringify({ error: `Tool ist nicht freigeschaltet: ${name}` });
+      return JSON.stringify({ error: `Tool is not enabled: ${name}` });
     }
     const disabled = toDisabledNameSet(context.disabledNames);
     if (disabled && disabled.has(name)) {
       return JSON.stringify({
-        error: `Tool ist deaktiviert: ${name}. Aktivierbar unter Einstellungen › Tools.`,
+        error: `Tool is switched off: ${name}. The user can enable it under "Einstellungen \u203a Tools".`,
       });
     }
     if (definition.isAvailable() !== true) {
       return JSON.stringify({
-        error: `Tool ist nicht eingerichtet: ${name}. Siehe Einstellungen › Tools.`,
+        error: `Tool is not configured: ${name}. See "Einstellungen \u203a Tools".`,
       });
     }
     return definition.handler(args || {}, context);
@@ -396,7 +403,7 @@ function createWorkspaceToolRegistry({
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       description:
         'Listet Dateien und Unterordner in einem Verzeichnis relativ zum geöffneten Projektordner (ohne versteckte Einträge, die mit . beginnen).',
-      modelDescription: 'Listet Dateien und Unterordner eines Verzeichnisses auf.',
+      modelDescription: 'Lists the files and subfolders of a directory.',
       promptDescription: 'Listet Dateien und Unterordner im Projektordner auf.',
       parameters: {
         type: 'object',
@@ -405,7 +412,7 @@ function createWorkspaceToolRegistry({
             type: 'string',
             // Ordner-Startpunkt, kein Dateipfad: ein Datei-Beispiel waere hier
             // irrefuehrender als gar keins (Issue #183).
-            description: 'Startordner; leer oder "." = ganzes Projekt.',
+            description: 'Starting folder; empty or "." = the whole project.',
           },
         },
       },
@@ -438,13 +445,18 @@ function createWorkspaceToolRegistry({
         + 'eine kurze Beschreibung — passt sie zu dem, was ansteht, hole dir hiermit die Anleitung, '
         + 'bevor du mit der Aufgabe beginnst, und richte dich danach. Rate nicht, was in einer '
         + 'Anleitung stehen könnte.',
+      modelDescription:
+        'Loads the full instructions of a skill that is switched on. The prompt carries only a '
+        + 'short description per skill — if it matches what is at hand, fetch the instructions '
+        + 'with this tool before you start on the task, and then follow them. Do not guess what '
+        + 'a set of instructions might say.',
       promptDescription: 'Lädt die Anleitung eines eingeschalteten Skills nach.',
       parameters: {
         type: 'object',
         properties: {
           name: {
             type: 'string',
-            description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+            description: 'Name of the skill, exactly as in the list of skills that are switched on.',
           },
         },
         required: ['name'],
@@ -463,7 +475,7 @@ function createWorkspaceToolRegistry({
           properties: {
             name: {
               type: 'string',
-              description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+              description: 'Name of the skill, exactly as in the list of skills that are switched on.',
               ...(names.length > 0 ? { enum: names } : {}),
             },
           },
@@ -480,20 +492,20 @@ function createWorkspaceToolRegistry({
       description:
         'Liest den Textinhalt einer Datei als UTF-8 (nur innerhalb des Projektordners). ' +
         'Maximale Dateigröße: 2 MB — größere Dateien liefern einen Fehler.',
-      modelDescription: 'Liest den Textinhalt einer Datei als UTF-8.',
+      modelDescription: 'Reads the text content of a file as UTF-8.',
       promptDescription: 'Liest Textdateien innerhalb des Projektordners.',
       parameters: {
         type: 'object',
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Dateipfad, z. B. "src/app.js".',
+            description: 'File path, e.g. "src/app.js".',
           },
           max_characters: {
             type: 'integer',
             default: 32000,
             maximum: 200000,
-            description: 'Maximale Zeichenanzahl des zurückgegebenen Texts.',
+            description: 'Maximum number of characters in the returned text.',
           },
         },
         required: ['relative_path'],
@@ -515,10 +527,10 @@ function createWorkspaceToolRegistry({
       // 10.000. Der Verweis auf search_in_files faellt weg — das Zeilenformat
       // steht in der Antwort selbst.
       modelDescription:
-        'Liest einen Ausschnitt einer Textdatei: entweder einen Zeilenbereich (start_line/end_line, ' +
-        '1-basiert, inklusiv) oder einen Byte-Bereich (start_byte/length). Im Zeilenmodus steht vor ' +
-        'jeder Zeile ihre Nummer und ein Tabulator. Token-sparsamer als read_file_text, wenn nur ein ' +
-        'Teil gebraucht wird.',
+        'Reads a slice of a text file: either a line range (start_line/end_line, 1-based, ' +
+        'inclusive) or a byte range (start_byte/length). In line mode each line is prefixed with ' +
+        'its number and a tab. Cheaper in tokens than read_file_text when only part of the file ' +
+        'is needed.',
       promptDescription:
         'Liest gezielt Zeilen- oder Byte-Ausschnitte aus Textdateien des Projektordners (Zeilen nummeriert).',
       parameters: {
@@ -526,31 +538,31 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Dateipfad, z. B. "src/app.js".',
+            description: 'File path, e.g. "src/app.js".',
           },
           start_line: {
             type: 'integer',
             default: 1,
-            description: 'Erste Zeile (1-basiert).',
+            description: 'First line (1-based).',
           },
           end_line: {
             type: 'integer',
             // Der Standard haengt an start_line und laesst sich nicht als
             // `default` ausdruecken — bleibt deshalb Prosa (Issue #183).
-            description: 'Letzte Zeile, inklusiv (Standard start_line + 199, höchstens 1000 je Aufruf).',
+            description: 'Last line, inclusive (default start_line + 199, at most 1000 per call).',
           },
           start_byte: {
             type: 'integer',
             // Der Byte-Modus ist ein echter zweiter Modus, kein Beiwerk
             // (fs-service.js:1083-1114) — er bleibt im Parametersatz, und die
             // Unvereinbarkeit steht hier einmal statt an beiden Modi (#184).
-            description: 'Byte-Offset (0-basiert); zweiter Modus, nicht mit start_line/end_line kombinierbar.',
+            description: 'Byte offset (0-based); the second mode, cannot be combined with start_line/end_line.',
           },
           length: {
             type: 'integer',
             default: 16000,
             maximum: 32000,
-            description: 'Anzahl Bytes ab start_byte.',
+            description: 'Number of bytes from start_byte.',
           },
         },
         required: ['relative_path'],
@@ -573,8 +585,8 @@ function createWorkspaceToolRegistry({
       // greifen, meldet sich die Suche selbst — das Zeitbudget als Fehler,
       // die Ueberspringer ueber den Hinweis im Konventionsblock (#184).
       modelDescription:
-        'Durchsucht Textdateien rekursiv nach einem Suchtext oder regulären Ausdruck und liefert nur ' +
-        'Trefferzeilen mit Zeilennummer und Kontext zurück — statt ganzer Dateien.',
+        'Searches text files recursively for a string or regular expression and returns only ' +
+        'the matching lines with line number and context — instead of whole files.',
       promptDescription:
         'Sucht Text oder Regex in Dateien des Projektordners und liefert Datei, Zeile und Kontext der Treffer.',
       parameters: {
@@ -590,46 +602,46 @@ function createWorkspaceToolRegistry({
             // Fehlermeldungen von `validateRegexPattern`
             // (search-line-matcher.js:55/113) — ein abgelehntes Muster kostet
             // eine Runde, der Vorabtext kostet jede Runde (#184).
-            description: 'Suchtext; bei is_regex=true ein regulärer Ausdruck in JavaScript-Syntax.',
+            description: 'Search string; with is_regex=true a regular expression in JavaScript syntax.',
           },
           is_regex: {
             type: 'boolean',
             default: false,
-            description: 'true, um query als regulären Ausdruck zu lesen (sonst wörtliche Suche).',
+            description: 'true to read query as a regular expression (otherwise a literal search).',
           },
           relative_path: {
             type: 'string',
-            description: 'Startordner oder einzelne Datei; leer oder "." = ganzes Projekt.',
+            description: 'Starting folder or a single file; empty or "." = the whole project.',
           },
           context_lines: {
             type: 'integer',
             default: 2,
             maximum: 10,
-            description: 'Kontextzeilen vor und nach jeder Trefferzeile.',
+            description: 'Context lines before and after each matching line.',
           },
           max_results: {
             type: 'integer',
             default: 50,
             maximum: 200,
-            description: 'Maximale Anzahl Treffer.',
+            description: 'Maximum number of hits.',
           },
           case_sensitive: {
             type: 'boolean',
             default: false,
-            description: 'true, um Groß-/Kleinschreibung zu beachten.',
+            description: 'true to match case.',
           },
           include: {
             type: 'string',
-            description: 'Glob-Muster (gitignore-Syntax); nur passende Dateien durchsuchen, z. B. "*.js" oder "src/**/*.md".',
+            description: 'Glob pattern (gitignore syntax); search matching files only, e.g. "*.js" or "src/**/*.md".',
           },
           exclude: {
             type: 'string',
-            description: 'Glob-Muster (gitignore-Syntax); passende Dateien und Ordner überspringen, z. B. "dist" oder "*.min.js".',
+            description: 'Glob pattern (gitignore syntax); skip matching files and folders, e.g. "dist" or "*.min.js".',
           },
           include_hidden: {
             type: 'boolean',
             default: false,
-            description: 'true, um versteckte Einträge mitzudurchsuchen.',
+            description: 'true to include hidden entries in the search.',
           },
         },
         required: ['query'],
@@ -651,8 +663,8 @@ function createWorkspaceToolRegistry({
       // der sie ohnehin tragen muss. Sie bleibt dort, die Beschreibung sagt
       // nur noch, wofuer man das Tool nimmt (#184).
       modelDescription:
-        'Findet Dateien und Ordner rekursiv per Glob-Muster und liefert nur die Pfade zurück — ' +
-        'ein Aufruf statt vieler list_directory-Runden.',
+        'Finds files and folders recursively by glob pattern and returns the paths only — ' +
+        'one call instead of many list_directory rounds.',
       promptDescription:
         'Findet Datei- und Ordnerpfade im Projektordner per Glob-Muster (z. B. "**/*.js").',
       parameters: {
@@ -661,23 +673,23 @@ function createWorkspaceToolRegistry({
           pattern: {
             type: 'string',
             description:
-              'Glob-Muster in gitignore-Syntax (*, ?, **), z. B. "*.md", "src/**/*.js" oder ' +
-              '"components/" (nur Ordner); Muster mit / sind am Projektroot verankert.',
+              'Glob pattern in gitignore syntax (*, ?, **), e.g. "*.md", "src/**/*.js" or ' +
+              '"components/" (folders only); patterns containing / are anchored at the project root.',
           },
           relative_path: {
             type: 'string',
-            description: 'Startordner; leer oder "." = ganzes Projekt.',
+            description: 'Starting folder; empty or "." = the whole project.',
           },
           max_results: {
             type: 'integer',
             default: 100,
             maximum: 500,
-            description: 'Maximale Anzahl gefundener Pfade.',
+            description: 'Maximum number of paths returned.',
           },
           include_hidden: {
             type: 'boolean',
             default: false,
-            description: 'true, um versteckte Einträge mitzufinden.',
+            description: 'true to include hidden entries in the results.',
           },
         },
         required: ['pattern'],
@@ -695,10 +707,10 @@ function createWorkspaceToolRegistry({
         'auf Wunsch die Zeilenzahl. Token-sparsam, um vor dem Lesen zu entscheiden, ' +
         'ob und wie gelesen werden sollte — z. B. bei großen Dateien read_file_lines statt read_file_text.',
       modelDescription:
-        'Liefert Metadaten zu einem Pfad, ohne die Datei zu lesen: Existenz, Typ (Datei/Ordner), ' +
-        'Größe in Bytes, Änderungszeitpunkt (ISO 8601) und auf Wunsch die Zeilenzahl. Token-sparsam, ' +
-        'um vor dem Lesen zu entscheiden, ob und wie gelesen werden sollte — z. B. bei großen Dateien ' +
-        'read_file_lines statt read_file_text.',
+        'Returns metadata about a path without reading the file: existence, type (file/folder), ' +
+        'size in bytes, modification time (ISO 8601) and, on request, the line count. Cheap in ' +
+        'tokens for deciding whether and how to read before reading — e.g. read_file_lines instead ' +
+        'of read_file_text for large files.',
       promptDescription:
         'Liefert Metadaten (Existenz, Typ, Größe, Änderungszeit, optional Zeilenzahl) zu Pfaden im Projektordner, ohne Dateiinhalt.',
       parameters: {
@@ -706,12 +718,12 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Pfad zu Datei oder Ordner; "." = Projektroot.',
+            description: 'Path to a file or folder; "." = the project root.',
           },
           include_line_count: {
             type: 'boolean',
             default: false,
-            description: 'true, um bei Textdateien zusätzlich die Zeilenzahl zu liefern.',
+            description: 'true to additionally return the line count for text files.',
           },
         },
         required: ['relative_path'],
@@ -729,10 +741,10 @@ function createWorkspaceToolRegistry({
         '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines ' +
         'gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
       modelDescription:
-        'Liefert die Gliederung einer Datei mit Zeilennummern, ohne den Inhalt zu lesen: bei Markdown ' +
-        'die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen ' +
-        '(Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit ' +
-        'read_file_lines gezielt nur den passenden Abschnitt zu lesen.',
+        'Returns the outline of a file with line numbers without reading its content: for ' +
+        'Markdown the headings (levels 1-6), for code the function, method, class and type ' +
+        'signatures (level derived from indentation, generic heuristic). A cheap map for then ' +
+        'reading just the relevant section with read_file_lines.',
       promptDescription:
         'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
       parameters: {
@@ -740,18 +752,18 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Dateipfad, z. B. "docs/konzept.md".',
+            description: 'File path, e.g. "docs/concept.md".',
           },
           max_depth: {
             type: 'integer',
             // Standard ist „alle Ebenen" und damit keine Zahl — bleibt Prosa.
-            description: 'Nur Einträge bis zu dieser Ebene (1 = nur oberste). Standard: alle Ebenen.',
+            description: 'Entries up to this level only (1 = top level only). Default: all levels.',
           },
           max_entries: {
             type: 'integer',
             default: 200,
             maximum: 1000,
-            description: 'Maximale Anzahl Einträge; darüber wird truncated=true gemeldet.',
+            description: 'Maximum number of entries; beyond that truncated=true is reported.',
           },
         },
         required: ['relative_path'],
@@ -775,9 +787,9 @@ function createWorkspaceToolRegistry({
       // an der Antwort ab. "[+N]" bleibt: es ist das einzige Zeichen dafuer,
       // dass der Baum unvollstaendig ist (#184).
       modelDescription:
-        'Liefert einen kompakten rekursiven Ordnerbaum in einem Aufruf statt vieler ' +
-        'list_directory-Runden. "[+N]" hinter einem Ordner heißt: N direkte Einträge sind nicht ' +
-        'angezeigt (max_depth oder max_entries erreicht).',
+        'Returns a compact recursive folder tree in one call instead of many list_directory ' +
+        'rounds. "[+N]" after a folder means: N direct entries are not shown (max_depth or ' +
+        'max_entries reached).',
       promptDescription:
         'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
       parameters: {
@@ -785,24 +797,24 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Startordner; leer oder "." = ganzes Projekt.',
+            description: 'Starting folder; empty or "." = the whole project.',
           },
           max_depth: {
             type: 'integer',
             default: 3,
             maximum: 10,
-            description: 'Maximale Tiefe (1 = nur direkte Einträge). Tiefere Ordner erscheinen mit [+N].',
+            description: 'Maximum depth (1 = direct entries only). Deeper folders appear with [+N].',
           },
           max_entries: {
             type: 'integer',
             default: 200,
             maximum: 1000,
-            description: 'Maximale Anzahl angezeigter Einträge; darüber truncated=true.',
+            description: 'Maximum number of entries shown; beyond that truncated=true.',
           },
           include_hidden: {
             type: 'boolean',
             default: false,
-            description: 'true, um versteckte Einträge mitzuzeigen.',
+            description: 'true to show hidden entries as well.',
           },
         },
       },
@@ -817,19 +829,19 @@ function createWorkspaceToolRegistry({
         'Fehlende Zwischenordner werden automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig. ' +
         'Maximale Inhaltsgröße: 2 MB.',
       modelDescription:
-        'Erstellt oder überschreibt eine Textdatei (UTF-8). Fehlende Zwischenordner werden ' +
-        'automatisch angelegt. Überschreibt vorhandenen Inhalt vollständig.',
+        'Creates or overwrites a text file (UTF-8). Missing intermediate folders are created ' +
+        'automatically. Replaces any existing content entirely.',
       promptDescription: 'Erstellt oder überschreibt Textdateien im Projektordner.',
       parameters: {
         type: 'object',
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Pfad zur Zieldatei, z. B. "docs/neu.md".',
+            description: 'Path to the target file, e.g. "docs/new.md".',
           },
           content: {
             type: 'string',
-            description: 'Vollständiger neuer Textinhalt der Datei.',
+            description: 'The complete new text content of the file.',
           },
         },
         required: ['relative_path', 'content'],
@@ -851,8 +863,8 @@ function createWorkspaceToolRegistry({
       // (fs-service.js:1288/1293) und am Parameter `old_string` — sie muss
       // nicht zusaetzlich in jeder Runde mitgeschickt werden (#184).
       modelDescription:
-        'Ersetzt in einer Textdatei gezielt eine Textstelle: old_string wird durch new_string ersetzt, ' +
-        'ohne die Datei komplett neu zu schreiben.',
+        'Replaces one specific passage in a text file: old_string is replaced by new_string, ' +
+        'without rewriting the whole file.',
       promptDescription:
         'Ersetzt gezielt Textstellen in Dateien des Projektordners (old_string → new_string), ohne die ganze Datei neu zu schreiben.',
       parameters: {
@@ -860,20 +872,20 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Dateipfad, z. B. "src/app.js".',
+            description: 'File path, e.g. "src/app.js".',
           },
           old_string: {
             type: 'string',
-            description: 'Exakter zu ersetzender Text; muss eindeutig in der Datei vorkommen.',
+            description: 'The exact text to replace; must occur exactly once in the file.',
           },
           new_string: {
             type: 'string',
-            description: 'Neuer Text; ein leerer String löscht die Textstelle.',
+            description: 'The new text; an empty string deletes the passage.',
           },
           replace_all: {
             type: 'boolean',
             default: false,
-            description: 'true, um alle Vorkommen zu ersetzen (sonst muss der Treffer eindeutig sein).',
+            description: 'true to replace every occurrence (otherwise the match must be unique).',
           },
         },
         required: ['relative_path', 'old_string', 'new_string'],
@@ -908,10 +920,10 @@ function createWorkspaceToolRegistry({
       // kann — sonst baut es einen Patch, den der Parser grundsaetzlich
       // ablehnt (fs-service.js:657/661).
       modelDescription:
-        'Ändert bestehende Textdateien mit mehreren zusammenhängenden Änderungen in einem Aufruf — ' +
-        'entweder als Liste von Ersetzungen (edits, alle in derselben Datei) oder als unified diff ' +
-        '(patch, auch über mehrere Dateien hinweg). Für eine einzelne Ersetzung ist edit_file ' +
-        'einfacher. Dateien anlegen (write_file_text), löschen oder umbenennen kann apply_patch nicht.',
+        'Changes existing text files with several related edits in one call — either as a list ' +
+        'of replacements (edits, all in the same file) or as a unified diff (patch, across several ' +
+        'files). For a single replacement edit_file is simpler. apply_patch cannot create files ' +
+        '(use write_file_text), delete them or rename them.',
       promptDescription:
         'Wendet mehrere zusammenhängende Änderungen (edits-Liste oder unified diff) atomar auf Dateien des Projektordners an.',
       parameters: {
@@ -919,29 +931,29 @@ function createWorkspaceToolRegistry({
         properties: {
           relative_path: {
             type: 'string',
-            description: 'Dateipfad, z. B. "src/app.js". Nur im edits-Modus; im patch-Modus stehen die Pfade im Diff.',
+            description: 'File path, e.g. "src/app.js". Only in edits mode; in patch mode the paths are in the diff.',
           },
           edits: {
             type: 'array',
             maxItems: 50,
             description:
-              'Ersetzungen in relative_path, der Reihe nach angewendet — jeder Schritt sieht das ' +
-              'Ergebnis der vorherigen. Nicht mit patch kombinierbar.',
+              'Replacements in relative_path, applied in order — each step sees the result of the ' +
+              'previous one. Cannot be combined with patch.',
             items: {
               type: 'object',
               properties: {
                 old_string: {
                   type: 'string',
-                  description: 'Exakter zu ersetzender Text; muss zum Zeitpunkt dieses Schritts eindeutig vorkommen.',
+                  description: 'The exact text to replace; must be unique at the time this step runs.',
                 },
                 new_string: {
                   type: 'string',
-                  description: 'Neuer Text; ein leerer String löscht die Textstelle.',
+                  description: 'The new text; an empty string deletes the passage.',
                 },
                 replace_all: {
                   type: 'boolean',
                   default: false,
-                  description: 'true, um in diesem Schritt alle Vorkommen zu ersetzen.',
+                  description: 'true to replace every occurrence in this step.',
                 },
               },
               required: ['old_string', 'new_string'],
@@ -955,9 +967,9 @@ function createWorkspaceToolRegistry({
             // Zeilennummern bleibt, weil sie kein Fehler meldet: ohne sie
             // liest das Modell Dateien neu, die es nicht neu lesen muss (#184).
             description:
-              'Unified diff als Text: je Datei "--- alt"/"+++ neu", darunter "@@ …"-Hunks. Die ' +
-              'Zeilennummern dürfen leicht verschoben sein, der Kontext muss exakt passen. ' +
-              'Nicht mit edits kombinierbar.',
+              'Unified diff as text: per file "--- old"/"+++ new", followed by "@@ …" hunks. The line ' +
+              'numbers may be slightly off, the context must match exactly. Cannot be combined ' +
+              'with edits.',
           },
         },
       },
@@ -982,6 +994,13 @@ function createWorkspaceToolRegistry({
         + 'Datenumformung, das Prüfen von regulären Ausdrücken oder Datenformaten. '
         + 'Jeder Aufruf ist ein frisches Skript — es gibt keinen Zustand zwischen zwei Aufrufen, '
         + 'und nur die Standardbibliothek ist garantiert vorhanden. Kein „pip install“.',
+      modelDescription:
+        'Runs a Python 3 program and returns stdout, stderr and the exit code. The working '
+        + 'directory is the open project folder, so open(\'data.csv\') works directly. Use this '
+        + 'tool instead of calculating or guessing: analysing files, conversions, reshaping data, '
+        + 'checking regular expressions or data formats. Every call is a fresh script — there is '
+        + 'no state between two calls, and only the standard library is guaranteed to be present. '
+        + 'No pip install.',
       promptDescription:
         'Führt Python-3-Code aus und liefert Ausgabe und Exit-Code zurück. '
         + 'Zum Rechnen und Prüfen benutzen, statt Ergebnisse selbst zu schätzen.',
@@ -991,23 +1010,23 @@ function createWorkspaceToolRegistry({
           code: {
             type: 'string',
             description:
-              'Das vollständige Programm. Ergebnisse mit print() ausgeben — der Rückgabewert '
-              + 'des letzten Ausdrucks wird nicht angezeigt.',
+              'The complete program. Print results with print() — the return value of the last '
+              + 'expression is not shown.',
           },
           stdin: {
             type: 'string',
-            description: 'Optionale Eingabe, die dem Programm auf der Standardeingabe zur Verfügung steht.',
+            description: 'Optional input made available to the program on standard input.',
           },
           argv: {
             type: 'array',
-            description: 'Optionale Argumente; im Programm über sys.argv[1:] erreichbar.',
+            description: 'Optional arguments; available to the program via sys.argv[1:].',
             items: { type: 'string' },
           },
           timeout_ms: {
             type: 'integer',
             default: 10000,
             maximum: 120000,
-            description: 'Zeitlimit in Millisekunden.',
+            description: 'Time limit in milliseconds.',
           },
         },
         required: ['code'],
@@ -1066,6 +1085,17 @@ function createWorkspaceToolRegistry({
         + 'Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht '
         + 'möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie '
         + 'sind gesperrt. Jeder Lauf braucht die Freigabe des Nutzers.',
+      modelDescription:
+        'Runs a command in the operating system shell (macOS/Linux in the user\'s login shell, '
+        + 'Windows in PowerShell or cmd.exe) and returns stdout, stderr and the exit code. That '
+        + 'covers everything the user would do in a terminal: git status, npm run build, docker ps, '
+        + 'an installed CLI tool. The working directory is the open project folder or a subfolder '
+        + 'of it. One command per call and no state between two calls: a cd only takes effect '
+        + 'within the same command (chain with && instead, or set cwd). Not interactive — there is '
+        + 'no terminal, so waiting on a prompt runs into the time limit; use non-interactive flags '
+        + 'and pass input via stdin. Background processes and servers meant to outlive the call are '
+        + 'not possible. Recursive force-deletes, disk operations and rewriting git history are '
+        + 'blocked. Every run needs the user\'s approval.',
       promptDescription:
         'Führt einen Befehl in der Shell des Betriebssystems aus (git, npm, installierte CLI-Werkzeuge) '
         + 'und liefert Ausgabe und Exit-Code zurück.',
@@ -1075,24 +1105,24 @@ function createWorkspaceToolRegistry({
           command: {
             type: 'string',
             description:
-              'Die vollständige Befehlszeile, so wie sie im Terminal stünde, z. B. "git status --short". '
-              + 'Mehrere Schritte mit && verketten.',
+              'The complete command line exactly as it would be typed in a terminal, e.g. '
+              + '"git status --short". Chain several steps with &&.',
           },
           cwd: {
             type: 'string',
             description:
-              'Optionaler Unterordner als Arbeitsverzeichnis (z. B. "frontend"). '
-              + 'Ohne Angabe läuft der Befehl im Projektordner.',
+              'Optional subfolder to use as the working directory (e.g. "frontend"). '
+              + 'Without it the command runs in the project folder.',
           },
           stdin: {
             type: 'string',
-            description: 'Optionale Eingabe, die dem Befehl auf der Standardeingabe zur Verfügung steht.',
+            description: 'Optional input made available to the command on standard input.',
           },
           timeout_ms: {
             type: 'integer',
             default: 30000,
             maximum: 300000,
-            description: 'Zeitlimit in Millisekunden.',
+            description: 'Time limit in milliseconds.',
           },
         },
         required: ['command'],
@@ -1155,6 +1185,11 @@ function createWorkspaceToolRegistry({
         + 'keine ganzen Seiten. Nutze das Tool für alles, was aktueller ist als dein Wissensstand oder was du '
         + 'belegen sollst: Versionen, Preise, Nachrichten, Fehlermeldungen, Normen. Die Suchanfrage verlässt '
         + 'den Rechner und geht an einen externen Suchdienst.',
+      modelDescription:
+        'Searches the web and returns a compact list of hits (title, URL, short excerpt, date '
+        + 'where available) — not whole pages. Use it for anything more recent than your knowledge '
+        + 'cut-off or anything you are asked to back up: versions, prices, news, error messages, '
+        + 'standards. The query leaves the machine and goes to an external search service.',
       promptDescription:
         'Sucht im Internet und liefert Titel, URL und einen kurzen Auszug je Treffer. '
         + 'Zum Lesen einer Seite im Volltext ist es nicht gedacht.',
@@ -1164,18 +1199,18 @@ function createWorkspaceToolRegistry({
           query: {
             type: 'string',
             maxLength: 400,
-            description: 'Suchanfrage in natürlicher Sprache oder als Stichworte.',
+            description: 'Search query in natural language or as keywords.',
           },
           max_results: {
             type: 'integer',
             default: 5,
             maximum: 10,
-            description: 'Maximale Anzahl Treffer.',
+            description: 'Maximum number of hits.',
           },
           language: {
             type: 'string',
             description:
-              'Optionaler Sprachhinweis für die Suche, z. B. "de" oder "en". Ohne Angabe entscheidet der Suchdienst.',
+              'Optional language hint for the search, e.g. "de" or "en". Without it the search service decides.',
           },
         },
         required: ['query'],
@@ -1214,6 +1249,12 @@ function createWorkspaceToolRegistry({
         + 'Fliesstext, gekürzt auf die gewünschte Länge. Gedacht als Ergänzung zu web_search: dort die '
         + 'Adresse finden, hier die Seite am Stück lesen. Lokale und private Adressen werden abgelehnt, '
         + 'ebenso alles, was kein Text ist (PDF, Bilder, Downloads). Der Abruf verlässt den Rechner.',
+      modelDescription:
+        'Fetches exactly one http(s) address and returns the readable text of the page as '
+        + 'Markdown-like prose, truncated to the requested length. Meant as a companion to '
+        + 'web_search: find the address there, read the page in one piece here. Local and private '
+        + 'addresses are rejected, as is anything that is not text (PDF, images, downloads). The '
+        + 'request leaves the machine.',
       promptDescription:
         'Liest eine Webseite als Text. Für Inhalte, die über den kurzen Auszug aus web_search hinausgehen.',
       parameters: {
@@ -1221,13 +1262,13 @@ function createWorkspaceToolRegistry({
         properties: {
           url: {
             type: 'string',
-            description: 'Vollständige http- oder https-Adresse, z. B. "https://example.org/changelog".',
+            description: 'Complete http or https address, e.g. "https://example.org/changelog".',
           },
           max_characters: {
             type: 'integer',
             default: 20000,
             maximum: 100000,
-            description: 'Maximale Zeichenanzahl des zurückgegebenen Texts.',
+            description: 'Maximum number of characters in the returned text.',
           },
         },
         required: ['url'],
@@ -1276,9 +1317,9 @@ function createWorkspaceToolRegistry({
         + 'samt Begründung. Nicht für den Stand von gerade eben und nichts, was in einer Datei '
         + 'des Projekts besser aufgehoben wäre. Passwörter, Schlüssel und Zugangsdaten niemals.',
       modelDescription:
-        'Merkt sich einen Satz dauerhaft (Ebene "workspace" = nur dieser Ordner, "user" = überall). '
-        + 'Der Eintrag steht ab der nächsten Nachricht in jedem Systemprompt. Nur Dauerhaftes, '
-        + 'niemals Passwörter oder Schlüssel. Vor dem ersten Gebrauch den Skill "snotra-memory" laden.',
+        'Remembers a statement permanently (level "workspace" = this folder only, "user" = '
+        + 'everywhere). From the next message on, the entry is part of every system prompt. Only '
+        + 'lasting facts, never passwords or keys. Load the skill "snotra-memory" before first use.',
       promptDescription:
         'Merkt sich einen Satz dauerhaft — auf Bitte des Nutzers („merk dir …") oder bei '
         + 'Dauerhaftem, das dir auffällt. Regeln dazu im Skill „snotra-memory".',
@@ -1289,33 +1330,33 @@ function createWorkspaceToolRegistry({
             type: 'string',
             enum: ['workspace', 'user'],
             description:
-              'Reichweite: "workspace" für alles, was nur für den geöffneten Ordner gilt '
-              + '(Build-Befehle, Projektkonventionen, laufende Vorhaben); "user" für alles, was '
-              + 'unabhängig vom Projekt gilt (Anrede, Sprache, bevorzugte Werkzeuge). '
-              + 'Im Zweifel "workspace" — das Speziellere richtet weniger Schaden an.',
+              'Scope: "workspace" for anything that applies to the open folder only (build '
+              + 'commands, project conventions, work in progress); "user" for anything that '
+              + 'applies regardless of the project (forms of address, language, preferred '
+              + 'tools). When in doubt "workspace" — the narrower scope does less damage.',
           },
           text: {
             type: 'string',
             maxLength: MAX_MEMORY_ENTRY_CHARS,
             description:
-              'Der Merksatz, aus sich heraus verständlich und ohne Bezug auf diese Unterhaltung. '
-              + 'Also "Tests laufen mit npm test" statt "wie eben besprochen". Ein Gedanke je Aufruf.',
+              'The statement to remember, understandable on its own and without reference to this '
+              + 'conversation. So "tests run with npm test" rather than "as just discussed". One '
+              + 'thought per call.',
           },
           origin: {
             type: 'string',
             enum: ['requested', 'self'],
             description:
-              'Wahrheitsgemäß: "requested", wenn der Nutzer ausdrücklich darum gebeten hat, '
-              + 'sonst "self". Der Nutzer kann selbstständiges Merken abschalten — dann werden '
-              + '"self"-Einträge abgelehnt, und ein falsch deklarierter Eintrag unterläuft seine '
-              + 'Einstellung.',
+              'Truthfully: "requested" when the user explicitly asked for it, otherwise "self". '
+              + 'The user can switch off unprompted remembering — "self" entries are then '
+              + 'rejected, and a wrongly declared entry subverts that setting.',
           },
         },
         required: ['scope', 'text', 'origin'],
       },
       handler: async (args, { workspaceRoot } = {}) => {
         if (!memory) {
-          return JSON.stringify({ error: 'Das Gedächtnis ist in dieser Installation nicht verfügbar.' });
+          return JSON.stringify({ error: 'Memory is not available in this installation.' });
         }
         try {
           const saved = await memory.remember({
@@ -1334,7 +1375,7 @@ function createWorkspaceToolRegistry({
             remembered: saved.text,
           });
         } catch (error) {
-          return JSON.stringify({ error: error?.message || 'Der Eintrag ließ sich nicht speichern.' });
+          return JSON.stringify({ error: error?.message || 'The entry could not be saved.' });
         }
       },
     },

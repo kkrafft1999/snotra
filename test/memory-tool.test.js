@@ -98,18 +98,18 @@ test('eine unbekannte Herkunft gilt als vom Nutzer erbeten, nicht als selbst gem
 });
 
 test('ein abgelehnter Merkversuch kommt als Fehlertext zurueck, nicht als Absturz', async () => {
-  const memory = makeMemoryStub({ fail: 'Selbstständiges Merken ist abgeschaltet.' });
+  const memory = makeMemoryStub({ fail: 'Unprompted remembering is switched off.' });
   const raw = await registryWith(memory)
     .getDefinition('remember')
     .handler({ scope: 'user', text: 'etwas', origin: 'self' }, {});
   const result = JSON.parse(raw);
   assert.equal(result.ok, undefined);
-  assert.match(result.error, /abgeschaltet/);
+  assert.match(result.error, /switched off/);
 });
 
 test('die Beschreibung fuer das Modell nennt die Grenze und den Skill', () => {
   const def = registryWith(makeMemoryStub()).getDefinition('remember');
-  assert.match(def.modelDescription, /niemals Passwörter/i);
+  assert.match(def.modelDescription, /never passwords/i);
   assert.match(def.modelDescription, /snotra-memory/);
   // Die Prompt-Zeile steht bei *jeder* Anfrage in der Tool-Liste und muss
   // deshalb schon ohne den Skill sagen, wann das Tool gemeint ist.

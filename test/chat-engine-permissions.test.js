@@ -206,7 +206,7 @@ test('Nutzer lehnt ab: strukturiertes Ergebnis ans Modell, Lauf geht mit der Abl
   assert.equal(tools.calls.length, 0);
   const first = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
   assert.equal(first.reason, 'user_denied');
-  assert.equal(first.message, 'Tool-Aufruf vom Nutzer abgelehnt');
+  assert.equal(first.message, 'Tool call denied by the user.');
   assert.match(result.toolTrace[0].line, /abgelehnt/);
 });
 
@@ -426,7 +426,7 @@ test('Provider-Redaktion: markierte Tool-Nachricht eines fremden Endpunkts wird 
   const { redactSensitiveToolMessages } = require('../src/application/permissions/sensitive-redaction');
   const messages = [{ role: 'tool', tool_call_id: 'x', content: '{"geheim":1}', sensitiveMarker: { sensitive: true, providerKey: 'anderer', targets: [] } }];
   assert.equal(redactSensitiveToolMessages(messages, 'test'), 1);
-  assert.match(messages[0].content, /zurückgehalten/);
+  assert.match(messages[0].content, /withheld/);
   assert.ok(switching && tampered);
 });
 

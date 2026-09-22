@@ -258,7 +258,7 @@ test('engine bietet Tools ohne Ordnerbezug auch ohne geöffneten Ordner an (#96)
   assert.deepEqual(calls[0].tools.map((tool) => tool.function.name), ['web_search']);
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'ohne Ordner, aber mit Tools gehört ein System-Prompt dazu');
-  assert.match(system.content, /Es ist kein Projektordner geöffnet/);
+  assert.match(system.content, /No project folder is open/);
   assert.match(system.content, /Tools: web_search/);
   // Der Pfad-Hinweis der Datei-Tools hat hier nichts zu suchen.
   assert.doesNotMatch(system.content, /geöffneten Ordner „/);
@@ -289,7 +289,7 @@ test('ohne Projektordner bleibt die Regel „Tool-Ergebnisse sind Daten" stehen 
 
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'ohne Ordner, aber mit Tools gehört ein System-Prompt dazu');
-  assert.match(system.content, /Es ist kein Projektordner geöffnet/);
+  assert.match(system.content, /No project folder is open/);
   assert.ok(
     system.content.includes(TOOL_RESULTS_ARE_DATA_RULE),
     'die Prompt-Injection-Regel darf nicht mit der Tool-Liste weggefallen sein'
@@ -307,7 +307,7 @@ test('mit Projektordner steht die Regel ebenfalls im System-Prompt (#182)', asyn
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system.content.includes(TOOL_RESULTS_ARE_DATA_RULE));
   // Der Konventionsblock steht darin, die Aufzaehlung der Tool-Namen nicht.
-  assert.match(system.content, /relativ zum Ordnerroot/);
+  assert.match(system.content, /relative to the folder root/);
   assert.doesNotMatch(system.content, /Du hast folgende Tools/);
 });
 
@@ -322,7 +322,7 @@ test('engine lässt Datei-Tools ohne Ordner unverändert draußen (#96)', async 
 
   assert.equal(tools.calls.length, 0, 'ohne Ordner wird kein Datei-Tool ausgeführt');
   const toolMessage = calls[1].messages.find((m) => m.role === 'tool');
-  assert.match(toolMessage.content, /Kein Arbeitsordner geöffnet; list_directory/);
+  assert.match(toolMessage.content, /No workspace folder open; list_directory/);
 });
 
 test('engine führt ein Tool ohne Ordnerbezug auch ohne Ordner aus (#96)', async () => {
@@ -378,12 +378,12 @@ test('engine describes the open folder and the available tools', async () => {
 
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'System-Nachricht mit Workspace-Kontext erwartet');
-  assert.match(system.content, /geöffneten Ordner „snotra-project“/);
+  assert.match(system.content, /open in the app: "snotra-project"/);
   assert.match(system.content, /Tools: list_directory/);
   assert.doesNotMatch(system.content, /ausgewählt/);
   // @-Referenzen aus der Chat-Eingabe (#52): Konvention erklären, Inhalt nicht einbetten.
-  assert.match(system.content, /„@<Pfad>“/);
-  assert.match(system.content, /nicht automatisch mitgeschickt/);
+  assert.match(system.content, /"@<path>"/);
+  assert.match(system.content, /not sent along automatically/);
 });
 
 test('engine names the selected entry in the system message', async () => {
@@ -400,7 +400,7 @@ test('engine names the selected entry in the system message', async () => {
   });
 
   const system = calls[0].messages.find((m) => m.role === 'system');
-  assert.match(system.content, /folgende Datei im Baum ausgewählt: „src\/app\.js“/);
+  assert.match(system.content, /selected this file in the tree: "src\/app\.js"/);
 
   const { engine: dirEngine, calls: dirCalls } = makeEngine([assistantText('ok')]);
   await dirEngine.send({
@@ -414,7 +414,7 @@ test('engine names the selected entry in the system message', async () => {
   });
   assert.match(
     dirCalls[0].messages.find((m) => m.role === 'system').content,
-    /folgenden Ordner im Baum ausgewählt: „src“/
+    /selected this folder in the tree: "src"/
   );
 });
 
@@ -433,7 +433,7 @@ test('engine keeps baseSystemPrompt in front of the workspace context', async ()
 
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system.content.startsWith('Sei knapp.\n\n'));
-  assert.match(system.content, /geöffneten Ordner „snotra-project“/);
+  assert.match(system.content, /open in the app: "snotra-project"/);
 });
 
 test('engine prepends baseSystemPrompt verbatim as the system message', async () => {
@@ -584,7 +584,7 @@ test('engine supplies a synthetic tool error when no workspace is open', async (
   assert.equal(tools.calls.length, 0);
   assert.equal(result.toolTrace[0].noWorkspace, true);
   const toolMessage = calls[1].messages.find((message) => message.role === 'tool');
-  assert.match(toolMessage.content, /Kein Arbeitsordner geöffnet/);
+  assert.match(toolMessage.content, /No workspace folder open/);
 });
 
 // Der Trace traegt mehr als Name und Argumente: was `buildTraceEntry` im
@@ -1055,7 +1055,7 @@ test('engine orders user prompt, skills and workspace context', async () => {
   const system = calls[0].messages.find((m) => m.role === 'system');
   const promptAt = system.content.indexOf('Sei knapp.');
   const skillAt = system.content.indexOf('## Skill: demo');
-  const workspaceAt = system.content.indexOf('Du arbeitest im in der App geöffneten Ordner');
+  const workspaceAt = system.content.indexOf('You are working in the folder currently open in the app');
   assert.ok(promptAt === 0 && promptAt < skillAt && skillAt < workspaceAt, system.content);
 });
 
@@ -1096,7 +1096,7 @@ test('engine erklärt Skill-Pfade nur, wenn ein Ordner offen ist', async () => {
     payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   const withFolderSystem = withFolder.calls[0].messages.find((m) => m.role === 'system').content;
-  assert.match(withFolderSystem, /skill:demo\/references\/anleitung\.md/);
+  assert.match(withFolderSystem, /skill:demo\/references\/guide\.md/);
 
   const withoutFolder = makeEngine([assistantText('ok')], { skills });
   await withoutFolder.engine.send({

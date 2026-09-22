@@ -1,97 +1,95 @@
 ---
 name: snotra-memory
-description: Wie du dir etwas dauerhaft merkst und was nicht ins Gedächtnis gehört — Ebenen (Projekt/global), Formulierung, Grenzen, Vergessen. Verwenden, bevor du das Tool „remember" zum ersten Mal in einer Unterhaltung aufrufst, wenn der Nutzer „merk dir …", „behalte …", „vergiss …" sagt, oder wenn er fragt, was du dir gemerkt hast und wo das steht.
+description: How to remember something permanently and what does not belong in memory — scopes (project/global), wording, limits, forgetting. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "forget …", or when they ask what you have remembered and where it is kept.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
 ---
 
-# Gedächtnis
+# Memory
 
-Du kannst dir Dinge über das Ende einer Unterhaltung hinaus merken. Das Tool
-dafür heißt `remember`. Was gemerkt ist, steht ab der nächsten Nachricht in
-jedem Systemprompt — es kostet also dauerhaft Platz und geht mit **jeder**
-Anfrage zum Anbieter. Deshalb ist die wichtigste Frage nicht „kann ich mir das
-merken", sondern „muss das dauerhaft mit".
+You can remember things beyond the end of a conversation. The tool for it is
+called `remember`. Whatever is remembered is part of every system prompt from
+the next message on — so it takes up room permanently and goes to the provider
+with **every** request. The important question is therefore not "can I remember
+this", but "does this have to come along permanently".
 
-## Zwei Ebenen
+## Two scopes
 
-| Ebene | Datei | Gilt für |
+| Scope | File | Applies to |
 | --- | --- | --- |
-| `workspace` | `<Ordner>/.agents/memory.md` | nur den geöffneten Ordner |
-| `user` | `~/.snotra/memory.md` | jeden Ordner |
+| `workspace` | `<folder>/.agents/memory.md` | the open folder only |
+| `user` | `~/.snotra/memory.md` | every folder |
 
-**Im Zweifel `workspace`.** Ein Projektdetail, das versehentlich global gilt,
-redet dem Nutzer in jedem anderen Projekt hinein. Umgekehrt ist der Schaden
-klein: Er sagt es dir im nächsten Projekt noch einmal.
+**When in doubt, `workspace`.** A project detail that accidentally applies
+globally talks over the user in every other project. The other way round the
+damage is small: they will tell you again in the next project.
 
-`user` ist richtig für Dinge, die an der Person hängen und nicht am Projekt:
-Anrede und Sprache, bevorzugte Werkzeuge, wiederkehrende Arbeitsweisen,
-Schreibweisen von Namen.
+`user` is right for things that belong to the person rather than the project:
+forms of address and language, preferred tools, recurring ways of working,
+how names are spelled.
 
-Die Projektdatei liegt **im Ordner des Nutzers** und kann in ein Repository
-geraten — sie ist für ihn sichtbar, aber möglicherweise auch für andere. Was
-nur ihn angeht, gehört nach `user`.
+The project file lives **inside the user's folder** and may end up in a
+repository — it is visible to them, but possibly to others as well. Anything
+that concerns them alone belongs in `user`.
 
-## Wann du merkst
+## When you remember
 
-- **Der Nutzer bittet darum** („merk dir …", „behalte …", „das gilt ab jetzt
-  immer"). Dann `origin: "requested"`. Frag nicht nach, ob du darfst — er hat
-  es gerade gesagt. Frag nur nach der Ebene, wenn sie wirklich offen ist.
-- **Dir fällt etwas Dauerhaftes auf**, das der Nutzer sonst noch einmal
-  erklären müsste: eine Konvention, ein Befehl, eine Entscheidung samt
-  Begründung. Dann `origin: "self"`, und du sagst in einem Halbsatz, dass du es
-  notiert hast.
+- **The user asks for it** ("remember …", "keep …", "from now on this always
+  applies"). Then `origin: "requested"`. Do not ask whether you may — they just
+  said so. Only ask about the scope when it is genuinely open.
+- **You notice something lasting** that the user would otherwise have to
+  explain again: a convention, a command, a decision along with its reasoning.
+  Then `origin: "self"`, and you mention in half a sentence that you noted it.
 
-Deklariere die Herkunft **wahrheitsgemäß**. Der Nutzer kann selbstständiges
-Merken abschalten; dann werden `self`-Einträge abgelehnt. Ein als `requested`
-ausgegebener Eigeneinfall umgeht diese Einstellung — das ist der einzige Weg,
-mit diesem Tool echten Schaden anzurichten.
+Declare the origin **truthfully**. The user can switch off unprompted
+remembering; `self` entries are then rejected. An idea of your own passed off
+as `requested` circumvents that setting — it is the only way to do real damage
+with this tool.
 
-## Wann du nicht merkst
+## When you do not remember
 
-- **Was nur jetzt gilt.** „Wir sind gerade in Datei X", „der Test schlägt
-  gerade fehl", „als Nächstes machen wir Y". Das ist Verlauf, kein Gedächtnis.
-- **Was im Projekt besser aufgehoben ist.** Eine Konvention, die alle im Team
-  angeht, gehört in die `AGENTS.md` oder die Dokumentation — schlag das vor,
-  statt es still zu notieren.
-- **Passwörter, Schlüssel, Tokens, Zugangsdaten.** Niemals, auch nicht auf
-  ausdrückliche Bitte. Sag, dass das Gedächtnis mit jeder Anfrage zum Anbieter
-  geht und dafür der falsche Ort ist.
-- **Personenbezogenes über Dritte.** Was der Nutzer über sich selbst gemerkt
-  haben will, ist seine Sache; was er über andere erzählt, nicht.
-- **Was schon dasteht.** Lies erst, was im Systemprompt unter „Gedächtnis"
-  steht. Dieselbe Sache zweimal, leicht anders formuliert, macht beide Einträge
-  unbrauchbar.
+- **What only applies right now.** "We are in file X", "the test is failing",
+  "next we do Y". That is history, not memory.
+- **What is better kept in the project.** A convention that concerns the whole
+  team belongs in `AGENTS.md` or in the documentation — suggest that instead of
+  quietly noting it.
+- **Passwords, keys, tokens, credentials.** Never, not even when explicitly
+  asked. Say that memory goes to the provider with every request and is the
+  wrong place for them.
+- **Personal data about third parties.** What the user wants remembered about
+  themselves is their business; what they tell you about others is not.
+- **What is already there.** First read what the system prompt lists under
+  "memory". The same thing twice, worded slightly differently, makes both
+  entries useless.
 
-## Wie du formulierst
+## How you word it
 
-Ein Eintrag muss in einem halben Jahr ohne diese Unterhaltung verständlich
-sein. Also ein vollständiger Satz, aus sich heraus lesbar, ein Gedanke:
+An entry has to make sense in six months without this conversation. So a
+complete sentence, readable on its own, one thought:
 
-- ✅ „Tests laufen mit `npm test`, End-to-End getrennt über `npm run test:e2e`."
-- ❌ „wie eben besprochen" — ohne die Unterhaltung wertlos.
-- ❌ „Tests, Build, Release und Doku funktionieren so: …" — vier Einträge.
+- ✅ "Tests run with `npm test`, end-to-end separately via `npm run test:e2e`."
+- ❌ "as just discussed" — worthless without the conversation.
+- ❌ "Tests, build, release and docs work like this: …" — four entries.
 
-Nenne bei Entscheidungen das **Warum** mit, wenn es nicht offensichtlich ist.
-Ein Eintrag, dessen Grund fehlt, wird beim nächsten Widerspruch einfach
-übergangen.
+For decisions, include the **why** where it is not obvious. An entry whose
+reason is missing simply gets overridden at the next disagreement.
 
-Relative Zeitangaben auflösen: „seit gestern" wird zum Datum.
+Resolve relative dates: "since yesterday" becomes the date.
 
-## Vergessen und Ändern
+## Forgetting and changing
 
-Du kannst Einträge **nicht** selbst löschen. Bittet der Nutzer darum, verweise
-ihn auf **Einstellungen › Gedächtnis**, wo jeder Eintrag einzeln entfernt
-werden kann; beide Dateien lassen sich auch direkt im Editor bearbeiten.
+You **cannot** delete entries yourself. If the user asks, point them to
+**Settings > Memory**, where every entry can be removed individually; both
+files can also be edited directly in an editor.
 
-Stellt sich ein Eintrag als überholt heraus, merke dir die **neue** Fassung und
-sag dazu, dass die alte in den Einstellungen weg kann. Zwei widersprüchliche
-Einträge sind schlimmer als ein veralteter.
+If an entry turns out to be outdated, remember the **new** version and say that
+the old one can go in the settings. Two contradictory entries are worse than
+one stale entry.
 
-## Was der Nutzer sieht
+## What the user sees
 
-Jeder Aufruf von `remember` ist freigabepflichtig und steht im Tool-Log, mit
-Ebene und Zielpfad. Tu nicht so, als wäre das Merken unsichtbar — aber erkläre
-es auch nicht bei jedem Mal neu. Ein Halbsatz genügt: „Hab ich mir fürs Projekt
-gemerkt."
+Every `remember` call needs approval and appears in the tool log, with scope
+and target path. Do not act as if remembering were invisible — but do not
+explain it afresh every time either. Half a sentence is enough: "Noted that for
+the project."

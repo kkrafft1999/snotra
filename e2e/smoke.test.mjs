@@ -304,27 +304,27 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Main-Prozess. Geprueft wird, was wirklich beim Modell ankommt.
   const systemMessage = model.requestFor(LINK_QUESTION).body.messages
     .find((m) => m.role === 'system')?.content || '';
-  assert.match(systemMessage, /Umgebung, in der du gerade läufst \(Snotra AI/);
+  assert.match(systemMessage, /The environment you are running in \(Snotra AI/);
   assert.ok(
-    systemMessage.includes(`- Arbeitsverzeichnis: ${workspace}`),
+    systemMessage.includes(`- Working directory: ${workspace}`),
     'der Block nennt den wirklich geoeffneten Ordner'
   );
-  assert.match(systemMessage, new RegExp(`- Plattform: ${process.platform}\\b`));
-  assert.match(systemMessage, /- Betriebssystem: \S+ \S+/);
-  assert.match(systemMessage, /- Heutiges Datum: \w+, \d{4}-\d{2}-\d{2}/);
+  assert.match(systemMessage, new RegExp(`- Platform: ${process.platform}\\b`));
+  assert.match(systemMessage, /- Operating system: \S+ \S+/);
+  assert.match(systemMessage, /- Today's date: \w+, \d{4}-\d{2}-\d{2}/);
   // Der Ordner ist frisch angelegt und kein Repo — die Zeile muss das sagen.
-  assert.match(systemMessage, /- Git-Repository: nein/);
+  assert.match(systemMessage, /- Git repository: no/);
   // `shell_execute` ist in der Testkonfiguration aus; dann darf der Block
   // keine Shell versprechen (Nachtrag zu #138).
-  assert.ok(!systemMessage.includes('Shell für shell_execute'),
+  assert.ok(!systemMessage.includes('Shell for shell_execute'),
     'ohne eingeschaltetes shell_execute keine Shell-Angabe');
   step('Umgebungsblock im Systemprompt geprueft');
 
   // --- Projektanweisungen aus AGENTS.md (Issue #212, #253) -----------------
   // Auch das entsteht erst im echten Main-Prozess: Welche Dateien gefunden
   // werden, weiss nur der Adapter am Dateisystem.
-  assert.match(systemMessage, /Projektanweisungen aus AGENTS\.md/);
-  assert.match(systemMessage, /## AGENTS\.md \(Projekt\)/);
+  assert.match(systemMessage, /Project instructions from AGENTS\.md/);
+  assert.match(systemMessage, /## AGENTS\.md \(project\)/);
   assert.ok(
     systemMessage.includes('Anweisung-aus-dot-agents.'),
     'die AGENTS.md aus .agents steht im Prompt'
@@ -336,22 +336,23 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   );
   // Vor dem Ordner-/Tool-Block, damit ihn keine fremde AGENTS.md ueberschreibt.
   assert.ok(
-    systemMessage.indexOf('Projektanweisungen aus AGENTS.md') < systemMessage.indexOf('geöffneten Ordner')
+    systemMessage.indexOf('Project instructions from AGENTS.md')
+      < systemMessage.indexOf('folder currently open in the app')
   );
   step('AGENTS.md im Systemprompt geprueft');
 
   // --- Gedaechtnis im Systemprompt (Issue #166) ----------------------------
   // Dieselbe Begruendung: Welche memory.md gefunden wird, entscheidet der
   // Adapter am Dateisystem, nicht der Core.
-  assert.match(systemMessage, /Dein Gedächtnis/);
-  assert.match(systemMessage, /## Gedächtnis \(Projekt\)/);
+  assert.match(systemMessage, /Your memory/);
+  assert.match(systemMessage, /## Memory \(project\)/);
   assert.ok(
     systemMessage.includes('Gemerkt-fuer-dieses-Projekt.'),
     'die memory.md aus .agents steht im Prompt'
   );
   // Direkt hinter dem eigenen Prompt des Nutzers und damit vor allem Fremden.
   assert.ok(
-    systemMessage.indexOf('Dein Gedächtnis') < systemMessage.indexOf('Projektanweisungen aus AGENTS.md')
+    systemMessage.indexOf('Your memory') < systemMessage.indexOf('Project instructions from AGENTS.md')
   );
   step('Gedaechtnis im Systemprompt geprueft');
 

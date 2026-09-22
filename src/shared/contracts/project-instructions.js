@@ -62,6 +62,17 @@ const PROJECT_INSTRUCTION_SOURCE_LABELS = Object.freeze({
 });
 
 /**
+ * Dieselben Quellen als Zwischenueberschrift **im System-Prompt** — englisch,
+ * weil sie dort beim Modell landen (Issue #276). Die Tabelle darueber bleibt
+ * die der Oberflaeche: sie beschriftet die Kontext-Aufschluesselung.
+ */
+const PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS = Object.freeze({
+  [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: 'AGENTS.md (project)',
+  [PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA]: 'AGENTS.md (global)',
+  [PROJECT_INSTRUCTION_SOURCES.USER_AGENTS]: 'AGENTS.md (global, legacy location)',
+});
+
+/**
  * Kurzform des Pfads für die Anzeige. Bewusst ohne aufgelöstes Home und ohne
  * Ordnernamen: Der absolute Pfad enthält den Benutzernamen, und diese Zeichen
  * gehen mit dem Prompt an den Anbieter (siehe `environmentInfoEnabled`, #138).
@@ -120,6 +131,7 @@ module.exports = {
   PROJECT_INSTRUCTION_SOURCES,
   PROJECT_INSTRUCTION_SOURCE_ORDER,
   PROJECT_INSTRUCTION_SOURCE_LABELS,
+  PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS,
   PROJECT_INSTRUCTION_SOURCE_PATHS,
   MAX_PROJECT_INSTRUCTION_CHARS,
   isProjectInstructionSource,

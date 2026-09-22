@@ -124,7 +124,7 @@ test('Ablehnungsergebnis ist strukturiert, kennt nur bekannte Gründe und trägt
   assert.deepEqual(denied, {
     error: 'permission_denied',
     reason: 'user_denied',
-    message: 'Tool-Aufruf vom Nutzer abgelehnt',
+    message: 'Tool call denied by the user.',
     rule_id: 'r1',
     risk_classes: ['read', 'write'],
   });

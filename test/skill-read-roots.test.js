@@ -328,7 +328,7 @@ test('load_skill trägt die eingeschalteten Skills als enum im Schema (#173)', (
     properties: {
       name: {
         type: 'string',
-        description: 'Name des Skills, genau wie in der Liste der eingeschalteten Skills.',
+        description: 'Name of the skill, exactly as in the list of skills that are switched on.',
         enum: ['demo', 'traffic'],
       },
     },

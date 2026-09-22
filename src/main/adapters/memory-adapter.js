@@ -130,12 +130,12 @@ function createMemoryAdapter({
      * wurde und nicht nur, dass gemerkt wurde.
      */
     async remember({ scope, workspaceRoot = null, text, origin } = {}) {
-      if (!isMemoryScope(scope)) throw new TypeError(`Unbekannte Gedächtnis-Ebene: ${scope}`);
+      if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
       const body = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
-      if (!body) throw new TypeError('Ein leerer Eintrag lässt sich nicht merken.');
+      if (!body) throw new TypeError('An empty entry cannot be remembered.');
       if (body.length > MAX_MEMORY_ENTRY_CHARS) {
         throw new RangeError(
-          `Ein Eintrag darf höchstens ${MAX_MEMORY_ENTRY_CHARS} Zeichen haben (hier: ${body.length}).`
+          `An entry may be at most ${MAX_MEMORY_ENTRY_CHARS} characters (here: ${body.length}).`
         );
       }
       // Vor allem anderen: Der Nutzer kann selbstständiges Merken abschalten.
@@ -144,8 +144,8 @@ function createMemoryAdapter({
       if (origin === MEMORY_ORIGINS.SELF && typeof isSelfMemoryAllowed === 'function') {
         if ((await isSelfMemoryAllowed()) === false) {
           throw new Error(
-            'Selbstständiges Merken ist abgeschaltet (Einstellungen › Gedächtnis). '
-              + 'Gemerkt wird nur, worum der Nutzer ausdrücklich bittet.'
+            'Unprompted remembering is switched off ("Einstellungen \u203a Ged\u00e4chtnis"). '
+              + 'Only what the user explicitly asks for is remembered.'
           );
         }
       }
@@ -153,8 +153,8 @@ function createMemoryAdapter({
       if (!file) {
         throw new Error(
           scope === MEMORY_SCOPES.WORKSPACE
-            ? 'Ohne geöffneten Ordner gibt es kein Projekt-Gedächtnis.'
-            : 'Das Benutzerverzeichnis ließ sich nicht bestimmen.'
+            ? 'Without an open folder there is no project memory.'
+            : 'The user directory could not be determined.'
         );
       }
       return serialize(file, async () => {
@@ -167,8 +167,8 @@ function createMemoryAdapter({
         });
         if (next.length > maxChars) {
           throw new RangeError(
-            `Das ${scope === MEMORY_SCOPES.USER ? 'globale' : 'Projekt-'}Gedächtnis ist voll `
-              + `(${maxChars} Zeichen). Lösche Einträge in den Einstellungen.`
+            `The ${scope === MEMORY_SCOPES.USER ? 'global' : 'project'} memory is full `
+              + `(${maxChars} characters). The user can delete entries under "Einstellungen \u203a Ged\u00e4chtnis".`
           );
         }
         await writeFileAtomic(file, next);

@@ -24,13 +24,14 @@ const {
 } = require('../../shared/contracts/context-breakdown');
 const {
   PROJECT_INSTRUCTION_SOURCE_LABELS,
+  PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS,
   PROJECT_INSTRUCTION_SOURCE_PATHS,
   MAX_PROJECT_INSTRUCTION_CHARS,
   normalizeProjectInstructionFiles,
 } = require('../../shared/contracts/project-instructions');
 
 /** Hinweis unter einem abgeschnittenen Text — im Prompt wie in der Anzeige. */
-const TRUNCATION_NOTE = `… [gekürzt auf ${MAX_PROJECT_INSTRUCTION_CHARS} Zeichen]`;
+const TRUNCATION_NOTE = `… [truncated to ${MAX_PROJECT_INSTRUCTION_CHARS} characters]`;
 
 /**
  * @param {Array<{source: string, text: string, truncated?: boolean}>} files
@@ -41,22 +42,22 @@ function buildProjectInstructionsSystemPrompt(files) {
   if (usable.length === 0) return { text: '', parts: [] };
 
   const intro = [
-    'Projektanweisungen aus AGENTS.md. Sie gelten für diese Unterhaltung '
-      + 'zusätzlich zu allem Übrigen in diesem Prompt und beschreiben, wie in '
-      + 'diesem Projekt gearbeitet wird.',
+    'Project instructions from AGENTS.md. They apply to this conversation in '
+      + 'addition to everything else in this prompt and describe how work is done '
+      + 'in this project.',
   ];
   // Ohne diesen Satz liest das Modell die Abschnitte als Auswahl und sucht
   // sich einen aus. Sie ergaenzen einander aber — es gilt alles zusammen, und
   // keine Datei schlaegt eine andere (Issue #253).
   if (usable.length > 1) {
     intro.push(
-      'Mehrere Dateien stehen hier untereinander. Sie ergänzen einander: '
-        + 'Alle gelten gemeinsam, keine ersetzt eine andere.'
+      'Several files are listed below one another. They complement each other: '
+        + 'all of them apply together, none replaces another.'
     );
   }
 
   const sections = usable.map((file) => {
-    const heading = PROJECT_INSTRUCTION_SOURCE_LABELS[file.source];
+    const heading = PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS[file.source];
     const body = file.truncated ? `${file.text}\n${TRUNCATION_NOTE}` : file.text;
     return `## ${heading}\n\n${body}`;
   });
