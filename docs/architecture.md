@@ -176,7 +176,7 @@ Both execution ports are deliberately cut equally narrow — one program or one
 command in, output and exit code out, no state between two calls — and carry the
 class `execute` in the registry: no workspace boundary, no sandbox, but an
 approval before every run and switched off as shipped (see
-`docs/sicherheitskonzept.md`, section 9).
+`docs/security-concept.md`, section 9).
 
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an
@@ -363,7 +363,7 @@ limits (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`) live in
 `shared/limits.js`; exceeding one rejects the whole drop instead of copying half
 of it. Confirmation happens natively in `ipc/fs-handlers.js` via
 `dialog.showMessageBox` — the renderer only triggers it, see
-`docs/sicherheitskonzept.md` §5.
+`docs/security-concept.md` §5.
 
 ### Context menu of the file tree
 
@@ -465,7 +465,7 @@ Two deliberately different rules for a new chat:
 - **Permission mode**: `smart` again every time. `auto` comes back only on an
   explicit switch in the history; on an automatic restore (app start, folder
   change) it falls back to `smart` — details in
-  [`sicherheitskonzept.md`](./sicherheitskonzept.md) §8.
+  [`security-concept.md`](./security-concept.md) §8.
 
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.

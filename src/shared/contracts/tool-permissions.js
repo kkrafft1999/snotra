@@ -1,5 +1,5 @@
 /**
- * Tool-Berechtigungen (Issue #66, Konzept #65 in docs/sicherheitskonzept.md).
+ * Tool-Berechtigungen (Issue #66, Konzept #65 in docs/security-concept.md).
  *
  * Gemeinsamer Wortschatz von Main, Application-Layer und Renderer für
  * Risikoklassen, Modi, Policy-Entscheidungen, Freigabe-Antworten, Regeln und

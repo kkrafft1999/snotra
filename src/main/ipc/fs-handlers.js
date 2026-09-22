@@ -86,7 +86,7 @@ function registerFsHandlers({
   // Der Renderer stößt nur an; geprüft, bestätigt und kopiert wird hier.
   // Dasselbe Muster wie bei den schutzlockernden Aktionen aus #66: Main
   // bestätigt nativ, weil der Renderer keine Sicherheitsgrenze ist
-  // (docs/sicherheitskonzept.md §5).
+  // (docs/security-concept.md §5).
   ipcMain.handle(REQ.FS_IMPORT_ITEMS, async (_event, sourcePaths, destDir) => {
     const inspection = await filesystem.inspectImport(sourcePaths, destDir);
     if (inspection.error) {

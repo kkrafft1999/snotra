@@ -92,7 +92,7 @@ const CHARS_PER_TOKEN_PROFILES = Object.freeze({
    *  - JSON: alle 17 eingebauten Tool-Schemas, 17.210 Zeichen / 4.154 Token
    *    = 4,14 (je Tool zwischen 3,91 und 4,59).
    *  - Markdown: `system-skills/snotra-capabilities/SKILL.md` 3,77,
-   *    `docs/sicherheitskonzept.md` 3,98, `README.md` 3,91.
+   *    `docs/security-concept.md` 3,98, `README.md` 3,91.
    *  - Prosa: der Tool-System-Prompt der Registry, 2.257 / 556 = 4,06.
    * Fuer JSON ist der konservativere (kleinere) Randwert der Messreihe
    * genommen, damit die teuerste Gruppe eher zu teuer als zu billig aussieht.

@@ -123,7 +123,7 @@ surrounding code.
 - **Security boundaries are not conveniences.** The workspace is the trust
   boundary of the file system; tool risk classes, the approval flow and the
   sensitive-path detection are described in
-  [`docs/sicherheitskonzept.md`](./docs/sicherheitskonzept.md) (German). If a
+  [`docs/security-concept.md`](./docs/security-concept.md). If a
   change touches any of them, say so in the pull request.
 
 ## UI work
