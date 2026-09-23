@@ -57,10 +57,10 @@ export function initToolPermissionState({ api }) {
     try {
       result = await api[name](...args);
     } catch (error) {
-      return { ok: false, error: error?.message || 'Unbekannter Fehler.' };
+      return { ok: false, error: error?.message || t('approval.error.unknown') };
     }
     if (result?.ok) await refresh();
-    return result || { ok: false, error: 'Keine Antwort.' };
+    return result || { ok: false, error: t('chat.toolMode.noAnswer') };
   }
 
   if (typeof api?.onToolPermissionsChanged === 'function') {

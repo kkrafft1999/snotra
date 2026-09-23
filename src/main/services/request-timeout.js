@@ -6,10 +6,10 @@ const CLOUD_MODELS_TIMEOUT_MS = 15_000;
 const LOCAL_MODELS_TIMEOUT_MS = 30_000;
 const TRANSCRIPTION_TIMEOUT_MS = 120_000;
 
-// The reason an abort carries has two readers. `message` stays the finished
-// sentence the transcription still shows as it stands; `userMessage` is the
-// same thing as a key, for the settings dialog that puts it into words in the
-// language of the interface (#308).
+// The reason an abort carries: `userMessage` is the key the interface puts into
+// words (#308), `message` is for logs and stack traces only. Since #310 nothing
+// shows `message` to the user any more — model listing and transcription both
+// go through `userMessageOf`.
 function abortReason(text, userMessage) {
   return Object.assign(new Error(text), { userMessage });
 }
@@ -24,7 +24,7 @@ function userMessageOf(err) {
 async function withRequestTimeout(operation, { timeoutMs, signal } = {}) {
   const controller = new AbortController();
   const abort = () => controller.abort(
-    abortReason('Anfrage abgebrochen.', createMessage('provider.error.cancelled'))
+    abortReason('Request cancelled.', createMessage('provider.error.cancelled'))
   );
   let rejectAbort;
   const aborted = new Promise((_, reject) => { rejectAbort = reject; });
@@ -32,7 +32,7 @@ async function withRequestTimeout(operation, { timeoutMs, signal } = {}) {
   controller.signal.addEventListener('abort', onAbort, { once: true });
   signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(abortReason(
-    `Zeitüberschreitung nach ${timeoutMs / 1000} s. Bitte erneut versuchen.`,
+    `Request timed out after ${timeoutMs / 1000} s.`,
     createMessage('provider.error.timeout', { seconds: timeoutMs / 1000 })
   )), timeoutMs);
   try {

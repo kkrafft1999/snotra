@@ -87,8 +87,8 @@ export function initMemoryPanel({ api }) {
     forget.innerHTML = TRASH_ICON;
     // Ohne den Text im Label liest ein Screenreader nur „Schaltfläche" — bei
     // einer Liste gleichaussehender Knöpfe ist das keine Bedienung.
-    forget.setAttribute('aria-label', `Vergessen: ${entry.text}`);
-    forget.title = 'Diesen Eintrag vergessen';
+    forget.setAttribute('aria-label', t('settings.memory.forget.label', { text: entry.text }));
+    forget.title = t('settings.memory.forget.title');
     forget.addEventListener('click', async () => {
       forget.disabled = true;
       const result = await api.forgetMemoryEntry(scope.scope, entry.line);
@@ -115,7 +115,9 @@ export function initMemoryPanel({ api }) {
     // erkennt sonst nicht, wessen Gedächtnis er gerade vor sich hat.
     title.textContent =
       scope.scope === MEMORY_SCOPES.WORKSPACE
-        ? `Projekt${scope.folderName ? ` · ${scope.folderName}` : ''}`
+        ? (scope.folderName
+          ? t('settings.memory.scope.workspace.named', { folder: scope.folderName })
+          : t('settings.memory.scope.workspace'))
         : t('settings.memory.scope.global');
     head.appendChild(title);
     const pathEl = document.createElement('span');
@@ -177,7 +179,7 @@ export function initMemoryPanel({ api }) {
     meta.className = 'memory-meta';
     const count = scope.entries.length;
     const parts = [
-      count === 1 ? '1 Eintrag' : tPlural('settings.memory.entries', count),
+      tPlural('settings.memory.entries', count),
       t('settings.memory.chars', { used: formatChars(scope.chars), max: formatChars(scope.maxChars || MAX_MEMORY_CHARS) }),
     ];
     if (scope.truncated) parts.push(t('settings.memory.truncated'));

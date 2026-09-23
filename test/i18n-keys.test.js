@@ -54,6 +54,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'context.part.agents.user',
   // A message and the network's own cause in brackets — nothing to word (#308).
   'provider.error.withCause',
+  // "Server" and "TLS" are the German words too; the rest is placeholders (#310).
+  'settings.models.connection',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

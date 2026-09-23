@@ -162,7 +162,7 @@ export function initUpdateDialog({ api }) {
         t('update.progress', { percent, received: formatBytes(receivedBytes), total: formatBytes(totalBytes) });
     } else {
       trackEl.removeAttribute('aria-valuenow');
-      progressTextEl.textContent = `${formatBytes(receivedBytes)} geladen`;
+      progressTextEl.textContent = t('update.progress.unknownTotal', { received: formatBytes(receivedBytes) });
     }
   }
 

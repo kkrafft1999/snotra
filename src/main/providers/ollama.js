@@ -226,7 +226,8 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
 module.exports = {
   id: 'ollama',
-  name: 'Ollama (lokal)',
+  // The name carries a word — "local" — and is therefore a key (#310).
+  name: createMessage('provider.name.ollama'),
   fields: { baseUrl: true, insecureTls: true },
   // Auf true, sobald translateMessagesToOllama Bilder abbildet (Issue #92).
   capabilities: { images: false },
@@ -237,7 +238,6 @@ module.exports = {
   presentation: {
     baseUrlPlaceholder: 'http://localhost:11434',
     connectionDetail: true,
-    insecureTlsHint: 'Nur bei selbstsigniertem oder intern signiertem Zertifikat, dem du vertraust.',
   },
   listModels,
   streamChatRound,

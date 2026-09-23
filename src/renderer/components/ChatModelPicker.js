@@ -267,6 +267,9 @@ export function initChatModelPicker({
   onLocaleChange(() => {
     updateChatChrome();
     syncLiveDot();
+    // The names of the local providers carry a word — "(local)" — and come
+    // from the main process in the stored language (#310).
+    void refreshLLMState().then(syncLiveDot);
   });
 
   return {

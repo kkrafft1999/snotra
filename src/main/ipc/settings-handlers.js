@@ -82,11 +82,15 @@ function registerSettingsHandlers({
         apiKeyDecryptable[`preset:${preset.id}`] = canDecryptApiKeyEnc(safeStorage, enc);
       }
     }
+    // Provider names and hints come in the stored language (#310), read fresh
+    // for the same reason as the tool catalogue below.
+    const prefs = await uiPrefsStore.readUIPrefs();
     return presentationService.buildLlmStateDto({
       encryptionAvailable,
       config: { ...config, presets: presetsWire },
       chatTarget,
       apiKeyDecryptable,
+      locale: prefs.appLocale,
     });
   });
 

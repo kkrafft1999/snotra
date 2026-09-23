@@ -1,4 +1,5 @@
-const { withRequestTimeout, TRANSCRIPTION_TIMEOUT_MS } = require('./request-timeout');
+const { withRequestTimeout, userMessageOf, TRANSCRIPTION_TIMEOUT_MS } = require('./request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
 
 function createWhisperService({ fetchImpl, credentials, speechProviderId = 'openai', getAppLocale }) {
   const fetchFn = fetchImpl;
@@ -19,14 +20,16 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
         timeoutMs: options?.timeoutMs ?? TRANSCRIPTION_TIMEOUT_MS,
       });
     } catch (err) {
-      return { error: err.message };
+      return { error: userMessageOf(err) };
     }
   }
 
+  // Errors travel as keys (#310), put into words by the voice input; what the
+  // API or the network said is quoted as it stands.
   async function transcribeRequest(audioBuffer, options) {
     const apiKey = await credentials.getApiKey(speechProviderId);
     if (!apiKey) {
-      return { error: 'Kein OpenAI-Key hinterlegt (Whisper benötigt einen).' };
+      return { error: createMessage('chat.voice.error.noApiKey') };
     }
 
     const language = await resolveLanguage(options);
@@ -73,7 +76,7 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
       const json = await res.json();
       return { text: json.text || '' };
     } catch (err) {
-      return { error: err.message || 'Transkription fehlgeschlagen.' };
+      return { error: err.message || createMessage('chat.voice.failed') };
     }
   }
 

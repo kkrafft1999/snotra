@@ -180,7 +180,7 @@ export function initMcpPanel({ api }) {
       const actions = el('div', 'mcp-row__actions');
       const edit = el('button', 'btn-secondary btn-compact', t('settings.mcp.edit'));
       edit.type = 'button';
-      edit.setAttribute('aria-label', `${server.label || server.id} bearbeiten`);
+      edit.setAttribute('aria-label', t('settings.mcp.edit.label', { name: server.label || server.id }));
       edit.addEventListener('click', () => openDialog(server));
       actions.append(edit);
 
@@ -465,8 +465,7 @@ export function initMcpPanel({ api }) {
     const status = result.status;
     if (status.state === MCP_CONNECTION_STATES.READY) {
       const count = result.tools?.length ?? 0;
-      testResult.append(el('p', 'mcp-test__ok',
-        `Verbindung steht — ${count} ${count === 1 ? 'Tool' : 'Tools'} gefunden.`));
+      testResult.append(el('p', 'mcp-test__ok', tPlural('mcpDialog.test.ok', count)));
       if (count > 0) testResult.append(el('p', 'mcp-test__tools', result.tools.join(', ')));
       // Der Katalog des Servers ist jetzt bekannt — Haekchen anbieten.
       renderTools({ ...editing, knownTools: result.tools || [] });

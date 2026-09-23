@@ -15,7 +15,22 @@ const {
   isSkillSuggestionMode,
 } = require('./enums');
 const { normalizeActiveSkills } = require('./skills');
-const { isMessage } = require('./message');
+const { createMessage, isMessage } = require('./message');
+
+/**
+ * Fallback for the `say` parameter below: plain text as it stands, a message
+ * as its bare key. Main and renderer always hand in a real translator — this
+ * only keeps a forgotten one visible instead of printing "[object Object]".
+ */
+function plainText(value) {
+  if (typeof value === 'string') return value;
+  return isMessage(value) ? value.key : '';
+}
+
+/** Text or message from a provider definition, or `fallback` if it has none. */
+function sayText(say, value, fallback) {
+  return typeof value === 'string' || isMessage(value) ? say(value) : fallback;
+}
 
 /**
  * Schema-Version von `llm-config.json`.
@@ -588,12 +603,20 @@ function hasConnectionDetail(source) {
   return source?.connectionDetail === true || source?.presentation?.connectionDetail === true;
 }
 
-function formatConnectionDetail(source, { baseUrl, insecureTls } = {}) {
+/**
+ * "Server: localhost:11434 · TLS verified". `say` puts the catalogue entries
+ * into words (#310): the renderer hands in `tMessage`, the main process a
+ * translator bound to the stored language.
+ */
+function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = plainText) {
   if (!hasConnectionDetail(source)) return '';
   const url = typeof baseUrl === 'string' ? baseUrl.trim() : '';
-  const host = url ? url.replace(/^https?:\/\//, '') : 'Server';
-  const tls = insecureTls === true;
-  return `Server: ${host} · TLS ${tls ? 'insecure' : 'geprüft'}`;
+  return say(createMessage('settings.models.connection', {
+    host: url ? url.replace(/^https?:\/\//, '') : createMessage('settings.models.connection.noHost'),
+    tls: createMessage(insecureTls === true
+      ? 'settings.models.connection.tlsInsecure'
+      : 'settings.models.connection.tlsVerified'),
+  }));
 }
 
 /**
@@ -644,7 +667,7 @@ function formatPresetOptionSuffixFromView(preset, providerView) {
  * Formatiert Preset-Sublabels aus normalisierten Provider-View-DTOs (Renderer + Main).
  * Optional connectionOverride für Credential-Drafts (baseUrl/insecureTls).
  */
-function formatPresetSublabelFromView(preset, providerView, connectionOverride) {
+function formatPresetSublabelFromView(preset, providerView, connectionOverride, say = plainText) {
   const optionDetail = formatPresetOptionDetailFromView(preset, providerView);
   if (optionDetail.text) return optionDetail;
 
@@ -653,7 +676,7 @@ function formatPresetSublabelFromView(preset, providerView, connectionOverride) 
       baseUrl: providerView.baseUrl ?? providerView.defaultBaseUrl ?? '',
       insecureTls: providerView.insecureTls ?? providerView.defaultInsecureTls === true,
     };
-    const text = formatConnectionDetail(providerView, connection);
+    const text = formatConnectionDetail(providerView, connection, say);
     if (text) return { text, style: PRESET_DETAIL_STYLES.DEFAULT };
   }
 
@@ -681,12 +704,12 @@ function formatPresetOptionDetail(preset, provider) {
   return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
 }
 
-function formatPresetSublabel(preset, provider, connection) {
+function formatPresetSublabel(preset, provider, connection, say = plainText) {
   const optionDetail = formatPresetOptionDetail(preset, provider);
   if (optionDetail.text) return optionDetail;
 
   if (provider?.fields?.baseUrl) {
-    const text = formatConnectionDetail(provider, connection);
+    const text = formatConnectionDetail(provider, connection, say);
     if (text) return { text, style: PRESET_DETAIL_STYLES.DEFAULT };
   }
 
@@ -694,7 +717,12 @@ function formatPresetSublabel(preset, provider, connection) {
   return { text: apiBase, style: PRESET_DETAIL_STYLES.DEFAULT };
 }
 
-function buildPresetFieldViews(provider) {
+/**
+ * The view builders below turn a provider definition into plain data for the
+ * settings dialog. Labels and hints may be catalogue messages there (#310);
+ * `say` puts them into words, so the view holds finished text in one language.
+ */
+function buildPresetFieldViews(provider, say = plainText) {
   const fields = provider?.presentation?.presetFields;
   if (!Array.isArray(fields)) return [];
   const out = [];
@@ -705,15 +733,15 @@ function buildPresetFieldViews(provider) {
           .filter((o) => o && typeof o.value === 'string')
           .map((o) => ({
             value: o.value,
-            label: typeof o.label === 'string' ? o.label : o.value,
+            label: sayText(say, o.label, o.value),
           }))
       : [];
     if (options.length === 0) continue;
     out.push({
       key: field.key,
       type: PRESET_FIELD_TYPES.SELECT,
-      label: typeof field.label === 'string' ? field.label : field.key,
-      hint: typeof field.hint === 'string' ? field.hint : '',
+      label: sayText(say, field.label, field.key),
+      hint: sayText(say, field.hint, ''),
       options,
       defaultValue: typeof field.defaultValue === 'string'
         ? field.defaultValue
@@ -730,7 +758,7 @@ function buildPresetFieldViews(provider) {
 }
 
 /** Vorlagen des Providers als reine Daten fuer die Oberflaeche (Issue #193). */
-function buildProviderTemplateViews(provider) {
+function buildProviderTemplateViews(provider, say = plainText) {
   const templates = provider?.presentation?.templates;
   if (!Array.isArray(templates)) return [];
   const out = [];
@@ -738,16 +766,16 @@ function buildProviderTemplateViews(provider) {
     if (!template || typeof template.id !== 'string' || !template.id.trim()) continue;
     out.push({
       id: template.id.trim(),
-      label: typeof template.label === 'string' ? template.label : template.id.trim(),
+      label: sayText(say, template.label, template.id.trim()),
       baseUrl: typeof template.baseUrl === 'string' ? template.baseUrl : '',
       apiStyle: isApiStyle(template.apiStyle) ? template.apiStyle : 'chat',
-      hint: typeof template.hint === 'string' ? template.hint : '',
+      hint: sayText(say, template.hint, ''),
     });
   }
   return out;
 }
 
-function buildProviderFormView(provider) {
+function buildProviderFormView(provider, say = plainText) {
   const presentation = provider?.presentation || {};
   const showApiKey = !!provider?.fields?.apiKey;
   const showBaseUrl = !!provider?.fields?.baseUrl;
@@ -755,27 +783,27 @@ function buildProviderFormView(provider) {
   const apiStyleOptions = Array.isArray(presentation.apiStyleOptions)
     ? presentation.apiStyleOptions
         .filter((o) => o && isApiStyle(o.value))
-        .map((o) => ({ value: o.value, label: typeof o.label === 'string' ? o.label : o.value }))
+        .map((o) => ({ value: o.value, label: sayText(say, o.label, o.value) }))
     : [];
   return {
     showApiKey,
     // Ein optionaler Key braucht eine andere Beschriftung als ein fehlender:
     // „leer lassen" ist hier kein Mangel, sondern der Normalfall (Issue #193).
     apiKeyOptional: provider?.optionalApiKey === true,
-    apiKeyPlaceholder: typeof presentation.apiKeyPlaceholder === 'string'
-      ? presentation.apiKeyPlaceholder
-      : '••••••',
+    apiKeyPlaceholder: sayText(say, presentation.apiKeyPlaceholder, '••••••'),
     showBaseUrl,
     baseUrlPlaceholder: typeof presentation.baseUrlPlaceholder === 'string'
       ? presentation.baseUrlPlaceholder
       : (provider?.defaultBaseUrl || 'http://localhost:11434'),
     showInsecureTls,
-    insecureTlsHint: typeof presentation.insecureTlsHint === 'string'
-      ? presentation.insecureTlsHint
-      : 'Nur bei selbstsigniertem oder intern signiertem Zertifikat, dem du vertraust.',
+    insecureTlsHint: sayText(
+      say,
+      presentation.insecureTlsHint,
+      say(createMessage('addModel.insecure.hint'))
+    ),
     // Felder des Providers „OpenAI-kompatibel" (Issue #193).
     showDisplayName: !!provider?.fields?.displayName,
-    displayNamePlaceholder: provider?.name || '',
+    displayNamePlaceholder: sayText(say, provider?.name, ''),
     showApiStyle: !!provider?.fields?.apiStyle && apiStyleOptions.length > 0,
     apiStyleOptions,
     defaultApiStyle: isApiStyle(provider?.defaultApiStyle) ? provider.defaultApiStyle : 'chat',
@@ -787,7 +815,7 @@ function buildProviderFormView(provider) {
     // Verbindung je Eintrag (Issue #202): Das Formular bearbeitet dann die
     // Zeile, nicht den Anbieter.
     connectionPerPreset: provider?.connectionPerPreset === true,
-    templates: buildProviderTemplateViews(provider),
+    templates: buildProviderTemplateViews(provider, say),
   };
 }
 

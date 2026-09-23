@@ -101,7 +101,7 @@ module.exports = {
         key: 'reasoningEffort',
         type: 'select',
         label: 'Reasoning',
-        hint: 'reasoning_effort bei passenden OpenAI-Modellen.',
+        hint: createMessage('provider.openai.reasoning.hint'),
         defaultValue: 'medium',
         affectsPresetIdentity: true,
         detailStyle: 'mono',
@@ -119,15 +119,13 @@ module.exports = {
       {
         key: 'reasoningSummary',
         type: 'select',
-        label: 'Reasoning-Zusammenfassung',
-        hint:
-          'Streamt eine Zusammenfassung des Nachdenkens als Zwischenschritte (reasoning.summary). '
-          + 'Manche Organisationen müssen dafür bei OpenAI verifiziert sein; bei Fehlern auf „aus“ stellen.',
+        label: createMessage('provider.openai.reasoningSummary.label'),
+        hint: createMessage('provider.openai.reasoningSummary.hint'),
         defaultValue: 'off',
         affectsPresetIdentity: false,
         detailStyle: 'mono',
         options: [
-          { value: 'off', label: 'aus' },
+          { value: 'off', label: createMessage('provider.openai.reasoningSummary.off') },
           { value: 'auto', label: 'auto' },
         ],
         // Nur „auto“ ist erwähnenswert; „aus“ soll das Preset-Sublabel nicht belegen.

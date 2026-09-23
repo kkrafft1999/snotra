@@ -14,6 +14,7 @@
 'use strict';
 
 const { Agent } = require('undici');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   withRequestTimeout,
   userMessageOf,
@@ -39,49 +40,49 @@ const TEMPLATES = Object.freeze([
     label: 'LM Studio',
     baseUrl: 'http://localhost:1234/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'Lokaler Server von LM Studio, ohne API-Key.',
+    hint: createMessage('provider.compatible.template.lmStudio'),
   },
   {
     id: 'mlx-lm',
     label: 'MLX-LM',
     baseUrl: 'http://127.0.0.1:8080/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'mlx_lm.server auf Apple Silicon, ohne API-Key.',
+    hint: createMessage('provider.compatible.template.mlxLm'),
   },
   {
     id: 'llama-cpp',
     label: 'llama.cpp',
     baseUrl: 'http://localhost:8080/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'llama-server mit eingebautem OpenAI-Layer.',
+    hint: createMessage('provider.compatible.template.llamaCpp'),
   },
   {
     id: 'vllm',
     label: 'vLLM',
     baseUrl: 'http://localhost:8000/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'vLLM-OpenAI-Server; ein API-Key ist dort optional.',
+    hint: createMessage('provider.compatible.template.vllm'),
   },
   {
     id: 'ollama',
     label: 'Ollama (/v1)',
     baseUrl: 'http://localhost:11434/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'Notausgang für entfernte Ollama-Instanzen hinter einem Gateway — lokal ist der eigene Anbieter „Ollama" der bessere Weg.',
+    hint: createMessage('provider.compatible.template.ollama'),
   },
   {
     id: 'openrouter',
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
     apiStyle: API_STYLE_CHAT,
-    hint: 'Router-Dienst mit Bearer-Key und sehr langer Modellliste.',
+    hint: createMessage('provider.compatible.template.openrouter'),
   },
   {
     id: 'custom',
-    label: 'Eigener Endpunkt',
+    label: createMessage('provider.compatible.template.custom.label'),
     baseUrl: '',
     apiStyle: API_STYLE_CHAT,
-    hint: 'URL, Key und Header selbst eintragen.',
+    hint: createMessage('provider.compatible.template.custom'),
   },
 ]);
 
@@ -276,7 +277,7 @@ function dispose() {
 
 module.exports = {
   id: 'openai-compatible',
-  name: 'OpenAI-kompatibel',
+  name: createMessage('provider.name.openaiCompatible'),
   fields: {
     apiKey: true,
     baseUrl: true,
@@ -309,14 +310,14 @@ module.exports = {
   defaultSupportsImages: false,
   apiBase: DEFAULT_BASE,
   presentation: {
-    apiKeyPlaceholder: 'leer lassen, wenn der Server keinen Key verlangt',
+    apiKeyPlaceholder: createMessage('provider.compatible.apiKeyPlaceholder'),
     baseUrlPlaceholder: DEFAULT_BASE,
     connectionDetail: true,
     manualModel: true,
     templates: TEMPLATES,
     apiStyleOptions: [
-      { value: API_STYLE_CHAT, label: 'Nur Chat Completions' },
-      { value: API_STYLE_FULL, label: 'Responses, sonst Chat Completions' },
+      { value: API_STYLE_CHAT, label: createMessage('provider.compatible.apiStyle.chat') },
+      { value: API_STYLE_FULL, label: createMessage('provider.compatible.apiStyle.full') },
     ],
   },
   // Fuer Tests und die Wiederverwendung an anderer Stelle.

@@ -268,7 +268,7 @@ test('der Verbindungstest zeigt Ergebnis und Tool-Liste', async () => {
 
   assert.deepEqual(calls[0], ['test', 'github']);
   const ergebnis = document.getElementById('mcp-test-result').textContent;
-  assert.match(ergebnis, /Verbindung steht — 1 Tool gefunden/);
+  assert.match(ergebnis, /Connected — 1 tool found\./);
   assert.match(ergebnis, /search/);
 });
 

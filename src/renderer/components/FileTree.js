@@ -29,15 +29,13 @@ import {
   treeDepthFromIndentWidth,
 } from '../tree/treePaths.js';
 
-const QUICK_ACTION_PROMPTS = {
-  analyse:
-    'Erklaere mir die Struktur dieses Projekts: Welche Hauptordner gibt es, was machen sie, und wie ist der Code organisiert?',
-  review:
-    'Mach einen Code-Review der wichtigsten Dateien in diesem Projekt. Achte auf Architektur, Wartbarkeit und Auffaelligkeiten.',
-  test:
-    'Welche Tests sollten in diesem Projekt ergaenzt werden? Schlage konkrete Test-Faelle fuer die kritischen Code-Pfade vor.',
-  doc:
-    'Fasse zusammen, worum es in diesem Projekt geht. Nutze README, package.json und die wichtigsten Quellen.',
+// What a quick start chip writes into the chat is the user's own message, so it
+// reads in the language of the interface (#310).
+const QUICK_ACTION_PROMPT_KEYS = {
+  analyse: 'welcome.prompt.analyse',
+  review: 'welcome.prompt.review',
+  test: 'welcome.prompt.test',
+  doc: 'welcome.prompt.doc',
 };
 
 export function initFileTree(deps) {
@@ -156,8 +154,9 @@ export function initFileTree(deps) {
       const chip = e.target.closest('.chip[data-action]');
       if (!chip) return;
       const action = chip.dataset.action;
-      const prompt = QUICK_ACTION_PROMPTS[action];
-      if (!prompt) return;
+      const promptKey = QUICK_ACTION_PROMPT_KEYS[action];
+      if (!promptKey) return;
+      const prompt = t(promptKey);
       chatInput.value = prompt;
       onInputChanged?.();
       chatInput.focus();
