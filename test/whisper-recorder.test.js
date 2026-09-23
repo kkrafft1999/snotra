@@ -4,8 +4,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { createTranslator } = require('../src/shared/i18n');
 // The module imports `../i18n.js`; the vm gets the same catalogue in German.
+// `\r?`: a Windows checkout has CRLF, and `.` does not match the `\r`.
 const source = fs.readFileSync(require.resolve('../src/renderer/voice/WhisperRecorder.js'), 'utf8')
-  .replace(/^import .*\n/m, '')
+  .replace(/^import .*\r?\n/m, '')
   .replace('export function', 'function');
 const t = createTranslator('de');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
