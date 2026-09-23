@@ -8,6 +8,12 @@ const { sleepAbortable } = require('../src/shared/runtime/abort');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { TOOL_RESULTS_ARE_DATA_RULE } = require('../src/shared/contracts/tool-permissions');
 
+const { translateMessage } = require('../src/shared/i18n');
+
+// Seit #306 antwortet der Kern mit einem Schluessel; zum Pruefen des Wortlauts
+// wird er hier ausgesprochen.
+const errorText = (result, locale = 'de') => translateMessage(locale, result.error);
+
 const WRITE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
 
 // Plan-Attrappe (Issue #66): Mindestklasse aus dem Tool-Namen, ein Dateiziel
@@ -1368,7 +1374,7 @@ test('engine lehnt Bild-Anhaenge ab, wenn der Anbieter keine Bilder kann', async
     onEvent: () => {},
   });
 
-  assert.match(result.error, /MLX-LM \(lokal\)/);
+  assert.match(errorText(result), /MLX-LM \(lokal\)/);
   assert.equal(result.code, 'INVALID');
   assert.equal(calls.length, 0, 'ohne Bild-Faehigkeit darf kein Request rausgehen');
 });

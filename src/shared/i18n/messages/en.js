@@ -721,6 +721,16 @@ module.exports = {
   'tools.mcp.short': '{text} (MCP: {server})',
   'tools.mcp.short.empty': 'Tool of the MCP server “{server}”.',
 
+  // ── Errors the chat run reports ──────────────────────────────────────────
+  'chat.error.noMessages': 'No messages handed over.',
+  'chat.error.invalidApiAnswer': 'Invalid answer from the API.',
+  'chat.error.noImages': '{provider} does not take images in Snotra AI yet. Remove the attachment or switch the model.',
+  'chat.error.provider.fallback': 'This provider',
+  'chat.error.toolLimit': 'Too many tool rounds ({limit} at the moment). Raise the limit under Settings › General, or ask a narrower question.',
+  'chat.error.runEnded.noApprovalUi': 'The tool call needs an approval, but no approval interface is available. The run has ended.',
+  'chat.error.runEnded.requestInvalidated': 'The approval request expired (the file, the context or the rules have changed). The run has ended; ask again if you still need it.',
+  'chat.error.runEnded.repeatedDenial': 'The model asked for a tool call that had already been denied, unchanged. The run has ended; the denial stands.',
+
   // ── Context breakdown (token panel) ──────────────────────────────────────
   'context.title': 'Context window of the last request',
   'context.sum': '{prompt} tokens prompt · {completion} tokens answer',

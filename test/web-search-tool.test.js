@@ -96,6 +96,27 @@ test('web_search gibt einen Adapter-Fehler als Tool-Ergebnis zurück, statt zu w
   assert.equal(out.error, 'Kontingent erschöpft.');
 });
 
+/**
+ * Was der Adapter meldet, geht ans Modell und ist deshalb englisch (#276) —
+ * eine darin zitierte Einstellungsseite heisst aber so, wie der Nutzer sie
+ * sieht (#294/#306).
+ */
+test('web_search: englischer Satz, zitierte Seite in der Oberflaechensprache', async () => {
+  const { registry } = makeRegistry({
+    search: () => ({
+      ok: false,
+      code: 'UNAUTHORIZED',
+      error: 'The Tavily key was rejected. Ask the user to check it under "{menu:settings.tools}".',
+    }),
+  });
+
+  const english = JSON.parse(await run(registry, { query: 'x' }, { locale: 'en' }));
+  assert.equal(english.error, 'The Tavily key was rejected. Ask the user to check it under "Settings › Tools".');
+
+  const german = JSON.parse(await run(registry, { query: 'x' }, { locale: 'de' }));
+  assert.equal(german.error, 'The Tavily key was rejected. Ask the user to check it under "Einstellungen › Tools".');
+});
+
 test('web_search bleibt ohne Freigabe der Policy stehen', async () => {
   const { registry, calls } = makeRegistry();
   const out = JSON.parse(await registry.execute('web_search', { query: 'x' }, {}));

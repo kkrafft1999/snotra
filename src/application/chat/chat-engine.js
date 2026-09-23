@@ -45,6 +45,7 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
+const { createMessage } = require('../../shared/contracts/message');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildMemorySystemPrompt } = require('./memory-prompt');
@@ -98,14 +99,16 @@ const CHAT_ENGINE_EVENTS = Object.freeze({
 /** Wie oft ein Aufruf nach geändertem Plan neu bewertet wird, bevor er verfällt. */
 const MAX_PLAN_ATTEMPTS = 3;
 
-/** Hinweis an den Nutzer, wenn ein Tool-Aufruf den Lauf beendet (Konzept §6). */
-const RUN_ENDED_MESSAGES = Object.freeze({
-  [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]:
-    'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.',
-  [PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]:
-    'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
-  [PERMISSION_DENIAL_REASONS.REPEATED_DENIAL]:
-    'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',
+/**
+ * Hinweis an den **Nutzer**, wenn ein Tool-Aufruf den Lauf beendet (Konzept §6)
+ * — als Katalogschluessel, nicht als Satz (#306). Der Lauf endet im
+ * Hauptprozess, gelesen wird der Hinweis im Renderer, wo die aktive Sprache
+ * lebt; also reist der Schluessel (#293).
+ */
+const RUN_ENDED_MESSAGE_KEYS = Object.freeze({
+  [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]: 'chat.error.runEnded.noApprovalUi',
+  [PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]: 'chat.error.runEnded.requestInvalidated',
+  [PERMISSION_DENIAL_REASONS.REPEATED_DENIAL]: 'chat.error.runEnded.repeatedDenial',
 });
 
 /**
@@ -624,9 +627,10 @@ function findUnsupportedAttachment(messages, sendBundle) {
   if (sendBundle?.capabilities?.images === true) return null;
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
   if (normalizeAttachments(lastUser?.attachments).length === 0) return null;
-  const name = sendBundle?.providerName || 'Dieser Anbieter';
   return createChatErrorResult({
-    error: `${name} nimmt in Snotra AI noch keine Bilder entgegen. Entferne den Anhang oder wechsle das Modell.`,
+    error: sendBundle?.providerName
+      ? createMessage('chat.error.noImages', { provider: sendBundle.providerName })
+      : createMessage('chat.error.noImages', { providerKey: 'chat.error.provider.fallback' }),
     code: CHAT_ERROR_CODES.INVALID,
   });
 }
@@ -815,7 +819,7 @@ function createChatEngine({
     try {
       const messages = payload?.messages;
       if (!Array.isArray(messages) || messages.length === 0) {
-        return createChatErrorResult({ error: 'Keine Nachrichten übergeben.', code: CHAT_ERROR_CODES.INVALID });
+        return createChatErrorResult({ error: createMessage('chat.error.noMessages'), code: CHAT_ERROR_CODES.INVALID });
       }
 
       const resolved = await resolveTarget(true);
@@ -1485,7 +1489,7 @@ function createChatEngine({
 
         const assistantMessage = streamed.message;
         if (!assistantMessage) {
-          return createChatErrorResult({ error: 'Ungültige Antwort der API.', code: CHAT_ERROR_CODES.INVALID });
+          return createChatErrorResult({ error: createMessage('chat.error.invalidApiAnswer'), code: CHAT_ERROR_CODES.INVALID });
         }
         apiMessages.push(assistantMessage);
 
@@ -1548,7 +1552,8 @@ function createChatEngine({
             // Provider-Request; das Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
             emitPhase(onEvent, CHAT_PHASES.IDLE);
             return createChatErrorResult({
-              error: RUN_ENDED_MESSAGES[outcome.invalidatedReason] || RUN_ENDED_MESSAGES[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED],
+              error: createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
+                || RUN_ENDED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]),
               code: CHAT_ERROR_CODES.PERMISSION,
               usage: requestUsage,
               contextUsage,
@@ -1561,9 +1566,7 @@ function createChatEngine({
 
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
-        error:
-          `Zu viele Tool-Runden (aktuell ${toolRoundLimit}). ` +
-          'Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
+        error: createMessage('chat.error.toolLimit', { limit: toolRoundLimit }),
         code: CHAT_ERROR_CODES.TOOL_LIMIT,
         usage: requestUsage,
         contextUsage,

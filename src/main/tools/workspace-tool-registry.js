@@ -1167,9 +1167,9 @@ function createWorkspaceToolRegistry({
         },
         required: ['query'],
       },
-      handler: async (args, { abortSignal } = {}) => {
+      handler: async (args, { abortSignal, locale } = {}) => {
         if (!webSearch) {
-          return JSON.stringify({ error: 'Websuche ist in dieser Installation nicht verfügbar.' });
+          return JSON.stringify({ error: 'Web search is not available in this installation.' });
         }
         const result = await webSearch.search({
           query: args?.query,
@@ -1178,7 +1178,9 @@ function createWorkspaceToolRegistry({
           abortSignal,
         });
         if (!result?.ok) {
-          return JSON.stringify({ error: result?.error || 'Die Suche ist fehlgeschlagen.' });
+          // Die Meldung geht ans Modell und ist englisch (#276); eine darin
+          // zitierte Einstellungsseite folgt der Oberflaeche (#294).
+          return JSON.stringify({ error: fillUiQuotes(locale, result?.error || 'The search failed.') });
         }
         // Keine Treffer ist ein gueltiges Ergebnis, kein Fehler — das Modell
         // soll die Anfrage umformulieren duerfen, statt abzubrechen.
