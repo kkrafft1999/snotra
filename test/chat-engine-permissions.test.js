@@ -16,6 +16,9 @@ const { translateMessage } = require('../src/shared/i18n');
 const reasonText = (request, locale = 'de') =>
   (request.reasonParts || []).map((m) => translateMessage(locale, m)).join(' ');
 
+// Dasselbe fuer den Hinweis an den Nutzer, wenn der Lauf endet (#306).
+const errorText = (result, locale = 'de') => translateMessage(locale, result.error);
+
 const WRITE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
 const ROOT = '/tmp/snotra-project';
 
@@ -229,7 +232,8 @@ test('identischer Plan nach Ablehnung: keine zweite Karte, Lauf endet ohne weite
   ], { tools, approvals });
   const result = await send(engine, { events });
   assert.equal(result.code, 'PERMISSION');
-  assert.match(result.error, /bereits abgelehnten Tool-Aufruf/);
+  assert.match(errorText(result), /bereits abgelehnten Tool-Aufruf/);
+  assert.match(errorText(result, 'en'), /had already been denied/);
   assert.equal(approvals.requests.length, 1, 'zweite identische Anfrage nicht gestellt');
   assert.equal(tools.calls.length, 0);
   assert.equal(llm.calls.length, 2, 'nach der Wiederholung kein weiterer Provider-Request');

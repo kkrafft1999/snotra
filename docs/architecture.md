@@ -1068,10 +1068,21 @@ already an enumerated value, the contract keeps a **table of keys** instead
 table is invisible to its scan for `t('…')` literals.
 
 `tMessage()` passes plain text through untouched. That is the seam to the layers
-that still hand over finished sentences — the settings handlers
-(`createSettingsError`) are the last of them, and they follow in their own slice
-of [#277](https://github.com/kkrafft1999/snotra/issues/277). The context
-breakdown came over in [#290](https://github.com/kkrafft1999/snotra/issues/290):
+that still hand over finished sentences. What is left behind it: the settings
+handlers (`createSettingsError`) and the error texts of the provider adapters,
+which reach the chat through `streamed.error` and `formatRoundError`. Both
+follow in their own slice of
+[#277](https://github.com/kkrafft1999/snotra/issues/277).
+
+The chat run itself came over in
+[#306](https://github.com/kkrafft1999/snotra/issues/306): every error
+`createChatErrorResult` writes is a descriptor now, and `ChatStream` puts it
+into words the moment the result arrives. An error bubble is a record of a run
+that has ended, like the conversation around it, so it keeps the language it was
+shown in — what comes after a language change comes in the new one.
+
+The context breakdown came over in
+[#290](https://github.com/kkrafft1999/snotra/issues/290):
 a part names its heading with `labelKey` and its second line with `detailKey`
 plus the `params` that fill it, so that "3 schemas" is counted where it is known
 and worded where it is shown.

@@ -60,19 +60,19 @@ function errorForStatus(status, body) {
   if (status === 401 || status === 403) {
     return {
       code: WEB_SEARCH_ERROR_CODES.UNAUTHORIZED,
-      error: 'Der Tavily-Schlüssel wurde abgelehnt. Bitte unter Einstellungen › Tools prüfen.',
+      error: 'The Tavily key was rejected. Ask the user to check it under "{menu:settings.tools}".',
     };
   }
   if (status === 429) {
     return {
       code: WEB_SEARCH_ERROR_CODES.RATE_LIMITED,
-      error: 'Das Suchkontingent bei Tavily ist vorerst erschöpft. Später erneut versuchen.',
+      error: 'The Tavily search quota is exhausted for now. Try again later.',
     };
   }
   const detail = typeof body === 'string' && body.trim() ? ` (${body.trim().slice(0, 200)})` : '';
   return {
     code: WEB_SEARCH_ERROR_CODES.SERVICE,
-    error: `Die Suche ist fehlgeschlagen: HTTP ${status}${detail}.`,
+    error: `The search failed: HTTP ${status}${detail}.`,
   };
 }
 
@@ -94,14 +94,14 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         return {
           ok: false,
           code: WEB_SEARCH_ERROR_CODES.INVALID_QUERY,
-          error: 'Es wurde keine Suchanfrage übergeben.',
+          error: 'No search query was handed over.',
         };
       }
       if (text.length > WEB_SEARCH_LIMITS.MAX_QUERY_CHARS) {
         return {
           ok: false,
           code: WEB_SEARCH_ERROR_CODES.INVALID_QUERY,
-          error: `Die Suchanfrage ist länger als ${WEB_SEARCH_LIMITS.MAX_QUERY_CHARS} Zeichen.`,
+          error: `The search query is longer than ${WEB_SEARCH_LIMITS.MAX_QUERY_CHARS} characters.`,
         };
       }
 
@@ -110,7 +110,7 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         return {
           ok: false,
           code: WEB_SEARCH_ERROR_CODES.NO_API_KEY,
-          error: 'Für die Websuche ist kein Tavily-Schlüssel hinterlegt (Einstellungen › Tools).',
+          error: 'No Tavily key is stored for the web search ("{menu:settings.tools}").',
         };
       }
 
@@ -144,7 +144,7 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         return {
           ok: false,
           code: WEB_SEARCH_ERROR_CODES.NETWORK,
-          error: e?.message || 'Die Suche konnte nicht erreicht werden.',
+          error: e?.message || 'The search could not be reached.',
         };
       }
 
@@ -165,7 +165,7 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         return {
           ok: false,
           code: WEB_SEARCH_ERROR_CODES.SERVICE,
-          error: 'Die Antwort der Suche war nicht lesbar.',
+          error: 'The search answer could not be read.',
         };
       }
 

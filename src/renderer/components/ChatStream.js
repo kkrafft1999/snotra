@@ -42,7 +42,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
 // per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
-import { getLocale, onLocaleChange, t } from '../i18n.js';
+import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
 const { coerceUsage, createEmptyUsage, inferChatTitle } = contracts;
 
@@ -907,6 +907,10 @@ export function initChatStream({
         appStore.chatAbortedSendSeq = 0;
       }
     } else if (result.error) {
+      // Seit #306 schickt der Kern einen Schluessel statt eines Satzes; was
+      // noch fertigen Text liefert — die Provider-Adapter — geht durch
+      // `tMessage` unveraendert durch (#293).
+      const errorText = tMessage(result.error);
       let bubbleKept = false;
       if (last && last.streaming) {
         if (Array.isArray(result.toolTrace) && result.toolTrace.length > 0) {
@@ -927,11 +931,11 @@ export function initChatStream({
           appStore.chatMessages.pop();
         }
       }
-      appStore.chatMessages.push({ role: 'assistant', content: result.error, isError: true });
+      appStore.chatMessages.push({ role: 'assistant', content: errorText, isError: true });
       if (bubbleKept) {
         const errorLi = document.createElement('li');
         errorLi.classList.add('chat-msg', 'assistant', 'error');
-        errorLi.textContent = result.error;
+        errorLi.textContent = errorText;
         chatMessagesEl.appendChild(errorLi);
         syncChatBusyState();
         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;

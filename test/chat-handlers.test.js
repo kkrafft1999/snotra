@@ -5,6 +5,12 @@ const { registerChatHandlers, resolveToolRoundLimit } = require('../src/main/ipc
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 
+const { translateMessage } = require('../src/shared/i18n');
+
+// Seit #306 antwortet der Kern mit einem Schluessel; zum Pruefen des Wortlauts
+// wird er hier ausgesprochen.
+const errorText = (result, locale = 'de') => translateMessage(locale, result.error);
+
 test('resolveToolRoundLimit clamps to configured bounds', () => {
   assert.equal(resolveToolRoundLimit({}, 14), 14);
   assert.equal(resolveToolRoundLimit({ maxToolRounds: 0 }, 14), 1);
@@ -224,7 +230,9 @@ test('CHAT_SEND rejects an empty messages payload', async () => {
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, { messages: [] });
-  assert.deepEqual(res, { error: 'Keine Nachrichten übergeben.', code: 'INVALID' });
+  assert.deepEqual(res, { error: { key: 'chat.error.noMessages' }, code: 'INVALID' });
+  assert.equal(errorText(res), 'Keine Nachrichten übergeben.');
+  assert.equal(errorText(res, 'en'), 'No messages handed over.');
 });
 
 test('CHAT_SEND reports an unknown provider without calling streamChatRound', async () => {
@@ -429,7 +437,8 @@ test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhaust
   });
 
   assert.equal(res.code, 'TOOL_LIMIT');
-  assert.match(res.error, /Zu viele Tool-Runden/);
+  assert.match(errorText(res), /Zu viele Tool-Runden \(aktuell 2\)/);
+  assert.match(errorText(res, 'en'), /Too many tool rounds \(2 at the moment\)/);
 });
 
 test('CHAT_SEND surfaces a provider error mid-loop and stops further rounds', async () => {
@@ -527,7 +536,7 @@ test('CHAT_SEND lehnt einen Schreibaufruf ohne Freigabe-Oberflaeche sicher ab un
   });
 
   assert.equal(res.code, 'PERMISSION');
-  assert.match(res.error, /Freigabe/);
+  assert.match(errorText(res), /Freigabe/);
   assert.equal(toolRegistry.calls.length, 0, 'kein Handler ohne Freigabe');
   assert.equal(calls.length, 1, 'kein weiterer Provider-Request nach Verfall');
   assert.equal(res.toolTrace.length, 1);
