@@ -5,7 +5,7 @@ const { extractStringFromPartialJson } = require('../../shared/runtime/partial-j
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
-const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
 const { parseQualifiedMcpToolName } = require('../../shared/contracts/mcp');
 const {
   CONTEXT_PART_GROUPS,
@@ -45,6 +45,7 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
+const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildMemorySystemPrompt } = require('./memory-prompt');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
@@ -869,6 +870,10 @@ function createChatEngine({
             // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
             // prägen (Issue #124).
             invokedSkills: collectInvokedSkillNames(messages),
+            // The system skills quote settings pages by name so the model can
+            // point at one. The quotation follows the interface (#294); the
+            // instructions around it stay English (#276).
+            locale: appLocale,
           });
           skillRoots = activeSkills
             .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
@@ -1092,6 +1097,23 @@ function createChatEngine({
         return JSON.stringify([chatId, workspaceRoot, policy.mode, policy.policyVersion, skillSignature]);
       }
 
+      /**
+       * `load_skill` is the one way a skill's instructions reach the model, and
+       * it reads the file straight off disk. For the app's own skills the
+       * quoted settings pages are filled in here (#294).
+       *
+       * Only for those: a folder skill is somebody else's text, and tool
+       * results are data. Rewriting one on its way to the model would be the
+       * same mistake as following an instruction found inside it.
+       */
+      function localizeSystemSkillResult(toolName, args, content) {
+        if (toolName !== LOAD_SKILL_TOOL) return content;
+        const name = typeof args?.name === 'string' ? args.name.trim() : '';
+        const skill = activeSkills.find((entry) => entry.name === name);
+        if (!skill || skill.source !== SKILL_SOURCES.SYSTEM) return content;
+        return fillUiQuotes(appLocale, content);
+      }
+
       function permissionDenied(entry, { reason, ruleId, riskClasses, mode, targets, message }) {
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.DENY,
@@ -1104,7 +1126,11 @@ function createChatEngine({
           targets,
         });
         return {
-          content: createPermissionDeniedToolResult({ reason, ruleId, riskClasses, message }),
+          // The sentence is English and stays that way (#276); a settings page
+          // quoted inside it is a display string and follows the interface, so
+          // that "the user can enable it under …" names a page that exists
+          // (#294).
+          content: fillUiQuotes(appLocale, createPermissionDeniedToolResult({ reason, ruleId, riskClasses, message })),
           denied: true,
           reason,
         };
@@ -1297,6 +1323,9 @@ function createChatEngine({
             skillRoots,
             abortSignal,
             disabledNames,
+            // For the sentences the registry writes itself — they quote a
+            // settings page, and it has to be the one the user sees (#294).
+            locale: appLocale,
             approved: true,
             plan,
             riskClasses,
@@ -1506,7 +1535,11 @@ function createChatEngine({
             throw error;
           }
           emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
-          const toolMessage = { role: 'tool', tool_call_id: toolCall.id, content: outcome.content };
+          const toolMessage = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: localizeSystemSkillResult(toolName, args, outcome.content),
+          };
           if (outcome.sensitiveMarker) toolMessage.sensitiveMarker = outcome.sensitiveMarker;
           apiMessages.push(toolMessage);
 

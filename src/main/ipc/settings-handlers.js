@@ -362,6 +362,9 @@ function registerSettingsHandlers({
     return skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
       activeSkills: Array.isArray(prefs.activeSkills) ? prefs.activeSkills : null,
+      // A system skill quotes settings pages; in the catalogue they read in the
+      // language of the interface showing them (#294).
+      locale: prefs.appLocale,
     });
   }
 

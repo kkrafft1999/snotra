@@ -131,7 +131,7 @@ test('createChatApplication reicht die eingeschalteten Skills bis in den Systemp
   });
 
   assert.deepEqual(skillQueries, [
-    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [] },
+    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [], locale: 'en' },
   ]);
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.match(system.content, /## Skill: snotra-capabilities/);

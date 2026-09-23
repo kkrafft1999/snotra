@@ -18,6 +18,7 @@
  */
 
 const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
+const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const {
   SKILL_SOURCES,
   SKILL_STATUS,
@@ -28,6 +29,23 @@ const {
 const SKILL_FILE = 'SKILL.md';
 /** Schutz vor versehentlich riesigen Verzeichnissen. */
 const MAX_SKILLS_PER_DIRECTORY = 200;
+
+/**
+ * Menu paths quoted in a system skill follow the interface language (#294).
+ * Applied on the way out rather than when the file is read, so the scan cache
+ * keeps the raw text and a language change costs nothing.
+ *
+ * Only the app's own skills. A folder skill is somebody else's text and is
+ * passed through exactly as it stands.
+ */
+function withMenuPaths(skill, locale) {
+  if (skill.source !== SKILL_SOURCES.SYSTEM) return skill;
+  return {
+    ...skill,
+    description: fillUiQuotes(locale, skill.description),
+    body: fillUiQuotes(locale, skill.body),
+  };
+}
 
 function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBodyChars = MAX_SKILL_BODY_CHARS }) {
   if (!fs || !path) throw new TypeError('createSkillsService benötigt fs und path.');
@@ -191,11 +209,11 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return Array.isArray(activeSkills) ? activeSkills : defaultActiveNames(skills);
   }
 
-  async function listCatalog({ workspaceRoot = null, activeSkills = null } = {}) {
+  async function listCatalog({ workspaceRoot = null, activeSkills = null, locale = null } = {}) {
     const { skills } = await scan(workspaceRoot);
     const active = new Set(resolveActiveNames(skills, activeSkills));
     return {
-      skills: skills.map((skill) => ({
+      skills: skills.map((raw) => withMenuPaths(raw, locale)).map((skill) => ({
         name: skill.name,
         description: skill.description,
         source: skill.source,
@@ -216,7 +234,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * (Issue #124). Sie kommen zusätzlich zur dauerhaften Auswahl dazu und
    * gelten nur für diesen Verlauf.
    */
-  async function getActiveSkills({ workspaceRoot = null, activeSkills = null, invokedSkills = null } = {}) {
+  async function getActiveSkills({ workspaceRoot = null, activeSkills = null, invokedSkills = null, locale = null } = {}) {
     const { skills } = await scan(workspaceRoot);
     const active = new Set(resolveActiveNames(skills, activeSkills));
     const invoked = new Set(Array.isArray(invokedSkills) ? invokedSkills : []);
@@ -226,6 +244,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
           skill.status === SKILL_STATUS.AVAILABLE
           && (active.has(skill.name) || invoked.has(skill.name))
       )
+      .map((raw) => withMenuPaths(raw, locale))
       .map((skill) => ({
         name: skill.name,
         description: skill.description,

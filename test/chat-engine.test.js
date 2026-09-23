@@ -1029,7 +1029,8 @@ test('engine injects the bodies of active skills into the system message', async
   });
 
   assert.deepEqual(skillCalls, [
-    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [] },
+    // `locale` seit #294: der Skill-Text zitiert Einstellungsseiten.
+    { workspaceRoot: null, activeSkills: ['snotra-capabilities'], invokedSkills: [], locale: 'en' },
   ]);
   const system = calls[0].messages.find((m) => m.role === 'system');
   assert.ok(system, 'Skills gelten auch ohne geöffneten Ordner');

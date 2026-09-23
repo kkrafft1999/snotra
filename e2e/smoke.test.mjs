@@ -320,6 +320,11 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     'ohne eingeschaltetes shell_execute keine Shell-Angabe');
   step('Umgebungsblock im Systemprompt geprueft');
 
+  // Der Systemprompt nennt die System-Skills nur mit ihrer Kurzbeschreibung;
+  // der Text selbst kommt erst auf `load_skill` (Issue #173).
+  assert.match(systemMessage, /- snotra-capabilities: What Snotra AI itself can do/);
+  assert.equal(systemMessage.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
+
   // --- Projektanweisungen aus AGENTS.md (Issue #212, #253) -----------------
   // Auch das entsteht erst im echten Main-Prozess: Welche Dateien gefunden
   // werden, weiss nur der Adapter am Dateisystem.
@@ -547,6 +552,34 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'geschlossener Einstellungsdialog' });
+
+  // --- Zitierte Menuepfade im Skill-Text (Issue #294) -----------------------
+  // Erst `load_skill` bringt den Text ans Modell. Der Satz darum bleibt
+  // englisch (#276); die Einstellungsseite heisst so, wie sie in der
+  // eingestellten Sprache heisst — hier Deutsch.
+  const SKILL_QUESTION = 'Was kannst du eigentlich alles?';
+  model.queueAnswer({
+    match: SKILL_QUESTION,
+    toolCalls: [{ name: 'load_skill', arguments: { name: 'snotra-capabilities' } }],
+  });
+  model.queueAnswer({ match: 'load_skill', text: 'Einiges.' });
+  await ask(page, SKILL_QUESTION);
+
+  const skillResult = await poll(() => {
+    for (const request of model.requests) {
+      const message = request.body?.messages?.findLast?.((m) => m.role === 'tool');
+      if (typeof message?.content === 'string' && message.content.includes('"skill":"snotra-capabilities"')) {
+        return message.content;
+      }
+    }
+    return null;
+  }, { what: 'Skill-Text beim Modell' });
+  assert.match(skillResult, /Einstellungen › Tools/, 'zitierter Menuepfad in der Oberflaechensprache');
+  assert.equal(skillResult.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
+  // Der Satz darum ist und bleibt englisch. (Dass im Quelltext des Skills
+  // keine Seite fest in einer Sprache steht, haelt test/ui-quotes.test.js.)
+  assert.match(skillResult, /The tool list of this conversation is what counts/);
+  step('Menuepfade im Skill-Text geprueft');
 
   // --- „merk dir das": Modell → Freigabe → Datei (Issue #166) ---------------
   // Die teuerste Strecke des Gedaechtnisses und die einzige, die kein

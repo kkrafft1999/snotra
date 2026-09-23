@@ -1115,6 +1115,46 @@ Number formatting follows the interface language as well, not the machine's: a
 thousands separator is a dot in German and a comma in English, and the percent
 sign takes a space on one side of the border and not on the other.
 
+### Model-facing text quotes the interface
+
+What goes to the model is English and stays English (#276). But some of those
+sentences **name something the user has to find** — "the user can enable it
+under …". A fixed German quotation inside an English sentence pointed at a page
+that does not exist once the interface was switchable, so since
+[#294](https://github.com/kkrafft1999/snotra/issues/294) the quotation follows
+`appLocale` while the sentence around it does not.
+
+`src/shared/i18n/ui-quotes.js` holds two placeholders, both resolved from the
+**same catalogue entries the interface renders**:
+
+| Placeholder | Yields |
+| --- | --- |
+| `{menu:settings.tools}` | `Settings › Tools` / `Einstellungen › Tools` — assembled from the navigation's own keys |
+| `{label:permissions.mode.smart}` | `Smart` / `Intelligent` — one entry, quoted as it stands |
+
+A path is never written out as its own string. `test/ui-quotes.test.js` checks
+every key a path is built from against the `data-i18n` attributes of
+`index.html`: rename a settings page and the quotation moves with it, and a
+second list kept alongside would fail the test rather than drift.
+
+**Filled where the app wrote the sentence, not at the door to the model.** The
+tempting shortcut — substituting in every tool result on its way out — would
+also rewrite file content a tool just read, and tool results are data. So the
+four places that write such a sentence fill it themselves:
+
+- the denial result (`permissionDenied` in `chat-engine`),
+- the two errors the tool registry writes (`context.locale`),
+- the memory adapter (`getLocale`, read fresh per call like the self-memory
+  switch next to it),
+- a **system** skill's instructions, on the one path they reach the model:
+  `load_skill`. A folder skill is somebody else's text and is passed through
+  exactly as written — rewriting it would be the same mistake as following an
+  instruction found inside it.
+
+`skills-service` fills the placeholder on the way out rather than when the file
+is read, so the scan cache keeps the raw text and a language change costs
+nothing.
+
 ### Renderer: markup declaratively, built nodes by callback
 
 `src/renderer/i18n.js` holds the active locale and knows three routes:

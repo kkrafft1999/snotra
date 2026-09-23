@@ -687,11 +687,11 @@ test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch
   // Auch ein mitgeschickter Pfad aendert nichts: es zaehlt der aktive Root.
   const result = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, '/tmp/fremd');
   assert.equal(result.skills[0].name, 'snotra-capabilities');
-  assert.deepEqual(calls, [{ workspaceRoot: ws, activeSkills: null }]);
+  assert.deepEqual(calls, [{ workspaceRoot: ws, activeSkills: null, locale: 'en' }]);
 
   await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['snotra-capabilities'] });
   await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG);
-  assert.deepEqual(calls[1], { workspaceRoot: ws, activeSkills: ['snotra-capabilities'] });
+  assert.deepEqual(calls[1], { workspaceRoot: ws, activeSkills: ['snotra-capabilities'], locale: 'en' });
 });
 
 test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (t) => {

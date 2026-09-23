@@ -30,6 +30,7 @@ const {
   removeMemoryEntryLine,
   formatMemoryDate,
 } = require('../../shared/contracts/memory');
+const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 
 function createMemoryAdapter({
   fs,
@@ -43,6 +44,12 @@ function createMemoryAdapter({
    * die Grenze setzt dann nur die Freigabe.
    */
   isSelfMemoryAllowed = null,
+  /**
+   * Die Oberflaechensprache — fuer die Einstellungsseiten, die diese Meldungen
+   * zitieren (#294). Wie der Schalter darueber bei jedem Aufruf frisch gelesen,
+   * damit ein Sprachwechsel sofort gilt.
+   */
+  getLocale = null,
 }) {
   if (!fs || !path) throw new TypeError('createMemoryAdapter benötigt fs und path.');
 
@@ -143,10 +150,11 @@ function createMemoryAdapter({
       // und eine Regel, die nur dort steht, gilt nur für den, der sie benutzt.
       if (origin === MEMORY_ORIGINS.SELF && typeof isSelfMemoryAllowed === 'function') {
         if ((await isSelfMemoryAllowed()) === false) {
-          throw new Error(
-            'Unprompted remembering is switched off ("Einstellungen \u203a Ged\u00e4chtnis"). '
+          throw new Error(fillUiQuotes(
+            typeof getLocale === 'function' ? getLocale() : null,
+            'Unprompted remembering is switched off ("{menu:settings.memory}"). '
               + 'Only what the user explicitly asks for is remembered.'
-          );
+          ));
         }
       }
       const file = fileFor(scope, workspaceRoot);
@@ -166,10 +174,11 @@ function createMemoryAdapter({
           date: formatMemoryDate(new Date()),
         });
         if (next.length > maxChars) {
-          throw new RangeError(
+          throw new RangeError(fillUiQuotes(
+            typeof getLocale === 'function' ? getLocale() : null,
             `The ${scope === MEMORY_SCOPES.USER ? 'global' : 'project'} memory is full `
-              + `(${maxChars} characters). The user can delete entries under "Einstellungen \u203a Ged\u00e4chtnis".`
-          );
+              + `(${maxChars} characters). The user can delete entries under "{menu:settings.memory}".`
+          ));
         }
         await writeFileAtomic(file, next);
         return { scope, file, text: body };

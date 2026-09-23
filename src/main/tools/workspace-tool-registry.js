@@ -3,6 +3,7 @@ const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const { createTranslator } = require('../../shared/i18n');
+const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -363,12 +364,13 @@ function createToolRegistry(initialDefinitions = []) {
     const disabled = toDisabledNameSet(context.disabledNames);
     if (disabled && disabled.has(name)) {
       return JSON.stringify({
-        error: `Tool is switched off: ${name}. The user can enable it under "Einstellungen \u203a Tools".`,
+        // English sentence, quoted page in the interface language (#294/#276).
+        error: fillUiQuotes(context.locale, `Tool is switched off: ${name}. The user can enable it under "{menu:settings.tools}".`),
       });
     }
     if (definition.isAvailable() !== true) {
       return JSON.stringify({
-        error: `Tool is not configured: ${name}. See "Einstellungen \u203a Tools".`,
+        error: fillUiQuotes(context.locale, `Tool is not configured: ${name}. See "{menu:settings.tools}".`),
       });
     }
     return definition.handler(args || {}, context);
