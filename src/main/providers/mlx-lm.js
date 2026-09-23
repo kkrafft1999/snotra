@@ -1,4 +1,5 @@
 const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
 const { listChatModels, streamChatCompletionsRound } = require('./openai-chat-transport');
 
 const DEFAULT_BASE = 'http://127.0.0.1:8080/v1';
@@ -42,7 +43,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
 module.exports = {
   id: 'mlx-lm',
-  name: 'MLX-LM (lokal)',
+  name: createMessage('provider.name.mlxLm'),
   fields: { baseUrl: true },
   // Der Server nimmt keine Bilder an — bleibt false (Issue #93).
   capabilities: { images: false },

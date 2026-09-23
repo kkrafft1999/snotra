@@ -7,6 +7,7 @@ const {
   buildProviderFormView,
   hasPresetConnection,
 } = require('../../shared/contracts/settings');
+const { createTranslator } = require('../../shared/i18n');
 
 function createSettingsPresentationService({ providerCatalog, defaultProviderId }) {
   function getProvider(id) {
@@ -64,8 +65,16 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     return out;
   }
 
-  function buildProviderView(meta, entry, { chatProviderId, apiKeyDecryptable } = {}) {
+  /**
+   * `say` puts what the provider definition says into words — the name of a
+   * local provider, the hints, the option labels (#310). Everything the view
+   * carries is finished text in the language of the interface, the way the
+   * tool catalogue does it (#291); the renderer fetches the state again when
+   * the language changes.
+   */
+  function buildProviderView(meta, entry, { chatProviderId, apiKeyDecryptable, say = createTranslator().message } = {}) {
     const provider = getProvider(meta.id) || meta;
+    const builtInName = say(meta.name);
     const { hasKey, keyUnreadable, baseUrl, configured, insecureTls } = resolveConfigured(meta, entry, apiKeyDecryptable);
     const model = entry.model || meta.defaultModel || '';
     const extended = resolveExtendedFields(meta, entry);
@@ -75,7 +84,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     // man spricht (Issue #193).
     const name = typeof extended.displayName === 'string' && extended.displayName.trim()
       ? extended.displayName.trim()
-      : meta.name;
+      : builtInName;
     // Bild-Faehigkeit kann an der Konfiguration haengen statt am Adapter.
     const capabilities = typeof provider?.capabilitiesFor === 'function'
       ? { images: provider.capabilitiesFor(entry)?.images === true }
@@ -86,7 +95,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       name,
       // Der fest eingebaute Name bleibt sichtbar, damit das Formular ihn als
       // Rueckfall anzeigen kann, wenn der Anzeigename leer ist.
-      builtInName: meta.name,
+      builtInName,
       ...extended,
       defaultModel: meta.defaultModel || '',
       defaultBaseUrl: meta.defaultBaseUrl || '',
@@ -104,8 +113,8 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       insecureTls,
       isActiveChatProvider: meta.id === chatProviderId,
       connectionDetail: !!(getProvider(meta.id)?.presentation?.connectionDetail),
-      form: buildProviderFormView(provider),
-      presetFields: buildPresetFieldViews(provider),
+      form: buildProviderFormView(provider, say),
+      presetFields: buildPresetFieldViews(provider, say),
     };
   }
 
@@ -140,7 +149,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     };
   }
 
-  function buildPresetView(preset, providerViewsById, connectionOverrides, apiKeyDecryptable) {
+  function buildPresetView(preset, providerViewsById, connectionOverrides, apiKeyDecryptable, say = createTranslator().message) {
     const providerView = providerViewsById[preset.providerId];
     if (!providerView) return null;
     const provider = getProvider(preset.providerId);
@@ -152,7 +161,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       ? buildPresetConnectionView(preset, provider, apiKeyDecryptable)
       : null;
     const connection = presetConnection || connectionOverrides?.[preset.providerId];
-    const sublabel = formatPresetSublabelFromView(preset, providerView, connection);
+    const sublabel = formatPresetSublabelFromView(preset, providerView, connection, say);
     // Zusatz wie das Reasoning-Level haengt hinter dem Modell, damit Chat-Menue
     // und Pille einzeilig bleiben: „OpenAI · gpt-5 · high“.
     const optionSuffix = formatPresetOptionSuffixFromView(preset, providerView);
@@ -202,7 +211,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     chatTarget,
     connectionOverrides,
     apiKeyDecryptable,
+    locale,
   }) {
+    const say = createTranslator(locale).message;
     const active = config.activeProvider || defaultProviderId;
     const providerMetaList = providerCatalog.listProviderMeta();
     const providerViews = providerMetaList.map((meta) => {
@@ -210,13 +221,14 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       return buildProviderView(meta, entry, {
         chatProviderId: chatTarget.providerId,
         apiKeyDecryptable,
+        say,
       });
     });
     const providerViewsById = Object.fromEntries(providerViews.map((p) => [p.id, p]));
 
     const presetsWire = Array.isArray(config.presets) ? config.presets : [];
     const presets = presetsWire
-      .map((row) => buildPresetView(row, providerViewsById, connectionOverrides, apiKeyDecryptable))
+      .map((row) => buildPresetView(row, providerViewsById, connectionOverrides, apiKeyDecryptable, say))
       .filter(Boolean);
 
     return {

@@ -1080,12 +1080,27 @@ third-party library. Snotra's own sentences — the settings handlers'
 keys. `createSettingsError` and `createListModelsResult` pass a descriptor
 through instead of stringifying it.
 
-Two things are deliberately not on this side of the line. The messages the
-**model** reads (`http-url-fetch-adapter.js`, `mcp-adapter.js`, the fallback in
-`describeFetchError`) are a [#276](https://github.com/kkrafft1999/snotra/issues/276)
-matter: they become English, not bilingual. And an aborted request carries both
-forms (`userMessage` next to `message` in `request-timeout.js`), because the
-transcription still shows `message` as it stands.
+The messages the **model** reads (`http-url-fetch-adapter.js`, `mcp-adapter.js`,
+the fallback in `describeFetchError`) are deliberately not on this side of the
+line. They are a [#276](https://github.com/kkrafft1999/snotra/issues/276) matter
+and become English, not bilingual.
+
+### Provider definitions speak through the catalogue
+
+A provider definition (`src/main/providers/*.js`) may give its name, hints,
+option labels and templates as `createMessage(key)` instead of a string. The
+name matters most, because "Ollama (local)" carries a word
+([#310](https://github.com/kkrafft1999/snotra/issues/310)). Proper nouns
+("OpenAI", "LM Studio", "low") stay plain strings.
+
+The two readers handle it differently. The **settings presentation** builds the
+provider views in the stored language, following the tool catalogue (#291):
+`buildLlmStateDto({ locale })` hands a translator to the view builders in
+`src/shared/contracts/settings.js` (their `say` parameter). The renderer
+therefore gets finished text and fetches the state again on a language change.
+**Messages that name a provider** — "No API key stored for {provider}." — take
+the name as it is. When the name is a descriptor, `resolveKeyParams` translates
+it together with the sentence around it (#308).
 
 The chat run itself came over in
 [#306](https://github.com/kkrafft1999/snotra/issues/306): every error

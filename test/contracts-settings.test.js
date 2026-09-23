@@ -62,11 +62,17 @@ test('presetIdentityKey distinguishes OpenAI presets by reasoning effort', () =>
 });
 
 test('formatConnectionDetail renders host and TLS state', () => {
-  const text = formatConnectionDetail(ollama, {
-    baseUrl: 'https://ollama.internal:11434',
-    insecureTls: true,
-  });
-  assert.equal(text, 'Server: ollama.internal:11434 · TLS insecure');
+  const { createTranslator } = require('../src/shared/i18n');
+  const connection = { baseUrl: 'https://ollama.internal:11434', insecureTls: true };
+  assert.equal(
+    formatConnectionDetail(ollama, connection, createTranslator('en').message),
+    'Server: ollama.internal:11434 · TLS insecure'
+  );
+  // The words come from the catalogue (#310).
+  assert.equal(
+    formatConnectionDetail(ollama, { baseUrl: '', insecureTls: false }, createTranslator('de').message),
+    'Server: Server · TLS geprüft'
+  );
 });
 
 test('formatPresetSublabelFromView uses view DTO presetFields and connectionDetail', () => {
@@ -95,7 +101,8 @@ test('formatPresetSublabelFromView uses view DTO presetFields and connectionDeta
   const conn = formatPresetSublabelFromView(
     { providerId: 'ollama', model: 'llama3.2' },
     ollamaView,
-    { baseUrl: 'https://draft.local', insecureTls: true }
+    { baseUrl: 'https://draft.local', insecureTls: true },
+    require('../src/shared/i18n').createTranslator('en').message
   );
   assert.match(conn.text, /draft\.local/);
   assert.match(conn.text, /TLS insecure/);

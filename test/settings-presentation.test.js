@@ -6,6 +6,7 @@ const {
   createProviderCatalogAdapter,
 } = require('../src/main/adapters/provider-catalog-adapter');
 const { createSettingsPresentationService } = require('../src/main/services/settings-presentation-service');
+const { isMessage } = require('../src/shared/contracts/message');
 
 const providerCatalog = createProviderCatalogAdapter(createProviderRuntimeAdapter(providers));
 
@@ -19,7 +20,9 @@ test('every registered provider exposes presentation metadata', () => {
     const p = providers.getProvider(id);
     assert.ok(p.presentation, `${id} must define presentation`);
     if (p.fields?.apiKey) {
-      assert.equal(typeof p.presentation.apiKeyPlaceholder, 'string');
+      // A proper placeholder ("sk-…") or a catalogue message (#310).
+      const placeholder = p.presentation.apiKeyPlaceholder;
+      assert.ok(typeof placeholder === 'string' || isMessage(placeholder), `${id}: apiKeyPlaceholder`);
     }
     if (p.fields?.baseUrl) {
       assert.equal(typeof p.presentation.baseUrlPlaceholder, 'string');
@@ -59,6 +62,7 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
       model: 'gpt-4o-mini',
       reasoningEffort: 'medium',
     },
+    locale: 'de',
   });
 
   assert.equal(dto.encryptionAvailable, true);
@@ -188,7 +192,7 @@ test('der Anzeigename der Zeile ersetzt den Anbieternamen in den Beschriftungen'
 
 test('ohne Anzeigename bleibt es beim eingebauten Namen', () => {
   const preset = compatPresetView({ displayName: '   ', baseUrl: 'http://localhost:1234/v1' });
-  assert.equal(preset.labelBase, 'OpenAI-kompatibel \u00b7 qwen2.5');
+  assert.equal(preset.labelBase, 'OpenAI-compatible \u00b7 qwen2.5');
 });
 
 test('zwei Zeilen fuehren zwei verschiedene Ziele nebeneinander', () => {
@@ -255,7 +259,54 @@ test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {
     { ollama: providerView }
   );
   assert.equal('connection' in preset, false);
-  assert.equal(preset.labelBase, 'Ollama (lokal) \u00b7 llama3.2');
+  assert.equal(preset.labelBase, 'Ollama (local) \u00b7 llama3.2');
+});
+
+// #310: what a provider definition says reaches the renderer in the stored
+// language — names, hints, option labels, templates and the connection line.
+test('buildLlmStateDto speaks the stored language', () => {
+  const config = {
+    activeProvider: 'ollama',
+    activePresetId: 'o1',
+    presets: [{ id: 'o1', providerId: 'ollama', model: 'llama3.2', menuVisible: true }],
+    providers: { ollama: { baseUrl: 'http://127.0.0.1:11434' } },
+  };
+  const build = (locale) => presentation.buildLlmStateDto({
+    encryptionAvailable: true,
+    config,
+    chatTarget: { providerId: 'ollama', model: 'llama3.2' },
+    locale,
+  });
+  const en = build('en');
+  const de = build('de');
+  const view = (dto, id) => dto.providers.find((p) => p.id === id);
+
+  assert.equal(en.presets[0].labelBase, 'Ollama (local) · llama3.2');
+  assert.equal(de.presets[0].labelBase, 'Ollama (lokal) · llama3.2');
+  assert.match(en.presets[0].sublabel, /TLS verified/);
+  assert.match(de.presets[0].sublabel, /TLS geprüft/);
+  assert.equal(view(en, 'mlx-lm').name, 'MLX-LM (local)');
+  assert.equal(view(de, 'openai-compatible').builtInName, 'OpenAI-kompatibel');
+
+  const summaryEn = view(en, 'openai').presetFields.find((f) => f.key === 'reasoningSummary');
+  const summaryDe = view(de, 'openai').presetFields.find((f) => f.key === 'reasoningSummary');
+  assert.equal(summaryEn.label, 'Reasoning summary');
+  assert.equal(summaryDe.label, 'Reasoning-Zusammenfassung');
+  assert.deepEqual(summaryEn.options.map((o) => o.label), ['off', 'auto']);
+  assert.deepEqual(summaryDe.options.map((o) => o.label), ['aus', 'auto']);
+
+  const formEn = view(en, 'openai-compatible').form;
+  const formDe = view(de, 'openai-compatible').form;
+  assert.equal(formEn.apiKeyPlaceholder, 'leave empty if the server needs no key');
+  assert.equal(formEn.displayNamePlaceholder, 'OpenAI-compatible');
+  assert.deepEqual(formDe.apiStyleOptions.map((o) => o.label), ['Nur Chat Completions', 'Responses, sonst Chat Completions']);
+  const customEn = formEn.templates.find((t) => t.id === 'custom');
+  const lmStudioDe = formDe.templates.find((t) => t.id === 'lm-studio');
+  assert.equal(customEn.label, 'Custom endpoint');
+  assert.equal(lmStudioDe.label, 'LM Studio');
+  assert.equal(lmStudioDe.hint, 'Lokaler Server von LM Studio, ohne API-Key.');
+  // Nothing in the views is left as a descriptor.
+  assert.equal(JSON.stringify(en).includes('"key":"provider.'), false);
 });
 
 

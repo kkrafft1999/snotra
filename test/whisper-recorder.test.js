@@ -2,7 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync(require.resolve('../src/renderer/voice/WhisperRecorder.js'), 'utf8').replace('export function', 'function');
+const { createTranslator } = require('../src/shared/i18n');
+// The module imports `../i18n.js`; the vm gets the same catalogue in German.
+// `\r?`: a Windows checkout has CRLF, and `.` does not match the `\r`.
+const source = fs.readFileSync(require.resolve('../src/renderer/voice/WhisperRecorder.js'), 'utf8')
+  .replace(/^import .*\r?\n/m, '')
+  .replace('export function', 'function');
+const t = createTranslator('de');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function setup(transcribeAudio) {
@@ -29,6 +35,7 @@ function setup(transcribeAudio) {
   }
   let cancellations = 0;
   const context = vm.createContext({ document, Blob, MediaRecorder: Recorder,
+    t, tMessage: t.message, onLocaleChange() {},
     navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } },
   });
   vm.runInContext(source, context);
@@ -53,6 +60,16 @@ test('transcription timeout exits loading and displays the error', async () => {
   assert.match(state.elements.get('chat-voice-status').textContent, /Zeitüberschreitung/);
   assert.equal(state.elements.get('btn-chat-mic').title, 'Spracheingabe');
   assert.equal(state.elements.get('btn-chat-mic').disabled, false);
+});
+
+// #310: the service answers with a key; the status line puts it into words.
+test('a transcription error given as a key is shown in the interface language', async () => {
+  const state = setup(async () => ({ error: { key: 'chat.voice.error.noApiKey' } }));
+  await record(state);
+  assert.equal(
+    state.elements.get('chat-voice-status').textContent,
+    'Fehler: Kein OpenAI-Key hinterlegt (Whisper braucht einen).'
+  );
 });
 
 for (const action of ['mic', 'lifecycle']) {

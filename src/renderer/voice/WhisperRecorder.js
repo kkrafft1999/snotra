@@ -1,3 +1,5 @@
+import { onLocaleChange, t, tMessage } from '../i18n.js';
+
 export function initWhisperRecorder({
   api,
   onInputChanged,
@@ -18,8 +20,13 @@ export function initWhisperRecorder({
   function setMicUi(recording) {
     btnChatMic.classList.toggle('recording', recording);
     btnChatMic.setAttribute('aria-pressed', recording ? 'true' : 'false');
-    btnChatMic.title = recording ? 'Aufnahme stoppen' : 'Spracheingabe';
-    btnChatMic.setAttribute('aria-label', recording ? 'Aufnahme stoppen' : 'Spracheingabe starten');
+    btnChatMic.title = t(recording ? 'chat.mic.stop' : 'chat.mic.title');
+    btnChatMic.setAttribute('aria-label', t(recording ? 'chat.mic.stop' : 'chat.mic.label'));
+  }
+
+  function setTranscribingUi() {
+    btnChatMic.title = t('chat.mic.cancel');
+    btnChatMic.setAttribute('aria-label', t('chat.mic.cancel'));
   }
 
   function setVoiceStatus(text) {
@@ -51,7 +58,9 @@ export function initWhisperRecorder({
       voiceStream = stream;
     } catch (err) {
       if (started !== generation) return;
-      setVoiceStatus(err.name === 'NotAllowedError' ? 'Mikrofonzugriff verweigert.' : `Mikrofon: ${err.message}`);
+      setVoiceStatus(err.name === 'NotAllowedError'
+        ? t('chat.voice.micDenied')
+        : t('chat.voice.micFailed', { error: err.message }));
       return;
     }
 
@@ -68,7 +77,7 @@ export function initWhisperRecorder({
 
     voiceRecording = true;
     setMicUi(true);
-    setVoiceStatus('Aufnahme laeuft …');
+    setVoiceStatus(t('chat.voice.recording'));
   }
 
   function stopVoiceRecording() {
@@ -85,12 +94,11 @@ export function initWhisperRecorder({
     if (voiceChunks.length === 0) { setVoiceStatus(''); return; }
     const blob = new Blob(voiceChunks, { type: 'audio/webm' });
     voiceChunks = [];
-    if (blob.size < 1000) { setVoiceStatus('Aufnahme zu kurz.'); return; }
+    if (blob.size < 1000) { setVoiceStatus(t('chat.voice.tooShort')); return; }
 
     voiceTranscribing = true;
-    btnChatMic.title = 'Transkription abbrechen';
-    btnChatMic.setAttribute('aria-label', 'Transkription abbrechen');
-    setVoiceStatus('Transkribiere…');
+    setTranscribingUi();
+    setVoiceStatus(t('chat.voice.transcribing'));
 
     try {
       const buf = await blob.arrayBuffer();
@@ -98,7 +106,7 @@ export function initWhisperRecorder({
       const result = await api.transcribeAudio(buf);
       if (started !== generation) return;
       if (result.error) {
-        setVoiceStatus(`Fehler: ${result.error}`);
+        setVoiceStatus(t('chat.voice.error', { error: tMessage(result.error) }));
       } else if (result.text?.trim()) {
         const cur = chatInput.value;
         const sep = cur && !/\s$/.test(cur) ? ' ' : '';
@@ -107,11 +115,11 @@ export function initWhisperRecorder({
         setVoiceStatus('');
         chatInput.focus();
       } else {
-        setVoiceStatus('Keine Sprache erkannt.');
+        setVoiceStatus(t('chat.voice.noSpeech'));
       }
     } catch (err) {
       if (started !== generation) return;
-      setVoiceStatus(`Fehler: ${err.message || 'Transkription fehlgeschlagen.'}`);
+      setVoiceStatus(t('chat.voice.error', { error: err.message || t('chat.voice.failed') }));
     } finally {
       if (started === generation) {
         voiceTranscribing = false;
@@ -145,6 +153,14 @@ export function initWhisperRecorder({
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopChatVoiceListening();
+  });
+
+  // The button speaks the language of the interface (#310). A status line left
+  // standing belongs to an attempt already over; the next one is in the new
+  // language anyway.
+  onLocaleChange(() => {
+    if (voiceTranscribing) setTranscribingUi();
+    else setMicUi(voiceRecording);
   });
 
   return { stopChatVoiceListening };

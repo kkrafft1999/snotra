@@ -35,7 +35,7 @@ for (const name of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
 test('pre-aborted requests do not start work; successful requests clean up', async () => {
   const controller = new AbortController();
   controller.abort();
-  await assert.rejects(withRequestTimeout(() => assert.fail('must not start'), { signal: controller.signal, timeoutMs: 10 }), /abgebrochen/);
+  await assert.rejects(withRequestTimeout(() => assert.fail('must not start'), { signal: controller.signal, timeoutMs: 10 }), /cancelled/);
   let signal;
   assert.equal(await withRequestTimeout((s) => { signal = s; return 42; }, { timeoutMs: 5 }), 42);
   await new Promise((resolve) => setTimeout(resolve, 15));
@@ -55,7 +55,9 @@ for (const cancel of [false, true]) {
       },
     });
     const result = await service.transcribeAudio(Buffer.from('audio'), { timeoutMs: 10, signal: controller.signal });
-    assert.match(result.error, cancel ? /abgebrochen/ : /Zeitüberschreitung/);
+    assert.deepEqual(result.error, cancel
+      ? { key: 'provider.error.cancelled' }
+      : { key: 'provider.error.timeout', params: { seconds: 0.01 } });
     assert.equal(signal.aborted, true);
   });
 }

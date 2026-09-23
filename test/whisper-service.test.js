@@ -19,7 +19,7 @@ test('transcribeAudio returns an error when no OpenAI key is stored', async () =
     getAppLocale: async () => 'de',
   });
   const res = await svc.transcribeAudio(Buffer.from('audio'));
-  assert.match(res.error, /Kein OpenAI-Key/);
+  assert.deepEqual(res.error, { key: 'chat.voice.error.noApiKey' });
 });
 
 test('transcribeAudio sends a multipart body with the resolved language and API key', async (t) => {

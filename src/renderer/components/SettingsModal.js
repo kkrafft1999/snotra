@@ -281,7 +281,7 @@ export function initSettingsModal(deps) {
   function presetSublabelForDraft(pr) {
     const pv = findProviderView(pr.providerId);
     if (!pv) return pr.sublabel || '';
-    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr));
+    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr), tMessage);
     return formatted.text || pr.sublabel || '';
   }
 
@@ -292,7 +292,7 @@ export function initSettingsModal(deps) {
         ? 'settings-pref-detail settings-pref-detail--mono'
         : 'settings-pref-detail';
     }
-    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr));
+    const formatted = formatPresetSublabelFromView(pr, pv, connectionForRow(pr), tMessage);
     const style = formatted.text ? formatted.style : pr.sublabelStyle;
     return style === PRESET_DETAIL_STYLES.MONO
       ? 'settings-pref-detail settings-pref-detail--mono'
@@ -472,11 +472,11 @@ export function initSettingsModal(deps) {
     for (const p of appStore.llmState.providers || []) {
       const opt = document.createElement('option');
       opt.value = p.id;
-      opt.setAttribute('lang', 'en');
+      // The tags are in the language of the interface, so no `lang` here (#310).
       const tags = [];
-      if (p.isActiveChatProvider) tags.push('aktiv');
-      if (p.configured) tags.push('konfiguriert');
-      if (p.keyUnreadable) tags.push('Key neu eingeben');
+      if (p.isActiveChatProvider) tags.push(t('settings.models.provider.tag.active'));
+      if (p.configured) tags.push(t('settings.models.provider.tag.configured'));
+      if (p.keyUnreadable) tags.push(t('settings.models.provider.tag.keyUnreadable'));
       opt.textContent = tags.length ? `${p.name} – ${tags.join(', ')}` : p.name;
       selectProvider.appendChild(opt);
     }
@@ -559,6 +559,39 @@ export function initSettingsModal(deps) {
     } else if (currentValue) {
       selectModel.value = currentValue;
     }
+  }
+
+  /**
+   * Redraws what the provider views put into words after a language change
+   * (#310) — without touching what the user has typed or picked. A full
+   * `syncPopupProviderUI` would also reset a model list loaded a moment ago.
+   */
+  function retranslateModels() {
+    renderDraftPresetList();
+    const popupOpen = addModelOverlay && !addModelOverlay.classList.contains('hidden');
+    const chosen = selectProvider.value;
+    renderProviderSelect();
+    if (!popupOpen) return;
+    selectProvider.value = chosen;
+    const pv = findProviderView(popupProviderId);
+    if (!pv) return;
+    const form = pv.form || {};
+    renderProviderTemplates(pv);
+    renderPresetFieldsPopup(pv);
+    for (const option of selectApiStyle.options) {
+      const label = (form.apiStyleOptions || []).find((o) => o.value === option.value)?.label;
+      if (label) option.textContent = label;
+    }
+    if (form.showDisplayName) {
+      inputDisplayName.placeholder = form.displayNamePlaceholder || pv.builtInName || pv.name;
+    }
+    if (form.showApiKey && !activeStored(popupProviderId).hasKey) {
+      inputApiKey.placeholder = form.apiKeyPlaceholder || '••••••';
+    }
+    if (modelLoadProviderLabel) {
+      modelLoadProviderLabel.textContent = draftProviderName(popupProviderId) || pv.name;
+    }
+    renderProviderStatusLine(popupProviderId);
   }
 
   /** Vorlagen-Auswahl (Issue #193): belegt Felder vor, speichert sich nie. */
@@ -737,6 +770,18 @@ export function initSettingsModal(deps) {
     if (resetModel) inputModel.value = '';
     renderModelSelect(pv.model || pv.defaultModel || '', null, pv);
 
+    renderProviderStatusLine(providerId);
+    setModelStatus('');
+    setModalError('');
+  }
+
+  /** The line below the provider choice: where it goes and what is stored. */
+  function renderProviderStatusLine(providerId) {
+    const pv = findProviderView(providerId);
+    if (!pv) return;
+    const form = pv.form || {};
+    const draft = activeDraft(providerId) || credentialDraftFor(pv);
+    const stored = activeStored(providerId);
     const lines = [];
     // Bei einem Anbieter mit Server-URL steht dort, wohin es wirklich geht —
     // die Standard-URL waere bei einem geaenderten Ziel schlicht falsch.
@@ -769,8 +814,6 @@ export function initSettingsModal(deps) {
       }
     }
     setProviderStatus(lines.join(' · '), false);
-    setModelStatus('');
-    setModalError('');
   }
 
   function renderDraftPresetList() {
@@ -802,8 +845,11 @@ export function initSettingsModal(deps) {
       const zeilenName = pr.connection
         ? (pr.connection.displayName?.trim() || pv.builtInName || pv.name)
         : (draftProviderName(pr.providerId) || pv.name);
-      title.textContent = `${zeilenName} · ${pr.model || pv.defaultModel}`
+      // The buttons below are named after what the row shows, not after the
+      // label stored with the draft: that one keeps the language it was made in.
+      const rowTitle = `${zeilenName} · ${pr.model || pv.defaultModel}`
         + (pr.optionSuffix ? ` · ${pr.optionSuffix}` : '');
+      title.textContent = rowTitle;
       const detail = document.createElement('span');
       detail.className = presetDetailClassForDraft(pr);
       detail.textContent = presetSublabelForDraft(pr);
@@ -820,7 +866,7 @@ export function initSettingsModal(deps) {
       sw.setAttribute('aria-checked', pr.menuVisible !== false ? 'true' : 'false');
       sw.setAttribute(
         'aria-label',
-        t(pr.menuVisible !== false ? 'settings.models.row.visible' : 'settings.models.row.hidden', { name: pr.label || pv.name })
+        t(pr.menuVisible !== false ? 'settings.models.row.visible' : 'settings.models.row.hidden', { name: rowTitle })
       );
       sw.dataset.presetId = pr.id;
       const track = document.createElement('span');
@@ -836,7 +882,7 @@ export function initSettingsModal(deps) {
       rm.className = 'settings-icon-trash';
       rm.setAttribute(
         'aria-label',
-        t('settings.models.row.remove', { name: pr.label || pv.name })
+        t('settings.models.row.remove', { name: rowTitle })
       );
       rm.dataset.presetId = pr.id;
       rm.innerHTML = trashSvg;
@@ -849,7 +895,7 @@ export function initSettingsModal(deps) {
       const edit = document.createElement('button');
       edit.type = 'button';
       edit.className = 'settings-icon-edit';
-      edit.setAttribute('aria-label', `${pr.label || pv.name} bearbeiten`);
+      edit.setAttribute('aria-label', t('settings.models.row.edit', { name: rowTitle }));
       edit.dataset.editPresetId = pr.id;
       edit.innerHTML = editSvg;
 
@@ -1781,7 +1827,8 @@ export function initSettingsModal(deps) {
     const formatted = formatPresetSublabelFromView(
       candidate,
       providerView,
-      connection || draftConnectionFor(pv)
+      connection || draftConnectionFor(pv),
+      tMessage
     );
     const row = {
       id,
@@ -2211,6 +2258,9 @@ export function initSettingsModal(deps) {
     if (modalSettings.classList.contains('hidden')) return;
     activateSettingsPanel(activePanelKey);
     renderDraftPresetList();
+    // Provider names, hints and option labels come from the main process in
+    // the stored language as well (#310): fetch, then redraw what shows them.
+    void refreshLLMState().then(retranslateModels);
     // Die Tool-Beschreibungen stehen im Main-Prozess und kommen in der
     // gespeicherten Sprache zurueck (#291) — hier reicht kein Neuzeichnen, die
     // Liste muss neu geholt werden. Der Main hat die neue Sprache bereits

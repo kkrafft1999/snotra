@@ -330,7 +330,7 @@ test('ohne bekannte Gesamtgroesse laeuft ein unbestimmter Balken statt einer erf
     true
   );
   assert.equal(ui.$('modal-update-track').hasAttribute('aria-valuenow'), false);
-  assert.equal(ui.$('modal-update-progress-text').textContent, '1,0 MB geladen');
+  assert.equal(ui.$('modal-update-progress-text').textContent, '1,0 MB downloaded');
   resolveDownload({ ok: false, canceled: true });
   await flush();
 });
