@@ -5,8 +5,9 @@ const {
   sleepAbortable,
   normalizeUsage,
   mergeUsage,
-  describeFetchError,
+  describeFetchErrorMessage,
 } = require('../src/main/providers/stream-helpers');
+const { describeFetchError } = require('../src/shared/runtime/fetch-errors');
 
 test('isAbortError recognizes AbortError', () => {
   const err = new Error('Aborted');
@@ -59,6 +60,27 @@ test('describeFetchError falls back to base URL when message is missing', () => 
     'Verbindung zu http://localhost:11434 fehlgeschlagen.'
   );
   assert.equal(describeFetchError(new Error('timeout'), 'x'), 'timeout');
+});
+
+// What the providers hand the user (#308): the network's words stay quoted,
+// only Snotra's own fallback sentence travels as a key.
+test('describeFetchErrorMessage quotes the network and keys its own sentence', () => {
+  const err = new Error('fetch failed');
+  err.cause = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8080'), { code: 'ECONNREFUSED' });
+  assert.equal(
+    describeFetchErrorMessage(err, 'http://127.0.0.1:8080'),
+    'fetch failed (ECONNREFUSED: connect ECONNREFUSED 127.0.0.1:8080)'
+  );
+  assert.deepEqual(describeFetchErrorMessage({}, 'http://localhost:11434'), {
+    key: 'provider.error.connectionFailed',
+    params: { url: 'http://localhost:11434' },
+  });
+  // `formatRoundError` has no address to name.
+  assert.deepEqual(describeFetchErrorMessage({}), { key: 'provider.error.connectionFailed.generic' });
+  assert.deepEqual(describeFetchErrorMessage({ cause: { code: 'ENOTFOUND' } }), {
+    key: 'provider.error.withCause',
+    params: { message: { key: 'provider.error.connectionFailed.generic' }, cause: 'ENOTFOUND' },
+  });
 });
 
 test('mergeUsage sums usage across rounds', () => {

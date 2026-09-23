@@ -9,7 +9,7 @@ const {
   bindAbortSignalToReader,
   sleepAbortable,
 } = require('../../shared/runtime/abort');
-const { describeFetchError } = require('../../shared/runtime/fetch-errors');
+const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors');
 
 async function* iterStreamLines(reader, abortSignal) {
   const decoder = new TextDecoder();
@@ -105,7 +105,7 @@ function notifyToolCallArgumentsDelta(callbacks, delta) {
 module.exports = {
   iterStreamLines,
   iterSseEvents,
-  describeFetchError,
+  describeFetchErrorMessage,
   readErrorMessage,
   safeJsonParse,
   isAbortError,

@@ -12,7 +12,7 @@ import {
   modeLabel,
 } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
-import { t, onLocaleChange } from '../i18n.js';
+import { t, tMessage, onLocaleChange } from '../i18n.js';
 
 const TRASH_ICON_HTML =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
@@ -75,7 +75,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       setError(target, t('settings.permissions.dialogCancelled'));
       return false;
     }
-    setError(target, result?.error || successText || 'Aktion fehlgeschlagen.');
+    setError(target, tMessage(result?.error) || successText || t('settings.permissions.actionFailed'));
     return false;
   }
 

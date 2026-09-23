@@ -159,6 +159,16 @@ test('createListModelsResult and settings result DTOs', () => {
   assert.deepEqual(createListModelsResult({ error: 'fail' }), { error: 'fail' });
 });
 
+// #308: a descriptor goes through as it is. `String()` would have turned it into
+// "[object Object]" on its way to the settings dialog.
+test('settings results pass a message descriptor through', () => {
+  const { createMessage } = require('../src/shared/contracts/message');
+  const message = createMessage('settings.error.mcp.unknownServer', { id: 'ghost' });
+  assert.deepEqual(createSettingsError(message), { ok: false, error: message });
+  assert.deepEqual(createSettingsError(message, 'cancelled'), { ok: false, error: message, code: 'cancelled' });
+  assert.deepEqual(createListModelsResult({ error: message }), { error: message });
+});
+
 // Seitenleiste (Issue #167): sichtbar, solange nichts anderes dasteht — nur ein
 // ausdrueckliches false blendet sie aus. Der Patch uebernimmt ausschliesslich
 // echte Booleans, damit ein halber Aufruf den gemerkten Zustand nicht kippt.

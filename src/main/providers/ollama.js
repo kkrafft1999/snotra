@@ -1,6 +1,7 @@
-const { withRequestTimeout, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
 const { Agent } = require('undici');
-const { iterStreamLines, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
+const { iterStreamLines, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://localhost:11434';
 
@@ -49,7 +50,7 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? LOCAL_MODELS_TIMEOUT_MS,
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
@@ -60,12 +61,12 @@ async function listModelsRequest(config) {
   try {
     res = await fetch(url, { dispatcher: dispatcherFor(url, config), signal: config.signal });
   } catch (err) {
-    return { error: describeFetchError(err, base) };
+    return { error: describeFetchErrorMessage(err, base) };
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
   if (!json || !Array.isArray(json.models)) {
-    return { error: 'Unerwartete Antwort des Ollama-Servers.' };
+    return { error: createMessage('provider.error.unexpectedAnswer.server', { provider: 'Ollama' }) };
   }
   const models = json.models
     .map((m) => m && typeof m.name === 'string' ? { id: m.name, label: m.name } : null)
@@ -145,10 +146,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     if (isAbortError(err)) {
       return cancelledChatRound({ role: 'assistant', content: '' });
     }
-    return { error: describeFetchError(err, base), code: 'NETWORK' };
+    return { error: describeFetchErrorMessage(err, base), code: 'NETWORK' };
   }
   if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
-  if (!res.body) return { error: 'Keine Stream-Antwort.', code: 'STREAM' };
+  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);

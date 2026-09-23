@@ -11,7 +11,7 @@ function sse(type, payload) {
 
 test('streamChatRound requires an API key', async () => {
   const res = await anthropic.streamChatRound({ config: {}, model: 'claude-sonnet-4-6', messages: [] });
-  assert.equal(res.error, 'Kein API-Key hinterlegt.');
+  assert.deepEqual(res.error, { key: 'provider.error.noApiKey' });
   assert.equal(res.code, 'NO_API_KEY');
 });
 

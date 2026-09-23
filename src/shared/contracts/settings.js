@@ -15,6 +15,7 @@ const {
   isSkillSuggestionMode,
 } = require('./enums');
 const { normalizeActiveSkills } = require('./skills');
+const { isMessage } = require('./message');
 
 /**
  * Schema-Version von `llm-config.json`.
@@ -90,14 +91,20 @@ function createSettingsOk() {
   return { ok: true };
 }
 
+/**
+ * A failed settings call. `error` is a message descriptor (`createMessage`)
+ * wherever Snotra says it itself, and passes through as one — the settings
+ * dialog puts it into words with `tMessage()` (#308). Plain text is what a
+ * third party said and stays as it is.
+ */
 function createSettingsError(error, code) {
-  const out = { ok: false, error: String(error ?? '') };
+  const out = { ok: false, error: isMessage(error) ? error : String(error ?? '') };
   if (code) out.code = code;
   return out;
 }
 
 function createListModelsResult({ models, error } = {}) {
-  if (error) return { error: String(error) };
+  if (error) return { error: isMessage(error) ? error : String(error) };
   if (!Array.isArray(models)) return { models: [] };
   const out = [];
   for (const m of models) {

@@ -1,4 +1,4 @@
-const { withRequestTimeout, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { listChatModels, streamChatCompletionsRound } = require('./openai-chat-transport');
 
 const DEFAULT_BASE = 'http://127.0.0.1:8080/v1';
@@ -15,7 +15,7 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? LOCAL_MODELS_TIMEOUT_MS,
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
@@ -23,7 +23,7 @@ async function listModelsRequest(config) {
   return listChatModels({
     baseUrl: baseUrlOf(config),
     signal: config.signal,
-    serverLabel: 'MLX-LM-Servers',
+    serverName: 'MLX-LM',
   });
 }
 

@@ -171,7 +171,7 @@ test('ohne safeStorage: kein Auto, keine dauerhaften Erlaubnisse, Sperren funkti
 
   const auto = await store.setMode('auto');
   assert.equal(auto.ok, false);
-  assert.match(auto.error, /verschlüsselt/);
+  assert.deepEqual(auto.error, { key: 'permissions.error.autoNeedsEncryption' });
   const allow = await store.addRule({ effect: 'allow', riskClass: 'read' });
   assert.equal(allow.ok, false);
   const deny = await store.addRule({ effect: 'deny', riskClass: 'external' });

@@ -10,9 +10,10 @@
 'use strict';
 
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   iterSseEvents,
-  describeFetchError,
+  describeFetchErrorMessage,
   readErrorMessage,
   abortIfRequested,
   cancelledChatRound,
@@ -132,17 +133,21 @@ function assistantMessageOf(content, toolCalls) {
 }
 
 /** Modellliste über `GET {base}/models`; Form ist bei allen Servern dieselbe. */
-async function listChatModels({ baseUrl, headers = {}, signal, dispatcher, filter, serverLabel = 'Servers' }) {
+async function listChatModels({ baseUrl, headers = {}, signal, dispatcher, filter, serverName = null }) {
   let res;
   try {
     res = await fetch(`${baseUrl}/models`, { headers, signal, ...(dispatcher ? { dispatcher } : {}) });
   } catch (err) {
-    return { error: describeFetchError(err, baseUrl) };
+    return { error: describeFetchErrorMessage(err, baseUrl) };
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
   if (!json || !Array.isArray(json.data)) {
-    return { error: `Unerwartete Antwort des ${serverLabel}.` };
+    return {
+      error: serverName
+        ? createMessage('provider.error.unexpectedAnswer.server', { provider: serverName })
+        : createMessage('provider.error.unexpectedAnswer.generic'),
+    };
   }
   const models = json.data
     .map((m) => (m && typeof m.id === 'string' ? { id: m.id, label: m.id } : null))
@@ -200,11 +205,11 @@ async function streamChatCompletionsRound({
     });
   } catch (err) {
     if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
-    return { error: describeFetchError(err, baseUrl), code: 'NETWORK' };
+    return { error: describeFetchErrorMessage(err, baseUrl), code: 'NETWORK' };
   }
 
   if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
-  if (!res.body) return { error: 'Keine Stream-Antwort.', code: 'STREAM' };
+  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);

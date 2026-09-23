@@ -1,6 +1,6 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
-import { onLocaleChange, t } from '../i18n.js';
+import { onLocaleChange, t, tMessage } from '../i18n.js';
 
 /**
  * Bestätigungskarte im Chat (Issue #67, Konzept §4/§6).
@@ -283,7 +283,7 @@ export function initToolApprovalCards({ api, appStore }) {
     queue.failResponse(requestId);
     if (card && view) {
       setButtonsEnabled(card, view, true);
-      setStatus(card, t('approval.error.rejected', { error: result?.error || t('approval.error.unknown.short') }));
+      setStatus(card, t('approval.error.rejected', { error: tMessage(result?.error) || t('approval.error.unknown.short') }));
     }
   }
 

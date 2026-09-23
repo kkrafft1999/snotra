@@ -1,5 +1,6 @@
-const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
-const { iterSseEvents, describeFetchError, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
+const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
+const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -20,23 +21,23 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'API-Key fehlt.' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
   let res;
   try {
     res = await fetch(`${API_BASE}/models?limit=100`, { headers: authHeaders(apiKey), signal: config.signal });
   } catch (err) {
-    return { error: describeFetchError(err, API_BASE) };
+    return { error: describeFetchErrorMessage(err, API_BASE) };
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
   if (!json || !Array.isArray(json.data)) {
-    return { error: 'Unerwartete Antwort der Anthropic-API.' };
+    return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'Anthropic' }) };
   }
   const models = json.data
     .map((m) => m && typeof m.id === 'string'
@@ -146,7 +147,7 @@ function translateMessagesToAnthropic(messages) {
 
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'Kein API-Key hinterlegt.', code: 'NO_API_KEY' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
 
   const { system, messages: anthMessages } = translateMessagesToAnthropic(messages);
   const tooling = translateToolsToAnthropic(tools);
@@ -172,10 +173,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     });
   } catch (err) {
     if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
-    return { error: describeFetchError(err, API_BASE), code: 'NETWORK' };
+    return { error: describeFetchErrorMessage(err, API_BASE), code: 'NETWORK' };
   }
   if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
-  if (!res.body) return { error: 'Keine Stream-Antwort.', code: 'STREAM' };
+  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
@@ -254,7 +255,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       } else if (type === 'message_stop') {
         // end
       } else if (type === 'error') {
-        const msg = payload.error?.message || 'Anthropic-Stream-Fehler';
+        const msg = payload.error?.message || createMessage('provider.error.streamFailed');
         return { error: msg, code: 'API' };
       }
     }

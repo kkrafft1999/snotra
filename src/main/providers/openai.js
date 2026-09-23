@@ -1,5 +1,6 @@
-const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
-const { describeFetchError, readErrorMessage } = require('./stream-helpers');
+const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
+const { describeFetchErrorMessage, readErrorMessage } = require('./stream-helpers');
 const { streamResponsesRound } = require('./openai-responses-transport');
 
 const DEFAULT_BASE = 'https://api.openai.com/v1';
@@ -16,13 +17,13 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'API-Key fehlt.' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
   const base = baseUrlOf(config);
   let res;
   try {
@@ -31,12 +32,12 @@ async function listModelsRequest(config) {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
   } catch (err) {
-    return { error: describeFetchError(err, base) };
+    return { error: describeFetchErrorMessage(err, base) };
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
   if (!json || !Array.isArray(json.data)) {
-    return { error: 'Unerwartete Antwort der OpenAI-API.' };
+    return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'OpenAI' }) };
   }
   const models = json.data
     .map((m) => m && typeof m.id === 'string' ? { id: m.id, label: m.id } : null)
@@ -48,7 +49,7 @@ async function listModelsRequest(config) {
 
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal, cacheKey }) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'Kein API-Key hinterlegt.', code: 'NO_API_KEY' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
 
   const extraBody = {};
   // Prompt-Caching greift ab ~1.024 Token automatisch, aber nur, wenn die

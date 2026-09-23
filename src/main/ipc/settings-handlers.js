@@ -12,6 +12,7 @@ const {
   normalizeStoredPresetConnection,
   PRESET_CONNECTION_PLAIN_FIELDS,
 } = require('../../shared/contracts/settings');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   MEMORY_SCOPES,
   MEMORY_SCOPE_ORDER,
@@ -129,16 +130,15 @@ function registerSettingsHandlers({
   // Der Modellteil ist abgelehnt, gespeichert wurde davon nichts. Die uebrigen
   // Einstellungen haben damit nichts zu tun — der System-Prompt haengt nicht am
   // OpenAI-Schluessel — und laufen trotzdem durch. Die Meldung sagt, was
-  // uebernommen wurde und was nicht (Issue #97).
-  async function rejectModelPart(message, uiPatch) {
-    if (Object.keys(uiPatch).length === 0) return createSettingsError(message);
+  // uebernommen wurde und was nicht (Issue #97). The reason goes into the
+  // sentence as a message of its own, so both read in one language (#308).
+  async function rejectModelPart(reason, uiPatch) {
+    if (Object.keys(uiPatch).length === 0) return createSettingsError(reason);
     if (!(await writeUiPrefsPatch(uiPatch))) {
-      return createSettingsError(
-        `${message} Die übrigen Einstellungen konnten ebenfalls nicht gespeichert werden.`
-      );
+      return createSettingsError(createMessage('settings.error.modelPart.othersFailed', { reason }));
     }
     return {
-      ...createSettingsError(`${message} Die übrigen Einstellungen wurden gespeichert.`),
+      ...createSettingsError(createMessage('settings.error.modelPart.othersSaved', { reason })),
       uiPrefsSaved: true,
     };
   }
@@ -160,12 +160,12 @@ function registerSettingsHandlers({
       .map((row) => llmConfigStore.normalizePresetEntry(row))
       .filter(Boolean);
     if (presets.length === 0) {
-      return rejectModelPart('Mindestens ein Modell-Eintrag ist erforderlich.', uiPatch);
+      return rejectModelPart(createMessage('settings.error.presets.empty'), uiPatch);
     }
     const seen = new Set();
     for (const p of presets) {
       if (seen.has(p.id)) {
-        return rejectModelPart('Doppelte Eintrags-IDs in der Liste.', uiPatch);
+        return rejectModelPart(createMessage('settings.error.presets.duplicateId'), uiPatch);
       }
       seen.add(p.id);
     }
@@ -188,7 +188,7 @@ function registerSettingsHandlers({
       const incomingPresetSecret = !!(presetPatch?.apiKey || presetPatch?.extraHeaders);
       if (meta.fields?.apiKey && (incomingKey || incomingPresetSecret)) {
         if (!safeStorage.isEncryptionAvailable()) {
-          return rejectModelPart('Verschlüsselter Speicher ist nicht verfügbar.', uiPatch);
+          return rejectModelPart(createMessage('settings.error.encryptionUnavailable'), uiPatch);
         }
       }
     }
@@ -237,7 +237,7 @@ function registerSettingsHandlers({
           const entry = (draft.providers && draft.providers[pr.providerId]) || {};
           if (!isProviderConfigured({ safeStorage }, meta, entry, pr)) {
             validationError = createSettingsError(
-              `Zugang für „${presetAccessLabel(meta, pr)}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).`
+              createMessage('settings.error.accessIncomplete', { label: presetAccessLabel(meta, pr) })
             );
             return config;
           }
@@ -271,9 +271,7 @@ function registerSettingsHandlers({
         return draft;
       });
     } catch {
-      return createSettingsError(
-        'Anbieter und Modell-Einträge konnten nicht gespeichert werden. Die UI-Einstellungen wurden nicht geändert.'
-      );
+      return createSettingsError(createMessage('settings.error.modelsNotSaved'));
     }
     if (validationError) return rejectModelPart(validationError.error, uiPatch);
 
@@ -288,15 +286,9 @@ function registerSettingsHandlers({
           return previousConfig;
         });
       } catch {
-        return createSettingsError(
-          'UI-Einstellungen konnten nicht gespeichert werden. Anbieter und Modell-Einträge wurden bereits gespeichert; '
-          + 'ihre Rücknahme ist fehlgeschlagen oder wurde wegen zwischenzeitlicher Änderungen ausgelassen. '
-          + 'Bitte die Einstellungen erneut öffnen und prüfen.'
-        );
+        return createSettingsError(createMessage('settings.error.uiNotSaved.rollbackFailed'));
       }
-      return createSettingsError(
-        'UI-Einstellungen konnten nicht gespeichert werden. Die Änderungen an Anbietern und Modell-Einträgen wurden zurückgenommen.'
-      );
+      return createSettingsError(createMessage('settings.error.uiNotSaved.rolledBack'));
     }
 
     // Auch der Dialog waehlt ausdruecklich: Der laufende Chat uebernimmt den
@@ -321,9 +313,9 @@ function registerSettingsHandlers({
   // letzter Ordner). Ein frei uebergebener Pfad kann die Vertrauensgrenze
   // damit nicht mehr verschieben (Issue #68).
   ipcMain.handle(REQ.SETTINGS_ACTIVATE_FOLDER, async (_event, folderPath) => {
-    if (!workspaceActivation) return createSettingsError('Ordner konnte nicht geöffnet werden.');
+    if (!workspaceActivation) return createSettingsError(createMessage('settings.error.folderNotOpened'));
     const activated = await workspaceActivation.activateKnownFolder(folderPath);
-    if (!activated) return createSettingsError('Ordner konnte nicht geöffnet werden.');
+    if (!activated) return createSettingsError(createMessage('settings.error.folderNotOpened'));
     return { ...createSettingsOk(), folderPath: activated };
   });
 
@@ -421,11 +413,11 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_GET_MEMORY, async () => buildMemoryState());
 
   ipcMain.handle(REQ.SETTINGS_FORGET_MEMORY, async (_event, payload) => {
-    if (!memory) return { ok: false, error: 'Das Gedächtnis ist nicht verfügbar.' };
+    if (!memory) return createSettingsError(createMessage('settings.error.memory.unavailable'));
     const scope = payload?.scope;
     const line = payload?.line;
     if (!isMemoryScope(scope) || !Number.isInteger(line)) {
-      return { ok: false, error: 'Unbrauchbare Angabe zum Vergessen.' };
+      return createSettingsError(createMessage('settings.error.memory.invalidRequest'));
     }
     try {
       const result = await memory.forget({ scope, line, workspaceRoot: getActiveWorkspaceRoot() });
@@ -434,7 +426,7 @@ function registerSettingsHandlers({
       // zeigte die Liste Zeilennummern, die nicht mehr stimmen.
       return { ok: true, removed: result.removed === true, state: await buildMemoryState() };
     } catch (error) {
-      return { ok: false, error: error?.message || 'Der Eintrag ließ sich nicht entfernen.' };
+      return createSettingsError(error?.message || createMessage('settings.error.memory.forgetFailed'));
     }
   });
 
@@ -465,10 +457,10 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_GET_MCP_CATALOG, async () => buildMcpCatalog());
 
   ipcMain.handle(REQ.SETTINGS_SAVE_MCP_SERVER, async (_event, input) => {
-    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    if (!mcpSettings) return createSettingsError(createMessage('settings.error.mcp.unavailable'));
     const result = await mcpSettings.save(input);
     if (!result?.ok) {
-      return { ...createSettingsError(result?.errors?.[0] || 'Der Server konnte nicht gespeichert werden.'),
+      return { ...createSettingsError(result?.errors?.[0] || createMessage('settings.mcp.saveFailed')),
         errors: result?.errors || [] };
     }
     // Direkt uebernehmen: sonst zeigte die Oberflaeche den neuen Stand, waehrend
@@ -478,10 +470,10 @@ function registerSettingsHandlers({
   });
 
   ipcMain.handle(REQ.SETTINGS_DELETE_MCP_SERVER, async (_event, id) => {
-    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    if (!mcpSettings) return createSettingsError(createMessage('settings.error.mcp.unavailable'));
     const result = await mcpSettings.remove(typeof id === 'string' ? id : '');
     if (!result?.ok) {
-      return { ...createSettingsError(result?.errors?.[0] || 'Der Server konnte nicht gelöscht werden.'),
+      return { ...createSettingsError(result?.errors?.[0] || createMessage('settings.mcp.deleteFailed')),
         errors: result?.errors || [] };
     }
     await mcpSettings.reload();
@@ -489,27 +481,27 @@ function registerSettingsHandlers({
   });
 
   ipcMain.handle(REQ.SETTINGS_RELOAD_MCP_SERVERS, async () => {
-    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    if (!mcpSettings) return createSettingsError(createMessage('settings.error.mcp.unavailable'));
     await mcpSettings.reload();
     return { ...createSettingsOk(), ...(await buildMcpCatalog()) };
   });
 
   ipcMain.handle(REQ.SETTINGS_TEST_MCP_SERVER, async (_event, id) => {
-    if (!mcpSettings) return createSettingsError('MCP ist in dieser Installation nicht verfügbar.');
+    if (!mcpSettings) return createSettingsError(createMessage('settings.error.mcp.unavailable'));
     const wanted = typeof id === 'string' ? id.trim() : '';
-    if (!wanted) return createSettingsError('Es fehlt die Kennung des Servers.');
+    if (!wanted) return createSettingsError(createMessage('settings.error.mcp.idMissing'));
     const result = await mcpSettings.test(wanted);
-    if (!result?.status) return createSettingsError(result?.error || `Unbekannter MCP-Server „${wanted}".`);
+    if (!result?.status) return createSettingsError(result?.error || createMessage('settings.error.mcp.unknownServer', { id: wanted }));
     return { ...createSettingsOk(), status: result.status, tools: result.tools || [] };
   });
 
   ipcMain.handle(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, async (_event, apiKey) => {
     if (!webSearchSettings) {
-      return createSettingsError('Websuche ist in dieser Installation nicht verfügbar.');
+      return createSettingsError(createMessage('settings.error.webSearch.unavailable'));
     }
     const value = typeof apiKey === 'string' ? apiKey : '';
     const result = await webSearchSettings.setApiKey(value);
-    if (!result?.ok) return createSettingsError(result?.error || 'Schlüssel konnte nicht gespeichert werden.');
+    if (!result?.ok) return createSettingsError(result?.error || createMessage('settings.webSearch.saveFailed'));
     return { ...createSettingsOk(), hasApiKey: result.hasApiKey === true };
   });
 
@@ -549,7 +541,7 @@ function registerSettingsHandlers({
 function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   const { safeStorage, providerCatalog } = deps;
   const provider = providerCatalog.getProvider(providerId);
-  if (!provider) return createSettingsError('Unbekannter Provider.');
+  if (!provider) return createSettingsError(createMessage('settings.error.provider.unknown'));
   // Bei Verbindung je Eintrag (Issue #202) gehoert nichts davon unter
   // `providers`. Der Payload kommt aus dem Renderer und wird nicht geglaubt:
   // Ein Anbieter-Zugang hier wuerde beim naechsten Lesen ohnehin wegmigriert
@@ -565,7 +557,7 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
     const incomingKey = typeof patch?.apiKey === 'string' ? patch.apiKey.trim() : '';
     if (incomingKey) {
       if (!safeStorage.isEncryptionAvailable()) {
-        return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+        return createSettingsError(createMessage('settings.error.encryptionUnavailable'));
       }
       next.apiKeyEnc = safeStorage.encryptString(incomingKey).toString('base64');
     }
@@ -599,7 +591,7 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
       // Zusatz-Header koennen ein Gateway-Token tragen und werden deshalb wie
       // der API-Key behandelt: nur verschluesselt auf die Platte, sonst gar nicht.
       if (!safeStorage.isEncryptionAvailable()) {
-        return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+        return createSettingsError(createMessage('settings.error.encryptionUnavailable'));
       }
       next.extraHeadersEnc = safeStorage.encryptString(incomingHeaders).toString('base64');
     }
@@ -654,7 +646,7 @@ function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
   if (draft.removeApiKey === true) delete next.apiKeyEnc;
   if (typeof draft.apiKey === 'string' && draft.apiKey.trim()) {
     if (!safeStorage.isEncryptionAvailable()) {
-      return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+      return createSettingsError(createMessage('settings.error.encryptionUnavailable'));
     }
     next.apiKeyEnc = safeStorage.encryptString(draft.apiKey.trim()).toString('base64');
   }
@@ -662,7 +654,7 @@ function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
   if (draft.removeExtraHeaders === true) delete next.extraHeadersEnc;
   if (typeof draft.extraHeaders === 'string' && draft.extraHeaders.trim()) {
     if (!safeStorage.isEncryptionAvailable()) {
-      return createSettingsError('Verschlüsselter Speicher ist nicht verfügbar.');
+      return createSettingsError(createMessage('settings.error.encryptionUnavailable'));
     }
     next.extraHeadersEnc = safeStorage.encryptString(draft.extraHeaders.trim()).toString('base64');
   }
@@ -683,7 +675,7 @@ async function applyActivePreset(
   { makeDefault = false } = {}
 ) {
   if (typeof rawPresetId !== 'string' || !rawPresetId.trim()) {
-    return createSettingsError('Kein Eintrag gewählt.');
+    return createSettingsError(createMessage('settings.error.preset.none'));
   }
   const presetId = rawPresetId.trim();
   let validationError = null;
@@ -692,13 +684,13 @@ async function applyActivePreset(
       ? config.presets.find((p) => p && p.id === presetId)
       : null;
     if (!preset || !providerCatalog.getProvider(preset.providerId)) {
-      validationError = createSettingsError('Eintrag nicht gefunden.');
+      validationError = createSettingsError(createMessage('settings.error.preset.notFound'));
       return config;
     }
     const meta = providerCatalog.getProvider(preset.providerId);
     const entry = (config.providers && config.providers[preset.providerId]) || {};
     if (!isProviderConfigured({ safeStorage }, meta, entry, preset)) {
-      validationError = createSettingsError('Anbieter ist noch nicht konfiguriert.');
+      validationError = createSettingsError(createMessage('settings.error.preset.notConfigured'));
       return config;
     }
     config.activePresetId = presetId;

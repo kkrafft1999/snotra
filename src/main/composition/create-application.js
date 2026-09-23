@@ -20,6 +20,7 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
+const { createMessage } = require('../../shared/contracts/message');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
@@ -393,7 +394,7 @@ function createApplication({
       // Konfiguration: sonst muesste die Oberflaeche Geheimnisse senden.
       await reloadMcpServers();
       const status = await mcpService.connect(id);
-      if (!status) return { status: null, error: `Unbekannter MCP-Server „${id}".` };
+      if (!status) return { status: null, error: createMessage('settings.error.mcp.unknownServer', { id }) };
       const [masked] = await maskMcpStatuses([status]);
       const tools = (await mcpService.listTools())
         .filter((tool) => tool.serverId === id)

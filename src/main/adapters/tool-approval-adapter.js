@@ -20,6 +20,7 @@ const {
   PERMISSION_DENIAL_REASONS,
   createToolApprovalRequestDto,
 } = require('../../shared/contracts/tool-permissions');
+const { createMessage } = require('../../shared/contracts/message');
 
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
   /** sessionId → webContents (nur angemeldete Fenster). */
@@ -126,10 +127,10 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
      */
     respond(sessionId, { requestId, response } = {}) {
       const entry = pending.get(requestId);
-      if (!entry) return { ok: false, error: 'Keine offene Anfrage mit dieser ID.' };
-      if (entry.sessionId !== sessionId) return { ok: false, error: 'Anfrage gehört zu einem anderen Fenster.' };
+      if (!entry) return { ok: false, error: createMessage('approval.error.noPending') };
+      if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
       if (!Object.values(APPROVAL_RESPONSES).includes(response)) {
-        return { ok: false, error: 'Ungültige Antwort.' };
+        return { ok: false, error: createMessage('approval.error.invalidResponse') };
       }
       if (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) {
         // Die Karte bot die Option nicht an; als Einzelfreigabe behandeln.

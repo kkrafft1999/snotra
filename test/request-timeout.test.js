@@ -16,7 +16,7 @@ for (const name of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
         return { ok: phase === 'body', json: never, text: never };
       });
       const result = await require(`../src/main/providers/${name}`).listModels({ apiKey: 'test', timeoutMs: 10 });
-      assert.match(result.error, /Zeitüberschreitung/);
+      assert.deepEqual(result.error, { key: 'provider.error.timeout', params: { seconds: 0.01 } });
       assert.equal(signal.aborted, true);
     });
   }
@@ -28,7 +28,7 @@ for (const name of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
       return never();
     });
     const result = await require(`../src/main/providers/${name}`).listModels({ apiKey: 'test', signal: controller.signal });
-    assert.match(result.error, /abgebrochen/);
+    assert.deepEqual(result.error, { key: 'provider.error.cancelled' });
   });
 }
 

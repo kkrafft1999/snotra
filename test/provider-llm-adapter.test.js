@@ -100,7 +100,7 @@ test('adapter resolves unknown provider as INVALID chat error', async () => {
 
   const result = await llm.resolveChatTarget();
   assert.equal(result.code, 'INVALID');
-  assert.match(result.error, /ghost/);
+  assert.deepEqual(result.error, { key: 'provider.error.unknown', params: { id: 'ghost' } });
 });
 
 test('adapter merges only declared preset option keys into provider config', async () => {
@@ -301,9 +301,9 @@ test('adapter validateTarget returns NO_API_KEY with send-specific suffix', asyn
   const explainErr = await llm.validateTarget(target, { forSend: false });
 
   assert.equal(sendErr.code, 'NO_API_KEY');
-  assert.match(sendErr.error, /Einstellungen speichern/);
+  assert.equal(sendErr.error.key, 'provider.error.noApiKeyFor.send');
   assert.equal(explainErr.code, 'NO_API_KEY');
-  assert.doesNotMatch(explainErr.error, /Einstellungen speichern/);
+  assert.equal(explainErr.error.key, 'provider.error.noApiKeyFor');
 });
 
 // --- Provider „OpenAI-kompatibel" (Issue #193) ----------------------------

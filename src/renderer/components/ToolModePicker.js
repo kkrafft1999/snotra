@@ -1,7 +1,7 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
 import { toolModeOptions, modeLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
-import { onLocaleChange, t } from '../i18n.js';
+import { onLocaleChange, t, tMessage } from '../i18n.js';
 
 /**
  * Modus-Pille in der Chat-Leiste (Issue #67, Konzept §3/§8): zeigt den aktiven
@@ -104,7 +104,7 @@ export function initToolModePicker({ toolPermissions }) {
       setStatus(t('chat.toolMode.unchanged'));
       return;
     }
-    setStatus(result?.error || t('chat.toolMode.failed'));
+    setStatus(tMessage(result?.error) || t('chat.toolMode.failed'));
   }
 
   btn.addEventListener('click', (e) => {
