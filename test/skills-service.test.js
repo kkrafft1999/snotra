@@ -30,6 +30,40 @@ function makeService({ systemSkillsDir = null, home }) {
   });
 }
 
+/**
+ * A system skill names settings pages so the model can point the user at one.
+ * The quotation follows the interface language (#294) — and only in the app's
+ * own skills: a folder skill is somebody else's text and is passed through
+ * exactly as written.
+ */
+test('Menüpfade im System-Skill folgen der Sprache, im Ordner-Skill nicht', async (t) => {
+  const root = await makeTempTree(t);
+  const systemDir = path.join(root, 'system-skills');
+  const home = path.join(root, 'home');
+  await writeSkill(systemDir, 'snotra-capabilities', {
+    description: 'Switched off under {menu:settings.tools}',
+    body: 'The user can enable it under `{menu:settings.tools}`.',
+  });
+  await writeSkill(path.join(home, '.agents', 'skills'), 'fremd', {
+    body: 'Fremder Text mit {menu:settings.tools} darin.',
+  });
+  const service = makeService({ systemSkillsDir: systemDir, home });
+
+  const english = await service.getActiveSkills({ locale: 'en', activeSkills: ['snotra-capabilities', 'fremd'] });
+  const german = await service.getActiveSkills({ locale: 'de', activeSkills: ['snotra-capabilities', 'fremd'] });
+  const bodyOf = (list, name) => list.find((skill) => skill.name === name).body;
+
+  assert.match(bodyOf(english, 'snotra-capabilities'), /`Settings › Tools`/);
+  assert.match(bodyOf(german, 'snotra-capabilities'), /`Einstellungen › Tools`/);
+  // Der Ordner-Skill bleibt Wort für Wort, wie er auf der Platte liegt.
+  assert.match(bodyOf(german, 'fremd'), /\{menu:settings\.tools\}/);
+
+  // Auch die Kurzbeschreibung im Katalog spricht die Sprache der Oberfläche.
+  const catalog = await service.listCatalog({ locale: 'de' });
+  const entry = catalog.skills.find((skill) => skill.name === 'snotra-capabilities');
+  assert.equal(entry.description, 'Switched off under Einstellungen › Tools');
+});
+
 test('findet System-Skills auch ohne geöffneten Ordner', async (t) => {
   const root = await makeTempTree(t);
   const systemDir = path.join(root, 'system-skills');

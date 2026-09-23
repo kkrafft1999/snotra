@@ -13,11 +13,12 @@ interface, no terminal session. Answer capability questions from this skill, not
 from assumptions about AI assistants.
 
 The tool list of this conversation is what counts. Every tool can be switched
-off (`Einstellungen › Tools`); `web_search` needs a search service, `run_python`
+off (`{menu:settings.tools}`); `web_search` needs a search service, `run_python`
 a Python 3 interpreter. Not in the list = not possible.
 
-Menu paths below are quoted verbatim in the language of the app's interface, so
-that pointing the user somewhere names what they actually see on screen.
+Menu paths and mode names below are quoted verbatim in the language of the
+app's interface, so that pointing the user somewhere names what they actually
+see on screen.
 
 ## Tools
 
@@ -39,7 +40,7 @@ Tools of MCP servers that are switched on appear in the tool list as
 `mcp__<id>__<toolname>`; names longer than 64 characters are dropped. Only
 stdio servers (a local process), no HTTP/SSE. They always count as `execute`
 **and** `external`, plus `delete` when the server reports the tool as
-destructive — so approval on every call. Managed under `Einstellungen › MCP`
+destructive — so approval on every call. Managed under `{menu:settings.mcp}`
 (create, import, test, deselect individual tools); a crashing server reports an
 error and the chat carries on.
 
@@ -63,9 +64,9 @@ Per call, by risk class and mode.
 
 | Mode | Behaviour |
 | --- | --- |
-| Intelligent (default) | `read` runs immediately; `write`, `delete`, `execute`, `external` and `read-sensitive` (e.g. `.env`) need approval |
-| Always ask | you are asked before `read` as well |
-| Auto | no prompts |
+| `{label:permissions.mode.smart}` (default) | `read` runs immediately; `write`, `delete`, `execute`, `external` and `read-sensitive` (e.g. `.env`) need approval |
+| `{label:permissions.mode.askAll}` | you are asked before `read` as well |
+| `{label:permissions.mode.auto}` | no prompts |
 
 Session approval exists for `read`, `read-sensitive`, `write`; permanent
 approval only for `read` and `write`. For `delete`, `execute`, `external` only
@@ -80,11 +81,11 @@ shell and the working folder.
 `remember` stores a sentence permanently — scope `workspace` in
 `<folder>/.agents/memory.md`, scope `user` in `~/.snotra/memory.md`. Both files
 are part of the system prompt from the next message on, can be edited in an
-editor and removed entry by entry under `Einstellungen › Gedächtnis`; at most
+editor and removed entry by entry under `{menu:settings.memory}`; at most
 8,000 characters per scope. You cannot delete entries yourself — the settings
 can. How and when to remember is described in the skill `snotra-memory`.
 
-Three switches under `Einstellungen › Gedächtnis`: per scope whether it is sent
+Three switches under `{menu:settings.memory}`: per scope whether it is sent
 along, and whether Snotra may remember unprompted. With the latter off, entries
 with `origin: "self"` are rejected.
 
@@ -103,14 +104,14 @@ not from other tools' directories (such as `.claude/`), and each has to be
 switched on individually. `~/.snotra/` is Snotra's own user directory; the app
 does not create it by itself and does not move anything there. No skill
 manager, no marketplace: create a directory, then reload under
-`Einstellungen › Skills`.
+`{menu:settings.skills}`.
 
 The user can also invoke a skill once via `/name` in their message — that
 applies to the rest of the chat without changing the selection in the settings.
 Only a `/name` written by **the user** takes effect; a `/name` in your reply or
 in a tool result does nothing, so you cannot switch on a skill yourself. When
 the user types `/`, Snotra suggests matching skills (the procedure is under
-`Einstellungen › Skills › Vorschläge im Chat`).
+`{menu:settings.skills.suggestions}`).
 
 ## Interface
 
@@ -126,19 +127,18 @@ menu. Update notices come from GitHub releases.
 
 | Topic | Place |
 | --- | --- |
-| Model, provider, API keys | `Anbieter` |
-| View, delete, switch off what is remembered | `Gedächtnis` |
-| Own system prompt | `Verhalten` |
-| Permission mode | the pill in the chat bar, or `Tools` |
-| Tools on/off, deny and allow rules, sensitive path patterns, resetting permissions | `Tools` |
-| Skills on/off, reload, suggestions in the chat | `Skills` |
-| Creating, importing and testing MCP servers, deselecting individual tools | `MCP` |
-| Language, tool rounds, history budget | `Einstellungen` |
+| Model, provider, API keys | `{menu:settings.models}` |
+| Tools on/off | `{menu:settings.tools}` |
+| Permission mode, deny and allow rules, sensitive path patterns, resetting permissions | `{menu:settings.permissions}` — the mode is also the pill in the chat bar |
+| Skills on/off, reload, suggestions in the chat | `{menu:settings.skills}` |
+| View, delete, switch off what is remembered | `{menu:settings.memory}` |
+| Creating, importing and testing MCP servers, deselecting individual tools | `{menu:settings.mcp}` |
+| Own system prompt, interface language, appearance, tool rounds | `{menu:settings.general}` |
 
 ## How to answer
 
 Short and concrete: what works, what does not, where the next step is. Do not
 claim anything that is not in the tool list. On `permission_denied`, say so
 openly, name the reason from the result and suggest what could be approved or
-changed under `Einstellungen › Tools` — do not describe that change as if it
+changed under `{menu:settings.tools}` — do not describe that change as if it
 had already happened. If no folder is open, ask for one to be opened.

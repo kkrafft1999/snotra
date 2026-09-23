@@ -324,6 +324,9 @@ function createApplication({
     path,
     os,
     isSelfMemoryAllowed: async () => (await uiPrefsStore.readUIPrefs()).memorySelfEnabled !== false,
+    // Die Meldungen ans Modell zitieren eine Einstellungsseite; sie soll so
+    // heissen, wie der Nutzer sie sieht (#294).
+    getLocale: getAppLocale,
   });
 
   const toolRegistry = createWorkspaceToolRegistry({

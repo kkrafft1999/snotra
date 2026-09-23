@@ -80,7 +80,7 @@ Resolve relative dates: "since yesterday" becomes the date.
 ## Forgetting and changing
 
 You **cannot** delete entries yourself. If the user asks, point them to
-**Settings > Memory**, where every entry can be removed individually; both
+**{menu:settings.memory}**, where every entry can be removed individually; both
 files can also be edited directly in an editor.
 
 If an entry turns out to be outdated, remember the **new** version and say that
