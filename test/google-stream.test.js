@@ -49,7 +49,7 @@ test('google streamChatRound returns error on MALFORMED_FUNCTION_CALL', async ()
     },
   ]);
 
-  assert.match(result.error, /ungültigen Function-Call/);
+  assert.deepEqual(result.error, { key: 'provider.error.malformedFunctionCall' });
   assert.equal(result.code, 'API');
   assert.equal(result.message, undefined);
   assert.deepEqual(result.usage, { prompt: 7, completion: 2, total: 9, cached: 0 });

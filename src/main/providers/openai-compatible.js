@@ -16,6 +16,7 @@
 const { Agent } = require('undici');
 const {
   withRequestTimeout,
+  userMessageOf,
   CLOUD_MODELS_TIMEOUT_MS,
   LOCAL_MODELS_TIMEOUT_MS,
 } = require('../services/request-timeout');
@@ -198,7 +199,7 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? modelsTimeoutFor(config),
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
@@ -209,7 +210,6 @@ async function listModelsRequest(config) {
     headers: buildHeaders(config, { json: false }),
     signal: config.signal,
     dispatcher: dispatcherFor(`${base}/models`, config),
-    serverLabel: 'Servers',
   });
 }
 

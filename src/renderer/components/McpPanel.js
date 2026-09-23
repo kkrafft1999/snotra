@@ -235,7 +235,7 @@ export function initMcpPanel({ api }) {
         adopt(result);
         setError(errorEl, '');
       } else {
-        setError(errorEl, result?.error || t('settings.mcp.reloadFailed'));
+        setError(errorEl, tMessage(result?.error) || t('settings.mcp.reloadFailed'));
       }
     } catch {
       setError(errorEl, t('settings.mcp.reloadFailed'));
@@ -250,7 +250,7 @@ export function initMcpPanel({ api }) {
       adopt(result);
       setError(errorEl, '');
     } else {
-      setError(errorEl, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.updateFailed'));
+      setError(errorEl, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.updateFailed'));
     }
   }
 
@@ -439,7 +439,7 @@ export function initMcpPanel({ api }) {
       setError(errorEl, '');
       return;
     }
-    setError(formError, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.saveFailed'));
+    setError(formError, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.saveFailed'));
   }
 
   async function remove() {
@@ -450,7 +450,7 @@ export function initMcpPanel({ api }) {
       closeDialog();
       return;
     }
-    setError(formError, tMessage(result?.errors?.[0]) || result?.error || t('settings.mcp.deleteFailed'));
+    setError(formError, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.deleteFailed'));
   }
 
   async function test() {
@@ -459,7 +459,7 @@ export function initMcpPanel({ api }) {
     const result = await api.testMcpServer?.(editing.id);
     testResult.replaceChildren();
     if (!result?.ok || !result.status) {
-      testResult.append(el('p', 'mcp-test__fail', result?.error || t('mcpDialog.test.failed')));
+      testResult.append(el('p', 'mcp-test__fail', tMessage(result?.error) || t('mcpDialog.test.failed')));
       return;
     }
     const status = result.status;
@@ -668,7 +668,7 @@ export function initMcpPanel({ api }) {
         result = null;
       }
       if (result?.ok) letztes = result;
-      else gescheitert.push(`${candidate.label}: ${result?.errors?.[0] || result?.error || t('mcpImport.failed.unknown')}`);
+      else gescheitert.push(`${candidate.label}: ${tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('mcpImport.failed.unknown')}`);
     }
 
     if (letztes) adopt(letztes);

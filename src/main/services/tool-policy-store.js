@@ -25,6 +25,7 @@ const {
   normalizePermissionRules,
   normalizeSensitivePathPatterns,
 } = require('../../shared/contracts/tool-permissions');
+const { createMessage } = require('../../shared/contracts/message');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
@@ -287,7 +288,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     const mode = normalizeToolPermissionMode(rawMode);
     return update((draft, { encryptionAvailable: enc }) => {
       if (mode === TOOL_PERMISSION_MODES.AUTO && !enc) {
-        return { error: 'Auto ist ohne verschlüsselten Speicher nicht aktivierbar.' };
+        return { error: createMessage('permissions.error.autoNeedsEncryption') };
       }
       draft.mode = mode;
       return null;
@@ -298,12 +299,12 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     return update((draft, { encryptionAvailable: enc }) => {
       const id = typeof rawRule?.id === 'string' && rawRule.id.trim() ? rawRule.id.trim() : crypto.randomUUID();
       const rule = normalizePermissionRule({ ...rawRule, id, createdAt: now() });
-      if (!rule) return { error: 'Ungültige Regel.' };
+      if (!rule) return { error: createMessage('permissions.error.invalidRule') };
       if (rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !enc) {
-        return { error: 'Dauerhafte Erlaubnisse sind ohne verschlüsselten Speicher nicht speicherbar.' };
+        return { error: createMessage('permissions.error.allowNeedsEncryption') };
       }
       if (allRules(draft).some((existing) => existing.id === rule.id)) {
-        return { error: 'Regel-ID bereits vergeben.' };
+        return { error: createMessage('permissions.error.ruleIdTaken') };
       }
       if (rule.scope === PERMISSION_RULE_SCOPES.GLOBAL) {
         draft.globalRules.push(rule);
@@ -317,7 +318,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   async function removeRule(ruleId) {
     const id = typeof ruleId === 'string' ? ruleId.trim() : '';
     return update((draft) => {
-      if (!id) return { error: 'Regel-ID fehlt.' };
+      if (!id) return { error: createMessage('permissions.error.ruleIdMissing') };
       let removed = false;
       const before = draft.globalRules.length;
       draft.globalRules = draft.globalRules.filter((rule) => rule.id !== id);
@@ -329,7 +330,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
         if (filtered.length === 0) delete draft.workspaceRules[root];
         else draft.workspaceRules[root] = filtered;
       }
-      return removed ? null : { error: 'Regel nicht gefunden.' };
+      return removed ? null : { error: createMessage('permissions.error.ruleNotFound') };
     });
   }
 

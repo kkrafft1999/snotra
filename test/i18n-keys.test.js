@@ -52,6 +52,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'approval.audit.status',
   // A file name plus "(global)" — the same in both languages (#290).
   'context.part.agents.user',
+  // A message and the network's own cause in brackets — nothing to word (#308).
+  'provider.error.withCause',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {
@@ -185,9 +187,35 @@ test('a message descriptor is translated, plain text passes through', () => {
   assert.equal(translateMessage('en', message), 'The identifier may be at most 64 characters long.');
   assert.equal(translateMessage('de', message), 'Die Kennung darf höchstens 64 Zeichen lang sein.');
   assert.equal(createTranslator('de').message(message), translateMessage('de', message));
-  // Layers that have not been converted yet still hand over finished text.
-  assert.equal(translateMessage('de', 'schon fertig'), 'schon fertig');
+  // Quoted material — what a provider's API said — stays as it is.
+  assert.equal(translateMessage('de', 'Incorrect API key provided'), 'Incorrect API key provided');
   assert.equal(translateMessage('de', null), '');
+});
+
+/**
+ * A sentence that wraps another one gets the inner one in its own language
+ * (#308) — otherwise "The other settings have been saved." would follow a
+ * reason still in the language the main process happened to pick.
+ */
+test('a message inside a message is translated along with it', () => {
+  const reason = createMessage('settings.error.accessIncomplete', { label: 'LM Studio' });
+  const message = createMessage('settings.error.modelPart.othersSaved', { reason });
+  assert.equal(
+    translateMessage('en', message),
+    'The access for “LM Studio” is incomplete (an API key or the server URL, for instance). The other settings have been saved.'
+  );
+  assert.equal(
+    translateMessage('de', message),
+    'Der Zugang für „LM Studio“ ist unvollständig (z. B. API-Schlüssel oder Server-URL). Die übrigen Einstellungen wurden gespeichert.'
+  );
+  // A quoted reason is put in as it stands.
+  assert.equal(
+    translateMessage('de', createMessage('provider.error.withCause', {
+      message: createMessage('provider.error.connectionFailed', { url: 'http://localhost:1234' }),
+      cause: 'ECONNREFUSED',
+    })),
+    'Verbindung zu http://localhost:1234 fehlgeschlagen. (ECONNREFUSED)'
+  );
 });
 
 test('English is the default; anything unknown falls back to it', () => {

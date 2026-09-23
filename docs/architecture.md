@@ -1067,12 +1067,25 @@ already an enumerated value, the contract keeps a **table of keys** instead
 `MEMORY_SCOPE_LABEL_KEYS`); `test/i18n-keys.test.js` walks those tables, since a
 table is invisible to its scan for `t('…')` literals.
 
-`tMessage()` passes plain text through untouched. That is the seam to the layers
-that still hand over finished sentences. What is left behind it: the settings
-handlers (`createSettingsError`) and the error texts of the provider adapters,
-which reach the chat through `streamed.error` and `formatRoundError`. Both
-follow in their own slice of
-[#277](https://github.com/kkrafft1999/snotra/issues/277).
+A message may carry another one as a parameter. `resolveKeyParams` translates
+it first, so a sentence that wraps a reason — "{reason} The other settings have
+been saved." — reads in one language from end to end
+([#308](https://github.com/kkrafft1999/snotra/issues/308)).
+
+`tMessage()` still passes plain text through untouched, but since #308 plain
+text is only ever **quoted material**: the error text of a provider's API, what
+the network layer said (`fetch failed (ECONNREFUSED …)`), an exception from a
+third-party library. Snotra's own sentences — the settings handlers'
+`createSettingsError`, the provider adapters, `formatRoundError` — all travel as
+keys. `createSettingsError` and `createListModelsResult` pass a descriptor
+through instead of stringifying it.
+
+Two things are deliberately not on this side of the line. The messages the
+**model** reads (`http-url-fetch-adapter.js`, `mcp-adapter.js`, the fallback in
+`describeFetchError`) are a [#276](https://github.com/kkrafft1999/snotra/issues/276)
+matter: they become English, not bilingual. And an aborted request carries both
+forms (`userMessage` next to `message` in `request-timeout.js`), because the
+transcription still shows `message` as it stands.
 
 The chat run itself came over in
 [#306](https://github.com/kkrafft1999/snotra/issues/306): every error

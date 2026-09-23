@@ -85,13 +85,6 @@ function translatePlural(locale, baseKey, count, params) {
 }
 
 /**
- * A message descriptor from the contract layer (`createMessage`) put into
- * words. Plain text passes through untouched: the layers that have not been
- * converted yet — the settings handlers, the context breakdown — still hand
- * over finished sentences, and those are shown as they stand rather than
- * swallowed (issue #293).
- */
-/**
  * Parameters that are themselves catalogue keys (#290). A layer far from the
  * screen — the permission planner, say — knows *which* mode or which risk
  * classes belong in the sentence, but not what they are called in the language
@@ -103,7 +96,13 @@ function resolveKeyParams(locale, params) {
   if (!params) return params;
   let out = params;
   for (const [name, value] of Object.entries(params)) {
-    if (name.endsWith('Keys') && Array.isArray(value)) {
+    // A whole message as a value (#308): a sentence that wraps another one —
+    // "{reason} The other settings have been saved." — gets the inner one in
+    // the same language as itself.
+    if (isMessage(value)) {
+      if (out === params) out = { ...params };
+      out[name] = translateMessage(locale, value);
+    } else if (name.endsWith('Keys') && Array.isArray(value)) {
       if (out === params) out = { ...params };
       out[name.slice(0, -4)] = value.map((key) => translate(locale, key)).join(', ');
       delete out[name];
@@ -116,6 +115,12 @@ function resolveKeyParams(locale, params) {
   return out;
 }
 
+/**
+ * A message descriptor from the contract layer (`createMessage`) put into
+ * words. Plain text passes through untouched — since #308 that is only ever
+ * quoted material: the error text of a provider's API, a network error, a
+ * message from a third-party library. Snotra's own sentences travel as keys.
+ */
 function translateMessage(locale, message) {
   if (isMessage(message)) return translate(locale, message.key, resolveKeyParams(locale, message.params));
   return typeof message === 'string' ? message : '';

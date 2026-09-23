@@ -1,13 +1,14 @@
 'use strict';
 
 const { createListModelsResult } = require('../../shared/contracts/settings');
+const { createMessage } = require('../../shared/contracts/message');
 
 function createProviderModelListingAdapter({ providerRuntime, providerSecrets }) {
   return {
     async listModels(providerId, request) {
       const provider = providerRuntime.getProvider(providerId);
       if (!provider || typeof provider.listModels !== 'function') {
-        return createListModelsResult({ error: 'Unbekannter Provider.' });
+        return createListModelsResult({ error: createMessage('settings.error.provider.unknown') });
       }
 
       // Bei `connectionPerPreset` liegt die gespeicherte Verbindung am Eintrag
@@ -41,7 +42,7 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
         if (result?.error) return createListModelsResult({ error: result.error });
         return createListModelsResult({ models: result?.models });
       } catch (err) {
-        return createListModelsResult({ error: err.message || 'Modelle konnten nicht geladen werden.' });
+        return createListModelsResult({ error: err.message || createMessage('addModel.models.loadFailed') });
       }
     },
   };

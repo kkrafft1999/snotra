@@ -2,7 +2,8 @@
 
 const { CHAT_ERROR_CODES, createChatErrorResult } = require('../../shared/contracts');
 const { createChatModelTarget } = require('../../shared/contracts/llm-target');
-const { describeFetchError } = require('../../shared/runtime/fetch-errors');
+const { createMessage } = require('../../shared/contracts/message');
+const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors');
 const {
   extractPresetOptions,
   filterDeclaredPresetOptions,
@@ -60,7 +61,7 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     const provider = providerRuntime.getProvider(raw.providerId);
     if (!provider) {
       return createChatErrorResult({
-        error: `Unbekannter Provider: ${raw.providerId}.`,
+        error: createMessage('provider.error.unknown', { id: raw.providerId }),
         code: CHAT_ERROR_CODES.INVALID,
       });
     }
@@ -71,7 +72,7 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     const provider = providerRuntime.getProvider(target.providerId);
     if (!provider) {
       return createChatErrorResult({
-        error: `Unbekannter Provider: ${target.providerId}.`,
+        error: createMessage('provider.error.unknown', { id: target.providerId }),
         code: CHAT_ERROR_CODES.INVALID,
       });
     }
@@ -83,15 +84,16 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     // Ein Anbieter mit optionalem Key (Issue #193) darf ohne Key laufen — ein
     // lokaler Server verlangt keinen.
     if (provider.fields?.apiKey && provider.optionalApiKey !== true && !providerConfig?.apiKey) {
-      const suffix = forSend ? ' Bitte in den Einstellungen speichern.' : '';
       return createChatErrorResult({
-        error: `Kein API-Key für ${provider.name} hinterlegt.${suffix}`,
+        error: forSend
+          ? createMessage('provider.error.noApiKeyFor.send', { provider: provider.name })
+          : createMessage('provider.error.noApiKeyFor', { provider: provider.name }),
         code: CHAT_ERROR_CODES.NO_API_KEY,
       });
     }
     if (provider.fields?.baseUrl && !providerConfig?.baseUrl) {
       return createChatErrorResult({
-        error: `Keine Server-URL für ${provider.name} hinterlegt.`,
+        error: createMessage('provider.error.noBaseUrlFor', { provider: provider.name }),
         code: CHAT_ERROR_CODES.NO_BASE_URL,
       });
     }
@@ -158,8 +160,9 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     });
   }
 
+  // Which provider it was is in the bubble already; the sentence names none.
   function formatRoundError(err) {
-    return describeFetchError(err, 'dem Provider');
+    return describeFetchErrorMessage(err);
   }
 
   return {

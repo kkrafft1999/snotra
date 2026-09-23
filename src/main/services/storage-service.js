@@ -480,7 +480,7 @@ function createStorageService({
       if (!enc) {
         return {
           ok: false,
-          error: 'Verschlüsselter Speicher ist auf diesem System nicht verfügbar.',
+          error: createMessage('settings.error.encryptionUnavailable'),
           hasApiKey: await hasWebSearchApiKey(),
         };
       }

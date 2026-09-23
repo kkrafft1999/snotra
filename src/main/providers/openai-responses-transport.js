@@ -8,9 +8,10 @@
 'use strict';
 
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   iterSseEvents,
-  describeFetchError,
+  describeFetchErrorMessage,
   readErrorMessage,
   abortIfRequested,
   cancelledChatRound,
@@ -137,7 +138,7 @@ async function streamResponsesRound({
     });
   } catch (err) {
     if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
-    return { error: describeFetchError(err, baseUrl), code: 'NETWORK' };
+    return { error: describeFetchErrorMessage(err, baseUrl), code: 'NETWORK' };
   }
 
   if (!res.ok) {
@@ -147,7 +148,7 @@ async function streamResponsesRound({
       ...(includeStatus ? { status: res.status } : {}),
     };
   }
-  if (!res.body) return { error: 'Keine Stream-Antwort.', code: 'STREAM' };
+  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
@@ -226,7 +227,7 @@ async function streamResponsesRound({
         const errMsg =
           json.error?.message
           || (typeof json.message === 'string' ? json.message : '')
-          || 'Fehler im Antwort-Stream.';
+          || createMessage('provider.error.streamFailed');
         streamError = errMsg;
         continue;
       }

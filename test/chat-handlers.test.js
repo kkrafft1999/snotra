@@ -255,7 +255,7 @@ test('CHAT_SEND reports an unknown provider without calling streamChatRound', as
 
   const res = await ipcMain.handlers.get(REQ.CHAT_SEND)(event, { messages: [{ role: 'user', content: 'Hi' }] });
   assert.equal(res.code, 'INVALID');
-  assert.match(res.error, /Unbekannter Provider/);
+  assert.equal(res.error.key, 'provider.error.unknown');
   assert.equal(calls.length, 0);
 });
 

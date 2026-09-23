@@ -1,5 +1,6 @@
-const { withRequestTimeout, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
-const { iterSseEvents, describeFetchError, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
+const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
+const { createMessage } = require('../../shared/contracts/message');
+const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -23,23 +24,23 @@ async function listModels(config) {
       timeoutMs: config?.timeoutMs ?? CLOUD_MODELS_TIMEOUT_MS,
     });
   } catch (err) {
-    return { error: err.message };
+    return { error: userMessageOf(err) };
   }
 }
 
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'API-Key fehlt.' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
   let res;
   try {
     res = await fetch(`${API_BASE}/models?key=${encodeURIComponent(apiKey)}&pageSize=200`, { signal: config.signal });
   } catch (err) {
-    return { error: describeFetchError(err, API_BASE) };
+    return { error: describeFetchErrorMessage(err, API_BASE) };
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
   if (!json || !Array.isArray(json.models)) {
-    return { error: 'Unerwartete Antwort der Google-API.' };
+    return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'Google' }) };
   }
   const models = json.models
     .filter((m) => Array.isArray(m.supportedGenerationMethods)
@@ -154,11 +155,11 @@ function translateMessagesToGoogle(messages) {
 
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const apiKey = config?.apiKey;
-  if (!apiKey) return { error: 'Kein API-Key hinterlegt.', code: 'NO_API_KEY' };
+  if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
 
   const modelId = bareModelId(model);
   if (!isValidModelId(modelId)) {
-    return { error: `Ungültige Modell-ID: „${String(model || '')}“.`, code: 'INVALID' };
+    return { error: createMessage('provider.error.invalidModelId', { model: String(model || '') }), code: 'INVALID' };
   }
 
   const { systemText, contents } = translateMessagesToGoogle(messages);
@@ -180,10 +181,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     });
   } catch (err) {
     if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
-    return { error: describeFetchError(err, API_BASE), code: 'NETWORK' };
+    return { error: describeFetchErrorMessage(err, API_BASE), code: 'NETWORK' };
   }
   if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
-  if (!res.body) return { error: 'Keine Stream-Antwort.', code: 'STREAM' };
+  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
@@ -252,7 +253,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
   if (malformedFunctionCall) {
     return {
-      error: 'Das Modell hat einen ungültigen Function-Call erzeugt (MALFORMED_FUNCTION_CALL). Bitte erneut senden oder die Anfrage umformulieren.',
+      error: createMessage('provider.error.malformedFunctionCall'),
       code: 'API',
       usage,
     };

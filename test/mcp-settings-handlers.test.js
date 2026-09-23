@@ -118,7 +118,7 @@ test('der Verbindungstest ohne Kennung scheitert verständlich', async () => {
   const ipcMain = makeHandlers(fakeMcpSettings());
   const result = await ipcMain.handlers.get(REQ.SETTINGS_TEST_MCP_SERVER)({}, '  ');
   assert.equal(result.ok, false);
-  assert.match(result.error, /Kennung/);
+  assert.deepEqual(result.error, { key: 'settings.error.mcp.idMissing' });
 });
 
 test('ohne MCP-Einrichtung antworten die Kanäle statt zu werfen', async () => {

@@ -10,12 +10,16 @@ const {
   isPresetUsable,
 } = require('../src/main/ipc/settings-handlers');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { translateMessage } = require('../src/shared/i18n');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
 const {
   createLlmConfigStorePort,
   createUiPrefsStorePort,
   createWorkspaceFolderStorePort,
 } = require('../src/main/adapters/persistence-store-adapters');
+// The handlers answer with keys since #308; the assertions read the German
+// sentence the settings dialog would show.
+const say = (message) => translateMessage('de', message);
 const {
   createMockProviderRuntime,
   createMockProviderCatalog,
@@ -344,7 +348,7 @@ test('commitSettings rejects an empty preset list', async (t) => {
   const { ipcMain } = await setupHandlers(t);
   const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, { presets: [] });
   assert.equal(res.ok, false);
-  assert.match(res.error, /Mindestens ein Modell-Eintrag/);
+  assert.match(say(res.error), /Mindestens ein Modell-Eintrag/);
 });
 
 test('commitSettings rejects duplicate preset ids', async (t) => {
@@ -356,7 +360,7 @@ test('commitSettings rejects duplicate preset ids', async (t) => {
     ],
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /Doppelte Eintrags-IDs/);
+  assert.match(say(res.error), /dieselbe Eintrags-ID doppelt/);
 });
 
 test('commitSettings fails early when a key arrives without encrypted storage', async (t) => {
@@ -366,7 +370,7 @@ test('commitSettings fails early when a key arrives without encrypted storage', 
     providerPatches: { openai: { apiKey: 'sk-test' } },
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /Verschlüsselter Speicher/);
+  assert.match(say(res.error), /Verschlüsselter Speicher/);
 });
 
 test('commitSettings rejects presets whose provider is not configured', async (t) => {
@@ -375,7 +379,7 @@ test('commitSettings rejects presets whose provider is not configured', async (t
     presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o' }],
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /unvollständig/);
+  assert.match(say(res.error), /unvollständig/);
   const config = await storage.readLLMConfig();
   assert.equal(
     config.presets.some((p) => p.id === 'p1'),
@@ -399,7 +403,7 @@ test('commitSettings does not persist provider patches when preset validation fa
     providerPatches: { openai: { removeApiKey: true } },
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /unvollständig/);
+  assert.match(say(res.error), /unvollständig/);
 
   const config = await storage.readLLMConfig();
   assert.equal(config.providers.openai?.apiKeyEnc, 'stored-key', 'provider patch must not persist');
@@ -418,8 +422,8 @@ test('commitSettings speichert die übrigen Einstellungen trotz unvollständigem
   });
 
   assert.equal(res.ok, false);
-  assert.match(res.error, /unvollständig/);
-  assert.match(res.error, /übrigen Einstellungen wurden gespeichert/);
+  assert.match(say(res.error), /unvollständig/);
+  assert.match(say(res.error), /übrigen Einstellungen wurden gespeichert/);
   assert.equal(res.uiPrefsSaved, true);
 
   const prefs = await storage.readUIPrefs();
@@ -439,8 +443,8 @@ test('commitSettings speichert die übrigen Einstellungen auch bei leerer Präfe
   });
 
   assert.equal(res.ok, false);
-  assert.match(res.error, /Mindestens ein Modell-Eintrag/);
-  assert.match(res.error, /übrigen Einstellungen wurden gespeichert/);
+  assert.match(say(res.error), /Mindestens ein Modell-Eintrag/);
+  assert.match(say(res.error), /übrigen Einstellungen wurden gespeichert/);
   assert.equal(res.uiPrefsSaved, true);
 
   const prefs = await storage.readUIPrefs();
@@ -459,7 +463,7 @@ test('commitSettings meldet einen gescheiterten UI-Schreibversuch auch im Ablehn
   });
 
   assert.equal(res.ok, false);
-  assert.match(res.error, /ebenfalls nicht gespeichert/);
+  assert.match(say(res.error), /ebenfalls nicht gespeichert/);
   assert.equal(res.uiPrefsSaved, undefined);
 });
 
@@ -515,7 +519,7 @@ test('commitSettings falls back to the first preset when activePresetId is unkno
 test('listModels returns an error for unknown providers', async (t) => {
   const { ipcMain } = await setupHandlers(t);
   const res = await ipcMain.invoke(REQ.SETTINGS_LIST_MODELS, { providerId: 'nope' });
-  assert.deepEqual(res, { error: 'Unbekannter Provider.' });
+  assert.deepEqual(res, { error: { key: 'settings.error.provider.unknown' } });
 });
 
 test('listModels surfaces provider exceptions as error results', async (t) => {
@@ -631,7 +635,7 @@ test('setActivePreset refuses a provider whose stored key cannot be decrypted', 
 
   const res = await ipcMain.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, 'p1');
   assert.equal(res.ok, false);
-  assert.match(res.error, /noch nicht konfiguriert/);
+  assert.match(say(res.error), /noch nicht konfiguriert/);
 });
 
 test('commitSettings treats an undecryptable key as incomplete access', async (t) => {
@@ -642,7 +646,7 @@ test('commitSettings treats an undecryptable key as incomplete access', async (t
     presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /unvollständig/);
+  assert.match(say(res.error), /unvollständig/);
 });
 
 test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
@@ -823,14 +827,14 @@ for (const failure of ['ui', 'llm', 'rollback']) {
       uiPrefs: { appLocale: 'en' },
     });
     assert.equal(res.ok, false);
-    assert.doesNotMatch(res.error, /private path/);
+    assert.doesNotMatch(say(res.error), /private path/);
     assert.deepEqual(await storage.readUIPrefs(), originalUi);
     if (failure === 'rollback') {
-      assert.match(res.error, /bereits gespeichert.*Rücknahme ist fehlgeschlagen/);
+      assert.match(say(res.error), /bereits gespeichert.*Rücknahme ist fehlgeschlagen/);
       assert.equal((await storage.readLLMConfig()).presets[0].id, 'new');
     } else {
       assert.deepEqual(await storage.readLLMConfig(), original);
-      assert.match(res.error, failure === 'ui' ? /zurückgenommen/ : /UI-Einstellungen wurden nicht geändert/);
+      assert.match(say(res.error), failure === 'ui' ? /zurückgenommen/ : /UI-Einstellungen wurden nicht geändert/);
     }
   });
 }
@@ -847,7 +851,7 @@ test('commitSettings rollback preserves a newer concurrent LLM update', async (t
     uiPrefs: { appLocale: 'en' },
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /zwischenzeitlicher Änderungen/);
+  assert.match(say(res.error), /zwischenzeitlicher Änderungen/);
   assert.equal((await storage.readLLMConfig()).activePresetId, 'newer-selection');
 });
 
@@ -915,7 +919,7 @@ test('ohne verschluesselten Speicher werden keine Zusatz-Header abgelegt', () =>
     extraHeaders: 'X-Tenant: acme',
   });
   assert.equal(res.ok, false);
-  assert.match(res.error, /Verschlüsselter Speicher/);
+  assert.match(say(res.error), /Verschlüsselter Speicher/);
 });
 
 test('ein unbekannter API-Stil wird nicht uebernommen', () => {

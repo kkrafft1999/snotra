@@ -22,6 +22,7 @@ const {
   normalizeToolApprovalResponse,
 } = require('../../shared/contracts/tool-permissions');
 const { createSettingsOk, createSettingsError } = require('../../shared/contracts/settings');
+const { createMessage } = require('../../shared/contracts/message');
 
 const AUTO_MODE_DIALOG = Object.freeze({
   type: 'warning',
@@ -123,10 +124,10 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_MODE, async (event, rawMode) => {
     const mode = normalizeToolPermissionMode(rawMode);
-    if (mode !== rawMode) return createSettingsError('Unbekannter Modus.');
+    if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
       const confirmed = await confirmNatively(AUTO_MODE_DIALOG);
-      if (!confirmed) return createSettingsError('Auto nicht aktiviert.', 'cancelled');
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
     const result = await toolPolicyStore.setMode(mode);
     if (!result.ok) return createSettingsError(result.error);
@@ -137,12 +138,12 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_ADD_RULE, async (event, rawRule) => {
     const candidate = rawRule && typeof rawRule === 'object' ? { ...rawRule } : null;
-    if (!candidate) return createSettingsError('Ungültige Regel.');
+    if (!candidate) return createSettingsError(createMessage('permissions.error.invalidRule'));
     // Workspace-Regeln binden immer den aktiven Root aus dem Main, nie einen
     // vom Renderer gelieferten Pfad (Konzept §5/§7).
     if (candidate.scope === PERMISSION_RULE_SCOPES.WORKSPACE) {
       const root = getActiveWorkspaceRoot();
-      if (!root) return createSettingsError('Kein Workspace geöffnet.');
+      if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
       candidate.root = root;
     } else {
       candidate.scope = PERMISSION_RULE_SCOPES.GLOBAL;
@@ -150,10 +151,10 @@ function registerToolPermissionHandlers({
     }
     delete candidate.id;
     const preview = normalizePermissionRule({ ...candidate, id: 'preview' });
-    if (!preview) return createSettingsError('Ungültige Regel.');
+    if (!preview) return createSettingsError(createMessage('permissions.error.invalidRule'));
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW) {
       const confirmed = await confirmNatively(allowRuleDialog(preview));
-      if (!confirmed) return createSettingsError('Regel nicht angelegt.', 'cancelled');
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.ruleNotCreated'), 'cancelled');
     }
     const result = await toolPolicyStore.addRule(candidate);
     if (!result.ok) return createSettingsError(result.error);
@@ -163,12 +164,12 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_RULE, async (event, ruleId) => {
     const id = typeof ruleId === 'string' ? ruleId.trim() : '';
-    if (!id) return createSettingsError('Regel-ID fehlt.');
+    if (!id) return createSettingsError(createMessage('permissions.error.ruleIdMissing'));
     const rule = await toolPolicyStore.findRule(id);
-    if (!rule) return createSettingsError('Regel nicht gefunden.');
+    if (!rule) return createSettingsError(createMessage('permissions.error.ruleNotFound'));
     if (rule.effect === PERMISSION_RULE_EFFECTS.DENY) {
       const confirmed = await confirmNatively(removeDenyRuleDialog(rule));
-      if (!confirmed) return createSettingsError('Sperre nicht gelöscht.', 'cancelled');
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.denyNotRemoved'), 'cancelled');
     }
     const result = await toolPolicyStore.removeRule(id);
     if (!result.ok) return createSettingsError(result.error);
@@ -177,7 +178,7 @@ function registerToolPermissionHandlers({
   });
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, async (event, rawPatterns) => {
-    if (!Array.isArray(rawPatterns)) return createSettingsError('Liste von Mustern erwartet.');
+    if (!Array.isArray(rawPatterns)) return createSettingsError(createMessage('permissions.error.patternsExpected'));
     const result = await toolPolicyStore.setSensitivePathPatterns(normalizeSensitivePathPatterns(rawPatterns));
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
@@ -193,7 +194,7 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, async (event) => {
     const root = getActiveWorkspaceRoot();
-    if (!root) return createSettingsError('Kein Workspace geöffnet.');
+    if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const result = await toolPolicyStore.resetWorkspaceRules(root);
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
@@ -215,7 +216,7 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_APPROVAL_RESPOND, async (event, payload) => {
     const response = normalizeToolApprovalResponse(payload);
-    if (!response) return createSettingsError('Ungültige Antwort.');
+    if (!response) return createSettingsError(createMessage('approval.error.invalidResponse'));
     const result = approvals.respond(event.sender.id, response);
     if (!result.ok) return createSettingsError(result.error);
     return { ...createSettingsOk(), response: result.response };

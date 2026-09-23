@@ -1,5 +1,5 @@
 import contracts from '../generated/contracts.js';
-import { t, tPlural, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
+import { t, tPlural, tMessage, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
 import {
   groupToolCatalog,
   groupCountLabel,
@@ -1306,7 +1306,7 @@ export function initSettingsModal(deps) {
       return;
     }
     if (!result?.ok) {
-      setWebSearchStatus(result?.error || t('settings.webSearch.saveFailed'), true);
+      setWebSearchStatus(tMessage(result?.error) || t('settings.webSearch.saveFailed'), true);
       return;
     }
     webSearchHasKey = result.hasApiKey === true;
@@ -1686,8 +1686,8 @@ export function initSettingsModal(deps) {
       if (result?.error) {
         setModelStatus(
           manual
-            ? t('addModel.models.errorManual', { error: result.error })
-            : t('addModel.models.error', { error: result.error }),
+            ? t('addModel.models.errorManual', { error: tMessage(result.error) })
+            : t('addModel.models.error', { error: tMessage(result.error) }),
           !manual
         );
         return;
@@ -1902,7 +1902,7 @@ export function initSettingsModal(deps) {
         );
       }
       if (!res?.ok) {
-        setModalError(res?.error || t('settings.saveFailed'));
+        setModalError(tMessage(res?.error) || t('settings.saveFailed'));
         return;
       }
       await refreshLLMState();
