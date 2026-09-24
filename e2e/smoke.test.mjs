@@ -265,27 +265,19 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const readAbortTrace = await snotra.traceChatAbort(LONG_QUESTION);
   await ask(page, LONG_QUESTION);
   step('lange Frage abgeschickt');
-  // #327: how far the server's stream got at each wait, to see which of the
-  // two polls below is slow on Linux and whether the renderer lags behind.
+  // #327: how far the server's stream got at each wait, logged with the step.
   const serverChunks = () => model.requestFor(LONG_QUESTION)?.trace.chunksWritten ?? 0;
 
   await poll(() => page.evaluate(() =>
     document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'laufende Antwort (Stop-Knopf)' });
   step(`stop button shown (server chunks: ${serverChunks()})`);
-  // Die letzte Bubble, nicht die erste: die erste ist die Begruessung, die die
-  // App beim Oeffnen eines Ordners selbst in den Chat schreibt.
-  const firstTextWaitStarted = Date.now();
-  let lastBubbles = null;
-  await poll(async () => {
-    lastBubbles = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
-      return { count: bubbles.length, last: (bubbles[bubbles.length - 1]?.textContent || '').slice(0, 80) };
-    });
-    return lastBubbles.last.includes('Diese Antwort');
-  }, { what: 'erste Textstuecke im Chat' });
-  step(`first text shown after ${Date.now() - firstTextWaitStarted} ms (server chunks: ${serverChunks()}, `
-    + `assistant bubbles: ${lastBubbles.count})`);
+  // Wait for the stream at the server, not for text in the bubble (#327): on
+  // the xvfb runner Chromium sometimes draws no frame for over ten seconds, and
+  // streamed text only reaches the DOM with the next animation frame. Three
+  // chunks leave the first one a quarter of a second to arrive in the renderer.
+  await poll(() => serverChunks() >= 3, { what: 'laufender Stream am Modellserver' });
+  step(`stream running (server chunks: ${serverChunks()})`);
 
   const stopClickedAt = Date.now();
   await page.evaluate(() => document.getElementById('btn-chat-send').click());
@@ -311,6 +303,14 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   t.diagnostic(`abort trace (#327): ${JSON.stringify(await abortDiagnosis())}`);
   assert.equal(model.requestFor(LONG_QUESTION).finished, false,
     'die abgebrochene Runde darf nicht zu Ende laufen');
+  // The abort writes the partial answer into the bubble synchronously, no
+  // frame needed. Die letzte Bubble, nicht die erste: die erste ist die
+  // Begruessung, die die App beim Oeffnen eines Ordners selbst schreibt.
+  const partialAnswer = await page.evaluate(() => {
+    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+    return bubbles[bubbles.length - 1]?.textContent || '';
+  });
+  assert.match(partialAnswer, /Diese Antwort/, 'die Teilantwort bleibt nach dem Abbruch im Chat stehen');
   step('Abbruch am Server angekommen');
 
   // --- Chatwechsel mitten im Lauf (#320): der Lauf arbeitet weiter ---------
