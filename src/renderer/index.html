@@ -292,13 +292,17 @@
           <span id="chat-history-title" data-i18n="history.title">History</span>
           <!-- Gegenstueck zu "Ordner oeffnen" in der Kopfzeile des Baums: Die
                Aktion, die der Spalte neue Eintraege verschafft, steht in der
-               Spalte. Weggeschaltet wird sie ueber die Titelzeile. -->
+               Spalte. Weggeschaltet wird sie ueber die Titelzeile.
+               Icon plus label since #318: a bare plus said nothing about what
+               gets added. The visible text is the accessible name; the title
+               stays for the narrow column, where CSS hides the label. -->
           <div class="icon-btn-row">
-            <button type="button" id="btn-chat-new" title="New chat" aria-label="New chat" data-i18n-attr="title:history.new;aria-label:history.new">
+            <button type="button" id="btn-chat-new" title="New chat" data-i18n-attr="title:history.new">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
               </svg>
+              <span class="btn-chat-new-label" data-i18n="history.new">New chat</span>
             </button>
           </div>
         </div>
