@@ -176,7 +176,13 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 
   const snotra = await launchApp({ userDataDir });
+  // #331: set once the clocks run; read before the app goes, pass or fail.
+  let reportFrames = null;
   t.after(async () => {
+    if (reportFrames) {
+      const frames = await reportFrames().catch((err) => ({ unreadable: String(err) }));
+      t.diagnostic(`frame probe (#331): ${JSON.stringify(frames)}`);
+    }
     await snotra.stop().catch(() => {});
     await model.close();
     await rm(workspace, { recursive: true, force: true });
@@ -186,6 +192,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const readOpenedLinks = await snotra.captureExternalLinks();
   const started = Date.now();
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
+  const readFrameProbe = await snotra.probeFrames();
+  reportFrames = () => readFrameProbe(started);
   step('App gestartet');
 
   // --- Fenstertitel: Name plus laufende Version -----------------------------

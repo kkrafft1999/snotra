@@ -103,6 +103,93 @@ export async function launchApp({ userDataDir }) {
       return () => app.evaluate(() => globalThis.__openedLinks ?? []);
     },
     /**
+     * Where the time goes when the renderer stops drawing (#331). Four clocks
+     * tick side by side: animation frames and a timer in the renderer, a timer
+     * in main, and one here in the test process. Frames missing while the
+     * renderer's timer ticks point at the compositor; all clocks stalling
+     * together point at the machine. Also records changes of visibility and
+     * focus. The returned function stops the clocks and summarises their gaps.
+     */
+    async probeFrames({ gapMs = 300 } = {}) {
+      const probeScript = (gapMs) => {
+        const probe = { gapMs, frames: [], timer: [], states: [] };
+        globalThis.__frameProbe = probe;
+        let last = { frames: Date.now(), timer: Date.now() };
+        const tick = (series) => {
+          const now = Date.now();
+          if (now - last[series] >= probe.gapMs) probe[series].push([last[series], now - last[series]]);
+          last[series] = now;
+        };
+        probe.stop = () => { probe.stopped = true; };
+        const frame = () => { if (probe.stopped) return; tick('frames'); requestAnimationFrame(frame); };
+        requestAnimationFrame(frame);
+        const timer = setInterval(() => { if (probe.stopped) clearInterval(timer); else tick('timer'); }, 50);
+        let state = '';
+        const sampleState = () => {
+          const next = `${document.visibilityState}${document.hasFocus() ? '+focus' : ''}`;
+          if (next !== state) { probe.states.push([Date.now(), next]); state = next; }
+        };
+        sampleState();
+        setInterval(sampleState, 250);
+        return true;
+      };
+      await page.evaluate(probeScript, gapMs);
+
+      await app.evaluate((_electron, gapMs) => {
+        const probe = { gapMs, timer: [] };
+        globalThis.__frameProbe = probe;
+        let last = Date.now();
+        probe.handle = setInterval(() => {
+          const now = Date.now();
+          if (now - last >= probe.gapMs) probe.timer.push([last, now - last]);
+          last = now;
+        }, 50);
+        return true;
+      }, gapMs);
+
+      const testGaps = [];
+      let testLast = Date.now();
+      const testTimer = setInterval(() => {
+        const now = Date.now();
+        if (now - testLast >= gapMs) testGaps.push([testLast, now - testLast]);
+        testLast = now;
+      }, 50);
+
+      return async (since) => {
+        clearInterval(testTimer);
+        const renderer = await page.evaluate(() => {
+          const probe = globalThis.__frameProbe;
+          probe?.stop();
+          return probe ? { frames: probe.frames, timer: probe.timer, states: probe.states } : null;
+        }).catch((err) => ({ unreadable: String(err) }));
+        const main = await app.evaluate(() => {
+          const probe = globalThis.__frameProbe;
+          if (probe) clearInterval(probe.handle);
+          return probe ? { timer: probe.timer } : null;
+        }).catch((err) => ({ unreadable: String(err) }));
+        // Gaps as [start, duration] with the start relative to `since`, so
+        // they line up with the test's step log.
+        const rel = (gaps) => (Array.isArray(gaps) ? gaps.map(([at, ms]) => [at - since, ms]) : gaps);
+        const worst = (gaps) => (Array.isArray(gaps) && gaps.length ? Math.max(...gaps.map(([, ms]) => ms)) : 0);
+        return {
+          note: `gaps of ${gapMs} ms or more, as [start ms since app start, duration ms]`,
+          worst: {
+            rendererFrames: worst(renderer?.frames),
+            rendererTimer: worst(renderer?.timer),
+            mainTimer: worst(main?.timer),
+            testTimer: worst(testGaps),
+          },
+          rendererFrames: rel(renderer?.frames),
+          rendererTimer: rel(renderer?.timer),
+          mainTimer: rel(main?.timer),
+          testTimer: rel(testGaps),
+          rendererStates: Array.isArray(renderer?.states)
+            ? renderer.states.map(([at, state]) => [at - since, state])
+            : renderer?.unreadable ?? null,
+        };
+      };
+    },
+    /**
      * Main's view of a chat abort, for #327: did `chat:abort` arrive, and did
      * the abort reach the provider's `fetch` — its signal, its response, its
      * body stream? Needs no hook in the app: a second `ipcMain` listener sits
