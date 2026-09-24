@@ -121,7 +121,16 @@ export async function launchApp({ userDataDir }) {
           last[series] = now;
         };
         probe.stop = () => { probe.stopped = true; };
-        const frame = () => { if (probe.stopped) return; tick('frames'); requestAnimationFrame(frame); };
+        probe.framesSeen = 0;
+        // Counted from here, so a renderer that never draws still shows a gap.
+        probe.lastFrame = Date.now();
+        const frame = () => {
+          if (probe.stopped) return;
+          tick('frames');
+          probe.framesSeen += 1;
+          probe.lastFrame = Date.now();
+          requestAnimationFrame(frame);
+        };
         requestAnimationFrame(frame);
         const timer = setInterval(() => { if (probe.stopped) clearInterval(timer); else tick('timer'); }, 50);
         let state = '';
@@ -144,6 +153,12 @@ export async function launchApp({ userDataDir }) {
           if (now - last >= probe.gapMs) probe.timer.push([last, now - last]);
           last = now;
         }, 50);
+        // A GPU process that crashes or hangs under xvfb stops all frames
+        // until Chromium falls back to software compositing.
+        probe.gone = [];
+        _electron.app.on('child-process-gone', (_event, details) => {
+          probe.gone.push([Date.now(), details.type, details.reason, details.exitCode]);
+        });
         return true;
       }, gapMs);
 
@@ -159,17 +174,30 @@ export async function launchApp({ userDataDir }) {
         clearInterval(testTimer);
         const renderer = await page.evaluate(() => {
           const probe = globalThis.__frameProbe;
-          probe?.stop();
-          return probe ? { frames: probe.frames, timer: probe.timer, states: probe.states } : null;
+          if (!probe) return null;
+          probe.stop();
+          // A gap is only recorded when the next frame comes; one that lasts
+          // until now would otherwise not show at all — the blind spot that
+          // hid a renderer drawing no frame for a whole failing run.
+          const now = Date.now();
+          const open = now - probe.lastFrame >= probe.gapMs
+            ? [[probe.lastFrame, now - probe.lastFrame, 'still open']] : [];
+          return { frames: [...probe.frames, ...open], framesSeen: probe.framesSeen, timer: probe.timer, states: probe.states };
         }).catch((err) => ({ unreadable: String(err) }));
-        const main = await app.evaluate(() => {
+        const main = await app.evaluate(({ app, BrowserWindow }) => {
           const probe = globalThis.__frameProbe;
           if (probe) clearInterval(probe.handle);
-          return probe ? { timer: probe.timer } : null;
+          const win = BrowserWindow.getAllWindows()[0];
+          return probe ? {
+            timer: probe.timer,
+            gone: probe.gone,
+            gpuFeatures: app.getGPUFeatureStatus(),
+            window: win ? { visible: win.isVisible(), minimized: win.isMinimized(), focused: win.isFocused() } : null,
+          } : null;
         }).catch((err) => ({ unreadable: String(err) }));
         // Gaps as [start, duration] with the start relative to `since`, so
         // they line up with the test's step log.
-        const rel = (gaps) => (Array.isArray(gaps) ? gaps.map(([at, ms]) => [at - since, ms]) : gaps);
+        const rel = (gaps) => (Array.isArray(gaps) ? gaps.map(([at, ...rest]) => [at - since, ...rest]) : gaps);
         const worst = (gaps) => (Array.isArray(gaps) && gaps.length ? Math.max(...gaps.map(([, ms]) => ms)) : 0);
         return {
           note: `gaps of ${gapMs} ms or more, as [start ms since app start, duration ms]`,
@@ -183,6 +211,10 @@ export async function launchApp({ userDataDir }) {
           rendererTimer: rel(renderer?.timer),
           mainTimer: rel(main?.timer),
           testTimer: rel(testGaps),
+          framesSeen: renderer?.framesSeen ?? null,
+          childProcessesGone: rel(main?.gone),
+          gpuFeatures: main?.gpuFeatures ?? null,
+          window: main?.window ?? null,
           rendererStates: Array.isArray(renderer?.states)
             ? renderer.states.map(([at, state]) => [at - since, state])
             : renderer?.unreadable ?? null,
