@@ -53,16 +53,36 @@ function createChatSessionSettings({
   // richtig, nur teurer.
   getActivePresetId = async () => null,
   getActiveMode = async () => null,
+  // A chat's own mode changed while it was being activated — its open cards
+  // and session approvals were given under the old one (concept §7, #320).
+  onChatModeChanged = () => {},
+  // Another chat is on screen now; main drops what only the left chat needed.
+  onActivated = () => {},
   log = console,
 }) {
   let currentChatId = null;
   /** @type {Map<string, {modelPresetId?: string, toolPermissionMode?: string}>} */
   const remembered = new Map();
+  /**
+   * The mode a chat had when it left the screen (#320). The store only ever
+   * holds the visible chat's mode; a run that goes on in the background keeps
+   * the one it was started under instead of borrowing the next chat's.
+   * @type {Map<string, string>}
+   */
+  const backgroundModes = new Map();
 
   function normalizeChatId(raw) {
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
     return trimmed ? trimmed.slice(0, 128) : null;
+  }
+
+  function rememberBackgroundMode(chatId, mode) {
+    backgroundModes.delete(chatId);
+    backgroundModes.set(chatId, mode);
+    while (backgroundModes.size > MAX_REMEMBERED_CHATS) {
+      backgroundModes.delete(backgroundModes.keys().next().value);
+    }
   }
 
   function rememberLocal(chatId, patch) {
@@ -141,17 +161,52 @@ function createChatSessionSettings({
    */
   async function activate(rawChatId, { activation = CHAT_ACTIVATION.EXPLICIT } = {}) {
     const chatId = normalizeChatId(rawChatId);
+    const previousChatId = currentChatId;
+    const activeMode = await getActiveMode();
+    // The chat leaving the screen keeps its mode for a run that may still be
+    // going (#320); the one coming on screen reads the store again.
+    if (previousChatId && previousChatId !== chatId && activeMode) {
+      rememberBackgroundMode(previousChatId, activeMode);
+    }
+    const modeBefore = chatId === previousChatId ? activeMode : backgroundModes.get(chatId) ?? null;
+    if (chatId) backgroundModes.delete(chatId);
     currentChatId = chatId;
     const values = chatId ? await storedValuesFor(chatId) : {};
     const presetId = await resolvePresetFor(values);
     const mode = resolveModeFor(values, activation);
-    // Nur anfassen, was sich wirklich ändert: Ein Moduswechsel verwirft offene
-    // Freigaben und Sitzungsfreigaben (Konzept §7) — das darf nicht bei jedem
-    // Chatwechsel passieren, bei dem der Modus ohnehin schon stimmt. Dasselbe
-    // gilt für die Konfigurationsdatei des Modells.
+    // Nur anfassen, was sich wirklich ändert — dasselbe gilt für die
+    // Konfigurationsdatei des Modells. Writing the mode here only mirrors the
+    // chat on screen into the store; it discards nothing on its own (#320).
     if (presetId && presetId !== (await getActivePresetId())) await applyPreset(presetId);
-    if (mode !== (await getActiveMode())) await applyMode(mode);
+    if (mode !== activeMode) await applyMode(mode);
+    // Only the chat's *own* mode changing voids its cards and approvals — a
+    // chat restored from "auto" to "smart", say (concept §7).
+    if (chatId && modeBefore && modeBefore !== mode) notify(onChatModeChanged, chatId);
+    notify(onActivated, chatId);
     return { chatId, modelPresetId: presetId, toolPermissionMode: mode };
+  }
+
+  function notify(hook, chatId) {
+    try {
+      hook(chatId);
+    } catch (error) {
+      log?.warn?.(`[chat-session-settings] Hook failed: ${error?.message || error}`);
+    }
+  }
+
+  /**
+   * The mode a run of this chat works under (#320). `null` for the chat on
+   * screen — its mode is the one in the store, as it always was.
+   */
+  function modeFor(rawChatId) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId || chatId === currentChatId) return null;
+    return backgroundModes.get(chatId) ?? null;
+  }
+
+  /** "Reset all permissions" puts every chat back to the store's mode. */
+  function forgetBackgroundModes() {
+    backgroundModes.clear();
   }
 
   /** Ausdrückliche Wahl in der Chat-Leiste oder in den Einstellungen. */
@@ -183,6 +238,7 @@ function createChatSessionSettings({
     const chatId = normalizeChatId(rawChatId);
     if (!chatId) return;
     remembered.delete(chatId);
+    backgroundModes.delete(chatId);
     if (currentChatId === chatId) currentChatId = null;
   }
 
@@ -192,6 +248,8 @@ function createChatSessionSettings({
     rememberMode,
     valuesFor,
     forget,
+    modeFor,
+    forgetBackgroundModes,
     getCurrentChatId: () => currentChatId,
   };
 }

@@ -230,6 +230,8 @@ module.exports = {
   'history.empty': 'Noch keine gespeicherten Chats.',
   'history.entry.fallbackTitle': 'Chat',
   'history.entry.remove': 'Aus Verlauf entfernen',
+  'history.entry.running': 'Arbeitet…',
+  'history.entry.awaiting': 'Wartet auf deine Freigabe',
 
   // ── Settings: frame ────────────────────────────────────────────────────────
   'settings.title': 'Einstellungen',
@@ -764,6 +766,7 @@ module.exports = {
   'chat.error.noImages': '{provider} nimmt in Snotra AI noch keine Bilder entgegen. Entferne den Anhang oder wechsle das Modell.',
   'chat.error.provider.fallback': 'Dieser Anbieter',
   'chat.error.toolLimit': 'Zu viele Tool-Runden (aktuell {limit}). Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
+  'chat.error.runLost': 'Die Antwort ist nicht angekommen. Frag bitte noch einmal.',
   'chat.error.runEnded.noApprovalUi': 'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.',
   'chat.error.runEnded.requestInvalidated': 'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
   'chat.error.runEnded.repeatedDenial': 'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',

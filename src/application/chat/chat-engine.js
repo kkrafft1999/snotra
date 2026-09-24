@@ -666,9 +666,19 @@ function createChatEngine({
   sessionGrants = createSessionGrants(),
   maxToolRounds,
   clock = () => Date.now(),
+  // Called once a run has ended, however it ended (#320).
+  onRunSettled = () => {},
 }) {
-  /** @type {Map<string | number, AbortController>} */
-  const activeChatAborts = new Map();
+  /**
+   * One run per window *and* chat (#320). Until then a window had exactly one
+   * run, and a second send — from another chat — aborted the first.
+   * @type {Map<string, { sessionId: string|number, chatId: string|null, controller: AbortController }>}
+   */
+  const activeRuns = new Map();
+
+  function runKey(sessionId, chatId) {
+    return JSON.stringify([sessionId ?? null, chatId ?? null]);
+  }
 
   function emit(onEvent, type, payload) {
     onEvent?.({ type, payload });
@@ -773,10 +783,11 @@ function createChatEngine({
     return { target };
   }
 
-  async function readPolicySnapshot() {
+  async function readPolicySnapshot(chatId) {
     if (!toolPolicy || typeof toolPolicy.read !== 'function') return defaultPolicySnapshot();
     try {
-      const snapshot = await toolPolicy.read();
+      // The mode of the run's own chat, not of the chat on screen (#320).
+      const snapshot = await toolPolicy.read({ chatId });
       return {
         mode: normalizeToolPermissionMode(snapshot?.mode),
         rules: Array.isArray(snapshot?.rules) ? snapshot.rules : [],
@@ -784,6 +795,7 @@ function createChatEngine({
           ? snapshot.sensitivePathPatterns
           : [],
         policyVersion: typeof snapshot?.policyVersion === 'string' ? snapshot.policyVersion : 'unknown',
+        rulesVersion: typeof snapshot?.rulesVersion === 'string' ? snapshot.rulesVersion : null,
         integrity: snapshot?.integrity,
       };
     } catch {
@@ -793,19 +805,34 @@ function createChatEngine({
     }
   }
 
-  function abort(sessionId) {
-    const controller = activeChatAborts.get(sessionId);
-    if (controller && !controller.signal.aborted) controller.abort(createChatAbortError());
+  /**
+   * Stops the run of one chat. Without a chat (`undefined`), every run of the
+   * window stops — what closing it means.
+   */
+  function abort(sessionId, chatId) {
+    for (const run of activeRuns.values()) {
+      if (run.sessionId !== sessionId) continue;
+      if (chatId !== undefined && run.chatId !== sanitizeChatId(chatId)) continue;
+      if (!run.controller.signal.aborted) run.controller.abort(createChatAbortError());
+    }
+  }
+
+  /** Chats with a run going right now — main keeps their approvals alive (#320). */
+  function runningChatIds() {
+    return new Set([...activeRuns.values()].map((run) => run.chatId));
   }
 
   async function send({ sessionId, payload, onEvent }) {
     const abortController = new AbortController();
     const abortSignal = abortController.signal;
-    const previous = activeChatAborts.get(sessionId);
-    if (previous && previous !== abortController && !previous.signal.aborted) {
-      previous.abort(createChatAbortError());
+    const chatId = sanitizeChatId(payload?.chatId);
+    const key = runKey(sessionId, chatId);
+    // A new turn in the same chat replaces its run; another chat's run goes on.
+    const previous = activeRuns.get(key);
+    if (previous && previous.controller !== abortController && !previous.controller.signal.aborted) {
+      previous.controller.abort(createChatAbortError());
     }
-    activeChatAborts.set(sessionId, abortController);
+    activeRuns.set(key, { sessionId, chatId, controller: abortController });
 
     const toolTrace = [];
     // requestUsage: Summe ueber alle Runden (Verbrauch dieses Zugs).
@@ -834,7 +861,6 @@ function createChatEngine({
       if (attachmentBlock) return attachmentBlock;
       const providerKey = buildProviderKey(target, sendBundle);
       const providerLabel = buildProviderLabel(target, sendBundle);
-      const chatId = sanitizeChatId(payload?.chatId);
 
       const workspaceRoot = workspacePaths.resolveRoot(payload?.workspaceRoot);
       const selection = workspaceRoot
@@ -1097,8 +1123,17 @@ function createChatEngine({
        * (Konzept §6/§7). */
       const deniedPlanKeys = new Set();
 
+      // Bound to the rules, not to every write of the policy file: the mode is
+      // part of the key on its own, and the file is written whenever another
+      // chat comes on screen (#320).
       function buildScopeKey(policy) {
-        return JSON.stringify([chatId, workspaceRoot, policy.mode, policy.policyVersion, skillSignature]);
+        return JSON.stringify([
+          chatId,
+          workspaceRoot,
+          policy.mode,
+          policy.rulesVersion ?? policy.policyVersion,
+          skillSignature,
+        ]);
       }
 
       /**
@@ -1207,6 +1242,7 @@ function createChatEngine({
             targets: plan.targets,
             riskClasses: plan.riskClasses,
             providerKey,
+            chatId,
           });
           return { response: APPROVAL_RESPONSES.ALLOW_SESSION };
         }
@@ -1219,7 +1255,7 @@ function createChatEngine({
        * Provider-Request (verfallene Freigabe, Konzept §6).
        */
       async function runToolCall({ entry, callIndex, toolName, args }) {
-        const policy = await readPolicySnapshot();
+        const policy = await readPolicySnapshot(chatId);
         if (policy.unreadable) {
           return {
             ...permissionDenied(entry, {
@@ -1582,7 +1618,14 @@ function createChatEngine({
         code: CHAT_ERROR_CODES.NETWORK,
       });
     } finally {
-      if (activeChatAborts.get(sessionId) === abortController) activeChatAborts.delete(sessionId);
+      if (activeRuns.get(key)?.controller === abortController) {
+        activeRuns.delete(key);
+        try {
+          onRunSettled({ sessionId, chatId });
+        } catch {
+          // Tidying up after a run must not turn its result into an error.
+        }
+      }
     }
   }
 
@@ -1655,7 +1698,7 @@ function createChatEngine({
     }
   }
 
-  return { send, abort, generateTitle, sessionGrants };
+  return { send, abort, runningChatIds, generateTitle, sessionGrants };
 }
 
 module.exports = {

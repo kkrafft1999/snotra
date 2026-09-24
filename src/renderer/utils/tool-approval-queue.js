@@ -83,11 +83,24 @@ export function createToolApprovalQueue() {
       }
       return out;
     },
-    /** Aufgelöste Einträge vergessen, sobald ihre Karte nicht mehr angezeigt wird. */
-    forgetResolved() {
+    /**
+     * Aufgelöste Einträge vergessen, sobald ihre Karte nicht mehr angezeigt wird.
+     * `keep` spares entries — those of another chat's run, say (#320).
+     */
+    forgetResolved(keep = () => false) {
       for (const [requestId, entry] of [...entries.entries()]) {
-        if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED) entries.delete(requestId);
+        if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED && !keep(entry)) entries.delete(requestId);
       }
+    },
+    /** Drops entries outright, whatever their state — a chat that was left (#320). */
+    forgetWhere(predicate) {
+      const out = [];
+      for (const [requestId, entry] of [...entries.entries()]) {
+        if (!predicate(entry)) continue;
+        entries.delete(requestId);
+        out.push(entry);
+      }
+      return out;
     },
     size() {
       return entries.size;

@@ -225,3 +225,24 @@ test('ein abgelehnter Auto-Dialog merkt auch nichts (#211)', async (t) => {
   assert.equal(res.ok, false);
   assert.deepEqual(remembered, []);
 });
+
+test('a mode change belongs to the chat on screen: a run in the background keeps its card and approvals (#320)', async (t) => {
+  const chatSessionSettings = { getCurrentChatId: () => 'chat-visible', rememberMode: async () => {} };
+  const { invoke, approvals, sessionGrants } = await setup(t, { chatSessionSettings });
+  const sender = makeSender();
+  approvals.subscribe(sender.id, sender);
+  const request = (chatId) => ({ tool: 't', riskClasses: ['write'], targets: [], mode: 'smart', chatId });
+  const visible = approvals.requestApproval({ sessionId: sender.id, request: request('chat-visible') });
+  void approvals.requestApproval({ sessionId: sender.id, request: request('chat-background') });
+  const grant = (chatId) =>
+    sessionGrants.grant({ scopeKey: chatId, tool: 'edit_file', targets: [{ path: 'a.js' }], riskClasses: ['write'], chatId });
+  grant('chat-visible');
+  grant('chat-background');
+
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'ask-all');
+  assert.equal(res.ok, true);
+  assert.equal((await visible).invalidated, true, 'the visible chat changed its mode');
+  assert.equal(approvals.pendingCount(), 1, 'the background chat still waits for its answer');
+  assert.equal(sessionGrants.count(), 1);
+  assert.ok(sender.sent.some((entry) => entry.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
+});

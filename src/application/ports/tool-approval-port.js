@@ -39,6 +39,9 @@
  * @property {(params: { sessionId: string|number, request: ToolApprovalRequest, abortSignal?: AbortSignal })
  *   => Promise<ToolApprovalOutcome>} requestApproval
  * @property {(sessionId: string|number, reason?: string) => void} [invalidateSession]
+ * @property {(chatId: string|null, reason?: string) => void} [invalidateChat]  one chat's open requests (#320)
+ * @property {(chatIds: Iterable<string|null>, reason?: string) => void} [invalidateExceptChats]
+ *   every open request outside the given chats — the visible one and the running ones (#320)
  */
 
 module.exports = {};

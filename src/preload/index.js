@@ -93,8 +93,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       selectedPath: options?.selectedPath ?? null,
       selectedIsDirectory: options?.selectedIsDirectory ?? false,
       chatId: typeof options?.chatId === 'string' ? options.chatId : null,
+      // Comes back on every event of this turn, so that a late event of an
+      // earlier turn cannot land in the next one (#320).
+      runId: typeof options?.runId === 'string' ? options.runId : null,
     }),
-  abortChat: () => ipcRenderer.send(REQ.CHAT_ABORT),
+  // Stops the run of this chat only; the other chats keep theirs (#320).
+  abortChat: (chatId) =>
+    ipcRenderer.send(REQ.CHAT_ABORT, { chatId: typeof chatId === 'string' ? chatId : null }),
   onChatDelta: (callback) => {
     const channel = PUSH.CHAT_DELTA;
     const listener = (_event, payload) => callback(payload);

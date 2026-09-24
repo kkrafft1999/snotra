@@ -128,6 +128,9 @@ export function initChatStream({
   // Meldet, dass der laufende Chat in die Ablage geschrieben wurde — der
   // Verlauf haengt daran seine Liste nach (Epic #223, Phase B).
   onChatPersisted = () => {},
+  // A run started, ended or changed its state — the history column marks
+  // running chats (#320).
+  onRunsChanged = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
@@ -239,6 +242,9 @@ export function initChatStream({
   function finalizeStreamingAssistantBubble(bubble, message) {
     delete message.pendingToolLines;
     delete message.thinkingSince;
+    delete message.toolRunning;
+    delete message.runningCallIndex;
+    delete message.permissionNote;
     bubble.querySelector('.chat-phase')?.remove();
     bubble.querySelector('.chat-reasoning-stream')?.remove();
 
@@ -462,12 +468,20 @@ export function initChatStream({
           }
           li.appendChild(reasoningEl);
 
-          li.appendChild(
-            buildToolLog(m.toolTrace, 'running', m.pendingToolLines, {
-              thinking: isThinking(m),
-              elapsedMs: thinkingElapsedMs(m),
-            })
-          );
+          // A step that is running is not thinking, even if the phase says so
+          // — without this a chat opened again mid-run showed its running
+          // step as done (#320).
+          const toolLog = buildToolLog(m.toolTrace, 'running', m.pendingToolLines, {
+            thinking: isThinking(m) && !m.toolRunning,
+            elapsedMs: thinkingElapsedMs(m),
+          });
+          const runningRow = m.toolRunning ? [...toolLog.querySelectorAll('.chat-tool-lines > .chat-tool-line--running')].pop() : null;
+          if (runningRow) {
+            if (Number.isInteger(m.runningCallIndex)) runningRow.dataset.callIndex = String(m.runningCallIndex);
+            if (m.permissionNote) showPermissionNote(runningRow, m.permissionNote);
+            syncToolLogSummary(toolLog, { thinking: false, elapsedMs: thinkingElapsedMs(m) });
+          }
+          li.appendChild(toolLog);
 
           // Freigabe-Karten (Issue #67) stehen sichtbar zwischen Tool-Log und
           // Antworttext – außerhalb des eingeklappten Logs.
@@ -528,26 +542,37 @@ export function initChatStream({
     if (greeting) appStore.chatMessages.push(greeting);
   }
 
-  async function persistCurrentChat() {
-    const persistable = appStore.chatMessages.filter((m) => !m.greeting);
-    if (!appStore.currentChatId || persistable.length === 0) return;
+  /**
+   * Writes a chat into the history. Any chat, not only the one on screen: a
+   * run that ends in the background writes its own (#320) — and does not make
+   * it the folder's active chat, which stays the one the user looks at.
+   */
+  async function persistChat(chat, { markActive = false } = {}) {
+    if (!chat?.id || lastPersisted.get(chat.id) === DELETED) return;
+    const persistable = persistableMessages(chat.messages);
+    if (persistable.length === 0) return;
+    lastPersisted.set(chat.id, { messages: chat.messages, count: persistable.length });
     // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
     // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
     // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
     // gesprochen“, obwohl niemand etwas gesagt hat.
     await api.upsertChatSession({
-      id: appStore.currentChatId,
-      workspaceRoot: appStore.currentChatWorkspace,
+      id: chat.id,
+      workspaceRoot: chat.workspaceRoot,
       messages: persistable,
-      tokenUsage: appStore.chatTokenUsage,
+      tokenUsage: chat.tokenUsage,
       // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
       // den Titel selbst aus der ersten Frage ab.
-      ...(appStore.currentChatTitle ? { title: appStore.currentChatTitle } : {}),
+      ...(chat.title ? { title: chat.title } : {}),
     });
-    await api.setActiveChatId(appStore.currentChatId);
+    if (markActive) await api.setActiveChatId(chat.id);
     // Die Verlaufsspalte steht seit Epic #223 (Phase B) dauerhaft daneben und
     // wuerde sonst den alten Titel und den alten Zeitpunkt zeigen.
     onChatPersisted();
+  }
+
+  async function persistCurrentChat() {
+    await persistChat(currentChatSnapshot(), { markActive: true });
   }
 
   /**
@@ -556,19 +581,23 @@ export function initChatStream({
    */
   async function loadChatForWorkspace(workspaceRoot) {
     stopChatVoiceListening();
-    approvalCards?.reset();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
 
     const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist?.sessions) ? hist.sessions : [];
     const { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    // A run in the chat just shown goes on in the background (#320).
+    detachCurrentChat();
     if (restore) {
-      appStore.currentChatId = restore.id;
-      appStore.currentChatWorkspace = workspaceRoot || null;
-      appStore.chatMessages = restore.messages;
-      appStore.currentChatTitle = restore.title || '';
-      setChatTokenUsage(restore.tokenUsage);
+      // Still running in memory, that state is newer than the file.
+      if (!attachChat(restore.id)) {
+        appStore.currentChatId = restore.id;
+        appStore.currentChatWorkspace = workspaceRoot || null;
+        appStore.chatMessages = restore.messages;
+        appStore.currentChatTitle = restore.title || '';
+        setChatTokenUsage(restore.tokenUsage);
+      }
       // Die zuletzt gefuehrte Konversation wird damit auch die aktive dieses
       // Ordners — sonst begaenne der naechste Wechsel wieder von vorn.
       if (!wasActive) await api.setActiveChatId(restore.id);
@@ -579,6 +608,7 @@ export function initChatStream({
       chatInput.value = '';
       onInputChanged();
       renderChatMessages();
+      afterChatSwitch();
       return { restored: true, wasActive };
     }
     if (hist?.activeChatId) await api.setActiveChatId(null);
@@ -592,13 +622,15 @@ export function initChatStream({
     chatInput.value = '';
     onInputChanged();
     renderChatMessages();
+    afterChatSwitch();
     return { restored: false, wasActive: false };
   }
 
   async function startNewChat() {
     stopChatVoiceListening();
-    approvalCards?.reset();
     await persistCurrentChat();
+    // A run in the chat just left goes on in the background (#320).
+    detachCurrentChat();
     appStore.chatSessionId += 1;
     appStore.currentChatId = crypto.randomUUID();
     appStore.currentChatWorkspace = appStore.rootPath || null;
@@ -612,6 +644,7 @@ export function initChatStream({
     // Neuer Chat: Standard-Modell aus den Einstellungen, Modus „Intelligent“.
     await activateChatSession(appStore.currentChatId, 'explicit');
     renderChatMessages();
+    afterChatSwitch();
   }
 
   function finalizeInFlightAssistantMessage() {
@@ -630,13 +663,374 @@ export function initChatStream({
     return true;
   }
 
-  function abortChatRequest() {
-    if (!appStore.chatInFlight) return;
-    appStore.chatAbortedSendSeq = appStore.chatSendSeq;
-    if (typeof api.abortChat === 'function') api.abortChat();
-    finalizeInFlightAssistantMessage();
-    appStore.chatInFlight = false;
+  // --- Runs per chat (#320) --------------------------------------------------
+  //
+  // A run belongs to the chat it was started in, not to the screen. While its
+  // chat is on screen, the chat's data lives in `appStore` as it always did and
+  // the run draws into the list. When another chat takes the screen, the run
+  // takes its chat along (`run.chat`) and goes on writing into those messages
+  // without touching the list; opening the chat again puts it back on screen.
+
+  let runSeq = 0;
+  // chatId → what was written last: the message array and how many messages
+  // went in. A title that arrives late only writes its snapshot if that is
+  // still the latest state of the chat.
+  const lastPersisted = new Map();
+  const DELETED = Symbol('deleted');
+
+  function persistableMessages(messages) {
+    return messages.filter((m) => !m.greeting);
+  }
+
+  /** Whether `chat` is exactly what the history holds for it right now. */
+  function isLatestWritten(chat) {
+    const latest = lastPersisted.get(chat.id);
+    return !!latest && latest !== DELETED && latest.messages === chat.messages
+      && latest.count === persistableMessages(chat.messages).length;
+  }
+
+  function isRunning(run) {
+    return !!run && !run.settled && !run.aborted;
+  }
+
+  function isOnScreen(run) {
+    return !!run && !run.chat && run.chatId === appStore.currentChatId;
+  }
+
+  /** `'running'`, `'awaiting'` (a card waits for the user) or `null`. */
+  function runStateOf(chatId) {
+    const run = appStore.chatRuns.get(chatId);
+    if (!isRunning(run)) return null;
+    return approvalCards?.pendingChatIds?.().has(chatId) ? 'awaiting' : 'running';
+  }
+
+  /** The chat on screen plus every chat that still has its run in memory. */
+  function liveChatIds() {
+    return new Set([appStore.currentChatId || null, ...appStore.chatRuns.keys()]);
+  }
+
+  function syncChatInFlight() {
+    appStore.chatInFlight = isRunning(appStore.chatRuns.get(appStore.currentChatId));
     syncChatSendButton();
+  }
+
+  function notifyRunsChanged() {
+    try {
+      onRunsChanged();
+    } catch {
+      // The history column is a view; it must not get in the way of a run.
+    }
+  }
+
+  // Sekundentakt für die Denkzeit (Issue #87). One for all runs: it only ever
+  // touches the chat on screen, and stops once nothing is running.
+  let elapsedTicker = 0;
+  function syncElapsedTicker() {
+    const anyRunning = [...appStore.chatRuns.values()].some(isRunning);
+    if (anyRunning && !elapsedTicker) {
+      elapsedTicker = setInterval(syncThinkingElapsed, 1000);
+    } else if (!anyRunning && elapsedTicker) {
+      clearInterval(elapsedTicker);
+      elapsedTicker = 0;
+    }
+  }
+
+  function currentChatSnapshot() {
+    return {
+      id: appStore.currentChatId,
+      workspaceRoot: appStore.currentChatWorkspace,
+      messages: appStore.chatMessages,
+      title: appStore.currentChatTitle,
+      tokenUsage: appStore.chatTokenUsage,
+      contextBreakdown: appStore.chatContextBreakdown,
+    };
+  }
+
+  /** Before another chat takes the screen: a running chat takes its data along. */
+  function detachCurrentChat() {
+    const run = appStore.chatRuns.get(appStore.currentChatId);
+    if (run && !run.chat) run.chat = currentChatSnapshot();
+    // A frame still due would draw the old chat's stream into the next one.
+    cancelStreamRender();
+  }
+
+  /** Whether this chat is in memory with its run — then it opens from there, not from disk. */
+  function canAttachChat(chatId) {
+    return !!appStore.chatRuns.get(chatId)?.chat;
+  }
+
+  /** Puts a chat that still has its run in memory back on screen. */
+  function attachChat(chatId) {
+    const run = appStore.chatRuns.get(chatId);
+    if (!run?.chat) return false;
+    const chat = run.chat;
+    run.chat = null;
+    appStore.currentChatId = chat.id;
+    appStore.currentChatWorkspace = chat.workspaceRoot;
+    appStore.chatMessages = chat.messages;
+    appStore.currentChatTitle = chat.title;
+    setChatTokenUsage(chat.tokenUsage, { breakdown: chat.contextBreakdown });
+    return true;
+  }
+
+  /** After the screen switched chats: the send button, the cards and the history follow. */
+  function afterChatSwitch() {
+    syncChatInFlight();
+    approvalCards?.retainChats?.(liveChatIds());
+    notifyRunsChanged();
+  }
+
+  /** The chat is being deleted: its run stops and must not write the chat back. */
+  function discardChatRun(chatId) {
+    lastPersisted.set(chatId, DELETED);
+    const run = appStore.chatRuns.get(chatId);
+    if (!run) return;
+    run.discarded = true;
+    if (!run.settled && !run.aborted) {
+      run.aborted = true;
+      if (typeof api.abortChat === 'function') api.abortChat(chatId);
+    }
+    appStore.chatRuns.delete(chatId);
+    syncChatInFlight();
+    syncElapsedTicker();
+    notifyRunsChanged();
+  }
+
+  /**
+   * The run an event belongs to (#320). Events name their chat and their run;
+   * a late event of an earlier turn, or of a run that has ended, finds nothing.
+   */
+  function runForEvent(payload) {
+    const chatId = typeof payload?.chatId === 'string' ? payload.chatId : null;
+    const run = chatId ? appStore.chatRuns.get(chatId) : null;
+    if (!run || run.settled || run.runId !== payload?.runId) return null;
+    const last = run.assistantMessage;
+    if (!last || last.role !== 'assistant' || !last.streaming) return null;
+    return run;
+  }
+
+  /** What a permission event says about the running step: waiting, denied, expired — or nothing. */
+  function permissionNoteFor(p) {
+    if (p.event === 'awaiting') return 'awaiting';
+    if (p.event !== 'resolved') return null;
+    const allowed = typeof p.response === 'string' && p.response !== 'deny';
+    if (allowed) return null;
+    return p.response === 'deny' ? 'denied' : 'expired';
+  }
+
+  const PERMISSION_NOTES = Object.freeze({
+    awaiting: { suffix: 'tools.line.suffix.awaiting', state: 'awaiting' },
+    denied: { suffix: 'tools.line.suffix.denied', state: 'denied' },
+    expired: { suffix: 'tools.line.suffix.expired', state: 'cancelled' },
+  });
+
+  /** Warten und Entscheidung an der Tool-Zeile sichtbar machen (Issue #67). */
+  function showPermissionNote(row, note) {
+    if (!row) return;
+    const textEl = row.querySelector('.chat-tool-line-text');
+    const base = row.dataset.baseText || textEl?.textContent || '';
+    if (!row.dataset.baseText) row.dataset.baseText = base;
+    const shown = PERMISSION_NOTES[note];
+    setToolLineText(row, shown ? `${base} · ${t(shown.suffix)}` : base);
+    if (shown) row.dataset.permission = shown.state;
+    else if (note === 'allowed') row.dataset.permission = 'allowed';
+  }
+
+  function onChatDelta(payload) {
+    const run = runForEvent(payload);
+    if (!run) return;
+    const last = run.assistantMessage;
+    const hadContent = !!(last.content && last.content.length > 0);
+    last.content = (last.content || '') + (payload?.text || '');
+    if (last.content) delete last.thinkingSince;
+    // Off screen, the message is all there is; the list is drawn from it on return.
+    if (!isOnScreen(run)) return;
+    const streamEl = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-md-streaming');
+    if (streamEl) {
+      scheduleStreamRender(streamEl, last.content);
+    } else {
+      renderChatMessages();
+    }
+    // Erster Text: „denkt nach“ endet, Phasen-Zeile und Einzeiler nachziehen.
+    if (!hadContent && last.content) updateStreamingChrome();
+  }
+
+  function onChatToolLine(payload) {
+    toolLogDebug.record('tool-line', compactToolLinePayload(payload));
+    const run = runForEvent(payload);
+    if (!run) return;
+    const last = run.assistantMessage;
+
+    const phase =
+      typeof payload === 'object' && payload !== null && payload.phase
+        ? payload.phase
+        : 'start';
+    // Main liefert fertige Anzeige-Zeilen in payload.line (Rohdaten optional für Debug).
+    const line = typeof payload?.line === 'string' ? payload.line : '';
+    if (!line) return;
+    const callIndex = Number.isInteger(payload?.callIndex) ? payload.callIndex : null;
+    // Ein Tool-Ereignis beendet die Denkpause; 'done' allein nicht — danach
+    // kommt sofort 'waiting' für die nächste Runde (Issue #87).
+    if (phase !== 'done') delete last.thinkingSince;
+    if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
+    if (!Array.isArray(last.pendingToolLines)) last.pendingToolLines = [];
+
+    // Zustand im Store: toolTrace = ausgeführte Tools (wird persistiert),
+    // pendingToolLines = vom Modell noch gestreamte Aufrufe (nur Anzeige).
+    // Der Tool-Name kommt mit dem Event und bleibt im Verlauf stehen —
+    // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
+    const tool = typeof payload?.tool === 'string' ? payload.tool : '';
+    const skill = typeof payload?.skill === 'string' ? payload.skill : '';
+    const permission =
+      payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
+    const entry = toolTraceEntryForStore({ line, tool, skill, permission });
+    if (phase === 'pending') {
+      const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
+      if (existing) {
+        existing.line = line;
+        if (tool) existing.tool = tool;
+        if (skill) existing.skill = skill;
+      } else {
+        last.pendingToolLines.push({
+          callIndex,
+          line,
+          tool: tool || undefined,
+          skill: skill || undefined,
+        });
+      }
+    } else if (phase === 'start') {
+      const pendingPos = last.pendingToolLines.findIndex((p) => p.callIndex === callIndex);
+      if (pendingPos >= 0) last.pendingToolLines.splice(pendingPos, 1);
+      else if (last.pendingToolLines.length > 0) last.pendingToolLines.shift();
+      last.toolTrace.push(entry);
+      // Which step is running lives in the message, not only in its row: a
+      // chat opened again mid-run is drawn from the message (#320).
+      last.toolRunning = true;
+      last.runningCallIndex = callIndex;
+      delete last.permissionNote;
+    } else if (phase === 'done') {
+      if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
+      else last.toolTrace.push(entry);
+      delete last.toolRunning;
+      delete last.runningCallIndex;
+      delete last.permissionNote;
+    }
+
+    if (!isOnScreen(run)) return;
+
+    const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
+    if (!wrap) {
+      renderChatMessages();
+      return;
+    }
+
+    let linesEl = wrap.querySelector('.chat-tool-lines');
+    if (!linesEl) {
+      linesEl = document.createElement('div');
+      linesEl.className = 'chat-tool-lines';
+      linesEl.setAttribute('role', 'list');
+      wrap.appendChild(linesEl);
+    }
+
+    const category = traceEntryCategory({ tool, skill });
+    if (phase === 'pending') {
+      // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
+      const row = findPendingToolLine(linesEl, callIndex);
+      if (row) setToolLineText(row, line);
+      else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
+    } else if (phase === 'done') {
+      const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
+      const byIndex = Number.isInteger(callIndex)
+        ? linesEl.querySelector(`.chat-tool-line--running[data-call-index="${callIndex}"]`)
+        : null;
+      const doneRow = byIndex || runningRows[runningRows.length - 1];
+      setToolLineDone(doneRow, line);
+      applyPermissionToRow(doneRow, permission);
+    } else {
+      linesEl.querySelectorAll('.chat-tool-line--running').forEach((row) => {
+        setToolLineDone(row);
+      });
+      // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
+      const pendingRow = findPendingToolLine(linesEl, callIndex, true);
+      if (pendingRow) promoteToolLineToRunning(pendingRow, line);
+      else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
+    }
+
+    syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
+    syncPhaseLine(wrap.closest('.chat-msg')?.querySelector('.chat-phase'), last);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function onChatProgress(p) {
+    const run = runForEvent(p);
+    if (!run) return;
+    const last = run.assistantMessage;
+    const onScreen = isOnScreen(run);
+    if (p.type === 'phase' && p.phase) {
+      toolLogDebug.record('phase', { phase: p.phase });
+      last.phase = p.phase;
+      // Jede Runde beginnt mit 'waiting': ab hier zählt die Denkzeit (Issue #87).
+      if (p.phase === 'waiting') {
+        last.thinkingSince = Date.now();
+        delete last.toolRunning;
+      } else if (p.phase === 'idle') delete last.thinkingSince;
+      if (onScreen) updateStreamingChrome();
+    }
+    if (p.type === 'reasoning' && p.text) {
+      last.reasoningText = (last.reasoningText || '') + p.text;
+      if (onScreen) updateStreamingChrome();
+    }
+    if (p.type === 'permission' && p.event) {
+      // Kept in the message as well, for a chat drawn again from it (#320).
+      last.permissionNote = permissionNoteFor(p);
+      if (!last.permissionNote) delete last.permissionNote;
+    }
+    if (p.type === 'permission' && p.event && onScreen) {
+      toolLogDebug.record('permission', { event: p.event, callIndex: p.callIndex, response: p.response, reason: p.reason });
+      // Warten und Entscheidung an der Tool-Zeile sichtbar machen (Issue #67);
+      // das Ergebnis der Ausführung bringt später die 'done'-Zeile vom Main.
+      const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
+      const row = wrap && Number.isInteger(p.callIndex)
+        ? wrap.querySelector(`.chat-tool-line--running[data-call-index="${p.callIndex}"]`)
+        : null;
+      if (row) {
+        showPermissionNote(row, last.permissionNote || (p.event === 'resolved' ? 'allowed' : null));
+        syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
+      }
+    }
+    if (p.type === 'workspace' && p.event === 'fileWritten' && typeof p.relativePath === 'string') {
+      // Ein ueberschriebenes Bild traegt seinen neuen Inhalt nicht im
+      // Pfad — der Cache aus #244 zeigte sonst weiter den alten Stand.
+      clearWorkspaceImageCache();
+      // The tree shows the open folder; a run in another one wrote elsewhere.
+      if (run.toolRoot === appStore.rootPath && typeof onWorkspaceFileWritten === 'function') {
+        onWorkspaceFileWritten(p.relativePath);
+      }
+    }
+  }
+
+  // Registered once (#320): the runs of all chats arrive on the same channels.
+  if (typeof api.onChatDelta === 'function') {
+    api.onChatDelta((payload) => toolLogDebug.guard('chat:delta', () => onChatDelta(payload)));
+  }
+  if (typeof api.onChatToolLine === 'function') {
+    api.onChatToolLine((payload) =>
+      toolLogDebug.guard('chat:tool-line', () => onChatToolLine(payload), compactToolLinePayload(payload)));
+  }
+  if (typeof api.onChatProgress === 'function') {
+    api.onChatProgress((p) => toolLogDebug.guard('chat:progress', () => onChatProgress(p), p?.type));
+  }
+
+  function abortChatRequest() {
+    const run = appStore.chatRuns.get(appStore.currentChatId);
+    if (!isRunning(run)) return;
+    run.aborted = true;
+    // Only this chat's run; the others keep theirs (#320).
+    if (typeof api.abortChat === 'function') api.abortChat(run.chatId);
+    finalizeInFlightAssistantMessage();
+    syncChatInFlight();
+    syncElapsedTicker();
+    notifyRunsChanged();
     void persistCurrentChat();
   }
 
@@ -646,7 +1040,6 @@ export function initChatStream({
     const text = chatInput.value.trim();
     // Ein Screenshot ohne Begleitfrage ist eine gueltige Eingabe (Issue #84).
     if ((!text && pendingAttachments.length === 0) || !activeProviderConfigured()) return;
-    const sessionAtSend = appStore.chatSessionId;
     chatInput.value = '';
     onInputChanged();
     const userMessage = { role: 'user', content: text };
@@ -657,10 +1050,6 @@ export function initChatStream({
     }
     appStore.chatMessages.push(userMessage);
     renderChatMessages();
-    appStore.chatSendSeq += 1;
-    const sendSeq = appStore.chatSendSeq;
-    appStore.chatInFlight = true;
-    syncChatSendButton();
 
     const payload = appStore.chatMessages
       .filter((m) => !m.greeting)
@@ -679,188 +1068,30 @@ export function initChatStream({
       thinkingSince: Date.now(),
     };
     appStore.chatMessages.push(assistantMessage);
-    approvalCards?.beginRun(assistantMessage);
+
+    runSeq += 1;
+    const chatId = appStore.currentChatId;
+    const run = {
+      chatId,
+      runId: `${runSeq}-${Date.now().toString(36)}`,
+      // The folder the tools work in — main takes the open one at send time.
+      toolRoot: appStore.rootPath,
+      assistantMessage,
+      aborted: false,
+      settled: false,
+      discarded: false,
+      // The chat's data while it is off screen; `null` while it is on screen.
+      chat: null,
+    };
+    appStore.chatRuns.set(chatId, run);
+    syncChatInFlight();
+    approvalCards?.beginRun(chatId, assistantMessage);
     renderChatMessages();
-
-    const offDelta =
-      typeof api.onChatDelta === 'function'
-        ? api.onChatDelta((payload) => toolLogDebug.guard('chat:delta', () => {
-            const deltaText = payload?.text;
-            const last = appStore.chatMessages[appStore.chatMessages.length - 1];
-            if (!last || last.role !== 'assistant' || !last.streaming) return;
-            const hadContent = !!(last.content && last.content.length > 0);
-            last.content = (last.content || '') + (deltaText || '');
-            if (last.content) delete last.thinkingSince;
-            const streamEl = chatMessagesEl.querySelector(
-              '.chat-msg.assistant:last-of-type .chat-md-streaming'
-            );
-            if (streamEl) {
-              scheduleStreamRender(streamEl, last.content);
-            } else {
-              renderChatMessages();
-            }
-            // Erster Text: „denkt nach“ endet, Phasen-Zeile und Einzeiler nachziehen.
-            if (!hadContent && last.content) updateStreamingChrome();
-          }))
-        : () => {};
-
-    const offTool =
-      typeof api.onChatToolLine === 'function'
-        ? api.onChatToolLine((payload) => toolLogDebug.guard('chat:tool-line', () => {
-            toolLogDebug.record('tool-line', compactToolLinePayload(payload));
-            const last = appStore.chatMessages[appStore.chatMessages.length - 1];
-            if (!last || last.role !== 'assistant' || !last.streaming) return;
-
-            const phase =
-              typeof payload === 'object' && payload !== null && payload.phase
-                ? payload.phase
-                : 'start';
-            // Main liefert fertige Anzeige-Zeilen in payload.line (Rohdaten optional für Debug).
-            // Strings in toolTrace sind persistierte Alt-Sessions.
-            const line =
-              typeof payload === 'string'
-                ? payload
-                : typeof payload?.line === 'string'
-                  ? payload.line
-                  : '';
-            if (!line) return;
-            const callIndex = Number.isInteger(payload?.callIndex) ? payload.callIndex : null;
-            // Ein Tool-Ereignis beendet die Denkpause; 'done' allein nicht — danach
-            // kommt sofort 'waiting' für die nächste Runde (Issue #87).
-            if (phase !== 'done') delete last.thinkingSince;
-            if (!Array.isArray(last.toolTrace)) last.toolTrace = [];
-            if (!Array.isArray(last.pendingToolLines)) last.pendingToolLines = [];
-
-            // Zustand im Store: toolTrace = ausgeführte Tools (wird persistiert),
-            // pendingToolLines = vom Modell noch gestreamte Aufrufe (nur Anzeige).
-            // Der Tool-Name kommt mit dem Event und bleibt im Verlauf stehen —
-            // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
-            const tool = typeof payload?.tool === 'string' ? payload.tool : '';
-            const skill = typeof payload?.skill === 'string' ? payload.skill : '';
-            const permission =
-              payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
-            const entry = toolTraceEntryForStore({ line, tool, skill, permission });
-            if (phase === 'pending') {
-              const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
-              if (existing) {
-                existing.line = line;
-                if (tool) existing.tool = tool;
-                if (skill) existing.skill = skill;
-              } else {
-                last.pendingToolLines.push({
-                  callIndex,
-                  line,
-                  tool: tool || undefined,
-                  skill: skill || undefined,
-                });
-              }
-            } else if (phase === 'start') {
-              const pendingPos = last.pendingToolLines.findIndex((p) => p.callIndex === callIndex);
-              if (pendingPos >= 0) last.pendingToolLines.splice(pendingPos, 1);
-              else if (last.pendingToolLines.length > 0) last.pendingToolLines.shift();
-              last.toolTrace.push(entry);
-            } else if (phase === 'done') {
-              if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
-              else last.toolTrace.push(entry);
-            }
-
-            const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
-            if (!wrap) {
-              renderChatMessages();
-              return;
-            }
-
-            let linesEl = wrap.querySelector('.chat-tool-lines');
-            if (!linesEl) {
-              linesEl = document.createElement('div');
-              linesEl.className = 'chat-tool-lines';
-              linesEl.setAttribute('role', 'list');
-              wrap.appendChild(linesEl);
-            }
-
-            const category = traceEntryCategory({ tool, skill });
-            if (phase === 'pending') {
-              // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
-              const row = findPendingToolLine(linesEl, callIndex);
-              if (row) setToolLineText(row, line);
-              else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
-            } else if (phase === 'done') {
-              const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
-              const byIndex = Number.isInteger(callIndex)
-                ? linesEl.querySelector(`.chat-tool-line--running[data-call-index="${callIndex}"]`)
-                : null;
-              const doneRow = byIndex || runningRows[runningRows.length - 1];
-              setToolLineDone(doneRow, line);
-              applyPermissionToRow(doneRow, permission);
-            } else {
-              linesEl.querySelectorAll('.chat-tool-line--running').forEach((row) => {
-                setToolLineDone(row);
-              });
-              // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
-              const pendingRow = findPendingToolLine(linesEl, callIndex, true);
-              if (pendingRow) promoteToolLineToRunning(pendingRow, line);
-              else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
-            }
-
-            syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
-            syncPhaseLine(wrap.closest('.chat-msg')?.querySelector('.chat-phase'), last);
-            chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-          }, compactToolLinePayload(payload)))
-        : () => {};
-
-    const offProgress =
-      typeof api.onChatProgress === 'function'
-        ? api.onChatProgress((p) => toolLogDebug.guard('chat:progress', () => {
-            const last = appStore.chatMessages[appStore.chatMessages.length - 1];
-            if (!last || last.role !== 'assistant' || !last.streaming) return;
-            if (p.type === 'phase' && p.phase) {
-              toolLogDebug.record('phase', { phase: p.phase });
-              last.phase = p.phase;
-              // Jede Runde beginnt mit 'waiting': ab hier zählt die Denkzeit (Issue #87).
-              if (p.phase === 'waiting') last.thinkingSince = Date.now();
-              else if (p.phase === 'idle') delete last.thinkingSince;
-              updateStreamingChrome();
-            }
-            if (p.type === 'reasoning' && p.text) {
-              last.reasoningText = (last.reasoningText || '') + p.text;
-              updateStreamingChrome();
-            }
-            if (p.type === 'permission' && p.event) {
-              toolLogDebug.record('permission', { event: p.event, callIndex: p.callIndex, response: p.response, reason: p.reason });
-              // Warten und Entscheidung an der Tool-Zeile sichtbar machen (Issue #67);
-              // das Ergebnis der Ausführung bringt später die 'done'-Zeile vom Main.
-              const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
-              const row = wrap && Number.isInteger(p.callIndex)
-                ? wrap.querySelector(`.chat-tool-line--running[data-call-index="${p.callIndex}"]`)
-                : null;
-              if (row) {
-                const textEl = row.querySelector('.chat-tool-line-text');
-                const base = row.dataset.baseText || textEl?.textContent || '';
-                if (!row.dataset.baseText) row.dataset.baseText = base;
-                if (p.event === 'awaiting') {
-                  setToolLineText(row, `${base} · ${t('tools.line.suffix.awaiting')}`);
-                  row.dataset.permission = 'awaiting';
-                } else if (p.event === 'resolved') {
-                  const allowed = typeof p.response === 'string' && p.response !== 'deny';
-                  setToolLineText(row, allowed
-                    ? base
-                    : `${base} · ${t(p.response === 'deny' ? 'tools.line.suffix.denied' : 'tools.line.suffix.expired')}`);
-                  row.dataset.permission = allowed ? 'allowed' : p.response === 'deny' ? 'denied' : 'cancelled';
-                }
-                syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
-              }
-            }
-            if (p.type === 'workspace' && p.event === 'fileWritten' && typeof p.relativePath === 'string') {
-              // Ein ueberschriebenes Bild traegt seinen neuen Inhalt nicht im
-              // Pfad — der Cache aus #244 zeigte sonst weiter den alten Stand.
-              clearWorkspaceImageCache();
-              if (typeof onWorkspaceFileWritten === 'function') onWorkspaceFileWritten(p.relativePath);
-            }
-          }, p?.type))
-        : () => {};
-
-    // Sekundentakt für die Denkzeit (Issue #87); endet mit der Antwort.
-    const elapsedTicker = setInterval(syncThinkingElapsed, 1000);
+    syncElapsedTicker();
+    notifyRunsChanged();
+    // The question is part of the chat from now on — also for the history
+    // column, which marks the chat as running while it is off screen.
+    void persistCurrentChat();
 
     let result;
     try {
@@ -868,120 +1099,161 @@ export function initChatStream({
         selectedPath: appStore.selectedPath,
         selectedIsDirectory: appStore.selectedIsDirectory,
         // Geltungsbereich fuer Sitzungsfreigaben von Tool-Aufrufen (Issue #66).
-        chatId: appStore.currentChatId,
+        chatId,
+        runId: run.runId,
       });
-    } finally {
-      clearInterval(elapsedTicker);
-      offDelta();
-      offTool();
-      offProgress();
-      appStore.chatInFlight = false;
-      syncChatSendButton();
+    } catch {
+      // A run that never answers would leave its chat marked as running.
+      result = { error: t('chat.error.runLost') };
     }
+    await settleRun(run, result);
+  }
 
-    if (sessionAtSend !== appStore.chatSessionId) return;
-
-    const abortedLocally = appStore.chatAbortedSendSeq === sendSeq;
-    const last = appStore.chatMessages[appStore.chatMessages.length - 1];
-    let skipRender = false;
-    if (abortedLocally || result?.cancelled) {
-      if (last && last.role === 'assistant') {
-        if (last.streaming) {
-          last.streaming = false;
-          if (typeof result?.content === 'string' && result.content.length > 0) {
-            last.content = result.content;
-          }
-          last.toolTrace = Array.isArray(result?.toolTrace)
-            ? result.toolTrace.map(toolTraceEntryForStore)
-            : last.toolTrace || [];
-          const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
-          if (bubble) {
-            finalizeStreamingAssistantBubble(bubble, last);
-            syncChatBusyState();
-            chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-            skipRender = true;
-          }
-        }
-      }
-      if (appStore.chatAbortedSendSeq === sendSeq) {
-        appStore.chatAbortedSendSeq = 0;
-      }
-    } else if (result.error) {
+  /**
+   * Brings a finished turn into its chat — on screen or off it (#320).
+   * Returns what the list on screen needs, if the chat is there.
+   */
+  function settleRunMessages(run, result, messages) {
+    const last = run.assistantMessage;
+    const streaming = !!last?.streaming && messages.includes(last);
+    const finish = () => {
+      last.streaming = false;
+      last.phase = 'idle';
+      delete last.pendingToolLines;
+      delete last.thinkingSince;
+      delete last.toolRunning;
+      delete last.runningCallIndex;
+      delete last.permissionNote;
+    };
+    if (run.aborted || result?.cancelled) {
+      if (!streaming) return { kind: 'render' };
+      finish();
+      if (typeof result?.content === 'string' && result.content.length > 0) last.content = result.content;
+      last.toolTrace = Array.isArray(result?.toolTrace)
+        ? result.toolTrace.map(toolTraceEntryForStore)
+        : last.toolTrace || [];
+      return { kind: 'finalize' };
+    }
+    if (result?.error) {
       // Seit #306 schickt der Kern einen Schluessel statt eines Satzes; was
       // noch fertigen Text liefert — die Provider-Adapter — geht durch
       // `tMessage` unveraendert durch (#293).
       const errorText = tMessage(result.error);
-      let bubbleKept = false;
-      if (last && last.streaming) {
+      let kind = 'render';
+      if (streaming) {
         if (Array.isArray(result.toolTrace) && result.toolTrace.length > 0) {
           // Lauf durch verfallene Freigabe beendet (Issue #66/#67): Die bis
           // dahin gelaufenen Schritte samt Audit und Karte bleiben sichtbar,
           // der Fehler folgt als eigene Nachricht. Kein vollständiger
           // Neuaufbau, sonst verschwände die Karte mit dem Verfallsgrund.
-          last.streaming = false;
-          last.phase = 'idle';
+          finish();
           last.toolTrace = result.toolTrace.map(toolTraceEntryForStore);
           if (!last.content) last.content = '';
-          const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
-          if (bubble) {
-            finalizeStreamingAssistantBubble(bubble, last);
-            bubbleKept = true;
-          }
+          kind = 'finalize-with-error';
         } else {
-          appStore.chatMessages.pop();
+          messages.splice(messages.indexOf(last), 1);
         }
       }
-      appStore.chatMessages.push({ role: 'assistant', content: errorText, isError: true });
-      if (bubbleKept) {
-        const errorLi = document.createElement('li');
-        errorLi.classList.add('chat-msg', 'assistant', 'error');
-        errorLi.textContent = errorText;
-        chatMessagesEl.appendChild(errorLi);
-        syncChatBusyState();
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-        skipRender = true;
-      }
-    } else if (last && last.role === 'assistant' && last.streaming) {
-      last.streaming = false;
-      last.content = result.content ?? '';
-      last.toolTrace = Array.isArray(result.toolTrace)
-        ? result.toolTrace.map(toolTraceEntryForStore)
-        : last.toolTrace || [];
-      const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
-      if (bubble) {
-        finalizeStreamingAssistantBubble(bubble, last);
-        syncChatBusyState();
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-        skipRender = true;
+      messages.push({ role: 'assistant', content: errorText, isError: true });
+      return { kind, errorText };
+    }
+    if (!streaming) return { kind: 'render' };
+    finish();
+    last.content = result?.content ?? '';
+    last.toolTrace = Array.isArray(result?.toolTrace)
+      ? result.toolTrace.map(toolTraceEntryForStore)
+      : last.toolTrace || [];
+    return { kind: 'finalize' };
+  }
+
+  /** Draws a settled turn into the list — only for the chat on screen. */
+  function showSettledRun(run, outcome) {
+    const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
+    if (outcome.kind === 'finalize' && bubble) {
+      finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
+      syncChatBusyState();
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      return;
+    }
+    if (outcome.kind === 'finalize-with-error' && bubble) {
+      finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
+      const errorLi = document.createElement('li');
+      errorLi.classList.add('chat-msg', 'assistant', 'error');
+      errorLi.textContent = outcome.errorText;
+      chatMessagesEl.appendChild(errorLi);
+      syncChatBusyState();
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      return;
+    }
+    renderChatMessages();
+  }
+
+  async function settleRun(run, result) {
+    run.settled = true;
+    // Replaced by a newer turn in the same chat (stop, then send again) or
+    // deleted with its chat: the turn has nothing left to write.
+    if (appStore.chatRuns.get(run.chatId) !== run) return;
+    syncChatInFlight();
+    syncElapsedTicker();
+    notifyRunsChanged();
+
+    const onScreen = isOnScreen(run);
+    const chat = onScreen ? null : run.chat;
+    if (!onScreen && !chat) {
+      // Neither on screen nor carrying its chat — nothing to write it into.
+      appStore.chatRuns.delete(run.chatId);
+      notifyRunsChanged();
+      return;
+    }
+    const outcome = settleRunMessages(run, result, onScreen ? appStore.chatMessages : chat.messages);
+    if (onScreen) {
+      showSettledRun(run, outcome);
+      applyUsageFromResult(result);
+    } else {
+      const usage = result?.contextUsage ?? result?.usage;
+      if (usage) {
+        chat.tokenUsage = coerceUsage(usage);
+        chat.contextBreakdown = result?.contextBreakdown ?? null;
       }
     }
-    if (!skipRender) renderChatMessages();
-    applyUsageFromResult(result);
-    await persistCurrentChat();
+
+    try {
+      // Written into its own chat — not into whichever chat is open now.
+      if (onScreen) await persistCurrentChat();
+      else await persistChat(chat);
+    } finally {
+      if (appStore.chatRuns.get(run.chatId) === run) appStore.chatRuns.delete(run.chatId);
+      // The chat may have been opened during the write; then it is on screen
+      // and keeps its cards, otherwise they go with the run.
+      approvalCards?.retainChats?.(liveChatIds());
+      notifyRunsChanged();
+    }
     // Ueberschrift im Hintergrund nachziehen: Sie darf die Antwort nicht
     // aufhalten und ihr Fehlschlag darf den Chat nicht stoeren.
-    void maybeGenerateChatTitle();
+    void maybeGenerateChatTitle(run.chatId, run.chat);
   }
 
   /**
    * Laesst das Modell die Konversation benennen, sobald die erste Antwort
-   * steht. Laeuft genau einmal je Chat: Danach steht in currentChatTitle ein
-   * Titel, der nicht mehr dem aus der Frage abgeleiteten entspricht. Aeltere
-   * Chats mit abgeleitetem Titel werden beim naechsten Zug nachbenannt.
+   * steht. Laeuft genau einmal je Chat: Danach steht im Titel etwas, das nicht
+   * mehr dem aus der Frage abgeleiteten entspricht. Aeltere Chats mit
+   * abgeleitetem Titel werden beim naechsten Zug nachbenannt.
+   *
+   * `offScreenChat` is the chat of a run that ended in the background (#320);
+   * without it, the chat on screen is meant.
    */
-  async function maybeGenerateChatTitle() {
+  async function maybeGenerateChatTitle(chatId, offScreenChat = null) {
     if (!activeProviderConfigured?.()) return;
-    const messages = appStore.chatMessages.filter((m) => !m.greeting && !m.isError && !m.streaming);
+    const source = offScreenChat || (appStore.currentChatId === chatId ? currentChatSnapshot() : null);
+    if (!source) return;
+    const messages = source.messages.filter((m) => !m.greeting && !m.isError && !m.streaming);
     const firstUser = messages.find((m) => m.role === 'user');
     const firstAnswer = messages.find((m) => m.role === 'assistant');
     if (!firstUser || !firstAnswer) return;
 
-    const current = typeof appStore.currentChatTitle === 'string' ? appStore.currentChatTitle.trim() : '';
+    const current = typeof source.title === 'string' ? source.title.trim() : '';
     if (current && current !== inferChatTitle(messages)) return;
 
-    // Chatwechsel waehrend der Anfrage darf den Titel nicht verschieben.
-    const sessionId = appStore.chatSessionId;
-    const chatId = appStore.currentChatId;
     let result = null;
     try {
       result = await api.generateChatTitle([
@@ -993,10 +1265,24 @@ export function initChatStream({
     }
     const title = typeof result?.title === 'string' ? result.title.trim() : '';
     if (!title) return;
-    if (appStore.chatSessionId !== sessionId || appStore.currentChatId !== chatId) return;
-    appStore.currentChatTitle = title;
-    syncChatTitle?.();
-    await persistCurrentChat();
+    if (lastPersisted.get(chatId) === DELETED) return;
+    // Wherever the chat is by now, the title follows it there.
+    if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
+      appStore.currentChatTitle = title;
+      syncChatTitle?.();
+      await persistCurrentChat();
+      return;
+    }
+    const run = appStore.chatRuns.get(chatId);
+    if (run?.chat) {
+      // Running again in the background: its next write takes the title along.
+      run.chat.title = title;
+      return;
+    }
+    // Nobody has the chat open. Only write if nothing newer went in since —
+    // otherwise the snapshot would take back what was said after it.
+    if (!isLatestWritten(source)) return;
+    await persistChat({ ...source, title });
   }
 
   function formatAttachmentSize(bytes) {
@@ -1181,5 +1467,14 @@ export function initChatStream({
     syncChatSendButton,
     resetChatTokenUsage,
     setChatTokenUsage,
+    // Runs per chat (#320), for the history column.
+    runs: {
+      detach: detachCurrentChat,
+      canAttach: canAttachChat,
+      attach: attachChat,
+      afterSwitch: afterChatSwitch,
+      discard: discardChatRun,
+      stateOf: runStateOf,
+    },
   };
 }

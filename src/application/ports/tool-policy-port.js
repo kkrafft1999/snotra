@@ -13,13 +13,19 @@
  * @property {Array<object>} rules  normalisierte Regeln aller Geltungsbereiche
  * @property {string[]} sensitivePathPatterns
  * @property {string} policyVersion  ändert sich bei jeder Regel-/Modusänderung
+ * @property {string} [rulesVersion]  changes with the rules, the sensitive
+ *   paths and the integrity state — but not with the mode. Session approvals
+ *   are bound to it, next to the mode, so that another chat taking the screen
+ *   does not void the approvals of a run in the background (#320).
  * @property {'ok'|'unsigned'|'invalid'|'missing'} [integrity]
  * @property {boolean} [encryptionAvailable]
  */
 
 /**
  * @typedef {Object} ToolPolicyPort
- * @property {() => Promise<ToolPolicySnapshot>} read
+ * @property {(options?: { chatId?: string|null }) => Promise<ToolPolicySnapshot>} read
+ *   `chatId` names the chat the run belongs to; `mode` is then that chat's mode,
+ *   not necessarily the one of the chat on screen (#320).
  */
 
 module.exports = {};

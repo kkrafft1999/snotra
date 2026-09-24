@@ -373,6 +373,9 @@ test('CHAT_SEND emits a workspace fileWritten progress event after write_file_te
     type: 'workspace',
     event: 'fileWritten',
     relativePath: 'notes/new.md',
+    // Every event names its chat and run since #320; this send named neither.
+    chatId: null,
+    runId: null,
   });
 });
 
@@ -638,4 +641,58 @@ test('CHAT_SEND ohne aktiven Workspace laesst die Tools ohne Wurzel (#68)', asyn
   });
 
   assert.equal(calls[0].tools, undefined, 'ohne aktiven Root gibt es keine Workspace-Tools');
+});
+
+// --- Runs per chat (#320) ----------------------------------------------------
+
+test('CHAT_SEND tags every event with its chat and run', async () => {
+  const provider = {
+    defaultModel: 'test-model',
+    fields: {},
+    async streamChatRound(args) {
+      args.callbacks?.onTextDelta('hi');
+      return assistantText('hi');
+    },
+  };
+  const { sendHandler } = setupChatHandlers({ provider });
+  const { event, sent } = makeFakeEvent(7);
+
+  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' });
+
+  assert.equal(res.content, 'hi');
+  const delta = sent.find((entry) => entry.channel === PUSH.CHAT_DELTA);
+  assert.deepEqual(delta.payload, { text: 'hi', chatId: 'chat-a', runId: 'run-1' });
+  assert.ok(sent.length > 1);
+  for (const entry of sent) {
+    assert.equal(entry.payload.chatId, 'chat-a', `${entry.channel} names its chat`);
+    assert.equal(entry.payload.runId, 'run-1', `${entry.channel} names its run`);
+  }
+});
+
+test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes on', async () => {
+  const releases = [];
+  const provider = {
+    defaultModel: 'test-model',
+    fields: {},
+    streamChatRound: ({ abortSignal }) =>
+      new Promise((resolve) => {
+        const finish = () => resolve({ cancelled: true, message: { role: 'assistant', content: '' } });
+        if (abortSignal.aborted) return finish();
+        abortSignal.addEventListener('abort', finish, { once: true });
+        releases.push(() => resolve(assistantText('still here')));
+      }),
+  };
+  const { sendHandler, abortHandler } = setupChatHandlers({ provider });
+  const { event } = makeFakeEvent(7);
+
+  const runA = sendHandler(event, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
+  const runB = sendHandler(event, { messages: [{ role: 'user', content: 'B' }], chatId: 'chat-b' });
+  await new Promise((resolve) => setImmediate(resolve));
+  abortHandler({ sender: { id: 7 } }, { chatId: 'chat-a' });
+
+  assert.equal((await runA).cancelled, true);
+  releases[1]();
+  const resB = await runB;
+  assert.equal(resB.cancelled, undefined);
+  assert.equal(resB.content, 'still here');
 });

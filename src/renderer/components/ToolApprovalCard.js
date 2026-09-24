@@ -18,13 +18,43 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  * Aktionen unwirksam und zeigt den Grund; verspätete oder doppelte Antworten
  * werden lokal abgefangen und vom Main ohnehin verworfen.
  */
-export function initToolApprovalCards({ api, appStore }) {
+export function initToolApprovalCards({ api, appStore, onPendingChanged = () => {} }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const queue = createToolApprovalQueue();
   /** requestId → Karten-Element des laufenden Zuges. */
   const cards = new Map();
-  /** Nachricht (Store-Objekt), zu der die Karten gehören – überlebt Neuaufbauten der Liste. */
-  let owner = null;
+  /**
+   * Chat → the message its cards belong to (a store object, so it survives a
+   * rebuild of the list). One per chat since #320: a run in the background
+   * collects its cards until its chat is on screen again.
+   */
+  const owners = new Map();
+
+  /** The chat a request belongs to — fixed when it arrives (`onRequest`). */
+  function chatOf(entry) {
+    return entry?.chatId ?? (entry?.dto?.chatId || null);
+  }
+
+  function isOnScreen(entry) {
+    return chatOf(entry) === (appStore.currentChatId || null);
+  }
+
+  /** Which chats have a card waiting for an answer — for the history column. */
+  function pendingChatIds() {
+    return new Set(queue.pending().map(chatOf));
+  }
+
+  let lastPendingSignature = '';
+  function notifyPendingChanged() {
+    const signature = [...pendingChatIds()].sort().join('\n');
+    if (signature === lastPendingSignature) return;
+    lastPendingSignature = signature;
+    try {
+      onPendingChanged();
+    } catch {
+      /* the history column is a view; it must not break the card */
+    }
+  }
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -44,8 +74,8 @@ export function initToolApprovalCards({ api, appStore }) {
   }
 
   /** Der Lauf wurde lokal abgebrochen (Stopp-Taste) – dann heißt Verfall „abgebrochen“. */
-  function runAborted() {
-    return appStore.chatSendSeq > 0 && appStore.chatAbortedSendSeq === appStore.chatSendSeq;
+  function runAborted(entry) {
+    return appStore.chatRuns?.get(chatOf(entry))?.aborted === true;
   }
 
   function ensureContainer(bubble) {
@@ -244,7 +274,7 @@ export function initToolApprovalCards({ api, appStore }) {
 
   /** Auflösung anzeigen: keine aktive Aktion bleibt zurück (Konzept §6). */
   function applyOutcome(card, entry) {
-    const outcome = describeApprovalOutcome({ ...(entry.outcome || {}), aborted: runAborted() && entry.outcome?.invalidated === true });
+    const outcome = describeApprovalOutcome({ ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true });
     card.dataset.state = outcome.status;
     const actions = card.querySelector('.chat-approval-card__actions');
     if (actions) {
@@ -290,23 +320,32 @@ export function initToolApprovalCards({ api, appStore }) {
   function onRequest(dto) {
     const entry = queue.add(dto);
     if (!entry) return;
+    // A request without a chat comes from a main that predates #320; it can
+    // only mean the chat on screen.
+    entry.chatId = dto.chatId || appStore.currentChatId || null;
     const view = buildApprovalCardView(dto);
     if (!view) return;
     const card = buildCard(entry, view);
     card.__approvalView = view;
     cards.set(dto.requestId, card);
-    const box = currentContainer();
+    // A card for a chat in the background waits here until that chat is
+    // opened; `mount` puts it in place then (#320).
+    const box = isOnScreen(entry) ? currentContainer() : null;
     if (box) {
       box.appendChild(card);
       if (chatMessagesEl) chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
+    notifyPendingChanged();
   }
 
   function onResolved(payload) {
     const entry = queue.resolve(payload);
     if (!entry) return;
+    // Decided now, not when the card is next drawn: by then the run may be gone.
+    entry.aborted = runAborted(entry);
     const card = cards.get(entry.dto.requestId);
     if (card) applyOutcome(card, entry);
+    notifyPendingChanged();
   }
 
   /**
@@ -357,7 +396,9 @@ export function initToolApprovalCards({ api, appStore }) {
     'keydown',
     (e) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      const pending = queue.pending();
+      // Only a card the user can see: a chat in the background is not declined
+      // by a key press in another one (#320).
+      const pending = queue.pending().filter(isOnScreen);
       if (pending.length === 0 || overlayOpen()) return;
       e.preventDefault();
       e.stopPropagation();
@@ -388,27 +429,41 @@ export function initToolApprovalCards({ api, appStore }) {
      * Verfall, Abbruch und Entscheidung sichtbar bleiben.
      */
     mount(bubble, message) {
-      if (cards.size === 0 || !owner || message !== owner) return;
-      const box = ensureContainer(bubble);
-      if (!box) return;
-      for (const card of cards.values()) box.appendChild(card);
-    },
-    /** Neuer Zug: Karten gehören ab jetzt zur neuen Assistant-Nachricht. */
-    beginRun(message) {
-      cards.clear();
-      queue.forgetResolved();
-      owner = message || null;
-    },
-    /** Chat- oder Workspace-Wechsel: offene Karten verfallen lokal (der Main verwirft sie ohnehin). */
-    reset() {
-      for (const entry of queue.invalidateAll('request_invalidated')) {
-        const card = cards.get(entry.dto.requestId);
-        if (card) applyOutcome(card, entry);
+      if (cards.size === 0 || !message) return;
+      let box = null;
+      for (const [requestId, card] of cards) {
+        const entry = queue.get(requestId);
+        if (!entry || owners.get(chatOf(entry)) !== message) continue;
+        box = box || ensureContainer(bubble);
+        if (!box) return;
+        box.appendChild(card);
       }
-      cards.clear();
-      queue.forgetResolved();
-      owner = null;
+    },
+    /** Neuer Zug: Karten dieses Chats gehören ab jetzt zur neuen Assistant-Nachricht. */
+    beginRun(chatId, message) {
+      const key = chatId || null;
+      for (const entry of queue.forgetWhere((e) => chatOf(e) === key && e.state === APPROVAL_ENTRY_STATES.RESOLVED)) {
+        cards.delete(entry.dto.requestId);
+      }
+      owners.set(key, message || null);
+    },
+    /**
+     * Keep only the cards of the given chats — the one on screen and those
+     * still running (#320). A chat the user has left and that has nothing
+     * going loses its cards; main has discarded its requests already.
+     */
+    retainChats(chatIds) {
+      const keep = new Set([...chatIds].map((id) => id || null));
+      for (const entry of queue.forgetWhere((e) => !keep.has(chatOf(e)))) {
+        cards.get(entry.dto.requestId)?.remove();
+        cards.delete(entry.dto.requestId);
+      }
+      for (const chatId of [...owners.keys()]) {
+        if (!keep.has(chatId)) owners.delete(chatId);
+      }
+      notifyPendingChanged();
     },
     pendingCount: () => queue.pending().length,
+    pendingChatIds,
   };
 }

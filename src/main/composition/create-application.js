@@ -205,15 +205,38 @@ function createApplication({
     isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
     getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
     getActiveMode: async () => (await toolPolicyStore.read()).mode,
+    // Mirrors the chat on screen into the store. Until #320 this also dropped
+    // every open card and session approval — which ended a run that waited for
+    // an approval in the chat just left. Now each chat keeps its own: the new
+    // chat inherits nothing because approvals are bound to their chat, and
+    // what the left chat no longer needs goes in `onActivated`.
     applyMode: async (mode) => {
-      const result = await toolPolicyStore.setMode(mode);
-      if (!result?.ok) return;
-      // Wie bei jeder Moduspflege (Konzept §7): offene Karten verwerfen und
-      // Sitzungsfreigaben loeschen. Der neue Chat erbt keine Freigaben des alten.
-      approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
-      sessionGrants.clear();
+      await toolPolicyStore.setMode(mode);
     },
+    onChatModeChanged: (chatId) => invalidateChatPermissions(chatId),
+    onActivated: () => pruneChatScopedPermissions(),
   });
+
+  // The engine is built further down; until then no chat is running.
+  let runningChatIds = () => [];
+
+  /**
+   * Open cards and session approvals belong to a chat (concept §7, #320). They
+   * live as long as that chat is on screen or still has a run going; a chat the
+   * user has left and that is idle loses them.
+   */
+  function pruneChatScopedPermissions() {
+    const live = new Set(runningChatIds());
+    live.add(chatSessionSettings.getCurrentChatId());
+    approvals.invalidateExceptChats(live, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+    sessionGrants.retainChats(live);
+  }
+
+  /** One chat's mode changed: only its own cards and approvals go. */
+  function invalidateChatPermissions(chatId) {
+    approvals.invalidateChat(chatId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+    sessionGrants.clearChat(chatId);
+  }
 
   // Erst weiter unten gebaut (der Dienst braucht den Skill-Service), aber
   // schon hier benannt: Der Workspace-Wechsel direkt darunter greift darauf zu.
@@ -231,8 +254,10 @@ function createApplication({
       const before = workspaceState.getActiveWorkspaceRoot();
       workspaceState.setActiveWorkspaceRoot(folderPath);
       if (workspaceState.getActiveWorkspaceRoot() !== before) {
-        approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
-        sessionGrants.clear();
+        // A run keeps working in its own folder when the user opens another
+        // one (#320), and keeps its cards and approvals with it. Everything
+        // else of the folder just left goes, as before (concept §7).
+        pruneChatScopedPermissions();
         // Die Ordner-Skills des alten Workspace gehen uns nichts mehr an;
         // der Watcher zieht mit (Issue #126). Ebenso der Dateibaum: Sonst
         // kaemen Meldungen fuer den alten Ordner an — und ein Handle bliebe
@@ -563,6 +588,10 @@ function createApplication({
     toolPolicyStore,
     approvals,
     sessionGrants,
+    // A run in the background keeps the mode of its own chat (#320).
+    resolveChatMode: (chatId) => chatSessionSettings.modeFor(chatId),
+    // A run that ended off screen takes its approvals with it.
+    onRunSettled: () => pruneChatScopedPermissions(),
     toolAdapterDeps: {
       fsService,
       fs,
@@ -580,6 +609,7 @@ function createApplication({
       },
     },
   });
+  runningChatIds = () => chatEngine.runningChatIds();
 
   registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
