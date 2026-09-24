@@ -306,6 +306,10 @@
         <div id="chat-history-list" class="chat-history-list"></div>
       </aside>
     </div>
+
+    <!-- Shown only when all four columns are hidden. Decorative, so it is kept
+         out of the accessibility tree entirely (#315). -->
+    <div id="empty-canvas" aria-hidden="true"></div>
   </main>
 
   <div id="modal-settings" class="modal modal-settings-root hidden" aria-hidden="true">
