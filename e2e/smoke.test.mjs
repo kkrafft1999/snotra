@@ -101,6 +101,33 @@ function makePng(width, height) {
   ]);
 }
 
+/**
+ * Puts the timestamps of an abort trace (#327) relative to the click on stop,
+ * so a CI log reads as one timeline: IPC, signal, reader, server socket.
+ */
+function describeAbortTrace({ stopClickedAt, main, server }) {
+  const rel = (at) => (typeof at === 'number' ? at - stopClickedAt : at);
+  const relFields = (obj) => Object.fromEntries(Object.entries(obj).map(([key, value]) =>
+    [key, key === 'at' || key.endsWith('At') ? rel(value) : value]));
+  const fromArrival = ({ arrivedAt, lastWriteMs, resCloseMs, socketCloseMs, endMs, ...rest }) => {
+    const at = (ms) => (typeof ms === 'number' ? rel(arrivedAt + ms) : null);
+    return {
+      ...rest,
+      arrivedAt: rel(arrivedAt),
+      lastWriteAt: at(lastWriteMs),
+      resCloseAt: at(resCloseMs),
+      socketCloseAt: at(socketCloseMs),
+      endAt: at(endMs),
+    };
+  };
+  return {
+    note: 'ms relative to the stop click',
+    ipc: main?.ipc?.map(relFields) ?? main,
+    fetches: main?.fetches?.map(relFields) ?? null,
+    server: server.map(fromArrival),
+  };
+}
+
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -231,6 +258,9 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // --- Chat abbrechen: der Stream laeuft, der Stop-Knopf beendet ihn --------
   model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort '.repeat(40), chunkDelayMs: 120 });
+  // #327: record main's and the server's view of this abort, to tell on a
+  // failed run whether the abort got lost on its way or the socket stayed open.
+  const readAbortTrace = await snotra.traceChatAbort(LONG_QUESTION);
   await ask(page, LONG_QUESTION);
   step('lange Frage abgeschickt');
 
@@ -244,14 +274,28 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     return (bubbles[bubbles.length - 1]?.textContent || '').includes('Diese Antwort');
   }), { what: 'erste Textstuecke im Chat' });
 
+  const stopClickedAt = Date.now();
   await page.evaluate(() => document.getElementById('btn-chat-send').click());
 
   await poll(() => page.evaluate(() =>
     !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'beendeter Lauf nach dem Abbruch' });
   // Der Abbruch muss bis zum Server durchschlagen, nicht nur die Anzeige stoppen.
-  await poll(() => model.requestFor(LONG_QUESTION)?.aborted,
-    { what: 'abgebrochene Anfrage am Modellserver' });
+  const abortDiagnosis = async () => describeAbortTrace({
+    stopClickedAt,
+    main: await readAbortTrace().catch((err) => ({ unreadable: String(err) })),
+    server: model.requests
+      .filter((r) => !r.isTitleRequest && JSON.stringify(r.body).includes(LONG_QUESTION))
+      .map((r) => ({ aborted: r.aborted, finished: r.finished, ...r.trace })),
+  });
+  try {
+    await poll(() => model.requestFor(LONG_QUESTION)?.aborted,
+      { what: 'abgebrochene Anfrage am Modellserver' });
+  } catch (err) {
+    err.message += `\nAbort trace (#327): ${JSON.stringify(await abortDiagnosis())}`;
+    throw err;
+  }
+  t.diagnostic(`abort trace (#327): ${JSON.stringify(await abortDiagnosis())}`);
   assert.equal(model.requestFor(LONG_QUESTION).finished, false,
     'die abgebrochene Runde darf nicht zu Ende laufen');
   step('Abbruch am Server angekommen');

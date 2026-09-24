@@ -102,6 +102,89 @@ export async function launchApp({ userDataDir }) {
       });
       return () => app.evaluate(() => globalThis.__openedLinks ?? []);
     },
+    /**
+     * Main's view of a chat abort, for #327: did `chat:abort` arrive, and did
+     * the abort reach the provider's `fetch` — its signal, its response, its
+     * body stream? Needs no hook in the app: a second `ipcMain` listener sits
+     * next to the real one, and the global `fetch` is wrapped, which the
+     * providers look up on every call. Only requests whose body contains
+     * `marker` are traced; everything else passes through untouched.
+     */
+    async traceChatAbort(marker) {
+      await app.evaluate(({ ipcMain }, marker) => {
+        const trace = { ipc: [], fetches: [] };
+        globalThis.__chatAbortTrace = trace;
+        ipcMain.on('chat:abort', (_event, payload) => {
+          trace.ipc.push({ at: Date.now(), chatId: payload?.chatId ?? null });
+        });
+        const original = globalThis.fetch;
+        globalThis.fetch = async (input, init = {}) => {
+          const body = typeof init?.body === 'string' ? init.body : '';
+          if (!body.includes(marker)) return original(input, init);
+          const entry = {
+            startedAt: Date.now(),
+            hasSignal: !!init.signal,
+            signalAbortedAt: null,
+            signalReason: null,
+            respondedAt: null,
+            fetchError: null,
+            chunksRead: 0,
+            streamErrorAt: null,
+            streamError: null,
+            streamDoneAt: null,
+            readerCancelledAt: null,
+            readerCancelSettledAt: null,
+            readerCancelError: null,
+          };
+          trace.fetches.push(entry);
+          init.signal?.addEventListener('abort', () => {
+            entry.signalAbortedAt = Date.now();
+            entry.signalReason = String(init.signal.reason?.message ?? init.signal.reason);
+          }, { once: true });
+          let res;
+          try {
+            res = await original(input, init);
+          } catch (err) {
+            entry.fetchError = `${err?.name}: ${err?.message}`;
+            throw err;
+          }
+          entry.respondedAt = Date.now();
+          // Observe the provider's own reader instead of tee'ing the body: a
+          // tee only cancels its source once both branches cancel, so a second
+          // reader would itself keep the socket open — the very thing traced.
+          if (res.body) {
+            const getReader = res.body.getReader.bind(res.body);
+            res.body.getReader = (...args) => {
+              const reader = getReader(...args);
+              const read = reader.read.bind(reader);
+              const cancel = reader.cancel.bind(reader);
+              reader.read = async () => {
+                try {
+                  const result = await read();
+                  if (result.done) entry.streamDoneAt ??= Date.now();
+                  else entry.chunksRead += 1;
+                  return result;
+                } catch (err) {
+                  entry.streamErrorAt ??= Date.now();
+                  entry.streamError ??= `${err?.name}: ${err?.message}`;
+                  throw err;
+                }
+              };
+              reader.cancel = (reason) => {
+                entry.readerCancelledAt ??= Date.now();
+                return cancel(reason).then(
+                  () => { entry.readerCancelSettledAt ??= Date.now(); },
+                  (err) => { entry.readerCancelError ??= `${err?.name}: ${err?.message}`; throw err; },
+                );
+              };
+              return reader;
+            };
+          }
+          return res;
+        };
+      }, marker);
+      return () => app.evaluate(() => globalThis.__chatAbortTrace ?? null);
+    },
     async stop() {
       await app.close();
     },
