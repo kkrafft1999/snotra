@@ -78,6 +78,20 @@ roadmap file and no task list in the repository.
 Please open an issue before starting on anything larger than a fix, so the
 approach can be discussed before the work exists.
 
+## Questions and ideas
+
+Not everything is a task. Questions, half-formed ideas, feedback and "look what
+I built with it" belong in
+[GitHub Discussions](https://github.com/kkrafft1999/snotra/discussions):
+
+- **Q&A** — how do I …, why does it …, is this a bug or am I holding it wrong.
+- **Ideas** — something that might become a feature, before it is concrete
+  enough for a feature request.
+- **Show and tell** — skills, tools and setups you use Snotra AI with.
+
+Once an idea is concrete, it moves into an issue; a discussion that turns out
+to be a bug is converted into one.
+
 ## Branches and pull requests
 
 `main` is protected by a repository ruleset: direct pushes are rejected, force
