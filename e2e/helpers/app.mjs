@@ -78,6 +78,12 @@ export async function launchApp({ userDataDir }) {
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--disable-backgrounding-occluded-windows',
+      // The Linux runner has no GPU and ends up compositing in software anyway,
+      // but only after trying GL first — and until then the window draws no
+      // frame, for seconds, sometimes for a whole run (#331). Streamed chat
+      // text only reaches the DOM in a frame. Going to software from the start
+      // skips the attempt. macOS and Windows keep their GPU path.
+      ...(process.platform === 'linux' ? ['--disable-gpu'] : []),
     ],
     env,
   });
