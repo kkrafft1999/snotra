@@ -257,22 +257,35 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   step('geloeschte Datei verschwindet aus dem Baum');
 
   // --- Chat abbrechen: der Stream laeuft, der Stop-Knopf beendet ihn --------
-  model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort '.repeat(40), chunkDelayMs: 120 });
+  // Streams until aborted (#327): on a slow Linux runner the click on stop came
+  // after a fixed-length answer had already ended, and nothing was left to abort.
+  model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort ', chunkDelayMs: 120, untilAbortedMs: 60000 });
   // #327: record main's and the server's view of this abort, to tell on a
   // failed run whether the abort got lost on its way or the socket stayed open.
   const readAbortTrace = await snotra.traceChatAbort(LONG_QUESTION);
   await ask(page, LONG_QUESTION);
   step('lange Frage abgeschickt');
+  // #327: how far the server's stream got at each wait, to see which of the
+  // two polls below is slow on Linux and whether the renderer lags behind.
+  const serverChunks = () => model.requestFor(LONG_QUESTION)?.trace.chunksWritten ?? 0;
 
   await poll(() => page.evaluate(() =>
     document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'laufende Antwort (Stop-Knopf)' });
+  step(`stop button shown (server chunks: ${serverChunks()})`);
   // Die letzte Bubble, nicht die erste: die erste ist die Begruessung, die die
   // App beim Oeffnen eines Ordners selbst in den Chat schreibt.
-  await poll(() => page.evaluate(() => {
-    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
-    return (bubbles[bubbles.length - 1]?.textContent || '').includes('Diese Antwort');
-  }), { what: 'erste Textstuecke im Chat' });
+  const firstTextWaitStarted = Date.now();
+  let lastBubbles = null;
+  await poll(async () => {
+    lastBubbles = await page.evaluate(() => {
+      const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+      return { count: bubbles.length, last: (bubbles[bubbles.length - 1]?.textContent || '').slice(0, 80) };
+    });
+    return lastBubbles.last.includes('Diese Antwort');
+  }, { what: 'erste Textstuecke im Chat' });
+  step(`first text shown after ${Date.now() - firstTextWaitStarted} ms (server chunks: ${serverChunks()}, `
+    + `assistant bubbles: ${lastBubbles.count})`);
 
   const stopClickedAt = Date.now();
   await page.evaluate(() => document.getElementById('btn-chat-send').click());

@@ -23,6 +23,8 @@ const contentChunk = (text) => sse({
  * noch einmal nach einem Gespraechstitel; eine reine Warteschlange wuerde dieser
  * Zwischenfrage die Antwort des naechsten Testschritts vorsetzen.
  * `chunkDelayMs` macht den Stream langsam genug, um ihn im Test abzubrechen.
+ * `untilAbortedMs` (with a `chunkDelayMs`) keeps it going until the client
+ * aborts, at most that long.
  * Was der Client geschickt hat, landet in `requests` — daran laesst sich pruefen,
  * ob ein Abbruch wirklich beim Server ankam.
  */
@@ -123,7 +125,13 @@ export async function startFakeModel() {
 
       // In Woerter zerlegen, damit ein Abbruch mitten im Stream moeglich ist.
       const parts = answer.text.match(/\S+\s*/g) ?? [answer.text];
-      for (const part of parts) {
+      // `untilAbortedMs` repeats the text until the client closes, so a test
+      // that aborts cannot race the answer's natural end (#327). The cap only
+      // keeps a broken abort from streaming forever; hitting it ends the answer
+      // normally, which the test then sees as `finished` instead of `aborted`.
+      const deadline = answer.untilAbortedMs ? Date.now() + answer.untilAbortedMs : null;
+      for (let i = 0; deadline ? Date.now() < deadline : i < parts.length; i += 1) {
+        const part = parts[i % parts.length];
         if (res.destroyed || res.writableEnded || record.aborted) return;
         res.write(contentChunk(part));
         record.trace.chunksWritten += 1;
@@ -150,7 +158,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {
