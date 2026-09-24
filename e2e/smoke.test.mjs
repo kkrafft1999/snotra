@@ -41,6 +41,9 @@ const WORKSPACE_MEMORY_MD = [
 // Die Fragen dienen dem Fake-Modell als Schluessel: welche Antwort es schickt,
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
+// A run that has to survive a chat switch (#320).
+const BACKGROUND_QUESTION = 'Arbeite im Hintergrund weiter.';
+const BACKGROUND_ANSWER = 'Hintergrund-Antwort '.repeat(30).trim();
 const LINK_QUESTION = 'Zeig mir Links.';
 const IMAGE_QUESTION = 'Zeig mir das Diagramm.';
 const MEMORY_QUESTION = 'Bitte merke dir etwas.';
@@ -252,6 +255,61 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(model.requestFor(LONG_QUESTION).finished, false,
     'die abgebrochene Runde darf nicht zu Ende laufen');
   step('Abbruch am Server angekommen');
+
+  // --- Chatwechsel mitten im Lauf (#320): der Lauf arbeitet weiter ---------
+  model.queueAnswer({ match: BACKGROUND_QUESTION, text: BACKGROUND_ANSWER, chunkDelayMs: 100 });
+  const historyWasClosed = await page.evaluate(() => {
+    const closed = document.getElementById('app').classList.contains('app--no-history');
+    if (closed) document.getElementById('btn-toggle-chat-history').click();
+    return closed;
+  });
+  await ask(page, BACKGROUND_QUESTION);
+  await poll(() => page.evaluate(() => {
+    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+    return (bubbles[bubbles.length - 1]?.textContent || '').includes('Hintergrund-Antwort');
+  }), { what: 'erste Textstuecke des Hintergrundlaufs' });
+  const runningChatId = await poll(() => page.evaluate(() =>
+    document.querySelector('.chat-history-row--current[data-chat-id]')?.dataset.chatId || null),
+    { what: 'laufender Chat im Verlauf' });
+
+  await page.evaluate(() => document.getElementById('btn-chat-new').click());
+  const background = await poll(() => page.evaluate((id) => {
+    const row = document.querySelector(`.chat-history-row[data-chat-id="${id}"]`);
+    if (!row || row.classList.contains('chat-history-row--current')) return null;
+    return {
+      state: row.dataset.runState || null,
+      label: row.querySelector('.chat-history-row-run')?.textContent || '',
+      composerBusy: document.getElementById('btn-chat-send').classList.contains('chat-send--stop'),
+    };
+  }, runningChatId), { what: 'Hintergrundlauf im Verlauf markiert' });
+  assert.equal(background.state, 'running', 'die Zeile zeigt den laufenden Chat');
+  assert.ok(background.label.length > 0, 'der Zustand steht auch als Text da');
+  assert.equal(background.composerBusy, false, 'der neue Chat ist sofort frei');
+  assert.equal(model.requestFor(BACKGROUND_QUESTION).aborted, false, 'der Wechsel bricht nichts ab');
+
+  await poll(() => {
+    const request = model.requestFor(BACKGROUND_QUESTION);
+    // An aborted request never finishes; say so instead of waiting out the clock.
+    assert.equal(request?.aborted, false, 'der Hintergrundlauf wurde unterwegs abgebrochen');
+    return request?.finished;
+  }, { what: 'Hintergrundlauf am Modellserver zu Ende' });
+  await poll(() => page.evaluate((id) =>
+    !document.querySelector(`.chat-history-row[data-chat-id="${id}"]`)?.dataset.runState, runningChatId),
+    { what: 'Markierung nach dem Ende verschwunden' });
+
+  await page.evaluate((id) =>
+    document.querySelector(`.chat-history-row[data-chat-id="${id}"]`)?.click(), runningChatId);
+  const answer = await poll(() => page.evaluate((id) => {
+    // Wait for the switch itself: until then the new chat's greeting is the last bubble.
+    if (!document.querySelector(`.chat-history-row--current[data-chat-id="${id}"]`)) return null;
+    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+    const last = bubbles[bubbles.length - 1];
+    if (!last || document.getElementById('chat-messages').getAttribute('aria-busy') === 'true') return null;
+    return last.textContent || '';
+  }, runningChatId), { what: 'zurueck im ersten Chat' });
+  assert.ok(answer.includes(BACKGROUND_ANSWER), 'die im Hintergrund fertig gewordene Antwort steht im eigenen Chat');
+  if (historyWasClosed) await page.evaluate(() => document.getElementById('btn-toggle-chat-history').click());
+  step('Hintergrundlauf ueberlebt den Chatwechsel');
 
   // --- Sanitizing in echtem Chromium ---------------------------------------
   model.queueAnswer({ match: LINK_QUESTION, text: ANSWER_WITH_LINKS });

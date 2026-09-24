@@ -18,9 +18,14 @@ export const appStore = {
   },
   chatMessages: [],
   chatSessionId: 0,
+  // Whether the chat on screen has a run going — the send button turns into
+  // stop. Runs of other chats do not count (#320).
   chatInFlight: false,
-  chatSendSeq: 0,
-  chatAbortedSendSeq: 0,
+  // Runs by chat id (#320). A run outlives the screen: it goes on while the
+  // user reads or writes in another chat, and writes its result back into its
+  // own chat. Owned by ChatStream; the approval cards and the history column
+  // only read it.
+  chatRuns: new Map(),
   chatTokenUsage: { prompt: 0, completion: 0, total: 0 },
   // Woraus der zuletzt gesendete Prompt bestand (Issue #174). Lebt nur in
   // dieser Sitzung: Ein wiederhergestellter Chat kennt die Aufteilung seiner

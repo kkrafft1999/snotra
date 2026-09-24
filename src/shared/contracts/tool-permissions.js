@@ -419,6 +419,7 @@ function createToolApprovalRequestDto({
   sessionScope,
   providerLabel,
   preview,
+  chatId,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   const dto = {
@@ -439,6 +440,9 @@ function createToolApprovalRequestDto({
     const usable = reasonParts.filter(isMessage).slice(0, 8);
     if (usable.length > 0) dto.reasonParts = usable;
   }
+  // Which chat asks (#320): with a run per chat, a card can arrive for a chat
+  // that is not on screen, and the renderer holds it until that chat is open.
+  if (typeof chatId === 'string' && chatId) dto.chatId = chatId.slice(0, 128);
   if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
   if (typeof sessionScopeLabel === 'string' && sessionScopeLabel) {
     dto.sessionScopeLabel = sessionScopeLabel.slice(0, 400);

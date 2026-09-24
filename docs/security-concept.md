@@ -367,8 +367,20 @@ a change of provider asks again. Ordinary `write` session approvals permit
 further changes to exactly those targets; that scope is stated explicitly on the
 card. They do not cover a later complete overwrite (`delete`).
 
-A restart, a change of chat, workspace, mode, rules or skill deletes the session
-approvals and discards open requests. After a block, no permission is sought by
+A restart, a change of rules or skill deletes the session approvals and
+discards open requests. Since #320 both belong to their chat, and a chat can
+keep a run going in the background while the user looks at another one. So a
+change of chat or workspace ends them for every chat that is neither on screen
+nor running; a running chat keeps its open card and its approvals until its run
+ends, and the card waits for it without a time limit. A change of mode affects
+only the chat whose mode changed. The mode itself is the chat's as well: the
+policy file holds the mode of the chat on screen, and a chat that leaves the
+screen keeps the mode it had there for its run — it never borrows the mode of
+the chat that is visible now. A failed signature overrides that and puts every
+chat back to `smart`; "Alle Berechtigungen zurücksetzen" does the same. Session
+approvals are bound to the rules, the sensitive path patterns and the integrity
+state next to the mode, not to every write of the policy file, which now
+happens whenever another chat comes on screen. After a block, no permission is sought by
 rephrasing, alias paths or repeated identical requests; a rejected plan stays
 blocked until the next user request, and repeating it unchanged ends the run
 (section 6). "Sitzungsfreigaben löschen", "Workspace-Regeln zurücksetzen" and

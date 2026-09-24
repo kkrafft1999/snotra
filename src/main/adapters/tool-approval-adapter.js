@@ -22,10 +22,14 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
 
+function chatKey(chatId) {
+  return typeof chatId === 'string' && chatId ? chatId : null;
+}
+
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
   /** sessionId → webContents (nur angemeldete Fenster). */
   const subscribers = new Map();
-  /** requestId → { sessionId, resolve, request, cleanup } */
+  /** requestId → { sessionId, chatId, resolve, request, cleanup } */
   const pending = new Map();
 
   function send(webContents, channel, payload) {
@@ -66,6 +70,26 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
 
   function invalidateAll(reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     for (const requestId of [...pending.keys()]) settle(requestId, { invalidated: true, reason });
+  }
+
+  /** Open requests of one chat only — its mode changed, or it was deleted (#320). */
+  function invalidateChat(chatId, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
+    const key = chatKey(chatId);
+    for (const [requestId, entry] of [...pending.entries()]) {
+      if (entry.chatId === key) settle(requestId, { invalidated: true, reason });
+    }
+  }
+
+  /**
+   * Open requests of every chat except the given ones (#320). Those are the
+   * visible chat and the chats still running in the background — a run that
+   * waits for a card keeps waiting while the user looks at something else.
+   */
+  function invalidateExceptChats(chatIds, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
+    const keep = new Set([...chatIds].map(chatKey));
+    for (const [requestId, entry] of [...pending.entries()]) {
+      if (!keep.has(entry.chatId)) settle(requestId, { invalidated: true, reason });
+    }
   }
 
   return {
@@ -111,6 +135,7 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
         abortSignal?.addEventListener?.('abort', onAbort, { once: true });
         pending.set(requestId, {
           sessionId,
+          chatId: chatKey(request?.chatId),
           request,
           resolve,
           cleanup: () => abortSignal?.removeEventListener?.('abort', onAbort),
@@ -142,6 +167,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     },
     invalidateSession,
     invalidateAll,
+    invalidateChat,
+    invalidateExceptChats,
     listPending(sessionId) {
       return [...pending.entries()]
         .filter(([, entry]) => sessionId === undefined || entry.sessionId === sessionId)

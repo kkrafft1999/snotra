@@ -15,6 +15,23 @@ import { t, onLocaleChange } from '../i18n.js';
  * Knopf fuer einen neuen Chat — so wie "Ordner oeffnen" in der Kopfzeile des
  * Baums steht.
  */
+const NO_RUNS = Object.freeze({
+  detach: () => {},
+  canAttach: () => false,
+  attach: () => false,
+  afterSwitch: () => {},
+  discard: () => {},
+  stateOf: () => null,
+});
+
+// Which run state a row shows, and the words for it. The words are part of the
+// row's accessible name too — the dot alone would say nothing to a screen
+// reader (WCAG 1.4.1).
+const RUN_STATE_LABELS = Object.freeze({
+  running: 'history.entry.running',
+  awaiting: 'history.entry.awaiting',
+});
+
 export function initChatHistoryPanel({
   api,
   appStore,
@@ -34,6 +51,9 @@ export function initChatHistoryPanel({
   // Wer einen Chat aus dem Verlauf anklickt, will ihn sehen — auch wenn die
   // Chat-Spalte gerade zu ist (Spiegelbild zum Klick auf eine Datei im Baum).
   revealChatPanel = () => {},
+  // Runs per chat (#320): a chat that is still running opens from memory, a
+  // deleted one stops, and its row says whether it is working or waiting.
+  runs = NO_RUNS,
 }) {
   const appRoot = document.getElementById('app');
   const chatHistoryList = document.getElementById('chat-history-list');
@@ -86,7 +106,10 @@ export function initChatHistoryPanel({
       titleEl.textContent = s.title || t('history.entry.fallbackTitle');
       const meta = document.createElement('span');
       meta.className = 'chat-history-row-meta';
-      meta.textContent = formatHistoryTime(s.updatedAt);
+      const time = document.createElement('span');
+      time.className = 'chat-history-row-time';
+      time.textContent = formatHistoryTime(s.updatedAt);
+      meta.appendChild(time);
       main.appendChild(titleEl);
       main.appendChild(meta);
       const del = document.createElement('button');
@@ -98,6 +121,8 @@ export function initChatHistoryPanel({
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
       row.appendChild(main);
       row.appendChild(del);
+      row.dataset.chatId = s.id;
+      applyRunState(row, runs.stateOf(s.id));
 
       const openThis = () => openChatSession(s.id);
       row.addEventListener('click', (e) => {
@@ -140,14 +165,23 @@ export function initChatHistoryPanel({
     stopChatVoiceListening();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
-    const hist = await api.getChatHistory();
-    const s = hist.sessions?.find((x) => x.id === id);
-    if (!s || !Array.isArray(s.messages)) return;
-    appStore.currentChatId = id;
-    appStore.currentChatWorkspace = s.workspaceRoot || null;
-    appStore.chatMessages = s.messages;
-    appStore.currentChatTitle = s.title || '';
-    setChatTokenUsage?.(s.tokenUsage);
+    // A chat whose run is still in memory opens from there (#320): the file
+    // only knows the state from when the run left the screen.
+    let s = null;
+    if (!runs.canAttach(id)) {
+      const hist = await api.getChatHistory();
+      s = hist.sessions?.find((x) => x.id === id);
+      if (!s || !Array.isArray(s.messages)) return;
+    }
+    // The chat on screen takes its run into the background.
+    runs.detach();
+    if (!runs.attach(id)) {
+      appStore.currentChatId = id;
+      appStore.currentChatWorkspace = s.workspaceRoot || null;
+      appStore.chatMessages = s.messages;
+      appStore.currentChatTitle = s.title || '';
+      setChatTokenUsage?.(s.tokenUsage);
+    }
     onInputChanged();
     await api.setActiveChatId(id);
     // Ausdruecklicher Wechsel: Dieser Chat bekommt sein Modell und seinen
@@ -155,11 +189,14 @@ export function initChatHistoryPanel({
     // Bestaetigung tragen kann (Issue #211).
     await activateChatSession(id, 'explicit');
     renderChatMessages();
+    runs.afterSwitch();
     updateChatChrome();
     await renderHistoryList();
   }
 
   async function removeChatFromHistory(id) {
+    // First the run: it must not write the chat back once it is gone (#320).
+    runs.discard(id);
     await api.deleteChatSession(id);
     if (id === appStore.currentChatId) {
       stopChatVoiceListening();
@@ -177,7 +214,43 @@ export function initChatHistoryPanel({
       renderChatMessages();
       updateChatChrome();
     }
+    runs.afterSwitch();
     await renderHistoryList();
+  }
+
+  /**
+   * Marks a row as running or waiting for an approval (#320). The state goes
+   * into the meta line in place of the time — shape, colour and words
+   * together, so it is never carried by colour alone.
+   */
+  function applyRunState(row, state) {
+    const meta = row.querySelector('.chat-history-row-meta');
+    if (!meta) return;
+    const label = RUN_STATE_LABELS[state] ? t(RUN_STATE_LABELS[state]) : '';
+    const shown = meta.querySelector('.chat-history-row-run');
+    // Unchanged: leave the node alone, so the pulse does not restart.
+    if ((row.dataset.runState || '') === (label ? state : '') && (shown?.textContent || '') === label) return;
+    shown?.remove();
+    if (!label) {
+      delete row.dataset.runState;
+      return;
+    }
+    row.dataset.runState = state;
+    const run = document.createElement('span');
+    run.className = 'chat-history-row-run';
+    const dot = document.createElement('span');
+    dot.className = 'chat-history-row-run-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    run.appendChild(dot);
+    run.append(label);
+    meta.prepend(run);
+  }
+
+  /** Re-reads the run state of every row without fetching the history again. */
+  function syncRunMarkers() {
+    for (const row of chatHistoryList.querySelectorAll('.chat-history-row[data-chat-id]')) {
+      applyRunState(row, runs.stateOf(row.dataset.chatId));
+    }
   }
 
   async function startNewChatWithHistory() {
@@ -206,5 +279,6 @@ export function initChatHistoryPanel({
     openChatSession,
     removeChatFromHistory,
     startNewChatWithHistory,
+    syncRunMarkers,
   };
 }

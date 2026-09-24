@@ -45,13 +45,16 @@ function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
    * Legt eine Freigabe an. Liefert null, wenn die Klassen nicht sitzungsweise
    * freigebbar sind (delete/execute/external nur einmalig, Konzept §6).
    */
-  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null } = {}) {
+  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null } = {}) {
     const classes = sessionGrantableClasses(riskClasses);
     if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
     const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
     const entry = {
       id: nextId(),
       scopeKey,
+      // The chat is part of `scopeKey` already; it is kept on its own so that
+      // one chat's approvals can be dropped without touching another's (#320).
+      chatId: typeof chatId === 'string' && chatId ? chatId : null,
       tool,
       targetKey: pathsKey(targets),
       classes,
@@ -88,11 +91,27 @@ function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
     grants = grants.filter((entry) => entry.scopeKey !== scopeKey);
   }
 
+  /** Drops the approvals of one chat — its mode changed, or it was deleted (#320). */
+  function clearChat(chatId) {
+    const key = typeof chatId === 'string' && chatId ? chatId : null;
+    grants = grants.filter((entry) => entry.chatId !== key);
+  }
+
+  /**
+   * Keeps only the approvals of the given chats: the visible one and those
+   * still running in the background (#320). Everything else is a chat the
+   * user has left, and leaving a chat ends its approvals (concept §7).
+   */
+  function retainChats(chatIds) {
+    const keep = new Set(chatIds);
+    grants = grants.filter((entry) => keep.has(entry.chatId));
+  }
+
   function count() {
     return grants.length;
   }
 
-  return { grant, find, clear, clearScope, count };
+  return { grant, find, clear, clearScope, clearChat, retainChats, count };
 }
 
 function defaultIdFactory() {

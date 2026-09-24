@@ -103,6 +103,25 @@ function registerToolPermissionHandlers({
     }
   }
 
+  /**
+   * A mode change belongs to the chat on screen (#211), so only its cards and
+   * session approvals go (#320). A run in another chat keeps working under its
+   * own mode and keeps what the user granted it. Without a known chat, the old,
+   * wider reset applies.
+   */
+  function afterModeChange(sender) {
+    const chatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    if (!chatId || typeof approvals.invalidateChat !== 'function' || typeof sessionGrants.clearChat !== 'function') {
+      afterPolicyChange(sender);
+      return;
+    }
+    approvals.invalidateChat(chatId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+    sessionGrants.clearChat(chatId);
+    if (sender && typeof sender.send === 'function' && !sender.isDestroyed?.()) {
+      sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    }
+  }
+
   async function buildState() {
     const state = await toolPolicyStore.read();
     const root = getActiveWorkspaceRoot();
@@ -132,7 +151,7 @@ function registerToolPermissionHandlers({
     const result = await toolPolicyStore.setMode(mode);
     if (!result.ok) return createSettingsError(result.error);
     await chatSessionSettings?.rememberMode(result.mode);
-    afterPolicyChange(event.sender);
+    afterModeChange(event.sender);
     return { ...createSettingsOk(), mode: result.mode };
   });
 
@@ -204,6 +223,8 @@ function registerToolPermissionHandlers({
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_ALL, async (event) => {
     const result = await toolPolicyStore.resetAll();
     if (!result.ok) return createSettingsError(result.error);
+    // Back to `smart` means every chat, including those in the background.
+    chatSessionSettings?.forgetBackgroundModes?.();
     afterPolicyChange(event.sender);
     return createSettingsOk();
   });

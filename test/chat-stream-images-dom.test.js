@@ -164,9 +164,10 @@ test('ein nachlaufender Stream-Frame ueberschreibt das fertige Bild nicht', asyn
   // Frame laeuft. Ohne Abbestellen schriebe er den Zwischenstand samt
   // Platzhaltern zurueck ueber das schon geladene Bild.
   const ANTWORT = '![Diagramm](diagramm.png)';
-  chatImpl = async () => {
+  chatImpl = async (_messages, options) => {
     // Genau die Reihenfolge des echten Laufs: Delta waehrend `api.chat` laeuft.
-    deltaCallback?.({ text: '![Diagr' });
+    // Events name their chat and run since #320.
+    deltaCallback?.({ text: '![Diagr', chatId: options?.chatId, runId: options?.runId });
     return { ok: true, content: ANTWORT, toolTrace: [] };
   };
   appStore.rootPath = '/ws';

@@ -227,7 +227,10 @@ const modelPicker = initChatModelPicker({ api, appStore });
 // Einstellungen, Freigabe-Karten melden sich beim Main als Oberfläche an.
 const toolPermissions = initToolPermissionState({ api });
 initToolModePicker({ toolPermissions });
-const approvalCards = initToolApprovalCards({ api, appStore });
+// Runs per chat (#320): cards and runs report changes, the history column
+// marks its rows. It is built further down, hence the indirection.
+let syncRunMarkers = () => {};
+const approvalCards = initToolApprovalCards({ api, appStore, onPendingChanged: () => syncRunMarkers() });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
 const memoryPanel = initMemoryPanel({ api });
@@ -316,6 +319,7 @@ const chatStream = initChatStream({
   onChatPersisted: () => {
     if (chatHistory.isHistoryOpen()) void chatHistory.renderHistoryList();
   },
+  onRunsChanged: () => syncRunMarkers(),
 });
 
 // Der Resizer entsteht erst in der Startsequenz, der Verlauf braucht ihn aber
@@ -344,7 +348,9 @@ const chatHistory = initChatHistoryPanel({
   // Wer einen Chat im Verlauf anklickt, will ihn sehen — genau wie der Klick
   // auf eine Datei die mittlere Spalte zurueckholt.
   revealChatPanel,
+  runs: chatStream.runs,
 });
+syncRunMarkers = () => chatHistory.syncRunMarkers();
 
 const updateDialog = initUpdateDialog({ api });
 

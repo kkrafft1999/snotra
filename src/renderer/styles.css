@@ -1303,6 +1303,47 @@ summary:focus-visible,
   color: var(--text-secondary);
 }
 
+/* A chat with a run going (#320): the meta line says what it is doing, in
+ * place of the time — that would only say "now". Shape and words carry the
+ * state; the colour only adds to it (WCAG 1.4.1). Variant A of
+ * out/mockup/history-run-markers.html, chosen on 2026-09-24. */
+.chat-history-row[data-run-state] .chat-history-row-time {
+  display: none;
+}
+
+.chat-history-row-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-history-row-run-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ds-blue);
+  animation: chatHistoryRunPulse var(--ds-motion-pulse) ease-in-out infinite;
+}
+
+/* Waiting for the user is the state that needs them: a ring instead of the
+ * dot, standing still, and the words in the accent colour. */
+.chat-history-row[data-run-state='awaiting'] .chat-history-row-meta {
+  color: var(--ds-blue);
+  font-weight: 500;
+}
+
+.chat-history-row[data-run-state='awaiting'] .chat-history-row-run-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--ds-blue);
+  animation: none;
+}
+
+@keyframes chatHistoryRunPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 .chat-history-row-delete {
   flex-shrink: 0;
   display: flex;
@@ -4640,6 +4681,9 @@ select.modal-input {
     opacity: 0.7;
   }
   #btn-chat-mic.recording {
+    animation: none;
+  }
+  .chat-history-row-run-dot {
     animation: none;
   }
   .chat-live-dot,

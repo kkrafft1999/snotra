@@ -470,6 +470,38 @@ Two deliberately different rules for a new chat:
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.
 
+### Runs per chat ([#320](https://github.com/kkrafft1999/snotra/issues/320))
+
+A run belongs to the chat it was started in, not to the screen. Until 1.8.1 the
+engine held one run per window (`sessionId = sender.id`), and the renderer
+threw a run's result away as soon as another chat was opened.
+
+- **Engine:** `activeRuns` is keyed by window *and* chat. A new turn in the same
+  chat replaces its run; another chat's run goes on. `abort(sessionId, chatId)`
+  stops one chat, without a chat every run of the window.
+  `runningChatIds()` tells main which chats are still working.
+- **Events:** `chat-handlers.js` adds `chatId` and the renderer's `runId` to
+  every `chat:delta`, `chat:tool-line` and `chat:progress`. The renderer
+  registers its listeners once and routes each event to its run; a late event
+  of an earlier turn finds nothing.
+- **Renderer:** `appStore.chatRuns` holds the runs. While its chat is on screen
+  the chat's data lives in `appStore` as before; when another chat takes the
+  screen, the run takes its chat along (`run.chat`) and keeps writing into those
+  messages without touching the list. Opening the chat again puts it back
+  (`ChatStream.runs.attach`) — from memory, because the file only knows the
+  state from when it left. A finished run writes into its own chat and does
+  not make it the folder's active chat. Deleting a running chat stops the run
+  first, so that its answer cannot bring the chat back.
+- **Mode:** the policy file holds the mode of the chat on screen.
+  `chat-session-settings` remembers the mode a chat had when it left the screen
+  (`modeFor`), and the policy port answers a run with its own chat's mode.
+- **Approvals:** cards and session approvals live as long as their chat is on
+  screen or running (`pruneChatScopedPermissions` in the composition root); a
+  mode change only affects its own chat. Details in
+  [`security-concept.md`](./security-concept.md) §7.
+- **History:** a running row shows "Working…" or "Needs your approval" in place
+  of its time (`ChatHistoryPanel.syncRunMarkers`).
+
 ## Composition root
 
 `src/main/composition/create-application.js` is the central entry point after the
