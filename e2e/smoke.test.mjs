@@ -101,6 +101,33 @@ function makePng(width, height) {
   ]);
 }
 
+/**
+ * Puts the timestamps of an abort trace (#327) relative to the click on stop,
+ * so a CI log reads as one timeline: IPC, signal, reader, server socket.
+ */
+function describeAbortTrace({ stopClickedAt, main, server }) {
+  const rel = (at) => (typeof at === 'number' ? at - stopClickedAt : at);
+  const relFields = (obj) => Object.fromEntries(Object.entries(obj).map(([key, value]) =>
+    [key, key === 'at' || key.endsWith('At') ? rel(value) : value]));
+  const fromArrival = ({ arrivedAt, lastWriteMs, resCloseMs, socketCloseMs, endMs, ...rest }) => {
+    const at = (ms) => (typeof ms === 'number' ? rel(arrivedAt + ms) : null);
+    return {
+      ...rest,
+      arrivedAt: rel(arrivedAt),
+      lastWriteAt: at(lastWriteMs),
+      resCloseAt: at(resCloseMs),
+      socketCloseAt: at(socketCloseMs),
+      endAt: at(endMs),
+    };
+  };
+  return {
+    note: 'ms relative to the stop click',
+    ipc: main?.ipc?.map(relFields) ?? main,
+    fetches: main?.fetches?.map(relFields) ?? null,
+    server: server.map(fromArrival),
+  };
+}
+
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -230,30 +257,60 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   step('geloeschte Datei verschwindet aus dem Baum');
 
   // --- Chat abbrechen: der Stream laeuft, der Stop-Knopf beendet ihn --------
-  model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort '.repeat(40), chunkDelayMs: 120 });
+  // Streams until aborted (#327): on a slow Linux runner the click on stop came
+  // after a fixed-length answer had already ended, and nothing was left to abort.
+  model.queueAnswer({ match: LONG_QUESTION, text: 'Diese Antwort ', chunkDelayMs: 120, untilAbortedMs: 60000 });
+  // #327: record main's and the server's view of this abort, to tell on a
+  // failed run whether the abort got lost on its way or the socket stayed open.
+  const readAbortTrace = await snotra.traceChatAbort(LONG_QUESTION);
   await ask(page, LONG_QUESTION);
   step('lange Frage abgeschickt');
+  // #327: how far the server's stream got at each wait, logged with the step.
+  const serverChunks = () => model.requestFor(LONG_QUESTION)?.trace.chunksWritten ?? 0;
 
   await poll(() => page.evaluate(() =>
     document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'laufende Antwort (Stop-Knopf)' });
-  // Die letzte Bubble, nicht die erste: die erste ist die Begruessung, die die
-  // App beim Oeffnen eines Ordners selbst in den Chat schreibt.
-  await poll(() => page.evaluate(() => {
-    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
-    return (bubbles[bubbles.length - 1]?.textContent || '').includes('Diese Antwort');
-  }), { what: 'erste Textstuecke im Chat' });
+  step(`stop button shown (server chunks: ${serverChunks()})`);
+  // Wait for the stream at the server, not for text in the bubble (#327): on
+  // the xvfb runner Chromium sometimes draws no frame for over ten seconds, and
+  // streamed text only reaches the DOM with the next animation frame. Three
+  // chunks leave the first one a quarter of a second to arrive in the renderer.
+  await poll(() => serverChunks() >= 3, { what: 'laufender Stream am Modellserver' });
+  step(`stream running (server chunks: ${serverChunks()})`);
 
+  const stopClickedAt = Date.now();
   await page.evaluate(() => document.getElementById('btn-chat-send').click());
 
   await poll(() => page.evaluate(() =>
     !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'beendeter Lauf nach dem Abbruch' });
   // Der Abbruch muss bis zum Server durchschlagen, nicht nur die Anzeige stoppen.
-  await poll(() => model.requestFor(LONG_QUESTION)?.aborted,
-    { what: 'abgebrochene Anfrage am Modellserver' });
+  const abortDiagnosis = async () => describeAbortTrace({
+    stopClickedAt,
+    main: await readAbortTrace().catch((err) => ({ unreadable: String(err) })),
+    server: model.requests
+      .filter((r) => !r.isTitleRequest && JSON.stringify(r.body).includes(LONG_QUESTION))
+      .map((r) => ({ aborted: r.aborted, finished: r.finished, ...r.trace })),
+  });
+  try {
+    await poll(() => model.requestFor(LONG_QUESTION)?.aborted,
+      { what: 'abgebrochene Anfrage am Modellserver' });
+  } catch (err) {
+    err.message += `\nAbort trace (#327): ${JSON.stringify(await abortDiagnosis())}`;
+    throw err;
+  }
+  t.diagnostic(`abort trace (#327): ${JSON.stringify(await abortDiagnosis())}`);
   assert.equal(model.requestFor(LONG_QUESTION).finished, false,
     'die abgebrochene Runde darf nicht zu Ende laufen');
+  // The abort writes the partial answer into the bubble synchronously, no
+  // frame needed. Die letzte Bubble, nicht die erste: die erste ist die
+  // Begruessung, die die App beim Oeffnen eines Ordners selbst schreibt.
+  const partialAnswer = await page.evaluate(() => {
+    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+    return bubbles[bubbles.length - 1]?.textContent || '';
+  });
+  assert.match(partialAnswer, /Diese Antwort/, 'die Teilantwort bleibt nach dem Abbruch im Chat stehen');
   step('Abbruch am Server angekommen');
 
   // --- Chatwechsel mitten im Lauf (#320): der Lauf arbeitet weiter ---------

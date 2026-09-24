@@ -23,12 +23,17 @@ const contentChunk = (text) => sse({
  * noch einmal nach einem Gespraechstitel; eine reine Warteschlange wuerde dieser
  * Zwischenfrage die Antwort des naechsten Testschritts vorsetzen.
  * `chunkDelayMs` macht den Stream langsam genug, um ihn im Test abzubrechen.
+ * `untilAbortedMs` (with a `chunkDelayMs`) keeps it going until the client
+ * aborts, at most that long.
  * Was der Client geschickt hat, landet in `requests` — daran laesst sich pruefen,
  * ob ein Abbruch wirklich beim Server ankam.
  */
 export async function startFakeModel() {
   const answers = [];
   const requests = [];
+  // Numbers the TCP connections, so a trace shows whether a request rode on a
+  // kept-alive socket and whether that socket went away with the abort (#327).
+  let socketSeq = 0;
 
   const server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url.startsWith('/v1/models')) {
@@ -47,6 +52,25 @@ export async function startFakeModel() {
       const raw = body || '{}';
       const record = { body: JSON.parse(raw), aborted: false, finished: false };
       requests.push(record);
+      // Server-side timeline for #327: when the stream was written, when the
+      // response and its socket closed, relative to the request's arrival.
+      const socket = req.socket;
+      socket.snotraId ??= ++socketSeq;
+      socket.snotraRequests = (socket.snotraRequests ?? 0) + 1;
+      const arrivedAt = Date.now();
+      record.trace = {
+        arrivedAt,
+        socketId: socket.snotraId,
+        socketReused: socket.snotraRequests > 1,
+        chunksWritten: 0,
+        lastWriteMs: null,
+        resCloseMs: null,
+        socketCloseMs: null,
+        endMs: null,
+      };
+      const sinceArrival = () => Date.now() - arrivedAt;
+      res.on('close', () => { record.trace.resCloseMs = sinceArrival(); });
+      socket.once('close', () => { record.trace.socketCloseMs ??= sinceArrival(); });
       // Nicht `req.on('aborted')`: das Ereignis ist seit Node 18 abgekuendigt und
       // bleibt hier aus. Verlaesslich ist, ob die Antwort zugeht, bevor wir mit
       // dem Schreiben fertig sind — genau das ist ein Abbruch durch den Client.
@@ -101,9 +125,17 @@ export async function startFakeModel() {
 
       // In Woerter zerlegen, damit ein Abbruch mitten im Stream moeglich ist.
       const parts = answer.text.match(/\S+\s*/g) ?? [answer.text];
-      for (const part of parts) {
+      // `untilAbortedMs` repeats the text until the client closes, so a test
+      // that aborts cannot race the answer's natural end (#327). The cap only
+      // keeps a broken abort from streaming forever; hitting it ends the answer
+      // normally, which the test then sees as `finished` instead of `aborted`.
+      const deadline = answer.untilAbortedMs ? Date.now() + answer.untilAbortedMs : null;
+      for (let i = 0; deadline ? Date.now() < deadline : i < parts.length; i += 1) {
+        const part = parts[i % parts.length];
         if (res.destroyed || res.writableEnded || record.aborted) return;
         res.write(contentChunk(part));
+        record.trace.chunksWritten += 1;
+        record.trace.lastWriteMs = sinceArrival();
         if (answer.chunkDelayMs) {
           await new Promise((resolve) => setTimeout(resolve, answer.chunkDelayMs));
         }
@@ -116,6 +148,7 @@ export async function startFakeModel() {
       res.write('data: [DONE]\n\n');
       res.end();
       record.finished = true;
+      record.trace.endMs = sinceArrival();
     });
   });
 
@@ -125,7 +158,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {
