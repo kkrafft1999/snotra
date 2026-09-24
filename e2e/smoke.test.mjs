@@ -299,15 +299,20 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   await page.evaluate((id) =>
     document.querySelector(`.chat-history-row[data-chat-id="${id}"]`)?.click(), runningChatId);
-  const answer = await poll(() => page.evaluate((id) => {
+  const answer = await poll(() => page.evaluate(({ id, question }) => {
     // Wait for the switch itself: until then the new chat's greeting is the last bubble.
+    // The highlighted row alone does not say so — a history render still due from the
+    // background run's own write can mark the row while the switch is still waiting
+    // on main, before the list is drawn. The chat's own question does.
     if (!document.querySelector(`.chat-history-row--current[data-chat-id="${id}"]`)) return null;
-    const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
-    const last = bubbles[bubbles.length - 1];
-    if (!last || document.getElementById('chat-messages').getAttribute('aria-busy') === 'true') return null;
-    return last.textContent || '';
-  }, runningChatId), { what: 'zurueck im ersten Chat' });
-  assert.ok(answer.includes(BACKGROUND_ANSWER), 'die im Hintergrund fertig gewordene Antwort steht im eigenen Chat');
+    const list = document.getElementById('chat-messages');
+    const shown = [...list.querySelectorAll('.chat-msg.user')]
+      .some((bubble) => (bubble.textContent || '').includes(question));
+    if (!shown || list.getAttribute('aria-busy') === 'true') return null;
+    const bubbles = list.querySelectorAll('.chat-msg.assistant');
+    return { text: bubbles[bubbles.length - 1]?.textContent ?? '' };
+  }, { id: runningChatId, question: BACKGROUND_QUESTION }), { what: 'zurueck im ersten Chat' });
+  assert.ok(answer.text.includes(BACKGROUND_ANSWER), 'die im Hintergrund fertig gewordene Antwort steht im eigenen Chat');
   if (historyWasClosed) await page.evaluate(() => document.getElementById('btn-toggle-chat-history').click());
   step('Hintergrundlauf ueberlebt den Chatwechsel');
 
