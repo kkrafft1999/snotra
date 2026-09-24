@@ -16,6 +16,10 @@
   --text-secondary: #63615D;
   --text-muted: var(--ds-grey-muted);   /* 4.84:1 statt 2.85:1 */
   --text-muted-strong: var(--ds-grey-strong); /* fuer Text < 14px */
+  /* Ink of the deck chair drawing that fills the empty area (#315). Muted on
+     purpose: it is background, and it must never compete with the panels that
+     come back when a toggle is switched on again. */
+  --empty-canvas-ink: color-mix(in srgb, var(--text-primary) 45%, transparent);
   --accent: var(--ds-blue);             /* Mono-Blue: einzige Akzentfarbe — Border, Outline, BG, Schrift */
   --accent-text: var(--ds-blue);        /* Alias bleibt fuer farbigen Text (Links etc.) */
   --accent-hover: var(--ds-btn-primary-bg-hover); /* dunklere Akzent-Stufe, z. B. Primary-Hover */
@@ -94,6 +98,9 @@
   --bg-header: #333230;
   --text-primary: #D0CBC6;
   --text-secondary: #999691;
+  /* Five points below the light value: the same share of ink reads brighter
+     on a dark ground, and the drawing would start to look chalky. */
+  --empty-canvas-ink: color-mix(in srgb, var(--text-primary) 40%, transparent);
   /* --text-muted / --accent / --accent-text / --accent-hover werden
      ueber tokens.css ([data-theme='dark']) automatisch hell genug. */
   --border: #3E3C39;
@@ -888,6 +895,52 @@ summary:focus-visible,
 #app.app--no-preview.app--no-chat #chat-history {
   flex: 1 1 auto;
   width: auto !important;
+}
+
+/* ── Leere Flaeche: der Liegestuhl (Issue #315) ───────────────────────────
+ * Switch off all four columns and #app holds nothing at all. That state is
+ * deliberate — somebody cleared the desk — so the app answers it with a
+ * drawing instead of a blank wall.
+ *
+ * The drawing is a mask, not an image: one file, and the ink comes from
+ * --empty-canvas-ink, so light and dark mode are the same asset. As the mask
+ * only takes the alpha channel from the file, the black fill in the SVG never
+ * reaches the screen.
+ *
+ * The ::before carries the mask rather than the element itself, because the
+ * element has to fill the row while the drawing must not: `height` caps it,
+ * `contain` keeps it proportional inside whatever box is left, and a box that
+ * is wider than the drawing simply centres it.
+ */
+#empty-canvas {
+  display: none;
+}
+
+/* Beide Haelften halten sich ganz heraus, sobald nichts mehr in ihnen steht.
+ * Ohne das teilte sich #chat-area die Breite mit der Zeichnung — es faellt
+ * unter app--no-preview.app--no-chat weiter auf `flex: 1 1 auto` und behielte
+ * die halbe Zeile fuer eine Spalte, die gar nichts mehr anzeigt. */
+#app.app--no-sidebar.app--no-preview.app--no-chat.app--no-history #workspace,
+#app.app--no-sidebar.app--no-preview.app--no-chat.app--no-history #chat-area {
+  flex: 0 0 auto;
+}
+
+#app.app--no-sidebar.app--no-preview.app--no-chat.app--no-history #empty-canvas {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+#app.app--no-sidebar.app--no-preview.app--no-chat.app--no-history #empty-canvas::before {
+  content: "";
+  width: 100%;
+  height: min(100%, 440px);
+  background-color: var(--empty-canvas-ink);
+  -webkit-mask: url('./assets/empty-canvas.svg') center / contain no-repeat;
+  mask: url('./assets/empty-canvas.svg') center / contain no-repeat;
 }
 
 #chat-history {

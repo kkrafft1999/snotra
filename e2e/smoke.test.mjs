@@ -626,4 +626,85 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.match(gemerkt, new RegExp(`- \\d{4}-\\d{2}-\\d{2} — ${MEMORY_NEW_ENTRY}`));
   assert.ok(gemerkt.includes('Gemerkt-fuer-dieses-Projekt.'), 'der alte Eintrag steht noch da');
   step('„merk dir das" bis in die Datei geprueft');
+
+  // --- Alle Spalten weg: der Liegestuhl kommt (Issue #315) ------------------
+  // Steht am Ende, weil es jede Spalte wegschaltet. Der Unit-Test haelt den
+  // Vertrag zwischen Markup, Stylesheet und Datei; hier laeuft Chromium, also
+  // ist erst hier pruefbar, was ihn ausmacht: dass die Maske wirklich geladen
+  // wird und die Flaeche nicht leer bleibt.
+  // Jeder Knopf traegt die Klasse, die er an #app setzt. Geklickt wird, bis
+  // alle vier stehen: Das Wegschalten einer Spalte kann eine andere
+  // nachtraeglich wieder aufmachen (der Resizer raeumt die Breiten neu auf),
+  // und ein Nutzer klickt in dem Fall auch einfach noch einmal.
+  const TOGGLE_CLASSES = {
+    'btn-toggle-sidebar': 'app--no-sidebar',
+    'btn-toggle-content-pane': 'app--no-preview',
+    'btn-toggle-chat-panel': 'app--no-chat',
+    'btn-toggle-chat-history': 'app--no-history',
+  };
+  const hideAllPanels = () => poll(async () => {
+    const missing = await page.evaluate((map) => {
+      const app = document.getElementById('app');
+      const open = Object.entries(map).filter(([, cls]) => !app.classList.contains(cls));
+      for (const [id] of open) document.getElementById(id).click();
+      return open.map(([, cls]) => cls);
+    }, TOGGLE_CLASSES);
+    return missing.length === 0 ? true : null;
+  }, { what: 'alle vier Spalten weggeschaltet' });
+
+  const canvasState = () => page.evaluate(() => {
+    const el = document.getElementById('empty-canvas');
+    const box = el.getBoundingClientRect();
+    const style = getComputedStyle(el, '::before');
+    return {
+      display: getComputedStyle(el).display,
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      mask: style.maskImage || style.webkitMaskImage,
+      ink: style.backgroundColor,
+    };
+  });
+
+  await hideAllPanels();
+  const bare = await poll(async () => {
+    const state = await canvasState();
+    return state.display === 'flex' ? state : null;
+  }, { what: 'sichtbarer Liegestuhl' });
+  assert.ok(bare.width > 200 && bare.height > 100, `Flaeche zu klein: ${bare.width}x${bare.height}`);
+  assert.match(bare.mask, /empty-canvas\.svg/, 'die Maske haengt am ::before');
+  // Deckkraft klar unter 1: Die Zeichnung ist Grund, nicht Inhalt. Chromium
+  // gibt color-mix als `color(srgb r g b / a)` zurueck, nicht als rgba().
+  const alphaMatch = bare.ink.match(/\/\s*([\d.]+)\s*\)/)
+    || bare.ink.match(/rgba\([^)]*,\s*([\d.]+)\s*\)/);
+  const alpha = Number(alphaMatch?.[1] ?? 1);
+  assert.ok(alpha > 0.2 && alpha < 0.7, `Tinte unerwartet deckend: ${bare.ink}`);
+
+  // Und es ist auch wirklich etwas zu sehen. Eine Maske, die nicht laedt,
+  // faerbt nichts — im DOM sieht dann trotzdem alles richtig aus. Deshalb der
+  // Blick auf die Pixel: ein Ausschnitt mit Zeichnung komprimiert deutlich
+  // schlechter als dieselbe Flaeche ohne sie.
+  const clip = await page.evaluate(() => {
+    const { x, y, width, height } = document.getElementById('empty-canvas').getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  const mitZeichnung = await page.screenshot({ clip });
+  await page.evaluate(() => {
+    const style = document.createElement('style');
+    style.id = 'ohne-zeichnung';
+    style.textContent = '#empty-canvas::before { display: none; }';
+    document.head.appendChild(style);
+  });
+  const ohneZeichnung = await page.screenshot({ clip });
+  await page.evaluate(() => document.getElementById('ohne-zeichnung').remove());
+  assert.ok(mitZeichnung.length > ohneZeichnung.length * 3,
+    `Flaeche sieht leer aus: ${mitZeichnung.length} vs. ${ohneZeichnung.length} Bytes`);
+
+  // Eine Spalte zurueck, und die Zeichnung ist wieder weg — ohne Neuladen.
+  await page.evaluate(() => document.getElementById('btn-toggle-chat-panel').click());
+  const wieder = await poll(async () => {
+    const state = await canvasState();
+    return state.display === 'none' ? state : null;
+  }, { what: 'wieder versteckter Liegestuhl' });
+  assert.equal(wieder.display, 'none');
+  step('leere Flaeche mit Liegestuhl geprueft');
 });
