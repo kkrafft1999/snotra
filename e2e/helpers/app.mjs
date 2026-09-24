@@ -224,8 +224,38 @@ export async function launchApp({ userDataDir }) {
         return true;
       });
       await page.evaluate(() => {
-        const trace = { shown: [] };
+        const trace = { shown: [], streamEls: [], frameSeconds: [] };
         globalThis.__chatStreamTrace = trace;
+        // Which `.chat-md-streaming` element is in the bubble: a new one means
+        // the bubble was drawn again, and a frame the stream had scheduled for
+        // the old one writes into a detached node.
+        const ids = new WeakMap();
+        let nextId = 0;
+        let streamElId = null;
+        new MutationObserver(() => {
+          const el = document.querySelector('#chat-messages .chat-msg.assistant:last-of-type .chat-md-streaming');
+          const id = el ? (ids.get(el) ?? (ids.set(el, ++nextId), nextId)) : null;
+          if (id !== streamElId && trace.streamEls.length < 400) {
+            trace.streamEls.push([Date.now(), id]);
+            streamElId = id;
+          }
+        }).observe(document.getElementById('chat-messages'), { childList: true, subtree: true });
+        // Frames per second and the longest frame gap in each second — the
+        // #331 probe only saw gaps of 300 ms or more.
+        let second = { from: Date.now(), frames: 0, longest: 0 };
+        let lastFrame = Date.now();
+        const frame = () => {
+          const now = Date.now();
+          second.frames += 1;
+          second.longest = Math.max(second.longest, now - lastFrame);
+          lastFrame = now;
+          if (now - second.from >= 1000) {
+            if (trace.frameSeconds.length < 120) trace.frameSeconds.push([second.from, second.frames, second.longest]);
+            second = { from: now, frames: 0, longest: 0 };
+          }
+          requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
         let previous = '';
         setInterval(() => {
           const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
@@ -258,6 +288,8 @@ export async function launchApp({ userDataDir }) {
           sent: rel(main?.sent) ?? main,
           counts: main?.counts ?? null,
           shown: rel(renderer?.shown) ?? renderer,
+          streamEls: renderer?.streamEls?.map(([at, id]) => [at - since, id]) ?? null,
+          frameSeconds: renderer?.frameSeconds?.map(([at, frames, longest]) => [at - since, frames, longest]) ?? null,
         };
       };
     },
