@@ -190,6 +190,78 @@ export async function launchApp({ userDataDir }) {
       };
     },
     /**
+     * The way of a chat event from main into the bubble (#331). Main records
+     * every chat event it sends to the window — channel, chat, run, text size
+     * or phase — and the renderer records what the last assistant bubble shows
+     * and which chat is on screen, whenever either changes. Between the two it
+     * shows whether streamed text is late leaving main or late being drawn.
+     */
+    async traceChatStream() {
+      await app.evaluate(({ BrowserWindow }) => {
+        const trace = { sent: [], counts: {} };
+        globalThis.__chatStreamTrace = trace;
+        const contents = BrowserWindow.getAllWindows()[0].webContents;
+        const send = contents.send.bind(contents);
+        contents.send = (channel, payload, ...rest) => {
+          if (typeof channel === 'string' && channel.startsWith('chat:')) {
+            const key = `${channel} ${payload?.runId ?? '-'}`;
+            trace.counts[key] = (trace.counts[key] ?? 0) + 1;
+            // The first few of each kind per run tell when it started; the
+            // counts tell how much followed.
+            if (trace.counts[key] <= 3) {
+              trace.sent.push({
+                at: Date.now(),
+                channel,
+                chatId: payload?.chatId ?? null,
+                runId: payload?.runId ?? null,
+                text: typeof payload?.text === 'string' ? payload.text.length : undefined,
+                type: payload?.type ?? payload?.phase ?? undefined,
+              });
+            }
+          }
+          return send(channel, payload, ...rest);
+        };
+        return true;
+      });
+      await page.evaluate(() => {
+        const trace = { shown: [] };
+        globalThis.__chatStreamTrace = trace;
+        let previous = '';
+        setInterval(() => {
+          const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+          const last = bubbles[bubbles.length - 1];
+          const state = {
+            bubbles: bubbles.length,
+            text: (last?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50),
+            streaming: !!last?.querySelector('.chat-md-streaming'),
+            chatId: document.querySelector('.chat-history-row--current[data-chat-id]')?.dataset.chatId ?? null,
+            stop: document.getElementById('btn-chat-send')?.classList.contains('chat-send--stop') ?? null,
+          };
+          const key = JSON.stringify(state);
+          if (key !== previous && trace.shown.length < 300) {
+            trace.shown.push({ at: Date.now(), ...state });
+            previous = key;
+          }
+        }, 50);
+        return true;
+      });
+      return async (since) => {
+        const rel = (entries) => (Array.isArray(entries)
+          ? entries.map(({ at, ...rest }) => ({ at: at - since, ...rest }))
+          : entries);
+        const main = await app.evaluate(() => globalThis.__chatStreamTrace ?? null)
+          .catch((err) => ({ unreadable: String(err) }));
+        const renderer = await page.evaluate(() => globalThis.__chatStreamTrace ?? null)
+          .catch((err) => ({ unreadable: String(err) }));
+        return {
+          note: 'ms since app start',
+          sent: rel(main?.sent) ?? main,
+          counts: main?.counts ?? null,
+          shown: rel(renderer?.shown) ?? renderer,
+        };
+      };
+    },
+    /**
      * Main's view of a chat abort, for #327: did `chat:abort` arrive, and did
      * the abort reach the provider's `fetch` — its signal, its response, its
      * body stream? Needs no hook in the app: a second `ipcMain` listener sits

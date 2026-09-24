@@ -182,6 +182,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     if (reportFrames) {
       const frames = await reportFrames().catch((err) => ({ unreadable: String(err) }));
       t.diagnostic(`frame probe (#331): ${JSON.stringify(frames)}`);
+      const stream = await reportChatStream().catch((err) => ({ unreadable: String(err) }));
+      t.diagnostic(`chat stream (#331): ${JSON.stringify(stream)}`);
     }
     await snotra.stop().catch(() => {});
     await model.close();
@@ -193,7 +195,9 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const started = Date.now();
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
   const readFrameProbe = await snotra.probeFrames();
+  const readChatStream = await snotra.traceChatStream();
   reportFrames = () => readFrameProbe(started);
+  const reportChatStream = () => readChatStream(started);
   step('App gestartet');
 
   // --- Fenstertitel: Name plus laufende Version -----------------------------
