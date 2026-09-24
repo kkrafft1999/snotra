@@ -170,4 +170,12 @@ test('die vier Spalten-Schalter stehen in der Titelzeile und melden ihren Zustan
     html.indexOf('id="chat-history-empty"')
   );
   assert.match(historyHeader, /id="btn-chat-new"/);
+  // Since #318 the button says what it does instead of showing a bare plus.
+  // The visible label is its accessible name, so no aria-label to drift from it.
+  const newChatButton = historyHeader.slice(
+    historyHeader.indexOf('id="btn-chat-new"'),
+    historyHeader.indexOf('</button>')
+  );
+  assert.match(newChatButton, /class="btn-chat-new-label" data-i18n="history\.new"/);
+  assert.doesNotMatch(newChatButton, /aria-label=/);
 });
