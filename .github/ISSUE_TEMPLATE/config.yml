@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: 💬 Questions & ideas
+    url: https://github.com/kkrafft1999/snotra/discussions
+    about: Ask a question, float an idea or show what you built — in GitHub Discussions, not as an issue.
   - name: 🗺️ Open issues / backlog
     url: https://github.com/kkrafft1999/snotra/issues
     about: An overview of what has already been filed, before you open a new issue.
