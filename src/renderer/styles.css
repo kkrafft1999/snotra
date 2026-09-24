@@ -960,6 +960,8 @@ summary:focus-visible,
   gap: 8px;
   padding: 10px 8px 10px 16px;
   border-bottom: 1px solid var(--border);
+  /* The "New chat" button reads its room from here (#318). */
+  container: chat-history-header / inline-size;
 }
 
 #chat-history-title {
@@ -1176,18 +1178,27 @@ summary:focus-visible,
   font-weight: var(--ds-font-weight-bold);
 }
 
+/* Icon plus label since #318, so a text button: a pill instead of a circle,
+ * the 32 px height kept so the three column headers still line up. At rest as
+ * quiet as the icon buttons in the tree header next to it. */
 #btn-chat-new {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--ds-touch-min);          /* 32x32 */
+  gap: 6px;
   height: var(--ds-touch-min);
-  padding: 0;
+  min-width: var(--ds-touch-min);
+  padding: 0 12px 0 10px;
   background: transparent;
   border: none;
-  border-radius: 50%;                  /* Mockup-konform: Icon-Btn als Kreis */
+  border-radius: 999px;
   cursor: pointer;
   color: var(--text-secondary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
   box-shadow: none;
   transition:
     background var(--ds-motion-fast),
@@ -1206,6 +1217,32 @@ summary:focus-visible,
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+#btn-chat-new svg {
+  flex-shrink: 0;
+}
+
+/* Dragged down towards its minimum width, the column has no room for title and
+ * label side by side — the label would squeeze "History" into an ellipsis.
+ * Below that point the button goes back to being a round icon button. The
+ * label stays in the accessibility tree, so the accessible name doesn't
+ * change; the tooltip carries it for sighted users. */
+@container chat-history-header (max-width: 180px) {
+  #btn-chat-new {
+    width: var(--ds-touch-min);
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .btn-chat-new-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
 }
 
 .chat-history-empty {
