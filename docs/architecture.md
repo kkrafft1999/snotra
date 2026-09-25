@@ -192,6 +192,18 @@ for card and run alike. The service decides availability by a self-test on
 first need and serialises runs whose domain sets differ, because the proxy's
 allowlist is process-wide.
 
+The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
+is policy, not isolation, and lives in the signed policy file next to the rules
+(`main/services/tool-policy-store.js`, a list of canonical roots). The planner
+reads it through `isSandboxDisabled(root)`, puts it on the plan
+(`plan.sandbox`, part of the plan key) and checks it again in `verifyTargets`,
+so a switch flipped between card and run voids the call. The handler passes
+`sandboxDisabled` from the approved plan to the runner, where `planSpawn` then
+does not ask the service at all and reports the reason `workspace`. The
+tool-permission state tells the renderer whether an offered execution tool
+would run unisolated (`executionIsolation`); the mode pill turns red on it in
+"Auto".
+
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an
 open project folder, but filters per tool.

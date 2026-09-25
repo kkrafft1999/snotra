@@ -28,7 +28,7 @@ function makeSender(id = 1) {
   return { id, sent, send: (channel, payload) => sent.push({ channel, payload }), isDestroyed: () => false, once() {} };
 }
 
-async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', chatSessionSettings = null, locale = 'de' } = {}) {
+async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', chatSessionSettings = null, locale = 'de', describeExecutionTools = null } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} } });
@@ -54,6 +54,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', c
     PUSH,
     chatSessionSettings,
     getLocale: () => locale,
+    describeExecutionTools,
   });
   // Handler direkt mit einem Event aufrufen, dessen sender das Fenster ist.
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
@@ -276,4 +277,77 @@ test('a mode change belongs to the chat on screen: a run in the background keeps
   assert.equal(approvals.pendingCount(), 1, 'the background chat still waits for its answer');
   assert.equal(sessionGrants.count(), 1);
   assert.ok(sender.sent.some((entry) => entry.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
+});
+
+// Per-workspace sandbox opt-out (#357).
+test('sandbox off needs the native confirmation; cancelling stores nothing', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 1, locale: 'en' });
+  const sender = makeSender();
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'cancelled');
+  assert.deepEqual(res.error, { key: 'permissions.error.sandboxNotSwitchedOff' });
+  assert.equal(dialogCalls.length, 1);
+  assert.equal(dialogCalls[0].message, 'Run without sandbox in this workspace?');
+  assert.match(dialogCalls[0].detail, /In \/work\/projekt, shell_execute and run_python will run with your full rights/);
+  assert.match(dialogCalls[0].detail, /In “Auto” mode they run without asking/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools/);
+  assert.deepEqual(dialogCalls[0].buttons, ['Run without sandbox', 'Cancel']);
+  assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
+  assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled('/work/projekt'), false);
+  assert.equal(sender.sent.length, 0);
+});
+
+test('sandbox off after confirmation binds main\'s root and voids open cards; on asks nothing', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore, sessionGrants } = await setup(t, { dialogResponse: 0 });
+  const sender = makeSender();
+  sessionGrants.grant({ scopeKey: 's', tool: 'read_file_text', targets: [], riskClasses: ['read'], providerKey: 'p' });
+  const off = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  assert.equal(off.ok, true);
+  assert.equal(off.workspaceSandboxDisabled, true);
+  assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled('/work/projekt'), true);
+  assert.equal(sessionGrants.count(), 0);
+  assert.deepEqual(sender.sent.map((m) => m.channel), [PUSH.TOOL_PERMISSIONS_CHANGED]);
+
+  const state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.workspaceSandboxDisabled, true);
+
+  const on = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, true);
+  assert.equal(on.ok, true);
+  assert.equal(dialogCalls.length, 1, 'switching back on needs no dialog');
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceSandboxDisabled, false);
+});
+
+test('sandbox setting: no workspace, no change; anything but a boolean is refused', async (t) => {
+  const { invoke, dialogCalls } = await setup(t, { workspaceRoot: null });
+  const sender = makeSender();
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.error, { key: 'permissions.error.noWorkspace' });
+  const bad = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, 'off');
+  assert.deepEqual(bad.error, { key: 'permissions.error.invalidSandboxSetting' });
+  assert.equal(dialogCalls.length, 0);
+});
+
+test('state reports unisolated execution: opted out, or no sandbox on this system', async (t) => {
+  let described = { active: ['shell_execute'], sandbox: { status: 'isolated', isolated: true } };
+  const { invoke } = await setup(t, { describeExecutionTools: async () => described });
+  const sender = makeSender();
+
+  let state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.deepEqual(state.executionIsolation, { unisolated: false, tools: ['shell_execute'], reason: '' });
+
+  await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['shell_execute'], reason: 'workspace' });
+
+  await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, true);
+  described = { active: ['run_python'], sandbox: { status: 'unavailable', reason: 'platform' } };
+  state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['run_python'], reason: 'platform' });
+
+  // No execution tool offered: nothing runs, nothing to warn about.
+  described = { active: [], sandbox: { status: 'unavailable', reason: 'platform' } };
+  state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.executionIsolation.unisolated, false);
 });

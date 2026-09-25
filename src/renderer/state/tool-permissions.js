@@ -81,6 +81,7 @@ export function initToolPermissionState({ api }) {
     clearSessionGrants: () => call('clearToolSessionGrants'),
     resetWorkspaceRules: () => call('resetWorkspaceToolRules'),
     resetAll: () => call('resetAllToolPermissions'),
+    setWorkspaceSandbox: (enabled) => call('setWorkspaceSandbox', enabled),
   };
 }
 

@@ -503,6 +503,29 @@
               <p id="settings-shell-sandbox" class="modal-hint" role="status" hidden></p>
             </div>
 
+            <div class="settings-tools-card" id="settings-sandbox-card" hidden>
+              <h3 class="settings-subsection-title" id="heading-workspace-sandbox"><span data-i18n="settings.sandbox.workspace.heading">Sandbox for this workspace</span> <code id="settings-sandbox-workspace-name" class="settings-rules-heading__root"></code></h3>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n-html="settings.sandbox.workspace.note.summary">Applies to <code>run_python</code> and <code>shell_execute</code>, in this folder only.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.sandbox.workspace.note.body">
+                  <p>
+                    Switch it off only when the sandbox gets in the way of something legitimate here: writing outside
+                    the folder, <code>gh</code> or <code>terraform</code> without network, an older <code>pip</code>.
+                    You confirm that in the system dialog. The setting is stored with your permissions, not in the
+                    folder, so a checked-out repository cannot switch it off for itself.
+                  </p>
+                </div>
+              </details>
+              <div class="settings-switch-row settings-exec-toggle">
+                <label for="input-workspace-sandbox" class="settings-switch-row__label" data-i18n="settings.sandbox.workspace.toggle">Run isolated</label>
+                <span id="status-workspace-sandbox" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" aria-describedby="settings-sandbox-state" checked>
+              </div>
+              <p id="settings-sandbox-state" class="modal-hint" role="status" hidden></p>
+            </div>
+
             <div class="settings-tools-card" id="settings-web-search-card">
               <h3 class="settings-subsection-title" id="heading-web-search" data-i18n="settings.webSearch.heading">Web search</h3>
               <details class="settings-note settings-note--tight">

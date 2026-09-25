@@ -25,8 +25,12 @@ const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
+const { SANDBOX_REASONS } = require('../services/sandbox-service');
 
 const PREVIEW_MAX_CHARS = 4000;
+/** The tools that run a process and have a sandbox (#329). */
+const EXECUTION_TOOLS = new Set(['shell_execute', 'run_python']);
+
 const RECOVERY_TRASH = 'trash';
 
 function buildPreview(toolName, args, options = {}) {
@@ -140,6 +144,8 @@ function stableStringify(value) {
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
  * @param {() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>} [deps.describeSandbox]
  *   isolation state for the card of the execution tools (#329)
+ * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
+ *   whether the user switched the sandbox off for this workspace (#357)
  */
 function createToolCallPlanner({
   fsService,
@@ -149,6 +155,7 @@ function createToolCallPlanner({
   canTrash = false,
   describeShell = null,
   describeSandbox = null,
+  isSandboxDisabled = null,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
@@ -337,20 +344,26 @@ function createToolCallPlanner({
       return { tool: toolName, error: 'Invalid risk class.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [], targets: [] };
     }
 
+    // A switched-off sandbox is part of what was approved (#357): the key
+    // changes with it, so flipping the switch between card and run is caught
+    // by the re-plan after the approval.
+    const sandboxDisabled = await readSandboxDisabled(toolName, workspaceRoot);
     const planKey = stableStringify({
       tool: toolName,
       args,
       root: workspaceRoot,
       classes: riskClasses,
       targets: targets.map((target) => [target.path, target.absPath, target.version]),
+      ...(sandboxDisabled ? { sandbox: 'off' } : {}),
     });
 
     const result = { tool: toolName, riskClasses, targets, planKey };
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
+    if (EXECUTION_TOOLS.has(toolName)) result.sandbox = { disabled: sandboxDisabled, root: workspaceRoot };
     // Isolation first: its detection waits for the shell detection (#111), so
     // the shell read afterwards is the detected one, not a startup placeholder.
-    const isolation = await describeIsolation(toolName, args);
+    const isolation = await describeIsolation(toolName, args, sandboxDisabled);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
       cwd: shellCwd,
@@ -367,8 +380,11 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
-  async function describeIsolation(toolName, args) {
-    if (toolName !== 'shell_execute' && toolName !== 'run_python') return null;
+  async function describeIsolation(toolName, args, sandboxDisabled = false) {
+    if (!EXECUTION_TOOLS.has(toolName)) return null;
+    // The user's choice comes before the detection: a run the user took out
+    // of the sandbox says so, whatever the sandbox could do (#357).
+    if (sandboxDisabled) return { isolated: false, reason: SANDBOX_REASONS.WORKSPACE, missing: [] };
     if (typeof describeSandbox !== 'function') return null;
     const sandbox = await describeSandbox();
     if (sandbox?.isolated === true) {
@@ -382,11 +398,33 @@ function createToolCallPlanner({
   }
 
   /**
+   * Whether the sandbox is switched off for this workspace (#357). Only the
+   * execution tools have one; a store that cannot be read keeps it on.
+   */
+  async function readSandboxDisabled(toolName, workspaceRoot) {
+    if (!EXECUTION_TOOLS.has(toolName) || typeof isSandboxDisabled !== 'function' || !workspaceRoot) return false;
+    try {
+      return (await isSandboxDisabled(workspaceRoot)) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Prüft unmittelbar vor der Ausführung, ob die Ziele noch dem Plan
    * entsprechen (Größe/Änderungszeit). Ein Austausch während der Freigabe
    * macht diese ungültig (Konzept §5/§6).
+   *
+   * The same holds for the sandbox switch (#357): in "Auto" no card sits
+   * between plan and run, so this is the last place a change is noticed.
    */
   async function verifyTargets(planned) {
+    if (planned?.sandbox && typeof planned.sandbox === 'object') {
+      const now = await readSandboxDisabled(planned.tool, planned.sandbox.root);
+      if (now !== (planned.sandbox.disabled === true)) {
+        return { ok: false, error: 'The sandbox setting of this workspace changed after the call was planned.' };
+      }
+    }
     if (!planned || !Array.isArray(planned.targets)) return { ok: true };
     for (const target of planned.targets) {
       if (target.kind === 'tree') continue;

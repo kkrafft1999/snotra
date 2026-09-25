@@ -10,6 +10,7 @@ import {
 } from '../utils/tool-catalog-view.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
+import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -71,6 +72,9 @@ export function initSettingsModal(deps) {
     updateChatChrome,
     onCheckUpdates,
     toolPermissionsPanel = null,
+    // Shared permission state; the sandbox switch of the workspace reads and
+    // writes it (#357), and the mode pill follows the tool switches.
+    toolPermissions = null,
     mcpPanel = null,
     memoryPanel = null,
     onSkillSuggestionModeChanged = null,
@@ -158,6 +162,11 @@ export function initSettingsModal(deps) {
   const shellSandboxEl = document.getElementById('settings-shell-sandbox');
   const pythonSandboxEl = document.getElementById('settings-python-sandbox');
   let shellReady = false;
+  // Last sandbox state main reported with each tool, for redrawing the
+  // isolation lines when the workspace switch changes (#357).
+  let pythonSandboxState = null;
+  let shellSandboxState = null;
+  const workspaceSandbox = initWorkspaceSandboxSetting({ toolPermissions, onChange: () => renderSandboxLines() });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
@@ -1295,7 +1304,21 @@ export function initSettingsModal(deps) {
     }
     pythonReady = state?.found === true && state?.enabled === true;
     setPythonStatus(describePythonState(state));
-    setSandboxStatus(pythonSandboxEl, describeSandboxStatus(state?.sandbox, pythonReady));
+    pythonSandboxState = state?.sandbox || null;
+    syncExecutionTools();
+  }
+
+  /** Both isolation lines; a workspace without sandbox says so in each (#357). */
+  function renderSandboxLines() {
+    const workspaceDisabled = workspaceSandbox.isDisabledHere();
+    setSandboxStatus(pythonSandboxEl, describeSandboxStatus(pythonSandboxState, pythonReady, { workspaceDisabled }));
+    setSandboxStatus(shellSandboxEl, describeSandboxStatus(shellSandboxState, shellReady, { workspaceDisabled }));
+  }
+
+  /** After a tool state arrived: isolation lines and the workspace switch. */
+  function syncExecutionTools() {
+    renderSandboxLines();
+    workspaceSandbox.update({ toolsOn: pythonReady || shellReady, sandbox: shellSandboxState || pythonSandboxState });
   }
 
   /** Isolation line under a tool's status (#329); hidden when there is nothing to say. */
@@ -1341,7 +1364,8 @@ export function initSettingsModal(deps) {
     }
     shellReady = state?.found === true && state?.enabled === true;
     setShellStatus(describeShellState(state));
-    setSandboxStatus(shellSandboxEl, describeSandboxStatus(state?.sandbox, shellReady));
+    shellSandboxState = state?.sandbox || null;
+    syncExecutionTools();
   }
 
   async function loadWebSearchState() {
@@ -1664,6 +1688,8 @@ export function initSettingsModal(deps) {
       // Mit Sprungziel steht der Fokus auf dem gemeinten Schalter, sonst wie
       // bisher auf dem ersten Reiter.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
+      // From the approval card's "Sandbox setting" link (#357).
+      if (jump?.focus === 'sandbox' && workspaceSandbox.focus()) return;
       try {
         settingsNavTabs[0]?.focus();
       } catch {
@@ -1966,6 +1992,8 @@ export function initSettingsModal(deps) {
         return;
       }
       await refreshLLMState();
+      // Ticking a tool off in the catalogue can take the red off the pill (#357).
+      void toolPermissions?.refresh?.();
       closeSettingsModal();
     } finally {
       btnSettingsSave.disabled = false;
@@ -2183,16 +2211,20 @@ export function initSettingsModal(deps) {
   );
   // Both decide whether run_python / shell_execute are offered; the status
   // line and the tool list follow what main now reports.
+  // The mode pill turns red for "Auto" with an unisolated execution tool
+  // (#357), so it has to hear about both switches too.
   const pythonSwitch = bindPrefSwitch(
     inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async () => {
       await loadPythonState();
       renderToolList();
+      void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
     inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async () => {
       await loadShellState();
       renderToolList();
+      void toolPermissions?.refresh?.();
     }
   );
   const instantSettings = [

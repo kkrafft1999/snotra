@@ -189,3 +189,68 @@ test('ungültige Regeln werden abgewiesen, gleiche IDs nicht doppelt vergeben', 
   assert.equal((await store.findRule('fix')).tool, 'a');
   assert.equal(await store.findRule('nope'), null);
 });
+
+// Per-workspace sandbox opt-out (#357): stored by canonical root, off by
+// default, loosening like an allow rule.
+test('sandbox opt-out: off by default, stored per canonical root, back on without a trace', async (t) => {
+  const { store } = await makeStore(t);
+  assert.deepEqual((await store.read()).unsandboxedWorkspaces, []);
+  assert.equal(await store.isWorkspaceSandboxDisabled('/a'), false);
+
+  const off = await store.setWorkspaceSandbox('/a', false);
+  assert.equal(off.ok, true);
+  assert.deepEqual(off.unsandboxedWorkspaces, ['/a']);
+  assert.equal(await store.isWorkspaceSandboxDisabled('/a'), true);
+  // A folder of the same name elsewhere shares nothing (concept §7).
+  assert.equal(await store.isWorkspaceSandboxDisabled('/b/a'), false);
+  // Switching off twice keeps one entry.
+  assert.deepEqual((await store.setWorkspaceSandbox('/a', false)).unsandboxedWorkspaces, ['/a']);
+
+  const on = await store.setWorkspaceSandbox('/a', true);
+  assert.equal(on.ok, true);
+  assert.deepEqual(on.unsandboxedWorkspaces, []);
+  assert.equal(await store.isWorkspaceSandboxDisabled('/a'), false);
+});
+
+test('sandbox opt-out: without a workspace nothing is stored', async (t) => {
+  const { store } = await makeStore(t);
+  const result = await store.setWorkspaceSandbox('', false);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.error, { key: 'permissions.error.noWorkspace' });
+  assert.equal(await store.isWorkspaceSandboxDisabled(''), false);
+});
+
+test('sandbox opt-out: needs safeStorage to switch off, never to switch back on', async (t) => {
+  const { store } = await makeStore(t, { available: false });
+  const off = await store.setWorkspaceSandbox('/a', false);
+  assert.equal(off.ok, false);
+  assert.deepEqual(off.error, { key: 'permissions.error.sandboxOffNeedsEncryption' });
+  assert.equal(await store.isWorkspaceSandboxDisabled('/a'), false);
+  assert.equal((await store.setWorkspaceSandbox('/a', true)).ok, true);
+});
+
+test('sandbox opt-out: a failed signature isolates every workspace again', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.setWorkspaceSandbox('/a', false);
+  const filePath = path.join(dir, POLICY_FILENAME);
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.unsandboxedWorkspaces.push('/b');
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+
+  const state = await store.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.deepEqual(state.unsandboxedWorkspaces, []);
+  assert.equal(await store.isWorkspaceSandboxDisabled('/a'), false);
+});
+
+test('sandbox opt-out: resetting the workspace rules or everything switches it back on', async (t) => {
+  const { store } = await makeStore(t);
+  await store.setWorkspaceSandbox('/a', false);
+  await store.setWorkspaceSandbox('/b', false);
+
+  let state = await store.resetWorkspaceRules('/a');
+  assert.deepEqual(state.unsandboxedWorkspaces, ['/b']);
+
+  state = await store.resetAll();
+  assert.deepEqual(state.unsandboxedWorkspaces, []);
+});

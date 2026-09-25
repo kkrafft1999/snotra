@@ -89,6 +89,7 @@ test('run_python reicht Code, stdin, argv, Zeitlimit und Arbeitsordner durch', a
     cwd: '/tmp/projekt',
     workspaceRoot: '/tmp/projekt',
     networkDomains: [],
+    sandboxDisabled: false,
     abortSignal: signal,
   });
 });

@@ -38,6 +38,8 @@ const SANDBOX_REASONS = Object.freeze({
   START: 'start',
   /** The self-test ran and failed — typically restricted user namespaces. */
   SELF_TEST: 'self-test',
+  /** The user switched the sandbox off for this workspace (#357). */
+  WORKSPACE: 'workspace',
 });
 
 /** The Linux packages the runtime needs, as the distributions name them. */
