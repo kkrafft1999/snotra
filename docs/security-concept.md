@@ -8,7 +8,8 @@ This document defines the target behaviour for
 implemented since 2026-09-05: the core (#66) with registry classes, the planner,
 the policy, the approval loop, the policy file and the audit; the interface
 (#67) with the mode selection, the confirmation card and rule management. MCP
-(#62) and web search (#63) only follow once both are done. "Must" marks an
+(#62) and web search (#63) followed once both were done and are implemented as
+well. "Must" marks an
 acceptance condition; the open points are in section 11. The review from
 2026-09-05 has been folded in: the trust model for the renderer (section 5), the
 layout of the policy store (section 7), binding to a provider in the history
@@ -63,7 +64,7 @@ blocked; there is no implicit `read` default.
 | `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch` |
 | `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` on an existing file when the recovery copy cannot be created; a future delete tool |
 | `execute` | Running a program or a script; possibly further side effects | `run_python` (#86). Executed code bypasses the workspace boundary by its nature: it is not Snotra that touches the files, it is the interpreter. The protection therefore lies in the approval before every run (with the source visible on the card) and in the explicit setting, which is off by default — not in a sandbox. Harder isolation (a separate user, `sandbox-exec`, a container, WASM Python) is open. |
-| `external` | Sending data to an additional service, or triggering actions there | `web_search` (#63) — the query itself leaves the machine. Future MCP tools (#62); a conservative starting class |
+| `external` | Sending data to an additional service, or triggering actions there | `web_search` (#63) — the query itself leaves the machine. Every MCP tool (#62), always together with `execute` |
 
 Classes are not a simple numeric ranking: a write tool can touch sensitive data
 as well, an external tool can delete as well. Such calls carry every attribute
@@ -507,7 +508,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | To be decided in #62. Until then no MCP tools; starting class `external`, no downgrade on a server's claim alone, no blanket approval for a server. |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio only, every MCP tool carries `execute` **and** `external`, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools), and endpoint changes, which only arise with a network transport. |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |
@@ -536,5 +537,5 @@ the product documentation. Smoke test: `smart` plus a write call → a visible c
 well.
 
 The concept and the sharpened issues are the handover for the next phase of
-work. #62 and #63 are blocked by the finished, tested results of #66 **and**
-#67; a concept alone enables no external tools.
+work. #62 and #63 were blocked by the finished, tested results of #66 **and**
+#67; a concept alone enabled no external tools. All four are done.
