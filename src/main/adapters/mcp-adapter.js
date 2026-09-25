@@ -28,6 +28,7 @@ const {
   parseQualifiedMcpToolName,
   qualifiedMcpToolName,
 } = require('../../shared/contracts/mcp');
+const { createMessage } = require('../../shared/contracts/message');
 
 /** Obergrenze fuer das, was ein MCP-Tool ins Kontextfenster schreiben darf. */
 const MAX_RESULT_CHARS = 100_000;
@@ -174,7 +175,7 @@ function createMcpAdapter({ mcpService } = {}) {
     for (const tool of tools) {
       const name = qualifiedMcpToolName(tool.serverId, tool.name);
       if (!fitsMcpToolNameLimit(name)) {
-        left.push({ serverId: tool.serverId, name: tool.name, reason: 'Der Tool-Name ist zu lang.' });
+        left.push({ serverId: tool.serverId, name: tool.name, reason: createMessage('settings.mcp.skippedTools.reason') });
         continue;
       }
       definitions.push(toDefinition(tool));

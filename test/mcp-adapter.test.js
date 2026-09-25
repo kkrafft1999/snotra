@@ -110,7 +110,7 @@ test('zu lange Namen werden ausgelassen und benannt, nicht gekürzt', async () =
   const definitions = await adapter.buildToolDefinitions();
   assert.deepEqual(definitions.map((d) => d.name), ['mcp__github__kurz']);
   assert.deepEqual(adapter.describeSkippedTools(), [
-    { serverId: 'github', name: 'x'.repeat(60), reason: 'Der Tool-Name ist zu lang.' },
+    { serverId: 'github', name: 'x'.repeat(60), reason: { key: 'settings.mcp.skippedTools.reason' } },
   ]);
 });
 

@@ -468,6 +468,7 @@ module.exports = {
   'settings.mcp.edit.label': 'Edit {name}',
   'settings.mcp.skippedTools.one': '{count} tool was left out because the combined name is too long:',
   'settings.mcp.skippedTools.other': '{count} tools were left out because the combined name is too long:',
+  'settings.mcp.skippedTools.reason': 'The tool name is too long.',
   'settings.mcp.readFailed': 'The MCP configuration could not be read.',
   'settings.mcp.reloadFailed': 'Reloading failed.',
   'settings.mcp.updateFailed': 'The server could not be changed.',

@@ -266,8 +266,6 @@ const NOT_MODEL_CHANNEL = [
   { file: 'src/main/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
-  // Shown in Settings › MCP next to a skipped tool (#308).
-  { file: 'src/main/adapters/mcp-adapter.js', text: 'Der Tool-Name ist zu lang.' },
   // Construction guard (#278).
   { file: 'src/main/adapters/memory-adapter.js', text: 'createMemoryAdapter benötigt fs und path.' },
 ];

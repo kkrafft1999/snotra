@@ -473,6 +473,7 @@ module.exports = {
   'settings.mcp.edit.label': '{name} bearbeiten',
   'settings.mcp.skippedTools.one': '{count} Tool wurde ausgelassen, weil der zusammengesetzte Name zu lang ist:',
   'settings.mcp.skippedTools.other': '{count} Tools wurden ausgelassen, weil der zusammengesetzte Name zu lang ist:',
+  'settings.mcp.skippedTools.reason': 'Der Tool-Name ist zu lang.',
   'settings.mcp.readFailed': 'Die MCP-Konfiguration konnte nicht gelesen werden.',
   'settings.mcp.reloadFailed': 'Neu laden ist fehlgeschlagen.',
   'settings.mcp.updateFailed': 'Der Server konnte nicht geändert werden.',
