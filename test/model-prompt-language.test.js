@@ -260,9 +260,6 @@ const MODEL_CHANNEL_SOURCES = [
 // no longer matches fails the test: a stale exception is how the next German
 // sentence would slip through unnoticed.
 const NOT_MODEL_CHANNEL = [
-  // The preview on the approval card — the user reads it, the model does not.
-  // (esbuild prints the template's \\n as a real line break, so none here.)
-  { file: 'src/main/tools/tool-call-planner.js', text: '… [gekürzt]' },
   // Registration guards: programming errors at construction time (#278).
   { file: 'src/main/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
