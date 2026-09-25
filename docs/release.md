@@ -1,10 +1,14 @@
 # Release and self-update
 
-The app has an **update notifier** (stage 1): at startup, and via
+The app **updates itself** (#232): at startup, and via
 *Help → Check for updates…* (or the link in the settings), it checks the
-**latest GitHub release** of this repository and shows a banner with a download
-link when a newer version exists. **Nothing is installed automatically** — the
-download goes through the browser, the installation is manual.
+**latest GitHub release** of this repository. When a newer version exists, a
+dialog walks through the update — download, install, restart — and **every step
+needs the user's confirmation** and can be cancelled until installation starts.
+Nothing is downloaded or installed without that confirmation. Installations
+that cannot replace themselves (a `.deb` under `/opt`, a location without write
+permission, a development build) get a link to the release page instead. The
+user's side of this is described in the README, section *Updating*.
 
 For that to work there have to be releases in the first place. This is the
 procedure that creates them.
@@ -178,8 +182,8 @@ gh release create vX.Y.Z \
   "out/make/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
 
-The text from `--notes` becomes the release body and is available to the app as
-`notes` in the banner.
+The text from `--notes` becomes the release body and is shown as "what has
+changed" in the update dialog.
 
 ### Pre-releases
 
