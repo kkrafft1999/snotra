@@ -28,7 +28,7 @@ function makeSender(id = 1) {
   return { id, sent, send: (channel, payload) => sent.push({ channel, payload }), isDestroyed: () => false, once() {} };
 }
 
-async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', chatSessionSettings = null } = {}) {
+async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', chatSessionSettings = null, locale = 'de' } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} } });
@@ -53,6 +53,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = '/work/projekt', c
     REQ,
     PUSH,
     chatSessionSettings,
+    getLocale: () => locale,
   });
   // Handler direkt mit einem Event aufrufen, dessen sender das Fenster ist.
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
@@ -151,6 +152,36 @@ test('Sperre löschen braucht den Dialog, Erlaubnis löschen nicht', async (t) =
   assert.equal((await toolPolicyStore.read()).rules.length, 1);
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_REMOVE_RULE, sender, 'nope')).ok, false);
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_REMOVE_RULE, sender, '')).ok, false);
+});
+
+test('the native dialogs speak the interface language and name the page the rules live on (#353)', async (t) => {
+  const { invoke, dialogCalls } = await setup(t, { dialogResponse: 0, locale: 'en' });
+  const sender = makeSender();
+
+  await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto');
+  assert.equal(dialogCalls[0].message, 'Switch on Auto (full access)?');
+  assert.deepEqual(dialogCalls[0].buttons, ['Switch on Auto', 'Cancel']);
+
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', tool: 'edit_file', scope: 'workspace', pathPattern: 'docs/**' });
+  assert.equal(dialogCalls[1].message, 'Create a permanent allowance?');
+  assert.equal(
+    dialogCalls[1].detail,
+    'From now on, the tool edit_file may access “docs/**” without asking (workspace /work/projekt). '
+      + 'The rule applies in “Smart” mode until you delete it under Settings › Permissions.',
+  );
+
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', riskClass: 'write', pathPattern: '*.md' });
+  const deny = (await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).globalRules.find((r) => r.effect === 'deny');
+  await invoke(REQ.TOOL_PERMISSIONS_REMOVE_RULE, sender, deny.id);
+  assert.equal(dialogCalls[2].message, 'Delete block?');
+  assert.equal(dialogCalls[2].detail, 'The block on the risk class write for “*.md” is removed. After that, the mode decides again.');
+  assert.deepEqual(dialogCalls[2].buttons, ['Delete block', 'Cancel']);
+});
+
+test('the German allowance dialog points to Einstellungen › Berechtigungen, not to Tools (#353)', async (t) => {
+  const { invoke, dialogCalls } = await setup(t, { dialogResponse: 1 });
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, makeSender(), { effect: 'allow', riskClass: 'read' });
+  assert.match(dialogCalls[0].detail, /Modus „Intelligent“, bis du sie unter Einstellungen › Berechtigungen löschst\.$/);
 });
 
 test('sensible Pfadmuster, Reset-Reichweiten und Sitzungsfreigaben löschen', async (t) => {

@@ -5,7 +5,7 @@ const path = require('path');
 const {
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
-  SKILL_SOURCE_LABELS,
+  SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
   isValidSkillName,
   normalizeActiveSkills,
@@ -19,8 +19,8 @@ test('System steht in der Quellenreihenfolge vorn und jede Quelle hat ein Label'
   assert.equal(SKILL_SOURCE_ORDER[0], SKILL_SOURCES.SYSTEM);
   assert.deepEqual(SKILL_SOURCE_ORDER, [...new Set(SKILL_SOURCE_ORDER)]);
   for (const source of SKILL_SOURCE_ORDER) {
-    assert.equal(typeof SKILL_SOURCE_LABELS[source], 'string');
-    assert.ok(SKILL_SOURCE_LABELS[source].length > 0);
+    assert.equal(typeof SKILL_SOURCE_LABEL_KEYS[source], 'string');
+    assert.ok(SKILL_SOURCE_LABEL_KEYS[source].startsWith('skills.source.'));
   }
 });
 
@@ -96,4 +96,15 @@ test('die mitgelieferten System-Skills sind gültig und voreingestellt aktiv', a
   const active = await service.getActiveSkills({});
   const capabilities = active.find((skill) => skill.name === 'snotra-capabilities');
   assert.ok(capabilities.body.includes('Snotra AI'));
+});
+
+test('a skill reason travels as a key through the IPC summary (#353)', () => {
+  const { normalizeSkillSummary } = require('../src/shared/contracts/skills');
+  const { translateMessage } = require('../src/shared/i18n');
+  const summary = normalizeSkillSummary({
+    name: 'x', status: 'shadowed', detail: { key: 'skills.shadowedBy', params: { path: '/a/x' } },
+  });
+  assert.deepEqual(summary.detail, { key: 'skills.shadowedBy', params: { path: '/a/x' } });
+  assert.equal(translateMessage('en', summary.detail), 'Shadowed by /a/x');
+  assert.equal(normalizeSkillSummary({ name: 'y', detail: 42 }).detail, '');
 });

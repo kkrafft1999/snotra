@@ -1096,8 +1096,9 @@ catalogue, so that a contract never has to require `src/shared/i18n` — the two
 modules would otherwise require each other in a circle. Where a reason is
 already an enumerated value, the contract keeps a **table of keys** instead
 (`PERMISSION_DENIED_MESSAGE_KEYS`, `WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS`,
-`MEMORY_SCOPE_LABEL_KEYS`); `test/i18n-keys.test.js` walks those tables, since a
-table is invisible to its scan for `t('…')` literals.
+`MEMORY_SCOPE_LABEL_KEYS`, `SKILL_SOURCE_LABEL_KEYS`); `test/i18n-keys.test.js`
+walks those tables, since a table is invisible to its scan for `t('…')`
+literals.
 
 A message may carry another one as a parameter. `resolveKeyParams` translates
 it first, so a sentence that wraps a reason — "{reason} The other settings have
@@ -1111,6 +1112,16 @@ third-party library. Snotra's own sentences — the settings handlers'
 `createSettingsError`, the provider adapters, `formatRoundError` — all travel as
 keys. `createSettingsError` and `createListModelsResult` pass a descriptor
 through instead of stringifying it.
+
+The main process follows the same line
+([#353](https://github.com/kkrafft1999/snotra/issues/353)). What it hands to the
+renderer — the update chain's reasons and errors, link and clipboard failures,
+skill reasons, a skipped MCP tool — is a descriptor; an error that is *thrown*
+on the way, as in `update-installer.js`, carries one as `userMessage` and keeps
+an English `message` for the log. The file tree side of `fs-service.js` is the
+older exception: it words its errors in main, per call, from `getLocale`. What
+main draws itself — native dialogs, the menu — is worded there, in the language
+of the moment it opens.
 
 The messages the **model** reads (`http-url-fetch-adapter.js`, `mcp-adapter.js`,
 the fallback in `describeFetchError`) are deliberately not on this side of the

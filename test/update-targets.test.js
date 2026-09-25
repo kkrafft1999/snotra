@@ -6,6 +6,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { translateMessage } = require('../src/shared/i18n');
+
+// Main hands over keys since #353; the German wording is checked through the
+// catalogue.
+const de = (message) => translateMessage('de', message);
 
 const {
   detectInstallTarget,
@@ -45,7 +50,7 @@ test('ein Entwicklungs-Build aktualisiert sich nicht selbst', () => {
   });
   assert.equal(target.kind, 'dev');
   assert.equal(target.canSelfUpdate, false);
-  assert.match(target.reason, /Entwicklungs-Build/);
+  assert.match(de(target.reason), /Entwicklungs-Build/);
 });
 
 test('macOS liefert das .app-Bundle als Ziel', () => {
@@ -93,7 +98,7 @@ test('Linux in /opt gilt als Paketinstallation und bleibt unangetastet', () => {
   });
   assert.equal(target.kind, 'linux-package');
   assert.equal(target.canSelfUpdate, false);
-  assert.match(target.reason, /Administratorrechte/);
+  assert.match(de(target.reason), /Administratorrechte/);
 });
 
 test('Linux in einem entpackten Ordner darf tauschen', () => {

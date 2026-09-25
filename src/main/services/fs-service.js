@@ -805,21 +805,31 @@ function createFsService({
     return !rel.startsWith('..') && !path.isAbsolute(rel);
   }
 
-  /** Fehlertexte je Wurzelart — der Nutzer soll sehen, woran ein Pfad scheitert. */
-  const WORKSPACE_LABELS = {
-    outside: 'Pfad liegt außerhalb des Arbeitsordners.',
-    missing: 'Kein Arbeitsordner geöffnet.',
+  /**
+   * Fehlertexte je Wurzelart — der Nutzer soll sehen, woran ein Pfad scheitert.
+   * The IPC boundary (tree, preview, context menu) speaks the interface
+   * language, built per call so that a language change takes effect (#353).
+   */
+  const workspaceLabels = () => {
+    const t = ui();
+    return {
+      outside: t('fs.error.outsideWorkspace'),
+      missing: t('fs.error.noWorkspace'),
+      required: t('fs.error.pathRequired'),
+    };
   };
-  // The same two failures as the model reads them (#309). Tool paths go
-  // through resolveToolRoot and nowhere else, so the IPC boundary above keeps
-  // its own labels and the model gets English.
+  // The same failures as the model reads them (#309). Tool paths go through
+  // resolveToolRoot and nowhere else, so the IPC boundary above keeps its own
+  // labels and the model gets English.
   const WORKSPACE_TOOL_LABELS = {
     outside: 'Path is outside the workspace folder.',
     missing: 'No workspace folder is open.',
+    required: 'A path is required.',
   };
   const SKILL_LABELS = {
     outside: 'Path is outside the skill folder.',
     missing: 'Skill folder not found.',
+    required: 'A path is required.',
   };
 
   function resolvePathInRoot(rootPath, relativePath, labels) {
@@ -836,7 +846,7 @@ function createFsService({
   }
 
   function resolveWorkspacePath(workspaceRoot, relativePath) {
-    return resolvePathInRoot(workspaceRoot, relativePath, WORKSPACE_LABELS);
+    return resolvePathInRoot(workspaceRoot, relativePath, workspaceLabels());
   }
 
   function assertAbsolutePathInRoot(rootPath, absPath, labels) {
@@ -845,7 +855,7 @@ function createFsService({
     }
     const raw = typeof absPath === 'string' ? absPath.trim() : '';
     if (!raw) {
-      return { error: 'Pfad ist erforderlich.' };
+      return { error: labels.required };
     }
     const resolved = path.resolve(raw);
     if (!containsPath(rootPath, resolved)) {
@@ -855,7 +865,7 @@ function createFsService({
   }
 
   function assertAbsolutePathInWorkspace(workspaceRoot, absPath) {
-    return assertAbsolutePathInRoot(workspaceRoot, absPath, WORKSPACE_LABELS);
+    return assertAbsolutePathInRoot(workspaceRoot, absPath, workspaceLabels());
   }
 
   /**
@@ -903,7 +913,7 @@ function createFsService({
   }
 
   async function assertPathAccessibleInWorkspace(workspaceRoot, absPath) {
-    return assertPathAccessibleInRoot(workspaceRoot, absPath, WORKSPACE_LABELS);
+    return assertPathAccessibleInRoot(workspaceRoot, absPath, workspaceLabels());
   }
 
   /**

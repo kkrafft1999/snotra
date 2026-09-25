@@ -79,7 +79,10 @@ function buildPreview(toolName, args, options = {}) {
   const truncated = masked.length > PREVIEW_MAX_CHARS;
   return {
     kind,
-    text: truncated ? `${masked.slice(0, PREVIEW_MAX_CHARS)}\n… [gekürzt]` : masked,
+    // A bare ellipsis, no word: the card says in the reader's language that
+    // the preview is shortened (summary and note), so the text needs no
+    // language of its own (#353).
+    text: truncated ? `${masked.slice(0, PREVIEW_MAX_CHARS)}\n…` : masked,
     truncated,
     masked: masked !== text,
     ...(extra || {}),

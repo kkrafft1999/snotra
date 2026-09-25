@@ -283,6 +283,7 @@ function createApplication({
   const filesystem = createFilesystemIpcAdapter({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    getLocale: getAppLocale,
   });
   // Shell-Ausfuehrung (Issue #102). Dieselben zwei Bedingungen wie bei Python —
   // gefundene Shell und ausdrueckliche Einstellung —, nur mit groesserer
@@ -611,7 +612,9 @@ function createApplication({
   });
   runningChatIds = () => chatEngine.runningChatIds();
 
-  registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
+  registerDialogHandlers({
+    ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ, getLocale: getAppLocale,
+  });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
@@ -701,6 +704,7 @@ function createApplication({
     REQ,
     PUSH,
     chatSessionSettings,
+    getLocale: getAppLocale,
   });
 
   async function runUpdateCheck({ silent }) {

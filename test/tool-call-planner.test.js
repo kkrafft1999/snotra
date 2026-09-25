@@ -125,7 +125,7 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   assert.equal(plan.preview.masked, true);
   assert.equal(plan.preview.truncated, true);
   assert.equal(plan.preview.text.includes('abcdefgh12345678'), false);
-  assert.match(plan.preview.text, /\[gekürzt\]$/);
+  assert.match(plan.preview.text, /\n…$/);
 
   const edit = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true });
   assert.equal(edit.kind, 'replace');

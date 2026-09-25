@@ -12,6 +12,11 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { Readable } = require('node:stream');
+const { translateMessage } = require('../src/shared/i18n');
+
+// Main hands over keys since #353; the German wording is checked through the
+// catalogue.
+const de = (message) => translateMessage('de', message);
 
 const {
   createUpdateDownloader,
@@ -97,7 +102,7 @@ test('eine fremde Adresse wird gar nicht erst abgerufen', async () => {
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /GitHub-Releases/);
+  assert.match(de(result.error), /GitHub-Releases/);
   assert.equal(called, false, 'es darf kein Abruf stattgefunden haben');
 });
 
@@ -115,7 +120,7 @@ test('eine abgeschnittene Antwort gilt als Fehler, nicht als fertiger Download',
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /unvollständig/);
+  assert.match(de(result.error), /unvollständig/);
   assert.equal(downloader.getReady(), null);
   assert.equal(fs.existsSync(downloader.getWorkDir()), false, 'der Torso muss weg sein');
 });
@@ -132,7 +137,7 @@ test('HTTP-Fehler werden gemeldet statt geworfen', async () => {
     version: '1.8.0',
   });
   assert.equal(result.ok, false);
-  assert.match(result.error, /HTTP 404/);
+  assert.match(de(result.error), /HTTP 404/);
 });
 
 test('cancel bricht den laufenden Download ab und raeumt auf', async () => {

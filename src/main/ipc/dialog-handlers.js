@@ -1,3 +1,5 @@
+const { createTranslator } = require('../../shared/i18n');
+
 /**
  * Der Ordnerdialog ist der einzige Weg, auf dem ein bisher unbekannter Pfad
  * zum aktiven Workspace wird (Issue #68): Auswahl und Aktivierung passieren
@@ -36,12 +38,17 @@ function registerDialogHandlers({
   workspaceActivation,
   workspaceFolderStore,
   REQ,
+  // Interface language (#353). Read when the dialog opens; it lives only until
+  // the choice, so a language change has nothing to repaint.
+  getLocale = () => undefined,
 }) {
   ipcMain.handle(REQ.DIALOG_OPEN_FOLDER, async () => {
+    const t = createTranslator(getLocale());
     const options = {
-      title: 'Ordner auswählen',
-      buttonLabel: 'Ordner öffnen',
-      message: 'Wähle einen Ordner aus, der angezeigt werden soll',
+      title: t('folderDialog.title'),
+      buttonLabel: t('folderDialog.button'),
+      // Only macOS shows `message`, as a line above the file list.
+      message: t('folderDialog.message'),
       // `createDirectory` blendet unter macOS den Knopf "Neuer Ordner" ein, damit
       // man den Ordner fuer ein frisches Vorhaben nicht vorher im Finder anlegen
       // muss (Issue #230). Windows und Linux ignorieren die Property.

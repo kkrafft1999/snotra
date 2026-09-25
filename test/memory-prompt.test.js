@@ -53,9 +53,11 @@ test('je Ebene eine eigene Zeile in der Token-Aufschluesselung', () => {
   // Gezaehlt wird der Dateitext, nicht Ueberschrift und Vorspann — sonst
   // waere nicht zu erkennen, welche Datei den Prompt aufblaeht.
   assert.deepEqual(parts.map((p) => p.chars), [3, 5]);
-  assert.deepEqual(parts.map((p) => p.detail), [
-    '<Ordner>/.agents/memory.md',
-    '~/.snotra/memory.md',
+  // The path as a key and its value: `<folder>/` is a word and is worded on
+  // screen (#353).
+  assert.deepEqual(parts.map((p) => [p.detailKey, p.params]), [
+    ['context.detail.folderPath', { path: '.agents/memory.md' }],
+    ['context.detail.path', { path: '~/.snotra/memory.md' }],
   ]);
 });
 
@@ -63,5 +65,12 @@ test('die Zeile einer gekuerzten Datei sagt es auch in der Aufschluesselung', ()
   const { parts } = buildMemorySystemPrompt([
     { scope: MEMORY_SCOPES.USER, text: 'abc', truncated: true },
   ]);
-  assert.match(parts[0].detail, /gekürzt/);
+  assert.equal(parts[0].detailKey, 'context.detail.pathTruncated');
+});
+
+test('the folder placeholder follows the interface language (#353)', () => {
+  const { translate } = require('../src/shared/i18n');
+  const { parts } = buildMemorySystemPrompt([{ scope: MEMORY_SCOPES.WORKSPACE, text: 'a', truncated: true }]);
+  assert.equal(translate('en', parts[0].detailKey, parts[0].params), '<folder>/.agents/memory.md · shortened');
+  assert.equal(translate('de', parts[0].detailKey, parts[0].params), '<Ordner>/.agents/memory.md · gekürzt');
 });

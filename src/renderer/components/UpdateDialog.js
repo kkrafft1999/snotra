@@ -17,7 +17,14 @@
  * ausschliesslich, was der Main-Prozess selbst bei GitHub nachgeschlagen hat.
  */
 
-import { t, onLocaleChange } from '../i18n.js';
+import contracts from '../generated/contracts.js';
+import { t, tMessage, onLocaleChange } from '../i18n.js';
+
+// Messages stay keys until the dialog draws them (#353), so an error on screen
+// follows a language change like the rest of the dialog. Main's own reasons
+// arrive the same way; plain text from the network or the file system is shown
+// as it stands.
+const { createMessage } = contracts;
 
 const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])';
 
@@ -177,10 +184,12 @@ export function initUpdateDialog({ api }) {
     try {
       const result = await api.openExternal(info.releaseUrl);
       if (result && result.ok === false) {
-        render('error', t('update.releasePage.failed', { error: result.error || t('mcpImport.failed.unknown') }));
+        render('error', createMessage('update.releasePage.failed', {
+          error: result.error || createMessage('mcpImport.failed.unknown'),
+        }));
       }
     } catch {
-      render('error', t('update.releasePage.failedPlain'));
+      render('error', createMessage('update.releasePage.failedPlain'));
     }
   }
 
@@ -203,7 +212,7 @@ export function initUpdateDialog({ api }) {
       return;
     }
     if (!result?.ok) {
-      render('error', result?.error || t('update.download.failed'));
+      render('error', result?.error || createMessage('update.download.failed'));
       return;
     }
     render('ready');
@@ -230,7 +239,7 @@ export function initUpdateDialog({ api }) {
       result = { ok: false, error: err?.message || t('update.install.failed') };
     }
     // Im Erfolgsfall beendet sich die App — hierher kommt nur der Fehlerfall.
-    if (!result?.ok) render('error', result?.error || t('update.install.failed'));
+    if (!result?.ok) render('error', result?.error || createMessage('update.install.failed'));
   }
 
   /** Baut Titel, Text und Knoepfe fuer den aktuellen Schritt neu auf. */
@@ -265,7 +274,7 @@ export function initUpdateDialog({ api }) {
         ? t('update.available.selfUpdate', { current, size })
         : t('update.available.manual', { current });
       if (!canSelfUpdate) {
-        hintEl.textContent = info?.selfUpdateBlockedReason
+        hintEl.textContent = tMessage(info?.selfUpdateBlockedReason)
           || t('update.available.manualHint');
         hintEl.classList.remove('hidden');
         actionsEl.appendChild(makeButton(t('update.openReleasePage'), 'btn-primary', openReleasePage));
@@ -300,7 +309,7 @@ export function initUpdateDialog({ api }) {
       progressTextEl.textContent = t('update.installing.progress');
     } else if (next === 'error') {
       titleEl.textContent = t('update.error.title');
-      summaryEl.textContent = lastMessage;
+      summaryEl.textContent = tMessage(lastMessage);
       hintEl.textContent = t('update.error.body');
       hintEl.classList.remove('hidden');
       if (canSelfUpdate) {
@@ -312,7 +321,7 @@ export function initUpdateDialog({ api }) {
       actionsEl.appendChild(makeButton(t('update.closeButton'), 'btn-secondary', close));
     } else if (next === 'info') {
       titleEl.textContent = t('update.none.title');
-      summaryEl.textContent = lastMessage;
+      summaryEl.textContent = tMessage(lastMessage);
       notesEl.classList.add('hidden');
       actionsEl.appendChild(makeButton(t('update.closeButton'), 'btn-primary', close));
     }
@@ -345,8 +354,8 @@ export function initUpdateDialog({ api }) {
     info = payload;
     open();
     render('info', payload.error
-      ? t('update.check.failed', { error: payload.error })
-      : t('update.check.upToDate', { version: payload.currentVersion }));
+      ? createMessage('update.check.failed', { error: payload.error })
+      : createMessage('update.check.upToDate', { version: payload.currentVersion }));
   }
 
   api.onUpdateAvailable(handlePayload);
@@ -393,7 +402,7 @@ export function initUpdateDialog({ api }) {
     } catch {
       info = null;
       open();
-      render('info', t('update.check.failedPlain'));
+      render('info', createMessage('update.check.failedPlain'));
     }
   }
 

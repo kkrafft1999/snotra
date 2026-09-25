@@ -42,7 +42,7 @@ const {
   presetIdentityKey,
   PRESET_DETAIL_STYLES,
   SKILL_SOURCE_ORDER,
-  SKILL_SOURCE_LABELS,
+  SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
@@ -1082,7 +1082,7 @@ export function initSettingsModal(deps) {
 
       const heading = document.createElement('li');
       heading.className = 'settings-skill-group';
-      heading.textContent = SKILL_SOURCE_LABELS[source] || source;
+      heading.textContent = SKILL_SOURCE_LABEL_KEYS[source] ? t(SKILL_SOURCE_LABEL_KEYS[source]) : source;
       settingsSkillList.appendChild(heading);
 
       for (const skill of group) {
@@ -1119,7 +1119,7 @@ export function initSettingsModal(deps) {
       const badge = document.createElement('span');
       badge.className = 'settings-tool-item__badge';
       badge.textContent = skill.status === SKILL_STATUS.SHADOWED ? t('settings.rules.state.shadowed') : t('settings.rules.state.invalid');
-      if (skill.detail) badge.title = skill.detail;
+      if (skill.detail) badge.title = tMessage(skill.detail);
       main.appendChild(badge);
     }
 
@@ -1127,7 +1127,7 @@ export function initSettingsModal(deps) {
     label.appendChild(main);
     li.appendChild(label);
 
-    const detailText = usable ? skill.description : skill.detail || skill.description;
+    const detailText = usable ? skill.description : tMessage(skill.detail) || skill.description;
     if (!detailText && !skill.path) return li;
 
     // Wie im Tool-Katalog (Issue #98/#104): in der Zeile steht eine Zeile

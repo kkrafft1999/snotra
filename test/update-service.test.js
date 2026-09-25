@@ -1,5 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { translateMessage } = require('../src/shared/i18n');
+
+// Main hands over keys since #353; the German wording is checked through the
+// catalogue.
+const de = (message) => translateMessage('de', message);
 const {
   createUpdateService,
   parseSemver,
@@ -115,7 +120,7 @@ test('checkForUpdate handles a non-OK HTTP response', async () => {
   });
   const res = await svc.checkForUpdate();
   assert.equal(res.updateAvailable, false);
-  assert.match(res.error, /404/);
+  assert.match(de(res.error), /404/);
 });
 
 test('checkForUpdate ignores a draft release', async () => {
@@ -211,7 +216,7 @@ test('ohne passendes Paket bleibt nur der Verweis auf die Release-Seite', async 
   assert.equal(res.updateAvailable, true);
   assert.equal(res.canSelfUpdate, false);
   assert.equal(res.asset, null);
-  assert.match(res.selfUpdateBlockedReason, /kein passendes Paket/);
+  assert.match(de(res.selfUpdateBlockedReason), /kein passendes Paket/);
 });
 
 test('eine Paketinstallation nennt ihren Grund statt eines Downloads', async () => {
@@ -223,7 +228,7 @@ test('eine Paketinstallation nennt ihren Grund statt eines Downloads', async () 
   });
   const res = await svc.checkForUpdate();
   assert.equal(res.canSelfUpdate, false);
-  assert.match(res.selfUpdateBlockedReason, /Administratorrechte/);
+  assert.match(de(res.selfUpdateBlockedReason), /Administratorrechte/);
 
   const download = await svc.downloadUpdate();
   assert.equal(download.ok, false);
@@ -322,7 +327,7 @@ test('installUpdate ohne geladene Datei beendet die App nicht', async () => {
   });
   const res = await svc.installUpdate();
   assert.equal(res.ok, false);
-  assert.match(res.error, /keine geladene Version/);
+  assert.match(de(res.error), /keine geladene Version/);
   assert.equal(quits, 0);
 });
 

@@ -403,3 +403,38 @@ test('handgeschriebene Notizen behalten ihre Gliederung', async (t) => {
     'Danke fuers Melden.',
   ].join('\n'));
 });
+
+test('reasons and errors from main are worded in the interface language and follow a switch (#353)', async (t) => {
+  const { setLocale } = await importRenderer('i18n.js');
+  const ui = await mount({
+    api: {
+      installUpdate: async () => ({
+        ok: false,
+        error: { key: 'update.error.notWritable', params: { placeKey: 'update.place.appFolder', dir: '/Applications' } },
+      }),
+    },
+  });
+  t.after(() => { setLocale('en', { force: true }); ui.dom.cleanup(); });
+
+  await ui.push({
+    ...AVAILABLE,
+    canSelfUpdate: false,
+    installKind: 'linux-package',
+    selfUpdateBlockedReason: { key: 'update.reason.package' },
+    asset: null,
+  });
+  assert.match(ui.hint().textContent, /^Snotra AI was installed as a system package\./);
+  setLocale('de');
+  await flush();
+  assert.match(ui.hint().textContent, /^Snotra AI wurde als Systempaket installiert\./);
+
+  setLocale('en');
+  await ui.push({ ...AVAILABLE });
+  await ui.click('Download');
+  await ui.click('Install and restart');
+  assert.equal(ui.summary(), 'No write access to the applications folder (/Applications). '
+    + 'Install the new version by hand, or start the app with the rights it needs.');
+  setLocale('de');
+  await flush();
+  assert.match(ui.summary(), /^Keine Schreibrechte für den Programmordner \(\/Applications\)\./);
+});

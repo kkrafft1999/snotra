@@ -187,7 +187,7 @@ function createMemoryAdapter({
 
     /** Eine Eintragszeile entfernen (Einstellungen › Gedächtnis › Vergessen). */
     async forget({ scope, workspaceRoot = null, line } = {}) {
-      if (!isMemoryScope(scope)) throw new TypeError(`Unbekannte Gedächtnis-Ebene: ${scope}`);
+      if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
       const file = fileFor(scope, workspaceRoot);
       if (!file) return { removed: false };
       return serialize(file, async () => {
@@ -202,12 +202,12 @@ function createMemoryAdapter({
 
     /** Den ganzen Text einer Ebene ersetzen — für die Bearbeitung von Hand. */
     async replace({ scope, workspaceRoot = null, text } = {}) {
-      if (!isMemoryScope(scope)) throw new TypeError(`Unbekannte Gedächtnis-Ebene: ${scope}`);
+      if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
       const file = fileFor(scope, workspaceRoot);
-      if (!file) throw new Error('Für diese Ebene gibt es gerade keinen Speicherort.');
+      if (!file) throw new Error('This scope has no file right now.');
       const next = typeof text === 'string' ? text : '';
       if (next.length > maxChars) {
-        throw new RangeError(`Höchstens ${maxChars} Zeichen je Ebene.`);
+        throw new RangeError(`At most ${maxChars} characters per scope.`);
       }
       return serialize(file, async () => {
         await writeFileAtomic(file, next);

@@ -53,19 +53,19 @@ test('resolveWorkspacePath accepts paths inside workspace', () => {
 test('resolveWorkspacePath rejects path traversal', () => {
   const svc = makeFsService();
   const root = '/tmp/project';
-  assert.match(svc.resolveWorkspacePath(root, '../secret').error, /außerhalb/);
-  assert.match(svc.resolveWorkspacePath(root, 'src/../../etc/passwd').error, /außerhalb/);
+  assert.match(svc.resolveWorkspacePath(root, '../secret').error, /outside the working folder/);
+  assert.match(svc.resolveWorkspacePath(root, 'src/../../etc/passwd').error, /outside the working folder/);
 });
 
 test('resolveWorkspacePath requires an open workspace', () => {
   const svc = makeFsService();
-  assert.match(svc.resolveWorkspacePath(null, 'note.txt').error, /Arbeitsordner/);
-  assert.match(svc.resolveWorkspacePath('', 'note.txt').error, /Arbeitsordner/);
+  assert.match(svc.resolveWorkspacePath(null, 'note.txt').error, /working folder/);
+  assert.match(svc.resolveWorkspacePath('', 'note.txt').error, /working folder/);
 });
 
 test('assertAbsolutePathInWorkspace requires open workspace', () => {
   const svc = makeFsService();
-  assert.match(svc.assertAbsolutePathInWorkspace(null, '/tmp/x').error, /Arbeitsordner/);
+  assert.match(svc.assertAbsolutePathInWorkspace(null, '/tmp/x').error, /working folder/);
 });
 
 test('assertAbsolutePathInWorkspace validates absolute paths', () => {
@@ -76,8 +76,19 @@ test('assertAbsolutePathInWorkspace validates absolute paths', () => {
   assert.deepEqual(svc.assertAbsolutePathInWorkspace(root, inside), { absPath: inside });
   assert.match(
     svc.assertAbsolutePathInWorkspace(root, path.resolve('/etc/passwd')).error,
-    /außerhalb/
+    /outside the working folder/
   );
+});
+
+test('the IPC path labels follow the interface language, the tool labels stay English (#353)', async () => {
+  let locale = 'de';
+  const svc = createFsService({ fs, path, getLocale: () => locale });
+  assert.equal(svc.resolveWorkspacePath(null, 'x').error, 'Kein Arbeitsordner geöffnet.');
+  locale = 'en';
+  assert.equal(svc.resolveWorkspacePath(null, 'x').error, 'No working folder is open.');
+  assert.equal(svc.assertAbsolutePathInWorkspace('/work', '  ').error, 'A path is required.');
+  locale = 'de';
+  assert.equal((await svc.resolveWorkspacePathForAccess(null, 'x')).error, 'No workspace folder is open.');
 });
 
 test('read_file_text respects workspace bounds through the registry', async () => {

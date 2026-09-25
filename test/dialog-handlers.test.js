@@ -23,7 +23,7 @@ function makeIpcMain() {
   };
 }
 
-function setup({ lastFolder, result, workspaceFolderStore, workspaceActivation } = {}) {
+function setup({ lastFolder, result, workspaceFolderStore, workspaceActivation, locale } = {}) {
   const seenOptions = [];
   const ipcMain = makeIpcMain();
   const store = workspaceFolderStore === undefined
@@ -42,6 +42,7 @@ function setup({ lastFolder, result, workspaceFolderStore, workspaceActivation }
     workspaceActivation: workspaceActivation === undefined ? null : workspaceActivation,
     workspaceFolderStore: store,
     REQ,
+    getLocale: () => locale,
   });
 
   return { ipcMain, seenOptions };
@@ -127,4 +128,16 @@ test('die Auswahl wird an workspaceActivation weitergereicht', async () => {
 
   assert.deepEqual(aktiviert, ['/gewaehlt']);
   assert.deepEqual(antwort, { path: '/gewaehlt', aktiv: true });
+});
+
+test('the dialog speaks the interface language (#353)', async () => {
+  const english = setup({ locale: 'en' });
+  await english.ipcMain.invoke(REQ.DIALOG_OPEN_FOLDER);
+  assert.equal(english.seenOptions[0].title, 'Choose a folder');
+  assert.equal(english.seenOptions[0].buttonLabel, 'Open folder');
+
+  const german = setup({ locale: 'de' });
+  await german.ipcMain.invoke(REQ.DIALOG_OPEN_FOLDER);
+  assert.equal(german.seenOptions[0].title, 'Ordner auswählen');
+  assert.equal(german.seenOptions[0].buttonLabel, 'Ordner öffnen');
 });

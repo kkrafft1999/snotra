@@ -3,13 +3,19 @@
 const path = require('path');
 const { LIMITS } = require('../../shared/limits');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
+const { createTranslator } = require('../../shared/i18n');
 
 function createFilesystemIpcAdapter({
   fsService,
   getActiveWorkspaceRoot,
   limits = LIMITS,
   sensitivePathMatcher = createSensitivePathMatcher(),
+  // Everything here ends at the user — the drop dialog and the @ completion —
+  // so it speaks the interface language, like fs-service's IPC side (#353).
+  getLocale = () => undefined,
 }) {
+  const ui = () => createTranslator(getLocale());
+
   async function boundPath(absPath) {
     const workspaceRoot = getActiveWorkspaceRoot();
     return fsService.assertPathAccessibleInWorkspace(workspaceRoot, absPath);
@@ -26,17 +32,16 @@ function createFilesystemIpcAdapter({
     const sources = Array.isArray(sourcePaths)
       ? sourcePaths.filter((p) => typeof p === 'string' && p.trim())
       : [];
-    if (sources.length === 0) return { error: 'Keine Quelle zum Übernehmen.' };
+    const t = ui();
+    if (sources.length === 0) return { error: t('fs.error.noSource') };
     for (const source of sources) {
       if (!path.isAbsolute(source)) {
-        return { error: `Quelle ist kein absoluter Pfad: ${source}` };
+        return { error: t('fs.error.sourceNotAbsolute', { path: source }) };
       }
       const verdict = sensitivePathMatcher.classifyPath(source);
       if (verdict.sensitive) {
         return {
-          error:
-            `„${path.basename(source)}“ sieht nach Zugangsdaten aus (Muster ${verdict.pattern}) `
-            + 'und wird nicht per Drag & Drop übernommen.',
+          error: t('fs.error.sourceSensitive', { name: path.basename(source), pattern: verdict.pattern }),
         };
       }
     }
@@ -107,7 +112,7 @@ function createFilesystemIpcAdapter({
     async listWorkspacePaths() {
       const workspaceRoot = getActiveWorkspaceRoot();
       if (!workspaceRoot) {
-        return { entries: [], truncated: false, error: 'Kein Arbeitsordner geöffnet.' };
+        return { entries: [], truncated: false, error: ui()('fs.error.noWorkspace') };
       }
       try {
         return await fsService.listWorkspacePaths(workspaceRoot);

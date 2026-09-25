@@ -62,9 +62,13 @@ const MEMORY_SCOPE_PROMPT_LABELS = Object.freeze({
   [MEMORY_SCOPES.USER]: 'Memory (global)',
 });
 
-/** Pfad zur Anzeige — nie zum Auflösen; die echten Pfade baut der Adapter. */
+/**
+ * Pfad zur Anzeige — nie zum Auflösen; die echten Pfade baut der Adapter.
+ * The project file is given relative to the open folder; the `<folder>/`
+ * in front of it is a word and comes from the catalogue (#353).
+ */
 const MEMORY_SCOPE_PATHS = Object.freeze({
-  [MEMORY_SCOPES.WORKSPACE]: '<Ordner>/.agents/memory.md',
+  [MEMORY_SCOPES.WORKSPACE]: '.agents/memory.md',
   [MEMORY_SCOPES.USER]: '~/.snotra/memory.md',
 });
 

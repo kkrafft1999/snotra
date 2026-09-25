@@ -18,8 +18,10 @@ const {
   CONTEXT_PART_GROUPS,
   CONTEXT_CONTENT_KINDS,
   createContextPart,
+  shortPathDetail,
 } = require('../../shared/contracts/context-breakdown');
 const {
+  MEMORY_SCOPES,
   MEMORY_SCOPE_LABEL_KEYS,
   MEMORY_SCOPE_PROMPT_LABELS,
   MEMORY_SCOPE_PATHS,
@@ -64,9 +66,10 @@ function buildMemorySystemPrompt(files) {
       id: `system:memory:${file.scope}`,
       group: CONTEXT_PART_GROUPS.SYSTEM,
       labelKey: MEMORY_SCOPE_LABEL_KEYS[file.scope],
-      detail: file.truncated
-        ? `${MEMORY_SCOPE_PATHS[file.scope]} · gekürzt`
-        : MEMORY_SCOPE_PATHS[file.scope],
+      ...shortPathDetail(MEMORY_SCOPE_PATHS[file.scope], {
+        inFolder: file.scope === MEMORY_SCOPES.WORKSPACE,
+        truncated: file.truncated,
+      }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
     })

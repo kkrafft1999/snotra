@@ -21,8 +21,10 @@ const {
   CONTEXT_PART_GROUPS,
   CONTEXT_CONTENT_KINDS,
   createContextPart,
+  shortPathDetail,
 } = require('../../shared/contracts/context-breakdown');
 const {
+  PROJECT_INSTRUCTION_SOURCES,
   PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS,
   PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS,
   PROJECT_INSTRUCTION_SOURCE_PATHS,
@@ -70,8 +72,10 @@ function buildProjectInstructionsSystemPrompt(files) {
       id: `system:agents-md:${file.source}`,
       group: CONTEXT_PART_GROUPS.SYSTEM,
       labelKey: PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS[file.source],
-      detailKey: file.truncated ? 'context.detail.pathTruncated' : 'context.detail.path',
-      params: { path: PROJECT_INSTRUCTION_SOURCE_PATHS[file.source] },
+      ...shortPathDetail(PROJECT_INSTRUCTION_SOURCE_PATHS[file.source], {
+        inFolder: file.source === PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
+        truncated: file.truncated,
+      }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
     })

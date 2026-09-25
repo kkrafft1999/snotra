@@ -11,6 +11,11 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { translateMessage } = require('../src/shared/i18n');
+
+// Main hands over keys since #353; the German wording is checked through the
+// catalogue.
+const de = (message) => translateMessage('de', message);
 
 const {
   createUpdateInstaller,
@@ -126,7 +131,7 @@ test('ohne geladene Datei passiert nichts', async () => {
     workDir: makeTempDir(),
   });
   assert.equal(result.ok, false);
-  assert.match(result.error, /nicht mehr da/);
+  assert.match(de(result.error), /nicht mehr da/);
   assert.deepEqual(runs, []);
   assert.deepEqual(launches, []);
 });
@@ -236,7 +241,10 @@ test('macOS: eine fremde Bundle-Kennung stoppt vor dem Tausch', async (t) => {
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /nicht Snotra AI/);
+  assert.match(de(result.error), /nicht Snotra AI/);
+  // A key for the dialog (#353), worded in English when English is on.
+  assert.deepEqual(result.error, { key: 'update.error.wrongApp', params: { id: 'com.fremd.app' } });
+  assert.equal(translateMessage('en', result.error), 'The downloaded program is not Snotra AI (identifier com.fremd.app).');
   // Entscheidend: die laufende Installation steht unveraendert da.
   assert.equal(fs.existsSync(path.join(appBundlePath, 'alt.txt')), true);
   assert.deepEqual((await fsp.readdir(appsDir)).sort(), ['Snotra AI.app']);
@@ -273,7 +281,7 @@ test('macOS: die falsche Version im Paket stoppt ebenfalls vor dem Tausch', asyn
     workDir: path.join(root, 'work'),
   });
   assert.equal(result.ok, false);
-  assert.match(result.error, /meldet Version 1\.2\.3, erwartet war 1\.8\.0/);
+  assert.match(de(result.error), /meldet Version 1\.2\.3, erwartet war 1\.8\.0/);
 });
 
 test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async (t) => {
@@ -304,7 +312,7 @@ test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async
     workDir,
   });
   assert.equal(result.ok, false);
-  assert.match(result.error, /fehlt „Snotra AI"/);
+  assert.match(de(result.error), /fehlt „Snotra AI“/);
   assert.deepEqual(launches, [], 'ohne gepruefte Dateien wird kein Helfer gestartet');
 });
 
@@ -356,6 +364,6 @@ test('fehlende Schreibrechte werden erklaert, nicht durchgereicht', async (t) =>
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /Keine Schreibrechte/);
+  assert.match(de(result.error), /Keine Schreibrechte/);
   assert.deepEqual(runs, [], 'ohne Schreibrecht wird gar nicht erst gemountet');
 });

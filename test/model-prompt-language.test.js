@@ -260,31 +260,14 @@ const MODEL_CHANNEL_SOURCES = [
 // no longer matches fails the test: a stale exception is how the next German
 // sentence would slip through unnoticed.
 const NOT_MODEL_CHANNEL = [
-  // The IPC boundary's labels for the file tree, the preview and the context
-  // menu. Tool paths have English labels of their own (WORKSPACE_TOOL_LABELS).
-  { file: 'src/main/services/fs-service.js', text: 'Pfad liegt außerhalb des Arbeitsordners.' },
-  { file: 'src/main/services/fs-service.js', text: 'Kein Arbeitsordner geöffnet.' },
-  // Only the IPC boundary reaches it: a tool path is always resolved to a
-  // non-empty absolute path before this check runs.
-  { file: 'src/main/services/fs-service.js', text: 'Pfad ist erforderlich.' },
-  // The preview on the approval card — the user reads it, the model does not.
-  // (esbuild prints the template's \\n as a real line break, so none here.)
-  { file: 'src/main/tools/tool-call-planner.js', text: '… [gekürzt]' },
   // Registration guards: programming errors at construction time (#278).
   { file: 'src/main/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
   { file: 'src/main/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
-  // Shown in Settings › MCP next to a skipped tool (#308).
-  { file: 'src/main/adapters/mcp-adapter.js', text: 'Der Tool-Name ist zu lang.' },
   // Construction guard (#278).
   { file: 'src/main/adapters/memory-adapter.js', text: 'createMemoryAdapter benötigt fs und path.' },
-  // forget() and replace() serve the settings page, never a tool: the model
-  // only has `remember`, whose messages are English.
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Unbekannte Gedächtnis-Ebene: ' },
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Für diese Ebene gibt es gerade keinen Speicherort.' },
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Höchstens ${maxChars} Zeichen je Ebene.' },
 ];
 
 function codeWithoutComments(file) {
