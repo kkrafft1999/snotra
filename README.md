@@ -541,6 +541,20 @@ the approval card shows it on every run.
 - **Windows:** no sandbox yet. Every run has your full rights, and the card
   says "Not isolated" in red.
 
+**Switching it off for one workspace.** When the sandbox gets in the way of
+something legitimate in a project — writing to a sibling repository or to
+`~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —
+you can switch it off for that folder under Settings › Tools › *Sandbox for this
+workspace*. It applies to that one folder, never globally and never by default.
+You confirm it in a system dialog, and it is stored with your permissions rather
+than in the folder, so a checked-out repository cannot switch it off for itself.
+From then on the approval card says "Not isolated" with the reason and a link
+back to the setting, and the model is told that the run was not isolated. In
+"Auto" mode such runs happen without asking; the mode pill in the chat bar turns
+red whenever "Auto" would run `shell_execute` or `run_python` without a sandbox —
+switched off here, or not available on the system. "Reset workspace rules" and
+"Reset all permissions" switch the sandbox back on.
+
 What the sandbox does not do: it does not stop a run from *reading* files
 outside the protected locations, and whatever it read can reach a domain the
 card allowed. On macOS, tools that verify certificates through the keychain —

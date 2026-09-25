@@ -324,7 +324,8 @@ are stored there as well, bound to the canonical workspace root; there is no
 automatically trusted policy file inside the repository. Folders with the same
 name share no approvals. Changes happen exclusively through the user interface,
 and for protection-loosening actions with a native confirmation by main
-(section 5).
+(section 5). The per-workspace sandbox opt-out of the execution tools (#357,
+section 9) is stored the same way.
 
 "Protected" means concretely: the mode, the rules and the sensitive path
 patterns live in a policy file of their own, separate from the UI settings,
@@ -543,6 +544,48 @@ replaced by an operating system boundary:
   approved for a session or permanently (§6/§7 unchanged). In "auto" a run
   executes without a card, but isolated. Local MCP servers are processes too and
   are not covered (#62).
+
+### Revision: a per-workspace opt-out (#357)
+
+The comment on #329 left one question open: "If there is one, it is per
+workspace, visible on the approval card, and never the default." There is one
+now, because a sandbox that gets in the way without an exit leads to the tool
+being switched off entirely — writing to a sibling repository or to
+`~/.config`, `gh` and `terraform` without network on macOS, a venv whose `pip`
+predates the certifi fallback.
+
+- **Scope and storage.** One switch for both execution tools, per workspace,
+  off by default, in Settings › Tools. It lives in the policy file (section 7)
+  as a list of canonical workspace roots — not in the folder, so a checked-out
+  repository cannot switch it off for itself, and a folder of the same name
+  elsewhere shares nothing. Switching it off is a protection-loosening action:
+  main confirms it in a native dialog (section 5) and binds the active root
+  itself, never a path from the renderer. Without `safeStorage` it cannot be
+  stored, and a failed signature drops it, like an allow rule. Switching it back
+  on asks nothing. "Workspace-Regeln zurücksetzen" and "Alle Berechtigungen
+  zurücksetzen" switch it back on as well.
+- **Bound to the approval.** The planner reads the switch and puts it on the
+  plan; it is part of the plan key, so flipping it between the card and the run
+  voids the approval, and `verifyTargets` checks it once more right before the
+  run — the only check in "Auto", where no card sits in between. The handler
+  takes the decision from the approved plan, never from a later read; a call
+  without a plan stays isolated.
+- **Visible on every run.** The card shows the red pill "Not isolated" with the
+  reason "switched off for this workspace" and a link back to the setting; the
+  settings show it under both tools and on the switch itself; the tool result
+  tells the model `sandbox: { isolated: false }` with the reason, so that it
+  neither reports limits that are not there nor asks for the sandbox to be
+  switched off.
+- **Auto mode (decision on #357).** "Auto" stays "Auto": with the sandbox
+  switched off, an execution runs without a card, as it does on Windows. The
+  warning moves to the mode pill instead: it turns red whenever "Auto" would run
+  an offered execution tool unisolated — switched off for the workspace, or no
+  sandbox on the system — and its tooltip says which tools and why. `execute`
+  still cannot be approved for a session or permanently (§6/§7 unchanged).
+- **Not built.** A global switch (it would silently apply to untrusted
+  projects), an environment variable (invisible in the UI) and a per-run
+  "run unisolated" button on the card (it teaches clicking past the sandbox;
+  a possible follow-up if the per-workspace switch proves too coarse).
 
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto
