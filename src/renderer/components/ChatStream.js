@@ -44,7 +44,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
-const { coerceUsage, createEmptyUsage, inferChatTitle } = contracts;
+const { coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -1251,8 +1251,8 @@ export function initChatStream({
     const firstAnswer = messages.find((m) => m.role === 'assistant');
     if (!firstUser || !firstAnswer) return;
 
-    const current = typeof source.title === 'string' ? source.title.trim() : '';
-    if (current && current !== inferChatTitle(messages)) return;
+    // A German fallback stored before #359 still counts as "not named yet".
+    if (!isDerivedChatTitle(source.title, messages)) return;
 
     let result = null;
     try {

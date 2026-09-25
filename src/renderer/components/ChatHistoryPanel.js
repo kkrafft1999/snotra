@@ -1,5 +1,8 @@
 import { formatHistoryTime } from '../chat/messageUtils.js';
-import { t, onLocaleChange } from '../i18n.js';
+import { t, tMessage, onLocaleChange } from '../i18n.js';
+import contracts from '../generated/contracts.js';
+
+const { resolveChatTitle } = contracts;
 
 /**
  * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
@@ -103,7 +106,7 @@ export function initChatHistoryPanel({
       main.className = 'chat-history-row-main';
       const titleEl = document.createElement('span');
       titleEl.className = 'chat-history-row-title';
-      titleEl.textContent = s.title || t('history.entry.fallbackTitle');
+      titleEl.textContent = tMessage(resolveChatTitle(s.title, s.messages));
       const meta = document.createElement('span');
       meta.className = 'chat-history-row-meta';
       const time = document.createElement('span');

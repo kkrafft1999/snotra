@@ -8,7 +8,11 @@
  * Contract-Schicht, weil die Kopfzeile im Renderer denselben Titel zeigt.
  */
 
-const { inferChatTitle } = require('../../shared/contracts/chat');
+const {
+  inferChatTitle,
+  inferChatTitleText,
+  isLegacyFallbackChatTitle,
+} = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
 
@@ -281,12 +285,18 @@ function storedChatMessagesChanged(existingMessages, nextMessages) {
   return !sameStoredValue(before[before.length - 1], after[after.length - 1]);
 }
 
+/**
+ * A chat without a title of its own is stored with its text-derived title, or
+ * with none at all: a fallback like "New chat" is worked out when the chat is
+ * shown, in the language it is shown in (#359). German fallbacks written by
+ * older versions are dropped on the way, so the next write migrates them.
+ */
 function resolveSessionTitle(sessionRow, messages, existingTitle) {
-  const titleRaw = typeof sessionRow.title === 'string' ? sessionRow.title.trim() : '';
-  if (titleRaw) return titleRaw;
-  const preserved = typeof existingTitle === 'string' ? existingTitle.trim() : '';
-  if (preserved) return preserved;
-  return inferChatTitle(messages);
+  const own = (value) => {
+    const title = typeof value === 'string' ? value.trim() : '';
+    return title && !isLegacyFallbackChatTitle(title, messages) ? title : '';
+  };
+  return own(sessionRow.title) || own(existingTitle) || inferChatTitleText(messages);
 }
 
 function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existingTitle, requireMessages = false } = {}) {
@@ -301,7 +311,7 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
   const out = {
     id: sessionRow.id.trim(),
     workspaceRoot,
-    title: title ? title.slice(0, 200) : 'Chat',
+    title: title.slice(0, 200),
     updatedAt: Number.isFinite(sessionRow.updatedAt) ? sessionRow.updatedAt : Date.now(),
     messages,
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
@@ -318,7 +328,7 @@ function normalizeSessionForLoad(sessionRow) {
   const out = {
     id: sessionRow.id,
     workspaceRoot: sessionRow.workspaceRoot ?? null,
-    title: sessionRow.title || 'Chat',
+    title: typeof sessionRow.title === 'string' ? sessionRow.title : '',
     updatedAt: sessionRow.updatedAt,
     messages: normalizeLoadedMessages(sessionRow.messages),
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),

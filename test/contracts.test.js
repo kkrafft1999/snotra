@@ -169,8 +169,49 @@ test('inferChatTitle derives a short title from the first user message', () => {
   assert.ok(long.endsWith('…'));
   assert.equal(inferChatTitle([{ role: 'user', content: 'eins\n\nzwei' }]), 'eins zwei');
   // Ohne Nutzerfrage bleibt der Platzhalter.
-  assert.equal(inferChatTitle([]), 'Neuer Chat');
-  assert.equal(inferChatTitle(null), 'Neuer Chat');
+  assert.deepEqual(inferChatTitle([]), { key: 'chat.title.new' });
+  assert.deepEqual(inferChatTitle(null), { key: 'chat.title.new' });
+});
+
+test('a fallback chat title is put into words in the interface language (#359)', () => {
+  const { inferChatTitle } = contracts;
+  const { translateMessage } = require('../src/shared/i18n');
+  const image = { kind: 'image', mediaType: 'image/png', file: `${'c'.repeat(64)}.png`, bytes: 512 };
+  const cases = [
+    [[], 'New chat', 'Neuer Chat'],
+    [[{ role: 'user', content: '', attachments: [image] }], 'Image', 'Bild'],
+    [[{ role: 'user', content: '', attachments: [image, image] }], '2 images', '2 Bilder'],
+  ];
+  for (const [messages, en, de] of cases) {
+    assert.equal(translateMessage('en', inferChatTitle(messages)), en);
+    assert.equal(translateMessage('de', inferChatTitle(messages)), de);
+  }
+  // The user's own words are not translated.
+  assert.equal(translateMessage('en', inferChatTitle([{ role: 'user', content: 'Wie geht das?' }])), 'Wie geht das?');
+});
+
+test('resolveChatTitle and isDerivedChatTitle see through German fallbacks stored before #359', () => {
+  const { resolveChatTitle, isDerivedChatTitle } = contracts;
+  const image = { kind: 'image', mediaType: 'image/png', file: `${'c'.repeat(64)}.png`, bytes: 512 };
+  const imageOnly = [{ role: 'user', content: '', attachments: [image] }];
+  const question = [{ role: 'user', content: 'Wie starte ich die App?' }];
+
+  assert.deepEqual(resolveChatTitle('Bild', imageOnly), { key: 'chat.title.image' });
+  assert.deepEqual(resolveChatTitle('Neuer Chat', []), { key: 'chat.title.new' });
+  assert.deepEqual(resolveChatTitle('', imageOnly), { key: 'chat.title.image' });
+  assert.equal(resolveChatTitle('Login-Screenshot', imageOnly), 'Login-Screenshot');
+  assert.equal(resolveChatTitle('Wie starte ich die App?', question), 'Wie starte ich die App?');
+  // A first message that literally reads "Bild" named its chat itself.
+  assert.equal(resolveChatTitle('Bild', [{ role: 'user', content: 'Bild' }]), 'Bild');
+
+  // Derived titles may still be replaced by a generated one — old and new.
+  assert.equal(isDerivedChatTitle('', imageOnly), true);
+  assert.equal(isDerivedChatTitle('Bild', imageOnly), true);
+  assert.equal(isDerivedChatTitle('2 Bilder', imageOnly), true);
+  assert.equal(isDerivedChatTitle('Neuer Chat', []), true);
+  assert.equal(isDerivedChatTitle('Wie starte ich die App?', question), true);
+  assert.equal(isDerivedChatTitle('Starting the app', question), false);
+  assert.equal(isDerivedChatTitle('Login-Screenshot', imageOnly), false);
 });
 
 test('sanitizeChatTitle strips model decoration and clamps the length', () => {

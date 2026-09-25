@@ -10,6 +10,7 @@
 'use strict';
 
 const { countImageAttachments } = require('./attachments');
+const { createMessage } = require('./message');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -24,29 +25,79 @@ const {
 const CHAT_TITLE_MAX_LENGTH = 48;
 
 /**
- * Leitet den Kurztitel einer Konversation aus ihrer ersten Nutzerfrage ab.
- * Wird von der Verlaufs-Ablage (Main) und der Kopfzeile (Renderer) genutzt —
- * beide muessen denselben Text zeigen, deshalb liegt die Regel hier.
+ * The short title a conversation gets from its first user message. The history
+ * store (main) and the chat header (renderer) both use it — they have to show
+ * the same text, which is why the rule lives here.
  *
- * Ein Screenshot ohne Begleitfrage ist eine gueltige erste Nachricht
- * (Issue #94). Ohne Text gibt es nichts zu kuerzen — dann benennt der Titel,
- * was in der Nachricht steckt, statt „Neuer Chat" stehen zu lassen.
+ * With text there is something to shorten, and the user's own words need no
+ * translation. Without it, the title names what the message holds — a
+ * screenshot on its own is a valid first message (#94) — and that name belongs
+ * to the interface language. The contract cannot know that language, so it
+ * answers with a message descriptor and the side that shows it looks it up
+ * (`translateMessage`, `tMessage`; #359).
+ *
+ * @returns {string|{ key: string, params?: object }}
  */
 function inferChatTitle(messages) {
+  const text = inferChatTitleText(messages);
+  if (text) return text;
   const list = Array.isArray(messages) ? messages : [];
   const first = list.find((m) => m && m.role === 'user');
-  if (!first) return 'Neuer Chat';
-  if (first.content != null && String(first.content).trim()) {
-    const text = String(first.content).trim().replace(/\s+/g, ' ');
-    if (text.length > CHAT_TITLE_MAX_LENGTH) {
-      return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
-    }
-    return text || 'Chat';
+  const images = first ? countImageAttachments(first) : 0;
+  if (images === 1) return createMessage('chat.title.image');
+  if (images > 1) return createMessage('chat.title.images', { count: images });
+  return createMessage('chat.title.new');
+}
+
+/**
+ * Only the part of `inferChatTitle` that comes from the user's text — an empty
+ * string when the first message has none. This is what the history store
+ * writes: a fallback title is not a title, it is worked out again in whatever
+ * language the chat is read in.
+ */
+function inferChatTitleText(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  const first = list.find((m) => m && m.role === 'user');
+  if (!first || first.content == null) return '';
+  const text = String(first.content).trim().replace(/\s+/g, ' ');
+  if (text.length > CHAT_TITLE_MAX_LENGTH) {
+    return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
   }
-  const images = countImageAttachments(first);
-  if (images === 1) return 'Bild';
-  if (images > 1) return `${images} Bilder`;
-  return 'Neuer Chat';
+  return text;
+}
+
+/**
+ * Until #359 the fallback titles were stored as finished German text. Such a
+ * title is only a fallback when the first message has no text — otherwise the
+ * old rule would have used the text — so a chat that literally opened with
+ * "Bild" keeps its title.
+ */
+function isLegacyFallbackChatTitle(title, messages) {
+  if (typeof title !== 'string' || inferChatTitleText(messages)) return false;
+  const value = title.trim();
+  return value === 'Neuer Chat' || value === 'Bild' || value === 'Chat' || /^\d+ Bilder$/.test(value);
+}
+
+/**
+ * Has this chat been given a title of its own — by the model or otherwise — or
+ * does it still carry the one derived from its first message? Only the second
+ * kind may be replaced by a generated title.
+ */
+function isDerivedChatTitle(title, messages) {
+  const value = typeof title === 'string' ? title.trim() : '';
+  if (!value) return true;
+  return value === inferChatTitleText(messages) || isLegacyFallbackChatTitle(value, messages);
+}
+
+/**
+ * The title to show for a stored chat: its own title, or — when it has none, or
+ * only a derived one — `inferChatTitle`. Like that one, the result may be a
+ * message descriptor.
+ */
+function resolveChatTitle(title, messages) {
+  const value = typeof title === 'string' ? title.trim() : '';
+  if (value && !isLegacyFallbackChatTitle(value, messages)) return value;
+  return inferChatTitle(messages);
 }
 
 /**
@@ -205,6 +256,10 @@ function isToolLinePhase(phase) {
 module.exports = {
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,
+  inferChatTitleText,
+  isDerivedChatTitle,
+  isLegacyFallbackChatTitle,
+  resolveChatTitle,
   sanitizeChatTitle,
   createChatResult,
   createCancelledChatResult,

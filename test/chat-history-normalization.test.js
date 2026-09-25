@@ -16,8 +16,8 @@ test('inferChatTitle uses first user message and truncates long text', () => {
     inferChatTitle([{ role: 'user', content: 'x'.repeat(60) }]).length,
     48
   );
-  assert.equal(inferChatTitle([]), 'Neuer Chat');
-  assert.equal(inferChatTitle([{ role: 'assistant', content: 'only bot' }]), 'Neuer Chat');
+  assert.deepEqual(inferChatTitle([]), { key: 'chat.title.new' });
+  assert.deepEqual(inferChatTitle([{ role: 'assistant', content: 'only bot' }]), { key: 'chat.title.new' });
 });
 
 test('sanitizeChatMessagesForStore strips UI fields and keeps rich assistant data', () => {
@@ -232,12 +232,15 @@ test('normalizeLoadedMessages keeps the tool name for loaded sessions', () => {
 const REF_PNG = { kind: 'image', mediaType: 'image/png', file: `${'b'.repeat(64)}.png`, bytes: 512 };
 
 test('inferChatTitle benennt eine erste Nachricht, die nur aus Bildern besteht', () => {
-  assert.equal(inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG] }]), 'Bild');
-  assert.equal(inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG, REF_PNG] }]), '2 Bilder');
+  assert.deepEqual(inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG] }]), { key: 'chat.title.image' });
+  assert.deepEqual(
+    inferChatTitle([{ role: 'user', content: '', attachments: [REF_PNG, REF_PNG] }]),
+    { key: 'chat.title.images', params: { count: 2 } }
+  );
   // Text schlaegt Bild — der Titel bleibt die Frage.
   assert.equal(inferChatTitle([{ role: 'user', content: 'Was ist das?', attachments: [REF_PNG] }]), 'Was ist das?');
   // Ohne Anhang bleibt es beim bisherigen Verhalten.
-  assert.equal(inferChatTitle([{ role: 'user', content: '   ' }]), 'Neuer Chat');
+  assert.deepEqual(inferChatTitle([{ role: 'user', content: '   ' }]), { key: 'chat.title.new' });
 });
 
 test('sanitizeChatMessagesForStore behaelt Bild-Referenzen und wirft Base64 weg', () => {
@@ -300,7 +303,9 @@ test('normalizeSessionForStore benennt eine Bild-Session und bleibt schlank', ()
     updatedAt: 1,
     messages: [{ role: 'user', content: '', attachments: [{ ...REF_PNG, dataBase64: 'AAAA' }] }],
   });
-  assert.equal(session.title, 'Bild');
+  // The fallback is not stored: it is worked out in the language the chat is
+  // read in (#359).
+  assert.equal(session.title, '');
   assert.ok(JSON.stringify(session).length < 400);
 });
 
@@ -377,4 +382,26 @@ test('storedChatMessagesChanged sieht ueber die Form aelterer Verlaeufe hinweg (
   const heute = sanitizeChatMessagesForStore(gespeichert);
 
   assert.equal(storedChatMessagesChanged(gespeichert, heute), false);
+});
+
+// --- Fallback titles in the interface language (#359) -----------------------
+
+test('normalizeSessionForStore drops a German fallback title written before #359', () => {
+  const imageOnly = [{ role: 'user', content: '', attachments: [REF_PNG] }];
+  for (const title of ['Neuer Chat', 'Bild', '3 Bilder', 'Chat']) {
+    assert.equal(normalizeSessionForStore({ id: 'c', title, messages: imageOnly }).title, '');
+    assert.equal(normalizeSessionForStore({ id: 'c', messages: imageOnly }, { existingTitle: title }).title, '');
+  }
+});
+
+test('normalizeSessionForStore keeps titles that only look like a fallback', () => {
+  // The chat opened with the word itself, so the old rule never made it up.
+  const session = normalizeSessionForStore({ id: 'c', messages: [{ role: 'user', content: 'Bild' }] });
+  assert.equal(session.title, 'Bild');
+  const named = normalizeSessionForStore({
+    id: 'c',
+    title: 'Screenshot of the login page',
+    messages: [{ role: 'user', content: '', attachments: [REF_PNG] }],
+  });
+  assert.equal(named.title, 'Screenshot of the login page');
 });
