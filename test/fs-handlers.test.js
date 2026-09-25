@@ -129,7 +129,7 @@ test('listWorkspacePaths returns an empty list without an open workspace', async
 
   const result = await ipcMain.invoke(REQ.FS_LIST_WORKSPACE_PATHS);
   assert.deepEqual(result.entries, []);
-  assert.match(result.error, /Kein Arbeitsordner/);
+  assert.match(result.error, /No working folder/);
 });
 
 test('listWorkspacePaths caps the list and reports truncation', async (t) => {
@@ -196,7 +196,7 @@ test('readFile denies a symlink to a file outside the workspace', async (t) => {
   if (!linked) return;
 
   const denied = await ipcMain.invoke(REQ.FS_READ_FILE, linkPath);
-  assert.match(denied.error, /außerhalb/);
+  assert.match(denied.error, /outside the working folder/);
   assert.equal(denied.content, undefined);
 });
 
@@ -215,13 +215,13 @@ test('all handlers deny access when no workspace is open', async (t) => {
 
   assert.deepEqual(await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace), []);
   const read = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'inside.txt'));
-  assert.match(read.error, /Kein Arbeitsordner/);
+  assert.match(read.error, /No working folder/);
   const move = await ipcMain.invoke(
     REQ.FS_MOVE_ITEM,
     path.join(workspace, 'inside.txt'),
     workspace
   );
-  assert.match(move.error, /Kein Arbeitsordner/);
+  assert.match(move.error, /No working folder/);
 });
 
 test('moveItem moves files within the workspace', async (t) => {
@@ -274,14 +274,14 @@ test('moveItem denies symlinked sources and destinations outside the workspace',
   if (!linkedDestination) return;
 
   const fromSymlink = await ipcMain.invoke(REQ.FS_MOVE_ITEM, sourceLink, workspace);
-  assert.match(fromSymlink.error, /außerhalb/);
+  assert.match(fromSymlink.error, /outside the working folder/);
 
   const toSymlink = await ipcMain.invoke(
     REQ.FS_MOVE_ITEM,
     path.join(workspace, 'inside.txt'),
     destinationLink
   );
-  assert.match(toSymlink.error, /außerhalb/);
+  assert.match(toSymlink.error, /outside the working folder/);
   assert.equal(await fs.readFile(path.join(workspace, 'inside.txt'), 'utf8'), 'inside');
 });
 
@@ -312,7 +312,7 @@ test('FS_SHOW_FILE_CONTEXT_MENU: isDirectory geht an das Menü, Vorgabe ist fals
 test('FS_SHOW_FILE_CONTEXT_MENU: Ordner außerhalb des Workspace wird abgelehnt (#120)', async (t) => {
   const { ipcMain, outside, popups } = await setup(t);
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, outside, { isDirectory: true });
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the working folder/);
   assert.deepEqual(popups, []);
 });
 
@@ -327,7 +327,7 @@ test('FS_SHOW_FILE_CONTEXT_MENU: onDeleted pusht FS_ITEM_DELETED an den Renderer
 test('FS_SHOW_FILE_CONTEXT_MENU: Pfad außerhalb des Workspace wird abgelehnt (#58)', async (t) => {
   const { ipcMain, outside, popups } = await setup(t);
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, path.join(outside, 'secret.txt'));
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the working folder/);
   assert.deepEqual(popups, []);
 });
 
@@ -336,7 +336,7 @@ test('FS_SHOW_FILE_CONTEXT_MENU: Symlink aus dem Workspace heraus wird abgelehnt
   const link = path.join(workspace, 'escape.txt');
   if (!(await createSymlinkOrSkip(t, path.join(outside, 'secret.txt'), link, 'file'))) return;
   const result = await ipcMain.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, link);
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the working folder/);
   assert.deepEqual(popups, []);
 });
 
@@ -418,7 +418,7 @@ test('FS_IMPORT_ITEMS: Ziel außerhalb des Workspace wird abgelehnt (#101)', asy
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(workspace, 'inside.txt')], elsewhere);
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the working folder/);
   assert.equal(messageBoxes[0].type, 'error', 'die Ablehnung wird nativ gemeldet');
   assert.deepEqual(await fs.readdir(elsewhere), []);
 });
@@ -429,7 +429,7 @@ test('FS_IMPORT_ITEMS: sensible Quelle wird abgelehnt, nicht nur gefiltert (#101
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, '.env')], workspace);
 
-  assert.match(result.error, /Zugangsdaten/);
+  assert.match(result.error, /looks like credentials/);
   assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
 });
 
@@ -440,7 +440,7 @@ test('FS_IMPORT_ITEMS: sensible Quelle unterhalb von .ssh wird abgelehnt (#101)'
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, '.ssh', 'config')], workspace);
 
-  assert.match(result.error, /Zugangsdaten/);
+  assert.match(result.error, /looks like credentials/);
   assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
 });
 
@@ -502,6 +502,6 @@ test('FS_IMPORT_ITEMS: ohne geöffneten Arbeitsordner passiert nichts (#101)', a
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'secret.txt')], workspace);
 
-  assert.match(result.error, /Kein Arbeitsordner/);
+  assert.match(result.error, /No working folder/);
   assert.deepEqual(await fs.readdir(workspace), ['inside.txt']);
 });

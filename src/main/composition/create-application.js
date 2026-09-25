@@ -283,6 +283,7 @@ function createApplication({
   const filesystem = createFilesystemIpcAdapter({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    getLocale: getAppLocale,
   });
   // Shell-Ausfuehrung (Issue #102). Dieselben zwei Bedingungen wie bei Python —
   // gefundene Shell und ausdrueckliche Einstellung —, nur mit groesserer
