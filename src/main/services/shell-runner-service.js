@@ -24,6 +24,7 @@
 const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
 const { createOutputSink } = require('./child-output-sink');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
+const { planSpawn } = require('./sandboxed-spawn');
 
 /** Marker der Erkennung: die Shell muss ihn tatsaechlich ausgeben. */
 const PROBE_MARKER = 'snotra-shell-ok';
@@ -167,8 +168,19 @@ function clampTimeout(raw) {
  * @param {typeof import('os')} deps.os
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {typeof import('fs/promises')} [deps.fs]  for the run's temp directory (#329)
+ * @param {typeof import('path')} [deps.path]
+ * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
  */
-function createShellRunnerService({ spawn, os, platform = process.platform, env = process.env }) {
+function createShellRunnerService({
+  spawn,
+  os,
+  platform = process.platform,
+  env = process.env,
+  fs = null,
+  path = null,
+  sandbox = null,
+}) {
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird.
   let detected = { found: false, error: 'Noch nicht geprüft.' };
@@ -280,7 +292,7 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
     }
   }
 
-  async function run({ command, stdin, timeoutMs, cwd, abortSignal } = {}) {
+  async function run({ command, stdin, timeoutMs, cwd, workspaceRoot, networkDomains, abortSignal } = {}) {
     if (!detected.found) {
       return { error: detected.error || 'Keine Shell gefunden.' };
     }
@@ -300,69 +312,108 @@ function createShellRunnerService({ spawn, os, platform = process.platform, env 
     const stdout = createOutputSink(SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
     const stderr = createOutputSink(SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
 
-    return await new Promise((resolve) => {
-      let child;
-      try {
-        child = spawn(detected.command, buildShellArgs(detected.invocation, line), {
-          cwd: cwd || os.homedir(),
-          stdio: ['pipe', 'pipe', 'pipe'],
-          // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
-          detached: platform !== 'win32',
-          env: childEnv(),
-        });
-      } catch (e) {
-        resolve({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' });
-        return;
-      }
-
-      let timedOut = false;
-      let aborted = false;
-      let settled = false;
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        killTree(child);
-      }, limit);
-
-      const onAbort = () => {
-        aborted = true;
-        killTree(child);
-      };
-      abortSignal?.addEventListener('abort', onAbort, { once: true });
-
-      const finish = (result) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        abortSignal?.removeEventListener('abort', onAbort);
-        resolve(result);
-      };
-
-      child.stdout?.on('data', (chunk) => stdout.push(chunk));
-      child.stderr?.on('data', (chunk) => stderr.push(chunk));
-      child.on('error', (e) => finish({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' }));
-      child.on('close', (exitCode) => {
-        finish({
-          stdout: stdout.text(),
-          stderr: stderr.text(),
-          exitCode: typeof exitCode === 'number' ? exitCode : null,
-          timedOut,
-          aborted,
-          truncated: stdout.truncated || stderr.truncated,
-          durationMs: Date.now() - startedAt,
-          shell: detected.label,
-        });
+    // Isolation (#329): besides the workspace, the run's own temp directory
+    // is the only place it may write to; caches are redirected there too.
+    const runTmp = sandbox && fs && path ? await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-')) : '';
+    const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
+    let target;
+    try {
+      target = await planSpawn({
+        sandbox: runTmp ? sandbox : null,
+        argv: [detected.command, ...buildShellArgs(detected.invocation, line)],
+        workspaceRoot,
+        runTmp,
+        domains: networkDomains,
+        commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        commandText: line,
+        abortSignal,
       });
-
-      // Kein TTY: was auf eine Eingabe wartet, bekommt hoechstens den
-      // mitgegebenen String und sonst ein Dateiende.
-      if (typeof stdin === 'string' && stdin) {
-        child.stdin?.end(stdin.slice(0, SHELL_EXECUTION_LIMITS.MAX_STDIN_CHARS));
-      } else {
-        child.stdin?.end();
+    } catch (e) {
+      await removeRunTmp();
+      if (e?.name === 'AbortError') {
+        return {
+          stdout: '', stderr: '', exitCode: null, timedOut: false, aborted: true,
+          truncated: false, durationMs: Date.now() - startedAt, shell: detected.label,
+        };
       }
-      if (abortSignal?.aborted) onAbort();
-    });
+      return { error: e?.message || 'The sandbox could not be prepared.' };
+    }
+
+    try {
+      return await spawnAndCollect(target);
+    } finally {
+      target.release();
+      await removeRunTmp();
+    }
+
+    function spawnAndCollect(target) {
+      return new Promise((resolve) => {
+        let child;
+        try {
+          child = spawn(target.command, target.args, {
+            cwd: cwd || os.homedir(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+            // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
+            detached: platform !== 'win32',
+            env: { ...childEnv(), ...target.env },
+          });
+        } catch (e) {
+          resolve({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' });
+          return;
+        }
+
+        let timedOut = false;
+        let aborted = false;
+        let settled = false;
+
+        const timer = setTimeout(() => {
+          timedOut = true;
+          killTree(child);
+        }, limit);
+
+        const onAbort = () => {
+          aborted = true;
+          killTree(child);
+        };
+        abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+        const finish = (result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          abortSignal?.removeEventListener('abort', onAbort);
+          resolve(result);
+        };
+
+        child.stdout?.on('data', (chunk) => stdout.push(chunk));
+        child.stderr?.on('data', (chunk) => stderr.push(chunk));
+        child.on('error', (e) => finish({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' }));
+        child.on('close', (exitCode) => {
+          const result = {
+            stdout: stdout.text(),
+            // What the sandbox refused goes to the model with the output (#329).
+            stderr: target.annotate(stderr.text()),
+            exitCode: typeof exitCode === 'number' ? exitCode : null,
+            timedOut,
+            aborted,
+            truncated: stdout.truncated || stderr.truncated,
+            durationMs: Date.now() - startedAt,
+            shell: detected.label,
+          };
+          if (target.isolation) result.isolation = target.isolation;
+          finish(result);
+        });
+
+        // Kein TTY: was auf eine Eingabe wartet, bekommt hoechstens den
+        // mitgegebenen String und sonst ein Dateiende.
+        if (typeof stdin === 'string' && stdin) {
+          child.stdin?.end(stdin.slice(0, SHELL_EXECUTION_LIMITS.MAX_STDIN_CHARS));
+        } else {
+          child.stdin?.end();
+        }
+        if (abortSignal?.aborted) onAbort();
+      });
+    }
   }
 
   return {

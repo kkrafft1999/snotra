@@ -87,8 +87,22 @@ test('run_python reicht Code, stdin, argv, Zeitlimit und Arbeitsordner durch', a
     argv: ['a'],
     timeoutMs: 2500,
     cwd: '/tmp/projekt',
+    workspaceRoot: '/tmp/projekt',
+    networkDomains: [],
     abortSignal: signal,
   });
+});
+
+test('run_python only gets the domains it declares — no guessing from the code (#329)', async () => {
+  const { registry, calls } = makeRegistry();
+
+  await exec(
+    registry,
+    { code: 'import subprocess; subprocess.run(["pip", "install", "x"])', network_domains: ['api.github.com'] },
+    { workspaceRoot: '/tmp/projekt' },
+  );
+
+  assert.deepEqual(calls[0].networkDomains, ['api.github.com']);
 });
 
 test('run_python liefert ein strukturiertes Ergebnis', async () => {

@@ -126,6 +126,8 @@ test('shell_execute reicht Befehl, stdin, Zeitlimit und Arbeitsordner durch', as
     stdin: 'x',
     timeoutMs: 2500,
     cwd: nodePath.join(WORKSPACE, 'frontend'),
+    workspaceRoot: WORKSPACE,
+    networkDomains: [],
     abortSignal: signal,
   });
 
@@ -267,6 +269,66 @@ test('die Karte nennt Shell und Arbeitsordner und warnt vor der fehlenden Grenze
   // Konzept §6: fuer „Ausfuehren" gibt es nur die Einzelentscheidung.
   assert.equal(view.actions.session.enabled, false);
   assert.match(sessionActionHint({ riskClasses: ['execute'], mode: 'smart' }), /Execute/);
+});
+
+test('shell_execute hands declared and package-install domains to the runner (#329)', async () => {
+  const { registry, calls } = makeRegistry();
+
+  await exec(registry, { command: 'pip install requests', network_domains: ['API.github.com', '10.0.0.1'] });
+
+  // Declared first, normalised; IP literals dropped; the registry of the
+  // detected package install added.
+  assert.deepEqual(calls[0].networkDomains, ['api.github.com', 'pypi.org', 'files.pythonhosted.org']);
+});
+
+test('shell_execute tells the model whether the run was isolated (#329)', async () => {
+  const isolated = makeRegistry({
+    run: () => ({
+      stdout: '', stderr: '', exitCode: 0, timedOut: false, aborted: false, truncated: false,
+      durationMs: 1, shell: 'zsh', isolation: { isolated: true, domains: ['pypi.org'] },
+    }),
+  });
+  const open = makeRegistry({
+    run: () => ({
+      stdout: '', stderr: '', exitCode: 0, timedOut: false, aborted: false, truncated: false,
+      durationMs: 1, shell: 'zsh', isolation: { isolated: false, reason: 'dependencies', missing: ['socat'] },
+    }),
+  });
+  const legacy = makeRegistry();
+
+  assert.deepEqual(JSON.parse(await exec(isolated.registry, { command: 'ls' })).sandbox, {
+    isolated: true,
+    network_domains: ['pypi.org'],
+  });
+  // Why it is not isolated is the user's business (card, settings), not the model's.
+  assert.deepEqual(JSON.parse(await exec(open.registry, { command: 'ls' })).sandbox, { isolated: false });
+  assert.equal('sandbox' in JSON.parse(await exec(legacy.registry, { command: 'ls' })), false);
+});
+
+test('the card names isolation and domains when a sandbox is wired (#329)', async () => {
+  const isolatedPlanner = createToolCallPlanner({
+    fsService: makeFsServiceStub(),
+    fs: require('fs').promises,
+    path: nodePath,
+    describeShell: () => ({ label: 'zsh', login: true }),
+    describeSandbox: async () => ({ isolated: true }),
+  });
+  const openPlanner = createToolCallPlanner({
+    fsService: makeFsServiceStub(),
+    fs: require('fs').promises,
+    path: nodePath,
+    describeSandbox: async () => ({ isolated: false, reason: 'platform', missing: [] }),
+  });
+  const context = { workspaceRoot: WORKSPACE };
+  const definition = makeRegistry().registry.getDefinition('shell_execute');
+
+  const isolated = await isolatedPlanner.plan(definition, { command: 'npm ci' }, context);
+  const open = await openPlanner.plan(definition, { command: 'npm ci' }, context);
+  const unwired = await makePlanner(() => ({ label: 'zsh' })).plan(definition, { command: 'ls' }, context);
+
+  assert.deepEqual(isolated.preview.isolation, { isolated: true, domains: ['registry.npmjs.org'] });
+  assert.deepEqual(open.preview.isolation, { isolated: false, reason: 'platform', missing: [] });
+  assert.equal('isolation' in unwired.preview, false);
 });
 
 test('shell_execute has the category "exec" and a display line', () => {
