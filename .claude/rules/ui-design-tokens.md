@@ -49,7 +49,7 @@ In `tokens.css` these are the channel names (light values in `:root`, dark in
 | `--ds-blue-soft` | `rgba(0,117,158,0.05)` | hover wash, active radio states |
 | `--ds-blue-border` | `rgba(0,117,158,0.25)` | active-state borders |
 | `--ds-black` | `#000000` | primary type, destructive action |
-| `--ds-white` | `#FFFFFF` | **ink only**: type on blue, check marks, toggle knob |
+| `--ds-white` | `#FFFFFF` | **ink only**: type on blue, check marks |
 | `--ds-surface` | `#FFFCF5` | primary surface (cards, dialogs, composer) |
 | `--ds-grey-bg` | `#F9F4ED` | page background, footer background |
 | `--ds-grey-card` | `#F2EDE6` | code background, inline code |
@@ -148,8 +148,14 @@ not compete with the primary action.
   ring from `styles.css` applies on top).
 - **Select**: like an input plus a custom chevron via a background SVG in
   `--ds-grey-muted`.
-- **Toggle switch**: 40×22, background `--ds-grey-divider`, white knob 16×16.
-  Active: background `--ds-blue`. ARIA: `role="switch"` plus `aria-checked`.
+- **Toggle switch**: 40×22, background `--ds-grey-divider` with a 1px
+  `--ds-grey-control-border` border, knob 16×16 in `--ds-surface` with a 1px
+  `--ds-grey-muted` edge, no shadow. Active: track background and border
+  `--ds-blue`, knob edge `--ds-blue`. The knob follows the surface rather than
+  `--ds-white`: in light that is near-white anyway, in dark the lightened blue
+  would swallow a white knob (2.3:1), and the knob's position is what tells on
+  from off (WCAG 1.4.11). ARIA: `role="switch"` plus `aria-checked` (or a native
+  checkbox with `role="switch"`, as `.ds-switch`).
 - **Radio**: 16×16, custom via `appearance: none`. Border `--ds-grey-muted`; when
   `:checked`, border and inner dot in `--ds-blue`. The wrapper row adds a border
   and a `--ds-blue-soft` background via `:has(input:checked)`.
