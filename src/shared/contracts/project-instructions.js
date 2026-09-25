@@ -78,7 +78,8 @@ const PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS = Object.freeze({
  * gehen mit dem Prompt an den Anbieter (siehe `environmentInfoEnabled`, #138).
  */
 const PROJECT_INSTRUCTION_SOURCE_PATHS = Object.freeze({
-  [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: '<Ordner>/.agents/AGENTS.md',
+  // Relative to the open folder; `<folder>/` comes from the catalogue (#353).
+  [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: '.agents/AGENTS.md',
   [PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA]: '~/.snotra/AGENTS.md',
   [PROJECT_INSTRUCTION_SOURCES.USER_AGENTS]: '~/.agents/AGENTS.md',
 });

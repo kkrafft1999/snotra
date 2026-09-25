@@ -919,6 +919,8 @@ module.exports = {
   'context.detail.namesAndShort': 'Namen und Kurzbeschreibungen',
   'context.detail.path': '{path}',
   'context.detail.pathTruncated': '{path} · gekürzt',
+  'context.detail.folderPath': '<Ordner>/{path}',
+  'context.detail.folderPathTruncated': '<Ordner>/{path} · gekürzt',
 
   // ── Approval card in the chat ──────────────────────────────────────────────
   'approval.title.execute': 'Ausführung bestätigen',

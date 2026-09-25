@@ -94,7 +94,7 @@ test('gekürzte Dateien sind im Prompt und in der Aufschlüsselung als solche er
   assert.ok(text.endsWith(TRUNCATION_NOTE));
   assert.match(TRUNCATION_NOTE, new RegExp(String(MAX_PROJECT_INSTRUCTION_CHARS)));
   // Since #290 the row carries the key and the path, not a finished sentence.
-  assert.equal(parts[0].detailKey, 'context.detail.pathTruncated');
+  assert.equal(parts[0].detailKey, 'context.detail.folderPathTruncated');
   // Gezählt wird der Text, der wirklich mitgeht.
   assert.equal(parts[0].chars, 50);
 });
@@ -109,7 +109,8 @@ test('je Datei eine eigene Zeile in der Kontext-Aufschlüsselung (#174)', () => 
     'system:agents-md:user-agents',
   ]);
   assert.deepEqual(parts.map((p) => p.group), ['system', 'system']);
-  assert.deepEqual(parts.map((p) => p.params.path), ['<Ordner>/.agents/AGENTS.md', '~/.agents/AGENTS.md']);
+  assert.deepEqual(parts.map((p) => p.params.path), ['.agents/AGENTS.md', '~/.agents/AGENTS.md']);
+  assert.deepEqual(parts.map((p) => p.detailKey), ['context.detail.folderPath', 'context.detail.path']);
   // Der Kurzpfad nennt bewusst weder das aufgelöste Home noch den Ordnernamen.
   for (const part of parts) assert.ok(!part.params.path.includes('/Users/'));
 });

@@ -177,6 +177,21 @@ function text(value) {
 }
 
 /**
+ * The second line of a row that names a file, as `detailKey` plus `params`
+ * (#353). A file inside the open folder is written `<folder>/…`, and that
+ * placeholder is a word — so it lives in the catalogue, not in the path.
+ *
+ * @param {string} shortPath  `.agents/memory.md` for a file in the folder,
+ *   `~/.snotra/memory.md` for one outside it.
+ */
+function shortPathDetail(shortPath, { inFolder = false, truncated = false } = {}) {
+  let detailKey;
+  if (inFolder) detailKey = truncated ? 'context.detail.folderPathTruncated' : 'context.detail.folderPath';
+  else detailKey = truncated ? 'context.detail.pathTruncated' : 'context.detail.path';
+  return { detailKey, params: { path: text(shortPath) } };
+}
+
+/**
  * Ein Baustein des Prompts. `chars` ist die einzige Pflichtangabe der Engine —
  * alles Weitere ist Beschriftung fuer die Anzeige.
  */
@@ -343,6 +358,7 @@ module.exports = {
   charsPerTokenProfile,
   estimateTokensFromChars,
   createContextPart,
+  shortPathDetail,
   createContextBreakdown,
   normalizeContextBreakdown,
   groupContextParts,
