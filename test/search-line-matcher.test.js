@@ -8,7 +8,7 @@ const {
 
 test('validateRegexPattern rejects nested unbounded quantifiers (ReDoS class)', () => {
   for (const pattern of ['(a+)+!', '(\\w*\\s?)*', '((ab)*c)+', '(a{2,})+', '(?:x+)*?', '(a|b+)*']) {
-    assert.match(validateRegexPattern(pattern) || '', /zu komplex/, `sollte abgelehnt werden: ${pattern}`);
+    assert.match(validateRegexPattern(pattern) || '', /too complex/, `sollte abgelehnt werden: ${pattern}`);
   }
 });
 
@@ -30,8 +30,8 @@ test('validateRegexPattern accepts common safe patterns', () => {
 
 test('validateRegexPattern enforces the pattern length limit', () => {
   assert.equal(validateRegexPattern('a'.repeat(SEARCH_MAX_PATTERN_CHARS)), null);
-  assert.match(validateRegexPattern('a'.repeat(SEARCH_MAX_PATTERN_CHARS + 1)), /zu lang/);
-  assert.match(validateRegexPattern('abc', { maxChars: 2 }), /zu lang/);
+  assert.match(validateRegexPattern('a'.repeat(SEARCH_MAX_PATTERN_CHARS + 1)), /too long/);
+  assert.match(validateRegexPattern('abc', { maxChars: 2 }), /too long/);
 });
 
 test('collectLineMatches returns context, clips output and probes only the line prefix', () => {

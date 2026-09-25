@@ -52,7 +52,7 @@ function collectLineMatches(text, matcher, options) {
  */
 function validateRegexPattern(source, { maxChars = SEARCH_MAX_PATTERN_CHARS } = {}) {
   if (source.length > maxChars) {
-    return `Regulärer Ausdruck zu lang (${source.length} Zeichen, erlaubt sind höchstens ${maxChars}).`;
+    return `Regular expression too long (${source.length} characters, at most ${maxChars} allowed).`;
   }
   const stack = [{ hasUnbounded: false }];
   let lastClosedGroup = null;
@@ -111,8 +111,8 @@ function validateRegexPattern(source, { maxChars = SEARCH_MAX_PATTERN_CHARS } = 
     if (unbounded) {
       if (lastClosedGroup && lastClosedGroup.hasUnbounded) {
         return (
-          'Regulärer Ausdruck zu komplex: verschachtelte unbegrenzte Wiederholungen wie "(a+)+" oder ' +
-          '"(\\w*\\s?)*" können die Suche blockieren. Muster vereinfachen oder wörtlich suchen (is_regex=false).'
+          'Regular expression too complex: nested unbounded repetitions such as "(a+)+" or ' +
+          '"(\\w*\\s?)*" can stall the search. Simplify the pattern or search literally (is_regex=false).'
         );
       }
       stack[stack.length - 1].hasUnbounded = true;

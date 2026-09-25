@@ -254,6 +254,19 @@ const MODEL_CHANNEL_SOURCES = [
   // Both feed fetch_url's errors: the address check and the network failure.
   'src/shared/runtime/url-safety.js',
   'src/shared/runtime/fetch-errors.js',
+  // #338: the reasons shell_execute refuses a command, search errors, the
+  // truncation marker of a child's output, the runners' run errors, MCP call
+  // errors, and the skill list and policy note of the chat engine. What of
+  // these also reaches Settings travels as a catalogue message instead.
+  'src/shared/runtime/shell-command-guard.js',
+  'src/main/services/regex-search-worker.js',
+  'src/main/services/search-line-matcher.js',
+  'src/main/services/child-output-sink.js',
+  'src/main/services/python-runner-service.js',
+  'src/main/services/shell-runner-service.js',
+  'src/main/services/mcp-service.js',
+  'src/main/services/mcp-stdio-transport.js',
+  'src/application/chat/chat-engine.js',
 ];
 
 // German that stays, each with the reason it is not the model's. An entry that

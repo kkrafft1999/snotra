@@ -82,7 +82,11 @@ function createMcpService({
       transport: null,
       state: MCP_CONNECTION_STATES.IDLE,
       tools: [],
+      // Two channels (#338): `error` is what Settings shows — a catalogue
+      // message, or a third-party text quoted as it is — and `modelError` the
+      // English sentence a failed `callTool` hands to the model.
       error: '',
+      modelError: '',
       stderr: '',
       serverName: '',
       serverVersion: '',
@@ -175,7 +179,8 @@ function createMcpService({
   /** Fehlerzustand festhalten und den Prozess loswerden. */
   function markFailed(connection, error) {
     connection.state = MCP_CONNECTION_STATES.FAILED;
-    connection.error = messageOf(error, 'Der MCP-Server ist nicht erreichbar.');
+    connection.error = error?.userMessage || messageOf(error, '') || createMessage('mcp.connection.unreachable');
+    connection.modelError = messageOf(error, 'The MCP server is not reachable.');
     connection.stderr = typeof error?.stderr === 'string' ? error.stderr : connection.transport?.stderrText?.() || '';
     connection.tools = [];
     const transport = connection.transport;
@@ -194,7 +199,7 @@ function createMcpService({
 
     // Stirbt der Server später von selbst, darf sein Katalog nicht stehen
     // bleiben — sonst bietet das Modell Tools an, die niemand mehr ausführt.
-    transport.onExit(({ reason, stderr, expected }) => {
+    transport.onExit(({ reason, reasonMessage, stderr, expected }) => {
       if (connection.transport !== transport) return;
       connection.transport = null;
       connection.tools = [];
@@ -203,7 +208,11 @@ function createMcpService({
         return;
       }
       connection.state = MCP_CONNECTION_STATES.FAILED;
-      connection.error = `Der MCP-Server „${connection.config.label}" hat sich unerwartet beendet (${reason}).`;
+      connection.error = createMessage('mcp.transport.exited', {
+        label: connection.config.label,
+        reason: reasonMessage || reason,
+      });
+      connection.modelError = `The MCP server “${connection.config.label}” exited unexpectedly (${reason}).`;
       connection.stderr = stderr || '';
     });
 
@@ -233,12 +242,14 @@ function createMcpService({
       connection.tools = [];
       connection.state = MCP_CONNECTION_STATES.READY;
       connection.error = '';
+      connection.modelError = '';
       return;
     }
 
     connection.tools = await fetchTools(transport, connection.config.id);
     connection.state = MCP_CONNECTION_STATES.READY;
     connection.error = '';
+    connection.modelError = '';
     connection.stderr = '';
 
     try {
@@ -266,6 +277,7 @@ function createMcpService({
 
     connection.state = MCP_CONNECTION_STATES.STARTING;
     connection.error = '';
+    connection.modelError = '';
     connection.starting = handshake(connection)
       .catch((error) => markFailed(connection, error))
       .then(() => {
@@ -283,6 +295,7 @@ function createMcpService({
     if (connection.transport) await disconnect(id);
     connection.state = MCP_CONNECTION_STATES.IDLE;
     connection.error = '';
+    connection.modelError = '';
     await ensureConnected(id);
     return describeOne(id);
   }
@@ -320,15 +333,16 @@ function createMcpService({
    */
   async function callTool({ serverId, name, args } = {}, { signal, timeoutMs = limits.REQUEST_MS } = {}) {
     const connection = connections.get(serverId);
-    if (!connection) throw new Error(`Unbekannter MCP-Server „${serverId}".`);
-    if (!connection.config.enabled) throw new Error(`Der MCP-Server „${connection.config.label}" ist abgeschaltet.`);
+    // Only the model reads these: they end up in the tool result (#338).
+    if (!connection) throw new Error(`Unknown MCP server “${serverId}”.`);
+    if (!connection.config.enabled) throw new Error(`The MCP server “${connection.config.label}” is switched off.`);
     if (connection.config.disabledTools.includes(name)) {
-      throw new Error(`Das Tool „${name}" ist für „${connection.config.label}" abgewählt.`);
+      throw new Error(`The tool “${name}” is deselected for “${connection.config.label}”.`);
     }
 
     await ensureConnected(serverId);
     if (connection.state !== MCP_CONNECTION_STATES.READY || !connection.transport) {
-      throw new Error(connection.error || `Der MCP-Server „${connection.config.label}" ist nicht verbunden.`);
+      throw new Error(connection.modelError || `The MCP server “${connection.config.label}” is not connected.`);
     }
 
     const result = await connection.transport.request(

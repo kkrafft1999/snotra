@@ -29,6 +29,7 @@ const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execut
 const { createOutputSink } = require('./child-output-sink');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { planSpawn } = require('./sandboxed-spawn');
+const { createMessage } = require('../../shared/contracts/message');
 
 /** Marker der Erkennung: die Shell muss ihn tatsaechlich ausgeben. */
 const PROBE_MARKER = 'snotra-shell-ok';
@@ -187,7 +188,10 @@ function createShellRunnerService({
 }) {
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird.
-  let detected = { found: false, error: 'Noch nicht geprüft.' };
+  // `error` is the detail Settings shows next to "No shell found": a
+  // catalogue message, or the quoted output of the probe (#338). The model
+  // never reads it — `run()` has its own English sentence.
+  let detected = { found: false, error: createMessage('runner.error.notChecked') };
 
   function probe(command, invocation) {
     return new Promise((resolve) => {
@@ -198,20 +202,20 @@ function createShellRunnerService({
           env,
         });
       } catch (e) {
-        resolve({ ok: false, error: e?.message || 'Start fehlgeschlagen.' });
+        resolve({ ok: false, error: e?.message || createMessage('runner.error.startFailed') });
         return;
       }
       let out = '';
       let err = '';
       const timer = setTimeout(() => {
         try { child.kill('SIGKILL'); } catch { /* schon weg */ }
-        resolve({ ok: false, error: 'Zeitüberschreitung bei der Shell-Erkennung.' });
+        resolve({ ok: false, error: createMessage('runner.error.probeTimeout') });
       }, SHELL_EXECUTION_LIMITS.PROBE_TIMEOUT_MS);
       child.stdout?.on('data', (c) => { out += String(c); });
       child.stderr?.on('data', (c) => { err += String(c); });
       child.on('error', (e) => {
         clearTimeout(timer);
-        resolve({ ok: false, error: e?.message || 'Shell nicht gefunden.' });
+        resolve({ ok: false, error: e?.message || createMessage('runner.error.notFound') });
       });
       child.on('close', (code) => {
         clearTimeout(timer);
@@ -219,7 +223,7 @@ function createShellRunnerService({
         // nur, dass der Marker wirklich aus der Shell kommt.
         const parsed = parseProbeOutput(out);
         if (code === 0 && parsed.marker) resolve({ ok: true, path: parsed.path });
-        else resolve({ ok: false, error: err.trim().split('\n')[0] || `Beendet mit Code ${code}.` });
+        else resolve({ ok: false, error: err.trim().split('\n')[0] || createMessage('runner.error.exitCode', { code }) });
       });
     });
   }
@@ -255,9 +259,12 @@ function createShellRunnerService({
     }
     detected = {
       found: false,
-      error: platform === 'win32'
-        ? `Keine Shell gefunden (weder „pwsh.exe“ noch „powershell.exe“ noch „cmd.exe“)${firstError ? `: ${firstError}` : '.'}`
-        : `Keine Shell gefunden (weder „$SHELL“ noch die üblichen Pfade)${firstError ? `: ${firstError}` : '.'}`,
+      error: createMessage(firstError ? 'runner.error.triedWithDetail' : 'runner.error.tried', {
+        ...(platform === 'win32'
+          ? { candidates: 'pwsh.exe, powershell.exe, cmd.exe' }
+          : { candidatesKey: 'runner.shell.posixCandidates' }),
+        ...(firstError ? { detail: firstError } : {}),
+      }),
     };
     return detected;
   }
@@ -298,12 +305,12 @@ function createShellRunnerService({
 
   async function run({ command, stdin, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
     if (!detected.found) {
-      return { error: detected.error || 'Keine Shell gefunden.' };
+      return { error: 'No shell is available.' };
     }
     const line = typeof command === 'string' ? command : '';
-    if (!line.trim()) return { error: 'Es wurde kein Befehl übergeben.' };
+    if (!line.trim()) return { error: 'No command was given.' };
     if (line.length > SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS) {
-      return { error: `Der Befehl ist länger als ${SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS} Zeichen.` };
+      return { error: `The command is longer than ${SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS} characters.` };
     }
     // Zweite Verteidigungslinie hinter der Freigabe (Konzept §9): der Planer
     // lehnt gesperrte Wirkungen schon vor der Karte ab, der Runner noch einmal
@@ -366,7 +373,7 @@ function createShellRunnerService({
             env: { ...childEnv(), ...target.env },
           });
         } catch (e) {
-          resolve({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' });
+          resolve({ error: e?.message || 'The shell could not be started.' });
           return;
         }
 
@@ -395,7 +402,7 @@ function createShellRunnerService({
 
         child.stdout?.on('data', (chunk) => stdout.push(chunk));
         child.stderr?.on('data', (chunk) => stderr.push(chunk));
-        child.on('error', (e) => finish({ error: e?.message || 'Die Shell konnte nicht gestartet werden.' }));
+        child.on('error', (e) => finish({ error: e?.message || 'The shell could not be started.' }));
         child.on('close', (exitCode) => {
           const result = {
             stdout: stdout.text(),

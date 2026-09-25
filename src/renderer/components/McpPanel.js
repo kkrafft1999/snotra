@@ -59,14 +59,18 @@ export function joinArgs(args) {
  * hohler Ring ausgeschaltet, Ausrufezeichen Fehler.
  */
 export function describeConnection(server, connection) {
-  if (!server?.enabled) return { kind: 'off', text: 'ausgeschaltet' };
+  if (!server?.enabled) return { kind: 'off', text: t('settings.mcp.state.off') };
   const state = connection?.state;
   if (state === MCP_CONNECTION_STATES.READY) {
-    const count = connection.toolCount ?? 0;
-    return { kind: 'on', text: `verbunden · ${count} ${count === 1 ? 'Tool' : 'Tools'}` };
+    return { kind: 'on', text: tPlural('settings.mcp.state.connected', connection.toolCount ?? 0) };
   }
   if (state === MCP_CONNECTION_STATES.FAILED) {
-    return { kind: 'error', text: t('settings.mcp.state.startFailed'), detail: connection.error, stderr: connection.stderr };
+    return {
+      kind: 'error',
+      text: t('settings.mcp.state.startFailed'),
+      detail: tMessage(connection.error),
+      stderr: connection.stderr,
+    };
   }
   if (state === MCP_CONNECTION_STATES.STARTING) return { kind: 'off', text: t('settings.mcp.state.starting') };
   // IDLE heisst: eingeschaltet, aber noch nie gebraucht. Traeges Verbinden
@@ -470,7 +474,7 @@ export function initMcpPanel({ api }) {
       // Der Katalog des Servers ist jetzt bekannt — Haekchen anbieten.
       renderTools({ ...editing, knownTools: result.tools || [] });
     } else {
-      testResult.append(el('p', 'mcp-test__fail', status.error || t('mcpDialog.test.noAnswer')));
+      testResult.append(el('p', 'mcp-test__fail', tMessage(status.error) || t('mcpDialog.test.noAnswer')));
       if (status.stderr) testResult.append(el('pre', null, status.stderr));
     }
     await load();

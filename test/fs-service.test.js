@@ -466,7 +466,7 @@ test('search_in_files rejects a known ReDoS pattern before scanning any file', a
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(rejected.error, /zu komplex/);
+  assert.match(rejected.error, /too complex/);
   assert.equal(rejected.matches, undefined);
 
   const tooLong = JSON.parse(
@@ -476,7 +476,7 @@ test('search_in_files rejects a known ReDoS pattern before scanning any file', a
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(tooLong.error, /zu lang/);
+  assert.match(tooLong.error, /too long/);
 
   // Wörtliche Suche nach demselben Text bleibt erlaubt — sie wird escaped und ist linear.
   const literal = JSON.parse(
@@ -511,7 +511,7 @@ test('search_in_files aborts a slow regex when the worker time budget is exhaust
     )
   );
   const elapsed = Date.now() - started;
-  assert.match(result.error, /zu langsam|Zeitbudget/);
+  assert.match(result.error, /too slow|time budget/);
   assert.equal(result.aborted, true);
   assert.deepEqual(result.matches, [{ file: 'a.txt', line: 1, text: 'harmlos!', before: [], after: [] }]);
   assert.ok(elapsed < 5000, `Abbruch dauerte ${elapsed} ms`);

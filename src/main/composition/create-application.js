@@ -20,7 +20,7 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
-const { createMessage } = require('../../shared/contracts/message');
+const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
@@ -377,7 +377,7 @@ function createApplication({
 
   // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die
   // Adressregeln stecken im Adapter (Issue #95).
-  const urlFetch = createHttpUrlFetchAdapter();
+  const urlFetch = createHttpUrlFetchAdapter({ getLocale: getAppLocale });
 
   // Gedaechtnis (Issue #166). Der Adapter kennt die zwei Pfade, der Wrapper
   // die eine Regel, die nicht in den Adapter gehoert: ob Snotra ungefragt
@@ -437,9 +437,19 @@ function createApplication({
   async function maskMcpStatuses(statuses) {
     const secrets = await mcpSecrets.getMcpSecretValues();
     if (secrets.length === 0) return statuses;
+    // Since #338 the error can be a catalogue message; a server's text then
+    // sits in its parameters, and that is where the masking has to reach.
+    const mask = (value) => {
+      if (typeof value === 'string') return redactOwnSecrets(value, secrets);
+      if (!isMessage(value)) return value;
+      const params = value.params
+        ? Object.fromEntries(Object.entries(value.params).map(([name, inner]) => [name, mask(inner)]))
+        : undefined;
+      return createMessage(value.key, params);
+    };
     return statuses.map((status) => ({
       ...status,
-      error: redactOwnSecrets(status.error, secrets),
+      error: mask(status.error),
       stderr: redactOwnSecrets(status.stderr, secrets),
     }));
   }

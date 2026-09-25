@@ -193,8 +193,8 @@ test('shell_execute meldet Zeitüberschreitung, Abbruch und Kappung als Felder',
 });
 
 test('shell_execute gibt einen Fehler des Runners als Tool-Ergebnis zurück', async () => {
-  const { registry } = makeRegistry({ run: () => ({ error: 'Keine Shell gefunden.' }) });
-  assert.equal(JSON.parse(await exec(registry, { command: 'ls' })).error, 'Keine Shell gefunden.');
+  const { registry } = makeRegistry({ run: () => ({ error: 'No shell is available.' }) });
+  assert.equal(JSON.parse(await exec(registry, { command: 'ls' })).error, 'No shell is available.');
 });
 
 test('gesperrte Wirkungen werden mit Begründung abgelehnt — ohne die Shell zu starten', async () => {
@@ -202,7 +202,7 @@ test('gesperrte Wirkungen werden mit Begründung abgelehnt — ohne die Shell zu
   const out = JSON.parse(await exec(registry, { command: 'rm -rf /' }));
 
   assert.equal(out.blocked, true);
-  assert.match(out.error, /Rekursives Zwangslöschen/);
+  assert.match(out.error, /Forced recursive deletion/);
   assert.equal(calls.length, 0);
 });
 
@@ -214,7 +214,7 @@ test('der Planer lehnt gesperrte Wirkungen ab, bevor eine Freigabekarte erschein
     workspaceRoot: WORKSPACE,
   });
 
-  assert.match(plan.error, /Git-Historie/);
+  assert.match(plan.error, /Rewriting Git history/);
   assert.equal(plan.reason, 'hard_limit');
 });
 

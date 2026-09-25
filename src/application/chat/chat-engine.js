@@ -595,7 +595,7 @@ function buildStaticContextParts({
 function describeSkillForCatalog(skill) {
   const description = typeof skill.description === 'string' ? skill.description.trim() : '';
   if (description) return collapseWhitespace(description);
-  return 'Ohne Beschreibung — bei Zweifel laden.';
+  return 'No description — load it when in doubt.';
 }
 
 function collapseWhitespace(text) {
@@ -1261,7 +1261,7 @@ function createChatEngine({
             ...permissionDenied(entry, {
               reason: PERMISSION_DENIAL_REASONS.POLICY_DENIED,
               mode: policy.mode,
-              message: 'Berechtigungsregeln nicht lesbar; Tools bleiben bis zur Korrektur blockiert.',
+              message: 'The permission rules cannot be read; tools stay blocked until they are fixed.',
             }),
           };
         }
@@ -1658,7 +1658,7 @@ function createChatEngine({
   async function generateTitle({ messages } = {}) {
     const list = Array.isArray(messages) ? messages : [];
     const firstUser = list.find((m) => m && m.role === 'user' && String(m.content ?? '').trim());
-    if (!firstUser) return { error: 'Keine Nutzerfrage vorhanden.', code: CHAT_ERROR_CODES.INVALID };
+    if (!firstUser) return { error: 'No user message to title.', code: CHAT_ERROR_CODES.INVALID };
     const firstAnswer = list.find(
       (m) => m && m.role === 'assistant' && !m.greeting && String(m.content ?? '').trim()
     );
@@ -1685,13 +1685,13 @@ function createChatEngine({
         callbacks: silentStreamCallbacks(),
         abortSignal: abortController.signal,
       });
-      if (round?.cancelled) return { error: 'Titel-Anfrage abgebrochen.', code: CHAT_ERROR_CODES.INVALID };
+      if (round?.cancelled) return { error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID };
       if (round?.error) return { error: round.error, code: round.code || CHAT_ERROR_CODES.API };
       const title = sanitizeChatTitle(round?.message?.content);
-      if (!title) return { error: 'Leere Antwort auf die Titel-Anfrage.', code: CHAT_ERROR_CODES.INVALID };
+      if (!title) return { error: 'Empty answer to the title request.', code: CHAT_ERROR_CODES.INVALID };
       return { title };
     } catch (error) {
-      if (isAbortError(error)) return { error: 'Titel-Anfrage abgebrochen.', code: CHAT_ERROR_CODES.INVALID };
+      if (isAbortError(error)) return { error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID };
       return { error: llm.formatRoundError(error), code: CHAT_ERROR_CODES.API };
     } finally {
       clearTimeout(timer);

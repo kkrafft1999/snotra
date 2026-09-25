@@ -136,8 +136,8 @@ test('run_python meldet Zeitüberschreitung, Abbruch und Kappung als Felder', as
 });
 
 test('run_python gibt einen Fehler des Runners als Tool-Ergebnis zurück', async () => {
-  const { registry } = makeRegistry({ run: () => ({ error: 'Kein Python-Interpreter gefunden.' }) });
-  assert.equal(JSON.parse(await exec(registry, { code: 'x' })).error, 'Kein Python-Interpreter gefunden.');
+  const { registry } = makeRegistry({ run: () => ({ error: 'No Python 3 interpreter is available.' }) });
+  assert.equal(JSON.parse(await exec(registry, { code: 'x' })).error, 'No Python 3 interpreter is available.');
 });
 
 test('die Freigabe-Karte bekommt den vollständigen Quelltext als Vorschau', async () => {

@@ -208,6 +208,25 @@ test('der Token taucht weder im Katalog noch in einer Fehlermeldung auf', async 
   assert.match(test1.status.stderr, /\[maskiert\]/);
 });
 
+test('a token inside a keyed status error is masked as well (#338)', async (t) => {
+  const { ipcMain } = await makeApp(t);
+  await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, {
+    id: 'leck',
+    label: 'Leck',
+    command: process.execPath,
+    args: [FAKE_SERVER, 'leak-init'],
+    env: { GITHUB_TOKEN: { value: TOKEN } },
+  });
+
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_TEST_MCP_SERVER)({}, 'leck');
+  assert.equal(result.status.state, MCP_CONNECTION_STATES.FAILED);
+  // The server's text travels as a parameter of the catalogue message …
+  assert.equal(result.status.error.key, 'mcp.transport.serverErrorCode');
+  assert.match(result.status.error.params.detail, /^bad credentials: GITHUB_TOKEN=\[maskiert\]$/);
+  // … and the token is nowhere in the result.
+  assert.equal(JSON.stringify(result).includes(TOKEN), false);
+});
+
 test('die gespeicherte Konfiguration übersteht einen Neustart der Anwendung', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-restart-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));

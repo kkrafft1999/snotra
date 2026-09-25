@@ -216,3 +216,22 @@ test('fetch_url-Adapter meldet einen unauflösbaren Namen als Ergebnis', async (
   assert.equal(result.code, URL_FETCH_ERROR_CODES.BLOCKED_ADDRESS);
   assert.match(result.error, /ENOTFOUND/);
 });
+
+test('fetch_url asks for the page in the interface language (#338)', async () => {
+  const requested = [];
+  let locale = 'en';
+  const adapter = createHttpUrlFetchAdapter({
+    fetchImpl: async (url, options) => {
+      requested.push(options.headers['accept-language']);
+      return htmlResponse('<html><body><p>Text.</p></body></html>');
+    },
+    lookup: publicLookup(),
+    getLocale: () => locale,
+  });
+
+  await adapter.fetchUrl({ url: 'https://example.org/' });
+  locale = 'de';
+  await adapter.fetchUrl({ url: 'https://example.org/' });
+
+  assert.deepEqual(requested, ['en,*;q=0.5', 'de,en;q=0.8']);
+});

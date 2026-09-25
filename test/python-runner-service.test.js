@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const childProcess = require('child_process');
+const { translateMessage } = require('../src/shared/i18n');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -73,10 +74,12 @@ test('ohne gefundenen Interpreter ist das Tool nicht verfügbar und läuft nicht
 
   assert.equal(detected.found, false);
   assert.equal(service.isAvailable(), false);
-  assert.match(detected.error, /Kein Python 3/);
+  // Settings shows the detail in the interface language, the model reads English (#338).
+  assert.equal(translateMessage('en', detected.error), 'tried python3, python');
+  assert.equal(translateMessage('de', detected.error), 'versucht: python3, python');
 
   const result = await service.run({ code: 'print(1)' });
-  assert.match(result.error, /Kein Python/);
+  assert.equal(result.error, 'No Python 3 interpreter is available.');
 });
 
 test('ein hinterlegter Interpreter, der nicht startet, fällt nicht still auf python3 zurück', async () => {
@@ -299,7 +302,7 @@ test('run kappt sehr große Ausgaben und sagt es', async (t) => {
   });
 
   assert.equal(result.truncated, true);
-  assert.match(result.stdout, /\[Ausgabe gekürzt\]$/);
+  assert.match(result.stdout, /\[output truncated\]$/);
   assert.ok(result.stdout.length < PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES + 200);
 });
 
@@ -307,11 +310,11 @@ test('run weist leeren und überlangen Code ab, ohne einen Prozess zu starten', 
   const service = await ready();
   if (!service) return t.skip('Kein Python 3 auf diesem Rechner.');
 
-  assert.match((await service.run({ code: '' })).error, /kein Python-Code/i);
-  assert.match((await service.run({ code: '   ' })).error, /kein Python-Code/i);
+  assert.match((await service.run({ code: '' })).error, /no python code/i);
+  assert.match((await service.run({ code: '   ' })).error, /no python code/i);
   assert.match(
     (await service.run({ code: 'x'.repeat(PYTHON_EXECUTION_LIMITS.MAX_CODE_CHARS + 1) })).error,
-    /länger als/,
+    /longer than/,
   );
 });
 

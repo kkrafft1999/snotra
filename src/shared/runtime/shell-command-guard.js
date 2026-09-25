@@ -16,14 +16,14 @@
 
 const BLOCK_REASONS = Object.freeze({
   RECURSIVE_DELETE:
-    'Rekursives Zwangslöschen ist in Snotra gesperrt. Lösche gezielt einzelne Pfade; '
-    + 'ist der Befehl wirklich nötig, muss der Nutzer ihn selbst im Terminal ausführen.',
+    'Forced recursive deletion is blocked in Snotra. Delete individual paths instead; '
+    + 'if the command is really needed, the user has to run it in a terminal themselves.',
   DISK:
-    'Datenträgeroperationen (Formatieren, Partitionieren, direktes Schreiben auf Geräte) sind in Snotra gesperrt. '
-    + 'Ist der Befehl wirklich nötig, muss der Nutzer ihn selbst im Terminal ausführen.',
+    'Disk operations (formatting, partitioning, writing to devices directly) are blocked in Snotra. '
+    + 'If the command is really needed, the user has to run it in a terminal themselves.',
   GIT_HISTORY:
-    'Das Umschreiben der Git-Historie (erzwungener Push, filter-branch, filter-repo) ist in Snotra gesperrt. '
-    + 'Ist der Befehl wirklich nötig, muss der Nutzer ihn selbst im Terminal ausführen.',
+    'Rewriting Git history (force push, filter-branch, filter-repo) is blocked in Snotra. '
+    + 'If the command is really needed, the user has to run it in a terminal themselves.',
 });
 
 /** Wrapper, die vor dem eigentlichen Befehl stehen duerfen. */

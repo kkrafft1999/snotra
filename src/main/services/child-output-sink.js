@@ -33,7 +33,7 @@ function createOutputSink(maxBytes) {
     },
     text() {
       const text = Buffer.concat(chunks).toString('utf8');
-      return truncated ? `${text}\n… [Ausgabe gekürzt]` : text;
+      return truncated ? `${text}\n… [output truncated]` : text;
     },
   };
 }

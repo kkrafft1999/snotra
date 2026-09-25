@@ -77,10 +77,10 @@ test('die Liste zeigt Server, Kommando und Status', async () => {
     list[0].querySelector('.mcp-row__meta').textContent,
     'npx -y @modelcontextprotocol/server-github',
   );
-  assert.match(list[0].querySelector('.mcp-status').textContent, /verbunden · 2 Tools/);
+  assert.match(list[0].querySelector('.mcp-status').textContent, /connected · 2 tools/);
   // Ausgeschaltet schlaegt den Verbindungszustand — sonst stuende dort
   // „noch nicht verbunden", was wie ein Problem aussieht.
-  assert.match(list[1].querySelector('.mcp-status').textContent, /ausgeschaltet/);
+  assert.match(list[1].querySelector('.mcp-status').textContent, /switched off/);
 });
 
 test('der volle Aufruf haengt im title, weil die Zeile abschneidet', async () => {
@@ -294,14 +294,16 @@ test('ein fehlgeschlagener Server zeigt Grund und stderr in der Liste', async ()
   await mount({
     getMcpCatalog: async () => katalog({
       connections: [
-        { serverId: 'github', state: 'failed', toolCount: 0, toolNames: [], error: 'Start fehlgeschlagen.', stderr: 'npx: not found' },
+        { serverId: 'github', state: 'failed', toolCount: 0, toolNames: [], error: { key: 'mcp.transport.startFailedReason', params: { label: 'GitHub', reason: { key: 'mcp.transport.reason.code', params: { code: 127 } } } }, stderr: 'npx: not found' },
         { serverId: 'files', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
       ],
     }),
   });
   const zeile = rows()[0];
   assert.match(zeile.querySelector('.mcp-status').textContent, /Failed to start/);
-  assert.match(zeile.querySelector('.mcp-row__error').textContent, /Start fehlgeschlagen/);
+  // Since #338 the error arrives as a catalogue message and is read in the
+  // interface language, nested reason included.
+  assert.match(zeile.querySelector('.mcp-row__error').textContent, /The MCP server “GitHub” could not be started \(exit code 127\)\./);
   assert.match(zeile.querySelector('.mcp-row__error pre').textContent, /npx: not found/);
 });
 
