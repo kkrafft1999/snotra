@@ -83,7 +83,20 @@ test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis
   const card = html.slice(cardStart, cardEnd);
   assert.match(card, /settings-note--warning/, 'die Warnung ist als solche ausgezeichnet');
   assert.match(card, /shell_execute/);
-  assert.match(card, /no<\/strong> project folder boundary/);
+  // Since #329 the warning names the scope per operating system: isolated on
+  // macOS and Linux, full rights on Windows.
+  assert.match(card, /isolated on macOS and Linux, with your full rights on Windows/);
+  assert.match(card, /<code>bubblewrap<\/code>, <code>socat<\/code> and\s+<code>ripgrep<\/code>/);
+  // The isolation line sits next to the status and stays hidden until there is something to say.
+  assert.match(card, /id="settings-shell-sandbox"[^>]*role="status"[^>]*hidden/);
+});
+
+test('the Python card names the sandbox scope and has an isolation line (#329)', () => {
+  const cardStart = html.indexOf('id="settings-python-card"');
+  const cardEnd = html.indexOf('id="settings-shell-card"');
+  const card = html.slice(cardStart, cardEnd);
+  assert.match(card, /isolated on macOS and Linux, with your full rights on Windows/);
+  assert.match(card, /id="settings-python-sandbox"[^>]*role="status"[^>]*hidden/);
 });
 
 // Issue #138: Der Schalter steht im Bereich „Allgemein“ neben dem

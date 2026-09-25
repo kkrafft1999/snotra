@@ -425,14 +425,21 @@
               <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.heading">Run Python</h3>
               <details class="settings-note settings-note--warning">
                 <summary class="settings-note__summary">
-                  <span data-i18n-html="settings.python.warning.summary"><strong>Careful:</strong> <code>run_python</code> runs the model&rsquo;s code with
-                  your rights &mdash; no sandbox.</span>
+                  <span data-i18n-html="settings.python.warning.summary"><strong>Careful:</strong> <code>run_python</code> runs the model&rsquo;s code &mdash;
+                  isolated on macOS and Linux, with your full rights on Windows.</span>
                 </summary>
                 <div class="settings-note__body" data-i18n-html="settings.python.warning.body">
                   <p>
-                    The code is <strong>not</strong> confined to the project folder &mdash; it can read and write
-                    anywhere, reach the network and start programs. Snotra shows you the full source before
-                    <em>every</em> run for approval. Only switch this on if you are aware of that.
+                    On <strong>macOS and Linux</strong> the code runs in a sandbox: it can write only inside the project
+                    folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the
+                    network only for the domains named on the approval card. It can still <strong>read</strong> your
+                    other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and
+                    <code>ripgrep</code>.
+                  </p>
+                  <p>
+                    On <strong>Windows</strong> there is no sandbox yet: the code can read and write anywhere, reach the
+                    network and start programs. Snotra shows you the full source before <em>every</em> run for approval,
+                    and the card says whether the run is isolated. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
@@ -458,23 +465,32 @@
                 </div>
               </details>
               <p id="settings-python-status" class="modal-hint" role="status"></p>
+              <p id="settings-python-sandbox" class="modal-hint" role="status" hidden></p>
             </div>
 
             <div class="settings-tools-card" id="settings-shell-card">
               <h3 class="settings-subsection-title" id="heading-shell" data-i18n="settings.shell.heading">Run shell commands</h3>
               <details class="settings-note settings-note--warning">
                 <summary class="settings-note__summary">
-                  <span data-i18n-html="settings.shell.warning.summary"><strong>Careful:</strong> <code>shell_execute</code> runs the model&rsquo;s commands
-                  with your rights &mdash; no sandbox.</span>
+                  <span data-i18n-html="settings.shell.warning.summary"><strong>Careful:</strong> <code>shell_execute</code> runs the model&rsquo;s commands &mdash;
+                  isolated on macOS and Linux, with your full rights on Windows.</span>
                 </summary>
                 <div class="settings-note__body" data-i18n-html="settings.shell.warning.body">
                   <p>
-                    A shell command can do <strong>everything</strong> you can do in a terminal yourself: read and write
-                    anywhere, reach the network, install programs. There is <strong>no</strong> project folder boundary.
-                    Snotra shows you the full command, the shell and the working directory before <em>every</em> run for
-                    approval; recursive force-delete, disk operations and rewriting Git history are blocked. That block
-                    is an extra safeguard, not complete protection &mdash; in &ldquo;Auto&rdquo; mode a command runs
-                    without asking. Only switch this on if you are aware of that.
+                    On <strong>macOS and Linux</strong> every command runs in a sandbox: it can write only inside the
+                    project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and
+                    reaches the network only for the domains named on the approval card &mdash; <code>pip</code> and
+                    <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your
+                    other files, and tools that verify certificates through the macOS keychain (<code>gh</code>,
+                    <code>terraform</code>) cannot reach the network inside it. On Linux the sandbox needs the packages
+                    <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.
+                  </p>
+                  <p>
+                    On <strong>Windows</strong> there is no sandbox yet: a command can do <strong>everything</strong> you
+                    can do in a terminal yourself. Snotra shows you the full command, the shell, the working directory
+                    and whether the run is isolated before <em>every</em> run for approval; recursive force-delete, disk
+                    operations and rewriting Git history are blocked. In &ldquo;Auto&rdquo; mode a command runs without
+                    asking. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
@@ -484,6 +500,7 @@
                 <input type="checkbox" role="switch" class="ds-switch" id="input-shell-enabled">
               </div>
               <p id="settings-shell-status" class="modal-hint" role="status"></p>
+              <p id="settings-shell-sandbox" class="modal-hint" role="status" hidden></p>
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">

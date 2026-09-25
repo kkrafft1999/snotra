@@ -640,8 +640,13 @@ function createApplication({
       readOwnSecrets,
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
       describeShell: () => shellRunnerService.describe(),
-      // …and whether it would run isolated, with which domains (#329).
-      describeSandbox: () => sandboxService.detect(),
+      // …and whether it would run isolated, with which domains (#329). The
+      // planner reads the shell right after this; waiting for its detection
+      // here keeps a card shown early after startup from lacking it.
+      describeSandbox: async () => {
+        await shellRunnerService.detect();
+        return sandboxService.detect();
+      },
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
       // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
       refreshDynamicTools: async () => {

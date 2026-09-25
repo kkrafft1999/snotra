@@ -5,9 +5,13 @@
  *
  * Baugleich zum Python-Runner (#86) — Kindprozess, hartes Zeitlimit, Kill des
  * Prozessbaums, Ausgabe-Kappung, AbortSignal fuer „Stop" im Chat —, nur dass
- * aus der Interpreter-Erkennung eine Shell-Erkennung wird. Bewusst ohne harte
- * Isolation: der Schutz liegt in der Freigabe vor jedem Lauf, nicht in einer
- * Sandbox. Ein Befehl kann alles, was der angemeldete Nutzer kann.
+ * aus der Interpreter-Erkennung eine Shell-Erkennung wird.
+ *
+ * Isolation (#329): on macOS and Linux the same shell, started the same way,
+ * runs under the sandbox service — writes only in the workspace and the run's
+ * temp directory, network only for the approved domains. On Windows, or where
+ * the sandbox is unavailable, a command can do everything the logged-in user
+ * can, and the approval before every run is the protection.
  *
  * Ein Befehl pro Aufruf, kein Zustand: kein dauerhafter Shell-Prozess, kein
  * `cd`, das den naechsten Aufruf beeinflusst. Nicht interaktiv (kein TTY,

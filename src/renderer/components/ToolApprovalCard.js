@@ -95,6 +95,14 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     return ensureContainer(bubble);
   }
 
+  /** The domains an isolated run may reach, one code chip each (#329). */
+  function buildDomainList(isolation) {
+    if (isolation.domains.length === 0) return isolation.networkNone;
+    const list = el('span', 'chat-approval-card__domains');
+    for (const domain of isolation.domains) list.appendChild(code(domain, 'en'));
+    return list;
+  }
+
   function fact(dl, term, valueNode) {
     const row = el('div', 'chat-approval-card__fact');
     row.appendChild(el('dt', null, term));
@@ -203,7 +211,25 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
 
     const title = el('h3', 'chat-approval-card__title', view.title);
     title.id = domId(requestId, 'title');
-    card.appendChild(title);
+    if (view.isolation) {
+      // Isolation sits next to the title (#329): the first thing read, and in
+      // red when the run would not be isolated.
+      const row = el('div', 'chat-approval-card__title-row');
+      row.appendChild(title);
+      const badge = el(
+        'span',
+        view.isolation.isolated
+          ? 'chat-approval-card__badge'
+          : 'chat-approval-card__badge chat-approval-card__badge--danger',
+        view.isolation.badge,
+      );
+      badge.id = domId(requestId, 'isolation');
+      row.appendChild(badge);
+      card.appendChild(row);
+      card.setAttribute('aria-describedby', `${domId(requestId, 'isolation')} ${domId(requestId, 'headline')}`);
+    } else {
+      card.appendChild(title);
+    }
 
     const headline = el('p', 'chat-approval-card__headline');
     headline.id = domId(requestId, 'headline');
@@ -214,6 +240,7 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     fact(facts, t('approval.fact.effect'), view.classText);
     if (view.shellLabel) fact(facts, t('approval.fact.shell'), view.shellLabel);
     if (view.cwdLabel) fact(facts, t('approval.fact.cwd'), code(view.cwdLabel));
+    if (view.isolation?.isolated) fact(facts, t('approval.fact.network'), buildDomainList(view.isolation));
     // The memory has no file target the user could influence (issue #166) —
     // the reach is the decision here, not the path.
     if (view.memoryScopeLabel) fact(facts, t('approval.fact.memoryScope'), view.memoryScopeLabel);
@@ -228,6 +255,8 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     if (view.scopeNote) fact(facts, t('approval.fact.sessionScope'), view.scopeNote);
     fact(facts, t('approval.fact.mode'), view.modeLabel);
     card.appendChild(facts);
+
+    if (view.isolation?.isolated) card.appendChild(el('p', 'chat-approval-card__note', view.isolation.note));
 
     if (view.warning) {
       const warning = el('p', 'chat-approval-card__warning');

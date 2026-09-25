@@ -345,12 +345,15 @@ function createToolCallPlanner({
     const result = { tool: toolName, riskClasses, targets, planKey };
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
+    // Isolation first: its detection waits for the shell detection (#111), so
+    // the shell read afterwards is the detected one, not a startup placeholder.
+    const isolation = await describeIsolation(toolName, args);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
       cwd: shellCwd,
       shellLabel: shell?.label || '',
       shellLogin: shell?.login === true,
-      isolation: await describeIsolation(toolName, args),
+      isolation,
     });
     if (preview) result.preview = preview;
     return result;

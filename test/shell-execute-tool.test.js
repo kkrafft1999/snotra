@@ -331,6 +331,68 @@ test('the card names isolation and domains when a sandbox is wired (#329)', asyn
   assert.equal('isolation' in unwired.preview, false);
 });
 
+function executeCardDto(tool, isolation) {
+  const preview = tool === 'shell_execute'
+    ? { kind: 'shell', text: 'pip install requests', truncated: false, masked: false, shell: 'zsh', cwd: '/tmp/projekt' }
+    : { kind: 'code', text: 'print(1)', truncated: false, masked: false };
+  return {
+    contractVersion: 1,
+    requestId: 'req-iso',
+    tool,
+    riskClasses: ['execute'],
+    targets: [],
+    mode: 'smart',
+    sessionAllowed: false,
+    preview: { ...preview, ...(isolation ? { isolation } : {}) },
+  };
+}
+
+test('an isolated run: pill "Isolated", its domains, no boundary warning (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const view = buildApprovalCardView(executeCardDto('shell_execute', {
+    isolated: true,
+    domains: ['pypi.org', 'files.pythonhosted.org'],
+  }));
+
+  assert.equal(view.isolation.isolated, true);
+  assert.equal(view.isolation.badge, 'Isolated');
+  assert.deepEqual(view.isolation.domains, ['pypi.org', 'files.pythonhosted.org']);
+  assert.match(view.isolation.note, /project folder and a temporary folder/);
+  assert.equal(view.warning, '');
+
+  const offline = buildApprovalCardView(executeCardDto('run_python', { isolated: true, domains: [] }));
+  assert.equal(offline.isolation.networkNone, 'No access');
+});
+
+test('a run that would not be isolated: red pill "Not isolated" and the reason in the warning (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const missing = buildApprovalCardView(executeCardDto('shell_execute', {
+    isolated: false, reason: 'dependencies', missing: ['bubblewrap', 'socat'],
+  }));
+  const windows = buildApprovalCardView(executeCardDto('run_python', { isolated: false, reason: 'platform', missing: [] }));
+  const ubuntu = buildApprovalCardView(executeCardDto('shell_execute', { isolated: false, reason: 'self-test', missing: [] }));
+
+  assert.equal(missing.isolation.isolated, false);
+  assert.equal(missing.isolation.badge, 'Not isolated');
+  assert.equal(
+    missing.warning,
+    'The sandbox needs the packages bubblewrap, socat, which are not installed. '
+      + 'The command runs with your rights and is not limited to the project folder.',
+  );
+  assert.match(windows.warning, /^Windows has no sandbox yet\. The program runs with your rights/);
+  assert.match(ubuntu.warning, /settings say why/);
+});
+
+test('without a sandbox wired the card stays as it was (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const shell = buildApprovalCardView(executeCardDto('shell_execute', null));
+  const python = buildApprovalCardView(executeCardDto('run_python', null));
+
+  assert.equal(shell.isolation, null);
+  assert.match(shell.warning, /not limited to the project folder/);
+  assert.equal(python.warning, '');
+});
+
 test('shell_execute has the category "exec" and a display line', () => {
   assert.equal(toolCategory('shell_execute'), TOOL_CATEGORIES.EXEC);
   assert.equal(

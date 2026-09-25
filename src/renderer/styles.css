@@ -5059,6 +5059,43 @@ select.modal-input {
   white-space: nowrap;
 }
 
+.chat-approval-card__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 4px;
+}
+
+.chat-approval-card__title-row .chat-approval-card__title {
+  margin: 0;
+}
+
+/* Isolation state (#329): a run that would not be isolated is flagged red. */
+.chat-approval-card__badge--danger {
+  border-color: var(--ds-error-border);
+  background: var(--ds-error-bg);
+  color: var(--ds-error);
+}
+
+.chat-approval-card[data-state]:not([data-state='pending']) .chat-approval-card__badge {
+  border-color: var(--ds-grey-divider);
+  background: none;
+  color: var(--text-muted);
+}
+
+.chat-approval-card__domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.chat-approval-card__note {
+  margin: 8px 0 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
 .chat-approval-card__warning {
   margin: 10px 0 0;
   padding: 8px 10px;

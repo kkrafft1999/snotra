@@ -8,9 +8,10 @@
  * Zeitlimit, Kill des Prozessbaums und Anbindung an den AbortSignal-Pfad,
  * damit „Stop" im Chat auch das Skript beendet.
  *
- * Erste Stufe bewusst ohne harte Isolation (eigener Nutzer, sandbox-exec,
- * Container, WASM-Python): der Schutz liegt hier in der Freigabe vor jedem
- * Lauf, nicht in einer Sandbox. Das steht so auch in README und Issue.
+ * Isolation (#329): on macOS and Linux the interpreter runs under the sandbox
+ * service — writes only in the workspace and the script's temp directory,
+ * network only for the declared domains. Elsewhere the approval before every
+ * run is the protection, and the result says the run was not isolated.
  *
  * Den PATH bringt der Dienst nicht selbst auf (Issue #111): eine aus dem
  * Finder gestartete App erbt nur den kargen PATH des Fensterservers und faende

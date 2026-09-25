@@ -63,7 +63,7 @@ blocked; there is no implicit `read` default.
 | `read-sensitive` | Sensitive content, or targeted access to a sensitive path | A dynamic escalation of the read tools, including under `skill:` |
 | `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch` |
 | `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` on an existing file when the recovery copy cannot be created; a future delete tool |
-| `execute` | Running a program or a script; possibly further side effects | `run_python` (#86). Executed code bypasses the workspace boundary by its nature: it is not Snotra that touches the files, it is the interpreter. The protection therefore lies in the approval before every run (with the source visible on the card) and in the explicit setting, which is off by default — not in a sandbox. Harder isolation (a separate user, `sandbox-exec`, a container, WASM Python) is open. |
+| `execute` | Running a program or a script; possibly further side effects | `run_python` (#86). Executed code bypasses the workspace boundary by its nature: it is not Snotra that touches the files, it is the interpreter. The protection lies in the approval before every run (with the source visible on the card), in the explicit setting, which is off by default, and — on macOS and Linux since #329 — in an operating system sandbox (section 9). On Windows there is none yet. |
 | `external` | Sending data to an additional service, or triggering actions there | `web_search` (#63) — the query itself leaves the machine. Every MCP tool (#62), always together with `execute` |
 
 Classes are not a simple numeric ranking: a write tool can touch sensitive data
@@ -480,6 +480,70 @@ circumvented, but recorded here:
   enables auto chooses that deliberately. The protection is the visible command
   plus a human approval, not a technical boundary.
 
+### Revision: isolation on macOS and Linux (#329)
+
+The residual risk above still describes Windows. On macOS and Linux it has been
+replaced by an operating system boundary:
+
+- **The mechanism.** Both tools run through the sandbox service
+  ([`sandbox-service.js`](../src/main/services/sandbox-service.js)) on top of
+  `@anthropic-ai/sandbox-runtime`, pinned to an exact version: a generated
+  Seatbelt profile (`sandbox-exec`) on macOS, `bubblewrap` with a removed network
+  namespace on Linux, and a domain filter as a proxy in the main process. The
+  runner still starts the same shell or interpreter with the same arguments —
+  only inside the sandbox — so time limit, output cap, "Stop" and the kill of
+  the process tree are unchanged. **On by default**, without a setting.
+- **What a run may do.** Write inside the workspace and its own temp directory,
+  nowhere else. Read everything except the credential and profile locations:
+  `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`,
+  `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.git-credentials`,
+  `~/.npmrc`, `~/.pypirc`, `~/.password-store`, the keychain and cookie stores,
+  the common browser profiles, and Snotra's own `userData`. Reach the network
+  only for the domains the approval card names: what the model declares in
+  `network_domains`, plus the registry of a detected package install (`pip`,
+  `uv`, `poetry` → PyPI; `npm`, `pnpm`, `npx` → the npm registry; `yarn`).
+  IP literals and a bare `*` are dropped — the card shows names, and the
+  sandbox allows nothing else. Planner and handler derive the list from the
+  same arguments through one function
+  ([`sandbox-domains.js`](../src/shared/runtime/sandbox-domains.js)), and the
+  approval is bound to those arguments by the plan key.
+- **What the runtime adds.** Inside the writable paths it keeps `.git/hooks`,
+  `.git/config`, shell profiles and editor settings closed. Snotra closes two of
+  its defaults that exist for Claude Code — `/tmp/claude` and `~/.claude/debug`,
+  both shared across runs — and sets `TMPDIR` to the run's own temp directory.
+  Caches (`pip`, `npm`, `XDG_CACHE_HOME`) are redirected there as well.
+- **Availability is tested, not assumed.** On first need the service runs a
+  self-test through the real sandbox: one write that must succeed and one that
+  must be refused. The library's dependency check alone is not trusted — on
+  Ubuntu 24.04 it passes, and every command then fails. The result is visible in
+  three places: a pill on the approval card ("Isolated", or "Not isolated" in
+  red), a status line in the settings with the reason and the remedy, and a
+  `sandbox` field in the tool result for the model.
+- **The fallback.** Windows, Linux without `bubblewrap`, `socat` and `ripgrep`,
+  a kernel that restricts unprivileged user namespaces (Ubuntu 24.04+ as
+  shipped), or a failing self-test: the run falls back to the flow of the
+  revision above, visibly. Snotra ships no AppArmor profile of its own (decision
+  on #329); the settings name the `sysctl` that lifts the restriction. A run
+  that was expected to be isolated and then cannot be wrapped ends in an error —
+  it never runs unisolated instead.
+- **Concurrency.** The proxy consults one process-wide domain list. Runs with
+  the same set share it; a run with a different set waits until the others are
+  done, so no run reaches a domain its card did not name.
+- **TLS on macOS.** The Seatbelt profile keeps `com.apple.trustd.agent` closed;
+  the runtime calls opening it a potential exfiltration channel. pip from 24.2
+  on verifies certificates through exactly that service, so inside the sandbox
+  it is switched back to its bundled certifi (`PIP_USE_DEPRECATED=legacy-certs`),
+  but only when the pip of `run_python`'s interpreter is new enough — older pip
+  rejects the value (decision on #329). A venv with a different pip version and
+  Go tools that verify through the Security framework (`gh`, `terraform`) are a
+  known limitation.
+- **The remaining risk.** A run can still **read** files outside the denied
+  locations — source code, documents — and send what it read to a domain the
+  card allowed; an allowed domain is a channel. `execute` still cannot be
+  approved for a session or permanently (§6/§7 unchanged). In "auto" a run
+  executes without a card, but isolated. Local MCP servers are processes too and
+  are not covered (#62).
+
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto
 ([`shell-command-guard.js`](../src/shared/runtime/shell-command-guard.js), in
@@ -512,8 +576,8 @@ not a claim that the product modes are identical.
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |
-| Safe process execution and recovery for a future delete tool | To be settled before such capabilities are introduced; the recovery copy on overwrite (section 9) is already part of #66. The shell has been registered since #102 — without isolation, but with an approval before every run and off as shipped (the revision in section 9). |
-| Real isolation for `run_python` and `shell_execute` (a separate user, `sandbox-exec`, containers, namespaces) | Open. A topic of its own across three operating systems; until then the revision in section 9 applies: approval instead of a sandbox, tools off by default. |
+| Safe process execution and recovery for a future delete tool | To be settled before such capabilities are introduced; the recovery copy on overwrite (section 9) is already part of #66. The shell has been registered since #102 with an approval before every run and off as shipped, and has run isolated on macOS and Linux since #329 (the revisions in section 9). |
+| Real isolation for `run_python` and `shell_execute` | Done for macOS and Linux in #329 (section 9). Open: **Windows** — the runtime brings an alpha of its own there, not used yet — and restricted user namespaces on Ubuntu 24.04+, where isolation needs the user's `sysctl` or an AppArmor profile. Until then the first revision in section 9 applies on those systems, and the card says so in red. |
 
 **#66 — the core:** registry classes and dynamic attributes, the complete matrix
 and rule priority, path and content protection including indirect output, the

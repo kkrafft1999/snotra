@@ -2,11 +2,14 @@
  * Shell-Ausfuehrungs-Port (Issue #102).
  *
  * Neben dem `code-execution-port` die zweite Ausfuehrungsfaehigkeit — und die
- * weitreichendere: ein Shell-Befehl kann alles, was der angemeldete Nutzer
- * kann. Es gibt keine Workspace-Grenze, keine Sandbox und kein
- * Schutzversprechen durch Musterlisten; der Schutz ist der sichtbare Befehl
- * plus Freigabe vor jedem einzelnen Lauf (Konzept §9, mit diesem Issue
- * bewusst revidiert).
+ * weitreichendere.
+ *
+ * Since #329 a run is isolated on macOS and Linux: it writes only inside the
+ * workspace and its own temp directory, cannot read credential stores, and
+ * reaches the network only for the approved domains. On Windows, or where the
+ * sandbox is unavailable, a command can do everything the logged-in user can;
+ * there the protection is the visible command plus an approval before every
+ * single run (concept §9). Pattern lists are a second line, not a promise.
  *
  * Wie beim Code-Port bleibt die Oberflaeche eng: ein Befehl rein, Ausgabe und
  * Exit-Code raus, kein Zustand zwischen zwei Aufrufen. Kein dauerhafter
@@ -21,6 +24,8 @@
  * @property {boolean} truncated     Ausgabe wurde gekappt
  * @property {number} durationMs
  * @property {string} shell          Anzeigename der tatsaechlich benutzten Shell
+ * @property {{isolated: boolean, domains?: string[], reason?: string, missing?: string[]}} [isolation]
+ *   whether the run was isolated (#329); absent when no sandbox is wired
  *
  * @typedef {Object} ShellDescription
  * @property {boolean} found
@@ -39,7 +44,8 @@
  *   weil die Tool-Sichtbarkeit beim Bauen der Tool-Liste feststehen muss.
  * @property {() => ShellDescription} describe
  * @property {(request: { command: string, stdin?: string, timeoutMs?: number,
- *   cwd?: string, abortSignal?: AbortSignal }) => Promise<ShellExecutionResult>} run
+ *   cwd?: string, workspaceRoot?: string, networkDomains?: string[],
+ *   abortSignal?: AbortSignal }) => Promise<ShellExecutionResult>} run
  */
 
 'use strict';
