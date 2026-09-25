@@ -239,7 +239,10 @@ module.exports = {
   'history.title': 'History',
   'history.new': 'New chat',
   'history.empty': 'No saved chats yet.',
-  'history.entry.fallbackTitle': 'Chat',
+  // Title of a chat whose first message has no text (#359).
+  'chat.title.new': 'New chat',
+  'chat.title.image': 'Image',
+  'chat.title.images': '{count} images',
   'history.entry.remove': 'Remove from history',
   'history.entry.running': 'Working…',
   'history.entry.awaiting': 'Needs your approval',

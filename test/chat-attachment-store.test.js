@@ -108,7 +108,8 @@ test('Nachricht ohne Text, nur mit Bild, bleibt erhalten und benennt den Chat', 
 
   const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.equal(sessions.length, 1);
-  assert.equal(sessions[0].title, 'Bild');
+  // Stored without a fallback title; the header and history work it out (#359).
+  assert.equal(sessions[0].title, '');
   assert.equal(sessions[0].messages[0].content, '');
   assert.equal(sessions[0].messages[0].attachments.length, 1);
 });

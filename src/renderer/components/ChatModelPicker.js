@@ -1,10 +1,10 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { onLocaleChange, t } from '../i18n.js';
+import { onLocaleChange, t, tMessage } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
 import contracts from '../generated/contracts.js';
 
-const { inferChatTitle } = contracts;
+const { resolveChatTitle } = contracts;
 
 export function initChatModelPicker({
   api,
@@ -160,7 +160,9 @@ export function initChatModelPicker({
     const messages = Array.isArray(appStore.chatMessages)
       ? appStore.chatMessages.filter((m) => !m.greeting)
       : [];
-    const title = stored || inferChatTitle(messages);
+    // A fallback title comes back as a message descriptor and is put into
+    // words in the interface language (#359).
+    const title = tMessage(resolveChatTitle(stored, messages));
     chatTitleEl.textContent = title;
     chatTitleEl.title = title;
     chatTitleEl.removeAttribute('lang');
