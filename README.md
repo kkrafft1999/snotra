@@ -3,6 +3,9 @@
 > 🇩🇪 **Deutsch:** [`README.de.md`](./README.de.md) — English is the project
 > language; the German version is maintained alongside it.
 
+> 🌐 **Website:** [snotra-ai.dev](https://snotra-ai.dev) — overview, use cases
+> and downloads.
+
 > An Electron-based platform that grows into use-case-specific AI applications
 > through **skills** and **tools**.
 
