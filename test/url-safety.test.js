@@ -10,18 +10,18 @@ test('parseHttpUrl nimmt nur http und https an', () => {
   assert.equal(parseHttpUrl('http://example.org').url.protocol, 'http:');
 
   for (const raw of ['file:///etc/passwd', 'ftp://example.org', 'data:text/html,<b>x', 'javascript:alert(1)']) {
-    assert.match(parseHttpUrl(raw).error || '', /Nur http und https|gültige Adresse/, raw);
+    assert.match(parseHttpUrl(raw).error || '', /Only http and https|not a valid address/, raw);
   }
 });
 
 test('parseHttpUrl lehnt leere und kaputte Eingaben ab', () => {
-  assert.match(parseHttpUrl('').error, /keine Adresse/);
-  assert.match(parseHttpUrl(null).error, /keine Adresse/);
-  assert.match(parseHttpUrl('kein-url').error, /gültige Adresse/);
+  assert.match(parseHttpUrl('').error, /No address/);
+  assert.match(parseHttpUrl(null).error, /No address/);
+  assert.match(parseHttpUrl('kein-url').error, /not a valid address/);
 });
 
 test('parseHttpUrl lehnt Zugangsdaten in der Adresse ab', () => {
-  assert.match(parseHttpUrl('https://user:geheim@example.org/').error, /Benutzername oder Passwort/);
+  assert.match(parseHttpUrl('https://user:geheim@example.org/').error, /user name or password/);
 });
 
 test('isBlockedHostname sperrt lokale Namen', () => {

@@ -11,7 +11,7 @@ function fetchErrorCause(err) {
 
 function describeFetchError(err, baseUrl) {
   const cause = fetchErrorCause(err);
-  const main = err?.message || `Verbindung zu ${baseUrl} fehlgeschlagen.`;
+  const main = err?.message || `Connection to ${baseUrl} failed.`;
   return cause ? `${main} (${cause})` : main;
 }
 

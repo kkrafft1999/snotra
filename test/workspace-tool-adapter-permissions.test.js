@@ -98,7 +98,7 @@ test('zu große Quelldatei: keine ungeprüfte Ausgabe', async (t) => {
   const { workspace, adapter } = await makeFixture(t, { maxScanBytes: 8 });
   const plan = await adapter.plan('read_file_text', { relative_path: 'notes.md' }, { workspaceRoot: workspace });
   const result = await adapter.execute('read_file_text', { relative_path: 'notes.md' }, { workspaceRoot: workspace, approved: true, plan });
-  assert.match(JSON.parse(result.output).error, /zu groß für die Prüfung/);
+  assert.match(JSON.parse(result.output).error, /too large to check/);
 });
 
 test('breite Suche lässt sensible Dateien und Trefferzeilen weg und meldet nur die Anzahl', async (t) => {

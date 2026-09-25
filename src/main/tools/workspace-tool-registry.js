@@ -472,7 +472,7 @@ function createWorkspaceToolRegistry({
       // im Verlauf steht „Skill <name>“ statt eines nackten Dateipfads (#61).
       targets: (args) => {
         const name = typeof args.name === 'string' ? args.name.trim() : '';
-        if (!name) return { error: 'name ist erforderlich.' };
+        if (!name) return { error: 'name is required.' };
         return [{ path: formatSkillPath(name, 'SKILL.md'), kind: 'file', access: 'read' }];
       },
       descriptionKey: 'tools.desc.load_skill',
@@ -1005,7 +1005,7 @@ function createWorkspaceToolRegistry({
       },
       handler: async (args, { workspaceRoot, abortSignal } = {}) => {
         if (!pythonRunner) {
-          return JSON.stringify({ error: 'Python-Ausführung ist in dieser Installation nicht verfügbar.' });
+          return JSON.stringify({ error: 'Running Python is not available in this installation.' });
         }
         const result = await pythonRunner.run({
           code: args?.code,
@@ -1024,11 +1024,11 @@ function createWorkspaceToolRegistry({
         };
         if (result.timedOut) {
           out.timed_out = true;
-          out.note = 'Das Programm wurde nach Ablauf des Zeitlimits beendet.';
+          out.note = 'The program was stopped when the time limit ran out.';
         }
         if (result.aborted) {
           out.aborted = true;
-          out.note = 'Das Programm wurde abgebrochen.';
+          out.note = 'The program was cancelled.';
         }
         if (result.truncated) out.truncated = true;
         return JSON.stringify(out);
@@ -1087,7 +1087,7 @@ function createWorkspaceToolRegistry({
       },
       handler: async (args, { workspaceRoot, abortSignal } = {}) => {
         if (!shellRunner) {
-          return JSON.stringify({ error: 'Shell-Ausführung ist in dieser Installation nicht verfügbar.' });
+          return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
         // Doppelt geprueft: der Planer lehnt gesperrte Wirkungen schon vor der
         // Freigabekarte ab, hier faengt es jeden Weg ohne Planer ab.
@@ -1118,11 +1118,11 @@ function createWorkspaceToolRegistry({
         };
         if (result.timedOut) {
           out.timed_out = true;
-          out.note = 'Der Befehl wurde nach Ablauf des Zeitlimits beendet.';
+          out.note = 'The command was stopped when the time limit ran out.';
         }
         if (result.aborted) {
           out.aborted = true;
-          out.note = 'Der Befehl wurde abgebrochen.';
+          out.note = 'The command was cancelled.';
         }
         if (result.truncated) out.truncated = true;
         return JSON.stringify(out);
@@ -1224,7 +1224,7 @@ function createWorkspaceToolRegistry({
       },
       handler: async (args, { abortSignal } = {}) => {
         if (!urlFetch) {
-          return JSON.stringify({ error: 'Der Seitenabruf ist in dieser Installation nicht verfügbar.' });
+          return JSON.stringify({ error: 'Fetching web pages is not available in this installation.' });
         }
         const result = await urlFetch.fetchUrl({
           url: args?.url,
@@ -1232,7 +1232,7 @@ function createWorkspaceToolRegistry({
           abortSignal,
         });
         if (!result?.ok) {
-          return JSON.stringify({ error: result?.error || 'Die Seite konnte nicht gelesen werden.' });
+          return JSON.stringify({ error: result?.error || 'The page could not be read.' });
         }
         const out = { url: result.url, text: result.text };
         if (result.title) out.title = result.title;

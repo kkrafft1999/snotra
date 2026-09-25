@@ -106,7 +106,7 @@ test('run_python meldet Zeitüberschreitung, Abbruch und Kappung als Felder', as
   });
   const outZeit = JSON.parse(await exec(zeit.registry, { code: 'while True: pass' }));
   assert.equal(outZeit.timed_out, true);
-  assert.match(outZeit.note, /Zeitlimit/);
+  assert.match(outZeit.note, /time limit/);
 
   const stop = makeRegistry({
     run: () => ({ stdout: '', stderr: '', exitCode: null, timedOut: false, aborted: true, truncated: false, durationMs: 400 }),

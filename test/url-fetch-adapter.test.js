@@ -67,7 +67,7 @@ test('fetch_url-Adapter kürzt auf max_characters', async () => {
 
   assert.equal(result.ok, true);
   assert.equal(result.truncated, true);
-  assert.match(result.text, /\[gekürzt\]$/);
+  assert.match(result.text, /\[truncated\]$/);
   assert.ok(result.text.length < 600, 'gekürzter Text bleibt nahe an der Grenze');
 });
 
@@ -113,7 +113,7 @@ test('fetch_url-Adapter stoppt eine Weiterleitung auf eine private Adresse (#95)
 
   assert.equal(result.ok, false);
   assert.equal(result.code, URL_FETCH_ERROR_CODES.BLOCKED_ADDRESS);
-  assert.match(result.error, /privates oder lokales Netz \(192\.168\.1\.10\)/);
+  assert.match(result.error, /private or local network \(192\.168\.1\.10\)/);
   assert.equal(requests.length, 1, 'das interne Ziel wird gar nicht erst abgerufen');
   assert.ok(call >= 2);
 });
@@ -151,7 +151,7 @@ test('fetch_url-Adapter bricht nach zu vielen Weiterleitungen ab', async () => {
   const result = await adapter.fetchUrl({ url: 'https://example.org/' });
 
   assert.equal(result.code, URL_FETCH_ERROR_CODES.TOO_MANY_REDIRECTS);
-  assert.match(result.error, /mehr als 3 Mal/);
+  assert.match(result.error, /more than 3 times/);
 });
 
 test('fetch_url-Adapter lehnt alles ab, was kein Text ist', async () => {

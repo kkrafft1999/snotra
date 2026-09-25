@@ -57,7 +57,7 @@ test('describeFetchError includes undici cause details', () => {
 test('describeFetchError falls back to base URL when message is missing', () => {
   assert.equal(
     describeFetchError({}, 'http://localhost:11434'),
-    'Verbindung zu http://localhost:11434 fehlgeschlagen.'
+    'Connection to http://localhost:11434 failed.'
   );
   assert.equal(describeFetchError(new Error('timeout'), 'x'), 'timeout');
 });

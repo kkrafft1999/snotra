@@ -133,7 +133,7 @@ test('ein fachlicher Serverfehler kommt als Ergebnis mit Text beim Modell an', a
   const [suche] = await definitionsOf(service);
   const result = JSON.parse(await suche.handler({}, {}));
   assert.equal(result.output, 'Repo nicht gefunden.');
-  assert.match(result.error, /meldet einen Fehler/);
+  assert.match(result.error, /reported an error/);
 });
 
 test('ein toter Server macht den Chat nicht kaputt, sondern liefert einen Fehler', async () => {
@@ -166,7 +166,7 @@ test('renderContent fasst Textblöcke zusammen und benennt Unbekanntes', () => {
     renderContent([{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }]).text,
     'a\nb',
   );
-  assert.match(renderContent([{ type: 'image', data: 'x' }]).text, /Typ „image" wird nicht unterstützt/);
+  assert.match(renderContent([{ type: 'image', data: 'x' }]).text, /type "image" is not supported/);
   assert.equal(renderContent([{ type: 'resource', resource: { text: 'aus der Datei' } }]).text, 'aus der Datei');
   assert.deepEqual(renderContent(null), { text: '', truncated: false });
 });
@@ -178,7 +178,7 @@ test('eine überlange Ausgabe wird gekappt und als gekappt gemeldet', async () =
   const [suche] = await definitionsOf(service);
   const result = JSON.parse(await suche.handler({}, {}));
   assert.equal(result.truncated, true);
-  assert.match(result.output, /\[Ausgabe gekürzt\]$/);
+  assert.match(result.output, /\[output truncated\]$/);
 });
 
 // --- Zusammenspiel mit der Registry ---

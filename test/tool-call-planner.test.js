@@ -167,7 +167,7 @@ test('harte Grenzen: Ausbruch, Skill-Schreiben, Snotra-eigener Speicher und Syml
 
   const skillWrite = await planner.plan(registry.getDefinition('write_file_text'), { relative_path: 'skill:demo/references/x.md', content: 'x' }, { workspaceRoot: workspace, skillRoots });
   assert.equal(skillWrite.reason, 'hard_limit');
-  assert.match(skillWrite.error, /schreibgeschützt/);
+  assert.match(skillWrite.error, /read-only/);
 
   const noWorkspace = await planner.plan(registry.getDefinition('read_file_text'), { relative_path: 'a' }, { workspaceRoot: '' });
   assert.equal(noWorkspace.reason, 'hard_limit');
@@ -195,7 +195,7 @@ test('ungültige Argumente blockieren vor jeder Pfadauflösung', async (t) => {
   assert.equal((await planner.plan(def, { relative_path: 42 }, { workspaceRoot: workspace })).reason, 'invalid_arguments');
   assert.equal((await planner.plan(def, { relative_path: 'a', max_characters: 'viele' }, { workspaceRoot: workspace })).reason, 'invalid_arguments');
   assert.equal((await planner.plan(def, [], { workspaceRoot: workspace })).reason, 'invalid_arguments');
-  assert.equal(validateArguments({ parameters: { required: ['x'], properties: { x: { type: 'boolean' } } } }, { x: 'ja' }), 'Argument „x“ muss true/false sein.');
+  assert.equal(validateArguments({ parameters: { required: ['x'], properties: { x: { type: 'boolean' } } } }, { x: 'ja' }), 'Argument "x" must be true or false.');
   assert.equal(validateArguments({ parameters: {} }, { extra: 1 }), null, 'unbekannte Felder stören nicht');
   const unknown = await planner.plan(null, {}, { workspaceRoot: workspace });
   assert.equal(unknown.reason, 'unknown_tool');
@@ -211,7 +211,7 @@ test('verifyTargets erkennt geänderte, gelöschte und neu entstandene Ziele', a
   await fs.writeFile(path.join(workspace, 'src', 'a.js'), 'const a = 1;\nconst b = 2;\n', 'utf8');
   const changed = await planner.verifyTargets(plan);
   assert.equal(changed.ok, false);
-  assert.match(changed.error, /geändert/);
+  assert.match(changed.error, /has changed since it was approved/);
 
   const created = await planner.plan(registry.getDefinition('write_file_text'), { relative_path: 'src/neu.md', content: 'x' }, { workspaceRoot: workspace });
   await fs.writeFile(path.join(workspace, 'src', 'neu.md'), 'inzwischen da', 'utf8');

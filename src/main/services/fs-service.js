@@ -163,7 +163,7 @@ function readIntegerArg(args, name) {
   const value = args[name];
   if (value === undefined || value === null) return { value: undefined };
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return { error: `${name} muss eine Ganzzahl sein.` };
+    return { error: `${name} must be an integer.` };
   }
   return { value: Math.floor(value) };
 }
@@ -177,9 +177,9 @@ function splitFileLines(text) {
 
 function buildLineSliceResult(rel, text, startLineArg, endLineArg, maxChars) {
   const startLine = startLineArg === undefined ? 1 : startLineArg;
-  if (startLine < 1) return { error: 'start_line muss mindestens 1 sein.' };
+  if (startLine < 1) return { error: 'start_line must be at least 1.' };
   const endLine = endLineArg === undefined ? startLine + READ_LINES_DEFAULT_COUNT - 1 : endLineArg;
-  if (endLine < startLine) return { error: 'end_line darf nicht kleiner als start_line sein.' };
+  if (endLine < startLine) return { error: 'end_line must not be less than start_line.' };
 
   const lines = splitFileLines(text);
   const totalLines = lines.length;
@@ -188,7 +188,7 @@ function buildLineSliceResult(rel, text, startLineArg, endLineArg, maxChars) {
   }
   if (startLine > totalLines) {
     return {
-      error: `start_line (${startLine}) liegt hinter dem Dateiende — die Datei hat ${totalLines} Zeilen.`,
+      error: `start_line (${startLine}) is past the end of the file — the file has ${totalLines} lines.`,
     };
   }
 
@@ -228,12 +228,12 @@ function buildLineSliceResult(rel, text, startLineArg, endLineArg, maxChars) {
 
 function buildByteSliceResult(rel, buf, startByteArg, lengthArg, maxChars) {
   const startByte = startByteArg === undefined ? 0 : startByteArg;
-  if (startByte < 0) return { error: 'start_byte darf nicht negativ sein.' };
+  if (startByte < 0) return { error: 'start_byte must not be negative.' };
   const requested = lengthArg === undefined ? READ_BYTES_DEFAULT_LENGTH : lengthArg;
-  if (requested < 1) return { error: 'length muss mindestens 1 sein.' };
+  if (requested < 1) return { error: 'length must be at least 1.' };
   if (startByte >= buf.length && !(startByte === 0 && buf.length === 0)) {
     return {
-      error: `start_byte (${startByte}) liegt hinter dem Dateiende — die Datei hat ${buf.length} Bytes.`,
+      error: `start_byte (${startByte}) is past the end of the file — the file has ${buf.length} bytes.`,
     };
   }
 
@@ -451,24 +451,24 @@ function applyEditsToText(text, edits) {
     const edit = edits[i];
     const label = `edits[${i}]`;
     if (!edit || typeof edit !== 'object' || Array.isArray(edit)) {
-      return { error: `${label} muss ein Objekt mit old_string und new_string sein.` };
+      return { error: `${label} must be an object with old_string and new_string.` };
     }
     if (typeof edit.old_string !== 'string' || !edit.old_string.length) {
-      return { error: `${label}.old_string (nicht leerer Text) ist erforderlich.` };
+      return { error: `${label}.old_string (non-empty text) is required.` };
     }
     if (typeof edit.new_string !== 'string') {
-      return { error: `${label}.new_string (Text, darf leer sein) ist erforderlich.` };
+      return { error: `${label}.new_string (text, may be empty) is required.` };
     }
     if (edit.old_string === edit.new_string) {
-      return { error: `${label}: old_string und new_string müssen sich unterscheiden.` };
+      return { error: `${label}: old_string and new_string must differ.` };
     }
 
     const firstIndex = current.indexOf(edit.old_string);
     if (firstIndex === -1) {
       return {
         error:
-          `${label}: old_string wurde nicht gefunden — der Text muss exakt übereinstimmen ` +
-          `(inklusive Einrückung und Zeilenumbrüchen) und darf nicht von einem früheren Schritt verändert worden sein.`,
+          `${label}: old_string was not found — the text must match exactly ` +
+          `(including indentation and line breaks) and must not have been changed by an earlier edit.`,
       };
     }
     let count = 0;
@@ -481,7 +481,7 @@ function applyEditsToText(text, edits) {
     }
     if (count > 1 && edit.replace_all !== true) {
       return {
-        error: `${label}: old_string ist nicht eindeutig (${count} Treffer). Mehr umgebenden Kontext angeben oder replace_all=true setzen.`,
+        error: `${label}: old_string is not unique (${count} matches). Include more surrounding context or set replace_all=true.`,
       };
     }
 
@@ -546,8 +546,8 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
   if (!match) {
     return {
       error:
-        `Hunk-Kopf in Zeile ${headerIndex + 1} ist ungültig: "${clipPatchLine(header)}". ` +
-        `Erwartet wird "@@ -alteZeile,anzahl +neueZeile,anzahl @@".`,
+        `Invalid hunk header on line ${headerIndex + 1}: "${clipPatchLine(header)}". ` +
+        `Expected "@@ -oldLine,count +newLine,count @@".`,
     };
   }
   const oldStart = Number(match[1]);
@@ -594,8 +594,8 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
     } else {
       return {
         error:
-          `Unerwartete Zeile ${i + 1} im Hunk "${clipPatchLine(header)}": "${clipPatchLine(body)}". ` +
-          `Hunk-Zeilen beginnen mit " " (unverändert), "-" (entfernt), "+" (neu) oder "\\".`,
+          `Unexpected line ${i + 1} in hunk "${clipPatchLine(header)}": "${clipPatchLine(body)}". ` +
+          `Hunk lines start with " " (unchanged), "-" (removed), "+" (added) or "\\".`,
       };
     }
     i += 1;
@@ -604,8 +604,8 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
   if (oldLines.length !== oldCount || newLines.length !== newCount) {
     return {
       error:
-        `Hunk "${clipPatchLine(header)}" ist unvollständig: erwartet ${oldCount} alte und ${newCount} neue Zeilen, ` +
-        `gefunden ${oldLines.length} und ${newLines.length}.`,
+        `Hunk "${clipPatchLine(header)}" is incomplete: expected ${oldCount} old and ${newCount} new lines, ` +
+        `found ${oldLines.length} and ${newLines.length}.`,
     };
   }
 
@@ -633,7 +633,7 @@ function parseUnifiedDiff(text) {
     const line = rawLines[i];
     if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) {
       return {
-        error: 'Binär-Patches werden nicht unterstützt — apply_patch verarbeitet nur Text-Diffs.',
+        error: 'Binary patches are not supported — apply_patch only handles text diffs.',
       };
     }
     if (line === '' || PATCH_PRELUDE_PREFIXES.some((prefix) => line.startsWith(prefix))) {
@@ -643,14 +643,14 @@ function parseUnifiedDiff(text) {
     if (!line.startsWith('--- ')) {
       return {
         error:
-          `Unerwartete Zeile ${i + 1} im Patch: "${clipPatchLine(line)}". ` +
-          `Erwartet wird ein Dateikopf ("--- …" gefolgt von "+++ …") oder ein Hunk ("@@ …").`,
+          `Unexpected line ${i + 1} in the patch: "${clipPatchLine(line)}". ` +
+          `Expected a file header ("--- …" followed by "+++ …") or a hunk ("@@ …").`,
       };
     }
     const oldPath = normalizeDiffPath(line.slice(4));
     i += 1;
     if (i >= rawLines.length || !rawLines[i].startsWith('+++ ')) {
-      return { error: `Nach dem "--- "-Kopf in Zeile ${i} fehlt die zugehörige "+++ "-Zeile.` };
+      return { error: `The "--- " header on line ${i} is not followed by its "+++ " line.` };
     }
     const newPath = normalizeDiffPath(rawLines[i].slice(4));
     i += 1;
@@ -658,21 +658,21 @@ function parseUnifiedDiff(text) {
     if (oldPath === '/dev/null') {
       return {
         error:
-          `Der Patch legt "${newPath}" neu an — apply_patch ändert nur bestehende Dateien. ` +
-          `Neue Dateien mit write_file_text erstellen.`,
+          `The patch creates "${newPath}" — apply_patch only changes existing files. ` +
+          `Create new files with write_file_text.`,
       };
     }
     if (newPath === '/dev/null') {
-      return { error: `Der Patch löscht "${oldPath}" — Dateien löschen kann apply_patch nicht.` };
+      return { error: `The patch deletes "${oldPath}" — apply_patch cannot delete files.` };
     }
     if (oldPath !== newPath) {
       return {
-        error: `Der Patch benennt "${oldPath}" in "${newPath}" um — Umbenennungen unterstützt apply_patch nicht.`,
+        error: `The patch renames "${oldPath}" to "${newPath}" — apply_patch does not support renames.`,
       };
     }
     if (files.some((file) => file.relativePath === newPath)) {
       return {
-        error: `"${newPath}" kommt mehrfach im Patch vor — alle Hunks einer Datei in einem Dateiabschnitt zusammenfassen.`,
+        error: `"${newPath}" appears more than once in the patch — put all hunks for one file into a single file section.`,
       };
     }
 
@@ -684,25 +684,25 @@ function parseUnifiedDiff(text) {
       totalHunks += 1;
       if (totalHunks > PATCH_MAX_HUNKS) {
         return {
-          error: `Zu viele Hunks im Patch (mehr als ${PATCH_MAX_HUNKS}). Bitte auf mehrere Aufrufe verteilen.`,
+          error: `Too many hunks in the patch (more than ${PATCH_MAX_HUNKS}). Split it across several calls.`,
         };
       }
       i = parsed.nextIndex;
     }
     if (!hunks.length) {
-      return { error: `Für "${newPath}" enthält der Patch keinen Hunk ("@@ …").` };
+      return { error: `The patch has no hunk ("@@ …") for "${newPath}".` };
     }
 
     files.push({ relativePath: newPath, hunks });
     if (files.length > PATCH_MAX_FILES) {
       return {
-        error: `Zu viele Dateien im Patch (mehr als ${PATCH_MAX_FILES}). Bitte auf mehrere Aufrufe verteilen.`,
+        error: `Too many files in the patch (more than ${PATCH_MAX_FILES}). Split it across several calls.`,
       };
     }
   }
 
   if (!files.length) {
-    return { error: 'Der Patch enthält keinen Dateikopf ("--- …" gefolgt von "+++ …").' };
+    return { error: 'The patch has no file header ("--- …" followed by "+++ …").' };
   }
   return { files };
 }
@@ -717,8 +717,8 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
     if (expected > lines.length) {
       return {
         error:
-          `die Einfügeposition (Zeile ${expected + 1}) liegt hinter dem Dateiende — ` +
-          `die Datei hat ${lines.length} Zeilen.`,
+          `the insertion point (line ${expected + 1}) is past the end of the file — ` +
+          `the file has ${lines.length} lines.`,
       };
     }
     return { index: Math.min(Math.max(expected, minIndex), lines.length) };
@@ -726,7 +726,7 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
   const maxIndex = lines.length - oldLines.length;
   if (maxIndex < minIndex) {
     return {
-      error: `die Datei hat ab Zeile ${minIndex + 1} weniger Zeilen als der Hunk erwartet (${oldLines.length}).`,
+      error: `from line ${minIndex + 1} on, the file has fewer lines than the hunk expects (${oldLines.length}).`,
     };
   }
   const matches = (index) => oldLines.every((line, k) => lines[index + k] === line);
@@ -740,8 +740,8 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
   }
   return {
     error:
-      `der Kontext passt nicht (erwartet ab Zeile ${expected + 1}, gesucht wurde "${clipPatchLine(oldLines[0])}"). ` +
-      `Datei erneut lesen und den Patch auf dem aktuellen Stand erzeugen.`,
+      `the context does not match (expected at line ${expected + 1}, looked for "${clipPatchLine(oldLines[0])}"). ` +
+      `Read the file again and build the patch against its current content.`,
   };
 }
 
@@ -759,7 +759,7 @@ function applyHunksToLines(lines, hunks, relativePath) {
     const found = findHunkIndex(result, hunk.oldLines, expected, minIndex);
     if (found.error) {
       return {
-        error: `Hunk ${h + 1} von ${hunks.length} lässt sich nicht auf "${relativePath}" anwenden: ${found.error}`,
+        error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${found.error}`,
       };
     }
     result.splice(found.index, hunk.oldLines.length, ...hunk.newLines);
@@ -811,8 +811,8 @@ function createFsService({
     missing: 'Kein Arbeitsordner geöffnet.',
   };
   const SKILL_LABELS = {
-    outside: 'Pfad liegt außerhalb des Skill-Ordners.',
-    missing: 'Skill-Ordner nicht gefunden.',
+    outside: 'Path is outside the skill folder.',
+    missing: 'Skill folder not found.',
   };
 
   function resolvePathInRoot(rootPath, relativePath, labels) {
@@ -917,16 +917,16 @@ function createFsService({
       return { root: workspaceRoot, rel: raw, prefix: '', labels: WORKSPACE_LABELS };
     }
     if (!Array.isArray(skillRoots)) {
-      return { error: 'Skill-Pfade (skill:…) sind nur mit den Lese-Tools möglich.' };
+      return { error: 'Skill paths (skill:…) only work with the read tools.' };
     }
     const known = skillRoots.filter((entry) => entry && entry.name && entry.dir);
     if (known.length === 0) {
-      return { error: 'Es ist kein Skill eingeschaltet — Skill-Pfade gibt es hier nicht.' };
+      return { error: 'No skill is switched on — there are no skill paths here.' };
     }
     const hit = known.find((entry) => entry.name === parsed.name);
     if (!hit) {
       const names = known.map((entry) => entry.name).join(', ');
-      return { error: `Unbekannter Skill: „${parsed.name}“. Eingeschaltet sind: ${names}.` };
+      return { error: `Unknown skill: "${parsed.name}". Switched on: ${names}.` };
     }
     return {
       root: hit.dir,
@@ -977,7 +977,7 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (!st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist kein Ordner.' });
+        return JSON.stringify({ error: 'Path is not a folder.' });
       }
       const entries = await fs.readdir(absPath, { withFileTypes: true });
       // Sensible Einträge (Issue #66) werden ausgelassen und nur gezählt.
@@ -1015,7 +1015,7 @@ function createFsService({
   async function runReadFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     let maxChars = Number.isFinite(args.max_characters) ? Math.floor(args.max_characters) : 32000;
     maxChars = Math.min(Math.max(1000, maxChars), 200000);
@@ -1024,18 +1024,18 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+        return JSON.stringify({ error: 'Path is a folder, not a file.' });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       const buf = await fs.readFile(absPath);
       let text = buf.toString('utf8');
       const truncated = text.length > maxChars;
       if (truncated) {
-        text = `${text.slice(0, maxChars)}\n… [gekürzt auf ${maxChars} Zeichen]`;
+        text = `${text.slice(0, maxChars)}\n… [truncated to ${maxChars} characters]`;
       }
       return JSON.stringify({
         relative_path: rel,
@@ -1063,9 +1063,9 @@ function createFsService({
    */
   async function runLoadSkillTool(args, workspaceRoot, options = {}) {
     const name = typeof args.name === 'string' ? args.name.trim() : '';
-    if (!name) return JSON.stringify({ error: 'name ist erforderlich.' });
+    if (!name) return JSON.stringify({ error: 'name is required.' });
     if (!isValidSkillName(name)) {
-      return JSON.stringify({ error: `Kein gültiger Skill-Name: „${name}“.` });
+      return JSON.stringify({ error: `Not a valid skill name: "${name}".` });
     }
     const rel = formatSkillPath(name, SKILL_FILE);
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
@@ -1074,15 +1074,15 @@ function createFsService({
       const raw = await fs.readFile(absPath, 'utf8');
       const parsed = parseSkillDocument(raw);
       if (!parsed) {
-        return JSON.stringify({ error: `${SKILL_FILE} von „${name}“ hat kein YAML-Frontmatter.` });
+        return JSON.stringify({ error: `${SKILL_FILE} of "${name}" has no YAML front matter.` });
       }
       const body = parsed.body.trim();
       if (!body) {
-        return JSON.stringify({ error: `Skill „${name}“ hat keine Anleitung.` });
+        return JSON.stringify({ error: `Skill "${name}" has no instructions.` });
       }
       const truncated = body.length > MAX_SKILL_BODY_CHARS;
       const instructions = truncated
-        ? `${body.slice(0, MAX_SKILL_BODY_CHARS)}\n… [gekürzt auf ${MAX_SKILL_BODY_CHARS} Zeichen]`
+        ? `${body.slice(0, MAX_SKILL_BODY_CHARS)}\n… [truncated to ${MAX_SKILL_BODY_CHARS} characters]`
         : body;
       return JSON.stringify({
         skill: name,
@@ -1097,14 +1097,14 @@ function createFsService({
   async function runReadFileLinesTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     const hasLineRange = args.start_line !== undefined || args.end_line !== undefined;
     const hasByteRange = args.start_byte !== undefined || args.length !== undefined;
     if (hasLineRange && hasByteRange) {
       return JSON.stringify({
         error:
-          'Entweder Zeilenbereich (start_line/end_line) oder Byte-Bereich (start_byte/length) angeben — nicht beides.',
+          'Give either a line range (start_line/end_line) or a byte range (start_byte/length) — not both.',
       });
     }
     const parsed = {};
@@ -1119,11 +1119,11 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+        return JSON.stringify({ error: 'Path is a folder, not a file.' });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       buf = await fs.readFile(absPath);
@@ -1156,13 +1156,13 @@ function createFsService({
     try {
       await fs.copyFile(absPath, copyPath);
     } catch (e) {
-      return { error: `Wiederherstellungskopie konnte nicht angelegt werden: ${e.message}` };
+      return { error: `The recovery copy could not be created: ${e.message}` };
     }
     try {
       await trashItem(copyPath);
     } catch (e) {
       await fs.unlink(copyPath).catch(() => {});
-      return { error: `Wiederherstellungskopie konnte nicht in den Papierkorb gelegt werden: ${e.message}` };
+      return { error: `The recovery copy could not be moved to the trash: ${e.message}` };
     }
     return { copyName };
   }
@@ -1180,7 +1180,7 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        throw new Error('Pfad ist ein Ordner, keine Datei.');
+        throw new Error('Path is a folder, not a file.');
       }
       mode = st.mode & 0o7777;
     } catch (e) {
@@ -1210,21 +1210,21 @@ function createFsService({
   async function runWriteFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     if (typeof args.content !== 'string') {
-      return JSON.stringify({ error: 'content (Text) ist erforderlich.' });
+      return JSON.stringify({ error: 'content (text) is required.' });
     }
     const byteLength = Buffer.byteLength(args.content, 'utf8');
     if (byteLength > MAX_WRITE_FILE_BYTES) {
       return JSON.stringify({
-        error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+        error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
       });
     }
     const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
     if (error) return JSON.stringify({ error });
     if (path.resolve(absPath) === path.resolve(workspaceRoot)) {
-      return JSON.stringify({ error: 'Der Projektordner selbst kann nicht als Datei beschrieben werden.' });
+      return JSON.stringify({ error: 'The project folder itself cannot be written as a file.' });
     }
     const recovery = options.recovery || null;
     try {
@@ -1232,7 +1232,7 @@ function createFsService({
       try {
         const st = await fs.stat(absPath);
         if (st.isDirectory()) {
-          return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+          return JSON.stringify({ error: 'Path is a folder, not a file.' });
         }
         existed = true;
       } catch {
@@ -1251,7 +1251,7 @@ function createFsService({
           }
         } else if (recovery.allowUnrecoverable !== true) {
           return JSON.stringify({
-            error: 'Kein Papierkorb verfügbar; Überschreiben ohne Wiederherstellungskopie braucht eine eigene Freigabe.',
+            error: 'No trash is available; overwriting without a recovery copy needs its own approval.',
             code: 'recovery_failed',
           });
         }
@@ -1273,27 +1273,27 @@ function createFsService({
   async function runEditFileTool(args, workspaceRoot) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     if (typeof args.old_string !== 'string' || !args.old_string.length) {
-      return JSON.stringify({ error: 'old_string (nicht leerer Text) ist erforderlich.' });
+      return JSON.stringify({ error: 'old_string (non-empty text) is required.' });
     }
     if (typeof args.new_string !== 'string') {
-      return JSON.stringify({ error: 'new_string (Text, darf leer sein) ist erforderlich.' });
+      return JSON.stringify({ error: 'new_string (text, may be empty) is required.' });
     }
     if (args.old_string === args.new_string) {
-      return JSON.stringify({ error: 'old_string und new_string müssen sich unterscheiden.' });
+      return JSON.stringify({ error: 'old_string and new_string must differ.' });
     }
     const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+        return JSON.stringify({ error: 'Path is a folder, not a file.' });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       const text = (await fs.readFile(absPath)).toString('utf8');
@@ -1305,12 +1305,12 @@ function createFsService({
       if (count === 0) {
         return JSON.stringify({
           error:
-            'old_string wurde nicht gefunden. Der Text muss exakt übereinstimmen — inklusive Einrückung und Zeilenumbrüchen.',
+            'old_string was not found. The text must match exactly — including indentation and line breaks.',
         });
       }
       if (count > 1 && args.replace_all !== true) {
         return JSON.stringify({
-          error: `old_string ist nicht eindeutig (${count} Treffer). Mehr umgebenden Kontext angeben oder replace_all=true setzen.`,
+          error: `old_string is not unique (${count} matches). Include more surrounding context or set replace_all=true.`,
         });
       }
       const updated =
@@ -1322,7 +1322,7 @@ function createFsService({
       const byteLength = Buffer.byteLength(updated, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
-          error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+          error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
         });
       }
       await writeFileAtomic(absPath, updated);
@@ -1345,14 +1345,14 @@ function createFsService({
   async function runApplyEditsMode(args, workspaceRoot) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     if (!Array.isArray(args.edits) || args.edits.length === 0) {
-      return JSON.stringify({ error: 'edits muss eine nicht leere Liste von Ersetzungen sein.' });
+      return JSON.stringify({ error: 'edits must be a non-empty list of replacements.' });
     }
     if (args.edits.length > PATCH_MAX_EDITS) {
       return JSON.stringify({
-        error: `Zu viele Schritte in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Bitte auf mehrere Aufrufe verteilen.`,
+        error: `Too many steps in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Split them across several calls.`,
       });
     }
     const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
@@ -1360,11 +1360,11 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+        return JSON.stringify({ error: 'Path is a folder, not a file.' });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       const text = (await fs.readFile(absPath)).toString('utf8');
@@ -1373,7 +1373,7 @@ function createFsService({
       const byteLength = Buffer.byteLength(applied.text, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
-          error: `Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+          error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
         });
       }
       await writeFileAtomic(absPath, applied.text);
@@ -1413,11 +1413,11 @@ function createFsService({
    */
   async function runApplyDiffMode(args, workspaceRoot) {
     if (typeof args.patch !== 'string' || !args.patch.trim()) {
-      return JSON.stringify({ error: 'patch (unified diff als Text) ist erforderlich.' });
+      return JSON.stringify({ error: 'patch (a unified diff as text) is required.' });
     }
     if (Buffer.byteLength(args.patch, 'utf8') > MAX_WRITE_FILE_BYTES) {
       return JSON.stringify({
-        error: `Patch zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+        error: `Patch too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller patches.`,
       });
     }
     const parsed = parseUnifiedDiff(args.patch);
@@ -1427,8 +1427,8 @@ function createFsService({
     if (relArg && !parsed.files.some((file) => file.relativePath === relArg)) {
       return JSON.stringify({
         error:
-          `relative_path ("${relArg}") kommt im Patch nicht vor. Im patch-Modus stehen die Pfade in den ` +
-          `"+++"-Kopfzeilen: ${parsed.files.map((file) => file.relativePath).join(', ')}.`,
+          `relative_path ("${relArg}") does not appear in the patch. In patch mode the paths come from the ` +
+          `"+++" header lines: ${parsed.files.map((file) => file.relativePath).join(', ')}.`,
       });
     }
 
@@ -1444,16 +1444,16 @@ function createFsService({
       } catch {
         return JSON.stringify({
           error:
-            `"${file.relativePath}" existiert nicht — apply_patch ändert nur bestehende Dateien. ` +
-            `Neue Dateien mit write_file_text erstellen.`,
+            `"${file.relativePath}" does not exist — apply_patch only changes existing files. ` +
+            `Create new files with write_file_text.`,
         });
       }
       if (st.isDirectory()) {
-        return JSON.stringify({ error: `"${file.relativePath}": Pfad ist ein Ordner, keine Datei.` });
+        return JSON.stringify({ error: `"${file.relativePath}": Path is a folder, not a file.` });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `"${file.relativePath}": Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `"${file.relativePath}": File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       let original;
@@ -1473,7 +1473,7 @@ function createFsService({
       const byteLength = Buffer.byteLength(updated, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
-          error: `"${file.relativePath}": Inhalt zu groß (>${MAX_WRITE_FILE_BYTES} Bytes). Bitte kleiner aufteilen.`,
+          error: `"${file.relativePath}": Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
         });
       }
       planned.push({
@@ -1495,10 +1495,10 @@ function createFsService({
       } catch (e) {
         const failed = await rollbackPatchedFiles(written);
         let note = written.length
-          ? ' Die bereits geschriebenen Dateien wurden zurückgesetzt.'
-          : ' Es wurde nichts geändert.';
+          ? ' The files already written were restored.'
+          : ' Nothing was changed.';
         if (failed.length) {
-          note = ` Achtung: Rücknahme unvollständig — nicht zurückgesetzt: ${failed.join(', ')}.`;
+          note = ` Warning: the rollback is incomplete — not restored: ${failed.join(', ')}.`;
         }
         return JSON.stringify({ error: `"${entry.relativePath}": ${e.message}.${note}` });
       }
@@ -1529,7 +1529,7 @@ function createFsService({
     const hasPatch = args?.patch !== undefined && args?.patch !== null;
     if (hasPatch && !hasEdits) {
       if (typeof args.patch !== 'string' || !args.patch.trim()) {
-        return { error: 'patch (unified diff als Text) ist erforderlich.' };
+        return { error: 'patch (a unified diff as text) is required.' };
       }
       const parsed = parseUnifiedDiff(args.patch);
       if (parsed.error) return { error: parsed.error };
@@ -1545,12 +1545,12 @@ function createFsService({
     if (hasEdits && hasPatch) {
       return JSON.stringify({
         error:
-          'Entweder edits (mehrere Ersetzungen in einer Datei) oder patch (unified diff) angeben — nicht beides.',
+          'Give either edits (several replacements in one file) or patch (a unified diff) — not both.',
       });
     }
     if (!hasEdits && !hasPatch) {
       return JSON.stringify({
-        error: 'edits (Liste von Ersetzungen) oder patch (unified diff als Text) ist erforderlich.',
+        error: 'Either edits (a list of replacements) or patch (a unified diff as text) is required.',
       });
     }
     return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
@@ -1606,7 +1606,7 @@ function createFsService({
   async function runSearchInFilesTool(args, workspaceRoot, options = {}) {
     const query = typeof args.query === 'string' ? args.query : '';
     if (!query) {
-      return JSON.stringify({ error: 'query ist erforderlich.' });
+      return JSON.stringify({ error: 'query is required.' });
     }
     const isRegex = args.is_regex === true;
     const pattern = isRegex ? query : escapeRegExpLiteral(query);
@@ -1620,7 +1620,8 @@ function createFsService({
     try {
       matcher = new RegExp(pattern, flags);
     } catch (e) {
-      return JSON.stringify({ error: `Ungültiger regulärer Ausdruck: ${e.message}` });
+      // V8's SyntaxError already reads "Invalid regular expression: /…/: …".
+      return JSON.stringify({ error: e.message });
     }
     let contextLines = Number.isFinite(args.context_lines)
       ? Math.floor(args.context_lines)
@@ -1776,7 +1777,7 @@ function createFsService({
   async function runFindFilesTool(args, workspaceRoot, options = {}) {
     const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : '';
     if (!pattern) {
-      return JSON.stringify({ error: 'pattern ist erforderlich.' });
+      return JSON.stringify({ error: 'pattern is required.' });
     }
     const glob = globToRegExp(pattern);
     let maxResults = Number.isFinite(args.max_results)
@@ -1829,7 +1830,7 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (!st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist kein Ordner.' });
+        return JSON.stringify({ error: 'Path is not a folder.' });
       }
       await walk(absPath);
     } catch (e) {
@@ -1877,7 +1878,7 @@ function createFsService({
   async function runStatPathTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich ("." für das Projektroot).' });
+      return JSON.stringify({ error: 'relative_path is required ("." for the project root).' });
     }
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
@@ -1900,12 +1901,12 @@ function createFsService({
     result.modified = new Date(st.mtimeMs).toISOString();
     if (args.include_line_count === true && !isDirectory) {
       if (st.size > MAX_READ_FILE_BYTES) {
-        result.line_count_skipped = `Datei zu groß für die Zeilenzählung (>${MAX_READ_FILE_BYTES} Bytes).`;
+        result.line_count_skipped = `File too large to count lines (>${MAX_READ_FILE_BYTES} bytes).`;
       } else {
         try {
           const buf = await fs.readFile(absPath);
           if (isBinaryBuffer(buf)) {
-            result.line_count_skipped = 'Binärdatei — Zeilenzählung übersprungen.';
+            result.line_count_skipped = 'Binary file — line count skipped.';
           } else {
             result.line_count = splitFileLines(buf.toString('utf8')).length;
           }
@@ -1920,12 +1921,12 @@ function createFsService({
   async function runOutlineFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
-      return JSON.stringify({ error: 'relative_path ist erforderlich.' });
+      return JSON.stringify({ error: 'relative_path is required.' });
     }
     const depth = readIntegerArg(args, 'max_depth');
     if (depth.error) return JSON.stringify({ error: depth.error });
     if (depth.value !== undefined && depth.value < 1) {
-      return JSON.stringify({ error: 'max_depth muss mindestens 1 sein.' });
+      return JSON.stringify({ error: 'max_depth must be at least 1.' });
     }
     let maxEntries = Number.isFinite(args.max_entries)
       ? Math.floor(args.max_entries)
@@ -1937,11 +1938,11 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist ein Ordner, keine Datei.' });
+        return JSON.stringify({ error: 'Path is a folder, not a file.' });
       }
       if (st.size > MAX_READ_FILE_BYTES) {
         return JSON.stringify({
-          error: `Datei zu groß (>${MAX_READ_FILE_BYTES} Bytes). Bitte andere Datei wählen.`,
+          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
         });
       }
       buf = await fs.readFile(absPath);
@@ -1949,7 +1950,7 @@ function createFsService({
       return JSON.stringify({ error: e.message });
     }
     if (isBinaryBuffer(buf)) {
-      return JSON.stringify({ error: 'Binärdatei — keine Gliederung möglich.' });
+      return JSON.stringify({ error: 'Binary file — no outline possible.' });
     }
     const ext = path.extname(rel).toLowerCase();
     const isMarkdown = OUTLINE_MARKDOWN_EXTENSIONS.has(ext);
@@ -1971,8 +1972,8 @@ function createFsService({
     };
     if (total === 0) {
       result.hint = isMarkdown
-        ? 'Keine Überschriften gefunden.'
-        : 'Keine Signaturen erkannt (generische Heuristik für Funktionen, Klassen, Typen). Ggf. read_file_lines nutzen.';
+        ? 'No headings found.'
+        : 'No signatures recognised (generic heuristic for functions, classes and types). Try read_file_lines instead.';
     }
     return JSON.stringify(result);
   }
@@ -1982,7 +1983,7 @@ function createFsService({
     const depth = readIntegerArg(args, 'max_depth');
     if (depth.error) return JSON.stringify({ error: depth.error });
     let maxDepth = depth.value === undefined ? TREE_DEFAULT_MAX_DEPTH : depth.value;
-    if (maxDepth < 1) return JSON.stringify({ error: 'max_depth muss mindestens 1 sein.' });
+    if (maxDepth < 1) return JSON.stringify({ error: 'max_depth must be at least 1.' });
     maxDepth = Math.min(maxDepth, TREE_MAX_DEPTH);
     let maxEntries = Number.isFinite(args.max_entries)
       ? Math.floor(args.max_entries)
@@ -1995,7 +1996,7 @@ function createFsService({
     try {
       const st = await fs.stat(absPath);
       if (!st.isDirectory()) {
-        return JSON.stringify({ error: 'Pfad ist kein Ordner.' });
+        return JSON.stringify({ error: 'Path is not a folder.' });
       }
     } catch (e) {
       return JSON.stringify({ error: e.message });

@@ -81,7 +81,7 @@ test('listApplyPatchTargets nennt alle Ziele oder den Parse-Fehler', async (t) =
   const patch = ['--- a/x.js', '+++ b/x.js', '@@ -1,1 +1,1 @@', '-a', '+b', '--- a/y.js', '+++ b/y.js', '@@ -1,1 +1,1 @@', '-c', '+d', ''].join('\n');
   assert.deepEqual(svc.listApplyPatchTargets({ patch }), ['x.js', 'y.js']);
   assert.match(svc.listApplyPatchTargets({ patch: 'kaputt' }).error, /./);
-  assert.match(svc.listApplyPatchTargets({ patch: '  ' }).error, /erforderlich/);
+  assert.match(svc.listApplyPatchTargets({ patch: '  ' }).error, /is required/);
 });
 
 test('write_file_text: Wiederherstellungskopie, Fehlschlag ohne Freigabe, Überschreiben als delete', async (t) => {
@@ -106,7 +106,7 @@ test('write_file_text: Wiederherstellungskopie, Fehlschlag ohne Freigabe, Übers
     })
   );
   assert.equal(failed.code, 'recovery_failed');
-  assert.match(failed.error, /Papierkorb/);
+  assert.match(failed.error, /trash/);
   assert.equal(await fs.readFile(target, 'utf8'), 'v2\n', 'nicht geschrieben');
   assert.deepEqual((await fs.readdir(path.join(root, 'src'))).filter((n) => n.includes('backup')), []);
 

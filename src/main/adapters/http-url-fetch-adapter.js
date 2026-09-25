@@ -92,22 +92,22 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
   /** Adresspruefung vor jedem einzelnen Sprung (auch nach Weiterleitungen). */
   async function checkAddress(url) {
     if (isBlockedHostname(url.hostname)) {
-      return `Adresse „${url.hostname}" zeigt auf den eigenen Rechner oder das lokale Netz und wird nicht abgerufen.`;
+      return `The address "${url.hostname}" points to this computer or the local network and is not fetched.`;
     }
     let addresses;
     try {
       addresses = await resolveHost(url.hostname);
     } catch (error) {
-      return `Der Name „${url.hostname}" konnte nicht aufgelöst werden (${error?.code || 'DNS-Fehler'}).`;
+      return `The name "${url.hostname}" could not be resolved (${error?.code || 'DNS error'}).`;
     }
     const list = Array.isArray(addresses) ? addresses : [addresses];
     if (list.length === 0) {
-      return `Der Name „${url.hostname}" konnte nicht aufgelöst werden.`;
+      return `The name "${url.hostname}" could not be resolved.`;
     }
     for (const entry of list) {
       const address = typeof entry === 'string' ? entry : entry?.address;
       if (isBlockedAddress(address)) {
-        return `Adresse „${url.hostname}" zeigt auf ein privates oder lokales Netz (${address}) und wird nicht abgerufen.`;
+        return `The address "${url.hostname}" points to a private or local network (${address}) and is not fetched.`;
       }
     }
     return null;
@@ -146,14 +146,14 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
               if (!location) {
                 return fail(
                   URL_FETCH_ERROR_CODES.SERVICE,
-                  `Die Seite antwortete mit HTTP ${response.status} ohne Zieladresse.`
+                  `The page answered with HTTP ${response.status} but no redirect location.`
                 );
               }
               let next;
               try {
                 next = new URL(location, current);
               } catch {
-                return fail(URL_FETCH_ERROR_CODES.INVALID_URL, `Die Weiterleitung nach „${location}" ist keine gültige Adresse.`);
+                return fail(URL_FETCH_ERROR_CODES.INVALID_URL, `The redirect target "${location}" is not a valid address.`);
               }
               const allowed = parseHttpUrl(next.toString());
               if (allowed.error) return fail(URL_FETCH_ERROR_CODES.BLOCKED_ADDRESS, allowed.error);
@@ -164,7 +164,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
             if (!response.ok) {
               return fail(
                 URL_FETCH_ERROR_CODES.SERVICE,
-                `Die Seite konnte nicht gelesen werden: HTTP ${response.status}.`
+                `The page could not be read: HTTP ${response.status}.`
               );
             }
 
@@ -172,7 +172,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
             if (contentType && !URL_FETCH_ALLOWED_CONTENT_TYPES.includes(contentType)) {
               return fail(
                 URL_FETCH_ERROR_CODES.UNSUPPORTED_CONTENT,
-                `Die Adresse liefert „${contentType}" — gelesen werden nur Textinhalte (HTML, Text, Markdown, JSON).`
+                `The address returns "${contentType}" — only text content is read (HTML, plain text, Markdown, JSON).`
               );
             }
 
@@ -180,7 +180,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
             if (body.tooLarge) {
               return fail(
                 URL_FETCH_ERROR_CODES.TOO_LARGE,
-                `Die Seite ist größer als ${Math.round(URL_FETCH_LIMITS.MAX_BYTES / (1024 * 1024))} MB und wird nicht gelesen.`
+                `The page is larger than ${Math.round(URL_FETCH_LIMITS.MAX_BYTES / (1024 * 1024))} MB and is not read.`
               );
             }
 
@@ -198,7 +198,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
             const out = {
               ok: true,
               url: current.toString(),
-              text: truncated ? `${text.slice(0, maxChars)}\n… [gekürzt]` : text,
+              text: truncated ? `${text.slice(0, maxChars)}\n… [truncated]` : text,
               truncated,
             };
             if (title) out.title = title;
@@ -206,7 +206,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
           }
           return fail(
             URL_FETCH_ERROR_CODES.TOO_MANY_REDIRECTS,
-            `Die Adresse leitet mehr als ${URL_FETCH_LIMITS.MAX_REDIRECTS} Mal weiter.`
+            `The address redirects more than ${URL_FETCH_LIMITS.MAX_REDIRECTS} times.`
           );
         },
         { timeoutMs: URL_FETCH_LIMITS.TIMEOUT_MS, signal: abortSignal }

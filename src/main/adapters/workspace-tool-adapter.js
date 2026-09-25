@@ -135,7 +135,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     async plan(name, args, context = {}) {
       const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
       if (!definition) {
-        return { tool: name, error: `Unbekanntes Tool: ${name}`, reason: PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL, unknownTool: true, riskClasses: [], targets: [] };
+        return { tool: name, error: `Unknown tool: ${name}`, reason: PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL, unknownTool: true, riskClasses: [], targets: [] };
       }
       if (!planner) {
         // Ohne Dateisystem-Zugang (Tests mit Registry-Stubs) bleibt nur die
@@ -225,7 +225,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
           if (!fileScan.scannable) {
             return {
               output: JSON.stringify({
-                error: 'Datei zu groß für die Prüfung auf sensible Inhalte; Ausgabe zurückgehalten.',
+                error: 'File too large to check for sensitive content; output withheld.',
               }),
               progressEvents: [],
             };
