@@ -14,6 +14,7 @@
 const { detectInstallTarget, pickReleaseAsset } = require('./update-targets');
 const { createUpdateDownloader } = require('./update-download');
 const { createUpdateInstaller } = require('./update-installer');
+const { createMessage } = require('../../shared/contracts/message');
 
 const GITHUB_API = 'https://api.github.com';
 const DEFAULT_REPO = 'kkrafft1999/snotra';
@@ -167,7 +168,7 @@ function createUpdateService({
         },
       });
       if (!res.ok) {
-        return { error: `GitHub antwortete mit HTTP ${res.status}.` };
+        return { error: createMessage('update.error.githubHttp', { status: res.status }) };
       }
       const json = await res.json();
       return { release: json };
@@ -195,7 +196,9 @@ function createUpdateService({
       return {
         updateAvailable: false,
         currentVersion,
-        error: offline ? 'Update-Server nicht erreichbar.' : (err?.message || 'Update-Pruefung fehlgeschlagen.'),
+        error: offline
+          ? createMessage('update.error.offline')
+          : (err?.message || createMessage('update.error.checkFailed')),
       };
     }
     if (result.error) {
@@ -205,7 +208,7 @@ function createUpdateService({
     const release = result.release || {};
     const latestVersion = typeof release.tag_name === 'string' ? release.tag_name.replace(/^v/, '') : '';
     if (!latestVersion || release.draft === true) {
-      return { updateAvailable: false, currentVersion, error: 'Kein gueltiges Release gefunden.' };
+      return { updateAvailable: false, currentVersion, error: createMessage('update.error.noRelease') };
     }
 
     const newer = isNewerVersion(latestVersion, currentVersion);
@@ -226,7 +229,7 @@ function createUpdateService({
     const canSelfUpdate = Boolean(target.canSelfUpdate && asset);
     const selfUpdateBlockedReason = canSelfUpdate
       ? ''
-      : (target.reason || 'Für diese Installation gibt es im Release kein passendes Paket.');
+      : (target.reason || createMessage('update.reason.noAsset'));
 
     return {
       updateAvailable: newer && !ignored,
@@ -254,14 +257,14 @@ function createUpdateService({
   async function downloadUpdate({ onProgress } = {}) {
     const result = await checkForUpdate({ respectIgnored: false });
     if (!result.updateAvailable) {
-      return { ok: false, error: result.error || 'Es gibt keine neuere Version.' };
+      return { ok: false, error: result.error || createMessage('update.error.noNewerVersion') };
     }
     if (!result.canSelfUpdate || !lastAsset) {
       return {
         ok: false,
         manualOnly: true,
         releaseUrl: result.releaseUrl,
-        error: result.selfUpdateBlockedReason || 'Selbst-Update ist hier nicht möglich.',
+        error: result.selfUpdateBlockedReason || createMessage('update.error.selfUpdateImpossible'),
       };
     }
     return downloader.download({ asset: lastAsset, version: result.latestVersion, onProgress });
@@ -283,7 +286,7 @@ function createUpdateService({
   async function installUpdate() {
     const ready = downloader.getReady();
     if (!ready) {
-      return { ok: false, error: 'Es liegt keine geladene Version bereit.' };
+      return { ok: false, error: createMessage('update.error.nothingDownloaded') };
     }
     const target = getInstallTarget();
     const result = await installer.install({
@@ -315,7 +318,7 @@ function createUpdateService({
       });
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err?.message || 'Konnte Version nicht merken.' };
+      return { ok: false, error: err?.message || createMessage('update.error.rememberFailed') };
     }
   }
 

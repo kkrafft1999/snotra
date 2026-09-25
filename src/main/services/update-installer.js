@@ -19,6 +19,19 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 
 const { APP_NAME, APP_BUNDLE_ID } = require('../app-identity');
+const { createMessage } = require('../../shared/contracts/message');
+const { translateMessage } = require('../../shared/i18n');
+
+/**
+ * An error for the update dialog (#353). `userMessage` is a key the dialog
+ * words in the interface language; `message` stays English, for the log.
+ */
+function installError(key, params) {
+  const userMessage = createMessage(key, params);
+  const err = new Error(translateMessage('en', userMessage));
+  err.userMessage = userMessage;
+  return err;
+}
 
 const MAC_BUNDLE_NAME = `${APP_NAME}.app`;
 const WINDOWS_EXE_NAME = `${APP_NAME}.exe`;
@@ -129,7 +142,9 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
   const exec = run || ((cmd, args, options = {}) => new Promise((resolve, reject) => {
     execFile(cmd, args, { maxBuffer: 8 * 1024 * 1024, ...options }, (err, stdout, stderr) => {
       if (err) {
-        err.message = `${cmd} fehlgeschlagen: ${String(stderr || err.message).trim()}`;
+        const output = String(stderr || err.message).trim();
+        err.userMessage = createMessage('update.error.commandFailed', { command: cmd, output });
+        err.message = `${cmd} failed: ${output}`;
         reject(err);
         return;
       }
@@ -142,12 +157,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     child.unref();
   });
 
-  async function assertWritable(dir, what) {
+  /** @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`. */
+  async function assertWritable(dir, placeKey) {
     try {
       await fsp.access(dir, fs.constants.W_OK);
     } catch {
-      throw new Error(`Keine Schreibrechte für ${what} (${dir}). `
-        + 'Installiere die neue Version von Hand oder starte die App mit den nötigen Rechten.');
+      throw installError('update.error.notWritable', { placeKey, dir });
     }
   }
 
@@ -169,22 +184,25 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     try {
       plist = await readBundlePlist(bundlePath);
     } catch (err) {
-      throw new Error(`Das geladene Programm konnte nicht geprüft werden: ${err.message}`);
+      throw installError('update.error.verifyFailed', { error: err?.userMessage || err.message });
     }
     const bundleId = plist?.CFBundleIdentifier;
     const version = plist?.CFBundleShortVersionString;
     if (bundleId !== APP_BUNDLE_ID) {
-      throw new Error(`Das geladene Programm ist nicht Snotra AI (Kennung ${bundleId || 'unbekannt'}).`);
+      throw installError('update.error.wrongApp', bundleId ? { id: bundleId } : { idKey: 'update.unknownValue' });
     }
     if (expectedVersion && version !== expectedVersion) {
-      throw new Error(`Das geladene Programm meldet Version ${version || 'unbekannt'}, erwartet war ${expectedVersion}.`);
+      throw installError('update.error.wrongVersion', {
+        ...(version ? { version } : { versionKey: 'update.unknownValue' }),
+        expected: expectedVersion,
+      });
     }
   }
 
   async function installMacos({ filePath, version, target, workDir }) {
     const appBundlePath = target.appBundlePath;
     const parentDir = path.dirname(appBundlePath);
-    await assertWritable(parentDir, 'den Programmordner');
+    await assertWritable(parentDir, 'update.place.appFolder');
 
     const stamp = Date.now();
     const mountPoint = path.join(workDir, `mnt-${stamp}`);
@@ -236,7 +254,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
   async function installWindows({ filePath, target, workDir }) {
     const installDir = target.installDir;
     const parentDir = path.win32.dirname(installDir);
-    await assertWritable(parentDir, 'den Installationsordner');
+    await assertWritable(parentDir, 'update.place.installFolder');
 
     const stamp = Date.now();
     const stagedDir = path.join(parentDir, `.snotra-new-${stamp}`);
@@ -258,7 +276,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
         rootDir = path.join(stagedDir, single);
       } else {
         await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
-        throw new Error(`Im geladenen Archiv fehlt „${WINDOWS_EXE_NAME}".`);
+        throw installError('update.error.archiveMissing', { file: WINDOWS_EXE_NAME });
       }
     }
 
@@ -275,7 +293,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
 
   async function installLinuxAppImage({ filePath, target, workDir }) {
     const appImagePath = target.appImagePath;
-    await assertWritable(path.dirname(appImagePath), 'den Ordner des AppImage');
+    await assertWritable(path.dirname(appImagePath), 'update.place.appImageFolder');
 
     const stagedPath = `${appImagePath}.new-${Date.now()}`;
     await fsp.copyFile(filePath, stagedPath);
@@ -292,7 +310,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
   async function installLinuxDir({ filePath, target, workDir }) {
     const installDir = target.installDir;
     const parentDir = path.posix.dirname(installDir);
-    await assertWritable(parentDir, 'den Installationsordner');
+    await assertWritable(parentDir, 'update.place.installFolder');
 
     const stamp = Date.now();
     const extractDir = path.join(workDir, `extract-${stamp}`);
@@ -304,7 +322,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     const extracted = rootName ? path.join(extractDir, rootName) : extractDir;
     if (!fs.existsSync(path.join(extracted, LINUX_BINARY_NAME))) {
       await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
-      throw new Error(`Im geladenen Archiv fehlt „${LINUX_BINARY_NAME}".`);
+      throw installError('update.error.archiveMissing', { file: LINUX_BINARY_NAME });
     }
 
     // Vor dem Tausch auf dasselbe Dateisystem bringen — ein `mv` ueber
@@ -333,10 +351,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
   async function install({ filePath, version, target, workDir }) {
     try {
       if (!filePath || !fs.existsSync(filePath)) {
-        return { ok: false, error: 'Die geladene Datei ist nicht mehr da.' };
+        return { ok: false, error: createMessage('update.error.fileGone') };
       }
       if (!target || target.canSelfUpdate !== true) {
-        return { ok: false, error: target?.reason || 'Selbst-Update ist hier nicht möglich.' };
+        return { ok: false, error: target?.reason || createMessage('update.error.selfUpdateImpossible') };
       }
       await fsp.mkdir(workDir, { recursive: true });
 
@@ -345,10 +363,11 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
         case 'windows-dir': return await installWindows({ filePath, version, target, workDir });
         case 'linux-appimage': return await installLinuxAppImage({ filePath, version, target, workDir });
         case 'linux-dir': return await installLinuxDir({ filePath, version, target, workDir });
-        default: return { ok: false, error: 'Selbst-Update ist hier nicht möglich.' };
+        default: return { ok: false, error: createMessage('update.error.selfUpdateImpossible') };
       }
     } catch (err) {
-      return { ok: false, error: err?.message || 'Die Installation ist fehlgeschlagen.' };
+      // Our own reasons carry a key; what the file system says is quoted.
+      return { ok: false, error: err?.userMessage || err?.message || createMessage('update.install.failed') };
     }
   }
 

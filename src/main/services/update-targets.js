@@ -8,20 +8,18 @@
 // Das Ausfuehren liegt in update-installer.js, das Laden in update-download.js.
 
 const path = require('path');
+const { createMessage } = require('../../shared/contracts/message');
 
 /** Verzeichnisse, in die nur root schreibt — dort liegt eine Paketinstallation. */
 const LINUX_SYSTEM_PREFIXES = ['/opt/', '/usr/', '/snap/'];
 
+// Why an installation does not replace itself. The update dialog words them in
+// the interface language, so they travel as keys (#353).
 const REASONS = Object.freeze({
-  dev: 'Das hier ist ein Entwicklungs-Build, kein installiertes Programm. '
-    + 'Ein Update spielst du über das Repository ein.',
-  package: 'Snotra AI wurde als Systempaket installiert. Das Ersetzen verlangt '
-    + 'Administratorrechte, die die App nicht hat — lade das neue Paket von der '
-    + 'Release-Seite und installiere es mit deinem Paketmanager.',
-  platform: 'Für dieses Betriebssystem kann sich die App nicht selbst '
-    + 'aktualisieren. Lade die neue Version von der Release-Seite.',
-  layout: 'Der Ablageort der App sieht ungewöhnlich aus — die App tauscht sich '
-    + 'lieber nicht selbst aus. Lade die neue Version von der Release-Seite.',
+  dev: createMessage('update.reason.dev'),
+  package: createMessage('update.reason.package'),
+  platform: createMessage('update.reason.platform'),
+  layout: createMessage('update.reason.layout'),
 });
 
 /**
@@ -50,7 +48,7 @@ function isLinuxSystemPath(dir) {
  * @param {string} ctx.execPath    process.execPath (bzw. app.getPath('exe'))
  * @param {object} [ctx.env]       process.env (nur APPIMAGE wird gelesen)
  * @param {boolean} [ctx.isPackaged] app.isPackaged
- * @returns {{kind: string, canSelfUpdate: boolean, reason?: string,
+ * @returns {{kind: string, canSelfUpdate: boolean, reason?: {key: string},
  *            appBundlePath?: string, installDir?: string, appImagePath?: string}}
  */
 function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true } = {}) {

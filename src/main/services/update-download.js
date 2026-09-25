@@ -10,6 +10,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
+const { createMessage } = require('../../shared/contracts/message');
 
 /** Nur von dort holen wir Dateien — GitHub-Releases und deren Ablage. */
 const ALLOWED_HOSTS = Object.freeze([
@@ -69,9 +70,9 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
    * @param {(p: {receivedBytes: number, totalBytes: number}) => void} [args.onProgress]
    */
   async function download({ asset, version, onProgress } = {}) {
-    if (active) return { ok: false, error: 'Es läuft bereits ein Download.' };
+    if (active) return { ok: false, error: createMessage('update.error.downloadRunning') };
     if (!asset || !isAllowedAssetUrl(asset.url)) {
-      return { ok: false, error: 'Die Download-Adresse gehört nicht zu den GitHub-Releases.' };
+      return { ok: false, error: createMessage('update.error.foreignUrl') };
     }
 
     // Jeder Lauf startet auf der gruenen Wiese: ein alter Rest aus einem
@@ -98,10 +99,10 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
         },
       });
       if (!res.ok) {
-        return { ok: false, error: `Download fehlgeschlagen (HTTP ${res.status}).` };
+        return { ok: false, error: createMessage('update.error.downloadHttp', { status: res.status }) };
       }
       if (!res.body) {
-        return { ok: false, error: 'Der Download lieferte keine Daten.' };
+        return { ok: false, error: createMessage('update.error.downloadEmpty') };
       }
 
       const headerLength = Number(res.headers?.get?.('content-length'));
@@ -136,7 +137,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
         await removeWorkDir();
         return {
           ok: false,
-          error: `Die geladene Datei ist unvollständig (${receivedBytes} statt ${declaredSize} Bytes).`,
+          error: createMessage('update.error.downloadIncomplete', { received: receivedBytes, expected: declaredSize }),
         };
       }
 
@@ -147,7 +148,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
       if (err && (err.name === 'AbortError' || controller.signal.aborted)) {
         return { ok: false, canceled: true };
       }
-      return { ok: false, error: err?.message || 'Download fehlgeschlagen.' };
+      return { ok: false, error: err?.message || createMessage('update.download.failed') };
     } finally {
       if (active === controller) active = null;
     }
