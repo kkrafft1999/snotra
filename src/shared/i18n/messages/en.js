@@ -668,6 +668,22 @@ module.exports = {
   'permissions.integrity.unsigned': 'Encrypted storage is not available. “Auto” mode and permanent allowances therefore cannot be stored.',
   'permissions.legacyWriteHint': 'File changes now ask for your approval. You can change the mode in the chat at any time.',
 
+  // ── Native confirmation dialogs of the permissions (#353) ────────────────
+  'permissionDialog.cancel': 'Cancel',
+  'permissionDialog.auto.title': 'Switch on Auto (full access)?',
+  'permissionDialog.auto.detail': 'Tools may read and change files automatically and send sensitive workspace content to the chosen provider. The same will apply to external tools you have switched on. There are no questions about tool calls. Workspace boundaries, blocked actions and the protection of Snotra’s own keys stay in force.',
+  'permissionDialog.auto.confirm': 'Switch on Auto',
+  'permissionDialog.subject.tool': 'the tool {tool}',
+  'permissionDialog.subject.class': 'the risk class {riskClass}',
+  'permissionDialog.scope.global': 'all workspaces',
+  'permissionDialog.scope.workspace': 'workspace {root}',
+  'permissionDialog.allowRule.title': 'Create a permanent allowance?',
+  'permissionDialog.allowRule.detail': 'From now on, {subject} may access “{pattern}” without asking ({scope}). The rule applies in “{mode}” mode until you delete it under {place}.',
+  'permissionDialog.allowRule.confirm': 'Create allowance',
+  'permissionDialog.removeDeny.title': 'Delete block?',
+  'permissionDialog.removeDeny.detail': 'The block on {subject} for “{pattern}” is removed. After that, the mode decides again.',
+  'permissionDialog.removeDeny.confirm': 'Delete block',
+
   'tools.riskClass.read': 'Read',
   'tools.riskClass.readSensitive': 'Read sensitive data',
   'tools.riskClass.write': 'Change',

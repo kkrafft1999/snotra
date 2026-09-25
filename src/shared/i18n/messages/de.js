@@ -673,6 +673,22 @@ module.exports = {
   'permissions.integrity.unsigned': 'Verschlüsselter Speicher ist nicht verfügbar. Modus „Auto“ und dauerhafte Erlaubnisse lassen sich deshalb nicht speichern.',
   'permissions.legacyWriteHint': 'Dateiänderungen fragen jetzt nach deiner Freigabe. Den Modus kannst du jederzeit im Chat ändern.',
 
+  // ── Native confirmation dialogs of the permissions (#353) ────────────────
+  'permissionDialog.cancel': 'Abbrechen',
+  'permissionDialog.auto.title': 'Auto / Vollzugriff aktivieren?',
+  'permissionDialog.auto.detail': 'Tools dürfen Dateien automatisch lesen und verändern sowie sensible Workspace-Inhalte an den gewählten Provider senden. Künftig gilt dies auch für freigeschaltete externe Tools. Es gibt keine Rückfragen zu Tool-Aufrufen. Workspace-Grenzen, gesperrte Aktionen und der Schutz von Snotra-Schlüsseln bleiben aktiv.',
+  'permissionDialog.auto.confirm': 'Auto aktivieren',
+  'permissionDialog.subject.tool': 'Tool {tool}',
+  'permissionDialog.subject.class': 'Risikoklasse {riskClass}',
+  'permissionDialog.scope.global': 'Alle Workspaces',
+  'permissionDialog.scope.workspace': 'Workspace {root}',
+  'permissionDialog.allowRule.title': 'Dauerhafte Erlaubnis anlegen?',
+  'permissionDialog.allowRule.detail': '{subject} darf künftig ohne Rückfrage auf „{pattern}“ zugreifen ({scope}). Die Regel gilt im Modus „{mode}“, bis du sie unter {place} löschst.',
+  'permissionDialog.allowRule.confirm': 'Erlaubnis anlegen',
+  'permissionDialog.removeDeny.title': 'Sperre löschen?',
+  'permissionDialog.removeDeny.detail': 'Die Sperre für {subject} auf „{pattern}“ wird entfernt. Danach entscheidet wieder der Modus.',
+  'permissionDialog.removeDeny.confirm': 'Sperre löschen',
+
   'tools.riskClass.read': 'Lesen',
   'tools.riskClass.readSensitive': 'Sensible Daten lesen',
   'tools.riskClass.write': 'Ändern',

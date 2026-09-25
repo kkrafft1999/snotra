@@ -23,45 +23,60 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { createSettingsOk, createSettingsError } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
+const { createTranslator } = require('../../shared/i18n');
+const { menuPath } = require('../../shared/i18n/ui-quotes');
 
-const AUTO_MODE_DIALOG = Object.freeze({
-  type: 'warning',
-  title: 'Auto / Vollzugriff aktivieren?',
-  message: 'Auto / Vollzugriff aktivieren?',
-  detail:
-    'Tools dürfen Dateien automatisch lesen und verändern sowie sensible Workspace-Inhalte an den ' +
-    'gewählten Provider senden. Künftig gilt dies auch für freigeschaltete externe Tools. Es gibt keine ' +
-    'Rückfragen zu Tool-Aufrufen. Workspace-Grenzen, gesperrte Aktionen und der Schutz von ' +
-    'Snotra-Schlüsseln bleiben aktiv.',
-  buttons: ['Auto aktivieren', 'Abbrechen'],
-  defaultId: 1,
-  cancelId: 1,
-});
-
-function allowRuleDialog(rule) {
-  const scope = rule.scope === PERMISSION_RULE_SCOPES.GLOBAL ? 'Alle Workspaces' : `Workspace ${rule.root}`;
-  const subject = rule.tool ? `Tool ${rule.tool}` : `Klasse ${rule.riskClass}`;
+// The three dialogs are built for the language the interface speaks at the
+// moment they open (#353). They live only until the click, so there is nothing
+// to repaint on a language change.
+function autoModeDialog(t) {
   return {
     type: 'warning',
-    title: 'Dauerhafte Erlaubnis anlegen?',
-    message: 'Dauerhafte Erlaubnis anlegen?',
-    detail:
-      `${subject} darf künftig ohne Rückfrage auf „${rule.pathPattern}“ zugreifen (${scope}). ` +
-      'Die Regel gilt im Modus „Intelligent“ bis du sie unter Einstellungen › Tools löschst.',
-    buttons: ['Erlaubnis anlegen', 'Abbrechen'],
+    title: t('permissionDialog.auto.title'),
+    message: t('permissionDialog.auto.title'),
+    detail: t('permissionDialog.auto.detail'),
+    buttons: [t('permissionDialog.auto.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,
   };
 }
 
-function removeDenyRuleDialog(rule) {
-  const subject = rule.tool ? `Tool ${rule.tool}` : `Klasse ${rule.riskClass}`;
+function ruleSubject(rule, t) {
+  return rule.tool
+    ? t('permissionDialog.subject.tool', { tool: rule.tool })
+    : t('permissionDialog.subject.class', { riskClass: rule.riskClass });
+}
+
+function allowRuleDialog(rule, t) {
+  const scope = rule.scope === PERMISSION_RULE_SCOPES.GLOBAL
+    ? t('permissionDialog.scope.global')
+    : t('permissionDialog.scope.workspace', { root: rule.root });
   return {
     type: 'warning',
-    title: 'Sperre löschen?',
-    message: 'Sperre löschen?',
-    detail: `Die Sperre für ${subject} auf „${rule.pathPattern}“ wird entfernt. Danach entscheidet wieder der Modus.`,
-    buttons: ['Sperre löschen', 'Abbrechen'],
+    title: t('permissionDialog.allowRule.title'),
+    message: t('permissionDialog.allowRule.title'),
+    detail: t('permissionDialog.allowRule.detail', {
+      subject: ruleSubject(rule, t),
+      pattern: rule.pathPattern,
+      scope,
+      // Mode and page are quoted from the entries the interface renders, so
+      // that the dialog names what the user will actually find.
+      mode: t('permissions.mode.smart'),
+      place: menuPath(t.locale, 'settings.permissions'),
+    }),
+    buttons: [t('permissionDialog.allowRule.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+function removeDenyRuleDialog(rule, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.removeDeny.title'),
+    message: t('permissionDialog.removeDeny.title'),
+    detail: t('permissionDialog.removeDeny.detail', { subject: ruleSubject(rule, t), pattern: rule.pathPattern }),
+    buttons: [t('permissionDialog.removeDeny.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,
   };
@@ -80,6 +95,8 @@ function registerToolPermissionHandlers({
   // Der Modus gehoert zum Chat (Issue #211): Was hier gesetzt wird, merkt sich
   // der laufende Chat und bekommt es beim naechsten Oeffnen zurueck.
   chatSessionSettings = null,
+  // Interface language for the native dialogs (#353), read afresh each time.
+  getLocale = () => undefined,
 }) {
   if (!toolPolicyStore || !approvals || !sessionGrants) {
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
@@ -145,7 +162,7 @@ function registerToolPermissionHandlers({
     const mode = normalizeToolPermissionMode(rawMode);
     if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
-      const confirmed = await confirmNatively(AUTO_MODE_DIALOG);
+      const confirmed = await confirmNatively(autoModeDialog(createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
     const result = await toolPolicyStore.setMode(mode);
@@ -172,7 +189,7 @@ function registerToolPermissionHandlers({
     const preview = normalizePermissionRule({ ...candidate, id: 'preview' });
     if (!preview) return createSettingsError(createMessage('permissions.error.invalidRule'));
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW) {
-      const confirmed = await confirmNatively(allowRuleDialog(preview));
+      const confirmed = await confirmNatively(allowRuleDialog(preview, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.ruleNotCreated'), 'cancelled');
     }
     const result = await toolPolicyStore.addRule(candidate);
@@ -187,7 +204,7 @@ function registerToolPermissionHandlers({
     const rule = await toolPolicyStore.findRule(id);
     if (!rule) return createSettingsError(createMessage('permissions.error.ruleNotFound'));
     if (rule.effect === PERMISSION_RULE_EFFECTS.DENY) {
-      const confirmed = await confirmNatively(removeDenyRuleDialog(rule));
+      const confirmed = await confirmNatively(removeDenyRuleDialog(rule, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.denyNotRemoved'), 'cancelled');
     }
     const result = await toolPolicyStore.removeRule(id);
@@ -250,7 +267,7 @@ function registerToolPermissionHandlers({
 
 module.exports = {
   registerToolPermissionHandlers,
-  AUTO_MODE_DIALOG,
+  autoModeDialog,
   allowRuleDialog,
   removeDenyRuleDialog,
 };

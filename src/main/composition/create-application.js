@@ -701,6 +701,7 @@ function createApplication({
     REQ,
     PUSH,
     chatSessionSettings,
+    getLocale: getAppLocale,
   });
 
   async function runUpdateCheck({ silent }) {
