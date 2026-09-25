@@ -95,7 +95,7 @@ test('read_file_text respects workspace bounds through the registry', async () =
   const bad = JSON.parse(
     await registry.execute('read_file_text', { relative_path: '../outside.txt' }, { workspaceRoot: tmpRoot })
   );
-  assert.match(bad.error, /außerhalb/);
+  assert.match(bad.error, /outside the workspace/);
 
   await fs.rm(tmpRoot, { recursive: true, force: true });
 });
@@ -126,7 +126,7 @@ test('read_file_text rejects a symlink to a file outside the workspace', async (
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.content, undefined);
 });
 
@@ -155,7 +155,7 @@ test('list_directory rejects a symlink to a directory outside the workspace', as
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.items, undefined);
 });
 
@@ -240,7 +240,7 @@ test('write_file_text rejects writes through a symlinked parent outside the work
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   await assert.rejects(fs.access(path.join(outside, 'created.txt')));
 });
 
@@ -305,7 +305,7 @@ test('write_file_text respects workspace bounds and rejects directory targets', 
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 
   const isDir = JSON.parse(
     await registry.execute(
@@ -314,7 +314,7 @@ test('write_file_text respects workspace bounds and rejects directory targets', 
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(isDir.error, /Ordner/);
+  assert.match(isDir.error, /folder/);
 
   const workspaceRoot = JSON.parse(
     await registry.execute(
@@ -323,7 +323,7 @@ test('write_file_text respects workspace bounds and rejects directory targets', 
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(workspaceRoot.error, /Projektordner/);
+  assert.match(workspaceRoot.error, /project folder itself/);
 
   const missingContent = JSON.parse(
     await registry.execute(
@@ -349,7 +349,7 @@ test('write_file_text enforces the max content size', async () => {
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(out.error, /zu groß/);
+  assert.match(out.error, /too large/);
   await assert.rejects(fs.access(path.join(tmpRoot, 'big.txt')));
 
   await fs.rm(tmpRoot, { recursive: true, force: true });
@@ -438,7 +438,7 @@ test('search_in_files rejects missing query and invalid regex', async (t) => {
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(invalid.error, /regulärer Ausdruck/i);
+  assert.match(invalid.error, /regular expression/i);
 });
 
 test('search_in_files rejects a known ReDoS pattern before scanning any file', async (t) => {
@@ -534,7 +534,7 @@ test('search_in_files respects workspace bounds', async (t) => {
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
 });
 
 test('search_in_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
@@ -797,7 +797,7 @@ test('find_files rejects a missing pattern and a file as start path', async (t) 
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(notDir.error, /kein Ordner/);
+  assert.match(notDir.error, /not a folder/);
 });
 
 test('find_files respects workspace bounds', async (t) => {
@@ -812,7 +812,7 @@ test('find_files respects workspace bounds', async (t) => {
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
 });
 
 test('find_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
@@ -1047,7 +1047,7 @@ test('stat_path requires relative_path and respects workspace bounds', async (t)
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 });
 
 test('stat_path rejects a symlink to a file outside the workspace', async (t) => {
@@ -1075,7 +1075,7 @@ test('stat_path rejects a symlink to a file outside the workspace', async (t) =>
       { workspaceRoot: workspace }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
   assert.equal(out.exists, undefined);
 });
 
@@ -1101,7 +1101,7 @@ test('stat_path skips the line count for binary and oversized files', async (t) 
   );
   assert.equal(binary.exists, true);
   assert.equal(binary.line_count, undefined);
-  assert.match(binary.line_count_skipped, /Binärdatei/);
+  assert.match(binary.line_count_skipped, /Binary file/);
 
   const oversized = JSON.parse(
     await registry.execute(
@@ -1114,7 +1114,7 @@ test('stat_path skips the line count for binary and oversized files', async (t) 
   assert.equal(oversized.exists, true);
   assert.equal(oversized.size_bytes, 20);
   assert.equal(oversized.line_count, undefined);
-  assert.match(oversized.line_count_skipped, /zu groß/);
+  assert.match(oversized.line_count_skipped, /too large/);
 });
 
 async function makeOutlineFixture(t, files) {
@@ -1351,12 +1351,12 @@ test('outline_file reports files without structure with an empty list and a hint
   assert.equal(txt.error, undefined);
   assert.deepEqual(txt.entries, []);
   assert.equal(txt.total_entries, 0);
-  assert.match(txt.hint, /Keine Signaturen/);
+  assert.match(txt.hint, /No signatures/);
 
   const md = await outlineOf(registry, tmpRoot, { relative_path: 'leer.md' });
   assert.equal(md.line_count, 0);
   assert.deepEqual(md.entries, []);
-  assert.match(md.hint, /Keine Überschriften/);
+  assert.match(md.hint, /No headings/);
 });
 
 test('outline_file validates arguments and respects workspace bounds', async (t) => {
@@ -1365,10 +1365,10 @@ test('outline_file validates arguments and respects workspace bounds', async (t)
   await fs.mkdir(path.join(tmpRoot, 'sub'));
 
   assert.match((await outlineOf(registry, tmpRoot, {})).error, /relative_path/);
-  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'sub' })).error, /Ordner/);
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'sub' })).error, /folder/);
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: '../outside.md' })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: 'a.md', max_depth: 0 })).error,
@@ -1376,7 +1376,7 @@ test('outline_file validates arguments and respects workspace bounds', async (t)
   );
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: 'a.md', max_depth: 'x' })).error,
-    /Ganzzahl/
+    /integer/
   );
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: 'fehlt.md' })).error,
@@ -1397,8 +1397,8 @@ test('outline_file rejects binary and oversized files', async (t) => {
   await fs.writeFile(path.join(tmpRoot, 'bin.md'), Buffer.from([0x23, 0x00, 0x42]));
   await fs.writeFile(path.join(tmpRoot, 'gross.md'), '# mehr als acht Bytes\n', 'utf8');
 
-  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'bin.md' })).error, /Binärdatei/);
-  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'gross.md' })).error, /zu groß/);
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'bin.md' })).error, /Binary file/);
+  assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'gross.md' })).error, /too large/);
 });
 
 test('outline_file rejects a symlink to a file outside the workspace', async (t) => {
@@ -1420,7 +1420,7 @@ test('outline_file rejects a symlink to a file outside the workspace', async (t)
   if (!linked) return;
 
   const out = await outlineOf(registry, workspace, { relative_path: 'secret-link.md' });
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
   assert.equal(out.entries, undefined);
 });
 
@@ -1544,10 +1544,10 @@ test('list_directory_tree validates arguments and respects workspace bounds', as
   const registry = makeToolRegistry();
   const tmpRoot = await makeTreeFixture(t);
 
-  assert.match((await treeOf(registry, tmpRoot, { relative_path: 'README.md' })).error, /kein Ordner/);
-  assert.match((await treeOf(registry, tmpRoot, { relative_path: '../x' })).error, /außerhalb/);
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: 'README.md' })).error, /not a folder/);
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: '../x' })).error, /outside the workspace/);
   assert.match((await treeOf(registry, tmpRoot, { max_depth: 0 })).error, /max_depth/);
-  assert.match((await treeOf(registry, tmpRoot, { max_depth: 'x' })).error, /Ganzzahl/);
+  assert.match((await treeOf(registry, tmpRoot, { max_depth: 'x' })).error, /integer/);
   assert.match((await treeOf(registry, tmpRoot, { relative_path: 'fehlt' })).error, /ENOENT|no such file/i);
 });
 
@@ -1637,9 +1637,9 @@ test('read_file_lines validates range parameters', async (t) => {
 
   assert.match((await run({ start_line: 0 })).error, /start_line/);
   assert.match((await run({ start_line: 5, end_line: 3 })).error, /end_line/);
-  assert.match((await run({ start_line: '3' })).error, /Ganzzahl/);
-  assert.match((await run({ start_line: 42 })).error, /hinter dem Dateiende.*10 Zeilen/);
-  assert.match((await run({ start_line: 1, start_byte: 0 })).error, /nicht beides/);
+  assert.match((await run({ start_line: '3' })).error, /integer/);
+  assert.match((await run({ start_line: 42 })).error, /past the end of the file.*10 lines/);
+  assert.match((await run({ start_line: 1, start_byte: 0 })).error, /not both/);
   const noPath = JSON.parse(await registry.execute('read_file_lines', {}, { workspaceRoot: tmpRoot }));
   assert.match(noPath.error, /relative_path/);
 });
@@ -1680,7 +1680,7 @@ test('read_file_lines reads a byte range and reports the first line', async (t) 
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(beyond.error, /hinter dem Dateiende.*12 Bytes/);
+  assert.match(beyond.error, /past the end of the file.*12 bytes/);
 });
 
 test('read_file_lines respects workspace bounds and rejects directories', async (t) => {
@@ -1694,12 +1694,12 @@ test('read_file_lines respects workspace bounds and rejects directories', async 
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 
   const dir = JSON.parse(
     await registry.execute('read_file_lines', { relative_path: '.' }, { workspaceRoot: tmpRoot })
   );
-  assert.match(dir.error, /Ordner/);
+  assert.match(dir.error, /folder/);
 });
 
 test('read_file_lines rejects a symlink to a file outside the workspace', async (t) => {
@@ -1727,7 +1727,7 @@ test('read_file_lines rejects a symlink to a file outside the workspace', async 
       { workspaceRoot: workspace }
     )
   );
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.content, undefined);
 });
 
@@ -1743,7 +1743,7 @@ test('read_file_lines rejects oversized files and enforces the slice budget', as
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(tooBig.error, /zu groß/);
+  assert.match(tooBig.error, /too large/);
 
   const smallSlice = createFsService({
     fs,
@@ -1840,8 +1840,8 @@ test('edit_file rejects missing and ambiguous matches without changing the file'
       await registry.execute('edit_file', { relative_path: 'a.js', ...args }, { workspaceRoot: tmpRoot, allowWrite: true })
     );
 
-  assert.match((await run({ old_string: 'gibtEsNicht', new_string: 'x' })).error, /nicht gefunden/);
-  assert.match((await run({ old_string: 'foo', new_string: 'baz' })).error, /nicht eindeutig \(2 Treffer\)/);
+  assert.match((await run({ old_string: 'gibtEsNicht', new_string: 'x' })).error, /not found/);
+  assert.match((await run({ old_string: 'foo', new_string: 'baz' })).error, /not unique \(2 matches\)/);
   const content = await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8');
   assert.equal(content, 'foo\nbar\nfoo\n');
 });
@@ -1874,7 +1874,7 @@ test('edit_file validates parameters and supports deletion via empty new_string'
   assert.match((await run({ new_string: 'x' })).error, /old_string/);
   assert.match((await run({ old_string: '', new_string: 'x' })).error, /old_string/);
   assert.match((await run({ old_string: 'eins' })).error, /new_string/);
-  assert.match((await run({ old_string: 'eins', new_string: 'eins' })).error, /unterscheiden/);
+  assert.match((await run({ old_string: 'eins', new_string: 'eins' })).error, /must differ/);
 
   const deleted = await run({ old_string: ' zwei', new_string: '' });
   assert.equal(deleted.replacements, 1);
@@ -1889,8 +1889,8 @@ test('edit_file respects workspace bounds and rejects directories', async (t) =>
       await registry.execute('edit_file', { old_string: 'a', new_string: 'b', ...args }, { workspaceRoot: tmpRoot, allowWrite: true })
     );
 
-  assert.match((await run({ relative_path: '../outside.js' })).error, /außerhalb/);
-  assert.match((await run({ relative_path: '.' })).error, /Ordner/);
+  assert.match((await run({ relative_path: '../outside.js' })).error, /outside the workspace/);
+  assert.match((await run({ relative_path: '.' })).error, /folder/);
 });
 
 test('edit_file rejects a symlink to a file outside the workspace', async (t) => {
@@ -1918,7 +1918,7 @@ test('edit_file rejects a symlink to a file outside the workspace', async (t) =>
       { workspaceRoot: workspace, allowWrite: true }
     )
   );
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(await fs.readFile(secret, 'utf8'), 'geheim\n');
 });
 
@@ -1937,7 +1937,7 @@ test('edit_file enforces read and write size limits', async (t) => {
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(tooBigToRead.error, /Datei zu groß/);
+  assert.match(tooBigToRead.error, /File too large/);
 
   const tooBigToWrite = JSON.parse(
     await registry.execute(
@@ -1946,7 +1946,7 @@ test('edit_file enforces read and write size limits', async (t) => {
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(tooBigToWrite.error, /Inhalt zu groß/);
+  assert.match(tooBigToWrite.error, /Content too large/);
   assert.equal(await fs.readFile(path.join(tmpRoot, 'klein.txt'), 'utf8'), 'kurz\n');
 });
 
@@ -2018,13 +2018,13 @@ test('apply_patch leaves the file untouched when one edit fails', async (t) => {
       { old_string: 'gibtEsNicht', new_string: 'x' },
     ],
   });
-  assert.match(missing.error, /^edits\[1\]: old_string wurde nicht gefunden/);
+  assert.match(missing.error, /^edits\[1\]: old_string was not found/);
 
   const ambiguous = await run({
     relative_path: 'a.js',
     edits: [{ old_string: 'foo', new_string: 'x' }],
   });
-  assert.match(ambiguous.error, /^edits\[0\]: old_string ist nicht eindeutig \(2 Treffer\)/);
+  assert.match(ambiguous.error, /^edits\[0\]: old_string is not unique \(2 matches\)/);
 
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'foo\nbar\nfoo\n');
 });
@@ -2034,21 +2034,21 @@ test('apply_patch validates the edits list', async (t) => {
   const run = makePatchRunner(tmpRoot);
 
   assert.match((await run({ edits: [{ old_string: 'eins', new_string: 'x' }] })).error, /relative_path/);
-  assert.match((await run({ relative_path: 'a.js', edits: [] })).error, /nicht leere Liste/);
-  assert.match((await run({ relative_path: 'a.js', edits: ['nope'] })).error, /edits\[0\] muss ein Objekt/);
+  assert.match((await run({ relative_path: 'a.js', edits: [] })).error, /non-empty list/);
+  assert.match((await run({ relative_path: 'a.js', edits: ['nope'] })).error, /edits\[0\] must be an object/);
   assert.match((await run({ relative_path: 'a.js', edits: [{ new_string: 'x' }] })).error, /edits\[0\]\.old_string/);
   assert.match((await run({ relative_path: 'a.js', edits: [{ old_string: '', new_string: 'x' }] })).error, /edits\[0\]\.old_string/);
   assert.match((await run({ relative_path: 'a.js', edits: [{ old_string: 'eins' }] })).error, /edits\[0\]\.new_string/);
   assert.match(
     (await run({ relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'eins' }] })).error,
-    /edits\[0\]: old_string und new_string müssen sich unterscheiden/
+    /edits\[0\]: old_string and new_string must differ/
   );
 
   const tooMany = await run({
     relative_path: 'a.js',
     edits: Array.from({ length: 51 }, (_, i) => ({ old_string: `x${i}`, new_string: `y${i}` })),
   });
-  assert.match(tooMany.error, /Zu viele Schritte in edits \(51 > 50\)/);
+  assert.match(tooMany.error, /Too many steps in edits \(51 > 50\)/);
 
   const deleted = await run({ relative_path: 'a.js', edits: [{ old_string: ' zwei', new_string: '' }] });
   assert.equal(deleted.replacements, 1);
@@ -2059,12 +2059,12 @@ test('apply_patch requires either edits or patch', async (t) => {
   const tmpRoot = await makePatchFixture(t, { 'a.js': 'eins\n' });
   const run = makePatchRunner(tmpRoot);
 
-  assert.match((await run({ relative_path: 'a.js' })).error, /edits .* oder patch/);
+  assert.match((await run({ relative_path: 'a.js' })).error, /edits .* or patch/);
   assert.match(
     (await run({ relative_path: 'a.js', edits: [{ old_string: 'eins', new_string: 'x' }], patch: 'egal' })).error,
-    /nicht beides/
+    /not both/
   );
-  assert.match((await run({ patch: '   ' })).error, /patch \(unified diff als Text\) ist erforderlich/);
+  assert.match((await run({ patch: '   ' })).error, /patch \(a unified diff as text\) is required/);
 });
 
 test('apply_patch laeuft ohne Freigabe der Policy nicht (Issue #66)', async (t) => {
@@ -2230,7 +2230,7 @@ test('apply_patch writes nothing when a hunk does not apply', async (t) => {
       '+x'
     ),
   });
-  assert.match(out.error, /Hunk 1 von 1 lässt sich nicht auf "b\.js" anwenden: der Kontext passt nicht/);
+  assert.match(out.error, /Hunk 1 of 1 does not apply to "b\.js": the context does not match/);
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\nzwei\n');
   assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'alpha\nbeta\n');
 });
@@ -2240,35 +2240,35 @@ test('apply_patch rejects malformed patches with an explanatory error', async (t
   const run = makePatchRunner(tmpRoot);
   const errorFor = async (patch) => (await run({ patch })).error;
 
-  assert.match(await errorFor('einfach nur Text\n'), /Unerwartete Zeile 1 im Patch/);
+  assert.match(await errorFor('einfach nur Text\n'), /Unexpected line 1 in the patch/);
   assert.match(
     await errorFor(diff('diff --git a/a.txt b/a.txt', 'index 1234567..89abcde 100644')),
-    /enthält keinen Dateikopf/
+    /has no file header/
   );
-  assert.match(await errorFor(diff('--- a.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')), /fehlt die zugehörige "\+\+\+ "-Zeile/);
-  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt')), /enthält der Patch keinen Hunk/);
-  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt', '@@ kaputt @@', ' eins')), /Hunk-Kopf in Zeile 3 ist ungültig/);
+  assert.match(await errorFor(diff('--- a.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')), /is not followed by its "\+\+\+ " line/);
+  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt')), /The patch has no hunk/);
+  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt', '@@ kaputt @@', ' eins')), /Invalid hunk header on line 3/);
   assert.match(
     await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,5 +1,5 @@', ' eins', '-zwei', '+ZWEI')),
-    /ist unvollständig: erwartet 5 alte und 5 neue Zeilen, gefunden 2 und 2/
+    /is incomplete: expected 5 old and 5 new lines, found 2 and 2/
   );
   assert.match(
     await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,2 +1,2 @@', ' eins', '?zwei')),
-    /Unerwartete Zeile 5 im Hunk/
+    /Unexpected line 5 in hunk/
   );
   assert.match(
     await errorFor(diff('--- /dev/null', '+++ b/neu.txt', '@@ -0,0 +1,1 @@', '+hallo')),
-    /legt "neu\.txt" neu an .* write_file_text/
+    /creates "neu\.txt" .* write_file_text/
   );
   assert.match(
     await errorFor(diff('--- a/a.txt', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-eins')),
-    /löscht "a\.txt" — Dateien löschen kann apply_patch nicht/
+    /deletes "a\.txt" — apply_patch cannot delete files/
   );
   assert.match(
     await errorFor(diff('--- a/a.txt', '+++ b/neu.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')),
-    /benennt "a\.txt" in "neu\.txt" um/
+    /renames "a\.txt" to "neu\.txt"/
   );
-  assert.match(await errorFor(diff('Binary files a/bild.png and b/bild.png differ')), /Binär-Patches/);
+  assert.match(await errorFor(diff('Binary files a/bild.png and b/bild.png differ')), /Binary patches/);
   assert.match(
     await errorFor(
       diff(
@@ -2284,7 +2284,7 @@ test('apply_patch rejects malformed patches with an explanatory error', async (t
         '+DREI'
       )
     ),
-    /"a\.txt" kommt mehrfach im Patch vor/
+    /"a\.txt" appears more than once in the patch/
   );
 
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\nzwei\ndrei\n');
@@ -2298,7 +2298,7 @@ test('apply_patch reports a relative_path that the patch does not touch', async 
     relative_path: 'andere.txt',
     patch: diff('--- a.txt', '+++ a.txt', '@@ -1,1 +1,1 @@', '-eins', '+EINS'),
   });
-  assert.match(out.error, /relative_path \("andere\.txt"\) kommt im Patch nicht vor.*a\.txt/);
+  assert.match(out.error, /relative_path \("andere\.txt"\) does not appear in the patch.*a\.txt/);
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\n');
 });
 
@@ -2309,23 +2309,23 @@ test('apply_patch respects workspace bounds, folders and missing files', async (
 
   assert.match(
     (await run({ relative_path: '../outside.txt', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({ relative_path: '.', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
-    /Ordner/
+    /folder/
   );
   assert.match(
     (await run({ patch: diff('--- ../outside.txt', '+++ ../outside.txt', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({ patch: diff('--- ordner', '+++ ordner', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
-    /Pfad ist ein Ordner, keine Datei/
+    /Path is a folder, not a file/
   );
   assert.match(
     (await run({ patch: diff('--- fehlt.txt', '+++ fehlt.txt', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
-    /"fehlt\.txt" existiert nicht/
+    /"fehlt\.txt" does not exist/
   );
 });
 
@@ -2350,13 +2350,13 @@ test('apply_patch rejects a symlink to a file outside the workspace', async (t) 
 
   assert.match(
     (await run({ relative_path: 'secret-link.txt', edits: [{ old_string: 'geheim', new_string: 'offen' }] })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({
       patch: diff('--- secret-link.txt', '+++ secret-link.txt', '@@ -1,1 +1,1 @@', '-geheim', '+offen'),
     })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.equal(await fs.readFile(secret, 'utf8'), 'geheim\n');
 });
@@ -2373,17 +2373,17 @@ test('apply_patch enforces read, write and patch size limits', async (t) => {
   );
   assert.match(
     (await strictWrite({ relative_path: 'gross.txt', edits: [{ old_string: 'x', new_string: 'y' }] })).error,
-    /Datei zu groß/
+    /File too large/
   );
   assert.match(
     (await strictWrite({ relative_path: 'klein.txt', edits: [{ old_string: 'kurz', new_string: 'k'.repeat(64) }] })).error,
-    /Inhalt zu groß/
+    /Content too large/
   );
   assert.match(
     (await strictWrite({
       patch: diff('--- klein.txt', '+++ klein.txt', '@@ -1,1 +1,1 @@', '-kurz', '+lang'),
     })).error,
-    /Patch zu groß/
+    /Patch too large/
   );
 
   const strictRead = makePatchRunner(
@@ -2392,7 +2392,7 @@ test('apply_patch enforces read, write and patch size limits', async (t) => {
   );
   assert.match(
     (await strictRead({ patch: diff('--- gross.txt', '+++ gross.txt', '@@ -1,1 +1,1 @@', '-x', '+y') })).error,
-    /"gross\.txt": Datei zu groß/
+    /"gross\.txt": File too large/
   );
   assert.equal(await fs.readFile(path.join(tmpRoot, 'klein.txt'), 'utf8'), 'kurz\n');
   assert.equal((await fs.readFile(path.join(tmpRoot, 'gross.txt'), 'utf8')).length, 2048);
@@ -2614,7 +2614,7 @@ test('apply_patch (patch) rolls back already written files atomically when a lat
     ),
   });
   assert.match(out.error, /"b\.js": EIO/);
-  assert.match(out.error, /zurückgesetzt/);
+  assert.match(out.error, /restored/);
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), 'eins\nzwei\n');
   assert.equal(await fs.readFile(path.join(tmpRoot, 'b.js'), 'utf8'), 'alpha\nbeta\n');
   assert.deepEqual(await listTmpFiles(tmpRoot), []);

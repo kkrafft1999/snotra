@@ -180,7 +180,7 @@ test('shell_execute meldet Zeitüberschreitung, Abbruch und Kappung als Felder',
   const zeit = makeRegistry({ run: () => ({ ...basis, timedOut: true, durationMs: 30_000 }) });
   const outZeit = JSON.parse(await exec(zeit.registry, { command: 'sleep 300' }));
   assert.equal(outZeit.timed_out, true);
-  assert.match(outZeit.note, /Zeitlimit/);
+  assert.match(outZeit.note, /time limit/);
 
   const stop = makeRegistry({ run: () => ({ ...basis, aborted: true }) });
   assert.equal(JSON.parse(await exec(stop.registry, { command: 'sleep 300' })).aborted, true);

@@ -50,11 +50,11 @@ function renderContent(content) {
       parts.push(block.resource.text);
       continue;
     }
-    parts.push(`[Inhalt vom Typ „${String(block.type || 'unbekannt')}" wird nicht unterstützt]`);
+    parts.push(`[content of type "${String(block.type || 'unknown')}" is not supported]`);
   }
   const text = parts.join('\n');
   if (text.length <= MAX_RESULT_CHARS) return { text, truncated: false };
-  return { text: `${text.slice(0, MAX_RESULT_CHARS)}\n… [Ausgabe gekürzt]`, truncated: true };
+  return { text: `${text.slice(0, MAX_RESULT_CHARS)}\n… [output truncated]`, truncated: true };
 }
 
 /**
@@ -148,14 +148,14 @@ function createMcpAdapter({ mcpService } = {}) {
           );
           const { text, truncated } = renderContent(result.content);
           const out = { output: text };
-          if (result.isError) out.error = 'Der MCP-Server meldet einen Fehler.';
+          if (result.isError) out.error = 'The MCP server reported an error.';
           if (truncated) out.truncated = true;
           if (result.structuredContent !== undefined) out.structured = result.structuredContent;
           return JSON.stringify(out);
         } catch (e) {
           // Hierher kommen Startfehler, Abstuerze, Zeitlimit und Abbruch.
           // Alle werden zum Ergebnis, nicht zum Chat-Abbruch.
-          return JSON.stringify({ error: e?.message || 'Der MCP-Aufruf ist fehlgeschlagen.' });
+          return JSON.stringify({ error: e?.message || 'The MCP call failed.' });
         }
       },
     };

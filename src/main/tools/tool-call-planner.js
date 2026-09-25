@@ -96,23 +96,23 @@ function validateArguments(definition, args) {
   const properties = schema.properties || {};
   const required = Array.isArray(schema.required) ? schema.required : [];
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return 'Argumente müssen ein Objekt sein.';
+    return 'Arguments must be an object.';
   }
   for (const key of required) {
-    if (args[key] === undefined || args[key] === null) return `Argument „${key}“ ist erforderlich.`;
+    if (args[key] === undefined || args[key] === null) return `Argument "${key}" is required.`;
   }
   for (const [key, value] of Object.entries(args)) {
     const spec = properties[key];
     if (!spec || value === undefined || value === null) continue;
     const expected = spec.type;
     const actual = Array.isArray(value) ? 'array' : typeof value;
-    if (expected === 'string' && actual !== 'string') return `Argument „${key}“ muss Text sein.`;
+    if (expected === 'string' && actual !== 'string') return `Argument "${key}" must be a string.`;
     if ((expected === 'integer' || expected === 'number') && actual !== 'number') {
-      return `Argument „${key}“ muss eine Zahl sein.`;
+      return `Argument "${key}" must be a number.`;
     }
-    if (expected === 'boolean' && actual !== 'boolean') return `Argument „${key}“ muss true/false sein.`;
-    if (expected === 'array' && actual !== 'array') return `Argument „${key}“ muss eine Liste sein.`;
-    if (expected === 'object' && actual !== 'object') return `Argument „${key}“ muss ein Objekt sein.`;
+    if (expected === 'boolean' && actual !== 'boolean') return `Argument "${key}" must be true or false.`;
+    if (expected === 'array' && actual !== 'array') return `Argument "${key}" must be an array.`;
+    if (expected === 'object' && actual !== 'object') return `Argument "${key}" must be an object.`;
   }
   return null;
 }
@@ -191,7 +191,7 @@ function createToolCallPlanner({
   async function plan(definition, args, context = {}) {
     const toolName = definition?.name || 'tool';
     if (!definition) {
-      return { tool: toolName, error: `Unbekanntes Tool: ${toolName}`, reason: PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL, unknownTool: true, riskClasses: [], targets: [] };
+      return { tool: toolName, error: `Unknown tool: ${toolName}`, reason: PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL, unknownTool: true, riskClasses: [], targets: [] };
     }
     const baseClass = definition.riskClass;
     // Mindestklassen der Definition: Grundklasse plus ergaenzende. Ein Tool
@@ -231,7 +231,7 @@ function createToolCallPlanner({
     try {
       descriptors = definition.targets(args || {}) || [];
     } catch (error) {
-      return { tool: toolName, error: error?.message || 'Ziele nicht bestimmbar.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
+      return { tool: toolName, error: error?.message || 'Could not determine the targets.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
     if (descriptors && descriptors.error) {
       return { tool: toolName, error: descriptors.error, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
@@ -243,7 +243,7 @@ function createToolCallPlanner({
     // nur die Ebene, und wohin die zeigt, entscheidet allein der Memory-Port.
     // Da gibt es nichts zu pruefen, weil es nichts zu beeinflussen gibt.
     if (isWriteTool && descriptors.length === 0 && definition.pathlessWrite !== true) {
-      return { tool: toolName, error: 'Kein Zielpfad angegeben.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
+      return { tool: toolName, error: 'No target path given.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
 
     const classes = new Set(baseClasses);
@@ -257,10 +257,10 @@ function createToolCallPlanner({
       const access = descriptor.access === 'write' ? 'write' : 'read';
       if (access === 'write' && parseSkillPath(rawPath)) {
         // Skill-Wurzeln sind in jedem Modus schreibgeschützt (Konzept §5).
-        return { tool: toolName, error: 'Skill-Verzeichnisse sind schreibgeschützt.', reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
+        return { tool: toolName, error: 'Skill folders are read-only.', reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
       }
       if (rawPath.trim() === '' && descriptor.kind !== 'tree') {
-        return { tool: toolName, error: 'relative_path ist erforderlich.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
+        return { tool: toolName, error: 'relative_path is required.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
       }
       const resolved = await fsService.resolveToolPath(
         workspaceRoot,
@@ -276,7 +276,7 @@ function createToolCallPlanner({
       try {
         stat = await statTarget(resolved.absPath);
       } catch (error) {
-        return { tool: toolName, error: error?.message || 'Pfad nicht prüfbar.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
+        return { tool: toolName, error: error?.message || 'Could not check the path.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
       }
       // Realer Pfad für Sensitivität und Schutzordner: Symlinks können auf
       // Snotra-eigene Dateien oder sensible Orte zeigen.
@@ -325,7 +325,7 @@ function createToolCallPlanner({
 
     const riskClasses = normalizeRiskClasses([...classes]);
     if (!riskClasses) {
-      return { tool: toolName, error: 'Ungültige Risikoklasse.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [], targets: [] };
+      return { tool: toolName, error: 'Invalid risk class.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [], targets: [] };
     }
 
     const planKey = stableStringify({
@@ -362,10 +362,10 @@ function createToolCallPlanner({
       try {
         stat = await statTarget(target.absPath);
       } catch (error) {
-        return { ok: false, error: error?.message || 'Ziel nicht prüfbar.' };
+        return { ok: false, error: error?.message || 'Could not check the target.' };
       }
       if (stat.exists !== target.exists || stat.version !== target.version) {
-        return { ok: false, error: `Ziel „${target.path}“ hat sich seit der Freigabe geändert.` };
+        return { ok: false, error: `Target "${target.path}" has changed since it was approved.` };
       }
     }
     return { ok: true };

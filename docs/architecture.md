@@ -1226,6 +1226,41 @@ four places that write such a sentence fill it themselves:
 is read, so the scan cache keeps the raw text and a language change costs
 nothing.
 
+### Model channel or user channel?
+
+Every message the app writes belongs to exactly one of two channels, and the
+channel decides the language: **the model channel is English, the user channel
+is bilingual**. Which one a sentence is on is not always visible where it is
+written — the web search looked like interface text in #306 and went to the
+model, and tool *errors* stayed German until
+[#309](https://github.com/kkrafft1999/snotra/issues/309) for the same reason. So
+the question is answered by following the value, not by reading the sentence:
+
+- **Model channel** — anything that ends up in a tool result: the JSON a tool
+  handler returns (`error`, `note`, `hint`, `…_skipped`, truncation markers),
+  the plan errors of `tool-call-planner` (they become the `message` of the
+  denial result), and what the adapters behind a handler hand back
+  (`fs-service`'s `run…Tool` functions, `http-url-fetch-adapter`,
+  `mcp-adapter`). Plain English strings; `{menu:…}` / `{label:…}` only where a
+  settings page or a mode is named.
+- **User channel** — anything that reaches the renderer: IPC results,
+  `createSettingsError`, approval cards and their previews, progress lines,
+  Settings panels (a skipped MCP tool's `reason`, for example). Catalogue keys
+  via `t()` / `createMessage()`, never a fixed sentence.
+- **Neither** — programming errors thrown at construction time and console
+  lines. Developer-facing, English as they are touched (#278).
+
+Two tells when it is unclear: a function whose name starts with `run…Tool` or
+that is called from a tool `handler` answers the model; a function that
+translates (`t`, `ui()`, `createMessage`) answers the user. A locale on its own
+is no tell — the model channel reads one too, to fill `{menu:…}`. When a string is
+reachable from **both** — `fs-service`'s workspace path labels are resolved
+by tool paths and by the IPC boundary of the file tree alike — it is neither
+translated nor keyed in place: the two callers get separate messages first.
+Until then it is listed as an exception in `test/model-prompt-language.test.js`,
+which scans the model-channel files for German literals and drives their error
+paths; an exception that no longer matches fails the test.
+
 ### Renderer: markup declaratively, built nodes by callback
 
 `src/renderer/i18n.js` holds the active locale and knows three routes:

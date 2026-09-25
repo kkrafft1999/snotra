@@ -90,7 +90,7 @@ test('Lese-Tools bleiben ohne Präfix auf dem Arbeitsordner', async (t) => {
   const outside = JSON.parse(
     await svc.runReadFileTextTool({ relative_path: '../geheim.txt' }, workspace, { skillRoots })
   );
-  assert.match(outside.error, /außerhalb des Arbeitsordners/);
+  assert.match(outside.error, /outside the workspace folder/);
 });
 
 test('Skill-Pfade brechen nicht aus dem Skill-Verzeichnis aus', async (t) => {
@@ -100,7 +100,7 @@ test('Skill-Pfade brechen nicht aus dem Skill-Verzeichnis aus', async (t) => {
 
   for (const rel of ['skill:demo/../../geheim.txt', 'skill:demo/references/../../../geheim.txt']) {
     const out = JSON.parse(await svc.runReadFileTextTool({ relative_path: rel }, workspace, { skillRoots }));
-    assert.match(out.error, /außerhalb des Skill-Ordners/, rel);
+    assert.match(out.error, /outside the skill folder/, rel);
   }
 });
 
@@ -119,7 +119,7 @@ test('Ein Symlink aus dem Skill-Verzeichnis heraus wird abgewiesen', async (t) =
   const out = JSON.parse(
     await svc.runReadFileTextTool({ relative_path: 'skill:demo/raus.txt' }, workspace, { skillRoots })
   );
-  assert.match(out.error, /außerhalb des Skill-Ordners/);
+  assert.match(out.error, /outside the skill folder/);
 });
 
 test('Unbekannte oder fehlende Skills liefern eine sprechende Meldung', async (t) => {
@@ -130,13 +130,13 @@ test('Unbekannte oder fehlende Skills liefern eine sprechende Meldung', async (t
   const unknown = JSON.parse(
     await svc.runReadFileTextTool({ relative_path: 'skill:fehlt/a.md' }, workspace, { skillRoots })
   );
-  assert.match(unknown.error, /Unbekannter Skill/);
+  assert.match(unknown.error, /Unknown skill/);
   assert.match(unknown.error, /demo/, 'die eingeschalteten Skills werden genannt');
 
   const none = JSON.parse(
     await svc.runReadFileTextTool({ relative_path: 'skill:demo/a.md' }, workspace, { skillRoots: [] })
   );
-  assert.match(none.error, /kein Skill eingeschaltet/i);
+  assert.match(none.error, /no skill is switched on/i);
 });
 
 test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
@@ -150,7 +150,7 @@ test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
       workspace
     )
   );
-  assert.match(written.error, /nur mit den Lese-Tools/);
+  assert.match(written.error, /only work with the read tools/);
 
   // Weder im Skill noch als Datei mit dem wörtlichen Namen „skill:demo“.
   const original = await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8');
@@ -226,7 +226,7 @@ test('Die Registry gibt Skill-Wurzeln nur an Lese-Tools weiter', async (t) => {
       context
     )
   );
-  assert.match(write.error, /nur mit den Lese-Tools/);
+  assert.match(write.error, /only work with the read tools/);
 });
 
 // ---------------------------------------------------------------------------
@@ -262,17 +262,17 @@ test('load_skill weist unbekannte, leere und ungültige Namen ab', async (t) => 
   const svc = makeFsService();
 
   const unknown = JSON.parse(await svc.runLoadSkillTool({ name: 'fehlt' }, workspace, { skillRoots }));
-  assert.match(unknown.error, /Unbekannter Skill/);
+  assert.match(unknown.error, /Unknown skill/);
   assert.match(unknown.error, /demo/, 'die eingeschalteten Skills werden genannt');
 
   const empty = JSON.parse(await svc.runLoadSkillTool({}, workspace, { skillRoots }));
-  assert.match(empty.error, /name ist erforderlich/);
+  assert.match(empty.error, /name is required/);
 
   // Ein Pfad im Namen darf nicht zu einer zweiten Adressierungsform werden.
   const escape = JSON.parse(
     await svc.runLoadSkillTool({ name: '../geheim' }, workspace, { skillRoots })
   );
-  assert.match(escape.error, /Kein gültiger Skill-Name/);
+  assert.match(escape.error, /Not a valid skill name/);
 });
 
 test('load_skill meldet eine SKILL.md ohne Anleitung, statt leer zu antworten', async (t) => {
@@ -282,13 +282,13 @@ test('load_skill meldet eine SKILL.md ohne Anleitung, statt leer zu antworten', 
 
   await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: demo\n---\n\n   \n', 'utf8');
   const leer = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
-  assert.match(leer.error, /keine Anleitung/);
+  assert.match(leer.error, /has no instructions/);
 
   await fs.writeFile(path.join(skillDir, 'SKILL.md'), 'Nur Text, kein Frontmatter.\n', 'utf8');
   const ohneFrontmatter = JSON.parse(
     await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots })
   );
-  assert.match(ohneFrontmatter.error, /YAML-Frontmatter/);
+  assert.match(ohneFrontmatter.error, /YAML front matter/);
 });
 
 test('load_skill läuft über die Registry als Skill-Schritt, nicht als Dateizugriff', async (t) => {

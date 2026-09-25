@@ -133,20 +133,20 @@ function isBlockedHostname(hostname) {
  */
 function parseHttpUrl(raw) {
   const value = typeof raw === 'string' ? raw.trim() : '';
-  if (!value) return { error: 'Es wurde keine Adresse angegeben.' };
+  if (!value) return { error: 'No address was given.' };
   let url;
   try {
     url = new URL(value);
   } catch {
-    return { error: `„${value}" ist keine gültige Adresse.` };
+    return { error: `"${value}" is not a valid address.` };
   }
   if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
-    return { error: `Nur http und https werden gelesen, nicht „${url.protocol.replace(':', '')}".` };
+    return { error: `Only http and https are fetched, not "${url.protocol.replace(':', '')}".` };
   }
   // Zugangsdaten in der Adresse: die wuerde das Tool mitschicken, ohne dass
   // der Nutzer sie je gesehen hat.
   if (url.username || url.password) {
-    return { error: 'Adressen mit Benutzername oder Passwort werden nicht abgerufen.' };
+    return { error: 'Addresses with a user name or password are not fetched.' };
   }
   return { url };
 }
