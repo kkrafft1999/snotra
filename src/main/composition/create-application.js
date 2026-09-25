@@ -611,7 +611,9 @@ function createApplication({
   });
   runningChatIds = () => chatEngine.runningChatIds();
 
-  registerDialogHandlers({ ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ });
+  registerDialogHandlers({
+    ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ, getLocale: getAppLocale,
+  });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
