@@ -1,4 +1,5 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
+const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
@@ -387,6 +388,27 @@ function createToolRegistry(initialDefinitions = []) {
     getDefinition,
     execute,
   };
+}
+
+/**
+ * The domain parameter both execution tools share (#329). What the model
+ * lists here is what the approval card shows and what the sandbox allows.
+ */
+const NETWORK_DOMAINS_PARAMETER = Object.freeze({
+  type: 'array',
+  items: { type: 'string' },
+  description:
+    'Domains the run may reach when it is isolated, e.g. ["api.github.com"]. Host names only; '
+    + '"*.example.com" covers subdomains. Leave it out when no network is needed. The user sees '
+    + 'the list on the approval card.',
+});
+
+/** Isolation state of a finished run, as the model reads it (#329). */
+function describeIsolationForModel(isolation) {
+  if (!isolation) return null;
+  return isolation.isolated
+    ? { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] }
+    : { isolated: false };
 }
 
 /**
@@ -974,7 +996,10 @@ function createWorkspaceToolRegistry({
         + 'tool instead of calculating or guessing: analysing files, conversions, reshaping data, '
         + 'checking regular expressions or data formats. Every call is a fresh script — there is '
         + 'no state between two calls, and only the standard library is guaranteed to be present. '
-        + 'No pip install.',
+        + 'No pip install. On macOS and Linux the program usually runs isolated: it can write only '
+        + 'inside the project folder and a temporary directory, cannot read credential stores, and '
+        + 'has no network unless you list the domains it needs in network_domains. The result says '
+        + 'whether the run was isolated.',
       shortDescriptionKey: 'tools.short.run_python',
       parameters: {
         type: 'object',
@@ -994,6 +1019,7 @@ function createWorkspaceToolRegistry({
             description: 'Optional arguments; available to the program via sys.argv[1:].',
             items: { type: 'string' },
           },
+          network_domains: NETWORK_DOMAINS_PARAMETER,
           timeout_ms: {
             type: 'integer',
             default: 10000,
@@ -1013,6 +1039,8 @@ function createWorkspaceToolRegistry({
           argv: args?.argv,
           timeoutMs: args?.timeout_ms,
           cwd: workspaceRoot || undefined,
+          workspaceRoot: workspaceRoot || undefined,
+          networkDomains: resolveNetworkDomains('run_python', args),
           abortSignal,
         });
         if (result?.error) return JSON.stringify({ error: result.error });
@@ -1022,6 +1050,8 @@ function createWorkspaceToolRegistry({
           exit_code: result.exitCode,
           duration_ms: result.durationMs,
         };
+        const sandbox = describeIsolationForModel(result.isolation);
+        if (sandbox) out.sandbox = sandbox;
         if (result.timedOut) {
           out.timed_out = true;
           out.note = 'The program was stopped when the time limit ran out.';
@@ -1055,7 +1085,12 @@ function createWorkspaceToolRegistry({
         + 'no terminal, so waiting on a prompt runs into the time limit; use non-interactive flags '
         + 'and pass input via stdin. Background processes and servers meant to outlive the call are '
         + 'not possible. Recursive force-deletes, disk operations and rewriting git history are '
-        + 'blocked. Every run needs the user\'s approval.',
+        + 'blocked. On macOS and Linux commands usually run isolated: writes only inside the project '
+        + 'folder and a temporary directory (caches are redirected there), no access to credential '
+        + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
+        + 'get their registry automatically. A refused write or connection shows up in stderr under '
+        + '<sandbox_violations>; report it instead of working around it. The result says whether the '
+        + 'run was isolated. Every run needs the user\'s approval.',
       shortDescriptionKey: 'tools.short.shell_execute',
       parameters: {
         type: 'object',
@@ -1076,6 +1111,7 @@ function createWorkspaceToolRegistry({
             type: 'string',
             description: 'Optional input made available to the command on standard input.',
           },
+          network_domains: NETWORK_DOMAINS_PARAMETER,
           timeout_ms: {
             type: 'integer',
             default: 30000,
@@ -1101,6 +1137,8 @@ function createWorkspaceToolRegistry({
           stdin: args?.stdin,
           timeoutMs: args?.timeout_ms,
           cwd: resolved.absPath,
+          workspaceRoot: workspaceRoot || undefined,
+          networkDomains: resolveNetworkDomains('shell_execute', args),
           abortSignal,
         });
         if (result?.error) {
@@ -1116,6 +1154,8 @@ function createWorkspaceToolRegistry({
           shell: result.shell,
           cwd: relativeCwd || '.',
         };
+        const sandbox = describeIsolationForModel(result.isolation);
+        if (sandbox) out.sandbox = sandbox;
         if (result.timedOut) {
           out.timed_out = true;
           out.note = 'The command was stopped when the time limit ran out.';

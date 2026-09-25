@@ -265,6 +265,10 @@ Red is **not forbidden outright**, but only use it when the meaning visually
 - **A destructive confirmation** (e.g. "delete data irreversibly"): only when
   the black destructive variant is too quiet; when in doubt, **try black
   first**.
+- **The "Not isolated" pill on the approval card** (#329): a command or program
+  that would run with the user's full rights, although a sandbox is the
+  default. Decided by the user on 2026-09-25; the pill carries the text as well,
+  so colour is not the only signal.
 
 Not permitted: red for non-critical notes, for validation hints without an
 actual error, or as a general accent.

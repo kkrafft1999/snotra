@@ -242,6 +242,11 @@ With the **AppImage** this route leads nowhere: the image is mounted read-only
 and `nosuid`, so a setuid bit inside it would have no effect. There, the `.deb`
 is the answer.
 
+The `.deb` also pulls in `bubblewrap`, `socat` and `ripgrep`, which the sandbox
+for shell commands and Python needs (see [The sandbox per operating
+system](#the-sandbox-per-operating-system)). With the AppImage or the tarball,
+install them yourself: `sudo apt install bubblewrap socat ripgrep`.
+
 ## Updating
 
 Snotra AI quietly checks for a newer version at startup and only speaks up if
@@ -435,11 +440,16 @@ deliberately not used — both require a code signature.
   (`subprocess`) see the same PATH. Which interpreter was found is shown under
   Settings › Tools.
 
-  **This is the riskiest setting in the app.** The executed code runs with your
-  privileges and is *not* confined to the project folder: it can read and write
-  anywhere, reach the network and start programs — there is no sandbox. The
-  protection is the approval: Snotra shows you the complete source before every
-  single run, and there is deliberately no "Allow for this session" for
+  **This is the riskiest setting in the app — how risky depends on your
+  system.** On **macOS and Linux** the code runs in a sandbox: it can write only
+  inside the project folder and a temporary folder, cannot read keys, cloud
+  credentials or browser data, and reaches the network only for the domains it
+  declares, which the approval card lists. It can still *read* your other files.
+  On **Windows** there is no sandbox yet: the code runs with your privileges and
+  can read and write anywhere, reach the network and start programs. Either way
+  the approval comes first: Snotra shows you the complete source before every
+  single run, and a pill on the card says whether the run is isolated — "Not
+  isolated" in red. There is deliberately no "Allow for this session" for
   execution. If a script runs too long it is terminated after the time limit
   (10 s by default); "Stop" in the chat ends it as well.
 
@@ -460,17 +470,22 @@ deliberately not used — both require a code signature.
   runs into the time limit (30 s by default, 300 s at most). Which shell was used
   is shown in the result and on the approval card.
 
-  **This is the most far-reaching setting in the app.** A shell command can do
-  everything you can do yourself in a terminal — read and write anywhere, reach
-  the network, install programs; there is *no* project-folder boundary here, and
-  no sandbox either. The protection is the approval: Snotra shows you the
-  complete command, the shell and the working directory before every single run,
-  and there is deliberately no "Allow for this session" for execution. Blocked
-  are recursive forced deletion (`rm -rf` and equivalents), disk operations and
-  rewriting Git history — that is an additional safeguard, **not** complete
-  protection, because a script or an interpreter in between bypasses any pattern
-  list. In *Auto* mode a command runs without asking. "Stop" in the chat and the
-  time limit terminate the entire process tree, not just the shell.
+  **This is the most far-reaching setting in the app.** On **macOS and Linux**
+  every command runs in a sandbox: it writes only inside the project folder and a
+  temporary folder (caches such as pip's and npm's are redirected there), cannot
+  read keys, cloud credentials or browser data, and reaches the network only for
+  the domains on the approval card — `pip install` and `npm install` get their
+  registry automatically, anything else the model has to name. On **Windows**
+  there is no sandbox yet: a command can do everything you can do yourself in a
+  terminal — read and write anywhere, reach the network, install programs. Snotra
+  shows you the complete command, the shell, the working directory and whether
+  the run is isolated before every single run, and there is deliberately no
+  "Allow for this session" for execution. Blocked are recursive forced
+  deletion (`rm -rf` and equivalents), disk operations and rewriting Git history
+  — that is an additional safeguard, **not** complete protection, because a
+  script or an interpreter in between bypasses any pattern list. In *Auto* mode a
+  command runs without asking — isolated, where the sandbox works. "Stop" in the
+  chat and the time limit terminate the entire process tree, not just the shell.
 
 - **Web search:** with a stored Tavily key (Settings › Tools › Web search) the
   model gets the `web_search` tool — it returns title, URL and a short excerpt per
@@ -501,6 +516,35 @@ response as well. Closing the model or settings dialog, as well as switching
 provider, aborts a running model query. A transcription can be aborted via the
 microphone button; a context switch or hiding the app also discards the voice
 input. Late results are no longer inserted.
+
+### The sandbox per operating system
+
+Whether a run is isolated is decided once per app start by a short self-test,
+not assumed. Settings › Tools shows the result under each execution tool, and
+the approval card shows it on every run.
+
+- **macOS:** built in, nothing to install.
+- **Linux:** needs `bubblewrap`, `socat` and `ripgrep`; the `.deb` installs
+  them, for the AppImage and the tarball run
+  `sudo apt install bubblewrap socat ripgrep`. **Ubuntu 24.04 and later**
+  restrict unprivileged user namespaces, and the sandbox cannot start there as
+  shipped — the settings say so. Lifting the restriction is a system-wide
+  decision and yours to make:
+
+  ```bash
+  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+  ```
+
+  It lasts until the next reboot; to keep it, put the same line (without
+  `sudo sysctl -w`) into a file under `/etc/sysctl.d/`. An AppArmor profile that
+  grants `userns` to `bwrap` works as well. Restart Snotra afterwards.
+- **Windows:** no sandbox yet. Every run has your full rights, and the card
+  says "Not isolated" in red.
+
+What the sandbox does not do: it does not stop a run from *reading* files
+outside the protected locations, and whatever it read can reach a domain the
+card allowed. On macOS, tools that verify certificates through the keychain —
+`gh`, `terraform` and other Go programs — cannot reach the network inside it.
 
 ## Providers
 
@@ -990,7 +1034,10 @@ Details on the layered architecture: [`docs/architecture.md`](./docs/architectur
   nothing is ever written there) — and the two **execution** tools `run_python`
   and `shell_execute` do not know this boundary at all: it is not Snotra that
   accesses files there, but the interpreter or the shell. Both are therefore off
-  as shipped and need an approval before every run.
+  as shipped and need an approval before every run. On macOS and Linux they run
+  in a sandbox that confines writes to the project folder and limits the network
+  to the approved domains (see [The sandbox per operating
+  system](#the-sandbox-per-operating-system)); on Windows they do not.
 - Every tool call passes through a policy in the main process (risk class × mode,
   deny rules, hard boundaries); file modifications and access to sensitive files
   need an approval in the default mode (see [tool permissions](#configuration)).

@@ -174,9 +174,23 @@ the Python service, because the latter draws its PATH from it.
 
 Both execution ports are deliberately cut equally narrow — one program or one
 command in, output and exit code out, no state between two calls — and carry the
-class `execute` in the registry: no workspace boundary, no sandbox, but an
-approval before every run and switched off as shipped (see
-`docs/security-concept.md`, section 9).
+class `execute` in the registry: an approval before every run and switched off
+as shipped (see `docs/security-concept.md`, section 9).
+
+**Isolation** ([#329](https://github.com/kkrafft1999/snotra/issues/329)) lives
+below the ports, in `main/services/sandbox-service.js`, and neither the core nor
+the tool registry knows how it works. Both runners take the service as a
+dependency and hand the argv they would spawn anyway to
+`main/services/sandboxed-spawn.js`; with isolation it comes back as
+`/bin/sh -c <wrapped>` (Seatbelt on macOS, bubblewrap on Linux, via
+`@anthropic-ai/sandbox-runtime`), without it unchanged plus the reason. Three
+things cross the boundary upwards: the request carries `workspaceRoot` and
+`networkDomains`, the result carries `isolation`, and the planner asks
+`describeSandbox()` so that the approval card shows the same state the run gets.
+The domains of a call are derived once, in `shared/runtime/sandbox-domains.js`,
+for card and run alike. The service decides availability by a self-test on
+first need and serialises runs whose domain sets differ, because the proxy's
+allowlist is process-wide.
 
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an

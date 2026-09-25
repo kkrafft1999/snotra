@@ -28,6 +28,8 @@ const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createShellRunnerService } = require('../services/shell-runner-service');
+const { createSandboxService } = require('../services/sandbox-service');
+const { existsSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
   createProviderRuntimeAdapter,
@@ -292,17 +294,47 @@ function createApplication({
   // Die Erkennung laeuft unabhaengig vom Schalter: sie liest den PATH des
   // Nutzers, den auch der Python-Runner braucht (Issue #111). Der Schalter
   // steuert das Tool, nicht das Wissen ueber die Shell.
-  const shellRunnerService = createShellRunnerService({ spawn: childProcess.spawn, os });
+  // Isolation for both execution tools (#329). Detection — dependency check,
+  // proxy start, self-test — runs once per app start, on the first card or
+  // run, or when the settings show a switched-on tool. Nothing of it runs for
+  // someone who never enables either tool.
+  const sandboxService = createSandboxService({
+    os,
+    path,
+    fs,
+    existsSync,
+    spawn: childProcess.spawn,
+    userDataPath: app.getPath('userData'),
+    readShellPath: async () => (await shellRunnerService.detect()).path || '',
+    // The interpreter run_python would use decides whether pip needs its
+    // certifi fallback inside the sandbox (decision 2b on #329).
+    readPythonCommand: async () => {
+      const python = pythonRunnerService.describe();
+      return python.found ? python.command : 'python3';
+    },
+  });
+  const shellRunnerService = createShellRunnerService({
+    spawn: childProcess.spawn,
+    os,
+    fs,
+    path,
+    sandbox: sandboxService,
+  });
   const shellRunner = {
     isAvailable: () => shellExecutionEnabled && shellRunnerService.isAvailable(),
     run: (request) => shellRunnerService.run(request),
   };
   const shellSettings = {
-    describe: () => ({ ...shellRunnerService.describe(), enabled: shellExecutionEnabled }),
+    describe: () => ({
+      ...shellRunnerService.describe(),
+      enabled: shellExecutionEnabled,
+      sandbox: sandboxService.describe(),
+    }),
     async refresh() {
       const prefs = await uiPrefsStore.readUIPrefs();
       shellExecutionEnabled = prefs.shellExecutionEnabled === true;
       await shellRunnerService.detect();
+      if (shellExecutionEnabled) await sandboxService.detect();
       return shellSettings.describe();
     },
   };
@@ -322,17 +354,23 @@ function createApplication({
     // Lauf, dieser Zugriff startet also keine zweite Login-Shell — auch nicht,
     // wenn beide Erkennungen nebenlaeufig angestossen werden.
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
+    sandbox: sandboxService,
   });
   const pythonRunner = {
     isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
     run: (request) => pythonRunnerService.run(request),
   };
   const pythonSettings = {
-    describe: () => ({ ...pythonRunnerService.describe(), enabled: pythonExecutionEnabled }),
+    describe: () => ({
+      ...pythonRunnerService.describe(),
+      enabled: pythonExecutionEnabled,
+      sandbox: sandboxService.describe(),
+    }),
     async refresh() {
       const prefs = await uiPrefsStore.readUIPrefs();
       pythonExecutionEnabled = prefs.pythonExecutionEnabled === true;
       await pythonRunnerService.detect();
+      if (pythonExecutionEnabled) await sandboxService.detect();
       return pythonSettings.describe();
     },
   };
@@ -603,6 +641,13 @@ function createApplication({
       readOwnSecrets,
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
       describeShell: () => shellRunnerService.describe(),
+      // …and whether it would run isolated, with which domains (#329). The
+      // planner reads the shell right after this; waiting for its detection
+      // here keeps a card shown early after startup from lacking it.
+      describeSandbox: async () => {
+        await shellRunnerService.detect();
+        return sandboxService.detect();
+      },
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
       // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
       refreshDynamicTools: async () => {
@@ -723,6 +768,9 @@ function createApplication({
     // laufen in einer eigenen Prozessgruppe — ohne das hier ueberlebten sie
     // die App (Issue #106).
     mcpService.disposeSync();
+    // The proxy servers live in this process and go with it; this only
+    // tidies up what the runtime keeps on disk.
+    void sandboxService.shutdown();
   }
 
   return {

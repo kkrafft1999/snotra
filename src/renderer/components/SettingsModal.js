@@ -9,6 +9,7 @@ import {
   toolStatusBadge,
 } from '../utils/tool-catalog-view.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
+import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -154,6 +155,8 @@ export function initSettingsModal(deps) {
   // wird, erkennt der Main und meldet es hier als Status.
   const inputShellEnabled = document.getElementById('input-shell-enabled');
   const shellStatusEl = document.getElementById('settings-shell-status');
+  const shellSandboxEl = document.getElementById('settings-shell-sandbox');
+  const pythonSandboxEl = document.getElementById('settings-python-sandbox');
   let shellReady = false;
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
@@ -1292,6 +1295,15 @@ export function initSettingsModal(deps) {
     }
     pythonReady = state?.found === true && state?.enabled === true;
     setPythonStatus(describePythonState(state));
+    setSandboxStatus(pythonSandboxEl, describeSandboxStatus(state?.sandbox, pythonReady));
+  }
+
+  /** Isolation line under a tool's status (#329); hidden when there is nothing to say. */
+  function setSandboxStatus(el, status) {
+    if (!el) return;
+    el.hidden = !status;
+    el.textContent = status?.text || '';
+    el.classList.toggle('error', status?.isError === true);
   }
 
   function describeShellState(state) {
@@ -1329,6 +1341,7 @@ export function initSettingsModal(deps) {
     }
     shellReady = state?.found === true && state?.enabled === true;
     setShellStatus(describeShellState(state));
+    setSandboxStatus(shellSandboxEl, describeSandboxStatus(state?.sandbox, shellReady));
   }
 
   async function loadWebSearchState() {

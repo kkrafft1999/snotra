@@ -24,6 +24,7 @@ const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-p
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
+const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
 
 const PREVIEW_MAX_CHARS = 4000;
 const RECOVERY_TRASH = 'trash';
@@ -54,6 +55,7 @@ function buildPreview(toolName, args, options = {}) {
     // Ohne den Quelltext waere die Freigabe eine Blankounterschrift (Issue #86).
     kind = 'code';
     text = typeof args?.code === 'string' ? args.code : '';
+    if (options.isolation) extra = { isolation: options.isolation };
   } else if (toolName === 'shell_execute') {
     // Der Nutzer soll sehen, *was* laeuft und *womit* (Issue #102): Befehl,
     // erkannte Shell und Arbeitsordner gehoeren zusammen auf die Karte.
@@ -63,6 +65,7 @@ function buildPreview(toolName, args, options = {}) {
       shell: typeof options.shellLabel === 'string' ? options.shellLabel : '',
       shellLogin: options.shellLogin === true,
       cwd: typeof options.cwd === 'string' ? options.cwd : '',
+      ...(options.isolation ? { isolation: options.isolation } : {}),
     };
   } else if (toolName === 'remember') {
     // Der Nutzer entscheidet hier ueber einen Satz, der ab jetzt in *jeder*
@@ -135,6 +138,8 @@ function stableStringify(value) {
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
  * @param {boolean} [deps.canTrash]  ob eine Wiederherstellungskopie in den Papierkorb möglich ist
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
+ * @param {() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>} [deps.describeSandbox]
+ *   isolation state for the card of the execution tools (#329)
  */
 function createToolCallPlanner({
   fsService,
@@ -143,6 +148,7 @@ function createToolCallPlanner({
   protectedRoots = [],
   canTrash = false,
   describeShell = null,
+  describeSandbox = null,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
@@ -342,14 +348,37 @@ function createToolCallPlanner({
     const result = { tool: toolName, riskClasses, targets, planKey };
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
+    // Isolation first: its detection waits for the shell detection (#111), so
+    // the shell read afterwards is the detected one, not a startup placeholder.
+    const isolation = await describeIsolation(toolName, args);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
       cwd: shellCwd,
       shellLabel: shell?.label || '',
       shellLogin: shell?.login === true,
+      isolation,
     });
     if (preview) result.preview = preview;
     return result;
+  }
+
+  /**
+   * Whether the run would be isolated and which domains it may reach (#329).
+   * Asked at plan time so that the card tells the truth: detection runs once
+   * per app start and is awaited here, never guessed.
+   */
+  async function describeIsolation(toolName, args) {
+    if (toolName !== 'shell_execute' && toolName !== 'run_python') return null;
+    if (typeof describeSandbox !== 'function') return null;
+    const sandbox = await describeSandbox();
+    if (sandbox?.isolated === true) {
+      return { isolated: true, domains: resolveNetworkDomains(toolName, args) };
+    }
+    return {
+      isolated: false,
+      reason: typeof sandbox?.reason === 'string' ? sandbox.reason : '',
+      missing: Array.isArray(sandbox?.missing) ? sandbox.missing : [],
+    };
   }
 
   /**

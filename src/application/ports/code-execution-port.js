@@ -15,6 +15,8 @@
  * @property {boolean} aborted       durch „Stop" im Chat beendet
  * @property {boolean} truncated     Ausgabe wurde gekappt
  * @property {number} durationMs
+ * @property {{isolated: boolean, domains?: string[], reason?: string, missing?: string[]}} [isolation]
+ *   whether the run was isolated (#329); absent when no sandbox is wired
  *
  * @typedef {Object} CodeExecutionPort
  * @property {() => boolean} isAvailable
@@ -22,7 +24,8 @@
  *   beim Bauen der Tool-Liste feststehen muss.
  * @property {() => { found: boolean, command?: string, version?: string, error?: string }} describe
  * @property {(request: { code: string, stdin?: string, argv?: string[], timeoutMs?: number,
- *   cwd?: string, abortSignal?: AbortSignal }) => Promise<CodeExecutionResult>} run
+ *   cwd?: string, workspaceRoot?: string, networkDomains?: string[],
+ *   abortSignal?: AbortSignal }) => Promise<CodeExecutionResult>} run
  */
 
 'use strict';

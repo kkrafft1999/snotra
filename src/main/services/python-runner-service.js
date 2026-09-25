@@ -8,9 +8,10 @@
  * Zeitlimit, Kill des Prozessbaums und Anbindung an den AbortSignal-Pfad,
  * damit „Stop" im Chat auch das Skript beendet.
  *
- * Erste Stufe bewusst ohne harte Isolation (eigener Nutzer, sandbox-exec,
- * Container, WASM-Python): der Schutz liegt hier in der Freigabe vor jedem
- * Lauf, nicht in einer Sandbox. Das steht so auch in README und Issue.
+ * Isolation (#329): on macOS and Linux the interpreter runs under the sandbox
+ * service — writes only in the workspace and the script's temp directory,
+ * network only for the declared domains. Elsewhere the approval before every
+ * run is the protection, and the result says the run was not isolated.
  *
  * Den PATH bringt der Dienst nicht selbst auf (Issue #111): eine aus dem
  * Finder gestartete App erbt nur den kargen PATH des Fensterservers und faende
@@ -22,6 +23,7 @@
 
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
 const { createOutputSink } = require('./child-output-sink');
+const { planSpawn } = require('./sandboxed-spawn');
 
 /** Kandidaten in der Reihenfolge, in der wir sie ausprobieren. */
 function interpreterCandidates(platform) {
@@ -78,6 +80,8 @@ function createPythonRunnerService({
   platform = process.platform,
   env = process.env,
   randomId = () => Math.random().toString(36).slice(2),
+  // Sandbox service (#329); without it runs are not isolated.
+  sandbox = null,
 }) {
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird; fortgeschrieben beim Start und beim Speichern
@@ -195,7 +199,7 @@ function createPythonRunnerService({
     }
   }
 
-  async function run({ code, stdin, argv, timeoutMs, cwd, abortSignal } = {}) {
+  async function run({ code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, abortSignal } = {}) {
     if (!detected.found) {
       return { error: detected.error || 'Kein Python-Interpreter gefunden.' };
     }
@@ -216,23 +220,44 @@ function createPythonRunnerService({
     const stdout = createOutputSink(PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
     const stderr = createOutputSink(PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
 
+    // Isolation (#329): the script's temp directory doubles as the run's own
+    // writable place next to the workspace.
+    let target;
+    try {
+      target = await planSpawn({
+        sandbox,
+        // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst
+        // geht die Ausgabe eines abgebrochenen Laufs verloren.
+        argv: [detected.command, ...(detected.args || []), '-B', '-u', scriptPath, ...normalizeArgv(argv)],
+        workspaceRoot,
+        runTmp: dir,
+        domains: networkDomains,
+        commandId: `python-${randomId()}`,
+        commandText: `python ${path.basename(scriptPath)}`,
+        abortSignal,
+      });
+    } catch (e) {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+      if (e?.name === 'AbortError') {
+        return {
+          stdout: '', stderr: '', exitCode: null, timedOut: false, aborted: true,
+          truncated: false, durationMs: Date.now() - startedAt,
+        };
+      }
+      return { error: e?.message || 'The sandbox could not be prepared.' };
+    }
+
     try {
       return await new Promise((resolve) => {
         let child;
         try {
-          child = spawn(
-            detected.command,
-            // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst
-            // geht die Ausgabe eines abgebrochenen Laufs verloren.
-            [...(detected.args || []), '-B', '-u', scriptPath, ...normalizeArgv(argv)],
-            {
-              cwd: cwd || os.homedir(),
-              stdio: ['pipe', 'pipe', 'pipe'],
-              // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
-              detached: platform !== 'win32',
-              env: childEnv({ PYTHONIOENCODING: 'utf-8' }),
-            },
-          );
+          child = spawn(target.command, target.args, {
+            cwd: cwd || os.homedir(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+            // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
+            detached: platform !== 'win32',
+            env: { ...childEnv({ PYTHONIOENCODING: 'utf-8' }), ...target.env },
+          });
         } catch (e) {
           resolve({ error: e?.message || 'Python konnte nicht gestartet werden.' });
           return;
@@ -265,15 +290,18 @@ function createPythonRunnerService({
         child.stderr?.on('data', (chunk) => stderr.push(chunk));
         child.on('error', (e) => finish({ error: e?.message || 'Python konnte nicht gestartet werden.' }));
         child.on('close', (exitCode) => {
-          finish({
+          const result = {
             stdout: stdout.text(),
-            stderr: stderr.text(),
+            // What the sandbox refused goes to the model with the output (#329).
+            stderr: target.annotate(stderr.text()),
             exitCode: typeof exitCode === 'number' ? exitCode : null,
             timedOut,
             aborted,
             truncated: stdout.truncated || stderr.truncated,
             durationMs: Date.now() - startedAt,
-          });
+          };
+          if (target.isolation) result.isolation = target.isolation;
+          finish(result);
         });
 
         if (typeof stdin === 'string' && stdin) {
@@ -284,6 +312,7 @@ function createPythonRunnerService({
         if (abortSignal?.aborted) onAbort();
       });
     } finally {
+      target.release();
       await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   }

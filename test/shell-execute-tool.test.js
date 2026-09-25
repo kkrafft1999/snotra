@@ -126,6 +126,8 @@ test('shell_execute reicht Befehl, stdin, Zeitlimit und Arbeitsordner durch', as
     stdin: 'x',
     timeoutMs: 2500,
     cwd: nodePath.join(WORKSPACE, 'frontend'),
+    workspaceRoot: WORKSPACE,
+    networkDomains: [],
     abortSignal: signal,
   });
 
@@ -267,6 +269,128 @@ test('die Karte nennt Shell und Arbeitsordner und warnt vor der fehlenden Grenze
   // Konzept §6: fuer „Ausfuehren" gibt es nur die Einzelentscheidung.
   assert.equal(view.actions.session.enabled, false);
   assert.match(sessionActionHint({ riskClasses: ['execute'], mode: 'smart' }), /Execute/);
+});
+
+test('shell_execute hands declared and package-install domains to the runner (#329)', async () => {
+  const { registry, calls } = makeRegistry();
+
+  await exec(registry, { command: 'pip install requests', network_domains: ['API.github.com', '10.0.0.1'] });
+
+  // Declared first, normalised; IP literals dropped; the registry of the
+  // detected package install added.
+  assert.deepEqual(calls[0].networkDomains, ['api.github.com', 'pypi.org', 'files.pythonhosted.org']);
+});
+
+test('shell_execute tells the model whether the run was isolated (#329)', async () => {
+  const isolated = makeRegistry({
+    run: () => ({
+      stdout: '', stderr: '', exitCode: 0, timedOut: false, aborted: false, truncated: false,
+      durationMs: 1, shell: 'zsh', isolation: { isolated: true, domains: ['pypi.org'] },
+    }),
+  });
+  const open = makeRegistry({
+    run: () => ({
+      stdout: '', stderr: '', exitCode: 0, timedOut: false, aborted: false, truncated: false,
+      durationMs: 1, shell: 'zsh', isolation: { isolated: false, reason: 'dependencies', missing: ['socat'] },
+    }),
+  });
+  const legacy = makeRegistry();
+
+  assert.deepEqual(JSON.parse(await exec(isolated.registry, { command: 'ls' })).sandbox, {
+    isolated: true,
+    network_domains: ['pypi.org'],
+  });
+  // Why it is not isolated is the user's business (card, settings), not the model's.
+  assert.deepEqual(JSON.parse(await exec(open.registry, { command: 'ls' })).sandbox, { isolated: false });
+  assert.equal('sandbox' in JSON.parse(await exec(legacy.registry, { command: 'ls' })), false);
+});
+
+test('the card names isolation and domains when a sandbox is wired (#329)', async () => {
+  const isolatedPlanner = createToolCallPlanner({
+    fsService: makeFsServiceStub(),
+    fs: require('fs').promises,
+    path: nodePath,
+    describeShell: () => ({ label: 'zsh', login: true }),
+    describeSandbox: async () => ({ isolated: true }),
+  });
+  const openPlanner = createToolCallPlanner({
+    fsService: makeFsServiceStub(),
+    fs: require('fs').promises,
+    path: nodePath,
+    describeSandbox: async () => ({ isolated: false, reason: 'platform', missing: [] }),
+  });
+  const context = { workspaceRoot: WORKSPACE };
+  const definition = makeRegistry().registry.getDefinition('shell_execute');
+
+  const isolated = await isolatedPlanner.plan(definition, { command: 'npm ci' }, context);
+  const open = await openPlanner.plan(definition, { command: 'npm ci' }, context);
+  const unwired = await makePlanner(() => ({ label: 'zsh' })).plan(definition, { command: 'ls' }, context);
+
+  assert.deepEqual(isolated.preview.isolation, { isolated: true, domains: ['registry.npmjs.org'] });
+  assert.deepEqual(open.preview.isolation, { isolated: false, reason: 'platform', missing: [] });
+  assert.equal('isolation' in unwired.preview, false);
+});
+
+function executeCardDto(tool, isolation) {
+  const preview = tool === 'shell_execute'
+    ? { kind: 'shell', text: 'pip install requests', truncated: false, masked: false, shell: 'zsh', cwd: '/tmp/projekt' }
+    : { kind: 'code', text: 'print(1)', truncated: false, masked: false };
+  return {
+    contractVersion: 1,
+    requestId: 'req-iso',
+    tool,
+    riskClasses: ['execute'],
+    targets: [],
+    mode: 'smart',
+    sessionAllowed: false,
+    preview: { ...preview, ...(isolation ? { isolation } : {}) },
+  };
+}
+
+test('an isolated run: pill "Isolated", its domains, no boundary warning (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const view = buildApprovalCardView(executeCardDto('shell_execute', {
+    isolated: true,
+    domains: ['pypi.org', 'files.pythonhosted.org'],
+  }));
+
+  assert.equal(view.isolation.isolated, true);
+  assert.equal(view.isolation.badge, 'Isolated');
+  assert.deepEqual(view.isolation.domains, ['pypi.org', 'files.pythonhosted.org']);
+  assert.match(view.isolation.note, /project folder and a temporary folder/);
+  assert.equal(view.warning, '');
+
+  const offline = buildApprovalCardView(executeCardDto('run_python', { isolated: true, domains: [] }));
+  assert.equal(offline.isolation.networkNone, 'No access');
+});
+
+test('a run that would not be isolated: red pill "Not isolated" and the reason in the warning (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const missing = buildApprovalCardView(executeCardDto('shell_execute', {
+    isolated: false, reason: 'dependencies', missing: ['bubblewrap', 'socat'],
+  }));
+  const windows = buildApprovalCardView(executeCardDto('run_python', { isolated: false, reason: 'platform', missing: [] }));
+  const ubuntu = buildApprovalCardView(executeCardDto('shell_execute', { isolated: false, reason: 'self-test', missing: [] }));
+
+  assert.equal(missing.isolation.isolated, false);
+  assert.equal(missing.isolation.badge, 'Not isolated');
+  assert.equal(
+    missing.warning,
+    'The sandbox needs the packages bubblewrap, socat, which are not installed. '
+      + 'The command runs with your rights and is not limited to the project folder.',
+  );
+  assert.match(windows.warning, /^Windows has no sandbox yet\. The program runs with your rights/);
+  assert.match(ubuntu.warning, /settings say why/);
+});
+
+test('without a sandbox wired the card stays as it was (#329)', async () => {
+  const { buildApprovalCardView } = await loadApprovalView();
+  const shell = buildApprovalCardView(executeCardDto('shell_execute', null));
+  const python = buildApprovalCardView(executeCardDto('run_python', null));
+
+  assert.equal(shell.isolation, null);
+  assert.match(shell.warning, /not limited to the project folder/);
+  assert.equal(python.warning, '');
 });
 
 test('shell_execute has the category "exec" and a display line', () => {

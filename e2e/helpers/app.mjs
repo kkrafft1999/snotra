@@ -63,13 +63,18 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
   await write('ui-preferences.json', { appLocale: 'de' });
 }
 
-/** Startet die App und wartet, bis der Renderer steht. */
-export async function launchApp({ userDataDir }) {
+/**
+ * Startet die App und wartet, bis der Renderer steht. `wrapper` is an optional
+ * executable to start instead of Electron — it must start Electron itself and
+ * pass all arguments on (Playwright puts its own in front). Used to start the
+ * app under a Seatbelt profile (#329).
+ */
+export async function launchApp({ userDataDir, wrapper = null }) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
 
   const app = await _electron.launch({
-    executablePath: electronBinary,
+    executablePath: wrapper || electronBinary,
     args: [
       APP_DIR,
       `--user-data-dir=${userDataDir}`,

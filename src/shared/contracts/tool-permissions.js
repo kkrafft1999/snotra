@@ -471,8 +471,31 @@ function createToolApprovalRequestDto({
     if (typeof preview.memoryScope === 'string' && preview.memoryScope) {
       dto.preview.memoryScope = preview.memoryScope.slice(0, 20);
     }
+    // Isolation of an execution tool (#329): whether the run is isolated and,
+    // if so, the domains it may reach; if not, why not.
+    const isolation = sanitizeIsolation(preview.isolation);
+    if (isolation) dto.preview.isolation = isolation;
   }
   return dto;
+}
+
+function stringList(value, maxItems, maxChars) {
+  return (Array.isArray(value) ? value : [])
+    .filter((entry) => typeof entry === 'string' && entry)
+    .slice(0, maxItems)
+    .map((entry) => entry.slice(0, maxChars));
+}
+
+function sanitizeIsolation(isolation) {
+  if (!isolation || typeof isolation !== 'object') return null;
+  if (isolation.isolated === true) {
+    return { isolated: true, domains: stringList(isolation.domains, 20, 253) };
+  }
+  return {
+    isolated: false,
+    reason: typeof isolation.reason === 'string' ? isolation.reason.slice(0, 40) : '',
+    missing: stringList(isolation.missing, 5, 40),
+  };
 }
 
 function isToolApprovalRequestDto(value) {

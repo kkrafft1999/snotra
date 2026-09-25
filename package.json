@@ -28,10 +28,13 @@
         "appBundleId": "dev.snotra-ai.app",
         "appCategoryType": "public.app-category.productivity",
         "icon": "./icon",
-        "asar": true,
+        "asar": {
+          "unpack": "**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**"
+        },
         "ignore": [
           "^/(?!(src|system-skills|node_modules)(/|$)|package\\.json$|LICENSE$)",
-          "/\\.DS_Store$"
+          "/\\.DS_Store$",
+          "/node_modules/@anthropic-ai/sandbox-runtime/vendor/srt-win(/|$)"
         ]
       },
       "hooks": {
@@ -70,7 +73,12 @@
               "icon": {
                 "512x512": "icon.png",
                 "scalable": "assets/icon/icon-windows.svg"
-              }
+              },
+              "depends": [
+                "bubblewrap",
+                "socat",
+                "ripgrep"
+              ]
             }
           }
         },
@@ -105,6 +113,7 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.77",
     "@fontsource/inter": "^5.2.8",
     "dompurify": "^3.4.11",
     "marked": "^17.0.5",

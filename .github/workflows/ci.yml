@@ -40,7 +40,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The sandbox of shell_execute/run_python (#329) is tested for real on
+      # macOS and Linux. Linux needs its three packages, and Ubuntu 24.04
+      # restricts the unprivileged user namespaces bubblewrap relies on.
+      - name: Sandbox prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap socat ripgrep
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: npm test
+        env:
+          # A skipped isolation test must not pass for a green one.
+          SNOTRA_REQUIRE_SANDBOX: ${{ runner.os != 'Windows' && '1' || '' }}
       - name: Xvfb installieren (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb

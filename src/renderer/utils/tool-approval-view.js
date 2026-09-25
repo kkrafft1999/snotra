@@ -205,13 +205,56 @@ export function sessionActionHint(dto) {
   return t('approval.sessionHint.single');
 }
 
+const ISOLATION_REASON_KEYS = Object.freeze({
+  platform: 'approval.isolation.reason.platform',
+  dependencies: 'approval.isolation.reason.dependencies',
+  'self-test': 'approval.isolation.reason.selfTest',
+  start: 'approval.isolation.reason.start',
+});
+
+/**
+ * Isolation of an execution tool as the card shows it (#329): a pill next to
+ * the title — "Isolated", or "Not isolated" in red — plus, when isolated, the
+ * domains the run may reach and a one-line note on what stays closed. Null
+ * when the card carries no isolation state at all (no sandbox wired).
+ */
+export function describeIsolation(isolation) {
+  if (!isolation || typeof isolation !== 'object') return null;
+  if (isolation.isolated === true) {
+    const domains = (Array.isArray(isolation.domains) ? isolation.domains : [])
+      .filter((entry) => typeof entry === 'string' && entry);
+    return {
+      isolated: true,
+      badge: t('approval.isolation.badge.on'),
+      domains,
+      networkNone: domains.length > 0 ? '' : t('approval.isolation.network.none'),
+      note: t('approval.isolation.note'),
+    };
+  }
+  const missing = (Array.isArray(isolation.missing) ? isolation.missing : [])
+    .filter((entry) => typeof entry === 'string' && entry);
+  const key = ISOLATION_REASON_KEYS[isolation.reason] || ISOLATION_REASON_KEYS.start;
+  return {
+    isolated: false,
+    badge: t('approval.isolation.badge.off'),
+    domains: [],
+    reason: t(key, { packages: missing.length > 0 ? missing.join(', ') : 'bubblewrap, socat, ripgrep' }),
+  };
+}
+
 /** Warning when overwriting (concept §6): with or without a way back. */
 export function overwriteWarning(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
-  if (dto?.tool === 'shell_execute') {
+  if (dto?.tool === 'shell_execute' || dto?.tool === 'run_python') {
+    const isolation = dto?.preview?.isolation;
+    // Isolated: the boundary exists, and the pill and the note say so (#329).
+    if (isolation?.isolated === true) return '';
     // No workspace boundary: that belongs on the card, not only in the
-    // settings (issue #102).
-    return t('approval.warning.shell');
+    // settings (issue #102) — and if a sandbox was expected, why it is
+    // missing (#329).
+    const base = t(dto.tool === 'shell_execute' ? 'approval.warning.shell' : 'approval.warning.python');
+    if (isolation && isolation.isolated === false) return `${describeIsolation(isolation).reason} ${base}`;
+    return dto.tool === 'shell_execute' ? base : '';
   }
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
   const existing = targets.filter((entry) => entry.exists === true && (entry.kind === 'file' || !entry.kind));
@@ -255,6 +298,7 @@ export function buildApprovalCardView(dto) {
     shellLabel: '',
     memoryScopeLabel: '',
     cwdLabel: '',
+    isolation: describeIsolation(dto.preview?.isolation),
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },
