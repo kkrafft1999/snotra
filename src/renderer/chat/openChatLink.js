@@ -1,5 +1,5 @@
 import { ALLOWED_LINK_PROTOS } from '../utils/helpers.js';
-import { t } from '../i18n.js';
+import { t, tMessage } from '../i18n.js';
 
 /**
  * Oeffnen von Links aus Modellantworten (Issues #82, #83).
@@ -31,7 +31,7 @@ export async function openChatLink(api, href) {
   try {
     const result = await api.openExternal(href);
     if (result?.ok) return { ok: true };
-    return { ok: false, error: result?.error || t('chat.link.error.failed') };
+    return { ok: false, error: result?.error ? tMessage(result.error) : t('chat.link.error.failed') };
   } catch (e) {
     return { ok: false, error: e?.message || t('chat.link.error.failed') };
   }

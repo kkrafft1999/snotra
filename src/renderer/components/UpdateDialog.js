@@ -17,7 +17,7 @@
  * ausschliesslich, was der Main-Prozess selbst bei GitHub nachgeschlagen hat.
  */
 
-import { t, onLocaleChange } from '../i18n.js';
+import { t, tMessage, onLocaleChange } from '../i18n.js';
 
 const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])';
 
@@ -177,7 +177,7 @@ export function initUpdateDialog({ api }) {
     try {
       const result = await api.openExternal(info.releaseUrl);
       if (result && result.ok === false) {
-        render('error', t('update.releasePage.failed', { error: result.error || t('mcpImport.failed.unknown') }));
+        render('error', t('update.releasePage.failed', { error: result.error ? tMessage(result.error) : t('mcpImport.failed.unknown') }));
       }
     } catch {
       render('error', t('update.releasePage.failedPlain'));

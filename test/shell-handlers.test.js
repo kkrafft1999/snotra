@@ -103,7 +103,7 @@ test('openExternal weist andere Protokolle ab, ohne die Shell zu rufen', async (
 
   const result = await ipcMain.invoke(REQ.SHELL_OPEN_EXTERNAL, 'file:///etc/passwd');
   assert.equal(result.ok, false);
-  assert.match(result.error, /http/);
+  assert.deepEqual(result.error, { key: 'shell.error.protocolNotAllowed' }, 'a key, worded where it is shown (#353)');
   assert.deepEqual(opened, [], 'die Shell darf gar nicht erst gerufen werden');
 });
 
@@ -159,7 +159,7 @@ test('writeClipboardText weist zu große Texte ab, ohne die Zwischenablage zu ru
   const zuGross = 'a'.repeat(MAX_CLIPBOARD_TEXT_BYTES + 1);
   const result = await ipcMain.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, zuGross);
   assert.equal(result.ok, false);
-  assert.match(result.error, /zu groß/i);
+  assert.deepEqual(result.error, { key: 'shell.error.clipboardTooLarge' });
   assert.deepEqual(written, []);
 
   const gradeNoch = 'a'.repeat(MAX_CLIPBOARD_TEXT_BYTES);

@@ -11,6 +11,8 @@
  * gehoert darum in den Main-Prozess.
  */
 
+const { createMessage } = require('../../shared/contracts/message');
+
 /** Groesstes Textstueck, das in die Zwischenablage darf (Issue #83). */
 const MAX_CLIPBOARD_TEXT_BYTES = 1024 * 1024;
 
@@ -41,21 +43,23 @@ function isOpenableUrl(url) {
 function registerShellHandlers({ ipcMain, shell, clipboard = null, REQ }) {
   ipcMain.handle(REQ.SHELL_OPEN_EXTERNAL, async (_event, url) => {
     if (!isOpenableUrl(url)) {
-      return { ok: false, error: 'Nur http-, https- und mailto-Links können geöffnet werden.' };
+      return { ok: false, error: createMessage('shell.error.protocolNotAllowed') };
     }
     try {
       await shell.openExternal(url.trim());
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: e?.message || 'Link konnte nicht geöffnet werden.' };
+      // What the operating system says is quoted as it stands; our own
+      // sentences travel as keys and are worded where they are shown (#353).
+      return { ok: false, error: e?.message || createMessage('chat.link.error.failed') };
     }
   });
 
   ipcMain.handle(REQ.SHELL_WRITE_CLIPBOARD_TEXT, async (_event, text) => {
-    if (!clipboard) return { ok: false, error: 'Zwischenablage nicht verfügbar.' };
+    if (!clipboard) return { ok: false, error: createMessage('shell.error.clipboardUnavailable') };
     const value = String(text ?? '');
     if (Buffer.byteLength(value, 'utf8') > MAX_CLIPBOARD_TEXT_BYTES) {
-      return { ok: false, error: 'Text ist zu groß für die Zwischenablage.' };
+      return { ok: false, error: createMessage('shell.error.clipboardTooLarge') };
     }
     try {
       // Ab Electron 44 liefert `writeText` ein Promise (Angleichung an die
@@ -64,7 +68,7 @@ function registerShellHandlers({ ipcMain, shell, clipboard = null, REQ }) {
       await clipboard.writeText(value);
       return { ok: true };
     } catch (e) {
-      return { ok: false, error: e?.message || 'Konnte nichts in die Zwischenablage legen.' };
+      return { ok: false, error: e?.message || createMessage('shell.error.clipboardFailed') };
     }
   });
 }

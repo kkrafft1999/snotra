@@ -82,3 +82,13 @@ test('openChatLink meldet eine fehlende Bruecke, statt zu werfen', async () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /cannot be opened/);
 });
+
+test('openChatLink puts a key from the main process into words (#353)', async () => {
+  const { openChatLink } = await modulePromise;
+  const api = { openExternal: () => Promise.resolve({ ok: false, error: { key: 'shell.error.protocolNotAllowed' } }) };
+
+  assert.deepEqual(await openChatLink(api, 'https://example.com'), {
+    ok: false,
+    error: 'Only http, https and mailto links can be opened.',
+  });
+});
