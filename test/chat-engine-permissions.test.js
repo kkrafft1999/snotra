@@ -492,7 +492,7 @@ test('unlesbare Berechtigungsregeln blockieren Tools statt Sperren zu verlieren'
   assert.equal(tools.calls.length, 0);
   const msg = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
   assert.equal(msg.reason, 'policy_denied');
-  assert.match(msg.message, /nicht lesbar/);
+  assert.match(msg.message, /cannot be read/);
 });
 
 test('eigene Provider-Secrets in der Ausgabe: harte Grenze, Ausgabe ersetzt', async () => {

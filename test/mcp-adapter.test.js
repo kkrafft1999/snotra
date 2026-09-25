@@ -139,12 +139,12 @@ test('ein fachlicher Serverfehler kommt als Ergebnis mit Text beim Modell an', a
 test('ein toter Server macht den Chat nicht kaputt, sondern liefert einen Fehler', async () => {
   const service = fakeService({
     call: async () => {
-      throw new Error('Der MCP-Server „GitHub" hat sich unerwartet beendet (Code 9).');
+      throw new Error('The MCP server “GitHub” exited unexpectedly (exit code 9).');
     },
   });
   const [suche] = await definitionsOf(service);
   const result = JSON.parse(await suche.handler({}, {}));
-  assert.match(result.error, /unerwartet beendet/);
+  assert.match(result.error, /exited unexpectedly/);
   assert.equal(result.output, undefined);
 });
 
@@ -487,7 +487,7 @@ test('stirbt der Server, meldet der Aufruf das als Tool-Ergebnis statt zu werfen
   await tools.prepare();
   const output = await registry.execute('mcp__fake__echo', {}, { approved: true });
   const result = JSON.parse(output);
-  assert.match(result.error, /unerwartet beendet/);
+  assert.match(result.error, /exited unexpectedly/);
 
   // Nach dem Neuaufbau sind seine Tools weg — das Modell bekommt nichts
   // angeboten, was niemand mehr ausführt.

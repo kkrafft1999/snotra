@@ -1270,7 +1270,7 @@ export function initSettingsModal(deps) {
       return { text: t('settings.python.status.unavailable'), isError: true };
     }
     if (!state.found) {
-      const reason = state.error ? ` (${state.error})` : '';
+      const reason = state.error ? ` (${tMessage(state.error)})` : '';
       return state.source === 'override'
         ? { text: t('settings.python.status.startFailed', { reason }), isError: true }
         : { text: t('settings.python.status.notFound', { reason }), isError: true };
@@ -1334,7 +1334,7 @@ export function initSettingsModal(deps) {
       return { text: t('settings.shell.status.unavailable'), isError: true };
     }
     if (!state.found) {
-      const reason = state.error ? ` (${state.error})` : '';
+      const reason = state.error ? ` (${tMessage(state.error)})` : '';
       return { text: t('settings.shell.status.notFound', { reason }), isError: true };
     }
     // Login-Shell heisst: dein Profil wird gelesen, Homebrew & Co. sind da.

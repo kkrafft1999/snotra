@@ -27,13 +27,13 @@ test('eine übergroße Antwort ohne Zeilenende bricht ab statt zu puffern', asyn
 
   await assert.rejects(
     () => transport.request('tools/list', {}, { timeoutMs: 10_000 }),
-    /übergroße Antwort ohne Zeilenende/,
+    /oversized answer without a line break/,
   );
 });
 
 test('eine Anfrage ohne laufenden Prozess scheitert sofort', async () => {
   const transport = transportFor('ok');
-  await assert.rejects(() => transport.request('tools/list', {}), /nicht verbunden/);
+  await assert.rejects(() => transport.request('tools/list', {}), /is not connected/);
 });
 
 test('ein bereits abgebrochenes Signal verhindert das Senden', async (t) => {
@@ -43,7 +43,7 @@ test('ein bereits abgebrochenes Signal verhindert das Senden', async (t) => {
 
   const controller = new AbortController();
   controller.abort();
-  await assert.rejects(() => transport.request('initialize', {}, { signal: controller.signal }), /abgebrochen/);
+  await assert.rejects(() => transport.request('initialize', {}, { signal: controller.signal }), /Request cancelled/);
 });
 
 test('ein nicht startbares Kommando wirft mit Klartext', async () => {
@@ -51,7 +51,7 @@ test('ein nicht startbares Kommando wirft mit Klartext', async () => {
     config: normalizeMcpServerConfig({ id: 'weg', label: 'weg', command: 'snotra-gibt-es-nicht-xyz' }),
     spawn: childProcess.spawn,
   });
-  await assert.rejects(() => transport.start(), /konnte nicht gestartet werden/);
+  await assert.rejects(() => transport.start(), /could not be started/);
   assert.equal(transport.isAlive(), false);
 });
 

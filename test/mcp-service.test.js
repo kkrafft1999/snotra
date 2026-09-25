@@ -10,6 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const childProcess = require('child_process');
 const path = require('path');
+const { translateMessage } = require('../src/shared/i18n');
 
 const { createMcpService } = require('../src/main/services/mcp-service');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
@@ -159,7 +160,7 @@ test('ein nicht antwortender Aufruf läuft in ein Zeitlimit statt zu hängen', a
 
   await assert.rejects(
     () => service.callTool({ serverId: 'files', name: 'echo', args: {} }, { timeoutMs: 250 }),
-    /nicht innerhalb von/,
+    /did not answer “tools\/call” within/,
   );
   // Die Verbindung steht weiter — ein Zeitlimit betrifft die Anfrage, nicht den Server.
   assert.equal(statusOf(service, 'files').state, MCP_CONNECTION_STATES.READY);
@@ -173,7 +174,10 @@ test('ein hängender Handshake läuft in das Handshake-Zeitlimit', async (t) => 
   assert.deepEqual(await service.listTools(), []);
   const status = statusOf(service, 'files');
   assert.equal(status.state, MCP_CONNECTION_STATES.FAILED);
-  assert.match(status.error, /nicht innerhalb von/);
+  // Settings reads the status in the interface language (#338).
+  assert.equal(status.error.key, 'mcp.transport.timeout');
+  assert.match(translateMessage('de', status.error), /nicht innerhalb von/);
+  assert.match(translateMessage('en', status.error), /did not answer “initialize” within/);
 });
 
 test('AbortSignal beendet den Aufruf sofort', async (t) => {
@@ -185,7 +189,7 @@ test('AbortSignal beendet den Aufruf sofort', async (t) => {
   const controller = new AbortController();
   const pending = service.callTool({ serverId: 'files', name: 'echo' }, { signal: controller.signal });
   controller.abort();
-  await assert.rejects(() => pending, /abgebrochen/);
+  await assert.rejects(() => pending, /Request cancelled/);
 });
 
 test('ein nicht startbares Kommando meldet Klartext statt zu hängen', async (t) => {
@@ -196,7 +200,7 @@ test('ein nicht startbares Kommando meldet Klartext statt zu hängen', async (t)
   assert.deepEqual(await service.listTools(), []);
   const status = statusOf(service, 'kaputt');
   assert.equal(status.state, MCP_CONNECTION_STATES.FAILED);
-  assert.match(status.error, /konnte nicht gestartet werden|nicht erreichbar/);
+  assert.match(translateMessage('en', status.error), /could not be started|not reachable/);
 });
 
 test('ein Server, der beim Start abbricht, liefert seinen stderr-Auszug mit', async (t) => {
@@ -218,14 +222,16 @@ test('stirbt der Server mitten im Aufruf, scheitert die Anfrage mit klarer Meldu
 
   await assert.rejects(
     () => service.callTool({ serverId: 'files', name: 'echo' }),
-    /unerwartet beendet/,
+    /exited unexpectedly/,
   );
 
   const status = statusOf(service, 'files');
   assert.equal(status.state, MCP_CONNECTION_STATES.FAILED);
   assert.equal(status.toolCount, 0, 'tote Server bieten keine Tools mehr an');
   // Und der naechste Aufruf haengt nicht, sondern sagt, was los ist.
-  await assert.rejects(() => service.callTool({ serverId: 'files', name: 'echo' }), /unerwartet beendet/);
+  await assert.rejects(() => service.callTool({ serverId: 'files', name: 'echo' }), /exited unexpectedly/);
+  // Settings gets the same fact as a catalogue message.
+  assert.match(translateMessage('de', status.error), /hat sich unerwartet beendet \((Exit-Code|Signal) /);
   assert.deepEqual(await service.listTools(), []);
 });
 
@@ -251,8 +257,8 @@ test('abgeschaltete Server und abgewählte Tools tauchen nicht auf', async (t) =
   const tools = await service.listTools();
   assert.deepEqual(tools.map((tool) => `${tool.serverId}:${tool.name}`), ['teilweise:echo']);
   assert.equal(children.length, 1, 'ein abgeschalteter Server wird gar nicht erst gestartet');
-  await assert.rejects(() => service.callTool({ serverId: 'aus', name: 'echo' }), /abgeschaltet/);
-  await assert.rejects(() => service.callTool({ serverId: 'teilweise', name: 'add' }), /abgewählt/);
+  await assert.rejects(() => service.callTool({ serverId: 'aus', name: 'echo' }), /is switched off/);
+  await assert.rejects(() => service.callTool({ serverId: 'teilweise', name: 'add' }), /is deselected for/);
 });
 
 test('setServers meldet ungültige Einträge und doppelte Kennungen', () => {

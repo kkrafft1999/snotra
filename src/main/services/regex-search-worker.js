@@ -27,9 +27,9 @@ parentPort.on('message', ({ id, text, maxMatches }) => {
 class RegexSearchTimeoutError extends Error {
   constructor(timeBudgetMs) {
     super(
-      `Der reguläre Ausdruck ist zu langsam: Zeitbudget von ${Math.round(timeBudgetMs / 1000)} s überschritten. ` +
-        'Muster vereinfachen (z. B. keine verschachtelten Wiederholungen), Suchbereich mit relative_path/include ' +
-        'einschränken oder wörtlich suchen (is_regex=false).'
+      `The regular expression is too slow: it exceeded its time budget of ${Math.round(timeBudgetMs / 1000)} s. ` +
+        'Simplify the pattern (no nested repetitions, for example), narrow the search with relative_path/include, ' +
+        'or search literally (is_regex=false).'
     );
     this.name = 'RegexSearchTimeoutError';
     this.timeBudgetMs = timeBudgetMs;
@@ -70,14 +70,14 @@ function createRegexSearchWorker({ pattern, flags, options, timeBudgetMs = REGEX
     settlePending((p) => p.reject(err));
   });
   worker.on('exit', () => {
-    failure = failure || new Error('Regex-Worker wurde beendet.');
+    failure = failure || new Error('The regex worker has stopped.');
     settlePending((p) => p.reject(failure));
   });
 
   /** Matcht `text` im Worker; wirft RegexSearchTimeoutError, wenn das Budget aufgebraucht ist. */
   function search(text, maxMatches) {
     if (failure) return Promise.reject(failure);
-    if (pending) return Promise.reject(new Error('Regex-Worker ist bereits beschäftigt.'));
+    if (pending) return Promise.reject(new Error('The regex worker is already busy.'));
     return new Promise((resolve, reject) => {
       const id = ++nextId;
       const timer = setTimeout(() => {
@@ -91,7 +91,7 @@ function createRegexSearchWorker({ pattern, flags, options, timeBudgetMs = REGEX
   }
 
   function terminate() {
-    settlePending((p) => p.reject(new Error('Regex-Suche abgebrochen.')));
+    settlePending((p) => p.reject(new Error('The regex search was cancelled.')));
     return worker.terminate();
   }
 

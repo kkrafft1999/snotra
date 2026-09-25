@@ -18,7 +18,7 @@
 'use strict';
 
 const { TOOL_RISK_CLASSES } = require('./tool-permissions');
-const { createMessage } = require('./message');
+const { createMessage, isMessage } = require('./message');
 
 const MCP_CONTRACT_VERSION = 1;
 
@@ -411,7 +411,9 @@ function createMcpConnectionStatus({
     serverName: text(serverName, MCP_LIMITS.LABEL_MAX_CHARS),
     serverVersion: text(serverVersion, MCP_LIMITS.LABEL_MAX_CHARS),
     protocolVersion: text(protocolVersion, MCP_LIMITS.LABEL_MAX_CHARS),
-    error: text(error, MCP_LIMITS.DESCRIPTION_MAX_CHARS),
+    // A catalogue message for our own sentences (#338), plain text when a
+    // server's own error is quoted.
+    error: isMessage(error) ? createMessage(error.key, error.params) : text(error, MCP_LIMITS.DESCRIPTION_MAX_CHARS),
     stderr: typeof stderr === 'string' ? stderr : '',
   };
 }

@@ -24,6 +24,7 @@
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
 const { createOutputSink } = require('./child-output-sink');
 const { planSpawn } = require('./sandboxed-spawn');
+const { createMessage } = require('../../shared/contracts/message');
 
 /** Kandidaten in der Reihenfolge, in der wir sie ausprobieren. */
 function interpreterCandidates(platform) {
@@ -86,7 +87,10 @@ function createPythonRunnerService({
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird; fortgeschrieben beim Start und beim Speichern
   // der Einstellungen.
-  let detected = { found: false, error: 'Noch nicht geprüft.' };
+  // `error` is the detail Settings shows next to "No Python 3 found": a
+  // catalogue message, or the quoted output of the probe (#338). The model
+  // never reads it — `run()` has its own English sentence.
+  let detected = { found: false, error: createMessage('runner.error.notChecked') };
   // PATH aus dem Shell-Profil, bei der Erkennung ermittelt. Leer heisst:
   // nichts zu reparieren (Windows) oder keine Shell gefunden.
   let shellPath = '';
@@ -109,19 +113,19 @@ function createPythonRunnerService({
           env: childEnv(),
         });
       } catch (e) {
-        resolve({ ok: false, error: e?.message || 'Start fehlgeschlagen.' });
+        resolve({ ok: false, error: e?.message || createMessage('runner.error.startFailed') });
         return;
       }
       let out = '';
       const timer = setTimeout(() => {
         try { child.kill('SIGKILL'); } catch { /* schon weg */ }
-        resolve({ ok: false, error: 'Zeitüberschreitung bei der Versionsabfrage.' });
+        resolve({ ok: false, error: createMessage('runner.error.probeTimeout') });
       }, 5_000);
       child.stdout?.on('data', (c) => { out += String(c); });
       child.stderr?.on('data', (c) => { out += String(c); });
       child.on('error', (e) => {
         clearTimeout(timer);
-        resolve({ ok: false, error: e?.message || 'Interpreter nicht gefunden.' });
+        resolve({ ok: false, error: e?.message || createMessage('runner.error.notFound') });
       });
       child.on('close', (code) => {
         clearTimeout(timer);
@@ -129,7 +133,7 @@ function createPythonRunnerService({
         if (code === 0 && /python\s*3/i.test(version)) {
           resolve({ ok: true, version });
         } else {
-          resolve({ ok: false, error: version || `Beendet mit Code ${code}.` });
+          resolve({ ok: false, error: version || createMessage('runner.error.exitCode', { code }) });
         }
       });
     });
@@ -170,10 +174,9 @@ function createPythonRunnerService({
     }
     detected = {
       found: false,
-      error:
-        platform === 'win32'
-          ? 'Kein Python 3 gefunden (weder „py -3“ noch „python“).'
-          : 'Kein Python 3 gefunden (weder „python3“ noch „python“).',
+      error: createMessage('runner.error.tried', {
+        candidates: platform === 'win32' ? 'py -3, python' : 'python3, python',
+      }),
       source: 'auto',
       pathSource: pathSource(),
     };
@@ -201,12 +204,12 @@ function createPythonRunnerService({
 
   async function run({ code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
     if (!detected.found) {
-      return { error: detected.error || 'Kein Python-Interpreter gefunden.' };
+      return { error: 'No Python 3 interpreter is available.' };
     }
     const source = typeof code === 'string' ? code : '';
-    if (!source.trim()) return { error: 'Es wurde kein Python-Code übergeben.' };
+    if (!source.trim()) return { error: 'No Python code was given.' };
     if (source.length > PYTHON_EXECUTION_LIMITS.MAX_CODE_CHARS) {
-      return { error: `Der Code ist länger als ${PYTHON_EXECUTION_LIMITS.MAX_CODE_CHARS} Zeichen.` };
+      return { error: `The code is longer than ${PYTHON_EXECUTION_LIMITS.MAX_CODE_CHARS} characters.` };
     }
 
     // Das Skript liegt im Temp-Verzeichnis, nicht im Projekt — der Ordner des
@@ -261,7 +264,7 @@ function createPythonRunnerService({
             env: { ...childEnv({ PYTHONIOENCODING: 'utf-8' }), ...target.env },
           });
         } catch (e) {
-          resolve({ error: e?.message || 'Python konnte nicht gestartet werden.' });
+          resolve({ error: e?.message || 'Python could not be started.' });
           return;
         }
 
@@ -290,7 +293,7 @@ function createPythonRunnerService({
 
         child.stdout?.on('data', (chunk) => stdout.push(chunk));
         child.stderr?.on('data', (chunk) => stderr.push(chunk));
-        child.on('error', (e) => finish({ error: e?.message || 'Python konnte nicht gestartet werden.' }));
+        child.on('error', (e) => finish({ error: e?.message || 'Python could not be started.' }));
         child.on('close', (exitCode) => {
           const result = {
             stdout: stdout.text(),

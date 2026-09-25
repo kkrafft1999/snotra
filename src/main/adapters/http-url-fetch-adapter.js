@@ -86,7 +86,17 @@ async function readLimitedBody(response) {
  * @param {(hostname: string) => Promise<Array<{ address: string }>>} [deps.lookup]
  *   DNS-Aufloesung; in Tests ersetzt, damit kein Netz noetig ist.
  */
-function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
+/**
+ * Which language version of a page to ask for (#338). Not a sentence we write,
+ * but it decides the language of what the model reads and quotes: a site that
+ * negotiates serves the user's language, so the header follows the interface.
+ * German keeps English as its fallback, as it always had.
+ */
+function acceptLanguageFor(locale) {
+  return locale === 'de' ? 'de,en;q=0.8' : 'en,*;q=0.5';
+}
+
+function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale = () => 'en' } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
 
   /** Adresspruefung vor jedem einzelnen Sprung (auch nach Weiterleitungen). */
@@ -133,7 +143,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null } = {}) {
               signal,
               headers: {
                 accept: 'text/html,text/plain,application/json;q=0.9,*/*;q=0.1',
-                'accept-language': 'de,en;q=0.8',
+                'accept-language': acceptLanguageFor(getLocale()),
                 'user-agent': USER_AGENT,
               },
             });

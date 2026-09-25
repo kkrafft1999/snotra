@@ -10,6 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
 const childProcess = require('child_process');
+const { translateMessage } = require('../src/shared/i18n');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -198,8 +199,10 @@ test('ohne gefundene Shell ist das Tool nicht verfügbar und läuft nicht', asyn
 
   assert.equal(detected.found, false);
   assert.equal(service.isAvailable(), false);
-  assert.match(detected.error, /Keine Shell gefunden/);
-  assert.match((await service.run({ command: 'ls' })).error, /Keine Shell/);
+  // Settings shows the detail in the interface language, the model reads English (#338).
+  assert.match(translateMessage('en', detected.error), /^tried \$SHELL and the usual paths/);
+  assert.match(translateMessage('de', detected.error), /^versucht: \$SHELL und die üblichen Pfade/);
+  assert.match((await service.run({ command: 'ls' })).error, /No shell is available/);
 });
 
 test('scheitern die Profil-Formen, wird dieselbe Shell gewöhnlich versucht', async () => {
@@ -502,7 +505,7 @@ test('run kappt sehr große Ausgaben und sagt es', async (t) => {
 
   const result = await service.run({ command, timeoutMs: 60_000 });
   assert.equal(result.truncated, true);
-  assert.match(result.stdout, /\[Ausgabe gekürzt\]$/);
+  assert.match(result.stdout, /\[output truncated\]$/);
   assert.ok(result.stdout.length < SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES + 200);
 });
 
@@ -510,11 +513,11 @@ test('run weist leere und überlange Befehle ab, ohne einen Prozess zu starten',
   const service = await ready();
   if (!service) return t.skip('Keine Shell auf diesem Rechner.');
 
-  assert.match((await service.run({ command: '' })).error, /kein Befehl/i);
-  assert.match((await service.run({ command: '   ' })).error, /kein Befehl/i);
+  assert.match((await service.run({ command: '' })).error, /no command/i);
+  assert.match((await service.run({ command: '   ' })).error, /no command/i);
   assert.match(
     (await service.run({ command: 'x'.repeat(SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS + 1) })).error,
-    /länger als/,
+    /longer than/,
   );
 });
 
@@ -524,6 +527,6 @@ test('gesperrte Wirkungen erreichen die Shell nicht', async (t) => {
 
   const result = await service.run({ command: 'rm -rf /' });
   assert.equal(result.blocked, true);
-  assert.match(result.error, /gesperrt/);
+  assert.match(result.error, /is blocked in Snotra/);
   assert.equal(result.exitCode, undefined);
 });

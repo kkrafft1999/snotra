@@ -14,6 +14,7 @@
  *   no-tools       — meldet keine tools-Capability
  *   flood          — schickt auf tools/list eine riesige Zeile ohne Zeilenende
  *   slow-init      — antwortet auf initialize nie
+ *   leak-init      — refuses initialize with its token in the error text (#338)
  *   slow-call      — antwortet auf tools/call nie
  *   crash-on-call  — stirbt beim ersten tools/call
  *   error-on-call  — antwortet mit einem JSON-RPC-Fehler
@@ -83,6 +84,10 @@ function handle(message) {
 
   if (method === 'initialize') {
     if (mode === 'slow-init') return; // nie antworten
+    if (mode === 'leak-init') {
+      send({ jsonrpc: '2.0', id, error: { code: -32000, message: `bad credentials: GITHUB_TOKEN=${process.env.GITHUB_TOKEN}` } });
+      return;
+    }
     if (mode === 'noisy') process.stdout.write('fake-mcp bereit\n');
     reply(id, {
       protocolVersion: '2025-06-18',
