@@ -3,6 +3,9 @@
 > 🇬🇧 **English:** [`README.md`](./README.md) — English is the project language;
 > this German version is maintained alongside it.
 
+> 🌐 **Website:** [snotra-ai.dev](https://snotra-ai.dev) — Überblick, Einsatzfelder
+> und Downloads.
+
 > Eine Electron-basierte Plattform, die per **Skills** und **Tools** zu Use-Case-spezifischen KI-Anwendungen ausgebaut werden kann.
 
 ## Vision
