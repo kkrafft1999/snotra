@@ -270,11 +270,6 @@ const NOT_MODEL_CHANNEL = [
   { file: 'src/main/adapters/mcp-adapter.js', text: 'Der Tool-Name ist zu lang.' },
   // Construction guard (#278).
   { file: 'src/main/adapters/memory-adapter.js', text: 'createMemoryAdapter benötigt fs und path.' },
-  // forget() and replace() serve the settings page, never a tool: the model
-  // only has `remember`, whose messages are English.
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Unbekannte Gedächtnis-Ebene: ' },
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Für diese Ebene gibt es gerade keinen Speicherort.' },
-  { file: 'src/main/adapters/memory-adapter.js', text: 'Höchstens ${maxChars} Zeichen je Ebene.' },
 ];
 
 function codeWithoutComments(file) {
