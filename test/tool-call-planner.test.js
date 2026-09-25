@@ -163,7 +163,7 @@ test('harte Grenzen: Ausbruch, Skill-Schreiben, Snotra-eigener Speicher und Syml
   const planner = make();
   const outside = await planner.plan(registry.getDefinition('read_file_text'), { relative_path: '../userData/llm-config.json' }, { workspaceRoot: workspace });
   assert.equal(outside.reason, 'hard_limit');
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 
   const skillWrite = await planner.plan(registry.getDefinition('write_file_text'), { relative_path: 'skill:demo/references/x.md', content: 'x' }, { workspaceRoot: workspace, skillRoots });
   assert.equal(skillWrite.reason, 'hard_limit');

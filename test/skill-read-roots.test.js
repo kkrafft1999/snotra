@@ -90,7 +90,7 @@ test('Lese-Tools bleiben ohne Präfix auf dem Arbeitsordner', async (t) => {
   const outside = JSON.parse(
     await svc.runReadFileTextTool({ relative_path: '../geheim.txt' }, workspace, { skillRoots })
   );
-  assert.match(outside.error, /außerhalb des Arbeitsordners/);
+  assert.match(outside.error, /outside the workspace folder/);
 });
 
 test('Skill-Pfade brechen nicht aus dem Skill-Verzeichnis aus', async (t) => {

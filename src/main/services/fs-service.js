@@ -810,6 +810,13 @@ function createFsService({
     outside: 'Pfad liegt außerhalb des Arbeitsordners.',
     missing: 'Kein Arbeitsordner geöffnet.',
   };
+  // The same two failures as the model reads them (#309). Tool paths go
+  // through resolveToolRoot and nowhere else, so the IPC boundary above keeps
+  // its own labels and the model gets English.
+  const WORKSPACE_TOOL_LABELS = {
+    outside: 'Path is outside the workspace folder.',
+    missing: 'No workspace folder is open.',
+  };
   const SKILL_LABELS = {
     outside: 'Path is outside the skill folder.',
     missing: 'Skill folder not found.',
@@ -914,7 +921,7 @@ function createFsService({
     const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
     const parsed = parseSkillPath(raw);
     if (!parsed) {
-      return { root: workspaceRoot, rel: raw, prefix: '', labels: WORKSPACE_LABELS };
+      return { root: workspaceRoot, rel: raw, prefix: '', labels: WORKSPACE_TOOL_LABELS };
     }
     if (!Array.isArray(skillRoots)) {
       return { error: 'Skill paths (skill:…) only work with the read tools.' };

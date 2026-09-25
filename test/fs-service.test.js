@@ -95,7 +95,7 @@ test('read_file_text respects workspace bounds through the registry', async () =
   const bad = JSON.parse(
     await registry.execute('read_file_text', { relative_path: '../outside.txt' }, { workspaceRoot: tmpRoot })
   );
-  assert.match(bad.error, /außerhalb/);
+  assert.match(bad.error, /outside the workspace/);
 
   await fs.rm(tmpRoot, { recursive: true, force: true });
 });
@@ -126,7 +126,7 @@ test('read_file_text rejects a symlink to a file outside the workspace', async (
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.content, undefined);
 });
 
@@ -155,7 +155,7 @@ test('list_directory rejects a symlink to a directory outside the workspace', as
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.items, undefined);
 });
 
@@ -240,7 +240,7 @@ test('write_file_text rejects writes through a symlinked parent outside the work
     )
   );
 
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   await assert.rejects(fs.access(path.join(outside, 'created.txt')));
 });
 
@@ -305,7 +305,7 @@ test('write_file_text respects workspace bounds and rejects directory targets', 
       { workspaceRoot: tmpRoot, allowWrite: true }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 
   const isDir = JSON.parse(
     await registry.execute(
@@ -534,7 +534,7 @@ test('search_in_files respects workspace bounds', async (t) => {
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
 });
 
 test('search_in_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
@@ -812,7 +812,7 @@ test('find_files respects workspace bounds', async (t) => {
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
 });
 
 test('find_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
@@ -1047,7 +1047,7 @@ test('stat_path requires relative_path and respects workspace bounds', async (t)
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 });
 
 test('stat_path rejects a symlink to a file outside the workspace', async (t) => {
@@ -1075,7 +1075,7 @@ test('stat_path rejects a symlink to a file outside the workspace', async (t) =>
       { workspaceRoot: workspace }
     )
   );
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
   assert.equal(out.exists, undefined);
 });
 
@@ -1368,7 +1368,7 @@ test('outline_file validates arguments and respects workspace bounds', async (t)
   assert.match((await outlineOf(registry, tmpRoot, { relative_path: 'sub' })).error, /folder/);
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: '../outside.md' })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await outlineOf(registry, tmpRoot, { relative_path: 'a.md', max_depth: 0 })).error,
@@ -1420,7 +1420,7 @@ test('outline_file rejects a symlink to a file outside the workspace', async (t)
   if (!linked) return;
 
   const out = await outlineOf(registry, workspace, { relative_path: 'secret-link.md' });
-  assert.match(out.error, /außerhalb/);
+  assert.match(out.error, /outside the workspace/);
   assert.equal(out.entries, undefined);
 });
 
@@ -1545,7 +1545,7 @@ test('list_directory_tree validates arguments and respects workspace bounds', as
   const tmpRoot = await makeTreeFixture(t);
 
   assert.match((await treeOf(registry, tmpRoot, { relative_path: 'README.md' })).error, /not a folder/);
-  assert.match((await treeOf(registry, tmpRoot, { relative_path: '../x' })).error, /außerhalb/);
+  assert.match((await treeOf(registry, tmpRoot, { relative_path: '../x' })).error, /outside the workspace/);
   assert.match((await treeOf(registry, tmpRoot, { max_depth: 0 })).error, /max_depth/);
   assert.match((await treeOf(registry, tmpRoot, { max_depth: 'x' })).error, /integer/);
   assert.match((await treeOf(registry, tmpRoot, { relative_path: 'fehlt' })).error, /ENOENT|no such file/i);
@@ -1694,7 +1694,7 @@ test('read_file_lines respects workspace bounds and rejects directories', async 
       { workspaceRoot: tmpRoot }
     )
   );
-  assert.match(outside.error, /außerhalb/);
+  assert.match(outside.error, /outside the workspace/);
 
   const dir = JSON.parse(
     await registry.execute('read_file_lines', { relative_path: '.' }, { workspaceRoot: tmpRoot })
@@ -1727,7 +1727,7 @@ test('read_file_lines rejects a symlink to a file outside the workspace', async 
       { workspaceRoot: workspace }
     )
   );
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(result.content, undefined);
 });
 
@@ -1889,7 +1889,7 @@ test('edit_file respects workspace bounds and rejects directories', async (t) =>
       await registry.execute('edit_file', { old_string: 'a', new_string: 'b', ...args }, { workspaceRoot: tmpRoot, allowWrite: true })
     );
 
-  assert.match((await run({ relative_path: '../outside.js' })).error, /außerhalb/);
+  assert.match((await run({ relative_path: '../outside.js' })).error, /outside the workspace/);
   assert.match((await run({ relative_path: '.' })).error, /folder/);
 });
 
@@ -1918,7 +1918,7 @@ test('edit_file rejects a symlink to a file outside the workspace', async (t) =>
       { workspaceRoot: workspace, allowWrite: true }
     )
   );
-  assert.match(result.error, /außerhalb/);
+  assert.match(result.error, /outside the workspace/);
   assert.equal(await fs.readFile(secret, 'utf8'), 'geheim\n');
 });
 
@@ -2309,7 +2309,7 @@ test('apply_patch respects workspace bounds, folders and missing files', async (
 
   assert.match(
     (await run({ relative_path: '../outside.txt', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({ relative_path: '.', edits: [{ old_string: 'a', new_string: 'b' }] })).error,
@@ -2317,7 +2317,7 @@ test('apply_patch respects workspace bounds, folders and missing files', async (
   );
   assert.match(
     (await run({ patch: diff('--- ../outside.txt', '+++ ../outside.txt', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({ patch: diff('--- ordner', '+++ ordner', '@@ -1,1 +1,1 @@', '-a', '+b') })).error,
@@ -2350,13 +2350,13 @@ test('apply_patch rejects a symlink to a file outside the workspace', async (t) 
 
   assert.match(
     (await run({ relative_path: 'secret-link.txt', edits: [{ old_string: 'geheim', new_string: 'offen' }] })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.match(
     (await run({
       patch: diff('--- secret-link.txt', '+++ secret-link.txt', '@@ -1,1 +1,1 @@', '-geheim', '+offen'),
     })).error,
-    /außerhalb/
+    /outside the workspace/
   );
   assert.equal(await fs.readFile(secret, 'utf8'), 'geheim\n');
 });

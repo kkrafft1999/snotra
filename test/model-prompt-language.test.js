@@ -260,9 +260,8 @@ const MODEL_CHANNEL_SOURCES = [
 // no longer matches fails the test: a stale exception is how the next German
 // sentence would slip through unnoticed.
 const NOT_MODEL_CHANNEL = [
-  // Shared by both channels: tool paths resolve through these labels, and so
-  // does the IPC boundary the file tree, the preview and the context menu use.
-  // Splitting them is a decision of its own, not a translation.
+  // The IPC boundary's labels for the file tree, the preview and the context
+  // menu. Tool paths have English labels of their own (WORKSPACE_TOOL_LABELS).
   { file: 'src/main/services/fs-service.js', text: 'Pfad liegt außerhalb des Arbeitsordners.' },
   { file: 'src/main/services/fs-service.js', text: 'Kein Arbeitsordner geöffnet.' },
   // Only the IPC boundary reaches it: a tool path is always resolved to a
