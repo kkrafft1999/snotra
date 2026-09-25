@@ -18,7 +18,7 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  * Aktionen unwirksam und zeigt den Grund; verspätete oder doppelte Antworten
  * werden lokal abgefangen und vom Main ohnehin verworfen.
  */
-export function initToolApprovalCards({ api, appStore, onPendingChanged = () => {} }) {
+export function initToolApprovalCards({ api, appStore, onPendingChanged = () => {}, onOpenSandboxSettings = null }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const queue = createToolApprovalQueue();
   /** requestId → Karten-Element des laufenden Zuges. */
@@ -262,6 +262,15 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
       const warning = el('p', 'chat-approval-card__warning');
       warning.appendChild(el('strong', null, t('approval.warning.prefix')));
       warning.append(view.warning);
+      // The user switched the sandbox off for this folder (#357): the way
+      // back sits right where the card says so.
+      if (view.isolation?.switchedOff && typeof onOpenSandboxSettings === 'function') {
+        warning.append(' ');
+        const link = el('button', 'chat-approval-card__warning-link', view.isolation.settingsLabel);
+        link.type = 'button';
+        link.addEventListener('click', () => onOpenSandboxSettings());
+        warning.appendChild(link);
+      }
       card.appendChild(warning);
     }
 

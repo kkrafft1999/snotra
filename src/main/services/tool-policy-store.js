@@ -13,6 +13,11 @@
  * Allow-Regeln verworfen, lesbare Deny-Regeln und Pfadmuster bleiben wirksam,
  * `integrity` meldet den Zustand an die Oberfläche. Ohne verfügbare
  * `safeStorage` sind Auto und dauerhafte Allow-Regeln nicht speicherbar.
+ *
+ * The per-workspace sandbox opt-out (#357) lives here too, as a list of
+ * canonical workspace roots. It loosens protection like an allow rule does,
+ * so it follows the same rules: it needs `safeStorage` to be stored, and a
+ * failed signature drops it — every workspace is isolated again.
  */
 
 const {
@@ -46,9 +51,21 @@ function defaultPayload() {
     globalRules: [],
     workspaceRules: {},
     sensitivePathPatterns: [],
+    unsandboxedWorkspaces: [],
     legacyWriteMigrated: false,
     updatedAt: 0,
   };
+}
+
+/** Canonical roots only, each once; anything else is not a workspace (#357). */
+function normalizeWorkspaceRoots(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || !entry || out.includes(entry)) continue;
+    out.push(entry);
+  }
+  return out;
 }
 
 function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath = null, log = console, now = () => Date.now() }) {
@@ -135,6 +152,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       }
     }
     out.sensitivePathPatterns = normalizeSensitivePathPatterns(data.sensitivePathPatterns);
+    out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
@@ -151,6 +169,8 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       );
       if (out.workspaceRules[root].length === 0) delete out.workspaceRules[root];
     }
+    // A switched-off sandbox is a loosening like an allow rule (#357).
+    out.unsandboxedWorkspaces = [];
     return out;
   }
 
@@ -236,6 +256,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       globalRules: payload.globalRules,
       workspaceRules: payload.workspaceRules,
       sensitivePathPatterns: payload.sensitivePathPatterns,
+      unsandboxedWorkspaces: payload.unsandboxedWorkspaces,
       policyVersion: policyVersionOf(payload, integrity),
       integrity,
       encryptionAvailable: encryptionAvailable(),
@@ -347,9 +368,39 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     });
   }
 
+  /**
+   * Switches the sandbox of the execution tools off or back on for one
+   * workspace (#357). Off needs `safeStorage`, like every other loosening.
+   */
+  async function setWorkspaceSandbox(root, enabled) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
+      const others = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
+      if (enabled === true) {
+        draft.unsandboxedWorkspaces = others;
+        return null;
+      }
+      if (!enc) return { error: createMessage('permissions.error.sandboxOffNeedsEncryption') };
+      draft.unsandboxedWorkspaces = [...others, root];
+      return null;
+    });
+  }
+
+  /** Whether the sandbox is switched off for this workspace (#357). */
+  async function isWorkspaceSandboxDisabled(root) {
+    if (typeof root !== 'string' || !root) return false;
+    const state = await read();
+    return state.unsandboxedWorkspaces.includes(root);
+  }
+
+  // "Reset workspace rules" is the workspace's whole policy: the sandbox
+  // opt-out goes with the rules (#357).
   async function resetWorkspaceRules(root) {
     return update((draft) => {
-      if (typeof root === 'string' && root) delete draft.workspaceRules[root];
+      if (typeof root === 'string' && root) {
+        delete draft.workspaceRules[root];
+        draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
+      }
       return null;
     });
   }
@@ -361,6 +412,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       draft.globalRules = [];
       draft.workspaceRules = {};
       draft.sensitivePathPatterns = [];
+      draft.unsandboxedWorkspaces = [];
       draft.legacyWriteMigrated = false;
       return null;
     });
@@ -383,6 +435,8 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     removeRule,
     findRule,
     setSensitivePathPatterns,
+    setWorkspaceSandbox,
+    isWorkspaceSandboxDisabled,
     resetWorkspaceRules,
     resetAll,
     clearLegacyMigrationNotice,

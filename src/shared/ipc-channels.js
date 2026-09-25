@@ -115,6 +115,7 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS: 'toolPermissions:clearSessionGrants',
   TOOL_PERMISSIONS_RESET_WORKSPACE_RULES: 'toolPermissions:resetWorkspaceRules',
   TOOL_PERMISSIONS_RESET_ALL: 'toolPermissions:resetAll',
+  TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX: 'toolPermissions:setWorkspaceSandbox',
   /** Renderer meldet sich als freigabefaehig an (Karten koennen angezeigt werden). */
   TOOL_APPROVAL_SUBSCRIBE: 'toolApproval:subscribe',
   /** Antwort auf eine Freigabe-Karte: nur requestId + Entscheidung. */

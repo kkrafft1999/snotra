@@ -648,6 +648,8 @@ function createApplication({
         await shellRunnerService.detect();
         return sandboxService.detect();
       },
+      // The user's per-workspace opt-out (#357), from the signed policy file.
+      isSandboxDisabled: (workspaceRoot) => toolPolicyStore.isWorkspaceSandboxDisabled(workspaceRoot),
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
       // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
       refreshDynamicTools: async () => {
@@ -750,7 +752,39 @@ function createApplication({
     PUSH,
     chatSessionSettings,
     getLocale: getAppLocale,
+    describeExecutionTools,
   });
+
+  /**
+   * Which execution tools the model is offered, and what the sandbox can do
+   * (#357). The mode pill turns red when "Auto" would run them unisolated.
+   * Detection only runs when one of them is on — as for the settings — and
+   * is not waited for: the self-test can take seconds, and the pill should
+   * not hang on it. Once it is known, the renderer is told to read again.
+   */
+  async function describeExecutionTools() {
+    let disabledTools = [];
+    try {
+      const prefs = await uiPrefsStore.readUIPrefs();
+      disabledTools = Array.isArray(prefs.disabledTools) ? prefs.disabledTools : [];
+    } catch {
+      disabledTools = [];
+    }
+    const active = [];
+    if (pythonRunner.isAvailable() && !disabledTools.includes('run_python')) active.push('run_python');
+    if (shellRunner.isAvailable() && !disabledTools.includes('shell_execute')) active.push('shell_execute');
+    const sandbox = sandboxService.describe();
+    if (active.length > 0 && (sandbox.status === 'unknown' || sandbox.status === 'testing')) {
+      void sandboxService.detect().then(notifyToolPermissionsChanged, () => {});
+    }
+    return { active, sandbox };
+  }
+
+  /** Makes the renderer read the permission state again — the mode pill (#357). */
+  function notifyToolPermissionsChanged() {
+    const win = getMainWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+  }
 
   async function runUpdateCheck({ silent }) {
     const result = await updates.checkForUpdate({ respectIgnored: silent });
@@ -785,7 +819,12 @@ function createApplication({
         // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
         // keinen Prozess — der Dienst verbindet traege.
         reloadMcpServers(),
-      ]),
+      ]).then((result) => {
+        // Only now is it known which execution tools are there and whether
+        // they run isolated; the mode pill read its state before that (#357).
+        notifyToolPermissionsChanged();
+        return result;
+      }),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
     getAppLocale,
   };

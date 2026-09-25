@@ -1,5 +1,5 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { toolModeOptions, modeLabel } from '../utils/tool-approval-view.js';
+import { toolModeOptions, modeLabel, describeAutoIsolationWarning } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 
@@ -67,8 +67,18 @@ export function initToolModePicker({ toolPermissions }) {
     const text = modeLabel(mode);
     label.textContent = text;
     wrap.dataset.mode = mode;
-    btn.title = t('chat.toolMode.button.title', { mode: text });
-    btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: text }));
+    // "Auto" with an execution tool that would run unisolated turns red
+    // (#357): those runs have the user's full rights and ask nothing.
+    const warning = describeAutoIsolationWarning(state);
+    if (warning) {
+      wrap.dataset.unisolated = 'true';
+      btn.title = t('chat.toolMode.button.titleUnisolated', { mode: text, warning });
+      btn.setAttribute('aria-label', t('chat.toolMode.button.labelUnisolated', { mode: text, warning }));
+    } else {
+      delete wrap.dataset.unisolated;
+      btn.title = t('chat.toolMode.button.title', { mode: text });
+      btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: text }));
+    }
     if (open) rebuild(mode);
   }
 

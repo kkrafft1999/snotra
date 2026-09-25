@@ -8,9 +8,12 @@
  * process that runs is exactly the one that would have run — same shell,
  * same login flag, same interpreter flags — only under the sandbox. Without
  * isolation the argv is spawned as before, and `isolation` says why.
+ *
+ * `disabled` is the user's per-workspace opt-out (#357): the sandbox is not
+ * even asked, and `isolation` names that choice as the reason.
  */
 
-const { quoteArgv } = require('./sandbox-service');
+const { quoteArgv, SANDBOX_REASONS } = require('./sandbox-service');
 
 const PASSTHROUGH = Object.freeze({
   env: Object.freeze({}),
@@ -21,6 +24,7 @@ const PASSTHROUGH = Object.freeze({
 /**
  * @param {object} request
  * @param {object|null} request.sandbox       the sandbox service, if wired
+ * @param {boolean} [request.disabled]         switched off for this workspace (#357)
  * @param {string[]} request.argv             [program, ...args]
  * @param {string} [request.workspaceRoot]
  * @param {string} request.runTmp
@@ -33,8 +37,16 @@ const PASSTHROUGH = Object.freeze({
  *   annotate: (s: string) => string, release: () => void}>}
  *   Rejects with an AbortError when "Stop" comes while waiting for the gate.
  */
-async function planSpawn({ sandbox, argv, workspaceRoot, runTmp, domains, commandId, commandText, abortSignal }) {
+async function planSpawn({ sandbox, disabled = false, argv, workspaceRoot, runTmp, domains, commandId, commandText, abortSignal }) {
   const [program, ...rest] = argv;
+  if (disabled) {
+    return {
+      command: program,
+      args: rest,
+      isolation: { isolated: false, reason: SANDBOX_REASONS.WORKSPACE, missing: [] },
+      ...PASSTHROUGH,
+    };
+  }
   if (!sandbox) {
     return { command: program, args: rest, isolation: null, ...PASSTHROUGH };
   }

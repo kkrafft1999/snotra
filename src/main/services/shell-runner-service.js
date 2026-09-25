@@ -296,7 +296,7 @@ function createShellRunnerService({
     }
   }
 
-  async function run({ command, stdin, timeoutMs, cwd, workspaceRoot, networkDomains, abortSignal } = {}) {
+  async function run({ command, stdin, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
     if (!detected.found) {
       return { error: detected.error || 'Keine Shell gefunden.' };
     }
@@ -318,12 +318,16 @@ function createShellRunnerService({
 
     // Isolation (#329): besides the workspace, the run's own temp directory
     // is the only place it may write to; caches are redirected there too.
-    const runTmp = sandbox && fs && path ? await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-')) : '';
+    // Switched off for this workspace (#357), the run needs none of that.
+    const runTmp = sandbox && !sandboxDisabled && fs && path
+      ? await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-'))
+      : '';
     const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
     let target;
     try {
       target = await planSpawn({
         sandbox: runTmp ? sandbox : null,
+        disabled: sandboxDisabled === true,
         argv: [detected.command, ...buildShellArgs(detected.invocation, line)],
         workspaceRoot,
         runTmp,

@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearToolSessionGrants: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS),
   resetWorkspaceToolRules: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES),
   resetAllToolPermissions: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_ALL),
+  setWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled),
   onToolPermissionsChanged: (callback) => {
     const channel = PUSH.TOOL_PERMISSIONS_CHANGED;
     const listener = (_event, payload) => callback(payload);

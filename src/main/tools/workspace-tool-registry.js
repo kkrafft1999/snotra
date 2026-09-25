@@ -1,5 +1,6 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
+const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
@@ -406,9 +407,22 @@ const NETWORK_DOMAINS_PARAMETER = Object.freeze({
 /** Isolation state of a finished run, as the model reads it (#329). */
 function describeIsolationForModel(isolation) {
   if (!isolation) return null;
-  return isolation.isolated
-    ? { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] }
+  if (isolation.isolated) {
+    return { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] };
+  }
+  // The user's own choice (#357): the model should not report sandbox limits
+  // that are not there, nor ask for the sandbox to be switched off.
+  return isolation.reason === SANDBOX_REASONS.WORKSPACE
+    ? { isolated: false, reason: 'The user switched the sandbox off for this workspace.' }
     : { isolated: false };
+}
+
+/**
+ * Whether the approved plan runs without sandbox (#357). Only the planner
+ * decides that — a call without a plan stays isolated.
+ */
+function sandboxDisabledByPlan(plan) {
+  return plan?.sandbox?.disabled === true;
 }
 
 /**
@@ -1029,7 +1043,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['code'],
       },
-      handler: async (args, { workspaceRoot, abortSignal } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan } = {}) => {
         if (!pythonRunner) {
           return JSON.stringify({ error: 'Running Python is not available in this installation.' });
         }
@@ -1041,6 +1055,7 @@ function createWorkspaceToolRegistry({
           cwd: workspaceRoot || undefined,
           workspaceRoot: workspaceRoot || undefined,
           networkDomains: resolveNetworkDomains('run_python', args),
+          sandboxDisabled: sandboxDisabledByPlan(plan),
           abortSignal,
         });
         if (result?.error) return JSON.stringify({ error: result.error });
@@ -1121,7 +1136,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['command'],
       },
-      handler: async (args, { workspaceRoot, abortSignal } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan } = {}) => {
         if (!shellRunner) {
           return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
@@ -1139,6 +1154,7 @@ function createWorkspaceToolRegistry({
           cwd: resolved.absPath,
           workspaceRoot: workspaceRoot || undefined,
           networkDomains: resolveNetworkDomains('shell_execute', args),
+          sandboxDisabled: sandboxDisabledByPlan(plan),
           abortSignal,
         });
         if (result?.error) {

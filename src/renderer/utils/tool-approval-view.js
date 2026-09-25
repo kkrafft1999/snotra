@@ -210,6 +210,7 @@ const ISOLATION_REASON_KEYS = Object.freeze({
   dependencies: 'approval.isolation.reason.dependencies',
   'self-test': 'approval.isolation.reason.selfTest',
   start: 'approval.isolation.reason.start',
+  workspace: 'approval.isolation.reason.workspace',
 });
 
 /**
@@ -217,6 +218,9 @@ const ISOLATION_REASON_KEYS = Object.freeze({
  * the title — "Isolated", or "Not isolated" in red — plus, when isolated, the
  * domains the run may reach and a one-line note on what stays closed. Null
  * when the card carries no isolation state at all (no sandbox wired).
+ *
+ * `switchedOff` marks the user's own opt-out for the workspace (#357): the
+ * card then offers the way back to the setting.
  */
 export function describeIsolation(isolation) {
   if (!isolation || typeof isolation !== 'object') return null;
@@ -234,12 +238,32 @@ export function describeIsolation(isolation) {
   const missing = (Array.isArray(isolation.missing) ? isolation.missing : [])
     .filter((entry) => typeof entry === 'string' && entry);
   const key = ISOLATION_REASON_KEYS[isolation.reason] || ISOLATION_REASON_KEYS.start;
+  const switchedOff = isolation.reason === 'workspace';
   return {
     isolated: false,
     badge: t('approval.isolation.badge.off'),
     domains: [],
     reason: t(key, { packages: missing.length > 0 ? missing.join(', ') : 'bubblewrap, socat, ripgrep' }),
+    switchedOff,
+    settingsLabel: switchedOff ? t('approval.isolation.settings') : '',
   };
+}
+
+/**
+ * Why the "Auto" pill is red (#357), or '' when it is not: in "Auto", an
+ * execution tool is offered and would run without sandbox — switched off for
+ * the workspace, or not available on this system.
+ */
+export function describeAutoIsolationWarning(state) {
+  if (state?.mode !== TOOL_PERMISSION_MODES.AUTO) return '';
+  const isolation = state?.executionIsolation;
+  if (!isolation || isolation.unisolated !== true) return '';
+  const tools = (Array.isArray(isolation.tools) ? isolation.tools : [])
+    .filter((entry) => entry === 'shell_execute' || entry === 'run_python');
+  if (tools.length === 0) return '';
+  return t(isolation.reason === 'workspace' ? 'chat.toolMode.unisolated.workspace' : 'chat.toolMode.unisolated.system', {
+    tools: tools.join(t('chat.toolMode.unisolated.and')),
+  });
 }
 
 /** Warning when overwriting (concept §6): with or without a way back. */

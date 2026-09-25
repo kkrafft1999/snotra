@@ -199,7 +199,7 @@ function createPythonRunnerService({
     }
   }
 
-  async function run({ code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, abortSignal } = {}) {
+  async function run({ code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
     if (!detected.found) {
       return { error: detected.error || 'Kein Python-Interpreter gefunden.' };
     }
@@ -226,6 +226,8 @@ function createPythonRunnerService({
     try {
       target = await planSpawn({
         sandbox,
+        // Switched off for this workspace by the user (#357).
+        disabled: sandboxDisabled === true,
         // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst
         // geht die Ausgabe eines abgebrochenen Laufs verloren.
         argv: [detected.command, ...(detected.args || []), '-B', '-u', scriptPath, ...normalizeArgv(argv)],

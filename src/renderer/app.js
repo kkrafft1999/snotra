@@ -230,7 +230,14 @@ initToolModePicker({ toolPermissions });
 // Runs per chat (#320): cards and runs report changes, the history column
 // marks its rows. It is built further down, hence the indirection.
 let syncRunMarkers = () => {};
-const approvalCards = initToolApprovalCards({ api, appStore, onPendingChanged: () => syncRunMarkers() });
+const approvalCards = initToolApprovalCards({
+  api,
+  appStore,
+  onPendingChanged: () => syncRunMarkers(),
+  // The card's way back to the sandbox switch (#357); the settings are built
+  // further down and only reached on a click.
+  onOpenSandboxSettings: () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' }),
+});
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
 const memoryPanel = initMemoryPanel({ api });
@@ -364,6 +371,7 @@ const settingsModal = initSettingsModal({
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onCheckUpdates: () => updateDialog.checkNow(),
   toolPermissionsPanel,
+  toolPermissions,
   mcpPanel,
   memoryPanel,
   onSkillSuggestionModeChanged: (mode) => skillSuggestion.setMode(mode),
@@ -403,7 +411,12 @@ const fileTree = initFileTree({
     // vorigen Ordners, beim Start gar keine.
     await chatHistory.refreshIfOpen();
   },
-  onProjectOpened: () => modelPicker.updateChatChrome(),
+  onProjectOpened: () => {
+    modelPicker.updateChatChrome();
+    // The sandbox opt-out is per folder (#357): the mode pill and the
+    // settings follow the folder that is open now.
+    void toolPermissions.refresh();
+  },
   sendChatMessage: () => chatStream.sendChatMessage(),
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   // @-Referenz aus dem Baum in die Chat-Eingabe (Issue #56); die Einfüge-Logik

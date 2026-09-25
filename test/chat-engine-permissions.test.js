@@ -513,3 +513,33 @@ test('Permission-Progress-Events melden Warten und Entscheidung mit Aufruf-Index
     { type: 'permission', event: 'resolved', callIndex: 0, tool: 'edit_file', response: 'allow-once' },
   ]);
 });
+
+// Decision on #357: with the sandbox switched off for the workspace, "Auto"
+// still runs execution tools without a card. The red mode pill carries the
+// warning instead (see sandbox-opt-out.test.js).
+test('auto with the sandbox switched off for the workspace runs execute without a card (#357)', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort({
+    plan: (toolName, args) => defaultPlan(toolName, args, {
+      riskClasses: ['execute'],
+      plan: { sandbox: { disabled: true, root: ROOT }, preview: { kind: 'shell', text: 'gh pr list', isolation: { isolated: false, reason: 'workspace', missing: [] } } },
+    }),
+  });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'gh pr list' }), assistantText('ok')], {
+    tools, approvals, toolPolicy: policy({ mode: 'auto' }),
+  });
+  const result = await send(engine);
+  assert.equal(approvals.requests.length, 0);
+  assert.equal(tools.calls.length, 1);
+  assert.equal(tools.calls[0].context.plan.sandbox.disabled, true, 'the approved plan reaches the handler');
+  assert.equal(result.toolTrace[0].permission.source, 'auto');
+
+  // In "Smart" the same call gets its card, as every execution does.
+  const smartApprovals = makeApprovals('allow-once');
+  const smart = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'gh pr list' }), assistantText('ok')], {
+    tools, approvals: smartApprovals, toolPolicy: policy({ mode: 'smart' }),
+  });
+  await send(smart.engine);
+  assert.equal(smartApprovals.requests.length, 1);
+  assert.deepEqual(smartApprovals.requests[0].preview.isolation, { isolated: false, reason: 'workspace', missing: [] });
+});

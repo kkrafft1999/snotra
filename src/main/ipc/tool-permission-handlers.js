@@ -9,6 +9,9 @@
  * Deny-Regel löschen — bestätigt der Main-Prozess in einem nativen Dialog
  * (`dialog.showMessageBox`), bevor er sie ausführt. Jede Änderung an Modus
  * oder Regeln verwirft offene Anfragen und Sitzungsfreigaben (Konzept §7).
+ *
+ * The fourth loosening is switching the sandbox off for a workspace (#357):
+ * the same native confirmation, the root always taken from main.
  */
 
 const {
@@ -82,6 +85,25 @@ function removeDenyRuleDialog(rule, t) {
   };
 }
 
+/** Where the sandbox switch lives, quoted in its dialog (#357). */
+const SANDBOX_SETTING_PAGE = 'settings.tools';
+
+function sandboxOffDialog(root, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.sandboxOff.title'),
+    message: t('permissionDialog.sandboxOff.title'),
+    detail: t('permissionDialog.sandboxOff.detail', {
+      root,
+      mode: t('permissions.mode.auto'),
+      place: menuPath(t.locale, SANDBOX_SETTING_PAGE),
+    }),
+    buttons: [t('permissionDialog.sandboxOff.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
 function registerToolPermissionHandlers({
   ipcMain,
   dialog,
@@ -97,6 +119,8 @@ function registerToolPermissionHandlers({
   chatSessionSettings = null,
   // Interface language for the native dialogs (#353), read afresh each time.
   getLocale = () => undefined,
+  // Active execution tools and the sandbox state, for the mode pill (#357).
+  describeExecutionTools = null,
 }) {
   if (!toolPolicyStore || !approvals || !sessionGrants) {
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
@@ -139,9 +163,35 @@ function registerToolPermissionHandlers({
     }
   }
 
+  /**
+   * Would shell_execute or run_python run without sandbox here (#357)?
+   * True when one of them is offered and the sandbox is switched off for the
+   * workspace or not available on this system. The mode pill shows "Auto" in
+   * red then: those runs happen without a question and without isolation.
+   */
+  async function describeUnisolatedExecution(sandboxDisabled) {
+    if (typeof describeExecutionTools !== 'function') return { unisolated: false, tools: [], reason: '' };
+    let described;
+    try {
+      described = await describeExecutionTools();
+    } catch {
+      return { unisolated: false, tools: [], reason: '' };
+    }
+    const tools = Array.isArray(described?.active) ? described.active : [];
+    if (tools.length === 0) return { unisolated: false, tools, reason: '' };
+    if (sandboxDisabled) return { unisolated: true, tools, reason: 'workspace' };
+    const sandbox = described?.sandbox;
+    if (sandbox?.status === 'unavailable') {
+      return { unisolated: true, tools, reason: typeof sandbox.reason === 'string' ? sandbox.reason : '' };
+    }
+    return { unisolated: false, tools, reason: '' };
+  }
+
   async function buildState() {
     const state = await toolPolicyStore.read();
     const root = getActiveWorkspaceRoot();
+    const workspaceSandboxDisabled = !!root && Array.isArray(state.unsandboxedWorkspaces)
+      && state.unsandboxedWorkspaces.includes(root);
     return {
       mode: state.mode,
       integrity: state.integrity,
@@ -150,6 +200,9 @@ function registerToolPermissionHandlers({
       globalRules: state.globalRules,
       workspaceRules: root && state.workspaceRules[root] ? state.workspaceRules[root] : [],
       workspaceRoot: root,
+      // Whether the execution tools run without sandbox in this workspace (#357).
+      workspaceSandboxDisabled,
+      executionIsolation: await describeUnisolatedExecution(workspaceSandboxDisabled),
       sensitivePathPatterns: state.sensitivePathPatterns,
       sessionGrantCount: sessionGrants.count(),
       policyVersion: state.policyVersion,
@@ -237,6 +290,23 @@ function registerToolPermissionHandlers({
     return createSettingsOk();
   });
 
+  // The sandbox of the execution tools, per workspace (#357). Off is a
+  // loosening and goes through the native dialog; on never asks. The root is
+  // the active one from main, never a path the renderer names.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, async (event, enabled) => {
+    if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
+    const root = getActiveWorkspaceRoot();
+    if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    if (!enabled) {
+      const confirmed = await confirmNatively(sandboxOffDialog(root, createTranslator(getLocale())));
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.sandboxNotSwitchedOff'), 'cancelled');
+    }
+    const result = await toolPolicyStore.setWorkspaceSandbox(root, enabled);
+    if (!result.ok) return createSettingsError(result.error);
+    afterPolicyChange(event.sender);
+    return { ...createSettingsOk(), workspaceSandboxDisabled: !enabled };
+  });
+
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_ALL, async (event) => {
     const result = await toolPolicyStore.resetAll();
     if (!result.ok) return createSettingsError(result.error);
@@ -270,4 +340,5 @@ module.exports = {
   autoModeDialog,
   allowRuleDialog,
   removeDenyRuleDialog,
+  sandboxOffDialog,
 };
