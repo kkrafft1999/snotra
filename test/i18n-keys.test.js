@@ -148,6 +148,7 @@ test('the key tables of the contract layer point at existing entries', () => {
     WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS:
       require('../src/shared/contracts/workspace-image').WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS,
     MEMORY_SCOPE_LABEL_KEYS: contracts.MEMORY_SCOPE_LABEL_KEYS,
+    SKILL_SOURCE_LABEL_KEYS: contracts.SKILL_SOURCE_LABEL_KEYS,
   };
   const missing = [];
   for (const [name, table] of Object.entries(tables)) {

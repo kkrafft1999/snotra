@@ -4,6 +4,11 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createSkillsService } = require('../src/main/services/skills-service');
+const { translateMessage } = require('../src/shared/i18n');
+
+// The service hands over keys since #353; the German wording is checked through
+// the catalogue.
+const de = (message) => translateMessage('de', message);
 const { SKILL_SOURCES, SKILL_STATUS } = require('../src/shared/contracts/skills');
 
 async function makeTempTree(t) {
@@ -120,7 +125,7 @@ test('bei gleichem Namen gewinnt ~/.snotra gegen ~/.agents', async (t) => {
       [SKILL_SOURCES.USER_AGENTS, SKILL_STATUS.SHADOWED],
     ]
   );
-  assert.ok(skills[1].detail.includes(gewinner), 'der überdeckte Eintrag nennt den Pfad des Gewinners');
+  assert.ok(de(skills[1].detail).includes(gewinner), 'der überdeckte Eintrag nennt den Pfad des Gewinners');
 
   const active = await service.getActiveSkills({ activeSkills: ['doppelt'] });
   assert.equal(active.length, 1);
@@ -190,8 +195,8 @@ test('gleicher Name mehrfach: der höher priorisierte Fund gewinnt', async (t) =
 
   assert.equal(skills[0].status, SKILL_STATUS.ACTIVE);
   assert.equal(skills[1].status, SKILL_STATUS.SHADOWED);
-  assert.match(skills[1].detail, /Überdeckt von/);
-  assert.ok(skills[1].detail.includes(winnerDir));
+  assert.match(de(skills[1].detail), /Überdeckt von/);
+  assert.ok(de(skills[1].detail).includes(winnerDir));
 
   const active = await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['doppelt'] });
   assert.equal(active.length, 1);
@@ -229,10 +234,10 @@ test('meldet ungültige Einträge mit Grund, statt den Scan abzubrechen', async 
   const { skills } = await service.listCatalog({});
   const byName = Object.fromEntries(skills.map((skill) => [skill.name, skill]));
 
-  assert.equal(byName['paket.zip'].detail, 'Kein Verzeichnis');
-  assert.equal(byName['ohne-datei'].detail, 'SKILL.md fehlt');
-  assert.equal(byName['ohne-frontmatter'].detail, 'Kein YAML-Frontmatter');
-  assert.match(byName['namens-mismatch'].detail, /≠ Verzeichnis/);
+  assert.equal(de(byName['paket.zip'].detail), 'Kein Verzeichnis');
+  assert.equal(de(byName['ohne-datei'].detail), 'SKILL.md fehlt');
+  assert.equal(de(byName['ohne-frontmatter'].detail), 'Kein YAML-Frontmatter');
+  assert.match(de(byName['namens-mismatch'].detail), /≠ Verzeichnis/);
   for (const name of ['paket.zip', 'ohne-datei', 'ohne-frontmatter', 'namens-mismatch']) {
     assert.equal(byName[name].status, SKILL_STATUS.INVALID);
   }
@@ -308,5 +313,5 @@ test('Block-Skalar ohne Inhalt zählt als fehlende description', async (t) => {
   const { skills } = await service.listCatalog({});
 
   assert.equal(skills[0].status, SKILL_STATUS.INVALID);
-  assert.equal(skills[0].detail, 'Frontmatter ohne description');
+  assert.equal(de(skills[0].detail), 'Frontmatter ohne description');
 });

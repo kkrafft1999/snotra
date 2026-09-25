@@ -19,6 +19,7 @@
 
 const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
+const { createMessage } = require('../../shared/contracts/message');
 const {
   SKILL_SOURCES,
   SKILL_STATUS,
@@ -96,7 +97,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       const skillDir = path.join(dir, dirName);
       if (!entry.isDirectory()) {
         // Häufiger Praxisfall: ein heruntergeladenes `foo.zip` liegt daneben.
-        found.push(invalidSkill(source, dirName, skillDir, 'Kein Verzeichnis'));
+        found.push(invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.notDirectory')));
         continue;
       }
       found.push(await readSkillFolder(source, dirName, skillDir));
@@ -122,23 +123,23 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     try {
       raw = await fs.readFile(filePath, 'utf8');
     } catch {
-      return invalidSkill(source, dirName, skillDir, `${SKILL_FILE} fehlt`);
+      return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.missingFile', { file: SKILL_FILE }));
     }
 
     const parsed = parseSkillDocument(raw);
     if (!parsed) {
-      return invalidSkill(source, dirName, skillDir, 'Kein YAML-Frontmatter');
+      return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noFrontmatter'));
     }
 
     const name = typeof parsed.frontmatter.name === 'string' ? parsed.frontmatter.name.trim() : '';
     const description =
       typeof parsed.frontmatter.description === 'string' ? parsed.frontmatter.description.trim() : '';
 
-    if (!name) return invalidSkill(source, dirName, skillDir, 'Frontmatter ohne name');
-    if (!description) return invalidSkill(source, dirName, skillDir, 'Frontmatter ohne description');
-    if (!isValidSkillName(name)) return invalidSkill(source, dirName, skillDir, `Ungültiger name: „${name}“`);
+    if (!name) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noName'));
+    if (!description) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noDescription'));
+    if (!isValidSkillName(name)) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.badName', { name }));
     if (name !== dirName) {
-      return invalidSkill(source, dirName, skillDir, `name „${name}“ ≠ Verzeichnis „${dirName}“`);
+      return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.nameMismatch', { name, dir: dirName }));
     }
 
     const body = parsed.body.length > maxSkillBodyChars ? parsed.body.slice(0, maxSkillBodyChars) : parsed.body;
@@ -172,7 +173,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       const winner = winners.get(skill.name);
       if (winner !== skill) {
         skill.status = SKILL_STATUS.SHADOWED;
-        skill.detail = `Überdeckt von ${winner.path}`;
+        skill.detail = createMessage('skills.shadowedBy', { path: winner.path });
       }
     }
 

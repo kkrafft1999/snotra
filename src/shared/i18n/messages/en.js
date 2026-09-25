@@ -410,6 +410,18 @@ module.exports = {
   'settings.reset.run': 'Run',
 
   // ── Settings: skills ─────────────────────────────────────────────────────
+  'skills.source.system': 'System skills (built in)',
+  'skills.source.workspaceAgents': 'Folder · .agents/skills',
+  'skills.source.userSnotra': 'User · ~/.snotra/skills',
+  'skills.source.userAgents': 'User · ~/.agents/skills (old location)',
+  'skills.invalid.notDirectory': 'Not a folder',
+  'skills.invalid.missingFile': '{file} is missing',
+  'skills.invalid.noFrontmatter': 'No YAML front matter',
+  'skills.invalid.noName': 'Front matter without name',
+  'skills.invalid.noDescription': 'Front matter without description',
+  'skills.invalid.badName': 'Invalid name: “{name}”',
+  'skills.invalid.nameMismatch': 'name “{name}” ≠ folder “{dir}”',
+  'skills.shadowedBy': 'Shadowed by {path}',
   'settings.skills.note.summary': 'A skill is a <code lang="en">SKILL.md</code> with instructions on how the model should work — ticked skills go into the system prompt.',
   'settings.skills.note.body': '<p><strong>System skills</strong> ship with the app and are on by default. <strong>Folder skills</strong> are read from three places: <code lang="en">.agents/skills</code> in the open folder, globally from <code lang="en">~/.snotra/skills</code> — the recommended place — and still from the old location <code lang="en">~/.agents/skills</code>. On a name clash the open folder wins, then <code lang="en">~/.snotra/skills</code>. Directories belonging to other tools, <code lang="en">.claude</code> for instance, are not read. Folder skills are somebody else’s content and are loaded only after you pick them.</p><p><code lang="en">~/.snotra</code> is Snotra’s own user directory — the root for user data that belongs to Snotra; <code lang="en">skills</code> is its first inhabitant. Snotra neither creates the directory nor moves anything into it.</p>',
   'settings.skills.suggestion.label': 'Suggestions in the chat',

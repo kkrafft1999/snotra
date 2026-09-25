@@ -415,6 +415,18 @@ module.exports = {
   'settings.reset.run': 'Ausführen',
 
   // ── Settings: skills ───────────────────────────────────────────────────────
+  'skills.source.system': 'System-Skills (eingebaut)',
+  'skills.source.workspaceAgents': 'Ordner · .agents/skills',
+  'skills.source.userSnotra': 'Benutzer · ~/.snotra/skills',
+  'skills.source.userAgents': 'Benutzer · ~/.agents/skills (alter Ort)',
+  'skills.invalid.notDirectory': 'Kein Verzeichnis',
+  'skills.invalid.missingFile': '{file} fehlt',
+  'skills.invalid.noFrontmatter': 'Kein YAML-Frontmatter',
+  'skills.invalid.noName': 'Frontmatter ohne name',
+  'skills.invalid.noDescription': 'Frontmatter ohne description',
+  'skills.invalid.badName': 'Ungültiger name: „{name}“',
+  'skills.invalid.nameMismatch': 'name „{name}“ ≠ Verzeichnis „{dir}“',
+  'skills.shadowedBy': 'Überdeckt von {path}',
   'settings.skills.note.summary': 'Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten soll — angehakte Skills stehen im System-Prompt.',
   'settings.skills.note.body': '<p><strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv. <strong>Ordner-Skills</strong> liest Snotra aus drei Orten: aus <code lang="en">.agents/skills</code> im geöffneten Ordner, global aus <code lang="en">~/.snotra/skills</code> — dem empfohlenen Ort — und weiterhin aus dem Alt-Ort <code lang="en">~/.agents/skills</code>. Bei gleichem Namen gewinnt der geöffnete Ordner, danach <code lang="en">~/.snotra/skills</code>. Verzeichnisse anderer Werkzeuge, etwa <code lang="en">.claude</code>, liest Snotra nicht. Ordner-Skills sind fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.</p><p><code lang="en">~/.snotra</code> ist Snotras eigenes Benutzerverzeichnis — die Wurzel für Nutzerdaten, die Snotra gehören; <code lang="en">skills</code> ist ihr erster Bewohner. Snotra legt das Verzeichnis nicht selbst an und verschiebt auch nichts dorthin.</p>',
   'settings.skills.suggestion.label': 'Vorschläge im Chat',

@@ -19,6 +19,8 @@
  */
 'use strict';
 
+const { createMessage, isMessage } = require('./message');
+
 /**
  * Name des Tools, mit dem das Modell die Anleitung eines eingeschalteten
  * Skills nachlädt (Issue #173). Steht hier, weil drei Schichten denselben
@@ -49,12 +51,15 @@ const SKILL_SOURCE_ORDER = Object.freeze([
   SKILL_SOURCES.USER_AGENTS,
 ]);
 
-/** Anzeigenamen der Quellgruppen in den Einstellungen. */
-const SKILL_SOURCE_LABELS = Object.freeze({
-  [SKILL_SOURCES.SYSTEM]: 'System-Skills (eingebaut)',
-  [SKILL_SOURCES.WORKSPACE_AGENTS]: 'Ordner · .agents/skills',
-  [SKILL_SOURCES.USER_SNOTRA]: 'Benutzer · ~/.snotra/skills',
-  [SKILL_SOURCES.USER_AGENTS]: 'Benutzer · ~/.agents/skills (Alt-Ort)',
+/**
+ * Headings of the source groups in the settings, as catalogue keys (#353):
+ * they are words, and the settings are read in either language.
+ */
+const SKILL_SOURCE_LABEL_KEYS = Object.freeze({
+  [SKILL_SOURCES.SYSTEM]: 'skills.source.system',
+  [SKILL_SOURCES.WORKSPACE_AGENTS]: 'skills.source.workspaceAgents',
+  [SKILL_SOURCES.USER_SNOTRA]: 'skills.source.userSnotra',
+  [SKILL_SOURCES.USER_AGENTS]: 'skills.source.userAgents',
 });
 
 const SKILL_STATUS = Object.freeze({
@@ -104,6 +109,11 @@ function normalizeActiveSkills(raw) {
   return [...seen];
 }
 
+function normalizeSkillDetail(value) {
+  if (isMessage(value)) return createMessage(value.key, value.params);
+  return typeof value === 'string' ? value : '';
+}
+
 /** Ein Katalog-Eintrag für die Einstellungen (IPC-DTO). */
 function normalizeSkillSummary(raw) {
   const data = raw && typeof raw === 'object' ? raw : {};
@@ -118,8 +128,11 @@ function normalizeSkillSummary(raw) {
     status,
     /** Absoluter Pfad des Skill-Verzeichnisses; bei System-Skills nur informativ. */
     path: typeof data.path === 'string' ? data.path : '',
-    /** Grund, falls `status === 'invalid'` oder `'shadowed'`. */
-    detail: typeof data.detail === 'string' ? data.detail : '',
+    /**
+     * Grund, falls `status === 'invalid'` oder `'shadowed'` — a message
+     * descriptor since #353, worded where the settings show it.
+     */
+    detail: normalizeSkillDetail(data.detail),
     /** System-Skills lassen sich nicht durch Ordner-Skills ersetzen. */
     builtin: source === SKILL_SOURCES.SYSTEM,
   };
@@ -137,7 +150,7 @@ module.exports = {
   LOAD_SKILL_TOOL,
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
-  SKILL_SOURCE_LABELS,
+  SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
   MAX_SKILL_BODY_CHARS,
   isSkillSource,

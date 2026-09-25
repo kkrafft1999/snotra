@@ -50,7 +50,7 @@ const {
 const {
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
-  SKILL_SOURCE_LABELS,
+  SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
   isValidSkillName,
   normalizeActiveSkills,
@@ -249,7 +249,7 @@ module.exports = {
   buildProviderFormView,
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
-  SKILL_SOURCE_LABELS,
+  SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
   isValidSkillName,
   normalizeActiveSkills,
