@@ -1,42 +1,110 @@
 # Snotra AI
 
-> 🇩🇪 **Deutsch:** [`README.de.md`](./README.de.md) — English is the project
-> language; the German version is maintained alongside it.
+**An open-source desktop agent built around your folder: always in view, and
+nothing happens in it without asking. Cloud or local models, no account, no
+telemetry.**
 
-> 🌐 **Website:** [snotra-ai.dev](https://snotra-ai.dev) — overview, use cases
-> and downloads.
+[**Download**](https://github.com/kkrafft1999/snotra/releases/latest) ·
+[Website](https://snotra-ai.dev) ·
+[Why Snotra?](#why-snotra) ·
+[Build from source](#build-from-source) ·
+[Deutsch](./README.de.md)
 
-> An Electron-based platform that grows into use-case-specific AI applications
-> through **skills** and **tools**.
+<!-- Screenshot / demo GIF of the English UI: folder tree, preview, chat with an
+     approval card. The GIF follows. -->
 
-## Vision
+**Works with** OpenAI · Anthropic · Google Gemini · Ollama · MLX-LM server ·
+any OpenAI-compatible API (LM Studio, llama.cpp, vLLM, OpenRouter …)
 
-`Snotra AI` is deliberately **not** a finished, pre-cut product — it is a
-**platform**:
+**Extensible with** Agent Skills (`SKILL.md`) · MCP servers (stdio) · built-in
+workspace tools · any CLI on your machine
 
-- The Electron app provides the foundation: window, file explorer, chat UI,
-  provider connections, secure key storage, tool-use loop.
-- On top of that sit **skills** (ready-made working methods, prompts,
-  procedures) and **tools** (concrete actions the model can perform) —
-  **dynamically or by configuration**.
-- From *one* base program, many **use-case-specific applications** emerge:
-  - 🏢 **Office work:** writing quotes, planning campaigns, preparing presentations
-  - 👥 **HR:** job postings, onboarding packages, employee communication
-  - 🖥️ **IT:** runbooks, incident support, documentation upkeep
-  - 👩‍💻 **Software engineering:** project-aware code and repository assistance
+**Runs on** macOS (Apple Silicon) · Windows (x64) · Linux (x64)
 
-The name comes from Norse mythology: Snotra is the goddess of wisdom and
-prudence. It stands for an assistant that knows the context of its workspace
-and acts deliberately.
+> Status: a personal open-source project — no company behind it, no paid tier.
+> Interfaces and configuration may still change.
 
-> Status: **personal hobby / experimentation project.** Interfaces, UI and
-> configuration may change at any time.
+## How it behaves
 
-> **Language:** English is the project language — README, contributing guide,
-> issues, pull requests and release notes. German is a fully supported product
-> language. The application UI itself is currently German only; an i18n
-> mechanism is planned, and until then the settings paths below name the German
-> labels you will actually see.
+- **The folder is the workspace.** You open one folder; the file tree stays in
+  view, and the chat works inside it. Files the agent writes show up as it
+  writes them.
+- **It asks before it acts.** In the default mode, *Smart*, reading runs without
+  asking; changing a file or touching a sensitive one asks first. Running
+  commands is switched off until you switch it on, and then every command gets
+  its own approval card.
+- **Auto is your decision, not the default.** The *Auto* mode drops the
+  questions — workspace boundaries, blocks and the protection of Snotra's own
+  keys stay. You switch it on deliberately.
+- **Your models, your keys.** Cloud and local models sit side by side in one
+  list; you switch per conversation. Keys are stored with the operating
+  system's encryption.
+- **Nothing phones home.** No account, no server of ours, no telemetry — not
+  even opt-in.
+
+## Download
+
+Get the latest release from the
+[releases page](https://github.com/kkrafft1999/snotra/releases/latest):
+
+| System | File |
+| --- | --- |
+| macOS (Apple Silicon) | `Snotra-AI-<version>-mac-arm64.dmg` |
+| Windows (x64) | `Snotra-AI-<version>-win-x64.zip` |
+| Linux (x64) | `.deb` (recommended), `.AppImage` or `.tar.gz` — see [Installing on Linux](#installing-on-linux) |
+
+**The builds are not signed yet**
+([#19](https://github.com/kkrafft1999/snotra/issues/19)), so macOS and Windows
+warn you on first launch:
+
+- **macOS:** open the DMG and drag the app into Applications. Launch it and
+  dismiss the warning, then *System Settings › Privacy & Security › Open
+  Anyway*. If that option is missing or doesn't help, remove the quarantine
+  flag by hand:
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Snotra AI.app"
+  ```
+
+- **Windows:** unzip, start `Snotra AI.exe`, then *SmartScreen › More info ›
+  Run anyway*.
+
+## Why Snotra?
+
+Open source, any model, MCP and Skills are what every agent desktop offers by
+now. What Snotra does differently is how it works in your folder and how
+carefully it acts there. Compared as of September 2026 — the field moves fast,
+corrections welcome.
+
+- **Goose** — the closest open-source match, and a good tool. Goose runs
+  autonomously by default; Snotra starts with command execution switched off
+  and asks before every command. There is no session-wide "allow" for
+  commands, unless you switch the whole app to *Auto*. Goose's usage data is
+  opt-in; Snotra has none to opt into.
+- **Claude Desktop / ChatGPT desktop** — polished, and they sandbox well. But
+  they require an account and a subscription, they are tied to one vendor, and
+  local models are an afterthought.
+- **LM Studio (Bionic)** — excellent for running local models, with native
+  MLX. But the agent is closed source, and its cloud is LM Studio's own, so
+  there are no OpenAI, Anthropic or Google models. Snotra uses LM Studio as
+  one provider among several and treats cloud and local models the same.
+- **Jan** — open source and local-first. Its folder agent and its sandbox are
+  in nightly/preview builds; the stable app is a chat client with MCP.
+- **Cherry Studio** — very feature-rich and close in scope. Analytics are on by
+  default, and it documents no sandbox for agent commands.
+- **AnythingLLM** — built for chatting with your documents (RAG). Its skills
+  are NodeJS code, not text files, and it has no shell tool.
+- **Open WebUI / LibreChat** — self-hosted web apps with logins and Docker: a
+  server for a team, not a desktop agent working in your folder.
+- **Msty** — closed source. Its agent mode wraps cloud coding CLIs rather than
+  running its own agent on your models.
+- **VS Code + Copilot/Cline, Cursor** — they have the file tree because they
+  are code editors. Snotra keeps the folder in view without being an IDE, for
+  work that isn't code.
+
+What Snotra doesn't have yet: signed builds
+([#19](https://github.com/kkrafft1999/snotra/issues/19)), a sandbox for commands
+([#329](https://github.com/kkrafft1999/snotra/issues/329)), MCP over HTTP.
 
 ## Motivation
 
@@ -68,6 +136,10 @@ Snotra's agent harness. The architecture is cut so that the backend can be
 separated from the frontend. What else can be made of that, I happily leave to
 the developer community and its imagination.
 
+The name comes from Norse mythology: Snotra is the goddess of wisdom and
+prudence. It stands for an assistant that knows the context of its workspace
+and acts deliberately.
+
 ## Current state & planning
 
 Everything that is due — bugs, individual features and larger topics — runs
@@ -95,7 +167,7 @@ Want to contribute? See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
   interface (LM Studio, llama.cpp, vLLM, OpenRouter, a corporate gateway — see
   [Providers](#providers))
 
-## Quick start
+## Build from source
 
 ```bash
 # Clone the repository
@@ -178,13 +250,14 @@ install them yourself: `sudo apt install bubblewrap socat ripgrep`.
 ## Updating
 
 Snotra AI quietly checks for a newer version at startup and only speaks up if
-there is one; *Snotra AI → Nach Updates suchen…* (Check for updates…) asks
-manually at any time. From there a dialog walks through the whole path — **each
-step confirmed individually, each one cancellable until the very end**:
+there is one; *Help › Check for Updates…* — or *Check for updates* next to the
+version number at the bottom of the settings — asks manually at any time. From
+there a dialog walks through the whole path — **each step confirmed
+individually, each one cancellable until the very end**:
 
-1. **Found.** Version, package size and "what has changed". "Download" starts
-   the download, "Skip" never offers this exact version again, "Later" asks
-   again on the next start.
+1. **Found.** Version, package size and "What has changed". "Download" starts
+   the download, "Skip this version" never offers this exact version again,
+   "Remind me later" asks again on the next start.
 2. **Downloading.** Progress in percent and megabytes. "Cancel" really aborts
    the download and clears away the half-written file.
 3. **Ready.** Only now does it ask whether to install. On install the app quits,
@@ -227,8 +300,7 @@ deliberately not used — both require a code signature.
   button controls filled in. Each state survives until the next start.
 - **Hiding the sidebar:** the first button hides the sidebar together with its
   divider, and the workspace moves over. The same via keyboard with
-  `Cmd/Ctrl+B` or through *Ansicht → Seitenleiste ein-/ausblenden* (View → Toggle
-  sidebar).
+  `Cmd/Ctrl+B` or through *View › Toggle Sidebar*.
 - **Showing and hiding the middle pane:** the second button toggles the middle
   column — the one holding the file preview and the welcome screen. As long as
   you have not set anything, the folder decides: with a folder open the column
@@ -241,17 +313,17 @@ deliberately not used — both require a code signature.
   what remains on the right is the history, if it is open. Clicking a chat there
   brings the column back by itself — the mirror image of clicking a file in the
   tree. The **settings** are reachable independently through the menu bar or
-  `Cmd/Ctrl+,` — on macOS under *Snotra AI → Einstellungen…*, on Windows and
-  Linux under *Ansicht → Einstellungen…*.
+  `Cmd/Ctrl+,` — on macOS under *Snotra AI › Settings…*, on Windows and Linux
+  under *View › Settings…*.
 - **Showing the chat history:** the last button places the history as a column
   next to the chat. Clicking a row loads that conversation along with its model
   and its permission mode; the trash icon removes it. The button for a **new
-  chat** sits in the header of that column — just like "Ordner öffnen" (Open
-  folder) sits in the header of the tree. If the window becomes too narrow for
+  chat** sits in the header of that column — just like "Open folder" sits in
+  the header of the tree. If the window becomes too narrow for
   all columns, the history gives way by itself and returns in a wider window.
 - **Just as you left it:** at startup Snotra brings back the folder's most
   recent conversation and you land straight in the discussion. The welcome
-  screen ("Womit fangen wir an?" — What shall we start with?) belongs to the
+  screen ("Where shall we start?") belongs to the
   cold start: it sits in the middle column and appears when no folder is open
   and there is nothing to continue — so on the very first start it appears by
   itself. The window also comes back the way you last set it: size, position and
@@ -266,8 +338,9 @@ deliberately not used — both require a code signature.
   `@<path relative to the project root>` there; the same thing without dragging
   is the `@` button on the right of the row (hover or Tab). Details under
   [Chat](#chat).
-- **Context menu:** a right-click (or ⌘/Ctrl-click) on a row opens Open, "Show in
-  Finder/Explorer", "Information" and Delete. Deleting moves to the trash, after
+- **Context menu:** a right-click (or ⌘/Ctrl-click) on a row opens "Open",
+  "Reveal in Finder" ("Show in Explorer" on Windows, "Show in file manager" on
+  Linux), "Information" and "Delete…". Deleting moves to the trash, after
   a confirmation.
 - **Information:** the "Information" entry shows a file's name, full path, type,
   size (human-readable and to the byte), modification and creation date, plus the
@@ -321,7 +394,7 @@ deliberately not used — both require a code signature.
   before sending. Because a screenshot often shows more than you consciously
   meant to share, you always see the preview before sending — with a cloud
   provider, the image leaves your machine. Images can be passed on by **OpenAI**
-  and, if you set the "Bild-Anhänge erlauben" (Allow image attachments) switch,
+  and, if you set the "Allow image attachments" switch,
   by the **OpenAI-compatible** provider: if another provider is active, pasting
   is rejected with a note in the status line instead of silently vanishing — and
   if you attach an image and then switch to a model without image support,
@@ -342,8 +415,8 @@ deliberately not used — both require a code signature.
   address from the network. PNG, JPEG, GIF and WebP up to 10 MB are displayed,
   recognised by file content rather than extension; SVG stays out for now. When
   it does not work, what stands there is not a broken image but a placeholder
-  with the reason ("image not found", "outside the working folder", "image too
-  large to display") and the model's alt text. While the answer is still running
+  with the reason ("Image not found", "Outside the working folder", "Image too
+  large to show") and the model's alt text. While the answer is still running
   a calm placeholder stands there — the image appears once the message is
   finished, instead of reloading on every chunk of text. If you open an older
   conversation in a different folder, you see placeholders instead of foreign
@@ -354,7 +427,7 @@ deliberately not used — both require a code signature.
   budget decision).
 
 - **Running Python (off by default):** after switching it on under Settings ›
-  Tools › "Python ausführen" (Run Python), the model gets the `run_python` tool:
+  Tools › "Run Python", the model gets the `run_python` tool:
   it writes a Python 3 program, Snotra runs it in the opened project folder and
   returns output, error output and exit code. That way analyses are computed
   instead of guessed — sums over a CSV, unit conversions, data reshaping, testing
@@ -376,12 +449,12 @@ deliberately not used — both require a code signature.
   can read and write anywhere, reach the network and start programs. Either way
   the approval comes first: Snotra shows you the complete source before every
   single run, and a pill on the card says whether the run is isolated — "Not
-  isolated" in red. There is deliberately no "remember for this session" for
+  isolated" in red. There is deliberately no "Allow for this session" for
   execution. If a script runs too long it is terminated after the time limit
   (10 s by default); "Stop" in the chat ends it as well.
 
 - **Running shell commands (off by default):** after switching it on under
-  Settings › Tools › "Shell-Befehle ausführen" (Run shell commands), the model
+  Settings › Tools › "Run shell commands", the model
   gets the `shell_execute` tool: it runs a command in your operating system's
   shell — macOS and Linux in your login shell (zsh, bash, …), Windows in
   PowerShell or `cmd.exe` — and returns output, error output and exit code. That
@@ -407,18 +480,18 @@ deliberately not used — both require a code signature.
   terminal — read and write anywhere, reach the network, install programs. Snotra
   shows you the complete command, the shell, the working directory and whether
   the run is isolated before every single run, and there is deliberately no
-  "remember for this session" for execution. Blocked are recursive forced
+  "Allow for this session" for execution. Blocked are recursive forced
   deletion (`rm -rf` and equivalents), disk operations and rewriting Git history
   — that is an additional safeguard, **not** complete protection, because a
-  script or an interpreter in between bypasses any pattern list. In "Auto" mode a
+  script or an interpreter in between bypasses any pattern list. In *Auto* mode a
   command runs without asking — isolated, where the sandbox works. "Stop" in the
   chat and the time limit terminate the entire process tree, not just the shell.
 
-- **Web search:** with a stored Tavily key (Settings › Tools › Websuche) the
+- **Web search:** with a stored Tavily key (Settings › Tools › Web search) the
   model gets the `web_search` tool — it returns title, URL and a short excerpt per
   hit, not whole pages. Without a key the tool is not offered at all. The query
   leaves your machine, which is why the tool is classified as an **external
-  service**: in "smart" mode Snotra asks before every search. A free key is
+  service**: in *Smart* mode Snotra asks before every search. A free key is
   available at [app.tavily.com](https://app.tavily.com); it is stored encrypted
   like the model keys. The search does not need an open project folder — unlike
   the file tools it is available in an empty chat as well.
@@ -475,7 +548,7 @@ card allowed. On macOS, tools that verify certificates through the keychain —
 
 ## Providers
 
-An **entry in the preference list** (Settings › Modelle › *Modell hinzufügen*)
+An **entry in the preference list** (Settings › Models › *Add model*)
 connects a provider with a model; in the chat you switch between entries via the
 pill next to the input. The chosen model stays with the conversation — a chat
 from the history comes back with its own, a new chat starts with the one last
@@ -505,13 +578,13 @@ is known — anyone running six OpenRouter models enters the key six times and
 changes it in six places.
 
 You edit an existing row via the **pencil icon** in the list (reachable by Tab,
-Enter opens it). The dialog is then called *Modell bearbeiten* (Edit model), the
-provider is fixed, and **Änderungen übernehmen** (Apply changes) replaces the row
+Enter opens it). The dialog is then called *Edit model*, the provider is fixed,
+and **Apply changes** replaces the row
 instead of creating a new one. Stored keys and headers are preserved as long as
 you do not overwrite them or delete them with the trash icon next to them.
 
 At the top of the dialog sits a **template**. It pre-fills the server URL and API
-style (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, "custom
+style (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, "Custom
 endpoint"); after that every field is freely editable, and the template itself is
 not stored. The fields:
 
@@ -521,12 +594,12 @@ not stored. The fields:
 | **API key** | **Optional.** Leaving it empty means *no* `Authorization` header goes out — the normal case for local servers. With a key: `Authorization: Bearer …` |
 | **Display name** | Appears in the chat before the model name ("LM Studio · qwen2.5") and distinguishes the rows from one another. Leave empty for "OpenAI-compatible" |
 | **Extra headers** | One `Name: Value` per line, for gateway tokens or tenant headers. Treated like a key: stored encrypted, no longer displayed after saving, never in logs or error messages |
-| **API style** | "Chat Completions only" (default, fits almost always) or "Responses, otherwise Chat Completions". Nothing is guessed; on `404`/`405` for `/responses` Snotra falls back exactly once and stays there for the session |
-| **Ignore TLS certificate** | As with Ollama, only for self-signed or internally signed certificates you trust |
-| **Send tools** | On by default. Turn it off for servers that choke on tool schemas — then it stays plain chat |
+| **API style** | "Chat Completions only" (default, fits almost always) or "Responses, falling back to Chat Completions". Nothing is guessed; on `404`/`405` for `/responses` Snotra falls back exactly once and stays there for the session |
+| **Ignore TLS certificate (insecure)** | As with Ollama, only for self-signed or internally signed certificates you trust |
+| **Send tools along** | On by default. Turn it off for servers that choke on tool schemas — then it stays plain chat |
 | **Allow image attachments** | Off by default. Turn it on only if the model behind it understands images; otherwise attachments are not even offered in the chat |
 
-**Model list:** "Modelle laden" (Load models) queries `GET {server URL}/models`.
+**Model list:** "Load models" queries `GET {server URL}/models`.
 If that fails or the server returns an empty list, that is **not an error** — the
 model name can be entered by hand and the entry stays usable; the status line
 says why the list stayed empty. A manually entered name remains in place even if
@@ -540,9 +613,9 @@ for model listing, but the tighter history budget (see `historyCharLimit` below)
 ## Configuration
 
 Most settings (provider, models, system prompt, language) are maintained
-directly in the app under **Einstellungen** (Settings) — opened via the menu bar
-(*Snotra AI → Einstellungen…* on macOS, *Ansicht → Einstellungen…* on Windows
-and Linux) or `Cmd/Ctrl+,`. There is deliberately no button for it: it used to
+directly in the app under **Settings** — opened via the menu bar
+(*Snotra AI › Settings…* on macOS, *View › Settings…* on Windows and Linux) or
+`Cmd/Ctrl+,`. There is deliberately no button for it: it used to
 sit in the chat header and was therefore gone as soon as you hid the chat column.
 Beyond that, a few JSON files live in the user profile (Electron's `userData`
 folder: macOS `~/Library/Application Support/Snotra AI`, Windows
@@ -558,8 +631,8 @@ folder: macOS `~/Library/Application Support/Snotra AI`, Windows
 copies settings, presets, folder history and chat history from the old `userData`
 folder; the old folder stays behind unchanged as a backup. On macOS the API keys
 have to be entered once more, because the keychain entry of Electron's
-`safeStorage` is tied to the app name; the settings then show "Key neu eingeben"
-(Re-enter key). A chat history that can no longer be decrypted as a result is
+`safeStorage` is tied to the app name; the settings then show "enter the key
+again". A chat history that can no longer be decrypted as a result is
 preserved as `chat-history.json.undecryptable-<timestamp>` instead of being
 overwritten.
 
@@ -586,19 +659,18 @@ and is not an estimate. From a skill row you jump straight to its switch under
 **Tool permissions:** whether a tool call runs is decided by Snotra per call,
 based on risk class (`read`, `read-sensitive`, `write`, `delete`, `execute`,
 `external`) and mode. You choose the mode in the **chat bar** (the pill next to
-the model selection) or under **Settings › Tools › Berechtigungen**
-(Permissions) — both show the same state. Switching to "Auto" requires a
-confirmation in a system dialog; the way back to "smart" is always possible
-without asking. The mode belongs to the conversation: a chat from the history
-brings its own back, and a **new** chat always starts at "smart". "Auto" also
-does not survive an app restart — after startup even an auto chat runs on "smart"
-until you explicitly open it from the history. Mode, deny/allow rules and custom
-sensitive path patterns live in their own HMAC-signed file `tool-policy.json` in
-the `userData` folder (the key protected via `safeStorage`); if the file is
-tampered with, Snotra falls back to "smart" mode and discards allowances, while
-denials remain in effect. The `allowWorkspaceWrite` switch used up to v1.3.1 is
-gone; both old values map onto the default mode, and the settings point this out
-once.
+the model selection) or under **Settings › Permissions** — both show the same
+state. Switching to *Auto* requires a confirmation in a system dialog; the way
+back to *Smart* is always possible without asking. The mode belongs to the
+conversation: a chat from the history brings its own back, and a **new** chat
+always starts at *Smart*. *Auto* also does not survive an app restart — after
+startup even an auto chat runs on *Smart* until you explicitly open it from the
+history. Mode, deny/allow rules and custom sensitive path patterns live in their
+own HMAC-signed file `tool-policy.json` in the `userData` folder (the key
+protected via `safeStorage`); if the file is tampered with, Snotra falls back to
+*Smart* mode and discards allowances, while denials remain in effect. The
+`allowWorkspaceWrite` switch used up to v1.3.1 is gone; both old values map onto
+the default mode, and the settings point this out once.
 
 | Mode | Reading | Reading sensitive data, modifying, overwriting irreversibly, executing, external services |
 | ----- | ----- | ----- |
@@ -626,36 +698,35 @@ The three write tools (max. 2 MB per file):
 | `apply_patch` | Several related changes in one call — as a list of replacements in one file, or as a unified diff across several files. All or nothing: if a step or a hunk fails, every affected file stays unchanged. The tool cannot create, delete or rename files |
 
 Access stays strictly limited to the project folder, as with the read tools. In
-the chat, the tool line (e.g. "Datei docs/neu.md wird geschrieben …") already
+the chat, the tool line (e.g. "Writing file docs/new.md …") already
 appears while the model is still producing the content — not only after the
 actual write.
 
 **Approval card:** if a call needs approval, a card appears in the chat
-("Änderung bestätigen", "Ausführung bestätigen" or "Dateizugriff bestätigen" —
-confirm change / execution / file access) with the tool, its effect, all target
-paths, the reason and — for write and execution tools — a masked preview of the
-new content, the replacement or the complete command; for `shell_execute` the
-card additionally names the detected shell and the working directory; when
-overwriting it states whether a copy goes to the trash. For sensitive files the
-card names the provider the content would go to. Three actions: **allow once**,
-**allow for this session** (only for reading, sensitive reading and ordinary
-modification; exactly this tool on exactly these targets, and not in "always ask"
-mode) and **deny**; Esc denies, no button is preselected, and there is no time
-limit. If chat, workspace, mode or rules change while a card is open, the request
-lapses and the run ends visibly ("request expired"). If you deny, the model
-receives a `permission_denied` result; the tool line shows the decision
-("· denied", "· blocked") with reason, class and status as a tooltip — in saved
-histories too.
+("Confirm change", "Confirm execution" or "Confirm file access") with the tool,
+its effect, all target paths, the reason and — for write and execution tools — a
+masked preview of the new content, the replacement or the complete command; for
+`shell_execute` the card additionally names the detected shell and the working
+directory; when overwriting it states whether a copy goes to the trash. For
+sensitive files the card names the provider the content would go to. Three
+actions: **Allow once**, **Allow for this session** (only for reading, sensitive
+reading and ordinary modification; exactly this tool on exactly these targets,
+and not in *Always ask* mode) and **Deny**; Esc denies, no button is
+preselected, and there is no time limit. If chat, workspace, mode or rules
+change while a card is open, the request lapses and the run ends visibly
+("Request expired"). If you deny, the model receives a `permission_denied`
+result; the tool line shows the decision ("· denied", "· blocked") with reason,
+class and status as a tooltip — in saved histories too.
 
-**Rule management (Settings › Tools):** denials and allowances per tool or risk
-class with path patterns (`*` within a folder, `**` across subfolders), kept
-separately for all workspaces and for the opened workspace; denials always win,
-permanent allowances exist only for reading and ordinary modification, and — like
-deleting a denial — they are confirmed in a system dialog. Alongside that, custom
-sensitive path patterns and three reset actions with a stated scope: clear
-session approvals, reset workspace rules, reset all permissions (which also sets
-the mode back to "smart"). These settings take effect immediately, independently
-of "Apply".
+**Rule management (Settings › Permissions):** denials and allowances per tool or
+risk class with path patterns (`*` within a folder, `**` across subfolders),
+kept separately for all workspaces and for the opened workspace; denials always
+win, permanent allowances exist only for reading and ordinary modification, and
+— like deleting a denial — they are confirmed in a system dialog. Alongside
+that, custom sensitive path patterns and three reset actions with a stated
+scope: "Delete session allowances", "Reset workspace rules", "Reset all
+permissions" (which also sets the mode back to *Smart*). These settings take
+effect immediately, independently of "Apply".
 
 ## Skills
 
@@ -699,7 +770,7 @@ directory slipped underneath. Invalid entries (not a directory, missing
 aborting the scan.
 
 Everything is managed under **Settings › Skills**: a checkbox per skill (any
-number at once), grouped by source, plus "Skills neu laden" (Reload skills). The
+number at once), grouped by source, plus "Reload skills". The
 skill directories are **watched**: if you create a skill, change its `SKILL.md`
 or install one via `skill-manager`, Snotra notices by itself — the list in the
 settings and the `/` completion in the chat follow immediately, without you
@@ -733,13 +804,13 @@ content can switch on a skill. A slash in the middle of a word or in a path
 ### Getting suitable skills suggested
 
 `/name` only helps if you know the name. So Snotra suggests a fitting skill:
-write your request and then type a **`/`** — below the input field, "Passt dazu:
-`/meeting-protocol`" (Fits this) appears. A click accepts it, the `×` hides it.
+write your request and then type a **`/`** — below the input field, "Fits here:
+`/meeting-protocol`" appears. A click accepts it, the `×` hides it.
 Without `/` nothing happens; the suggestion therefore never pushes itself into an
 ordinary conversation.
 
 Where the suggestion comes from is configured under **Settings › Skills ›
-Vorschläge im Chat** (Suggestions in chat):
+Suggestions in the chat**:
 
 - **From the descriptions (default).** Snotra compares your line with the skill
   descriptions — on your machine, without the network and without cost. Words
@@ -774,7 +845,7 @@ The boundaries stay narrow:
 - **No escaping.** `..` and symlinks are checked against the real path, exactly as
   with the working folder.
 - **Recognisable in the chat.** Read accesses to skill files get their own symbol
-  in the tool log plus "(Skill ‹name›)" in the text, so that they do not look like
+  in the tool log plus "(skill ‹name›)" in the text, so that they do not look like
   access to the project; in the collapsed summary, skill accesses come first.
 
 Without an open folder there are no tools at all, and therefore no skill paths
@@ -816,13 +887,13 @@ files are read afresh with every message.
 **The content is instruction, not data.** Unlike a tool result, an `AGENTS.md` is
 *meant* to change the model's behaviour — otherwise it would be pointless. Whoever
 opens a foreign folder also adopts its instructions. The emergency brake for that
-is the switch **Settings › Allgemein › "`AGENTS.md` mitschicken"** (General ›
-Send `AGENTS.md`, on by default), which turns off all three places.
+is the switch **Settings › General › "Send `AGENTS.md`"** (on by default), which
+turns off all three places.
 
 ## Memory: `memory.md`
 
-Snotra does not start every chat from scratch. Say **"bitte merke dir …"**
-(please remember …) in the chat, and from the next message on the sentence is back
+Snotra does not start every chat from scratch. Say **"please remember …"** in
+the chat, and from the next message on the sentence is back
 in the system prompt — in a new chat as well, and after a restart.
 
 There are two levels, both ordinary Markdown files:
@@ -844,7 +915,7 @@ remembering requires approval and appears with its target and path in the tool
 log — and the self-directed remembering can be switched off, leaving only what you
 explicitly ask for.
 
-Under **Settings › Gedächtnis** (Memory) you see both levels with all their
+Under **Settings › Memory** you see both levels with all their
 entries, delete individual ones and switch off each level. At most 8,000
 characters per level are sent along; how much that contributes to the context
 window is listed individually in the breakdown below the input field.
@@ -862,7 +933,7 @@ transport). Servers reachable only over HTTP or SSE do not work yet.
 
 ### Adding a server
 
-"Server hinzufügen" (Add server) opens a small form:
+"Add server" opens a small form:
 
 | Field | Meaning |
 | ---- | --------- |
@@ -879,7 +950,7 @@ replaced or deleted. Anyone who deliberately wants to keep a value readable (say
 Forgetting should not be the expensive case. If encryption is not possible on the
 system, nothing is stored at all rather than putting a token down in the open.
 
-**"Verbindung testen"** (Test connection) starts the server once and shows whether
+**"Test connection"** starts the server once and shows whether
 it responds and which tools it offers — or an understandable error message
 including `stderr` if it does not start. Only after that can individual tools be
 deselected.
@@ -887,7 +958,7 @@ deselected.
 ### Importing servers
 
 Anyone already using MCP in Claude Desktop, Claude Code or Cursor does not have to
-retype their servers: **"Importieren"** (Import) accepts a pasted `mcpServers`
+retype their servers: **"Import"** accepts a pasted `mcpServers`
 block — with or without an enclosing `mcpServers`, and Markdown fences, comments
 and trailing commas do not get in the way. While you paste, what was recognised
 appears below.
