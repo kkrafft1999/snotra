@@ -3604,34 +3604,39 @@ select.modal-input {
   cursor: pointer;
 }
 
+/* Drawn like .ds-switch (#300): the border keeps the off-track visible, the
+ * knob follows the surface and takes --ds-grey-muted as its edge. */
 .settings-pref-switch-track {
   display: block;
   width: 40px;
   height: 22px;
+  border: 1px solid var(--ds-grey-control-border);
   border-radius: var(--ds-radius-pill);
   background: var(--ds-grey-divider);
-  transition: background var(--ds-motion-fast);
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
   position: relative;
 }
 
 .settings-pref-switch[aria-checked='true'] .settings-pref-switch-track {
   background: var(--ds-blue);
+  border-color: var(--ds-blue);
 }
 
 .settings-pref-switch-knob {
   position: absolute;
   width: 16px;
   height: 16px;
+  border: 1px solid var(--ds-grey-muted);
   border-radius: 50%;
-  background: var(--ds-white);
-  top: 3px;
-  left: 3px;
+  background: var(--ds-surface);
+  top: 2px;
+  left: 2px;
   pointer-events: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: transform var(--ds-motion-fast);
+  transition: transform var(--ds-motion-fast), border-color var(--ds-motion-fast);
 }
 
 .settings-pref-switch[aria-checked='true'] .settings-pref-switch-knob {
+  border-color: var(--ds-blue);
   transform: translateX(18px);
 }
 
@@ -5657,23 +5662,26 @@ select.modal-input {
   padding: 0;
   position: relative;
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--ds-radius-pill);
   background: var(--ds-grey-divider);
   border: 1px solid var(--ds-grey-control-border);
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
 }
 
+/* Knob as in .ds-switch (#300): --ds-grey-muted as the edge, since the
+ * control border only reaches 2.9:1 on the grey off-track. */
 .mcp-switch::after {
   content: "";
+  box-sizing: border-box;
   position: absolute;
   top: 2px;
   left: 2px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
-  background: var(--bg-primary);
-  border: 1px solid var(--ds-grey-control-border);
-  transition: transform 0.15s;
+  border-radius: 50%;
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-grey-muted);
+  transition: transform var(--ds-motion-fast), border-color var(--ds-motion-fast);
 }
 
 .mcp-switch[aria-checked="true"] {
