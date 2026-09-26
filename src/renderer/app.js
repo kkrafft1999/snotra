@@ -446,6 +446,17 @@ if (welcomeCta) {
 
 btnChatNew.addEventListener('click', () => chatHistory.startNewChatWithHistory());
 
+// Menu "File > New Chat" or Cmd/Ctrl+N (issue #381): the same as the button,
+// plus what a keyboard user needs — a hidden chat column comes back, and the
+// cursor lands in the input. Behind an open dialog the shortcut does nothing:
+// the chat would be reset out of sight.
+api.onNewChat?.(async () => {
+  if (document.querySelector('.modal:not(.hidden)')) return;
+  revealChatPanel();
+  await chatHistory.startNewChatWithHistory();
+  chatInput.focus();
+});
+
 modelPicker.refreshLLMState();
 void toolPermissions.refresh();
 void initAppVersionBadge({ api });

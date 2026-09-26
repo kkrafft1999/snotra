@@ -827,4 +827,41 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }, { what: 'wieder versteckter Liegestuhl' });
   assert.equal(wieder.display, 'none');
   step('leere Flaeche mit Liegestuhl geprueft');
+
+  // --- File > New Chat with the chat column hidden (issue #381) ------------
+  // Like the settings: the shortcut cannot be pressed from outside, the menu
+  // item behind it can. The chat still holds the earlier rounds, so an empty
+  // list proves the reset; the column has to come back and take the focus.
+  await page.evaluate(() => document.getElementById('btn-toggle-chat-panel').click());
+  await poll(() => page.evaluate(() =>
+    document.getElementById('app').classList.contains('app--no-chat')),
+    { what: 'hidden chat column' });
+  assert.ok(await page.evaluate(() =>
+    document.querySelectorAll('#chat-messages .chat-msg.user').length > 0),
+    'the chat should still hold the earlier questions');
+
+  const newChatMenu = await app.evaluate(({ Menu }) => {
+    for (const top of Menu.getApplicationMenu().items) {
+      const item = top.submenu?.items.find((i) => i.label === 'Neuer Chat');
+      if (item) {
+        item.click();
+        return { menu: top.label, accelerator: item.accelerator };
+      }
+    }
+    return null;
+  });
+  assert.deepEqual(newChatMenu, {
+    menu: process.platform === 'darwin' ? 'Ablage' : 'Datei',
+    accelerator: 'CmdOrCtrl+N',
+  });
+  const fresh = await poll(async () => {
+    const state = await page.evaluate(() => ({
+      chatVisible: !document.getElementById('app').classList.contains('app--no-chat'),
+      userMessages: document.querySelectorAll('#chat-messages .chat-msg.user').length,
+      focus: document.activeElement?.id,
+    }));
+    return state.chatVisible && state.userMessages === 0 && state.focus === 'chat-input' ? state : null;
+  }, { what: 'new chat with the column back and the focus in the input' });
+  assert.equal(fresh.focus, 'chat-input');
+  step('Datei > Neuer Chat geprueft');
 });

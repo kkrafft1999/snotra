@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Die Menueleiste der App (Issues #167, #266).
+ * Die Menueleiste der App (Issues #167, #266, #381).
  *
  * Gebaut wird nur das Template — Menu.buildFromTemplate bleibt beim Aufrufer,
  * damit dieses Modul ohne laufendes Electron geprueft werden kann. Alles, was
@@ -64,6 +64,20 @@ function createApplicationMenuTemplate({
       { role: 'unhide', label: t('menu.app.unhide') },
       { type: 'separator' },
       { role: 'quit', label: t('menu.app.quit', { appName }) },
+    ],
+  };
+
+  // Issue #381: "New Chat" lives where every platform keeps "New" — in the
+  // File menu, which the Mac calls "Ablage" in German. Like Cmd/Ctrl+B the
+  // shortcut hangs on the item, so it works with the focus anywhere.
+  const fileMenu = {
+    label: t(isMac ? 'menu.file.mac' : 'menu.file'),
+    submenu: [
+      {
+        label: t('menu.file.newChat'),
+        accelerator: 'CmdOrCtrl+N',
+        click: () => send(PUSH.UI_NEW_CHAT),
+      },
     ],
   };
 
@@ -135,6 +149,7 @@ function createApplicationMenuTemplate({
 
   return [
     ...(isMac ? [macAppMenu] : []),
+    fileMenu,
     editMenu,
     viewMenu,
     windowMenu,
