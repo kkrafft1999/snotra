@@ -303,7 +303,8 @@ deliberately not used — both require a code signature.
   button controls filled in. Each state survives until the next start.
 - **Hiding the sidebar:** the first button hides the sidebar together with its
   divider, and the workspace moves over. The same via keyboard with
-  `Cmd/Ctrl+B` or through *View › Toggle Sidebar*.
+  `Cmd/Ctrl+B` or through *View › Toggle Sidebar* (all shortcuts under
+  [Keyboard shortcuts](#keyboard-shortcuts)).
 - **Showing and hiding the middle pane:** the second button toggles the middle
   column — the one holding the file preview and the welcome screen. As long as
   you have not set anything, the folder decides: with a folder open the column
@@ -341,7 +342,8 @@ deliberately not used — both require a code signature.
   `@<path relative to the project root>` there; the same thing without dragging
   is the `@` button on the right of the row (hover or Tab). Details under
   [Chat](#chat).
-- **Context menu:** a right-click (or ⌘/Ctrl-click) on a row opens "Open",
+- **Context menu:** a right-click (or ⌘/Ctrl-click, see
+  [Keyboard shortcuts](#keyboard-shortcuts)) on a row opens "Open",
   "Reveal in Finder" ("Show in Explorer" on Windows, "Show in file manager" on
   Linux), "Information" and "Delete…". Deleting moves to the trash, after
   a confirmation.
@@ -370,7 +372,8 @@ deliberately not used — both require a code signature.
 ## Chat
 
 - **Sending:** `Enter` sends the message, `Shift+Enter` inserts a line break.
-  While the model is answering, the send button becomes a stop button.
+  While the model is answering, the send button becomes a stop button. The
+  other shortcuts are collected under [Keyboard shortcuts](#keyboard-shortcuts).
 - **Referencing files with `@`:** typing `@` in the input opens a list of the
   files and folders of the opened project folder above the text field. Typing
   further filters — fuzzily, too: `@rlse` finds `docs/release.md`, for example.
@@ -568,6 +571,45 @@ outside the protected locations, and whatever it read can reach a domain the
 card allowed. On macOS, tools that verify certificates through the keychain —
 `gh`, `terraform` and other Go programs — cannot reach the network inside it.
 
+## Keyboard shortcuts
+
+What Snotra adds on top of the usual system shortcuts. Copy, paste, undo, zoom
+and full screen behave as in any other app on your platform and sit in the
+*Edit*, *View* and *Window* menus.
+
+**Anywhere in the window**
+
+| What it does | macOS | Windows / Linux |
+| --- | --- | --- |
+| Open the settings | `Cmd+,` | `Ctrl+,` |
+| Show or hide the sidebar | `Cmd+B` | `Ctrl+B` |
+| Copy the tool log diagnostics as JSON to the clipboard — useful for a bug report | `Cmd+Shift+D` | `Ctrl+Shift+D` |
+
+**Chat input**
+
+| What it does | macOS | Windows / Linux |
+| --- | --- | --- |
+| Send the message | `Enter` | `Enter` |
+| Insert a line break | `Shift+Enter` | `Shift+Enter` |
+| Paste an image from the clipboard as an attachment | `Cmd+V` | `Ctrl+V` |
+| In the `@` file list or the `/` skill list: select · accept · close | `↑`/`↓` · `Enter` or `Tab` · `Esc` | `↑`/`↓` · `Enter` or `Tab` · `Esc` |
+| Deny the tool approval card that is on screen | `Esc` | `Esc` |
+
+**File tree and columns**
+
+| What it does | macOS | Windows / Linux |
+| --- | --- | --- |
+| Open the context menu of a row (instead of a right-click) | `Cmd`-click | `Ctrl`-click |
+| Recently used folders: open · remove from the list | `Enter` or `Space` · `Delete` or `Backspace` | `Enter` or `Space` · `Delete` or `Backspace` |
+| Focused column divider: move it · in larger steps · to its end position | `←`/`→` · `Shift+←`/`→` · `Home`/`End` | `←`/`→` · `Shift+←`/`→` · `Home`/`End` |
+
+**Dialogs and menus**
+
+| What it does | macOS | Windows / Linux |
+| --- | --- | --- |
+| Settings: move to the previous or next section · to the first or last | `↑`/`↓` or `←`/`→` · `Home`/`End` | `↑`/`↓` or `←`/`→` · `Home`/`End` |
+| Close a dialog, a menu or an enlarged image | `Esc` | `Esc` |
+
 ## Providers
 
 An **entry in the preference list** (Settings › Models › *Add model*)
@@ -641,7 +683,8 @@ for model listing, but the tighter history budget (see `historyCharLimit` below)
 Most settings (provider, models, system prompt, language) are maintained
 directly in the app under **Settings** — opened via the menu bar
 (*Snotra AI › Settings…* on macOS, *View › Settings…* on Windows and Linux) or
-`Cmd/Ctrl+,`. There is deliberately no button for it: it used to
+`Cmd/Ctrl+,` (see [Keyboard shortcuts](#keyboard-shortcuts)). There is
+deliberately no button for it: it used to
 sit in the chat header and was therefore gone as soon as you hid the chat column.
 Beyond that, a few JSON files live in the user profile (Electron's `userData`
 folder: macOS `~/Library/Application Support/Snotra AI`, Windows

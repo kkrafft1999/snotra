@@ -2016,6 +2016,22 @@ export function initSettingsModal(deps) {
       const key = tab.dataset.settingsPanel;
       if (key) activateSettingsPanel(key);
     });
+    // The list turns into a row below 640 px, so both arrow axes move.
+    tab.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const i = settingsNavTabs.indexOf(tab);
+      const n = settingsNavTabs.length;
+      let next;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % n;
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + n) % n;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = n - 1;
+      else return;
+      e.preventDefault();
+      const target = settingsNavTabs[next];
+      activateSettingsPanel(target.dataset.settingsPanel);
+      target.focus();
+    });
   });
 
   btnOpenAddModel?.addEventListener('click', () => {
