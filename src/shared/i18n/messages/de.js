@@ -479,6 +479,7 @@ module.exports = {
   'settings.memory.scope.workspace.named': 'Projekt · {folder}',
   'settings.memory.forget.label': 'Vergessen: {text}',
   'settings.memory.forget.title': 'Diesen Eintrag vergessen',
+  'settings.memory.origin.self': 'selbst gemerkt',
   'settings.memory.scope.noFolder': 'Kein Ordner geöffnet',
   'settings.memory.scope.send': 'Mitschicken',
   'settings.memory.empty': 'Noch nichts gemerkt. Sag im Chat „bitte merke dir …“.',
