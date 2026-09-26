@@ -188,12 +188,16 @@ export function initMcpPanel({ api }) {
       edit.addEventListener('click', () => openDialog(server));
       actions.append(edit);
 
-      const toggle = el('button', 'mcp-switch');
-      toggle.type = 'button';
+      const toggle = el('input', 'ds-switch');
+      toggle.type = 'checkbox';
       toggle.setAttribute('role', 'switch');
-      toggle.setAttribute('aria-checked', server.enabled ? 'true' : 'false');
-      toggle.setAttribute('aria-label', `${server.label || server.id} aktiv`);
-      toggle.addEventListener('click', () => setEnabled(server, !server.enabled));
+      toggle.checked = Boolean(server.enabled);
+      toggle.setAttribute('aria-label', t('settings.mcp.enabled.label', { name: server.label || server.id }));
+      toggle.dataset.serverId = server.id;
+      toggle.addEventListener('change', async () => {
+        // A refused save leaves the list as it was, so the box has to go back.
+        if (!(await setEnabled(server, toggle.checked))) toggle.checked = Boolean(server.enabled);
+      });
       actions.append(toggle);
       row.append(actions);
 
@@ -251,11 +255,19 @@ export function initMcpPanel({ api }) {
     const payload = toPayload(server, { enabled, env: keepAllEnv(server) });
     const result = await api.saveMcpServer?.(payload);
     if (result?.ok) {
+      // The list is redrawn with the new status; the switch that was just
+      // used keeps the focus instead of losing it to the page.
+      const hadFocus = document.activeElement?.dataset?.serverId === server.id;
       adopt(result);
       setError(errorEl, '');
-    } else {
-      setError(errorEl, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.updateFailed'));
+      if (hadFocus) {
+        [...(list?.querySelectorAll('.ds-switch') || [])]
+          .find((node) => node.dataset.serverId === server.id)?.focus();
+      }
+      return true;
     }
+    setError(errorEl, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.updateFailed'));
+    return false;
   }
 
   /** Beim bloßen Umschalten bleiben alle env-Werte, wie sie sind. */

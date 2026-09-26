@@ -1,6 +1,6 @@
 // Look instead of trust: starts the real app, opens the settings dialog and
-// photographs all three switch styles — model visibility, the instant
-// switches and the MCP servers — off and on, light and dark (issue #300).
+// photographs the switch in all three places — model visibility, the instant
+// switches and the MCP servers — off and on, light and dark (issues #300, #336).
 // Prints the WCAG 1.4.11 contrast of every switch from its computed colours.
 // Not a test — a look.
 //
@@ -39,8 +39,8 @@ const { page, app } = snotra;
 
 // Contrast of each visible switch, measured on the colours the browser
 // actually paints. Off and on are read from the same element by flipping its
-// state attribute for a moment, so both states come from identical markup.
-const measure = () => page.evaluate(() => {
+// checked state for a moment, so both states come from identical markup.
+const measure = (selector) => page.evaluate((selector) => {
   // Transitions would hand back a colour halfway between the two states.
   const still = document.createElement('style');
   still.textContent = '*, *::before, *::after { transition: none !important; }';
@@ -71,30 +71,15 @@ const measure = () => page.evaluate(() => {
     return 'rgb(255, 255, 255)';
   };
 
-  const kinds = [
-    { name: 'settings-pref-switch', selector: '.settings-pref-switch',
-      track: (el) => el.querySelector('.settings-pref-switch-track'),
-      knob: (el) => [el.querySelector('.settings-pref-switch-knob'), null],
-      set: (el, on) => el.setAttribute('aria-checked', String(on)) },
-    { name: 'ds-switch', selector: '.ds-switch',
-      track: (el) => el, knob: (el) => [el, '::before'],
-      set: (el, on) => { el.checked = on; } },
-    { name: 'mcp-switch', selector: '.mcp-switch',
-      track: (el) => el, knob: (el) => [el, '::after'],
-      set: (el, on) => el.setAttribute('aria-checked', String(on)) },
-  ];
-
   const rows = [];
-  for (const kind of kinds) {
-    const el = [...document.querySelectorAll(kind.selector)]
-      .find((node) => node.getBoundingClientRect().width > 0);
-    if (!el) continue;
-    const wasOn = kind.name === 'ds-switch' ? el.checked : el.getAttribute('aria-checked') === 'true';
+  const el = [...document.querySelectorAll(selector)]
+    .find((node) => node.getBoundingClientRect().width > 0);
+  if (el) {
+    const wasOn = el.checked;
     const read = (on) => {
-      kind.set(el, on);
-      const track = getComputedStyle(kind.track(el));
-      const [knobEl, pseudo] = kind.knob(el);
-      const knob = getComputedStyle(knobEl, pseudo);
+      el.checked = on;
+      const track = getComputedStyle(el);
+      const knob = getComputedStyle(el, '::before');
       return {
         track: track.backgroundColor, trackBorder: track.borderTopColor,
         knob: knob.backgroundColor, knobBorder: knob.borderTopColor,
@@ -103,21 +88,26 @@ const measure = () => page.evaluate(() => {
     };
     const off = read(false);
     const on = read(true);
-    kind.set(el, wasOn);
-    const surface = surfaceOf(el);
+    el.checked = wasOn;
     rows.push({
-      switch: kind.name,
+      switch: selector,
       'knob on on-track': ratio(on.knob, on.track),
       'knob edge on off-track': ratio(off.knobBorder, off.track),
-      'off-track border on surface': ratio(off.trackBorder, surface),
+      'off-track border on surface': ratio(off.trackBorder, surfaceOf(el)),
       'knob shadow': off.shadow,
     });
   }
   still.remove();
   return rows;
-});
+}, selector);
 
-const SWITCH_OF = { models: '.settings-pref-switch', tools: '.ds-switch', mcp: '.mcp-switch' };
+// Since #336 every row uses .ds-switch; the selector says which panel's row
+// is measured.
+const SWITCH_OF = {
+  models: '#pref-model-list .ds-switch',
+  tools: '#panel-settings-tools .ds-switch',
+  mcp: '#settings-mcp-list .ds-switch',
+};
 
 const openPanel = async (panel) => {
   await page.evaluate((name) =>
@@ -155,7 +145,7 @@ try {
       });
       await page.screenshot({ path: path.join(SHOTS, `switches-${panel}-${theme}.png`), clip: box });
       console.log(`\n${theme} · ${panel}`);
-      console.table(await measure());
+      console.table(await measure(SWITCH_OF[panel]));
     }
   }
   console.log('\nScreenshots in', SHOTS);

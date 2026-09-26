@@ -2975,7 +2975,9 @@ button.chat-msg-attachment:hover {
 
 /* Spec from ui-design-tokens.md: 40×22, white 16×16 knob, blue when on. The
  * borders keep the off state visible (3.4:1) — the divider grey alone would
- * all but vanish on the dialog surface, and a knob shadow is not allowed. */
+ * all but vanish on the dialog surface, and a knob shadow is not allowed.
+ * The one switch in the app (#336): model visibility and the MCP servers use
+ * it too, so a change here reaches every row that can be switched. */
 .ds-switch {
   appearance: none;
   flex: none;
@@ -3592,57 +3594,6 @@ select.modal-input {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-.settings-pref-switch {
-  width: 40px;
-  height: 22px;
-  padding: 0;
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-/* Drawn like .ds-switch (#300): the border keeps the off-track visible, the
- * knob follows the surface and takes --ds-grey-muted as its edge. */
-.settings-pref-switch-track {
-  display: block;
-  width: 40px;
-  height: 22px;
-  border: 1px solid var(--ds-grey-control-border);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-grey-divider);
-  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
-  position: relative;
-}
-
-.settings-pref-switch[aria-checked='true'] .settings-pref-switch-track {
-  background: var(--ds-blue);
-  border-color: var(--ds-blue);
-}
-
-.settings-pref-switch-knob {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--ds-grey-muted);
-  border-radius: 50%;
-  background: var(--ds-surface);
-  top: 2px;
-  left: 2px;
-  pointer-events: none;
-  transition: transform var(--ds-motion-fast), border-color var(--ds-motion-fast);
-}
-
-.settings-pref-switch[aria-checked='true'] .settings-pref-switch-knob {
-  border-color: var(--ds-blue);
-  transform: translateX(18px);
-}
-
-.settings-pref-switch:focus-visible .settings-pref-switch-track {
-  outline: var(--ds-focus-ring);
-  outline-offset: var(--ds-focus-offset);
 }
 
 .settings-icon-trash {
@@ -5724,45 +5675,6 @@ select.modal-input {
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-}
-
-.mcp-switch {
-  width: 40px;
-  height: 22px;
-  flex: none;
-  padding: 0;
-  position: relative;
-  cursor: pointer;
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-grey-divider);
-  border: 1px solid var(--ds-grey-control-border);
-  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
-}
-
-/* Knob as in .ds-switch (#300): --ds-grey-muted as the edge, since the
- * control border only reaches 2.9:1 on the grey off-track. */
-.mcp-switch::after {
-  content: "";
-  box-sizing: border-box;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--ds-surface);
-  border: 1px solid var(--ds-grey-muted);
-  transition: transform var(--ds-motion-fast), border-color var(--ds-motion-fast);
-}
-
-.mcp-switch[aria-checked="true"] {
-  background: var(--ds-blue);
-  border-color: var(--ds-blue);
-}
-
-.mcp-switch[aria-checked="true"]::after {
-  transform: translateX(18px);
-  border-color: var(--ds-blue);
 }
 
 /* Umgebungsvariablen: vier Spalten, solange Platz ist — sonst umbrechen

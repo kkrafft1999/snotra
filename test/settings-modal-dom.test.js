@@ -280,6 +280,55 @@ test('ein gespeichertes Geheimnis bleibt beim Bearbeiten stehen (#202)', async (
   assert.equal(zeile.connection.baseUrl, 'http://localhost:1234/v1');
 });
 
+test('die Sichtbarkeit im Modellmenue schaltet die native Checkbox, der Fokus bleibt (#336)', async (t) => {
+  let gesendet = null;
+  const { dom, appStore } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { gesendet = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [{
+    id: 'p1',
+    providerId: 'openai-compatible',
+    model: 'qwen2.5',
+    menuVisible: true,
+    configured: true,
+    connection: {
+      displayName: 'LM Studio',
+      baseUrl: 'http://localhost:1234/v1',
+      apiStyle: 'chat',
+      insecureTls: false,
+      supportsImages: false,
+      sendTools: true,
+      hasKey: false,
+      keyUnreadable: false,
+      hasExtraHeaders: false,
+    },
+  }];
+  appStore.llmState.activePresetId = 'p1';
+  await dom.reopenSettings();
+
+  const sw = document.querySelector('#pref-model-list .ds-switch');
+  assert.equal(sw.type, 'checkbox');
+  assert.equal(sw.getAttribute('role'), 'switch');
+  assert.equal(sw.checked, true);
+  // The name says what "on" means and does not change with the state.
+  const name = sw.getAttribute('aria-label');
+  assert.match(name, /^LM Studio \u00b7 qwen2\.5 \u2014 /);
+
+  sw.focus();
+  sw.click();
+  await flush();
+  assert.equal(sw.checked, false);
+  assert.equal(document.activeElement, sw, 'kein Neuzeichnen, das den Fokus verliert');
+  assert.equal(sw.getAttribute('aria-label'), name);
+  assert.equal(sw.closest('.settings-pref-row-inner').getAttribute('data-pref-menu-off'), 'true');
+
+  document.getElementById('btn-settings-save').click();
+  await flush();
+  assert.equal(gesendet.presets[0].menuVisible, false);
+});
+
 test('der Papierkorb neben dem Feld loescht das gespeicherte Geheimnis (#202)', async (t) => {
   let gesendet = null;
   const { dom, appStore } = await mountSettings({
