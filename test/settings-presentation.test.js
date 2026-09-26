@@ -285,7 +285,8 @@ test('buildLlmStateDto speaks the stored language', () => {
   assert.equal(de.presets[0].labelBase, 'Ollama (lokal) · llama3.2');
   assert.match(en.presets[0].sublabel, /TLS verified/);
   assert.match(de.presets[0].sublabel, /TLS geprüft/);
-  assert.equal(view(en, 'mlx-lm').name, 'MLX-LM (local)');
+  assert.equal(view(en, 'ollama').name, 'Ollama (local)');
+  assert.equal(view(en, 'mlx-lm'), undefined, 'MLX-LM is a template now, not a provider (#194)');
   assert.equal(view(de, 'openai-compatible').builtInName, 'OpenAI-kompatibel');
 
   const summaryEn = view(en, 'openai').presetFields.find((f) => f.key === 'reasoningSummary');
@@ -340,7 +341,7 @@ test('das Formular meldet alle acht Felder und die Vorlagen', () => {
 });
 
 test('die bestehenden Anbieter zeigen keines der neuen Felder', () => {
-  for (const id of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
+  for (const id of ['openai', 'anthropic', 'google', 'ollama']) {
     const meta = providerCatalog.listProviderMeta().find((m) => m.id === id);
     const view = presentation.buildProviderView(meta, {}, {});
     assert.equal(view.form.showDisplayName, false, id);

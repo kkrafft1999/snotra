@@ -486,8 +486,8 @@ test('commitSettings persists presets, encrypts keys, prunes unused providers an
   assert.deepEqual(res, { ok: true });
 
   const config = await storage.readLLMConfig();
-  // v4 seit Issue #202: Verbindung im Eintrag statt am Anbieter.
-  assert.equal(config.version, 4);
+  // v4 seit Issue #202: Verbindung im Eintrag statt am Anbieter; v5 since #194.
+  assert.equal(config.version, 5);
   assert.deepEqual(config.presets.map((p) => p.id), ['p1', 'p2']);
   assert.equal(config.activePresetId, 'p2');
   assert.equal(config.activeProvider, 'openai');

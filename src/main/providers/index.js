@@ -49,7 +49,6 @@ const openai = require('./openai');
 const anthropic = require('./anthropic');
 const google = require('./google');
 const ollama = require('./ollama');
-const mlxLm = require('./mlx-lm');
 const openaiCompatible = require('./openai-compatible');
 
 const PROVIDERS = {
@@ -57,10 +56,9 @@ const PROVIDERS = {
   anthropic,
   google,
   ollama,
-  'mlx-lm': mlxLm,
   'openai-compatible': openaiCompatible,
 };
-const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm', 'openai-compatible'];
+const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
 
 function getProvider(id) {
   return PROVIDERS[id] || null;

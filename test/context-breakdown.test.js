@@ -139,7 +139,7 @@ const O200K_TOOL_SCHEMA_TOKENS = 4154;
 
 test('gleiche Zeichenzahl, je nach Anbieter eine andere Schaetzung (#178)', () => {
   const chars = O200K_TOOL_SCHEMA_CHARS;
-  const lokal = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'mlx-lm');
+  const lokal = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'ollama');
   const openai = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'openai');
 
   assert.ok(lokal > openai * 1.5, `${lokal} (lokal) muss deutlich ueber ${openai} (OpenAI) liegen`);
@@ -157,7 +157,7 @@ test('gleiche Zeichenzahl, je nach Anbieter eine andere Schaetzung (#178)', () =
 });
 
 test('eine Server-URL auf diesem Rechner sticht das ID-Profil (#193)', () => {
-  const lokal = charsPerTokenProfile('mlx-lm');
+  const lokal = charsPerTokenProfile('ollama');
   // Der generische Anbieter hat kein eigenes ID-Profil; entfernt bleibt es beim
   // konservativen Standard, lokal gilt das gemessene local-Profil.
   assert.deepEqual(charsPerTokenProfile('openai-compatible'), lokal);
@@ -185,7 +185,7 @@ test('die OpenAI-Schaetzung trifft die Tokenizer-Messung auf 10 % (#178)', () =>
   const alt = estimateTokensFromChars(
     O200K_TOOL_SCHEMA_CHARS,
     CONTEXT_CONTENT_KINDS.JSON,
-    'mlx-lm'
+    'ollama'
   );
   assert.ok(alt / O200K_TOOL_SCHEMA_TOKENS > 1.5);
 });
@@ -207,7 +207,7 @@ test('das Anbieter-Profil verschiebt Gewichte, nicht die Gesamtzahl (#178)', () 
   ];
   const toolTokens = (breakdown) => breakdown.parts.find((row) => row.id === 'tools').tokens;
 
-  const lokal = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'mlx-lm' });
+  const lokal = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'ollama' });
   const openai = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'openai' });
 
   // Skaliert wird weiterhin auf 100 % der echten Zahl — beide Male.

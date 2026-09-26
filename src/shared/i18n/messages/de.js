@@ -943,7 +943,6 @@ module.exports = {
   'provider.error.timeout': 'Zeitüberschreitung nach {seconds} s. Versuche es erneut.',
   'provider.error.cancelled': 'Anfrage abgebrochen.',
   'provider.name.ollama': 'Ollama (lokal)',
-  'provider.name.mlxLm': 'MLX-LM (lokal)',
   'provider.name.openaiCompatible': 'OpenAI-kompatibel',
   'provider.openai.reasoning.hint': 'reasoning_effort bei passenden OpenAI-Modellen.',
   'provider.openai.reasoningSummary.label': 'Reasoning-Zusammenfassung',

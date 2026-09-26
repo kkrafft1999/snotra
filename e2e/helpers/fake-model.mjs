@@ -1,10 +1,10 @@
 // Gefakter OpenAI-kompatibler Modellserver fuer den Smoke-Test (Issue #78).
 //
 // Der Smoke-Test braucht ein Modell, das antwortet — aber keinen API-Key, kein
-// Netz und keine Wartezeit. Der Provider `mlx-lm` hat ein `baseUrl`-Feld und
-// verlangt keinen Key, also zeigt die Testkonfiguration einfach hierher.
-// Gesprochen wird das Chat-Completions-Protokoll als SSE, genau so viel davon,
-// wie src/main/providers/mlx-lm.js liest.
+// Netz und keine Wartezeit. The `openai-compatible` provider takes a server
+// URL per entry and needs no key, so the test configuration points here.
+// It speaks Chat Completions over SSE — as much of it as
+// src/main/providers/openai-chat-transport.js reads.
 
 import http from 'node:http';
 

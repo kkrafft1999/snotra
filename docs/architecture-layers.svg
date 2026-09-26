@@ -229,7 +229,7 @@
   <g>
     <rect class="prov" x="70"  y="1290" width="130" height="26" rx="6"/><text class="chip tt-prov" x="135" y="1308">openai · anthropic</text>
     <rect class="prov" x="212" y="1290" width="130" height="26" rx="6"/><text class="chip tt-prov" x="277" y="1308">google · ollama</text>
-    <rect class="prov" x="70"  y="1322" width="130" height="26" rx="6"/><text class="chip tt-prov" x="135" y="1340">mlx-lm</text>
+    <rect class="prov" x="70"  y="1322" width="130" height="26" rx="6"/><text class="chip tt-prov" x="135" y="1340">openai-compatible</text>
     <rect class="prov" x="212" y="1322" width="130" height="26" rx="6"/><text class="chip tt-prov" x="277" y="1340">stream-helpers</text>
   </g>
 
@@ -264,7 +264,7 @@
   <text class="zlabel tt-ext" x="30" y="1418">EXTERNAL SYSTEMS</text>
   <g>
     <rect class="ext" x="220" y="1398" width="176" height="80" rx="9"/>
-    <text class="chip tt-ext" x="308" y="1431">LLM APIs</text><text class="chipsub" x="308" y="1447">OpenAI · Anthropic</text><text class="chipsub" x="308" y="1460">Google · Ollama · MLX</text>
+    <text class="chip tt-ext" x="308" y="1431">LLM APIs</text><text class="chipsub" x="308" y="1447">OpenAI · Anthropic</text><text class="chipsub" x="308" y="1460">Google · Ollama · compatible</text>
     <rect class="ext" x="408" y="1398" width="176" height="80" rx="9"/>
     <text class="chip tt-ext" x="496" y="1431">Whisper API</text><text class="chipsub" x="496" y="1447">OpenAI speech to text</text>
     <rect class="ext" x="596" y="1398" width="176" height="80" rx="9"/>

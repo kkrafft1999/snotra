@@ -13,9 +13,8 @@ Modelle, kein Konto, keine Telemetrie.**
 <!-- Screenshot / Demo-GIF der Oberfläche: Dateibaum, Vorschau, Chat mit
      Freigabe-Karte. Das GIF folgt. -->
 
-**Funktioniert mit** OpenAI · Anthropic · Google Gemini · Ollama ·
-MLX-LM-Server · jeder OpenAI-kompatiblen API (LM Studio, llama.cpp, vLLM,
-OpenRouter …)
+**Funktioniert mit** OpenAI · Anthropic · Google Gemini · Ollama · jeder
+OpenAI-kompatiblen API (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter …)
 
 **Erweiterbar mit** Agent Skills (`SKILL.md`) · MCP-Servern (stdio) ·
 eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
@@ -324,7 +323,7 @@ bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
 - **Websuche:** Mit einem hinterlegten Tavily-Schlüssel (Einstellungen › Tools › Websuche) bekommt das Modell das Tool `web_search` — es liefert Titel, URL und einen kurzen Auszug je Treffer, keine ganzen Seiten. Ohne Schlüssel wird das Tool gar nicht erst angeboten. Die Suchanfrage verlässt deinen Rechner, deshalb ist das Tool als **externer Dienst** eingestuft: im Modus „Intelligent“ fragt Snotra vor jeder Suche nach. Einen kostenlosen Schlüssel gibt es unter [app.tavily.com](https://app.tavily.com); er wird wie die Modell-Schlüssel verschlüsselt abgelegt. Einen geöffneten Projektordner braucht die Suche nicht — anders als die Datei-Tools steht sie auch im leeren Chat zur Verfügung.
 - **Seiten lesen:** Was `web_search` an Adressen findet, liest das Tool `fetch_url` am Stück: es ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite statt des HTML — gekürzt, ohne Skripte und Navigation. Gedacht für das, was über den kurzen Auszug hinausgeht: ein Changelog, eine Norm, eine lange Fehlermeldung. Auch dieses Tool ist ein **externer Dienst** und braucht keinen Projektordner; einzurichten gibt es nichts. Abgelehnt werden lokale und private Adressen (`localhost`, Heimnetz, Cloud-Metadaten) — auch dann, wenn eine Weiterleitung erst dorthin führt — sowie alles, was kein Text ist: PDF, Bilder und Downloads holt Snotra nicht. **Der gelesene Text kommt von einem Fremden**: er ist für das Modell Material, kein Auftrag, und jeder Tool-Aufruf danach läuft erneut durch die Freigabe.
 
-**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Ollama und MLX-LM gelten immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
+**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Ollama gilt immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
 
 ### Die Sandbox je Betriebssystem
 
@@ -346,7 +345,7 @@ Was die Sandbox nicht leistet: Sie hindert einen Lauf nicht daran, Dateien auße
 
 ## Anbieter
 
-Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten. Sechs Anbieter stehen zur Wahl:
+Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten. Fünf Anbieter stehen zur Wahl:
 
 | Anbieter | Zugang | Bemerkung |
 | -------- | ------ | --------- |
@@ -354,14 +353,15 @@ Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hi
 | **Anthropic** | API-Key | |
 | **Google** | API-Key | |
 | **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |
-| **MLX-LM (lokal)** | Server-URL | `mlx_lm.server` auf Apple Silicon |
 | **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle; **Verbindung je Eintrag**, mehrere Ziele nebeneinander |
 
 ### OpenAI-kompatibel
 
-Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks.
+Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **MLX-LM** (`mlx_lm.server` auf Apple Silicon), **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks.
 
-**Die Verbindung gehört zum Eintrag.** Jede Zeile der Präferenzliste trägt ihre eigene Adresse, ihren eigenen Schlüssel und ihren eigenen Namen — ein lokaler LM-Studio-Server und ein Firmen-Gateway stehen also nebeneinander, ohne sich zu überschreiben. Bei den übrigen fünf Anbietern bleibt es bei einer Konfiguration je Anbieter: Der OpenAI-Schlüssel soll sich gerade *nicht* über mehrere Zeilen verteilen. Der Preis dieser Wahl ist bekannt — wer sechs OpenRouter-Modelle führt, trägt den Schlüssel sechsmal ein und ändert ihn an sechs Stellen.
+**MLX-LM war früher ein eigener Anbieter** und ist jetzt eine Vorlage dieses Anbieters. Bestehende MLX-LM-Einträge werden beim ersten Start nach dem Update übernommen, ohne dass du etwas tun musst: gleiches Modell, gleiche Server-URL, Anzeigename „MLX-LM“, kein Schlüssel.
+
+**Die Verbindung gehört zum Eintrag.** Jede Zeile der Präferenzliste trägt ihre eigene Adresse, ihren eigenen Schlüssel und ihren eigenen Namen — ein lokaler LM-Studio-Server und ein Firmen-Gateway stehen also nebeneinander, ohne sich zu überschreiben. Bei den übrigen vier Anbietern bleibt es bei einer Konfiguration je Anbieter: Der OpenAI-Schlüssel soll sich gerade *nicht* über mehrere Zeilen verteilen. Der Preis dieser Wahl ist bekannt — wer sechs OpenRouter-Modelle führt, trägt den Schlüssel sechsmal ein und ändert ihn an sechs Stellen.
 
 Eine bestehende Zeile änderst du über das **Stift-Symbol** in der Liste (per Tabulator erreichbar, Enter öffnet). Der Dialog heißt dann *Modell bearbeiten*, der Anbieter steht fest, und **Änderungen übernehmen** ersetzt die Zeile, statt eine neue anzulegen. Gespeicherte Schlüssel und Header bleiben erhalten, solange du sie nicht überschreibst oder mit dem Papierkorb daneben löschst.
 
@@ -380,7 +380,7 @@ Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil v
 
 **Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt.
 
-**Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama und MLX-LM.
+**Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama.
 
 ## Konfiguration
 

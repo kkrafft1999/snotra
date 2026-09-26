@@ -38,8 +38,10 @@ function sayText(say, value, fallback) {
  * 3: Presets mit Provider-ID und Modell, Verbindung unter `providers[id]`.
  * 4: Bei Anbietern mit `connectionPerPreset` liegt die Verbindung im Eintrag
  *    (Issue #202). Wer die Zahl erhoeht, schreibt die Migration dazu.
+ * 5: The dedicated `mlx-lm` provider is gone; its entries became entries of
+ *    `openai-compatible` (issue #194).
  */
-const LLM_CONFIG_VERSION = 4;
+const LLM_CONFIG_VERSION = 5;
 
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;

@@ -74,7 +74,7 @@ const CONTEXT_CONTENT_KINDS = Object.freeze({
  */
 const CHARS_PER_TOKEN_PROFILES = Object.freeze({
   /**
-   * Lokale Modelle (mlx-lm, Ollama), gemessen gegen Qwen am 2026-09-18
+   * Lokale Modelle (MLX-LM, Ollama), gemessen gegen Qwen am 2026-09-18
    * (Issue #169). Deutscher Fliesstext und Markdown liegen nahe an der
    * Faustregel, JSON packt der Tokenizer deutlich dichter.
    */
@@ -119,7 +119,6 @@ const DEFAULT_CHARS_PER_TOKEN_PROFILE = 'local';
 
 const CHARS_PER_TOKEN_PROFILE_BY_PROVIDER = Object.freeze({
   openai: 'o200k',
-  'mlx-lm': 'local',
   ollama: 'local',
 });
 
