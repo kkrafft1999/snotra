@@ -34,11 +34,15 @@ export function isTextFile(filename) {
  * Katalog. Gegenstück im Main-Prozess: `shared/runtime/format-bytes.js`.
  */
 export function formatSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const value = (bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1);
-  return `${value.replace('.', t('format.decimal'))} ${units[i]}`;
+  const value = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+  if (value === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.max(Math.floor(Math.log(value) / Math.log(1024)), 0), units.length - 1);
+  const scaled = value / Math.pow(1024, i);
+  const text = i === 0
+    ? String(Math.round(scaled))
+    : scaled.toFixed(1).replace('.', t('format.decimal'));
+  return `${text} ${units[i]}`;
 }
 
 function pad2(n) {
