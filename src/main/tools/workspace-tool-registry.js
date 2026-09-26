@@ -1,5 +1,5 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
-const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
+const { resolveNetworkDomains, resolveRunDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../services/fs-service');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
@@ -405,11 +405,35 @@ const NETWORK_DOMAINS_PARAMETER = Object.freeze({
     + 'the list on the approval card.',
 });
 
-/** Isolation state of a finished run, as the model reads it (#329). */
-function describeIsolationForModel(isolation) {
+/** Why a program allowance stayed off, as the model reads it (#408). */
+const ALLOWANCE_SKIP_TEXT = Object.freeze({
+  compound: 'the command does more than run the program: no chaining, pipes, redirections or variables in front',
+  expansion: 'the command uses $ or backticks, so what runs is only known after the shell expanded it',
+  otherFile: 'the command starts a different file of that name, not the one the user allowed',
+});
+
+/**
+ * Isolation state of a finished run, as the model reads it (#329), with the
+ * program allowance of the approved plan (#408): which extra rights the run
+ * had, or why the one for its program did not apply.
+ */
+function describeIsolationForModel(isolation, sandboxPlan = null) {
   if (!isolation) return null;
   if (isolation.isolated) {
-    return { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] };
+    const out = { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] };
+    const granted = sandboxPlan?.allowance;
+    const skipped = sandboxPlan?.allowanceSkipped;
+    if (granted) {
+      out.program_allowance = {
+        program: granted.program,
+        write_paths: Array.isArray(isolation.writePaths) ? isolation.writePaths : [],
+        macos_certificate_check: isolation.trustd === true,
+      };
+    } else if (skipped && ALLOWANCE_SKIP_TEXT[skipped.reason]) {
+      out.program_allowance_not_applied = `The user's allowance for ${skipped.program} did not apply: `
+        + `${ALLOWANCE_SKIP_TEXT[skipped.reason]}. Run the program on its own to get it.`;
+    }
+    return out;
   }
   // The user's own choice (#357): the model should not report sandbox limits
   // that are not there, nor ask for the sandbox to be switched off.
@@ -1109,10 +1133,13 @@ function createWorkspaceToolRegistry({
         + 'blocked. On macOS and Linux commands usually run isolated: writes only inside the project '
         + 'folder and a temporary directory (caches are redirected there), no access to credential '
         + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
-        + 'get their registry automatically. A refused write or connection shows up in stderr under '
+        + 'get their registry automatically. Programs the user has given an allowance in Settings '
+        + '(Program allowances) get its domains and folders by themselves, but only when the command '
+        + 'runs the program on its own: no chaining, pipes, redirections or $ — so call such a program '
+        + 'alone and filter its output afterwards. A refused write or connection shows up in stderr under '
         + '<sandbox_violations>; report it instead of working around it. The result says whether the '
-        + 'run was isolated. Every run needs the user\'s approval, unless the user has allowed '
-        + 'exactly this command line for the project folder.',
+        + 'run was isolated and whether an allowance applied. Every run needs the user\'s approval, '
+        + 'unless the user has allowed exactly this command line for the project folder.',
       shortDescriptionKey: 'tools.short.shell_execute',
       parameters: {
         type: 'object',
@@ -1154,13 +1181,18 @@ function createWorkspaceToolRegistry({
         const relativeCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
         const resolved = await fsService.resolveToolPath(workspaceRoot, relativeCwd);
         if (resolved.error) return JSON.stringify({ error: resolved.error });
+        // A program allowance (#408) comes only from the approved plan: the
+        // line starts with the allowed file's absolute path, and the run gets
+        // the allowance's domains, folders and trustd — what the card named.
+        const allowance = plan?.sandbox?.allowance || null;
         const result = await shellRunner.run({
-          command: args?.command,
+          command: allowance?.command || args?.command,
           stdin: args?.stdin,
           timeoutMs: args?.timeout_ms,
           cwd: resolved.absPath,
           workspaceRoot: workspaceRoot || undefined,
-          networkDomains: resolveNetworkDomains('shell_execute', args),
+          networkDomains: resolveRunDomains('shell_execute', args, allowance),
+          programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
           abortSignal,
         });
@@ -1177,7 +1209,7 @@ function createWorkspaceToolRegistry({
           shell: result.shell,
           cwd: relativeCwd || '.',
         };
-        const sandbox = describeIsolationForModel(result.isolation);
+        const sandbox = describeIsolationForModel(result.isolation, plan?.sandbox);
         if (sandbox) out.sandbox = sandbox;
         if (result.timedOut) {
           out.timed_out = true;

@@ -26,8 +26,9 @@ const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-p
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
-const { resolveNetworkDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
+const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
+const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 
 const PREVIEW_MAX_CHARS = 4000;
 /** The tools that run a process and have a sandbox (#329). */
@@ -148,6 +149,10 @@ function stableStringify(value) {
  *   isolation state for the card of the execution tools (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
  *   whether the user switched the sandbox off for this workspace (#357)
+ * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]
+ *   the program allowance a shell command gets, or why it does not (#408)
+ * @param {() => Promise<object[]>} [deps.readProgramAllowances]
+ *   the stored allowances, to notice a change between plan and run (#408)
  */
 function createToolCallPlanner({
   fsService,
@@ -158,6 +163,8 @@ function createToolCallPlanner({
   describeShell = null,
   describeSandbox = null,
   isSandboxDisabled = null,
+  matchProgramAllowance = null,
+  readProgramAllowances = null,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
@@ -366,6 +373,9 @@ function createToolCallPlanner({
     // changes with it, so flipping the switch between card and run is caught
     // by the re-plan after the approval.
     const sandboxDisabled = await readSandboxDisabled(toolName, workspaceRoot);
+    // So is a program allowance (#408): the card names it, and the run gets
+    // exactly the rights the card named or none.
+    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled);
     const planKey = stableStringify({
       tool: toolName,
       args,
@@ -373,16 +383,28 @@ function createToolCallPlanner({
       classes: riskClasses,
       targets: targets.map((target) => [target.path, target.absPath, target.version]),
       ...(sandboxDisabled ? { sandbox: 'off' } : {}),
+      ...(allowance?.allowance ? { allowance: allowance.allowance } : {}),
     });
 
     const result = { tool: toolName, riskClasses, targets, planKey };
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
-    if (EXECUTION_TOOLS.has(toolName)) result.sandbox = { disabled: sandboxDisabled, root: workspaceRoot };
+    if (EXECUTION_TOOLS.has(toolName)) {
+      result.sandbox = { disabled: sandboxDisabled, root: workspaceRoot };
+      if (allowance?.allowance) {
+        result.sandbox.allowance = {
+          ...allowance.allowance,
+          command: allowance.command,
+          entryKey: stableStringify(allowance.entry),
+        };
+      } else if (allowance?.skipped) {
+        result.sandbox.allowanceSkipped = allowance.skipped;
+      }
+    }
     if (shellCommand) result.shellCommand = shellCommand;
     // Isolation first: its detection waits for the shell detection (#111), so
     // the shell read afterwards is the detected one, not a startup placeholder.
-    const isolation = await describeIsolation(toolName, args, sandboxDisabled);
+    const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
       cwd: shellCwd,
@@ -399,7 +421,7 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
-  async function describeIsolation(toolName, args, sandboxDisabled = false) {
+  async function describeIsolation(toolName, args, sandboxDisabled = false, allowance = null) {
     if (!EXECUTION_TOOLS.has(toolName)) return null;
     // The user's choice comes before the detection: a run the user took out
     // of the sandbox says so, whatever the sandbox could do (#357).
@@ -407,13 +429,39 @@ function createToolCallPlanner({
     if (typeof describeSandbox !== 'function') return null;
     const sandbox = await describeSandbox();
     if (sandbox?.isolated === true) {
-      return { isolated: true, domains: resolveNetworkDomains(toolName, args) };
+      const granted = allowance?.allowance || null;
+      const isolation = { isolated: true, domains: resolveRunDomains(toolName, args, granted) };
+      if (granted) {
+        isolation.allowance = {
+          program: granted.program,
+          path: granted.path,
+          writePaths: granted.writePaths,
+          trustd: granted.trustd === true,
+        };
+      } else if (allowance?.skipped) {
+        isolation.allowanceSkipped = allowance.skipped;
+      }
+      return isolation;
     }
     return {
       isolated: false,
       reason: typeof sandbox?.reason === 'string' ? sandbox.reason : '',
       missing: Array.isArray(sandbox?.missing) ? sandbox.missing : [],
     };
+  }
+
+  /**
+   * The program allowance of a shell command (#408), or why the one naming
+   * its program does not apply. None without a sandbox to widen, and none
+   * when anything goes wrong on the way: a failed check never grants.
+   */
+  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled) {
+    if (toolName !== 'shell_execute' || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
+    try {
+      return (await matchProgramAllowance({ command: args?.command, cwd })) || null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -443,6 +491,9 @@ function createToolCallPlanner({
       if (now !== (planned.sandbox.disabled === true)) {
         return { ok: false, error: 'The sandbox setting of this workspace changed after the call was planned.' };
       }
+      if (planned.sandbox.allowance && !(await allowanceUnchanged(planned.sandbox.allowance))) {
+        return { ok: false, error: 'The program allowance for this command changed after the call was planned.' };
+      }
     }
     if (!planned || !Array.isArray(planned.targets)) return { ok: true };
     for (const target of planned.targets) {
@@ -460,8 +511,22 @@ function createToolCallPlanner({
     return { ok: true };
   }
 
+  /** The stored entry an approved allowance came from is still the same (#408). */
+  async function allowanceUnchanged(granted) {
+    if (typeof readProgramAllowances !== 'function') return false;
+    let entries;
+    try {
+      entries = normalizeProgramAllowances(await readProgramAllowances());
+    } catch {
+      return false;
+    }
+    const entry = entries.find((candidate) => candidate.path === granted.path);
+    return !!entry && stableStringify(entry) === granted.entryKey;
+  }
+
   return { plan, verifyTargets, validateArguments, buildPreview };
 }
+
 
 module.exports = {
   createToolCallPlanner,

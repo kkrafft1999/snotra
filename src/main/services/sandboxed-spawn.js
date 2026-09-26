@@ -29,15 +29,28 @@ const PASSTHROUGH = Object.freeze({
  * @param {string} [request.workspaceRoot]
  * @param {string} request.runTmp
  * @param {string[]} [request.domains]
+ * @param {{writePaths?: string[], trustd?: boolean}|null} [request.allowance]  a program allowance (#408)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
  * @param {AbortSignal} [request.abortSignal]
  * @returns {Promise<{command: string, args: string[], env: object,
- *   isolation: null|{isolated: boolean, domains?: string[], reason?: string, missing?: string[]},
+ *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
+ *     reason?: string, missing?: string[]},
  *   annotate: (s: string) => string, release: () => void}>}
  *   Rejects with an AbortError when "Stop" comes while waiting for the gate.
  */
-async function planSpawn({ sandbox, disabled = false, argv, workspaceRoot, runTmp, domains, commandId, commandText, abortSignal }) {
+async function planSpawn({
+  sandbox,
+  disabled = false,
+  argv,
+  workspaceRoot,
+  runTmp,
+  domains,
+  allowance = null,
+  commandId,
+  commandText,
+  abortSignal,
+}) {
   const [program, ...rest] = argv;
   if (disabled) {
     return {
@@ -55,6 +68,8 @@ async function planSpawn({ sandbox, disabled = false, argv, workspaceRoot, runTm
     workspaceRoot,
     runTmp,
     allowedDomains: domains,
+    extraWritePaths: Array.isArray(allowance?.writePaths) ? allowance.writePaths : [],
+    weakerNetworkIsolation: allowance?.trustd === true,
     commandId,
     commandText,
     abortSignal,
@@ -76,7 +91,12 @@ async function planSpawn({ sandbox, disabled = false, argv, workspaceRoot, runTm
     command: prepared.command,
     args: prepared.args,
     env: prepared.env,
-    isolation: { isolated: true, domains: prepared.domains },
+    isolation: {
+      isolated: true,
+      domains: prepared.domains,
+      ...(Array.isArray(prepared.writePaths) && prepared.writePaths.length > 0 ? { writePaths: prepared.writePaths } : {}),
+      ...(prepared.trustd === true ? { trustd: true } : {}),
+    },
     annotate: prepared.annotate,
     release: prepared.release,
   };

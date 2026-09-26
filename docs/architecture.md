@@ -207,6 +207,23 @@ shield next to the folder name (`FolderSandboxShield`, #398) shows it in any
 mode; both take their words from `describeModePill` and
 `describeFolderSandbox`.
 
+**Program allowances** ([#408](https://github.com/kkrafft1999/snotra/issues/408))
+widen the sandbox for one program in every workspace: domains, writable
+folders and, on macOS, the trust service (`enableWeakerNetworkIsolation`). The
+entry format is shared (`shared/contracts/program-allowances.js`) and stored in
+the signed policy file. `main/services/program-allowances-service.js` resolves
+programs through the shell's PATH, checks folders against Snotra's storage and
+the sandbox's unreadable paths, and matches a command: one simple command
+(`shared/runtime/simple-command.js`) whose program is the same real file. The
+planner calls it through `matchProgramAllowance`, puts the result on
+`plan.sandbox.allowance` (with the line rewritten to the absolute path, part of
+the plan key) or `plan.sandbox.allowanceSkipped`, and re-checks the stored
+entry in `verifyTargets`. The `shell_execute` handler hands the plan's
+allowance to the runner; `planSpawn` passes folders and trustd to
+`sandbox.prepare`, whose `buildConfig` adds them. The settings list lives in
+`renderer/components/ProgramAllowancesSetting.js`; widening goes through a
+native confirmation in `main/ipc/tool-permission-handlers.js`.
+
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an
 open project folder, but filters per tool.

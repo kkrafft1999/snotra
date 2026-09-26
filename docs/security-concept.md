@@ -565,9 +565,10 @@ replaced by an operating system boundary:
   on verifies certificates through exactly that service, so inside the sandbox
   it is switched back to its bundled certifi (`PIP_USE_DEPRECATED=legacy-certs`),
   but only when the pip of `run_python`'s interpreter is new enough — older pip
-  rejects the value (decision on #329). A venv with a different pip version and
-  Go tools that verify through the Security framework (`gh`, `terraform`) are a
-  known limitation.
+  rejects the value (decision on #329). A venv with a different pip version is a
+  known limitation; Go tools that verify through the Security framework (`gh`,
+  `terraform`) get the service back only through a program allowance (#408,
+  below), one program at a time.
 - **The remaining risk.** A run can still **read** files outside the denied
   locations — source code, documents — and send what it read to a domain the
   card allowed; an allowed domain is a channel. `execute` still cannot be
@@ -621,6 +622,63 @@ predates the certifi fallback.
   projects), an environment variable (invisible in the UI) and a per-run
   "run unisolated" button on the card (it teaches clicking past the sandbox;
   a possible follow-up if the per-workspace switch proves too coarse).
+
+### Revision: program allowances (#408)
+
+The per-workspace switch is all or nothing. A single command-line tool the
+user trusts — `ms-todo-cli`, `gh`, a company tool — needed more than the
+sandbox gives and less than switching it off: its API hosts, its own token
+cache, and on macOS the trust service for its certificate check. Without that
+it failed as soon as its access token expired: the refresh host was not on the
+card, the refreshed token could not be written back, and Go's TLS check was
+refused. A program allowance grants exactly those three things, to one
+program.
+
+- **Scope and storage.** Global, in Settings › Tools › *Program allowances*,
+  none by default. An entry names the program by its absolute path and adds
+  host names, writable folders and — macOS only — the trust service. It lives
+  in the policy file next to the rules (section 7), is dropped by a failed
+  signature and cannot be stored without `safeStorage`, like every loosening.
+  Main resolves the program through the PATH the shell detection read (#111)
+  and checks every folder itself: it must exist, and it must not be the root,
+  the home folder or anything above it, Snotra's own storage, or a place the
+  sandbox keeps unreadable — nor contain one. A new or wider allowance is
+  confirmed in a native dialog that lists every right (section 5); taking
+  rights away and removing an entry ask nothing.
+- **Identity is the file.** An allowance applies only when the command is one
+  simple command — no chain, pipe, redirection, subshell, expansion or variable
+  in front (`DYLD_INSERT_LIBRARIES=… prog` would load foreign code into the
+  program) — and its first word resolves to the same real file the allowance
+  names. The sandbox cannot tell the processes of a run apart, so anything
+  more would hand the rights to other programs too. The line that runs starts
+  with the allowed file's absolute path instead of the typed name, so neither
+  a PATH entry nor a file of the same name in the project can take its place
+  between the check and the run; a `.` in the PATH that finds the project's
+  file first makes the check fail.
+- **Bound to the approval.** The planner matches the allowance, puts it on the
+  plan and into the plan key, and `verifyTargets` checks right before the run
+  that the stored entry is unchanged. The handler takes the rewritten line,
+  the domains, the folders and trustd from the approved plan only; a call
+  without a plan gets none. The allowance's domains come first, so the cap on
+  domains never pushes them out.
+- **Visible on every run.** The card lists the domains under "Network" and
+  names the allowance with its folders and the certificate check, with a link
+  to the list — or says why the allowance for a program the command mentions
+  does not apply. The tool result tells the model which extra rights the run
+  had (`program_allowance`) or why it had none, and a certificate check the
+  sandbox refused is explained in stderr (`<sandbox_certificates>`) instead of
+  looking like a broken certificate.
+- **The remaining risk.** trustd runs outside the sandbox and can reach the
+  network by itself; the runtime calls opening it a potential exfiltration
+  channel, and it is open for the whole run of an allowed program. The program
+  is trusted with any arguments the model gives it: an allowed `gh` can reach
+  every endpoint of its hosts, an allowed tool can write anything into its
+  folders. The folders are refused where they would reach keys or Snotra's own
+  storage, but nothing checks what a program keeps in the folders it is given.
+- **Not built.** Allowances created from the card or from a failed run (a
+  possible follow-up once the list proves itself), per-workspace allowances,
+  and domain hints for known tools baked into Snotra — the user states what a
+  program needs, Snotra does not guess it.
 
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto

@@ -232,6 +232,7 @@ const toolPermissions = initToolPermissionState({ api });
 // and the shield next to the folder name (#398). The settings are built
 // further down and only reached on a click.
 const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' });
+const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'allowances' });
 initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
 // A narrow chat puts the pills on a row of their own (#400).
 initComposerBarLayout();
@@ -244,6 +245,8 @@ const approvalCards = initToolApprovalCards({
   appStore,
   onPendingChanged: () => syncRunMarkers(),
   onOpenSandboxSettings: openSandboxSettings,
+  getHomeDir: () => toolPermissions.get()?.homeDir || '',
+  onOpenAllowanceSettings: openAllowanceSettings,
 });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });

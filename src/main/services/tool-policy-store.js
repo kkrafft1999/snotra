@@ -18,6 +18,9 @@
  * canonical workspace roots. It loosens protection like an allow rule does,
  * so it follows the same rules: it needs `safeStorage` to be stored, and a
  * failed signature drops it — every workspace is isolated again.
+ *
+ * Program allowances (#408) widen the sandbox for one program in every
+ * workspace — the same kind of loosening, so the same rules again.
  */
 
 const {
@@ -32,6 +35,12 @@ const {
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
+const {
+  normalizeProgramAllowance,
+  normalizeProgramAllowances,
+  isNarrowing,
+  PROGRAM_ALLOWANCE_LIMITS,
+} = require('../../shared/contracts/program-allowances');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
@@ -53,6 +62,7 @@ function defaultPayload() {
     workspaceRules: {},
     sensitivePathPatterns: [],
     unsandboxedWorkspaces: [],
+    programAllowances: [],
     legacyWriteMigrated: false,
     updatedAt: 0,
   };
@@ -165,6 +175,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     }
     out.sensitivePathPatterns = normalizeSensitivePathPatterns(data.sensitivePathPatterns);
     out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
+    out.programAllowances = normalizeProgramAllowances(data.programAllowances);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
@@ -181,8 +192,10 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       );
       if (out.workspaceRules[root].length === 0) delete out.workspaceRules[root];
     }
-    // A switched-off sandbox is a loosening like an allow rule (#357).
+    // A switched-off sandbox is a loosening like an allow rule (#357), and so
+    // is a program allowance (#408).
     out.unsandboxedWorkspaces = [];
+    out.programAllowances = [];
     return out;
   }
 
@@ -269,6 +282,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       workspaceRules: payload.workspaceRules,
       sensitivePathPatterns: payload.sensitivePathPatterns,
       unsandboxedWorkspaces: payload.unsandboxedWorkspaces,
+      programAllowances: payload.programAllowances,
       policyVersion: policyVersionOf(payload, integrity),
       integrity,
       encryptionAvailable: encryptionAvailable(),
@@ -418,6 +432,50 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     return state.unsandboxedWorkspaces.includes(root);
   }
 
+  /**
+   * Stores a program allowance (#408), replacing the entry of the same
+   * program or — when the dialog changed the program — the one it was opened
+   * for. Widening needs `safeStorage`; only taking rights away works without.
+   */
+  async function setProgramAllowance(rawEntry, { replacePath = null } = {}) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      const entry = normalizeProgramAllowance(rawEntry);
+      if (!entry) return { error: createMessage('permissions.allowance.error.invalid') };
+      const previous = draft.programAllowances.find((other) => other.path === (replacePath || entry.path))
+        || draft.programAllowances.find((other) => other.path === entry.path)
+        || null;
+      if (!enc && !isNarrowing(previous, entry)) {
+        return { error: createMessage('permissions.allowance.error.needsEncryption') };
+      }
+      if (!previous && draft.programAllowances.length >= PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES) {
+        return { error: createMessage('permissions.allowance.error.tooMany', { max: PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES }) };
+      }
+      // An edited entry keeps its place in the list; a new one goes last.
+      const next = [];
+      for (const other of draft.programAllowances) {
+        if (other === previous) next.push(entry);
+        else if (other.path !== entry.path && other.path !== replacePath) next.push(other);
+      }
+      if (!previous) next.push(entry);
+      draft.programAllowances = next;
+      return null;
+    });
+  }
+
+  /** Takes a program allowance away (#408) — a tightening, never refused. */
+  async function removeProgramAllowance(programPath) {
+    return update((draft) => {
+      draft.programAllowances = draft.programAllowances.filter((entry) => entry.path !== programPath);
+      return null;
+    });
+  }
+
+  /** The stored allowances; a store that cannot be read has none (#408). */
+  async function readProgramAllowances() {
+    const state = await read();
+    return Array.isArray(state.programAllowances) ? state.programAllowances : [];
+  }
+
   // "Reset workspace rules" is the workspace's whole policy: the sandbox
   // opt-out goes with the rules (#357).
   async function resetWorkspaceRules(root) {
@@ -438,6 +496,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       draft.workspaceRules = {};
       draft.sensitivePathPatterns = [];
       draft.unsandboxedWorkspaces = [];
+      draft.programAllowances = [];
       draft.legacyWriteMigrated = false;
       return null;
     });
@@ -462,6 +521,9 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     setSensitivePathPatterns,
     setWorkspaceSandbox,
     isWorkspaceSandboxDisabled,
+    setProgramAllowance,
+    removeProgramAllowance,
+    readProgramAllowances,
     resetWorkspaceRules,
     resetAll,
     clearLegacyMigrationNotice,

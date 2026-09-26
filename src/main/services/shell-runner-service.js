@@ -303,7 +303,17 @@ function createShellRunnerService({
     }
   }
 
-  async function run({ command, stdin, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
+  async function run({
+    command,
+    stdin,
+    timeoutMs,
+    cwd,
+    workspaceRoot,
+    networkDomains,
+    programAllowance = null,
+    sandboxDisabled = false,
+    abortSignal,
+  } = {}) {
     if (!detected.found) {
       return { error: 'No shell is available.' };
     }
@@ -339,6 +349,9 @@ function createShellRunnerService({
         workspaceRoot,
         runTmp,
         domains: networkDomains,
+        // A program allowance's folders and trustd (#408); its domains are
+        // already part of networkDomains.
+        allowance: programAllowance,
         commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         commandText: line,
         abortSignal,

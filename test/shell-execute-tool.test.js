@@ -128,6 +128,7 @@ test('shell_execute reicht Befehl, stdin, Zeitlimit und Arbeitsordner durch', as
     cwd: nodePath.join(WORKSPACE, 'frontend'),
     workspaceRoot: WORKSPACE,
     networkDomains: [],
+    programAllowance: null,
     sandboxDisabled: false,
     abortSignal: signal,
   });

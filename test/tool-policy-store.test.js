@@ -254,3 +254,69 @@ test('sandbox opt-out: resetting the workspace rules or everything switches it b
   state = await store.resetAll();
   assert.deepEqual(state.unsandboxedWorkspaces, []);
 });
+
+// ── Program allowances (#408) ───────────────────────────────────────────────
+
+const GH = { path: '/opt/bin/gh', domains: ['api.github.com'], writePaths: [], trustd: true };
+const TODO = { path: '/home/u/bin/ms-todo-cli', domains: ['graph.microsoft.com'], writePaths: ['/home/u/.cache/todo'], trustd: false };
+
+test('program allowances: none by default, stored normalized, an edit keeps its place', async (t) => {
+  const { store } = await makeStore(t);
+  assert.deepEqual((await store.read()).programAllowances, []);
+
+  await store.setProgramAllowance(GH);
+  const added = await store.setProgramAllowance({ ...TODO, domains: ['Graph.Microsoft.com'] });
+  assert.equal(added.ok, true);
+  assert.deepEqual(added.programAllowances.map((entry) => entry.path), [GH.path, TODO.path]);
+  assert.deepEqual(added.programAllowances[1].domains, ['graph.microsoft.com']);
+
+  // Edited under a new program path: the old entry is replaced in place.
+  const moved = await store.setProgramAllowance({ ...GH, path: '/usr/local/bin/gh' }, { replacePath: GH.path });
+  assert.deepEqual(moved.programAllowances.map((entry) => entry.path), ['/usr/local/bin/gh', TODO.path]);
+  assert.deepEqual(await store.readProgramAllowances(), moved.programAllowances);
+
+  const removed = await store.removeProgramAllowance('/usr/local/bin/gh');
+  assert.deepEqual(removed.programAllowances.map((entry) => entry.path), [TODO.path]);
+  assert.equal((await store.setProgramAllowance({ path: 'relative' })).ok, false);
+});
+
+test('program allowances: without safeStorage none can be stored, and stored ones do not count', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.setProgramAllowance(TODO);
+  const locked = createToolPolicyStore({
+    app: { getPath: () => dir }, safeStorage: makeSafeStorage(false), fs, path, crypto, log: { warn() {} }, now: () => 1000,
+  });
+  // The signature cannot be checked, so the allowance is dropped like an allow rule.
+  assert.deepEqual(await locked.readProgramAllowances(), []);
+  const added = await locked.setProgramAllowance(TODO);
+  assert.equal(added.ok, false);
+  assert.equal(added.error.key, 'permissions.allowance.error.needsEncryption');
+  assert.equal((await locked.removeProgramAllowance(TODO.path)).ok, true);
+});
+
+test('program allowances: an edit that only takes rights away is not a widening', async (t) => {
+  const { store } = await makeStore(t);
+  await store.setProgramAllowance({ ...TODO, trustd: true });
+  const narrower = await store.setProgramAllowance({ ...TODO, trustd: false, domains: [] });
+  assert.equal(narrower.ok, true);
+  assert.deepEqual(narrower.programAllowances[0].domains, []);
+});
+
+test('program allowances: a failed signature drops them, resetting everything clears them', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.setProgramAllowance(GH);
+  const filePath = path.join(dir, POLICY_FILENAME);
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.programAllowances.push(TODO);
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+  const state = await store.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.deepEqual(state.programAllowances, []);
+  assert.deepEqual(await store.readProgramAllowances(), []);
+
+  const { store: fresh } = await makeStore(t);
+  await fresh.setProgramAllowance(GH);
+  // Workspace rules are per folder; allowances are global and stay.
+  assert.equal((await fresh.resetWorkspaceRules('/a')).programAllowances.length, 1);
+  assert.deepEqual((await fresh.resetAll()).programAllowances, []);
+});

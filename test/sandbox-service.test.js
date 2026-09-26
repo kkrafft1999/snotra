@@ -18,6 +18,7 @@ const {
   unpackedPath,
   missingPackages,
   sensitiveReadPaths,
+  annotateBlockedTrustd,
   SANDBOX_REASONS,
 } = require('../src/main/services/sandbox-service');
 const { normalizeDomains, suggestDomains, resolveNetworkDomains } = require('../src/shared/runtime/sandbox-domains');
@@ -362,6 +363,61 @@ test('on macOS a pip from 24.2 on gets the certifi fallback, an older one does n
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+// ── Program allowances (#408) ───────────────────────────────────────────────
+
+test('a program allowance adds its folders to the writable ones, trustd stays closed off macOS', posixOnly, async () => {
+  const { service, calls } = makeService();
+  await service.detect();
+  const prepared = await service.prepare({
+    command: '/opt/bin/tool lists',
+    workspaceRoot: '/home/u/project',
+    runTmp: '/tmp/snotra-sh-2',
+    allowedDomains: ['graph.microsoft.com'],
+    extraWritePaths: ['/home/u/.cache/tool', '/home/u/project'],
+    weakerNetworkIsolation: true,
+  });
+  const config = calls.updateConfig.at(-1);
+  assert.deepEqual(config.filesystem.allowWrite, ['/home/u/project', '/tmp/snotra-sh-2', '/home/u/.cache/tool']);
+  assert.equal('enableWeakerNetworkIsolation' in config, false, 'Linux has no trust service to open');
+  assert.deepEqual(prepared.writePaths, ['/home/u/.cache/tool']);
+  assert.equal(prepared.trustd, false);
+  prepared.release();
+});
+
+test('on macOS trustd opens only for a run whose allowance asks for it, and a blocked check is explained', posixOnly, async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fake-python-'));
+  const python = path.join(dir, 'python');
+  await fs.writeFile(python, '#!/bin/sh\necho "pip 23.0 from /x (python 3.12)"\n', { mode: 0o755 });
+  try {
+    const { service, calls } = makeService({ deps: { platform: 'darwin', readPythonCommand: async () => python } });
+    await service.detect();
+    const tls = 'Get "https://login.microsoftonline.com/x": tls: failed to verify certificate: x509: OSStatus -26276';
+
+    const open = await service.prepare({ command: 'tool', runTmp: '/tmp/r1', weakerNetworkIsolation: true });
+    assert.equal(calls.updateConfig.at(-1).enableWeakerNetworkIsolation, true);
+    assert.equal(open.trustd, true);
+    assert.doesNotMatch(open.annotate(tls), /sandbox_certificates/);
+    open.release();
+
+    const closed = await service.prepare({ command: 'tool', runTmp: '/tmp/r2' });
+    assert.equal('enableWeakerNetworkIsolation' in calls.updateConfig.at(-1), false);
+    assert.equal(closed.trustd, false);
+    const annotated = closed.annotate(tls);
+    assert.match(annotated, /<sandbox_certificates>/);
+    assert.match(annotated, /Program allowances/);
+    closed.release();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('the trustd note only answers Go\'s blocked certificate check, and only once', () => {
+  assert.equal(annotateBlockedTrustd('curl: (60) SSL certificate problem'), 'curl: (60) SSL certificate problem');
+  const once = annotateBlockedTrustd('x509: OSStatus -26276');
+  assert.match(once, /^x509: OSStatus -26276\n\n<sandbox_certificates>\n/);
+  assert.equal(annotateBlockedTrustd(once), once);
 });
 
 test('an unavailable sandbox prepares nothing — the runner falls back', async () => {
