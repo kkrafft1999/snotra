@@ -51,22 +51,26 @@ export function createSkillCatalogSource({ api, appStore }) {
     if (pending?.root === root) return pending.promise;
 
     const startedAt = generation;
-    const promise = (async () => {
-      let skills = [];
-      try {
-        const result = await api.getSkillCatalog();
-        skills = Array.isArray(result?.skills) ? result.skills.filter(isInvocable) : [];
-      } catch {
-        skills = [];
-      }
+    // `.then` always runs after `promise` is assigned, even when the API throws
+    // synchronously — reading it inside the fetch itself hit the TDZ (#377).
+    const promise = fetchInvocable().then((skills) => {
       if (startedAt === generation && (appStore.rootPath || '') === root) {
         cache = { root, skills, fetchedAt: Date.now() };
       }
       if (pending?.promise === promise) pending = null;
       return skills;
-    })();
+    });
     pending = { root, promise };
     return promise;
+  }
+
+  async function fetchInvocable() {
+    try {
+      const result = await api.getSkillCatalog();
+      return Array.isArray(result?.skills) ? result.skills.filter(isInvocable) : [];
+    } catch {
+      return [];
+    }
   }
 
   return { load, invalidate, onInvalidated };
