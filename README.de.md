@@ -293,14 +293,14 @@ bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
 
 - **Projektordner öffnen:** über den Knopf in der Seitenleiste oder die Liste der zuletzt genutzten Ordner. Alles Weitere bezieht sich immer auf diesen einen Ordner.
 - **Vier Spalten, vier Schalter:** Das Fenster besteht aus Seitenleiste, Anzeige, Chat und Verlauf, und jede Spalte hat ihren eigenen Schalter in der Titelzeile — links die beiden des Arbeitsbereichs, rechts spiegelverkehrt die beiden der Chat-Seite, jeweils in der Reihenfolge ihrer Spalten. Alle vier tragen dasselbe Bild: ein Fenster mit einer schmalen und einer breiten Fläche, gefüllt ist die, die der Knopf schaltet. Jeder Zustand bleibt bis zum nächsten Start erhalten.
-- **Seitenleiste wegschalten:** Der erste Knopf blendet die Seitenleiste samt Trenner aus, der Arbeitsbereich rückt nach. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht › Seitenleiste ein-/ausblenden*.
+- **Seitenleiste wegschalten:** Der erste Knopf blendet die Seitenleiste samt Trenner aus, der Arbeitsbereich rückt nach. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht › Seitenleiste ein-/ausblenden* (alle Kürzel unter [Tastenkürzel](#tastenkürzel)).
 - **Mittlere Anzeige ein- und ausblenden:** Der zweite Knopf schaltet die mittlere Spalte — die, in der die Dateivorschau und der Startschirm stehen. Solange du nichts eingestellt hast, entscheidet der Ordner: Mit geöffnetem Ordner bleibt die Spalte **zu**, der Chat bekommt die Breite. Ist kein Ordner offen, steht dort der Startschirm, und zwar genau so breit, wie er ihn braucht — der Rest des Fensters gehört dem Chat. Klickst du eine Datei im Baum an, kommt die Spalte von selbst zurück, sonst ginge der Klick ins Leere. Schaltest du sie über den Knopf ein oder aus, gilt deine Entscheidung ab dann auch beim Start.
 - **Chat wegschalten:** Der vorletzte Knopf nimmt die Chat-Spalte weg; übrig bleibt rechts der Verlauf, falls er offen ist. Klickst du dort einen Chat an, kommt die Spalte von selbst zurück — spiegelbildlich zum Klick auf eine Datei im Baum. Die **Einstellungen** erreichst du unabhängig davon über die Menüleiste bzw. `Cmd/Strg+,` — auf dem Mac unter *Snotra AI › Einstellungen…*, unter Windows und Linux unter *Ansicht › Einstellungen…*.
 - **Chat-Verlauf einblenden:** Der letzte Knopf stellt den Verlauf als Spalte neben den Chat. Ein Klick auf eine Zeile lädt diese Konversation samt ihrem Modell und ihrem Freigabemodus, das Papierkorb-Symbol entfernt sie. Der Knopf für einen **neuen Chat** steht in der Kopfzeile dieser Spalte — so wie „Ordner öffnen“ in der Kopfzeile des Baums. Wird das Fenster zu schmal für alle Spalten, weicht der Verlauf von selbst und kommt im breiteren Fenster zurück.
 - **So, wie du die App verlassen hast:** Beim Start holt Snotra die zuletzt geführte Konversation des Ordners zurück und du landest direkt im Gespräch. Der Startschirm („Womit fangen wir an?“) gehört zum kalten Start: Er steht in der mittleren Spalte und erscheint, wenn kein Ordner offen ist und es nichts fortzusetzen gibt — beim allerersten Start also von selbst. Auch das Fenster kommt zurück, wie du es zuletzt eingestellt hast: Größe, Position und ob es maximiert oder im Vollbild lief. Beim allerersten Start geht es mit 1536 × 960 Punkten auf, auf kleineren Bildschirmen so groß, wie die Arbeitsfläche hergibt. Hast du den Zweitbildschirm abgezogen, auf dem es zuletzt stand, kommt es in derselben Größe zentriert auf dem Hauptbildschirm zurück statt im Nichts.
 - **Verschieben:** Eine Datei oder einen Ordner im Baum auf eine Ordnerzeile ziehen verschiebt den Eintrag dorthin; auf der freien Fläche unter dem Baum landet er im Projektordner. Gibt es den Namen schon, wird `name (2).ext` daraus.
 - **Im Chat referenzieren:** Eine Datei oder einen Ordner in die Chat-Eingabe ziehen fügt dort `@<pfad relativ zur Projektwurzel>` ein; derselbe Weg ohne Ziehen ist der `@`-Knopf rechts in der Zeile (Hover oder Tabulator). Details unter [Chat](#chat).
-- **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick) auf eine Zeile öffnet „Öffnen“, „Im Finder anzeigen“ (unter Windows „Im Explorer anzeigen“, unter Linux „Im Dateimanager anzeigen“), „Informationen“ und „Löschen…“. Gelöscht wird in den Papierkorb, nach Rückfrage.
+- **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick, siehe [Tastenkürzel](#tastenkürzel)) auf eine Zeile öffnet „Öffnen“, „Im Finder anzeigen“ (unter Windows „Im Explorer anzeigen“, unter Linux „Im Dateimanager anzeigen“), „Informationen“ und „Löschen…“. Gelöscht wird in den Papierkorb, nach Rückfrage.
 - **Informationen:** Der Eintrag „Informationen“ zeigt zu einer Datei Name, vollständigen Pfad, Typ, Größe (lesbar und auf das Byte genau), Änderungs- und Erstellungsdatum sowie das Programm, mit dem „Öffnen“ sie starten würde. Bei einem Ordner steht statt der Größe die Anzahl seiner direkten Einträge — rekursiv gezählt wird bewusst nicht, das kann bei `node_modules` beliebig lange dauern. Der Knopf **„Pfad kopieren“** legt den vollen Pfad in die Zwischenablage. Werte, die das Betriebssystem nicht hergibt — unter Linux oft das Erstellungsdatum —, stehen als „unbekannt“ da.
 - **Von außen übernehmen:** Dateien und Ordner aus Finder oder Explorer lassen sich direkt in den Baum ziehen — auf eine Ordnerzeile oder auf die freie Fläche für den Projektordner. Sie werden **kopiert**, das Original bleibt liegen; Mehrfachauswahl geht, Namenskollisionen enden wie oben als `name (2).ext`.
 
@@ -308,7 +308,7 @@ bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
 
 ## Chat
 
-- **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button.
+- **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button. Die übrigen Kürzel stehen gesammelt unter [Tastenkürzel](#tastenkürzel).
 - **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rlse` findet z. B. `docs/release.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/release.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
 - **Dateien aus dem Baum übernehmen (Maus):** Was du im Dateibaum schon vor Augen hast, musst du nicht abtippen. Zieh die Datei oder den Ordner aus dem Baum in die Chat-Eingabe — eingefügt wird an der Cursorposition der Pfad **relativ zur Projektwurzel** (`@docs/release.md`, Ordner mit `/` am Ende), nicht der absolute Pfad. Ohne Ziehen geht es über den `@`-Knopf, der rechts in der Zeile erscheint, sobald du mit der Maus über die Zeile fährst oder den Knopf per Tabulator ansteuerst. Der einfache Klick auf eine Zeile bleibt, was er war: auswählen und Vorschau zeigen; das Verschieben im Baum per Drag & Drop ebenfalls.
 - **Screenshots einfügen:** Ein Bild in der Zwischenablage (macOS `Cmd+Ctrl+Shift+4`, Windows Snipping Tool) landet mit `Cmd/Ctrl+V` als Anhang über der Eingabezeile — mit Vorschau, Dateigröße und einem Knopf zum Entfernen. Der getippte Text bleibt dabei unberührt; ein Screenshot ohne Begleitfrage lässt sich ebenfalls abschicken. Erlaubt sind PNG, JPEG, GIF und WebP, bis zu 4 Bilder je Nachricht und 5 MB pro Bild; größere Bilder werden vor dem Senden auf 1568 px längste Kante verkleinert. Weil ein Screenshot oft mehr zeigt, als man bewusst teilen will, siehst du vor dem Senden immer die Vorschau — bei einem Cloud-Anbieter verlässt das Bild deinen Rechner. Bilder weiterreichen kann **OpenAI** und, wenn du den Schalter „Bild-Anhänge erlauben“ setzt, der Anbieter **OpenAI-kompatibel**: Ist ein anderer Anbieter aktiv, wird das Einfügen mit einem Hinweis in der Statuszeile abgelehnt, statt still zu verschwinden — und hängst du ein Bild an und wechselst danach auf ein Modell ohne Bild-Unterstützung, sagt Snotra das beim Senden, bevor die Anfrage rausgeht. Angehängte Bilder gehören zum gespeicherten Verlauf: Sie liegen als Dateien unter `chat-attachments/<Chat-ID>/` im `userData`-Ordner — unverschlüsselt, wie die Screenshots auf deiner Platte auch —, während die Verlaufsdatei nur den Dateinamen trägt und schlank bleibt. Beim Öffnen einer älteren Konversation sind die Bilder wieder da; ein Klick auf das Vorschaubild zeigt es groß. Löschst du einen Chat, verschwinden seine Bilder mit; dasselbe gilt, wenn er aus dem Verlauf herausfällt. Ist eine Datei von Hand entfernt worden, steht an ihrer Stelle ein Hinweis statt eines kaputten Bildes.
@@ -345,6 +345,43 @@ Ob ein Lauf isoliert ist, entscheidet ein kurzer Selbsttest einmal je App-Start 
 **Für einen Workspace abschalten.** Verhindert die Sandbox in einem Projekt etwas Legitimes — Schreiben in ein Nachbar-Repository oder nach `~/.config`, `gh` oder `terraform`, die ins Netz müssen, ein älteres `pip` in einem venv —, schaltest du sie unter Einstellungen › Tools › *Sandbox für diesen Workspace* für diesen Ordner ab. Das gilt nur für diesen einen Ordner, nie global und nie als Voreinstellung. Du bestätigst es in einem Systemdialog, und die Einstellung liegt bei deinen Berechtigungen statt im Ordner — ein ausgechecktes Repository kann sie also nicht selbst abschalten. Ab dann zeigt die Freigabekarte „Nicht isoliert“ mit dem Grund und einem Link zurück zur Einstellung, und das Modell erfährt, dass der Lauf nicht isoliert war. Im Modus „Auto“ laufen solche Befehle ohne Rückfrage; die Modus-Pille in der Chatleiste wird rot, sobald „Auto“ `shell_execute` oder `run_python` ohne Sandbox ausführen würde — hier abgeschaltet oder auf dem System nicht verfügbar. „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ schalten die Sandbox wieder ein.
 
 Was die Sandbox nicht leistet: Sie hindert einen Lauf nicht daran, Dateien außerhalb der geschützten Orte zu *lesen*, und was er gelesen hat, kann eine Domain erreichen, die die Karte erlaubt hat. Unter macOS kommen Werkzeuge, die Zertifikate über den Schlüsselbund prüfen — `gh`, `terraform` und andere Go-Programme —, darin nicht ins Netz.
+
+## Tastenkürzel
+
+Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rückgängig, Zoom und Vollbild verhalten sich wie in jeder anderen App deiner Plattform und stehen in den Menüs *Bearbeiten*, *Ansicht* und *Fenster*.
+
+**Überall im Fenster**
+
+| Was es tut | macOS | Windows / Linux |
+| --- | --- | --- |
+| Einstellungen öffnen | `Cmd+,` | `Strg+,` |
+| Seitenleiste ein- oder ausblenden | `Cmd+B` | `Strg+B` |
+| Tool-Log-Diagnose als JSON in die Zwischenablage kopieren — nützlich für einen Fehlerbericht | `Cmd+Shift+D` | `Strg+Shift+D` |
+
+**Chat-Eingabe**
+
+| Was es tut | macOS | Windows / Linux |
+| --- | --- | --- |
+| Nachricht abschicken | `Enter` | `Enter` |
+| Zeilenumbruch einfügen | `Shift+Enter` | `Shift+Enter` |
+| Bild aus der Zwischenablage als Anhang einfügen | `Cmd+V` | `Strg+V` |
+| In der `@`-Dateiliste oder der `/`-Skill-Liste: wählen · übernehmen · schließen | `↑`/`↓` · `Enter` oder `Tab` · `Esc` | `↑`/`↓` · `Enter` oder `Tab` · `Esc` |
+| Die sichtbare Freigabekarte eines Tools ablehnen | `Esc` | `Esc` |
+
+**Dateibaum und Spalten**
+
+| Was es tut | macOS | Windows / Linux |
+| --- | --- | --- |
+| Kontextmenü einer Zeile öffnen (statt Rechtsklick) | `Cmd`-Klick | `Strg`-Klick |
+| Zuletzt verwendete Ordner: öffnen · aus der Liste entfernen | `Enter` oder `Leertaste` · `Entf` oder `Rücktaste` | `Enter` oder `Leertaste` · `Entf` oder `Rücktaste` |
+| Fokussierter Spaltentrenner: verschieben · in größeren Schritten · bis zur Endlage | `←`/`→` · `Shift+←`/`→` · `Pos1`/`Ende` | `←`/`→` · `Shift+←`/`→` · `Pos1`/`Ende` |
+
+**Dialoge und Menüs**
+
+| Was es tut | macOS | Windows / Linux |
+| --- | --- | --- |
+| Einstellungen: zum vorigen oder nächsten Bereich · zum ersten oder letzten | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` |
+| Dialog, Menü oder vergrößertes Bild schließen | `Esc` | `Esc` |
 
 ## Anbieter
 
@@ -387,7 +424,7 @@ Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil v
 
 ## Konfiguration
 
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra AI › Einstellungen…* auf dem Mac, *Ansicht › Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,`. Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
+Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra AI › Einstellungen…* auf dem Mac, *Ansicht › Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,` (siehe [Tastenkürzel](#tastenkürzel)). Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
 
 | Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
 | ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |

@@ -6,9 +6,9 @@ requests and questions are welcome.
 
 **English is the project language.** Issues, pull request titles and
 descriptions, commit messages and release notes are written in English. German
-is a fully supported *product* language: the application UI is currently German
-only, and [`README.de.md`](./README.de.md) is maintained alongside the English
-README. Some documents under `docs/` are still German; they are being translated
+is a fully supported *product* language: the application UI is bilingual
+(English by default, German selectable under *Settings › General*), and
+[`README.de.md`](./README.de.md) is maintained alongside the English README. Some documents under `docs/` are still German; they are being translated
 gradually.
 
 ## Prerequisites
