@@ -16,9 +16,21 @@ const fakeView = (id, { kind = 'viewer', exts = [] } = {}) => ({
 
 test('the app registry sends text files to the plain-text view', async () => {
   const { fileViews } = await load();
-  for (const name of ['README.md', 'app.JS', 'notes.txt', 'data.csv']) {
+  for (const name of ['app.JS', 'notes.txt', 'data.csv', 'README']) {
     assert.equal(fileViews.resolve({ name, size: 1 })?.id, 'plain-text', name);
   }
+});
+
+test('Markdown goes to the Markdown view, with plain text as the second candidate (#344)', async () => {
+  const { fileViews } = await load();
+  for (const name of ['README.md', 'SKILL.MD', 'notes.markdown', 'page.mdx']) {
+    assert.equal(fileViews.resolve({ name, size: 1 })?.id, 'markdown', name);
+  }
+  assert.deepEqual(fileViews.candidatesFor({ name: 'README.md' }).map((view) => view.id), ['markdown', 'plain-text']);
+  // `isTextFile` never knew these two, so they used to land on the info card;
+  // their source is still the plain-text view, mounted by the Markdown view.
+  assert.deepEqual(fileViews.candidatesFor({ name: 'page.mdx' }).map((view) => view.id), ['markdown']);
+  assert.equal(fileViews.resolve({ name: 'README.md' }, 'plain-text')?.id, 'plain-text');
 });
 
 test('names without an extension are recognised the way isTextFile knows them', async () => {

@@ -6,6 +6,7 @@ const PUSH = {
   UI_OPEN_SETTINGS: 'ui:open-settings',
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
   UI_NEW_CHAT: 'ui:new-chat',
+  UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
 };
 
 function buildTemplate(platform, overrides = {}) {
@@ -48,9 +49,11 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
   const view = menuNamed(template, 'View');
   assert.ok(view, 'das Menue Ansicht existiert weiter');
   assert.ok(!view.submenu.some((item) => item.label === 'Settings\u2026'));
-  // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, dann Neu laden.
+  // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, Markdown
+  // darunter (#344), dann Neu laden.
   assert.equal(view.submenu[0].label, 'Toggle Sidebar');
-  assert.equal(view.submenu[2].role, 'reload');
+  assert.equal(view.submenu[1].label, 'Markdown: Preview or Source');
+  assert.equal(view.submenu[3].role, 'reload');
 });
 
 for (const platform of ['win32', 'linux']) {
@@ -60,8 +63,8 @@ for (const platform of ['win32', 'linux']) {
 
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
-    assert.deepEqual(labels.slice(0, 5), [
-      'Toggle Sidebar', 'separator', 'Settings\u2026', 'separator', 'Reload',
+    assert.deepEqual(labels.slice(0, 6), [
+      'Toggle Sidebar', 'Markdown: Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
     ]);
   });
 }
@@ -123,6 +126,16 @@ for (const platform of ['darwin', 'win32', 'linux']) {
     assert.equal(newChat.accelerator, 'CmdOrCtrl+N');
     newChat.click();
     assert.deepEqual(sent, [PUSH.UI_NEW_CHAT]);
+  });
+
+  test(`${platform}: View > Markdown: Preview or Source with CmdOrCtrl+Shift+M (#344)`, () => {
+    const { template, sent } = buildTemplate(platform);
+    const item = menuNamed(template, 'View').submenu.find((entry) => entry.label === 'Markdown: Preview or Source');
+    assert.ok(item, 'the item exists');
+    // Not Cmd/Ctrl+Shift+V: that is "Paste and Match Style" in every text field.
+    assert.equal(item.accelerator, 'CmdOrCtrl+Shift+M');
+    item.click();
+    assert.deepEqual(sent, [PUSH.UI_TOGGLE_MARKDOWN_SOURCE]);
   });
 
   test(`${platform}: no accelerator is assigned twice (#381)`, () => {

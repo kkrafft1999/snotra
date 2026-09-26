@@ -108,6 +108,13 @@ const droppedFile = (nativePath) => ({ name: nativePath.split('/').pop(), native
 
 const rowFor = (container, path) => container.querySelector(`.tree-item[data-path="${path}"]`);
 
+/**
+ * The text of whichever view shows the file. `README.md` goes to the Markdown
+ * view since #344; without `marked` in happy-dom it renders escaped text, so
+ * the text reads the same as in the plain-text view.
+ */
+const paneText = () => document.querySelector('#preview-body > .file-view')?.textContent ?? null;
+
 test('openProject zeichnet die oberste Ebene aus dem Main-Prozess', async (t) => {
   const { dom, container } = await mountTree();
   t.after(dom.cleanup);
@@ -152,7 +159,7 @@ test('Klick auf eine Datei oeffnet die Vorschau und markiert die Zeile', async (
   assert.ok(document.getElementById('welcome').classList.contains('hidden'));
   assert.equal(document.getElementById('file-preview').classList.contains('hidden'), false);
   assert.equal(document.getElementById('preview-filename').textContent, 'README.md');
-  assert.equal(document.getElementById('preview-content').textContent, '# Titel');
+  assert.equal(paneText(), '# Titel');
   assert.ok(rowFor(container, '/ws/README.md').classList.contains('active'));
   assert.equal(appStore.selectedPath, '/ws/README.md');
 });
@@ -454,12 +461,12 @@ test('die offene Vorschau laedt nach, wenn sich ihr Ordner meldet', async (t) =>
 
   rowFor(container, '/ws/README.md').click();
   await flush();
-  assert.equal(document.getElementById('preview-content').textContent, 'alt');
+  assert.equal(paneText(), 'alt');
 
   inhalt = 'neu';
   await emitTreeChanged({ directories: ['/ws'], complete: true });
 
-  assert.equal(document.getElementById('preview-content').textContent, 'neu');
+  assert.equal(paneText(), 'neu');
 });
 
 test('ohne geoeffneten Ordner passiert nichts', async (t) => {
@@ -514,7 +521,7 @@ test('the note in a subfolder lines up with the names and follows the language',
 // ── The paths into the content pane go through the file views (#225) ────────
 
 const previewShown = () => !document.getElementById('file-preview').classList.contains('hidden');
-const previewText = () => document.getElementById('preview-content')?.textContent;
+const previewText = paneText;
 
 test('an agent write to the open file (#73) reloads it, a write elsewhere reads nothing', async (t) => {
   const reads = [];
@@ -659,4 +666,82 @@ test('discarding lets the folder switch through', async (t) => {
   assert.equal(await tree.openProject('/elsewhere'), true);
   assert.deepEqual(activated, ['/elsewhere']);
   assert.equal(previewShown(), false);
+});
+
+// ── Links from the preview (#344) ───────────────────────────────────────────
+
+/** A registry with one view that hands its context to the test. */
+async function capturingViews() {
+  const { createFileViewRegistry } = await importRenderer('file-views', 'registry.js');
+  const contexts = [];
+  const fileViews = createFileViewRegistry([{
+    id: 'capture',
+    kind: 'viewer',
+    canHandle: () => true,
+    mount(hostEl, context) {
+      contexts.push(context);
+      hostEl.textContent = context.file.name;
+      return { update() {}, unmount() {} };
+    },
+  }]);
+  return { fileViews, contexts };
+}
+
+test('a link from the preview unfolds the folders, selects the file and shows it', async (t) => {
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, appStore } = await mountTree({}, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(contexts[0].workspaceRoot, '/ws');
+
+  assert.deepEqual(await contexts[0].openFile('/ws/docs/notes.md'), { ok: true });
+  await flush();
+  const docs = container.querySelector('.tree-children[data-path="/ws/docs"]');
+  assert.ok(docs.classList.contains('expanded'), 'the folder above is open');
+  assert.ok(rowFor(container, '/ws/docs/notes.md').classList.contains('active'));
+  assert.equal(appStore.selectedPath, '/ws/docs/notes.md');
+  assert.equal(document.getElementById('preview-filename').textContent, 'notes.md');
+});
+
+test('a link to a folder selects and opens it, the preview stays', async (t) => {
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, appStore } = await mountTree({}, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.deepEqual(await contexts[0].openFile('/ws/docs'), { ok: true });
+  assert.ok(rowFor(container, '/ws/docs').classList.contains('active'));
+  assert.equal(appStore.selectedIsDirectory, true);
+  assert.equal(document.getElementById('preview-filename').textContent, 'README.md');
+});
+
+test('a link outside the folder, or to nothing, is refused with its reason', async (t) => {
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, appStore } = await mountTree({
+    readFile: async (p) => (p === '/ws/README.md' ? { content: '# Titel', size: 7 } : { error: 'ENOENT' }),
+  }, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.deepEqual(await contexts[0].openFile('/etc/passwd'), { ok: false, reason: 'outside' });
+  assert.deepEqual(await contexts[0].openFile('/ws-other/a.md'), { ok: false, reason: 'outside' });
+  assert.deepEqual(await contexts[0].openFile('/ws/missing.md'), { ok: false, reason: 'not-found' });
+  assert.equal(appStore.selectedPath, '/ws/README.md', 'nothing moved');
+});
+
+test('a file the listing left out still opens, without a row to mark', async (t) => {
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, appStore } = await mountTree({}, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.deepEqual(await contexts[0].openFile('/ws/.hidden-notes.md'), { ok: true });
+  assert.equal(document.getElementById('preview-filename').textContent, '.hidden-notes.md');
+  assert.equal(container.querySelector('.tree-item.active'), null);
+  assert.equal(appStore.selectedPath, '/ws/.hidden-notes.md');
 });

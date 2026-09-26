@@ -49,6 +49,17 @@ module.exports = {
   'tree.hiddenEntries.one': '… {count} weiterer Eintrag ausgeblendet',
   'tree.hiddenEntries.other': '… {count} weitere Einträge ausgeblendet',
   'fileInfo.type.unknown': 'Unbekannt',
+  // Markdown in der Dateivorschau (#344). „Preview“ bleibt auch im Deutschen
+  // „Preview“ — so entschieden am 2026-09-26.
+  'fileView.markdown.mode.label': 'Anzeigen als',
+  'fileView.markdown.mode.preview': 'Preview',
+  'fileView.markdown.mode.source': 'Quelltext',
+  'fileView.markdown.frontMatter': 'Front Matter',
+  'fileView.markdown.empty': 'Diese Datei ist leer.',
+  'fileView.markdown.image.remote': 'Bild aus dem Netz, nicht geladen',
+  'fileView.markdown.link.notFound': '{path} gibt es im geöffneten Ordner nicht.',
+  'fileView.markdown.link.outside': '{path} liegt außerhalb des geöffneten Ordners.',
+  'fileView.markdown.link.noAnchor': 'In dieser Datei gibt es keine Überschrift {anchor}.',
 
   // ── Welcome screen ─────────────────────────────────────────────────────────
   'welcome.headline': 'Womit fangen wir an?',
@@ -1315,6 +1326,7 @@ module.exports = {
   'menu.edit.selectAll': 'Alles auswählen',
   'menu.view': 'Ansicht',
   'menu.view.toggleSidebar': 'Seitenleiste ein-/ausblenden',
+  'menu.view.toggleMarkdownSource': 'Markdown: Preview oder Quelltext',
   'menu.view.reload': 'Neu laden',
   'menu.view.forceReload': 'Hart neu laden',
   'menu.view.devTools': 'Entwicklertools',

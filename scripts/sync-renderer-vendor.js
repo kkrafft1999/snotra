@@ -46,6 +46,18 @@ esbuild.buildSync({
   outfile: path.join(generatedDir, 'i18n.js'),
 });
 
+// ── Front matter parser for the renderer ────────────────────────────────────
+// The Markdown viewer (#344) reads the YAML head of a file with the same
+// parser the skills use (`src/shared/runtime/skill-frontmatter.js`, CommonJS)
+// rather than with a second one that would drift apart from it.
+esbuild.buildSync({
+  entryPoints: [path.join(root, 'src', 'shared', 'runtime', 'skill-frontmatter.js')],
+  bundle: true,
+  format: 'esm',
+  platform: 'neutral',
+  outfile: path.join(generatedDir, 'skill-frontmatter.js'),
+});
+
 // ── JS-Vendor-Bibliotheken ──────────────────────────────────────────────────
 fs.copyFileSync(
   path.join(root, 'node_modules', 'marked', 'lib', 'marked.umd.js'),

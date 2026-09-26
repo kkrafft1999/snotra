@@ -101,6 +101,15 @@ export function formatTimestamp(value) {
  */
 export const ALLOWED_LINK_PROTOS = /^(https?|mailto):/i;
 let domPurifyConfigured = false;
+// Set for the duration of one sanitize call that renders a workspace file
+// (#344). DOMPurify runs synchronously, so a module flag is enough to tell the
+// hook which of the two callers it is working for.
+let keepRelativeLinks = false;
+
+/** Relative to the document: no scheme, no `//host`. `#anchor` counts too. */
+function isRelativeLink(href) {
+  return Boolean(href) && !href.startsWith('//') && !/^[a-z][a-z0-9+.-]*:/i.test(href);
+}
 
 function configureDomPurify() {
   if (domPurifyConfigured || typeof DOMPurify === 'undefined') return;
@@ -124,6 +133,12 @@ function configureDomPurify() {
       node.setAttribute('rel', 'noopener noreferrer');
       const href = node.getAttribute('href') || '';
       if (!ALLOWED_LINK_PROTOS.test(href)) {
+        // A link to another file of the workspace means nothing to the chat,
+        // but it does in the file preview. It never stays an `href`: the
+        // viewer resolves it and opens the file itself (#344).
+        if (keepRelativeLinks && isRelativeLink(href.trim())) {
+          node.setAttribute('data-workspace-href', href.trim());
+        }
         node.removeAttribute('href');
       }
     }
@@ -131,16 +146,32 @@ function configureDomPurify() {
   domPurifyConfigured = true;
 }
 
-export function markdownToSafeHtml(raw) {
+/**
+ * Markdown to sanitized HTML — the one path for chat answers and for Markdown
+ * files in the preview (#344), so there is only one sanitizer to get right.
+ *
+ * The defaults are those of the chat. A file differs in two ways:
+ *   * `breaks: false` — a file is hard-wrapped at some column, and a single
+ *     line break inside a paragraph is a space, as on GitHub. A chat answer
+ *     means every line break it contains.
+ *   * `keepRelativeLinks: true` — a link without a scheme leaves the sanitizer
+ *     as `data-workspace-href` instead of disappearing, see the hook above.
+ */
+export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keepRelative = false } = {}) {
   const text = String(raw ?? '');
   if (typeof marked !== 'undefined' && typeof marked.parse === 'function' && typeof DOMPurify !== 'undefined') {
     configureDomPurify();
-    const html = marked.parse(text, { breaks: true, gfm: true });
-    return DOMPurify.sanitize(html, {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ['style', 'iframe', 'form'],
-      FORBID_ATTR: ['style', 'srcset'],
-    });
+    const html = marked.parse(text, { breaks, gfm: true });
+    keepRelativeLinks = keepRelative;
+    try {
+      return DOMPurify.sanitize(html, {
+        USE_PROFILES: { html: true },
+        FORBID_TAGS: ['style', 'iframe', 'form'],
+        FORBID_ATTR: ['style', 'srcset'],
+      });
+    } finally {
+      keepRelativeLinks = false;
+    }
   }
   const esc = document.createElement('div');
   esc.textContent = text;

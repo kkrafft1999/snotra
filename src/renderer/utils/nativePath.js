@@ -77,3 +77,33 @@ export function joinNative(dir, relPosix) {
   if (!rel) return base || sep;
   return `${base}${sep}${rel}`;
 }
+
+/**
+ * Resolves a relative POSIX path from a document (`../img/a.png`, `./b.md`)
+ * against the native folder it sits in, including `.` and `..` (#344). Keeps
+ * the separator of `dir`. A path that climbs above the root of `dir` stays at
+ * the root, the way `path.resolve` does — whether the result is still inside
+ * the workspace is for the caller to check (`isInsideDir`), and the main
+ * process checks again.
+ */
+export function resolveNative(dir, relPosix) {
+  const sep = separatorOf(dir);
+  const base = String(dir ?? '');
+  // The prefix that `segmentsOf` would drop: `/`, `C:`, or `\\` of a UNC path.
+  const uncPrefix = /^[\\/]{2}(?=[^\\/])/.test(base) ? sep + sep : '';
+  const rootPrefix = uncPrefix || (/^[\\/]/.test(base) ? sep : '');
+  const segments = segmentsOf(base);
+  // A UNC path keeps server and share as its root; a drive keeps its letter.
+  const fixed = uncPrefix ? Math.min(2, segments.length) : (DRIVE_ONLY.test(segments[0] ?? '') ? 1 : 0);
+  for (const part of String(relPosix ?? '').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (segments.length > fixed) segments.pop();
+      continue;
+    }
+    segments.push(part);
+  }
+  const joined = segments.join(sep);
+  if (fixed === 1 && segments.length === 1) return `${joined}${sep}`;
+  return `${rootPrefix}${joined}` || sep;
+}

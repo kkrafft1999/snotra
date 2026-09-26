@@ -40,6 +40,34 @@ const WORKSPACE_MEMORY_MD = [
 
 // Die Fragen dienen dem Fake-Modell als Schluessel: welche Antwort es schickt,
 // haengt an der Frage und nicht an der Reihenfolge der Anfragen.
+/**
+ * A Markdown file in the preview (#344) with everything the viewer must hold:
+ * a head, an image of the workspace next to it, an image from the web that
+ * must never be asked for, a relative link, and what the sanitizer has to cut.
+ */
+const REMOTE_IMAGE = 'https://img.snotra-smoke.invalid/badge.png';
+const PREVIEW_MD = [
+  '---',
+  'name: vorschau',
+  'description: Checked by the smoke test.',
+  '---',
+  '# Vorschau',
+  '',
+  'Siehe [die Liste](liste.md).',
+  '',
+  '![Diagramm](bild.png)',
+  '',
+  `![Badge](${REMOTE_IMAGE})`,
+  '',
+  '<script>globalThis.__pwnedMd = "script"</script>',
+  '<img src=x onerror="globalThis.__pwnedMd = \'onerror\'">',
+  '',
+  '[Bitte klicken](javascript:alert(1)) [Anrufen](tel:+4912345)',
+  '',
+  '<iframe src="https://example.com"></iframe>',
+  '',
+].join('\n');
+
 const LONG_QUESTION = 'Erzaehl mir etwas Langes.';
 // A run that has to survive a chat switch (#320).
 const BACKGROUND_QUESTION = 'Arbeite im Hintergrund weiter.';
@@ -158,6 +186,8 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'README.md'), README, 'utf8');
   await mkdir(path.join(dir, 'notizen'));
   await writeFile(path.join(dir, 'notizen', 'liste.md'), '- eins\n', 'utf8');
+  await writeFile(path.join(dir, 'notizen', 'vorschau.md'), PREVIEW_MD, 'utf8');
+  await writeFile(path.join(dir, 'notizen', 'bild.png'), makePng(40, 20));
   // Die Projekt-Quelle der AGENTS.md-Kette (Issue #212) und daneben der
   // Koeder in der Ordnerwurzel, der seit #253 nicht mehr zaehlt. Die globalen
   // Quellen liegen im echten Home des Ausfuehrenden und werden hier bewusst
@@ -224,16 +254,99 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       const state = await page.evaluate(() => ({
         hidden: document.getElementById('file-preview').classList.contains('hidden'),
         name: document.getElementById('preview-filename').textContent,
-        // Mounted by the plain-text view once the file is read (#225).
-        content: document.getElementById('preview-content')?.textContent ?? null,
+        // A .md file opens in the Markdown view, rendered (#344).
+        view: document.querySelector('#preview-body > .file-view')?.dataset.view ?? null,
+        heading: document.querySelector('.md-doc h1')?.textContent ?? null,
       }));
-      return state.hidden ? null : state;
+      return state.hidden || !state.heading ? null : state;
     },
     { what: 'Dateivorschau' }
   );
   assert.equal(preview.name, 'README.md');
-  assert.equal(preview.content, README);
+  assert.equal(preview.view, 'markdown');
+  assert.equal(preview.heading, 'Testprojekt');
+
+  // The source is the plain-text view (#225), character for character.
+  await page.evaluate(() => {
+    const source = document.querySelector('#preview-tools input[value="source"]');
+    source.click();
+  });
+  const source = await poll(
+    () => page.evaluate(() => document.getElementById('preview-content')?.textContent ?? null),
+    { what: 'Quelltext der README' }
+  );
+  assert.equal(source, README);
   step('Vorschau geprueft');
+
+  // --- Markdown in the preview (#344): sanitized, nothing from the web -------
+  // A CSP violation is the proof that something tried to load: the policy
+  // blocks every remote image, so the event fires for any attempt at all.
+  await page.evaluate(() => {
+    globalThis.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+      globalThis.__cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`);
+    });
+  });
+  const remoteRequests = [];
+  const onRequest = (request) => {
+    if (request.url().includes('snotra-smoke.invalid')) remoteRequests.push(request.url());
+  };
+  page.on('request', onRequest);
+  await page.evaluate(() => {
+    const row = (label) => [...document.querySelectorAll('#tree-container .tree-item')]
+      .find((el) => el.querySelector('.label')?.textContent === label);
+    row('notizen').click();
+  });
+  await poll(() => page.evaluate(() => [...document.querySelectorAll('#tree-container .tree-item .label')]
+    .some((el) => el.textContent === 'vorschau.md')), { what: 'notizen aufgeklappt' });
+  await page.evaluate(() => {
+    [...document.querySelectorAll('#tree-container .tree-item')]
+      .find((el) => el.querySelector('.label')?.textContent === 'vorschau.md').click();
+  });
+  const markdown = await poll(async () => {
+    const state = await page.evaluate(() => {
+      const doc = document.querySelector('.md-doc');
+      if (!doc || document.getElementById('preview-filename').textContent !== 'vorschau.md') return null;
+      return {
+        frontMatter: [...doc.querySelectorAll('.md-front-matter dt')].map((el) => el.textContent),
+        workspaceImage: doc.querySelector('img.md-image')?.getAttribute('src')?.slice(0, 22) ?? null,
+        unresolved: doc.querySelectorAll('img[data-md-src], img:not([src])').length,
+        remotePlaceholder: [...doc.querySelectorAll('.chat-md-image-source')].map((el) => el.textContent),
+        httpImages: doc.querySelectorAll('img[src^="http"]').length,
+        scripts: doc.querySelectorAll('script').length,
+        iframes: doc.querySelectorAll('iframe').length,
+        onerror: doc.querySelectorAll('[onerror]').length,
+        hrefs: [...doc.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')),
+      };
+    });
+    return state && state.workspaceImage && state.unresolved === 0 ? state : null;
+  }, { what: 'gerenderte vorschau.md mit Bildern' });
+  // Give a stray loader a moment to show itself before looking for traces.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  page.off('request', onRequest);
+
+  assert.deepEqual(markdown.frontMatter, ['name', 'description']);
+  assert.equal(markdown.workspaceImage, 'data:image/png;base64,');
+  assert.deepEqual(markdown.remotePlaceholder, [REMOTE_IMAGE]);
+  assert.equal(markdown.httpImages, 0);
+  assert.equal(markdown.scripts, 0, 'script must be removed');
+  assert.equal(markdown.iframes, 0, 'iframe must be removed');
+  assert.equal(markdown.onerror, 0, 'onerror must be removed');
+  // Only the workspace link stays clickable, and not as an address.
+  assert.deepEqual(markdown.hrefs, ['#']);
+  assert.equal(await page.evaluate(() => globalThis.__pwnedMd ?? null), null, 'nothing hostile ran');
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'nothing tried to load');
+  assert.deepEqual(remoteRequests, []);
+
+  // The relative link opens its file and selects it in the tree.
+  await page.evaluate(() => {
+    [...document.querySelectorAll('.md-doc a')].find((a) => a.textContent === 'die Liste').click();
+  });
+  await poll(() => page.evaluate(() =>
+    document.getElementById('preview-filename').textContent === 'liste.md'
+    && document.querySelector('#tree-container .tree-item.active .label')?.textContent === 'liste.md'),
+  { what: 'liste.md ueber den Link geoeffnet' });
+  step('Markdown-Vorschau geprueft');
 
   // --- Der Baum folgt dem Dateisystem (Issue #158) --------------------------
   // Kein Klick in der App: Die Datei entsteht daneben, so wie sie im Terminal,

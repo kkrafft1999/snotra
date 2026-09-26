@@ -55,7 +55,13 @@ export function initFileTree(deps) {
   const treeContainer = document.getElementById('tree-container');
   // What the middle column shows for a file is the business of the file views
   // (#225); the tree only says which file, and when it changed or went away.
-  const contentPane = createFileViewHost({ api, registry: fileViews, confirmLeave });
+  const contentPane = createFileViewHost({
+    api,
+    registry: fileViews,
+    confirmLeave,
+    openFile: (path) => openFromPreview(path),
+    getWorkspaceRoot: () => appStore.rootPath,
+  });
   const projectName = document.getElementById('project-name');
   const btnFolderHistory = document.getElementById('btn-folder-history');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
@@ -681,6 +687,80 @@ export function initFileTree(deps) {
     if (arrow) arrow.classList.add('expanded');
   }
 
+  /** Expands a folder that is already drawn, loading it on first use. */
+  async function ensureFolderExpanded(dirPath) {
+    const childContainer = treeContainer.querySelector(
+      `.tree-children[data-path="${CSS.escape(dirPath)}"]`
+    );
+    if (!childContainer) return false;
+    const row = childContainer.previousElementSibling;
+    if (childContainer.dataset.loaded !== 'true') {
+      await loadTreeLevel(childContainer, dirPath, loadDepthFromTreeRow(row));
+      childContainer.dataset.loaded = 'true';
+    }
+    childContainer.classList.add('expanded');
+    row?.querySelector('.arrow')?.classList.add('expanded');
+    return true;
+  }
+
+  /**
+   * A link in the preview points at another file of the workspace (#344):
+   * unfold the folders above it, select it and show it — the same as a click
+   * on its row. A folder is unfolded and selected; the preview stays.
+   *
+   * Resolves to `{ ok: true }` or `{ ok: false, reason }` with 'outside' (not
+   * in the open folder) or 'not-found'; the view tells the user which.
+   */
+  async function openFromPreview(targetPath) {
+    const root = appStore.rootPath;
+    if (!root || typeof targetPath !== 'string' || !isInsideDir(targetPath, root)) {
+      return { ok: false, reason: 'outside' };
+    }
+    const ancestors = [];
+    for (let dir = parentDirOf(targetPath); isInsideDir(dir, root); dir = parentDirOf(dir)) {
+      ancestors.unshift(dir);
+    }
+    for (const dir of ancestors) {
+      if (!(await ensureFolderExpanded(dir))) break;
+    }
+
+    const row = rowForPath(targetPath);
+    if (row?.dataset.isDirectory === 'true') {
+      await ensureFolderExpanded(targetPath);
+      setActiveItem(row);
+      appStore.selectedPath = targetPath;
+      appStore.selectedIsDirectory = true;
+      row.scrollIntoView?.({ block: 'nearest' });
+      return { ok: true };
+    }
+    if (row) {
+      row.scrollIntoView?.({ block: 'nearest' });
+      row.click();
+      return { ok: true };
+    }
+
+    // Not drawn: either it does not exist, or the listing left it out (#76) —
+    // or the link spells the name in another case than the disk. Whatever
+    // reads, is shown; the tree then has no row to mark.
+    const probe = await api.readFile(targetPath);
+    if (!probe || probe.error) {
+      return { ok: false, reason: 'not-found' };
+    }
+    const shown = await contentPane.open({
+      path: targetPath,
+      name: basenameOf(targetPath),
+      size: probe.size,
+      modified: probe.modified,
+    });
+    if (shown) {
+      appStore.activeTreeItem?.classList.remove('active');
+      appStore.activeTreeItem = null;
+      appStore.selectedPath = targetPath;
+      appStore.selectedIsDirectory = false;
+    }
+    return { ok: true };
+  }
+
   async function handleDrop(e, destDir, dropRow, depth) {
     e.preventDefault();
     e.stopPropagation();
@@ -1049,5 +1129,7 @@ export function initFileTree(deps) {
     refreshWelcomeRecent,
     closeFolderHistoryMenu,
     notifyExternalFileWrite,
+    /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
+    runPreviewCommand: (name) => contentPane.runCommand(name),
   };
 }
