@@ -4573,6 +4573,29 @@ select.modal-input {
   flex-shrink: 0;
 }
 
+/* Tool area a file view may claim, right next to the size (#225). Empty and
+ * hidden by default, so the header looks the same without it. */
+#preview-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+#preview-tools[hidden] {
+  display: none;
+}
+
+/* The host and the element each mount gets: both only pass the height on, so
+ * that the view itself decides where it scrolls. */
+#preview-body,
+#preview-body > .file-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 #preview-content {
   flex: 1;
   overflow: auto;

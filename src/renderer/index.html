@@ -166,9 +166,12 @@
         <div id="file-preview" class="hidden">
           <div id="preview-header">
             <span id="preview-filename"></span>
+            <div id="preview-tools" hidden></div>
             <span id="preview-meta"></span>
           </div>
-          <pre id="preview-content"></pre>
+          <!-- Host of the file views (renderer/file-views/, #225): the active
+               viewer or editor mounts here, the header above stays the pane's. -->
+          <div id="preview-body"></div>
         </div>
         <div id="file-info" class="hidden">
           <div class="file-info-icon" aria-hidden="true">
