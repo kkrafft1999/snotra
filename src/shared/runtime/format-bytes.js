@@ -16,7 +16,8 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 function formatBytes(bytes, locale) {
   const value = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
   if (value === 0) return '0 B';
-  const i = Math.min(Math.floor(Math.log(value) / Math.log(1024)), UNITS.length - 1);
+  // Below one byte the logarithm turns negative; clamp to 'B' instead of UNITS[-1].
+  const i = Math.min(Math.max(Math.floor(Math.log(value) / Math.log(1024)), 0), UNITS.length - 1);
   const scaled = value / 1024 ** i;
   const text = i === 0
     ? String(Math.round(scaled))
