@@ -91,7 +91,9 @@ test('der volle Aufruf haengt im title, weil die Zeile abschneidet', async () =>
 
 test('der Schalter speichert sofort und laesst Geheimnisse unangetastet', async () => {
   const { calls } = await mount();
-  rows()[0].querySelector('.mcp-switch').click();
+  const toggle = rows()[0].querySelector('input.ds-switch[role="switch"]');
+  assert.equal(toggle.checked, true);
+  toggle.click();
   await flush();
 
   const [art, payload] = calls[0];
@@ -101,6 +103,29 @@ test('der Schalter speichert sofort und laesst Geheimnisse unangetastet', async 
   // blossen Umschalten nicht loeschen.
   assert.deepEqual(payload.env.GITHUB_TOKEN, { secret: true, keep: true });
   assert.deepEqual(payload.env.LANG, { secret: false, value: 'de_DE' });
+});
+
+test('der Schalter ist die native Checkbox und behaelt nach dem Neuzeichnen den Fokus (#336)', async () => {
+  await mount();
+  const toggle = rows()[0].querySelector('.ds-switch');
+  assert.equal(toggle.type, 'checkbox');
+  assert.equal(toggle.getAttribute('aria-label'), 'GitHub enabled');
+  assert.equal(rows()[1].querySelector('.ds-switch').checked, false);
+
+  toggle.focus();
+  toggle.click();
+  await flush();
+  // The list was redrawn with the new status — a new node, same server.
+  const now = rows()[0].querySelector('.ds-switch');
+  assert.equal(document.activeElement, now);
+});
+
+test('lehnt der Speicher ab, springt der Schalter zurueck (#336)', async () => {
+  await mount({ saveMcpServer: async () => ({ ok: false, error: 'nope' }) });
+  const toggle = rows()[0].querySelector('.ds-switch');
+  toggle.click();
+  await flush();
+  assert.equal(toggle.checked, true);
 });
 
 test('„Bearbeiten" fuellt den Unterdialog, ohne das Geheimnis zu zeigen', async () => {

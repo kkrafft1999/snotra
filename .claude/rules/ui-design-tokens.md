@@ -154,8 +154,9 @@ not compete with the primary action.
   `--ds-blue`, knob edge `--ds-blue`. The knob follows the surface rather than
   `--ds-white`: in light that is near-white anyway, in dark the lightened blue
   would swallow a white knob (2.3:1), and the knob's position is what tells on
-  from off (WCAG 1.4.11). ARIA: `role="switch"` plus `aria-checked` (or a native
-  checkbox with `role="switch"`, as `.ds-switch`).
+  from off (WCAG 1.4.11). There is one implementation, `.ds-switch`: a native
+  `<input type="checkbox" role="switch">`, listened to with `change` — no
+  `<button>` with `aria-checked` and no second rule set (#336).
 - **Radio**: 16×16, custom via `appearance: none`. Border `--ds-grey-muted`; when
   `:checked`, border and inner dot in `--ds-blue`. The wrapper row adds a border
   and a `--ds-blue-soft` background via `:has(input:checked)`.

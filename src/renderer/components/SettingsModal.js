@@ -871,23 +871,15 @@ export function initSettingsModal(deps) {
       const actions = document.createElement('div');
       actions.className = 'settings-pref-actions';
 
-      const sw = document.createElement('button');
-      sw.type = 'button';
-      sw.className = 'settings-pref-switch';
+      // The same native switch as the instant settings (#336). Its name stays
+      // put and says what "on" means; whether it is on is the checked state.
+      const sw = document.createElement('input');
+      sw.type = 'checkbox';
+      sw.className = 'ds-switch';
       sw.setAttribute('role', 'switch');
-      sw.setAttribute('aria-checked', pr.menuVisible !== false ? 'true' : 'false');
-      sw.setAttribute(
-        'aria-label',
-        t(pr.menuVisible !== false ? 'settings.models.row.visible' : 'settings.models.row.hidden', { name: rowTitle })
-      );
+      sw.checked = pr.menuVisible !== false;
+      sw.setAttribute('aria-label', t('settings.models.row.visible', { name: rowTitle }));
       sw.dataset.presetId = pr.id;
-      const track = document.createElement('span');
-      track.className = 'settings-pref-switch-track';
-      track.setAttribute('aria-hidden', 'true');
-      const knob = document.createElement('span');
-      knob.className = 'settings-pref-switch-knob';
-      track.appendChild(knob);
-      sw.appendChild(track);
 
       const rm = document.createElement('button');
       rm.type = 'button';
@@ -2152,15 +2144,6 @@ export function initSettingsModal(deps) {
       openAddModelOverlay({ presetId: edit.dataset.editPresetId });
       return;
     }
-    const sw = e.target.closest('.settings-pref-switch');
-    if (sw && prefModelList.contains(sw)) {
-      const id = sw.dataset.presetId;
-      const row = settingsDraftPresets.find((p) => p.id === id);
-      if (!row) return;
-      row.menuVisible = !(row.menuVisible !== false);
-      renderDraftPresetList();
-      return;
-    }
     const rm = e.target.closest('.settings-icon-trash');
     if (rm && prefModelList.contains(rm)) {
       const id = rm.dataset.presetId;
@@ -2170,6 +2153,19 @@ export function initSettingsModal(deps) {
       }
       renderDraftPresetList();
     }
+  });
+
+  // Only the row changes, the list is not redrawn: a redraw would drop the
+  // focus from the switch that was just toggled by keyboard.
+  prefModelList?.addEventListener('change', (e) => {
+    const sw = e.target.closest('.ds-switch');
+    if (!sw || !prefModelList.contains(sw)) return;
+    const row = settingsDraftPresets.find((p) => p.id === sw.dataset.presetId);
+    if (!row) return;
+    row.menuVisible = sw.checked;
+    const inner = sw.closest('.settings-pref-row-inner');
+    if (sw.checked) inner?.removeAttribute('data-pref-menu-off');
+    else inner?.setAttribute('data-pref-menu-off', 'true');
   });
 
   // Instant settings (issue #297): each one is written on its own through
