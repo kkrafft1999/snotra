@@ -13,8 +13,8 @@ telemetry.**
 <!-- Screenshot / demo GIF of the English UI: folder tree, preview, chat with an
      approval card. The GIF follows. -->
 
-**Works with** OpenAI · Anthropic · Google Gemini · Ollama · MLX-LM server ·
-any OpenAI-compatible API (LM Studio, llama.cpp, vLLM, OpenRouter …)
+**Works with** OpenAI · Anthropic · Google Gemini · Ollama · any
+OpenAI-compatible API (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter …)
 
 **Extensible with** Agent Skills (`SKILL.md`) · MCP servers (stdio) · built-in
 workspace tools · any CLI on your machine
@@ -509,7 +509,7 @@ deliberately not used — both require a code signature.
 
 **Network timeouts:** model listings abort after 15 seconds (cloud) or 30
 seconds (local) with an understandable error message, speech transcriptions
-after 120 seconds. Ollama and MLX-LM always count as local; for the
+after 120 seconds. Ollama always counts as local; for the
 "OpenAI-compatible" provider the host of the server URL decides — `localhost`,
 `127.0.0.x`, `::1` and `*.local` count as local. The timeouts cover reading the
 response as well. Closing the model or settings dialog, as well as switching
@@ -566,7 +566,7 @@ An **entry in the preference list** (Settings › Models › *Add model*)
 connects a provider with a model; in the chat you switch between entries via the
 pill next to the input. The chosen model stays with the conversation — a chat
 from the history comes back with its own, a new chat starts with the one last
-chosen. Six providers are available:
+chosen. Five providers are available:
 
 | Provider | Access | Note |
 | -------- | ------ | ---- |
@@ -574,19 +574,23 @@ chosen. Six providers are available:
 | **Anthropic** | API key | |
 | **Google** | API key | |
 | **Ollama** | Server URL | Native Ollama API (`/api/tags`, `/api/chat`), not the `/v1` layer |
-| **MLX-LM (local)** | Server URL | `mlx_lm.server` on Apple Silicon |
 | **OpenAI-compatible** | Server URL, key optional | Everything else with an OpenAI-shaped interface; **connection per entry**, several targets side by side |
 
 ### OpenAI-compatible
 
 For anything that offers an OpenAI-shaped HTTP interface: **LM Studio**,
-**llama.cpp** (`llama-server`), **vLLM**, an in-house gateway, router services
-such as **OpenRouter**, Together, Groq or Fireworks.
+**MLX-LM** (`mlx_lm.server` on Apple Silicon), **llama.cpp** (`llama-server`),
+**vLLM**, an in-house gateway, router services such as **OpenRouter**, Together,
+Groq or Fireworks.
+
+**MLX-LM used to be a provider of its own** and is now a template of this one. Existing MLX-LM entries are moved over on the first start after the
+update, with nothing to do on your side: same model, same server URL, display
+name "MLX-LM", no key.
 
 **The connection belongs to the entry.** Every row of the preference list carries
 its own address, its own key and its own name — so a local LM Studio server and a
 corporate gateway sit side by side without overwriting each other. For the other
-five providers it stays at one configuration per provider: the OpenAI key is
+four providers it stays at one configuration per provider: the OpenAI key is
 precisely *not* meant to be spread across several rows. The price of that choice
 is known — anyone running six OpenRouter models enters the key six times and
 changes it in six places.
@@ -622,7 +626,7 @@ the list loads later after all.
 **Local or remote** is decided by the host of the server URL: `localhost`,
 `127.0.0.x`, `::1` and `*.local` count as local and get the more generous timeout
 for model listing, but the tighter history budget (see `historyCharLimit` below)
-— just like Ollama and MLX-LM.
+— just like Ollama.
 
 ## Configuration
 

@@ -54,6 +54,11 @@ function createStorageService({
 
   const NO_WORKSPACE_KEY = '__none__';
 
+  // Only the v4 -> v5 migration may still name the retired provider (#194).
+  const RETIRED_MLX_LM_ID = 'mlx-lm';
+  const MLX_LM_DEFAULT_BASE_URL = 'http://127.0.0.1:8080/v1';
+  const OPENAI_COMPATIBLE_ID = 'openai-compatible';
+
   const fileLocks = new Map();
 
   async function writeJsonAtomic(targetPath, data) {
@@ -232,11 +237,86 @@ function createStorageService({
 
     out.providers = providers;
     out.presets = presets;
-    out.version = LLM_CONFIG_VERSION;
-    if (persist && (changed || existing.version !== LLM_CONFIG_VERSION)) {
+    out.version = 4;
+    if (persist && (changed || existing.version !== 4)) {
       await writeLLMConfig(out);
     }
     return out;
+  }
+
+  /**
+   * v4 -> v5 (issue #194): the dedicated `mlx-lm` provider is gone. Every entry
+   * that pointed at it becomes an `openai-compatible` entry with its own
+   * connection — display name "MLX-LM", the server URL it used so far, Chat
+   * Completions, no API key. Entry ids stay, so `activePresetId` and
+   * `defaultPresetId` keep pointing at the same row.
+   *
+   * Without this step those entries would vanish from the picker without a
+   * word: the catalog no longer knows `mlx-lm`, and `normalizePresetWire`
+   * drops every entry whose provider it cannot resolve.
+   *
+   * Works on the raw id on purpose — the catalog cannot answer for `mlx-lm`
+   * any more. Idempotent: once nothing refers to `mlx-lm`, nothing changes.
+   */
+  async function migrateLLMConfigToV5(existing, { persist = true } = {}) {
+    const out = { ...existing };
+    const providers = (out.providers && typeof out.providers === 'object') ? { ...out.providers } : {};
+    let presets = Array.isArray(out.presets) ? out.presets : [];
+    const compat = providerCatalog.getProvider(OPENAI_COMPATIBLE_ID);
+    const legacy = providers[RETIRED_MLX_LM_ID];
+    let changed = false;
+
+    const refersToMlx = presets.some((p) => p && p.providerId === RETIRED_MLX_LM_ID)
+      || out.activeProvider === RETIRED_MLX_LM_ID
+      || legacy !== undefined;
+    if (compat && refersToMlx) {
+      const alt = (legacy && typeof legacy === 'object') ? legacy : {};
+      const baseUrl = typeof alt.baseUrl === 'string' && alt.baseUrl.trim()
+        ? alt.baseUrl.trim()
+        : MLX_LM_DEFAULT_BASE_URL;
+      const connectionFor = () => normalizeStoredPresetConnection(
+        { displayName: 'MLX-LM', baseUrl, apiStyle: 'chat' },
+        compat
+      );
+
+      presets = presets.map((p) => (
+        p && p.providerId === RETIRED_MLX_LM_ID
+          ? { ...p, providerId: OPENAI_COMPATIBLE_ID, connection: connectionFor() }
+          : p
+      ));
+      // A config from before presets existed only knows `activeProvider`; the
+      // v3 step could not turn that into an entry because the catalog no
+      // longer resolves `mlx-lm`. Do it here, or the model would be lost.
+      if (out.activeProvider === RETIRED_MLX_LM_ID && presets.length === 0) {
+        const id = randomUUID();
+        presets = [...presets, {
+          id,
+          providerId: OPENAI_COMPATIBLE_ID,
+          model: typeof alt.model === 'string' ? alt.model.trim() : '',
+          reasoningEffort: null,
+          menuVisible: true,
+          connection: connectionFor(),
+        }];
+        out.activePresetId = id;
+      }
+      if (out.activeProvider === RETIRED_MLX_LM_ID) out.activeProvider = OPENAI_COMPATIBLE_ID;
+      delete providers[RETIRED_MLX_LM_ID];
+      changed = true;
+    }
+
+    out.providers = providers;
+    out.presets = presets;
+    out.version = 5;
+    if (persist && (changed || existing.version !== 5)) {
+      await writeLLMConfig(out);
+    }
+    return out;
+  }
+
+  /** v3 file -> current version, persisting only at the end. */
+  async function migrateFromV3(existing, { persist }) {
+    const v4 = await migrateLLMConfigToV4(existing, { persist: false });
+    return migrateLLMConfigToV5(v4, { persist });
   }
 
   async function readLLMConfigRaw() {
@@ -281,13 +361,18 @@ function createStorageService({
       if (!Array.isArray(existing.presets)) existing.presets = [];
       return withDefaultPresetId(existing);
     }
+    if (existing && existing.version === 4 && existing.providers) {
+      if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
+      if (!Array.isArray(existing.presets)) existing.presets = [];
+      return withDefaultPresetId(await migrateLLMConfigToV5(existing, { persist: persistMigration }));
+    }
     if (existing && existing.version === 3 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
         existing.providers = {};
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return withDefaultPresetId(await migrateLLMConfigToV4(existing, { persist: persistMigration }));
+      return withDefaultPresetId(await migrateFromV3(existing, { persist: persistMigration }));
     }
     if (existing && existing.version === 2 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
@@ -295,7 +380,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       const v3 = await migrateLLMConfigToV3(existing, { persist: false });
-      return withDefaultPresetId(await migrateLLMConfigToV4(v3, { persist: persistMigration }));
+      return withDefaultPresetId(await migrateFromV3(v3, { persist: persistMigration }));
     }
     // Migrate from legacy openai-config.json (if present)
     const legacy = await readLegacyOpenAIConfig();
@@ -308,7 +393,7 @@ function createStorageService({
       migrated.activeProvider = 'openai';
     }
     const withV3 = await migrateLLMConfigToV3(migrated, { persist: false });
-    return withDefaultPresetId(await migrateLLMConfigToV4(withV3, { persist: persistMigration }));
+    return withDefaultPresetId(await migrateFromV3(withV3, { persist: persistMigration }));
   }
 
   async function writeLLMConfig(config) {

@@ -54,11 +54,25 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
   await write('last-folder.json', { path: workspace });
   await write('folder-history.json', { paths: [workspace] });
   await write('llm-config.json', {
-    version: 3,
-    activeProvider: 'mlx-lm',
+    version: 5,
+    activeProvider: 'openai-compatible',
     activePresetId: presetId,
-    presets: [{ id: presetId, providerId: 'mlx-lm', model: 'fake-model', reasoningEffort: null, menuVisible: true }],
-    providers: { 'mlx-lm': { baseUrl: modelBaseUrl, model: 'fake-model' } },
+    presets: [{
+      id: presetId,
+      providerId: 'openai-compatible',
+      model: 'fake-model',
+      reasoningEffort: null,
+      menuVisible: true,
+      connection: {
+        displayName: 'Fake model',
+        baseUrl: modelBaseUrl,
+        apiStyle: 'chat',
+        sendTools: true,
+        supportsImages: false,
+        insecureTls: false,
+      },
+    }],
+    providers: {},
   });
   await write('ui-preferences.json', { appLocale: 'de' });
 }

@@ -141,7 +141,7 @@
   <text class="eyebrow" x="980" y="158">AI ACCESS</text>
   <text class="heading" x="980" y="195">LLM providers</text>
   <text class="description" x="980" y="229">OpenAI &#183; Anthropic &#183; Google</text>
-  <text class="description" x="980" y="253">Ollama &#183; MLX-LM</text>
+  <text class="description" x="980" y="253">Ollama &#183; OpenAI-compatible</text>
 
   <!-- Workspace flow -->
   <rect class="module" x="500" y="390" width="330" height="130"/>

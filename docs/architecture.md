@@ -554,15 +554,17 @@ what is in which menu without starting Electron (`test/application-menu.test.js`
 
 `src/main/providers/` holds one module per provider that fulfils the contract
 from `providers/index.js` (`listModels`, `streamChatRound`, plus `fields`,
-`presentation`, `capabilities`). Six are registered: `openai`, `anthropic`,
-`google`, `ollama`, `mlx-lm` and `openai-compatible`.
+`presentation`, `capabilities`). Five are registered: `openai`, `anthropic`,
+`google`, `ollama` and `openai-compatible`. MLX-LM had a module of its own
+until issue #194; it is now a template of `openai-compatible`, and the
+`llm-config.json` migration to version 5 moves existing entries over.
 
 The two OpenAI protocols exist **once** and are shared, instead of being copied
 per provider:
 
 | Module | Protocol | Used by |
 | ----- | --------- | ----------- |
-| `openai-chat-transport.js` | Chat Completions (`POST {base}/chat/completions`), SSE | `mlx-lm`, `openai-compatible` |
+| `openai-chat-transport.js` | Chat Completions (`POST {base}/chat/completions`), SSE | `openai-compatible` |
 | `openai-responses-transport.js` | Responses (`POST {base}/responses`), SSE | `openai`, `openai-compatible` |
 
 The transports know neither provider IDs nor stored configuration: they receive
@@ -650,8 +652,9 @@ Up to issue #193 this hung on a fixed list of provider IDs. The generic provider
 fits into no such list — the same ID serves LM Studio on `localhost` and a
 gateway on the network. The question is therefore answered by
 `shared/contracts/provider-endpoint.js` at the **host of the base URL**; the
-existing ID entries for `ollama` and `mlx-lm` stay untouched, and the host rule
-applies in addition.
+remaining ID entry for `ollama` stays, and the host rule applies in addition.
+(`mlx-lm` left the list with issue #194 — a MLX-LM server on `127.0.0.1` is
+local through its URL.)
 
 ## Renderer: what was moved, what stays
 
@@ -914,8 +917,8 @@ everything once at startup catches the bulk of it. It takes about three seconds.
 - **Isolation:** its own `--user-data-dir` and a working folder created via
   `mkdtemp`. The settings of the installed app remain untouched.
 - **Model:** `e2e/helpers/fake-model.mjs`, a small OpenAI-compatible SSE server.
-  The `mlx-lm` provider points there via `baseUrl` — no API key, no network, and
-  the stream can be slowed down in order to abort it.
+  An `openai-compatible` entry points there via its connection's `baseUrl` — no
+  API key, no network, and the stream can be slowed down in order to abort it.
 - **Route:** start with a pre-set folder → tree → open a file and preview → abort
   a chat round (the abort has to reach the server) → second round with links and
   dangerous markup → **sanitizing in real Chromium** → a click on the link lands

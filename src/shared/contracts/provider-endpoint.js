@@ -2,7 +2,7 @@
  * Wo ein Anbieter-Endpunkt steht — lokal auf diesem Rechner oder entfernt.
  *
  * Bis Issue #193 hing diese Unterscheidung an einer festen Liste von
- * Provider-IDs (`ollama`, `mlx-lm`). Der Provider „OpenAI-kompatibel" passt in
+ * Provider-IDs (damals `ollama` und `mlx-lm`). Der Provider „OpenAI-kompatibel" passt in
  * keine solche Liste: dieselbe ID zeigt mal auf LM Studio an `localhost`, mal
  * auf ein Gateway im Netz. Die Frage „lokal oder entfernt" beantwortet deshalb
  * der **Host der Base-URL** — er ist die einzige Angabe, die in beiden Fällen

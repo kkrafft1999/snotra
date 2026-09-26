@@ -1,7 +1,7 @@
 /**
  * Transport für die **Chat-Completions**-API (`POST {base}/chat/completions`).
  *
- * Gemeinsame Grundlage von `mlx-lm.js` und `openai-compatible.js` (Issue #193).
+ * Grundlage von `openai-compatible.js` (Issue #193).
  * Der Baustein kennt weder Anbieter-IDs noch gespeicherte Konfiguration: Er
  * bekommt fertige Header, eine Base-URL und die Nachrichten und liefert ein
  * `ChatRoundResult` zurück. Alles Anbieter-Eigene (welche Header, ob Bilder,

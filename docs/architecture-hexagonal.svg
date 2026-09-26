@@ -137,7 +137,7 @@
   <rect class="prov" x="985" y="420" width="215" height="64" rx="9"/>
   <text class="btitle tt-prov" x="997" y="443">provider-llm-adapter</text>
   <text class="bsub" x="997" y="460">LlmPort → provider-runtime + secrets</text>
-  <text class="bsub" x="997" y="476">openai · anthropic · google · ollama · mlx-lm</text>
+  <text class="bsub" x="997" y="476">5 providers, incl. openai-compatible</text>
 
   <rect class="tool" x="985" y="492" width="215" height="64" rx="9"/>
   <text class="btitle tt-tool" x="997" y="515">workspace-tool-adapter</text>

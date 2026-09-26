@@ -6,7 +6,7 @@ const { createRequestLifecycle } = require('../src/main/ipc/request-lifecycle');
 const { createWhisperService } = require('../src/main/services/whisper-service');
 const never = () => new Promise(() => {});
 
-for (const name of ['openai', 'anthropic', 'google', 'ollama', 'mlx-lm']) {
+for (const name of ['openai', 'anthropic', 'google', 'ollama']) {
   for (const phase of ['headers', 'body', 'error-body']) {
     test(`${name}: timeout during ${phase} aborts transport and returns readable error`, async (t) => {
       let signal;

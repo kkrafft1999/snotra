@@ -12,11 +12,11 @@ const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // Lokale Modelle verarbeiten den Prompt um Groessenordnungen langsamer als
-// Cloud-Anbieter (gemessen: ~93 tok/s Prefill auf mlx-lm, also ~9 Minuten
+// Cloud-Anbieter (gemessen: ~93 tok/s Prefill auf MLX-LM, also ~9 Minuten
 // allein fuer das Fuellen des Standardbudgets). Fuer sie gilt deshalb ein
 // engeres Budget; eine ausdrueckliche Einstellung sticht es weiterhin.
 const DEFAULT_LOCAL_HISTORY_CHAR_LIMIT = 40_000;
-const LOCAL_PROVIDER_IDS = new Set(['mlx-lm', 'ollama']);
+const LOCAL_PROVIDER_IDS = new Set(['ollama']);
 
 const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
   note: 'Ältere Tool-Ausgabe wurde gekürzt, um den Verlauf kompakt zu halten.',

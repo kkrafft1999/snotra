@@ -1354,7 +1354,7 @@ test('engine lehnt Bild-Anhaenge ab, wenn der Anbieter keine Bilder kann', async
     sendBundle: {
       config: { apiKey: 'test' },
       model: 'text-only',
-      providerName: 'MLX-LM (lokal)',
+      providerName: 'Ollama (lokal)',
       capabilities: { images: false },
     },
   });
@@ -1374,7 +1374,7 @@ test('engine lehnt Bild-Anhaenge ab, wenn der Anbieter keine Bilder kann', async
     onEvent: () => {},
   });
 
-  assert.match(errorText(result), /MLX-LM \(lokal\)/);
+  assert.match(errorText(result), /Ollama \(lokal\)/);
   assert.equal(result.code, 'INVALID');
   assert.equal(calls.length, 0, 'ohne Bild-Faehigkeit darf kein Request rausgehen');
 });
@@ -1386,7 +1386,7 @@ test('engine laesst aeltere Bilder im Verlauf einen Textanbieter nicht blockiere
     sendBundle: {
       config: { apiKey: 'test' },
       model: 'text-only',
-      providerName: 'MLX-LM (lokal)',
+      providerName: 'Ollama (lokal)',
       capabilities: { images: false },
     },
   });
@@ -1518,7 +1518,7 @@ test('engine schaetzt die Aufschlüsselung gegen den Tokenizer des Anbieters (#1
     return result.contextBreakdown.parts.find((row) => row.id === 'tools:builtin').share;
   }
 
-  const lokal = await toolShareFor('mlx-lm');
+  const lokal = await toolShareFor('ollama');
   const openai = await toolShareFor('openai');
   assert.ok(
     lokal > openai * 1.4,

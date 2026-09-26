@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
 
 const mockProviders = {
@@ -680,7 +681,7 @@ test('Migration v3 -> v4 kopiert die Verbindung in jeden Eintrag des Anbieters',
   await storage.writeLLMConfig(v3ConfigMitCompat());
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 4);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   // Die Verbindung steht jetzt an beiden Eintraegen - vollstaendig, inklusive
   // der verschluesselten Geheimnisse.
   for (const id of ['p1', 'p2']) {
@@ -699,7 +700,7 @@ test('Migration v3 -> v4 kopiert die Verbindung in jeden Eintrag des Anbieters',
   assert.equal('connection' in config.presets.find((pr) => pr.id === 'p3'), false);
 
   const aufDerPlatte = JSON.parse(await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8'));
-  assert.equal(aufDerPlatte.version, 4, 'die Migration wird auch geschrieben');
+  assert.equal(aufDerPlatte.version, LLM_CONFIG_VERSION, 'die Migration wird auch geschrieben');
 });
 
 test('die Migration ist idempotent', async (t) => {
@@ -728,7 +729,7 @@ test('eine Konfiguration ohne diesen Anbieter bleibt inhaltlich unveraendert', a
   await storage.writeLLMConfig(vorher);
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 4);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   assert.deepEqual(config.providers, vorher.providers);
   assert.deepEqual(config.presets, vorher.presets);
 });
@@ -825,4 +826,165 @@ test('resolveChatModelTarget nennt den Eintrag, aus dem es stammt', async (t) =>
   });
   assert.equal(target.presetId, 'b');
   assert.equal(target.model, 'gpt-4o-mini');
+});
+
+
+// --- MLX-LM becomes an OpenAI-compatible entry (issue #194) ----------------
+
+const MLX = 'mlx-lm';
+
+function v4ConfigWithMlx() {
+  return {
+    version: 4,
+    activeProvider: MLX,
+    activePresetId: 'm1',
+    defaultPresetId: 'm1',
+    presets: [
+      { id: 'm1', providerId: MLX, model: 'mlx-community/Qwen3-8B-4bit', reasoningEffort: null, menuVisible: true },
+      { id: 'm2', providerId: MLX, model: 'mlx-community/gemma-3-4b', reasoningEffort: null, menuVisible: false },
+      { id: 'o1', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+      {
+        id: 'c1',
+        providerId: COMPAT,
+        model: 'gpt-4o-mini',
+        menuVisible: true,
+        connection: {
+          baseUrl: 'https://gateway.firma.example/v1',
+          displayName: 'Firmen-Gateway',
+          apiStyle: 'full',
+          sendTools: true,
+          supportsImages: true,
+          insecureTls: false,
+        },
+      },
+    ],
+    providers: {
+      [MLX]: { baseUrl: 'http://127.0.0.1:8090/v1', model: 'mlx-community/Qwen3-8B-4bit' },
+      openai: { apiKeyEnc: Buffer.from('enc:sk-oai', 'utf8').toString('base64') },
+    },
+  };
+}
+
+test('migration v4 -> v5 turns MLX-LM entries into OpenAI-compatible ones', async (t) => {
+  const { tmp, storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v4ConfigWithMlx());
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 5);
+  for (const [id, model, menuVisible] of [
+    ['m1', 'mlx-community/Qwen3-8B-4bit', true],
+    ['m2', 'mlx-community/gemma-3-4b', false],
+  ]) {
+    const preset = config.presets.find((p) => p.id === id);
+    assert.equal(preset.providerId, COMPAT, id);
+    assert.equal(preset.model, model, id);
+    assert.equal(preset.menuVisible, menuVisible, id);
+    assert.deepEqual(preset.connection, {
+      displayName: 'MLX-LM',
+      baseUrl: 'http://127.0.0.1:8090/v1',
+      apiStyle: 'chat',
+      sendTools: true,
+      supportsImages: false,
+      insecureTls: false,
+    }, id);
+  }
+  // Same active and default entry, now under the generic provider.
+  assert.equal(config.activePresetId, 'm1');
+  assert.equal(config.defaultPresetId, 'm1');
+  assert.equal(config.activeProvider, COMPAT);
+  assert.equal(MLX in config.providers, false);
+  // The rest of the file is left alone — including the existing gateway entry
+  // of the same provider, which keeps its own connection.
+  assert.deepEqual(config.presets.find((p) => p.id === 'o1'), v4ConfigWithMlx().presets[2]);
+  assert.deepEqual(config.presets.find((p) => p.id === 'c1'), v4ConfigWithMlx().presets[3]);
+  assert.ok(config.providers.openai.apiKeyEnc);
+
+  const onDisk = JSON.parse(await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8'));
+  assert.equal(onDisk.version, 5, 'the migration is written back');
+  assert.equal(JSON.stringify(onDisk).includes(MLX), false);
+
+  // The chat resolves to the same model and server as before.
+  const target = storage.resolveChatModelTarget(config);
+  assert.equal(target.providerId, COMPAT);
+  assert.equal(target.presetId, 'm1');
+  assert.equal(target.model, 'mlx-community/Qwen3-8B-4bit');
+  const effective = await storage.getEffectiveProviderConfig(COMPAT, { presetId: 'm1' });
+  assert.equal(effective.baseUrl, 'http://127.0.0.1:8090/v1');
+  assert.equal(effective.apiKey, undefined);
+});
+
+test('migration v4 -> v5 is idempotent', async (t) => {
+  const { tmp, storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v4ConfigWithMlx());
+
+  const first = await storage.readLLMConfig();
+  const afterFirst = await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8');
+  const second = await storage.readLLMConfig();
+  const afterSecond = await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8');
+
+  assert.deepEqual(second, first);
+  assert.equal(afterSecond, afterFirst);
+  assert.equal(second.presets.filter((p) => p.connection?.displayName === 'MLX-LM').length, 2);
+});
+
+test('migration v4 -> v5 falls back to the MLX-LM default URL', async (t) => {
+  const { storage } = await tmpStore(t);
+  const config = v4ConfigWithMlx();
+  delete config.providers[MLX];
+  await storage.writeLLMConfig(config);
+
+  const read = await storage.readLLMConfig();
+  assert.equal(read.presets.find((p) => p.id === 'm1').connection.baseUrl, 'http://127.0.0.1:8080/v1');
+});
+
+test('migration v4 -> v5 leaves a config without MLX-LM unchanged', async (t) => {
+  const { storage } = await tmpStore(t);
+  const before = {
+    version: 4,
+    activeProvider: 'openai',
+    activePresetId: 'p1',
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+    providers: { openai: { apiKeyEnc: Buffer.from('enc:sk-oai', 'utf8').toString('base64') } },
+  };
+  await storage.writeLLMConfig(before);
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 5);
+  assert.equal(config.activeProvider, 'openai');
+  assert.equal(config.activePresetId, 'p1');
+  assert.deepEqual(config.providers, before.providers);
+  assert.deepEqual(config.presets, before.presets);
+});
+
+test('a v3 file with MLX-LM goes through v4 and v5 in one read', async (t) => {
+  const { storage } = await tmpStore(t);
+  const v3 = v4ConfigWithMlx();
+  v3.version = 3;
+  v3.presets = v3.presets.filter((p) => p.providerId !== COMPAT);
+  await storage.writeLLMConfig(v3);
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 5);
+  assert.equal(config.presets.find((p) => p.id === 'm1').connection.baseUrl, 'http://127.0.0.1:8090/v1');
+  assert.equal(config.activeProvider, COMPAT);
+  assert.equal(MLX in config.providers, false);
+});
+
+test('a v2 file that only knows MLX-LM as active provider gets an entry', async (t) => {
+  const { storage } = await tmpStore(t);
+  await storage.writeLLMConfig({
+    version: 2,
+    activeProvider: MLX,
+    providers: { [MLX]: { baseUrl: 'http://127.0.0.1:8090/v1', model: 'mlx-community/Qwen3-8B-4bit' } },
+  });
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 5);
+  assert.equal(config.presets.length, 1);
+  const [preset] = config.presets;
+  assert.equal(preset.providerId, COMPAT);
+  assert.equal(preset.model, 'mlx-community/Qwen3-8B-4bit');
+  assert.equal(preset.connection.baseUrl, 'http://127.0.0.1:8090/v1');
+  assert.equal(config.activePresetId, preset.id);
+  assert.equal(config.activeProvider, COMPAT);
 });
