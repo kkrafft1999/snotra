@@ -235,14 +235,14 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     title.id = domId(requestId, 'title');
     if (view.isolation) {
       // Isolation sits next to the title (#329): the first thing read, and in
-      // red when the run would not be isolated.
+      // the warning amber when the run would not be isolated (#396).
       const row = el('div', 'chat-approval-card__title-row');
       row.appendChild(title);
       const badge = el(
         'span',
         view.isolation.isolated
           ? 'chat-approval-card__badge'
-          : 'chat-approval-card__badge chat-approval-card__badge--danger',
+          : 'chat-approval-card__badge chat-approval-card__badge--warning',
         view.isolation.badge,
       );
       badge.id = domId(requestId, 'isolation');

@@ -236,7 +236,7 @@ test('card: red pill, the reason "switched off for this workspace" and the way b
 
 // ── Mode pill ──────────────────────────────────────────────────────────────
 
-test('mode pill: red only in "Auto" with an execution tool that would run unisolated', async () => {
+test('mode pill: warns only in "Auto" with an execution tool that would run unisolated', async () => {
   const { describeAutoIsolationWarning } = await loadRenderer('tool-approval-view.js');
   const unisolated = (tools, reason) => ({ unisolated: true, tools, reason });
 
@@ -248,7 +248,7 @@ test('mode pill: red only in "Auto" with an execution tool that would run unisol
     describeAutoIsolationWarning({ mode: 'auto', executionIsolation: unisolated(['run_python', 'shell_execute'], 'platform') }),
     'No sandbox for run_python and shell_execute on this system, and every run happens without asking.',
   );
-  // Not red: another mode, an isolated sandbox, no execution tool, no state.
+  // No warning: another mode, an isolated sandbox, no execution tool, no state.
   assert.equal(describeAutoIsolationWarning({ mode: 'smart', executionIsolation: unisolated(['shell_execute'], 'workspace') }), '');
   assert.equal(describeAutoIsolationWarning({ mode: 'auto', executionIsolation: { unisolated: false, tools: ['shell_execute'] } }), '');
   assert.equal(describeAutoIsolationWarning({ mode: 'auto', executionIsolation: unisolated([], 'workspace') }), '');
@@ -256,12 +256,48 @@ test('mode pill: red only in "Auto" with an execution tool that would run unisol
   assert.equal(describeAutoIsolationWarning(null), '');
 });
 
+test('mode pill: the warning is spelled out on the pill and in the menu (#396)', async () => {
+  const { describeModePill } = await loadRenderer('tool-approval-view.js');
+  const { setLocale } = await loadRenderer('../i18n.js');
+  const unisolated = (reason) => ({ unisolated: true, tools: ['shell_execute'], reason });
+
+  // Without a warning the pill just names the mode; an unknown mode reads as the default.
+  assert.deepEqual(describeModePill({ mode: 'auto', executionIsolation: { unisolated: false, tools: ['shell_execute'] } }), {
+    mode: 'auto', label: 'Auto', unisolated: false, heading: '', warning: '', settingsLabel: '',
+  });
+  assert.equal(describeModePill({ mode: 'bogus' }).mode, 'smart');
+  assert.equal(describeModePill({ mode: 'smart', executionIsolation: unisolated('workspace') }).unisolated, false);
+
+  const off = describeModePill({ mode: 'auto', executionIsolation: unisolated('workspace') });
+  assert.deepEqual(off, {
+    mode: 'auto',
+    label: 'Auto · not isolated',
+    unisolated: true,
+    heading: 'Not isolated',
+    warning: 'No sandbox for shell_execute in this workspace, and every run happens without asking.',
+    settingsLabel: 'Sandbox setting',
+  });
+  // A missing package can be fixed in the settings; Windows has nothing to switch.
+  assert.equal(describeModePill({ mode: 'auto', executionIsolation: unisolated('dependencies') }).settingsLabel, 'Sandbox setting');
+  assert.equal(describeModePill({ mode: 'auto', executionIsolation: unisolated('platform') }).settingsLabel, '');
+
+  setLocale('de');
+  try {
+    const de = describeModePill({ mode: 'auto', executionIsolation: unisolated('workspace') });
+    assert.equal(de.label, 'Auto · nicht isoliert');
+    assert.equal(de.heading, 'Nicht isoliert');
+    assert.equal(de.settingsLabel, 'Sandbox-Einstellung');
+  } finally {
+    setLocale('en');
+  }
+});
+
 // ── Settings ───────────────────────────────────────────────────────────────
 
 test('settings: the isolation line of each tool names the switched-off workspace', async () => {
   const { describeSandboxStatus } = await loadRenderer('sandbox-status-view.js');
   const status = describeSandboxStatus({ isolated: true, status: 'isolated' }, true, { workspaceDisabled: true });
-  assert.equal(status.isError, true);
+  assert.equal(status.isWarning, true);
   assert.equal(status.text, 'Not isolated in this workspace: you switched the sandbox off below.');
   // Windows has nothing to switch off; its own reason stays.
   const windows = describeSandboxStatus({ isolated: false, status: 'unavailable', reason: 'platform' }, true, { workspaceDisabled: true });
@@ -283,8 +319,8 @@ test('settings: the workspace switch — hidden, no folder, on, off', async () =
 
   const none = describeWorkspaceSandbox({ permissions: { workspaceRoot: null }, toolsOn: true, sandbox, autoLabel });
   assert.deepEqual(
-    { visible: none.visible, hasWorkspace: none.hasWorkspace, checked: none.checked, stateIsError: none.stateIsError },
-    { visible: true, hasWorkspace: false, checked: true, stateIsError: false },
+    { visible: none.visible, hasWorkspace: none.hasWorkspace, checked: none.checked, stateIsWarning: none.stateIsWarning },
+    { visible: true, hasWorkspace: false, checked: true, stateIsWarning: false },
   );
   assert.equal(none.stateText, 'Open a folder to decide for it.');
 
@@ -295,7 +331,7 @@ test('settings: the workspace switch — hidden, no folder, on, off', async () =
 
   const off = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox, autoLabel });
   assert.equal(off.checked, false);
-  assert.equal(off.stateIsError, true);
+  assert.equal(off.stateIsWarning, true);
   assert.match(off.stateText, /^Off in this workspace: every run has your full rights\./);
   assert.match(off.stateText, /in “Auto” mode it runs without asking/);
 });

@@ -335,19 +335,37 @@ test('state reports unisolated execution: opted out, or no sandbox on this syste
   const sender = makeSender();
 
   let state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
-  assert.deepEqual(state.executionIsolation, { unisolated: false, tools: ['shell_execute'], reason: '' });
+  assert.deepEqual(state.executionIsolation, { unisolated: false, tools: ['shell_execute'], reason: '', pending: false });
 
   await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
   state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
-  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['shell_execute'], reason: 'workspace' });
+  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['shell_execute'], reason: 'workspace', pending: false });
 
   await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, true);
   described = { active: ['run_python'], sandbox: { status: 'unavailable', reason: 'platform' } };
   state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
-  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['run_python'], reason: 'platform' });
+  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['run_python'], reason: 'platform', pending: false });
 
   // No execution tool offered: nothing runs, nothing to warn about.
   described = { active: [], sandbox: { status: 'unavailable', reason: 'platform' } };
   state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
   assert.equal(state.executionIsolation.unisolated, false);
+});
+
+test('state marks a sandbox that is still being checked as pending, not as unisolated (#398)', async (t) => {
+  let described = { active: ['shell_execute'], sandbox: { status: 'testing' } };
+  const { invoke } = await setup(t, { describeExecutionTools: async () => described });
+  const sender = makeSender();
+
+  let state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.deepEqual(state.executionIsolation, { unisolated: false, tools: ['shell_execute'], reason: '', pending: true });
+
+  described = { active: ['shell_execute'], sandbox: { status: 'unknown' } };
+  state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.executionIsolation.pending, true);
+
+  // The user's own opt-out needs no detection: not pending, unisolated.
+  await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.deepEqual(state.executionIsolation, { unisolated: true, tools: ['shell_execute'], reason: 'workspace', pending: false });
 });

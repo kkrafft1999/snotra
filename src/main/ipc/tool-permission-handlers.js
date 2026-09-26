@@ -201,25 +201,29 @@ function registerToolPermissionHandlers({
   /**
    * Would shell_execute or run_python run without sandbox here (#357)?
    * True when one of them is offered and the sandbox is switched off for the
-   * workspace or not available on this system. The mode pill shows "Auto" in
-   * red then: those runs happen without a question and without isolation.
+   * workspace or not available on this system. The mode pill warns in "Auto"
+   * then, and the shield next to the folder name in any mode (#396, #398).
+   * `pending`: the detection has not answered yet — isolated so far, but
+   * not confirmed.
    */
   async function describeUnisolatedExecution(sandboxDisabled) {
-    if (typeof describeExecutionTools !== 'function') return { unisolated: false, tools: [], reason: '' };
+    const none = { unisolated: false, tools: [], reason: '', pending: false };
+    if (typeof describeExecutionTools !== 'function') return none;
     let described;
     try {
       described = await describeExecutionTools();
     } catch {
-      return { unisolated: false, tools: [], reason: '' };
+      return none;
     }
     const tools = Array.isArray(described?.active) ? described.active : [];
-    if (tools.length === 0) return { unisolated: false, tools, reason: '' };
-    if (sandboxDisabled) return { unisolated: true, tools, reason: 'workspace' };
+    if (tools.length === 0) return { ...none, tools };
+    if (sandboxDisabled) return { unisolated: true, tools, reason: 'workspace', pending: false };
     const sandbox = described?.sandbox;
     if (sandbox?.status === 'unavailable') {
-      return { unisolated: true, tools, reason: typeof sandbox.reason === 'string' ? sandbox.reason : '' };
+      return { unisolated: true, tools, reason: typeof sandbox.reason === 'string' ? sandbox.reason : '', pending: false };
     }
-    return { unisolated: false, tools, reason: '' };
+    const pending = sandbox?.status === 'unknown' || sandbox?.status === 'testing';
+    return { unisolated: false, tools, reason: '', pending };
   }
 
   async function buildState() {

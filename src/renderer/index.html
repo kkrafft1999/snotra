@@ -71,6 +71,14 @@
     <div id="workspace">
       <aside id="sidebar">
         <div id="tree-header">
+          <!-- Whether shell_execute and run_python run isolated in this folder
+               (#398). Title and label come from FolderSandboxShield. -->
+          <button id="btn-tree-sandbox" type="button" hidden>
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
+              <path class="tree-sandbox-slash" d="M1.8 1.8 14.2 14.2"/>
+            </svg>
+          </button>
           <!-- Kein `data-i18n`: Steht ein Ordner offen, traegt dieses Feld seinen
                Namen, und `applyTranslations` wuerde ihn beim Sprachwechsel durch
                „Kein Ordner geoeffnet" ersetzen (#292). Den Platzhalter setzt
@@ -242,19 +250,36 @@
                   class="chat-model-pill chat-model-pill--btn chat-tool-mode-pill"
                   aria-haspopup="listbox"
                   aria-expanded="false"
-                  aria-controls="chat-tool-mode-menu"
+                  aria-controls="chat-tool-mode-list"
                   aria-label="Choose the permission mode"
                   title="Tool permissions"
                   data-i18n-attr="aria-label:chat.toolMode.label;title:chat.toolMode.title">
                   <svg class="chat-tool-mode-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
+                    <path class="chat-tool-mode-icon-slash" d="M1.8 1.8 14.2 14.2"/>
                   </svg>
                   <span id="chat-tool-mode-label" data-i18n="chat.toolMode.smart">Smart</span>
                   <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
                     <path fill="currentColor" d="M0 0l5 6 5-6z"/>
                   </svg>
                 </button>
-                <ul id="chat-tool-mode-menu" class="chat-model-menu chat-tool-mode-menu hidden" role="listbox" tabindex="-1" aria-label="Permission mode" data-i18n-attr="aria-label:chat.toolMode.menu"></ul>
+                <!-- The popup holds the listbox and, above it, the notice when
+                     "Auto" would run unisolated (#396). The notice stays outside
+                     the listbox: a listbox may own nothing but options. -->
+                <div id="chat-tool-mode-menu" class="chat-model-menu chat-tool-mode-menu hidden">
+                  <div id="chat-tool-mode-notice" class="chat-tool-mode-notice" hidden>
+                    <svg class="chat-tool-mode-notice-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
+                      <path d="M1.8 1.8 14.2 14.2"/>
+                    </svg>
+                    <div class="chat-tool-mode-notice-body">
+                      <p id="chat-tool-mode-notice-heading" class="chat-tool-mode-notice-heading"></p>
+                      <p id="chat-tool-mode-notice-text" class="chat-tool-mode-notice-text"></p>
+                      <button type="button" id="chat-tool-mode-notice-link" class="chat-tool-mode-notice-link" hidden></button>
+                    </div>
+                  </div>
+                  <ul id="chat-tool-mode-list" class="chat-tool-mode-list" role="listbox" tabindex="-1" aria-label="Permission mode" data-i18n-attr="aria-label:chat.toolMode.menu"></ul>
+                </div>
               </span>
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
             </div>

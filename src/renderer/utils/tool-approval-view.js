@@ -283,9 +283,9 @@ export function describeIsolation(isolation) {
 }
 
 /**
- * Why the "Auto" pill is red (#357), or '' when it is not: in "Auto", an
- * execution tool is offered and would run without sandbox — switched off for
- * the workspace, or not available on this system.
+ * Why the "Auto" pill warns (#357, #396), or '' when it does not: in "Auto",
+ * an execution tool is offered and would run without sandbox — switched off
+ * for the workspace, or not available on this system.
  */
 export function describeAutoIsolationWarning(state) {
   if (state?.mode !== TOOL_PERMISSION_MODES.AUTO) return '';
@@ -297,6 +297,27 @@ export function describeAutoIsolationWarning(state) {
   return t(isolation.reason === 'workspace' ? 'chat.toolMode.unisolated.workspace' : 'chat.toolMode.unisolated.system', {
     tools: tools.join(t('chat.toolMode.unisolated.and')),
   });
+}
+
+/**
+ * Display model of the mode pill and the notice on top of its menu (#396).
+ * The warning is never carried by colour alone: the label says "not
+ * isolated", the menu says why and offers the way to the setting — except on
+ * Windows, where there is no sandbox to switch on.
+ */
+export function describeModePill(state) {
+  const mode = MODE_KEYS[state?.mode] ? state.mode : TOOL_PERMISSION_MODES.SMART;
+  const name = modeLabel(mode);
+  const warning = describeAutoIsolationWarning(state);
+  if (!warning) return { mode, label: name, unisolated: false, heading: '', warning: '', settingsLabel: '' };
+  return {
+    mode,
+    label: t('chat.toolMode.unisolated.label', { mode: name }),
+    unisolated: true,
+    heading: t('approval.isolation.badge.off'),
+    warning,
+    settingsLabel: state.executionIsolation.reason === 'platform' ? '' : t('approval.isolation.settings'),
+  };
 }
 
 /** Warning when overwriting (concept §6): with or without a way back. */

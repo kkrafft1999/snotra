@@ -38,7 +38,9 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     if (stateEl) {
       stateEl.hidden = !text;
       stateEl.textContent = text;
-      stateEl.classList.toggle('error', !!error || view.stateIsError);
+      // A failed switch is an error; the switch being off is a warning (#396).
+      stateEl.classList.toggle('error', !!error);
+      stateEl.classList.toggle('warning', !error && view.stateIsWarning);
     }
   }
 
