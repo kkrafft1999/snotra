@@ -328,6 +328,8 @@ bzw. Squirrel zum Einsatz — beide setzen eine Code-Signatur voraus.
 
 **Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden. Ollama gilt immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
 
+**Größengrenzen:** Eine Sprachaufnahme stoppt nach 5 Minuten oder 20 MB von selbst, je nachdem, was zuerst eintritt; eine halbe Minute vorher sagt es die Statuszeile unter der Eingabe an. Der Dateibaum listet höchstens 2.000 Einträge pro Ordner und schließt eine längere Liste mit einer Zeile ab, die sagt, wie viele noch fehlen.
+
 ### Die Sandbox je Betriebssystem
 
 Ob ein Lauf isoliert ist, entscheidet ein kurzer Selbsttest einmal je App-Start — angenommen wird nichts. Einstellungen › Tools zeigt das Ergebnis unter jedem Ausführungs-Tool, die Freigabekarte bei jedem Lauf.

@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, TRANSCRIPTION_TIMEOUT_MS } = require('./request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { checkTranscriptionPayload } = require('../../shared/contracts/voice');
 
 function createWhisperService({ fetchImpl, credentials, speechProviderId = 'openai', getAppLocale }) {
   const fetchFn = fetchImpl;
@@ -14,6 +15,10 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
   }
 
   async function transcribeAudio(audioBuffer, options) {
+    // The renderer stops long before this; checked again because the payload
+    // crossed IPC and would otherwise be copied twice before Whisper refuses it (#76).
+    const checked = checkTranscriptionPayload(audioBuffer);
+    if (checked.error) return { error: checked.error };
     try {
       return await withRequestTimeout((signal) => transcribeRequest(audioBuffer, { ...options, signal }), {
         signal: options?.signal,

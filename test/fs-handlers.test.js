@@ -145,17 +145,18 @@ test('readDirectory lists workspace entries and denies paths outside', async (t)
   const { ipcMain, workspace, outside } = await setup(t);
 
   const inside = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace);
-  assert.deepEqual(inside.map((e) => e.name), ['inside.txt']);
+  assert.deepEqual(inside.entries.map((e) => e.name), ['inside.txt']);
+  assert.equal(inside.hidden, 0);
 
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, outside);
-  assert.deepEqual(denied, [], 'directories outside the workspace must not be listed');
+  assert.deepEqual(denied, { entries: [], hidden: 0 }, 'directories outside the workspace must not be listed');
 });
 
 test('readDirectory denies traversal via .. segments', async (t) => {
   const { ipcMain, workspace } = await setup(t);
   const sneaky = path.join(workspace, '..', 'outside');
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, sneaky);
-  assert.deepEqual(denied, []);
+  assert.deepEqual(denied, { entries: [], hidden: 0 });
 });
 
 test('readDirectory denies a symlink to a directory outside the workspace', async (t) => {
@@ -170,7 +171,7 @@ test('readDirectory denies a symlink to a directory outside the workspace', asyn
   if (!linked) return;
 
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, linkPath);
-  assert.deepEqual(denied, []);
+  assert.deepEqual(denied, { entries: [], hidden: 0 });
 });
 
 test('readFile denies files outside the workspace and reads files inside', async (t) => {
@@ -213,7 +214,7 @@ test('all handlers deny access when no workspace is open', async (t) => {
   const { ipcMain, workspace, setWorkspace } = await setup(t);
   setWorkspace(null);
 
-  assert.deepEqual(await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace), []);
+  assert.deepEqual(await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace), { entries: [], hidden: 0 });
   const read = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'inside.txt'));
   assert.match(read.error, /No working folder/);
   const move = await ipcMain.invoke(

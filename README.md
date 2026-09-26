@@ -528,6 +528,11 @@ provider, aborts a running model query. A transcription can be aborted via the
 microphone button; a context switch or hiding the app also discards the voice
 input. Late results are no longer inserted.
 
+**Size limits:** a voice recording stops by itself after 5 minutes or 20 MB,
+whichever comes first; half a minute before, the status line under the input
+says so. The file tree lists at most 2,000 entries per folder and ends a longer
+list with a line saying how many more there are.
+
 ### The sandbox per operating system
 
 Whether a run is isolated is decided once per app start by a short self-test,

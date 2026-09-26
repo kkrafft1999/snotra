@@ -128,6 +128,13 @@ const {
   workspaceImageDataUrl,
 } = require('./workspace-image');
 const {
+  MAX_VOICE_RECORDING_MS,
+  MAX_VOICE_RECORDING_BYTES,
+  VOICE_STOP_WARNING_MS,
+  MAX_TRANSCRIPTION_UPLOAD_BYTES,
+  checkTranscriptionPayload,
+} = require('./voice');
+const {
   ATTACHMENT_KINDS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGES_PER_MESSAGE,
@@ -404,4 +411,9 @@ module.exports = {
   MAX_MEMORY_ENTRY_CHARS,
   isMemoryScope,
   parseMemoryEntries,
+  MAX_VOICE_RECORDING_MS,
+  MAX_VOICE_RECORDING_BYTES,
+  VOICE_STOP_WARNING_MS,
+  MAX_TRANSCRIPTION_UPLOAD_BYTES,
+  checkTranscriptionPayload,
 };

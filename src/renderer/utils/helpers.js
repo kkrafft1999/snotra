@@ -55,6 +55,23 @@ export function formatMegabytes(bytes) {
   return `${mb.toFixed(1).replace('.', t('format.decimal'))} MB`;
 }
 
+/**
+ * A whole number with the thousands separator of the interface language
+ * ("12,345" / "12.345"). By hand for the same reason as `groupDigits` in
+ * `main/services/file-info.js`: the separator comes from the catalogue.
+ */
+export function formatCount(value) {
+  const n = Math.trunc(Number(value) || 0);
+  const digits = String(Math.abs(n));
+  const separator = t('format.group');
+  let out = '';
+  for (let i = 0; i < digits.length; i += 1) {
+    if (i > 0 && (digits.length - i) % 3 === 0) out += separator;
+    out += digits[i];
+  }
+  return n < 0 ? `-${out}` : out;
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }

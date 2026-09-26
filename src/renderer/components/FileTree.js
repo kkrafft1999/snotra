@@ -1,7 +1,8 @@
-import { t, onLocaleChange } from '../i18n.js';
+import { t, tPlural, onLocaleChange } from '../i18n.js';
 import {
   isTextFile,
   getExtension,
+  formatCount,
   formatSize,
   formatTimestamp,
   svgAt,
@@ -409,7 +410,7 @@ export function initFileTree(deps) {
   });
 
   async function loadTreeLevel(parentEl, dirPath, depth) {
-    const items = await api.readDirectory(dirPath);
+    const { entries: items = [], hidden = 0 } = (await api.readDirectory(dirPath)) || {};
 
     for (const item of items) {
       const row = document.createElement('div');
@@ -504,6 +505,28 @@ export function initFileTree(deps) {
         void openFileContextMenu(item);
       });
     }
+
+    if (hidden > 0) parentEl.appendChild(buildHiddenEntriesNote(hidden, depth));
+  }
+
+  /**
+   * Main lists at most READ_DIRECTORY_MAX_ENTRIES per folder (#76); the rest is
+   * counted here instead of drawn. Deliberately not a `.tree-item`: it is no
+   * entry, so keyboard navigation, drag and drop and the refresh skip it.
+   */
+  function buildHiddenEntriesNote(hidden, depth) {
+    const note = document.createElement('div');
+    note.className = 'tree-hidden-entries';
+    note.dataset.hiddenCount = String(hidden);
+    // Lined up with the file names above it (a file row has no arrow):
+    // indent + icon + its gap.
+    note.style.paddingLeft = `${depth * 16 + 4 + 16 + 4}px`;
+    note.textContent = hiddenEntriesText(hidden);
+    return note;
+  }
+
+  function hiddenEntriesText(hidden) {
+    return tPlural('tree.hiddenEntries', hidden, { count: formatCount(hidden) });
   }
 
   /**
@@ -833,14 +856,24 @@ export function initFileTree(deps) {
     return [appStore.rootPath, ...collectExpandedFolderPaths()];
   }
 
+  function folderContainer(dirPath) {
+    return dirPath === appStore.rootPath
+      ? treeContainer
+      : treeContainer.querySelector(`.tree-children[data-path="${CSS.escape(dirPath)}"]`);
+  }
+
   /** Die gezeichneten Einträge eines Ordners (nur die direkte Ebene). */
   function rowsOfFolder(dirPath) {
-    const container =
-      dirPath === appStore.rootPath
-        ? treeContainer
-        : treeContainer.querySelector(`.tree-children[data-path="${CSS.escape(dirPath)}"]`);
+    const container = folderContainer(dirPath);
     if (!container) return null;
     return [...container.children].filter((el) => el.classList?.contains('tree-item'));
+  }
+
+  /** How many entries the folder's note says are cut off; 0 without a note. */
+  function hiddenCountOfFolder(dirPath) {
+    const note = [...(folderContainer(dirPath)?.children ?? [])]
+      .find((el) => el.classList?.contains('tree-hidden-entries'));
+    return note ? Number(note.dataset.hiddenCount) || 0 : 0;
   }
 
   /**
@@ -853,10 +886,11 @@ export function initFileTree(deps) {
   async function folderListingChanged(dirPath) {
     const rows = rowsOfFolder(dirPath);
     if (!rows) return false;
-    const items = (await api.readDirectory(dirPath)) || [];
+    const { entries: items = [], hidden = 0 } = (await api.readDirectory(dirPath)) || {};
     const jetzt = items.map((item) => listingSignature(item.path, item.isDirectory));
     const vorher = rows.map((row) => listingSignature(row.dataset.path, row.dataset.isDirectory === 'true'));
-    return listingsDiffer(jetzt, vorher);
+    // Past the cap the drawn rows can stay the same while the count behind them moves.
+    return listingsDiffer(jetzt, vorher) || hidden !== hiddenCountOfFolder(dirPath);
   }
 
   /**
@@ -1057,6 +1091,9 @@ export function initFileTree(deps) {
       const name = btn.dataset.itemName || '';
       btn.setAttribute('aria-label', t('tree.reference.label', { name }));
       btn.title = t('tree.reference');
+    }
+    for (const note of treeContainer.querySelectorAll('.tree-hidden-entries')) {
+      note.textContent = hiddenEntriesText(Number(note.dataset.hiddenCount) || 0);
     }
     if (!folderHistoryMenu.classList.contains('hidden')) void refreshFolderHistory();
     if (shownInfo) {

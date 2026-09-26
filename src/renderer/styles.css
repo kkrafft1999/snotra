@@ -643,6 +643,24 @@ summary:focus-visible,
   text-overflow: ellipsis;
 }
 
+/* Note under a folder cut at READ_DIRECTORY_MAX_ENTRIES (#76). At least a
+   row's height so the rhythm of the tree holds, but wrapping rather than cut
+   off: the count is the whole point. No hover, since it is not an entry. */
+.tree-hidden-entries {
+  display: flex;
+  align-items: center;
+  min-height: 31px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  padding-right: 8px;
+  border-left: 2px solid transparent;
+  font-size: var(--ds-font-size-md);
+  font-style: italic;
+  line-height: 1.3;
+  color: var(--text-muted-strong);
+  cursor: default;
+}
+
 /* @-Knopf in der Zeile (Issue #56): dragfreier Weg zur Chat-Referenz. Wie die
    Entfernen-Aktion im Ordner-Verlauf erst bei Hover bzw. Fokus sichtbar, damit
    der Baum ruhig bleibt; focus-within deckt die Tastatur ab. */

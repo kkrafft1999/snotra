@@ -76,6 +76,10 @@ const TREE_DEFAULT_MAX_ENTRIES = 200;
 const TREE_MAX_ENTRIES = 1000;
 // Cut after filtering and sorting, so the model sees folders first and a stable first page.
 const LIST_DIRECTORY_MAX_ENTRIES = 1000;
+// The file tree shows more than the model gets, but not everything: a folder
+// with tens of thousands of entries would otherwise stall main, IPC and the DOM.
+const READ_DIRECTORY_MAX_ENTRIES = 2000;
+const READ_DIRECTORY_LSTAT_BATCH = 64;
 
 
 function escapeRegExpLiteral(text) {
@@ -2096,35 +2100,40 @@ function createFsService({
     });
   }
 
-  async function readDirectory(dirPath) {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    const items = await Promise.all(
-      entries
-        .filter((entry) => !entry.name.startsWith('.'))
-        .map(async (entry) => {
-          const fullPath = path.join(dirPath, entry.name);
-          let stats = null;
-          try {
-            stats = await fs.lstat(fullPath);
-          } catch {
-            // skip inaccessible files
-          }
-          return {
-            name: entry.name,
-            path: fullPath,
-            isDirectory: entry.isDirectory(),
-            size: stats ? stats.size : 0,
-            modified: stats ? stats.mtimeMs : 0,
-          };
-        })
-    );
+  // The file tree's listing (#76). Sorted and cut on the bare directory
+  // entries, so only the rows that are shown cost an lstat, and those run in
+  // batches instead of all at once.
+  async function readDirectory(dirPath, { maxEntries = READ_DIRECTORY_MAX_ENTRIES } = {}) {
+    const all = (await fs.readdir(dirPath, { withFileTypes: true }))
+      .filter((entry) => !entry.name.startsWith('.'))
+      .sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+    const shown = all.slice(0, maxEntries);
 
-    items.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    });
+    const entries = [];
+    for (let i = 0; i < shown.length; i += READ_DIRECTORY_LSTAT_BATCH) {
+      const batch = shown.slice(i, i + READ_DIRECTORY_LSTAT_BATCH);
+      entries.push(...await Promise.all(batch.map(async (entry) => {
+        const fullPath = path.join(dirPath, entry.name);
+        let stats = null;
+        try {
+          stats = await fs.lstat(fullPath);
+        } catch {
+          // skip inaccessible files
+        }
+        return {
+          name: entry.name,
+          path: fullPath,
+          isDirectory: entry.isDirectory(),
+          size: stats ? stats.size : 0,
+          modified: stats ? stats.mtimeMs : 0,
+        };
+      })));
+    }
 
-    return items;
+    return { entries, hidden: all.length - shown.length };
   }
 
   /**
@@ -2485,4 +2494,5 @@ function createFsService({
 module.exports = {
   createFsService,
   LIST_DIRECTORY_MAX_ENTRIES,
+  READ_DIRECTORY_MAX_ENTRIES,
 };
