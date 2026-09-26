@@ -797,6 +797,9 @@ function createChatEngine({
         policyVersion: typeof snapshot?.policyVersion === 'string' ? snapshot.policyVersion : 'unknown',
         rulesVersion: typeof snapshot?.rulesVersion === 'string' ? snapshot.rulesVersion : null,
         integrity: snapshot?.integrity,
+        // Whether an allow rule can be stored at all — the card offers to
+        // remember a command only then (#121).
+        encryptionAvailable: snapshot?.encryptionAvailable !== false,
       };
     } catch {
       // Fehlerhafte Sicherheitsregeln blockieren Tools, statt Sperren zu
@@ -1196,6 +1199,8 @@ function createChatEngine({
           policyVersion: policy.policyVersion,
           chatId,
           checkpoint,
+          workspaceRoot,
+          encryptionAvailable: policy.encryptionAvailable,
         });
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.ASK,
@@ -1245,6 +1250,11 @@ function createChatEngine({
             chatId,
           });
           return { response: APPROVAL_RESPONSES.ALLOW_SESSION };
+        }
+        // Main has stored the command rule by now (#121); this call runs on
+        // the user's click, the next identical one on the rule.
+        if (outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS && request.alwaysAllowed) {
+          return { response: APPROVAL_RESPONSES.ALLOW_ALWAYS, ruleId: outcome.ruleId };
         }
         return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
       }
@@ -1299,6 +1309,7 @@ function createChatEngine({
             root: workspaceRoot,
             rules: policy.rules,
             sessionGrant: grant,
+            shellCommand: plan.shellCommand || null,
             toolDisabled,
             unknownTool: plan.unknownTool === true,
             hardLimit: plan.hardLimit || null,
@@ -1315,6 +1326,7 @@ function createChatEngine({
           }
 
           let source = verdict.source;
+          let ruleId = verdict.ruleId;
           if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
             if (answer.invalidated) {
@@ -1330,7 +1342,10 @@ function createChatEngine({
             source =
               answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                 ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
-                : PERMISSION_DECISION_SOURCES.ALLOW_ONCE;
+                : answer.response === APPROVAL_RESPONSES.ALLOW_ALWAYS
+                  ? PERMISSION_DECISION_SOURCES.ALLOW_RULE
+                  : PERMISSION_DECISION_SOURCES.ALLOW_ONCE;
+            if (answer.response === APPROVAL_RESPONSES.ALLOW_ALWAYS && answer.ruleId) ruleId = answer.ruleId;
             // Vor der Ausführung erneut planen: geänderte Datei, Wurzel oder
             // Argumente machen die Karte ungültig (Konzept §6).
             const recheck = await tools.plan(toolName, args, {
@@ -1351,7 +1366,7 @@ function createChatEngine({
           entry.permission = createPermissionAuditEntry({
             decision: POLICY_DECISIONS.ALLOW,
             source,
-            ruleId: verdict.ruleId,
+            ruleId,
             riskClasses,
             mode: policy.mode,
             status: TOOL_EXECUTION_STATUSES.EXECUTED,

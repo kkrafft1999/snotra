@@ -28,6 +28,9 @@
  * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
  * @property {{ reason: string }} [hardLimit]  verletzte harte Grenze → deny in jedem Modus
  * @property {boolean} [unknownTool]
+ * @property {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} [shellCommand]
+ *   `shell_execute` only: the call in the form a remembered command is compared in (#121);
+ *   `command` is null when the command line cannot be remembered
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
  */

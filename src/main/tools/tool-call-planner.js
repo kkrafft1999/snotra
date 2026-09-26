@@ -19,12 +19,14 @@ const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
   normalizeRiskClasses,
+  normalizeRememberableCommand,
+  normalizeCommandCwd,
 } = require('../../shared/contracts/tool-permissions');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
-const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
+const { resolveNetworkDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 
 const PREVIEW_MAX_CHARS = 4000;
@@ -230,6 +232,7 @@ function createToolCallPlanner({
     // Freigabekarte erscheint — der Nutzer soll nichts bestaetigen muessen,
     // was ohnehin nicht laufen darf.
     let shellCwd = '';
+    let shellCommand = null;
     if (toolName === 'shell_execute') {
       const guard = checkShellCommand(args?.command);
       if (guard.blocked) {
@@ -241,6 +244,21 @@ function createToolCallPlanner({
         return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       shellCwd = resolvedCwd.absPath;
+      // The call in the form a remembered command is compared in (#121): the
+      // working folder relative to the root, whatever spelling the model used.
+      // `command` is null for a command that cannot be remembered at all.
+      const relativeCwd = workspaceRoot
+        ? path.relative(workspaceRoot, resolvedCwd.absPath).split(path.sep).join('/')
+        : rawCwd;
+      // A folder that has no rule form cannot be remembered either — never
+      // read as the root.
+      const ruleCwd = normalizeCommandCwd(relativeCwd);
+      shellCommand = {
+        command: ruleCwd === null ? null : normalizeRememberableCommand(args?.command),
+        cwd: ruleCwd ?? '',
+        networkDomains: [...normalizeDomains(args?.network_domains)].sort(),
+        stdin: typeof args?.stdin === 'string' && args.stdin.length > 0,
+      };
     }
 
     let descriptors;
@@ -361,6 +379,7 @@ function createToolCallPlanner({
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
     if (EXECUTION_TOOLS.has(toolName)) result.sandbox = { disabled: sandboxDisabled, root: workspaceRoot };
+    if (shellCommand) result.shellCommand = shellCommand;
     // Isolation first: its detection waits for the shell detection (#111), so
     // the shell read afterwards is the detected one, not a startup placeholder.
     const isolation = await describeIsolation(toolName, args, sandboxDisabled);

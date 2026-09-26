@@ -24,6 +24,8 @@ const {
   PERMISSION_RULE_SCOPES,
   PERSISTENT_ALLOW_CLASSES,
   TOOL_RISK_CLASS_ORDER,
+  COMMAND_RULE_UNAVAILABLE_REASONS,
+  isCommandRule,
   isToolApprovalRequestDto,
   normalizeRulePathPattern,
 } = contracts;
@@ -205,6 +207,37 @@ export function sessionActionHint(dto) {
   return t('approval.sessionHint.single');
 }
 
+const ALWAYS_UNAVAILABLE_KEYS = Object.freeze({
+  [COMMAND_RULE_UNAVAILABLE_REASONS.ASK_ALL]: 'approval.alwaysHint.askAll',
+  [COMMAND_RULE_UNAVAILABLE_REASONS.NOT_SIMPLE]: 'approval.alwaysHint.notSimple',
+  [COMMAND_RULE_UNAVAILABLE_REASONS.STDIN]: 'approval.alwaysHint.stdin',
+  [COMMAND_RULE_UNAVAILABLE_REASONS.NO_ENCRYPTION]: 'approval.alwaysHint.noEncryption',
+  [COMMAND_RULE_UNAVAILABLE_REASONS.NO_WORKSPACE]: 'approval.alwaysHint.noWorkspace',
+  [COMMAND_RULE_UNAVAILABLE_REASONS.CLASSES]: 'approval.alwaysHint.classes',
+});
+
+/**
+ * Whether the card is one that can remember its command (#121) — a
+ * `shell_execute` card before the run. It then offers "always allow" where
+ * other cards offer "for this session", which a command never gets.
+ */
+export function offersAlways(dto) {
+  return dto?.alwaysAllowed === true || typeof dto?.alwaysUnavailableReason === 'string';
+}
+
+/**
+ * What "always allow" means on this card, or why it is not offered (#121).
+ * Offered, the hint says what exactly is remembered and where it is undone;
+ * that is the whole difference to "allow once", so it stands on the card.
+ */
+export function alwaysActionHint(dto) {
+  if (dto?.alwaysAllowed === true) {
+    return t('approval.alwaysHint.allowed', { page: t('settings.nav.permissions') });
+  }
+  const key = ALWAYS_UNAVAILABLE_KEYS[dto?.alwaysUnavailableReason];
+  return key ? t(key) : '';
+}
+
 const ISOLATION_REASON_KEYS = Object.freeze({
   platform: 'approval.isolation.reason.platform',
   dependencies: 'approval.isolation.reason.dependencies',
@@ -332,8 +365,17 @@ export function buildApprovalCardView(dto) {
         enabled: dto.sessionAllowed === true,
         hint: sessionActionHint(dto),
       },
+      always: {
+        response: APPROVAL_RESPONSES.ALLOW_ALWAYS,
+        label: t('approval.action.always'),
+        enabled: dto.alwaysAllowed === true,
+        hint: alwaysActionHint(dto),
+      },
       deny: { response: APPROVAL_RESPONSES.DENY, label: t('approval.action.deny'), enabled: true },
     },
+    // The three buttons of the card, in order. A command card has "always"
+    // in the middle instead of "for this session" (#121).
+    actionOrder: offersAlways(dto) ? ['once', 'always', 'deny'] : ['once', 'session', 'deny'],
     scopeNote: '',
   };
   if (dto.sessionAllowed === true) {
@@ -415,6 +457,16 @@ export function describeApprovalOutcome({ response, invalidated, reason, aborted
       label: t('approval.outcome.denied.label'),
       detail: t('approval.outcome.denied.detail', {
         message: t(PERMISSION_DENIED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.USER_DENIED]),
+      }),
+    };
+  }
+  if (response === APPROVAL_RESPONSES.ALLOW_ALWAYS) {
+    return {
+      status: 'allowed',
+      label: t('approval.outcome.always.label'),
+      detail: t('approval.outcome.always.detail', {
+        mode: modeLabel(TOOL_PERMISSION_MODES.SMART),
+        page: t('settings.nav.permissions'),
       }),
     };
   }
@@ -524,11 +576,39 @@ export function ruleClassOptions(effect) {
   return classes.map((value) => ({ value, label: riskClassLabel(value) }));
 }
 
+/**
+ * A remembered command (#121) reads as what it is: the command line, and —
+ * when not the project folder itself — the folder it runs in and the domains
+ * it may reach. Path pattern and class mean nothing for it.
+ */
+function describeCommandRule(rule, effectLabel) {
+  const scopeLabel = t('permissions.rule.scope.workspace');
+  const parts = [rule.cwd
+    ? t('permissions.rule.subject.commandIn', { cwd: rule.cwd })
+    : t('permissions.rule.subject.command')];
+  if (Array.isArray(rule.networkDomains) && rule.networkDomains.length > 0) {
+    parts.push(t('permissions.rule.subject.commandNetwork', { domains: rule.networkDomains.join(', ') }));
+  }
+  const subject = parts.join(t('permissions.rule.subject.separator'));
+  return {
+    id: rule.id,
+    effect: rule.effect,
+    effectLabel,
+    subject,
+    pattern: rule.command,
+    patternLabel: rule.command,
+    scopeLabel,
+    command: true,
+    text: t('permissions.rule.text.command', { effect: effectLabel, subject, command: rule.command, scope: scopeLabel }),
+  };
+}
+
 export function describeRule(rule) {
   if (!rule || typeof rule !== 'object') return null;
   const effectLabel = t(rule.effect === PERMISSION_RULE_EFFECTS.ALLOW
     ? 'permissions.rule.label.allow'
     : 'permissions.rule.label.deny');
+  if (isCommandRule(rule)) return describeCommandRule(rule, effectLabel);
   const subject = rule.tool
     ? t('permissions.rule.subject.tool', { tool: rule.tool })
     : t('permissions.rule.subject.class', { label: riskClassLabel(rule.riskClass) });

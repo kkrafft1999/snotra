@@ -480,7 +480,12 @@ deliberately not used — both require a code signature.
   terminal — read and write anywhere, reach the network, install programs. Snotra
   shows you the complete command, the shell, the working directory and whether
   the run is isolated before every single run, and there is deliberately no
-  "Allow for this session" for execution. Blocked are recursive forced
+  "Allow for this session" for execution. What you can do instead is remember
+  one **exact, simple command line** for the open folder — "Always allow this
+  command" on the card, confirmed in a system dialog: `git status` then runs
+  without asking in *Smart* mode, while `git status --short`, the same command in
+  another folder, with other network domains, with chaining, pipes, redirection,
+  variables or quotes still asks every time. Blocked are recursive forced
   deletion (`rm -rf` and equivalents), disk operations and rewriting Git history
   — that is an additional safeguard, **not** complete protection, because a
   script or an interpreter in between bypasses any pattern list. In *Auto* mode a
@@ -729,7 +734,9 @@ directory; when overwriting it states whether a copy goes to the trash. For
 sensitive files the card names the provider the content would go to. Three
 actions: **Allow once**, **Allow for this session** (only for reading, sensitive
 reading and ordinary modification; exactly this tool on exactly these targets,
-and not in *Always ask* mode) and **Deny**; Esc denies, no button is
+and not in *Always ask* mode) and **Deny**; on a `shell_execute` card the middle
+button is **Always allow this command** instead, and the hint below it says what
+exactly is remembered — or why the command cannot be. Esc denies, no button is
 preselected, and there is no time limit. If chat, workspace, mode or rules
 change while a card is open, the request lapses and the run ends visibly
 ("Request expired"). If you deny, the model receives a `permission_denied`
@@ -739,8 +746,10 @@ class and status as a tooltip — in saved histories too.
 **Rule management (Settings › Permissions):** denials and allowances per tool or
 risk class with path patterns (`*` within a folder, `**` across subfolders),
 kept separately for all workspaces and for the opened workspace; denials always
-win, permanent allowances exist only for reading and ordinary modification, and
-— like deleting a denial — they are confirmed in a system dialog. Alongside
+win, permanent allowances exist only for reading and ordinary modification —
+plus the shell commands you remembered from the card, listed under the workspace
+with their working folder and deletable one by one — and, like deleting a
+denial, they are confirmed in a system dialog. Alongside
 that, custom sensitive path patterns and three reset actions with a stated
 scope: "Delete session allowances", "Reset workspace rules", "Reset all
 permissions" (which also sets the mode back to *Smart*). These settings take

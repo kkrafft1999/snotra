@@ -288,11 +288,21 @@ description by the model.
   (section 7). Under `ask-all` the option is disabled with "Dieser Modus fragt
   bei jedem Aufruf". For `delete`, `execute` and `external` it stays disabled in
   the first stage as well: individual decisions only.
+- **Always allow this command (#121):** on a `shell_execute` card this button
+  takes the place of "for this session", which an execution never gets. It
+  remembers exactly the command line on the card for the workspace (section 7)
+  and is confirmed in a native dialog that repeats command, working folder and
+  network access before anything is stored. Cancelling the dialog leaves the
+  card open. The button is disabled, with the reason below it, under `ask-all`,
+  without a workspace, without `safeStorage`, for input on stdin and for any
+  command that is not simple enough to be compared exactly.
 - **Reject:** no pending side effect. The engine hands the model a structured
   result, e.g. `permission_denied` with the reason `user_denied` and the text
   "Tool-Aufruf vom Nutzer abgelehnt". No invented tool results.
 
-The new approval port returns `allow-once | allow-session | deny`. Main binds
+The new approval port returns `allow-once | allow-session | deny`, and since
+#121 `allow-always` for a remembered command. The rule it stores is built in
+main from the plan of the open request; the renderer only says "always". Main binds
 requests to a random `requestId`, the window, the session, the run, the tool
 call, the normalised arguments and plan, the file version, the workspace and the
 policy version. The answering IPC accepts only a decision on one of its own open
@@ -357,7 +367,25 @@ labelled "Alle Workspaces". Global blocks stay in force everywhere.
 
 Persistent allow rules are planned for `read` and ordinary `write` only;
 sensitive disclosure, `delete`, `execute` and `external` get no permanent
-permission. Deny rules can block every class. "Sensitive paths" is a separate
+permission.
+
+**The one exception is a command rule (#121).** It allows a single
+`shell_execute` command line in a single workspace — never the class `execute`,
+never the tool as a whole, never globally. It matches only when everything the
+card showed is the same: the command line (runs of spaces collapsed), the
+working folder relative to the root, the declared network domains, no input on
+stdin, and a call that is `execute` and nothing else (a call escalated to
+sensitive output asks again). Only simple commands can be remembered: letters,
+digits, spaces and `_ - . / : = , @ + * ~`. That allowlist fails closed on
+every shell Snotra runs — chaining, pipes, redirection, substitution,
+variables, quoting and escapes are all outside it — so the meaning of a
+remembered line cannot shift between approval and a later call. What such a
+line does is still up to the program: `npm test` runs whatever the project's
+scripts say at that moment, and the sandbox (section 9) is what bounds it.
+Command rules are allow rules like any other: `ask-all` ignores them, a deny
+rule beats them, they need `safeStorage`, a failed signature drops them, and
+"reset workspace rules" removes them. Adding one discards no open card and no
+session approval, because it can only turn a question into an allowance. Deny rules can block every class. "Sensitive paths" is a separate
 classification setting, not an allow rule. Rules can be created, reviewed and
 deleted individually in Settings › Tools; the chat card creates no permanent
 rule unnoticed.
@@ -469,7 +497,9 @@ circumvented, but recorded here:
   **better** in security terms than that detour, because the approval card then
   carries the actual command instead of a Python script hiding it.
 - **What takes the place of isolation.** The class `execute` can be approved
-  neither for a session nor permanently (§6/§7): every run produces its own card
+  neither for a session nor permanently (§6/§7; since #121 with the one
+  exception of an exact, simple command line remembered for a workspace): every
+  run produces its own card
   with the full command, the detected shell and the working directory. Both
   tools are **off** as shipped and are enabled in the settings with a visible
   warning. A time limit, output truncation and "Stop" end the process tree, not

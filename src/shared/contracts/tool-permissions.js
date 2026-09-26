@@ -68,6 +68,9 @@ const POLICY_DECISIONS = Object.freeze({
 const APPROVAL_RESPONSES = Object.freeze({
   ALLOW_ONCE: 'allow-once',
   ALLOW_SESSION: 'allow-session',
+  // A shell command remembered for the workspace (#121): the card answers with
+  // it, main confirms natively and stores a command rule.
+  ALLOW_ALWAYS: 'allow-always',
   DENY: 'deny',
 });
 
@@ -125,7 +128,29 @@ const SESSION_GRANTABLE_CLASSES = Object.freeze([
 /** Klassen, für die eine dauerhafte Allow-Regel möglich ist (Konzept §7). */
 const PERSISTENT_ALLOW_CLASSES = Object.freeze([TOOL_RISK_CLASSES.READ, TOOL_RISK_CLASSES.WRITE]);
 
+/**
+ * The one tool whose calls can be remembered as a command rule (#121). An
+ * `execute` call stays outside PERSISTENT_ALLOW_CLASSES: what is remembered is
+ * one exact command line, never the class and never the tool as a whole.
+ */
+const COMMAND_RULE_TOOL = 'shell_execute';
+
+/**
+ * Why the card does not offer "always allow" for a command (#121). The
+ * renderer turns the value into a sentence; main only names the reason.
+ */
+const COMMAND_RULE_UNAVAILABLE_REASONS = Object.freeze({
+  ASK_ALL: 'ask-all',
+  NOT_SIMPLE: 'not-simple',
+  STDIN: 'stdin',
+  NO_ENCRYPTION: 'no-encryption',
+  NO_WORKSPACE: 'no-workspace',
+  CLASSES: 'classes',
+});
+
 const MAX_RULES = 500;
+const MAX_COMMAND_RULE_CHARS = 400;
+const MAX_COMMAND_RULE_DOMAINS = 20;
 const MAX_PATH_PATTERN_CHARS = 400;
 const MAX_SENSITIVE_PATH_PATTERNS = 200;
 const MAX_TOOL_NAME_CHARS = 64;
@@ -264,6 +289,62 @@ function normalizeRulePathPattern(raw) {
 }
 
 /**
+ * Characters a remembered command may consist of (#121). An allowlist, so that
+ * everything the shell would give a meaning of its own — chaining, pipes,
+ * redirection, substitution, variables, quoting, escapes — fails closed on
+ * every shell Snotra runs (sh, zsh, bash, PowerShell, cmd.exe). What is left
+ * is a program with plain words as arguments, and its meaning cannot shift
+ * between the moment it was approved and a later call.
+ */
+const REMEMBERABLE_COMMAND_PATTERN = /^[A-Za-z0-9 _\-./:=,@+*~]+$/;
+
+/**
+ * The form in which a command is remembered and compared (#121): runs of
+ * spaces collapsed, ends trimmed. Returns null for a command that cannot be
+ * remembered — too long, empty, starting with an option, or containing a
+ * character outside the allowlist. Collapsing spaces is safe precisely
+ * because quotes are not allowed: there is nothing a space could be part of.
+ */
+function normalizeRememberableCommand(raw) {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/[ \t]+/g, ' ').trim();
+  if (!text || text.length > MAX_COMMAND_RULE_CHARS) return null;
+  if (!REMEMBERABLE_COMMAND_PATTERN.test(text) || text.startsWith('-')) return null;
+  return text;
+}
+
+/**
+ * Working folder of a command rule, relative to the workspace root with `/`
+ * as separator; '' is the root itself. Null for anything that leaves it.
+ */
+function normalizeCommandCwd(raw) {
+  if (raw === undefined || raw === null) return '';
+  if (typeof raw !== 'string') return null;
+  const text = cleanShortString(raw, MAX_PATH_PATTERN_CHARS);
+  if (!text && raw.trim()) return null;
+  let cwd = text.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+  cwd = cwd.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '');
+  if (!cwd || cwd === '.') return '';
+  if (cwd.startsWith('/') || /^[A-Za-z]:/.test(cwd)) return null;
+  if (cwd.split('/').some((segment) => segment === '..' || segment === '.')) return null;
+  return cwd;
+}
+
+/** Network domains of a command rule: lower case, each once, sorted. */
+function normalizeCommandDomains(raw) {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  const out = new Set();
+  for (const entry of raw) {
+    const domain = cleanShortString(entry, 253).toLowerCase();
+    if (!domain || /\s/.test(domain)) return null;
+    out.add(domain);
+  }
+  if (out.size > MAX_COMMAND_RULE_DOMAINS) return null;
+  return [...out].sort();
+}
+
+/**
  * Normalisiert eine gespeicherte oder per IPC übergebene Regel. Liefert null,
  * wenn die Regel unvollständig oder widersprüchlich ist — eine kaputte Regel
  * darf nie zu einer stillen Erlaubnis werden.
@@ -272,6 +353,11 @@ function normalizeRulePathPattern(raw) {
  *  - genau eines von tool / riskClass muss gesetzt sein
  *  - allow-Regeln nur für read/write (PERSISTENT_ALLOW_CLASSES)
  *  - scope 'workspace' verlangt eine Wurzel
+ *
+ * A command rule (#121) additionally carries `command`, `cwd` and
+ * `networkDomains`. It is an allow rule for `shell_execute` in exactly one
+ * workspace, with no path pattern of its own; anything else is not a command
+ * rule and is dropped rather than read as a wider one.
  */
 function normalizePermissionRule(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -301,7 +387,7 @@ function normalizePermissionRule(raw) {
   const pathPattern = normalizeRulePathPattern(raw.pathPattern);
   if (pathPattern === null) return null;
   const createdAt = Number.isFinite(raw.createdAt) ? Math.round(raw.createdAt) : 0;
-  return {
+  const rule = {
     id,
     effect,
     scope,
@@ -311,6 +397,26 @@ function normalizePermissionRule(raw) {
     pathPattern,
     createdAt,
   };
+  if (raw.command === undefined || raw.command === null) return rule;
+  const command = normalizeRememberableCommand(raw.command);
+  const cwd = normalizeCommandCwd(raw.cwd);
+  const networkDomains = normalizeCommandDomains(raw.networkDomains);
+  if (
+    command === null ||
+    cwd === null ||
+    networkDomains === null ||
+    effect !== PERMISSION_RULE_EFFECTS.ALLOW ||
+    scope !== PERMISSION_RULE_SCOPES.WORKSPACE ||
+    tool !== COMMAND_RULE_TOOL ||
+    pathPattern !== '**'
+  ) {
+    return null;
+  }
+  return { ...rule, command, cwd, networkDomains };
+}
+
+function isCommandRule(rule) {
+  return !!rule && typeof rule === 'object' && typeof rule.command === 'string' && rule.command.length > 0;
 }
 
 /** Bereinigt eine Regelliste; ungültige Einträge fallen weg, IDs sind eindeutig. */
@@ -420,6 +526,8 @@ function createToolApprovalRequestDto({
   providerLabel,
   preview,
   chatId,
+  alwaysAllowed,
+  alwaysUnavailableReason,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   const dto = {
@@ -444,6 +552,12 @@ function createToolApprovalRequestDto({
   // that is not on screen, and the renderer holds it until that chat is open.
   if (typeof chatId === 'string' && chatId) dto.chatId = chatId.slice(0, 128);
   if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
+  // "Always allow this command in this workspace" (#121): whether the card
+  // offers it, and if not, why. The rule itself stays in main.
+  if (alwaysAllowed === true) dto.alwaysAllowed = true;
+  else if (Object.values(COMMAND_RULE_UNAVAILABLE_REASONS).includes(alwaysUnavailableReason)) {
+    dto.alwaysUnavailableReason = alwaysUnavailableReason;
+  }
   if (typeof sessionScopeLabel === 'string' && sessionScopeLabel) {
     dto.sessionScopeLabel = sessionScopeLabel.slice(0, 400);
   }
@@ -565,6 +679,9 @@ module.exports = {
   PERMISSION_RULE_SCOPES,
   SESSION_GRANTABLE_CLASSES,
   PERSISTENT_ALLOW_CLASSES,
+  COMMAND_RULE_TOOL,
+  COMMAND_RULE_UNAVAILABLE_REASONS,
+  MAX_COMMAND_RULE_CHARS,
   SENSITIVE_CONTENT_REDACTED_TEXT,
   TOOL_RESULTS_ARE_DATA_RULE,
   isToolRiskClass,
@@ -577,6 +694,10 @@ module.exports = {
   normalizeRulePathPattern,
   normalizePermissionRule,
   normalizePermissionRules,
+  normalizeRememberableCommand,
+  normalizeCommandCwd,
+  normalizeCommandDomains,
+  isCommandRule,
   normalizeSensitivePathPatterns,
   createPermissionDeniedToolResult,
   parsePermissionDeniedToolResult,
