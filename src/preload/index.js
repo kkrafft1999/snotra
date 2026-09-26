@@ -151,6 +151,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // New chat (issue #381): menu "File > New Chat" or Cmd/Ctrl+N. As with the
+  // sidebar, the shortcut hangs on the menu item; the renderer only gets the
+  // signal.
+  onNewChat: (callback) => {
+    const channel = PUSH.UI_NEW_CHAT;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Einstellungen oeffnen (Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma).
   // Wie oben: Das Kuerzel haengt am Menueeintrag, der Renderer bekommt nur das
   // Signal.

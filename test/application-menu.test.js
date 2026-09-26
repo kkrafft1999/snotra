@@ -2,7 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createApplicationMenuTemplate } = require('../src/main/services/application-menu');
 
-const PUSH = { UI_OPEN_SETTINGS: 'ui:open-settings', UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar' };
+const PUSH = {
+  UI_OPEN_SETTINGS: 'ui:open-settings',
+  UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
+  UI_NEW_CHAT: 'ui:new-chat',
+};
 
 function buildTemplate(platform, overrides = {}) {
   const sent = [];
@@ -52,7 +56,7 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
 for (const platform of ['win32', 'linux']) {
   test(`${platform}: Einstellungen stehen in Ansicht, es gibt kein App-Menue`, () => {
     const { template } = buildTemplate(platform);
-    assert.equal(template[0].label, 'Edit', 'ohne App-Menue beginnt die Leiste mit Bearbeiten');
+    assert.equal(template[0].label, 'File', 'ohne App-Menue beginnt die Leiste mit Datei');
 
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
@@ -83,6 +87,7 @@ test('ohne Fenster laeuft der Klick ins Leere statt zu werfen', () => {
   const items = allItems(template);
   assert.doesNotThrow(() => items.find((item) => item.label === 'Settings\u2026').click());
   assert.doesNotThrow(() => items.find((item) => item.label === 'Toggle Sidebar').click());
+  assert.doesNotThrow(() => items.find((item) => item.label === 'New Chat').click());
 });
 
 test('Hilfe: Update-Pruefung und GitHub-Link haengen an den Callbacks', () => {
@@ -97,13 +102,43 @@ test('Hilfe: Update-Pruefung und GitHub-Link haengen an den Callbacks', () => {
 
 test('the menu follows the chosen language (epic #277)', () => {
   const { template: en } = buildTemplate('darwin');
-  assert.deepEqual(en.map((m) => m.label), ['Snotra AI', 'Edit', 'View', 'Window', 'Help']);
+  assert.deepEqual(en.map((m) => m.label), ['Snotra AI', 'File', 'Edit', 'View', 'Window', 'Help']);
 
   const { template: de } = buildTemplate('darwin', { locale: 'de' });
-  assert.deepEqual(de.map((m) => m.label), ['Snotra AI', 'Bearbeiten', 'Ansicht', 'Fenster', 'Hilfe']);
+  assert.deepEqual(de.map((m) => m.label), ['Snotra AI', 'Ablage', 'Bearbeiten', 'Ansicht', 'Fenster', 'Hilfe']);
 
   // The German labels carry real umlauts again instead of the earlier ASCII
   // stand-ins (epic #277).
   const edit = de.find((m) => m.label === 'Bearbeiten');
   assert.deepEqual(edit.submenu.map(labelOf).slice(0, 2), ['Rückgängig', 'Wiederholen']);
+});
+
+for (const platform of ['darwin', 'win32', 'linux']) {
+  test(`${platform}: File > New Chat with CmdOrCtrl+N, right after the app menu (#381)`, () => {
+    const { template, sent } = buildTemplate(platform);
+    const file = template[platform === 'darwin' ? 1 : 0];
+    assert.equal(file.label, 'File');
+    const [newChat] = file.submenu;
+    assert.equal(newChat.label, 'New Chat');
+    assert.equal(newChat.accelerator, 'CmdOrCtrl+N');
+    newChat.click();
+    assert.deepEqual(sent, [PUSH.UI_NEW_CHAT]);
+  });
+
+  test(`${platform}: no accelerator is assigned twice (#381)`, () => {
+    const { template } = buildTemplate(platform);
+    const accelerators = allItems(template).map((item) => item.accelerator).filter(Boolean);
+    assert.deepEqual(accelerators.filter((a, i) => accelerators.indexOf(a) !== i), []);
+  });
+}
+
+test('the File menu is "Ablage" on the Mac and "Datei" elsewhere in German (#381)', () => {
+  const mac = buildTemplate('darwin', { locale: 'de' }).template[1];
+  assert.equal(mac.label, 'Ablage');
+  assert.equal(mac.submenu[0].label, 'Neuer Chat');
+  for (const platform of ['win32', 'linux']) {
+    const file = buildTemplate(platform, { locale: 'de' }).template[0];
+    assert.equal(file.label, 'Datei');
+    assert.equal(file.submenu[0].label, 'Neuer Chat');
+  }
 });

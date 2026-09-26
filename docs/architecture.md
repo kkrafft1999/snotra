@@ -768,7 +768,13 @@ applies to chat and history as to tree and content pane:
   it, the click would run into a hidden area.
 - The button for a new chat sits in the header of the history, just as "Ordner
   öffnen" (Open folder) sits in the header of the tree: the action that gives a
-  column entries belongs in that column.
+  column entries belongs in that column. The same action sits in the menu bar
+  (issue #381): *File → New Chat* (`CmdOrCtrl+N`; the German Mac menu is called
+  *Ablage*, elsewhere *Datei*), a push on `UI_NEW_CHAT` along the same path as
+  `UI_TOGGLE_SIDEBAR` — menu item, preload `onNewChat`, renderer. On top of what
+  the button does, the renderer brings a hidden chat column back
+  (`revealChatPanel`) and puts the focus into the input; while a dialog is open
+  the shortcut does nothing, so the chat is never reset out of sight.
 - The settings dialog no longer has a button. The gear sat in the chat header and
   was gone with its column; since then only the menu bar leads into it
   (`CmdOrCtrl+,`) — a push on `UI_OPEN_SETTINGS`, exactly like `UI_TOGGLE_SIDEBAR`

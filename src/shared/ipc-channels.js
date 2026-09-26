@@ -193,6 +193,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
   /** Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma. */
   UI_OPEN_SETTINGS: 'ui:open-settings',
+  /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
+  UI_NEW_CHAT: 'ui:new-chat',
 });
 
 module.exports = {
