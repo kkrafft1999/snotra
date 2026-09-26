@@ -10,6 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const childProcess = require('child_process');
+const net = require('net');
 const fs = require('fs').promises;
 const { existsSync } = require('fs');
 const path = require('path');
@@ -62,6 +63,18 @@ async function ready(t) {
     return null;
   }
   return ctx;
+}
+
+/** Whether something accepts a TCP connection on 127.0.0.1:port. */
+function reachable(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    socket.setTimeout(2_000);
+    const done = (value) => { socket.destroy(); resolve(value); };
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+    socket.once('timeout', () => done(false));
+  });
 }
 
 function run(ctx, command, extra = {}) {
@@ -124,7 +137,19 @@ test('no network unless a domain is allowed — an allowed domain works', async 
   if (!ctx) return;
   const curl = 'curl -sS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
 
-  const blocked = await run(ctx, curl, { timeoutMs: 30_000 });
+  let blocked = await run(ctx, curl, { timeoutMs: 30_000 });
+  // Seen once in ~240 macOS CI jobs (#368): curl did not reach the proxy at
+  // all. Nothing got out, and the run now says so itself. Whether the proxy
+  // was listening at that moment tells a dead proxy from a refused connect,
+  // so the test records it — and tries once more. A proxy that stays out of
+  // reach still fails the assertion below.
+  const unreachable = blocked.stderr.match(/<sandbox_network>[^]*?localhost:(\d+)/);
+  if (unreachable) {
+    assert.notEqual(blocked.exitCode, 0);
+    const listening = await reachable(Number(unreachable[1]));
+    t.diagnostic(`proxy not reached, listening from outside the sandbox: ${listening}; stderr: ${blocked.stderr}`);
+    blocked = await run(ctx, curl, { timeoutMs: 30_000 });
+  }
   const allowed = await run(ctx, curl, { networkDomains: ['example.com'], timeoutMs: 30_000 });
 
   assert.notEqual(blocked.exitCode, 0);
