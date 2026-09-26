@@ -109,9 +109,10 @@ das Feld bewegt sich schnell, Korrekturen willkommen.
   für Arbeit, die kein Code ist.
 
 Was Snotra noch fehlt: signierte Builds
-([#19](https://github.com/kkrafft1999/snotra/issues/19)), eine Sandbox für
-Befehle ([#329](https://github.com/kkrafft1999/snotra/issues/329)), MCP über
-HTTP.
+([#19](https://github.com/kkrafft1999/snotra/issues/19)), eine Sandbox unter
+Windows (unter macOS und Linux laufen Befehle und Python isoliert — siehe [Die
+Sandbox je Betriebssystem](#die-sandbox-je-betriebssystem)), MCP über HTTP
+([#341](https://github.com/kkrafft1999/snotra/issues/341)).
 
 ## Motivation
 

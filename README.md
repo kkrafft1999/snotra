@@ -106,8 +106,10 @@ corrections welcome.
   work that isn't code.
 
 What Snotra doesn't have yet: signed builds
-([#19](https://github.com/kkrafft1999/snotra/issues/19)), a sandbox for commands
-([#329](https://github.com/kkrafft1999/snotra/issues/329)), MCP over HTTP.
+([#19](https://github.com/kkrafft1999/snotra/issues/19)), a sandbox on Windows
+(on macOS and Linux, commands and Python run isolated — see [The sandbox per
+operating system](#the-sandbox-per-operating-system)), MCP over HTTP
+([#341](https://github.com/kkrafft1999/snotra/issues/341)).
 
 ## Motivation
 

@@ -78,3 +78,14 @@ test('snotra-capabilities behauptet nicht mehr, Shell und Internet seien unmögl
     'Der widerlegte Satz „Kein Internetzugriff für dich" steht wieder im Skill.'
   );
 });
+
+test('snotra-capabilities says where runs are isolated and where not (#405)', () => {
+  // Without it the model has to guess whether its commands are sandboxed.
+  // A Windows checkout carries CRLF, so blank lines are split either way.
+  const isolation = skillText.split(/\r?\n\r?\n/).find((block) => block.startsWith('Isolation:'));
+  assert.ok(isolation, 'The skill has no paragraph on isolation.');
+  assert.match(isolation, /macOS and Linux/);
+  assert.match(isolation, /On Windows there is no sandbox/);
+  assert.match(isolation, /\{label:settings\.sandbox\.workspace\.heading\}/);
+  assert.match(isolation, /`sandbox\.isolated`/);
+});

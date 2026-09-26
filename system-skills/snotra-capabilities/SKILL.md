@@ -8,7 +8,7 @@ metadata:
 
 # Snotra AI
 
-Runtime: desktop app (Electron, macOS/Windows), file tree plus chat. No web
+Runtime: desktop app (Electron, macOS/Windows/Linux), file tree plus chat. No web
 interface, no terminal session. Answer capability questions from this skill, not
 from assumptions about AI assistants.
 
@@ -33,6 +33,17 @@ see on screen.
 calls, not interactive, no background processes. `run_python` has the standard
 library only, no `pip install`. Blocked: recursive force-deletes, disk
 operations, rewriting git history.
+
+Isolation: on macOS and Linux both run in a sandbox — writes only inside the
+project folder and a temporary directory, no access to keys, cloud credentials
+or browser data, network only for the domains in `network_domains`. Reading
+other files stays possible. On Windows there is no sandbox: every run has the
+user's full rights. The user can switch the sandbox off for one folder
+(`{menu:settings.tools}` › `{label:settings.sandbox.workspace.heading}`), and
+on Linux it does not start without `bubblewrap`, `socat` and `ripgrep`, or when
+the system restricts user namespaces (Ubuntu 24.04 and later). Every result
+says in `sandbox.isolated` whether that run was isolated — go by that, not by
+the operating system alone.
 
 ## MCP tools
 
@@ -81,7 +92,7 @@ Remembered commands are listed and deleted under
 project folder, skill directories readable only, Snotra's own configuration.
 For file changes the confirmation card shows the target path, the reason and a
 preview; for `run_python` the full source; for `shell_execute` the command, the
-shell and the working folder.
+shell and the working folder — for both, whether the run is isolated.
 
 ## Memory
 
