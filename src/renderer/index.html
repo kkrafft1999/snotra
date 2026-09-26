@@ -225,6 +225,9 @@
                 </svg>
               </button>
               <p id="chat-voice-status" class="chat-voice-status hidden" aria-live="polite"></p>
+              <!-- Model and mode pill. In a narrow bar ComposerBarLayout moves
+                   this group onto a row of its own above the mic (#400). -->
+              <div class="chat-composer-pills" id="chat-composer-pills">
               <span class="chat-model-picker-wrap hidden" id="chat-model-picker-wrap">
                 <button
                   type="button"
@@ -282,6 +285,7 @@
                 </div>
               </span>
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
+              </div>
             </div>
             <div class="chat-composer-bar-end">
               <span class="chat-token-usage-wrap">

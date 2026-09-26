@@ -214,12 +214,12 @@ try {
   await themed('composer-auto', (file) => page.locator('#chat-input-row').screenshot({ path: file }));
 
   // Narrower composers: the model name gives way before "not isolated", and
-  // below 400 px of bar the pill keeps only its struck-through shield.
+  // below 400 px of bar the pills take a row of their own (#400).
   for (const width of [420, 300, 240]) {
     await page.evaluate((w) => { document.getElementById('chat-input-row').style.width = `${w}px`; }, width);
     await pause();
     const widths = await page.evaluate(() => ({
-      compact: document.getElementById('chat-tool-mode-wrap').dataset.compact === 'true',
+      stacked: document.querySelector('.chat-composer-bar').dataset.stacked === 'true',
       model: document.getElementById('chat-model-picker-wrap').getBoundingClientRect().width,
       mode: document.getElementById('chat-tool-mode-wrap').getBoundingClientRect().width,
       modeTruncated: (() => {

@@ -15,6 +15,7 @@ import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initFolderSandboxShield } from './components/FolderSandboxShield.js';
+import { initComposerBarLayout } from './components/ComposerBarLayout.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
@@ -232,6 +233,8 @@ const toolPermissions = initToolPermissionState({ api });
 // further down and only reached on a click.
 const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' });
 initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
+// A narrow chat puts the pills on a row of their own (#400).
+initComposerBarLayout();
 initFolderSandboxShield({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
 // Runs per chat (#320): cards and runs report changes, the history column
 // marks its rows. It is built further down, hence the indirection.
