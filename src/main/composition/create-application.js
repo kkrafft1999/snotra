@@ -28,7 +28,8 @@ const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createShellRunnerService } = require('../services/shell-runner-service');
-const { createSandboxService } = require('../services/sandbox-service');
+const { createSandboxService, sensitiveReadPaths } = require('../services/sandbox-service');
+const { createProgramAllowances } = require('../services/program-allowances-service');
 const { existsSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
@@ -312,6 +313,19 @@ function createApplication({
       const python = pythonRunnerService.describe();
       return python.found ? python.command : 'python3';
     },
+  });
+  // Program allowances (#408): a program found through the user's PATH, and
+  // folders checked against Snotra's own storage and what the sandbox keeps
+  // unreadable.
+  const programAllowances = createProgramAllowances({
+    fs,
+    path,
+    os,
+    platform: process.platform,
+    readUserPath: async () => (await shellRunnerService.detect()).path || '',
+    readAllowances: () => toolPolicyStore.readProgramAllowances(),
+    protectedRoots: [app.getPath('userData')],
+    sensitivePaths: sensitiveReadPaths({ platform: process.platform, userDataPath: app.getPath('userData') }),
   });
   const shellRunnerService = createShellRunnerService({
     spawn: childProcess.spawn,
@@ -660,6 +674,9 @@ function createApplication({
       },
       // The user's per-workspace opt-out (#357), from the signed policy file.
       isSandboxDisabled: (workspaceRoot) => toolPolicyStore.isWorkspaceSandboxDisabled(workspaceRoot),
+      // Program allowances (#408), from the same file.
+      matchProgramAllowance: (request) => programAllowances.match(request),
+      readProgramAllowances: () => toolPolicyStore.readProgramAllowances(),
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
       // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
       refreshDynamicTools: async () => {
@@ -763,6 +780,9 @@ function createApplication({
     chatSessionSettings,
     getLocale: getAppLocale,
     describeExecutionTools,
+    programAllowances,
+    platform: process.platform,
+    homeDir: os.homedir(),
   });
 
   /**

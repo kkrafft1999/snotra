@@ -224,6 +224,17 @@ const {
   isMemoryScope,
   parseMemoryEntries,
 } = require('./memory');
+const {
+  PROGRAM_ALLOWANCE_LIMITS,
+  PROGRAM_ALLOWANCE_SKIP_REASONS,
+  programName,
+  normalizeAllowancePath,
+  normalizeProgramAllowance,
+  normalizeProgramAllowances,
+  grantsSomething,
+  parseDomainInput,
+  isNarrowing,
+} = require('./program-allowances');
 
 const { createMessage, isMessage } = require('./message');
 
@@ -416,4 +427,13 @@ module.exports = {
   VOICE_STOP_WARNING_MS,
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
   checkTranscriptionPayload,
+  PROGRAM_ALLOWANCE_LIMITS,
+  PROGRAM_ALLOWANCE_SKIP_REASONS,
+  programName,
+  normalizeAllowancePath,
+  normalizeProgramAllowance,
+  normalizeProgramAllowances,
+  grantsSomething,
+  parseDomainInput,
+  isNarrowing,
 };

@@ -81,9 +81,20 @@ function resolveNetworkDomains(toolName, args) {
   return normalizeDomains([...declared, ...suggested]);
 }
 
+/**
+ * The domains of one run with a program allowance (#408): the allowance's
+ * first, so the cap never pushes out what the user set, then the call's own.
+ */
+function resolveRunDomains(toolName, args, allowance) {
+  const declared = resolveNetworkDomains(toolName, args);
+  const granted = Array.isArray(allowance?.domains) ? allowance.domains : [];
+  return granted.length > 0 ? normalizeDomains([...granted, ...declared]) : declared;
+}
+
 module.exports = {
   normalizeDomains,
   suggestDomains,
   resolveNetworkDomains,
+  resolveRunDomains,
   MAX_DOMAINS,
 };

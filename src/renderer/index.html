@@ -514,7 +514,7 @@
                     reaches the network only for the domains named on the approval card &mdash; <code>pip</code> and
                     <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your
                     other files, and tools that verify certificates through the macOS keychain (<code>gh</code>,
-                    <code>terraform</code>) cannot reach the network inside it. On Linux the sandbox needs the packages
+                    <code>terraform</code>) cannot reach the network inside it &mdash; unless you give them a program allowance below. On Linux the sandbox needs the packages
                     <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.
                   </p>
                   <p>
@@ -545,7 +545,8 @@
                   <p>
                     Switch it off only when the sandbox gets in the way of something legitimate here: writing outside
                     the folder, <code>gh</code> or <code>terraform</code> without network, an older <code>pip</code>.
-                    You confirm that in the system dialog. The setting is stored with your permissions, not in the
+                    When it is one program that needs more, a program allowance below is the narrower way.
+                    You confirm switching off in the system dialog. The setting is stored with your permissions, not in the
                     folder, so a checked-out repository cannot switch it off for itself.
                   </p>
                 </div>
@@ -556,6 +557,34 @@
                 <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" aria-describedby="settings-sandbox-state" checked>
               </div>
               <p id="settings-sandbox-state" class="modal-hint" role="status" hidden></p>
+            </div>
+
+            <div class="settings-tools-card" id="settings-allowances-card" hidden>
+              <h3 class="settings-subsection-title" id="heading-program-allowances" data-i18n="settings.allowances.heading">Program allowances</h3>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n="settings.allowances.note.summary">Extra rights inside the sandbox for programs you trust, in every workspace.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.allowances.note.body">
+                  <p>
+                    An allowance applies only when a command runs the program on its own: no chaining, no pipes, no
+                    redirections. The program is recognised by its file, so a file of the same name in a project
+                    folder does not get it. You confirm every new or wider allowance in the system dialog; it is
+                    stored with your permissions, not in a folder.
+                  </p>
+                  <p>
+                    Programs written in Go (<code>gh</code>, <code>terraform</code>, many company tools) need the
+                    macOS certificate check to reach the network at all.
+                  </p>
+                </div>
+              </details>
+              <ul id="settings-allowance-list" class="allowance-list" aria-labelledby="heading-program-allowances"></ul>
+              <p id="settings-allowance-empty" class="settings-empty-hint" data-i18n="settings.allowances.empty">No program has an allowance.</p>
+              <div class="allowance-card__footer">
+                <button type="button" id="btn-add-program-allowance" class="btn-secondary" data-i18n="settings.allowances.add">Add program</button>
+                <span id="status-program-allowances" class="settings-instant-status" role="status"></span>
+              </div>
+              <p id="settings-allowance-error" class="modal-hint error hidden" role="alert"></p>
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">
@@ -1115,6 +1144,57 @@
           <footer class="modal-actions">
             <button type="button" id="btn-mcp-import-cancel" class="btn-secondary" data-i18n="mcpImport.cancel">Cancel</button>
             <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled data-i18n="mcpImport.apply">Apply</button>
+          </footer>
+        </div>
+      </div>
+
+      <div id="program-allowance-overlay" class="add-model-overlay hidden" aria-hidden="true">
+        <div
+          class="add-model-dialog modal-dialog modal-dialog--nested"
+          role="dialog"
+          aria-modal="true"
+          id="dialog-program-allowance"
+          aria-labelledby="dialog-program-allowance-title">
+          <header class="add-model-dialog__header">
+            <h2 id="dialog-program-allowance-title" class="add-model-dialog__title" data-i18n="allowanceDialog.title.add">Add program</h2>
+            <button type="button" id="btn-program-allowance-close" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:allowanceDialog.close">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+              </svg>
+            </button>
+          </header>
+          <div class="add-model-dialog__body modal-dialog__body">
+            <p id="allowance-form-error" class="modal-warning hidden" role="alert"></p>
+            <div class="modal-field-group">
+              <label for="allowance-field-program" class="modal-field-label" data-i18n="allowanceDialog.program.label">Program</label>
+              <input type="text" id="allowance-field-program" class="modal-input modal-input--mono" placeholder="gh" autocomplete="off" spellcheck="false" aria-describedby="allowance-program-status">
+              <p id="allowance-program-status" class="modal-hint" aria-live="polite" data-i18n="allowanceDialog.program.hint">The name you type in the terminal, or a full path.</p>
+            </div>
+            <div class="modal-field-group">
+              <label for="allowance-field-domains" class="modal-field-label" data-i18n="allowanceDialog.domains.label">Domains it may reach</label>
+              <textarea id="allowance-field-domains" class="modal-input modal-input--mono allowance-domains" rows="3" spellcheck="false" autocomplete="off" placeholder="api.github.com" aria-describedby="allowance-domains-hint allowance-domains-invalid"></textarea>
+              <p id="allowance-domains-hint" class="modal-hint" data-i18n-html="allowanceDialog.domains.hint">One per line. <code>*.example.com</code> covers subdomains.</p>
+              <p id="allowance-domains-invalid" class="modal-hint error hidden" aria-live="polite"></p>
+            </div>
+            <div class="modal-field-group">
+              <span class="modal-field-label" id="heading-allowance-folders" data-i18n="allowanceDialog.folders.label">Folders it may also write in</span>
+              <ul id="allowance-folder-list" class="allowance-folders" aria-labelledby="heading-allowance-folders"></ul>
+              <p id="allowance-folders-none" class="modal-hint" data-i18n="allowanceDialog.folders.none">Only the project folder, as for every run.</p>
+              <button type="button" id="btn-allowance-folder-add" class="btn-secondary" data-i18n="allowanceDialog.folders.add">Add folder…</button>
+            </div>
+            <div class="modal-field-group" id="allowance-trustd-group">
+              <div class="settings-switch-row">
+                <label for="allowance-field-trustd" class="settings-switch-row__label" data-i18n="allowanceDialog.trustd.label">Check certificates through macOS</label>
+                <input type="checkbox" role="switch" class="ds-switch" id="allowance-field-trustd" aria-describedby="allowance-trustd-warning">
+              </div>
+              <p id="allowance-trustd-warning" class="allowance-warning" data-i18n-html="allowanceDialog.trustd.warning"><strong>Weaker isolation:</strong> programs written in Go need this to reach the network. It opens a macOS service that runs outside the sandbox and can make connections of its own.</p>
+            </div>
+          </div>
+          <footer class="add-model-dialog__bottom">
+            <div class="modal-actions">
+              <button type="button" id="btn-program-allowance-cancel" class="btn-secondary" data-i18n="allowanceDialog.cancel">Cancel</button>
+              <button type="button" id="btn-program-allowance-save" class="btn-primary" data-i18n="allowanceDialog.save">Save</button>
+            </div>
           </footer>
         </div>
       </div>

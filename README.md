@@ -578,6 +578,18 @@ reads "Auto · not isolated" in amber whenever "Auto" would run `shell_execute` 
 system — and its menu says why, with a link to the setting. "Reset workspace
 rules" and "Reset all permissions" switch the sandbox back on.
 
+**Program allowances.** When it is one program that needs more — a tool whose
+login has to be refreshed, `gh` or `terraform` on macOS — you don't have to
+switch the sandbox off. Under Settings › Tools › *Program allowances* you give
+that program the domains it may reach, folders it may also write in (its token
+cache, say) and, on macOS, the certificate check through the system, which
+programs written in Go need to reach the network at all. The allowance applies
+in every workspace, but only when a command runs the program on its own — no
+chaining, pipes or redirections — and only to the very file you chose, not to
+a file of the same name in a project. You confirm every new or wider allowance
+in a system dialog. The approval card names the allowance, or says why it does
+not apply, and the model learns the same.
+
 **The shield next to the folder name** shows the same in every mode, as long as
 `shell_execute` or `run_python` is on: a plain shield while runs in this folder
 are isolated, a struck-through amber one while they are not. A click on it opens

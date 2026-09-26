@@ -11,6 +11,7 @@ import {
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
+import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -167,6 +168,8 @@ export function initSettingsModal(deps) {
   let pythonSandboxState = null;
   let shellSandboxState = null;
   const workspaceSandbox = initWorkspaceSandboxSetting({ toolPermissions, onChange: () => renderSandboxLines() });
+  // Program allowances (#408): only shell_execute runs a program by name.
+  const programAllowances = initProgramAllowancesSetting({ api, toolPermissions });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
@@ -1311,6 +1314,7 @@ export function initSettingsModal(deps) {
   function syncExecutionTools() {
     renderSandboxLines();
     workspaceSandbox.update({ toolsOn: pythonReady || shellReady, sandbox: shellSandboxState || pythonSandboxState });
+    programAllowances.update({ shellOn: shellReady, sandbox: shellSandboxState });
   }
 
   /** Isolation line under a tool's status (#329); hidden when there is nothing to say. */
@@ -1682,6 +1686,8 @@ export function initSettingsModal(deps) {
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
       // From the approval card's "Sandbox setting" link (#357).
       if (jump?.focus === 'sandbox' && workspaceSandbox.focus()) return;
+      // From the card's "Program allowances" link (#408).
+      if (jump?.focus === 'allowances' && programAllowances.focus()) return;
       try {
         settingsNavTabs[0]?.focus();
       } catch {
@@ -1709,6 +1715,7 @@ export function initSettingsModal(deps) {
   function closeSettingsModal() {
     toolPermissionsPanel?.close?.();
     mcpPanel?.close?.();
+    programAllowances.close();
     closeChatModelMenu(false);
     stashPopupCredentialInputs();
     closeAddModelOverlay();

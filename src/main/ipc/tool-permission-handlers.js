@@ -17,6 +17,11 @@
  * this workspace" stores a command rule. The rule is the one main built from
  * the plan of the open request — the renderer only says "always" — and it is
  * confirmed natively like every other allow rule before it is stored.
+ *
+ * The sixth is a program allowance (#408): extra rights inside the sandbox
+ * for one program, in every workspace. Main resolves the program and checks
+ * every folder itself, then confirms natively; an edit that only takes rights
+ * away, and removing an allowance, need no confirmation.
  */
 
 const {
@@ -34,6 +39,7 @@ const { createSettingsOk, createSettingsError } = require('../../shared/contract
 const { createMessage } = require('../../shared/contracts/message');
 const { createTranslator } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
+const { isNarrowing, normalizeAllowancePath } = require('../../shared/contracts/program-allowances');
 
 // The three dialogs are built for the language the interface speaks at the
 // moment they open (#353). They live only until the click, so there is nothing
@@ -139,6 +145,38 @@ function sandboxOffDialog(root, t) {
   };
 }
 
+/** `/Users/me/x` → `~/x`, so the dialog reads like the settings list. */
+function tildePath(value, homeDir) {
+  if (!homeDir || typeof value !== 'string') return value;
+  if (value === homeDir) return '~';
+  return value.startsWith(`${homeDir}/`) ? `~${value.slice(homeDir.length)}` : value;
+}
+
+function programAllowanceDialog(entry, t, homeDir = '') {
+  const lines = [];
+  if (entry.domains.length > 0) lines.push(t('permissionDialog.allowance.domains', { domains: entry.domains.join(', ') }));
+  if (entry.writePaths.length > 0) {
+    lines.push(t('permissionDialog.allowance.folders', {
+      folders: entry.writePaths.map((folder) => tildePath(folder, homeDir)).join(', '),
+    }));
+  }
+  if (entry.trustd) lines.push(t('permissionDialog.allowance.trustd'));
+  const program = entry.path.split('/').pop();
+  return {
+    type: 'warning',
+    title: t('permissionDialog.allowance.title', { program }),
+    message: t('permissionDialog.allowance.title', { program }),
+    detail: [
+      t('permissionDialog.allowance.intro', { path: tildePath(entry.path, homeDir) }),
+      lines.map((line) => `• ${line}`).join('\n'),
+      t('permissionDialog.allowance.footer', { place: menuPath(t.locale, SANDBOX_SETTING_PAGE) }),
+    ].join('\n\n'),
+    buttons: [t('permissionDialog.allowance.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
 function registerToolPermissionHandlers({
   ipcMain,
   dialog,
@@ -156,6 +194,10 @@ function registerToolPermissionHandlers({
   getLocale = () => undefined,
   // Active execution tools and the sandbox state, for the mode pill (#357).
   describeExecutionTools = null,
+  // Program allowances (#408): resolving programs and checking folders.
+  programAllowances = null,
+  platform = process.platform,
+  homeDir = '',
 }) {
   if (!toolPolicyStore || !approvals || !sessionGrants) {
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
@@ -243,6 +285,10 @@ function registerToolPermissionHandlers({
       workspaceSandboxDisabled,
       executionIsolation: await describeUnisolatedExecution(workspaceSandboxDisabled),
       sensitivePathPatterns: state.sensitivePathPatterns,
+      // Global, like the rules for all workspaces (#408).
+      programAllowances: Array.isArray(state.programAllowances) ? state.programAllowances : [],
+      platform,
+      homeDir,
       sessionGrantCount: sessionGrants.count(),
       policyVersion: state.policyVersion,
     };
@@ -346,6 +392,74 @@ function registerToolPermissionHandlers({
     return { ...createSettingsOk(), workspaceSandboxDisabled: !enabled };
   });
 
+  // Program allowances (#408). The renderer sends what the dialog holds; main
+  // resolves the program and checks the folders on its own, and asks natively
+  // before anything widens the sandbox.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_PROGRAM_ALLOWANCE, async (event, raw) => {
+    if (!programAllowances) return createSettingsError(createMessage('permissions.allowance.error.unavailable'));
+    const data = raw && typeof raw === 'object' ? raw : {};
+    const prepared = await programAllowances.prepareEntry(data);
+    if (!prepared.ok) return createSettingsError(prepared.error);
+    const entry = prepared.entry;
+    const replacePath = normalizeAllowancePath(data.previousPath);
+    const state = await toolPolicyStore.read();
+    const stored = Array.isArray(state.programAllowances) ? state.programAllowances : [];
+    const previous = stored.find((other) => other.path === (replacePath || entry.path))
+      || stored.find((other) => other.path === entry.path)
+      || null;
+    if (!isNarrowing(previous, entry)) {
+      const confirmed = await confirmNatively(programAllowanceDialog(entry, createTranslator(getLocale()), homeDir));
+      if (!confirmed) return createSettingsError(createMessage('permissions.allowance.error.notSaved'), 'cancelled');
+    }
+    const result = await toolPolicyStore.setProgramAllowance(entry, { replacePath });
+    if (!result.ok) return createSettingsError(result.error);
+    afterPolicyChange(event.sender);
+    return { ...createSettingsOk(), entry };
+  });
+
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, async (event, rawPath) => {
+    const programPath = normalizeAllowancePath(rawPath);
+    if (!programPath) return createSettingsError(createMessage('permissions.allowance.error.invalid'));
+    const result = await toolPolicyStore.removeProgramAllowance(programPath);
+    if (!result.ok) return createSettingsError(result.error);
+    afterPolicyChange(event.sender);
+    return createSettingsOk();
+  });
+
+  // What the dialog's program field means, as the user's shell would find it.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_RESOLVE_PROGRAM, async (_event, text) => {
+    if (!programAllowances) return createSettingsError(createMessage('permissions.allowance.error.unavailable'));
+    const resolved = await programAllowances.resolveProgram(typeof text === 'string' ? text : '');
+    if (!resolved.ok) return createSettingsError(resolved.error);
+    return { ...createSettingsOk(), path: resolved.path, name: resolved.name };
+  });
+
+  // A folder for the allowance, picked natively and checked at once.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER, async () => {
+    if (!programAllowances || !dialog || typeof dialog.showOpenDialog !== 'function') {
+      return createSettingsError(createMessage('permissions.allowance.error.unavailable'));
+    }
+    const t = createTranslator(getLocale());
+    const options = {
+      title: t('permissionDialog.allowance.folderTitle'),
+      message: t('permissionDialog.allowance.folderTitle'),
+      buttonLabel: t('permissionDialog.allowance.folderButton'),
+      // Tool caches live in hidden folders more often than not.
+      properties: ['openDirectory', 'showHiddenFiles'],
+      ...(homeDir ? { defaultPath: homeDir } : {}),
+    };
+    const win = getMainWindow();
+    const result = win && !win.isDestroyed?.()
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    if (result?.canceled || !Array.isArray(result?.filePaths) || result.filePaths.length === 0) {
+      return createSettingsError(createMessage('permissions.allowance.error.noFolder'), 'cancelled');
+    }
+    const checked = await programAllowances.validateWritePath(result.filePaths[0]);
+    if (!checked.ok) return createSettingsError(checked.error);
+    return { ...createSettingsOk(), path: checked.path };
+  });
+
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_ALL, async (event) => {
     const result = await toolPolicyStore.resetAll();
     if (!result.ok) return createSettingsError(result.error);
@@ -415,4 +529,5 @@ module.exports = {
   removeDenyRuleDialog,
   sandboxOffDialog,
   commandRuleDialog,
+  programAllowanceDialog,
 };

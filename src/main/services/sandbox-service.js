@@ -293,9 +293,20 @@ function createSandboxService({
     return out;
   }
 
-  /** The complete runtime configuration for one run. */
-  function buildConfig({ workspaceRoot = '', runTmp = '', allowedDomains = [] } = {}) {
-    const allowWrite = [workspaceRoot, runTmp].filter((p) => typeof p === 'string' && p);
+  /**
+   * The complete runtime configuration for one run. A program allowance
+   * (#408) adds its folders to the writable ones and, on macOS only, opens
+   * the trust service for certificate checks.
+   */
+  function buildConfig({
+    workspaceRoot = '',
+    runTmp = '',
+    allowedDomains = [],
+    extraWritePaths = [],
+    weakerNetworkIsolation = false,
+  } = {}) {
+    const allowWrite = [workspaceRoot, runTmp, ...(Array.isArray(extraWritePaths) ? extraWritePaths : [])]
+      .filter((p, index, all) => typeof p === 'string' && p && all.indexOf(p) === index);
     return {
       network: { allowedDomains: normalizeDomains(allowedDomains), deniedDomains: [] },
       filesystem: {
@@ -303,6 +314,7 @@ function createSandboxService({
         allowWrite,
         denyWrite: [...DENY_WRITE_DEFAULTS],
       },
+      ...(platform === 'darwin' && weakerNetworkIsolation === true ? { enableWeakerNetworkIsolation: true } : {}),
       ...vendorPaths(),
     };
   }
@@ -480,6 +492,8 @@ function createSandboxService({
    * @param {string} [request.workspaceRoot]
    * @param {string} request.runTmp    the run's own temp directory
    * @param {string[]} [request.allowedDomains]
+   * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
+   * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
    * @param {string} [request.commandId]
    * @param {string} [request.commandText]  what the user sees, for violations
    * @param {AbortSignal} [request.abortSignal]
@@ -489,6 +503,8 @@ function createSandboxService({
     workspaceRoot = '',
     runTmp,
     allowedDomains = [],
+    extraWritePaths = [],
+    weakerNetworkIsolation = false,
     commandId,
     commandText,
     abortSignal,
@@ -502,7 +518,8 @@ function createSandboxService({
     const key = [...domains].sort().join(',');
     const release = await gate.acquire(key, abortSignal);
     const manager = runtime.SandboxManager;
-    const config = buildConfig({ workspaceRoot, runTmp, allowedDomains: domains });
+    const config = buildConfig({ workspaceRoot, runTmp, allowedDomains: domains, extraWritePaths, weakerNetworkIsolation });
+    const trustd = config.enableWeakerNetworkIsolation === true;
     // The runtime sets TMPDIR to its own /tmp/claude, a directory every run
     // (and Claude Code) shares and Snotra keeps closed. The run's temp dir
     // takes its place — assigned inside, after the runtime's assignment.
@@ -530,6 +547,9 @@ function createSandboxService({
       args: ['-c', wrapped],
       env: runEnv(runTmp),
       domains,
+      // What a program allowance added (#408), as the run actually got it.
+      writePaths: config.filesystem.allowWrite.filter((p) => p !== workspaceRoot && p !== runTmp),
+      trustd,
       release() {
         if (released) return;
         released = true;
@@ -543,7 +563,8 @@ function createSandboxService({
         } catch {
           text = String(stderr ?? '');
         }
-        return annotateUnreachableProxy(text, proxyPort);
+        text = annotateUnreachableProxy(text, proxyPort);
+        return platform === 'darwin' && !trustd ? annotateBlockedTrustd(text) : text;
       },
     };
   }
@@ -592,8 +613,26 @@ function annotateUnreachableProxy(stderr, proxyPort) {
   return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_network>\n${note}\n</sandbox_network>\n`;
 }
 
+/**
+ * Go's certificate check on macOS asks the system trust service, which the
+ * sandbox keeps closed; the check then fails with `OSStatus -26276`
+ * (errSecInternalComponent) before a single byte reaches the host (#408).
+ * Without a word the model reads that as a broken certificate or a host that
+ * is down, so the run says what happened and where the user can change it.
+ */
+function annotateBlockedTrustd(stderr) {
+  const text = String(stderr ?? '');
+  if (!/x509: OSStatus -26276\b/.test(text) || text.includes('<sandbox_certificates>')) return text;
+  const note = 'The certificate check was refused inside the sandbox: this program verifies certificates '
+    + 'through the macOS trust service (trustd), which the sandbox keeps closed. The host was not reached. '
+    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools › '
+    + 'Program allowances. Tell them that instead of working around it.';
+  return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_certificates>\n${note}\n</sandbox_certificates>\n`;
+}
+
 module.exports = {
   createSandboxService,
+  annotateBlockedTrustd,
   createDomainGate,
   normalizeDomains,
   quoteArgv,

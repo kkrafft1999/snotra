@@ -31,6 +31,8 @@ const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'f
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
  * @param {() => Promise<object>} [deps.describeSandbox]  isolation state for the card (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
+ * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]  #408
+ * @param {() => Promise<object[]>} [deps.readProgramAllowances]  #408
  * @param {number} [deps.maxScanBytes]
  */
 function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
@@ -44,6 +46,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     describeShell = null,
     describeSandbox = null,
     isSandboxDisabled = null,
+    matchProgramAllowance = null,
+    readProgramAllowances = null,
     refreshDynamicTools = null,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
@@ -58,6 +62,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
           describeShell,
           describeSandbox,
           isSandboxDisabled,
+          matchProgramAllowance,
+          readProgramAllowances,
         })
       : null;
 

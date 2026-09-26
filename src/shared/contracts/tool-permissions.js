@@ -600,10 +600,28 @@ function stringList(value, maxItems, maxChars) {
     .map((entry) => entry.slice(0, maxChars));
 }
 
+/** A program allowance on the card (#408): what it adds, or why it stays off. */
+const ALLOWANCE_SKIP_REASONS = new Set(['compound', 'expansion', 'otherFile']);
+
 function sanitizeIsolation(isolation) {
   if (!isolation || typeof isolation !== 'object') return null;
   if (isolation.isolated === true) {
-    return { isolated: true, domains: stringList(isolation.domains, 20, 253) };
+    const out = { isolated: true, domains: stringList(isolation.domains, 20, 253) };
+    const allowance = isolation.allowance;
+    if (allowance && typeof allowance === 'object' && typeof allowance.program === 'string' && allowance.program) {
+      out.allowance = {
+        program: allowance.program.slice(0, 255),
+        path: typeof allowance.path === 'string' ? allowance.path.slice(0, 1024) : '',
+        writePaths: stringList(allowance.writePaths, 10, 1024),
+        trustd: allowance.trustd === true,
+      };
+    }
+    const skipped = isolation.allowanceSkipped;
+    if (!out.allowance && skipped && typeof skipped === 'object' && typeof skipped.program === 'string'
+      && skipped.program && ALLOWANCE_SKIP_REASONS.has(skipped.reason)) {
+      out.allowanceSkipped = { program: skipped.program.slice(0, 255), reason: skipped.reason };
+    }
+    return out;
   }
   return {
     isolated: false,

@@ -8,6 +8,7 @@
  * wird, stammt aus dem validierten DTO des Main-Prozesses. Diese Funktionen
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
+import { describeAllowanceOnCard } from './program-allowance-view.js';
 import contracts from '../generated/contracts.js';
 import { t, tMessage } from '../i18n.js';
 
@@ -255,7 +256,7 @@ const ISOLATION_REASON_KEYS = Object.freeze({
  * `switchedOff` marks the user's own opt-out for the workspace (#357): the
  * card then offers the way back to the setting.
  */
-export function describeIsolation(isolation) {
+export function describeIsolation(isolation, { homeDir = '' } = {}) {
   if (!isolation || typeof isolation !== 'object') return null;
   if (isolation.isolated === true) {
     const domains = (Array.isArray(isolation.domains) ? isolation.domains : [])
@@ -266,6 +267,8 @@ export function describeIsolation(isolation) {
       domains,
       networkNone: domains.length > 0 ? '' : t('approval.isolation.network.none'),
       note: t('approval.isolation.note'),
+      // A program allowance (#408): what it adds, or why it stays off.
+      allowance: describeAllowanceOnCard(isolation, { homeDir }),
     };
   }
   const missing = (Array.isArray(isolation.missing) ? isolation.missing : [])
@@ -349,7 +352,7 @@ export function overwriteWarning(dto) {
  * Complete display model of the card from the DTO. Returns null for invalid
  * DTOs — then nothing is shown and nothing is answered.
  */
-export function buildApprovalCardView(dto) {
+export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
   if (!isToolApprovalRequestDto(dto)) return null;
   const classes = dto.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls));
   const targets = dto.targets.map(describeTarget);
@@ -376,7 +379,7 @@ export function buildApprovalCardView(dto) {
     shellLabel: '',
     memoryScopeLabel: '',
     cwdLabel: '',
-    isolation: describeIsolation(dto.preview?.isolation),
+    isolation: describeIsolation(dto.preview?.isolation, { homeDir }),
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },

@@ -18,9 +18,24 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  * Aktionen unwirksam und zeigt den Grund; verspätete oder doppelte Antworten
  * werden lokal abgefangen und vom Main ohnehin verworfen.
  */
-export function initToolApprovalCards({ api, appStore, onPendingChanged = () => {}, onOpenSandboxSettings = null }) {
+export function initToolApprovalCards({
+  api,
+  appStore,
+  onPendingChanged = () => {},
+  onOpenSandboxSettings = null,
+  // Program allowances (#408): home folder for `~` paths, the way to the list.
+  getHomeDir = () => '',
+  onOpenAllowanceSettings = null,
+}) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const queue = createToolApprovalQueue();
+  const readHomeDir = () => {
+    try {
+      return getHomeDir() || '';
+    } catch {
+      return '';
+    }
+  };
   /** requestId → Karten-Element des laufenden Zuges. */
   const cards = new Map();
   /**
@@ -280,6 +295,26 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
 
     if (view.isolation?.isolated) card.appendChild(el('p', 'chat-approval-card__note', view.isolation.note));
 
+    // A program allowance (#408): what the run gets on top, or why the
+    // allowance for its program stays off — with the way to the list.
+    const allowance = view.isolation?.allowance;
+    if (allowance) {
+      const box = el('p', 'chat-approval-card__allowance');
+      if (allowance.prefix) {
+        box.appendChild(el('strong', null, allowance.prefix));
+        box.append(' ');
+      }
+      box.append(allowance.text);
+      if (typeof onOpenAllowanceSettings === 'function') {
+        box.append(' ');
+        const link = el('button', 'chat-approval-card__warning-link', allowance.settingsLabel);
+        link.type = 'button';
+        link.addEventListener('click', () => onOpenAllowanceSettings());
+        box.appendChild(link);
+      }
+      card.appendChild(box);
+    }
+
     if (view.warning) {
       const warning = el('p', 'chat-approval-card__warning');
       warning.appendChild(el('strong', null, t('approval.warning.prefix')));
@@ -384,7 +419,7 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     // A request without a chat comes from a main that predates #320; it can
     // only mean the chat on screen.
     entry.chatId = dto.chatId || appStore.currentChatId || null;
-    const view = buildApprovalCardView(dto);
+    const view = buildApprovalCardView(dto, { homeDir: readHomeDir() });
     if (!view) return;
     const card = buildCard(entry, view);
     card.__approvalView = view;
@@ -419,7 +454,7 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     for (const [requestId, card] of [...cards]) {
       const entry = queue.get(requestId);
       if (!entry) continue;
-      const view = buildApprovalCardView(entry.dto);
+      const view = buildApprovalCardView(entry.dto, { homeDir: readHomeDir() });
       if (!view) continue;
       const fresh = buildCard(entry, view);
       fresh.__approvalView = view;

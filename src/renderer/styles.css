@@ -6621,3 +6621,210 @@ select.modal-input {
   color: var(--ds-grey-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Program allowances (#408) ─────────────────────────────────────────
+   Settings › Tools: one row per program, the rights it adds underneath.
+   Rows follow the MCP server list. trustd weakens the sandbox itself, so it
+   carries a tag in words — neutral, because amber is reserved for runs that
+   are not isolated at all (#396). */
+.allowance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.allowance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: start;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+}
+
+.allowance-row__main {
+  min-width: 0;
+}
+
+.allowance-row__name {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.allowance-row__path {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-xs);
+  color: var(--text-muted-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.allowance-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.allowance-row__facts {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 14px;
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-sm);
+}
+
+.allowance-row__facts dt {
+  color: var(--text-secondary);
+}
+
+.allowance-row__facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.allowance-row__facts code {
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-xs);
+}
+
+.allowance-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 9px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-card);
+  color: var(--text-muted-strong);
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+#settings-allowance-empty {
+  margin: 0 0 10px;
+}
+
+.allowance-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* The dialog: program and hosts in the typeface they are typed in, folders
+   as a list of rows with their own remove button. */
+#dialog-program-allowance .modal-input--mono {
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-md);
+}
+
+.allowance-domains {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.allowance-folders {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.allowance-folders:empty {
+  display: none;
+}
+
+.allowance-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+}
+
+.allowance-folder__path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.allowance-folder__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.allowance-folder__remove:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+#allowance-folders-none {
+  margin: 0 0 8px;
+}
+
+/* Like the card's "Careful:" note: grey ground, the bold prefix carries it. */
+.allowance-warning {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-primary);
+}
+
+.allowance-warning code {
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 640px) {
+  .allowance-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .allowance-row__actions {
+    justify-content: flex-end;
+  }
+}
+
+/* The approval card names a program allowance, or why it stays off (#408). */
+.chat-approval-card__allowance {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  font-size: var(--ds-font-size-md);
+}
+
+.chat-approval-card__allowance code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
