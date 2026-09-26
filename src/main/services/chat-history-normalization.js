@@ -127,17 +127,37 @@ function permissionAuditForStore(raw) {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Schema violations of a call (#187) for the history: argument paths per
+ * kind, capped. The paths come from the model, so they are bounded like any
+ * other foreign string; values never get here.
+ */
+function schemaViolationsForStore(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out = {};
+  for (const key of ['unknownProperties', 'nonInteger', 'invalidItems']) {
+    if (!Array.isArray(raw[key])) continue;
+    const paths = raw[key].filter((p) => typeof p === 'string' && p).map((p) => p.slice(0, 128)).slice(0, 32);
+    if (paths.length) out[key] = paths;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function toolTraceEntryForStore(entry) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';
   const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' && entry.skill ? entry.skill : '';
   const permission = permissionAuditForStore(entry?.permission);
-  if (!tool && !skill && !permission) return line;
+  const round = Number.isInteger(entry?.round) && entry.round > 0 ? entry.round : 0;
+  const schema = schemaViolationsForStore(entry?.schema);
+  if (!tool && !skill && !permission && !round && !schema) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
   if (permission) out.permission = permission;
+  if (round) out.round = round;
+  if (schema) out.schema = schema;
   return out;
 }
 

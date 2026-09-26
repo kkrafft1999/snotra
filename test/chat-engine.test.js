@@ -615,6 +615,37 @@ test('engine preserves tool-trace metadata from the adapter', async () => {
   assert.equal(result.toolTrace[0].line, 'Skill traffic loaded');
 });
 
+// #187: the trace is also a measurement — which round a call came in and
+// which schema violations the adapter found. Neither changes the run.
+test('engine records the round and the schema violations of each call', async () => {
+  const tools = makeToolPort();
+  const measured = [];
+  tools.measureArguments = (toolName, args) => {
+    measured.push(toolName);
+    return 'pattern' in args ? { unknownProperties: ['pattern'] } : null;
+  };
+  const { engine } = makeEngine([
+    assistantToolCall('call_1', 'list_directory', { relative_path: '.', pattern: '*.js' }),
+    assistantToolCall('call_2', 'list_directory', { relative_path: 'src' }),
+    assistantText('Fertig.'),
+  ], { tools });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Liste' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+  });
+
+  assert.equal(result.content, 'Fertig.');
+  assert.deepEqual(result.toolTrace.map((entry) => entry.round), [1, 2]);
+  assert.deepEqual(result.toolTrace[0].schema, { unknownProperties: ['pattern'] });
+  assert.equal(result.toolTrace[1].schema, undefined);
+  assert.deepEqual(measured, ['list_directory', 'list_directory']);
+  assert.equal(tools.calls.length, 2, 'a violation is counted, the call still runs');
+});
+
 test('engine stops at its configured tool-round limit', async () => {
   const { engine } = makeEngine(() =>
     assistantToolCall('call_1', 'list_directory', { relative_path: '.' })
