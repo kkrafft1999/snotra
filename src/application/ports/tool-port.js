@@ -61,6 +61,16 @@
  * @property {boolean} [noWorkspace]
  * @property {string} [line] — fertige Anzeige-Zeile (done-Phase), für Persistenz
  * @property {object} [permission] — bereinigter Audit-Eintrag (Entscheidung, Klassen, Status)
+ * @property {number} [round] — 1-based tool round of the turn the call came in (#187)
+ * @property {SchemaViolations} [schema] — schema violations in the arguments (#187)
+ */
+
+/**
+ * Argument paths per kind of violation, never the values (#187).
+ * @typedef {Object} SchemaViolations
+ * @property {string[]} [unknownProperties] — e.g. `path`, `edits[0].old_text`
+ * @property {string[]} [nonInteger] — a number where the schema asks for an integer
+ * @property {string[]} [invalidItems] — array elements that do not match `items`
  */
 
 /**
@@ -84,6 +94,8 @@
  * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
  * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry
+ * @property {(name: string, args: object) => (SchemaViolations|null)} [measureArguments] — optional:
+ *   schema violations the planner lets through (#187); a measurement, never a refusal
  * @property {(entry: ToolTraceEntry, phase: string, locale?: string) => string} formatDisplayLine
  * @property {(name: string, args: object, ctx: ToolPlanContext) => Promise<ToolPlan>} plan
  * @property {(name: string, args: object, ctx: ToolExecutionContext) => Promise<ToolExecutionResult>} execute

@@ -12,6 +12,7 @@ const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
 const { createToolCallPlanner } = require('../tools/tool-call-planner');
+const { measureArgumentConformance } = require('../tools/argument-conformance');
 
 /** Tools, deren Ausgabe Dateiinhalte enthalten kann und deshalb geprüft wird. */
 const CONTENT_READ_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file', 'search_in_files']);
@@ -134,6 +135,13 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         if (skill) entry.skill = skill.name;
       }
       return entry;
+    },
+    // Counts schema violations the planner lets through (#187): unknown
+    // properties, non-integers, mismatching array items. A measurement only —
+    // the call runs or is refused exactly as before.
+    measureArguments(name, args) {
+      const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
+      return definition ? measureArgumentConformance(definition, args) : null;
     },
     formatDisplayLine(entry, phase, locale) {
       return formatToolDisplayLine(entry, phase, locale);

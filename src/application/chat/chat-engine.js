@@ -1564,6 +1564,14 @@ function createChatEngine({
           const toolName = toolCall.function?.name || 'tool';
           const args = parseToolArguments(toolCall.function?.arguments);
           const entry = tools.buildTraceEntry(toolName, args, traceExtraFor(toolName));
+          // Round and schema violations make the trace a measurement (#187):
+          // how many extra rounds a turn took, and which calls sent arguments
+          // the schema does not describe.
+          entry.round = round + 1;
+          const schemaViolations = typeof tools.measureArguments === 'function'
+            ? tools.measureArguments(toolName, args)
+            : null;
+          if (schemaViolations) entry.schema = schemaViolations;
           toolTrace.push(entry);
           emitToolLine(TOOL_LINE_PHASES.START, entry, { callIndex });
 
