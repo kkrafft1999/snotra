@@ -69,7 +69,7 @@ function pendingCard() {
     if (!el || !once || once.disabled) return null;
     return {
       badge: el.querySelector('.chat-approval-card__badge')?.textContent || '',
-      badgeDanger: !!el.querySelector('.chat-approval-card__badge--danger'),
+      badgeWarning: !!el.querySelector('.chat-approval-card__badge--warning'),
       text: el.textContent.replace(/\s+/g, ' ').slice(0, 400),
     };
   }), { what: 'pending approval card', timeoutMs: 30_000 });

@@ -1318,7 +1318,7 @@ export function initSettingsModal(deps) {
     if (!el) return;
     el.hidden = !status;
     el.textContent = status?.text || '';
-    el.classList.toggle('error', status?.isError === true);
+    el.classList.toggle('warning', status?.isWarning === true);
   }
 
   function describeShellState(state) {
@@ -1984,7 +1984,8 @@ export function initSettingsModal(deps) {
         return;
       }
       await refreshLLMState();
-      // Ticking a tool off in the catalogue can take the red off the pill (#357).
+      // Ticking a tool off in the catalogue can take the warning off the pill
+      // and the folder shield (#357, #398).
       void toolPermissions?.refresh?.();
       closeSettingsModal();
     } finally {

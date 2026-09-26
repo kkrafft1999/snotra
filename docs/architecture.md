@@ -201,8 +201,11 @@ so a switch flipped between card and run voids the call. The handler passes
 `sandboxDisabled` from the approved plan to the runner, where `planSpawn` then
 does not ask the service at all and reports the reason `workspace`. The
 tool-permission state tells the renderer whether an offered execution tool
-would run unisolated (`executionIsolation`); the mode pill turns red on it in
-"Auto".
+would run unisolated (`executionIsolation`, with `pending` while the detection
+has not answered yet). The mode pill warns on it in "Auto" (#396), and the
+shield next to the folder name (`FolderSandboxShield`, #398) shows it in any
+mode; both take their words from `describeModePill` and
+`describeFolderSandbox`.
 
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an

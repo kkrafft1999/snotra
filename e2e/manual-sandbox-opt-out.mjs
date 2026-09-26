@@ -1,6 +1,10 @@
-// Look instead of trust (#357): starts the real app with shell_execute on and
+// Look instead of trust (#357, #396, #398): starts the real app with
+// shell_execute on and
 //  1. photographs the workspace sandbox switch in Settings › Tools, on and off,
-//  2. photographs the "Auto" pill red while the sandbox is off,
+//     and the shield next to the folder name in both states,
+//  2. photographs the "Auto" pill in amber while the sandbox is off, its menu
+//     with the notice, and the composer bar at its narrowest; follows the
+//     notice's link and the shield and reports where the focus landed,
 //  3. photographs the approval card with the reason and the way back, follows
 //     the link and reports where the focus landed,
 //  4. lets "Auto" run a command that writes outside the workspace and reports
@@ -99,6 +103,30 @@ async function closeSettings() {
 
 const exists = (p) => stat(p).then(() => true, () => false);
 
+/** The shield next to the folder name (#398), as the user meets it. */
+function shieldState() {
+  return page.evaluate(() => {
+    const btn = document.getElementById('btn-tree-sandbox');
+    return {
+      hidden: btn.hidden,
+      unisolated: btn.dataset.unisolated === 'true',
+      title: btn.title,
+      label: btn.getAttribute('aria-label'),
+      color: getComputedStyle(btn).color,
+    };
+  });
+}
+
+/** Clicks something that opens the sandbox setting and reports the focus. */
+async function followToSwitch(what, click) {
+  await click();
+  await poll(() => page.evaluate(() => document.activeElement?.id === 'input-workspace-sandbox'),
+    { what: `focus on the switch after ${what}` });
+  console.log(`${what} focused:`, await page.evaluate(() => document.activeElement.id));
+  await closeSettings();
+  console.log(`focus back after ${what}:`, await page.evaluate(() => document.activeElement?.id || ''));
+}
+
 try {
   // Answer every native dialog with its first button, and keep what it said.
   await app.evaluate(({ dialog }) => {
@@ -113,7 +141,16 @@ try {
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });
 
-  // 1. The switch, on.
+  // 1. The shield once the detection has answered: plain when isolated, amber
+  //    when this system has no working sandbox.
+  await poll(async () => {
+    const s = await shieldState();
+    return !s.hidden && !/being checked|wird geprüft/.test(s.title);
+  }, { what: 'settled shield', timeoutMs: 30_000 });
+  console.log('shield (start):', JSON.stringify(await shieldState()));
+  await themed('shield-start', (file) => page.locator('#tree-header').screenshot({ path: file }));
+
+  // The switch, on.
   await openToolsSettings();
   await poll(() => page.evaluate(() => !document.getElementById('settings-sandbox-card').hidden),
     { what: 'sandbox card', timeoutMs: 30_000 });
@@ -127,8 +164,9 @@ try {
   await poll(() => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode === 'auto'),
     { what: 'auto pill' });
   await pause(600);
-  console.log('pill red while isolated:', await page.evaluate(() =>
+  console.log('pill warns while isolated:', await page.evaluate(() =>
     document.getElementById('chat-tool-mode-wrap').dataset.unisolated === 'true'));
+  await themed('pill-auto-isolated', (file) => page.locator('#chat-tool-mode-wrap').screenshot({ path: file }));
   await page.evaluate(() => window.electronAPI.setToolPermissionMode('smart'));
   await openToolsSettings();
   await poll(() => page.evaluate(() => !document.getElementById('settings-sandbox-card').hidden),
@@ -136,9 +174,10 @@ try {
 
   // … and off, through the native dialog.
   await page.evaluate(() => document.getElementById('input-workspace-sandbox').click());
+  // Off is a warning, not an error (#396).
   await poll(() => page.evaluate(() => {
     const el = document.getElementById('settings-sandbox-state');
-    return !el.hidden && el.classList.contains('error') ? el.textContent : null;
+    return !el.hidden && el.classList.contains('warning') && !el.classList.contains('error') ? el.textContent : null;
   }), { what: 'switched-off state' });
   const dialog = await app.evaluate(() => globalThis.__dialogs.at(-1));
   console.log('dialog:', JSON.stringify({ message: dialog.message, detail: dialog.detail, buttons: dialog.buttons }));
@@ -150,22 +189,72 @@ try {
     await page.locator('#settings-shell-card').screenshot({ path: file.replace('settings-off', 'shell-card-off') });
     await page.locator('#settings-sandbox-card').screenshot({ path: file });
   });
-  console.log('isolation line:', await page.evaluate(() => document.getElementById('settings-shell-sandbox').textContent));
+  console.log('isolation line:', await page.evaluate(() => {
+    const el = document.getElementById('settings-shell-sandbox');
+    return `${el.textContent} [${el.className}]`;
+  }));
   console.log('switch state:', await page.evaluate(() => document.getElementById('settings-sandbox-state').textContent));
   await closeSettings();
 
-  // 2. "Auto" while the sandbox is off: the pill turns red.
+  // The shield follows the switch, in any mode.
+  await poll(async () => (await shieldState()).unisolated, { what: 'amber shield' });
+  console.log('shield (off):', JSON.stringify(await shieldState()));
+  await themed('shield-off', (file) => page.locator('#tree-header').screenshot({ path: file }));
+
+  // 2. "Auto" while the sandbox is off: the pill warns in amber, in words.
   await page.evaluate(() => window.electronAPI.setToolPermissionMode('auto'));
   await poll(() => page.evaluate(() =>
-    document.getElementById('chat-tool-mode-wrap').dataset.unisolated === 'true'), { what: 'red pill' });
+    document.getElementById('chat-tool-mode-wrap').dataset.unisolated === 'true'), { what: 'amber pill' });
   const pill = await page.evaluate(() => {
     const btn = document.getElementById('btn-chat-tool-mode');
-    return { title: btn.title, label: btn.getAttribute('aria-label'), color: getComputedStyle(btn).color };
+    return { text: btn.textContent.trim(), title: btn.title, label: btn.getAttribute('aria-label'), color: getComputedStyle(btn).color };
   });
   console.log('pill:', JSON.stringify(pill));
   await themed('pill-auto', (file) => page.locator('#chat-tool-mode-wrap').screenshot({ path: file }));
-  const composer = page.locator('#chat-tool-mode-wrap').locator('xpath=ancestor::*[contains(@class,"chat-composer") or contains(@class,"chat-input")][1]');
-  if (await composer.count()) await composer.first().screenshot({ path: shot('composer-auto') });
+  await themed('composer-auto', (file) => page.locator('#chat-input-row').screenshot({ path: file }));
+
+  // Narrower composers: the model name gives way before "not isolated", and
+  // below 400 px of bar the pill keeps only its struck-through shield.
+  for (const width of [420, 300, 240]) {
+    await page.evaluate((w) => { document.getElementById('chat-input-row').style.width = `${w}px`; }, width);
+    await pause();
+    const widths = await page.evaluate(() => ({
+      compact: document.getElementById('chat-tool-mode-wrap').dataset.compact === 'true',
+      model: document.getElementById('chat-model-picker-wrap').getBoundingClientRect().width,
+      mode: document.getElementById('chat-tool-mode-wrap').getBoundingClientRect().width,
+      modeTruncated: (() => {
+        const el = document.getElementById('btn-chat-tool-mode');
+        return el.scrollWidth > el.clientWidth;
+      })(),
+    }));
+    console.log(`composer at ${width}px:`, JSON.stringify(widths));
+    await page.locator('#chat-input-row').screenshot({ path: shot(`composer-${width}`) });
+  }
+  await page.evaluate(() => { document.getElementById('chat-input-row').style.width = ''; });
+  await pause();
+
+  // The menu explains the pill: the notice above the options, then the way to the switch.
+  // Clicks and focus through the DOM: Playwright's own waiting hangs on the
+  // throttled timers of a background window.
+  const press = (id) => page.evaluate((el) => {
+    const node = document.getElementById(el);
+    node.focus();
+    node.click();
+  }, id);
+  await press('btn-chat-tool-mode');
+  await poll(() => page.evaluate(() => !document.getElementById('chat-tool-mode-menu').classList.contains('hidden')),
+    { what: 'open mode menu' });
+  console.log('menu:', JSON.stringify(await page.evaluate(() => ({
+    notice: document.getElementById('chat-tool-mode-notice').textContent.replace(/\s+/g, ' ').trim(),
+    describedBy: document.getElementById('chat-tool-mode-list').getAttribute('aria-describedby'),
+    focus: document.activeElement?.dataset?.mode || document.activeElement?.id || '',
+  }))));
+  await themed('menu-auto', (file) => page.locator('#chat-panel').screenshot({ path: file }));
+  await page.evaluate(() => document.getElementById('chat-tool-mode-notice-link').focus());
+  await page.keyboard.press('ArrowDown');
+  console.log('arrow down from the link:', await page.evaluate(() => document.activeElement?.dataset?.mode || ''));
+  await followToSwitch('menu link', () => press('chat-tool-mode-notice-link'));
+  await followToSwitch('shield', () => press('btn-tree-sandbox'));
 
   // 4. In "Auto" the command runs without a card — and without sandbox.
   model.queueAnswer({ match: AUTO, toolCalls: [{ name: 'shell_execute', arguments: { command: `echo x > '${outsideFile}'; echo done` } }] });

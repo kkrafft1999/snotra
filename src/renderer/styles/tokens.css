@@ -78,6 +78,15 @@
   --ds-error-bg: rgba(176, 48, 48, 0.10);
   --ds-error-border: rgba(176, 48, 48, 0.35);
 
+  /* ── Warning status token (#396) ────────────────────────────────────────────
+   * Amber means exactly one thing: a run happens without isolation — the
+   * sandbox is switched off for the workspace or missing on the system. A
+   * risk carried knowingly or unavoidably, not a malfunction; errors stay red.
+   * No other use, and never as an accent. */
+  --ds-warning: #915B00;       /* 5.5:1 on --ds-surface, 4.8:1 on its own tint */
+  --ds-warning-bg: rgba(145, 91, 0, 0.10);
+  --ds-warning-border: rgba(145, 91, 0, 0.35);
+
   --ds-mic-recording: #DC2626;        /* 4,7:1 auf --ds-surface — separater Rotton, damit
                                          Recording-Pulse nicht mit Error-Bubbles
                                          farblich kollidiert */
@@ -244,6 +253,10 @@
   --ds-error: #FF8080;
   --ds-error-bg: rgba(255, 128, 128, 0.12);
   --ds-error-border: rgba(255, 128, 128, 0.35);
+
+  --ds-warning: #F2B45A;       /* 4.8:1 on its tint over the composer, 7.1:1 on --ds-surface */
+  --ds-warning-bg: rgba(242, 180, 90, 0.12);
+  --ds-warning-border: rgba(242, 180, 90, 0.35);
 
   --ds-mic-recording: #F87171;
   --ds-mic-recording-bg: rgba(248, 113, 113, 0.15);

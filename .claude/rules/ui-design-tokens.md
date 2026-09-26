@@ -266,18 +266,48 @@ Red is **not forbidden outright**, but only use it when the meaning visually
 - **A destructive confirmation** (e.g. "delete data irreversibly"): only when
   the black destructive variant is too quiet; when in doubt, **try black
   first**.
-- **The "Not isolated" pill on the approval card** (#329): a command or program
-  that would run with the user's full rights, although a sandbox is the
-  default. Decided by the user on 2026-09-25; the pill carries the text as well,
-  so colour is not the only signal.
 
 Not permitted: red for non-critical notes, for validation hints without an
-actual error, or as a general accent.
+actual error, or as a general accent. A run without isolation is not red
+either — from #329 until #396 the "Not isolated" pill on the approval card was,
+since then it has the warning colour below.
 
 Token convention: red tokens are named `--ds-error`, `--ds-error-bg`,
 `--ds-error-border`, `--ds-mic-recording`, `--ds-mic-recording-bg`. They live in
 `tokens.css` next to the Mono-Blue tokens, but are **documented clearly as
 status tokens**, so that nobody repurposes them as a general accent by accident.
+
+## Warning status colour (exception, since 2026-09-26)
+
+A second status colour next to red, for exactly one meaning: **a run happens
+without isolation** — the sandbox is switched off for the workspace, or the
+system has none (#396). That is a risk the user accepted or cannot avoid, not a
+malfunction. Red would read as "error", and on a permission control as
+"blocked" — the opposite of a state in which everything runs. Decided by the
+user on 2026-09-26 from a mockup with four variants (red with words, black with
+words, amber, today's red).
+
+The same state carries the same colour everywhere:
+
+- the mode pill in "Auto" ("Auto · not isolated") and the notice on top of its
+  menu,
+- the "Not isolated" badge on the approval card,
+- the shield next to the folder name (#398),
+- the "Not isolated" lines in Settings › Tools.
+
+Rules:
+
+- **Never the colour alone:** the words "not isolated" and the struck-through
+  shield go with it. Only a composer bar too narrow for the words keeps the
+  shield on its own; tooltip, accessible name and the menu still say it.
+- **Nothing else is amber** — no general caution, no validation hint, no
+  accent. An action that failed stays red, even when it concerns the sandbox
+  (the switch could not be flipped, say).
+- Tokens: `--ds-warning` (text, icon, pill border), `--ds-warning-bg` (tint),
+  `--ds-warning-border` (badge border). Light `#915B00`: 5.5:1 on
+  `--ds-surface`, 4.8:1 on its own tint. Dark `#F2B45A`: 4.8:1 on its tint over
+  the composer, 7.1:1 on `--ds-surface`. Whoever changes a value checks it on
+  those grounds again.
 
 ## Mandatory patterns (WCAG 2.1 AA)
 
