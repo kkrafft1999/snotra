@@ -510,3 +510,153 @@ test('the note in a subfolder lines up with the names and follows the language',
   t.after(() => setLocale('en', { force: true }));
   assert.equal(note.textContent, '… 1 weiterer Eintrag ausgeblendet');
 });
+
+// ── The paths into the content pane go through the file views (#225) ────────
+
+const previewShown = () => !document.getElementById('file-preview').classList.contains('hidden');
+const previewText = () => document.getElementById('preview-content')?.textContent;
+
+test('an agent write to the open file (#73) reloads it, a write elsewhere reads nothing', async (t) => {
+  const reads = [];
+  let content = 'before';
+  const { dom, container, tree } = await mountTree({
+    readFile: async (p) => { reads.push(p); return { content, size: content.length }; },
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  content = 'after';
+  await tree.notifyExternalFileWrite('README.md');
+  assert.equal(previewText(), 'after');
+
+  reads.length = 0;
+  await tree.notifyExternalFileWrite('docs/other.md');
+  assert.deepEqual(reads, []);
+});
+
+test('deleting the open file from the context menu closes it, deleting something else does not', async (t) => {
+  let deleted = null;
+  const { dom, container, appStore } = await mountTree({
+    onFsItemDeleted: (callback) => { deleted = callback; },
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  deleted({ path: '/ws/docs' });
+  await flush();
+  assert.ok(previewShown(), 'another folder went away, the open file stays');
+
+  deleted({ path: '/ws/README.md' });
+  await flush();
+  assert.equal(previewShown(), false);
+  assert.equal(appStore.selectedPath, null);
+  assert.equal(document.getElementById('welcome').classList.contains('hidden'), false);
+});
+
+test('clicking a folder moves the selection, but the open file keeps following the disk', async (t) => {
+  let content = 'one';
+  const { dom, container, appStore, emitTreeChanged } = await mountTree({
+    readFile: async () => ({ content, size: content.length }),
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  assert.equal(appStore.selectedPath, '/ws/docs');
+
+  content = 'two';
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+  assert.equal(previewText(), 'two');
+});
+
+test('a file in a folder deleted outside the app closes with its folder', async (t) => {
+  const { dom, container, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  rowFor(container, '/ws/docs/notes.md').click();
+  await flush();
+  rowFor(container, '/ws/docs').click(); // collapse, selection on the folder
+  await flush();
+  entries['/ws'] = entries['/ws'].filter((item) => item.name !== 'docs');
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+  assert.equal(previewShown(), false);
+});
+
+test('opening another folder unmounts the view', async (t) => {
+  const { dom, container, tree } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(await tree.openProject('/ws'), true);
+  assert.equal(previewShown(), false);
+  assert.equal(document.getElementById('preview-body').children.length, 0);
+});
+
+async function mountTreeWithDirtyEditor(t, answer) {
+  const { createFileViewRegistry } = await importRenderer('file-views', 'registry.js');
+  const { plainTextView } = await importRenderer('file-views', 'plain-text-view.js');
+  const asked = [];
+  let editorContext = null;
+  const editor = {
+    id: 'test-editor',
+    kind: 'editor',
+    canHandle: ({ ext }) => ext === 'md',
+    mount(hostEl, context) {
+      editorContext = context;
+      return { update() {}, unmount() {} };
+    },
+  };
+  const activated = [];
+  const setup = await mountTree(
+    { activateFolder: async (p) => { activated.push(p); return { ok: true }; } },
+    {
+      fileViews: createFileViewRegistry([editor, plainTextView]),
+      confirmLeave: async (question) => { asked.push(question); return answer; },
+    }
+  );
+  t.after(setup.dom.cleanup);
+  rowFor(setup.container, '/ws/README.md').click();
+  await flush();
+  editorContext.setDirty(true);
+  activated.length = 0; // the first openProject in mountTree
+  return { ...setup, asked, activated };
+}
+
+test('an editor that keeps its unsaved changes keeps the selection on its file', async (t) => {
+  const { container, appStore, asked } = await mountTreeWithDirtyEditor(t, 'cancel');
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  rowFor(container, '/ws/docs/notes.md').click();
+  await flush();
+
+  assert.equal(asked.length, 1);
+  assert.equal(asked[0].reason, 'switch-file');
+  assert.equal(document.getElementById('preview-filename').textContent, 'README.md');
+  assert.equal(appStore.selectedPath, '/ws/docs', 'the folder click moved it, the refused file click did not');
+  assert.equal(rowFor(container, '/ws/docs/notes.md').classList.contains('active'), false);
+});
+
+test('an editor that keeps its unsaved changes keeps the folder open', async (t) => {
+  const { tree, asked, activated } = await mountTreeWithDirtyEditor(t, 'cancel');
+
+  assert.equal(await tree.openProject('/elsewhere'), false);
+  assert.equal(asked[0].reason, 'switch-folder');
+  assert.deepEqual(activated, [], 'main was never asked to switch');
+  assert.equal(document.getElementById('preview-filename').textContent, 'README.md');
+});
+
+test('discarding lets the folder switch through', async (t) => {
+  const { tree, activated } = await mountTreeWithDirtyEditor(t, 'discard');
+
+  assert.equal(await tree.openProject('/elsewhere'), true);
+  assert.deepEqual(activated, ['/elsewhere']);
+  assert.equal(previewShown(), false);
+});

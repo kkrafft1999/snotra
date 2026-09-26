@@ -1,10 +1,6 @@
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import {
-  isTextFile,
-  getExtension,
   formatCount,
-  formatSize,
-  formatTimestamp,
   svgAt,
   svgChevron,
   svgFolder,
@@ -29,6 +25,7 @@ import {
   sortFoldersTopDown,
   treeDepthFromIndentWidth,
 } from '../tree/treePaths.js';
+import { createFileViewHost } from '../file-views/host.js';
 
 // What a quick start chip writes into the chat is the user's own message, so it
 // reads in the language of the interface (#310).
@@ -50,19 +47,15 @@ export function initFileTree(deps) {
     activeProviderConfigured,
     insertChatReference,
     revealContentPane,
+    // Both only for tests; the app runs with the defaults of the host.
+    fileViews,
+    confirmLeave,
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
-  const welcomeEl = document.getElementById('welcome');
-  const filePreview = document.getElementById('file-preview');
-  const fileInfo = document.getElementById('file-info');
-  const previewFilename = document.getElementById('preview-filename');
-  const previewMeta = document.getElementById('preview-meta');
-  const previewContent = document.getElementById('preview-content');
-  const infoFilename = document.getElementById('info-filename');
-  const infoSize = document.getElementById('info-size');
-  const infoModified = document.getElementById('info-modified');
-  const infoType = document.getElementById('info-type');
+  // What the middle column shows for a file is the business of the file views
+  // (#225); the tree only says which file, and when it changed or went away.
+  const contentPane = createFileViewHost({ api, registry: fileViews, confirmLeave });
   const projectName = document.getElementById('project-name');
   const btnFolderHistory = document.getElementById('btn-folder-history');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
@@ -83,11 +76,6 @@ export function initFileTree(deps) {
   // Laeuft gerade ein Import von aussen? Verhindert einen zweiten Drop,
   // waehrend noch kopiert wird (#101).
   let importInFlight = false;
-  // Was gerade in der mittleren Spalte steht. Gemerkt, weil ein Sprachwechsel
-  // Groesse, Datum und Typ neu schreiben muss und die Werte sonst nur noch im
-  // DOM stuenden — als fertiger Text in der alten Sprache (#292).
-  let shownInfo = null;
-  let shownPreviewSize = null;
 
   function resetDragState() {
     clearDragVisualState();
@@ -173,6 +161,9 @@ export function initFileTree(deps) {
    * im Verlauf —, bleibt der bisherige Workspace stehen.
    */
   async function openProject(folderPath) {
+    // Unsaved changes in an editor are settled before main switches folders;
+    // afterwards the file they belong to is out of reach.
+    if (!(await contentPane.settleUnsaved('switch-folder'))) return false;
     const activated = await api.activateFolder(folderPath);
     if (!activated?.ok) {
       await refreshFolderHistory();
@@ -187,7 +178,7 @@ export function initFileTree(deps) {
     document.title = 'Snotra AI';
 
     treeContainer.innerHTML = '';
-    showWelcome();
+    contentPane.clear();
 
     await loadTreeLevel(treeContainer, folderPath, 0);
     if (workspaceChanged) {
@@ -583,10 +574,11 @@ export function initFileTree(deps) {
     // Bei einem gelöschten Ordner (#120) ist auch die Vorschau einer Datei
     // darin hinfällig, nicht nur die des gelöschten Eintrags selbst.
     if (appStore.selectedPath === deletedPath || isInsideDir(appStore.selectedPath, deletedPath)) {
-      appStore.selectedPath = null;
-      appStore.selectedIsDirectory = false;
-      appStore.activeTreeItem = null;
-      showWelcome();
+      clearSelection();
+    }
+    const openPath = contentPane.openPath();
+    if (openPath === deletedPath || isInsideDir(openPath, deletedPath)) {
+      await contentPane.close('file-removed');
     }
     await refreshParentOf(deletedPath);
   }
@@ -793,28 +785,8 @@ export function initFileTree(deps) {
     const absPath = joinNative(appStore.rootPath, rel);
 
     await refreshParentOf(absPath);
-
-    if (appStore.selectedPath === absPath && !appStore.selectedIsDirectory) {
-      await showTextPreview(absPath);
-    }
-  }
-
-  /**
-   * Vorschau einer Datei neu aus dem Dateisystem lesen. Anders als
-   * showFileContent() kommt sie ohne Baum-Eintrag aus — der Aufrufer hat nur
-   * einen Pfad, und die Datei kann inzwischen weg sein (dann bleibt stehen,
-   * was zu sehen war; ums Aufräumen kümmert sich der Aufrufer).
-   */
-  async function showTextPreview(absPath) {
-    const result = await api.readFile(absPath);
-    if (result.error) return;
-    welcomeEl.classList.add('hidden');
-    filePreview.classList.remove('hidden');
-    fileInfo.classList.add('hidden');
-    previewFilename.textContent = basenameOf(absPath);
-    shownPreviewSize = result.size;
-    previewMeta.textContent = formatSize(result.size);
-    previewContent.textContent = result.content;
+    // The pane decides whether that is the file on show.
+    await contentPane.refresh(absPath);
   }
 
   async function refreshFolder(dirPath) {
@@ -943,31 +915,36 @@ export function initFileTree(deps) {
   }
 
   /**
-   * Die Auswahl nachziehen: Ist sie verschwunden, wird sie aufgehoben und die
-   * Vorschau geschlossen — besser als eine Vorschau, die auf nichts mehr
-   * zeigt. Hat sich der Ordner der ausgewählten Datei gemeldet, wird ihr
-   * Inhalt neu gelesen; welche Datei genau geschrieben wurde, weiß der
-   * Watcher nicht.
+   * Selection and the open file after a watcher report. They are two things:
+   * clicking a folder moves the selection, but the pane keeps showing the last
+   * file. A vanished selection is cleared; a vanished open file closes the
+   * pane — better than a view of nothing. If the folder of the open file
+   * reported, the file is read again; which file exactly was written, the
+   * watcher does not know.
    */
   async function syncSelection(reportedDirs, complete) {
+    // Whatever sits in a collapsed folder has no row to go by: left alone.
+    const inVisibleFolder = (p) => visibleFolderPaths().includes(parentDirOf(p));
     const selected = appStore.selectedPath;
-    if (!selected) return;
-    const parent = parentDirOf(selected);
-    // Liegt der Eintrag in einem zugeklappten Ordner, ist nichts zu tun.
-    if (!visibleFolderPaths().includes(parent)) return;
-    if (!rowForPath(selected)) {
-      appStore.selectedPath = null;
-      appStore.selectedIsDirectory = false;
-      appStore.activeTreeItem = null;
-      showWelcome();
+    let vanished = null;
+    if (selected && inVisibleFolder(selected) && !rowForPath(selected)) {
+      vanished = selected;
+      clearSelection();
+    }
+
+    const openPath = contentPane.openPath();
+    if (!openPath) return;
+    if (vanished && (openPath === vanished || isInsideDir(openPath, vanished))) {
+      await contentPane.close('file-removed');
       return;
     }
-    if (appStore.selectedIsDirectory) return;
-    if (complete && !reportedDirs.includes(parent)) return;
-    // Nur nachladen, was ohnehin sichtbar ist — eine geschlossene Vorschau
-    // reißt der Watcher nicht von sich aus auf.
-    if (filePreview.classList.contains('hidden')) return;
-    await showTextPreview(selected);
+    if (!inVisibleFolder(openPath)) return;
+    if (!rowForPath(openPath)) {
+      await contentPane.close('file-removed');
+      return;
+    }
+    if (complete && !reportedDirs.includes(parentDirOf(openPath))) return;
+    await contentPane.refresh(openPath);
   }
 
   /**
@@ -1019,14 +996,23 @@ export function initFileTree(deps) {
   }
 
   async function selectFile(row, item) {
-    setActiveItem(row);
-    appStore.selectedPath = item.path;
-    appStore.selectedIsDirectory = false;
     // Die Vorschau lebt in der mittleren Spalte. Ist die zu — beim Start neben
     // einem wiederhergestellten Chat (Issue #208) oder weil sie weggeschaltet
     // wurde —, waere der Klick auf eine Datei sonst folgenlos.
     revealContentPane?.();
-    await showFileContent(item);
+    // The selection follows only once the pane shows the file: an editor with
+    // unsaved changes may keep it, and a quicker second click overtakes this
+    // one — either way the row must not claim a file that is not on show.
+    if (!(await contentPane.open(item))) return;
+    setActiveItem(row);
+    appStore.selectedPath = item.path;
+    appStore.selectedIsDirectory = false;
+  }
+
+  function clearSelection() {
+    appStore.selectedPath = null;
+    appStore.selectedIsDirectory = false;
+    appStore.activeTreeItem = null;
   }
 
   function setActiveItem(row) {
@@ -1037,53 +1023,12 @@ export function initFileTree(deps) {
     appStore.activeTreeItem = row;
   }
 
-  function showWelcome() {
-    welcomeEl.classList.remove('hidden');
-    filePreview.classList.add('hidden');
-    fileInfo.classList.add('hidden');
-  }
-
-  async function showFileContent(item) {
-    welcomeEl.classList.add('hidden');
-
-    if (isTextFile(item.name)) {
-      const result = await api.readFile(item.path);
-
-      if (result.error) {
-        showFileInfo(item, result.error);
-        return;
-      }
-
-      filePreview.classList.remove('hidden');
-      fileInfo.classList.add('hidden');
-      previewFilename.textContent = item.name;
-      shownInfo = null;
-      shownPreviewSize = result.size;
-      previewMeta.textContent = formatSize(result.size);
-      previewContent.textContent = result.content;
-    } else {
-      showFileInfo(item);
-    }
-  }
-
-  function showFileInfo(item, errorMsg) {
-    filePreview.classList.add('hidden');
-    fileInfo.classList.remove('hidden');
-    shownInfo = { item, errorMsg };
-    shownPreviewSize = null;
-    infoFilename.textContent = item.name;
-    // Ein Fehlertext kommt aus dem Main-Prozess und steht schon in der
-    // richtigen Sprache — der Sprachwechsel unten holt ihn deshalb neu.
-    infoSize.textContent = errorMsg || formatSize(item.size);
-    infoModified.textContent = formatTimestamp(item.modified);
-    infoType.textContent = getExtension(item.name) || t('fileInfo.type.unknown');
-  }
-
   /**
    * Sprachwechsel (Epic #277). Der Rahmen des Baums traegt `data-i18n` und
    * wird von `applyTranslations` erledigt; hier stehen die Stellen, die zur
-   * Laufzeit gebaut werden — die Beschriftungen der Zeilen, das Verlaufsmenue
-   * und die mittlere Spalte, deren Zahlen und Datumsangaben der Sprache folgen.
+   * Laufzeit gebaut werden — die Beschriftungen der Zeilen und das
+   * Verlaufsmenue. Die mittlere Spalte folgt der Sprache in
+   * `file-views/host.js`.
    */
   onLocaleChange(() => {
     if (!appStore.rootPath) projectName.textContent = t('sidebar.noFolder');
@@ -1096,14 +1041,6 @@ export function initFileTree(deps) {
       note.textContent = hiddenEntriesText(Number(note.dataset.hiddenCount) || 0);
     }
     if (!folderHistoryMenu.classList.contains('hidden')) void refreshFolderHistory();
-    if (shownInfo) {
-      // Der Fehlertext kam aus dem Main-Prozess: neu lesen statt den alten
-      // Wortlaut stehen zu lassen. Ohne Fehler kostet das Neuzeichnen nichts.
-      if (shownInfo.errorMsg) void showFileContent(shownInfo.item);
-      else showFileInfo(shownInfo.item);
-    } else if (shownPreviewSize !== null) {
-      previewMeta.textContent = formatSize(shownPreviewSize);
-    }
   });
 
   return {

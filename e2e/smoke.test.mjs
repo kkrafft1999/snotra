@@ -224,7 +224,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       const state = await page.evaluate(() => ({
         hidden: document.getElementById('file-preview').classList.contains('hidden'),
         name: document.getElementById('preview-filename').textContent,
-        content: document.getElementById('preview-content').textContent,
+        // Mounted by the plain-text view once the file is read (#225).
+        content: document.getElementById('preview-content')?.textContent ?? null,
       }));
       return state.hidden ? null : state;
     },

@@ -706,6 +706,72 @@ during the test run and would warn on every run
 `config.forge.packagerConfig.ignore` lets everything under `src/` through, and
 `scripts/check-asar-contents.js` verifies that after every build.
 
+### File views: what the content pane shows ([#225](https://github.com/kkrafft1999/snotra/issues/225))
+
+The content pane shows a file through a **file view** — either a *viewer*,
+which only shows, or an *editor*, which can also hold changes that are not on
+disk yet. Which view takes a file is decided by a registry, not by a chain of
+`if` branches in `FileTree.js`. This is the extension point for every new file
+type: a new view is one module and one line in the registry.
+
+| Module | What lives there | Test |
+| ----- | -------------- | ---- |
+| `renderer/file-views/registry.js` | The descriptor, context and instance interface (documented in the module header), the registry and its order. DOM-free. | `test/file-view-registry.test.js` |
+| `renderer/file-views/host.js` | The pane as host: reading the file, choosing the view, the header (name, size, tool area), the file info card as the last fallback, mount/update/unmount, and the one gate for unsaved changes | `test/file-view-host-dom.test.js` |
+| `renderer/file-views/plain-text-view.js` | The default view: the text as it is, in `<pre id="preview-content">` | both of the above |
+
+```
+FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js
+                                                      │ registry.resolve(file)
+                                                      ▼
+                          first view whose canHandle() says yes ─ none ─▶ info card
+                                                      │ api.readFile — error ─▶ info card, with the error
+                                                      ▼
+                          mount(fresh element, context) → instance
+```
+
+The rules the host guarantees:
+
+- **The first view that can handle a file wins**, in the explicit order of the
+  registry; specialised views go before `plain-text`. `resolve(file, id)` can
+  pick another candidate — the hook for a later "rendered | source" or
+  "view | edit" switch, which a type with more than one view will need.
+- **The header belongs to the pane**, not to the view: name and size look the
+  same for every type. A view may put controls into the tool area next to the
+  size (`context.setTools`); it is hidden while empty.
+- **Every mount gets a fresh element.** Nothing is inherited from the previous
+  view, including the scroll position.
+- **`update()` only comes when the text on disk changed.** A watcher report for
+  a neighbouring file, or the echo of the editor's own save, does not reach the
+  view — a viewer keeps its scroll position and text selection.
+- **A read error is shown, not swallowed.** A file over the 1 MB preview limit
+  shows the error on the info card — also when it grows past the limit while it
+  is open, where the old text used to simply stay.
+
+**Editors.** An editor reports unsaved changes via `context.setDirty()`. Every
+path that would replace or close it — another file, another folder, the file
+deleted — goes through one gate in the host; there the editor can keep the pane
+(`confirmLeave` answers `save`, `discard` or `cancel`). `selectFile()` only moves
+the tree selection once the pane actually shows the new file, and
+`openProject()` settles unsaved changes before it asks main to switch folders.
+An editor with unsaved changes survives an external change (it gets `update()`
+and decides) and a file it can no longer read. The dialog itself and the write
+channel come with the first editor
+([#226](https://github.com/kkrafft1999/snotra/issues/226)); until then the
+default answer is `cancel`, because a lost edit is worse than a pane that stays
+where it is. `setDirty()` is ignored for viewers, so a viewer can never trap the
+user.
+
+The pane follows the open file, not the tree selection: clicking a folder
+moves the selection, but the file on show keeps reloading when the watcher
+reports its folder, and closes when it disappears.
+
+Every view reads text today. Views for images and PDFs
+([#345](https://github.com/kkrafft1999/snotra/issues/345),
+[#346](https://github.com/kkrafft1999/snotra/issues/346)) read through their own
+channel; the descriptor will get a way to opt out of the text read, with text
+staying the default.
+
 ### Two halves: workspace and chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
 
 The directory tree and the content pane belong together — you click a file on the
@@ -897,6 +963,7 @@ a stubbed `api`/`appStore`.
 | Test | What it checks |
 | ---- | ------------ |
 | `test/file-tree-dom.test.js` | Drawing the tree, expanding/collapsing, preview, drop from outside ([#101](https://github.com/kkrafft1999/snotra/issues/101)): target folder per hit area, reading the `DataTransfer` before the first `await`, busy lock, tree refresh |
+| `test/file-view-host-dom.test.js` | The content pane as host of the file views ([#225](https://github.com/kkrafft1999/snotra/issues/225)): switching and `unmount`, fresh element per mount, fallbacks (binary, too large, empty), `update()` only on changed text, overtaken reads, the tool area, the gate for an editor's unsaved changes |
 | `test/settings-modal-dom.test.js` | Tab switching: panel, `aria-selected`, roving tabindex, heading, Escape |
 | `test/chat-links-dom.test.js` | Click handler for links from model answers ([#82](https://github.com/kkrafft1999/snotra/issues/82), [#83](https://github.com/kkrafft1999/snotra/issues/83)) including the error message in the status line |
 | `test/chat-restore-report-dom.test.js` | What `loadChatForWorkspace()` reports to the startup ([#208](https://github.com/kkrafft1999/snotra/issues/208)): restored conversation, empty folder, plain greeting |
