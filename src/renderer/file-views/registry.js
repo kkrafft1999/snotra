@@ -30,6 +30,10 @@
 //     file: { path, name, ext, size, modified },
 //     content,              // the file as UTF-8 text, read by the host
 //     api,                  // window.electronAPI, for views that need more
+//     workspaceRoot,        // the open folder, or null
+//     openFile(path) → Promise<{ ok, reason? }>,
+//                           // show another file of the workspace and select
+//                           // it in the tree; reason 'outside' or 'not-found'
 //     setTools(nodes),      // fill the tool area in the header (right-hand
 //                           // side, next to the size); [] or null clears it
 //     setDirty(dirty),      // editors only: "my buffer differs from the file"
@@ -47,6 +51,9 @@
 //                                           // the host empties hostEl after it
 //     save() → Promise<boolean>,            // editors only; false = failed,
 //                                           // the editor stays open
+//     command(name) → boolean,              // optional: a command from the
+//                                           // menu, e.g. 'toggle-source';
+//                                           // true when the view handled it
 //   }
 //
 // Rules the host relies on:
@@ -67,6 +74,7 @@
 // read me as text", with text staying the default.
 
 import { getExtension } from '../utils/helpers.js';
+import { markdownView } from './markdown-view.js';
 import { plainTextView } from './plain-text-view.js';
 
 const KINDS = new Set(['viewer', 'editor']);
@@ -132,4 +140,4 @@ export function createFileViewRegistry(views) {
  * The views of the app. Order matters: specialised views go before
  * `plain-text`, which takes every text file nobody else claims.
  */
-export const fileViews = createFileViewRegistry([plainTextView]);
+export const fileViews = createFileViewRegistry([markdownView, plainTextView]);

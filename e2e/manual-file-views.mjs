@@ -20,7 +20,9 @@ const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
 const PINNED = new Date('2026-09-20T14:32:00');
 
-const README = [
+// A .txt, not a README.md: Markdown has its own view since #344, and this
+// script is about the plain-text view.
+const NOTES = [
   '# Example project',
   '',
   'A short README, the way most workspaces have one.',
@@ -39,7 +41,7 @@ const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-file-views-userdat
 await mkdir(SHOTS, { recursive: true });
 
 const files = {
-  'README.md': README,
+  'notes.txt': NOTES,
   'empty.txt': '',
   'long-lines.txt': LONG,
   'big.log': 'x'.repeat(1024 * 1024 + 1),
@@ -91,7 +93,7 @@ try {
     { what: 'tree' }
   );
 
-  await open('README.md', (s) => s.preview && s.name === 'README.md' && s.text === README);
+  await open('notes.txt', (s) => s.preview && s.name === 'notes.txt' && s.text === NOTES);
   await shoot('text');
 
   await open('long-lines.txt', (s) => s.preview && s.name === 'long-lines.txt');
@@ -120,14 +122,14 @@ try {
   }));
 
   // Written from outside while open — the watcher path of #158 / #73.
-  await open('README.md', (s) => s.preview && s.name === 'README.md');
-  await writeFile(path.join(workspace, 'README.md'), `${README}- three, written from outside\n`);
-  await poll(async () => (await pane()).text?.includes('three'), { what: 'README reloaded' });
+  await open('notes.txt', (s) => s.preview && s.name === 'notes.txt');
+  await writeFile(path.join(workspace, 'notes.txt'), `${NOTES}- three, written from outside\n`);
+  await poll(async () => (await pane()).text?.includes('three'), { what: 'notes.txt reloaded' });
   await shoot('rewritten');
 
   // Grows past the limit while open: until now the old text simply stayed.
-  await writeFile(path.join(workspace, 'README.md'), 'y'.repeat(1024 * 1024 + 1));
-  await poll(async () => (await pane()).info, { what: 'README too large now' }).catch(() => {});
+  await writeFile(path.join(workspace, 'notes.txt'), 'y'.repeat(1024 * 1024 + 1));
+  await poll(async () => (await pane()).info, { what: 'notes.txt too large now' }).catch(() => {});
   console.log('grown past the limit:', await pane());
 } finally {
   await snotra.stop().catch(() => {});

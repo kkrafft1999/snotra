@@ -4537,12 +4537,17 @@ select.modal-input {
  * Nachher: Filename in Mono (so wie tool-hero-arg in der Referenz),
  * Groesse als kompakte Pill rechts. Hintergrund neutraler.
  */
+/* The height of the chat header, whatever the file: a Markdown file brings
+ * the "Preview | Source" switch into the tool area (#344), and the row must
+ * not jump by its height when the next file is plain text. It also lines the
+ * middle column up with the tree and the chat. */
 #preview-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 8px 16px;
+  min-height: calc(var(--ds-touch-min) + 20px);
+  padding: 4px 16px;
   background: var(--ds-grey-bg);
   border-bottom: 1px solid var(--ds-grey-divider);
 }
@@ -4577,6 +4582,7 @@ select.modal-input {
  * hidden by default, so the header looks the same without it. */
 #preview-tools {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
   margin-left: auto;
@@ -4607,6 +4613,346 @@ select.modal-input {
   tab-size: 4;
   white-space: pre;
   user-select: text;
+}
+
+/* ── Markdown in the file preview (#344) ──────────────────────────────────
+ * Reading, not chatting: a wider measure and more air than `.chat-md`, but the
+ * same tokens, so code, tables and quotes look alike in both places. */
+
+/* The segmented control of the settings, sized for a header row. */
+.ds-segmented--compact .ds-segmented__option {
+  min-width: 0;
+  padding: 0 12px;
+  font-size: var(--ds-font-size-sm);
+}
+
+.md-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 32px;
+}
+
+.md-view:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset) - 2px);
+}
+
+.md-view[hidden],
+.md-source[hidden] {
+  display: none;
+}
+
+.md-source {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.md-doc {
+  max-width: 72ch;
+  font-size: var(--ds-font-size-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+  user-select: text;
+}
+
+.md-doc > :first-child {
+  margin-top: 0;
+}
+
+.md-doc > :last-child {
+  margin-bottom: 0;
+}
+
+.md-doc h1,
+.md-doc h2,
+.md-doc h3,
+.md-doc h4,
+.md-doc h5,
+.md-doc h6 {
+  font-weight: var(--ds-font-weight-bold);
+  line-height: 1.3;
+  scroll-margin-top: 12px;
+}
+
+.md-doc h1 {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.md-doc h2 {
+  font-size: var(--ds-font-size-h3);
+  margin: 1.6em 0 0.5em;
+}
+
+.md-doc h3 {
+  font-size: var(--ds-font-size-lg);
+  margin: 1.4em 0 0.4em;
+}
+
+.md-doc h4,
+.md-doc h5,
+.md-doc h6 {
+  font-size: var(--ds-font-size-base);
+  margin: 1.2em 0 0.4em;
+}
+
+.md-doc p {
+  margin: 0 0 0.9em;
+}
+
+.md-doc ul,
+.md-doc ol {
+  margin: 0 0 0.9em;
+  padding-left: 1.5em;
+}
+
+.md-doc li {
+  margin: 0.25em 0;
+}
+
+.md-doc li > ul,
+.md-doc li > ol {
+  margin: 0.25em 0 0;
+}
+
+/* GFM task lists: the checkbox stands in for the bullet. */
+.md-doc li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.3em;
+}
+
+.md-doc li > input[type='checkbox'] {
+  margin: 0 0.45em 0 0;
+  vertical-align: -1px;
+  accent-color: var(--ds-blue);
+}
+
+/* Underlined, not only blue: a link has to be recognisable without colour
+ * (WCAG 1.4.1). */
+.md-doc a[href] {
+  color: var(--ds-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  border-radius: 2px;
+}
+
+.md-doc a[href]:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* A link the sanitizer or the viewer disarmed is text again. */
+.md-doc a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+  cursor: text;
+}
+
+.md-doc a[href]:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Leaves the app: the arrow says so before the click does. The empty
+ * alternative text keeps screen readers from announcing "north east arrow". */
+.md-doc a.md-link--external::after {
+  content: '\2197' / '';
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.85em;
+  text-decoration: none;
+}
+
+.md-doc code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--ds-grey-card);
+  border: 1px solid var(--ds-grey-divider);
+}
+
+.md-doc pre {
+  margin: 0 0 1em;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-bg);
+  border: 1px solid var(--ds-grey-divider);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  tab-size: 4;
+}
+
+.md-doc pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+}
+
+.md-doc blockquote {
+  margin: 0 0 1em;
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 3px solid var(--accent);
+  color: var(--text-secondary);
+}
+
+.md-doc hr {
+  border: none;
+  border-top: 1px solid var(--ds-grey-divider);
+  margin: 1.5em 0;
+}
+
+/* A wide table scrolls in its own frame instead of widening the pane. */
+.md-table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 1em;
+}
+
+.md-doc table {
+  /* As wide as its content wants, so the frame scrolls instead of every cell
+   * breaking at each hyphen; a prose cell still wraps at its own limit. */
+  width: max-content;
+  border-collapse: collapse;
+  font-size: var(--ds-font-size-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.md-doc th,
+.md-doc td {
+  max-width: 40ch;
+  overflow-wrap: normal;
+  border: 1px solid var(--ds-grey-divider);
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-doc th {
+  background: var(--ds-grey-bg);
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.md-doc .md-image {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+/* An image alone in its paragraph: a figure across the measure. */
+.md-doc p.md-figure {
+  margin: 0.4em 0 1em;
+}
+
+.md-doc .md-figure .md-image {
+  display: block;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+}
+
+/* The placeholder of the chat (#244): inline in a sentence, a block of its
+ * own where the image would have been a figure. */
+.md-doc .md-figure .chat-md-image {
+  display: flex;
+  margin: 0;
+}
+
+.chat-md-image-source {
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-xs);
+  color: var(--ds-grey-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.md-empty {
+  color: var(--text-muted-strong);
+}
+
+/* Front matter: the head of a SKILL.md carries its name and description. */
+.md-front-matter {
+  margin: 0 0 1.4em;
+  padding: 10px 14px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-bg);
+  font-size: var(--ds-font-size-md);
+}
+
+.md-front-matter__title {
+  margin-bottom: 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: var(--ds-font-weight-bold);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ds-grey-strong);
+}
+
+.md-front-matter__list {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 3px 14px;
+  margin: 0;
+}
+
+.md-front-matter__list dt {
+  padding-top: 1px;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  overflow-wrap: anywhere;
+}
+
+.md-front-matter__list dd {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.md-doc .md-front-matter__raw,
+.md-doc .md-front-matter__nested {
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Why a link did nothing — a file that is not there, a failed browser. */
+.md-notice {
+  margin: 0 24px 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+}
+
+.md-notice[hidden] {
+  display: none;
 }
 
 /* ── File Info (binary files) ── */

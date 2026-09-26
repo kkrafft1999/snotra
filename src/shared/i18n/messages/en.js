@@ -38,6 +38,16 @@ module.exports = {
   'tree.hiddenEntries.one': '… {count} more entry not shown',
   'tree.hiddenEntries.other': '… {count} more entries not shown',
   'fileInfo.type.unknown': 'Unknown',
+  // Markdown in the file preview (#344).
+  'fileView.markdown.mode.label': 'Show as',
+  'fileView.markdown.mode.preview': 'Preview',
+  'fileView.markdown.mode.source': 'Source',
+  'fileView.markdown.frontMatter': 'Front matter',
+  'fileView.markdown.empty': 'This file is empty.',
+  'fileView.markdown.image.remote': 'Image from the web, not loaded',
+  'fileView.markdown.link.notFound': '{path} does not exist in the open folder.',
+  'fileView.markdown.link.outside': '{path} is outside the open folder.',
+  'fileView.markdown.link.noAnchor': 'There is no heading {anchor} in this file.',
 
   // ── Welcome screen ───────────────────────────────────────────────────────
   'welcome.headline': 'Where shall we start?',
@@ -1303,6 +1313,7 @@ module.exports = {
   'menu.edit.selectAll': 'Select All',
   'menu.view': 'View',
   'menu.view.toggleSidebar': 'Toggle Sidebar',
+  'menu.view.toggleMarkdownSource': 'Markdown: Preview or Source',
   'menu.view.reload': 'Reload',
   'menu.view.forceReload': 'Force Reload',
   'menu.view.devTools': 'Developer Tools',

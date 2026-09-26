@@ -84,3 +84,25 @@ test('isInsideDir erkennt Dateien unterhalb eines Ordners, den Ordner selbst nic
   assert.equal(isInsideDir(null, '/ws/docs'), false);
   assert.equal(isInsideDir('/ws/docs/a.md', ''), false);
 });
+
+test('resolveNative resolves . and .. against the folder of a document (#344)', async () => {
+  const { resolveNative } = await nativePathPromise;
+  assert.equal(resolveNative('/ws/docs', './a.md'), '/ws/docs/a.md');
+  assert.equal(resolveNative('/ws/docs', 'sub/./b.md'), '/ws/docs/sub/b.md');
+  assert.equal(resolveNative('/ws/docs', '../img/x.png'), '/ws/img/x.png');
+  assert.equal(resolveNative('/ws/docs/', '../README.md'), '/ws/README.md');
+  // Above the root it stays at the root, like path.resolve; the caller checks
+  // whether that is still inside the workspace.
+  assert.equal(resolveNative('/ws', '../../../etc/p'), '/etc/p');
+  assert.equal(resolveNative('/', 'a.md'), '/a.md');
+  assert.equal(resolveNative('/ws', ''), '/ws');
+});
+
+test('resolveNative keeps Windows drives and UNC shares as their root (#344)', async () => {
+  const { resolveNative } = await nativePathPromise;
+  assert.equal(resolveNative('C:\\repo\\docs', '../README.md'), 'C:\\repo\\README.md');
+  assert.equal(resolveNative('C:\\repo\\docs', 'img/a b.png'), 'C:\\repo\\docs\\img\\a b.png');
+  assert.equal(resolveNative('C:\\repo', '../../x.md'), 'C:\\x.md');
+  assert.equal(resolveNative('C:\\repo', '..'), 'C:\\');
+  assert.equal(resolveNative('\\\\srv\\share\\d', '../../../x.md'), '\\\\srv\\share\\x.md');
+});

@@ -9,14 +9,21 @@
 // path that would replace or close it — another file, another folder, the file
 // deleted — goes through `askToLeave()`, and only there. The answer comes from
 // `confirmLeave({ file, reason })`, which resolves to 'save', 'discard' or
-// 'cancel'. The dialog behind it belongs to the first editor (#226); until
-// then the default keeps the buffer, because a lost edit is worse than a pane
-// that stays where it is. Reasons: 'switch-file', 'switch-folder',
-// 'file-removed'.
+// 'cancel'. The dialog behind it belongs to the first editor — there is none:
+// editing in the preview was dropped on 2026-09-26 (#226), the paths stay so
+// that the question does not have to be reopened in the host. Until then the
+// default keeps the buffer, because a lost edit is worse than a pane that
+// stays where it is. Reasons: 'switch-file', 'switch-folder', 'file-removed'.
 //
-// Writing (#226) will go through the host as well, so that the host knows what
-// is on disk after a save and does not hand it back to the editor as an
-// external change.
+// Writing would go through the host as well, so that the host knows what is on
+// disk after a save and does not hand it back to the editor as an external
+// change.
+//
+// **Leaving the view from inside.** A view may point at another file — a link
+// in a Markdown document (#344). It asks through `context.openFile(path)`; the
+// host hands that to `openFile`, which the file tree provides, because only
+// the tree knows the workspace, can select the file and can tell a file that
+// is not there from one it just does not list.
 //
 // The interface of a view is documented in the header of `registry.js`.
 
@@ -26,7 +33,15 @@ import { fileViews } from './registry.js';
 
 const keepEditing = async () => 'cancel';
 
-export function createFileViewHost({ api, registry = fileViews, confirmLeave = keepEditing }) {
+const noOpener = async () => ({ ok: false, reason: 'not-found' });
+
+export function createFileViewHost({
+  api,
+  registry = fileViews,
+  confirmLeave = keepEditing,
+  openFile = noOpener,
+  getWorkspaceRoot = () => null,
+}) {
   const welcomeEl = document.getElementById('welcome');
   const filePreview = document.getElementById('file-preview');
   const previewFilename = document.getElementById('preview-filename');
@@ -82,6 +97,8 @@ export function createFileViewHost({ api, registry = fileViews, confirmLeave = k
 
   function renderHeader() {
     previewFilename.textContent = current.file.name;
+    // A long name gives way to the tool area and ends in an ellipsis (#344).
+    previewFilename.title = current.file.name;
     previewMeta.textContent = formatSize(current.file.size);
   }
 
@@ -136,6 +153,8 @@ export function createFileViewHost({ api, registry = fileViews, confirmLeave = k
       file: { ...file },
       content: result.content,
       api,
+      workspaceRoot: getWorkspaceRoot() ?? null,
+      openFile: (path) => (current === shown ? openFile(path) : Promise.resolve({ ok: false, reason: 'stale' })),
       setTools: (nodes) => {
         if (current === shown) setTools(nodes);
       },
@@ -282,6 +301,22 @@ export function createFileViewHost({ api, registry = fileViews, confirmLeave = k
     return true;
   }
 
+  /**
+   * Hands a command to the view on show — the menu shortcut that switches a
+   * Markdown file between preview and source (#344). False when there is no
+   * view, or the view does not know the command.
+   */
+  function runCommand(name) {
+    const instance = current?.instance;
+    if (!instance || typeof instance.command !== 'function') return false;
+    try {
+      return instance.command(name) === true;
+    } catch (err) {
+      console.warn(`File view "${current.view.id}" failed on command "${name}":`, err?.message ?? err);
+      return false;
+    }
+  }
+
   const stopFollowingLocale = onLocaleChange(() => {
     if (!current) return;
     if (current.error) void refresh(current.file.path);
@@ -296,6 +331,7 @@ export function createFileViewHost({ api, registry = fileViews, confirmLeave = k
     settleUnsaved,
     /** Back to the welcome screen without asking — for a caller that already settled. */
     clear: showWelcome,
+    runCommand,
     openPath: () => current?.file.path ?? null,
     hasUnsavedChanges: () => Boolean(current?.dirty),
     /** Unmount the view and stop listening — for a pane that goes away. */

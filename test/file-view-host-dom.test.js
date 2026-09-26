@@ -37,7 +37,7 @@ function recordingView(id, { kind = 'viewer', exts = ['txt'], save } = {}) {
   return { view, log };
 }
 
-async function mountHost(t, { files = {}, views, confirmLeave } = {}) {
+async function mountHost(t, { files = {}, views, confirmLeave, openFile, getWorkspaceRoot } = {}) {
   const dom = setupRendererDom();
   const { createFileViewHost } = await importRenderer('file-views', 'host.js');
   const { createFileViewRegistry } = await importRenderer('file-views', 'registry.js');
@@ -51,7 +51,7 @@ async function mountHost(t, { files = {}, views, confirmLeave } = {}) {
     },
   };
   const registry = views ? createFileViewRegistry(views) : undefined;
-  const host = createFileViewHost({ api, registry, confirmLeave });
+  const host = createFileViewHost({ api, registry, confirmLeave, openFile, getWorkspaceRoot });
   // A host that outlives its test would still answer a language switch, into
   // a window that is gone.
   t.after(() => {
@@ -448,4 +448,33 @@ test('an external change reaches a dirty editor through update(), not by remount
   assert.equal(log.length, 1);
   assert.deepEqual(log[0].updates.map((u) => u.content), ['# A, from the agent']);
   assert.equal(host.hasUnsavedChanges(), true, 'what to do with the buffer is the editor’s call');
+});
+
+test('a view asks for another file through the host; a view that is gone cannot (#344)', async (t) => {
+  const { view, log } = recordingView('rec', { exts: ['txt'] });
+  const asked = [];
+  const { host } = await mountHost(t, {
+    views: [view],
+    files: { '/ws/a.txt': text('a'), '/ws/b.txt': text('b') },
+    openFile: async (p) => { asked.push(p); return { ok: true }; },
+    getWorkspaceRoot: () => '/ws',
+  });
+
+  await host.open(item('a.txt'));
+  const first = log[0].context;
+  assert.equal(first.workspaceRoot, '/ws');
+  assert.deepEqual(await first.openFile('/ws/b.txt'), { ok: true });
+  assert.deepEqual(asked, ['/ws/b.txt']);
+
+  await host.open(item('b.txt'));
+  assert.deepEqual(await first.openFile('/ws/c.txt'), { ok: false, reason: 'stale' });
+  assert.deepEqual(asked, ['/ws/b.txt'], 'the replaced view no longer reaches the tree');
+});
+
+test('without an opener a view is told the file is not there', async (t) => {
+  const { view, log } = recordingView('rec', { exts: ['txt'] });
+  const { host } = await mountHost(t, { views: [view], files: { '/ws/a.txt': text('a') } });
+  await host.open(item('a.txt'));
+  assert.equal(log[0].context.workspaceRoot, null);
+  assert.deepEqual(await log[0].context.openFile('/ws/b.txt'), { ok: false, reason: 'not-found' });
 });

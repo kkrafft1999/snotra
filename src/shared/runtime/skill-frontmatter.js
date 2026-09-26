@@ -253,4 +253,9 @@ function parseSkillDocument(text) {
 
 module.exports = {
   parseSkillDocument,
+  // The Markdown viewer in the file preview (#344) shows the front matter of
+  // any `.md` file, not only of a skill, and needs the two steps separately:
+  // it parses the head entry by entry and falls back to the raw lines.
+  splitFrontmatter,
+  parseFrontmatterLines,
 };

@@ -105,6 +105,16 @@ function createApplicationMenuTemplate({
         accelerator: 'CmdOrCtrl+B',
         click: () => send(PUSH.UI_TOGGLE_SIDEBAR),
       },
+      // Issue #344: switches a Markdown file in the preview between the
+      // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
+      // other editors — on the Mac that is "Paste and Match Style" in every
+      // text field, the chat input included. Does nothing unless a Markdown
+      // file is on show.
+      {
+        label: t('menu.view.toggleMarkdownSource'),
+        accelerator: 'CmdOrCtrl+Shift+M',
+        click: () => send(PUSH.UI_TOGGLE_MARKDOWN_SOURCE),
+      },
       { type: 'separator' },
       ...(isMac ? [] : [settingsItem, { type: 'separator' }]),
       { role: 'reload', label: t('menu.view.reload') },

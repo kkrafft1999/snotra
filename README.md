@@ -391,6 +391,12 @@ deliberately not used — both require a code signature.
   button that appears on the right of a row as soon as you hover over it or reach
   the button with Tab. A plain click on a row remains what it was: select and
   show the preview; so does moving things in the tree by drag and drop.
+- **Reading Markdown:** a `.md` file opens formatted in the preview — headings,
+  lists, tables, code, and the front matter of a `SKILL.md` as a compact block
+  above the text. **Preview | Source** in the header, or `Cmd/Ctrl+Shift+M`,
+  switches to the raw text and back. Images from the open folder are shown;
+  images from the web are never loaded — a placeholder says where they point. A
+  link to another file of the folder opens it and selects it in the tree.
 - **Pasting screenshots:** an image on the clipboard (macOS `Cmd+Ctrl+Shift+4`,
   Windows Snipping Tool) lands as an attachment above the input line with
   `Cmd/Ctrl+V` — with preview, file size and a button to remove it. The typed

@@ -151,6 +151,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Markdown preview or source (#344): menu "View" or Cmd/Ctrl+Shift+M. The
+  // renderer knows which file is on show and whether it is Markdown.
+  onToggleMarkdownSource: (callback) => {
+    const channel = PUSH.UI_TOGGLE_MARKDOWN_SOURCE;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // New chat (issue #381): menu "File > New Chat" or Cmd/Ctrl+N. As with the
   // sidebar, the shortcut hangs on the menu item; the renderer only gets the
   // signal.

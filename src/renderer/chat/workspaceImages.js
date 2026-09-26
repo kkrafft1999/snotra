@@ -72,7 +72,12 @@ export function clearWorkspaceImageCache() {
   cache.clear();
 }
 
-function placeholderFor(altText, message) {
+/**
+ * Also used by the Markdown viewer of the file preview (#344), which adds the
+ * address of an image from the web as `detail` — in a file, where it points is
+ * part of what the reader needs to know.
+ */
+export function placeholderFor(altText, message, { detail = '' } = {}) {
   const box = document.createElement('span');
   box.className = 'chat-md-image chat-md-image--placeholder';
   box.setAttribute('role', 'img');
@@ -96,6 +101,14 @@ function placeholderFor(altText, message) {
   reason.className = 'chat-md-image-reason';
   reason.textContent = message;
   text.appendChild(reason);
+  if (detail) {
+    const source = document.createElement('span');
+    source.className = 'chat-md-image-source';
+    source.textContent = detail;
+    source.title = detail;
+    text.appendChild(source);
+    box.setAttribute('aria-label', `${box.getAttribute('aria-label')} (${detail})`);
+  }
   box.appendChild(text);
   return box;
 }

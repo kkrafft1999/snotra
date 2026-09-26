@@ -719,6 +719,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/registry.js` | The descriptor, context and instance interface (documented in the module header), the registry and its order. DOM-free. | `test/file-view-registry.test.js` |
 | `renderer/file-views/host.js` | The pane as host: reading the file, choosing the view, the header (name, size, tool area), the file info card as the last fallback, mount/update/unmount, and the one gate for unsaved changes | `test/file-view-host-dom.test.js` |
 | `renderer/file-views/plain-text-view.js` | The default view: the text as it is, in `<pre id="preview-content">` | both of the above |
+| `renderer/file-views/markdown-view.js` | `md`, `markdown`, `mdx`: rendered, with a "Preview \| Source" switch; images, links, notices ([#344](https://github.com/kkrafft1999/snotra/issues/344)) | `test/markdown-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
 
 ```
 FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js
@@ -756,15 +758,62 @@ the tree selection once the pane actually shows the new file, and
 `openProject()` settles unsaved changes before it asks main to switch folders.
 An editor with unsaved changes survives an external change (it gets `update()`
 and decides) and a file it can no longer read. The dialog itself and the write
-channel come with the first editor
-([#226](https://github.com/kkrafft1999/snotra/issues/226)); until then the
-default answer is `cancel`, because a lost edit is worse than a pane that stays
-where it is. `setDirty()` is ignored for viewers, so a viewer can never trap the
-user.
+channel would come with the first editor; there is none, because editing in the
+preview was dropped on 2026-09-26
+([#226](https://github.com/kkrafft1999/snotra/issues/226)). The default answer
+is `cancel`, because a lost edit is worse than a pane that stays where it is.
+`setDirty()` is ignored for viewers, so a viewer can never trap the user.
 
 The pane follows the open file, not the tree selection: clicking a folder
 moves the selection, but the file on show keeps reloading when the watcher
 reports its folder, and closes when it disappears.
+
+**Commands and links.** A view may implement `command(name)`; the host passes
+menu commands through `runCommand()` — today only `toggle-source`, the
+Cmd/Ctrl+Shift+M shortcut of the Markdown view. A view that points at another
+file calls `context.openFile(path)`, which the host hands to the file tree:
+only the tree knows the workspace (`'outside'`), can unfold the folders and
+select the row, and can tell a missing file (`'not-found'`) from one its
+listing left out. A view that has been replaced gets `'stale'` and reaches
+nothing.
+
+#### Markdown ([#344](https://github.com/kkrafft1999/snotra/issues/344))
+
+```
+text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if unreadable)
+                     └▶ body ─ markdownToSafeHtml(breaks: false, keepRelativeLinks)
+                                 │  the one sanitizer, shared with the chat
+                                 ▼
+                          <template> (inert: nothing loads)
+                                 │ img src → data-md-src, heading anchors,
+                                 │ tables framed, links classified
+                                 ▼
+                          the view ─ images: fs:readWorkspaceImage → data: URI
+                                   │         or a placeholder with the reason
+                                   └ links:  external → shell, file → tree,
+                                             #anchor → scroll, else plain text
+```
+
+- **One sanitizer.** The chat and the preview both go through
+  `markdownToSafeHtml()`. A file differs in two options only: `breaks: false`
+  (a hard-wrapped paragraph is one paragraph, as on GitHub) and
+  `keepRelativeLinks` (a link without a scheme leaves DOMPurify as
+  `data-workspace-href` instead of disappearing).
+- **Nothing loads on its own.** The HTML is parsed into a `<template>` and every
+  `src` moves to `data-md-src` before a node reaches the window. Under the CSP
+  `img-src 'self' data:` an `<img>` with an absolute path would otherwise load
+  straight from the disk (`'self'` covers `file:`), past the main process's
+  check whether the path lies inside the workspace. An image from the web is
+  never requested: it becomes a placeholder with its address; the smoke test
+  proves the absence with a CSP violation listener.
+- **Paths start at the file.** `![](img/a.png)` in `docs/guide.md` means
+  `docs/img/a.png`; a leading `/` means the root of the open folder, as on
+  GitHub. The main process checks every image path again.
+- **Headings get anchors, not ids** (`data-md-anchor`, GitHub's slug): a
+  heading called "Chat input" must not become a second `#chat-input`.
+- **The mode belongs to the open file.** Every file opens in the preview; the
+  source (the plain-text view, mounted on first use) and the preview both
+  follow an external change, so switching back shows the current text.
 
 Every view reads text today. Views for images and PDFs
 ([#345](https://github.com/kkrafft1999/snotra/issues/345),

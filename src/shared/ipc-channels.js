@@ -195,6 +195,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_OPEN_SETTINGS: 'ui:open-settings',
   /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
   UI_NEW_CHAT: 'ui:new-chat',
+  /** Menu "View > Markdown: Preview or Source" or Cmd/Ctrl+Shift+M (#344). */
+  UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
 });
 
 module.exports = {
