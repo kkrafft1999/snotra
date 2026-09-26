@@ -140,6 +140,11 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     const preview = view.preview;
     if (!preview) return null;
     const details = el('details', 'chat-approval-card__preview');
+    // Open from the start: the preview is what is being approved — the
+    // command, the source, the change. Having to unfold it first invites
+    // approving without reading, and since "always allow this command"
+    // (#121) that costs more than one call. Long previews stay height-limited.
+    details.open = true;
     const summary = el('summary', null, preview.summary);
     details.appendChild(summary);
     const notes = [preview.truncatedNote, preview.maskedNote].filter(Boolean);
@@ -159,6 +164,21 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
       expand.setAttribute('aria-expanded', clamped ? 'false' : 'true');
     });
     details.appendChild(expand);
+    // With the preview open from the start, "show in full" under a one-line
+    // command would be noise: it only appears when the text really runs past
+    // the limit. Measured, not guessed — wrapping depends on the width, and a
+    // card for a chat in the background is laid out only once it is mounted,
+    // which is when the observer first reports. Once expanded, the button
+    // stays, so the preview can be folded back.
+    if (typeof ResizeObserver === 'function') {
+      const syncToggle = () => {
+        if (!pre.classList.contains('chat-approval-card__preview-text--clamped')) return;
+        expand.hidden = pre.scrollHeight <= pre.clientHeight + 1;
+      };
+      const observer = new ResizeObserver(syncToggle);
+      observer.observe(pre);
+      observer.observe(details);
+    }
     return details;
   }
 

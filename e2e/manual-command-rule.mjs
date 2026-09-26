@@ -6,12 +6,14 @@
 //  2. asks for `git status` again and reports that no card came,
 //  3. photographs the card of a compound command, where "always" is disabled
 //     and the hint says why,
-//  4. photographs the remembered command in Settings › Permissions.
+//  4. photographs a long command, whose open preview is height-limited and
+//     keeps "show in full" — the short ones do not show it,
+//  5. photographs the remembered command in Settings › Permissions.
 // Not a test — a look.
 //
 //   node e2e/manual-command-rule.mjs [en|de]
 //
-// Result: out/mockup/command-rule-<locale>-{card-light,card-dark,compound,settings}.png
+// Result: out/mockup/command-rule-<locale>-{card-light,card-dark,compound,long,settings}.png
 
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,6 +27,7 @@ const SHOTS = path.resolve('out/mockup');
 const FIRST = 'Show the git status please.';
 const AGAIN = 'And once more, please.';
 const COMPOUND = 'Status and log together please.';
+const LONG = 'Print the numbers please.';
 
 const model = await startFakeModel();
 const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-command-rule-'));
@@ -62,6 +65,8 @@ function pendingCard() {
       buttons: [...el.querySelectorAll('.chat-approval-card__actions button')].map((b) => `${b.textContent}${b.disabled ? ' (disabled)' : ''}`),
       alwaysEnabled: !!always && !always.disabled,
       hint: el.querySelector('.chat-approval-card__hint')?.textContent || '',
+      previewOpen: el.querySelector('.chat-approval-card__preview')?.open === true,
+      showInFull: !!el.querySelector('.chat-approval-card__preview-toggle:not([hidden])'),
     };
   }, PENDING), { what: 'pending approval card', timeoutMs: 30_000 });
 }
@@ -120,6 +125,15 @@ try {
   await ask(COMPOUND);
   console.log('compound card:', JSON.stringify(await pendingCard()));
   await shootCard('compound');
+  await page.evaluate((selector) =>
+    document.querySelector(`${selector} button[data-response="deny"]`).click(), PENDING);
+  await idle();
+
+  const lines = Array.from({ length: 30 }, (_, i) => `echo line ${i + 1}`).join('\n');
+  model.queueAnswer({ match: LONG, toolCalls: [{ name: 'shell_execute', arguments: { command: lines } }] });
+  await ask(LONG);
+  console.log('long card:', JSON.stringify(await pendingCard()));
+  await shootCard('long');
   await page.evaluate((selector) =>
     document.querySelector(`${selector} button[data-response="deny"]`).click(), PENDING);
   await idle();
