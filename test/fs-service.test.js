@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createFsService } = require('../src/main/services/fs-service');
+const { createFsService, LIST_DIRECTORY_MAX_ENTRIES } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 
 function makeFsService({ locale } = {}) {
@@ -187,6 +187,55 @@ test('list_directory lists directories before files and hides dotfiles', async (
   ]);
 
   await fs.rm(tmpRoot, { recursive: true, force: true });
+});
+
+test('list_directory below the cap returns every entry without a truncated flag (#379)', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.mkdir(path.join(tmpRoot, 'src'));
+  await fs.writeFile(path.join(tmpRoot, 'a.txt'), '', 'utf8');
+
+  const out = JSON.parse(
+    await registry.execute('list_directory', { relative_path: '.' }, { workspaceRoot: tmpRoot })
+  );
+
+  assert.deepEqual(out, {
+    relative_path: '.',
+    items: [
+      { name: 'src', kind: 'directory' },
+      { name: 'a.txt', kind: 'file' },
+    ],
+  });
+});
+
+test('list_directory cuts a long folder at the cap, folders first, and reports the rest (#379)', async (t) => {
+  const registry = makeToolRegistry();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  const fileCount = LIST_DIRECTORY_MAX_ENTRIES + 4;
+  await fs.mkdir(path.join(tmpRoot, 'zz-folder'));
+  await Promise.all(Array.from({ length: fileCount }, (_, i) =>
+    fs.writeFile(path.join(tmpRoot, `f${String(i).padStart(5, '0')}.txt`), '', 'utf8')));
+
+  const out = JSON.parse(
+    await registry.execute('list_directory', { relative_path: '.' }, { workspaceRoot: tmpRoot })
+  );
+
+  assert.equal(out.items.length, LIST_DIRECTORY_MAX_ENTRIES);
+  assert.equal(out.truncated, true);
+  assert.equal(out.entries_shown, LIST_DIRECTORY_MAX_ENTRIES);
+  assert.equal(out.entries_hidden, fileCount + 1 - LIST_DIRECTORY_MAX_ENTRIES);
+  assert.deepEqual(out.items[0], { name: 'zz-folder', kind: 'directory' });
+  assert.equal(out.items[1].name, 'f00000.txt');
+  assert.equal(out.items.at(-1).name, `f${String(LIST_DIRECTORY_MAX_ENTRIES - 2).padStart(5, '0')}.txt`);
+});
+
+test('the list_directory description tells the model about the cap (#379)', () => {
+  const registry = makeToolRegistry();
+  const description = registry.getDefinition('list_directory').modelDescription;
+  assert.match(description, new RegExp(`${LIST_DIRECTORY_MAX_ENTRIES} entries`));
+  assert.match(description, /truncated/);
 });
 
 test('write_file_text laeuft ohne Freigabe der Policy nicht (Issue #66)', async () => {

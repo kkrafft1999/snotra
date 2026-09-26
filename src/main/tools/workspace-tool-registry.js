@@ -1,6 +1,7 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveNetworkDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
+const { LIST_DIRECTORY_MAX_ENTRIES } = require('../services/fs-service');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
@@ -474,7 +475,10 @@ function createWorkspaceToolRegistry({
       skips: ['hidden'],
       targets: (args) => [{ path: args.relative_path ?? '', kind: 'tree', access: 'read' }],
       descriptionKey: 'tools.desc.list_directory',
-      modelDescription: 'Lists the files and subfolders of a directory.',
+      modelDescription:
+        `Lists the files and subfolders of a directory, folders first. At most ${LIST_DIRECTORY_MAX_ENTRIES} entries; `
+        + 'a longer list is cut and marked `truncated` with the number of `entries_hidden` — '
+        + 'then narrow down to a subfolder or use find_files.',
       shortDescriptionKey: 'tools.short.list_directory',
       parameters: {
         type: 'object',
