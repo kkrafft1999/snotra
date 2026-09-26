@@ -463,6 +463,86 @@ test('nur der aktive Tab liegt in der Tabreihenfolge (Roving Tabindex)', async (
   );
 });
 
+const pressOnTab = (key, keyName, init = {}) =>
+  tabFor(key).dispatchEvent(new window.KeyboardEvent('keydown', { key: keyName, bubbles: true, cancelable: true, ...init }));
+
+const selectedTabKey = () =>
+  document.querySelector('.settings-nav-item[role="tab"][aria-selected="true"]').dataset.settingsPanel;
+
+test('the tab list declares its orientation (#378)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(dom.cleanup);
+
+  assert.equal(document.querySelector('[role="tablist"]').getAttribute('aria-orientation'), 'vertical');
+});
+
+test('arrow keys move to the next and previous tab, wrapping around (#378)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(dom.cleanup);
+
+  const order = [...document.querySelectorAll('.settings-nav-item[role="tab"]')].map((tab) => tab.dataset.settingsPanel);
+  const last = order[order.length - 1];
+
+  for (const [from, keyName, expected] of [
+    [order[0], 'ArrowDown', order[1]],
+    [order[1], 'ArrowRight', order[2]],
+    [order[2], 'ArrowUp', order[1]],
+    [order[1], 'ArrowLeft', order[0]],
+    [order[0], 'ArrowUp', last],
+    [last, 'ArrowDown', order[0]],
+    [order[0], 'ArrowLeft', last],
+    [last, 'ArrowRight', order[0]],
+  ]) {
+    tabFor(from).focus();
+    pressOnTab(from, keyName);
+    await flush();
+
+    assert.equal(selectedTabKey(), expected, `${keyName} from ${from}`);
+    assert.equal(document.activeElement, tabFor(expected), `focus after ${keyName} from ${from}`);
+    assert.equal(panelFor(expected).hidden, false);
+    assert.equal(tabFor(expected).tabIndex, 0);
+  }
+});
+
+test('Home and End jump to the first and last tab (#378)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(dom.cleanup);
+
+  const order = [...document.querySelectorAll('.settings-nav-item[role="tab"]')].map((tab) => tab.dataset.settingsPanel);
+
+  pressOnTab('skills', 'End');
+  await flush();
+  assert.equal(selectedTabKey(), order[order.length - 1]);
+  assert.equal(document.activeElement, tabFor(order[order.length - 1]));
+
+  pressOnTab(order[order.length - 1], 'Home');
+  await flush();
+  assert.equal(selectedTabKey(), order[0]);
+  assert.equal(document.activeElement, tabFor(order[0]));
+});
+
+test('arrows with a modifier and other keys leave the tabs alone (#378)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(dom.cleanup);
+
+  pressOnTab('models', 'ArrowDown', { altKey: true });
+  pressOnTab('models', 'a');
+  await flush();
+
+  assert.equal(selectedTabKey(), 'models');
+});
+
+test('Escape on a focused tab still closes the dialog (#378)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(dom.cleanup);
+
+  tabFor('models').focus();
+  pressOnTab('models', 'Escape');
+  await flush();
+
+  assert.ok(document.getElementById('modal-settings').classList.contains('hidden'));
+});
+
 test('jeder Tab zeigt auf ein Panel, das es wirklich gibt', async (t) => {
   const { dom } = await mountSettings();
   t.after(dom.cleanup);
