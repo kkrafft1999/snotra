@@ -1393,6 +1393,7 @@ export function initChatStream({
   btnChatSend.addEventListener('click', onSendOrStopClick);
 
   chatInput.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendChatMessage();

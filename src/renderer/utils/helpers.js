@@ -45,6 +45,16 @@ export function formatSize(bytes) {
   return `${text} ${units[i]}`;
 }
 
+/**
+ * Always in MB with one decimal, for a progress line whose two numbers have to
+ * share a unit ("46.0 MB of 92.0 MB"), where `formatSize` might switch units.
+ */
+export function formatMegabytes(bytes) {
+  const value = Number(bytes);
+  const mb = Number.isFinite(value) && value > 0 ? value / (1024 * 1024) : 0;
+  return `${mb.toFixed(1).replace('.', t('format.decimal'))} MB`;
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }

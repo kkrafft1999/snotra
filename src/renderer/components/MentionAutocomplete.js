@@ -246,6 +246,7 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
     'keydown',
     (e) => {
       if (!isOpen()) return;
+      if (e.isComposing) return;
       let handled = true;
       switch (e.key) {
         case 'ArrowDown':

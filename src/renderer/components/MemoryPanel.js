@@ -19,7 +19,7 @@
  */
 
 import contracts from '../generated/contracts.js';
-import { t, tPlural, onLocaleChange } from '../i18n.js';
+import { getLocale, t, tPlural, onLocaleChange } from '../i18n.js';
 import { bindInstantSwitch } from './InstantSetting.js';
 
 const { MEMORY_SCOPES, MEMORY_ORIGINS, MAX_MEMORY_CHARS } = contracts;
@@ -27,14 +27,14 @@ const { MEMORY_SCOPES, MEMORY_ORIGINS, MAX_MEMORY_CHARS } = contracts;
 const TRASH_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
-/** `2026-09-21` → `21.09.2026`; alles andere bleibt, wie es in der Datei steht. */
+/** `2026-09-21` in the app language's date form; anything else stays as it is in the file. */
 function formatDate(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
-  return match ? `${match[3]}.${match[2]}.${match[1]}` : value || '';
+  return match ? t('format.date', { year: match[1], month: match[2], day: match[3] }) : value || '';
 }
 
 function formatChars(count) {
-  return new Intl.NumberFormat('de-DE').format(count);
+  return new Intl.NumberFormat(getLocale()).format(count);
 }
 
 export function initMemoryPanel({ api }) {
@@ -76,7 +76,7 @@ export function initMemoryPanel({ api }) {
     if (entry.origin === MEMORY_ORIGINS.SELF) {
       const badge = document.createElement('span');
       badge.className = 'memory-item__origin';
-      badge.textContent = 'selbst gemerkt';
+      badge.textContent = t('settings.memory.origin.self');
       text.appendChild(badge);
     }
     item.appendChild(text);
