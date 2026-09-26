@@ -10,8 +10,11 @@ Modelle, kein Konto, keine Telemetrie.**
 [Aus dem Quellcode bauen](#aus-dem-quellcode-bauen) ·
 [English](./README.md)
 
-<!-- Screenshot / Demo-GIF der Oberfläche: Dateibaum, Vorschau, Chat mit
-     Freigabe-Karte. Das GIF folgt. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/demo-dark.gif">
+  <img src="assets/readme/demo-light.gif" width="880"
+       alt="Snotra liest einen Projektordner, fragt vor dem Schreiben von ARCHITECTURE.md nach, und die neue Datei erscheint im Baum.">
+</picture>
 
 **Funktioniert mit** OpenAI · Anthropic · Google Gemini · Ollama · jeder
 OpenAI-kompatiblen API (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter …)
@@ -724,6 +727,7 @@ Fehler wird gemeldet, alles andere läuft weiter.
 ├── scripts/             Build-Helfer (Vendor-Sync für den Renderer, Icon-Build)
 ├── docs/                Architektur (`architecture.md`, SVG-Diagramme), Release, Sicherheitskonzept
 ├── assets/icon/         SVG-Quellen des App-Icons (macOS- und Windows-Layout)
+├── assets/readme/       Demo-GIF und Standbilder fürs README (hell und dunkel)
 ├── icon.icns/.ico/.png  App-Icons für macOS / Windows / Linux, erzeugt per `node scripts/build-icons.js`
 └── package.json
 ```

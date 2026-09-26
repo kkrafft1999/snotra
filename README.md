@@ -10,8 +10,11 @@ telemetry.**
 [Build from source](#build-from-source) ·
 [Deutsch](./README.de.md)
 
-<!-- Screenshot / demo GIF of the English UI: folder tree, preview, chat with an
-     approval card. The GIF follows. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/readme/demo-dark.gif">
+  <img src="assets/readme/demo-light.gif" width="880"
+       alt="Snotra reads a project folder, asks before it writes ARCHITECTURE.md, and the new file appears in the tree.">
+</picture>
 
 **Works with** OpenAI · Anthropic · Google Gemini · Ollama · any
 OpenAI-compatible API (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter …)
@@ -1037,6 +1040,7 @@ reported and everything else keeps running.
 ├── scripts/             build helpers (vendor sync for the renderer, icon build)
 ├── docs/                architecture (`architecture.md`, SVG diagrams), release, security concept
 ├── assets/icon/         SVG sources of the app icon (macOS and Windows layout)
+├── assets/readme/       demo GIF and stills for the README (light and dark)
 ├── icon.icns/.ico/.png  app icons for macOS / Windows / Linux, generated via `node scripts/build-icons.js`
 └── package.json
 ```
