@@ -600,18 +600,23 @@ predates the certifi fallback.
   run — the only check in "Auto", where no card sits in between. The handler
   takes the decision from the approved plan, never from a later read; a call
   without a plan stays isolated.
-- **Visible on every run.** The card shows the red pill "Not isolated" with the
-  reason "switched off for this workspace" and a link back to the setting; the
-  settings show it under both tools and on the switch itself; the tool result
+- **Visible on every run.** The card shows the amber pill "Not isolated" with
+  the reason "switched off for this workspace" and a link back to the setting;
+  the settings show it under both tools and on the switch itself, and the
+  folder panel as a struck-through shield next to the folder name (#398); the
+  tool result
   tells the model `sandbox: { isolated: false }` with the reason, so that it
   neither reports limits that are not there nor asks for the sandbox to be
   switched off.
 - **Auto mode (decision on #357).** "Auto" stays "Auto": with the sandbox
   switched off, an execution runs without a card, as it does on Windows. The
-  warning moves to the mode pill instead: it turns red whenever "Auto" would run
-  an offered execution tool unisolated — switched off for the workspace, or no
-  sandbox on the system — and its tooltip says which tools and why. `execute`
-  still cannot be approved for a session or permanently (§6/§7 unchanged).
+  warning moves to the mode pill instead: it reads "Auto · not isolated" in
+  amber whenever "Auto" would run an offered execution tool unisolated —
+  switched off for the workspace, or no sandbox on the system — and its menu
+  says which tools and why, with the way to the setting (#396). Amber rather
+  than red: the state is a risk the user accepted or cannot avoid, not an
+  error, and red on a permission control reads as "blocked". `execute` still
+  cannot be approved for a session or permanently (§6/§7 unchanged).
 - **Not built.** A global switch (it would silently apply to untrusted
   projects), an environment variable (invisible in the UI) and a per-run
   "run unisolated" button on the card (it teaches clicking past the sandbox;

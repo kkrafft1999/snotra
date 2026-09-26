@@ -14,6 +14,7 @@ import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
+import { initFolderSandboxShield } from './components/FolderSandboxShield.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
@@ -226,7 +227,12 @@ const modelPicker = initChatModelPicker({ api, appStore });
 // Tool-Berechtigungen (Issue #67): ein geteilter Stand für Chat-Pille und
 // Einstellungen, Freigabe-Karten melden sich beim Main als Oberfläche an.
 const toolPermissions = initToolPermissionState({ api });
-initToolModePicker({ toolPermissions });
+// The way to the sandbox switch — from the card (#357), the mode menu (#396)
+// and the shield next to the folder name (#398). The settings are built
+// further down and only reached on a click.
+const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' });
+initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
+initFolderSandboxShield({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
 // Runs per chat (#320): cards and runs report changes, the history column
 // marks its rows. It is built further down, hence the indirection.
 let syncRunMarkers = () => {};
@@ -234,9 +240,7 @@ const approvalCards = initToolApprovalCards({
   api,
   appStore,
   onPendingChanged: () => syncRunMarkers(),
-  // The card's way back to the sandbox switch (#357); the settings are built
-  // further down and only reached on a click.
-  onOpenSandboxSettings: () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' }),
+  onOpenSandboxSettings: openSandboxSettings,
 });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });

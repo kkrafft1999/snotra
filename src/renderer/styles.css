@@ -233,7 +233,8 @@ summary:focus-visible,
 }
 
 #tree-header #btn-open-folder,
-#tree-header #btn-folder-history {
+#tree-header #btn-folder-history,
+#tree-header #btn-tree-sandbox {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -255,7 +256,8 @@ summary:focus-visible,
 }
 
 #tree-header #btn-open-folder:hover,
-#tree-header #btn-folder-history:hover {
+#tree-header #btn-folder-history:hover,
+#tree-header #btn-tree-sandbox:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
@@ -266,11 +268,51 @@ summary:focus-visible,
 }
 
 #tree-header #btn-open-folder:active,
-#tree-header #btn-folder-history:active {
+#tree-header #btn-folder-history:active,
+#tree-header #btn-tree-sandbox:active {
   background: var(--bg-active);
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* The shield next to the folder name (#398). The icon sits where the name
+   starts without it, and the 32 px target reaches into the header padding
+   instead of pushing the name further in. */
+#tree-header #btn-tree-sandbox {
+  margin: 0 -8px 0 -9px;
+}
+
+#tree-header #btn-tree-sandbox[hidden] {
+  display: none;
+}
+
+#tree-header #btn-tree-sandbox svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+#tree-header #btn-tree-sandbox .tree-sandbox-slash {
+  display: none;
+}
+
+/* Not isolated: amber and struck through, like the pill and the card (#396). */
+#tree-header #btn-tree-sandbox[data-unisolated='true'],
+#tree-header #btn-tree-sandbox[data-unisolated='true']:hover,
+#tree-header #btn-tree-sandbox[data-unisolated='true']:active {
+  color: var(--ds-warning);
+}
+
+#tree-header #btn-tree-sandbox[data-unisolated='true'] .tree-sandbox-slash {
+  display: inline;
+}
+
+#tree-header #btn-tree-sandbox:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
 }
 
 #folder-history-wrapper {
@@ -3142,6 +3184,11 @@ button.chat-msg-attachment:hover {
   color: var(--ds-error);
 }
 
+/* "Not isolated" lines in Settings › Tools (#396): a warning, not an error. */
+.modal-hint.warning {
+  color: var(--ds-warning);
+}
+
 /* Sekundaer-Button: Default-Border in --ds-grey-divider, Hover wechselt auf
  * neutralen --ds-grey-muted-Border (kein einladender Blue-Wash, weil der
  * Secondary-Button nicht mit der Primary-Aktion konkurrieren soll). Fokus-
@@ -3316,6 +3363,7 @@ select.modal-input {
   #btn-toggle-chat-history:active,
   #tree-header #btn-open-folder:active,
   #tree-header #btn-folder-history:active,
+  #tree-header #btn-tree-sandbox:active,
   .folder-history-item-remove:active,
   #btn-chat-new:active,
   #btn-chat-mic:active:not(:disabled),
@@ -4886,6 +4934,13 @@ select.modal-input {
   stroke: currentColor;
   stroke-width: 1.5;
   stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The slash of the struck-through shield, drawn only while "Auto" would run
+   unisolated (#396). */
+.chat-tool-mode-icon-slash {
+  display: none;
 }
 
 /* „Auto“ ist der einzige Modus ohne Rückfragen – er bleibt in der Leiste
@@ -4901,21 +4956,130 @@ select.modal-input {
   stroke: var(--ds-blue);
 }
 
-/* "Auto" while an execution tool would run without sandbox (#357): red, like
-   the "Not isolated" pill on the approval card. */
+/* "Auto" while an execution tool would run without sandbox (#357, #396): the
+   warning amber, the struck-through outline shield and the words "not
+   isolated" — never the colour alone. The same state as the "Not isolated"
+   badge on the approval card. */
 .chat-tool-mode-wrap[data-mode='auto'][data-unisolated='true'] .chat-tool-mode-pill {
-  border-color: var(--ds-error);
-  background: var(--ds-error-bg);
-  color: var(--ds-error);
+  border-color: var(--ds-warning);
+  background: var(--ds-warning-bg);
+  color: var(--ds-warning);
 }
 
 .chat-tool-mode-wrap[data-mode='auto'][data-unisolated='true'] .chat-tool-mode-icon {
-  fill: var(--ds-error);
-  stroke: var(--ds-error);
+  fill: none;
+  stroke: var(--ds-warning);
 }
 
+.chat-tool-mode-wrap[data-mode='auto'][data-unisolated='true'] .chat-tool-mode-icon-slash {
+  display: inline;
+}
+
+/* While "Auto" would run unisolated, the model name gives way first: "not
+   isolated" is the part of the bar that has to stay readable. In the other
+   modes both pills shrink alike, as before. */
+.chat-composer-bar:has(.chat-tool-mode-wrap[data-unisolated='true']) #chat-model-picker-wrap {
+  flex-shrink: 100;
+}
+
+/* With the words shown the pill does not shrink at all: even a fraction of a
+   pixel would put the ellipsis where "isolated" ends. Below the compact
+   threshold it may give way again, as the last thing in the bar. */
+.chat-tool-mode-wrap[data-unisolated='true']:not([data-compact='true']) {
+  flex-shrink: 0;
+}
+
+/* Both labels end in an ellipsis and leave the chevron standing, instead of
+   being cut off together with it. */
+#chat-model-pill-label,
+#chat-tool-mode-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A bar too narrow for the words next to a model name (ToolModePicker sets
+   data-compact): the pill keeps the struck-through shield and the chevron.
+   Tooltip, accessible name and the menu notice still say "not isolated". */
+.chat-tool-mode-wrap[data-unisolated='true'][data-compact='true'] #chat-tool-mode-label {
+  display: none;
+}
+
+/* The popup: the notice (#396) on top, the listbox below it. Taller than the
+   model menu, because three described modes and the notice need the room. */
 .chat-tool-mode-menu {
   min-width: min(340px, 84vw);
+  max-height: min(420px, 70vh);
+}
+
+.chat-tool-mode-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-tool-mode-notice {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 4px 12px 10px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.chat-tool-mode-notice[hidden] {
+  display: none;
+}
+
+.chat-tool-mode-notice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--ds-warning);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chat-tool-mode-notice-body {
+  min-width: 0;
+}
+
+.chat-tool-mode-notice-heading {
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ds-warning);
+}
+
+.chat-tool-mode-notice-text {
+  margin: 2px 0 0;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.chat-tool-mode-notice-link {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-tool-mode-notice-link[hidden] {
+  display: none;
+}
+
+.chat-tool-mode-notice-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
 }
 
 .chat-tool-mode-opt-main {
@@ -5077,10 +5241,12 @@ select.modal-input {
 }
 
 /* Isolation state (#329): a run that would not be isolated is flagged red. */
-.chat-approval-card__badge--danger {
-  border-color: var(--ds-error-border);
-  background: var(--ds-error-bg);
-  color: var(--ds-error);
+/* "Not isolated" (#329): the warning amber since #396 — a risk to accept,
+   not an error. */
+.chat-approval-card__badge--warning {
+  border-color: var(--ds-warning-border);
+  background: var(--ds-warning-bg);
+  color: var(--ds-warning);
 }
 
 .chat-approval-card[data-state]:not([data-state='pending']) .chat-approval-card__badge {

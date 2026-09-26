@@ -1,5 +1,5 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { toolModeOptions, modeLabel, describeAutoIsolationWarning } from '../utils/tool-approval-view.js';
+import { toolModeOptions, modeLabel, describeModePill } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 
@@ -8,14 +8,22 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  * Berechtigungsmodus neben der Modell-Auswahl und wechselt ihn per Menü. Der
  * Wechsel läuft über den Main; „Auto“ bestätigt dieser in einem nativen Dialog
  * – die Pille zeigt erst danach den neuen Modus.
+ *
+ * `onOpenSandboxSettings`: the way from the menu notice to the sandbox switch
+ * (#396), the same one the approval card offers.
  */
-export function initToolModePicker({ toolPermissions }) {
+export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
   const wrap = document.getElementById('chat-tool-mode-wrap');
   const btn = document.getElementById('btn-chat-tool-mode');
   const label = document.getElementById('chat-tool-mode-label');
   const menu = document.getElementById('chat-tool-mode-menu');
+  const list = document.getElementById('chat-tool-mode-list');
+  const notice = document.getElementById('chat-tool-mode-notice');
+  const noticeHeading = document.getElementById('chat-tool-mode-notice-heading');
+  const noticeText = document.getElementById('chat-tool-mode-notice-text');
+  const noticeLink = document.getElementById('chat-tool-mode-notice-link');
   const status = document.getElementById('chat-tool-mode-status');
-  if (!wrap || !btn || !label || !menu || !toolPermissions) {
+  if (!wrap || !btn || !label || !menu || !list || !toolPermissions) {
     return { close() {}, isOpen: () => false };
   }
 
@@ -36,7 +44,7 @@ export function initToolModePicker({ toolPermissions }) {
   }
 
   function rebuild(activeMode) {
-    menu.innerHTML = '';
+    list.innerHTML = '';
     for (const option of toolModeOptions()) {
       const li = document.createElement('li');
       li.setAttribute('role', 'none');
@@ -58,28 +66,44 @@ export function initToolModePicker({ toolPermissions }) {
       main.appendChild(desc);
       opt.appendChild(main);
       li.appendChild(opt);
-      menu.appendChild(li);
+      list.appendChild(li);
     }
   }
 
+  /** The notice on top of the menu (#396): why the pill warns, and the way to the switch. */
+  function renderNotice(view) {
+    if (!notice) return;
+    notice.hidden = !view.unisolated;
+    if (noticeHeading) noticeHeading.textContent = view.heading;
+    if (noticeText) noticeText.textContent = view.warning;
+    if (noticeLink) {
+      const offered = !!view.settingsLabel && typeof onOpenSandboxSettings === 'function';
+      noticeLink.hidden = !offered;
+      noticeLink.textContent = offered ? view.settingsLabel : '';
+    }
+    // The notice sits outside the listbox, so the listbox points at it.
+    if (view.unisolated) list.setAttribute('aria-describedby', 'chat-tool-mode-notice-heading chat-tool-mode-notice-text');
+    else list.removeAttribute('aria-describedby');
+  }
+
   function render(state) {
-    const mode = state?.mode || 'smart';
-    const text = modeLabel(mode);
-    label.textContent = text;
-    wrap.dataset.mode = mode;
-    // "Auto" with an execution tool that would run unisolated turns red
-    // (#357): those runs have the user's full rights and ask nothing.
-    const warning = describeAutoIsolationWarning(state);
-    if (warning) {
+    const view = describeModePill(state);
+    label.textContent = view.label;
+    wrap.dataset.mode = view.mode;
+    // "Auto" with an execution tool that would run unisolated warns in amber
+    // (#357, #396): those runs have the user's full rights and ask nothing.
+    // Tooltip and accessible name begin with the visible label.
+    if (view.unisolated) {
       wrap.dataset.unisolated = 'true';
-      btn.title = t('chat.toolMode.button.titleUnisolated', { mode: text, warning });
-      btn.setAttribute('aria-label', t('chat.toolMode.button.labelUnisolated', { mode: text, warning }));
+      btn.title = t('chat.toolMode.button.titleUnisolated', { mode: view.label, warning: view.warning });
+      btn.setAttribute('aria-label', t('chat.toolMode.button.labelUnisolated', { mode: view.label, warning: view.warning }));
     } else {
       delete wrap.dataset.unisolated;
-      btn.title = t('chat.toolMode.button.title', { mode: text });
-      btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: text }));
+      btn.title = t('chat.toolMode.button.title', { mode: view.label });
+      btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: view.label }));
     }
-    if (open) rebuild(mode);
+    renderNotice(view);
+    if (open) rebuild(view.mode);
   }
 
   function close() {
@@ -97,7 +121,7 @@ export function initToolModePicker({ toolPermissions }) {
     open = true;
     menu.classList.remove('hidden');
     btn.setAttribute('aria-expanded', 'true');
-    menu.querySelector('[aria-selected="true"]')?.focus();
+    list.querySelector('[aria-selected="true"]')?.focus();
   }
 
   async function choose(mode) {
@@ -128,6 +152,13 @@ export function initToolModePicker({ toolPermissions }) {
     void choose(opt.dataset.mode);
   });
 
+  // Focus goes back to the pill first, so that closing the settings lands there.
+  noticeLink?.addEventListener('click', () => {
+    close();
+    btn.focus();
+    onOpenSandboxSettings?.();
+  });
+
   menu.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -137,13 +168,15 @@ export function initToolModePicker({ toolPermissions }) {
       return;
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const options = [...menu.querySelectorAll('.chat-tool-mode-option')];
+    const options = [...list.querySelectorAll('.chat-tool-mode-option')];
     if (options.length === 0) return;
     e.preventDefault();
     const index = options.indexOf(document.activeElement);
-    const next = e.key === 'ArrowDown'
-      ? options[(index + 1) % options.length]
-      : options[(index - 1 + options.length) % options.length];
+    // From the notice link (index -1) the arrows enter the list at its ends.
+    let next;
+    if (index === -1) next = e.key === 'ArrowDown' ? options[0] : options[options.length - 1];
+    else if (e.key === 'ArrowDown') next = options[(index + 1) % options.length];
+    else next = options[(index - 1 + options.length) % options.length];
     next.focus();
   });
 
@@ -152,6 +185,17 @@ export function initToolModePicker({ toolPermissions }) {
     ownsTarget: (t) => !!t?.closest?.('#chat-tool-mode-wrap'),
     onDismiss: close,
   });
+
+  // Below this bar width "Auto · not isolated" and a model name no longer fit
+  // side by side (#396); the pill then drops the words (see styles.css).
+  const COMPACT_BAR_BELOW = 400;
+  const bar = wrap.closest('.chat-composer-bar');
+  if (bar && typeof ResizeObserver === 'function') {
+    new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width < COMPACT_BAR_BELOW) wrap.dataset.compact = 'true';
+      else delete wrap.dataset.compact;
+    }).observe(bar);
+  }
 
   toolPermissions.subscribe(render);
   // The pill, its tooltip and the open menu are built at runtime, so a

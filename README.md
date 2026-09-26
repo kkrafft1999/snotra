@@ -455,7 +455,7 @@ deliberately not used — both require a code signature.
   can read and write anywhere, reach the network and start programs. Either way
   the approval comes first: Snotra shows you the complete source before every
   single run, and a pill on the card says whether the run is isolated — "Not
-  isolated" in red. There is deliberately no "Allow for this session" for
+  isolated" in amber. There is deliberately no "Allow for this session" for
   execution. If a script runs too long it is terminated after the time limit
   (10 s by default); "Stop" in the chat ends it as well.
 
@@ -555,7 +555,7 @@ the approval card shows it on every run.
   `sudo sysctl -w`) into a file under `/etc/sysctl.d/`. An AppArmor profile that
   grants `userns` to `bwrap` works as well. Restart Snotra afterwards.
 - **Windows:** no sandbox yet. Every run has your full rights, and the card
-  says "Not isolated" in red.
+  says "Not isolated" in amber.
 
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
@@ -566,10 +566,16 @@ You confirm it in a system dialog, and it is stored with your permissions rather
 than in the folder, so a checked-out repository cannot switch it off for itself.
 From then on the approval card says "Not isolated" with the reason and a link
 back to the setting, and the model is told that the run was not isolated. In
-"Auto" mode such runs happen without asking; the mode pill in the chat bar turns
-red whenever "Auto" would run `shell_execute` or `run_python` without a sandbox —
-switched off here, or not available on the system. "Reset workspace rules" and
-"Reset all permissions" switch the sandbox back on.
+"Auto" mode such runs happen without asking; the mode pill in the chat bar then
+reads "Auto · not isolated" in amber whenever "Auto" would run `shell_execute` or
+`run_python` without a sandbox — switched off here, or not available on the
+system — and its menu says why, with a link to the setting. "Reset workspace
+rules" and "Reset all permissions" switch the sandbox back on.
+
+**The shield next to the folder name** shows the same in every mode, as long as
+`shell_execute` or `run_python` is on: a plain shield while runs in this folder
+are isolated, a struck-through amber one while they are not. A click on it opens
+the sandbox setting.
 
 What the sandbox does not do: it does not stop a run from *reading* files
 outside the protected locations, and whatever it read can reach a domain the
