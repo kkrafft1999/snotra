@@ -56,6 +56,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'provider.error.withCause',
   // "Server" and "TLS" are the German words too; the rest is placeholders (#310).
   'settings.models.connection',
+  // A remembered command in the rule list: placeholders only (#121).
+  'permissions.rule.text.command',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

@@ -150,20 +150,34 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
      * Antwort aus dem Renderer. Akzeptiert nur eine Entscheidung auf eine
      * eigene, offene Anfrage; alles andere ist ein Fehler ohne Wirkung.
      */
-    respond(sessionId, { requestId, response } = {}) {
+    respond(sessionId, { requestId, response, ruleId } = {}) {
       const entry = pending.get(requestId);
       if (!entry) return { ok: false, error: createMessage('approval.error.noPending') };
       if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
       if (!Object.values(APPROVAL_RESPONSES).includes(response)) {
         return { ok: false, error: createMessage('approval.error.invalidResponse') };
       }
-      if (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) {
+      if (
+        (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) ||
+        (response === APPROVAL_RESPONSES.ALLOW_ALWAYS && (entry.request?.alwaysAllowed !== true || !ruleId))
+      ) {
         // Die Karte bot die Option nicht an; als Einzelfreigabe behandeln.
+        // "Always" without a stored rule is not "always" either (#121).
         settle(requestId, { response: APPROVAL_RESPONSES.ALLOW_ONCE });
         return { ok: true, response: APPROVAL_RESPONSES.ALLOW_ONCE };
       }
-      settle(requestId, { response });
+      settle(requestId, response === APPROVAL_RESPONSES.ALLOW_ALWAYS ? { response, ruleId } : { response });
       return { ok: true, response };
+    },
+    /**
+     * The open request behind a card, for main's own use (#121): the IPC
+     * handler reads the command rule from it before it asks natively. Null
+     * for a request that is not open or belongs to another window.
+     */
+    getPendingRequest(sessionId, requestId) {
+      const entry = pending.get(requestId);
+      if (!entry || entry.sessionId !== sessionId) return null;
+      return entry.request || null;
     },
     invalidateSession,
     invalidateAll,

@@ -12,6 +12,11 @@
  *
  * The fourth loosening is switching the sandbox off for a workspace (#357):
  * the same native confirmation, the root always taken from main.
+ *
+ * The fifth comes from the card itself (#121): "always allow this command in
+ * this workspace" stores a command rule. The rule is the one main built from
+ * the plan of the open request — the renderer only says "always" — and it is
+ * confirmed natively like every other allow rule before it is stored.
  */
 
 const {
@@ -19,6 +24,7 @@ const {
   PERMISSION_RULE_EFFECTS,
   PERMISSION_RULE_SCOPES,
   PERMISSION_DENIAL_REASONS,
+  APPROVAL_RESPONSES,
   normalizeToolPermissionMode,
   normalizePermissionRule,
   normalizeSensitivePathPatterns,
@@ -80,6 +86,35 @@ function removeDenyRuleDialog(rule, t) {
     message: t('permissionDialog.removeDeny.title'),
     detail: t('permissionDialog.removeDeny.detail', { subject: ruleSubject(rule, t), pattern: rule.pathPattern }),
     buttons: [t('permissionDialog.removeDeny.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+/**
+ * "Always allow this command" (#121). The dialog repeats exactly what is
+ * remembered — command, folder, network — because that is the whole rule:
+ * a different spelling of the command is a different command.
+ */
+function commandRuleDialog(rule, t) {
+  const facts = [
+    t('permissionDialog.commandRule.command', { command: rule.command }),
+    t('permissionDialog.commandRule.cwd', { cwd: rule.cwd || t('permissionDialog.commandRule.cwd.root') }),
+    rule.networkDomains.length > 0
+      ? t('permissionDialog.commandRule.network', { domains: rule.networkDomains.join(', ') })
+      : t('permissionDialog.commandRule.network.none'),
+  ];
+  return {
+    type: 'warning',
+    title: t('permissionDialog.commandRule.title'),
+    message: t('permissionDialog.commandRule.title'),
+    detail: t('permissionDialog.commandRule.detail', {
+      facts: facts.join('\n'),
+      root: rule.root,
+      mode: t('permissions.mode.smart'),
+      place: menuPath(t.locale, 'settings.permissions'),
+    }),
+    buttons: [t('permissionDialog.commandRule.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,
   };
@@ -322,9 +357,43 @@ function registerToolPermissionHandlers({
     return createSettingsOk();
   });
 
+  /**
+   * "Always allow" on a card (#121): confirm natively, store the command rule,
+   * then answer the card with the rule's id. Cancelling the dialog leaves the
+   * card open — the command has not run, and the user decides again.
+   *
+   * No other card and no session approval is dropped: a new allow rule for
+   * one command can only turn a question into an allowance, and nothing
+   * granted before becomes wrong by it.
+   */
+  async function rememberCommand(event, { requestId }) {
+    const request = approvals.getPendingRequest?.(event.sender.id, requestId);
+    if (!request) return { error: createMessage('approval.error.noPending') };
+    if (request.alwaysAllowed !== true || !request.commandRule) return { ruleId: null };
+    const rule = normalizePermissionRule({ ...request.commandRule, id: 'preview' });
+    if (!rule) return { error: createMessage('permissions.error.invalidRule') };
+    const confirmed = await confirmNatively(commandRuleDialog(rule, createTranslator(getLocale())));
+    if (!confirmed) return { error: createMessage('approval.error.alwaysNotConfirmed'), code: 'cancelled' };
+    // The run may have ended while the dialog was open; then nothing is kept.
+    if (!approvals.getPendingRequest?.(event.sender.id, requestId)) {
+      return { error: createMessage('approval.error.noPending') };
+    }
+    const stored = await toolPolicyStore.addRule(request.commandRule);
+    if (!stored.ok) return { error: stored.error };
+    if (event.sender && typeof event.sender.send === 'function' && !event.sender.isDestroyed?.()) {
+      event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    }
+    return { ruleId: stored.ruleId };
+  }
+
   ipcMain.handle(REQ.TOOL_APPROVAL_RESPOND, async (event, payload) => {
     const response = normalizeToolApprovalResponse(payload);
     if (!response) return createSettingsError(createMessage('approval.error.invalidResponse'));
+    if (response.response === APPROVAL_RESPONSES.ALLOW_ALWAYS) {
+      const remembered = await rememberCommand(event, response);
+      if (remembered.error) return createSettingsError(remembered.error, remembered.code);
+      response.ruleId = remembered.ruleId;
+    }
     const result = approvals.respond(event.sender.id, response);
     if (!result.ok) return createSettingsError(result.error);
     return { ...createSettingsOk(), response: result.response };
@@ -341,4 +410,5 @@ module.exports = {
   allowRuleDialog,
   removeDenyRuleDialog,
   sandboxOffDialog,
+  commandRuleDialog,
 };

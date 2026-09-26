@@ -11,8 +11,8 @@
  *  2. passende Deny-Regel (global oder Workspace) → deny
  *  3. Modus `ask-all` → ask (auch bei Lesetools, ignoriert Freigaben)
  *  4. Modus `auto` → allow
- *  5. Modus `smart` → gültige Sitzungsfreigabe oder deckende Allow-Regel → allow,
- *     sonst Grundmatrix
+ *  5. Modus `smart` → gültige Sitzungsfreigabe, passende Befehlsregel (#121)
+ *     oder deckende Allow-Regel → allow, sonst Grundmatrix
  */
 'use strict';
 
@@ -26,8 +26,10 @@ const {
   PERMISSION_RULE_EFFECTS,
   PERMISSION_RULE_SCOPES,
   PERSISTENT_ALLOW_CLASSES,
+  COMMAND_RULE_TOOL,
   normalizeToolPermissionMode,
   normalizeRiskClasses,
+  isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { matchesPathPattern } = require('../../shared/runtime/path-pattern');
 
@@ -127,7 +129,8 @@ function denyRuleMatches(rule, { toolName, riskClasses, paths }) {
  */
 function allowRulesCover(rules, { toolName, riskClasses, paths }) {
   if (riskClasses.some((cls) => !PERSISTENT_ALLOW_CLASSES.includes(cls))) return null;
-  const allowRules = rules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.ALLOW);
+  // A command rule allows one command line and nothing else (#121).
+  const allowRules = rules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !isCommandRule(rule));
   if (allowRules.length === 0) return null;
   const matched = [];
   for (const cls of riskClasses) {
@@ -144,6 +147,37 @@ function allowRulesCover(rules, { toolName, riskClasses, paths }) {
   return matched;
 }
 
+function sameList(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((entry, index) => entry === b[index]);
+}
+
+/**
+ * A remembered shell command (#121) covers a call only when everything the
+ * user saw on the card is the same: the tool, a pure `execute` (nothing
+ * escalated to sensitive or external), the command line, the working folder
+ * and the declared network domains — and no input on stdin, which could turn
+ * a harmless program into a different one. Workspace-bound through
+ * `selectRulesForRoot`, like every workspace rule.
+ */
+function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
+  if (toolName !== COMMAND_RULE_TOOL) return null;
+  if (riskClasses.length !== 1 || riskClasses[0] !== TOOL_RISK_CLASSES.EXECUTE) return null;
+  if (!shellCommand || typeof shellCommand.command !== 'string' || !shellCommand.command) return null;
+  if (shellCommand.stdin === true) return null;
+  return (
+    rules.find(
+      (rule) =>
+        rule.effect === PERMISSION_RULE_EFFECTS.ALLOW &&
+        rule.scope === PERMISSION_RULE_SCOPES.WORKSPACE &&
+        isCommandRule(rule) &&
+        rule.tool === COMMAND_RULE_TOOL &&
+        rule.command === shellCommand.command &&
+        rule.cwd === shellCommand.cwd &&
+        sameList(rule.networkDomains, shellCommand.networkDomains)
+    ) || null
+  );
+}
+
 /**
  * @param {object} input
  * @param {string} input.mode
@@ -153,6 +187,8 @@ function allowRulesCover(rules, { toolName, riskClasses, paths }) {
  * @param {string|null} [input.root]  kanonische Workspace-Wurzel
  * @param {Array} [input.rules]  normalisierte Regeln (global + alle Workspaces)
  * @param {object|null} [input.sessionGrant]  passende, noch gültige Sitzungsfreigabe
+ * @param {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }|null} [input.shellCommand]
+ *   the planned `shell_execute` call in the form command rules compare (#121)
  * @param {boolean} [input.toolDisabled]
  * @param {boolean} [input.unknownTool]
  * @param {{ reason?: string }|null} [input.hardLimit]
@@ -211,6 +247,16 @@ function decideToolPolicy(input = {}) {
       mode,
     };
   }
+  const commandRule = commandRuleCovers(rules, { ...call, shellCommand: input.shellCommand });
+  if (commandRule) {
+    return {
+      decision: POLICY_DECISIONS.ALLOW,
+      source: PERMISSION_DECISION_SOURCES.ALLOW_RULE,
+      ruleId: commandRule.id,
+      ruleIds: [commandRule.id],
+      mode,
+    };
+  }
   const covering = allowRulesCover(rules, call);
   if (covering) {
     return {
@@ -236,5 +282,6 @@ module.exports = {
   matrixDecisionForClasses,
   classesRequiringAsk,
   selectRulesForRoot,
+  commandRuleCovers,
   decideToolPolicy,
 };

@@ -12,6 +12,10 @@ const {
   SESSION_GRANTABLE_CLASSES,
   TOOL_PERMISSION_MODE_LABEL_KEYS,
   TOOL_RISK_CLASS_LABEL_KEYS,
+  PERMISSION_RULE_EFFECTS,
+  PERMISSION_RULE_SCOPES,
+  COMMAND_RULE_TOOL,
+  COMMAND_RULE_UNAVAILABLE_REASONS,
   normalizeRiskClasses,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
@@ -90,6 +94,41 @@ function describeSessionScope({ tool, targets, riskClasses } = {}) {
 }
 
 /**
+ * Whether the card may offer "always allow this command in this workspace"
+ * (#121), and the rule it would create. Only for `shell_execute` before it
+ * runs, only for a pure `execute`, and only for a command simple enough to be
+ * compared exactly. The rule is built here from the plan — the same plan that
+ * runs — and stays in main; the renderer only learns whether it is offered.
+ *
+ * Returns `{ rule }` or `{ reason }`, or null for a call it does not concern.
+ */
+function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, workspaceRoot, encryptionAvailable }) {
+  if (tool !== COMMAND_RULE_TOOL || checkpoint !== 'access') return null;
+  const reasons = COMMAND_RULE_UNAVAILABLE_REASONS;
+  if (classes.length !== 1 || classes[0] !== TOOL_RISK_CLASSES.EXECUTE) return { reason: reasons.CLASSES };
+  // "Ask every time" ignores rules; a rule offered here would not apply here.
+  if (mode === TOOL_PERMISSION_MODES.ASK_ALL) return { reason: reasons.ASK_ALL };
+  if (typeof workspaceRoot !== 'string' || !workspaceRoot) return { reason: reasons.NO_WORKSPACE };
+  const call = plan?.shellCommand;
+  if (!call || typeof call.command !== 'string' || !call.command) return { reason: reasons.NOT_SIMPLE };
+  if (call.stdin === true) return { reason: reasons.STDIN };
+  // An allow rule needs the signed store; without `safeStorage` it would be
+  // refused after the dialog, so it is not offered in the first place.
+  if (encryptionAvailable === false) return { reason: reasons.NO_ENCRYPTION };
+  return {
+    rule: {
+      effect: PERMISSION_RULE_EFFECTS.ALLOW,
+      scope: PERMISSION_RULE_SCOPES.WORKSPACE,
+      root: workspaceRoot,
+      tool: COMMAND_RULE_TOOL,
+      command: call.command,
+      cwd: typeof call.cwd === 'string' ? call.cwd : '',
+      networkDomains: Array.isArray(call.networkDomains) ? [...call.networkDomains] : [],
+    },
+  };
+}
+
+/**
  * Freigabe-Anfrage aus Plan und Policy-Ergebnis. `sessionAllowed` ist nur
  * wahr, wenn alle abgefragten Klassen sitzungsweise freigebbar sind und der
  * Modus Freigaben überhaupt berücksichtigt (nicht `ask-all`).
@@ -104,6 +143,8 @@ function buildApprovalRequest({
   policyVersion,
   chatId,
   checkpoint = 'access',
+  workspaceRoot = null,
+  encryptionAvailable,
 } = {}) {
   const classes = normalizeRiskClasses(askClasses) || normalizeRiskClasses(plan?.riskClasses) || [];
   const sessionAllowed =
@@ -147,6 +188,14 @@ function buildApprovalRequest({
     request.preview = plan.preview;
   }
   if (typeof chatId === 'string' && chatId) request.chatId = chatId;
+  const offer = describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, workspaceRoot, encryptionAvailable });
+  if (offer?.rule) {
+    request.alwaysAllowed = true;
+    request.commandRule = offer.rule;
+  } else if (offer?.reason) {
+    request.alwaysAllowed = false;
+    request.alwaysUnavailableReason = offer.reason;
+  }
   return request;
 }
 
@@ -156,5 +205,6 @@ module.exports = {
   modeLabelKey,
   describeApprovalReason,
   describeSessionScope,
+  describeCommandRuleOffer,
   buildApprovalRequest,
 };

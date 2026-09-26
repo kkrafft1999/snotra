@@ -140,6 +140,11 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
     const preview = view.preview;
     if (!preview) return null;
     const details = el('details', 'chat-approval-card__preview');
+    // Open from the start: the preview is what is being approved — the
+    // command, the source, the change. Having to unfold it first invites
+    // approving without reading, and since "always allow this command"
+    // (#121) that costs more than one call. Long previews stay height-limited.
+    details.open = true;
     const summary = el('summary', null, preview.summary);
     details.appendChild(summary);
     const notes = [preview.truncatedNote, preview.maskedNote].filter(Boolean);
@@ -159,19 +164,36 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
       expand.setAttribute('aria-expanded', clamped ? 'false' : 'true');
     });
     details.appendChild(expand);
+    // With the preview open from the start, "show in full" under a one-line
+    // command would be noise: it only appears when the text really runs past
+    // the limit. Measured, not guessed — wrapping depends on the width, and a
+    // card for a chat in the background is laid out only once it is mounted,
+    // which is when the observer first reports. Once expanded, the button
+    // stays, so the preview can be folded back.
+    if (typeof ResizeObserver === 'function') {
+      const syncToggle = () => {
+        if (!pre.classList.contains('chat-approval-card__preview-text--clamped')) return;
+        expand.hidden = pre.scrollHeight <= pre.clientHeight + 1;
+      };
+      const observer = new ResizeObserver(syncToggle);
+      observer.observe(pre);
+      observer.observe(details);
+    }
     return details;
   }
 
   function buildActions(view, requestId) {
     const actions = el('div', 'chat-approval-card__actions');
     const hintId = domId(requestId, 'session-hint');
-    for (const key of ['once', 'session', 'deny']) {
+    for (const key of view.actionOrder) {
       const action = view.actions[key];
       const button = el('button', key === 'once' ? 'btn-primary' : 'btn-secondary', action.label);
       button.type = 'button';
       button.dataset.response = action.response;
       button.disabled = !action.enabled;
-      if (key === 'session' && action.hint) {
+      // The middle button — "for this session", or "always" on a command
+      // card (#121) — carries the hint below the buttons.
+      if ((key === 'session' || key === 'always') && action.hint) {
         button.setAttribute('aria-describedby', hintId);
         button.title = action.hint;
       }
@@ -279,8 +301,9 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
 
     const { actions, hintId } = buildActions(view, requestId);
     card.appendChild(actions);
-    if (view.actions.session.hint) {
-      const hint = el('p', 'chat-approval-card__hint', view.actions.session.hint);
+    const middleHint = view.actions[view.actionOrder[1]]?.hint;
+    if (middleHint) {
+      const hint = el('p', 'chat-approval-card__hint', middleHint);
       hint.id = hintId;
       card.appendChild(hint);
     }
@@ -305,8 +328,8 @@ export function initToolApprovalCards({ api, appStore, onPendingChanged = () => 
 
   function setButtonsEnabled(card, view, enabled) {
     for (const button of card.querySelectorAll('.chat-approval-card__actions button')) {
-      const key = button.dataset.response === 'allow-session' ? 'session' : button.dataset.response === 'deny' ? 'deny' : 'once';
-      button.disabled = !enabled || !view.actions[key].enabled;
+      const action = Object.values(view.actions).find((entry) => entry.response === button.dataset.response);
+      button.disabled = !enabled || !action?.enabled;
     }
   }
 

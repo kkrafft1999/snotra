@@ -1085,7 +1085,9 @@ function createWorkspaceToolRegistry({
       // Shell-Befehl kann alles, was der angemeldete Nutzer kann, und kennt
       // keine Workspace-Grenze. `execute` ist weder sitzungs- noch dauerhaft
       // freigebbar (Konzept §6/§7); die Karte zeigt Befehl, Shell und
-      // Arbeitsordner (Issue #102).
+      // Arbeitsordner (Issue #102). The one exception is a single exact
+      // command line the user remembered for this workspace (#121) — a
+      // command rule, never the class or the tool as a whole.
       riskClass: TOOL_RISK_CLASSES.EXECUTE,
       targets: () => [],
       isAvailable: () => shellRunner?.isAvailable() === true,
@@ -1105,7 +1107,8 @@ function createWorkspaceToolRegistry({
         + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
         + 'get their registry automatically. A refused write or connection shows up in stderr under '
         + '<sandbox_violations>; report it instead of working around it. The result says whether the '
-        + 'run was isolated. Every run needs the user\'s approval.',
+        + 'run was isolated. Every run needs the user\'s approval, unless the user has allowed '
+        + 'exactly this command line for the project folder.',
       shortDescriptionKey: 'tools.short.shell_execute',
       parameters: {
         type: 'object',

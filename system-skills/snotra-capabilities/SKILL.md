@@ -70,7 +70,14 @@ Per call, by risk class and mode.
 
 Session approval exists for `read`, `read-sensitive`, `write`; permanent
 approval only for `read` and `write`. For `delete`, `execute`, `external` only
-"once" remains, and every run is asked afresh. Hard limits in every mode: the
+"once" remains, and every run is asked afresh — with one exception: on a
+`shell_execute` card the user can remember one exact, simple command line for
+the open folder ("{label:approval.action.always}", confirmed in a system
+dialog). It then runs without asking in `{label:permissions.mode.smart}`; any
+other arguments, folder or network domains ask again, and commands with
+chaining, pipes, redirection, variables or quotes cannot be remembered at all.
+Remembered commands are listed and deleted under
+{menu:settings.permissions}. Hard limits in every mode: the
 project folder, skill directories readable only, Snotra's own configuration.
 For file changes the confirmation card shows the target path, the reason and a
 preview; for `run_python` the full source; for `shell_execute` the command, the

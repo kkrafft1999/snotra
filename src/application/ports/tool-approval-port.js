@@ -23,14 +23,18 @@
  * @property {string} planKey  stabiler Schlüssel des validierten Plans
  * @property {string} policyVersion
  * @property {string} [chatId]
+ * @property {boolean} [alwaysAllowed]  whether "always allow this command" is offered (#121)
+ * @property {string} [alwaysUnavailableReason]  COMMAND_RULE_UNAVAILABLE_REASONS value when it is not
+ * @property {object} [commandRule]  the rule main stores on "always"; never sent to the renderer
  */
 
 /**
  * @typedef {Object} ToolApprovalOutcome
- * @property {'allow-once'|'allow-session'|'deny'} response
+ * @property {'allow-once'|'allow-session'|'allow-always'|'deny'} response
  * @property {boolean} [invalidated]  Anfrage verfallen (Abbruch, Fenster zu, Kontextwechsel, keine UI)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert bei invalidated
  * @property {string} [requestId]
+ * @property {string} [ruleId]  the command rule stored for `allow-always` (#121)
  */
 
 /**

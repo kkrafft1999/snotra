@@ -29,6 +29,7 @@ const {
   normalizePermissionRule,
   normalizePermissionRules,
   normalizeSensitivePathPatterns,
+  isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
 
@@ -66,6 +67,17 @@ function normalizeWorkspaceRoots(value) {
     out.push(entry);
   }
   return out;
+}
+
+function sameCommandRule(a, b) {
+  return (
+    isCommandRule(a) &&
+    isCommandRule(b) &&
+    a.root === b.root &&
+    a.command === b.command &&
+    a.cwd === b.cwd &&
+    a.networkDomains.join('\n') === b.networkDomains.join('\n')
+  );
 }
 
 function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath = null, log = console, now = () => Date.now() }) {
@@ -316,8 +328,10 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     });
   }
 
+  /** Result carries `ruleId`: the new rule's, or that of the command rule it repeats (#121). */
   async function addRule(rawRule) {
-    return update((draft, { encryptionAvailable: enc }) => {
+    let ruleId = null;
+    const result = await update((draft, { encryptionAvailable: enc }) => {
       const id = typeof rawRule?.id === 'string' && rawRule.id.trim() ? rawRule.id.trim() : crypto.randomUUID();
       const rule = normalizePermissionRule({ ...rawRule, id, createdAt: now() });
       if (!rule) return { error: createMessage('permissions.error.invalidRule') };
@@ -327,6 +341,16 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       if (allRules(draft).some((existing) => existing.id === rule.id)) {
         return { error: createMessage('permissions.error.ruleIdTaken') };
       }
+      // Two cards for the same command, both answered with "always", make one
+      // rule, not two identical rows in the settings.
+      const same = isCommandRule(rule)
+        ? (draft.workspaceRules[rule.root] || []).find((existing) => sameCommandRule(existing, rule))
+        : null;
+      if (same) {
+        ruleId = same.id;
+        return null;
+      }
+      ruleId = rule.id;
       if (rule.scope === PERMISSION_RULE_SCOPES.GLOBAL) {
         draft.globalRules.push(rule);
       } else {
@@ -334,6 +358,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       }
       return null;
     });
+    return result.ok ? { ...result, ruleId } : result;
   }
 
   async function removeRule(ruleId) {

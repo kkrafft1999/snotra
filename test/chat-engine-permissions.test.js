@@ -543,3 +543,66 @@ test('auto with the sandbox switched off for the workspace runs execute without 
   assert.equal(smartApprovals.requests.length, 1);
   assert.deepEqual(smartApprovals.requests[0].preview.isolation, { isolated: false, reason: 'workspace', missing: [] });
 });
+
+// ── Remembered shell commands (#121) ─────────────────────────────────────────
+
+function shellPlan(toolName, args) {
+  return {
+    tool: toolName,
+    riskClasses: ['execute'],
+    targets: [],
+    planKey: JSON.stringify([toolName, args]),
+    shellCommand: { command: args.command, cwd: '', networkDomains: [], stdin: false },
+  };
+}
+
+test('a remembered command runs without a card and is audited as an allowance rule', async () => {
+  const tools = makeToolPort({ plan: shellPlan });
+  const approvals = makeApprovals('allow-once');
+  const rule = {
+    id: 'cmd-1', effect: 'allow', scope: 'workspace', root: path.resolve(ROOT), tool: 'shell_execute',
+    riskClass: null, pathPattern: '**', command: 'git status', cwd: '', networkDomains: [],
+  };
+  const { engine } = makeEngine(
+    [assistantToolCall('c1', 'shell_execute', { command: 'git status' }), assistantToolCall('c2', 'shell_execute', { command: 'git status --short' }), assistantText('fertig')],
+    { tools, approvals, toolPolicy: policy({ rules: [rule] }) }
+  );
+  const result = await send(engine);
+  assert.equal(tools.calls.length, 2);
+  // Only the call that differs from the remembered line asks.
+  assert.equal(approvals.requests.length, 1);
+  assert.equal(approvals.requests[0].preview, undefined);
+  const [first, second] = result.toolTrace;
+  assert.equal(first.permission.source, 'allow-rule');
+  assert.equal(first.permission.ruleId, 'cmd-1');
+  assert.equal(second.permission.source, 'allow-once');
+});
+
+test('"always" on the card runs the call and records the new rule; the card offer carries the rule', async () => {
+  const tools = makeToolPort({ plan: shellPlan });
+  const approvals = makeApprovals(() => ({ response: 'allow-always', ruleId: 'new-rule' }));
+  const { engine } = makeEngine(
+    [assistantToolCall('c1', 'shell_execute', { command: 'npm test' }), assistantText('fertig')],
+    { tools, approvals, toolPolicy: policy({ encryptionAvailable: true }) }
+  );
+  const result = await send(engine);
+  assert.equal(tools.calls.length, 1);
+  const [card] = approvals.requests;
+  assert.equal(card.alwaysAllowed, true);
+  assert.equal(card.commandRule.command, 'npm test');
+  assert.equal(card.commandRule.root, path.resolve(ROOT));
+  assert.equal(result.toolTrace[0].permission.source, 'allow-rule');
+  assert.equal(result.toolTrace[0].permission.ruleId, 'new-rule');
+});
+
+test('without secure storage the card does not offer to remember a command', async () => {
+  const tools = makeToolPort({ plan: shellPlan });
+  const approvals = makeApprovals('allow-once');
+  const { engine } = makeEngine(
+    [assistantToolCall('c1', 'shell_execute', { command: 'npm test' }), assistantText('fertig')],
+    { tools, approvals, toolPolicy: policy({ encryptionAvailable: false }) }
+  );
+  await send(engine);
+  assert.equal(approvals.requests[0].alwaysAllowed, false);
+  assert.equal(approvals.requests[0].alwaysUnavailableReason, 'no-encryption');
+});

@@ -1,7 +1,7 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
-const { normalizeToolPermissionMode } = require('../../shared/contracts/tool-permissions');
+const { normalizeToolPermissionMode, isCommandRule } = require('../../shared/contracts/tool-permissions');
 const { createChatEngine } = require('../../application/chat/chat-engine');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { createProviderLlmAdapter } = require('../adapters/provider-llm-adapter');
@@ -109,7 +109,11 @@ function modeForRun(state, chatId, resolveChatMode) {
  */
 function rulesVersionOf(state) {
   const hash = createHash('sha256');
-  hash.update(JSON.stringify([state.integrity, state.rules, state.sensitivePathPatterns]));
+  // Command rules (#121) are left out: they allow one `shell_execute` line,
+  // which no session approval can cover, so remembering a command must not
+  // cost the user the approvals of the chats that are open.
+  const rules = (Array.isArray(state.rules) ? state.rules : []).filter((rule) => !isCommandRule(rule));
+  hash.update(JSON.stringify([state.integrity, rules, state.sensitivePathPatterns]));
   return hash.digest('hex').slice(0, 32);
 }
 
