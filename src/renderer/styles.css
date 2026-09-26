@@ -27,8 +27,12 @@
   --scrollbar-thumb: #C5C0BB;
   --scrollbar-track: transparent;
 
-  /* Horizontaler Innenrand im Chat (Text, Header, Eingabe) */
-  --chat-gutter-x: 64px;
+  /* Horizontal inset of the chat (text, header, composer). It grows with the
+     panel (#400): 16 px at 320 px — the chat docked next to an open file —
+     and the full 64 px from 640 px on, so the wide chat stays as it was. A
+     fixed 64 px took 40 % of the docked panel. The percentage resolves where
+     the value is used, against the width of #chat-panel. */
+  --chat-gutter-x: clamp(16px, calc(15% - 32px), 64px);
   /* Lesespalte: waechst mit dem Fenster bis maximal DIN-A4-Breite, danach
    * wandert der Zuwachs in den Rand. Die Prozentangaben beziehen sich auf die
    * Breite von #chat-panel, deshalb liegen Nachrichten und Eingabezeile bei
@@ -2094,6 +2098,26 @@ summary:focus-visible,
 
 .chat-composer-bar-end {
   flex-shrink: 0;
+}
+
+/* Model and mode pill as one group: in a single row it sits after the mic and
+   shrinks there; in a narrow bar ComposerBarLayout moves it to the front of
+   the bar, where it takes a row of its own above the mic, the token counter
+   and send (#400). */
+.chat-composer-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-composer-bar[data-stacked='true'] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.chat-composer-bar[data-stacked='true'] > .chat-composer-pills {
+  flex: 1 1 100%;
 }
 
 /* In der Werkzeugzeile traegt die Karte die Flaeche; die Pille bleibt
@@ -5321,17 +5345,11 @@ select.modal-input {
   display: inline;
 }
 
-/* While "Auto" would run unisolated, the model name gives way first: "not
-   isolated" is the part of the bar that has to stay readable. In the other
-   modes both pills shrink alike, as before. */
-.chat-composer-bar:has(.chat-tool-mode-wrap[data-unisolated='true']) #chat-model-picker-wrap {
-  flex-shrink: 100;
-}
-
-/* With the words shown the pill does not shrink at all: even a fraction of a
-   pixel would put the ellipsis where "isolated" ends. Below the compact
-   threshold it may give way again, as the last thing in the bar. */
-.chat-tool-mode-wrap[data-unisolated='true']:not([data-compact='true']) {
+/* Only the model name gives way; the mode — short, and in "Auto" without
+   sandbox the warning — stays whole. Not even a fraction of a pixel: that
+   alone would put the ellipsis where the word ends. A bar too narrow for both
+   puts the pills on a row of their own instead (#396, #400). */
+.chat-tool-mode-wrap {
   flex-shrink: 0;
 }
 
@@ -5342,13 +5360,6 @@ select.modal-input {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* A bar too narrow for the words next to a model name (ToolModePicker sets
-   data-compact): the pill keeps the struck-through shield and the chevron.
-   Tooltip, accessible name and the menu notice still say "not isolated". */
-.chat-tool-mode-wrap[data-unisolated='true'][data-compact='true'] #chat-tool-mode-label {
-  display: none;
 }
 
 /* The popup: the notice (#396) on top, the listbox below it. Taller than the
