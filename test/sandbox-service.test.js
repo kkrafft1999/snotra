@@ -29,7 +29,7 @@ const posixOnly = { skip: process.platform === 'win32' ? 'needs /bin/sh' : false
  * default the "sandbox" lets the allowed write through and refuses the one
  * outside, like the real thing.
  */
-function fakeRuntime({ errors = [], wrap, initialize } = {}) {
+function fakeRuntime({ errors = [], wrap, initialize, proxyPort } = {}) {
   const calls = { updateConfig: [], wrap: [], cleanup: 0, reset: 0, initialize: 0 };
   const runtime = {
     SandboxManager: {
@@ -45,6 +45,7 @@ function fakeRuntime({ errors = [], wrap, initialize } = {}) {
         return command.includes('/outside/') ? 'exit 1' : command;
       },
       annotateStderrWithSandboxFailures: (key, stderr) => `${stderr}[annotated:${key}]`,
+      getProxyPort: () => proxyPort,
       cleanupAfterCommand() { calls.cleanup += 1; },
       async reset() { calls.reset += 1; },
     },
@@ -301,6 +302,37 @@ test('a run may write to the workspace and its temp dir and reach only its domai
   prepared.release();
   prepared.release();
   assert.equal(calls.cleanup, before + 1, 'release is idempotent');
+});
+
+test('a proxy the command could not reach is named as a sandbox problem (#368)', posixOnly, async () => {
+  const { service } = makeService({ fake: { proxyPort: 49737 } });
+  await service.detect();
+  const prepared = await service.prepare({ command: 'curl https://example.com', runTmp: '/tmp/r', commandId: 'shell-2' });
+  const note = /<sandbox_network>\nThe sandbox's network proxy on localhost:49737 did not accept the connection/;
+
+  const curl = prepared.annotate("curl: (7) Failed to connect to localhost port 49737 after 0 ms: Couldn't connect to server\n");
+  assert.match(curl, /^curl: \(7\).*\n\[annotated:shell-2\]\n\n<sandbox_network>/s, 'after the runtime’s own annotation');
+  assert.match(curl, note);
+  assert.match(prepared.annotate("ProxyError('Unable to connect to proxy', NewConnectionError('[Errno 61] Connection refused'))"), note);
+  assert.equal(prepared.annotate(curl), `${curl}[annotated:shell-2]`, 'never twice');
+
+  for (const other of [
+    'curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn\'t connect to server',
+    'curl: (56) CONNECT tunnel failed, response 403',
+    'listening on 49737',
+    '',
+  ]) {
+    assert.doesNotMatch(prepared.annotate(other), /sandbox_network/, other);
+  }
+  prepared.release();
+});
+
+test('without a proxy port nothing is added', posixOnly, async () => {
+  const { service } = makeService();
+  await service.detect();
+  const prepared = await service.prepare({ command: 'true', runTmp: '/tmp/r', commandId: 'shell-3' });
+  assert.equal(prepared.annotate('Unable to connect to proxy'), 'Unable to connect to proxy[annotated:shell-3]');
+  prepared.release();
 });
 
 test('without a workspace only the run’s temp dir is writable', posixOnly, async () => {

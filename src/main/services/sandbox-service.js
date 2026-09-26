@@ -522,6 +522,8 @@ function createSandboxService({
       release();
       throw e;
     }
+    let proxyPort;
+    try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
     let released = false;
     return {
       command: '/bin/sh',
@@ -535,11 +537,13 @@ function createSandboxService({
         release();
       },
       annotate(stderr) {
+        let text;
         try {
-          return manager.annotateStderrWithSandboxFailures(commandId || inner, String(stderr ?? ''));
+          text = manager.annotateStderrWithSandboxFailures(commandId || inner, String(stderr ?? ''));
         } catch {
-          return String(stderr ?? '');
+          text = String(stderr ?? '');
         }
+        return annotateUnreachableProxy(text, proxyPort);
       },
     };
   }
@@ -562,6 +566,30 @@ function createSandboxService({
 
 function firstLine(text) {
   return String(text || '').trim().split('\n')[0].slice(0, 300);
+}
+
+/**
+ * A command that cannot reach the sandbox's own network proxy fails with an
+ * ordinary connection error — curl's "Failed to connect to localhost port …"
+ * reads as if the target host were down (#368). The runtime records nothing
+ * in that case, so the run says it here: nothing left the sandbox, and the
+ * cause is the proxy, not the host. Only an error naming the proxy port, or a
+ * client's own "cannot connect to proxy", counts; anything else stays as it is.
+ *
+ * @param {string} stderr  already annotated by the runtime
+ * @param {number|undefined} proxyPort
+ */
+function annotateUnreachableProxy(stderr, proxyPort) {
+  const text = String(stderr ?? '');
+  if (!Number.isInteger(proxyPort) || text.includes('<sandbox_network>')) return text;
+  const namesPort = new RegExp(`(?:port\\s+|:)${proxyPort}\\b`).test(text)
+    && /connect|refused|not permitted/i.test(text);
+  const namesProxy = /(?:unable to|cannot|can't|could not) connect to (?:the )?proxy/i.test(text);
+  if (!namesPort && !namesProxy) return text;
+  const note = `The sandbox's network proxy on localhost:${proxyPort} did not accept the connection, `
+    + 'so this command could not reach the network at all. This is a problem of the sandbox, '
+    + 'not a sign that the target host is down.';
+  return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_network>\n${note}\n</sandbox_network>\n`;
 }
 
 module.exports = {
