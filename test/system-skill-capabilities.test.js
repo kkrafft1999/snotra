@@ -81,7 +81,8 @@ test('snotra-capabilities behauptet nicht mehr, Shell und Internet seien unmögl
 
 test('snotra-capabilities says where runs are isolated and where not (#405)', () => {
   // Without it the model has to guess whether its commands are sandboxed.
-  const isolation = skillText.split('\n\n').find((block) => block.startsWith('Isolation:'));
+  // A Windows checkout carries CRLF, so blank lines are split either way.
+  const isolation = skillText.split(/\r?\n\r?\n/).find((block) => block.startsWith('Isolation:'));
   assert.ok(isolation, 'The skill has no paragraph on isolation.');
   assert.match(isolation, /macOS and Linux/);
   assert.match(isolation, /On Windows there is no sandbox/);
