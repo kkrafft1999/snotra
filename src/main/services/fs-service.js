@@ -74,6 +74,8 @@ const TREE_DEFAULT_MAX_DEPTH = 3;
 const TREE_MAX_DEPTH = 10;
 const TREE_DEFAULT_MAX_ENTRIES = 200;
 const TREE_MAX_ENTRIES = 1000;
+// Cut after filtering and sorting, so the model sees folders first and a stable first page.
+const LIST_DIRECTORY_MAX_ENTRIES = 1000;
 
 
 function escapeRegExpLiteral(text) {
@@ -1019,9 +1021,13 @@ function createFsService({
           if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
           return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         });
+      const hidden = Math.max(0, items.length - LIST_DIRECTORY_MAX_ENTRIES);
       return JSON.stringify({
         relative_path: rel || '.',
-        items,
+        items: hidden > 0 ? items.slice(0, LIST_DIRECTORY_MAX_ENTRIES) : items,
+        ...(hidden > 0
+          ? { entries_shown: LIST_DIRECTORY_MAX_ENTRIES, entries_hidden: hidden, truncated: true }
+          : {}),
         ...(omittedSensitive > 0 ? { omitted_sensitive: omittedSensitive } : {}),
       });
     } catch (e) {
@@ -2478,4 +2484,5 @@ function createFsService({
 
 module.exports = {
   createFsService,
+  LIST_DIRECTORY_MAX_ENTRIES,
 };
