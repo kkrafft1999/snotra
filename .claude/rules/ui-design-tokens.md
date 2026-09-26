@@ -298,8 +298,8 @@ The same state carries the same colour everywhere:
 Rules:
 
 - **Never the colour alone:** the words "not isolated" and the struck-through
-  shield go with it. Only a composer bar too narrow for the words keeps the
-  shield on its own; tooltip, accessible name and the menu still say it.
+  shield go with it. A composer bar too narrow for the words puts the pills on
+  a row of their own (#400) instead of dropping them.
 - **Nothing else is amber** — no general caution, no validation hint, no
   accent. An action that failed stays red, even when it concerns the sandbox
   (the switch could not be flipped, say).

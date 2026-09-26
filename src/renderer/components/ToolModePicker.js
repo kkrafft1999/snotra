@@ -186,17 +186,6 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
     onDismiss: close,
   });
 
-  // Below this bar width "Auto · not isolated" and a model name no longer fit
-  // side by side (#396); the pill then drops the words (see styles.css).
-  const COMPACT_BAR_BELOW = 400;
-  const bar = wrap.closest('.chat-composer-bar');
-  if (bar && typeof ResizeObserver === 'function') {
-    new ResizeObserver(([entry]) => {
-      if (entry.contentRect.width < COMPACT_BAR_BELOW) wrap.dataset.compact = 'true';
-      else delete wrap.dataset.compact;
-    }).observe(bar);
-  }
-
   toolPermissions.subscribe(render);
   // The pill, its tooltip and the open menu are built at runtime, so a
   // language change has to redraw them (#290).
