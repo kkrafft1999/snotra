@@ -40,6 +40,8 @@ async function mountTree(overrides = {}, extraDeps = {}) {
   appStore.selectedIsDirectory = false;
 
   const entries = fakeFilesystem();
+  // Entries main cut off per folder (#76); empty means every folder fits.
+  const hidden = {};
   const calls = { importItems: [], moveItem: [], inspectImport: [], readDirectory: [] };
   // Der Dateisystem-Watcher meldet ueber diesen Rueckruf (#158).
   let treeChangedListener = null;
@@ -49,7 +51,7 @@ async function mountTree(overrides = {}, extraDeps = {}) {
     getFolderHistory: async () => ({ paths: [] }),
     readDirectory: async (dir) => {
       calls.readDirectory.push(dir);
-      return entries[dir] ?? [];
+      return { entries: entries[dir] ?? [], hidden: hidden[dir] ?? 0 };
     },
     readFile: async () => ({ content: '# Titel', size: 12 }),
     onFsTreeChanged: (callback) => {
@@ -95,6 +97,7 @@ async function mountTree(overrides = {}, extraDeps = {}) {
     appStore,
     calls,
     entries,
+    hidden,
     emitTreeChanged,
     container: document.getElementById('tree-container'),
   };
@@ -253,7 +256,7 @@ test('Waehrend eines laufenden Imports ist der Baum busy und ein zweiter Drop wi
 test('Nach dem Import steht die Datei im Baum und aufgeklappte Ordner bleiben offen', async (t) => {
   const entries = fakeFilesystem();
   const { dom, container } = await mountTree({
-    readDirectory: async (dir) => entries[dir] ?? [],
+    readDirectory: async (dir) => ({ entries: entries[dir] ?? [], hidden: 0 }),
     importItems: async (sources, dest) => {
       entries[dest] = [
         ...entries[dest],
@@ -468,4 +471,42 @@ test('ohne geoeffneten Ordner passiert nichts', async (t) => {
   await emitTreeChanged({ directories: ['/ws'], complete: true });
 
   assert.deepEqual(calls.readDirectory, []);
+});
+
+// ── Cut-off folders (#76) ───────────────────────────────────────────────────
+
+const hiddenNote = (container) => container.querySelector(':scope > .tree-hidden-entries');
+
+test('a folder cut off in main ends in a note with the hidden count', async (t) => {
+  const { dom, container, hidden, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+  assert.equal(hiddenNote(container), null, 'nothing cut, no note');
+
+  hidden['/ws'] = 12345;
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+
+  const note = hiddenNote(container);
+  assert.ok(note, 'the refresh notices a count that moved behind unchanged rows');
+  assert.equal(note.textContent, '… 12,345 more entries not shown');
+  assert.equal(note.classList.contains('tree-item'), false, 'not an entry: no keyboard stop, no drag');
+  assert.equal(container.lastElementChild, note, 'after the last entry');
+});
+
+test('the note in a subfolder lines up with the names and follows the language', async (t) => {
+  const { dom, container, hidden } = await mountTree();
+  t.after(dom.cleanup);
+  hidden['/ws/docs'] = 1;
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+
+  const children = container.querySelector('.tree-children[data-path="/ws/docs"]');
+  const note = hiddenNote(children);
+  assert.equal(note.textContent, '… 1 more entry not shown');
+  assert.equal(note.style.paddingLeft, '40px', 'depth 1: indent 20 + icon 16 + gap 4, like a file name');
+
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('de', { force: true });
+  t.after(() => setLocale('en', { force: true }));
+  assert.equal(note.textContent, '… 1 weiterer Eintrag ausgeblendet');
 });

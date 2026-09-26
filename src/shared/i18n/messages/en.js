@@ -35,6 +35,8 @@ module.exports = {
   'sidebar.history.remove.label': 'Remove {name} from the history',
   'tree.reference': 'Reference in the chat',
   'tree.reference.label': 'Reference {name} in the chat',
+  'tree.hiddenEntries.one': '… {count} more entry not shown',
+  'tree.hiddenEntries.other': '… {count} more entries not shown',
   'fileInfo.type.unknown': 'Unknown',
 
   // ── Welcome screen ───────────────────────────────────────────────────────
@@ -148,6 +150,11 @@ module.exports = {
   'chat.voice.noSpeech': 'No speech recognised.',
   'chat.voice.failed': 'Transcription failed.',
   'chat.voice.error.noApiKey': 'No OpenAI key stored (Whisper needs one).',
+  'chat.voice.error.invalidAudio': 'The recording could not be read.',
+  'chat.voice.error.tooLarge': 'The recording is larger than {max} MB.',
+  'chat.voice.stoppingSoon': 'Recording … stops automatically in under {seconds} seconds.',
+  'chat.voice.autoStopped.time': 'Recording stopped automatically after {minutes} minutes.',
+  'chat.voice.autoStopped.size': 'Recording stopped automatically at {max} MB.',
   'chat.modelPicker.label': 'Choose the active model',
   'chat.modelPicker.menu': 'Available models',
   'chat.toolMode.label': 'Choose the permission mode',

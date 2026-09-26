@@ -160,3 +160,38 @@ test('transcribeAudio reports network failures as an error instead of throwing',
   const res = await svc.transcribeAudio(Buffer.from('x'));
   assert.match(res.error, /ECONNRESET/);
 });
+
+// #76: main does not trust the size of what crosses IPC.
+test('transcribeAudio refuses a payload above the Whisper limit before anything else', async () => {
+  const { MAX_TRANSCRIPTION_UPLOAD_BYTES } = require('../src/shared/contracts/voice');
+  const svc = createWhisperService({
+    fetchImpl: async () => { throw new Error('must not be called'); },
+    credentials: { getApiKey: async () => { throw new Error('must not be asked'); } },
+  });
+  const res = await svc.transcribeAudio(new ArrayBuffer(MAX_TRANSCRIPTION_UPLOAD_BYTES + 1));
+  assert.deepEqual(res.error, { key: 'chat.voice.error.tooLarge', params: { max: 25 } });
+});
+
+for (const [label, payload] of [
+  ['a string', 'audio'],
+  ['an object', { byteLength: 10 }],
+  ['an empty buffer', new ArrayBuffer(0)],
+  ['nothing', undefined],
+]) {
+  test(`transcribeAudio refuses ${label} as audio payload`, async () => {
+    const svc = createWhisperService({
+      fetchImpl: async () => { throw new Error('must not be called'); },
+      credentials: { getApiKey: async () => { throw new Error('must not be asked'); } },
+    });
+    const res = await svc.transcribeAudio(payload);
+    assert.deepEqual(res.error, { key: 'chat.voice.error.invalidAudio' });
+  });
+}
+
+test('transcribeAudio accepts an ArrayBuffer as it arrives over IPC', async (t) => {
+  const { fetchImpl, calls } = makeFetchStub(t, async () => ({ ok: true, json: async () => ({ text: 'ok' }) }));
+  const svc = createWhisperService({ fetchImpl, credentials: { getApiKey: async () => 'sk-test' } });
+  const res = await svc.transcribeAudio(new Uint8Array([1, 2, 3]).buffer);
+  assert.deepEqual(res, { text: 'ok' });
+  assert.equal(calls.length, 1);
+});

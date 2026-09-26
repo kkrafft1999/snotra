@@ -3,7 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createFsService, LIST_DIRECTORY_MAX_ENTRIES } = require('../src/main/services/fs-service');
+const {
+  createFsService,
+  LIST_DIRECTORY_MAX_ENTRIES,
+  READ_DIRECTORY_MAX_ENTRIES,
+} = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 
 function makeFsService({ locale } = {}) {
@@ -2857,4 +2861,52 @@ test('importExternalItems lehnt fehlende, relative und nicht-Ordner-Ziele ab (#1
     /kein Ordner/
   );
   assert.match((await svc.importExternalItems([], workspace)).error, /Nichts zum Übernehmen/);
+});
+
+test('readDirectory for the file tree lists everything below the cap (#76)', async (t) => {
+  const fsService = makeFsService();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.mkdir(path.join(tmpRoot, 'src'));
+  await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'abc', 'utf8');
+  await fs.writeFile(path.join(tmpRoot, '.hidden'), '', 'utf8');
+
+  const { entries, hidden } = await fsService.readDirectory(tmpRoot);
+
+  assert.equal(hidden, 0);
+  assert.deepEqual(entries.map((e) => [e.name, e.isDirectory]), [['src', true], ['b.txt', false]]);
+  assert.equal(entries[1].size, 3);
+  assert.equal(entries[1].path, path.join(tmpRoot, 'b.txt'));
+});
+
+test('readDirectory cuts after sorting, folders first, and counts the rest (#76)', async (t) => {
+  const fsService = makeFsService();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.mkdir(path.join(tmpRoot, 'zz-folder'));
+  await Promise.all(Array.from({ length: 150 }, (_, i) =>
+    fs.writeFile(path.join(tmpRoot, `f${String(i).padStart(3, '0')}.txt`), 'x', 'utf8')));
+
+  // 100 rows is more than one lstat batch, so the batching is covered too.
+  const { entries, hidden } = await fsService.readDirectory(tmpRoot, { maxEntries: 100 });
+
+  assert.equal(entries.length, 100);
+  assert.equal(hidden, 51);
+  assert.equal(entries[0].name, 'zz-folder');
+  assert.equal(entries[1].name, 'f000.txt');
+  assert.equal(entries.at(-1).name, 'f098.txt');
+  assert.ok(entries.slice(1).every((e) => e.size === 1), 'every shown row carries its lstat');
+});
+
+test('readDirectory caps the file tree at READ_DIRECTORY_MAX_ENTRIES by default (#76)', async (t) => {
+  const fsService = makeFsService();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await Promise.all(Array.from({ length: READ_DIRECTORY_MAX_ENTRIES + 3 }, (_, i) =>
+    fs.writeFile(path.join(tmpRoot, `f${String(i).padStart(5, '0')}`), '', 'utf8')));
+
+  const { entries, hidden } = await fsService.readDirectory(tmpRoot);
+
+  assert.equal(entries.length, READ_DIRECTORY_MAX_ENTRIES);
+  assert.equal(hidden, 3);
 });

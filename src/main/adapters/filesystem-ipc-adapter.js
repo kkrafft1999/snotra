@@ -68,13 +68,13 @@ function createFilesystemIpcAdapter({
       const { absPath, error } = await boundPath(dirPath);
       if (error) {
         console.error('readDirectory denied:', error);
-        return [];
+        return { entries: [], hidden: 0 };
       }
       try {
         return await fsService.readDirectory(absPath);
       } catch (err) {
         console.error('readDirectory error:', err.message);
-        return [];
+        return { entries: [], hidden: 0 };
       }
     },
     async moveItem(sourcePath, destDir) {
