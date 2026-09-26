@@ -11,6 +11,48 @@ is a fully supported *product* language: the application UI is bilingual
 [`README.de.md`](./README.de.md) is maintained alongside the English README. Some documents under `docs/` are still German; they are being translated
 gradually.
 
+## First contribution
+
+You don't need write access to this repository — outside contributions come in
+through a fork. The whole path, from nothing to an open pull request:
+
+1. **Pick an issue.** Issues labelled
+   [`good first issue`](https://github.com/kkrafft1999/snotra/labels/good%20first%20issue)
+   are self-contained and come with a *Getting started* section that names the
+   files involved. Comment on the issue to say you're taking it, so two people
+   don't do the same work.
+2. **Fork** the repository on GitHub (*Fork* button, top right).
+3. **Clone your fork** and add this repository as `upstream`:
+
+   ```bash
+   git clone https://github.com/<your-user>/snotra.git
+   cd snotra
+   git remote add upstream https://github.com/kkrafft1999/snotra.git
+   ```
+
+4. **Set up and run the tests** as described under
+   [Prerequisites](#prerequisites) and [Tests](#tests).
+5. **Branch off an up-to-date `main`:**
+
+   ```bash
+   git fetch upstream
+   git switch -c fix/short-description upstream/main
+   ```
+
+6. **Commit, push to your fork and open the pull request** against
+   `kkrafft1999/snotra:main`:
+
+   ```bash
+   git push -u origin fix/short-description
+   ```
+
+   GitHub then offers *Compare & pull request* on your fork. Put
+   `Closes #N` in the description. What happens after that is described under
+   [Branches and pull requests](#branches-and-pull-requests).
+
+To bring your fork's branch up to date later, `git fetch upstream` and merge
+`upstream/main` into it.
+
 ## Prerequisites
 
 - **Node.js ≥ 24** (Active LTS). The version is pinned in
@@ -23,7 +65,7 @@ gradually.
   [README](./README.md#building--packaging-the-app).
 
 ```bash
-git clone git@github.com:kkrafft1999/snotra.git
+git clone https://github.com/kkrafft1999/snotra.git   # or your fork, see above
 cd snotra
 nvm use          # or make sure node -v reports v24.x
 npm install
@@ -45,6 +87,15 @@ launches the real Electron app against a fake OpenAI-compatible model server and
 checks what a DOM stand-in cannot — sanitizing with the real DOMPurify, layout
 and focus in the running window. It takes a few seconds and is **not** part of
 `npm test`.
+
+The e2e test opens a real window and therefore needs a display. On a headless
+Linux machine or in a container, run it under Xvfb the way CI does:
+
+```bash
+xvfb-run --auto-servernum npm run test:e2e
+```
+
+(`xvfb-run` comes with the `xvfb` package, e.g. `sudo apt-get install xvfb`.)
 
 Both run in CI on macOS, Windows and Linux ([`ci.yml`](./.github/workflows/ci.yml))
 and are required status checks on `main`. Windows in particular catches things a
@@ -99,7 +150,8 @@ pushes and branch deletion are blocked, and the three `Tests (…)` contexts are
 required. Every change goes through a pull request — no exceptions, including
 release version bumps.
 
-1. **Branch off `main`.** Name it after what it does, e.g.
+1. **Branch off `main`** — in your fork, if you don't have write access (see
+   [First contribution](#first-contribution)). Name it after what it does, e.g.
    `fix/tree-drop-collision` or `feature/mcp-http-transport`.
 2. **Commit in readable steps**, with messages in English. Present tense,
    imperative mood, one concern per commit.
@@ -107,8 +159,11 @@ release version bumps.
 4. **Open a pull request** with `Closes #N` referencing the issue. The keyword
    has to be English — a German "Schließt #N" closes nothing.
 5. **Wait for the pipeline.** All required checks green, no conflicts with
-   `main`, no open review comments that need an answer.
-6. **Squash-merge**, so that `main` carries one commit per pull request with the
+   `main`, no open review comments that need an answer. On a first-time
+   contributor's pull request, GitHub holds the workflows until a maintainer
+   approves them — if the checks show as waiting, nothing is broken; they start
+   once the run is approved.
+6. **Squash-merge** (done by a maintainer for pull requests from forks), so that `main` carries one commit per pull request with the
    PR number in the title, and delete the branch afterwards.
 
 Keep the diff to the task at hand: no unrelated changes swept in, no credentials
