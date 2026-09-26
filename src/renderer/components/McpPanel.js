@@ -326,13 +326,13 @@ export function initMcpPanel({ api }) {
     const secret = el('input');
     secret.type = 'checkbox';
     secret.checked = entry.secret !== false;
-    secretLabel.append(secret, el('span', null, 'geheim'));
+    secretLabel.append(secret, el('span', null, t('mcpDialog.env.secret')));
     opts.append(secretLabel);
 
     const remove = el('button', 'settings-dialog__icon-close');
     remove.type = 'button';
     remove.innerHTML = CLOSE_ICON_HTML;
-    remove.setAttribute('aria-label', 'Umgebungsvariable entfernen');
+    remove.setAttribute('aria-label', t('mcpDialog.env.remove'));
     remove.addEventListener('click', () => row.remove());
     opts.append(remove);
 
@@ -521,12 +521,12 @@ export function initMcpPanel({ api }) {
     const notes = [];
     if (candidate.conflict) {
       notes.push(importNoteRow(
-        t('mcpImport.candidate.duplicate', { id: candidate.id }), 'ersetzt', true));
+        t('mcpImport.candidate.duplicate', { id: candidate.id }), t('mcpImport.candidate.replaces'), true));
     }
     const secrets = candidate.env.filter((entry) => entry.secret).map((entry) => entry.key);
     if (secrets.length > 0) {
       notes.push(importNoteRow(
-        tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), 'geheim'));
+        tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), t('mcpImport.candidate.secret')));
     }
     // A placeholder or a missing value has to be dealt with before the server
     // is switched on — that is what the loud mark is for. Recognised by the

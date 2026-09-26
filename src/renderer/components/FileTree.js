@@ -574,9 +574,9 @@ export function initFileTree(deps) {
   async function openFileContextMenu(item) {
     try {
       const result = await api.showFileContextMenu(item.path, { isDirectory: Boolean(item.isDirectory) });
-      if (result?.error) console.warn('Kontextmenü abgelehnt:', result.error);
+      if (result?.error) console.warn('Context menu refused:', result.error);
     } catch (err) {
-      console.warn('Kontextmenü fehlgeschlagen:', err?.message ?? err);
+      console.warn('Context menu failed:', err?.message ?? err);
     }
   }
 

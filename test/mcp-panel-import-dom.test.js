@@ -126,7 +126,7 @@ test('Geheimnisse und Platzhalter werden in der Zeile benannt', async () => {
   assert.match(notes, /stored encrypted/);
   assert.match(notes, /still contains a placeholder/);
   const marken = [...zeilen()[0].querySelectorAll('.mcp-import__badge')].map((b) => b.textContent);
-  assert.ok(marken.includes('geheim'));
+  assert.ok(marken.includes('secret'));
 });
 
 test('eine Kennung, die es schon gibt, wird als Ersetzen ausgewiesen', async () => {
@@ -137,7 +137,7 @@ test('eine Kennung, die es schon gibt, wird als Ersetzen ausgewiesen', async () 
   const zeile = zeilen()[0];
   assert.match(zeile.textContent, /replaces it/);
   const warn = zeile.querySelector('.mcp-import__badge--warn');
-  assert.equal(warn.textContent, 'ersetzt');
+  assert.equal(warn.textContent, 'replaces');
 });
 
 test('der Knopf nennt die Zahl und folgt dem Abwählen', async () => {

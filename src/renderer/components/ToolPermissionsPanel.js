@@ -86,7 +86,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     // Die Karte ist seit #99 mit „Modus" ueberschrieben; die Legend wuerde den
     // Text doppeln, bleibt aber fuer Screenreader als Gruppenname noetig.
     legend.className = 'settings-mode-group__legend visually-hidden';
-    legend.textContent = 'Modus';
+    legend.textContent = t('settings.permissions.mode.legend');
     modeGroup.appendChild(legend);
     const active = state?.mode || 'smart';
     for (const option of toolModeOptions()) {
@@ -264,7 +264,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
         remove.type = 'button';
         remove.className = 'settings-icon-trash';
         remove.dataset.pattern = pattern;
-        remove.setAttribute('aria-label', `Muster ${pattern} entfernen`);
+        remove.setAttribute('aria-label', t('settings.sensitive.remove', { pattern }));
         remove.innerHTML = TRASH_ICON_HTML;
         li.appendChild(remove);
         sensitiveList.appendChild(li);
