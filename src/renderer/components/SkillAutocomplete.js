@@ -139,6 +139,7 @@ export function initSkillAutocomplete({ catalog, onInputChanged }) {
     'keydown',
     (e) => {
       if (!isOpen()) return;
+      if (e.isComposing) return;
       let handled = true;
       switch (e.key) {
         case 'ArrowDown':
