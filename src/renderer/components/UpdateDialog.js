@@ -19,6 +19,7 @@
 
 import contracts from '../generated/contracts.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { formatMegabytes, formatSize } from '../utils/helpers.js';
 
 // Messages stay keys until the dialog draws them (#353), so an error on screen
 // follows a language change like the rest of the dialog. Main's own reasons
@@ -28,14 +29,6 @@ const { createMessage } = contracts;
 
 const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])';
 
-/** Bytes als „12,4 MB" — eine Nachkommastelle reicht, um Bewegung zu sehen. */
-function formatBytes(bytes) {
-  const value = Number(bytes);
-  if (!Number.isFinite(value) || value <= 0) return '0 MB';
-  const mb = value / (1024 * 1024);
-  if (mb < 1) return `${(value / 1024).toFixed(0)} kB`;
-  return `${mb.toFixed(1).replace('.', ',')} MB`;
-}
 
 /**
  * Macht aus den Release-Notizen von GitHub eine schlichte Aufzaehlung.
@@ -116,6 +109,7 @@ export function initUpdateDialog({ api }) {
   /** 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'info' */
   let state = 'available';
   let lastMessage = '';
+  let lastProgress = null;
   let lastFocused = null;
 
   function isOpen() {
@@ -154,6 +148,7 @@ export function initUpdateDialog({ api }) {
   }
 
   function setProgress({ receivedBytes, totalBytes }) {
+    lastProgress = { receivedBytes, totalBytes };
     progressEl.classList.remove('hidden');
     const known = Number(totalBytes) > 0;
     const percent = known
@@ -166,10 +161,10 @@ export function initUpdateDialog({ api }) {
     if (known) {
       trackEl.setAttribute('aria-valuenow', String(percent));
       progressTextEl.textContent =
-        t('update.progress', { percent, received: formatBytes(receivedBytes), total: formatBytes(totalBytes) });
+        t('update.progress', { percent, received: formatMegabytes(receivedBytes), total: formatMegabytes(totalBytes) });
     } else {
       trackEl.removeAttribute('aria-valuenow');
-      progressTextEl.textContent = t('update.progress.unknownTotal', { received: formatBytes(receivedBytes) });
+      progressTextEl.textContent = t('update.progress.unknownTotal', { received: formatMegabytes(receivedBytes) });
     }
   }
 
@@ -266,7 +261,7 @@ export function initUpdateDialog({ api }) {
 
     if (next === 'available') {
       const tag = info?.isPrerelease ? t('update.prerelease') : '';
-      const size = info?.asset?.size ? ` (${formatBytes(info.asset.size)})` : '';
+      const size = info?.asset?.size ? ` (${formatSize(info.asset.size)})` : '';
       titleEl.textContent = t('update.available.title', { version, tag });
       // Die Groesse steht im Text, nicht auf dem Knopf: drei Knoepfe muessen
       // in eine Zeile passen, sonst rutscht der letzte allein in die zweite.
@@ -293,6 +288,8 @@ export function initUpdateDialog({ api }) {
       titleEl.textContent = t('update.downloading.title', { version });
       summaryEl.textContent = t('update.downloading.body');
       progressEl.classList.remove('hidden');
+      // Redrawn so a language switch reaches the size figures too.
+      if (lastProgress) setProgress(lastProgress);
       actionsEl.appendChild(makeButton(t('update.cancel'), 'btn-secondary', cancelDownload));
     } else if (next === 'ready') {
       titleEl.textContent = t('update.ready.title', { version });
@@ -416,4 +413,4 @@ export function initUpdateDialog({ api }) {
   return { checkNow, isOpen };
 }
 
-export { formatBytes, formatReleaseNotes };
+export { formatReleaseNotes };

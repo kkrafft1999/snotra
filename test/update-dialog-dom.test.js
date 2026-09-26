@@ -83,7 +83,7 @@ test('ein gefundenes Update wird gezeigt, aber noch nichts geladen', async (t) =
   assert.match(ui.summary(), /You have version 1\.7\.1/);
   // Die Groesse steht im Text — der Nutzer entscheidet mit Kenntnis darueber,
   // was der Klick kostet, ohne dass die Knopfzeile umbricht.
-  assert.match(ui.summary(), /the new version \(92,0 MB\)/);
+  assert.match(ui.summary(), /the new version \(92\.0 MB\)/);
   assert.deepEqual(ui.labels(), ['Download', 'Remind me later', 'Skip this version']);
   assert.deepEqual(ui.calls, [], 'ohne Klick wird nichts geladen');
   assert.match(ui.dom.document.getElementById('modal-update-notes-body').textContent, /Selbst-Update/);
@@ -156,7 +156,7 @@ test('der ganze Weg: laden bestaetigen, dann noch einmal installieren bestaetige
 
   await ui.progress({ receivedBytes: 46 * 1024 * 1024, totalBytes: 92 * 1024 * 1024 });
   assert.equal(ui.$('modal-update-track').getAttribute('aria-valuenow'), '50');
-  assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46,0 MB of 92,0 MB$/);
+  assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46\.0 MB of 92\.0 MB$/);
   assert.equal(ui.$('modal-update-bar').style.width, '50%');
 
   resolveDownload({ ok: true });
@@ -330,7 +330,7 @@ test('ohne bekannte Gesamtgroesse laeuft ein unbestimmter Balken statt einer erf
     true
   );
   assert.equal(ui.$('modal-update-track').hasAttribute('aria-valuenow'), false);
-  assert.equal(ui.$('modal-update-progress-text').textContent, '1,0 MB downloaded');
+  assert.equal(ui.$('modal-update-progress-text').textContent, '1.0 MB downloaded');
   resolveDownload({ ok: false, canceled: true });
   await flush();
 });
@@ -437,4 +437,31 @@ test('reasons and errors from main are worded in the interface language and foll
   setLocale('de');
   await flush();
   assert.match(ui.summary(), /^Keine Schreibrechte für den Programmordner \(\/Applications\)\./);
+});
+
+test('sizes use the decimal separator of the interface language and follow a switch (#373)', async (t) => {
+  const { setLocale } = await importRenderer('i18n.js');
+  let resolveDownload;
+  const ui = await mount({
+    api: { downloadUpdate: () => new Promise((resolve) => { resolveDownload = resolve; }) },
+  });
+  t.after(async () => {
+    resolveDownload?.({ ok: false, cancelled: true });
+    await flush();
+    setLocale('en', { force: true });
+    ui.dom.cleanup();
+  });
+
+  await ui.push({ ...AVAILABLE });
+  assert.match(ui.summary(), /\(92\.0 MB\)/);
+  setLocale('de');
+  await flush();
+  assert.match(ui.summary(), /\(92,0 MB\)/);
+
+  await ui.click('Herunterladen');
+  await ui.progress({ receivedBytes: 46 * 1024 * 1024, totalBytes: 92 * 1024 * 1024 });
+  assert.match(ui.$('modal-update-progress-text').textContent, /46,0 MB .* 92,0 MB$/);
+  setLocale('en');
+  await flush();
+  assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46\.0 MB of 92\.0 MB$/);
 });
