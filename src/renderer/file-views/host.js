@@ -29,7 +29,7 @@
 
 import { t, onLocaleChange } from '../i18n.js';
 import { formatSize, formatTimestamp, getExtension } from '../utils/helpers.js';
-import { fileViews } from './registry.js';
+import { fileViews, readsText } from './registry.js';
 
 const keepEditing = async () => 'cancel';
 
@@ -55,7 +55,7 @@ export function createFileViewHost({
   const infoType = document.getElementById('info-type');
 
   // What the pane shows, or null for the welcome screen:
-  //   { item, file, view, instance, content, dirty, error }
+  //   { item, file, view, instance, content, dirty, error, detail }
   // `view` without `instance` means a text view was chosen but the file could
   // not be read — the info card stands in, and a refresh tries again.
   let current = null;
@@ -99,7 +99,8 @@ export function createFileViewHost({
     previewFilename.textContent = current.file.name;
     // A long name gives way to the tool area and ends in an ellipsis (#344).
     previewFilename.title = current.file.name;
-    previewMeta.textContent = formatSize(current.file.size);
+    const size = formatSize(current.file.size);
+    previewMeta.textContent = current.detail ? `${size} · ${current.detail}` : size;
   }
 
   function renderInfo() {
@@ -136,7 +137,9 @@ export function createFileViewHost({
       size: result.size,
       modified: result.modified ?? item.modified,
     };
-    const shown = { item, file, view, instance: null, content: result.content, dirty: false, error: null };
+    const shown = {
+      item, file, view, instance: null, content: result.content, dirty: false, error: null, detail: null,
+    };
     current = shown;
     showPane('preview');
     renderHeader();
@@ -157,6 +160,12 @@ export function createFileViewHost({
       openFile: (path) => (current === shown ? openFile(path) : Promise.resolve({ ok: false, reason: 'stale' })),
       setTools: (nodes) => {
         if (current === shown) setTools(nodes);
+      },
+      setMeta: ({ size, detail } = {}) => {
+        if (current !== shown) return;
+        if (Number.isFinite(size)) shown.file = { ...shown.file, size };
+        if (detail !== undefined) shown.detail = detail || null;
+        renderHeader();
       },
       setDirty: (dirty) => {
         if (current === shown && view.kind === 'editor') shown.dirty = Boolean(dirty);
@@ -243,6 +252,11 @@ export function createFileViewHost({
       showInfo(item);
       return true;
     }
+    if (!readsText(view)) {
+      // The view reads the file itself (#345); size and date come from the tree.
+      await mountView(view, item, { content: null, size: item.size, modified: item.modified });
+      return ticket === generation;
+    }
     const result = await api.readFile(item.path);
     if (ticket !== generation) return false;
     if (!result || result.error) {
@@ -261,6 +275,12 @@ export function createFileViewHost({
   async function refresh(path) {
     const shown = current;
     if (!shown || shown.file.path !== path || !shown.view) return;
+    if (!readsText(shown.view)) {
+      // Nothing to compare here: the view reads again and decides. One that is
+      // still mounting is about to read the file anyway.
+      await shown.instance?.update({});
+      return;
+    }
     const result = await api.readFile(path);
     if (current !== shown) return;
     if (!result || result.error) {

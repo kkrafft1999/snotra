@@ -52,7 +52,7 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
   // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, Markdown
   // darunter (#344), dann Neu laden.
   assert.equal(view.submenu[0].label, 'Toggle Sidebar');
-  assert.equal(view.submenu[1].label, 'Markdown: Preview or Source');
+  assert.equal(view.submenu[1].label, 'Preview or Source');
   assert.equal(view.submenu[3].role, 'reload');
 });
 
@@ -64,7 +64,7 @@ for (const platform of ['win32', 'linux']) {
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
     assert.deepEqual(labels.slice(0, 6), [
-      'Toggle Sidebar', 'Markdown: Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
+      'Toggle Sidebar', 'Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
     ]);
   });
 }
@@ -128,9 +128,9 @@ for (const platform of ['darwin', 'win32', 'linux']) {
     assert.deepEqual(sent, [PUSH.UI_NEW_CHAT]);
   });
 
-  test(`${platform}: View > Markdown: Preview or Source with CmdOrCtrl+Shift+M (#344)`, () => {
+  test(`${platform}: View > Preview or Source with CmdOrCtrl+Shift+M (#344)`, () => {
     const { template, sent } = buildTemplate(platform);
-    const item = menuNamed(template, 'View').submenu.find((entry) => entry.label === 'Markdown: Preview or Source');
+    const item = menuNamed(template, 'View').submenu.find((entry) => entry.label === 'Preview or Source');
     assert.ok(item, 'the item exists');
     // Not Cmd/Ctrl+Shift+V: that is "Paste and Match Style" in every text field.
     assert.equal(item.accelerator, 'CmdOrCtrl+Shift+M');

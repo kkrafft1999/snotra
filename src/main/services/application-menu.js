@@ -109,7 +109,7 @@ function createApplicationMenuTemplate({
       // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
       // other editors — on the Mac that is "Paste and Match Style" in every
       // text field, the chat input included. Does nothing unless a Markdown
-      // file is on show.
+      // file or, since #345, an SVG is on show.
       {
         label: t('menu.view.toggleMarkdownSource'),
         accelerator: 'CmdOrCtrl+Shift+M',

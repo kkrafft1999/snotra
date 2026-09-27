@@ -47,19 +47,26 @@ const WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS = Object.freeze({
 });
 
 /**
- * Erlaubte Typen. SVG steht bewusst nicht dabei: Eine SVG-Datei ist ein
- * Dokument mit Skript- und Verweismöglichkeiten, kein reines Pixelbild — das
- * gehört eigens betrachtet und nicht nebenbei mitgenommen (Issue #244).
+ * Allowed types. SVG joined with the file preview (#345): it is a document
+ * that can carry scripts and references, which is why the renderer only ever
+ * shows it through `<img>` — there no script runs and nothing outside the
+ * `data:` URI is loaded. It is never inlined into the DOM.
  */
 const WORKSPACE_IMAGE_MIME_TYPES = Object.freeze([
   'image/png',
   'image/jpeg',
   'image/gif',
   'image/webp',
+  'image/svg+xml',
 ]);
 
-/** Kopf-Bytes je Typ. Mehr als das liest die Erkennung nie. */
-const WORKSPACE_IMAGE_SNIFF_BYTES = 16;
+/**
+ * How much of the head the detection reads, at most. The binary formats need
+ * 12 bytes; SVG has no signature and may start with an XML declaration, a
+ * doctype and a comment block — an editor's licence header, say — before the
+ * `<svg` that decides it.
+ */
+const WORKSPACE_IMAGE_SNIFF_BYTES = 4096;
 
 function startsWith(bytes, signature, offset = 0) {
   for (let i = 0; i < signature.length; i += 1) {
@@ -79,6 +86,40 @@ const GIF89_SIGNATURE = ascii('GIF89a');
 const RIFF_SIGNATURE = ascii('RIFF');
 const WEBP_SIGNATURE = ascii('WEBP');
 
+const UTF8_BOM = [0xef, 0xbb, 0xbf];
+
+/**
+ * Is this the head of an SVG document? Skips what may stand before the root
+ * element — BOM, whitespace, `<?xml …?>`, comments, a doctype with or without
+ * an internal subset — and then asks for `<svg` and nothing else. An HTML file
+ * or an XML file with another root is not an image, whatever its name says.
+ */
+function looksLikeSvg(bytes) {
+  const start = startsWith(bytes, UTF8_BOM) ? UTF8_BOM.length : 0;
+  const end = Math.min(bytes.length, WORKSPACE_IMAGE_SNIFF_BYTES);
+  let text = '';
+  for (let i = start; i < end; i += 1) text += String.fromCharCode(bytes[i]);
+
+  let pos = 0;
+  for (;;) {
+    while (pos < text.length && /\s/.test(text[pos])) pos += 1;
+    const rest = text.slice(pos);
+    let skipTo = -1;
+    if (rest.startsWith('<?')) skipTo = rest.indexOf('?>') + 2;
+    else if (rest.startsWith('<!--')) skipTo = rest.indexOf('-->') + 3;
+    else if (/^<!doctype/i.test(rest)) {
+      const subset = rest.indexOf('[');
+      const close = rest.indexOf('>');
+      skipTo = subset !== -1 && subset < close ? rest.indexOf(']>', subset) + 2 : close + 1;
+    } else {
+      return /^<svg[\s>/]/.test(rest);
+    }
+    // The prolog runs past the window, or never closes: not an image we know.
+    if (skipTo < 2) return false;
+    pos += skipTo;
+  }
+}
+
 /**
  * Erkennt den Bildtyp am Dateikopf. Die Endung zählt nicht: Ein Modell, das
  * eine Textdatei `plot.png` nennt, soll keinen Anzeigeversuch auslösen, und
@@ -96,6 +137,7 @@ function sniffImageMime(header) {
   if (bytes.length >= 12 && startsWith(bytes, RIFF_SIGNATURE) && startsWith(bytes, WEBP_SIGNATURE, 8)) {
     return 'image/webp';
   }
+  if (looksLikeSvg(bytes)) return 'image/svg+xml';
   return null;
 }
 

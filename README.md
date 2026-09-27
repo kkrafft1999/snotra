@@ -400,6 +400,12 @@ deliberately not used — both require a code signature.
   switches to the raw text and back. Images from the open folder are shown;
   images from the web are never loaded — a placeholder says where they point. A
   link to another file of the folder opens it and selects it in the tree.
+- **Looking at images:** PNG, JPEG, GIF, WebP and SVG open as images in the
+  preview, fitted to the column; a click (or Enter) shows the actual size and
+  back. The header gives the pixel dimensions next to the size, and a
+  checkerboard behind the image shows where it is transparent. An SVG has
+  **Preview | Source** like a Markdown file. Images up to 10 MB from the open
+  folder are shown; for anything else the column says why not.
 - **Pasting screenshots:** an image on the clipboard (macOS `Cmd+Ctrl+Shift+4`,
   Windows Snipping Tool) lands as an attachment above the input line with
   `Cmd/Ctrl+V` — with preview, file size and a button to remove it. The typed
@@ -427,8 +433,9 @@ deliberately not used — both require a code signature.
   to chat width and with the aspect ratio preserved. The **currently open** folder
   applies: relative and absolute paths are resolved against it, and anything
   outside is not loaded — no symlink pointing out of the folder either, and no
-  address from the network. PNG, JPEG, GIF and WebP up to 10 MB are displayed,
-  recognised by file content rather than extension; SVG stays out for now. When
+  address from the network. PNG, JPEG, GIF, WebP and SVG up to 10 MB are
+  displayed, recognised by file content rather than extension; an SVG only as a
+  picture, no script in it runs. When
   it does not work, what stands there is not a broken image but a placeholder
   with the reason ("Image not found", "Outside the working folder", "Image too
   large to show") and the model's alt text. While the answer is still running

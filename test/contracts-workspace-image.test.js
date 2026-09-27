@@ -38,17 +38,39 @@ test('erkennt die vier erlaubten Typen am Dateikopf', () => {
   assert.equal(sniffImageMime(GIF87), 'image/gif');
   assert.equal(sniffImageMime(GIF89), 'image/gif');
   assert.equal(sniffImageMime(WEBP), 'image/webp');
+  assert.equal(sniffImageMime(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')), 'image/svg+xml');
   // Die Liste im Vertrag und die Erkennung duerfen nicht auseinanderlaufen.
   assert.deepEqual(
-    [...new Set([PNG, JPEG, GIF89, WEBP].map(sniffImageMime))].sort(),
+    [...new Set([PNG, JPEG, GIF89, WEBP, Buffer.from('<svg>')].map(sniffImageMime))].sort(),
     [...WORKSPACE_IMAGE_MIME_TYPES].sort()
   );
 });
 
-test('SVG und Fremdformate fallen durch — die Endung rettet nichts', () => {
-  // Genau das, was in `diagramm.svg` steht: ein Textdokument ohne Bildkopf.
-  assert.equal(sniffImageMime(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg">')), null);
-  assert.equal(sniffImageMime(Buffer.from('<?xml version="1.0"?><svg/>')), null);
+test('SVG is recognised by its root element, past whatever prolog precedes it (#345)', () => {
+  const svg = (text) => sniffImageMime(Buffer.from(text));
+  assert.equal(svg('<svg width="10" height="10"></svg>'), 'image/svg+xml');
+  assert.equal(svg('\n  <svg\n  xmlns="http://www.w3.org/2000/svg">'), 'image/svg+xml');
+  assert.equal(svg('<?xml version="1.0" encoding="UTF-8"?>\n<svg/>'), 'image/svg+xml');
+  assert.equal(svg('\ufeff<?xml version="1.0"?><svg/>'), 'image/svg+xml', 'UTF-8 BOM');
+  assert.equal(
+    svg('<?xml version="1.0"?>\n<!-- Created with Inkscape -->\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"\n "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n<svg/>'),
+    'image/svg+xml',
+  );
+  assert.equal(svg('<!DOCTYPE svg [ <!ENTITY a "b"> ]><svg/>'), 'image/svg+xml', 'doctype with internal subset');
+  assert.equal(svg(`<!--${' licence '.repeat(300)}--><svg/>`), 'image/svg+xml', 'a long header comment');
+});
+
+test('what is not an SVG root stays out, whatever the name says', () => {
+  const svg = (text) => sniffImageMime(Buffer.from(text));
+  assert.equal(svg('<html><body><svg/></body></html>'), null, 'HTML with an inline SVG');
+  assert.equal(svg('<?xml version="1.0"?><plist/>'), null, 'XML with another root');
+  assert.equal(svg('<svgfoo/>'), null);
+  assert.equal(svg('<!-- never closed <svg/>'), null);
+  assert.equal(svg(`<!--${'x'.repeat(5000)}--><svg/>`), null, 'the root lies beyond the sniff window');
+  assert.equal(svg('text before <svg/>'), null);
+});
+
+test('Fremdformate fallen durch — die Endung rettet nichts', () => {
   assert.equal(sniffImageMime(Buffer.from('BM6\x00\x00\x00', 'latin1')), null, 'BMP steht nicht auf der Liste');
   assert.equal(sniffImageMime(Buffer.from('nur Text')), null);
 });
