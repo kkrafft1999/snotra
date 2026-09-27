@@ -168,6 +168,14 @@ function crc32(buf) {
   return (c ^ 0xffffffff) >>> 0;
 }
 
+/**
+ * An SVG with only a viewBox, and a script that must never run (#345): it is
+ * shown through <img>, where scripts are inert.
+ */
+const FLOW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 170">'
+  + '<script>window.__pwnedSvg = true</script>'
+  + '<rect x="20" y="40" width="200" height="90" fill="#00759E"/></svg>';
+
 /** Breiter als jedes Chat-Panel in diesem Test — genau darum geht es. */
 const BREITES_PNG = makePng(1200, 60);
 
@@ -188,6 +196,7 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'liste.md'), '- eins\n', 'utf8');
   await writeFile(path.join(dir, 'notizen', 'vorschau.md'), PREVIEW_MD, 'utf8');
   await writeFile(path.join(dir, 'notizen', 'bild.png'), makePng(40, 20));
+  await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
   // Die Projekt-Quelle der AGENTS.md-Kette (Issue #212) und daneben der
   // Koeder in der Ordnerwurzel, der seit #253 nicht mehr zaehlt. Die globalen
   // Quellen liegen im echten Home des Ausfuehrenden und werden hier bewusst
@@ -347,6 +356,52 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     && document.querySelector('#tree-container .tree-item.active .label')?.textContent === 'liste.md'),
   { what: 'liste.md ueber den Link geoeffnet' });
   step('Markdown-Vorschau geprueft');
+
+  // --- Images in the preview (#345) -----------------------------------------
+  // Only here can it be seen whether Chromium really decodes the data: URI,
+  // and whether the fit arrives at a size in pixels.
+  const openInTree = (label) => page.evaluate((name) => {
+    [...document.querySelectorAll('#tree-container .tree-item')]
+      .find((el) => el.querySelector('.label')?.textContent === name).click();
+  }, label);
+  const imageState = () => page.evaluate(() => {
+    const img = document.querySelector('.img-view__image');
+    return {
+      name: document.getElementById('preview-filename').textContent,
+      view: document.querySelector('#preview-body > .file-view')?.dataset.view ?? null,
+      meta: document.getElementById('preview-meta').textContent,
+      natural: img ? img.naturalWidth : 0,
+      width: img?.style.width ?? '',
+      visible: img ? !img.hidden : false,
+      checker: img ? getComputedStyle(img).backgroundImage.startsWith('conic-gradient') : false,
+      inlineSvg: document.querySelectorAll('#preview-body svg').length,
+      switch: document.querySelectorAll('#preview-tools input[type="radio"]').length,
+    };
+  });
+
+  await openInTree('bild.png');
+  const raster = await poll(async () => {
+    const state = await imageState();
+    return state.name === 'bild.png' && state.visible && state.natural > 0 && state.width ? state : null;
+  }, { what: 'bild.png in der Vorschau' });
+  assert.equal(raster.view, 'image');
+  assert.equal(raster.natural, 40);
+  assert.equal(raster.width, '40px', 'a small image is not upscaled');
+  assert.match(raster.meta, / · 40 × 20$/);
+  assert.equal(raster.checker, true, 'the checkerboard sits behind the image');
+  assert.equal(raster.switch, 0);
+
+  await openInTree('fluss.svg');
+  const vector = await poll(async () => {
+    const state = await imageState();
+    return state.name === 'fluss.svg' && state.visible && state.natural > 0 && state.width ? state : null;
+  }, { what: 'fluss.svg in der Vorschau' });
+  assert.equal(vector.view, 'image');
+  assert.match(vector.meta, / · 720 × 170$/, 'the size the SVG declares');
+  assert.equal(vector.inlineSvg, 0, 'never inlined into the DOM');
+  assert.equal(vector.switch, 2, 'Preview | Source');
+  assert.equal(await page.evaluate(() => globalThis.__pwnedSvg ?? null), null, 'the script in the SVG did not run');
+  step('Bildvorschau geprueft');
 
   // --- Der Baum folgt dem Dateisystem (Issue #158) --------------------------
   // Kein Klick in der App: Die Datei entsteht daneben, so wie sie im Terminal,
@@ -618,7 +673,11 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Leerzeichen im Namen: Im Markdown steht dafuer `%20`, und nur eine
   // Ruecknahme dieser Kodierung findet die Datei wieder.
   await writeFile(path.join(workspace, 'bilder', 'mein plot.png'), BREITES_PNG);
-  await writeFile(path.join(workspace, 'diagramm.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  // Since #345 an SVG is an image too — still only ever through <img>.
+  await writeFile(
+    path.join(workspace, 'diagramm.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#00759E"/></svg>',
+  );
   const absolutesBild = path.join(workspace, 'bilder', 'mein plot.png');
   model.queueAnswer({
     match: IMAGE_QUESTION,
@@ -653,7 +712,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
           busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
           geladen: [...last.querySelectorAll('img')].map((img) => ({
             alt: img.getAttribute('alt'),
-            istDataUri: (img.getAttribute('src') || '').startsWith('data:image/png;base64,'),
+            istDataUri: /^data:image\/(png|svg\+xml);base64,/.test(img.getAttribute('src') || ''),
             breite: img.naturalWidth,
             passtInDieBlase: img.getBoundingClientRect().width <= last.getBoundingClientRect().width,
           })),
@@ -669,27 +728,26 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       // beidem saehe man 5 rohe <img> und haette nichts gemessen.
       const fertig = state
         && !state.busy
-        && state.geladen.length === 2
-        && state.platzhalter.length === 4
+        && state.geladen.length === 3
+        && state.platzhalter.length === 3
         && state.geladen.every((bild) => bild.breite > 0);
       return fertig ? state : null;
     },
     { what: 'aufgeloeste Bilder in der Antwort' }
   );
 
-  // Relativ und absolut: beide kommen an, beide sind wirklich dekodiert.
-  assert.deepEqual(bilder.geladen.map((b) => b.alt).sort(), ['Absolut', 'Relativ']);
+  // Relativ, absolut und das SVG: alle kommen an, alle sind wirklich dekodiert.
+  assert.deepEqual(bilder.geladen.map((b) => b.alt).sort(), ['Absolut', 'Relativ', 'Vektor']);
   for (const bild of bilder.geladen) {
     assert.equal(bild.istDataUri, true, `${bild.alt}: kommt als data:-URI`);
     assert.ok(bild.breite > 0, `${bild.alt}: Chromium hat das Bild wirklich dekodiert`);
     assert.equal(bild.passtInDieBlase, true, `${bild.alt}: sprengt die Blase nicht`);
   }
 
-  // Fehlend, SVG und ausserhalb: Platzhalter mit Grund statt Broken-Image-Icon.
+  // Fehlend und ausserhalb: Platzhalter mit Grund statt Broken-Image-Icon.
   const gruende = Object.fromEntries(bilder.platzhalter.map((p) => [p.alt, p.grund]));
-  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Laufwerk', 'Vektor']);
+  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Laufwerk']);
   assert.equal(gruende.Fehlt, 'Bild nicht gefunden');
-  assert.equal(gruende.Vektor, 'Dieses Bildformat wird nicht angezeigt');
   assert.equal(gruende.Draussen, 'Außerhalb des Arbeitsordners');
   // Der Laufwerkspfad darf alles sein, nur nicht „gar nicht erst gefragt“ —
   // genau das waere er ohne die Ausnahme im Sanitizer.

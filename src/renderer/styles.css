@@ -5139,6 +5139,83 @@ select.modal-input {
   display: none;
 }
 
+/* ── Images in the file preview (#345) ────────────────────────────────────
+ * Fitted to the column and never upscaled; `image-view.js` sets the size in
+ * pixels, because a fit has to know the natural size and the toggle to the
+ * actual size has to keep the column scrollable in both directions. The
+ * padding here is VIEW_PADDING_PX there. */
+.img-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  /* `safe`: an image larger than the column starts at its top left corner
+   * instead of being cut off on both sides. */
+  place-items: safe center;
+  padding: 24px;
+}
+
+.img-view[hidden] {
+  display: none;
+}
+
+.img-view:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset) - 2px);
+}
+
+.img-view__image {
+  display: block;
+  max-width: none;
+  /* The checkerboard: only behind the image, so an opaque image hides it
+   * completely and a transparent one shows where it has no pixels. */
+  background-color: var(--ds-checker-light);
+  background-image: conic-gradient(
+    var(--ds-checker-dark) 25%, transparent 0 50%,
+    var(--ds-checker-dark) 0 75%, transparent 0
+  );
+  background-size: 16px 16px;
+  /* The edge of the image: a screenshot on a light ground would otherwise
+   * run into the column. An outline, so that the size stays the image's. */
+  outline: 1px solid var(--ds-grey-divider);
+  user-select: none;
+}
+
+.img-view__image[hidden] {
+  display: none;
+}
+
+.img-view--toggleable .img-view__image {
+  cursor: zoom-in;
+}
+
+.img-view--toggleable.img-view--actual .img-view__image {
+  cursor: zoom-out;
+}
+
+/* Loading, and every reason an image is not shown: centred in the column,
+ * as an empty state is. */
+.img-view__message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 360px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-base);
+}
+
+.img-view__message[hidden] {
+  display: none;
+}
+
+.img-view__message-title {
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-base);
+  font-weight: var(--ds-font-weight-bold);
+}
+
 /* ── File Info (binary files) ── */
 
 #file-info {

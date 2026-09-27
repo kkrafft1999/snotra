@@ -117,6 +117,13 @@
   --ds-overlay-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 2px 6px rgba(0, 0, 0, 0.07);
+  /* Transparency checkerboard behind an image in the file preview (#345).
+   * A functional pattern, not decoration: it is the one way to show that an
+   * image has no background of its own. Only ever behind the image, never
+   * behind a panel. The squares sit far enough apart that dark and light
+   * artwork both stay visible. */
+  --ds-checker-light: #FFFCF5;
+  --ds-checker-dark: #E6E1DA;
 
   /* ── Typografie ───────────────────────────────────────────────────────── */
   --ds-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -271,6 +278,10 @@
   --ds-overlay-shadow:
     0 10px 30px rgba(0, 0, 0, 0.6),
     0 2px 8px rgba(0, 0, 0, 0.45);
+  /* Mid-tone on purpose: on the dark ground a dark logo would vanish on
+   * darker squares, a light one would glare on lighter ones. */
+  --ds-checker-light: #4A4845;
+  --ds-checker-dark: #3A3836;
 }
 
 /* ── Reduced-Motion-Token-Override ─────────────────────────────────────────

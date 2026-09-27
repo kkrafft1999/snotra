@@ -15,6 +15,7 @@
 //     id: 'plain-text',               // unique and stable, e.g. for a later
 //                                     // "open with" switch between candidates
 //     kind: 'viewer' | 'editor',
+//     reads: 'text' | 'none',         // optional, 'text' by default; see below
 //     canHandle(file) → boolean,      // file: { name, ext, size, mime }
 //     mount(hostEl, context) → instance | Promise<instance>,
 //   }
@@ -28,7 +29,8 @@
 //
 //   {
 //     file: { path, name, ext, size, modified },
-//     content,              // the file as UTF-8 text, read by the host
+//     content,              // the file as UTF-8 text, read by the host;
+//                           // null for a view with reads: 'none'
 //     api,                  // window.electronAPI, for views that need more
 //     workspaceRoot,        // the open folder, or null
 //     openFile(path) → Promise<{ ok, reason? }>,
@@ -36,6 +38,10 @@
 //                           // it in the tree; reason 'outside' or 'not-found'
 //     setTools(nodes),      // fill the tool area in the header (right-hand
 //                           // side, next to the size); [] or null clears it
+//     setMeta({ size, detail }),
+//                           // what the size pill says: a size the view read
+//                           // itself, and a detail after it, e.g. the pixel
+//                           // dimensions of an image; null clears the detail
 //     setDirty(dirty),      // editors only: "my buffer differs from the file"
 //   }
 //
@@ -69,15 +75,23 @@
 //   * A fresh `mount` gets a fresh `hostEl` content: nothing, including the
 //     scroll position, is inherited from the previous view.
 //
-// Every view reads text today. A view for images or PDFs (#345, #346) will
-// read through its own channel; the descriptor then gets a way to say "don't
-// read me as text", with text staying the default.
+// ── Views that do not read text ────────────────────────────────────────────
+//
+// A view with `reads: 'none'` gets no `content`: the host does not touch the
+// file, and the view reads it through its own channel — the image view (#345)
+// through `fs:readWorkspaceImage`, a PDF view (#346) through its own. Such a
+// view's `update()` is called with an empty object whenever the file may have
+// changed on disk, since the host has no text to compare; the view reads again
+// and decides itself whether anything is different.
 
 import { getExtension } from '../utils/helpers.js';
+import { imageView } from './image-view.js';
 import { markdownView } from './markdown-view.js';
 import { plainTextView } from './plain-text-view.js';
 
 const KINDS = new Set(['viewer', 'editor']);
+
+const READS = new Set(['text', 'none']);
 
 function assertDescriptor(view) {
   if (!view || typeof view.id !== 'string' || !view.id) {
@@ -85,6 +99,9 @@ function assertDescriptor(view) {
   }
   if (!KINDS.has(view.kind)) {
     throw new TypeError(`File view "${view.id}" has kind "${view.kind}", expected viewer or editor.`);
+  }
+  if (view.reads !== undefined && !READS.has(view.reads)) {
+    throw new TypeError(`File view "${view.id}" has reads "${view.reads}", expected text or none.`);
   }
   for (const method of ['canHandle', 'mount']) {
     if (typeof view[method] !== 'function') {
@@ -136,8 +153,14 @@ export function createFileViewRegistry(views) {
   return { views: ordered, candidatesFor, resolve };
 }
 
+/** Does the host read this view's file as text before mounting it? */
+export function readsText(view) {
+  return (view?.reads ?? 'text') === 'text';
+}
+
 /**
  * The views of the app. Order matters: specialised views go before
- * `plain-text`, which takes every text file nobody else claims.
+ * `plain-text`, which takes every text file nobody else claims — SVG included,
+ * which is why the image view stands in front of it.
  */
-export const fileViews = createFileViewRegistry([markdownView, plainTextView]);
+export const fileViews = createFileViewRegistry([imageView, markdownView, plainTextView]);

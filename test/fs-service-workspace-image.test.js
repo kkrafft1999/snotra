@@ -116,14 +116,21 @@ test('ein Symlink innerhalb des Workspace bleibt erlaubt', async (t) => {
   assert.equal(result.mime, 'image/png');
 });
 
-test('SVG und unbekannte Typen enden als Grund, nicht als Bild', async (t) => {
+test('an SVG arrives as an image, a lying extension as a reason (#345)', async (t) => {
   const root = await makeWorkspace(t);
-  await fs.writeFile(path.join(root, 'diagramm.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
-  // Die Endung luegt: Inhalt ist Text, Name ist .png.
+  const svgText = '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="2"/>';
+  await fs.writeFile(path.join(root, 'diagramm.svg'), svgText);
+  // Die Endung luegt: Inhalt ist Text, Name ist .png bzw. .svg.
   await fs.writeFile(path.join(root, 'gelogen.png'), 'kein Bild');
+  await fs.writeFile(path.join(root, 'seite.svg'), '<html><body>kein Bild</body></html>');
   const svc = makeFsService();
 
-  for (const name of ['diagramm.svg', 'gelogen.png']) {
+  const svg = await svc.readWorkspaceImage(root, 'diagramm.svg');
+  assert.equal(svg.ok, true);
+  assert.equal(svg.mime, 'image/svg+xml');
+  assert.equal(Buffer.from(svg.base64, 'base64').toString('utf8'), svgText);
+
+  for (const name of ['gelogen.png', 'seite.svg']) {
     const result = await svc.readWorkspaceImage(root, name);
     assert.equal(result.ok, false, name);
     assert.equal(result.reason, WORKSPACE_IMAGE_ERRORS.UNSUPPORTED_TYPE, name);
