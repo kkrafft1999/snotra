@@ -36,7 +36,7 @@ function makeProvidersModule(disposeTracker) {
   };
 }
 
-function makeApplication(t, { getMainWindow, updates } = {}) {
+function makeApplication(t, { getMainWindow, updates, env = {} } = {}) {
   return async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-'));
     t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
@@ -72,6 +72,7 @@ function makeApplication(t, { getMainWindow, updates } = {}) {
       },
       defaultProviderId: 'openai',
       updates,
+      env,
     });
 
     return { app, ipcMain, disposed };
@@ -193,6 +194,67 @@ test('runUpdateCheck manual mode always pushes even when up to date', async (t) 
   assert.equal(sent[0].channel, PUSH.UPDATE_AVAILABLE);
   assert.equal(sent[0].payload.manual, true);
   assert.equal(sent[0].payload.updateAvailable, false);
+});
+
+function makeCountingUpdates() {
+  const calls = [];
+  return {
+    calls,
+    updates: {
+      getCurrentVersion: () => '1.0.0',
+      checkForUpdate: async (options) => {
+        calls.push(options);
+        return { updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0' };
+      },
+      ignoreVersion: async () => ({ ok: true }),
+    },
+  };
+}
+
+test('SNOTRA_NO_UPDATE_CHECK=1 skips the silent start-up check (#407)', async (t) => {
+  const sent = [];
+  const { calls, updates } = makeCountingUpdates();
+  const { app } = await makeApplication(t, {
+    getMainWindow: () => ({
+      isDestroyed: () => false,
+      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    }),
+    updates,
+    env: { SNOTRA_NO_UPDATE_CHECK: '1' },
+  })();
+
+  await app.runUpdateCheck({ silent: true });
+  assert.equal(calls.length, 0, 'no request to the update service');
+  assert.equal(sent.length, 0);
+});
+
+test('SNOTRA_NO_UPDATE_CHECK=1 still answers a check the user asked for', async (t) => {
+  const sent = [];
+  const { calls, updates } = makeCountingUpdates();
+  const { app } = await makeApplication(t, {
+    getMainWindow: () => ({
+      isDestroyed: () => false,
+      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    }),
+    updates,
+    env: { SNOTRA_NO_UPDATE_CHECK: '1' },
+  })();
+
+  await app.runUpdateCheck({ silent: false });
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.manual, true);
+});
+
+test('other values of SNOTRA_NO_UPDATE_CHECK leave the start-up check on', async (t) => {
+  const { calls, updates } = makeCountingUpdates();
+  const { app } = await makeApplication(t, {
+    updates,
+    env: { SNOTRA_NO_UPDATE_CHECK: 'true' },
+  })();
+
+  await app.runUpdateCheck({ silent: true });
+  assert.equal(calls.length, 1);
 });
 
 test('createApplication wires the skill catalog channels', async (t) => {
