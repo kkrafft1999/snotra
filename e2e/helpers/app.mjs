@@ -86,6 +86,10 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
 export async function launchApp({ userDataDir, wrapper = null }) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  // The start-up update check would ask GitHub for real. Once a release newer
+  // than the checkout is out, its dialog lands on top of the window and the
+  // screenshots compare the dialog instead of the app (#407).
+  env.SNOTRA_NO_UPDATE_CHECK = '1';
 
   const app = await _electron.launch({
     executablePath: wrapper || electronBinary,

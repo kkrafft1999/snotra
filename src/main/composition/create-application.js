@@ -114,6 +114,13 @@ function createApplication({
    * the menu bar from it — the menu belongs to them, not here.
    */
   onAppLocaleChanged = null,
+  /**
+   * The process environment. Only `SNOTRA_NO_UPDATE_CHECK` is read: set to
+   * `1`, the silent check at start-up does not ask GitHub (#407). The smoke
+   * test sets it, so a release published in the meantime cannot put the
+   * update dialog over the window it takes screenshots of.
+   */
+  env = process.env,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -821,6 +828,9 @@ function createApplication({
   }
 
   async function runUpdateCheck({ silent }) {
+    // Only the automatic check steps aside. Choosing "Check for updates" in
+    // the menu is an explicit request and still gets an answer.
+    if (silent && env.SNOTRA_NO_UPDATE_CHECK === '1') return;
     const result = await updates.checkForUpdate({ respectIgnored: silent });
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return;
