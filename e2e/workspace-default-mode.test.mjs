@@ -71,7 +71,12 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
     checked: false,
   });
   await page.click('#chat-tool-mode-remember');
-  await poll(async () => (await state(page)).workspaceMode === 'ask-all', { what: 'default stored in main' });
+  await poll(async () => (await state(page)).workspaceMode === 'ask-all', { what: 'default stored in main' })
+    .catch(async (error) => {
+      // What the menu said about it, so that a failure explains itself.
+      const status = await page.evaluate(() => document.getElementById('chat-tool-mode-status').textContent);
+      throw new Error(`${error.message} — menu status: ${JSON.stringify(status)}`);
+    });
   await poll(() => page.evaluate(() =>
     document.querySelector('.chat-tool-mode-option[data-mode="ask-all"] .chat-tool-mode-default-tag')?.textContent || null),
   { what: 'tag on the default' });

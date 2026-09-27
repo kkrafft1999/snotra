@@ -50,6 +50,8 @@ const {
   PROGRAM_ALLOWANCE_LIMITS,
 } = require('../../shared/contracts/program-allowances');
 
+const { renameWithRetry } = require('./rename-with-retry');
+
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
 const POLICY_FILE_VERSION = 1;
@@ -288,7 +290,9 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     const tmp = `${target}.tmp-${crypto.randomUUID()}`;
     await fs.writeFile(tmp, JSON.stringify(file), { encoding: 'utf8', mode: 0o600 });
     try {
-      await fs.rename(tmp, target);
+      // Reads of the same file run all the time (every state refresh), and on
+      // Windows one of them can hold the target for a moment.
+      await renameWithRetry(fs, tmp, target);
     } catch (error) {
       await fs.unlink(tmp).catch(() => {});
       throw error;
