@@ -401,3 +401,36 @@ test('workspace default mode: resetting the workspace rules or everything remove
   state = await store.resetAll();
   assert.deepEqual(state.workspaceModes, {});
 });
+
+// ── "Always ask" through the fail-safe (#419) ───────────────────────────────
+
+test('without safeStorage "Always ask" is stored and read back, "Auto" is not', async (t) => {
+  const { store } = await makeStore(t, { available: false });
+  const set = await store.setMode('ask-all');
+  assert.equal(set.ok, true);
+  const state = await store.read();
+  assert.equal(state.integrity, 'unsigned');
+  assert.equal(state.mode, 'ask-all');
+  assert.equal((await store.setMode('auto')).ok, false);
+  assert.equal((await store.read()).mode, 'ask-all');
+  assert.equal((await store.setMode('smart')).ok, true);
+  assert.equal((await store.read()).mode, 'smart');
+});
+
+test('a tampered or unsigned file keeps "Always ask", never anything looser than "Smart"', async (t) => {
+  const { dir, store } = await makeStore(t);
+  const filePath = path.join(dir, POLICY_FILENAME);
+  await store.setMode('ask-all');
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.globalRules = [{ id: 'a', effect: 'allow', riskClass: 'read', scope: 'global' }];
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+  let state = await store.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.equal(state.mode, 'ask-all');
+  assert.deepEqual(state.globalRules, []);
+
+  await fs.writeFile(filePath, JSON.stringify({ version: 1, payload: { mode: 'ask-all' } }), 'utf8');
+  state = await store.read();
+  assert.equal(state.integrity, 'unsigned');
+  assert.equal(state.mode, 'ask-all');
+});

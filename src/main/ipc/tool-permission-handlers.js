@@ -234,6 +234,14 @@ function registerToolPermissionHandlers({
     return result?.response === 0;
   }
 
+  async function canStoreAuto() {
+    try {
+      return (await toolPolicyStore.read()).encryptionAvailable === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Nach jeder Änderung: offene Karten verwerfen, Sitzungsfreigaben löschen, Renderer informieren. */
   function afterPolicyChange(sender) {
     approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
@@ -326,6 +334,9 @@ function registerToolPermissionHandlers({
     const mode = normalizeToolPermissionMode(rawMode);
     if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
+      // Without safeStorage "Auto" cannot be stored (#419): say so instead of
+      // asking for a confirmation that leads nowhere.
+      if (!(await canStoreAuto())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
       const confirmed = await confirmNatively(autoModeDialog(createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
@@ -427,6 +438,7 @@ function registerToolPermissionHandlers({
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const current = await toolPolicyStore.readWorkspaceMode(root);
     if (mode === TOOL_PERMISSION_MODES.AUTO && current !== TOOL_PERMISSION_MODES.AUTO) {
+      if (!(await canStoreAuto())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
       const confirmed = await confirmNatively(workspaceAutoDialog(root, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.workspaceAutoNotSet'), 'cancelled');
     }

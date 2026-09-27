@@ -89,7 +89,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     legend.textContent = t('settings.permissions.mode.legend');
     modeGroup.appendChild(legend);
     const active = state?.mode || 'smart';
-    for (const option of toolModeOptions()) {
+    for (const option of toolModeOptions(state, active)) {
       const label = document.createElement('label');
       label.className = 'settings-mode-option';
       const input = document.createElement('input');
@@ -97,7 +97,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       input.name = 'tool-permission-mode';
       input.value = option.value;
       input.checked = option.value === active;
-      input.disabled = !state;
+      input.disabled = !state || option.unavailable;
       const main = document.createElement('span');
       main.className = 'settings-mode-option__main';
       const title = document.createElement('span');

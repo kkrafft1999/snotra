@@ -3,10 +3,9 @@
 // and it is still there after a restart — with "Auto" as the default, "Auto"
 // itself survives the restart.
 //
-// Without safeStorage (a Linux runner without a keyring, say) the policy file
-// cannot be signed, and the fail-safe reads every mode back as "Smart"
-// (concept §7) — no chat can leave "Smart" there, so there is nothing to
-// check and the test is skipped.
+// "Auto" needs safeStorage. Without it (a Linux runner without a keyring,
+// say) "Auto" is not offered, and the restart is checked with "Always ask",
+// which the fail-safe keeps (#419).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,10 +49,6 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   await confirmDialogs(snotra.app);
   await waitForTree(page);
   await poll(async () => (await state(page))?.workspaceRoot, { what: 'permission state with a workspace' });
-  if ((await state(page)).encryptionAvailable !== true) {
-    t.skip('no encrypted storage: every mode is read back as "Smart" (concept §7)');
-    return;
-  }
 
   // Nothing to remember while the chat and the folder are at "Smart".
   assert.equal(await pillMode(page), 'smart');
@@ -76,7 +71,12 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
     checked: false,
   });
   await page.click('#chat-tool-mode-remember');
-  await poll(async () => (await state(page)).workspaceMode === 'ask-all', { what: 'default stored in main' });
+  await poll(async () => (await state(page)).workspaceMode === 'ask-all', { what: 'default stored in main' })
+    .catch(async (error) => {
+      // What the menu said about it, so that a failure explains itself.
+      const status = await page.evaluate(() => document.getElementById('chat-tool-mode-status').textContent);
+      throw new Error(`${error.message} — menu status: ${JSON.stringify(status)}`);
+    });
   await poll(() => page.evaluate(() =>
     document.querySelector('.chat-tool-mode-option[data-mode="ask-all"] .chat-tool-mode-default-tag')?.textContent || null),
   { what: 'tag on the default' });
@@ -88,10 +88,16 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   await page.evaluate(() => document.getElementById('btn-chat-new').click());
   await poll(async () => (await pillMode(page)) === 'ask-all', { what: 'new chat at the default' });
 
-  // "Auto" as the default — and the next start keeps it.
+  // With encrypted storage, "Auto" as the default — and the next start keeps it.
+  let expected = 'ask-all';
   const set = await page.evaluate(() => window.electronAPI.setWorkspaceMode('auto'));
-  assert.equal(set.ok, true);
-  const expected = 'auto';
+  if ((await state(page)).encryptionAvailable === true) {
+    assert.equal(set.ok, true);
+    expected = 'auto';
+  } else {
+    assert.deepEqual(set.error, { key: 'permissions.error.autoNeedsEncryption' });
+    t.diagnostic('no encrypted storage here: the restart is checked with "Always ask"');
+  }
 
   await snotra.stop();
   snotra = await launchApp({ userDataDir });

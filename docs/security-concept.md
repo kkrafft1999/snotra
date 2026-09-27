@@ -344,17 +344,18 @@ which today sit in `userData` as plain-text JSON. The rules themselves are not
 secret; their integrity is what matters. The policy file therefore carries an
 integrity check (an HMAC with a key protected through `safeStorage`), so that
 tampering can be told apart from corruption. If the check fails, the fail-safe
-applies: mode `smart`, all allow rules and session approvals discarded, readable
-deny rules and sensitive path patterns stay in force, with a visible note to the
-user. Without `safeStorage` available, auto cannot be enabled and permanent
-allow rules are not stored. That protects against accidental editing and against
+applies: mode `smart` — unless it was `ask-all`, which only tightens and stays
+(#419) —, all allow rules and session approvals discarded, readable deny rules
+and sensitive path patterns stay in force, with a visible note to the user.
+Without `safeStorage` available, auto cannot be enabled and permanent allow
+rules are not stored; `smart` and `ask-all` work as usual. That protects against accidental editing and against
 tools that change files blindly. The signature secures the integrity of the file
 at rest, not against a compromised main process: whoever runs with the user's
 rights can replace the key and the file alike; that lies outside the protection
 goal (section 5). Rotating the signing key is not planned. If the key is lost —
 because the `safeStorage` key no longer matches after the app was renamed, say —
-the same fail-safe applies: the cold reset to `smart` without allow rules is
-intended, because losing a key cannot be told apart from tampering. Session
+the same fail-safe applies: the cold reset to `smart` (or `ask-all`) without
+allow rules is intended, because losing a key cannot be told apart from tampering. Session
 approvals are unaffected anyway; they only live in memory and end with a
 restart.
 
@@ -408,7 +409,7 @@ only the chat whose mode changed. The mode itself is the chat's as well: the
 policy file holds the mode of the chat on screen, and a chat that leaves the
 screen keeps the mode it had there for its run — it never borrows the mode of
 the chat that is visible now. A failed signature overrides that and puts every
-chat back to `smart`; "Alle Berechtigungen zurücksetzen" does the same. Session
+chat back to `smart`, or to `ask-all` where that was the mode on screen; "Alle Berechtigungen zurücksetzen" does the same. Session
 approvals are bound to the rules, the sensitive path patterns and the integrity
 state next to the mode, not to every write of the policy file, which now
 happens whenever another chat comes on screen. After a block, no permission is sought by
@@ -725,6 +726,27 @@ workspace can now carry a default mode of its own.
   last choice in a chat (an `auto` switched on for one task would stick for
   the folder unnoticed), and a mode that belongs to the workspace instead of
   the chat (it would undo #211/#320).
+
+### Revision: "Always ask" without encrypted storage (#419)
+
+Without `safeStorage` the policy file cannot be signed, so every read went
+through the fail-safe of section 7 and came back at `smart`. On such a system
+— a Linux desktop without a keyring, say — "Always ask" was accepted, written
+and read back as "Smart" at once; since #413 the same happened to "Always ask"
+as a workspace default, whose entry survived but whose mode did not.
+
+- **The fail-safe keeps `ask-all`.** It only tightens, like a deny rule, which
+  already survives a failed check. An unsigned or tampered file can therefore
+  leave Snotra at `ask-all` — never looser than `smart`. The same holds for a
+  workspace default of `ask-all`, so a sensitive folder keeps asking on a
+  system without a keyring.
+- **"Auto" is not offered where it cannot be stored.** The mode pill, the mode
+  card and the workspace default card show it as unavailable with the reason,
+  and main refuses it before it opens the confirmation dialog, instead of
+  asking for a confirmation that leads nowhere. A chat stored at `auto` that
+  is opened on such a system runs at `smart`, not at what the previous chat
+  left behind. The notice for an unsigned file says that "Smart" and "Always
+  ask" still work.
 
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto
