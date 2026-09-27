@@ -178,6 +178,29 @@ export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keep
   return esc.innerHTML.replace(/\n/g, '<br>');
 }
 
+/**
+ * Sanitized HTML as a fragment in which no image has started loading (#402).
+ *
+ * The HTML is parsed inside a `<template>`, whose content belongs to an inert
+ * document: nothing there fetches anything. Every `<img src>` then moves to
+ * `data-md-src` before a node can reach the window. Assigned to a live node
+ * instead, an `<img>` fetches its `src` at once — even while the node is not
+ * attached yet — and a local path reaches the disk before the main process has
+ * decided whether it lies inside the workspace.
+ *
+ * Whoever renders the fragment fills the images in: `applyWorkspaceImages()`
+ * in the chat, `markdown-view.js` in the file preview.
+ */
+export function inertHtmlFragment(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  for (const img of template.content.querySelectorAll('img')) {
+    img.setAttribute('data-md-src', img.getAttribute('src') ?? '');
+    img.removeAttribute('src');
+  }
+  return template.content;
+}
+
 export function svgChevron() {
   return `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
     <path d="M3 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>

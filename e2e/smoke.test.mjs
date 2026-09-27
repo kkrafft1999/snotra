@@ -679,6 +679,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#00759E"/></svg>',
   );
   const absolutesBild = path.join(workspace, 'bilder', 'mein plot.png');
+  // A real file outside the open folder, named by its absolute path (#402):
+  // the case the issue is about. The placeholder alone proves nothing — it
+  // replaced a raw `<img>` before #402 too, after that image had started to
+  // load. The listeners below are what tells the two apart.
+  const fremdesBild = path.join(userDataDir, 'outside.png');
+  await writeFile(fremdesBild, BREITES_PNG);
   model.queueAnswer({
     match: IMAGE_QUESTION,
     text: [
@@ -697,7 +703,25 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       // Datei dann existiert, haengt an der Plattform — dass der Pfad
       // ueberhaupt beim Aufloeser ankommt, nicht.
       '![Laufwerk](C:/ws/bilder/plot.png)',
+      '',
+      `![Fremdordner](${encodeURI(fremdesBild.split(path.sep).join('/'))})`,
     ].join('\n'),
+  });
+  // Every image of the chat that loads or fails, and every attempt the CSP
+  // stops. Only `data:` may get that far. Before #402 each path handed to an
+  // `<img>` as `src` showed up here — with `load` if the file existed, with
+  // `error` if not — including the images of earlier answers, since sending
+  // redraws the whole history.
+  await page.evaluate(() => {
+    globalThis.__cspViolations = [];
+    globalThis.__chatImageLoads = [];
+    const note = (e) => {
+      if (e.target?.tagName !== 'IMG' || !e.target.closest('#chat-messages')) return;
+      const src = e.target.getAttribute('src') || '';
+      if (!src.startsWith('data:')) globalThis.__chatImageLoads.push(`${e.type} ${src}`);
+    };
+    document.addEventListener('load', note, true);
+    document.addEventListener('error', note, true);
   });
   await ask(page, IMAGE_QUESTION);
   step('Bild-Frage abgeschickt');
@@ -729,7 +753,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       const fertig = state
         && !state.busy
         && state.geladen.length === 3
-        && state.platzhalter.length === 3
+        && state.platzhalter.length === 4
         && state.geladen.every((bild) => bild.breite > 0);
       return fertig ? state : null;
     },
@@ -746,9 +770,15 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // Fehlend und ausserhalb: Platzhalter mit Grund statt Broken-Image-Icon.
   const gruende = Object.fromEntries(bilder.platzhalter.map((p) => [p.alt, p.grund]));
-  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Laufwerk']);
+  assert.deepEqual(Object.keys(gruende).sort(), ['Draussen', 'Fehlt', 'Fremdordner', 'Laufwerk']);
   assert.equal(gruende.Fehlt, 'Bild nicht gefunden');
   assert.equal(gruende.Draussen, 'Außerhalb des Arbeitsordners');
+  assert.equal(gruende.Fremdordner, 'Außerhalb des Arbeitsordners');
+  // #402: the main process decided, and the renderer never tried on its own.
+  assert.deepEqual(await page.evaluate(() => globalThis.__chatImageLoads), [],
+    'no image of the answer loaded from anything but a data: URI');
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [],
+    'no image of the answer tried to load past the CSP');
   // Der Laufwerkspfad darf alles sein, nur nicht „gar nicht erst gefragt“ —
   // genau das waere er ohne die Ausnahme im Sanitizer.
   assert.notEqual(gruende.Laufwerk, 'Nur Bilder aus dem Arbeitsordner werden angezeigt');

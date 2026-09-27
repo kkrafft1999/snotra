@@ -1,4 +1,4 @@
-import { markdownToSafeHtml } from '../utils/helpers.js';
+import { inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { isOpenableChatLink, openChatLink } from '../chat/openChatLink.js';
 // Bild-Anhaenge im Composer (Issue #84): Aufnahme aus der Zwischenablage,
 // Limits und Verkleinern.
@@ -266,7 +266,7 @@ export function initChatStream({
     const streamEl = bubble.querySelector('.chat-md-streaming');
     if (streamEl) {
       streamEl.classList.remove('chat-md-streaming');
-      streamEl.innerHTML = markdownToSafeHtml(message.content || '');
+      streamEl.replaceChildren(renderAnswer(message.content || ''));
       // Erst jetzt: Waehrend des Streams stand hier nur ein Platzhalter.
       void showWorkspaceImages(streamEl);
     }
@@ -277,6 +277,14 @@ export function initChatStream({
     const busy = !!(last && last.role === 'assistant' && last.streaming);
     chatMessagesEl.setAttribute('aria-busy', busy ? 'true' : 'false');
     syncLiveDot();
+  }
+
+  /**
+   * A chat answer as nodes, never as `innerHTML` on a live node (#402): the
+   * images in it have no `src` yet, `showWorkspaceImages()` decides on them.
+   */
+  function renderAnswer(markdown) {
+    return inertHtmlFragment(markdownToSafeHtml(markdown));
   }
 
   /**
@@ -302,7 +310,7 @@ export function initChatStream({
     cancelStreamRender();
     streamRenderRaf = requestAnimationFrame(() => {
       streamRenderRaf = 0;
-      streamEl.innerHTML = markdownToSafeHtml(text);
+      streamEl.replaceChildren(renderAnswer(text));
       void showWorkspaceImages(streamEl, { streaming: true });
       chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     });
@@ -491,7 +499,7 @@ export function initChatStream({
 
           const stream = document.createElement('div');
           stream.className = 'chat-md-streaming chat-md';
-          stream.innerHTML = markdownToSafeHtml(m.content || '');
+          stream.replaceChildren(renderAnswer(m.content || ''));
           void showWorkspaceImages(stream, { streaming: true });
           li.appendChild(stream);
           approvalCards?.mount(li, m);
@@ -513,7 +521,7 @@ export function initChatStream({
           }
           const inner = document.createElement('div');
           inner.className = 'chat-md';
-          inner.innerHTML = markdownToSafeHtml(m.content);
+          inner.replaceChildren(renderAnswer(m.content));
           void showWorkspaceImages(inner);
           li.appendChild(inner);
           // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
