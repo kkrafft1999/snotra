@@ -92,6 +92,9 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   assert.equal(openaiProvider.presetFields.length, 2);
   assert.equal(openaiProvider.presetFields[0].key, 'reasoningEffort');
   assert.equal(openaiProvider.presetFields[1].key, 'reasoningSummary');
+  // Three levels as segments, off/on as a switch (#414).
+  assert.equal(openaiProvider.presetFields[0].control, 'segmented');
+  assert.equal(openaiProvider.presetFields[1].control, 'switch');
   assert.equal(openaiProvider.isActiveChatProvider, true);
   assert.equal(openaiProvider.fields, undefined);
 
@@ -291,8 +294,10 @@ test('buildLlmStateDto speaks the stored language', () => {
 
   const summaryEn = view(en, 'openai').presetFields.find((f) => f.key === 'reasoningSummary');
   const summaryDe = view(de, 'openai').presetFields.find((f) => f.key === 'reasoningSummary');
-  assert.equal(summaryEn.label, 'Reasoning summary');
-  assert.equal(summaryDe.label, 'Reasoning-Zusammenfassung');
+  assert.equal(summaryEn.label, 'Summary');
+  assert.equal(summaryDe.label, 'Zusammenfassung');
+  assert.equal(summaryEn.toggleLabel, 'Show in chat');
+  assert.equal(summaryDe.toggleLabel, 'Im Chat zeigen');
   assert.deepEqual(summaryEn.options.map((o) => o.label), ['off', 'auto']);
   assert.deepEqual(summaryDe.options.map((o) => o.label), ['aus', 'auto']);
 

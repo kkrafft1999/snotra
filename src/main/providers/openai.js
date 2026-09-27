@@ -100,6 +100,7 @@ module.exports = {
       {
         key: 'reasoningEffort',
         type: 'select',
+        control: 'segmented',
         label: 'Reasoning',
         hint: createMessage('provider.openai.reasoning.hint'),
         defaultValue: 'medium',
@@ -119,7 +120,10 @@ module.exports = {
       {
         key: 'reasoningSummary',
         type: 'select',
+        // Off and on: the first option is the switch's off position (#414).
+        control: 'switch',
         label: createMessage('provider.openai.reasoningSummary.label'),
+        toggleLabel: createMessage('provider.openai.reasoningSummary.toggle'),
         hint: createMessage('provider.openai.reasoningSummary.hint'),
         defaultValue: 'off',
         affectsPresetIdentity: false,

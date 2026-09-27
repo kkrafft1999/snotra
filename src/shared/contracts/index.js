@@ -22,6 +22,7 @@ const {
   isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
+  PRESET_FIELD_CONTROLS,
   WORKSPACE_PROGRESS_EVENTS,
   PERMISSION_PROGRESS_EVENTS,
 } = require('./enums');
@@ -254,6 +255,7 @@ module.exports = {
   isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
+  PRESET_FIELD_CONTROLS,
   clampMaxToolRounds,
   clampSidebarWidth,
   clampChatPanelWidth,

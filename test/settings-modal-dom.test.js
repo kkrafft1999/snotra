@@ -407,6 +407,124 @@ test('die Vorlage belegt Adresse und API-Stil vor (#193)', async (t) => {
   assert.match(document.getElementById('provider-template-hint').textContent, /Router-Dienst/);
 });
 
+/**
+ * OpenAI as the main process describes it: two options of its own, drawn as a
+ * segmented control and a switch (#414).
+ */
+const OPENAI_VIEW = {
+  id: 'openai',
+  name: 'OpenAI',
+  builtInName: 'OpenAI',
+  configured: true,
+  hasKey: true,
+  defaultModel: 'gpt-4o-mini',
+  apiBase: 'https://api.openai.com/v1',
+  capabilities: { images: true },
+  presetFields: [
+    {
+      key: 'reasoningEffort',
+      type: 'select',
+      control: 'segmented',
+      label: 'Reasoning',
+      hint: 'Wie gr\u00fcndlich das Modell nachdenkt (`reasoning_effort`).',
+      options: [
+        { value: 'low', label: 'low' },
+        { value: 'medium', label: 'medium' },
+        { value: 'high', label: 'high' },
+      ],
+      defaultValue: 'medium',
+      affectsPresetIdentity: true,
+      detailPrefix: '',
+      showAsSuffix: true,
+      detailStyle: 'mono',
+    },
+    {
+      key: 'reasoningSummary',
+      type: 'select',
+      control: 'switch',
+      label: 'Zusammenfassung',
+      toggleLabel: 'Im Chat zeigen',
+      hint: 'Erscheint im Chat (`reasoning.summary`).',
+      options: [
+        { value: 'off', label: 'aus' },
+        { value: 'auto', label: 'auto' },
+      ],
+      defaultValue: 'off',
+      affectsPresetIdentity: false,
+      detailPrefix: '',
+      showAsSuffix: false,
+      detailStyle: 'mono',
+    },
+  ],
+  form: { showApiKey: true, apiKeyPlaceholder: 'sk-\u2026' },
+};
+
+test('reasoning effort is a segmented control, the summary a switch (#414)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    providers: [OPENAI_VIEW],
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+
+  const group = document.getElementById('preset-field-reasoningEffort');
+  assert.equal(group.getAttribute('role'), 'radiogroup');
+  assert.equal(document.getElementById(group.getAttribute('aria-labelledby')).textContent, 'Reasoning');
+  const levels = [...group.querySelectorAll('input[type="radio"]')];
+  assert.deepEqual(levels.map((r) => r.value), ['low', 'medium', 'high']);
+  assert.equal(levels.find((r) => r.checked).value, 'medium');
+
+  const toggle = document.getElementById('preset-field-reasoningSummary');
+  assert.equal(toggle.getAttribute('role'), 'switch');
+  assert.equal(toggle.checked, false);
+  assert.equal(toggle.closest('label').textContent, 'Im Chat zeigen');
+  assert.equal(document.querySelector('label[for="preset-field-reasoningSummary"]').textContent, 'Zusammenfassung');
+
+  // Parameter names in backticks become code, the rest stays plain text.
+  const hint = document.getElementById(group.getAttribute('aria-describedby'));
+  assert.equal(hint.querySelector('code').textContent, 'reasoning_effort');
+  assert.equal(hint.textContent, 'Wie gr\u00fcndlich das Modell nachdenkt (reasoning_effort).');
+
+  levels[2].click();
+  toggle.click();
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  const row = sent.presets.find((pr) => pr.providerId === 'openai');
+  assert.equal(row.reasoningEffort, 'high');
+  assert.equal(row.reasoningSummary, 'auto');
+});
+
+test('the switch turned off again yields the first option (#414)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    providers: [OPENAI_VIEW],
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const toggle = document.getElementById('preset-field-reasoningSummary');
+  toggle.click();
+  toggle.click();
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  const row = sent.presets.find((pr) => pr.providerId === 'openai');
+  assert.equal(row.reasoningEffort, 'medium');
+  assert.equal(row.reasoningSummary, 'off');
+});
+
 const tabFor = (key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`);
 const panelFor = (key) => document.getElementById(`panel-settings-${key}`);
 
