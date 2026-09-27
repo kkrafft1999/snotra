@@ -19,6 +19,11 @@ const {
  * Aufgelöst wird **nach** dem Sanitizing auf den fertigen Knoten im DOM, nie
  * per String-Ersetzung im HTML: DOMPurify läuft damit unverändert zuerst, und
  * was hier ankommt, ist bereits ein bereinigter Baum.
+ *
+ * Since #402 that tree comes from `inertHtmlFragment()`: no image in it has a
+ * `src`, the address waits in `data-md-src`. An image only ever gets a `data:`
+ * URI here, so nothing from a chat answer touches the disk before the main
+ * process has checked the path.
  */
 
 /**
@@ -127,6 +132,7 @@ function pendingFor(altText) {
 }
 
 function markLoaded(img, dataUrl) {
+  img.removeAttribute('data-md-src');
   img.classList.add('chat-md-image-img');
   // Das Dekodieren soll den Frame nicht aufhalten; der Verlauf scrollt sonst
   // spürbar später.
@@ -137,14 +143,18 @@ function markLoaded(img, dataUrl) {
 async function resolveOne(img, { api, workspaceRoot }) {
   // Markdown liefert eine URL, kein Dateipfad — zurueck in den Pfad, den das
   // Modell geschrieben hat (Backslashes, Umlaute, Leerzeichen).
-  const src = decodeWorkspaceImageSource(img.getAttribute('src'));
+  const src = decodeWorkspaceImageSource(img.getAttribute('data-md-src'));
   const altText = img.getAttribute('alt') || '';
 
   if (!isWorkspaceImageSource(src)) {
-    // `data:` trägt seine Bytes selbst und ist per CSP erlaubt — das bleibt
-    // stehen. Alles andere (http(s), file://) lädt unter dieser CSP nichts;
-    // statt eines kaputten Bildes steht dort, warum.
-    if (/^data:image\//i.test(src.trim())) return;
+    // `data:` trägt seine Bytes selbst und ist per CSP erlaubt — das kommt
+    // unverändert zurück. Alles andere (http(s), file://) lädt unter dieser
+    // CSP nichts; statt eines kaputten Bildes steht dort, warum.
+    if (/^data:image\//i.test(src.trim())) {
+      img.removeAttribute('data-md-src');
+      img.src = src.trim();
+      return;
+    }
     img.replaceWith(placeholderFor(altText, externalSourceMessage()));
     return;
   }
@@ -186,7 +196,7 @@ async function resolveOne(img, { api, workspaceRoot }) {
  */
 export function applyWorkspaceImages(container, { api, workspaceRoot, streaming = false } = {}) {
   if (!container) return Promise.resolve();
-  const images = [...container.querySelectorAll('img')];
+  const images = [...container.querySelectorAll('img[data-md-src]')];
   if (images.length === 0) return Promise.resolve();
   if (streaming) {
     for (const img of images) img.replaceWith(pendingFor(img.getAttribute('alt') || ''));

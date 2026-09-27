@@ -188,3 +188,54 @@ test('ein nachlaufender Stream-Frame ueberschreibt das fertige Bild nicht', asyn
     'der Zwischenstand darf nicht zurueckkommen');
   assert.equal(blase.querySelector('img')?.getAttribute('src'), PNG_DATA_URL);
 });
+
+test('no chat render path puts anything but a data: URI into an <img src> (#402)', async () => {
+  // Assigned to a node of the document, an <img> fetches its `src` at once —
+  // attached or not. So every image that ever shows up in the chat, and every
+  // `src` it is given, is recorded here, across all render paths.
+  const seen = [];
+  const record = (img) => seen.push(img.getAttribute('src'));
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type === 'attributes' && m.target.tagName === 'IMG') record(m.target);
+      for (const node of m.addedNodes || []) {
+        if (node.nodeType !== 1) continue;
+        if (node.tagName === 'IMG') record(node);
+        for (const img of node.querySelectorAll?.('img') || []) record(img);
+      }
+    }
+  });
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] });
+  try {
+    const OUTSIDE = '![Outside](/tmp/outside/x.png)';
+    readImpl = async () => ({ ok: false, reason: 'outsideWorkspace' });
+
+    // A streaming answer restored from history, then a finished one.
+    show(OUTSIDE, { streaming: true });
+    await flush();
+    show(OUTSIDE);
+    await flush();
+
+    // A live run: a streaming frame first, then the final answer.
+    chatImpl = async (_messages, options) => {
+      deltaCallback?.({ text: OUTSIDE, chatId: options?.chatId, runId: options?.runId });
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return { ok: true, content: OUTSIDE, toolTrace: [] };
+    };
+    appStore.chatMessages = [];
+    appStore.chatSessionId = (appStore.chatSessionId || 0) + 1;
+    const input = document.getElementById('chat-input');
+    input.value = 'Show it.';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('btn-chat-send').click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await flush();
+  } finally {
+    observer.disconnect();
+  }
+
+  const leaked = seen.filter((src) => src !== null && !src.startsWith('data:'));
+  assert.deepEqual(leaked, [], 'an image address reached the document');
+  assert.ok(asked.includes('/tmp/outside/x.png'), 'the main process was asked instead');
+  assert.ok(letzteBlase().querySelector('.chat-md-image--placeholder'));
+});

@@ -7,7 +7,7 @@
 
 import contracts from '../generated/contracts.js';
 import frontmatterParser from '../generated/skill-frontmatter.js';
-import { ALLOWED_LINK_PROTOS, markdownToSafeHtml } from '../utils/helpers.js';
+import { ALLOWED_LINK_PROTOS, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { resolveNative } from '../utils/nativePath.js';
 
 const { decodeWorkspaceImageSource, isWindowsDrivePath } = contracts;
@@ -137,21 +137,16 @@ function decodeFragment(fragment) {
 /**
  * Renders the Markdown body into an inert fragment.
  *
- * The HTML goes into a `<template>` first: nothing in its content loads. An
- * `<img>` put straight into the document would start fetching its `src` at
- * once, and a local path would reach the disk without the main process ever
- * deciding whether it lies inside the workspace. Here every `src` moves to
- * `data-md-src` before a node reaches the page; `markdown-view.js` fills it in
- * through `fs:readWorkspaceImage` or replaces it with a placeholder.
+ * `inertHtmlFragment()` keeps every image from loading: its `src` waits in
+ * `data-md-src` until `markdown-view.js` fills it in through
+ * `fs:readWorkspaceImage` or replaces it with a placeholder.
  */
 export function renderMarkdownFragment(body) {
-  const template = document.createElement('template');
-  template.innerHTML = markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true });
-  const root = template.content;
+  const root = inertHtmlFragment(
+    markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true })
+  );
 
   for (const img of root.querySelectorAll('img')) {
-    img.setAttribute('data-md-src', img.getAttribute('src') ?? '');
-    img.removeAttribute('src');
     // An image alone in its paragraph is a figure and gets the full width; one
     // inside a sentence — a badge in a README line — stays in the line.
     const paragraph = img.closest('p');

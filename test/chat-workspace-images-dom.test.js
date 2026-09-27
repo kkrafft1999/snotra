@@ -21,6 +21,7 @@ const PNG_DATA_URL = `data:image/png;base64,${PNG_1PX}`;
 
 let dom = null;
 let images = null;
+let inertHtmlFragment = null;
 
 /** Antwort des Main-Prozesses, pro Test austauschbar. */
 let readImpl = async () => ({ ok: true, mime: 'image/png', base64: PNG_1PX, mtimeMs: 1, size: 70 });
@@ -36,6 +37,7 @@ const api = {
 test.before(async () => {
   dom = setupRendererDom();
   images = await importRenderer('chat', 'workspaceImages.js');
+  ({ inertHtmlFragment } = await importRenderer('utils', 'helpers.js'));
 });
 
 test.after(() => dom?.cleanup());
@@ -46,11 +48,14 @@ test.beforeEach(() => {
   readImpl = async () => ({ ok: true, mime: 'image/png', base64: PNG_1PX, mtimeMs: 1, size: 70 });
 });
 
-/** Ein Antwort-Knoten, wie ihn markdownToSafeHtml nach dem Sanitizing liefert. */
+/**
+ * Ein Antwort-Knoten, wie ihn ChatStream nach dem Sanitizing setzt: ueber
+ * `inertHtmlFragment()`, also ohne `src` an den Bildern (#402).
+ */
 function bubble(html) {
   const el = document.createElement('div');
   el.className = 'chat-md';
-  el.innerHTML = html;
+  el.replaceChildren(inertHtmlFragment(html));
   document.body.appendChild(el);
   return el;
 }
@@ -116,6 +121,26 @@ test('fremde Quellen werden nicht gefragt — data: bleibt unangetastet', async 
   const bleibt = el.querySelectorAll('img');
   assert.equal(bleibt.length, 1);
   assert.equal(bleibt[0].getAttribute('alt'), 'Eigenes');
+  assert.equal(bleibt[0].getAttribute('src'), PNG_DATA_URL);
+});
+
+test('the fragment carries no image address in src (#402)', () => {
+  const fragment = inertHtmlFragment(
+    '<p><img src="/tmp/outside/x.png" alt="Outside"><img src="D:\\pics\\x.png"></p>'
+  );
+  const imgs = [...fragment.querySelectorAll('img')];
+  assert.equal(imgs.length, 2);
+  for (const img of imgs) assert.equal(img.hasAttribute('src'), false);
+  assert.deepEqual(imgs.map((img) => img.getAttribute('data-md-src')), ['/tmp/outside/x.png', 'D:\\pics\\x.png']);
+});
+
+test('an image without data-md-src is left alone', async () => {
+  const el = document.createElement('div');
+  el.innerHTML = `<img src="${PNG_DATA_URL}" alt="App">`;
+  document.body.appendChild(el);
+  await images.applyWorkspaceImages(el, { api, workspaceRoot: '/ws' });
+  assert.deepEqual(asked, []);
+  assert.equal(el.querySelector('img').getAttribute('src'), PNG_DATA_URL);
 });
 
 test('waehrend des Streams laedt nichts — nur ein ruhiger Platzhalter', async () => {
@@ -166,7 +191,8 @@ test('ein Knoten, der zwischenzeitlich aus dem Dokument fiel, wird nicht angefas
   // Der Verlauf wird neu gezeichnet, waehrend die Antwort noch unterwegs ist.
   el.remove();
   await lauf;
-  assert.equal(img.getAttribute('src'), 'plot.png', 'unveraendert — er haengt nirgends mehr');
+  assert.equal(img.getAttribute('data-md-src'), 'plot.png', 'unveraendert — er haengt nirgends mehr');
+  assert.equal(img.hasAttribute('src'), false);
 });
 
 test('ohne den IPC-Kanal steht der Platzhalter statt eines kaputten Bildes', async () => {
