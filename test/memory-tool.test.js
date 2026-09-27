@@ -121,6 +121,17 @@ test('die Beschreibung fuer das Modell nennt die Grenze und den Skill', () => {
   assert.match(kurz('en'), /remember/i);
 });
 
+test('the model asks the user for the scope before remembering (#416)', () => {
+  const def = registryWith(makeMemoryStub()).getDefinition('remember');
+  // In the description and not only in the skill: the description goes along
+  // with every request, the skill may never be loaded.
+  assert.match(def.modelDescription, /ask the user/i);
+  assert.match(def.modelDescription, /project or global/i);
+  assert.match(def.parameters.properties.scope.description, /chosen by the user/i);
+  // The old default that let the model decide on its own is gone.
+  assert.doesNotMatch(def.parameters.properties.scope.description, /in doubt/i);
+});
+
 /* ── Freigabekarte (Issue #166) ──────────────────────────────────────────── */
 
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');

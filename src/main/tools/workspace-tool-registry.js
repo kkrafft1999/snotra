@@ -1353,10 +1353,16 @@ function createWorkspaceToolRegistry({
       pathlessWrite: true,
       isAvailable: () => memory !== null,
       descriptionKey: 'tools.desc.remember',
+      // The user picks the scope, not the model (#416). The question to ask
+      // is stated here and not only in the skill: the description goes along
+      // with every request, the skill only once the model decides to load it.
       modelDescription:
         'Remembers a statement permanently (level "workspace" = this folder only, "user" = '
         + 'everywhere). From the next message on, the entry is part of every system prompt. Only '
-        + 'lasting facts, never passwords or keys. Load the skill "snotra-memory" before first use.',
+        + 'lasting facts, never passwords or keys. Before calling it, ask the user in the chat '
+        + 'whether the entry is for this project or global, and wait for the answer — unless they '
+        + 'already named the scope, or no folder is open (then only "user" is possible). Load the '
+        + 'skill "snotra-memory" before first use.',
       shortDescriptionKey: 'tools.short.remember',
       parameters: {
         type: 'object',
@@ -1365,10 +1371,10 @@ function createWorkspaceToolRegistry({
             type: 'string',
             enum: ['workspace', 'user'],
             description:
-              'Scope: "workspace" for anything that applies to the open folder only (build '
-              + 'commands, project conventions, work in progress); "user" for anything that '
-              + 'applies regardless of the project (forms of address, language, preferred '
-              + 'tools). When in doubt "workspace" — the narrower scope does less damage.',
+              'Scope, as chosen by the user — ask them before the call: "workspace" for '
+              + 'anything that applies to the open folder only (build commands, project '
+              + 'conventions); "user" for anything that applies regardless of the project '
+              + '(forms of address, language, preferred tools).',
           },
           text: {
             type: 'string',
