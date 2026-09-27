@@ -598,6 +598,7 @@ export function initChatStream({
         appStore.currentChatTitle = restore.title || '';
         setChatTokenUsage(restore.tokenUsage);
       }
+      syncChatInFlight(); // before the round trips, see startNewChat (#411)
       // Die zuletzt gefuehrte Konversation wird damit auch die aktive dieses
       // Ordners — sonst begaenne der naechste Wechsel wieder von vorn.
       if (!wasActive) await api.setActiveChatId(restore.id);
@@ -618,6 +619,7 @@ export function initChatStream({
     appStore.currentChatTitle = '';
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
+    syncChatInFlight(); // before the round trip, see startNewChat (#411)
     await activateChatSession(appStore.currentChatId, 'auto');
     chatInput.value = '';
     onInputChanged();
@@ -640,6 +642,10 @@ export function initChatStream({
     resetChatTokenUsage();
     chatInput.value = '';
     onInputChanged();
+    // The composer belongs to the new chat from here on, not only once the
+    // round trips below are done — until then it showed the old chat's stop
+    // button (#411).
+    syncChatInFlight();
     await api.setActiveChatId(null);
     // Neuer Chat: Standard-Modell aus den Einstellungen, Modus „Intelligent“.
     await activateChatSession(appStore.currentChatId, 'explicit');
@@ -1474,6 +1480,7 @@ export function initChatStream({
       canAttach: canAttachChat,
       attach: attachChat,
       afterSwitch: afterChatSwitch,
+      syncComposer: syncChatInFlight,
       discard: discardChatRun,
       stateOf: runStateOf,
     },

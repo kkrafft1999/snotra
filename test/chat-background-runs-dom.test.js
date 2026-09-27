@@ -257,3 +257,131 @@ test('a step waiting for an approval still says so when its chat is opened again
   await flush();
   await flush();
 });
+
+// The composer during a switch (#411). A switch changes the chat on screen and
+// then waits on IPC — `setActiveChatId`, `activateChatSession`. The send button
+// used to follow only after those round trips, so the new chat showed the old
+// one's stop button for as long as they took. Here the first round trip is
+// held open, and the button is looked at while it is.
+
+/** An IPC call that returns only once the test lets it — for the ids `holds` picks. */
+function gatedCall(holds = () => true) {
+  let open;
+  const opened = new Promise((resolve) => { open = resolve; });
+  const call = { reached: false, open };
+  call.fn = async (id) => {
+    if (!holds(id)) return;
+    call.reached = true;
+    await opened;
+  };
+  return call;
+}
+
+async function until(condition) {
+  for (let i = 0; i < 20 && !condition(); i += 1) await flush();
+  assert.ok(condition(), 'the switch got as far as its first round trip');
+}
+
+const stopShown = () => document.getElementById('btn-chat-send').classList.contains('chat-send--stop');
+
+async function mountHistoryPanel(env, { setActiveChatId }) {
+  const { initChatHistoryPanel } = await importRenderer('components', 'ChatHistoryPanel.js');
+  return initChatHistoryPanel({
+    api: {
+      getChatHistory: async () => ({ sessions: [], activeChatId: null }),
+      setActiveChatId,
+      setUIPrefs: async () => ({ ok: true }),
+      deleteChatSession: async () => ({ ok: true }),
+    },
+    appStore: env.appStore,
+    stopChatVoiceListening() {},
+    persistCurrentChat: async () => {},
+    renderChatMessages: env.chat.renderChatMessages,
+    updateChatChrome() {},
+    onInputChanged() {},
+    setChatTokenUsage() {},
+    resetChatTokenUsage() {},
+    seedGreetingIfWorkspace() {},
+    onNewChatStarted: async () => {},
+    runs: env.chat.runs,
+  });
+}
+
+test('a new chat is free to write in before its round trips return (#411)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, api, appStore, ask } = env;
+
+  ask('Check the docs folder.');
+  await flush();
+  assert.equal(stopShown(), true, 'chat A shows its stop button');
+
+  // Saving chat A on the way out marks it active first; the new chat's own
+  // call is the one with no id.
+  const ipc = gatedCall((id) => id === null);
+  api.setActiveChatId = ipc.fn;
+  const switching = chat.startNewChat();
+  await until(() => ipc.reached);
+  assert.notEqual(appStore.currentChatId, 'chat-a');
+  assert.equal(stopShown(), false, 'the new chat does not wear chat A\'s stop button');
+  assert.equal(appStore.chatInFlight, false);
+
+  ipc.open();
+  await switching;
+  assert.equal(stopShown(), false);
+  assert.equal(chat.runs.stateOf('chat-a'), 'running', 'chat A keeps working meanwhile');
+});
+
+test('opening a running chat shows its stop button before the round trips return (#411)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, appStore, ask } = env;
+
+  ask('Draft the release notes.');
+  await flush();
+  await chat.startNewChat();
+  assert.equal(stopShown(), false);
+
+  const ipc = gatedCall();
+  const panel = await mountHistoryPanel(env, { setActiveChatId: ipc.fn });
+  const opening = panel.openChatSession('chat-a');
+  await until(() => ipc.reached);
+  assert.equal(appStore.currentChatId, 'chat-a');
+  assert.equal(stopShown(), true, 'chat A can be stopped the moment it is on screen');
+
+  ipc.open();
+  await opening;
+  assert.equal(stopShown(), true);
+});
+
+test('opening another folder frees the composer before the round trips return (#411)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, api, appStore, ask } = env;
+
+  ask('Check the docs folder.');
+  await flush();
+  assert.equal(stopShown(), true);
+
+  api.getChatHistory = async () => ({
+    sessions: [{
+      id: 'chat-b',
+      workspaceRoot: '/other',
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'Earlier.' }, { role: 'assistant', content: 'Answer.' }],
+    }],
+    activeChatId: null,
+  });
+  // The restored chat becomes the folder's active one — that is the call held.
+  const ipc = gatedCall((id) => id === 'chat-b');
+  api.setActiveChatId = ipc.fn;
+  const loading = chat.loadChatForWorkspace('/other');
+  await until(() => ipc.reached);
+  assert.equal(appStore.currentChatId, 'chat-b');
+  assert.equal(stopShown(), false, 'the restored chat does not wear chat A\'s stop button');
+
+  ipc.open();
+  await loading;
+  assert.equal(stopShown(), false);
+  assert.equal(chat.runs.stateOf('chat-a'), 'running', 'chat A keeps working in the background');
+});
