@@ -326,3 +326,30 @@ test('normalizeProviderPatch ignoriert Felder, die der Anbieter nicht führt', (
     { baseUrl: 'http://127.0.0.1:11434' },
   );
 });
+
+test('a preset field only gets the control its options allow (#414)', () => {
+  const { buildPresetFieldViews } = contracts;
+  const option = (value) => ({ value, label: value });
+  const provider = {
+    presentation: {
+      presetFields: [
+        { key: 'level', type: 'select', control: 'segmented', options: ['a', 'b', 'c'].map(option) },
+        { key: 'onOff', type: 'select', control: 'switch', toggleLabel: 'Show it', options: ['off', 'on'].map(option) },
+        { key: 'wide', type: 'select', control: 'segmented', options: ['1', '2', '3', '4', '5'].map(option) },
+        { key: 'three', type: 'select', control: 'switch', options: ['x', 'y', 'z'].map(option) },
+        { key: 'plain', type: 'select', options: ['p', 'q'].map(option) },
+      ],
+    },
+  };
+  const views = buildPresetFieldViews(provider);
+  const control = (key) => views.find((v) => v.key === key).control;
+
+  assert.equal(control('level'), 'segmented');
+  assert.equal(control('onOff'), 'switch');
+  assert.equal(views.find((v) => v.key === 'onOff').toggleLabel, 'Show it');
+  // Too many segments, or a switch with three positions: the dropdown holds any number.
+  assert.equal(control('wide'), 'dropdown');
+  assert.equal(control('three'), 'dropdown');
+  assert.equal(control('plain'), 'dropdown');
+  assert.equal('toggleLabel' in views.find((v) => v.key === 'plain'), false);
+});

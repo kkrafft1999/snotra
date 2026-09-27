@@ -11,6 +11,7 @@ const {
   APP_LOCALES,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
+  PRESET_FIELD_CONTROLS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
 } = require('./enums');
@@ -720,6 +721,21 @@ function formatPresetSublabel(preset, provider, connection, say = plainText) {
 }
 
 /**
+ * The control a select field asks for, if its options allow it (#414): a
+ * switch needs exactly two options, a segmented control at most four. Anything
+ * else falls back to the dropdown, which can hold any number.
+ */
+function presetFieldControl(field, options) {
+  if (field.control === PRESET_FIELD_CONTROLS.SWITCH && options.length === 2) {
+    return PRESET_FIELD_CONTROLS.SWITCH;
+  }
+  if (field.control === PRESET_FIELD_CONTROLS.SEGMENTED && options.length <= 4) {
+    return PRESET_FIELD_CONTROLS.SEGMENTED;
+  }
+  return PRESET_FIELD_CONTROLS.DROPDOWN;
+}
+
+/**
  * The view builders below turn a provider definition into plain data for the
  * settings dialog. Labels and hints may be catalogue messages there (#310);
  * `say` puts them into words, so the view holds finished text in one language.
@@ -739,11 +755,16 @@ function buildPresetFieldViews(provider, say = plainText) {
           }))
       : [];
     if (options.length === 0) continue;
+    const control = presetFieldControl(field, options);
     out.push({
       key: field.key,
       type: PRESET_FIELD_TYPES.SELECT,
+      control,
       label: sayText(say, field.label, field.key),
       hint: sayText(say, field.hint, ''),
+      ...(control === PRESET_FIELD_CONTROLS.SWITCH
+        ? { toggleLabel: sayText(say, field.toggleLabel, '') }
+        : {}),
       options,
       defaultValue: typeof field.defaultValue === 'string'
         ? field.defaultValue

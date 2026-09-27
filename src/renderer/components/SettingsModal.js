@@ -44,6 +44,7 @@ const {
   formatPresetSublabelFromView,
   presetIdentityKey,
   PRESET_DETAIL_STYLES,
+  PRESET_FIELD_CONTROLS,
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
@@ -422,11 +423,33 @@ export function initSettingsModal(deps) {
     if (!pv) return;
     if (!popupPresetFieldValues[providerId]) popupPresetFieldValues[providerId] = {};
     for (const field of pv.presetFields || []) {
-      const el = document.getElementById(`preset-field-${field.key}`);
-      if (el) popupPresetFieldValues[providerId][field.key] = el.value;
+      const value = readPresetFieldControl(field);
+      if (value != null) popupPresetFieldValues[providerId][field.key] = value;
     }
   }
 
+  /**
+   * What a preset field's control shows right now (#414): the dropdown and the
+   * segmented control hold one of the options, the switch the first (off) or
+   * the second (on). `null` when the control is not in the popup.
+   */
+  function readPresetFieldControl(field) {
+    const el = document.getElementById(`preset-field-${field.key}`);
+    if (!el) return null;
+    if (field.control === PRESET_FIELD_CONTROLS.SEGMENTED) {
+      return [...el.querySelectorAll('input')].find((input) => input.checked)?.value ?? null;
+    }
+    if (field.control === PRESET_FIELD_CONTROLS.SWITCH) {
+      return field.options[el.checked ? 1 : 0].value;
+    }
+    return el.value;
+  }
+
+  /**
+   * The provider's own options as rows of the popup form (#414): the label on
+   * the left, the control and its hint on the right. The provider decides the
+   * control; the value is one of the field's options in every case.
+   */
   function renderPresetFieldsPopup(providerView) {
     if (!presetFieldsPopup) return;
     presetFieldsPopup.innerHTML = '';
@@ -438,48 +461,126 @@ export function initSettingsModal(deps) {
     presetFieldsPopup.classList.remove('hidden');
     const providerId = providerView.id;
     if (!popupPresetFieldValues[providerId]) popupPresetFieldValues[providerId] = {};
+    const values = popupPresetFieldValues[providerId];
 
     for (const field of fields) {
-      const section = document.createElement('div');
-      const head = document.createElement('div');
-      head.className = 'popup-flow-subhead';
-      head.textContent = field.label;
-      section.appendChild(head);
+      const id = `preset-field-${field.key}`;
+      const options = field.options || [];
+      const stored = values[field.key];
+      const current = options.some((o) => o.value === stored)
+        ? stored
+        : (field.defaultValue || options[0]?.value);
+      values[field.key] = current;
 
-      const label = document.createElement('label');
-      label.className = 'visually-hidden';
-      label.setAttribute('for', `preset-field-${field.key}`);
+      const row = document.createElement('div');
+      row.className = 'popup-form__row';
+      // A radio group has no single element to point `for` at; it names
+      // itself through aria-labelledby instead.
+      const segmented = field.control === PRESET_FIELD_CONTROLS.SEGMENTED;
+      const label = document.createElement(segmented ? 'span' : 'label');
+      label.className = 'popup-form__label';
+      label.id = `${id}-label`;
       label.textContent = field.label;
-      section.appendChild(label);
+      if (!segmented) label.htmlFor = id;
 
-      const select = document.createElement('select');
-      select.id = `preset-field-${field.key}`;
-      select.className = 'modal-input';
-      select.dataset.presetFieldKey = field.key;
-      for (const opt of field.options || []) {
-        const option = document.createElement('option');
-        option.value = opt.value;
-        option.textContent = opt.label || opt.value;
-        select.appendChild(option);
-      }
-      const current = popupPresetFieldValues[providerId][field.key] || field.defaultValue;
-      select.value = current;
-      popupPresetFieldValues[providerId][field.key] = select.value;
-      section.appendChild(select);
-
+      const cell = document.createElement('div');
+      cell.className = 'popup-form__field';
+      const hintId = field.hint ? `${id}-hint` : '';
+      const onChange = (value) => {
+        values[field.key] = value;
+      };
+      cell.appendChild(buildPresetFieldControl(field, id, current, hintId, onChange));
       if (field.hint) {
         const hint = document.createElement('p');
         hint.className = 'modal-hint';
-        hint.textContent = field.hint;
-        section.appendChild(hint);
+        hint.id = hintId;
+        appendHintText(hint, field.hint);
+        cell.appendChild(hint);
       }
 
-      select.addEventListener('change', () => {
-        popupPresetFieldValues[providerId][field.key] = select.value;
-      });
-
-      presetFieldsPopup.appendChild(section);
+      row.append(label, cell);
+      presetFieldsPopup.appendChild(row);
     }
+  }
+
+  function buildPresetFieldControl(field, id, current, hintId, onChange) {
+    const options = field.options || [];
+    if (field.control === PRESET_FIELD_CONTROLS.SEGMENTED) {
+      const group = document.createElement('div');
+      group.id = id;
+      group.className = 'ds-segmented ds-segmented--compact';
+      group.setAttribute('role', 'radiogroup');
+      group.setAttribute('aria-labelledby', `${id}-label`);
+      if (hintId) group.setAttribute('aria-describedby', hintId);
+      for (const opt of options) {
+        const option = document.createElement('label');
+        option.className = 'ds-segmented__option';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.className = 'ds-segmented__input';
+        input.name = id;
+        input.value = opt.value;
+        input.checked = opt.value === current;
+        input.addEventListener('change', () => {
+          if (input.checked) onChange(opt.value);
+        });
+        const text = document.createElement('span');
+        text.textContent = opt.label || opt.value;
+        option.append(input, text);
+        group.appendChild(option);
+      }
+      return group;
+    }
+
+    if (field.control === PRESET_FIELD_CONTROLS.SWITCH) {
+      const [off, on] = options;
+      const wrap = document.createElement('label');
+      wrap.className = 'popup-form__switch';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.id = id;
+      input.className = 'ds-switch';
+      input.setAttribute('role', 'switch');
+      if (hintId) input.setAttribute('aria-describedby', hintId);
+      input.checked = current === on.value;
+      input.addEventListener('change', () => onChange(input.checked ? on.value : off.value));
+      const text = document.createElement('span');
+      text.textContent = field.toggleLabel || on.label || on.value;
+      wrap.append(input, text);
+      return wrap;
+    }
+
+    const select = document.createElement('select');
+    select.id = id;
+    select.className = 'modal-input';
+    if (hintId) select.setAttribute('aria-describedby', hintId);
+    for (const opt of options) {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label || opt.value;
+      select.appendChild(option);
+    }
+    select.value = current;
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
+  }
+
+  /**
+   * Hint text from a provider view: plain text in which `backticks` mark an
+   * API parameter name. Built from text nodes, so nothing in the hint is ever
+   * read as markup.
+   */
+  function appendHintText(target, text) {
+    String(text).split('`').forEach((part, index) => {
+      if (!part) return;
+      if (index % 2 === 1) {
+        const code = document.createElement('code');
+        code.textContent = part;
+        target.appendChild(code);
+      } else {
+        target.appendChild(document.createTextNode(part));
+      }
+    });
   }
 
   function renderProviderSelect() {

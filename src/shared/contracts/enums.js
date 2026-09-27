@@ -104,6 +104,15 @@ const PRESET_FIELD_TYPES = Object.freeze({
   SELECT: 'select',
 });
 
+// How a select field is drawn (#414). The value stays one of its options
+// either way: a dropdown by default, a segmented control for a few short
+// choices, a switch for exactly two — the first option is off, the second on.
+const PRESET_FIELD_CONTROLS = Object.freeze({
+  DROPDOWN: 'dropdown',
+  SEGMENTED: 'segmented',
+  SWITCH: 'switch',
+});
+
 module.exports = {
   CONTRACT_VERSION,
   CHAT_ERROR_CODES,
@@ -118,4 +127,5 @@ module.exports = {
   isSkillSuggestionMode,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_TYPES,
+  PRESET_FIELD_CONTROLS,
 };

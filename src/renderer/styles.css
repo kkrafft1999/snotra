@@ -3010,12 +3010,6 @@ button.chat-msg-attachment:hover {
   min-width: 0;
 }
 
-/* Provider-Modal: Insecure-TLS-Toggle. Layout-only — Farben kommen aus
- * accent-color (--ds-blue), die Hint-Klasse darunter aus .modal-hint. */
-.modal-checkbox-row {
-  margin-top: 12px;
-}
-
 .modal-checkbox {
   display: inline-flex;
   align-items: center;
@@ -4258,6 +4252,12 @@ select.modal-input {
   box-shadow: none;
 }
 
+/* The add-model form needs room for a label column (#414). The window is at
+ * least 900px wide, so 760px always fits. */
+.modal-dialog.modal-dialog--nested.add-model-dialog--form {
+  max-width: 760px;
+}
+
 .add-model-dialog__header {
   display: flex;
   align-items: flex-start;
@@ -4296,19 +4296,6 @@ select.modal-input {
   margin-bottom: 10px;
 }
 
-.popup-flow-subhead {
-  font-size: var(--ds-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ds-grey-muted);
-  margin: 12px 0 8px;
-}
-
-.popup-flow-subhead:first-of-type {
-  margin-top: 0;
-}
-
 .provider-flow-card {
   border: 1px solid var(--ds-grey-divider);
   border-radius: var(--ds-radius-md);
@@ -4316,51 +4303,100 @@ select.modal-input {
   padding: 14px 16px 14px;
 }
 
-/* Feldgruppe im Anbieter-Popup: Feld + Hinweis gehoeren zusammen, die
- * naechste Ueberschrift nicht mehr dazu. Der Hinweis hat nur 4px Abstand nach
- * oben und keinen nach unten, und die Ueberschrift verliert in ihrem eigenen
- * Wrapper das :first-of-type-Margin — ohne diesen Abstand klebte jeder
- * Hinweistext an der Ueberschrift darunter und las sich wie deren Einleitung
- * (Issue #193). */
-.provider-flow-group {
-  margin-bottom: 14px;
+/* The add-model form (#414): one row per setting, the label in a fixed
+ * column on the left, the control with its hint on the right. It replaces
+ * uppercase subheads over a half-width grid, which had left each reasoning
+ * field a quarter of the dialog. */
+.popup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-/* Modellzeile: Bei frei eingetragenem Namen muss man lesen koennen, was
- * dasteht. Neben „Modelle laden" blieben in der halbbreiten Spalte nur rund
- * acht Zeichen uebrig — deshalb darf der Knopf umbrechen (Issue #193). */
-.popup-model-slot .modal-row {
+.popup-form__row {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  column-gap: 16px;
+  align-items: start;
+}
+
+/* Centred on the first line of the control: inputs, selects, the segmented
+ * control and the switch row are all 38px tall. */
+.popup-form__label {
+  padding-top: 10px;
+  font-size: var(--ds-font-size-md);
+  font-weight: 500;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+.popup-form__field {
+  min-width: 0;
+}
+
+/* On/off rows name themselves next to the switch; the label column stays empty. */
+.popup-form__row--toggle .popup-form__field {
+  grid-column: 2;
+}
+
+.popup-form__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+}
+
+.popup-form .modal-hint code {
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+}
+
+/* The provider's own options (reasoning for OpenAI) belong to the model; a
+ * rule sets them apart from the connection above. */
+.popup-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+/* As tall as the inputs, so every label sits on the same line. */
+.popup-form .ds-segmented__option {
+  min-width: 80px;
+  min-height: 32px;
+}
+
+/* "Load models" stays next to the model and only wraps once a typed name
+ * would be left too little room (#193). */
+.popup-model-row {
   flex-wrap: wrap;
 }
 
-#input-model {
-  flex: 1 1 180px;
+.popup-model-row > .modal-input {
+  flex: 1 1 200px;
 }
 
-.provider-form-grid-popup {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 16px;
-  align-items: start;
-  margin-bottom: 8px;
+/* Empty until models are loaded — then it takes no line. */
+#model-status:empty {
+  display: none;
 }
 
 @media (max-width: 560px) {
-  .provider-form-grid-popup {
-    grid-template-columns: 1fr;
+  .popup-form__row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
   }
 
-  #provider-baseurl-row.hidden + .popup-model-slot {
+  .popup-form__label {
+    padding-top: 0;
+  }
+
+  .popup-form__row--toggle .popup-form__field {
     grid-column: auto;
   }
-}
-
-#provider-baseurl-row.hidden + .popup-model-slot {
-  grid-column: 1 / -1;
-}
-
-#provider-baseurl-row:not(.hidden) + .popup-model-slot {
-  grid-column: auto;
 }
 
 .add-model-dialog__bottom {
