@@ -444,18 +444,22 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     { what: 'laufender Chat im Verlauf' });
 
   await page.evaluate(() => document.getElementById('btn-chat-new').click());
+  // The switch is done once the old row has let go of "current" *and* the
+  // composer is free. The row alone is no proof: a history render can move it
+  // while the switch is still waiting on IPC (#411). That the composer is
+  // free before any of those round trips is pinned in
+  // test/chat-background-runs-dom.test.js, where the timing is under control.
   const background = await poll(() => page.evaluate((id) => {
     const row = document.querySelector(`.chat-history-row[data-chat-id="${id}"]`);
     if (!row || row.classList.contains('chat-history-row--current')) return null;
+    if (document.getElementById('btn-chat-send').classList.contains('chat-send--stop')) return null;
     return {
       state: row.dataset.runState || null,
       label: row.querySelector('.chat-history-row-run')?.textContent || '',
-      composerBusy: document.getElementById('btn-chat-send').classList.contains('chat-send--stop'),
     };
-  }, runningChatId), { what: 'Hintergrundlauf im Verlauf markiert' });
+  }, runningChatId), { what: 'background run marked in the history, new chat free to write in' });
   assert.equal(background.state, 'running', 'die Zeile zeigt den laufenden Chat');
   assert.ok(background.label.length > 0, 'der Zustand steht auch als Text da');
-  assert.equal(background.composerBusy, false, 'der neue Chat ist sofort frei');
   assert.equal(model.requestFor(BACKGROUND_QUESTION).aborted, false, 'der Wechsel bricht nichts ab');
 
   await poll(() => {

@@ -23,6 +23,7 @@ const NO_RUNS = Object.freeze({
   canAttach: () => false,
   attach: () => false,
   afterSwitch: () => {},
+  syncComposer: () => {},
   discard: () => {},
   stateOf: () => null,
 });
@@ -186,6 +187,9 @@ export function initChatHistoryPanel({
       setChatTokenUsage?.(s.tokenUsage);
     }
     onInputChanged();
+    // The composer follows the chat on screen at once, not after the round
+    // trips below (#411).
+    runs.syncComposer();
     await api.setActiveChatId(id);
     // Ausdruecklicher Wechsel: Dieser Chat bekommt sein Modell und seinen
     // Freigabemodus zurueck — auch „Auto“, das er nur nach einer nativen
