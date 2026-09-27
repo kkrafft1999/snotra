@@ -116,6 +116,7 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_RESET_WORKSPACE_RULES: 'toolPermissions:resetWorkspaceRules',
   TOOL_PERMISSIONS_RESET_ALL: 'toolPermissions:resetAll',
   TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX: 'toolPermissions:setWorkspaceSandbox',
+  TOOL_PERMISSIONS_SET_WORKSPACE_MODE: 'toolPermissions:setWorkspaceMode',
   /** Program allowances (#408): widening is confirmed natively by main. */
   TOOL_PERMISSIONS_SET_PROGRAM_ALLOWANCE: 'toolPermissions:setProgramAllowance',
   TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE: 'toolPermissions:removeProgramAllowance',

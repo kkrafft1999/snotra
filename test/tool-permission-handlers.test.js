@@ -512,3 +512,71 @@ test('the program field is resolved by main, and a folder is picked natively and
   const cancelled = await setup(t, { programAllowances: fakeAllowances() });
   assert.equal((await cancelled.invoke(REQ.TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER, sender)).code, 'cancelled');
 });
+
+// Default mode per workspace (#413).
+test('workspace default "auto" needs the native confirmation naming the folder; cancelling stores nothing', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 1, locale: 'en' });
+  const sender = makeSender();
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'cancelled');
+  assert.deepEqual(res.error, { key: 'permissions.error.workspaceAutoNotSet' });
+  assert.equal(dialogCalls.length, 1);
+  assert.equal(dialogCalls[0].message, 'Make “Auto” the default for this workspace?');
+  assert.match(dialogCalls[0].detail, /Every new chat in \/work\/projekt will run in “Auto” mode/);
+  assert.match(dialogCalls[0].detail, /also after an app restart/);
+  assert.match(dialogCalls[0].detail, /switched to “Smart”/);
+  assert.match(dialogCalls[0].detail, /under Settings › Permissions/);
+  assert.deepEqual(dialogCalls[0].buttons, ['Make “Auto” the default', 'Cancel']);
+  assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
+  assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'smart');
+  assert.equal(sender.sent.length, 0);
+});
+
+test('workspace default: binds main\'s root, voids no card and no approval, and leaves the chat\'s mode alone', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore, sessionGrants } = await setup(t, { dialogResponse: 0 });
+  const sender = makeSender();
+  sessionGrants.grant({ scopeKey: 's', tool: 'read_file_text', targets: [], riskClasses: ['read'], providerKey: 'p' });
+
+  const auto = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
+  assert.equal(auto.ok, true);
+  assert.equal(auto.workspaceMode, 'auto');
+  assert.equal(dialogCalls.length, 1);
+  assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'auto');
+  assert.equal(sessionGrants.count(), 1, 'a default for new chats changes nothing for this one');
+  assert.deepEqual(sender.sent.map((m) => m.channel), [PUSH.TOOL_PERMISSIONS_CHANGED]);
+
+  const state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.workspaceMode, 'auto');
+  assert.equal(state.mode, 'smart');
+
+  // Already "auto": nothing new to confirm.
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto')).ok, true);
+  assert.equal(dialogCalls.length, 1);
+
+  // Stricter or back to "smart" asks nothing.
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'ask-all')).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceMode, 'ask-all');
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'smart')).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceMode, 'smart');
+  assert.equal(dialogCalls.length, 1);
+});
+
+test('workspace default: no workspace, no change; an unknown mode is refused', async (t) => {
+  const { invoke, dialogCalls } = await setup(t, { workspaceRoot: null });
+  const sender = makeSender();
+  const res = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
+  assert.deepEqual(res.error, { key: 'permissions.error.noWorkspace' });
+  const bad = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'yolo');
+  assert.deepEqual(bad.error, { key: 'permissions.error.unknownMode' });
+  assert.equal(dialogCalls.length, 0);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceMode, null);
+});
+
+test('workspace default: "reset workspace rules" puts it back to "smart"', async (t) => {
+  const { invoke } = await setup(t, { dialogResponse: 0 });
+  const sender = makeSender();
+  await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, sender)).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceMode, 'smart');
+});

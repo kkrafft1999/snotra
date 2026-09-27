@@ -1,5 +1,5 @@
 import { dismissOnOutsideClick } from '../utils/helpers.js';
-import { toolModeOptions, modeLabel, describeModePill } from '../utils/tool-approval-view.js';
+import { toolModeOptions, modeLabel, describeModePill, describeWorkspaceDefault } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 
@@ -11,6 +11,10 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  *
  * `onOpenSandboxSettings`: the way from the menu notice to the sandbox switch
  * (#396), the same one the approval card offers.
+ *
+ * Below the list sits the workspace default (#413): a checkbox that makes the
+ * chat's mode the one every new chat in this folder starts with, and a tag on
+ * the option that is the default. Main confirms "Auto" natively.
  */
 export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
   const wrap = document.getElementById('chat-tool-mode-wrap');
@@ -23,12 +27,17 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
   const noticeText = document.getElementById('chat-tool-mode-notice-text');
   const noticeLink = document.getElementById('chat-tool-mode-notice-link');
   const status = document.getElementById('chat-tool-mode-status');
+  const footer = document.getElementById('chat-tool-mode-footer');
+  const remember = document.getElementById('chat-tool-mode-remember');
+  const rememberLabel = document.getElementById('chat-tool-mode-remember-label');
+  const rememberHint = document.getElementById('chat-tool-mode-remember-hint');
   if (!wrap || !btn || !label || !menu || !list || !toolPermissions) {
     return { close() {}, isOpen: () => false };
   }
 
   let open = false;
   let statusTimer = 0;
+  let rememberBusy = false;
 
   function setStatus(text) {
     if (!status) return;
@@ -43,7 +52,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
     }
   }
 
-  function rebuild(activeMode) {
+  function rebuild(activeMode, defaults = describeWorkspaceDefault(toolPermissions.get())) {
     list.innerHTML = '';
     for (const option of toolModeOptions()) {
       const li = document.createElement('li');
@@ -62,7 +71,18 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
       const desc = document.createElement('span');
       desc.className = 'chat-tool-mode-opt-desc';
       desc.textContent = option.description;
-      main.appendChild(title);
+      if (defaults.tagMode === option.value) {
+        const head = document.createElement('span');
+        head.className = 'chat-tool-mode-opt-head';
+        const tag = document.createElement('span');
+        tag.className = 'chat-tool-mode-default-tag';
+        tag.textContent = defaults.tag;
+        head.appendChild(title);
+        head.appendChild(tag);
+        main.appendChild(head);
+      } else {
+        main.appendChild(title);
+      }
       main.appendChild(desc);
       opt.appendChild(main);
       li.appendChild(opt);
@@ -86,8 +106,29 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
     else list.removeAttribute('aria-describedby');
   }
 
+  /** The checkbox under the list (#413). Kept as it is while main decides. */
+  function renderFooter(defaults) {
+    if (!footer || !remember) return;
+    footer.hidden = !defaults.visible;
+    if (!defaults.visible || rememberBusy) return;
+    remember.checked = defaults.checked;
+    remember.disabled = defaults.disabled;
+    remember.dataset.target = defaults.targetMode;
+    if (rememberLabel) {
+      rememberLabel.textContent = defaults.label.before;
+      if (defaults.label.folder) {
+        const strong = document.createElement('strong');
+        strong.textContent = defaults.label.folder;
+        rememberLabel.appendChild(strong);
+      }
+      rememberLabel.append(defaults.label.after);
+    }
+    if (rememberHint) rememberHint.textContent = defaults.hint;
+  }
+
   function render(state) {
     const view = describeModePill(state);
+    const defaults = describeWorkspaceDefault(state);
     label.textContent = view.label;
     wrap.dataset.mode = view.mode;
     // "Auto" with an execution tool that would run unisolated warns in amber
@@ -97,13 +138,18 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
       wrap.dataset.unisolated = 'true';
       btn.title = t('chat.toolMode.button.titleUnisolated', { mode: view.label, warning: view.warning });
       btn.setAttribute('aria-label', t('chat.toolMode.button.labelUnisolated', { mode: view.label, warning: view.warning }));
+    } else if (defaults.isDefault) {
+      delete wrap.dataset.unisolated;
+      btn.title = t('chat.toolMode.button.titleDefault', { mode: view.label, folder: defaults.folder });
+      btn.setAttribute('aria-label', t('chat.toolMode.button.labelDefault', { mode: view.label, folder: defaults.folder }));
     } else {
       delete wrap.dataset.unisolated;
       btn.title = t('chat.toolMode.button.title', { mode: view.label });
       btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: view.label }));
     }
     renderNotice(view);
-    if (open) rebuild(view.mode);
+    renderFooter(defaults);
+    if (open) rebuild(view.mode, defaults);
   }
 
   function close() {
@@ -140,6 +186,42 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
     }
     setStatus(tMessage(result?.error) || t('chat.toolMode.failed'));
   }
+
+  /**
+   * Ticked: the chat's mode becomes the workspace default; unticked: the
+   * default goes back to "Smart". The menu stays open, so the result can be
+   * read where the click happened.
+   */
+  async function rememberForWorkspace() {
+    const target = remember.dataset.target;
+    const folder = describeWorkspaceDefault(toolPermissions.get()).folder;
+    rememberBusy = true;
+    remember.disabled = true;
+    setStatus('');
+    let result;
+    try {
+      result = await toolPermissions.setWorkspaceMode(target);
+    } finally {
+      rememberBusy = false;
+    }
+    if (result?.ok) {
+      setStatus(t(target === 'smart' ? 'chat.toolMode.remember.cleared' : 'chat.toolMode.remember.set', {
+        folder,
+        mode: modeLabel(target),
+      }));
+    } else if (isCancelledResult(result)) {
+      setStatus(t('chat.toolMode.remember.unchanged'));
+    } else {
+      setStatus(tMessage(result?.error) || t('chat.toolMode.remember.failed'));
+    }
+    // Whatever happened, the checkbox shows what main holds.
+    render(toolPermissions.get());
+    if (open) remember.focus();
+  }
+
+  remember?.addEventListener('change', () => {
+    void rememberForWorkspace();
+  });
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();

@@ -38,7 +38,8 @@ workspace tools · any CLI on your machine
   its own approval card.
 - **Auto is your decision, not the default.** The *Auto* mode drops the
   questions — workspace boundaries, blocks and the protection of Snotra's own
-  keys stay. You switch it on deliberately.
+  keys stay. You switch it on deliberately, for one chat or as the default of
+  a folder you trust.
 - **Your models, your keys.** Cloud and local models sit side by side in one
   list; you switch per conversation. Keys are stored with the operating
   system's encryption.
@@ -763,9 +764,20 @@ the model selection) or under **Settings › Permissions** — both show the sam
 state. Switching to *Auto* requires a confirmation in a system dialog; the way
 back to *Smart* is always possible without asking. The mode belongs to the
 conversation: a chat from the history brings its own back, and a **new** chat
-always starts at *Smart*. *Auto* also does not survive an app restart — after
+starts at *Smart*. *Auto* also does not survive an app restart — after
 startup even an auto chat runs on *Smart* until you explicitly open it from the
-history. Mode, deny/allow rules and custom sensitive path patterns live in their
+history.
+
+A folder can have a **default mode** of its own. Tick "*Auto* for new chats in
+‹folder› too" under the modes in the pill's menu — or pick the default under
+**Settings › Permissions › Default mode for this workspace** — and every new chat in
+that folder starts in that mode. A folder you trust stays on *Auto*, also after
+a restart; a sensitive one starts every chat at *Always ask*. You confirm *Auto*
+as a default once in a system dialog that names the folder; the tag "Default in
+‹folder›" in the menu shows which mode it is. A single chat can still be switched,
+and that stays a decision for that chat. The default is stored with your
+permissions, not in the folder, so a checked-out repository cannot make itself
+*Auto*; "Reset workspace rules" puts it back to *Smart*. Mode, deny/allow rules and custom sensitive path patterns live in their
 own HMAC-signed file `tool-policy.json` in the `userData` folder (the key
 protected via `safeStorage`); if the file is tampered with, Snotra falls back to
 *Smart* mode and discards allowances, while denials remain in effect. The

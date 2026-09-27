@@ -208,6 +208,7 @@ function createApplication({
     isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
     getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
     getActiveMode: async () => (await toolPolicyStore.read()).mode,
+    getWorkspaceMode: () => toolPolicyStore.readWorkspaceMode(workspaceState.getActiveWorkspaceRoot()),
     // Mirrors the chat on screen into the store. Until #320 this also dropped
     // every open card and session approval — which ended a run that waited for
     // an approval in the chat just left. Now each chat keeps its own: the new
