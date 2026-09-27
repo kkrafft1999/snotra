@@ -3,9 +3,10 @@
 // and it is still there after a restart — with "Auto" as the default, "Auto"
 // itself survives the restart.
 //
-// "Auto" as a default needs safeStorage. Where the system has none (a Linux
-// runner without a keyring, say), the restart is checked with "Always ask",
-// which needs no encryption.
+// Without safeStorage (a Linux runner without a keyring, say) the policy file
+// cannot be signed, and the fail-safe reads every mode back as "Smart"
+// (concept §7) — no chat can leave "Smart" there, so there is nothing to
+// check and the test is skipped.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,6 +50,10 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   await confirmDialogs(snotra.app);
   await waitForTree(page);
   await poll(async () => (await state(page))?.workspaceRoot, { what: 'permission state with a workspace' });
+  if ((await state(page)).encryptionAvailable !== true) {
+    t.skip('no encrypted storage: every mode is read back as "Smart" (concept §7)');
+    return;
+  }
 
   // Nothing to remember while the chat and the folder are at "Smart".
   assert.equal(await pillMode(page), 'smart');
@@ -83,16 +88,10 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   await page.evaluate(() => document.getElementById('btn-chat-new').click());
   await poll(async () => (await pillMode(page)) === 'ask-all', { what: 'new chat at the default' });
 
-  // With encrypted storage, "Auto" as the default — and the next start keeps it.
-  const canAuto = (await state(page)).encryptionAvailable === true;
-  let expected = 'ask-all';
-  if (canAuto) {
-    const set = await page.evaluate(() => window.electronAPI.setWorkspaceMode('auto'));
-    assert.equal(set.ok, true);
-    expected = 'auto';
-  } else {
-    t.diagnostic('no encrypted storage here: the restart is checked with "Always ask"');
-  }
+  // "Auto" as the default — and the next start keeps it.
+  const set = await page.evaluate(() => window.electronAPI.setWorkspaceMode('auto'));
+  assert.equal(set.ok, true);
+  const expected = 'auto';
 
   await snotra.stop();
   snotra = await launchApp({ userDataDir });
