@@ -282,6 +282,17 @@
                     </div>
                   </div>
                   <ul id="chat-tool-mode-list" class="chat-tool-mode-list" role="listbox" tabindex="-1" aria-label="Permission mode" data-i18n-attr="aria-label:chat.toolMode.menu"></ul>
+                  <!-- The workspace default (#413): outside the listbox as well,
+                       it is a setting of the folder, not a mode to pick. -->
+                  <div id="chat-tool-mode-footer" class="chat-tool-mode-footer" hidden>
+                    <label class="chat-tool-mode-remember">
+                      <input type="checkbox" id="chat-tool-mode-remember" aria-describedby="chat-tool-mode-remember-hint">
+                      <span class="chat-tool-mode-remember-body">
+                        <span id="chat-tool-mode-remember-label"></span>
+                        <span id="chat-tool-mode-remember-hint" class="chat-tool-mode-remember-hint"></span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </span>
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
@@ -650,6 +661,28 @@
                 </div>
               </details>
               <p id="settings-permissions-error" class="modal-hint error hidden" role="alert"></p>
+            </div>
+
+            <div class="settings-tools-card" id="settings-workspace-mode-card">
+              <h3 class="settings-subsection-title" id="heading-workspace-mode"><span data-i18n="settings.workspaceMode.heading">Default mode for this workspace</span> <code id="settings-workspace-mode-name" class="settings-rules-heading__root"></code></h3>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span data-i18n="settings.workspaceMode.note.summary">What new chats in this folder start with. Every chat can still differ.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.workspaceMode.note.body">
+                  <p>
+                    A chat from the history brings its own mode back. When the default is &ldquo;Auto&rdquo;,
+                    &ldquo;Auto&rdquo; also survives an app restart; you confirm that once in the system dialog. The
+                    default is stored with your permissions, not in the folder, so a checked-out repository cannot make
+                    itself &ldquo;Auto&rdquo;.
+                  </p>
+                  <p>&ldquo;Reset workspace rules&rdquo; sets it back to &ldquo;Smart&rdquo;.</p>
+                </div>
+              </details>
+              <div class="settings-workspace-mode-row">
+                <span id="settings-workspace-mode-legend" class="settings-workspace-mode-row__label" data-i18n="settings.workspaceMode.legend">New chats start with</span>
+                <div id="settings-workspace-mode-options" class="settings-segmented" role="radiogroup" aria-labelledby="settings-workspace-mode-legend heading-workspace-mode" aria-describedby="settings-workspace-mode-state"></div>
+                <span id="status-workspace-mode" class="settings-instant-status" role="status"></span>
+              </div>
+              <p id="settings-workspace-mode-state" class="modal-hint" role="status" hidden></p>
             </div>
 
             <div class="settings-tools-card" id="settings-rules-card">

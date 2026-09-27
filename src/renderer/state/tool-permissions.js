@@ -82,6 +82,7 @@ export function initToolPermissionState({ api }) {
     resetWorkspaceRules: () => call('resetWorkspaceToolRules'),
     resetAll: () => call('resetAllToolPermissions'),
     setWorkspaceSandbox: (enabled) => call('setWorkspaceSandbox', enabled),
+    setWorkspaceMode: (mode) => call('setWorkspaceMode', mode),
     // Program allowances (#408); widening is confirmed natively by main.
     setProgramAllowance: (payload) => call('setProgramAllowance', payload),
     removeProgramAllowance: (programPath) => call('removeProgramAllowance', programPath),

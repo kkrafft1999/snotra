@@ -323,6 +323,75 @@ export function describeModePill(state) {
   };
 }
 
+/** The folder name of a workspace root, as the folder panel shows it (#413). */
+export function workspaceFolderName(root) {
+  if (typeof root !== 'string' || !root) return '';
+  const parts = root.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] || root;
+}
+
+// Stands in for the folder name while the sentence is translated, so the
+// name can be set apart without the catalogue knowing about markup.
+const FOLDER_MARK = '\u0001';
+
+function splitAtFolder(text, folder) {
+  const at = text.indexOf(FOLDER_MARK);
+  if (at === -1) return { before: text, folder: '', after: '' };
+  return { before: text.slice(0, at), folder, after: text.slice(at + FOLDER_MARK.length).split(FOLDER_MARK).join(folder) };
+}
+
+/**
+ * The workspace default in the mode pill's menu (#413): the tag on the option
+ * that is the default, and the checkbox that makes the chat's mode the
+ * default — or, ticked, takes it back to "Smart". The checkbox always speaks
+ * about the mode the chat has now; its label names that mode.
+ *
+ * Hidden without a workspace, and when there is nothing to remember: the chat
+ * runs at "Smart" and the workspace has no default of its own.
+ */
+export function describeWorkspaceDefault(state) {
+  const SMART = TOOL_PERMISSION_MODES.SMART;
+  const mode = MODE_KEYS[state?.mode] ? state.mode : SMART;
+  const workspaceMode = MODE_KEYS[state?.workspaceMode] ? state.workspaceMode : SMART;
+  const root = typeof state?.workspaceRoot === 'string' ? state.workspaceRoot : '';
+  const view = {
+    visible: false,
+    folder: '',
+    tagMode: null,
+    tag: '',
+    isDefault: false,
+    checked: false,
+    disabled: false,
+    label: { before: '', folder: '', after: '' },
+    hint: '',
+    targetMode: SMART,
+  };
+  if (!root) return view;
+  const folder = workspaceFolderName(root);
+  view.folder = folder;
+  if (workspaceMode !== SMART) {
+    view.tagMode = workspaceMode;
+    view.tag = t('chat.toolMode.defaultTag', { folder });
+    view.isDefault = mode === workspaceMode;
+  }
+  if (mode === SMART && workspaceMode === SMART) return view;
+  view.visible = true;
+  view.checked = mode === workspaceMode;
+  view.targetMode = view.checked ? SMART : mode;
+  view.label = splitAtFolder(t('chat.toolMode.remember.label', { mode: modeLabel(mode), folder: FOLDER_MARK }), folder);
+  if (view.checked) {
+    view.hint = t('chat.toolMode.remember.hint.checked', { mode: modeLabel(SMART) });
+  } else if (mode === TOOL_PERMISSION_MODES.AUTO && state?.encryptionAvailable === false) {
+    view.disabled = true;
+    view.hint = t('chat.toolMode.remember.hint.needsEncryption');
+  } else if (workspaceMode !== SMART) {
+    view.hint = t('chat.toolMode.remember.hint.current', { mode: modeLabel(workspaceMode) });
+  } else {
+    view.hint = t(mode === TOOL_PERMISSION_MODES.AUTO ? 'chat.toolMode.remember.hint.auto' : 'chat.toolMode.remember.hint.other');
+  }
+  return view;
+}
+
 /** Warning when overwriting (concept §6): with or without a way back. */
 export function overwriteWarning(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];

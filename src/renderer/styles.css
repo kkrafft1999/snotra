@@ -3908,6 +3908,82 @@ select.modal-input {
 /* Einstellungen › Tools: Liste der Workspace-Tools mit An/Aus-Häkchen.
  * Solider Rahmen (im Gegensatz zur gestrichelten Placeholder-Card),
  * weil hier echter Datenfluss dahintersteht. */
+/* The default mode of a workspace (#413): a label and three segments in a
+   row, the saved status after them. */
+.settings-workspace-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
+.settings-workspace-mode-row__label {
+  font-size: var(--ds-font-size-md);
+  color: var(--text-primary);
+}
+
+.settings-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+}
+
+.settings-segmented__option {
+  position: relative;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--ds-radius-md) - 2px);
+  color: var(--text-muted-strong);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--ds-motion-fast),
+    background var(--ds-motion-fast),
+    border-color var(--ds-motion-fast);
+}
+
+/* The radio stays in the tab order and in the accessibility tree; only the
+   dot is not drawn, the segment shows the state. */
+.settings-segmented__option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.settings-segmented__option:hover {
+  color: var(--text-primary);
+}
+
+.settings-segmented__option:has(input:checked) {
+  border-color: var(--ds-blue-border);
+  background: var(--bg-primary);
+  color: var(--ds-blue);
+}
+
+.settings-segmented__option:has(input:focus-visible) {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-segmented__option:has(input:disabled) {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.settings-segmented__option:has(input:disabled:checked) {
+  color: var(--text-muted-strong);
+}
+
 .settings-tools-card {
   border: 1px solid var(--ds-grey-divider);
   border-radius: var(--ds-radius-md);
@@ -5460,6 +5536,87 @@ select.modal-input {
 
 .chat-tool-mode-status {
   margin: 0;
+}
+
+/* The option that is the workspace default carries a tag next to its name
+   (#413). */
+.chat-tool-mode-opt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-tool-mode-default-tag {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-pill);
+  color: var(--ds-blue);
+  font-size: var(--ds-font-size-xs);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+/* The workspace default under the list (#413), set apart like the notice
+   above it. */
+.chat-tool-mode-footer {
+  margin-top: 6px;
+  padding: 10px 12px 4px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-tool-mode-footer[hidden] {
+  display: none;
+}
+
+.chat-tool-mode-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chat-tool-mode-remember input {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: var(--ds-blue);
+  cursor: pointer;
+}
+
+.chat-tool-mode-remember input:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-tool-mode-remember:has(input:disabled) {
+  color: var(--text-muted-strong);
+  cursor: default;
+}
+
+.chat-tool-mode-remember:has(input:disabled) input {
+  cursor: default;
+}
+
+.chat-tool-mode-remember-body {
+  min-width: 0;
+}
+
+.chat-tool-mode-remember strong {
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.chat-tool-mode-remember-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
 }
 
 /* Freigabe-Karte: flacher Container (6px, Divider-Border), zwischen Tool-Log

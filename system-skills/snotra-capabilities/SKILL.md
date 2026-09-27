@@ -79,6 +79,12 @@ Per call, by risk class and mode.
 | `{label:permissions.mode.askAll}` | you are asked before `read` as well |
 | `{label:permissions.mode.auto}` | no prompts |
 
+The mode belongs to the chat. A folder can have a default mode that every new
+chat there starts with (`{menu:settings.permissions}` ›
+`{label:settings.workspaceMode.heading}`, or the checkbox under the modes in the
+chat bar); with `{label:permissions.mode.auto}` as the default it also survives
+a restart. Only the user sets it — you cannot.
+
 Session approval exists for `read`, `read-sensitive`, `write`; permanent
 approval only for `read` and `write`. For `delete`, `execute`, `external` only
 "once" remains, and every run is asked afresh — with one exception: on a

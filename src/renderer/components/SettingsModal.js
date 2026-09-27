@@ -11,6 +11,7 @@ import {
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
+import { initWorkspaceModeSetting } from './WorkspaceModeSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
 
 /**
@@ -168,6 +169,8 @@ export function initSettingsModal(deps) {
   let pythonSandboxState = null;
   let shellSandboxState = null;
   const workspaceSandbox = initWorkspaceSandboxSetting({ toolPermissions, onChange: () => renderSandboxLines() });
+  // What new chats in the open folder start with (#413).
+  initWorkspaceModeSetting({ toolPermissions });
   // Program allowances (#408): only shell_execute runs a program by name.
   const programAllowances = initProgramAllowancesSetting({ api, toolPermissions });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der

@@ -23,6 +23,12 @@
  * dort kann der Wert ausschließlich stehen, weil der Main-Prozess ihn zuvor im
  * nativen Dialog bestätigen ließ (Konzept §5). Der Renderer liefert diese Werte
  * nie, er löst nur den Wechsel aus.
+ *
+ * A workspace can carry a default mode of its own (#413). It takes the place
+ * of `smart` in both rules above: a new chat starts with it, and a chat
+ * restored automatically from `auto` falls back to it — so a workspace whose
+ * default is `auto` keeps `auto` across a restart. The default can only be
+ * `auto` after main's own native confirmation for that workspace.
  */
 
 const {
@@ -53,6 +59,8 @@ function createChatSessionSettings({
   // richtig, nur teurer.
   getActivePresetId = async () => null,
   getActiveMode = async () => null,
+  // The default mode of the workspace on screen (#413); `null` means `smart`.
+  getWorkspaceMode = async () => null,
   // A chat's own mode changed while it was being activated — its open cards
   // and session approvals were given under the old one (concept §7, #320).
   onChatModeChanged = () => {},
@@ -145,11 +153,19 @@ function createChatSessionSettings({
     return (await getDefaultPresetId()) || null;
   }
 
-  function resolveModeFor(values, activation) {
-    const stored = values.toolPermissionMode;
-    if (!stored) return DEFAULT_TOOL_PERMISSION_MODE;
-    if (activation === CHAT_ACTIVATION.AUTO && stored === TOOL_PERMISSION_MODES.AUTO) {
+  async function readWorkspaceMode() {
+    try {
+      return chatToolPermissionModeForStore(await getWorkspaceMode()) || DEFAULT_TOOL_PERMISSION_MODE;
+    } catch {
       return DEFAULT_TOOL_PERMISSION_MODE;
+    }
+  }
+
+  function resolveModeFor(values, activation, workspaceMode) {
+    const stored = values.toolPermissionMode;
+    if (!stored) return workspaceMode;
+    if (activation === CHAT_ACTIVATION.AUTO && stored === TOOL_PERMISSION_MODES.AUTO) {
+      return workspaceMode;
     }
     return stored;
   }
@@ -173,7 +189,7 @@ function createChatSessionSettings({
     currentChatId = chatId;
     const values = chatId ? await storedValuesFor(chatId) : {};
     const presetId = await resolvePresetFor(values);
-    const mode = resolveModeFor(values, activation);
+    const mode = resolveModeFor(values, activation, await readWorkspaceMode());
     // Nur anfassen, was sich wirklich ändert — dasselbe gilt für die
     // Konfigurationsdatei des Modells. Writing the mode here only mirrors the
     // chat on screen into the store; it discards nothing on its own (#320).

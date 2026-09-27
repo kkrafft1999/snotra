@@ -25,7 +25,12 @@ function createFakeChatHistoryStore(sessions = []) {
   };
 }
 
-function setup({ sessions = [], usablePresets = ['preset-a', 'preset-b'], defaultPresetId = 'preset-a' } = {}) {
+function setup({
+  sessions = [],
+  usablePresets = ['preset-a', 'preset-b'],
+  defaultPresetId = 'preset-a',
+  workspaceMode = null,
+} = {}) {
   const history = createFakeChatHistoryStore(sessions);
   const applied = { presets: [], modes: [] };
   const settings = createChatSessionSettings({
@@ -38,6 +43,7 @@ function setup({ sessions = [], usablePresets = ['preset-a', 'preset-b'], defaul
     applyMode: async (mode) => {
       applied.modes.push(mode);
     },
+    getWorkspaceMode: async () => (typeof workspaceMode === 'function' ? workspaceMode() : workspaceMode),
     log: { warn() {} },
   });
   return { settings, applied, history };
@@ -217,4 +223,76 @@ test('was schon gilt, wird nicht noch einmal gesetzt', async () => {
   await settings.activate('chat-a');
 
   assert.deepEqual(applied, { presets: [], modes: [] });
+});
+
+// ── Default mode per workspace (#413) ───────────────────────────────────────
+
+test('a new chat starts with the default of its workspace', async () => {
+  for (const workspaceMode of ['auto', 'ask-all']) {
+    const { settings, applied } = setup({ workspaceMode });
+    for (const activation of [CHAT_ACTIVATION.EXPLICIT, CHAT_ACTIVATION.AUTO]) {
+      const result = await settings.activate(`chat-new-${activation}`, { activation });
+      assert.equal(result.toolPermissionMode, workspaceMode);
+    }
+    assert.ok(applied.modes.length > 0 && applied.modes.every((mode) => mode === workspaceMode));
+  }
+});
+
+test('a workspace without a default of its own starts new chats at "smart"', async () => {
+  for (const workspaceMode of [null, 'smart', 'nonsense']) {
+    const { settings } = setup({ workspaceMode });
+    assert.equal((await settings.activate('chat-new')).toolPermissionMode, 'smart');
+  }
+});
+
+test('a chat restored from "auto" keeps "auto" when that is the workspace default', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-auto', toolPermissionMode: 'auto' }],
+    workspaceMode: 'auto',
+  });
+  const result = await settings.activate('chat-auto', { activation: CHAT_ACTIVATION.AUTO });
+  assert.equal(result.toolPermissionMode, 'auto');
+});
+
+test('a chat restored from "auto" falls back to a stricter workspace default', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-auto', toolPermissionMode: 'auto' }],
+    workspaceMode: 'ask-all',
+  });
+  const result = await settings.activate('chat-auto', { activation: CHAT_ACTIVATION.AUTO });
+  assert.equal(result.toolPermissionMode, 'ask-all');
+});
+
+test('a chat keeps its own mode over the workspace default', async () => {
+  const { settings } = setup({
+    sessions: [
+      { id: 'chat-strict', toolPermissionMode: 'ask-all' },
+      { id: 'chat-smart', toolPermissionMode: 'smart' },
+    ],
+    workspaceMode: 'auto',
+  });
+  for (const activation of [CHAT_ACTIVATION.EXPLICIT, CHAT_ACTIVATION.AUTO]) {
+    assert.equal((await settings.activate('chat-strict', { activation })).toolPermissionMode, 'ask-all');
+    assert.equal((await settings.activate('chat-smart', { activation })).toolPermissionMode, 'smart');
+  }
+});
+
+test('an unreadable workspace default counts as "smart"', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-auto', toolPermissionMode: 'auto' }],
+    workspaceMode: () => {
+      throw new Error('policy file gone');
+    },
+  });
+  assert.equal((await settings.activate('chat-new')).toolPermissionMode, 'smart');
+  const restored = await settings.activate('chat-auto', { activation: CHAT_ACTIVATION.AUTO });
+  assert.equal(restored.toolPermissionMode, 'smart');
+});
+
+test('the workspace default is not written into the chat', async () => {
+  // Only an explicit choice belongs to the chat; a chat that merely started
+  // with the default follows it when it changes.
+  const { settings } = setup({ workspaceMode: 'auto' });
+  await settings.activate('chat-new');
+  assert.deepEqual(settings.valuesFor('chat-new'), {});
 });

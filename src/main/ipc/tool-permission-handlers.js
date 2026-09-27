@@ -18,6 +18,10 @@
  * the plan of the open request — the renderer only says "always" — and it is
  * confirmed natively like every other allow rule before it is stored.
  *
+ * The seventh is "Auto" as the default mode of a workspace (#413): every new
+ * chat there runs without asking, also after a restart. Main binds the active
+ * root and names it in the dialog; "Smart" and "Always ask" need no dialog.
+ *
  * The sixth is a program allowance (#408): extra rights inside the sandbox
  * for one program, in every workspace. Main resolves the program and checks
  * every folder itself, then confirms natively; an edit that only takes rights
@@ -140,6 +144,24 @@ function sandboxOffDialog(root, t) {
       place: menuPath(t.locale, SANDBOX_SETTING_PAGE),
     }),
     buttons: [t('permissionDialog.sandboxOff.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+/** "Auto" for every new chat in one workspace (#413). */
+function workspaceAutoDialog(root, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.workspaceAuto.title'),
+    message: t('permissionDialog.workspaceAuto.title'),
+    detail: t('permissionDialog.workspaceAuto.detail', {
+      root,
+      mode: t('permissions.mode.auto'),
+      smart: t('permissions.mode.smart'),
+      place: menuPath(t.locale, 'settings.permissions'),
+    }),
+    buttons: [t('permissionDialog.workspaceAuto.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,
   };
@@ -283,6 +305,10 @@ function registerToolPermissionHandlers({
       workspaceRoot: root,
       // Whether the execution tools run without sandbox in this workspace (#357).
       workspaceSandboxDisabled,
+      // What new chats in this workspace start with (#413); null without one.
+      workspaceMode: root
+        ? (state.workspaceModes && state.workspaceModes[root]) || TOOL_PERMISSION_MODES.SMART
+        : null,
       executionIsolation: await describeUnisolatedExecution(workspaceSandboxDisabled),
       sensitivePathPatterns: state.sensitivePathPatterns,
       // Global, like the rules for all workspaces (#408).
@@ -390,6 +416,24 @@ function registerToolPermissionHandlers({
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), workspaceSandboxDisabled: !enabled };
+  });
+
+  // The mode new chats in the active workspace start with (#413). It changes
+  // nothing for a chat that is open, so no card and no approval is voided.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, async (event, rawMode) => {
+    const mode = normalizeToolPermissionMode(rawMode);
+    if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
+    const root = getActiveWorkspaceRoot();
+    if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    const current = await toolPolicyStore.readWorkspaceMode(root);
+    if (mode === TOOL_PERMISSION_MODES.AUTO && current !== TOOL_PERMISSION_MODES.AUTO) {
+      const confirmed = await confirmNatively(workspaceAutoDialog(root, createTranslator(getLocale())));
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.workspaceAutoNotSet'), 'cancelled');
+    }
+    const result = await toolPolicyStore.setWorkspaceMode(root, mode);
+    if (!result.ok) return createSettingsError(result.error);
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return { ...createSettingsOk(), workspaceMode: mode };
   });
 
   // Program allowances (#408). The renderer sends what the dialog holds; main
@@ -528,6 +572,7 @@ module.exports = {
   allowRuleDialog,
   removeDenyRuleDialog,
   sandboxOffDialog,
+  workspaceAutoDialog,
   commandRuleDialog,
   programAllowanceDialog,
 };

@@ -320,3 +320,84 @@ test('program allowances: a failed signature drops them, resetting everything cl
   assert.equal((await fresh.resetWorkspaceRules('/a')).programAllowances.length, 1);
   assert.deepEqual((await fresh.resetAll()).programAllowances, []);
 });
+
+// ── Default mode per workspace (#413) ───────────────────────────────────────
+
+test('workspace default mode: none by default, stored per canonical root, "smart" removes it', async (t) => {
+  const { store } = await makeStore(t);
+  assert.deepEqual((await store.read()).workspaceModes, {});
+  assert.equal(await store.readWorkspaceMode('/a'), 'smart');
+
+  const auto = await store.setWorkspaceMode('/a', 'auto');
+  assert.equal(auto.ok, true);
+  assert.deepEqual(auto.workspaceModes, { '/a': 'auto' });
+  assert.equal(await store.readWorkspaceMode('/a'), 'auto');
+  // A folder of the same name elsewhere shares nothing (concept §7).
+  assert.equal(await store.readWorkspaceMode('/b/a'), 'smart');
+
+  await store.setWorkspaceMode('/b', 'ask-all');
+  assert.equal(await store.readWorkspaceMode('/b'), 'ask-all');
+
+  const smart = await store.setWorkspaceMode('/a', 'smart');
+  assert.deepEqual(smart.workspaceModes, { '/b': 'ask-all' });
+  // The workspace default does not touch the mode of the chat on screen.
+  assert.equal(smart.mode, 'smart');
+});
+
+test('workspace default mode: an unknown mode or no workspace stores nothing', async (t) => {
+  const { store } = await makeStore(t);
+  const unknown = await store.setWorkspaceMode('/a', 'yolo');
+  assert.equal(unknown.ok, false);
+  assert.deepEqual(unknown.error, { key: 'permissions.error.unknownMode' });
+  const noRoot = await store.setWorkspaceMode('', 'ask-all');
+  assert.equal(noRoot.ok, false);
+  assert.deepEqual(noRoot.error, { key: 'permissions.error.noWorkspace' });
+  assert.deepEqual((await store.read()).workspaceModes, {});
+  assert.equal(await store.readWorkspaceMode(''), 'smart');
+});
+
+test('workspace default mode: "auto" needs safeStorage, "always ask" does not', async (t) => {
+  const { store } = await makeStore(t, { available: false });
+  const auto = await store.setWorkspaceMode('/a', 'auto');
+  assert.equal(auto.ok, false);
+  assert.deepEqual(auto.error, { key: 'permissions.error.autoNeedsEncryption' });
+  assert.equal((await store.setWorkspaceMode('/a', 'ask-all')).ok, true);
+  assert.equal(await store.readWorkspaceMode('/a'), 'ask-all');
+});
+
+test('workspace default mode: a failed signature drops "auto" and keeps "always ask"', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.setWorkspaceMode('/a', 'auto');
+  await store.setWorkspaceMode('/b', 'ask-all');
+  const filePath = path.join(dir, POLICY_FILENAME);
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.workspaceModes['/c'] = 'auto';
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+
+  const state = await store.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.deepEqual(state.workspaceModes, { '/b': 'ask-all' });
+});
+
+test('workspace default mode: values that are not a mode never become a default', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.setWorkspaceMode('/a', 'ask-all');
+  const filePath = path.join(dir, POLICY_FILENAME);
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.workspaceModes = { '/a': 'ask-all', '/b': 'smart', '/c': 'nope', '': 'ask-all', '/d': 7 };
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+  const state = await store.read();
+  assert.deepEqual(state.workspaceModes, { '/a': 'ask-all' });
+});
+
+test('workspace default mode: resetting the workspace rules or everything removes it', async (t) => {
+  const { store } = await makeStore(t);
+  await store.setWorkspaceMode('/a', 'auto');
+  await store.setWorkspaceMode('/b', 'ask-all');
+
+  let state = await store.resetWorkspaceRules('/a');
+  assert.deepEqual(state.workspaceModes, { '/b': 'ask-all' });
+
+  state = await store.resetAll();
+  assert.deepEqual(state.workspaceModes, {});
+});

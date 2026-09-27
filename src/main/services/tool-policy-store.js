@@ -21,6 +21,11 @@
  *
  * Program allowances (#408) widen the sandbox for one program in every
  * workspace — the same kind of loosening, so the same rules again.
+ *
+ * The default mode per workspace (#413) is a map of canonical root → mode.
+ * `smart` is the absence of an entry. `auto` loosens and follows the rules
+ * above; `ask-all` tightens, so like a deny rule it survives a failed
+ * signature.
  */
 
 const {
@@ -63,9 +68,23 @@ function defaultPayload() {
     sensitivePathPatterns: [],
     unsandboxedWorkspaces: [],
     programAllowances: [],
+    workspaceModes: {},
     legacyWriteMigrated: false,
     updatedAt: 0,
   };
+}
+
+/** Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413). */
+function normalizeWorkspaceModes(value) {
+  const out = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [root, raw] of Object.entries(value)) {
+    if (typeof root !== 'string' || !root || typeof raw !== 'string') continue;
+    const mode = normalizeToolPermissionMode(raw);
+    if (mode !== raw || mode === DEFAULT_TOOL_PERMISSION_MODE) continue;
+    out[root] = mode;
+  }
+  return out;
 }
 
 /** Canonical roots only, each once; anything else is not a workspace (#357). */
@@ -176,6 +195,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     out.sensitivePathPatterns = normalizeSensitivePathPatterns(data.sensitivePathPatterns);
     out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
     out.programAllowances = normalizeProgramAllowances(data.programAllowances);
+    out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
@@ -196,6 +216,11 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     // is a program allowance (#408).
     out.unsandboxedWorkspaces = [];
     out.programAllowances = [];
+    // "Auto" as a workspace default goes with them; "Always ask" only tightens
+    // and stays, like a deny rule (#413).
+    for (const [root, mode] of Object.entries(out.workspaceModes)) {
+      if (mode !== TOOL_PERMISSION_MODES.ASK_ALL) delete out.workspaceModes[root];
+    }
     return out;
   }
 
@@ -283,6 +308,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       sensitivePathPatterns: payload.sensitivePathPatterns,
       unsandboxedWorkspaces: payload.unsandboxedWorkspaces,
       programAllowances: payload.programAllowances,
+      workspaceModes: payload.workspaceModes,
       policyVersion: policyVersionOf(payload, integrity),
       integrity,
       encryptionAvailable: encryptionAvailable(),
@@ -433,6 +459,34 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   }
 
   /**
+   * The mode new chats in one workspace start with (#413). `smart` removes the
+   * entry. `auto` needs `safeStorage`, like every other loosening.
+   */
+  async function setWorkspaceMode(root, rawMode) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
+      const mode = normalizeToolPermissionMode(rawMode);
+      if (mode !== rawMode) return { error: createMessage('permissions.error.unknownMode') };
+      if (mode === DEFAULT_TOOL_PERMISSION_MODE) {
+        delete draft.workspaceModes[root];
+        return null;
+      }
+      if (mode === TOOL_PERMISSION_MODES.AUTO && !enc) {
+        return { error: createMessage('permissions.error.autoNeedsEncryption') };
+      }
+      draft.workspaceModes[root] = mode;
+      return null;
+    });
+  }
+
+  /** The default mode of one workspace; `smart` when it has none (#413). */
+  async function readWorkspaceMode(root) {
+    if (typeof root !== 'string' || !root) return DEFAULT_TOOL_PERMISSION_MODE;
+    const state = await read();
+    return state.workspaceModes[root] || DEFAULT_TOOL_PERMISSION_MODE;
+  }
+
+  /**
    * Stores a program allowance (#408), replacing the entry of the same
    * program or — when the dialog changed the program — the one it was opened
    * for. Widening needs `safeStorage`; only taking rights away works without.
@@ -477,12 +531,13 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   }
 
   // "Reset workspace rules" is the workspace's whole policy: the sandbox
-  // opt-out goes with the rules (#357).
+  // opt-out (#357) and the default mode (#413) go with the rules.
   async function resetWorkspaceRules(root) {
     return update((draft) => {
       if (typeof root === 'string' && root) {
         delete draft.workspaceRules[root];
         draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
+        delete draft.workspaceModes[root];
       }
       return null;
     });
@@ -497,6 +552,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       draft.sensitivePathPatterns = [];
       draft.unsandboxedWorkspaces = [];
       draft.programAllowances = [];
+      draft.workspaceModes = {};
       draft.legacyWriteMigrated = false;
       return null;
     });
@@ -521,6 +577,8 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     setSensitivePathPatterns,
     setWorkspaceSandbox,
     isWorkspaceSandboxDisabled,
+    setWorkspaceMode,
+    readWorkspaceMode,
     setProgramAllowance,
     removeProgramAllowance,
     readProgramAllowances,

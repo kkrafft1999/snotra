@@ -335,7 +335,8 @@ automatically trusted policy file inside the repository. Folders with the same
 name share no approvals. Changes happen exclusively through the user interface,
 and for protection-loosening actions with a native confirmation by main
 (section 5). The per-workspace sandbox opt-out of the execution tools (#357,
-section 9) is stored the same way.
+section 9) and the default mode per workspace (#413, section 9) are stored the
+same way.
 
 "Protected" means concretely: the mode, the rules and the sensitive path
 patterns live in a policy file of their own, separate from the UI settings,
@@ -439,8 +440,10 @@ main opens (section 5):
 
 The mode belongs to the conversation (issue #211): it is stored with the chat,
 stays visible in the chat at all times and can be turned back to smart there. A
-**new** chat always starts at `smart` — `auto` is a decision for one chat, not
-for the app. When a chat from the history is opened **explicitly**, its stored
+**new** chat starts at `smart` — `auto` is a decision for one chat, not
+for the app. A workspace can replace that `smart` with a default of its own
+(#413, section 9); the rules below then read "the workspace default" wherever
+they say `smart`. When a chat from the history is opened **explicitly**, its stored
 mode applies again, `auto` included: the value can only have got there through
 the native confirmation above, and it comes from main's own store, not from the
 renderer — which names nothing but the chat id when switching. When a chat is
@@ -679,6 +682,49 @@ program.
   possible follow-up once the list proves itself), per-workspace allowances,
   and domain hints for known tools baked into Snotra — the user states what a
   program needs, Snotra does not guess it.
+
+### Revision: a default mode per workspace (#413)
+
+Section 8 made `auto` a decision for one chat: a new chat starts at `smart`,
+and a chat restored automatically falls back from `auto` to `smart`. For a
+folder the user trusts completely that meant setting "Auto" again for nearly
+every chat; for a sensitive folder nothing kept a new chat at `ask-all`. A
+workspace can now carry a default mode of its own.
+
+- **What it changes.** The default takes the place of `smart` in both rules of
+  section 8: a new chat in that workspace starts with it, and a chat restored
+  automatically from `auto` falls back to it — so `auto` survives a restart
+  exactly where the default is `auto`. A chat with a mode of its own keeps it;
+  a stricter chat stays stricter. The default is read from main's store when a
+  chat is activated and is never written into the chat: only an explicit choice
+  belongs to the chat (#211), and background runs keep their mode as before
+  (#320).
+- **Scope and storage.** One value per workspace, `smart` by default, in the
+  policy file (section 7) as a map of canonical root → `ask-all` | `auto`;
+  `smart` is the absence of an entry. Not in the folder, so a checked-out
+  repository cannot make itself `auto`, and a folder of the same name elsewhere
+  shares nothing. Main binds the active root itself, never a path from the
+  renderer.
+- **Confirmation.** `auto` as a default is a loosening beyond the one of
+  section 8 — every future chat in the folder, across restarts — so main
+  confirms it in its own native dialog that names the root and says so. It
+  needs `safeStorage`; a failed signature drops it. `ask-all` only tightens:
+  it needs no dialog and survives a failed signature, like a deny rule. Going
+  back to `smart` asks nothing. Setting a default voids no card and no session
+  approval: it changes nothing for a chat that is open.
+- **Where it is set.** A checkbox under the modes in the mode pill's menu makes
+  the chat's current mode the default ("“Auto” for new chats in ‹folder›
+  too"), unticking it goes back to `smart`; Settings › Permissions shows the
+  same value as a choice of three right under the mode. The option that is the
+  default carries the tag "Default in ‹folder›", and the pill's tooltip says
+  when the chat runs at the default. "Workspace-Regeln zurücksetzen" puts the
+  default back to `smart`, "Alle Berechtigungen zurücksetzen" does so for every
+  workspace.
+- **Not built.** A global default (it would silently apply to untrusted
+  projects — the same reason as in #357), a default taken silently from the
+  last choice in a chat (an `auto` switched on for one task would stick for
+  the folder unnoticed), and a mode that belongs to the workspace instead of
+  the chat (it would undo #211/#320).
 
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto
