@@ -54,6 +54,7 @@ const { createSpeechAdapter } = require('../adapters/speech-adapter');
 const { createUpdateAdapter } = require('../adapters/update-adapter');
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
+const { createPdfAssetReader } = require('../services/pdf-assets');
 const { createFileContextMenu } = require('../services/file-context-menu');
 const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
@@ -705,8 +706,14 @@ function createApplication({
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
     : null;
   // dialog: der Import von außen (#101) wird nativ bestätigt, nicht im Renderer.
+  // #346: pdf.js data files, next to the renderer code they belong to.
+  const pdfAssets = createPdfAssetReader({
+    fs,
+    path,
+    rootDir: path.join(__dirname, '..', '..', 'renderer', 'vendor', 'pdfjs'),
+  });
   registerFsHandlers({
-    ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale,
+    ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,
   });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({

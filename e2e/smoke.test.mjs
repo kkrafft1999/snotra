@@ -18,6 +18,7 @@ import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { HOSTILE_HOST, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 
@@ -197,6 +198,8 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'vorschau.md'), PREVIEW_MD, 'utf8');
   await writeFile(path.join(dir, 'notizen', 'bild.png'), makePng(40, 20));
   await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
+  // #346: JavaScript on open, a link to the web and a link running JavaScript.
+  await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({ pages: 3, hostile: true }));
   // Die Projekt-Quelle der AGENTS.md-Kette (Issue #212) und daneben der
   // Koeder in der Ordnerwurzel, der seit #253 nicht mehr zaehlt. Die globalen
   // Quellen liegen im echten Home des Ausfuehrenden und werden hier bewusst
@@ -402,6 +405,54 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(vector.switch, 2, 'Preview | Source');
   assert.equal(await page.evaluate(() => globalThis.__pwnedSvg ?? null), null, 'the script in the SVG did not run');
   step('Bildvorschau geprueft');
+
+  // --- PDFs in the preview (#346) --------------------------------------------
+  // Real pdf.js in real Chromium: the worker starts under the unchanged CSP,
+  // the standard font data comes through the main process (Helvetica is not
+  // embedded), and nothing in the PDF acts on its own.
+  const pdfRequests = [];
+  const onPdfRequest = (request) => {
+    const url = request.url();
+    if (!url.startsWith('file:') && !url.startsWith('data:') && !url.startsWith('devtools:')) pdfRequests.push(url);
+  };
+  page.on('request', onPdfRequest);
+  await openInTree('spezifikation.pdf');
+  const pdf = await poll(async () => {
+    const state = await page.evaluate(() => {
+      const canvas = document.querySelector('.pdf-page canvas');
+      if (!canvas || document.getElementById('preview-filename').textContent !== 'spezifikation.pdf') return null;
+      // Ink on the page: the title and text were really drawn, fonts included.
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let ink = 0;
+      for (let i = 0; i < data.length; i += 16) if (data[i] < 90 && data[i + 1] < 90 && data[i + 2] < 90) ink += 1;
+      return {
+        view: document.querySelector('#preview-body > .file-view')?.dataset.view ?? null,
+        pages: document.querySelectorAll('.pdf-page').length,
+        ink,
+        meta: document.getElementById('preview-meta').textContent,
+        total: document.querySelector('.pdf-tools__total')?.textContent ?? null,
+        links: document.querySelectorAll('.pdf-view a, .pdf-view [href], .pdf-view iframe, .pdf-view embed').length,
+      };
+    });
+    return state && state.ink > 0 ? state : null;
+  }, { what: 'gezeichnete PDF-Seite' });
+  assert.equal(pdf.view, 'pdf');
+  assert.equal(pdf.pages, 3);
+  assert.equal(pdf.total, '/ 3');
+  assert.match(pdf.meta, / · 3 Seiten$/);
+  assert.equal(pdf.links, 0, 'no annotation layer: nothing in the page is clickable');
+  // Click where the link annotations lie: on the text line and on the box.
+  const pageBox = await page.locator('.pdf-page').first().boundingBox();
+  await page.mouse.click(pageBox.x + pageBox.width * 0.3, pageBox.y + pageBox.height * 0.22);
+  await page.mouse.click(pageBox.x + pageBox.width * 0.5, pageBox.y + pageBox.height * 0.45);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  page.off('request', onPdfRequest);
+  assert.equal(await page.evaluate(() => globalThis.__pwnedPdf ?? null), null, 'PDF JavaScript did not run');
+  assert.deepEqual(await readOpenedLinks(), [], 'a link in the PDF opened nothing');
+  assert.deepEqual(pdfRequests.filter((url) => url.includes(HOSTILE_HOST)), []);
+  assert.deepEqual(pdfRequests, []);
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'pdf.js stayed inside the CSP');
+  step('PDF-Vorschau geprueft');
 
   // --- Der Baum folgt dem Dateisystem (Issue #158) --------------------------
   // Kein Klick in der App: Die Datei entsteht daneben, so wie sie im Terminal,

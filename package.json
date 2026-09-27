@@ -129,6 +129,7 @@
     "electron": "^44.2.0",
     "esbuild": "^0.28.1",
     "happy-dom": "^20.14.5",
+    "pdfjs-dist": "^6.3.289",
     "playwright-core": "^1.63.0"
   },
   "overrides": {

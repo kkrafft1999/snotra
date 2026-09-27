@@ -406,6 +406,12 @@ deliberately not used — both require a code signature.
   checkerboard behind the image shows where it is transparent. An SVG has
   **Preview | Source** like a Markdown file. Images up to 10 MB from the open
   folder are shown; for anything else the column says why not.
+- **Reading PDFs:** a PDF opens in the preview, page after page, fitted to the
+  column width. The header shows the page you are on — type a number to jump
+  there — and zooms with − / + or back to **Width**. A password-protected PDF
+  asks for its password right there; it is not stored. JavaScript inside a PDF
+  never runs and its links do nothing. PDFs up to 50 MB from the open folder are
+  shown; for anything else the column says why not.
 - **Pasting screenshots:** an image on the clipboard (macOS `Cmd+Ctrl+Shift+4`,
   Windows Snipping Tool) lands as an attachment above the input line with
   `Cmd/Ctrl+V` — with preview, file size and a button to remove it. The typed

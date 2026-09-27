@@ -129,6 +129,16 @@ const {
   workspaceImageDataUrl,
 } = require('./workspace-image');
 const {
+  MAX_WORKSPACE_PDF_BYTES,
+  WORKSPACE_PDF_ERRORS,
+  WORKSPACE_PDF_SNIFF_BYTES,
+  PDF_ASSET_DIRS,
+  isPdfHeader,
+  isPdfAssetName,
+  createWorkspacePdfResult,
+  createWorkspacePdfError,
+} = require('./workspace-pdf');
+const {
   MAX_VOICE_RECORDING_MS,
   MAX_VOICE_RECORDING_BYTES,
   VOICE_STOP_WARNING_MS,
@@ -345,6 +355,14 @@ module.exports = {
   createWorkspaceImageError,
   workspaceImageErrorMessageKey,
   workspaceImageDataUrl,
+  MAX_WORKSPACE_PDF_BYTES,
+  WORKSPACE_PDF_ERRORS,
+  WORKSPACE_PDF_SNIFF_BYTES,
+  PDF_ASSET_DIRS,
+  isPdfHeader,
+  isPdfAssetName,
+  createWorkspacePdfResult,
+  createWorkspacePdfError,
   ATTACHMENT_KINDS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGES_PER_MESSAGE,

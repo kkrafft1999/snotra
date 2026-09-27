@@ -21,6 +21,13 @@ const REQUEST_CHANNELS = Object.freeze({
    * hier Typ, Groesse und Symlink-Ausbruch anders geprueft werden.
    */
   FS_READ_WORKSPACE_IMAGE: 'fs:readWorkspaceImage',
+  /**
+   * Bytes of a PDF from the open folder for the file preview (#346), checked
+   * like an image, returned as a Uint8Array. `PDF_READ_ASSET` hands pdf.js
+   * the CMaps, fonts and decoders it ships with, from fixed folders only.
+   */
+  FS_READ_WORKSPACE_PDF: 'fs:readWorkspacePdf',
+  PDF_READ_ASSET: 'pdf:readAsset',
   FS_MOVE_ITEM: 'fs:moveItem',
   /** Flache Pfadliste des Workspace für die @-Vervollständigung im Chat. */
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',

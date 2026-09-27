@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
   // Bild aus dem Arbeitsordner fuer eine Chat-Antwort (Issue #244).
   readWorkspaceImage: (imagePath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_IMAGE, imagePath),
+  // PDF in the file preview (#346): the file's bytes, and the data pdf.js asks for.
+  readWorkspacePdf: (pdfPath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_PDF, pdfPath),
+  readPdfAsset: (kind, filename) => ipcRenderer.invoke(REQ.PDF_READ_ASSET, kind, filename),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
   // Drag & Drop von aussen (Issue #101). In Electron 44 gibt es File.path
   // nicht mehr; webUtils.getPathForFile ist der dokumentierte Ersatz und einer
