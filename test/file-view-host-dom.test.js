@@ -106,12 +106,12 @@ test('a very long line stays one line in the view', async (t) => {
 test('a file no view claims goes to the info card without being read', async (t) => {
   const { host, el, reads, shows } = await mountHost(t);
 
-  assert.equal(await host.open(item('photo.png', { size: 2048 })), true);
+  assert.equal(await host.open(item('archive.zip', { size: 2048 })), true);
   assert.deepEqual(shows(), { welcome: false, preview: false, info: true });
   assert.deepEqual(reads, []);
-  assert.equal(el('info-filename').textContent, 'photo.png');
+  assert.equal(el('info-filename').textContent, 'archive.zip');
   assert.equal(el('info-size').textContent, '2.0 KB');
-  assert.equal(el('info-type').textContent, 'png');
+  assert.equal(el('info-type').textContent, 'zip');
 });
 
 test('a file over the preview limit shows the error on the info card', async (t) => {

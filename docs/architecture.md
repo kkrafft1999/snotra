@@ -343,8 +343,10 @@ stand raw in a URL, so `C:\ws\plot.png` becomes `C:%5Cws%5Cplot.png` and
 space, an umlaut or a Windows separator. From there `fs:readWorkspaceImage` goes
 to `fs-service.readWorkspaceImage`, which resolves the path (relative or
 absolute) against the active workspace, checks it lexically **and** via
-`realpath`, determines the type from the file header (PNG, JPEG, GIF, WebP — no
-SVG) and limits the size. Back comes `{ mime, base64 }` or a reason from
+`realpath`, determines the type from the file content (PNG, JPEG, GIF, WebP by
+their signature; SVG, since [#345](https://github.com/kkrafft1999/snotra/issues/345),
+by its root element) and limits the size. An SVG is only ever shown through
+`<img>`, where no script in it runs and no reference in it is fetched. Back comes `{ mime, base64 }` or a reason from
 `shared/contracts/workspace-image.js`, out of which the renderer builds a
 designed placeholder.
 
@@ -741,6 +743,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/plain-text-view.js` | The default view: the text as it is, in `<pre id="preview-content">` | both of the above |
 | `renderer/file-views/markdown-view.js` | `md`, `markdown`, `mdx`: rendered, with a "Preview \| Source" switch; images, links, notices ([#344](https://github.com/kkrafft1999/snotra/issues/344)) | `test/markdown-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
+| `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, toggle to actual size, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/mode-switch.js` | The "Preview \| Source" control, shared by Markdown and SVG | both view tests |
 
 ```
 FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js
@@ -760,7 +764,9 @@ The rules the host guarantees:
   "view | edit" switch, which a type with more than one view will need.
 - **The header belongs to the pane**, not to the view: name and size look the
   same for every type. A view may put controls into the tool area next to the
-  size (`context.setTools`); it is hidden while empty.
+  size (`context.setTools`); it is hidden while empty. What the size pill says
+  can be extended by the view (`context.setMeta`) — the image view puts the
+  pixel dimensions after the size.
 - **Every mount gets a fresh element.** Nothing is inherited from the previous
   view, including the scroll position.
 - **`update()` only comes when the text on disk changed.** A watcher report for
@@ -790,8 +796,8 @@ reports its folder, and closes when it disappears.
 
 **Commands and links.** A view may implement `command(name)`; the host passes
 menu commands through `runCommand()` — today only `toggle-source`, the
-Cmd/Ctrl+Shift+M shortcut of the Markdown view. A view that points at another
-file calls `context.openFile(path)`, which the host hands to the file tree:
+Cmd/Ctrl+Shift+M shortcut of the Markdown view and of an SVG. A view that points
+at another file calls `context.openFile(path)`, which the host hands to the file tree:
 only the tree knows the workspace (`'outside'`), can unfold the folders and
 select the row, and can tell a missing file (`'not-found'`) from one its
 listing left out. A view that has been replaced gets `'stale'` and reaches
@@ -835,11 +841,37 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
   source (the plain-text view, mounted on first use) and the preview both
   follow an external change, so switching back shows the current text.
 
-Every view reads text today. Views for images and PDFs
-([#345](https://github.com/kkrafft1999/snotra/issues/345),
-[#346](https://github.com/kkrafft1999/snotra/issues/346)) read through their own
-channel; the descriptor will get a way to opt out of the text read, with text
-staying the default.
+#### Images ([#345](https://github.com/kkrafft1999/snotra/issues/345))
+
+```
+host ─ reads: 'none' ─▶ the host does not read the file
+                         │
+image view ─ fs:readWorkspaceImage(path) ─▶ main: lexical + realpath check,
+                         │                  type from the content, 10 MB limit
+                         ▼
+          { mime, base64 } ─▶ <img src="data:…"> ─ decoded ─▶ fit, header W × H
+          { reason }       ─▶ the reason as a sentence, in the column
+```
+
+- **The view reads, not the host.** A descriptor with `reads: 'none'` gets no
+  text; `update({})` comes on every watcher report for the file, and the view
+  compares size and modification time before it replaces anything — a click
+  on the open image does not make it flash.
+- **The same channel as the chat.** No `file://` URL, no CSP change; the main
+  process stays the trust boundary. A symlink out of the workspace ends as
+  "outside the open folder".
+- **Fitted, never upscaled.** A click, or Enter/Space on the focused image,
+  toggles to the actual size and scrolls to where the click landed. No zoom
+  beyond that (decided with a mockup on 2026-09-27).
+- **SVG stays a document.** It is shown through `<img>` only and never inlined;
+  its markup is parsed with `DOMParser`, unattached, for the size it declares —
+  Chromium would report 300 × 150 for an SVG with only a `viewBox`. Its source
+  is the plain-text view behind the shared "Preview | Source" switch.
+- **Transparency shows.** A checkerboard sits behind the image only, in its own
+  tokens (`--ds-checker-light`, `--ds-checker-dark`) for light and dark.
+
+A PDF view ([#346](https://github.com/kkrafft1999/snotra/issues/346)) will read
+through a channel of its own in the same way.
 
 ### Two halves: workspace and chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
 

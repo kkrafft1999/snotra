@@ -25,6 +25,7 @@ import {
   resolveDocumentPath,
   splitDocument,
 } from './markdown-document.js';
+import { MODES, buildModeSwitch } from './mode-switch.js';
 import { plainTextView } from './plain-text-view.js';
 
 const {
@@ -36,52 +37,6 @@ const {
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
 const NOTICE_MS = 5000;
-export const MODES = Object.freeze({ PREVIEW: 'preview', SOURCE: 'source' });
-
-// Radio groups need a name that is unique in the window; a counter is enough.
-let instanceCount = 0;
-
-function buildModeSwitch(name, onChange) {
-  const group = document.createElement('div');
-  group.className = 'ds-segmented ds-segmented--compact md-mode-switch';
-  group.setAttribute('role', 'radiogroup');
-
-  const options = {};
-  for (const mode of [MODES.PREVIEW, MODES.SOURCE]) {
-    const label = document.createElement('label');
-    label.className = 'ds-segmented__option';
-    const input = document.createElement('input');
-    input.type = 'radio';
-    input.className = 'ds-segmented__input';
-    input.name = name;
-    input.value = mode;
-    input.checked = mode === MODES.PREVIEW;
-    input.addEventListener('change', () => {
-      if (input.checked) onChange(mode);
-    });
-    const text = document.createElement('span');
-    label.append(input, text);
-    group.append(label);
-    options[mode] = { input, text };
-  }
-  // "Preview" is English in both languages (decided 2026-09-26).
-  options[MODES.PREVIEW].text.lang = 'en';
-
-  function applyLabels() {
-    group.setAttribute('aria-label', t('fileView.markdown.mode.label'));
-    options[MODES.PREVIEW].text.textContent = t('fileView.markdown.mode.preview');
-    options[MODES.SOURCE].text.textContent = t('fileView.markdown.mode.source');
-  }
-  applyLabels();
-
-  return {
-    element: group,
-    applyLabels,
-    select(mode) {
-      options[mode].input.checked = true;
-    },
-  };
-}
 
 function buildFrontMatter(frontMatter) {
   const section = document.createElement('section');
@@ -166,8 +121,7 @@ export const markdownView = {
 
     hostEl.append(previewEl, sourceEl, noticeEl);
 
-    instanceCount += 1;
-    const modeSwitch = buildModeSwitch(`md-mode-${instanceCount}`, (next) => setMode(next));
+    const modeSwitch = buildModeSwitch((next) => setMode(next));
     context.setTools([modeSwitch.element]);
 
     function showNotice(message) {

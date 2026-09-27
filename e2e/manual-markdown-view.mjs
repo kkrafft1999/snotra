@@ -238,7 +238,7 @@ try {
   await shoot('skill-scrolled');
 
   // Source: by keyboard — focus the checked radio, arrow to the right.
-  await page.focus('.md-mode-switch input:checked');
+  await page.focus('.file-view-mode-switch input:checked');
   await page.keyboard.press('ArrowRight');
   await poll(async () => page.evaluate(() => {
     const pre = document.getElementById('preview-content');

@@ -40,11 +40,21 @@ test('names without an extension are recognised the way isTextFile knows them', 
   }
 });
 
+test('images go to the image view, SVG with plain text as the second candidate (#345)', async () => {
+  const { fileViews, readsText } = await load();
+  for (const name of ['photo.png', 'Shot.JPG', 'scan.jpeg', 'loop.gif', 'still.webp', 'flow.svg']) {
+    assert.equal(fileViews.resolve({ name, size: 1 })?.id, 'image', name);
+  }
+  assert.deepEqual(fileViews.candidatesFor({ name: 'flow.svg' }).map((view) => view.id), ['image', 'plain-text']);
+  assert.equal(readsText(fileViews.resolve({ name: 'photo.png' })), false, 'the image view reads its own bytes');
+  assert.equal(readsText(fileViews.resolve({ name: 'notes.txt' })), true);
+});
+
 test('a file no view claims resolves to null, so the pane falls back to the info card', async () => {
   const { fileViews } = await load();
-  assert.equal(fileViews.resolve({ name: 'photo.png' }), null);
   assert.equal(fileViews.resolve({ name: 'archive.zip' }), null);
-  assert.deepEqual(fileViews.candidatesFor({ name: 'photo.png' }), []);
+  assert.equal(fileViews.resolve({ name: 'photo.bmp' }), null);
+  assert.deepEqual(fileViews.candidatesFor({ name: 'archive.zip' }), []);
 });
 
 test('canHandle sees name, lower-case extension, size and an open mime slot', async () => {
@@ -89,6 +99,7 @@ test('a broken descriptor fails when the registry is built, not when a file is c
   assert.throws(() => createFileViewRegistry([{ ...fakeView('x'), mount: undefined }]), /missing mount/);
   assert.throws(() => createFileViewRegistry([{ ...fakeView('x'), canHandle: null }]), /missing canHandle/);
   assert.throws(() => createFileViewRegistry([fakeView('x'), fakeView('x')]), /registered twice/);
+  assert.throws(() => createFileViewRegistry([{ ...fakeView('x'), reads: 'bytes' }]), /text or none/);
 });
 
 test('the order is fixed once the registry is built', async () => {

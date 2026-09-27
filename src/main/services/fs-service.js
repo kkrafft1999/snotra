@@ -2436,8 +2436,8 @@ function createFsService({
       return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
     }
     // Der Typ haengt am Inhalt, nicht an der Endung: Eine Textdatei namens
-    // `plot.png` darf keinen Ladeversuch ausloesen, und SVG faellt hier
-    // zwangslaeufig durch, weil es keine Kopf-Signatur mitbringt.
+    // `plot.png` darf keinen Ladeversuch ausloesen. SVG is recognised by its
+    // root element (#345), an HTML file named `.svg` is not.
     const mime = sniffImageMime(buffer.subarray(0, WORKSPACE_IMAGE_SNIFF_BYTES));
     if (!mime) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.UNSUPPORTED_TYPE);
 

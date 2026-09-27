@@ -440,8 +440,8 @@ const fileTree = initFileTree({
   },
 });
 
-// Menu "View > Markdown: Preview or Source" or Cmd/Ctrl+Shift+M (#344). The
-// file view decides; for anything but a Markdown file it is a no-op.
+// Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344). The file view
+// decides; for anything but a Markdown file or an SVG (#345) it is a no-op.
 api.onToggleMarkdownSource?.(() => {
   fileTree.runPreviewCommand('toggle-source');
 });
