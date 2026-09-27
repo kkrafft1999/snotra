@@ -809,6 +809,7 @@ module.exports = {
   'permissions.mode.askAll.desc': 'Jeder Tool-Aufruf fragt nach, auch Lesen. Gemerkte Erlaubnisse gelten nicht.',
   'permissions.mode.auto': 'Auto',
   'permissions.mode.auto.desc': 'Keine Rückfragen zu Tool-Aufrufen. Workspace-Grenzen, Sperren und der Schutz der Snotra-Schlüssel bleiben. Bewusst zu aktivieren.',
+  'permissions.mode.auto.unavailable': 'Nicht verfügbar: Dieses System bietet keinen verschlüsselten Speicher.',
   'permissions.rule.effect.deny': 'Sperren',
   'permissions.rule.effect.deny.desc': 'Der Aufruf wird in jedem Modus blockiert. Sperren gewinnen immer.',
   'permissions.rule.effect.allow': 'Erlauben',
@@ -841,8 +842,8 @@ module.exports = {
   'permissions.reset.workspace.desc': 'Löscht Sperren und Erlaubnisse, die nur für den geöffneten Workspace gelten, schaltet seine Sandbox wieder ein und stellt seinen Standardmodus zurück auf „Intelligent“. Globale Regeln, Muster und der Modus des Chats bleiben.',
   'permissions.reset.all': 'Alle Berechtigungen zurücksetzen',
   'permissions.reset.all.desc': 'Löscht alle Regeln, eigene sensible Pfadmuster und Sitzungsfreigaben, schaltet die Sandbox in allen Workspaces wieder ein und stellt den Modus „Intelligent“ wieder her, auch als Standard jedes Workspace.',
-  'permissions.integrity.invalid': 'Die Berechtigungsdatei war beschädigt oder verändert. Snotra läuft im Modus „Intelligent“; Erlaubnisse wurden verworfen, Sperren bleiben wirksam.',
-  'permissions.integrity.unsigned': 'Verschlüsselter Speicher ist nicht verfügbar. Modus „Auto“ und dauerhafte Erlaubnisse lassen sich deshalb nicht speichern.',
+  'permissions.integrity.invalid': 'Die Berechtigungsdatei war beschädigt oder verändert. Snotra läuft im Modus „Intelligent“, oder in „Immer fragen“, falls das eingestellt war; Erlaubnisse wurden verworfen, Sperren bleiben wirksam.',
+  'permissions.integrity.unsigned': 'Verschlüsselter Speicher ist nicht verfügbar. Modus „Auto“ und dauerhafte Erlaubnisse lassen sich deshalb nicht speichern; „Intelligent“ und „Immer fragen“ funktionieren wie gewohnt.',
   'permissions.legacyWriteHint': 'Dateiänderungen fragen jetzt nach deiner Freigabe. Den Modus kannst du jederzeit im Chat ändern.',
 
   // ── Native confirmation dialogs of the permissions (#353) ────────────────

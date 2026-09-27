@@ -15,9 +15,9 @@ const { createSessionGrants } = require('../src/application/permissions/session-
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 
-function makeSafeStorage() {
+function makeSafeStorage(available = true) {
   return {
-    isEncryptionAvailable: () => true,
+    isEncryptionAvailable: () => available,
     encryptString: (plain) => Buffer.from(`enc:${plain}`, 'utf8'),
     decryptString: (buf) => buf.toString('utf8').slice(4),
   };
@@ -36,10 +36,11 @@ async function setup(t, {
   describeExecutionTools = null,
   programAllowances = null,
   openDialogResult = { canceled: true, filePaths: [] },
+  encryption = true,
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} } });
+  const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} } });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];
@@ -579,4 +580,22 @@ test('workspace default: "reset workspace rules" puts it back to "smart"', async
   await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, sender)).ok, true);
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceMode, 'smart');
+});
+
+// Without encrypted storage (#419).
+test('without encrypted storage "Auto" is refused before any dialog; "Always ask" works', async (t) => {
+  const { invoke, dialogCalls } = await setup(t, { encryption: false, dialogResponse: 0 });
+  const sender = makeSender();
+  const mode = await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto');
+  assert.deepEqual(mode.error, { key: 'permissions.error.autoNeedsEncryption' });
+  const workspace = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'auto');
+  assert.deepEqual(workspace.error, { key: 'permissions.error.autoNeedsEncryption' });
+  assert.equal(dialogCalls.length, 0, 'no confirmation that leads nowhere');
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'ask-all')).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'ask-all')).ok, true);
+  const state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.integrity, 'unsigned');
+  assert.equal(state.mode, 'ask-all');
+  assert.equal(state.workspaceMode, 'ask-all');
 });

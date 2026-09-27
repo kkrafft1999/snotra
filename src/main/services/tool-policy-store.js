@@ -11,6 +11,9 @@
  *
  * Fail-safe bei fehlender oder falscher Signatur: Modus `smart`, alle
  * Allow-Regeln verworfen, lesbare Deny-Regeln und Pfadmuster bleiben wirksam,
+ * and a mode of `ask-all` stays as well (#419) — it only tightens, like a
+ * deny rule, and without it a system without `safeStorage` could never leave
+ * `smart`,
  * `integrity` meldet den Zustand an die Oberfläche. Ohne verfügbare
  * `safeStorage` sind Auto und dauerhafte Allow-Regeln nicht speicherbar.
  *
@@ -201,10 +204,13 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     return out;
   }
 
-  /** Fail-safe: nur Sperren und Muster überleben eine gescheiterte Prüfung. */
+  /**
+   * Fail-safe: only what tightens survives a failed check — blocks, patterns,
+   * and "Always ask" as the mode (#419) or as a workspace default (#413).
+   */
   function failSafe(payload) {
     const out = normalizePayload(payload);
-    out.mode = DEFAULT_TOOL_PERMISSION_MODE;
+    if (out.mode !== TOOL_PERMISSION_MODES.ASK_ALL) out.mode = DEFAULT_TOOL_PERMISSION_MODE;
     out.globalRules = out.globalRules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY);
     for (const root of Object.keys(out.workspaceRules)) {
       out.workspaceRules[root] = out.workspaceRules[root].filter(

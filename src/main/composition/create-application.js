@@ -17,7 +17,7 @@ const { createWorkspaceActivation } = require('../services/workspace-activation'
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
-const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
+const { PERMISSION_DENIAL_REASONS, DEFAULT_TOOL_PERMISSION_MODE } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
 const { createMessage, isMessage } = require('../../shared/contracts/message');
@@ -215,7 +215,10 @@ function createApplication({
     // chat inherits nothing because approvals are bound to their chat, and
     // what the left chat no longer needs goes in `onActivated`.
     applyMode: async (mode) => {
-      await toolPolicyStore.setMode(mode);
+      const result = await toolPolicyStore.setMode(mode);
+      // A chat stored at "Auto" on a system that lost its encrypted storage
+      // (#419): it runs at "Smart" rather than at what the last chat left.
+      if (!result?.ok && mode !== DEFAULT_TOOL_PERMISSION_MODE) await toolPolicyStore.setMode(DEFAULT_TOOL_PERMISSION_MODE);
     },
     onChatModeChanged: (chatId) => invalidateChatPermissions(chatId),
     onActivated: () => pruneChatScopedPermissions(),

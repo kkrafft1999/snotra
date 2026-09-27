@@ -780,7 +780,10 @@ permissions, not in the folder, so a checked-out repository cannot make itself
 *Auto*; "Reset workspace rules" puts it back to *Smart*. Mode, deny/allow rules and custom sensitive path patterns live in their
 own HMAC-signed file `tool-policy.json` in the `userData` folder (the key
 protected via `safeStorage`); if the file is tampered with, Snotra falls back to
-*Smart* mode and discards allowances, while denials remain in effect. The
+*Smart* mode — or stays at *Always ask* — and discards allowances, while denials
+remain in effect. Without encrypted storage (a Linux desktop without a keyring,
+say) *Auto* and permanent allowances are not available; *Smart* and *Always ask*
+work as usual. The
 `allowWorkspaceWrite` switch used up to v1.3.1 is gone; both old values map onto
 the default mode, and the settings point this out once.
 

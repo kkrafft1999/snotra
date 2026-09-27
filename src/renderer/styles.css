@@ -5565,6 +5565,19 @@ select.modal-input {
   white-space: normal;
 }
 
+/* A mode this system cannot store (#419): shown, not offered. */
+.chat-tool-mode-option:disabled {
+  cursor: default;
+}
+
+.chat-tool-mode-option:disabled:hover {
+  background: transparent;
+}
+
+.chat-tool-mode-option:disabled .chat-model-menu-opt-title {
+  color: var(--text-muted-strong);
+}
+
 .chat-tool-mode-option:focus-visible {
   outline: var(--ds-focus-ring);
   outline-offset: calc(-1 * var(--ds-focus-offset));
@@ -5970,6 +5983,19 @@ select.modal-input {
 .settings-mode-option:has(input:checked) {
   border-color: var(--ds-blue);
   background: var(--ds-blue-soft);
+}
+
+.settings-mode-option:has(input:disabled) {
+  cursor: default;
+}
+
+.settings-mode-option:has(input:disabled):not(:has(input:checked)):hover {
+  border-color: var(--ds-grey-divider);
+  background: var(--bg-primary);
+}
+
+.settings-mode-option:has(input:disabled) .settings-mode-option__title {
+  color: var(--text-muted-strong);
 }
 
 .settings-mode-option:has(input:focus-visible) {

@@ -803,6 +803,7 @@ module.exports = {
   'permissions.mode.askAll.desc': 'Every tool call asks, reading included. Remembered allowances do not apply.',
   'permissions.mode.auto': 'Auto',
   'permissions.mode.auto.desc': 'No questions about tool calls. Workspace boundaries, blocks and the protection of Snotra’s own keys stay. To be switched on deliberately.',
+  'permissions.mode.auto.unavailable': 'Not available: this system offers no encrypted storage.',
   'permissions.rule.effect.deny': 'Block',
   'permissions.rule.effect.deny.desc': 'The call is blocked in every mode. Blocks always win.',
   'permissions.rule.effect.allow': 'Allow',
@@ -835,8 +836,8 @@ module.exports = {
   'permissions.reset.workspace.desc': 'Deletes blocks and allowances that apply only to the open workspace, switches its sandbox back on and sets its default mode back to “Smart”. Global rules, patterns and the chat’s mode stay.',
   'permissions.reset.all': 'Reset all permissions',
   'permissions.reset.all.desc': 'Deletes all rules, your own sensitive path patterns and session allowances, switches the sandbox back on in every workspace, and restores “Smart” mode, also as the default of every workspace.',
-  'permissions.integrity.invalid': 'The permissions file was damaged or altered. Snotra is running in “Smart” mode; allowances were discarded, blocks remain in force.',
-  'permissions.integrity.unsigned': 'Encrypted storage is not available. “Auto” mode and permanent allowances therefore cannot be stored.',
+  'permissions.integrity.invalid': 'The permissions file was damaged or altered. Snotra is running in “Smart” mode, or in “Always ask” if that was set; allowances were discarded, blocks remain in force.',
+  'permissions.integrity.unsigned': 'Encrypted storage is not available. “Auto” mode and permanent allowances therefore cannot be stored; “Smart” and “Always ask” work as usual.',
   'permissions.legacyWriteHint': 'File changes now ask for your approval. You can change the mode in the chat at any time.',
 
   // ── Native confirmation dialogs of the permissions (#353) ────────────────

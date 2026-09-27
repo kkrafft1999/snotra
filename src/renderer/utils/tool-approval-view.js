@@ -61,13 +61,22 @@ const RISK_CLASS_KEYS = Object.freeze({
  * Order and description of the modes for the chat pill and the settings
  * (concept §3). A function rather than a constant: the strings depend on the
  * language and must not freeze when the module loads.
+ *
+ * Given the permission state, "Auto" is marked unavailable where it cannot be
+ * stored — no encrypted storage (#419) — unless it is the mode already set,
+ * so that it can still be seen and left.
  */
-export function toolModeOptions() {
-  return MODE_ORDER.map((value) => ({
-    value,
-    label: t(MODE_KEYS[value]),
-    description: t(`${MODE_KEYS[value]}.desc`),
-  }));
+export function toolModeOptions(state = null, current = state?.mode) {
+  const autoBlocked = state?.encryptionAvailable === false && current !== TOOL_PERMISSION_MODES.AUTO;
+  return MODE_ORDER.map((value) => {
+    const unavailable = autoBlocked && value === TOOL_PERMISSION_MODES.AUTO;
+    return {
+      value,
+      label: t(MODE_KEYS[value]),
+      description: unavailable ? t('permissions.mode.auto.unavailable') : t(`${MODE_KEYS[value]}.desc`),
+      unavailable,
+    };
+  });
 }
 
 /** Klassen, für die es keine Sitzungsfreigabe gibt (Konzept §6). */

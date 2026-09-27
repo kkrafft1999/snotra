@@ -54,7 +54,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
 
   function rebuild(activeMode, defaults = describeWorkspaceDefault(toolPermissions.get())) {
     list.innerHTML = '';
-    for (const option of toolModeOptions()) {
+    for (const option of toolModeOptions(toolPermissions.get(), activeMode)) {
       const li = document.createElement('li');
       li.setAttribute('role', 'none');
       const opt = document.createElement('button');
@@ -63,6 +63,11 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
       opt.setAttribute('role', 'option');
       opt.setAttribute('aria-selected', option.value === activeMode ? 'true' : 'false');
       opt.dataset.mode = option.value;
+      // Not offered where it cannot take effect (#419); still read out.
+      if (option.unavailable) {
+        opt.disabled = true;
+        opt.setAttribute('aria-disabled', 'true');
+      }
       const main = document.createElement('span');
       main.className = 'chat-tool-mode-opt-main';
       const title = document.createElement('span');
@@ -250,7 +255,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
       return;
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const options = [...list.querySelectorAll('.chat-tool-mode-option')];
+    const options = [...list.querySelectorAll('.chat-tool-mode-option:not(:disabled)')];
     if (options.length === 0) return;
     e.preventDefault();
     const index = options.indexOf(document.activeElement);
