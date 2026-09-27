@@ -653,6 +653,10 @@ Es gibt zwei Ebenen, beide als gewöhnliche Markdown-Datei:
 | Projekt | `<ordner>/.agents/memory.md` | nur den geöffneten Ordner |
 | Global | `~/.snotra/memory.md` | jeden Ordner |
 
+**Snotra fragt nach, welche der beiden**, bevor es sich etwas merkt — außer du
+hast es schon gesagt („merk dir global …"), oder es ist kein Ordner geöffnet und
+nur das globale Gedächtnis bleibt übrig.
+
 Dieselben zwei Orte wie bei `AGENTS.md` und den Skills. Weil es Dateien sind,
 kannst du sie im Editor lesen und bearbeiten, und das Projekt-Gedächtnis zieht
 beim Verschieben des Ordners mit um. Es liegt damit aber auch **in deinem

@@ -1,6 +1,6 @@
 ---
 name: snotra-memory
-description: How to remember something permanently and what does not belong in memory — scopes (project/global), wording, limits, forgetting. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "forget …", or when they ask what you have remembered and where it is kept.
+description: How to remember something permanently and what does not belong in memory — scopes (project/global) and asking the user which one, wording, limits, forgetting. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "forget …", or when they ask what you have remembered and where it is kept.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
@@ -21,13 +21,24 @@ this", but "does this have to come along permanently".
 | `workspace` | `<folder>/.agents/memory.md` | the open folder only |
 | `user` | `~/.snotra/memory.md` | every folder |
 
-**When in doubt, `workspace`.** A project detail that accidentally applies
-globally talks over the user in every other project. The other way round the
-damage is small: they will tell you again in the next project.
+**The user picks the scope, not you.** Before every `remember` call, ask in
+the chat where the entry should go — this project or global — and call the tool
+only once they have answered. One short question is enough, with the entry
+worded the way you would store it, for example: "Should I remember 'Tests run
+with `npm test`' for this project or globally?" You may say which scope you
+would pick; the decision is theirs.
 
-`user` is right for things that belong to the person rather than the project:
-forms of address and language, preferred tools, recurring ways of working,
-how names are spelled.
+Ask no question only when the answer is already there:
+
+- **The user named the scope** in their request ("remember globally …", "for
+  this project …"). Then take it as said.
+- **No folder is open.** Then only `user` is possible — say that you are
+  remembering it globally instead of asking.
+
+What helps them decide: a project detail that ends up global talks over them
+in every other project. `user` is right for things that belong to the person
+rather than the project: forms of address and language, preferred tools,
+recurring ways of working, how names are spelled.
 
 The project file lives **inside the user's folder** and may end up in a
 repository — it is visible to them, but possibly to others as well. Anything
@@ -37,15 +48,17 @@ that concerns them alone belongs in `user`.
 
 - **The user asks for it** ("remember …", "keep …", "from now on this always
   applies"). Then `origin: "requested"`. Do not ask whether you may — they just
-  said so. Only ask about the scope when it is genuinely open.
+  said so. The scope is the one thing you do ask about — see above.
 - **You notice something lasting** that the user would otherwise have to
   explain again: a convention, a command, a decision along with its reasoning.
-  Then `origin: "self"`, and you mention in half a sentence that you noted it.
+  Then `origin: "self"`. Propose the entry and ask for the scope in the same
+  question.
 
 Declare the origin **truthfully**. The user can switch off unprompted
 remembering; `self` entries are then rejected. An idea of your own passed off
 as `requested` circumvents that setting — it is the only way to do real damage
-with this tool.
+with this tool. An entry you proposed stays `self` even after the user has
+picked a scope for it: the idea was still yours.
 
 ## When you do not remember
 

@@ -1007,6 +1007,10 @@ There are two levels, both ordinary Markdown files:
 | Project | `<folder>/.agents/memory.md` | only the opened folder |
 | Global | `~/.snotra/memory.md` | every folder |
 
+**Snotra asks which of the two** before it remembers anything — unless you
+already said so ("remember globally …"), or no folder is open and only the global
+memory is left.
+
 The same two places as for `AGENTS.md` and the skills. Because they are files,
 you can read and edit them in an editor, and the project memory moves along when
 the folder moves. But it therefore also lives **inside your project** and can end
