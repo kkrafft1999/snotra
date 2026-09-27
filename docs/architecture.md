@@ -745,6 +745,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
 | `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, toggle to actual size, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/mode-switch.js` | The "Preview \| Source" control, shared by Markdown and SVG | both view tests |
+| `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
 
 ```
 FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js
@@ -870,8 +872,56 @@ image view ─ fs:readWorkspaceImage(path) ─▶ main: lexical + realpath check
 - **Transparency shows.** A checkerboard sits behind the image only, in its own
   tokens (`--ds-checker-light`, `--ds-checker-dark`) for light and dark.
 
-A PDF view ([#346](https://github.com/kkrafft1999/snotra/issues/346)) will read
-through a channel of its own in the same way.
+#### PDFs ([#346](https://github.com/kkrafft1999/snotra/issues/346))
+
+Rendered by **pdf.js**, vendored from `pdfjs-dist` (a devDependency — only the
+copy under `src/renderer/vendor/pdfjs/`, made by `scripts/sync-renderer-vendor.js`,
+ships). The alternatives were Chromium's own PDF viewer, which needs
+`plugins: true`, a looser CSP and cannot be themed, and a first-page thumbnail,
+which Electron only offers on macOS and Windows.
+
+```
+pdf view ─ fs:readWorkspacePdf(path) ─▶ main: lexical + realpath check,
+                │                       %PDF- in the first KB, 50 MB limit
+                ▼
+     { bytes: Uint8Array } ─▶ pdf.js (worker: vendor/pdfjs/pdf.worker.min.mjs)
+                                 │ asks for CMaps, fonts, decoders
+                                 ▼
+                   BinaryDataFactory ─ pdf:readAsset(kind, name) ─▶ main:
+                                 one of three fixed folders, a plain file name
+```
+
+**CSP and `webPreferences` are unchanged.** `sandbox`, `contextIsolation`,
+no `nodeIntegration`, no `plugins`; `default-src 'none'`, `script-src 'self'`,
+`connect-src 'none'`. The library and its worker are scripts from the app
+itself — a worker falls back to `script-src`, and so does the decoders'
+JavaScript fallback, which the worker `import()`s when WebAssembly is
+refused. The data files are the part pdf.js would `fetch`; opening
+`connect-src` for them would, under `file:`, let the renderer read any file on
+the disk. They come through `pdf:readAsset` instead
+(`main/services/pdf-assets.js`): `cmaps/`, `standard_fonts/`, `wasm/`, a plain
+name, nothing else.
+
+- **Nothing in a PDF acts.** No scripting sandbox is vendored or created, so
+  PDF JavaScript never runs; `enableXfa: false`, `isEvalSupported: false`; no
+  annotation layer, so a link is drawn but there is nothing to click. The
+  smoke test opens a PDF with an OpenAction script and two link annotations
+  and checks that nothing ran, opened or was requested.
+- **Only pages near the viewport are drawn.** Every page gets a placeholder of
+  its size at once; an IntersectionObserver draws pages within one screen of
+  the viewport and releases their canvases further away. A canvas is capped at
+  16 MP and drawn at a lower resolution above that.
+- **Zoom** is relative to 96 dpi (100 % = one point as 1/72 inch); "Width"
+  follows the column through a ResizeObserver. A zoom change keeps the same
+  spot of the same page at the top.
+- **Password**: pdf.js asks through `onPassword`; the view shows a field in
+  the column. The password lives in the view's closure until it unmounts — it
+  is never stored — and is tried once more after a change on disk.
+- **The header wraps** in a narrow column: the name keeps at least 10em, page
+  and zoom tools and the size move to a second row, right-aligned.
+- Not included: text selection and search (pdf.js's text layer), printing,
+  the ICC profile for CMYK (it would need a synchronous request from the
+  worker; colours are converted the simple way).
 
 ### Two halves: workspace and chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
 

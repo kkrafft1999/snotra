@@ -124,6 +124,12 @@
    * artwork both stay visible. */
   --ds-checker-light: #FFFCF5;
   --ds-checker-dark: #E6E1DA;
+  /* A PDF page (#346): paper, not a surface. White in both themes on
+   * purpose — a document is shown the way it would print, and a warm or
+   * dimmed page would shift every colour in it. The ground behind the pages
+   * carries the contrast to the column. */
+  --ds-paper: #FFFFFF;
+  --ds-paper-ground: #E9E4DC;
 
   /* ── Typografie ───────────────────────────────────────────────────────── */
   --ds-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -282,6 +288,7 @@
    * darker squares, a light one would glare on lighter ones. */
   --ds-checker-light: #4A4845;
   --ds-checker-dark: #3A3836;
+  --ds-paper-ground: #141312;
 }
 
 /* ── Reduced-Motion-Token-Override ─────────────────────────────────────────

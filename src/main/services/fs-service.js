@@ -22,6 +22,14 @@ const {
   createWorkspaceImageError,
 } = require('../../shared/contracts/workspace-image');
 const {
+  MAX_WORKSPACE_PDF_BYTES,
+  WORKSPACE_PDF_ERRORS,
+  WORKSPACE_PDF_SNIFF_BYTES,
+  isPdfHeader,
+  createWorkspacePdfResult,
+  createWorkspacePdfError,
+} = require('../../shared/contracts/workspace-pdf');
+const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
   RegexSearchTimeoutError,
   createRegexSearchWorker,
@@ -2398,43 +2406,9 @@ function createFsService({
    * Bilder gilt zunaechst nur der Arbeitsordner.
    */
   async function readWorkspaceImage(workspaceRoot, rawPath) {
-    if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) {
-      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NO_WORKSPACE);
-    }
-    const raw = typeof rawPath === 'string' ? rawPath.trim() : '';
-    if (!raw) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
-
-    const root = path.resolve(workspaceRoot);
-    const absPath = path.resolve(root, raw);
-    if (!containsPath(root, absPath)) {
-      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE);
-    }
-
-    let realTarget;
-    let stats;
-    try {
-      const realRoot = await fs.realpath(root);
-      realTarget = await fs.realpath(absPath);
-      if (!containsPath(realRoot, realTarget)) {
-        return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE);
-      }
-      stats = await fs.stat(realTarget);
-    } catch {
-      // Nicht da, haengender Symlink, keine Leseerlaubnis: fuer den Chat ist
-      // das alles dasselbe — es gibt kein Bild.
-      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
-    }
-    if (!stats.isFile()) return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
-    if (stats.size > MAX_WORKSPACE_IMAGE_BYTES) {
-      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.TOO_LARGE);
-    }
-
-    let buffer;
-    try {
-      buffer = await fs.readFile(realTarget);
-    } catch {
-      return createWorkspaceImageError(WORKSPACE_IMAGE_ERRORS.NOT_FOUND);
-    }
+    const read = await readWorkspaceBytes(workspaceRoot, rawPath, MAX_WORKSPACE_IMAGE_BYTES);
+    if (read.reason) return createWorkspaceImageError(read.reason);
+    const { buffer, stats } = read;
     // Der Typ haengt am Inhalt, nicht an der Endung: Eine Textdatei namens
     // `plot.png` darf keinen Ladeversuch ausloesen. SVG is recognised by its
     // root element (#345), an HTML file named `.svg` is not.
@@ -2447,6 +2421,63 @@ function createFsService({
       mtimeMs: stats.mtimeMs,
       size: stats.size,
     });
+  }
+
+  /**
+   * The bytes of a PDF from the open folder, for the file preview (#346).
+   * The same checks as for an image — lexically, via `realpath`, a size limit
+   * — and a type decided by the content. The bytes travel as they are; the
+   * reason for a refusal carries the size, so that "too large" can say how
+   * large.
+   */
+  async function readWorkspacePdf(workspaceRoot, rawPath) {
+    const read = await readWorkspaceBytes(workspaceRoot, rawPath, MAX_WORKSPACE_PDF_BYTES);
+    if (read.reason) return createWorkspacePdfError(read.reason, read.size ? { size: read.size } : {});
+    const { buffer, stats } = read;
+    if (!isPdfHeader(buffer.subarray(0, WORKSPACE_PDF_SNIFF_BYTES))) {
+      return createWorkspacePdfError(WORKSPACE_PDF_ERRORS.NOT_PDF, { size: stats.size });
+    }
+    return createWorkspacePdfResult({ bytes: buffer, size: stats.size, mtimeMs: stats.mtimeMs });
+  }
+
+  /**
+   * One file of the open folder, read in full after the checks both preview
+   * channels share (#244, #346): a path relative to the root or absolute,
+   * inside it lexically **and** after `realpath`, a file, at most `maxBytes`.
+   * Answers `{ buffer, stats }` or `{ reason, size? }` with the reason codes
+   * of the image contract, which the PDF contract shares.
+   */
+  async function readWorkspaceBytes(workspaceRoot, rawPath, maxBytes) {
+    if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) {
+      return { reason: WORKSPACE_IMAGE_ERRORS.NO_WORKSPACE };
+    }
+    const raw = typeof rawPath === 'string' ? rawPath.trim() : '';
+    if (!raw) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+
+    const root = path.resolve(workspaceRoot);
+    const absPath = path.resolve(root, raw);
+    if (!containsPath(root, absPath)) return { reason: WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE };
+
+    let realTarget;
+    let stats;
+    try {
+      const realRoot = await fs.realpath(root);
+      realTarget = await fs.realpath(absPath);
+      if (!containsPath(realRoot, realTarget)) return { reason: WORKSPACE_IMAGE_ERRORS.OUTSIDE_WORKSPACE };
+      stats = await fs.stat(realTarget);
+    } catch {
+      // Nicht da, haengender Symlink, keine Leseerlaubnis: fuer die Anzeige
+      // ist das alles dasselbe — es gibt nichts zu zeigen.
+      return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+    }
+    if (!stats.isFile()) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+    if (stats.size > maxBytes) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: stats.size };
+
+    try {
+      return { buffer: await fs.readFile(realTarget), stats };
+    } catch {
+      return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+    }
   }
 
   async function readFilePreview(filePath) {
@@ -2488,6 +2519,7 @@ function createFsService({
     importExternalItems,
     readFilePreview,
     readWorkspaceImage,
+    readWorkspacePdf,
   };
 }
 

@@ -79,7 +79,8 @@
 //
 // A view with `reads: 'none'` gets no `content`: the host does not touch the
 // file, and the view reads it through its own channel — the image view (#345)
-// through `fs:readWorkspaceImage`, a PDF view (#346) through its own. Such a
+// through `fs:readWorkspaceImage`, the PDF view (#346) through
+// `fs:readWorkspacePdf`. Such a
 // view's `update()` is called with an empty object whenever the file may have
 // changed on disk, since the host has no text to compare; the view reads again
 // and decides itself whether anything is different.
@@ -87,6 +88,7 @@
 import { getExtension } from '../utils/helpers.js';
 import { imageView } from './image-view.js';
 import { markdownView } from './markdown-view.js';
+import { pdfView } from './pdf-view.js';
 import { plainTextView } from './plain-text-view.js';
 
 const KINDS = new Set(['viewer', 'editor']);
@@ -163,4 +165,4 @@ export function readsText(view) {
  * `plain-text`, which takes every text file nobody else claims — SVG included,
  * which is why the image view stands in front of it.
  */
-export const fileViews = createFileViewRegistry([imageView, markdownView, plainTextView]);
+export const fileViews = createFileViewRegistry([imageView, pdfView, markdownView, plainTextView]);

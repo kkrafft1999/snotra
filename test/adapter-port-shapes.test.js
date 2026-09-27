@@ -58,6 +58,7 @@ const FILESYSTEM_PORT_KEYS = [
   'resolveWorkspacePath',
   'readFilePreview',
   'readWorkspaceImage',
+  'readWorkspacePdf',
 ];
 
 function makeStorageStub() {

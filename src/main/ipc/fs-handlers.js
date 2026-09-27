@@ -50,6 +50,9 @@ function registerFsHandlers({
   // Sprache der Oberfläche (#292). Wie beim Kontextmenü bei jedem Dialog neu
   // gelesen — er lebt nur bis zum Klick, ein Neuaufbau erübrigt sich.
   getLocale = () => undefined,
+  // Reader for the pdf.js data files (#346); without it the channel stays
+  // unregistered and pdf.js renders without CMaps, fonts and decoders.
+  pdfAssets = null,
 }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath) =>
     filesystem.readDirectory(dirPath));
@@ -65,6 +68,15 @@ function registerFsHandlers({
   // geprueft (Workspace, Symlink, Typ, Groesse) wird ausschliesslich hier.
   ipcMain.handle(REQ.FS_READ_WORKSPACE_IMAGE, async (_event, imagePath) =>
     filesystem.readWorkspaceImage(imagePath));
+
+  // #346: a PDF for the preview, and the data files pdf.js asks for. Both
+  // decide here what may be read; the renderer only names it.
+  ipcMain.handle(REQ.FS_READ_WORKSPACE_PDF, async (_event, pdfPath) =>
+    filesystem.readWorkspacePdf(pdfPath));
+  if (pdfAssets) {
+    ipcMain.handle(REQ.PDF_READ_ASSET, async (_event, kind, filename) =>
+      pdfAssets.readPdfAsset(kind, filename));
+  }
 
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async () =>
     filesystem.listWorkspacePaths());

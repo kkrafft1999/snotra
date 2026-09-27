@@ -68,6 +68,34 @@ fs.copyFileSync(
   path.join(vendor, 'purify.min.js')
 );
 
+// ── pdf.js for the PDF view in the file preview (#346) ─────────────────────
+// Only what the view uses: the library, its worker, and the data it asks for
+// through its BinaryDataFactory — CMaps (CJK text), the standard fonts (PDFs
+// that do not embed Helvetica & co.) and the image decoders for JBIG2 and
+// JPEG 2000. The data files are read by the main process (`pdf:readAsset`),
+// never fetched by the renderer. Left out on purpose: the viewer UI, the
+// scripting sandbox (`pdf.sandbox`, `quickjs-eval`) — PDF JavaScript never
+// runs — and the source maps.
+const pdfjsSource = path.join(root, 'node_modules', 'pdfjs-dist');
+const pdfjsTarget = path.join(vendor, 'pdfjs');
+fs.rmSync(pdfjsTarget, { recursive: true, force: true });
+fs.mkdirSync(pdfjsTarget, { recursive: true });
+for (const file of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
+  fs.copyFileSync(path.join(pdfjsSource, 'build', file), path.join(pdfjsTarget, file));
+}
+fs.copyFileSync(path.join(pdfjsSource, 'LICENSE'), path.join(pdfjsTarget, 'LICENSE'));
+const PDFJS_DATA = {
+  cmaps: (name) => name.endsWith('.bcmap') || name === 'LICENSE',
+  standard_fonts: (name) => /\.(pfb|ttf)$/.test(name) || name.startsWith('LICENSE'),
+  wasm: (name) => !name.startsWith('quickjs'),
+};
+for (const [dir, keep] of Object.entries(PDFJS_DATA)) {
+  fs.mkdirSync(path.join(pdfjsTarget, dir), { recursive: true });
+  for (const name of fs.readdirSync(path.join(pdfjsSource, dir)).filter(keep)) {
+    fs.copyFileSync(path.join(pdfjsSource, dir, name), path.join(pdfjsTarget, dir, name));
+  }
+}
+
 // ── Inter-Webfont (doubleSlash UI-Design) ───────────────────────────────────
 // Wir vendoren nur die tatsaechlich benoetigten Subsets/Weights, um das Bundle
 // klein zu halten. Latin + Latin-Ext deckt Deutsch (Umlaute) ab.

@@ -132,6 +132,10 @@ function createFilesystemIpcAdapter({
     async readWorkspaceImage(imagePath) {
       return fsService.readWorkspaceImage(getActiveWorkspaceRoot(), imagePath);
     },
+    // PDF for the file preview (#346), against the active folder like an image.
+    async readWorkspacePdf(pdfPath) {
+      return fsService.readWorkspacePdf(getActiveWorkspaceRoot(), pdfPath);
+    },
     async readFilePreview(filePath) {
       const { absPath, error } = await boundPath(filePath);
       if (error) return { error };

@@ -50,6 +50,15 @@ test('images go to the image view, SVG with plain text as the second candidate (
   assert.equal(readsText(fileViews.resolve({ name: 'notes.txt' })), true);
 });
 
+test('PDFs go to the PDF view, which reads its own bytes (#346)', async () => {
+  const { fileViews, readsText } = await load();
+  for (const name of ['spec.pdf', 'SCAN.PDF']) {
+    assert.equal(fileViews.resolve({ name, size: 1 })?.id, 'pdf', name);
+  }
+  assert.deepEqual(fileViews.candidatesFor({ name: 'spec.pdf' }).map((view) => view.id), ['pdf']);
+  assert.equal(readsText(fileViews.resolve({ name: 'spec.pdf' })), false);
+});
+
 test('a file no view claims resolves to null, so the pane falls back to the info card', async () => {
   const { fileViews } = await load();
   assert.equal(fileViews.resolve({ name: 'archive.zip' }), null);
