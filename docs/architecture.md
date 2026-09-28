@@ -1234,14 +1234,14 @@ The system prompt is assembled per request from five building blocks
    (Send environment information) in the settings (on by default) — the absolute
    path contains the user name and goes to the provider.
 5. **Project instructions** (`application/chat/project-instructions-prompt.js`,
-   issue #212, sharpened in #253) — the `AGENTS.md` files from
-   `<workspace>/.agents`, `~/.snotra` and `~/.agents`, all existing ones
+   issue #212, sharpened in #253 and #432) — the `AGENTS.md` files from
+   the `<workspace>` root, `~/.snotra` and `~/.agents`, all existing ones
    concatenated. They **complement one another and apply jointly**; none beats
    another, so the order is a reading order and not a precedence. It is the same
    source list as for skills (#251) — two orderings that would have to be learned
    separately would cost more than the one alignment. Within the project only
-   `.agents/` counts: an `AGENTS.md` in the folder root is not read, even though
-   that is the more common form outside this project. At most 20,000 characters
+   the root-level file counts, where most repositories keep it (#432 reversed
+   the `.agents/`-only rule of #253); `<workspace>/.agents/AGENTS.md` is not read. At most 20,000 characters
    per file (`MAX_PROJECT_INSTRUCTION_CHARS`, the same limit as for skill
    bodies), oversized content is visibly truncated rather than discarded, and each
    file gets its own line in the context breakdown (#174). Can be switched off via

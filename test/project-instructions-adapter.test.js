@@ -17,11 +17,11 @@ const HOME = path.resolve(path.join('/home', 'konrad'));
 const ROOT = path.resolve(path.join('/tmp', 'projekt'));
 
 const P = {
-  workspaceAgents: path.join(ROOT, '.agents', 'AGENTS.md'),
+  workspaceAgents: path.join(ROOT, 'AGENTS.md'),
   userSnotra: path.join(HOME, '.snotra', 'AGENTS.md'),
   userAgents: path.join(HOME, '.agents', 'AGENTS.md'),
-  /** Kein Ziel mehr, nur noch Koeder fuer den Test unten (#253). */
-  workspaceRoot: path.join(ROOT, 'AGENTS.md'),
+  /** No longer a target, only bait for the test below (#432). */
+  workspaceDotAgents: path.join(ROOT, '.agents', 'AGENTS.md'),
 };
 
 /** `files` bildet Pfad auf Inhalt ab; ein `Error` als Wert wird geworfen. */
@@ -66,15 +66,15 @@ test('alle drei Quellen kommen in der Reihenfolge aus #251', async () => {
   assert.deepEqual(files.map((f) => f.truncated), [false, false, false]);
 });
 
-test('eine AGENTS.md in der Ordnerwurzel wird weder gelesen noch geliefert (#253)', async () => {
+test('the project file comes from the folder root, .agents/AGENTS.md is neither read nor returned (#432)', async () => {
   const log = [];
   const files = await build(
-    { [P.workspaceRoot]: 'aus der Ordnerwurzel', [P.workspaceAgents]: 'aus .agents' },
+    { [P.workspaceAgents]: 'from the folder root', [P.workspaceDotAgents]: 'from .agents' },
     { log }
   ).load({ workspaceRoot: ROOT });
-  assert.deepEqual(files, [{ source: SRC.WORKSPACE_AGENTS, text: 'aus .agents', truncated: false }]);
-  // Nicht nur ignoriert — gar nicht erst angefasst.
-  assert.ok(!log.includes(P.workspaceRoot), log.join(', '));
+  assert.deepEqual(files, [{ source: SRC.WORKSPACE_AGENTS, text: 'from the folder root', truncated: false }]);
+  // Not just ignored — never touched.
+  assert.ok(!log.includes(P.workspaceDotAgents), log.join(', '));
 });
 
 test('jede Teilmenge kommt durch, fehlende Dateien sind kein Fehler', async () => {
@@ -134,11 +134,11 @@ test('übergroße Dateien werden je Datei gekürzt und als gekürzt gemeldet', a
   assert.deepEqual(eng, [{ source: SRC.WORKSPACE_AGENTS, text: 'abc', truncated: true }]);
 });
 
-test('liegt der Ordner im Home, wird dieselbe Datei nicht zweimal gelesen', async () => {
-  // `<workspace>/.agents/AGENTS.md` ist dann zugleich `~/.agents/AGENTS.md`.
+test('opening ~/.agents itself does not read the same file twice', async () => {
+  // `<workspace>/AGENTS.md` is then also `~/.agents/AGENTS.md`.
   const log = [];
-  const files = await build({ [path.join(HOME, '.agents', 'AGENTS.md')]: 'einmal' }, { log })
-    .load({ workspaceRoot: HOME });
+  const files = await build({ [path.join(HOME, '.agents', 'AGENTS.md')]: 'once' }, { log })
+    .load({ workspaceRoot: path.join(HOME, '.agents') });
   assert.deepEqual(log, [
     path.join(HOME, '.agents', 'AGENTS.md'),
     path.join(HOME, '.snotra', 'AGENTS.md'),
@@ -150,7 +150,7 @@ test('liegt der Ordner im Home, wird dieselbe Datei nicht zweimal gelesen', asyn
 test('ein relativer Ordnerpfad wird aufgelöst, bevor gelesen wird', async () => {
   const log = [];
   await build({}, { log }).load({ workspaceRoot: './unterordner' });
-  assert.ok(log.includes(path.join(path.resolve('./unterordner'), '.agents', 'AGENTS.md')));
+  assert.ok(log.includes(path.join(path.resolve('./unterordner'), 'AGENTS.md')));
 });
 
 test('unter Windows-Pfaden gilt dieselbe Kette und dieselbe Doppelt-Erkennung', async () => {
@@ -163,10 +163,18 @@ test('unter Windows-Pfaden gilt dieselbe Kette und dieselbe Doppelt-Erkennung', 
     path: path.win32,
     os: { homedir: () => home },
   });
-  await adapter.load({ workspaceRoot: home });
+  await adapter.load({ workspaceRoot: 'C:\\Users\\konrad\\.agents' });
   assert.deepEqual(log, [
     'C:\\Users\\konrad\\.agents\\AGENTS.md',
     'C:\\Users\\konrad\\.snotra\\AGENTS.md',
+  ]);
+
+  log.length = 0;
+  await adapter.load({ workspaceRoot: home });
+  assert.deepEqual(log, [
+    'C:\\Users\\konrad\\AGENTS.md',
+    'C:\\Users\\konrad\\.snotra\\AGENTS.md',
+    'C:\\Users\\konrad\\.agents\\AGENTS.md',
   ]);
 });
 

@@ -944,7 +944,7 @@
                 <div class="settings-note__body" data-i18n-html="settings.general.projectInstructions.note.body">
                   <p>
                     Up to three files are read:
-                    <code>&lt;folder&gt;/.agents/AGENTS.md</code> from the open project,
+                    <code>&lt;folder&gt;/AGENTS.md</code> from the open project,
                     <code>~/.snotra/AGENTS.md</code> (applies everywhere) and
                     <code>~/.agents/AGENTS.md</code> (applies everywhere, the older place, still read).
                     All that exist <strong>add to each other</strong> and apply together &mdash; none
@@ -952,9 +952,9 @@
                     is visibly truncated.
                   </p>
                   <p>
-                    Inside the project only <code>.agents/</code> counts. An <code lang="en">AGENTS.md</code>
-                    directly in the folder root is <strong>not</strong> read, even though that is the more
-                    common form elsewhere.
+                    Inside the project the file sits directly in the folder root, where most repositories
+                    keep it. An <code lang="en">AGENTS.md</code> under <code>.agents/</code> is
+                    <strong>not</strong> read &mdash; that folder only holds <code>memory.md</code> and the skills.
                   </p>
                   <p>
                     The content is <strong>instruction, not data</strong> &mdash; unlike tool results it

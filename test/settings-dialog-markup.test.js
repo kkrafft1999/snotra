@@ -149,13 +149,14 @@ test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () 
   const hint = panel.slice(hintAt, panel.indexOf('</details>', hintAt));
   // Alle drei Quellen müssen dort stehen — sonst sucht der Nutzer die Datei
   // an der falschen Stelle.
-  for (const pfad of ['&lt;folder&gt;/.agents/AGENTS.md', '~/.snotra/AGENTS.md', '~/.agents/AGENTS.md']) {
+  for (const pfad of ['&lt;folder&gt;/AGENTS.md', '~/.snotra/AGENTS.md', '~/.agents/AGENTS.md']) {
     assert.ok(hint.includes(pfad), `der Erklärtext nennt ${pfad}`);
   }
-  // Und der Wegfall der Ordnerwurzel gehört benannt (#253): Wer dort eine
-  // Datei liegen hat, soll nicht raten müssen, warum sie nichts tut.
-  assert.match(hint, /Inside the project only/);
-  assert.match(hint, /folder root is <strong>not<\/strong> read/);
+  assert.ok(!hint.includes('&lt;folder&gt;/.agents/AGENTS.md'), 'the old project location is gone');
+  // Whoever still has a file under `.agents/` should not have to guess why it
+  // does nothing (#432).
+  assert.match(hint, /directly in the folder root/);
+  assert.match(hint, /under <code>\.agents\/<\/code> is\s+<strong>not<\/strong> read/);
   assert.match(hint, /add to each other/,
     'der Text behauptet keine Rangfolge, sondern sagt, dass alles gemeinsam gilt');
   assert.match(hint, /instruction, not data|instruction<\/strong>, not data/,

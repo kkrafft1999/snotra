@@ -1019,7 +1019,7 @@ selected. Snotra reads it from three places while building every system prompt:
 
 | # | Path | Scope |
 |---|------|-------|
-| 1 | `<folder>/.agents/AGENTS.md` | this project |
+| 1 | `<folder>/AGENTS.md` | this project |
 | 2 | `~/.snotra/AGENTS.md` | everywhere |
 | 3 | `~/.agents/AGENTS.md` | everywhere, older location, still read |
 
@@ -1028,11 +1028,10 @@ The order is the same as for skills: the project first, then the global places.
 another, so there is nothing to decide and no precedence. Missing files are the
 normal case and not an error.
 
-**Within the project, only `.agents/` counts.** An `AGENTS.md` directly in the
-folder root is **not** read by Snotra — even though that is the more common form
-outside this project. This gives the project exactly one place for AI
-instructions, the same one as for skills. Anyone wanting to adopt a file from
-another tool moves it into `.agents/`.
+**Within the project, the file sits directly in the folder root**, where most
+repositories keep it, so an existing `AGENTS.md` works as it is. An `AGENTS.md`
+under `.agents/` is **not** read — that folder only holds `memory.md` and the
+skills. Anyone who still has one there moves it up into the folder root.
 
 `AGENTS.md` is the only file name Snotra knows for this — no `CLAUDE.md`, no
 `.cursorrules`. At most 20,000 characters per file are sent along; anything

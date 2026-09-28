@@ -643,7 +643,7 @@ drei Stellen:
 
 | # | Pfad | Geltung |
 |---|------|---------|
-| 1 | `<ordner>/.agents/AGENTS.md` | dieses Projekt |
+| 1 | `<ordner>/AGENTS.md` | dieses Projekt |
 | 2 | `~/.snotra/AGENTS.md` | überall |
 | 3 | `~/.agents/AGENTS.md` | überall, älterer Ort, wird weiter gelesen |
 
@@ -653,11 +653,11 @@ gemeinsam — keine ersetzt eine andere, es gibt also nichts zu entscheiden und
 keine Rangfolge. Fehlende Dateien sind der Normalfall
 und kein Fehler.
 
-**Im Projekt zählt allein `.agents/`.** Eine `AGENTS.md` direkt in der
-Ordnerwurzel liest Snotra **nicht** — auch wenn das außerhalb dieses Projekts
-die verbreitetere Form ist. So gibt es im Projekt genau einen Ort für
-KI-Anweisungen, denselben wie für Skills. Wer eine Datei aus einem anderen
-Werkzeug übernehmen will, verschiebt sie nach `.agents/`.
+**Im Projekt liegt die Datei direkt in der Ordnerwurzel**, dort, wo die meisten
+Repositorys sie ablegen — eine vorhandene `AGENTS.md` wirkt also so, wie sie ist.
+Eine `AGENTS.md` unter `.agents/` liest Snotra **nicht**; der Ordner hält nur
+`memory.md` und die Skills. Wer dort noch eine liegen hat, verschiebt sie eine
+Ebene höher in die Ordnerwurzel.
 
 `AGENTS.md` ist der einzige Dateiname, den Snotra dafür kennt — kein
 `CLAUDE.md`, kein `.cursorrules`. Je Datei gehen höchstens 20.000 Zeichen mit;

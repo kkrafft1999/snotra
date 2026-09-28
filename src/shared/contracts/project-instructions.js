@@ -1,17 +1,17 @@
 'use strict';
 
 /**
- * Projektanweisungen aus `AGENTS.md` (Issue #212, nachgeschärft in #253).
+ * Projektanweisungen aus `AGENTS.md` (Issue #212, nachgeschärft in #253 und #432).
  *
  * `AGENTS.md` trägt „so arbeitet man hier“ — Paketmanager, Testbefehle,
  * Konventionen, tabu-Ordner. Snotra liest die Datei aus drei Quellen und hängt
  * alle gefundenen an den Systemprompt:
  *
- * | # | Pfad                            | Geltung                     |
- * |---|---------------------------------|-----------------------------|
- * | 1 | `<workspace>/.agents/AGENTS.md` | Projekt                     |
- * | 2 | `~/.snotra/AGENTS.md`           | global, Standardort         |
- * | 3 | `~/.agents/AGENTS.md`           | global, kompatibler Alt-Ort |
+ * | # | Pfad                    | Geltung                     |
+ * |---|-------------------------|-----------------------------|
+ * | 1 | `<workspace>/AGENTS.md` | Projekt                     |
+ * | 2 | `~/.snotra/AGENTS.md`   | global, Standardort         |
+ * | 3 | `~/.agents/AGENTS.md`   | global, kompatibler Alt-Ort |
  *
  * **Die Dateien ergänzen einander, sie überschreiben sich nicht.** Alle
  * gefundenen gelten gemeinsam; keine schlägt eine andere. Es gibt hier also
@@ -24,12 +24,11 @@
  * reine Lesereihenfolge; gleich bleibt sie, damit man sich nicht zwei
  * Ordnungen merken muss.
  *
- * Im Projekt zählt allein `.agents/` — eine `AGENTS.md` in der Ordnerwurzel
- * liest Snotra bewusst **nicht** (Issue #253), auch wenn sie außerhalb dieses
- * Projekts die verbreitetere Form ist. Ebenso bewusst nur dieser eine
- * Dateiname: kein `CLAUDE.md`, kein `.cursorrules`. Verzeichnisse anderer
- * Werkzeuge liest Snotra nicht (Issue #103), und eine Datei mit drei erlaubten
- * Namen ist schwerer zu erklären als eine mit einem.
+ * In the project only the root-level file counts, where most repositories keep
+ * it (#432, reversing the `.agents/`-only rule of #253); `.agents/AGENTS.md`
+ * is not read. Just as deliberately only this one file name: no `CLAUDE.md`,
+ * no `.cursorrules`. Snotra does not read other tools' directories (#103), and
+ * a file with three allowed names is harder to explain than one with one.
  *
  * CommonJS, damit Main (require) und Renderer (generiertes ESM-Bundle)
  * dieselben Werte benutzen.
@@ -79,7 +78,7 @@ const PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS = Object.freeze({
  */
 const PROJECT_INSTRUCTION_SOURCE_PATHS = Object.freeze({
   // Relative to the open folder; `<folder>/` comes from the catalogue (#353).
-  [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: '.agents/AGENTS.md',
+  [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: 'AGENTS.md',
   [PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA]: '~/.snotra/AGENTS.md',
   [PROJECT_INSTRUCTION_SOURCES.USER_AGENTS]: '~/.agents/AGENTS.md',
 });
