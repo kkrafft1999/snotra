@@ -22,9 +22,9 @@ import { HOSTILE_HOST, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 
-// Projektanweisungen (Issue #212, #253): zwei Dateien mit unterscheidbarem
-// Inhalt. Nur die aus `.agents/` zaehlt — die in der Ordnerwurzel liegt als
-// Koeder daneben und muss ungelesen bleiben.
+// Project instructions (#212, #432): two files with distinguishable content.
+// Only the one in the folder root counts — the one under `.agents/` sits next
+// to it as bait and must stay unread.
 const WORKSPACE_ROOT_AGENTS_MD = '# Wurzel\n\nAnweisung-aus-der-Ordnerwurzel.\n';
 const AGENTS_DIR_AGENTS_MD = '# Projekt\n\nAnweisung-aus-dot-agents.\n';
 
@@ -200,10 +200,10 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
   // #346: JavaScript on open, a link to the web and a link running JavaScript.
   await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({ pages: 3, hostile: true }));
-  // Die Projekt-Quelle der AGENTS.md-Kette (Issue #212) und daneben der
-  // Koeder in der Ordnerwurzel, der seit #253 nicht mehr zaehlt. Die globalen
-  // Quellen liegen im echten Home des Ausfuehrenden und werden hier bewusst
-  // nicht angelegt — der Test schreibt nicht nach `~`.
+  // The project source of the AGENTS.md chain (#212) and next to it the bait
+  // under `.agents/`, which no longer counts since #432. The global sources
+  // live in the real home of whoever runs this and are deliberately not
+  // created here — the test does not write to `~`.
   await writeFile(path.join(dir, 'AGENTS.md'), WORKSPACE_ROOT_AGENTS_MD, 'utf8');
   await mkdir(path.join(dir, '.agents'));
   await writeFile(path.join(dir, '.agents', 'AGENTS.md'), AGENTS_DIR_AGENTS_MD, 'utf8');
@@ -669,19 +669,19 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.match(systemMessage, /- snotra-capabilities: What Snotra AI itself can do/);
   assert.equal(systemMessage.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
 
-  // --- Projektanweisungen aus AGENTS.md (Issue #212, #253) -----------------
+  // --- Projektanweisungen aus AGENTS.md (Issue #212, #432) -----------------
   // Auch das entsteht erst im echten Main-Prozess: Welche Dateien gefunden
   // werden, weiss nur der Adapter am Dateisystem.
   assert.match(systemMessage, /Project instructions from AGENTS\.md/);
   assert.match(systemMessage, /## AGENTS\.md \(project\)/);
   assert.ok(
-    systemMessage.includes('Anweisung-aus-dot-agents.'),
-    'die AGENTS.md aus .agents steht im Prompt'
+    systemMessage.includes('Anweisung-aus-der-Ordnerwurzel.'),
+    'the AGENTS.md from the folder root is in the prompt'
   );
-  // Der Koeder in der Ordnerwurzel darf nicht mitkommen (#253).
+  // The bait under `.agents/` must not come along (#432).
   assert.ok(
-    !systemMessage.includes('Anweisung-aus-der-Ordnerwurzel.'),
-    'eine AGENTS.md in der Ordnerwurzel wird nicht mehr gelesen'
+    !systemMessage.includes('Anweisung-aus-dot-agents.'),
+    'an AGENTS.md under .agents/ is no longer read'
   );
   // Vor dem Ordner-/Tool-Block, damit ihn keine fremde AGENTS.md ueberschreibt.
   assert.ok(

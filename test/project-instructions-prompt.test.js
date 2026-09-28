@@ -109,7 +109,7 @@ test('je Datei eine eigene Zeile in der Kontext-Aufschlüsselung (#174)', () => 
     'system:agents-md:user-agents',
   ]);
   assert.deepEqual(parts.map((p) => p.group), ['system', 'system']);
-  assert.deepEqual(parts.map((p) => p.params.path), ['.agents/AGENTS.md', '~/.agents/AGENTS.md']);
+  assert.deepEqual(parts.map((p) => p.params.path), ['AGENTS.md', '~/.agents/AGENTS.md']);
   assert.deepEqual(parts.map((p) => p.detailKey), ['context.detail.folderPath', 'context.detail.path']);
   // Der Kurzpfad nennt bewusst weder das aufgelöste Home noch den Ordnernamen.
   for (const part of parts) assert.ok(!part.params.path.includes('/Users/'));

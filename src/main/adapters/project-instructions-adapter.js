@@ -48,12 +48,12 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     const targets = [];
     const root =
       typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
-    // Im Projekt zaehlt allein `.agents/` — eine AGENTS.md in der Ordnerwurzel
-    // bleibt ungelesen (Issue #253), auch wenn sie anderswo verbreiteter ist.
+    // In the project only the root-level file counts (#432); `.agents/AGENTS.md`
+    // stays unread.
     if (root) {
       targets.push({
         source: PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
-        file: path.join(root, '.agents', PROJECT_INSTRUCTIONS_FILE),
+        file: path.join(root, PROJECT_INSTRUCTIONS_FILE),
       });
     }
     const home = homeDir();
@@ -67,10 +67,9 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
         file: path.join(home, '.agents', PROJECT_INSTRUCTIONS_FILE),
       });
     }
-    // Liegt der geöffnete Ordner im Home, fallen Pfade zusammen — `~/.agents`
-    // ist dann zugleich `<workspace>/.agents`. Dieselbe Datei zweimal im
-    // Prompt wäre doppelt bezahlt und läse sich wie zwei Anweisungen; es
-    // bleibt der erste Treffer stehen.
+    // Opening `~/.snotra` or `~/.agents` itself makes the project file and a
+    // global one the same path. The same file twice in the prompt would be
+    // paid twice and read like two instructions; the first hit stays.
     const seen = new Set();
     return targets.filter(({ file }) => {
       if (seen.has(file)) return false;
