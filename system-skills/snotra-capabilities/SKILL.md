@@ -120,7 +120,10 @@ A skill is a directory with a `SKILL.md` (YAML front matter `name`,
 description of the skills that are switched on — if one fits, fetch its
 instructions with `load_skill` before starting work; neighbouring files via
 `skill:<name>/<path>`, or by an absolute path inside the folder `load_skill`
-reports.
+reports. Once a skill is loaded in the current reply, the write tools reach its
+folder the same way, and `shell_execute`/`run_python` may write there too; the
+app's own skills stay read-only. Without an open folder the file tools still
+work for skill folders.
 
 System skills are built in and on. Folder skills are read from
 `.agents/skills/` in the open folder and globally from `~/.snotra/skills/`

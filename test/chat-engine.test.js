@@ -48,10 +48,13 @@ function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresW
   // Wie die echte Registry (Issue #96): ohne geoeffneten Ordner bleiben nur die
   // Tools ohne Ordnerbezug in Liste und Prompt. Und wie sie seit #195: die
   // Haekchen des Nutzers gelten nicht fuer die Grundausstattung (`essential`).
-  const visible = ({ workspaceOpen = true, disabledNames = [] } = {}) =>
+  const visible = ({ workspaceOpen = true, disabledNames = [], skillNames = null } = {}) =>
     toolDefs.filter(
       (def) =>
-        (workspaceOpen !== false || def.requiresWorkspace === false) &&
+        // Like the real registry (#429): a file tool for skill paths stays
+        // without a folder while a skill is switched on.
+        (workspaceOpen !== false || def.requiresWorkspace === false
+          || (def.skillPaths === true && Array.isArray(skillNames) && skillNames.length > 0)) &&
         (!disabledNames.includes(def.name) || def.essential === true)
     );
   return {
@@ -65,6 +68,7 @@ function makeToolPort(execute, { toolDefs = [{ name: 'list_directory', requiresW
     },
     requiresWorkspace: (name) =>
       toolDefs.find((def) => def.name === name)?.requiresWorkspace !== false,
+    supportsSkillPaths: (name) => toolDefs.find((def) => def.name === name)?.skillPaths === true,
     async plan(toolName, args, context) {
       planCalls.push({ toolName, args, context });
       return defaultPlan(toolName, args);
@@ -1657,4 +1661,117 @@ test('engine zaehlt Tool-Ergebnisse der letzten Runde in den Verlauf (#174)', as
   assert.ok(row, 'Tool-Ergebnisse stehen als eigene Zeile im Verlauf');
   assert.equal(row.count, 1);
   assert.ok(row.share > 0.5, `Das grosse Ergebnis dominiert den Prompt, war aber ${row.share}`);
+});
+
+// ── Skill folders that a run may write to (#429) ───────────────────────────
+
+function skillToolPort({ loadOutput, toolDefs } = {}) {
+  return makeToolPort(
+    async (toolName, args) => {
+      if (toolName === 'load_skill') {
+        return loadOutput ? loadOutput(args) : JSON.stringify({ skill: args.name, truncated: false, instructions: 'Rules.' });
+      }
+      return JSON.stringify({ ok: true });
+    },
+    {
+      toolDefs: toolDefs || [
+        { name: 'load_skill', requiresWorkspace: false, essential: true },
+        { name: 'read_file_text', requiresWorkspace: true, skillPaths: true },
+      ],
+    }
+  );
+}
+
+function skillsPort(list) {
+  return { async getActiveSkills() { return list; } };
+}
+
+const FOLDER_SKILL = { name: 'demo', description: 'd', source: 'user-agents', path: '/skills/demo', body: 'Rules.' };
+const SYSTEM_SKILL = { name: 'snotra-memory', description: 'd', source: 'system', path: '/app/system-skills/snotra-memory', body: 'Rules.' };
+
+test('a skill becomes writable once it is loaded in the run, not before (#429)', async () => {
+  const tools = skillToolPort();
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'skill:demo/assets/a.md' }),
+    assistantToolCall('c2', 'load_skill', { name: 'demo' }),
+    assistantToolCall('c3', 'read_file_text', { relative_path: 'skill:demo/assets/a.md' }),
+    assistantText('fertig'),
+  ], { tools, skills: skillsPort([FOLDER_SKILL]), maxToolRounds: 4 });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const reads = tools.planCalls.filter((call) => call.toolName === 'read_file_text');
+  assert.deepEqual(reads[0].context.writableSkills, []);
+  assert.deepEqual(reads[1].context.writableSkills, ['demo']);
+  const executed = tools.calls.filter((call) => call.toolName === 'read_file_text');
+  assert.deepEqual(executed[1].context.writableSkills, ['demo']);
+});
+
+test('a skill called by /name is writable from the start, the app\'s own never (#429)', async () => {
+  const tools = skillToolPort();
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'load_skill', { name: 'snotra-memory' }),
+    assistantToolCall('c2', 'read_file_text', { relative_path: 'skill:demo/assets/a.md' }),
+    assistantText('fertig'),
+  ], {
+    tools,
+    skills: skillsPort([{ ...FOLDER_SKILL, invoked: true }, SYSTEM_SKILL]),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: '/demo bitte' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const read = tools.planCalls.find((call) => call.toolName === 'read_file_text');
+  assert.deepEqual(read.context.writableSkills, ['demo']);
+});
+
+test('a failed load_skill opens nothing (#429)', async () => {
+  const tools = skillToolPort({ loadOutput: () => JSON.stringify({ error: 'Skill "demo" has no instructions.' }) });
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'load_skill', { name: 'demo' }),
+    assistantToolCall('c2', 'read_file_text', { relative_path: 'skill:demo/assets/a.md' }),
+    assistantText('fertig'),
+  ], { tools, skills: skillsPort([FOLDER_SKILL]) });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  const read = tools.planCalls.find((call) => call.toolName === 'read_file_text');
+  assert.deepEqual(read.context.writableSkills, []);
+});
+
+test('without a folder a file tool runs for the skill folders instead of being refused (#429)', async () => {
+  const withSkill = skillToolPort();
+  const first = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'skill:demo/assets/a.md' }),
+    assistantText('fertig'),
+  ], { tools: withSkill, skills: skillsPort([FOLDER_SKILL]) });
+  const events = [];
+  await first.engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }] },
+    onEvent: (event) => events.push(event),
+  });
+  assert.equal(withSkill.calls.filter((call) => call.toolName === 'read_file_text').length, 1);
+  const lines = events.filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE).map((event) => event.payload.line);
+  assert.equal(lines.some((line) => /kein Ordner geöffnet|no folder open/i.test(line)), false);
+  const system = first.calls[0].messages.find((m) => m.role === 'system').content;
+  assert.match(system, /skill:demo\/references\/guide\.md/);
+  assert.match(system, /the file tools reach only the folders of the switched-on skills/);
+
+  // Without a skill switched on, the old answer stands.
+  const noSkill = skillToolPort();
+  const second = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'a.md' }),
+    assistantText('fertig'),
+  ], { tools: noSkill, skills: skillsPort([]) });
+  await second.engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+  assert.equal(noSkill.calls.filter((call) => call.toolName === 'read_file_text').length, 0);
 });

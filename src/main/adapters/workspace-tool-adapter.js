@@ -128,6 +128,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
       return definition ? definition.requiresWorkspace !== false : true;
     },
+    // Takes `skill:<name>/…` paths, and so works without an open folder while
+    // a skill is switched on (#429).
+    supportsSkillPaths(name) {
+      const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
+      return definition ? definition.skillPaths === true : false;
+    },
     buildTraceEntry(toolName, args, extra = {}) {
       const entry = { tool: toolName, args, ...extra };
       // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der

@@ -933,22 +933,27 @@ function createFsService({
   /**
    * Waehlt die Wurzel fuer einen Tool-Pfad (Issue #61). Ohne Praefix ist das
    * der Arbeitsordner. Mit "skill:<name>/" ist es das Verzeichnis eines
-   * eingeschalteten Skills — das bekommen ausschliesslich die Lese-Tools
-   * uebergeben, Schreib-Tools erhalten nie eine `skillRoots`-Liste und
-   * scheitern deshalb strukturell an solchen Pfaden.
+   * eingeschalteten Skills.
+   *
+   * Reading reaches every switched-on skill. Writing (#429) reaches only the
+   * skills named in `writableSkills` — those loaded in the current run, never
+   * the app's own. A caller that passes no `skillRoots` at all gets no skill
+   * paths, so a `skill:` path never lands in the workspace as a file of that
+   * name.
    *
    * @param {string} workspaceRoot
    * @param {string} relativePath  Pfad wie vom Modell uebergeben.
    * @param {Array<{name: string, dir: string}>} [skillRoots]
+   * @param {string[]|null} [writableSkills]  set for a write: the skills that may be written
    */
-  function resolveAccessRoot(workspaceRoot, relativePath, skillRoots) {
+  function resolveAccessRoot(workspaceRoot, relativePath, skillRoots, writableSkills = null) {
     const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
     const parsed = parseSkillPath(raw);
     if (!parsed) {
       return { root: workspaceRoot, rel: raw, prefix: '', labels: WORKSPACE_TOOL_LABELS };
     }
     if (!Array.isArray(skillRoots)) {
-      return { error: 'Skill paths (skill:…) only work with the read tools.' };
+      return { error: 'Skill paths (skill:…) are not available here.' };
     }
     const known = skillRoots.filter((entry) => entry && entry.name && entry.dir);
     if (known.length === 0) {
@@ -958,6 +963,13 @@ function createFsService({
     if (!hit) {
       const names = known.map((entry) => entry.name).join(', ');
       return { error: `Unknown skill: "${parsed.name}". Switched on: ${names}.` };
+    }
+    if (Array.isArray(writableSkills) && !writableSkills.includes(hit.name)) {
+      return {
+        error:
+          `The folder of skill "${hit.name}" is read-only here. Only a skill loaded in this run ` +
+          '(with load_skill, or called by /name) can be written to, and never one of the app\'s own skills.',
+      };
     }
     return {
       root: hit.dir,
@@ -1025,7 +1037,12 @@ function createFsService({
 
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
     const asSkillPath = await skillPathForAbsolute(workspaceRoot, relativePath, options.skillRoots);
-    const chosen = resolveAccessRoot(workspaceRoot, asSkillPath || relativePath, options.skillRoots);
+    const chosen = resolveAccessRoot(
+      workspaceRoot,
+      asSkillPath || relativePath,
+      options.skillRoots,
+      options.access === 'write' ? (Array.isArray(options.writableSkills) ? options.writableSkills : []) : null
+    );
     if (chosen.error) return { error: chosen.error };
     const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
     if (lexical.error) return lexical;
@@ -1040,12 +1057,24 @@ function createFsService({
   }
 
   /**
-   * Wie `resolveToolPath`, aber ohne Skill-Wurzeln: nutzen die Schreib-Tools.
-   * Ein "skill:"-Pfad scheitert hier bewusst mit einer klaren Meldung, statt
-   * als Datei mit dem Namen „skill:…“ im Arbeitsordner zu landen.
+   * The path of a write tool. Without skill roots only the workspace; with
+   * them (#429) also the folders of the skills in `writableSkills`. A
+   * `skill:` path to any other skill fails with a clear message instead of
+   * landing in the workspace as a file named "skill:…".
+   *
+   * @param {{ skillRoots?: Array<{name: string, dir: string}>, writableSkills?: string[] }} [options]
    */
-  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath) {
-    return resolveToolPath(workspaceRoot, relativePath);
+  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath, options = {}) {
+    return resolveToolPath(workspaceRoot, relativePath, {
+      skillRoots: options.skillRoots,
+      writableSkills: options.writableSkills,
+      access: 'write',
+    });
+  }
+
+  /** The options of a write tool that concern skill folders (#429). */
+  function skillWriteOptions(options = {}) {
+    return { skillRoots: options.skillRoots, writableSkills: options.writableSkills };
   }
 
   async function runListDirectoryTool(args, workspaceRoot, options = {}) {
@@ -1177,7 +1206,8 @@ function createFsService({
         files:
           `Files next to ${SKILL_FILE} are read with the read tools as ` +
           `"${formatSkillPath(name, '<path>')}"; an absolute path inside "directory" works the same. ` +
-          'There is no need to search for this folder. It is read-only.',
+          'There is no need to search for this folder. Now that the skill is loaded, the write ' +
+          'tools reach it the same way — except for the app\'s own skills, which stay read-only.',
         instructions,
       });
     } catch (e) {
@@ -1312,10 +1342,14 @@ function createFsService({
         error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
       });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, skillName, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, skillWriteOptions(options));
     if (error) return JSON.stringify({ error });
-    if (path.resolve(absPath) === path.resolve(workspaceRoot)) {
-      return JSON.stringify({ error: 'The project folder itself cannot be written as a file.' });
+    if (path.resolve(absPath) === path.resolve(root)) {
+      return JSON.stringify({
+        error: skillName
+          ? 'The skill folder itself cannot be written as a file.'
+          : 'The project folder itself cannot be written as a file.',
+      });
     }
     const recovery = options.recovery || null;
     try {
@@ -1361,7 +1395,7 @@ function createFsService({
     }
   }
 
-  async function runEditFileTool(args, workspaceRoot) {
+  async function runEditFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required.' });
@@ -1375,7 +1409,7 @@ function createFsService({
     if (args.old_string === args.new_string) {
       return JSON.stringify({ error: 'old_string and new_string must differ.' });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, skillWriteOptions(options));
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -1433,7 +1467,7 @@ function createFsService({
    * Schritte durchlaufen, wird einmal geschrieben — schlägt einer fehl, bleibt die
    * Datei unverändert.
    */
-  async function runApplyEditsMode(args, workspaceRoot) {
+  async function runApplyEditsMode(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required.' });
@@ -1446,7 +1480,7 @@ function createFsService({
         error: `Too many steps in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Split them across several calls.`,
       });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, skillWriteOptions(options));
     if (error) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
@@ -1502,7 +1536,7 @@ function createFsService({
    * Datei (writeFileAtomic), nicht der Satz — ein Prozessabbruch zwischen zwei
    * Dateien hinterlässt einen teilweise angewendeten Patch (Issue #75).
    */
-  async function runApplyDiffMode(args, workspaceRoot) {
+  async function runApplyDiffMode(args, workspaceRoot, options = {}) {
     if (typeof args.patch !== 'string' || !args.patch.trim()) {
       return JSON.stringify({ error: 'patch (a unified diff as text) is required.' });
     }
@@ -1525,7 +1559,7 @@ function createFsService({
 
     const planned = [];
     for (const file of parsed.files) {
-      const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath);
+      const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath, skillWriteOptions(options));
       if (resolved.error) {
         return JSON.stringify({ error: `"${file.relativePath}": ${resolved.error}` });
       }
@@ -1630,7 +1664,7 @@ function createFsService({
     return rel ? [rel] : [];
   }
 
-  async function runApplyPatchTool(args, workspaceRoot) {
+  async function runApplyPatchTool(args, workspaceRoot, options = {}) {
     const hasEdits = args.edits !== undefined && args.edits !== null;
     const hasPatch = args.patch !== undefined && args.patch !== null;
     if (hasEdits && hasPatch) {
@@ -1644,7 +1678,7 @@ function createFsService({
         error: 'Either edits (a list of replacements) or patch (a unified diff as text) is required.',
       });
     }
-    return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
+    return hasEdits ? runApplyEditsMode(args, workspaceRoot, options) : runApplyDiffMode(args, workspaceRoot, options);
   }
 
   async function loadGitignoreMatcher(root) {

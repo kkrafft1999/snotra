@@ -315,6 +315,16 @@ export function initToolApprovalCards({
       card.appendChild(box);
     }
 
+    // The folders of the skills loaded in the run (#429): what the run may
+    // write to beyond the project folder, in the same box as an allowance.
+    const skillFolders = view.isolation?.skillFolders;
+    if (skillFolders) {
+      const box = el('p', 'chat-approval-card__allowance');
+      box.appendChild(el('strong', null, skillFolders.prefix));
+      box.append(' ', skillFolders.text);
+      card.appendChild(box);
+    }
+
     if (view.warning) {
       const warning = el('p', 'chat-approval-card__warning');
       warning.appendChild(el('strong', null, t('approval.warning.prefix')));

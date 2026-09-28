@@ -173,7 +173,8 @@ stored with the history in the encrypted store.
   process, and the active skill read roots (#68/#61). No root set freely by the
   renderer or the model, no escape through `..`, symlinks or junctions; new
   files are checked against the real existing parent path. Skill targets stay
-  read-only in every mode. Paths, file state and root are re-checked immediately
+  read-only in every mode, except for the folder of a skill loaded in the
+  current run (see the revision for #429 in section 9). Paths, file state and root are re-checked immediately
   before access; a swap during the approval invalidates it. Plain string prefix
   checks are not enough.
 - **Import from outside (#101):** dropping from Finder or Explorer into the file
@@ -758,6 +759,50 @@ no match for interpreters, wrappers or composed commands — `bash script.sh` an
 capabilities plus operating system and network isolation. Writing into scripts
 that run automatically remains a risk of ordinary write approvals, and the
 execution tools arm it further.
+
+### Revision: writing to the folder of a loaded skill (#429)
+
+A skill often keeps what it learns next to its `SKILL.md` — mapping rules,
+templates, a state file its scripts update. Until #429 every skill folder was
+read-only in every mode, so such a skill could read its files but never keep
+them up to date. The boundary now opens for one case and stays closed for the
+rest:
+
+- **Only a skill loaded in the current run.** A skill counts as loaded once its
+  instructions are in the run: fetched with `load_skill` (a successful result,
+  not an error), called by `/name`, or carried in full because there is no
+  `load_skill`. The engine keeps that set per run and hands it to the planner
+  and the tools; a new message starts empty again, so a skill has to be loaded
+  anew before it can be written. A switched-on skill that was not loaded, and
+  every one of the app's own skills, stays a hard limit in every mode — the
+  write never reaches the policy.
+- **An ordinary write.** Within that folder the write tools classify as they do
+  in the workspace (`write`, or `delete` without a recovery copy) and follow the
+  mode matrix of section 3: "Auto" writes without asking, "Smart" asks, and an
+  approval for this session works as usual. The card names the skill and says
+  that the change applies wherever the skill is switched on — for a skill under
+  `~/.snotra/skills` or `~/.agents/skills`, that is every project.
+- **The same escape checks.** A skill path, or an absolute path inside a skill
+  folder, is resolved against that folder and checked lexically and by real
+  path, exactly like a workspace path. `..`, symlinks and junctions do not lead
+  out of it.
+- **Execution runs.** With the sandbox on, `shell_execute` and `run_python` may
+  also write to the real folders of the skills loaded in the run. The planner
+  resolves them before the card, the card lists them ("Loaded skills: also
+  writes in …"), they are part of the plan key, and the run gets exactly the
+  folders the card named. `shell_execute` also accepts `cwd: "skill:<name>"`,
+  so a skill's scripts run where their relative paths point; such a command
+  cannot be remembered as a command rule, since a rule belongs to a workspace.
+- **Without an open folder** the file tools stay available while a skill is
+  switched on, and reach only the skill folders. The execution tools still need
+  a folder.
+
+The price: a loaded skill is a way for a prompt injection to persist. Text in a
+project file that gets the model to load a global skill and rewrite it changes
+that skill for every project. What limits it is that the skill has to be
+switched on and loaded in the same run, that "Smart" and "Always ask" show the
+card for every change, and that the card says how far the change reaches. In
+"Auto" there is no card — as for every other write.
 
 ## 10. Comparison with the official references
 

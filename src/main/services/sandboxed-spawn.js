@@ -30,6 +30,7 @@ const PASSTHROUGH = Object.freeze({
  * @param {string} request.runTmp
  * @param {string[]} [request.domains]
  * @param {{writePaths?: string[], trustd?: boolean}|null} [request.allowance]  a program allowance (#408)
+ * @param {string[]} [request.skillWritePaths]  folders of the skills loaded in the run (#429)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
  * @param {AbortSignal} [request.abortSignal]
@@ -47,11 +48,14 @@ async function planSpawn({
   runTmp,
   domains,
   allowance = null,
+  skillWritePaths = [],
   commandId,
   commandText,
   abortSignal,
 }) {
   const [program, ...rest] = argv;
+  const skillFolders = (Array.isArray(skillWritePaths) ? skillWritePaths : [])
+    .filter((entry) => typeof entry === 'string' && entry);
   if (disabled) {
     return {
       command: program,
@@ -68,7 +72,10 @@ async function planSpawn({
     workspaceRoot,
     runTmp,
     allowedDomains: domains,
-    extraWritePaths: Array.isArray(allowance?.writePaths) ? allowance.writePaths : [],
+    extraWritePaths: [
+      ...(Array.isArray(allowance?.writePaths) ? allowance.writePaths : []),
+      ...skillFolders,
+    ],
     weakerNetworkIsolation: allowance?.trustd === true,
     commandId,
     commandText,
@@ -87,6 +94,10 @@ async function planSpawn({
       ...PASSTHROUGH,
     };
   }
+  const granted = Array.isArray(prepared.writePaths) ? prepared.writePaths : [];
+  const grantedSkills = granted.filter((entry) => skillFolders.includes(entry));
+  const allowanceWrites = granted.filter((entry) => !skillFolders.includes(entry)
+    || (Array.isArray(allowance?.writePaths) && allowance.writePaths.includes(entry)));
   return {
     command: prepared.command,
     args: prepared.args,
@@ -94,7 +105,10 @@ async function planSpawn({
     isolation: {
       isolated: true,
       domains: prepared.domains,
-      ...(Array.isArray(prepared.writePaths) && prepared.writePaths.length > 0 ? { writePaths: prepared.writePaths } : {}),
+      // What the allowance added, and apart from it what the skills added —
+      // the model is told the two separately.
+      ...(allowanceWrites.length > 0 ? { writePaths: allowanceWrites } : {}),
+      ...(grantedSkills.length > 0 ? { skillWritePaths: grantedSkills } : {}),
       ...(prepared.trustd === true ? { trustd: true } : {}),
     },
     annotate: prepared.annotate,
