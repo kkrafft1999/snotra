@@ -296,7 +296,14 @@ function createToolCallPlanner({
     for (const descriptor of descriptors) {
       const rawPath = typeof descriptor.path === 'string' ? descriptor.path : '';
       const access = descriptor.access === 'write' ? 'write' : 'read';
-      if (access === 'write' && parseSkillPath(rawPath)) {
+      // An absolute path into a skill folder is a skill path too (#427), and
+      // gets the same answer instead of "outside the workspace".
+      const writesSkill = access === 'write' && (
+        parseSkillPath(rawPath)
+        || (typeof fsService.skillPathForAbsolute === 'function'
+          && await fsService.skillPathForAbsolute(workspaceRoot, rawPath, skillRoots))
+      );
+      if (writesSkill) {
         // Skill-Wurzeln sind in jedem Modus schreibgeschützt (Konzept §5).
         return { tool: toolName, error: 'Skill folders are read-only.', reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
       }
@@ -346,6 +353,12 @@ function createToolCallPlanner({
         root: resolved.root,
         skillName: resolved.skillName || null,
       };
+      // The target in the skill's own spelling (#427): an absolute path into
+      // a skill folder shows up in the log like a `skill:` path.
+      if (resolved.skillName) {
+        const rel = path.relative(resolved.root, resolved.absPath).split(path.sep).join('/');
+        target.skillPath = `${resolved.prefix || ''}${rel}`.replace(/\/$/, '');
+      }
       if (sensitive) {
         target.sensitiveReason = (logicalHit.sensitive ? logicalHit : realHit).pattern;
         classes.add(TOOL_RISK_CLASSES.READ_SENSITIVE);

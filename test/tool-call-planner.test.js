@@ -169,6 +169,11 @@ test('harte Grenzen: Ausbruch, Skill-Schreiben, Snotra-eigener Speicher und Syml
   assert.equal(skillWrite.reason, 'hard_limit');
   assert.match(skillWrite.error, /read-only/);
 
+  // An absolute path into the skill folder is refused the same way (#427).
+  const absoluteSkillWrite = await planner.plan(registry.getDefinition('write_file_text'), { relative_path: path.join(skillRoots[0].dir, 'references', 'x.md'), content: 'x' }, { workspaceRoot: workspace, skillRoots });
+  assert.equal(absoluteSkillWrite.reason, 'hard_limit');
+  assert.match(absoluteSkillWrite.error, /read-only/);
+
   const noWorkspace = await planner.plan(registry.getDefinition('read_file_text'), { relative_path: 'a' }, { workspaceRoot: '' });
   assert.equal(noWorkspace.reason, 'hard_limit');
 
@@ -219,4 +224,27 @@ test('verifyTargets erkennt geänderte, gelöschte und neu entstandene Ziele', a
 
   const tree = await planner.plan(registry.getDefinition('list_directory'), { relative_path: 'src' }, { workspaceRoot: workspace });
   assert.deepEqual(await planner.verifyTargets(tree), { ok: true }, 'Baum-Ziele werden nicht versioniert');
+});
+
+test('reading a skill file by its absolute path plans like a skill: path (#427)', async (t) => {
+  const { workspace, registry, make, skillDir, skillRoots } = await makeFixture(t);
+  const planner = make();
+  const plan = await planner.plan(
+    registry.getDefinition('read_file_text'),
+    { relative_path: path.join(skillDir, 'references', 'x.md') },
+    { workspaceRoot: workspace, skillRoots }
+  );
+  assert.equal(plan.error, undefined);
+  assert.deepEqual(plan.riskClasses, ['read']);
+  assert.equal(plan.targets[0].skillName, 'demo');
+  assert.equal(plan.targets[0].skillPath, 'skill:demo/references/x.md');
+
+  // Without the skill switched on it stays outside the workspace.
+  const off = await planner.plan(
+    registry.getDefinition('read_file_text'),
+    { relative_path: path.join(skillDir, 'references', 'x.md') },
+    { workspaceRoot: workspace }
+  );
+  assert.equal(off.reason, 'hard_limit');
+  assert.match(off.error, /outside the workspace/);
 });

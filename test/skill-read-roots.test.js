@@ -342,3 +342,105 @@ test('load_skill trägt die eingeschalteten Skills als enum im Schema (#173)', (
   // Leere Liste heißt „kein Skill eingeschaltet“ — dann fällt das Tool weg.
   assert.equal(schemaFor({ skillNames: [] }), undefined);
 });
+
+// Absolute paths into a skill folder (#427). Skills written for other agents
+// locate their own folder and then read `<dir>/assets/…`.
+
+test('read_file_text reads a skill file by its absolute path', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  const out = JSON.parse(
+    await svc.runReadFileTextTool(
+      { relative_path: path.join(skillDir, 'references', 'anleitung.md') },
+      workspace,
+      { skillRoots }
+    )
+  );
+  assert.equal(out.error, undefined);
+  assert.match(out.content, /Nadelöhr/);
+});
+
+test('an absolute path matches a skill folder reached through a symlink', async (t) => {
+  // Like ~/.agents/skills -> ~/.claude/skills: the skill is configured under
+  // the link, the skill itself reports the real location.
+  const { base, workspace, skillDir } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const linked = path.join(base, 'linked-skills');
+  if (!(await createSymlinkOrSkip(t, path.dirname(skillDir), linked, 'dir'))) return;
+  const skillRoots = [{ name: 'demo', dir: path.join(linked, 'demo') }];
+  const svc = makeFsService();
+
+  for (const spelling of [skillDir, path.join(linked, 'demo')]) {
+    const out = JSON.parse(
+      await svc.runReadFileTextTool(
+        { relative_path: path.join(spelling, 'references', 'anleitung.md') },
+        workspace,
+        { skillRoots }
+      )
+    );
+    assert.equal(out.error, undefined, spelling);
+    assert.match(out.content, /Nadelöhr/);
+  }
+});
+
+test('absolute paths outside every skill folder stay refused', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  for (const relative_path of [path.join(base, 'geheim.txt'), `${skillDir}${path.sep}..${path.sep}..${path.sep}geheim.txt`]) {
+    const out = JSON.parse(await svc.runReadFileTextTool({ relative_path }, workspace, { skillRoots }));
+    assert.match(out.error, /outside the workspace/, relative_path);
+  }
+});
+
+test('a symlink inside a skill folder cannot be followed out by absolute path', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const link = path.join(skillDir, 'raus.txt');
+  if (!(await createSymlinkOrSkip(t, path.join(base, 'geheim.txt'), link, 'file'))) return;
+  const svc = makeFsService();
+
+  const out = JSON.parse(await svc.runReadFileTextTool({ relative_path: link }, workspace, { skillRoots }));
+  assert.ok(out.error);
+  assert.equal(out.content, undefined);
+});
+
+test('an absolute path inside the workspace stays a workspace path', async (t) => {
+  const { base, workspace, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  const out = JSON.parse(
+    await svc.runReadFileTextTool({ relative_path: path.join(workspace, 'app.js') }, workspace, { skillRoots })
+  );
+  assert.equal(out.error, undefined);
+  assert.equal(out.content, 'const a = 1;\n');
+});
+
+test('write tools do not reach a skill folder by absolute path either', async (t) => {
+  const { base, workspace, skillDir } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+  const target = path.join(skillDir, 'references', 'anleitung.md');
+
+  const written = JSON.parse(await svc.runWriteFileTextTool({ relative_path: target, content: 'überschrieben' }, workspace));
+  assert.ok(written.error);
+  assert.match(await fs.readFile(target, 'utf8'), /Nadelöhr/);
+});
+
+test('load_skill reports the skill folder and how to reach its files', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+
+  for (const root of [workspace, null]) {
+    const out = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, root, { skillRoots }));
+    assert.equal(out.error, undefined);
+    assert.equal(out.directory, path.resolve(skillDir));
+    assert.match(out.files, /skill:demo\/<path>/);
+    assert.match(out.files, /read-only/);
+  }
+});

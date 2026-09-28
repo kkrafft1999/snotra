@@ -292,10 +292,20 @@ function buildSkillsSystemPrompt(
       `If a skill points to files next to its SKILL.md (e.g. "references/…" or ` +
         `"assets/…"), read them with the read tools via the path ` +
         `"skill:<name>/<path>", for example "skill:${usable[0].name}/references/guide.md". ` +
+        `"load_skill" also reports the skill's folder, and an absolute path inside it ` +
+        `works the same, so there is no need to search for the folder. ` +
         `Switched on are: ${names}. Nothing is written there — write tools still ` +
         `apply to the workspace folder only.`
     );
   }
+  // A skill whose rules live in a file next to it is not followed by guessing
+  // the rules (#427): the model once answered "I know them from memory" and
+  // went on without them.
+  intro.push(
+    'If a file a skill depends on cannot be read, say so plainly and name the ' +
+      'file. Do not carry on with what you expect it to contain, and do not ' +
+      'present the result as following the skill.'
+  );
 
   const sections = eager.map((skill) => `## Skill: ${skill.name}\n\n${skill.body.trim()}`);
   const text = [...intro, ...sections].join('\n\n');
@@ -1295,6 +1305,15 @@ function createChatEngine({
               targets: plan?.targets,
               message: plan?.error,
             });
+          }
+          // A skill file read by its absolute path (#427) is a skill access in
+          // the log too — the planner knows the skill, the path alone does not.
+          if (!entry.skill) {
+            const skillTarget = (plan.targets || []).find((target) => target && target.skillName);
+            if (skillTarget) {
+              entry.skill = skillTarget.skillName;
+              if (typeof skillTarget.skillPath === 'string' && skillTarget.skillPath) entry.skillPath = skillTarget.skillPath;
+            }
           }
           const riskClasses = normalizeRiskClasses(plan.riskClasses);
           const scopeKey = buildScopeKey(policy);

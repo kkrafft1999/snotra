@@ -968,10 +968,19 @@ via the prefix `skill:<name>/<path>`, for example
 `skill:meeting-protocol/references/template.md`. The system prompt names the
 addressing scheme and the enabled names as soon as a folder is open.
 
+`load_skill` also reports the skill's folder, and an absolute path inside it
+works just like the `skill:` form. Skills written for other agents — which look
+up their own folder and then read `<folder>/assets/…` — therefore work
+unchanged, including through a symlinked skills directory such as
+`~/.agents/skills` pointing to `~/.claude/skills`. If a file a skill depends on
+cannot be read after all, the model is told to say so and name the file rather
+than carry on with what it expects the file to contain.
+
 The boundaries stay narrow:
 
 - **Read-only.** `write_file_text`, `edit_file` and `apply_patch` never even see
-  the skill directories and reject `skill:` paths.
+  the skill directories and reject `skill:` paths — and absolute paths into a
+  skill folder just the same.
 - **Enabled skills only.** A skill that is not selected is not a path; the error
   message names the skills that actually are enabled.
 - **No escaping.** `..` and symlinks are checked against the real path, exactly as

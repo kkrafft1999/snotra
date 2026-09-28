@@ -589,10 +589,20 @@ Verzeichnis jedes **eingeschalteten** Skills ist deshalb eine zweite
 Der Systemprompt nennt die Adressierung und die eingeschalteten Namen, sobald
 ein Ordner offen ist.
 
+`load_skill` nennt außerdem den Ordner des Skills, und ein absoluter Pfad darin
+funktioniert genauso wie die `skill:`-Schreibweise. Skills, die für andere
+Agenten geschrieben sind — die erst ihren eigenen Ordner suchen und dann
+`<ordner>/assets/…` lesen —, laufen deshalb unverändert, auch über ein
+verlinktes Skill-Verzeichnis wie `~/.agents/skills`, das auf `~/.claude/skills`
+zeigt. Lässt sich eine Datei, auf die ein Skill angewiesen ist, trotzdem nicht
+lesen, soll das Modell das sagen und die Datei nennen, statt mit dem
+weiterzumachen, was es darin vermutet.
+
 Die Grenzen bleiben eng gezogen:
 
 - **Nur lesend.** `write_file_text`, `edit_file` und `apply_patch` bekommen die
-  Skill-Verzeichnisse gar nicht erst zu sehen und weisen `skill:`-Pfade ab.
+  Skill-Verzeichnisse gar nicht erst zu sehen und weisen `skill:`-Pfade ab —
+  absolute Pfade in einen Skill-Ordner genauso.
 - **Nur eingeschaltete Skills.** Ein nicht ausgewählter Skill ist kein Pfad;
   die Fehlermeldung nennt die tatsächlich eingeschalteten Namen.
 - **Kein Ausbruch.** `..` und Symlinks werden gegen den echten Pfad geprüft,
