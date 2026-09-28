@@ -24,7 +24,6 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
-const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
@@ -231,6 +230,8 @@ function createToolCallPlanner({
 
     const workspaceRoot = typeof context.workspaceRoot === 'string' ? context.workspaceRoot : '';
     const skillRoots = Array.isArray(context.skillRoots) ? context.skillRoots : [];
+    // The skills loaded in this run (#429): the only ones a write may reach.
+    const writableSkills = Array.isArray(context.writableSkills) ? context.writableSkills : [];
     const matcher = createSensitivePathMatcher({ userPatterns: context.sensitivePathPatterns });
     await resolveProtectedRoots();
 
@@ -239,6 +240,9 @@ function createToolCallPlanner({
     // Freigabekarte erscheint — der Nutzer soll nichts bestaetigen muessen,
     // was ohnehin nicht laufen darf.
     let shellCwd = '';
+    // A skill folder as the working folder shows as `skill:<name>` (#429);
+    // the card names its real place under "Loaded skills".
+    let shellCwdLabel = '';
     let shellCommand = null;
     if (toolName === 'shell_execute') {
       const guard = checkShellCommand(args?.command);
@@ -246,11 +250,16 @@ function createToolCallPlanner({
         return { tool: toolName, error: guard.reason, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       const rawCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
-      const resolvedCwd = await fsService.resolveToolPath(workspaceRoot, rawCwd);
+      // `skill:<name>` runs a skill's scripts in its own folder (#429).
+      const resolvedCwd = await fsService.resolveToolPath(workspaceRoot, rawCwd, { skillRoots });
       if (resolvedCwd.error) {
         return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       shellCwd = resolvedCwd.absPath;
+      if (resolvedCwd.skillName) {
+        const rest = path.relative(resolvedCwd.root, resolvedCwd.absPath).split(path.sep).join('/');
+        shellCwdLabel = `${resolvedCwd.prefix}${rest}`.replace(/\/$/, '');
+      }
       // The call in the form a remembered command is compared in (#121): the
       // working folder relative to the root, whatever spelling the model used.
       // `command` is null for a command that cannot be remembered at all.
@@ -259,12 +268,15 @@ function createToolCallPlanner({
         : rawCwd;
       // A folder that has no rule form cannot be remembered either — never
       // read as the root.
-      const ruleCwd = normalizeCommandCwd(relativeCwd);
+      // A skill folder has no rule form either: it is not part of the
+      // workspace a command rule belongs to.
+      const ruleCwd = resolvedCwd.skillName ? null : normalizeCommandCwd(relativeCwd);
       shellCommand = {
         command: ruleCwd === null ? null : normalizeRememberableCommand(args?.command),
         cwd: ruleCwd ?? '',
         networkDomains: [...normalizeDomains(args?.network_domains)].sort(),
         stdin: typeof args?.stdin === 'string' && args.stdin.length > 0,
+        ...(resolvedCwd.skillName ? { skillFolder: true } : {}),
       };
     }
 
@@ -296,24 +308,16 @@ function createToolCallPlanner({
     for (const descriptor of descriptors) {
       const rawPath = typeof descriptor.path === 'string' ? descriptor.path : '';
       const access = descriptor.access === 'write' ? 'write' : 'read';
-      // An absolute path into a skill folder is a skill path too (#427), and
-      // gets the same answer instead of "outside the workspace".
-      const writesSkill = access === 'write' && (
-        parseSkillPath(rawPath)
-        || (typeof fsService.skillPathForAbsolute === 'function'
-          && await fsService.skillPathForAbsolute(workspaceRoot, rawPath, skillRoots))
-      );
-      if (writesSkill) {
-        // Skill-Wurzeln sind in jedem Modus schreibgeschützt (Konzept §5).
-        return { tool: toolName, error: 'Skill folders are read-only.', reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
-      }
       if (rawPath.trim() === '' && descriptor.kind !== 'tree') {
         return { tool: toolName, error: 'relative_path is required.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
       }
+      // A write reaches a skill folder only for a skill loaded in this run,
+      // never one of the app's own (#429, concept §5); any other skill path
+      // fails here as a hard limit, in every mode.
       const resolved = await fsService.resolveToolPath(
         workspaceRoot,
         rawPath,
-        access === 'read' ? { skillRoots } : {}
+        access === 'read' ? { skillRoots } : { skillRoots, writableSkills, access: 'write' }
       );
       if (resolved.error) {
         // Ausbruch aus der Wurzel oder unbekannter Skill: harte Grenze, kein
@@ -389,6 +393,8 @@ function createToolCallPlanner({
     // So is a program allowance (#408): the card names it, and the run gets
     // exactly the rights the card named or none.
     const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled);
+    // And so are the skill folders a run may write to (#429).
+    const skillFolders = await readSkillWriteFolders(toolName, sandboxDisabled, skillRoots, writableSkills);
     const planKey = stableStringify({
       tool: toolName,
       args,
@@ -397,6 +403,7 @@ function createToolCallPlanner({
       targets: targets.map((target) => [target.path, target.absPath, target.version]),
       ...(sandboxDisabled ? { sandbox: 'off' } : {}),
       ...(allowance?.allowance ? { allowance: allowance.allowance } : {}),
+      ...(skillFolders.length > 0 ? { skillFolders } : {}),
     });
 
     const result = { tool: toolName, riskClasses, targets, planKey };
@@ -413,14 +420,15 @@ function createToolCallPlanner({
       } else if (allowance?.skipped) {
         result.sandbox.allowanceSkipped = allowance.skipped;
       }
+      if (skillFolders.length > 0) result.sandbox.skillFolders = skillFolders;
     }
     if (shellCommand) result.shellCommand = shellCommand;
     // Isolation first: its detection waits for the shell detection (#111), so
     // the shell read afterwards is the detected one, not a startup placeholder.
-    const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance);
+    const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance, skillFolders);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
-      cwd: shellCwd,
+      cwd: shellCwdLabel || shellCwd,
       shellLabel: shell?.label || '',
       shellLogin: shell?.login === true,
       isolation,
@@ -434,7 +442,7 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
-  async function describeIsolation(toolName, args, sandboxDisabled = false, allowance = null) {
+  async function describeIsolation(toolName, args, sandboxDisabled = false, allowance = null, skillFolders = []) {
     if (!EXECUTION_TOOLS.has(toolName)) return null;
     // The user's choice comes before the detection: a run the user took out
     // of the sandbox says so, whatever the sandbox could do (#357).
@@ -454,6 +462,7 @@ function createToolCallPlanner({
       } else if (allowance?.skipped) {
         isolation.allowanceSkipped = allowance.skipped;
       }
+      if (skillFolders.length > 0) isolation.skillFolders = skillFolders;
       return isolation;
     }
     return {
@@ -475,6 +484,28 @@ function createToolCallPlanner({
     } catch {
       return null;
     }
+  }
+
+  /**
+   * The folders of the skills loaded in this run, as an execution run may
+   * write to them (#429). Real paths, because the sandbox compares real
+   * paths: a skill under a symlinked `~/.agents/skills` is writable at the
+   * place it actually lives. None without a sandbox to widen.
+   */
+  async function readSkillWriteFolders(toolName, sandboxDisabled, skillRoots, writableSkills) {
+    if (!EXECUTION_TOOLS.has(toolName) || sandboxDisabled || writableSkills.length === 0) return [];
+    const folders = [];
+    for (const entry of skillRoots) {
+      if (!entry || !writableSkills.includes(entry.name) || typeof entry.dir !== 'string' || !entry.dir) continue;
+      let real;
+      try {
+        real = await fs.realpath(path.resolve(entry.dir));
+      } catch {
+        continue; // a folder that is gone is not opened
+      }
+      if (!folders.some((folder) => folder.path === real)) folders.push({ name: entry.name, path: real });
+    }
+    return folders;
   }
 
   /**

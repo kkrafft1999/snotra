@@ -39,6 +39,7 @@
  * @typedef {Object} ToolPlanContext
  * @property {string} workspaceRoot
  * @property {Array<{name: string, dir: string}>} [skillRoots]
+ * @property {string[]} [writableSkills]  skills loaded in this run, whose folders a write may reach (#429)
  * @property {string[]} [sensitivePathPatterns]  Nutzer-Muster zusätzlich zu den Standardmustern
  * @property {string[]} [forcedClasses]  Klassen, die eine Neubewertung erzwingt (z. B. 'delete')
  */
@@ -46,6 +47,8 @@
 /**
  * @typedef {Object} ToolExecutionContext
  * @property {string} workspaceRoot
+ * @property {Array<{name: string, dir: string}>} [skillRoots]
+ * @property {string[]} [writableSkills]  as in ToolPlanContext (#429)
  * @property {AbortSignal} abortSignal
  * @property {string[]} [disabledNames] — in den Einstellungen abgewählte Tools
  * @property {boolean} approved — Policy hat den Aufruf freigegeben (Pflicht)
@@ -93,6 +96,7 @@
  * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => Array} getTools
  * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
+ * @property {(name: string) => boolean} [supportsSkillPaths] — takes `skill:` paths, and so works without a folder while a skill is on (#429)
  * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry
  * @property {(name: string, args: object) => (SchemaViolations|null)} [measureArguments] — optional:
  *   schema violations the planner lets through (#187); a measurement, never a refusal

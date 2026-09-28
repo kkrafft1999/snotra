@@ -150,7 +150,7 @@ test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
       workspace
     )
   );
-  assert.match(written.error, /only work with the read tools/);
+  assert.match(written.error, /not available here/);
 
   // Weder im Skill noch als Datei mit dem wörtlichen Namen „skill:demo“.
   const original = await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8');
@@ -206,12 +206,12 @@ test('list_directory und list_directory_tree zeigen den Skill-Ordner', async (t)
   assert.match(tree.tree, /anleitung\.md/);
 });
 
-test('Die Registry gibt Skill-Wurzeln nur an Lese-Tools weiter', async (t) => {
-  const { base, workspace, skillRoots } = await makeFixture();
+test('the registry lets write tools reach only the folders of loaded skills (#429)', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
-  // `approved` steht fuer die Policy-Freigabe der Engine (Issue #66); hier
-  // zaehlt nur, dass Schreib-Tools strukturell keine Skill-Wurzeln sehen.
+  // `approved` stands for the engine's policy approval (#66); what counts
+  // here is which skills the write tools may reach.
   const context = { workspaceRoot: workspace, skillRoots, approved: true };
 
   const read = JSON.parse(
@@ -226,7 +226,59 @@ test('Die Registry gibt Skill-Wurzeln nur an Lese-Tools weiter', async (t) => {
       context
     )
   );
-  assert.match(write.error, /only work with the read tools/);
+  assert.match(write.error, /read-only here/);
+  assert.match(await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8'), /Nadelöhr/);
+
+  const loaded = { ...context, writableSkills: ['demo'] };
+  const written = JSON.parse(
+    await registry.execute('write_file_text', { relative_path: 'skill:demo/assets/rules.md', content: 'Regel A\n' }, loaded)
+  );
+  assert.equal(written.error, undefined);
+  assert.equal(await fs.readFile(path.join(skillDir, 'assets', 'rules.md'), 'utf8'), 'Regel A\n');
+
+  const edited = JSON.parse(
+    await registry.execute(
+      'edit_file',
+      { relative_path: path.join(skillDir, 'assets', 'rules.md'), old_string: 'Regel A', new_string: 'Regel B' },
+      loaded
+    )
+  );
+  assert.equal(edited.error, undefined);
+
+  const patched = JSON.parse(
+    await registry.execute(
+      'apply_patch',
+      { relative_path: 'skill:demo/assets/rules.md', edits: [{ old_string: 'Regel B', new_string: 'Regel C' }] },
+      loaded
+    )
+  );
+  assert.equal(patched.error, undefined);
+  assert.equal(await fs.readFile(path.join(skillDir, 'assets', 'rules.md'), 'utf8'), 'Regel C\n');
+
+  // The folder itself is no file, and another skill stays closed.
+  const folder = JSON.parse(await registry.execute('write_file_text', { relative_path: 'skill:demo', content: 'x' }, loaded));
+  assert.match(folder.error, /skill folder itself/);
+  const other = JSON.parse(
+    await registry.execute('write_file_text', { relative_path: 'skill:demo/x.md', content: 'x' }, { ...context, writableSkills: ['anderer'] })
+  );
+  assert.match(other.error, /read-only here/);
+});
+
+test('a write cannot leave a loaded skill folder (#429)', async (t) => {
+  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const svc = makeFsService();
+  const options = { skillRoots, writableSkills: ['demo'] };
+
+  const escape = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'skill:demo/../../raus.txt', content: 'x' }, workspace, options));
+  assert.ok(escape.error);
+  await assert.rejects(fs.access(path.join(base, 'raus.txt')));
+
+  const link = path.join(skillDir, 'raus');
+  if (!(await createSymlinkOrSkip(t, base, link, 'dir'))) return;
+  const viaLink = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'skill:demo/raus/neu.txt', content: 'x' }, workspace, options));
+  assert.ok(viaLink.error);
+  await assert.rejects(fs.access(path.join(base, 'neu.txt')));
 });
 
 // ---------------------------------------------------------------------------

@@ -82,7 +82,7 @@ function describeApprovalReason({ mode, askClasses, providerLabel, recovery, che
 function describeSessionScope({ tool, targets, riskClasses } = {}) {
   const classKeys = (normalizeRiskClasses(riskClasses) || []).map((cls) => CLASS_KEYS[cls]).filter(Boolean);
   const paths = (Array.isArray(targets) ? targets : [])
-    .map((target) => (typeof target === 'string' ? target : target?.path))
+    .map((target) => (typeof target === 'string' ? target : target?.skillPath || target?.path))
     .filter((p) => typeof p === 'string' && p);
   const effectKeys = classKeys.length > 0 ? classKeys : [CLASS_KEYS[TOOL_RISK_CLASSES.READ]];
   // Ohne Pfade ergäbe „auf genau ohne Dateiziel“ keinen Satz. Den Fall gibt es
@@ -110,6 +110,7 @@ function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, works
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) return { reason: reasons.ASK_ALL };
   if (typeof workspaceRoot !== 'string' || !workspaceRoot) return { reason: reasons.NO_WORKSPACE };
   const call = plan?.shellCommand;
+  if (call?.skillFolder === true) return { reason: reasons.SKILL_FOLDER };
   if (!call || typeof call.command !== 'string' || !call.command) return { reason: reasons.NOT_SIMPLE };
   if (call.stdin === true) return { reason: reasons.STDIN };
   // An allow rule needs the signed store; without `safeStorage` it would be
@@ -163,6 +164,8 @@ function buildApprovalRequest({
       sensitiveReason: target.sensitiveReason,
       version: target.version ?? null,
       recovery: target.recovery,
+      // A target in a skill folder (#427/#429): the card names the skill.
+      ...(target.skillName ? { skillName: target.skillName, skillPath: target.skillPath } : {}),
     })),
     reasonParts: describeApprovalReason({
       mode,
