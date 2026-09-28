@@ -494,7 +494,7 @@ export function initMcpPanel({ api }) {
 
   // --- Import (Issue #110) -----------------------------------------------
   //
-  // Variante B aus `docs/ui-design/mcp-import-mockup.html`: Das Eingabefeld
+  // Variant B of the import mockup: the input field
   // bleibt stehen, die Vorschau waechst darunter mit. Gelesen wird ausschliesslich der eingefuegte Text —
   // es wird keine fremde Konfigurationsdatei geoeffnet.
   //
