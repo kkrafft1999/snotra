@@ -13,7 +13,7 @@ const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
 const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
-const { createApplicationMenuTemplate } = require('./services/application-menu');
+const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
 // "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
@@ -53,7 +53,16 @@ app.whenReady().then(async () => {
       PUSH,
       onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
       locale: application?.getAppLocale?.(),
+      showHiddenFiles: application?.getShowHiddenFiles?.(),
     })));
+  }
+
+  // A checkbox, unlike a label, can change in place (#436). Electron ticks it
+  // itself on a click; this follows every other way of switching — the button
+  // in the tree, the shortcut, the stored value at start-up.
+  function syncHiddenFilesMenuItem(showHiddenFiles) {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(MENU_ITEM_IDS.SHOW_HIDDEN_FILES);
+    if (item) item.checked = showHiddenFiles === true;
   }
 
   application = createApplication({
@@ -77,6 +86,7 @@ app.whenReady().then(async () => {
     watchFile,
     realpathNative: realpathSync.native,
     onAppLocaleChanged: () => applyApplicationMenu(),
+    onShowHiddenFilesChanged: syncHiddenFilesMenuItem,
   });
 
   // The stored language is only known once the preferences have been read.

@@ -17,10 +17,22 @@ export function getExtension(filename) {
   return filename.slice(dotIndex + 1).toLowerCase();
 }
 
+/**
+ * Dot files come into the tree with #436, and nearly all of them are
+ * configuration: `.gitignore`, `.npmrc`, `.nvmrc`, `.editorconfig`. One without
+ * a further extension therefore counts as text — `getExtension` sees none in
+ * it. With an extension, the extension decides as for any file, so a vim swap
+ * file (`.notes.md.swp`) stays on the info card. `.env.local` and its siblings
+ * carry their stage where the extension would be; the `.env` in front decides.
+ */
+const ENV_FILE = /^\.env(\.|$)/;
+
 export function isTextFile(filename) {
   const ext = getExtension(filename);
+  const lower = filename.toLowerCase();
+  if (ENV_FILE.test(lower)) return true;
   if (!ext) {
-    const lower = filename.toLowerCase();
+    if (lower.startsWith('.') && lower.length > 1) return true;
     return ['makefile', 'dockerfile', 'readme', 'license', 'changelog'].some(
       (n) => lower === n || lower.startsWith(n + '.')
     );

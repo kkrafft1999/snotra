@@ -238,7 +238,8 @@ summary:focus-visible,
 
 #tree-header #btn-open-folder,
 #tree-header #btn-folder-history,
-#tree-header #btn-tree-sandbox {
+#tree-header #btn-tree-sandbox,
+#tree-header #btn-toggle-hidden-files {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -261,7 +262,8 @@ summary:focus-visible,
 
 #tree-header #btn-open-folder:hover,
 #tree-header #btn-folder-history:hover,
-#tree-header #btn-tree-sandbox:hover {
+#tree-header #btn-tree-sandbox:hover,
+#tree-header #btn-toggle-hidden-files:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
@@ -273,11 +275,45 @@ summary:focus-visible,
 
 #tree-header #btn-open-folder:active,
 #tree-header #btn-folder-history:active,
-#tree-header #btn-tree-sandbox:active {
+#tree-header #btn-tree-sandbox:active,
+#tree-header #btn-toggle-hidden-files:active {
   background: var(--bg-active);
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* Hidden files in the tree (#436). Unlike the sidebar toggle (#221), this one
+   shows when it is on: nothing else on screen says a filter is off, and a file
+   that is "gone" is found faster when the switch admits it. On: the open eye
+   in the accent colour, on its wash, inside an active-state border. Off: the
+   struck-through eye in the secondary colour. Shape and colour change
+   together, so the state never rests on colour alone (WCAG 1.4.1).
+   The border is there in both states, transparent when off, so the button
+   keeps its 32 px either way. */
+#tree-header #btn-toggle-hidden-files {
+  border: 1px solid transparent;
+}
+
+#tree-header #btn-toggle-hidden-files[aria-pressed='true'] {
+  background: var(--ds-blue-soft);
+  border-color: var(--ds-blue-border);
+  color: var(--ds-blue);
+}
+
+#tree-header #btn-toggle-hidden-files[aria-pressed='true']:hover,
+#tree-header #btn-toggle-hidden-files[aria-pressed='true']:active {
+  background: var(--bg-hover);
+  color: var(--ds-blue);
+}
+
+#btn-toggle-hidden-files .icon-hidden-files-on,
+#btn-toggle-hidden-files[aria-pressed='true'] .icon-hidden-files-off {
+  display: none;
+}
+
+#btn-toggle-hidden-files[aria-pressed='true'] .icon-hidden-files-on {
+  display: block;
 }
 
 /* The shield next to the folder name (#398). The icon sits where the name
@@ -687,6 +723,19 @@ summary:focus-visible,
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A hidden entry, or anything below a hidden folder (#436), is dimmed: the
+   name in the secondary colour (5.6:1 light, 5.2:1 dark on the panel, still
+   4.7:1 under hover), the icon toned down. The leading dot already tells the
+   entry apart; the colour only adds to it. A selected row keeps the primary
+   colour — on its darker ground the secondary one would drop below 4.5:1. */
+.tree-item--hidden:not(.active) .label {
+  color: var(--text-secondary);
+}
+
+.tree-item--hidden .icon {
+  opacity: 0.55;
 }
 
 /* Note under a folder cut at READ_DIRECTORY_MAX_ENTRIES (#76). At least a

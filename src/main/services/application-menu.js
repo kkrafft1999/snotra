@@ -25,10 +25,15 @@ function createSettingsItem(openSettings, t) {
   };
 }
 
+/** Ids of the items the main process changes after the menu is built. */
+const MENU_ITEM_IDS = Object.freeze({
+  SHOW_HIDDEN_FILES: 'view.showHiddenFiles',
+});
+
 /**
  * `locale` decides the labels (epic #277). The menu belongs to the main process
  * and is rebuilt on a language change — Electron cannot rename an item after
- * the fact.
+ * the fact. `showHiddenFiles` ticks the checkbox of the same name (#436).
  */
 function createApplicationMenuTemplate({
   appName,
@@ -38,6 +43,7 @@ function createApplicationMenuTemplate({
   PUSH,
   onCheckForUpdates,
   locale,
+  showHiddenFiles = false,
 }) {
   const t = createTranslator(locale);
   // Auf macOS muss das ERSTE Submenu den App-Namen als label tragen — das ist
@@ -105,6 +111,21 @@ function createApplicationMenuTemplate({
         accelerator: 'CmdOrCtrl+B',
         click: () => send(PUSH.UI_TOGGLE_SIDEBAR),
       },
+      // #436: dot files in the tree, next to the sidebar they belong to. The
+      // renderer holds the state and answers with it, which ticks this box via
+      // MENU_ITEM_IDS. The accelerator is only shown here: Shift+. types a
+      // colon on a German keyboard, so the menu would miss it there. The
+      // window matches the physical key instead (hidden-files-shortcut.js),
+      // the same way on every platform.
+      {
+        id: MENU_ITEM_IDS.SHOW_HIDDEN_FILES,
+        label: t('menu.view.showHiddenFiles'),
+        type: 'checkbox',
+        checked: showHiddenFiles === true,
+        accelerator: 'CmdOrCtrl+Shift+.',
+        registerAccelerator: false,
+        click: () => send(PUSH.UI_TOGGLE_HIDDEN_FILES),
+      },
       // Issue #344: switches a Markdown file in the preview between the
       // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
       // other editors — on the Mac that is "Paste and Match Style" in every
@@ -167,4 +188,4 @@ function createApplicationMenuTemplate({
   ];
 }
 
-module.exports = { createApplicationMenuTemplate };
+module.exports = { createApplicationMenuTemplate, MENU_ITEM_IDS };

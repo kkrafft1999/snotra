@@ -192,6 +192,19 @@ test('normalizeUiPrefs merkt die ausgeblendete Seitenleiste', () => {
   assert.equal(normalizeUiPrefsPatch({ sidebarVisible: true }).sidebarVisible, true);
 });
 
+test('normalizeUiPrefs keeps hidden files off unless switched on (#436)', () => {
+  const { normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+
+  assert.equal(normalizeUiPrefs({}).showHiddenFiles, false);
+  assert.equal(normalizeUiPrefs({ showHiddenFiles: true }).showHiddenFiles, true);
+  assert.equal(normalizeUiPrefs({ showHiddenFiles: 'ja' }).showHiddenFiles, false);
+
+  assert.equal('showHiddenFiles' in normalizeUiPrefsPatch({}), false);
+  assert.equal('showHiddenFiles' in normalizeUiPrefsPatch({ showHiddenFiles: 1 }), false);
+  assert.equal(normalizeUiPrefsPatch({ showHiddenFiles: true }).showHiddenFiles, true);
+  assert.equal(normalizeUiPrefsPatch({ showHiddenFiles: false }).showHiddenFiles, false);
+});
+
 // Python-Ausfuehrung (Issue #86): standardmaessig aus, Pfad bereinigt.
 test('normalizeUiPrefs schaltet die Python-Ausführung standardmäßig ab', () => {
   const { normalizeUiPrefs } = require('../src/shared/contracts/settings');

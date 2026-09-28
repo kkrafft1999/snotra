@@ -3,6 +3,8 @@ const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
 const { resolveWindowBounds, createWindowStateStore } = require('./window-state');
+const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
+const { PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -130,6 +132,12 @@ function createWindow() {
   });
 
   window.webContents.on('will-navigate', createRendererNavigationHandler());
+
+  // Hidden files in the tree (#436). Before the page sees the key, so it works
+  // with the focus in the chat input as well — like a menu accelerator would.
+  window.webContents.on('before-input-event', createHiddenFilesShortcutHandler({
+    onToggle: () => window.webContents.send(PUSH.UI_TOGGLE_HIDDEN_FILES),
+  }));
 
   window.loadFile(path.join(projectRoot, 'src', 'renderer', 'index.html'));
   return window;

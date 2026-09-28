@@ -7,7 +7,7 @@
 //
 // Pfade kommen nativ aus dem Main-Prozess (Windows: Backslash), deshalb
 // laufen alle Zerlegungen ueber nativePath.js statt ueber split('/') (#73).
-import { depthOf, parentDirOf, isInsideDir } from '../utils/nativePath.js';
+import { depthOf, parentDirOf, isInsideDir, segmentsOf } from '../utils/nativePath.js';
 import { TREE_DRAG_MIME } from '../chat/workspaceReference.js';
 
 export function folderDepthSortKey(dirPath) {
@@ -103,4 +103,17 @@ export function foldersToReexpand({ expandedBefore = [], redrawn = [], rootPath 
   return expandedBefore.filter(
     (p) => p !== rootPath && redrawn.some((dir) => p !== dir && isInsideDir(p, dir))
   );
+}
+
+/**
+ * Whether a tree entry is hidden or lies below a hidden folder (#436) — the
+ * rows that are dimmed, and that go away when hidden files are switched off.
+ * Only the part below the project folder counts: a project that itself sits in
+ * a dot folder (`~/.config/tool`) is not hidden from its own tree. Both
+ * separators, since Windows paths arrive with backslashes.
+ */
+export function isHiddenTreePath(itemPath, rootPath) {
+  if (!isInsideDir(itemPath, rootPath)) return false;
+  const below = segmentsOf(itemPath).slice(segmentsOf(rootPath).length);
+  return below.some((segment) => segment.startsWith('.'));
 }

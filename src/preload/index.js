@@ -7,7 +7,9 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-ch
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openFolder: () => ipcRenderer.invoke(REQ.DIALOG_OPEN_FOLDER),
-  readDirectory: (dirPath) => ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath),
+  // `showHidden` lists dot files as well (#436); only the flag crosses over.
+  readDirectory: (dirPath, options) =>
+    ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath, { showHidden: options?.showHidden === true }),
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
   // Bild aus dem Arbeitsordner fuer eine Chat-Antwort (Issue #244).
   readWorkspaceImage: (imagePath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_IMAGE, imagePath),
@@ -29,7 +31,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   inspectImport: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_INSPECT_IMPORT, sourcePaths, destDir),
   importItems: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_IMPORT_ITEMS, sourcePaths, destDir),
-  listWorkspacePaths: () => ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS),
+  listWorkspacePaths: (options) =>
+    ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: options?.showHidden === true }),
   showFileContextMenu: (filePath, options) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, options),
   onFsItemDeleted: (callback) => {
     const channel = PUSH.FS_ITEM_DELETED;
@@ -150,6 +153,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Zustand haelt er selbst.
   onToggleSidebar: (callback) => {
     const channel = PUSH.UI_TOGGLE_SIDEBAR;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // Hidden files in the tree (#436): menu "View" or Cmd+Shift+. / Ctrl+Shift+.
+  // Like the sidebar, the renderer holds the state and only gets the signal.
+  onToggleHiddenFiles: (callback) => {
+    const channel = PUSH.UI_TOGGLE_HIDDEN_FILES;
     const listener = () => callback();
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

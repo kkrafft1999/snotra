@@ -34,8 +34,10 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   };
   if (!chatInput || !menu || typeof api?.listWorkspacePaths !== 'function') return inactive;
 
-  let cache = null; // { root, entries, fetchedAt }
-  let pending = null; // { root, promise }
+  // Keyed by the folder and by whether hidden files are shown (#436): the list
+  // follows the tree, so switching them over fetches it anew.
+  let cache = null; // { root, showHidden, entries, fetchedAt }
+  let pending = null; // { root, showHidden, promise }
   let cacheGeneration = 0;
   let active = null; // { start, query } der offenen Referenz
   let items = [];
@@ -64,27 +66,29 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   async function loadEntries() {
     const root = appStore.rootPath;
     if (!root) return [];
-    if (cache?.root === root && Date.now() - cache.fetchedAt < CACHE_MAX_AGE_MS) {
+    const showHidden = appStore.showHiddenFiles === true;
+    const matches = (entry) => entry?.root === root && entry.showHidden === showHidden;
+    if (matches(cache) && Date.now() - cache.fetchedAt < CACHE_MAX_AGE_MS) {
       return cache.entries;
     }
-    if (pending?.root === root) return pending.promise;
+    if (matches(pending)) return pending.promise;
 
     const generation = cacheGeneration;
     const promise = (async () => {
       let entries = [];
       try {
-        const result = await api.listWorkspacePaths();
+        const result = await api.listWorkspacePaths({ showHidden });
         entries = Array.isArray(result?.entries) ? result.entries : [];
       } catch {
         entries = [];
       }
       if (generation === cacheGeneration && appStore.rootPath === root) {
-        cache = { root, entries, fetchedAt: Date.now() };
+        cache = { root, showHidden, entries, fetchedAt: Date.now() };
       }
       if (pending?.promise === promise) pending = null;
       return entries;
     })();
-    pending = { root, promise };
+    pending = { root, showHidden, promise };
     return promise;
   }
 

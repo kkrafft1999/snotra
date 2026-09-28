@@ -46,8 +46,24 @@ test('isTextFile recognises well-known files without an extension', async () => 
   for (const name of ['Makefile', 'Dockerfile', 'README', 'LICENSE', 'CHANGELOG']) {
     assert.equal(isTextFile(name), true, name);
   }
-  assert.equal(isTextFile('.env'), false);
   assert.equal(isTextFile('binary'), false);
+});
+
+test('isTextFile reads dot files as text, since the tree can show them (#436)', async () => {
+  const { isTextFile } = await load();
+  // No extension of their own — configuration by convention.
+  for (const name of ['.env', '.gitignore', '.npmrc', '.nvmrc', '.editorconfig', '.gitattributes']) {
+    assert.equal(isTextFile(name), true, name);
+  }
+  // The stage of an env file sits where the extension would be.
+  for (const name of ['.env.local', '.env.example', '.ENV.production']) {
+    assert.equal(isTextFile(name), true, name);
+  }
+  // With an extension, the extension decides.
+  assert.equal(isTextFile('.eslintrc.json'), true);
+  assert.equal(isTextFile('.notes.md.swp'), false);
+  assert.equal(isTextFile('.cover.png'), false);
+  assert.equal(isTextFile('.'), false);
 });
 
 test('formatSize steps through B, KB, MB, GB and TB', async () => {

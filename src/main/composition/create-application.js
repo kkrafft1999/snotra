@@ -116,6 +116,12 @@ function createApplication({
    */
   onAppLocaleChanged = null,
   /**
+   * Called when hidden files in the tree are switched on or off, and at
+   * start-up when the stored value is on (#436). The caller ticks the checkbox
+   * in its View menu, which starts unticked.
+   */
+  onShowHiddenFilesChanged = null,
+  /**
    * The process environment. Only `SNOTRA_NO_UPDATE_CHECK` is read: set to
    * `1`, the silent check at start-up does not ask GitHub (#407). The smoke
    * test sets it, so a release published in the meantime cannot put the
@@ -164,6 +170,25 @@ function createApplication({
       // If the stored language differs, the caller rebuilds it now — long
       // before anyone opens it.
       onAppLocaleChanged?.(appLocale);
+    })
+    .catch(() => {});
+
+  // ── Hidden files in the tree (#436) ───────────────────────────────────────
+  // The renderer owns the switch; the main process remembers it only for the
+  // checkbox in the View menu, which is built synchronously like the labels.
+  // A toggle that beats the start-up read wins — it is the newer wish.
+  let showHiddenFiles = false;
+  let showHiddenFilesSet = false;
+  const getShowHiddenFiles = () => showHiddenFiles;
+  const setShowHiddenFiles = (next) => {
+    showHiddenFilesSet = true;
+    showHiddenFiles = next === true;
+    onShowHiddenFilesChanged?.(showHiddenFiles);
+  };
+  void uiPrefsStore.readUIPrefs()
+    .then((prefs) => {
+      if (showHiddenFilesSet || prefs.showHiddenFiles !== true) return;
+      setShowHiddenFiles(true);
     })
     .catch(() => {});
 
@@ -738,6 +763,7 @@ function createApplication({
       appLocale = normalizeLocale(next);
       onAppLocaleChanged?.(appLocale);
     },
+    onShowHiddenFilesChanged: setShowHiddenFiles,
     mcpSettings,
     pythonSettings,
     shellSettings,
@@ -878,6 +904,7 @@ function createApplication({
       }),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
     getAppLocale,
+    getShowHiddenFiles,
   };
 }
 

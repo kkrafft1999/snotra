@@ -152,6 +152,51 @@ test('readDirectory lists workspace entries and denies paths outside', async (t)
   assert.deepEqual(denied, { entries: [], hidden: 0 }, 'directories outside the workspace must not be listed');
 });
 
+test('readDirectory lists dot entries only with showHidden, system noise never (#436)', async (t) => {
+  const { ipcMain, workspace } = await setup(t);
+  await fs.mkdir(path.join(workspace, '.github'));
+  await fs.mkdir(path.join(workspace, '.git'));
+  for (const name of ['.env', '.DS_Store', 'Thumbs.db', 'desktop.ini']) {
+    await fs.writeFile(path.join(workspace, name), 'x', 'utf8');
+  }
+  const names = async (...options) =>
+    (await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace, ...options)).entries.map((e) => e.name);
+
+  assert.deepEqual(await names(), ['inside.txt']);
+  assert.deepEqual(await names({ showHidden: true }), ['.github', '.env', 'inside.txt']);
+  // Only a real `true` from the renderer counts.
+  assert.deepEqual(await names({ showHidden: 'yes' }), ['inside.txt']);
+});
+
+test('readDirectory with showHidden still denies paths outside the workspace (#436)', async (t) => {
+  const { ipcMain, outside } = await setup(t);
+  const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, outside, { showHidden: true });
+  assert.deepEqual(denied, { entries: [], hidden: 0 });
+});
+
+test('listWorkspacePaths follows the tree: dot entries only with showHidden (#436)', async (t) => {
+  const { ipcMain, workspace } = await setup(t);
+  await seedMentionFixture(workspace);
+  for (const name of ['.DS_Store', 'Thumbs.db']) {
+    await fs.writeFile(path.join(workspace, name), 'x', 'utf8');
+  }
+
+  const shown = (await ipcMain.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: true }))
+    .entries.map((e) => e.path);
+  for (const listed of ['.gitignore', '.hidden', '.hidden/h.txt', 'docs/guide.md']) {
+    assert.ok(shown.includes(listed), `${listed} is listed with hidden files shown`);
+  }
+  // .gitignore keeps applying, and the noise the tree leaves out stays out here.
+  for (const excluded of ['.git', '.git/config', '.DS_Store', 'Thumbs.db', 'node_modules', 'debug.log']) {
+    assert.ok(!shown.includes(excluded), `${excluded} must not be listed`);
+  }
+
+  const off = (await ipcMain.invoke(REQ.FS_LIST_WORKSPACE_PATHS)).entries.map((e) => e.path);
+  for (const excluded of ['.gitignore', '.hidden', 'Thumbs.db']) {
+    assert.ok(!off.includes(excluded), `${excluded} must not be listed with hidden files off`);
+  }
+});
+
 test('readDirectory denies traversal via .. segments', async (t) => {
   const { ipcMain, workspace } = await setup(t);
   const sneaky = path.join(workspace, '..', 'outside');

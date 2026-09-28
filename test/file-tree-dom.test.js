@@ -38,6 +38,8 @@ async function mountTree(overrides = {}, extraDeps = {}) {
   appStore.activeTreeItem = null;
   appStore.selectedPath = null;
   appStore.selectedIsDirectory = false;
+  // A module singleton: without this, the switch of one test leaks into the next (#436).
+  appStore.showHiddenFiles = false;
 
   const entries = fakeFilesystem();
   // Entries main cut off per folder (#76); empty means every folder fits.
@@ -744,4 +746,181 @@ test('a file the listing left out still opens, without a row to mark', async (t)
   assert.equal(document.getElementById('preview-filename').textContent, '.hidden-notes.md');
   assert.equal(container.querySelector('.tree-item.active'), null);
   assert.equal(appStore.selectedPath, '/ws/.hidden-notes.md');
+});
+
+// ── Hidden files (#436) ─────────────────────────────────────────────────────
+
+function hiddenFilesystem() {
+  return {
+    '/ws': [
+      { name: '.github', path: '/ws/.github', isDirectory: true },
+      { name: 'docs', path: '/ws/docs', isDirectory: true },
+      { name: '.env', path: '/ws/.env', isDirectory: false, size: 3, modified: 0 },
+      { name: 'README.md', path: '/ws/README.md', isDirectory: false, size: 12, modified: 0 },
+    ],
+    '/ws/.github': [
+      { name: 'workflows', path: '/ws/.github/workflows', isDirectory: true },
+    ],
+    '/ws/.github/workflows': [
+      { name: 'ci.yml', path: '/ws/.github/workflows/ci.yml', isDirectory: false, size: 1, modified: 0 },
+    ],
+    '/ws/docs': [
+      { name: 'notes.md', path: '/ws/docs/notes.md', isDirectory: false, size: 5, modified: 0 },
+    ],
+  };
+}
+
+/** A tree whose main side filters like the real one: dot entries only with showHidden. */
+async function mountHiddenTree(t, extraDeps = {}) {
+  const listing = hiddenFilesystem();
+  const reads = [];
+  const prefWrites = [];
+  const mounted = await mountTree({
+    readDirectory: async (dir, options) => {
+      reads.push({ dir, showHidden: options?.showHidden });
+      const all = listing[dir] ?? [];
+      const entries = options?.showHidden === true ? all : all.filter((item) => !item.name.startsWith('.'));
+      return { entries, hidden: 0 };
+    },
+    setUIPrefs: async (patch) => {
+      prefWrites.push(patch);
+      return patch;
+    },
+  }, extraDeps);
+  t.after(mounted.dom.cleanup);
+  return { ...mounted, listing, reads, prefWrites };
+}
+
+const topLabels = (container) => [...container.children]
+  .filter((el) => el.classList.contains('tree-item'))
+  .map((row) => row.querySelector('.label').textContent);
+
+const hiddenFilesButton = () => document.getElementById('btn-toggle-hidden-files');
+
+async function until(condition) {
+  for (let i = 0; i < 50 && !condition(); i += 1) await flush();
+  assert.ok(condition(), 'the condition came true');
+}
+
+test('hidden files are off at first: the eye is struck through and the dot entries stay out', async (t) => {
+  const { container, reads } = await mountHiddenTree(t);
+
+  assert.deepEqual(topLabels(container), ['docs', 'README.md']);
+  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'false');
+  assert.equal(hiddenFilesButton().getAttribute('aria-label'), 'Show hidden files');
+  assert.match(hiddenFilesButton().title, /^Show hidden files \(.+\)$/, 'the title names the shortcut');
+  assert.ok(reads.every((read) => read.showHidden === false), 'main is asked without hidden files');
+});
+
+test('a click on the eye shows hidden files, dims them, and remembers the switch', async (t) => {
+  const { container, reads, prefWrites } = await mountHiddenTree(t);
+
+  hiddenFilesButton().click();
+  await until(() => prefWrites.length === 1);
+
+  assert.deepEqual(topLabels(container), ['.github', 'docs', '.env', 'README.md']);
+  assert.equal(rowFor(container, '/ws/.github').classList.contains('tree-item--hidden'), true);
+  assert.equal(rowFor(container, '/ws/.env').classList.contains('tree-item--hidden'), true);
+  assert.equal(rowFor(container, '/ws/docs').classList.contains('tree-item--hidden'), false);
+  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'true');
+  // The label stays; the title says what the next click does.
+  assert.equal(hiddenFilesButton().getAttribute('aria-label'), 'Show hidden files');
+  assert.match(hiddenFilesButton().title, /^Hide hidden files \(/);
+  assert.deepEqual(prefWrites, [{ showHiddenFiles: true }]);
+  assert.equal(reads.at(-1).showHidden, true);
+});
+
+test('everything below a hidden folder is dimmed, even without a dot of its own', async (t) => {
+  const { tree, container } = await mountHiddenTree(t);
+  await tree.setShowHiddenFiles(true);
+
+  rowFor(container, '/ws/.github').click();
+  await flush();
+  rowFor(container, '/ws/.github/workflows').click();
+  await flush();
+
+  assert.equal(rowFor(container, '/ws/.github/workflows').classList.contains('tree-item--hidden'), true);
+  assert.equal(rowFor(container, '/ws/.github/workflows/ci.yml').classList.contains('tree-item--hidden'), true);
+});
+
+test('switching keeps open folders, and hidden folders open again when they come back', async (t) => {
+  const { tree, container } = await mountHiddenTree(t);
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  await tree.setShowHiddenFiles(true);
+  rowFor(container, '/ws/.github').click();
+  await flush();
+
+  await tree.setShowHiddenFiles(false);
+  assert.equal(rowFor(container, '/ws/.github'), null);
+  assert.ok(rowFor(container, '/ws/docs/notes.md'), 'docs stays open');
+  assert.equal(
+    container.querySelector('.tree-children[data-path="/ws/docs"]').classList.contains('expanded'),
+    true
+  );
+
+  await tree.setShowHiddenFiles(true);
+  assert.equal(
+    container.querySelector('.tree-children[data-path="/ws/.github"]').classList.contains('expanded'),
+    true,
+    '.github is open again, as it was'
+  );
+  assert.ok(rowFor(container, '/ws/.github/workflows'));
+  assert.ok(rowFor(container, '/ws/docs/notes.md'));
+});
+
+test('hiding lets go of a hidden selection, but its preview stays — also through a watcher report', async (t) => {
+  const { tree, container, appStore, emitTreeChanged } = await mountHiddenTree(t);
+  await tree.setShowHiddenFiles(true);
+  rowFor(container, '/ws/.env').click();
+  await flush();
+  assert.equal(previewShown(), true, 'a dot file is text and opens in the preview');
+
+  await tree.setShowHiddenFiles(false);
+  assert.equal(rowFor(container, '/ws/.env'), null);
+  assert.equal(appStore.selectedPath, null);
+  assert.equal(appStore.activeTreeItem, null);
+  assert.equal(previewShown(), true, 'the file is not gone, only not shown');
+
+  // The row is missing, but that is the filter, not a deletion.
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+  assert.equal(previewShown(), true);
+  assert.equal(document.getElementById('preview-filename').textContent, '.env');
+});
+
+test('two quick switches cancel out: no redraw, and the last state is stored', async (t) => {
+  const { tree, container, reads, prefWrites } = await mountHiddenTree(t);
+  const readsBefore = reads.length;
+
+  void tree.toggleHiddenFiles();
+  await tree.toggleHiddenFiles();
+
+  assert.deepEqual(topLabels(container), ['docs', 'README.md']);
+  assert.equal(reads.length, readsBefore, 'the tree already matched, nothing was listed again');
+  assert.deepEqual(prefWrites, [{ showHiddenFiles: false }, { showHiddenFiles: false }]);
+  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'false');
+});
+
+test('the stored switch at start-up is applied without being written back', async (t) => {
+  const { tree, container, prefWrites } = await mountHiddenTree(t);
+
+  await tree.setShowHiddenFiles(true, { persist: false });
+
+  assert.deepEqual(topLabels(container), ['.github', 'docs', '.env', 'README.md']);
+  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(prefWrites, []);
+});
+
+test('a hidden file opened from a link keeps its preview through a watcher report', async (t) => {
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, emitTreeChanged } = await mountTree({}, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.deepEqual(await contexts[0].openFile('/ws/.hidden-notes.md'), { ok: true });
+
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+  assert.equal(document.getElementById('preview-filename').textContent, '.hidden-notes.md');
+  assert.equal(previewShown(), true);
 });

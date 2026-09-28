@@ -12,6 +12,7 @@ const {
   validateRegexPattern,
 } = require('./search-line-matcher');
 const { formatBytes } = require('../../shared/runtime/format-bytes');
+const { isAlwaysHiddenEntryName, isListedEntryName } = require('../../shared/runtime/hidden-entries');
 const { createTranslator } = require('../../shared/i18n');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
@@ -1979,16 +1980,19 @@ function createFsService({
    * Symlinks. Breitensuche, damit beim Erreichen der Obergrenze die oberen Ebenen
    * vollständig sind (die Liste zeigt bei leerer Eingabe die Wurzel zuerst).
    */
-  async function listWorkspacePaths(workspaceRoot, { maxEntries = MENTION_MAX_ENTRIES } = {}) {
+  // The `@` menu follows the tree (#436): hidden entries only with
+  // `showHidden`, and the tree's system noise stays out either way.
+  async function listWorkspacePaths(workspaceRoot, { maxEntries = MENTION_MAX_ENTRIES, showHidden = false } = {}) {
     const root = path.resolve(workspaceRoot);
     const cap = Math.max(1, Math.floor(Number(maxEntries) || MENTION_MAX_ENTRIES));
-    const walkOptions = { root, includeHidden: false, isIgnored: await loadGitignoreMatcher(root) };
+    const walkOptions = { root, includeHidden: showHidden === true, isIgnored: await loadGitignoreMatcher(root) };
     const entries = [];
     let truncated = false;
     const queue = [root];
     while (queue.length > 0 && !truncated) {
       const dirAbs = queue.shift();
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
+        if (isAlwaysHiddenEntryName(entry.name)) continue;
         if (entries.length >= cap) {
           truncated = true;
           break;
@@ -2200,10 +2204,11 @@ function createFsService({
 
   // The file tree's listing (#76). Sorted and cut on the bare directory
   // entries, so only the rows that are shown cost an lstat, and those run in
-  // batches instead of all at once.
-  async function readDirectory(dirPath, { maxEntries = READ_DIRECTORY_MAX_ENTRIES } = {}) {
+  // batches instead of all at once. Hidden entries only with `showHidden`
+  // (#436); system noise such as `.git` never.
+  async function readDirectory(dirPath, { maxEntries = READ_DIRECTORY_MAX_ENTRIES, showHidden = false } = {}) {
     const all = (await fs.readdir(dirPath, { withFileTypes: true }))
-      .filter((entry) => !entry.name.startsWith('.'))
+      .filter((entry) => isListedEntryName(entry.name, { showHidden }))
       .sort((a, b) => {
         if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });

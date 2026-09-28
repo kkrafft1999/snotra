@@ -338,6 +338,14 @@ deliberately not used — both require a code signature.
   at 1536 × 960 points, and on smaller screens as large as the work area allows.
   If you have unplugged the second monitor it last sat on, it comes back at the
   same size, centred on the primary display, instead of into the void.
+- **Hidden files:** files and folders whose name starts with a dot — `.github`,
+  `.gitignore`, `.env` — are not in the tree at first. The eye in the header of
+  the tree shows them, and so do `Cmd+Shift+.` on the Mac, `Ctrl+Shift+.` on
+  Windows and Linux, and *View › Show Hidden Files*. They then appear dimmed in
+  their usual place, along with everything inside a hidden folder, and open in
+  the preview like any other text file. The `@` list in the chat follows the
+  tree. `.git`, `.DS_Store`, `Thumbs.db` and `desktop.ini` stay out either way.
+  The switch applies to every folder and is still set after a restart.
 - **Moving:** dragging a file or folder in the tree onto a folder row moves the
   entry there; dropping it on the free area below the tree puts it in the project
   folder. If the name already exists, it becomes `name (2).ext`.
@@ -630,6 +638,7 @@ and full screen behave as in any other app on your platform and sit in the
 | --- | --- | --- |
 | Open the settings | `Cmd+,` | `Ctrl+,` |
 | Show or hide the sidebar | `Cmd+B` | `Ctrl+B` |
+| Show or hide hidden files in the tree | `Cmd+Shift+.` | `Ctrl+Shift+.` |
 | Copy the tool log diagnostics as JSON to the clipboard — useful for a bug report | `Cmd+Shift+D` | `Ctrl+Shift+D` |
 
 **Chat input**

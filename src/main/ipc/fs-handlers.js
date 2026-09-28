@@ -54,8 +54,8 @@ function registerFsHandlers({
   // unregistered and pdf.js renders without CMaps, fonts and decoders.
   pdfAssets = null,
 }) {
-  ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath) =>
-    filesystem.readDirectory(dirPath));
+  ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath, options) =>
+    filesystem.readDirectory(dirPath, options));
 
   ipcMain.handle(REQ.FS_MOVE_ITEM, async (_event, sourcePath, destDir) =>
     filesystem.moveItem(sourcePath, destDir));
@@ -78,8 +78,8 @@ function registerFsHandlers({
       pdfAssets.readPdfAsset(kind, filename));
   }
 
-  ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async () =>
-    filesystem.listWorkspacePaths());
+  ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async (_event, options) =>
+    filesystem.listWorkspacePaths(options));
 
   function showMessageBox(options) {
     const win = getMainWindow();
