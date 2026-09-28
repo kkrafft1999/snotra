@@ -64,14 +64,16 @@ function createFilesystemIpcAdapter({
   }
 
   return {
-    async readDirectory(dirPath) {
+    // `showHidden` (#436) comes from the renderer: whether hidden files are
+    // shown is a view setting, not a boundary — the path check stays as it is.
+    async readDirectory(dirPath, options) {
       const { absPath, error } = await boundPath(dirPath);
       if (error) {
         console.error('readDirectory denied:', error);
         return { entries: [], hidden: 0 };
       }
       try {
-        return await fsService.readDirectory(absPath);
+        return await fsService.readDirectory(absPath, { showHidden: options?.showHidden === true });
       } catch (err) {
         console.error('readDirectory error:', err.message);
         return { entries: [], hidden: 0 };
@@ -109,13 +111,13 @@ function createFilesystemIpcAdapter({
     },
     // Pfadliste für die @-Vervollständigung; immer relativ zum aktiven Workspace,
     // der Renderer übergibt bewusst keinen Pfad (kein Ausbruch aus dem Root möglich).
-    async listWorkspacePaths() {
+    async listWorkspacePaths(options) {
       const workspaceRoot = getActiveWorkspaceRoot();
       if (!workspaceRoot) {
         return { entries: [], truncated: false, error: ui()('fs.error.noWorkspace') };
       }
       try {
-        return await fsService.listWorkspacePaths(workspaceRoot);
+        return await fsService.listWorkspacePaths(workspaceRoot, { showHidden: options?.showHidden === true });
       } catch (err) {
         return { entries: [], truncated: false, error: err.message };
       }

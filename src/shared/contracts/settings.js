@@ -470,6 +470,9 @@ function normalizeUiPrefs(raw) {
     // Chat-Spalte: voreingestellt sichtbar — sie ist der Grund, warum es die
     // App gibt. Wer sie wegschaltet, findet sie weggeschaltet vor.
     chatPanelVisible: data.chatPanelVisible !== false,
+    // Hidden files in the tree (#436): off by default, so nothing changes for
+    // anyone who does not look for the switch. Hence `=== true`.
+    showHiddenFiles: data.showHiddenFiles === true,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
@@ -508,6 +511,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.chatPanelVisible === 'boolean') {
     out.chatPanelVisible = patch.chatPanelVisible;
+  }
+  if (typeof patch.showHiddenFiles === 'boolean') {
+    out.showHiddenFiles = patch.showHiddenFiles;
   }
   if (typeof patch.baseSystemPrompt === 'string') {
     out.baseSystemPrompt = patch.baseSystemPrompt;

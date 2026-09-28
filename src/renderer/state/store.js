@@ -8,6 +8,9 @@ export const appStore = {
   activeTreeItem: null,
   selectedPath: null,
   selectedIsDirectory: false,
+  // Hidden files in the tree (#436). Owned by FileTree; the `@` menu reads it,
+  // so what the tree shows can be referenced.
+  showHiddenFiles: false,
   llmState: {
     encryptionAvailable: true,
     activeProvider: 'openai',

@@ -446,6 +446,12 @@ api.onToggleMarkdownSource?.(() => {
   fileTree.runPreviewCommand('toggle-source');
 });
 
+// Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436) — the
+// same as the eye in the tree header.
+api.onToggleHiddenFiles?.(() => {
+  void fileTree.toggleHiddenFiles();
+});
+
 async function openFolderViaDialog() {
   const folderPath = await api.openFolder();
   if (folderPath) {
@@ -502,6 +508,9 @@ void initAppVersionBadge({ api });
     setChatPanelVisible(uiPrefs.chatPanelVisible !== false);
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
     setLocale(uiPrefs.appLocale);
+    // Before the folder opens, so its first listing already follows the
+    // switch (#436). The stored value is no new wish: not written back.
+    await fileTree.setShowHiddenFiles(uiPrefs.showHiddenFiles === true, { persist: false });
   } catch {
     setSidebarVisible(true, { animate: false });
   }

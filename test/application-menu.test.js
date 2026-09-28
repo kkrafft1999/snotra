@@ -1,12 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApplicationMenuTemplate } = require('../src/main/services/application-menu');
+const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('../src/main/services/application-menu');
 
 const PUSH = {
   UI_OPEN_SETTINGS: 'ui:open-settings',
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
   UI_NEW_CHAT: 'ui:new-chat',
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
+  UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
 };
 
 function buildTemplate(platform, overrides = {}) {
@@ -49,11 +50,12 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
   const view = menuNamed(template, 'View');
   assert.ok(view, 'das Menue Ansicht existiert weiter');
   assert.ok(!view.submenu.some((item) => item.label === 'Settings\u2026'));
-  // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, Markdown
-  // darunter (#344), dann Neu laden.
+  // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, darunter die
+  // versteckten Dateien (#436), dann Markdown (#344), dann Neu laden.
   assert.equal(view.submenu[0].label, 'Toggle Sidebar');
-  assert.equal(view.submenu[1].label, 'Preview or Source');
-  assert.equal(view.submenu[3].role, 'reload');
+  assert.equal(view.submenu[1].label, 'Show Hidden Files');
+  assert.equal(view.submenu[2].label, 'Preview or Source');
+  assert.equal(view.submenu[4].role, 'reload');
 });
 
 for (const platform of ['win32', 'linux']) {
@@ -63,8 +65,8 @@ for (const platform of ['win32', 'linux']) {
 
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
-    assert.deepEqual(labels.slice(0, 6), [
-      'Toggle Sidebar', 'Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
+    assert.deepEqual(labels.slice(0, 7), [
+      'Toggle Sidebar', 'Show Hidden Files', 'Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
     ]);
   });
 }
@@ -154,4 +156,27 @@ test('the File menu is "Ablage" on the Mac and "Datei" elsewhere in German (#381
     assert.equal(file.label, 'Datei');
     assert.equal(file.submenu[0].label, 'Neuer Chat');
   }
+});
+
+for (const platform of ['darwin', 'win32', 'linux']) {
+  test(`${platform}: View > Show Hidden Files is a checkbox that sends the toggle (#436)`, () => {
+    const { template, sent } = buildTemplate(platform);
+    const item = allItems(template).find((entry) => entry.id === MENU_ITEM_IDS.SHOW_HIDDEN_FILES);
+    assert.equal(item.menu, 'View');
+    assert.equal(item.type, 'checkbox');
+    assert.equal(item.checked, false, 'off unless the stored state says otherwise');
+    assert.equal(item.accelerator, 'CmdOrCtrl+Shift+.');
+    // Only shown: the window matches the physical key (hidden-files-shortcut.js),
+    // which a menu accelerator cannot on a German keyboard.
+    assert.equal(item.registerAccelerator, false);
+    item.click();
+    assert.deepEqual(sent, [PUSH.UI_TOGGLE_HIDDEN_FILES]);
+  });
+}
+
+test('Show Hidden Files follows the stored state and the language (#436)', () => {
+  const { template } = buildTemplate('darwin', { showHiddenFiles: true, locale: 'de' });
+  const item = allItems(template).find((entry) => entry.id === MENU_ITEM_IDS.SHOW_HIDDEN_FILES);
+  assert.equal(item.checked, true);
+  assert.equal(item.label, 'Versteckte Dateien anzeigen');
 });

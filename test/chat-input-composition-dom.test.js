@@ -145,3 +145,47 @@ test('Enter during an IME composition leaves the @ menu open', async (t) => {
   assert.ok(mention.isOpen(), 'the menu is still open, no entry was applied');
   assert.equal(input.value, before, 'the input text is unchanged');
 });
+
+test('the @ menu asks for what the tree shows, and asks again after the switch (#436)', async (t) => {
+  const dom = setupRendererDom();
+  t.after(dom.cleanup);
+  const { initMentionAutocomplete } = await importRenderer('components', 'MentionAutocomplete.js');
+  const { appStore } = await importRenderer('state', 'store.js');
+
+  const calls = [];
+  const api = {
+    listWorkspacePaths: async (options) => {
+      calls.push(options);
+      const entries = [{ path: 'src', kind: 'directory' }];
+      if (options?.showHidden === true) entries.unshift({ path: '.github', kind: 'directory' });
+      return { entries };
+    },
+  };
+  appStore.rootPath = '/ws';
+  appStore.showHiddenFiles = false;
+  t.after(() => { appStore.showHiddenFiles = false; });
+  const mention = initMentionAutocomplete({ api, appStore, onInputChanged() {} });
+  const input = document.getElementById('chat-input');
+  const menu = document.getElementById('chat-mention-menu');
+
+  async function typeMention() {
+    input.value = '@';
+    input.selectionStart = input.value.length;
+    input.selectionEnd = input.value.length;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    for (let i = 0; i < 5 && !mention.isOpen(); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  const offered = () => [...menu.querySelectorAll('.chat-mention-option')].map((el) => el.textContent);
+
+  await typeMention();
+  assert.deepEqual(calls, [{ showHidden: false }]);
+  assert.ok(!offered().some((text) => text.includes('.github')));
+
+  mention.close();
+  appStore.showHiddenFiles = true;
+  await typeMention();
+  assert.deepEqual(calls, [{ showHidden: false }, { showHidden: true }], 'the cached list belonged to the other switch');
+  assert.ok(offered().some((text) => text.includes('.github')));
+});

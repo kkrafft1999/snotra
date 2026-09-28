@@ -51,6 +51,11 @@ function registerSettingsHandlers({
    * belongs here; this handler only knows when it happens.
    */
   onAppLocaleChanged = null,
+  /**
+   * The same for the hidden files in the tree (#436): the renderer owns the
+   * switch, the main process only keeps the checkbox in the View menu in step.
+   */
+  onShowHiddenFilesChanged = null,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -530,6 +535,7 @@ function registerSettingsHandlers({
     }
     const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
     if ('appLocale' in patch) onAppLocaleChanged?.(patch.appLocale);
+    if ('showHiddenFiles' in patch) onShowHiddenFilesChanged?.(patch.showHiddenFiles);
     // Beides entscheidet ueber die Sichtbarkeit von run_python und muss
     // sofort greifen, nicht erst beim naechsten App-Start.
     if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {

@@ -210,6 +210,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_NEW_CHAT: 'ui:new-chat',
   /** Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344, #345). */
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
+  /** Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436). */
+  UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
 });
 
 module.exports = {

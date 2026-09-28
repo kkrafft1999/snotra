@@ -19,6 +19,7 @@ import {
   foldersToReexpand,
   importDestDirFor,
   isExternalFileDrop,
+  isHiddenTreePath,
   listingSignature,
   listingsDiffer,
   parentDirFromItemPath,
@@ -64,6 +65,7 @@ export function initFileTree(deps) {
   });
   const projectName = document.getElementById('project-name');
   const btnFolderHistory = document.getElementById('btn-folder-history');
+  const btnHiddenFiles = document.getElementById('btn-toggle-hidden-files');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
   const welcomeRecentSection = document.getElementById('welcome-recent');
   const welcomeRecentList = document.getElementById('welcome-recent-list');
@@ -82,6 +84,12 @@ export function initFileTree(deps) {
   // Laeuft gerade ein Import von aussen? Verhindert einen zweiten Drop,
   // waehrend noch kopiert wird (#101).
   let importInFlight = false;
+
+  // Hidden files (#436). Whether the tree on screen was drawn with them, and
+  // which hidden folders were open when they went away — they open again when
+  // hidden files come back, so switching twice leaves the tree as it was.
+  let drawnShowHidden = false;
+  let expandedHiddenFolders = [];
 
   function resetDragState() {
     clearDragVisualState();
@@ -186,6 +194,8 @@ export function initFileTree(deps) {
     treeContainer.innerHTML = '';
     contentPane.clear();
 
+    drawnShowHidden = appStore.showHiddenFiles === true;
+    expandedHiddenFolders = [];
     await loadTreeLevel(treeContainer, folderPath, 0);
     if (workspaceChanged) {
       await onWorkspaceChanged?.(folderPath, workspaceChanged);
@@ -407,11 +417,13 @@ export function initFileTree(deps) {
   });
 
   async function loadTreeLevel(parentEl, dirPath, depth) {
-    const { entries: items = [], hidden = 0 } = (await api.readDirectory(dirPath)) || {};
+    const { entries: items = [], hidden = 0 } = (await listFolder(dirPath)) || {};
 
     for (const item of items) {
       const row = document.createElement('div');
       row.classList.add('tree-item');
+      // Dimmed (#436): a dot entry, or anything below a dot folder.
+      if (isHiddenTreePath(item.path, appStore.rootPath)) row.classList.add('tree-item--hidden');
       row.dataset.path = item.path;
       row.dataset.isDirectory = item.isDirectory;
       row.setAttribute('draggable', 'true');
@@ -938,7 +950,7 @@ export function initFileTree(deps) {
   async function folderListingChanged(dirPath) {
     const rows = rowsOfFolder(dirPath);
     if (!rows) return false;
-    const { entries: items = [], hidden = 0 } = (await api.readDirectory(dirPath)) || {};
+    const { entries: items = [], hidden = 0 } = (await listFolder(dirPath)) || {};
     const jetzt = items.map((item) => listingSignature(item.path, item.isDirectory));
     const vorher = rows.map((row) => listingSignature(row.dataset.path, row.dataset.isDirectory === 'true'));
     // Past the cap the drawn rows can stay the same while the count behind them moves.
@@ -1003,8 +1015,11 @@ export function initFileTree(deps) {
    * watcher does not know.
    */
   async function syncSelection(reportedDirs, complete) {
-    // Whatever sits in a collapsed folder has no row to go by: left alone.
-    const inVisibleFolder = (p) => visibleFolderPaths().includes(parentDirOf(p));
+    // Whatever sits in a collapsed folder has no row to go by: left alone. So
+    // does a hidden file while hidden files are off (#436) — it is not gone,
+    // only not shown, and its preview stays.
+    const inVisibleFolder = (p) =>
+      visibleFolderPaths().includes(parentDirOf(p)) && !hiddenByFilter(p);
     const selected = appStore.selectedPath;
     let vanished = null;
     if (selected && inVisibleFolder(selected) && !rowForPath(selected)) {
@@ -1053,6 +1068,94 @@ export function initFileTree(deps) {
 
     await syncSelection(gemeldet, vollstaendig);
   }
+
+  // ── Hidden files (#436) ───────────────────────────────────────────────────
+  // One app-wide switch, held in `appStore.showHiddenFiles` so the `@` menu
+  // reads the same value. Main filters the listing, including the system noise
+  // that stays out either way; the tree asks with the flag and dims the rows
+  // that lie in a hidden place.
+
+  const HIDDEN_FILES_SHORTCUT_MAC = '⇧⌘.';
+
+  function hiddenFilesShortcut() {
+    return navigator.userAgent.includes('Mac')
+      ? HIDDEN_FILES_SHORTCUT_MAC
+      : t('sidebar.hiddenFiles.shortcut');
+  }
+
+  function listFolder(dirPath) {
+    return api.readDirectory(dirPath, { showHidden: appStore.showHiddenFiles === true });
+  }
+
+  /** On disk, but not in the tree because hidden files are switched off. */
+  function hiddenByFilter(itemPath) {
+    return appStore.showHiddenFiles !== true && isHiddenTreePath(itemPath, appStore.rootPath);
+  }
+
+  // The label stays "Show hidden files" and aria-pressed carries the state;
+  // the title names what a click does next, with the shortcut.
+  function renderHiddenFilesButton() {
+    if (!btnHiddenFiles) return;
+    const on = appStore.showHiddenFiles === true;
+    btnHiddenFiles.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const action = t(on ? 'sidebar.hiddenFiles.hide' : 'sidebar.hiddenFiles.show');
+    btnHiddenFiles.title = `${action} (${hiddenFilesShortcut()})`;
+  }
+
+  /**
+   * Draws the tree again for the current switch. Open folders, the scroll
+   * position and the focus survive; a selection that went into hiding is let
+   * go, the file on show stays where it is. Skipped when the tree already
+   * matches — two quick presses in a row cancel out.
+   */
+  async function redrawForHiddenFiles() {
+    const root = appStore.rootPath;
+    const show = appStore.showHiddenFiles === true;
+    if (!root || drawnShowHidden === show) return;
+    const view = captureTreeView();
+    const expandedBefore = collectExpandedFolderPaths();
+    const toExpand = show ? [...expandedBefore, ...expandedHiddenFolders] : expandedBefore;
+    expandedHiddenFolders = show ? [] : expandedBefore.filter((p) => isHiddenTreePath(p, root));
+    drawnShowHidden = show;
+    treeContainer.innerHTML = '';
+    await loadTreeLevel(treeContainer, root, 0);
+    await restoreExpandedFolders(toExpand);
+    if (appStore.selectedPath && hiddenByFilter(appStore.selectedPath)) clearSelection();
+    restoreTreeView(view);
+  }
+
+  /**
+   * Switches hidden files on or off. The button follows at once; the redraw
+   * queues behind any watcher report still running, since both rebuild the
+   * same DOM. `persist: false` at start-up, where the value comes from the
+   * preferences and is no new wish.
+   */
+  function setShowHiddenFiles(show, { persist = true } = {}) {
+    const next = show === true;
+    const changed = (appStore.showHiddenFiles === true) !== next;
+    appStore.showHiddenFiles = next;
+    renderHiddenFilesButton();
+    if (!changed) return treeSyncChain;
+    treeSyncChain = treeSyncChain
+      .then(async () => {
+        await redrawForHiddenFiles();
+        // What counts is the state once the queue gets here: after two quick
+        // presses both writes store the last one. A failed write leaves the
+        // tree as asked; only the next start falls back to the stored value.
+        if (persist) await api.setUIPrefs({ showHiddenFiles: appStore.showHiddenFiles === true });
+      })
+      .catch((err) => console.warn('Hidden files could not be switched:', err?.message ?? err));
+    return treeSyncChain;
+  }
+
+  function toggleHiddenFiles() {
+    return setShowHiddenFiles(appStore.showHiddenFiles !== true);
+  }
+
+  btnHiddenFiles?.addEventListener('click', () => {
+    void toggleHiddenFiles();
+  });
+  renderHiddenFilesButton();
 
   async function toggleFolder(row, childContainer, dirPath, depth) {
     const arrow = row.querySelector('.arrow');
@@ -1112,6 +1215,7 @@ export function initFileTree(deps) {
    */
   onLocaleChange(() => {
     if (!appStore.rootPath) projectName.textContent = t('sidebar.noFolder');
+    renderHiddenFilesButton();
     for (const btn of treeContainer.querySelectorAll('.tree-item-reference')) {
       const name = btn.dataset.itemName || '';
       btn.setAttribute('aria-label', t('tree.reference.label', { name }));
@@ -1129,6 +1233,9 @@ export function initFileTree(deps) {
     refreshWelcomeRecent,
     closeFolderHistoryMenu,
     notifyExternalFileWrite,
+    /** Hidden files on or off (#436); resolves once the tree is redrawn. */
+    setShowHiddenFiles,
+    toggleHiddenFiles,
     /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
     runPreviewCommand: (name) => contentPane.runCommand(name),
   };

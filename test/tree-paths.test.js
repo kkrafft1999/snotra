@@ -171,3 +171,34 @@ test('foldersToReexpand zerlegt auch Windows-Pfade richtig', async () => {
     ['C:\\ws\\src\\tief']
   );
 });
+
+test('isHiddenTreePath: a dot entry and everything below a dot folder (#436)', async () => {
+  const { isHiddenTreePath } = await treePathsPromise;
+  assert.equal(isHiddenTreePath('/ws/.gitignore', '/ws'), true);
+  assert.equal(isHiddenTreePath('/ws/.github', '/ws'), true);
+  assert.equal(isHiddenTreePath('/ws/.github/workflows/ci.yml', '/ws'), true);
+  assert.equal(isHiddenTreePath('/ws/src/.eslintrc', '/ws'), true);
+  assert.equal(isHiddenTreePath('/ws/src/app.js', '/ws'), false);
+  // A dot inside a name is no hidden entry.
+  assert.equal(isHiddenTreePath('/ws/v1.2/notes.md', '/ws'), false);
+});
+
+test('isHiddenTreePath: only the part below the project folder counts (#436)', async () => {
+  const { isHiddenTreePath } = await treePathsPromise;
+  // A project that itself lives in a dot folder is not hidden from its tree.
+  assert.equal(isHiddenTreePath('/home/me/.config/tool/src/a.js', '/home/me/.config/tool'), false);
+  assert.equal(isHiddenTreePath('/home/me/.config/tool/.env', '/home/me/.config/tool'), true);
+  // The root itself and paths outside it are never "hidden".
+  assert.equal(isHiddenTreePath('/ws', '/ws'), false);
+  assert.equal(isHiddenTreePath('/other/.env', '/ws'), false);
+  assert.equal(isHiddenTreePath('/ws/.env', null), false);
+});
+
+test('isHiddenTreePath takes Windows paths apart as well (#436)', async () => {
+  const { isHiddenTreePath } = await treePathsPromise;
+  assert.equal(isHiddenTreePath('C:\\ws\\.github\\workflows', 'C:\\ws'), true);
+  assert.equal(isHiddenTreePath('C:\\ws\\src\\app.js', 'C:\\ws'), false);
+  assert.equal(isHiddenTreePath('C:\\Users\\me\\.vscode\\proj\\src', 'C:\\Users\\me\\.vscode\\proj'), false);
+  // A project at the root of a drive.
+  assert.equal(isHiddenTreePath('D:\\.env', 'D:\\'), true);
+});
