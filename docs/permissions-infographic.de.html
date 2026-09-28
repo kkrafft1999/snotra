@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Snotra Berechtigungskonzept</title>
+<style>
+  :root {
+    --surface: #FFFCF5;
+    --bg-2: #F7F2EC;
+    --bg-3: #ECE7E1;
+    --line: #DAD5CF;
+    --text: #1F1E1C;
+    --text-2: #63615D;
+    --blue: #00759E;
+    --blue-bg: rgba(0, 117, 158, 0.09);
+    --blue-border: rgba(0, 117, 158, 0.32);
+    --ok: #2F7A4A;
+    --ok-bg: rgba(47, 122, 74, 0.10);
+    --ask: #00759E;
+    --ask-bg: rgba(0, 117, 158, 0.10);
+    --amber: #915B00;
+    --amber-bg: rgba(145, 91, 0, 0.10);
+    --amber-border: rgba(145, 91, 0, 0.35);
+    --stop: #A3332A;
+    --stop-bg: rgba(163, 51, 42, 0.09);
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg-3); }
+  body { font-family: var(--font); color: var(--text); -webkit-font-smoothing: antialiased; }
+  .sheet {
+    width: 1240px; margin: 0 auto; padding: 48px 56px 32px;
+    background: var(--surface);
+  }
+  code { white-space: nowrap; font-family: var(--mono); font-size: 0.92em; background: var(--bg-3); padding: 1px 5px; border-radius: 4px; }
+
+  /* Header */
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); margin: 0 0 8px; }
+  h1 { font-size: 40px; line-height: 1.12; margin: 0 0 14px; letter-spacing: -0.02em; }
+  .lead { font-size: 18px; line-height: 1.5; color: var(--text-2); margin: 0; max-width: 900px; }
+  .lead strong { color: var(--text); }
+
+  /* Two dials */
+  .dials { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 32px 0 44px; }
+  .dial { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; background: var(--bg-2); }
+  .dial-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--text); color: var(--surface); font-weight: 700; font-size: 15px; display: grid; place-items: center; }
+  .dial h2 { font-size: 20px; margin: 0; }
+  .dial .q { font-size: 15px; color: var(--text-2); margin: 0 0 14px 42px; }
+  .opts { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-left: 42px; }
+  .opt { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 12px; font-size: 14px; line-height: 1.35; }
+  .opt b { display: block; font-size: 15px; }
+  .opt span { color: var(--text-2); }
+  .opt.iso { border-color: var(--blue-border); background: var(--blue-bg); }
+  .opt.noiso { border-color: var(--amber-border); background: var(--amber-bg); }
+
+  h3.sec { display: flex; align-items: baseline; gap: 12px; font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h3.sec small { font-size: 15px; font-weight: 500; color: var(--text-2); }
+  .sec-lead { font-size: 15px; color: var(--text-2); margin: 0 0 16px; }
+
+  /* Matrix */
+  .matrix { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .matrix tr:last-child td { border-bottom: 0; }
+  .matrix thead th { background: var(--bg-3); font-size: 15px; text-align: center; }
+  .matrix thead th:first-child { text-align: left; }
+  .matrix thead th small { display: block; font-weight: 500; color: var(--text-2); font-size: 12.5px; margin-top: 2px; }
+  .matrix td + td { border-left: 1px solid var(--line); text-align: center; width: 215px; }
+  .matrix tbody tr:nth-child(even) td { background: var(--bg-2); }
+  .act { display: flex; gap: 12px; align-items: center; }
+  .ico { flex: none; width: 36px; height: 36px; border-radius: 9px; background: var(--bg-3); display: grid; place-items: center; }
+  .ico svg { width: 20px; height: 20px; stroke: var(--text); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .act b { font-size: 15.5px; display: block; }
+  .act span { font-size: 13px; color: var(--text-2); line-height: 1.4; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; padding: 5px 11px 5px 8px; border-radius: 999px; white-space: nowrap; }
+  .chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .ok { color: var(--ok); background: var(--ok-bg); }
+  .ask { color: var(--ask); background: var(--ask-bg); }
+  .stop { color: var(--stop); background: var(--stop-bg); }
+  .note { display: block; max-width: 180px; margin-left: auto; margin-right: auto; font-size: 12px; color: var(--text-2); margin-top: 5px; line-height: 1.35; }
+  .note.warn { color: var(--amber); font-weight: 600; }
+  .row-hard td { background: var(--stop-bg) !important; }
+  .legend { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; font-size: 13.5px; color: var(--text-2); margin: 12px 2px 0; }
+  .legend .chip { font-size: 12.5px; }
+
+  /* Sandbox comparison */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { border-radius: 14px; padding: 20px 22px; border: 1px solid; }
+  .panel.iso { border-color: var(--blue-border); background: var(--blue-bg); }
+  .panel.noiso { border-color: var(--amber-border); background: var(--amber-bg); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .panel h4 { font-size: 19px; margin: 0; }
+  .pill { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; display: inline-flex; gap: 6px; align-items: center; }
+  .pill svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .pill.iso { color: var(--blue); background: var(--surface); border: 1px solid var(--blue-border); }
+  .pill.noiso { color: var(--amber); background: var(--surface); border: 1px solid var(--amber-border); }
+  .where { font-size: 13.5px; color: var(--text-2); margin: 0 0 14px; }
+  .panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  .panel li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 14.5px; line-height: 1.45; }
+  .panel li svg { width: 18px; height: 18px; margin-top: 2px; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .yes svg { stroke: var(--ok); }
+  .no svg { stroke: var(--stop); }
+  .caveat { margin-top: 14px; padding-top: 12px; border-top: 1px dashed currentColor; font-size: 13.5px; line-height: 1.45; }
+  .panel.iso .caveat { color: var(--blue); }
+  .panel.noiso .caveat { color: var(--amber); }
+  .caveat b { color: var(--text); }
+
+  /* 2x2 */
+  .grid2 { display: grid; grid-template-columns: 150px 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .gh { font-size: 14px; font-weight: 700; text-align: center; padding: 6px; }
+  .gh small { display: block; font-weight: 500; color: var(--text-2); font-size: 12.5px; }
+  .gl { font-size: 14px; font-weight: 700; display: flex; flex-direction: column; justify-content: center; padding-left: 4px; }
+  .gl small { font-weight: 500; color: var(--text-2); font-size: 12.5px; }
+  .cell { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line); background: var(--bg-2); }
+  .cell .verdict { font-size: 15.5px; font-weight: 700; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+  .cell p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .c-best { background: var(--ok-bg); border-color: rgba(47,122,74,.3); } .c-best .verdict { color: var(--ok); } .c-best .dots i.on { background: var(--ok); }
+  .c-good { background: var(--blue-bg); border-color: var(--blue-border); } .c-good .verdict { color: var(--blue); } .c-good .dots i.on { background: var(--blue); }
+  .c-you { background: var(--bg-2); } .c-you .verdict { color: var(--text); } .c-you .dots i.on { background: var(--text-2); }
+  .c-none { background: var(--amber-bg); border-color: var(--amber-border); } .c-none .verdict { color: var(--amber); } .c-none .dots i.on { background: var(--amber); }
+  .keyline { margin: 16px 0 0; padding: 14px 18px; border-left: 4px solid var(--blue); background: var(--bg-2); border-radius: 0 10px 10px 0; font-size: 16px; line-height: 1.45; }
+
+  /* Loosening */
+  .loosen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .lz { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--bg-2); }
+  .lz b { display: block; font-size: 14.5px; margin-bottom: 4px; }
+  .lz span { font-size: 13px; color: var(--text-2); line-height: 1.45; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .fact { font-size: 13.5px; line-height: 1.45; color: var(--text-2); padding: 12px 16px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--line); }
+  .fact b { color: var(--text); }
+
+  section { margin-bottom: 40px; }
+  footer { display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 12.5px; color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <p class="eyebrow">Snotra AI · Berechtigungen</p>
+  <h1>Wer darf was? Das Berechtigungskonzept von Snotra</h1>
+  <p class="lead">Das Modell schlägt Aktionen nur vor. Snotra prüft jede einzelne, bevor sie läuft. Dafür gibt es zwei Regler: <strong>Der Modus entscheidet, ob Snotra dich fragt. Die Sandbox entscheidet, wie weit ein Programm reicht</strong>, wenn du es laufen lässt.</p>
+
+  <div class="dials">
+    <div class="dial">
+      <div class="dial-head"><div class="num">1</div><h2>Der Modus</h2></div>
+      <p class="q">Fragt Snotra vor einer Aktion nach? Gilt pro Chat, ein Standard lässt sich pro Workspace festlegen.</p>
+      <div class="opts">
+        <div class="opt"><b>Intelligent</b><span>Standard. Fragt, sobald etwas geändert wird oder nach außen geht.</span></div>
+        <div class="opt"><b>Immer fragen</b><span>Fragt bei jedem Aufruf, auch beim Lesen.</span></div>
+        <div class="opt"><b>Auto</b><span>Fragt nie. Einschalten nur mit Systemdialog.</span></div>
+      </div>
+    </div>
+    <div class="dial">
+      <div class="dial-head"><div class="num">2</div><h2>Die Sandbox</h2></div>
+      <p class="q">Wie weit reicht ein Befehl oder ein Python-Programm? Betrifft nur <code>shell_execute</code> und <code>run_python</code>.</p>
+      <div class="opts">
+        <div class="opt iso"><b>Isoliert</b><span>macOS und Linux, ab Werk eingeschaltet.</span></div>
+        <div class="opt noiso"><b>Nicht isoliert</b><span>Windows, Linux ohne <code>bubblewrap</code>, oder im Workspace abgeschaltet.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <h3 class="sec">Wann fragt Snotra nach? <small>Regler 1, der Modus</small></h3>
+    <p class="sec-lead">Jede Aktion gehört zu einer Risikoklasse. Der Modus legt fest, was mit ihr passiert.</p>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th>Aktion</th>
+          <th>Intelligent<small>Standard</small></th>
+          <th>Immer fragen<small>merkt sich nichts</small></th>
+          <th>Auto<small>Vollzugriff</small></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></div><div><b>Lesen und suchen</b><span>Datei öffnen, durchsuchen, Ordner auflisten, Skill laden</span></div></div></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+        </tr>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3M14 9l2 2"/></svg></div><div><b>Sensible Dateien lesen</b><span><code>.env</code>, Schlüssel wie <code>*.pem</code> oder <code>id_*</code>, Ordner <code>.ssh/</code></span></div></div></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span><span class="note">„Für diese Sitzung erlauben“ möglich</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+        </tr>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></div><div><b>Dateien anlegen und ändern</b><span>Die alte Version landet vorher im Papierkorb. Gilt auch für den Ordner eines geladenen Skills.</span></div></div></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span><span class="note">„Für diese Sitzung erlauben“ oder dauerhafte Regel möglich</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+        </tr>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg></div><div><b>Überschreiben ohne Sicherung</b><span>wenn keine Kopie in den Papierkorb möglich ist, oder künftig: Löschen</span></div></div></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span><span class="note">jedes Mal</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+        </tr>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 10l3 2.5L7 15M12.5 15H17"/></svg></div><div><b>Befehle und Python ausführen</b><span><code>shell_execute</code>, <code>run_python</code>, ab Werk ausgeschaltet. Die Karte zeigt den vollständigen Befehl.</span></div></div></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span><span class="note">jedes Mal · ein einfacher Befehl lässt sich „immer erlauben“</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span><span class="note warn">ohne Sandbox mit deinen vollen Rechten, siehe unten</span></td>
+        </tr>
+        <tr>
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg></div><div><b>Ins Internet und zu anderen Diensten</b><span>Websuche, Webseite abrufen, MCP-Tools. Die Daten verlassen deinen Rechner.</span></div></div></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span><span class="note">jedes Mal</span></td>
+          <td><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span></td>
+          <td><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span></td>
+        </tr>
+        <tr class="row-hard">
+          <td><div class="act"><div class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></div><div><b>Harte Grenzen</b><span>Snotras eigene Schlüssel und Regeln, Pfade außerhalb des Workspace, <code>rm -rf</code>, Datenträgeroperationen, Git-Historie umschreiben</span></div></div></td>
+          <td><span class="chip stop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>gesperrt</span></td>
+          <td><span class="chip stop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>gesperrt</span></td>
+          <td><span class="chip stop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>gesperrt</span><span class="note">auch in Auto nicht freizugeben</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="legend">
+      <span><span class="chip ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>läuft</span> ohne Rückfrage</span>
+      <span><span class="chip ask"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M9.5 10a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.4M12 16.4v.1"/></svg>fragt</span> Freigabekarte im Chat: Einmal erlauben oder Ablehnen</span>
+      <span><span class="chip stop"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/></svg>gesperrt</span> geht in keinem Modus</span>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="sec">Mit und ohne Sandbox <small>Regler 2, nur beim Ausführen von Programmen</small></h3>
+    <p class="sec-lead">Beim Lesen und Schreiben über Snotras Datei-Tools gilt die Workspace-Grenze immer. Ein Befehl dagegen läuft als eigenes Programm. Was er erreicht, bestimmt die Sandbox.</p>
+    <div class="compare">
+      <div class="panel iso">
+        <div class="panel-head"><h4>Mit Sandbox</h4><span class="pill iso"><svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.3-7.5 9.5-4.3-1.2-7.5-5-7.5-9.5V6L12 3z"/></svg>Isoliert</span></div>
+        <p class="where">macOS und Linux, ab Werk eingeschaltet</p>
+        <ul>
+          <li class="yes"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Schreibt nur im <b>Projektordner</b>, in einem eigenen Temp-Ordner und im Ordner geladener Skills</span></li>
+          <li class="yes"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Netzwerk nur zu den <b>Domains, die auf der Karte stehen</b>. Für <code>pip</code> und <code>npm</code> kommt die Registry automatisch dazu.</span></li>
+          <li class="no"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Kein Zugriff auf SSH- und Cloud-Schlüssel, Schlüsselbund, Browserprofile und Snotras eigene Daten</span></li>
+          <li class="no"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Keine Änderung an <code>.git/hooks</code>, <code>.git/config</code> und Shell-Profilen</span></li>
+        </ul>
+        <p class="caveat"><b>Grenze:</b> Deine übrigen Dateien kann der Befehl lesen und an eine freigegebene Domain schicken. Jede erlaubte Domain ist ein Kanal nach außen.</p>
+      </div>
+      <div class="panel noiso">
+        <div class="panel-head"><h4>Ohne Sandbox</h4><span class="pill noiso"><svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.3-7.5 9.5-4.3-1.2-7.5-5-7.5-9.5V6L12 3z"/><path d="M4 20L20 4"/></svg>Nicht isoliert</span></div>
+        <p class="where">Windows, Linux ohne <code>bubblewrap</code>, oder von dir für diesen Workspace abgeschaltet</p>
+        <ul>
+          <li class="yes"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Kann <b>alles, was du selbst im Terminal kannst</b>: überall lesen und schreiben, auch außerhalb des Projekts</span></li>
+          <li class="yes"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Erreicht das <b>ganze Netzwerk</b> und kann weitere Programme starten</span></li>
+          <li class="no"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>Nur eine Sperrliste bleibt: <code>rm -rf</code>, Datenträgeroperationen und das Umschreiben der Git-Historie</span></li>
+        </ul>
+        <p class="caveat"><b>Der Schutz bist du:</b> Die Sperrliste ist eine zweite Verteidigungslinie, kein Versprechen. Was zählt, ist, dass du den Befehl auf der Karte liest, bevor du ihn erlaubst.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h3 class="sec">Das Zusammenspiel beim Ausführen <small>Modus × Sandbox</small></h3>
+    <div class="grid2">
+      <div></div>
+      <div class="gh">Intelligent oder Immer fragen<small>Karte vor jedem Lauf</small></div>
+      <div class="gh">Auto<small>keine Karte</small></div>
+
+      <div class="gl">Sandbox an<small>„Isoliert“</small></div>
+      <div class="cell c-best"><div class="verdict"><span class="dots"><i class="on"></i><i class="on"></i></span>Doppelt geschützt</div><p>Du prüfst jeden Lauf, und die Sandbox begrenzt, was er anrichten kann.</p></div>
+      <div class="cell c-good"><div class="verdict"><span class="dots"><i class="on"></i><i></i></span>Die Sandbox schützt</div><p>Befehle laufen ohne Rückfrage, bleiben aber im Projektordner und bei den genannten Domains.</p></div>
+
+      <div class="gl">Sandbox aus<small>„Nicht isoliert“</small></div>
+      <div class="cell c-you"><div class="verdict"><span class="dots"><i class="on"></i><i></i></span>Du schützt</div><p>Vor jedem Lauf kommt die Karte. Was du freigibst, läuft mit deinen vollen Rechten.</p></div>
+      <div class="cell c-none"><div class="verdict"><span class="dots"><i></i><i></i></span>Ungeschützt</div><p>Keine Karte und volle Rechte. Die Modus-Anzeige warnt in Bernstein: <b>„Auto · nicht isoliert“</b>.</p></div>
+    </div>
+    <p class="keyline"><b>Merksatz:</b> Die Sandbox ändert nicht, <i>ob</i> Snotra fragt, sondern nur, <i>was ein Lauf anrichten kann</i>. Erst im Modus Auto wird sie zum einzigen Schutz.</p>
+  </section>
+
+  <section style="margin-bottom:28px">
+    <h3 class="sec">Lockern geht nur mit Systemdialog <small>verschärfen jederzeit ohne Rückfrage</small></h3>
+    <p class="sec-lead">Alles, was den Schutz dauerhaft aufweicht, bestätigst du in einem Dialog des Betriebssystems, nicht nur mit einem Klick im Chat.</p>
+    <div class="loosen">
+      <div class="lz"><b>Auto einschalten</b><span>für den Chat oder als Standard für alle neuen Chats eines Workspace</span></div>
+      <div class="lz"><b>Dauerhaft erlauben</b><span>eine Regel für Lesen und Ändern, oder „Diesen Befehl immer erlauben“</span></div>
+      <div class="lz"><b>Sandbox abschalten</b><span>nur pro Workspace, nie global. Der Ordner zeigt dann ein durchgestrichenes Schild.</span></div>
+      <div class="lz"><b>Freigabe pro Programm</b><span>ein einzelnes Werkzeug wie <code>gh</code> bekommt zusätzliche Hosts und Ordner. Jeder Lauf wird trotzdem angefragt.</span></div>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>Kein Projekt schaltet sich selbst frei.</b> Freigaben liegen in Snotras signierter Berechtigungsdatei, nie im Projektordner. Ein ausgechecktes Repository kann sich also weder auf Auto setzen noch die Sandbox abschalten.</div>
+      <div class="fact"><b>Text ist kein Befehl.</b> Was in Dateien, Webseiten oder Skills steht, kann keine Rechte vergeben. Jeder Aufruf läuft erneut durch die Prüfung, egal wie überzeugend der Text klingt.</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Erstellt 28.09.2026 · Claude Opus 5.5 · Reasoning-Effort: high</span>
+    <span>Stand: Snotra <code>main</code> @ 6b60ee3 (nach v1.12.0) · Quelle: docs/security-concept.md</span>
+  </footer>
+</div>
+</body>
+</html>
