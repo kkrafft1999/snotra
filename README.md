@@ -1190,6 +1190,13 @@ Details on the layered architecture: [`docs/architecture.md`](./docs/architectur
 
 ## Security notes
 
+Which action asks for your approval in which mode, and what the sandbox
+changes:
+
+![Who may do what: the three permission modes against the kinds of action, the sandbox on and off, and what loosening protection takes](docs/permissions-infographic.png)
+
+The details are in the [security concept](docs/security-concept.md).
+
 - API keys are stored **locally** and are not passed on to third parties.
 - The workspace access of the file tools is limited to the currently opened
   project folder. Exceptions: the **read** tools additionally reach the

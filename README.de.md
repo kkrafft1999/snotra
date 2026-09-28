@@ -820,6 +820,12 @@ Details zur Schichtenarchitektur: [`docs/architecture.md`](./docs/architecture.m
 
 ## Sicherheitshinweise
 
+Welche Aktion in welchem Modus deine Freigabe braucht und was die Sandbox daran ändert:
+
+![Wer darf was: die drei Berechtigungsmodi und die Arten von Aktionen, die Sandbox an und aus, und was es braucht, um den Schutz zu lockern](docs/permissions-infographic.de.png)
+
+Die Einzelheiten stehen im [Sicherheitskonzept](docs/security-concept.md) (englisch).
+
 - API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
 - Der Workspace-Zugriff der Datei-Tools ist auf den jeweils geöffneten Projektordner beschränkt. Ausnahmen: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…`, die Schreib-Tools die Ordner der in der laufenden Antwort geladenen Skills (siehe [Skills](#skills)) — und die beiden **Ausführungs**-Tools `run_python` und `shell_execute` kennen diese Grenze grundsätzlich nicht: nicht Snotra greift dort auf Dateien zu, sondern der Interpreter bzw. die Shell. Beide sind deshalb im Lieferzustand abgeschaltet und brauchen vor jedem Lauf eine Freigabe. Unter macOS und Linux laufen sie in einer Sandbox, die das Schreiben auf den Projektordner (und die Ordner geladener Skills) begrenzt und das Netzwerk auf die freigegebenen Domains (siehe [Die Sandbox je Betriebssystem](#die-sandbox-je-betriebssystem)); unter Windows nicht.
 - Jeder Tool-Aufruf durchläuft im Main-Prozess eine Policy (Risikoklasse × Modus, Sperr-Regeln, harte Grenzen); Dateiänderungen und der Zugriff auf sensible Dateien brauchen im Standardmodus eine Freigabe (siehe [Tool-Berechtigungen](#konfiguration)). Ein Tool-Text, eine Datei oder ein Skill kann keine Berechtigung erteilen.

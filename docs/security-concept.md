@@ -16,6 +16,12 @@ layout of the policy store (section 7), binding to a provider in the history
 (section 4), expiry instead of a time limit (section 6) and the recovery copy on
 overwrite (sections 2 and 9).
 
+The model at a glance — which action asks in which mode, and what the sandbox
+changes — as of v1.12.0 (#434, source:
+[`permissions-infographic.html`](./permissions-infographic.html)):
+
+![Who may do what: the three modes against the risk classes, the sandbox on and off, and what loosening protection takes](permissions-infographic.png)
+
 ## 1. The goal and the starting point
 
 The model proposes actions; Snotra decides whether they run. What is protected:
