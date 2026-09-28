@@ -188,7 +188,12 @@ function permissionSuffix(entry, phase, t) {
 function formatToolDisplayLine(entry, phase = 'start', locale = DEFAULT_LOCALE) {
   if (typeof entry === 'string') return entry;
   const t = createTranslator(locale);
-  const parts = [summarizeToolCall(entry?.tool, entry?.args, phase, locale)];
+  // A skill file reached by its absolute path is shown in the skill's own
+  // spelling, which the planner worked out (#427).
+  const args = typeof entry?.skillPath === 'string' && entry.skillPath
+    ? { ...(entry.args || {}), relative_path: entry.skillPath }
+    : entry?.args;
+  const parts = [summarizeToolCall(entry?.tool, args, phase, locale)];
   const suffix = permissionSuffix(entry, phase, t);
   if (suffix) parts.push(suffix);
   if (entry?.noWorkspace) parts.push(t('tools.line.suffix.noWorkspace'));

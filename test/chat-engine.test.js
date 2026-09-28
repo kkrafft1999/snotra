@@ -1146,6 +1146,60 @@ test('engine erklärt Skill-Pfade nur, wenn ein Ordner offen ist', async () => {
   assert.doesNotMatch(withoutFolderSystem, /skill:demo\//);
 });
 
+test('a skill file read by absolute path ends up as a skill access in the log (#427)', async () => {
+  const tools = makeToolPort(undefined, { toolDefs: [{ name: 'read_file_text', requiresWorkspace: true }] });
+  // The real planner maps the absolute path to the skill and says so.
+  tools.plan = async (toolName, args) => {
+    const plan = defaultPlan(toolName, args);
+    plan.targets = plan.targets.map((target) => ({ ...target, skillName: 'demo', skillPath: 'skill:demo/assets/rules.md' }));
+    return plan;
+  };
+  const { engine } = makeEngine([
+    assistantToolCall('call-1', 'read_file_text', { relative_path: '/skills/demo/assets/rules.md' }),
+    assistantText('fertig'),
+  ], {
+    tools,
+    skills: {
+      async getActiveSkills() {
+        return [{ name: 'demo', description: 'd', source: 'workspace-agents', path: '/skills/demo', body: 'Regel A.' }];
+      },
+    },
+  });
+  const events = [];
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: (event) => events.push(event),
+  });
+
+  const done = events.find(
+    (event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE && event.payload.phase === TOOL_LINE_PHASES.DONE
+  );
+  assert.equal(done.payload.skill, 'demo');
+  // Shown like a `skill:` path, not as the long absolute one.
+  assert.match(done.payload.line, /assets\/rules\.md/);
+  assert.match(done.payload.line, /demo/);
+  assert.doesNotMatch(done.payload.line, /\/skills\/demo/);
+});
+
+test('engine tells the model not to stand in for a skill file it cannot read (#427)', async () => {
+  const skills = {
+    async getActiveSkills() {
+      return [{ name: 'demo', description: 'd', source: 'system', path: '/skills/demo', body: 'Regel A.' }];
+    },
+  };
+  for (const workspaceRoot of ['/tmp/snotra-project', undefined]) {
+    const { engine, calls } = makeEngine([assistantText('ok')], { skills });
+    await engine.send({
+      sessionId: 'renderer-1',
+      payload: { messages: [{ role: 'user', content: 'Hi' }], ...(workspaceRoot ? { workspaceRoot } : {}) },
+    });
+    const system = calls[0].messages.find((m) => m.role === 'system').content;
+    assert.match(system, /If a file a skill depends on cannot be read, say so plainly/);
+    assert.match(system, /Do not carry on with what you expect it to contain/);
+  }
+});
+
 test('engine keeps answering when the skill port fails', async () => {
   const { engine, calls } = makeEngine([assistantText('ok')], {
     skills: {

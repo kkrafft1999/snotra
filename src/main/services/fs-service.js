@@ -976,8 +976,56 @@ function createFsService({
    *   skillName?: string|null, error?: string}>} `root` ist die tatsaechlich
    *   genutzte Wurzel, `prefix` das Praefix fuer daraus erzeugte relative Pfade.
    */
+  /**
+   * An absolute path that lies in the folder of a switched-on skill, spelled
+   * as `skill:<name>/…` (#427). Skills written for other agents locate their
+   * own folder and then read `<dir>/assets/…` — a path the read tools would
+   * otherwise refuse as outside the workspace. The folder is compared as
+   * configured and by realpath, so a symlinked skills directory
+   * (`~/.agents/skills` → `~/.claude/skills`) matches either spelling.
+   *
+   * Returns null when the path is not absolute, is already a skill path, lies
+   * in the workspace (the workspace wins) or in no skill folder. Whether it
+   * stays inside the folder is checked afterwards, like any skill path.
+   */
+  async function skillPathForAbsolute(workspaceRoot, relativePath, skillRoots) {
+    const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
+    if (!raw || !path.isAbsolute(raw) || parseSkillPath(raw)) return null;
+    if (!Array.isArray(skillRoots) || skillRoots.length === 0) return null;
+    const target = path.resolve(raw);
+    if (typeof workspaceRoot === 'string' && workspaceRoot.trim() && containsPath(workspaceRoot, target)) {
+      return null;
+    }
+    let realTarget;
+    for (const entry of skillRoots) {
+      if (!entry || !entry.name || typeof entry.dir !== 'string' || !entry.dir) continue;
+      const roots = [path.resolve(entry.dir)];
+      try {
+        roots.push(await fs.realpath(roots[0]));
+      } catch {
+        /* a missing folder matches nothing; the lookup reports it */
+      }
+      if (realTarget === undefined) {
+        try {
+          realTarget = await resolveExistingRealPath(target);
+        } catch {
+          realTarget = null;
+        }
+      }
+      for (const root of roots) {
+        for (const candidate of [target, realTarget]) {
+          if (!candidate || !containsPath(root, candidate)) continue;
+          const rel = path.relative(root, candidate).split(path.sep).join('/');
+          return formatSkillPath(entry.name, rel);
+        }
+      }
+    }
+    return null;
+  }
+
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
-    const chosen = resolveAccessRoot(workspaceRoot, relativePath, options.skillRoots);
+    const asSkillPath = await skillPathForAbsolute(workspaceRoot, relativePath, options.skillRoots);
+    const chosen = resolveAccessRoot(workspaceRoot, asSkillPath || relativePath, options.skillRoots);
     if (chosen.error) return { error: chosen.error };
     const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
     if (lexical.error) return lexical;
@@ -1103,7 +1151,7 @@ function createFsService({
       return JSON.stringify({ error: `Not a valid skill name: "${name}".` });
     }
     const rel = formatSkillPath(name, SKILL_FILE);
-    const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
+    const { absPath, root, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const raw = await fs.readFile(absPath, 'utf8');
@@ -1119,9 +1167,17 @@ function createFsService({
       const instructions = truncated
         ? `${body.slice(0, MAX_SKILL_BODY_CHARS)}\n… [truncated to ${MAX_SKILL_BODY_CHARS} characters]`
         : body;
+      // The folder travels with the instructions (#427): a skill that refers
+      // to its own directory — "find your folder, then read assets/…" — gets
+      // it without a search, and learns how the read tools reach it.
       return JSON.stringify({
         skill: name,
         truncated,
+        directory: root,
+        files:
+          `Files next to ${SKILL_FILE} are read with the read tools as ` +
+          `"${formatSkillPath(name, '<path>')}"; an absolute path inside "directory" works the same. ` +
+          'There is no need to search for this folder. It is read-only.',
         instructions,
       });
     } catch (e) {
@@ -2498,6 +2554,7 @@ function createFsService({
     assertPathAccessibleInWorkspace,
     resolveWorkspacePathForAccess,
     resolveToolPath,
+    skillPathForAbsolute,
     listApplyPatchTargets,
     runListDirectoryTool,
     runLoadSkillTool,
