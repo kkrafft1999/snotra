@@ -136,7 +136,15 @@ function configureDomPurify() {
   // und selbst wenn das ausbliebe, laesst die CSP (`img-src 'self' data:`)
   // kein `d:` zu. Geprueft wird der Pfad ohnehin erst im Main-Prozess.
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-    if (node.tagName !== 'IMG' || data.attrName !== 'src') return;
+    if (data.attrName !== 'src') return;
+    // `<img>` is the only element whose `src` survives (#423): it is moved
+    // aside before anything loads and resolved by the main process (#402).
+    // Any other one — `<input type="image">` above all, which the task lists
+    // need as a tag — would read a local file straight from disk.
+    if (node.tagName !== 'IMG') {
+      data.keepAttr = false;
+      return;
+    }
     if (contracts.isWindowsDrivePath(data.attrValue)) data.forceKeepAttr = true;
   });
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
@@ -178,8 +186,12 @@ export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keep
     try {
       return DOMPurify.sanitize(html, {
         USE_PROFILES: { html: true },
-        FORBID_TAGS: ['style', 'iframe', 'form'],
-        FORBID_ATTR: ['style', 'srcset'],
+        // Media elements load their `src` and `poster` on their own, from any
+        // local file `'self'` covers (#423). The chat has no use for them —
+        // the CSP now says `media-src 'none'`.
+        // `background` is a table's image, loaded under `img-src 'self'`.
+        FORBID_TAGS: ['style', 'iframe', 'form', 'video', 'audio', 'source', 'track', 'picture'],
+        FORBID_ATTR: ['style', 'srcset', 'poster', 'background'],
       });
     } finally {
       keepRelativeLinks = false;
