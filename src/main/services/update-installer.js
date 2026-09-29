@@ -205,6 +205,12 @@ function buildWindowsSwapScript({
   ].join('\n');
 }
 
+/** `update-install.log` → `update-install-output.log`, next to it. */
+function helperOutputFile(logFile) {
+  const ext = path.extname(logFile);
+  return `${logFile.slice(0, logFile.length - ext.length)}-output${ext}`;
+}
+
 /**
  * Entries of the app folder that the new package does not bring along — the
  * ZIP the app came in, or files of the user's when the app was extracted into
@@ -242,9 +248,21 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     });
   }));
 
-  const launch = spawnDetached || ((cmd, args, options = {}) => {
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true, ...options });
-    child.unref();
+  // `outputFile` catches what the helper prints — above all what PowerShell
+  // says when the script cannot even start. The helper outlives this process,
+  // so a file is the only place that can still hear it (#442).
+  const launch = spawnDetached || ((cmd, args, { outputFile, ...options } = {}) => {
+    let fd = null;
+    if (outputFile) {
+      try { fd = fs.openSync(outputFile, 'w'); } catch { fd = null; }
+    }
+    const stdio = fd === null ? 'ignore' : ['ignore', fd, fd];
+    try {
+      const child = spawn(cmd, args, { detached: true, stdio, windowsHide: true, ...options });
+      child.unref();
+    } finally {
+      if (fd !== null) fs.closeSync(fd);
+    }
   });
 
   /** @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`. */
@@ -390,7 +408,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     launch('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
       '-File', script,
-    ], { cwd: parentDir });
+    ], { cwd: parentDir, outputFile: helperOutputFile(helperLog) });
     return { ok: true, relaunching: true, logFile: helperLog };
   }
 
@@ -488,6 +506,7 @@ module.exports = {
   buildLinuxDirScript,
   buildWindowsSwapScript,
   listForeignEntries,
+  helperOutputFile,
   shQuote,
   psQuote,
 };

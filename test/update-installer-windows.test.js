@@ -16,7 +16,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 
-const { createUpdateInstaller, buildWindowsSwapScript } = require('../src/main/services/update-installer');
+const {
+  createUpdateInstaller,
+  buildWindowsSwapScript,
+  helperOutputFile,
+} = require('../src/main/services/update-installer');
 
 const onWindows = process.platform === 'win32';
 const EXE = 'Snotra AI.exe';
@@ -89,23 +93,11 @@ async function makeFixture(t) {
 }
 
 /**
- * Starts the install the way the app does: from inside its own folder. The
- * helper is spawned with the installer's own options; only its output is kept
- * instead of dropped, so a failure on the runner says what went wrong.
+ * Starts the install the way the app does: from inside its own folder, and
+ * with the installer's own launcher — detached, as it has to outlive the app.
  */
 async function installFromInsideTheFolder(fixture, pid) {
-  const helper = { output: '', exit: null };
-  fixture.helper = helper;
-  const installer = createUpdateInstaller({
-    getPid: () => pid,
-    spawnDetached: (cmd, args, options) => {
-      const child = spawn(cmd, args, { ...options, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-      child.stdout.on('data', (chunk) => { helper.output += chunk; });
-      child.stderr.on('data', (chunk) => { helper.output += chunk; });
-      child.on('exit', (code) => { helper.exit = code; });
-      child.on('error', (err) => { helper.output += `spawn error: ${err.message}`; });
-    },
-  });
+  const installer = createUpdateInstaller({ getPid: () => pid });
   const before = process.cwd();
   process.chdir(fixture.installDir);
   try {
@@ -124,8 +116,8 @@ async function installFromInsideTheFolder(fixture, pid) {
 
 function describe(fixture) {
   return [
-    `the helper (exit ${fixture.helper?.exit})`,
-    `output: ${fixture.helper?.output || '(none)'}`,
+    'the helper',
+    `output: ${readIfThere(helperOutputFile(fixture.logFile)) || '(none)'}`,
     `log: ${readIfThere(fixture.logFile) || '(none)'}`,
     `status: ${readIfThere(fixture.statusFile) || '(none)'}`,
     `next to the app: ${fs.readdirSync(fixture.parentDir).join(', ')}`,

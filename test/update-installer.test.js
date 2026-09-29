@@ -228,7 +228,10 @@ test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokol
   assert.equal(runs[0].cmd, 'powershell.exe');
   assert.equal(launches.length, 1);
   assert.equal(launches[0].cmd, 'powershell.exe');
-  assert.deepEqual(launches[0].options, { cwd: path.join(dir, 'tools') });
+  assert.deepEqual(launches[0].options, {
+    cwd: path.join(dir, 'tools'),
+    outputFile: path.join(dir, 'userData', 'update-install-output.log'),
+  });
   const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
   assert.ok(script.includes(`$log     = ${psQuote(logFile)}`));
   assert.ok(script.includes(`$status  = ${psQuote(statusFile)}`));
