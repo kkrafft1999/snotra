@@ -218,6 +218,8 @@ function registerToolPermissionHandlers({
   describeExecutionTools = null,
   // Program allowances (#408): resolving programs and checking folders.
   programAllowances = null,
+  // Titles of the chats that hold session approvals (#447): chatId → title.
+  describeChats = async () => new Map(),
   platform = process.platform,
   homeDir = '',
 }) {
@@ -298,6 +300,33 @@ function registerToolPermissionHandlers({
     return { unisolated: false, tools, reason: '', pending };
   }
 
+  /**
+   * The session approvals as the settings list them (#447): display data and
+   * an opaque id, grouped by the renderer. Nothing that matches an approval —
+   * scope key, file version, provider key — leaves main.
+   */
+  async function describeSessionGrants() {
+    const grants = typeof sessionGrants.list === 'function' ? sessionGrants.list() : [];
+    if (grants.length === 0) return [];
+    const currentChatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    let titles = new Map();
+    try {
+      titles = (await describeChats([...new Set(grants.map((grant) => grant.chatId).filter(Boolean))])) || new Map();
+    } catch {
+      /* without titles the list still works */
+    }
+    return grants.map((grant) => ({
+      id: grant.id,
+      tool: grant.tool,
+      classes: grant.classes,
+      scope: grant.scope,
+      grantedAt: grant.grantedAt,
+      chatId: grant.chatId,
+      chatTitle: (grant.chatId && titles.get(grant.chatId)) || '',
+      current: !!grant.chatId && grant.chatId === currentChatId,
+    }));
+  }
+
   async function buildState() {
     const state = await toolPolicyStore.read();
     const root = getActiveWorkspaceRoot();
@@ -324,6 +353,7 @@ function registerToolPermissionHandlers({
       platform,
       homeDir,
       sessionGrantCount: sessionGrants.count(),
+      sessionGrants: await describeSessionGrants(),
       policyVersion: state.policyVersion,
     };
   }
@@ -401,6 +431,17 @@ function registerToolPermissionHandlers({
     approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
     if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
     return createSettingsOk();
+  });
+
+  // One approval, by the id the list showed (#447). Revoking only tightens:
+  // no dialog, no open card is voided, the next identical call asks again. An
+  // id that is gone by now — the chat was left, a rule changed — is no error.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, async (event, grantId) => {
+    const id = typeof grantId === 'string' ? grantId.trim() : '';
+    if (!id || id.length > 200) return createSettingsError(createMessage('permissions.error.grantIdMissing'));
+    const revoked = sessionGrants.revoke(id);
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return { ...createSettingsOk(), revoked };
   });
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, async (event) => {

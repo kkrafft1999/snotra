@@ -1310,6 +1310,9 @@ function createChatEngine({
             riskClasses: plan.riskClasses,
             providerKey,
             chatId,
+            // The card's own sentence, so the approval can be recognised in
+            // the settings later (#447).
+            scope: request.sessionScope,
           });
           return { response: APPROVAL_RESPONSES.ALLOW_SESSION };
         }

@@ -65,3 +65,57 @@ test('nicht freigebbare Klassen ergeben keine Freigabe; clear und clearScope rä
   grants.clear();
   assert.equal(grants.count(), 0);
 });
+
+// ── Listing and revoking (#447) ────────────────────────────────────────────
+
+test('list() shows display data only, revoke() drops exactly one approval (#447)', () => {
+  let clock = 1000;
+  const grants = createSessionGrants({ now: () => clock });
+  const scope = { key: 'approval.sessionScope.targets', params: { tool: 'apply_patch', paths: 'a.js' } };
+  const a = grants.grant({ scopeKey: SCOPE, tool: 'apply_patch', targets: [{ path: 'a.js', version: '1' }], riskClasses: ['read-sensitive'], chatId: 'c1', scope, providerKey: 'p' });
+  clock = 2000;
+  const b = grants.grant({ scopeKey: SCOPE, tool: 'edit_file', targets: ['b.js'], riskClasses: ['write'], chatId: 'c2', scope: 'not a message' });
+
+  assert.deepEqual(grants.list(), [
+    { id: a.id, chatId: 'c1', tool: 'apply_patch', classes: ['read-sensitive'], scope, grantedAt: 1000 },
+    { id: b.id, chatId: 'c2', tool: 'edit_file', classes: ['write'], scope: null, grantedAt: 2000 },
+  ]);
+  grants.list()[0].classes.push('write');
+  assert.deepEqual(grants.list()[0].classes, ['read-sensitive'], 'the list hands out copies');
+
+  assert.equal(grants.revoke('unknown'), false);
+  assert.equal(grants.revoke(''), false);
+  assert.equal(grants.revoke(a.id), true);
+  assert.equal(grants.revoke(a.id), false, 'twice is a no-op');
+  assert.equal(grants.find({ scopeKey: SCOPE, tool: 'apply_patch', targets: [{ path: 'a.js', version: '1' }], riskClasses: ['read-sensitive'], providerKey: 'p' }), null);
+  assert.equal(grants.find({ scopeKey: SCOPE, tool: 'edit_file', targets: ['b.js'], riskClasses: ['write'] })?.id, b.id);
+
+  grants.clearChat('c2');
+  assert.equal(grants.revoke(b.id), false, 'an id dropped with its chat is gone');
+});
+
+test('onChange fires when the set of approvals changes, and only then (#447)', () => {
+  const grants = createSessionGrants();
+  let calls = 0;
+  const off = grants.onChange(() => { calls += 1; });
+  grants.onChange(() => { throw new Error('broken listener'); });
+
+  const entry = grants.grant({ scopeKey: SCOPE, tool: 'edit_file', targets: ['a'], riskClasses: ['write'], chatId: 'c1' });
+  assert.equal(calls, 1);
+  assert.equal(grants.grant({ scopeKey: SCOPE, tool: 'shell_execute', targets: [], riskClasses: ['execute'] }), null);
+  assert.equal(calls, 1, 'a refused grant changes nothing');
+  grants.retainChats(['c1']);
+  grants.clearChat('other');
+  grants.revoke('unknown');
+  assert.equal(calls, 1, 'no-ops stay quiet');
+  grants.revoke(entry.id);
+  assert.equal(calls, 2);
+  grants.grant({ scopeKey: SCOPE, tool: 'edit_file', targets: ['a'], riskClasses: ['write'] });
+  grants.clear();
+  assert.equal(calls, 4);
+  grants.clear();
+  assert.equal(calls, 4);
+  off();
+  grants.grant({ scopeKey: SCOPE, tool: 'edit_file', targets: ['a'], riskClasses: ['write'] });
+  assert.equal(calls, 4);
+});
