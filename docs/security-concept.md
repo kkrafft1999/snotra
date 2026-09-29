@@ -810,6 +810,67 @@ switched on and loaded in the same run, that "Smart" and "Always ask" show the
 card for every change, and that the card says how far the change reaches. In
 "Auto" there is no card — as for every other write.
 
+### Revision: one Security page per workspace (#437)
+
+Decided on 2026-09-29, not built yet; the work is split into
+[#447](https://github.com/kkrafft1999/snotra/issues/447) (session approvals),
+[#448](https://github.com/kkrafft1999/snotra/issues/448) (the page as an
+overview) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
+controls move into it). The permission model above stays as it is. What changes
+is where a user sees it and what they can take back.
+
+- **One place.** The settings that decide what a tool call may do leave
+  Settings › Tools, Settings › Permissions and the security part of
+  Settings › MCP and form one page, Settings › Security. It describes the open
+  workspace and is sorted by the six risk classes of section 2. Each row shows
+  the effective result for that workspace and, opened, answers three questions:
+  may Snotra do this, does it ask first, where or what exactly. Tools keeps the
+  configuration without a security effect (the interpreter path, API keys), MCP
+  keeps the server connections. Where sections 7 and 8 and the revisions for
+  #357, #408 and #413 name Settings › Tools or Settings › Permissions, they mean
+  this page from #449 on, and they are rewritten in that pull request.
+- **The chat's mode is set in the chat only.** Section 8 had Settings offer
+  "the same selection" as the chat bar. The page no longer offers it: its mode
+  control is the workspace default of #413, with the same rules — a
+  confirmation for `auto`, none for `ask-all` or for going back to `smart`, and
+  no effect on a chat that is open. The chat's own mode stays in the mode pill
+  (#211). Since a default does not change open chats, the page names every chat
+  of the workspace whose stored mode differs from it. The list is read from
+  main's store and is for display only; it switches nothing.
+- **The effective result comes from main.** The page shows per class whether a
+  call runs, asks or is off, and why. Main computes that from the same policy
+  snapshot the planner uses, and the renderer only draws it — the renderer
+  decides nothing (section 5), and a second calculation in the renderer could
+  drift from the one that is enforced.
+- **Scope stays with the setting.** Every control says whether it applies to all
+  workspaces or only to this one. A global control on a workspace page still
+  applies globally: moving a setting changes where it is shown, not its scope
+  or its storage (section 7).
+- **Session approvals become visible and revocable one by one.** Until now there
+  was a count and "Sitzungsfreigaben löschen". Main now keeps, next to what
+  matches an approval (section 7), what a person needs to recognise it: the
+  card's sentence on the session scope, the classes, the chat and the time it
+  was granted. The page lists the approvals that exist — after #320 those of
+  the chat on screen and of chats still running in the background — grouped by
+  chat, each in the row of its class. The renderer receives that display data
+  and an opaque id; it never sees the scope key, the file version or the
+  provider key. Revoking names only the id. Main drops the approval if it still
+  exists, and ignores an id that is unknown or already gone. Revoking only
+  tightens: there is no native dialog, no open card is voided, and the next
+  identical call shows a card again. The bulk action stays.
+- **Nothing loosens more easily.** Every loosening keeps its native
+  confirmation (section 5). The page adds no new way to allow anything, and a
+  control that is only a link today keeps the confirmation of the place it
+  links to. Settings that matter only in some states — the sandbox and program
+  allowances while the execution tools are off — are shown with that
+  condition instead of being hidden.
+- **Reaches of reset.** "Alle Berechtigungen zurücksetzen" also removes the
+  program allowances (#408). It always did; its description now says so.
+- **Not chosen.** A view that traces the path of a single call through the
+  checks, and a side sheet that stacks chat, workspace and global scope. Both
+  were mocked up in #437. The first may come back as a "Why?" behind a tool
+  call in the chat.
+
 ## 10. Comparison with the official references
 
 Retrieved 2026-09-05. What the right-hand column adopts are Snotra decisions,
