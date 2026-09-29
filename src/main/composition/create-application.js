@@ -864,11 +864,16 @@ function createApplication({
     // Only the automatic check steps aside. Choosing "Check for updates" in
     // the menu is an explicit request and still gets an answer.
     if (silent && env.SNOTRA_NO_UPDATE_CHECK === '1') return;
-    const result = await updates.checkForUpdate({ respectIgnored: silent });
+    // A swap that failed after the last quit is told on the next start, and
+    // only then (#442).
+    const lastInstallFailure = silent && typeof updates.takeInstallFailure === 'function'
+      ? await updates.takeInstallFailure()
+      : null;
+    const result = await updates.checkForUpdate({ respectIgnored: silent && !lastInstallFailure });
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return;
     if (silent && !result.updateAvailable) return;
-    win.webContents.send(PUSH.UPDATE_AVAILABLE, { ...result, manual: !silent });
+    win.webContents.send(PUSH.UPDATE_AVAILABLE, { ...result, lastInstallFailure, manual: !silent });
   }
 
   function dispose() {

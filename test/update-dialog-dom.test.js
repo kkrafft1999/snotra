@@ -465,3 +465,46 @@ test('sizes use the decimal separator of the interface language and follow a swi
   await flush();
   assert.match(ui.$('modal-update-progress-text').textContent, /^50 % – 46\.0 MB of 92\.0 MB$/);
 });
+
+// #442: a swap that failed after the app had quit is reported on the next
+// start, next to the same update that is offered again.
+test('ein beim letzten Mal gescheiterter Tausch steht als Warnung im Dialog', async (t) => {
+  const { setLocale } = await importRenderer('i18n.js');
+  const ui = await mount();
+  t.after(() => { setLocale('en', { force: true }); ui.dom.cleanup(); });
+  const log = 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log';
+
+  await ui.push({
+    ...AVAILABLE,
+    installKind: 'windows-dir',
+    lastInstallFailure: { version: '1.8.0', error: 'The folder is in use', logFile: log },
+  });
+  assert.equal(ui.isOpen(), true);
+  assert.equal(ui.hint().classList.contains('hidden'), false);
+  assert.equal(ui.hint().classList.contains('warning'), true);
+  assert.equal(ui.hint().classList.contains('error'), false);
+  assert.equal(ui.hint().textContent, 'Last time, version 1.8.0 could not be put in place (The folder is in use), '
+    + 'so version 1.7.1 is still running. Close any window that shows the Snotra AI folder, then try again. '
+    + `The log is at ${log}.`);
+  assert.deepEqual(ui.labels(), ['Download', 'Remind me later', 'Skip this version']);
+
+  setLocale('de');
+  await flush();
+  assert.match(ui.hint().textContent, /^Beim letzten Mal ließ sich Version 1\.8\.0 nicht einspielen \(The folder is in use\)/);
+
+  setLocale('en');
+  await ui.push({ ...AVAILABLE, lastInstallFailure: { version: '1.8.0', error: '', logFile: log } });
+  assert.match(ui.hint().textContent, /^Last time, version 1\.8\.0 could not be put in place, so version 1\.7\.1/);
+
+  // Downloading moves on; the warning does not follow into the next step.
+  await ui.click('Download');
+  assert.equal(ui.hint().classList.contains('hidden'), true);
+  assert.equal(ui.hint().classList.contains('warning'), false);
+});
+
+test('ohne Fehlschlag beim letzten Mal bleibt der Hinweis weg', async (t) => {
+  const ui = await mount();
+  t.after(ui.dom.cleanup);
+  await ui.push({ ...AVAILABLE, lastInstallFailure: null });
+  assert.equal(ui.hint().classList.contains('hidden'), true);
+});

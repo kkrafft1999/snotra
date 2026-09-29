@@ -11,6 +11,9 @@
 // das Asset und update-installer.js tauscht die Installation aus; die
 // Entscheidung, WAS getauscht wird, steht in update-targets.js.
 
+const fsp = require('fs/promises');
+const path = require('path');
+
 const { detectInstallTarget, pickReleaseAsset } = require('./update-targets');
 const { createUpdateDownloader } = require('./update-download');
 const { createUpdateInstaller } = require('./update-installer');
@@ -114,6 +117,24 @@ function createUpdateService({
     } catch {
       return require('os').tmpdir();
     }
+  }
+
+  /**
+   * Where the Windows helper reports after this process has quit (#442): a
+   * log of every step, and a status file that exists only when the swap
+   * failed. Both sit in the user data folder, which no update replaces.
+   */
+  function getHelperFiles() {
+    let dir;
+    try {
+      dir = app.getPath('userData');
+    } catch {
+      dir = getTempDir();
+    }
+    return {
+      logFile: path.join(dir, 'update-install.log'),
+      statusFile: path.join(dir, 'update-install-failed.json'),
+    };
   }
 
   const downloader = downloaderOverride
@@ -294,10 +315,44 @@ function createUpdateService({
       version: ready.version,
       target,
       workDir: downloader.getWorkDir(),
+      ...getHelperFiles(),
     });
     if (!result.ok) return result;
     if (typeof quitApp === 'function') quitApp();
     return result;
+  }
+
+  /**
+   * Did the last install fail after this app had already quit? Reads the
+   * helper's status file once and removes it. A record for a version that is
+   * not newer than the running one is stale — the user has updated some other
+   * way since — and is dropped without a word.
+   *
+   * @returns {Promise<{version: string, error: string, logFile: string} | null>}
+   */
+  async function takeInstallFailure() {
+    const { statusFile, logFile } = getHelperFiles();
+    let raw;
+    try {
+      raw = await fsp.readFile(statusFile, 'utf8');
+    } catch {
+      return null;
+    }
+    await fsp.rm(statusFile, { force: true }).catch(() => {});
+    let record;
+    try {
+      // Windows PowerShell 5 writes UTF-8 with a byte order mark.
+      record = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    } catch {
+      return null;
+    }
+    const version = typeof record?.version === 'string' ? record.version : '';
+    if (!version || !isNewerVersion(version, getCurrentVersion())) return null;
+    return {
+      version,
+      error: typeof record.error === 'string' ? record.error.trim() : '',
+      logFile: typeof record.log === 'string' && record.log ? record.log : logFile,
+    };
   }
 
   async function getIgnoredVersion() {
@@ -332,6 +387,7 @@ function createUpdateService({
     cancelDownload,
     discardDownload,
     installUpdate,
+    takeInstallFailure,
   };
 }
 

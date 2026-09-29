@@ -831,6 +831,8 @@ module.exports = {
   'update.available.selfUpdate': 'Du hast Version {current}. Snotra AI lädt die neue Version{size} herunter und installiert sie selbst – vor dem Neustart wirst du noch einmal gefragt.',
   'update.available.manual': 'Du hast Version {current}. Diese Installation muss von Hand ersetzt werden.',
   'update.available.manualHint': 'Diese Installation kann sich nicht selbst aktualisieren.',
+  'update.available.lastFailed': 'Beim letzten Mal ließ sich Version {version} nicht einspielen ({error}), deshalb läuft noch Version {current}. Schließe jedes Fenster, das den Ordner von Snotra AI zeigt, und versuch es dann noch einmal. Das Protokoll liegt unter {log}.',
+  'update.available.lastFailedPlain': 'Beim letzten Mal ließ sich Version {version} nicht einspielen, deshalb läuft noch Version {current}. Schließe jedes Fenster, das den Ordner von Snotra AI zeigt, und versuch es dann noch einmal. Das Protokoll liegt unter {log}.',
   'update.download': 'Herunterladen',
   'update.retry': 'Erneut versuchen',
   'update.openReleasePage': 'Release-Seite öffnen',

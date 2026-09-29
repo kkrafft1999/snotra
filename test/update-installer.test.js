@@ -23,6 +23,7 @@ const {
   buildLinuxAppImageScript,
   buildLinuxDirScript,
   buildWindowsSwapScript,
+  listForeignEntries,
   shQuote,
   psQuote,
 } = require('../src/main/services/update-installer');
@@ -42,7 +43,7 @@ function makeInstaller({ onRun } = {}) {
       if (onRun) return onRun(cmd, args);
       return '';
     },
-    spawnDetached: (cmd, args) => { launches.push({ cmd, args }); },
+    spawnDetached: (cmd, args, options) => { launches.push({ cmd, args, options }); },
   });
   return { installer, runs, launches };
 }
@@ -96,19 +97,145 @@ test('das Linux-Ordner-Skript stellt bei einem Fehlschlag die alte Version zurue
   assert.match(script, /exec '\/home\/k\/apps\/snotra-ai\/Snotra AI'/);
 });
 
+const WINDOWS_SCRIPT_ARGS = Object.freeze({
+  pid: 1234,
+  installDir: 'C:\\Users\\k\\Snotra AI',
+  stagedDir: 'C:\\Users\\k\\.snotra-new-1\\Snotra AI-win32-x64',
+  stageRoot: 'C:\\Users\\k\\.snotra-new-1',
+  backupDir: 'C:\\Users\\k\\.snotra-old-1',
+  workDir: 'C:\\Temp\\snotra-update',
+  logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
+  statusFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-failed.json',
+  version: '1.13.0',
+});
+
 test('das Windows-Skript wartet auf den Prozess und macht den Tausch rueckgaengig', () => {
-  const script = buildWindowsSwapScript({
-    pid: 1234,
-    installDir: 'C:\\Users\\k\\Snotra AI',
-    stagedDir: 'C:\\Users\\k\\.snotra-new-1',
-    backupDir: 'C:\\Users\\k\\.snotra-old-1',
-    workDir: 'C:\\Temp\\snotra-update',
-  });
-  assert.match(script, /\$procId = 1234/);
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  assert.match(script, /\$procId {2}= 1234/);
   assert.match(script, /Get-Process -Id \$procId/);
-  assert.match(script, /Move-Item -LiteralPath \$install -Destination \$backup -Force/);
-  assert.match(script, /} catch \{\n {2}Move-Item -LiteralPath \$backup -Destination \$install -Force\n {2}throw/);
-  assert.match(script, /Start-Process -FilePath \(Join-Path \$install 'Snotra AI\.exe'\)/);
+  assert.match(script, /Move-WithRetry \$install \$backup/);
+  assert.match(script, /} catch \{\n {4}Move-WithRetry \$backup \$install\n {4}throw/);
+  assert.match(script, /\$exe {5}= Join-Path \$install 'Snotra AI\.exe'/);
+  assert.match(script, /\nStart-Process -FilePath \$exe\n$/);
+});
+
+// #442: The app is usually started from its own folder, and a folder that is
+// some process's working directory cannot be renamed on Windows.
+test('das Windows-Skript arbeitet ausserhalb des App-Ordners', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  const setLocation = script.indexOf('Set-Location -LiteralPath (Split-Path -Parent $install)');
+  assert.ok(setLocation > 0);
+  assert.ok(setLocation < script.indexOf('Move-WithRetry $install $backup'));
+});
+
+test('das Windows-Skript versucht jeden Zug mehrmals, bevor es aufgibt', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  assert.match(script, /function Move-WithRetry\(\[string\]\$from, \[string\]\$to\)/);
+  assert.match(script, /if \(\$i -ge 40\) \{ throw \}/);
+  assert.match(script, /Start-Sleep -Milliseconds 500/);
+  // Every move of a folder goes through the retry, none around it.
+  assert.doesNotMatch(script.replace(/function Move-WithRetry[\s\S]*?\n\}\n/, ''), /Move-Item/);
+});
+
+test('ein gescheiterter Tausch wird protokolliert, gemeldet und startet die alte Version', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  assert.match(script, /\$log {5}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install\.log'/);
+  assert.match(script, /\$status {2}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-failed\.json'/);
+  assert.match(script, /\$version = '1\.13\.0'/);
+  const failure = script.slice(script.indexOf('} catch {\n  $reason'), script.indexOf('  exit 1'));
+  assert.match(failure, /Write-Log \('update failed: ' \+ \$reason\)/);
+  assert.match(failure, /ConvertTo-Json \| Set-Content -LiteralPath \$status -Encoding UTF8/);
+  assert.match(failure, /Remove-Item -LiteralPath \$stage -Recurse/);
+  assert.match(failure, /if \(Test-Path -LiteralPath \$exe\) \{[\s\S]*Start-Process -FilePath \$exe/);
+  // The rollback leaves the backup alone: it is the old version again.
+  assert.doesNotMatch(failure, /Remove-Item -LiteralPath \$backup/);
+});
+
+test('ein gelungener Tausch raeumt auf und loescht eine alte Fehlermeldung', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  const success = script.slice(script.indexOf('$keepBackup = $false'));
+  assert.match(success, /Remove-Item -LiteralPath \$status -Force/);
+  assert.match(success, /Remove-Item -LiteralPath \$stage -Recurse/);
+  assert.match(success, /Remove-Item -LiteralPath \$work -Recurse/);
+  assert.match(success, /if \(\$keepBackup\) \{[\s\S]*\} else \{\n {2}Remove-Item -LiteralPath \$backup -Recurse/);
+});
+
+test('fremde Eintraege im App-Ordner ziehen in den neuen Ordner mit', () => {
+  const none = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  assert.match(none, /\$carry {3}= @\(\)/);
+  const some = buildWindowsSwapScript({
+    ...WINDOWS_SCRIPT_ARGS,
+    carryOver: ['Snotra AI-win32-x64-1.12.0.zip', "Kon's notes.txt"],
+  });
+  assert.match(some, /\$carry {3}= @\('Snotra AI-win32-x64-1\.12\.0\.zip', 'Kon''s notes\.txt'\)/);
+  assert.match(some, /Move-WithRetry \(Join-Path \$backup \$name\) \(Join-Path \$install \$name\)/);
+  // What cannot be carried over keeps the backup instead of vanishing with it.
+  assert.match(some, /catch \{ \$keepBackup = \$true;/);
+});
+
+test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gross-/Kleinschreibung zu achten', async (t) => {
+  const dir = makeTempDir();
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const installDir = path.join(dir, 'app');
+  const packageDir = path.join(dir, 'pkg');
+  await fsp.mkdir(path.join(installDir, 'resources'), { recursive: true });
+  await fsp.mkdir(path.join(packageDir, 'Resources'), { recursive: true });
+  for (const name of ['Snotra AI.exe', 'ffmpeg.dll', 'Snotra AI-win32-x64-1.12.0.zip', 'notes.txt']) {
+    await fsp.writeFile(path.join(installDir, name), '');
+  }
+  for (const name of ['snotra ai.exe', 'FFMPEG.dll', 'vulkan-1.dll']) {
+    await fsp.writeFile(path.join(packageDir, name), '');
+  }
+  assert.deepEqual(
+    (await listForeignEntries(installDir, packageDir)).sort(),
+    ['Snotra AI-win32-x64-1.12.0.zip', 'notes.txt'],
+  );
+});
+
+test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokoll, Status und Mitbringsel', async (t) => {
+  if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+  const dir = makeTempDir();
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+  await fsp.mkdir(installDir, { recursive: true });
+  await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
+  await fsp.writeFile(path.join(installDir, 'Snotra AI-win32-x64-1.12.0.zip'), 'zip');
+  const workDir = path.join(dir, 'work');
+  const zip = path.join(dir, 'new.zip');
+  await fsp.writeFile(zip, 'zip');
+
+  const { installer, runs, launches } = makeInstaller({
+    // Stands in for Expand-Archive: the ZIP carries a top-level folder.
+    onRun: async (cmd, args) => {
+      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+      await fsp.mkdir(path.join(dest, 'Snotra AI-win32-x64'), { recursive: true });
+      await fsp.writeFile(path.join(dest, 'Snotra AI-win32-x64', 'Snotra AI.exe'), 'new');
+      return '';
+    },
+  });
+  const logFile = path.join(dir, 'userData', 'update-install.log');
+  const statusFile = path.join(dir, 'userData', 'update-install-failed.json');
+  const res = await installer.install({
+    filePath: zip,
+    version: '1.13.0',
+    target: { kind: 'windows-dir', canSelfUpdate: true, installDir },
+    workDir,
+    logFile,
+    statusFile,
+  });
+
+  assert.deepEqual(res, { ok: true, relaunching: true, logFile });
+  assert.equal(runs[0].cmd, 'powershell.exe');
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].cmd, 'powershell.exe');
+  assert.deepEqual(launches[0].options, { cwd: path.join(dir, 'tools') });
+  const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
+  assert.ok(script.includes(`$log     = ${psQuote(logFile)}`));
+  assert.ok(script.includes(`$status  = ${psQuote(statusFile)}`));
+  assert.ok(script.includes("$version = '1.13.0'"));
+  assert.ok(script.includes("$carry   = @('Snotra AI-win32-x64-1.12.0.zip')"));
+  assert.match(script, /\$staged {2}= '[^']*\.snotra-new-\d+\/Snotra AI-win32-x64'/);
+  assert.match(script, /\$stage {3}= '[^']*\.snotra-new-\d+'/);
 });
 
 test('eine PID wird als Zahl eingesetzt, nie als Text', () => {
