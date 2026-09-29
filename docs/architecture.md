@@ -362,6 +362,16 @@ by a `data:` URI or a placeholder; and even if that did not happen,
 main process anyway. Without it there would never be an image via an absolute
 path on Windows.
 
+**`<img>` is the only element that keeps a URL** ([#423](https://github.com/kkrafft1999/snotra/issues/423)).
+The HTML profile allows more that loads on its own: `<video>`/`<audio>` with
+`<source>` and `<track>`, a `poster`, `<input type="image">`, a table's
+`background`. Each of them would read a local file past the main process —
+`'self'` covers `file:`. So the sanitizer forbids the media tags and `picture`,
+drops `poster` and `background`, and the same hook
+removes `src` from every element but `<img>`; `<input>` itself has to stay, the
+task lists render their checkboxes with it. The CSP says `media-src 'none'`:
+the voice recording records a stream and never plays one back.
+
 Two quirks hang on streaming: while the answer is running, `scheduleStreamRender`
 sets the complete `innerHTML` anew on every animation frame — which is why images
 get only a calm placeholder until the end. And completion cancels the still

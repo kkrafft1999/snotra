@@ -75,6 +75,7 @@ const BACKGROUND_QUESTION = 'Arbeite im Hintergrund weiter.';
 const BACKGROUND_ANSWER = 'Hintergrund-Antwort '.repeat(30).trim();
 const LINK_QUESTION = 'Zeig mir Links.';
 const IMAGE_QUESTION = 'Zeig mir das Diagramm.';
+const MEDIA_QUESTION = 'Spiel mir die Aufnahme vor.';
 const MEMORY_QUESTION = 'Bitte merke dir etwas.';
 const MEMORY_NEW_ENTRY = 'Frisch-gemerkt-im-Smoke-Test.';
 
@@ -179,6 +180,25 @@ const FLOW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 170">
 
 /** Breiter als jedes Chat-Panel in diesem Test — genau darum geht es. */
 const BREITES_PNG = makePng(1200, 60);
+
+/** A tenth of a second of silence as 8 kHz mono PCM — small, and playable. */
+function makeWav(samples = 800) {
+  const buf = Buffer.alloc(44 + samples);
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + samples, 4);
+  buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20);
+  buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(8000, 24);
+  buf.writeUInt32LE(8000, 28);
+  buf.writeUInt16LE(1, 32);
+  buf.writeUInt16LE(8, 34);
+  buf.write('data', 36);
+  buf.writeUInt32LE(samples, 40);
+  buf.fill(128, 44);
+  return buf;
+}
 
 /** Frage abschicken — `page.evaluate` sieht nur, was man ihm mitgibt. */
 function ask(page, question) {
@@ -837,6 +857,83 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     assert.equal(p.rolle, 'img', `${p.alt}: der Platzhalter meldet sich als Bild`);
   }
   step('Bilder aus dem Arbeitsordner geprueft');
+
+  // --- Media and other URL attributes in the answer (#423) ------------------
+  // The same gap as #402, without the `<img>`: `media-src 'self'` covers every
+  // local file, and so does `img-src 'self'` for a poster, an image button or
+  // a table background. None of them may reach the DOM. A real, playable file
+  // outside the open folder, so that a load would show up as an event.
+  const fremdeAufnahme = path.join(userDataDir, 'outside.wav');
+  await writeFile(fremdeAufnahme, makeWav());
+  const fremdeUrl = encodeURI(fremdeAufnahme.split(path.sep).join('/'));
+  const fremdesBildUrl = encodeURI(fremdesBild.split(path.sep).join('/'));
+  model.queueAnswer({
+    match: MEDIA_QUESTION,
+    text: [
+      'Hier ist sie:',
+      '',
+      `<video src="${fremdeUrl}" controls>video fallback</video>`,
+      '',
+      `<video poster="${fremdesBildUrl}"></video>`,
+      '',
+      `<audio src="${fremdeUrl}" controls></audio>`,
+      '',
+      `<audio controls><source src="${fremdeUrl}" type="audio/wav"><track src="${fremdeUrl}"></audio>`,
+      '',
+      `<picture><source srcset="${fremdesBildUrl}"><img alt="Bildquelle"></picture>`,
+      '',
+      `<input type="image" src="${fremdesBildUrl}" alt="Bildknopf">`,
+      '',
+      `<table background="${fremdesBildUrl}"><tr><td background="${fremdesBildUrl}">Zelle</td></tr></table>`,
+      '',
+      '- [x] erledigt',
+    ].join('\n'),
+  });
+  await page.evaluate(() => {
+    globalThis.__cspViolations = [];
+    globalThis.__chatMediaEvents = [];
+    const note = (e) => {
+      if (!e.target?.closest?.('#chat-messages') || e.target.tagName === 'IMG') return;
+      globalThis.__chatMediaEvents.push(`${e.type} ${e.target.tagName}`);
+    };
+    for (const type of ['loadstart', 'loadedmetadata', 'load', 'error']) {
+      document.addEventListener(type, note, true);
+    }
+  });
+  await ask(page, MEDIA_QUESTION);
+  step('Medien-Frage abgeschickt');
+
+  const medien = await poll(
+    async () => {
+      const state = await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+        const last = bubbles[bubbles.length - 1];
+        if (!last || !last.textContent.includes('Hier ist sie')) return null;
+        if (document.getElementById('chat-messages').getAttribute('aria-busy') === 'true') return null;
+        return {
+          elemente: [...last.querySelectorAll('video, audio, source, track, picture')].map((el) => el.tagName),
+          urlAttribute: [...last.querySelectorAll('[src]:not(img), [poster], [background], [srcset]')]
+            .map((el) => el.outerHTML),
+          text: last.textContent,
+          checkbox: last.querySelectorAll('input[type="checkbox"]').length,
+        };
+      });
+      return state;
+    },
+    { what: 'Medien-Antwort' }
+  );
+  // Give a media element that did slip through the time to report itself.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.deepEqual(medien.elemente, [], 'no media element reaches the answer');
+  assert.deepEqual(medien.urlAttribute, [], 'no element but <img> keeps a URL attribute');
+  assert.deepEqual(await page.evaluate(() => globalThis.__chatMediaEvents), [],
+    'nothing in the answer started loading');
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [],
+    'nothing in the answer tried to load past the CSP');
+  // What stays: the rest of the answer, and the task list's checkbox, an <input>.
+  assert.match(medien.text, /Zelle/);
+  assert.equal(medien.checkbox, 1, 'the task list still renders its checkbox');
+  step('Medien in der Antwort geprueft');
 
   // --- Einstellungen: oeffnen, Tab wechseln, mit Escape schliessen ----------
   // Es gibt keinen Knopf mehr dafuer: Der Dialog haengt am Menueeintrag
