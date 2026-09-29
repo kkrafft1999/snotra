@@ -5591,6 +5591,8 @@ select.modal-input {
 
 .update-dialog__hint {
   margin: 0;
+  /* A log path has no spaces to break at. */
+  overflow-wrap: anywhere;
 }
 
 /* Fortschritt: Balken UND Text. Der Balken allein waere ein Zustand, der nur

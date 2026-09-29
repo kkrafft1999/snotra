@@ -101,10 +101,57 @@ function buildLinuxDirScript({ pid, installDir, stagedDir, backupDir, workDir, b
   ].join('\n');
 }
 
-function buildWindowsSwapScript({ pid, installDir, stagedDir, backupDir, workDir, exeName = WINDOWS_EXE_NAME }) {
+/**
+ * Windows: wait for this process to end, swap the folders, start again.
+ *
+ * Everything here has to hold up against a folder Windows will not let go of
+ * (#442). The helper therefore runs from the parent folder — a directory that
+ * is some process's current directory cannot be renamed, and the app is
+ * usually started from its own folder. Each move is retried for a while,
+ * because a scanner or a sync client often holds a file for a moment. And a
+ * failure is never silent: the helper logs every step, rolls back, leaves a
+ * status file for the next start and restarts the old version.
+ *
+ * `carryOver` lists entries of the app folder that are not part of the new
+ * package (the downloaded ZIP, say). They move into the new folder instead of
+ * being deleted along with the backup.
+ */
+function buildWindowsSwapScript({
+  pid, installDir, stagedDir, stageRoot = stagedDir, backupDir, workDir,
+  logFile, statusFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
+}) {
+  const carry = carryOver.length > 0 ? `@(${carryOver.map(psQuote).join(', ')})` : '@()';
   return [
     '$ErrorActionPreference =' + " 'Stop'",
-    `$procId = ${Number(pid)}`,
+    `$procId  = ${Number(pid)}`,
+    `$install = ${psQuote(installDir)}`,
+    `$staged  = ${psQuote(stagedDir)}`,
+    `$stage   = ${psQuote(stageRoot)}`,
+    `$backup  = ${psQuote(backupDir)}`,
+    `$work    = ${psQuote(workDir)}`,
+    `$log     = ${psQuote(logFile)}`,
+    `$status  = ${psQuote(statusFile)}`,
+    `$version = ${psQuote(version)}`,
+    `$carry   = ${carry}`,
+    `$exe     = Join-Path $install ${psQuote(exeName)}`,
+    '',
+    'function Write-Log([string]$text) {',
+    "  try { Add-Content -LiteralPath $log -Value ((Get-Date -Format o) + ' ' + $text) -Encoding UTF8 } catch { }",
+    '}',
+    '',
+    'function Move-WithRetry([string]$from, [string]$to) {',
+    '  for ($i = 1; ; $i++) {',
+    '    try { Move-Item -LiteralPath $from -Destination $to -Force; return }',
+    '    catch {',
+    '      if ($i -ge 40) { throw }',
+    "      Write-Log ('move ' + $from + ' failed (attempt ' + $i + '): ' + $_.Exception.Message)",
+    '      Start-Sleep -Milliseconds 500',
+    '    }',
+    '  }',
+    '}',
+    '',
+    'Set-Location -LiteralPath (Split-Path -Parent $install)',
+    "Write-Log ('update to ' + $version + ': waiting for process ' + $procId)",
     '$deadline = (Get-Date).AddSeconds(120)',
     'while ((Get-Date) -lt $deadline) {',
     '  if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { break }',
@@ -112,22 +159,71 @@ function buildWindowsSwapScript({ pid, installDir, stagedDir, backupDir, workDir
     '}',
     // Windows gibt Dateihandles erst kurz nach dem Prozessende frei.
     'Start-Sleep -Milliseconds 1000',
-    `$install = ${psQuote(installDir)}`,
-    `$staged  = ${psQuote(stagedDir)}`,
-    `$backup  = ${psQuote(backupDir)}`,
-    `$work    = ${psQuote(workDir)}`,
-    'Move-Item -LiteralPath $install -Destination $backup -Force',
+    '',
     'try {',
-    '  Move-Item -LiteralPath $staged -Destination $install -Force',
+    '  Move-WithRetry $install $backup',
+    '  try {',
+    "    if (Test-Path -LiteralPath $install) { throw ($install + ' still exists') }",
+    '    Move-WithRetry $staged $install',
+    '  } catch {',
+    '    Move-WithRetry $backup $install',
+    '    throw',
+    '  }',
     '} catch {',
-    '  Move-Item -LiteralPath $backup -Destination $install -Force',
-    '  throw',
+    '  $reason = $_.Exception.Message',
+    "  Write-Log ('update failed: ' + $reason)",
+    '  try {',
+    '    @{ version = $version; error = $reason; log = $log; at = (Get-Date -Format o) } |',
+    '      ConvertTo-Json | Set-Content -LiteralPath $status -Encoding UTF8',
+    '  } catch { }',
+    '  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
+    '  if (Test-Path -LiteralPath $exe) {',
+    "    Write-Log 'starting the previous version again'",
+    '    Start-Process -FilePath $exe',
+    '  } else {',
+    "    Write-Log ('the previous version is in ' + $backup)",
+    '  }',
+    '  exit 1',
     '}',
-    'Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue',
+    '',
+    '$keepBackup = $false',
+    'foreach ($name in $carry) {',
+    '  try { Move-WithRetry (Join-Path $backup $name) (Join-Path $install $name) }',
+    "  catch { $keepBackup = $true; Write-Log ('could not carry over ' + $name + ': ' + $_.Exception.Message) }",
+    '}',
+    'Remove-Item -LiteralPath $status -Force -ErrorAction SilentlyContinue',
+    'if ($keepBackup) {',
+    "  Write-Log ('kept the previous folder as ' + $backup)",
+    '} else {',
+    '  Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue',
+    '}',
+    'Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
     'Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue',
-    `Start-Process -FilePath (Join-Path $install ${psQuote(exeName)})`,
+    "Write-Log ('updated to ' + $version)",
+    'Start-Process -FilePath $exe',
     '',
   ].join('\n');
+}
+
+/** `update-install.log` → `update-install-output.log`, next to it. */
+function helperOutputFile(logFile) {
+  const ext = path.extname(logFile);
+  return `${logFile.slice(0, logFile.length - ext.length)}-output${ext}`;
+}
+
+/**
+ * Entries of the app folder that the new package does not bring along — the
+ * ZIP the app came in, or files of the user's when the app was extracted into
+ * a shared folder. The folder is swapped as a whole, so without this they
+ * would go with the backup. Windows names are compared without case.
+ */
+async function listForeignEntries(installDir, packageDir) {
+  const [installed, shipped] = await Promise.all([
+    fsp.readdir(installDir).catch(() => []),
+    fsp.readdir(packageDir).catch(() => []),
+  ]);
+  const known = new Set(shipped.map((name) => name.toLowerCase()));
+  return installed.filter((name) => !known.has(name.toLowerCase()));
 }
 
 /**
@@ -152,9 +248,26 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     });
   }));
 
-  const launch = spawnDetached || ((cmd, args) => {
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
-    child.unref();
+  // `outputFile` catches what the helper prints — above all what PowerShell
+  // says when the script cannot even start. The helper outlives this process,
+  // so a file is the only place that can still hear it (#442).
+  const launch = spawnDetached || ((cmd, args, { outputFile, ...options } = {}) => {
+    let fd = null;
+    if (outputFile) {
+      try { fd = fs.openSync(outputFile, 'w'); } catch { fd = null; }
+    }
+    const stdio = fd === null ? 'ignore' : ['ignore', fd, fd];
+    // Not detached on Windows: there it means DETACHED_PROCESS, a process
+    // without any console, and powershell.exe ends at once without a word.
+    // A child outlives its parent on Windows anyway; attached, it gets a
+    // console of its own, which `windowsHide` keeps out of sight (#442).
+    const detached = process.platform !== 'win32';
+    try {
+      const child = spawn(cmd, args, { detached, stdio, windowsHide: true, ...options });
+      child.unref();
+    } finally {
+      if (fd !== null) fs.closeSync(fd);
+    }
   });
 
   /** @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`. */
@@ -251,7 +364,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     return { ok: true, relaunching: true };
   }
 
-  async function installWindows({ filePath, target, workDir }) {
+  async function installWindows({ filePath, version, target, workDir, logFile, statusFile }) {
     const installDir = target.installDir;
     const parentDir = path.win32.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
@@ -280,15 +393,28 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
       }
     }
 
+    const carryOver = await listForeignEntries(installDir, rootDir);
+    const helperLog = logFile || path.join(path.dirname(workDir), 'snotra-update.log');
     const script = path.join(workDir, 'swap.ps1');
     await fsp.writeFile(script, buildWindowsSwapScript({
-      pid: pidOf(), installDir, stagedDir: rootDir, backupDir, workDir,
+      pid: pidOf(),
+      installDir,
+      stagedDir: rootDir,
+      stageRoot: stagedDir,
+      backupDir,
+      workDir,
+      logFile: helperLog,
+      statusFile: statusFile || path.join(path.dirname(workDir), 'snotra-update-failed.json'),
+      version,
+      carryOver,
     }), 'utf8');
+    // Not from the app's own folder: Windows keeps a process's working
+    // directory from being renamed, and the helper would inherit it (#442).
     launch('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
       '-File', script,
-    ]);
-    return { ok: true, relaunching: true };
+    ], { cwd: parentDir, outputFile: helperOutputFile(helperLog) });
+    return { ok: true, relaunching: true, logFile: helperLog };
   }
 
   async function installLinuxAppImage({ filePath, target, workDir }) {
@@ -347,8 +473,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
    * Spielt die geladene Datei ein. Wirft nie — ein Fehler kommt als
    * `{ ok: false, error }` zurueck; die laufende Installation ist dann
    * unveraendert.
+   *
+   * `logFile` and `statusFile` are where the Windows helper reports once this
+   * process is gone (#442); they belong outside the app folder and the work
+   * folder, which both get replaced or removed.
    */
-  async function install({ filePath, version, target, workDir }) {
+  async function install({ filePath, version, target, workDir, logFile, statusFile }) {
     try {
       if (!filePath || !fs.existsSync(filePath)) {
         return { ok: false, error: createMessage('update.error.fileGone') };
@@ -360,7 +490,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
 
       switch (target.kind) {
         case 'macos-bundle': return await installMacos({ filePath, version, target, workDir });
-        case 'windows-dir': return await installWindows({ filePath, version, target, workDir });
+        case 'windows-dir': return await installWindows({ filePath, version, target, workDir, logFile, statusFile });
         case 'linux-appimage': return await installLinuxAppImage({ filePath, version, target, workDir });
         case 'linux-dir': return await installLinuxDir({ filePath, version, target, workDir });
         default: return { ok: false, error: createMessage('update.error.selfUpdateImpossible') };
@@ -380,6 +510,8 @@ module.exports = {
   buildLinuxAppImageScript,
   buildLinuxDirScript,
   buildWindowsSwapScript,
+  listForeignEntries,
+  helperOutputFile,
   shQuote,
   psQuote,
 };

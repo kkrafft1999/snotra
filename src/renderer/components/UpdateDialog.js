@@ -250,7 +250,7 @@ export function initUpdateDialog({ api }) {
 
     actionsEl.replaceChildren();
     hintEl.classList.add('hidden');
-    hintEl.classList.remove('error');
+    hintEl.classList.remove('error', 'warning');
     progressEl.classList.add('hidden');
     // Die Aenderungsliste hilft nur bei der Entscheidung „laden/installieren?".
     // Waehrend des Ladens, beim Einspielen und im Fehlerfall lenkt sie ab.
@@ -275,6 +275,18 @@ export function initUpdateDialog({ api }) {
         actionsEl.appendChild(makeButton(t('update.openReleasePage'), 'btn-primary', openReleasePage));
       } else {
         actionsEl.appendChild(makeButton(t('update.download'), 'btn-primary', startDownload));
+      }
+      // The last swap failed after the app had quit (#442). The running
+      // version is fine, so this is a warning and not an error — but it says
+      // why the same update is offered again, and where the log is.
+      const failure = info?.lastInstallFailure;
+      if (failure && canSelfUpdate) {
+        const params = { version: failure.version, current, log: failure.logFile };
+        hintEl.textContent = failure.error
+          ? t('update.available.lastFailed', { ...params, error: failure.error })
+          : t('update.available.lastFailedPlain', params);
+        hintEl.classList.add('warning');
+        hintEl.classList.remove('hidden');
       }
       // Beide Knoepfe schliessen den Dialog, aber nur einer davon fuer immer.
       // Das steht jetzt in der Beschriftung statt in einem Titel-Text, den

@@ -310,3 +310,36 @@ test('createApplication findet System-Skills unter app.getAppPath()/system-skill
     [['demo-system-skill', 'system', 'active']]
   );
 });
+
+// #442: a failed swap is read once on the silent start check and travels with
+// the update it concerns; the ignored version must not hide it.
+test('runUpdateCheck reports a failed install from the last quit on the silent check', async (t) => {
+  const sent = [];
+  const checks = [];
+  let takes = 0;
+  const failure = { version: '2.0.0', error: 'in use', logFile: '/tmp/update-install.log' };
+  const build = await makeApplication(t, {
+    getMainWindow: () => ({
+      isDestroyed: () => false,
+      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    }),
+    updates: {
+      getCurrentVersion: () => '1.0.0',
+      checkForUpdate: async (options) => {
+        checks.push(options);
+        return { updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0' };
+      },
+      takeInstallFailure: async () => { takes += 1; return takes === 1 ? failure : null; },
+      ignoreVersion: async () => ({ ok: true }),
+    },
+  })();
+  const { app } = build;
+
+  await app.runUpdateCheck({ silent: true });
+  assert.deepEqual(checks[0], { respectIgnored: false });
+  assert.deepEqual(sent[0].payload.lastInstallFailure, failure);
+
+  await app.runUpdateCheck({ silent: false });
+  assert.equal(takes, 1, 'a manual check leaves the record alone');
+  assert.equal(sent[1].payload.lastInstallFailure, null);
+});

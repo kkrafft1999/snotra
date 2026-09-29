@@ -347,3 +347,79 @@ test('eine gescheiterte Installation laesst die laufende App stehen', async () =
   assert.deepEqual(res, { ok: false, error: 'Keine Schreibrechte.' });
   assert.equal(quits, 0, 'die App darf sich nicht beenden, wenn nichts getauscht wurde');
 });
+
+// #442: the Windows helper reports a failed swap after the app has quit.
+function makeUserDataApp(t, version = '1.12.0') {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-update-status-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return {
+    dir,
+    statusFile: path.join(dir, 'update-install-failed.json'),
+    logFile: path.join(dir, 'update-install.log'),
+    app: {
+      getVersion: () => version,
+      getPath: (name) => (name === 'userData' ? dir : os.tmpdir()),
+    },
+  };
+}
+
+test('installUpdate gibt dem Installer Protokoll und Status im Benutzerordner mit', async (t) => {
+  const { app: userApp, logFile, statusFile } = makeUserDataApp(t, '1.0.0');
+  const seen = [];
+  const svc = createUpdateService({
+    app: userApp,
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader: fakeDownloader(),
+    installer: { async install(args) { seen.push(args); return { ok: true, relaunching: true }; } },
+    quitApp: () => {},
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  await svc.downloadUpdate();
+  await svc.installUpdate();
+  assert.equal(seen[0].logFile, logFile);
+  assert.equal(seen[0].statusFile, statusFile);
+});
+
+test('takeInstallFailure meldet einen gescheiterten Tausch genau einmal', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, statusFile } = makeUserDataApp(t);
+  // Windows PowerShell 5 writes a byte order mark in front of the JSON.
+  fs.writeFileSync(statusFile, `\uFEFF${JSON.stringify({
+    version: '1.13.0',
+    error: ' The process cannot access the file because it is being used by another process. ',
+    log: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
+  })}`);
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+
+  assert.deepEqual(await svc.takeInstallFailure(), {
+    version: '1.13.0',
+    error: 'The process cannot access the file because it is being used by another process.',
+    logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
+  });
+  assert.equal(fs.existsSync(statusFile), false);
+  assert.equal(await svc.takeInstallFailure(), null);
+});
+
+test('takeInstallFailure verwirft eine Meldung, die inzwischen ueberholt ist', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, statusFile } = makeUserDataApp(t, '1.13.0');
+  fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0', error: 'locked' }));
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  assert.equal(await svc.takeInstallFailure(), null);
+  assert.equal(fs.existsSync(statusFile), false);
+});
+
+test('takeInstallFailure uebersteht eine kaputte Datei und faellt auf das eigene Protokoll zurueck', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, statusFile, logFile } = makeUserDataApp(t);
+  fs.writeFileSync(statusFile, '{ not json');
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  assert.equal(await svc.takeInstallFailure(), null);
+
+  fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0' }));
+  assert.deepEqual(await svc.takeInstallFailure(), { version: '1.13.0', error: '', logFile });
+});

@@ -23,6 +23,9 @@ function createUpdateAdapter(updateService) {
     installUpdate() {
       return updateService.installUpdate();
     },
+    takeInstallFailure() {
+      return updateService.takeInstallFailure();
+    },
   };
 }
 
