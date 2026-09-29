@@ -257,8 +257,13 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
       try { fd = fs.openSync(outputFile, 'w'); } catch { fd = null; }
     }
     const stdio = fd === null ? 'ignore' : ['ignore', fd, fd];
+    // Not detached on Windows: there it means DETACHED_PROCESS, a process
+    // without any console, and powershell.exe ends at once without a word.
+    // A child outlives its parent on Windows anyway; attached, it gets a
+    // console of its own, which `windowsHide` keeps out of sight (#442).
+    const detached = process.platform !== 'win32';
     try {
-      const child = spawn(cmd, args, { detached: true, stdio, windowsHide: true, ...options });
+      const child = spawn(cmd, args, { detached, stdio, windowsHide: true, ...options });
       child.unref();
     } finally {
       if (fd !== null) fs.closeSync(fd);
