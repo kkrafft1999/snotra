@@ -16,7 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 
-const { createUpdateInstaller } = require('../src/main/services/update-installer');
+const { createUpdateInstaller, buildWindowsSwapScript } = require('../src/main/services/update-installer');
 
 const onWindows = process.platform === 'win32';
 const EXE = 'Snotra AI.exe';
@@ -28,12 +28,13 @@ function holdFolder(cwd, ms) {
   return child;
 }
 
+/** `what` is a function, so the message shows the state at the timeout. */
 async function waitFor(check, { timeoutMs, what }) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const value = await check();
     if (value) return value;
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what()}`);
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
@@ -87,9 +88,24 @@ async function makeFixture(t) {
   };
 }
 
-/** Starts the install the way the app does: from inside its own folder. */
+/**
+ * Starts the install the way the app does: from inside its own folder. The
+ * helper is spawned with the installer's own options; only its output is kept
+ * instead of dropped, so a failure on the runner says what went wrong.
+ */
 async function installFromInsideTheFolder(fixture, pid) {
-  const installer = createUpdateInstaller({ getPid: () => pid });
+  const helper = { output: '', exit: null };
+  fixture.helper = helper;
+  const installer = createUpdateInstaller({
+    getPid: () => pid,
+    spawnDetached: (cmd, args, options) => {
+      const child = spawn(cmd, args, { ...options, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      child.stdout.on('data', (chunk) => { helper.output += chunk; });
+      child.stderr.on('data', (chunk) => { helper.output += chunk; });
+      child.on('exit', (code) => { helper.exit = code; });
+      child.on('error', (err) => { helper.output += `spawn error: ${err.message}`; });
+    },
+  });
   const before = process.cwd();
   process.chdir(fixture.installDir);
   try {
@@ -106,6 +122,44 @@ async function installFromInsideTheFolder(fixture, pid) {
   }
 }
 
+function describe(fixture) {
+  return [
+    `the helper (exit ${fixture.helper?.exit})`,
+    `output: ${fixture.helper?.output || '(none)'}`,
+    `log: ${readIfThere(fixture.logFile) || '(none)'}`,
+    `status: ${readIfThere(fixture.statusFile) || '(none)'}`,
+    `next to the app: ${fs.readdirSync(fixture.parentDir).join(', ')}`,
+  ].join('\n');
+}
+
+test('Windows: the swap script parses', { skip: !onWindows }, () => {
+  const script = buildWindowsSwapScript({
+    pid: 1,
+    installDir: 'C:\\a\\Snotra AI',
+    stagedDir: 'C:\\a\\.snotra-new-1\\x',
+    stageRoot: 'C:\\a\\.snotra-new-1',
+    backupDir: 'C:\\a\\.snotra-old-1',
+    workDir: 'C:\\t\\w',
+    logFile: 'C:\\t\\l.log',
+    statusFile: 'C:\\t\\s.json',
+    version: '1.13.0',
+    carryOver: ["Kon's.zip"],
+  });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-parse-'));
+  try {
+    const file = path.join(dir, 'swap.ps1');
+    fs.writeFileSync(file, script, 'utf8');
+    const out = execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${file}', [ref]$null, [ref]$e); `
+        + '$e | ForEach-Object { $_.Extent.StartLineNumber.ToString() + ": " + $_.Message }',
+    ], { encoding: 'utf8' });
+    assert.equal(out.trim(), '', out);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('Windows: the swap goes through although the app ran from its own folder', { skip: !onWindows, timeout: 90_000 }, async (t) => {
   const fixture = await makeFixture(t);
   const app = holdFolder(fixture.installDir, 2000);
@@ -116,7 +170,7 @@ test('Windows: the swap goes through although the app ran from its own folder', 
 
   const log = await waitFor(() => /updated to 1\.13\.0/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
     timeoutMs: 60_000,
-    what: `the helper to finish (log so far: ${readIfThere(fixture.logFile)})`,
+    what: () => describe(fixture),
   });
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'new', log);
   assert.equal(readIfThere(path.join(fixture.installDir, `${FOLDER}-1.12.0.zip`)), 'the old download');
@@ -137,7 +191,7 @@ test('Windows: a folder that stays locked rolls back, reports and keeps the old 
 
   const status = await waitFor(() => readIfThere(fixture.statusFile), {
     timeoutMs: 90_000,
-    what: `the failure report (log so far: ${readIfThere(fixture.logFile)})`,
+    what: () => describe(fixture),
   });
   const record = JSON.parse(status.replace(/^\uFEFF/, ''));
   assert.equal(record.version, '1.13.0');
@@ -146,7 +200,7 @@ test('Windows: a folder that stays locked rolls back, reports and keeps the old 
 
   const log = await waitFor(() => /starting the previous version again/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
     timeoutMs: 10_000,
-    what: 'the old version to be started again',
+    what: () => describe(fixture),
   });
   assert.match(log, /update failed: /);
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'old');
