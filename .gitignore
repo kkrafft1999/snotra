@@ -49,3 +49,5 @@ Thumbs.db
 !.claude/rules/**
 !.claude/launch.json
 
+# The negations above take Finder files back in; drop them again
+.claude/**/.DS_Store
