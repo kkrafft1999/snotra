@@ -43,11 +43,18 @@ const focusInfo = (page) => page.evaluate(() => {
   return el ? `${el.tagName.toLowerCase()}#${el.id || ''}.${el.className || ''}[${el.dataset?.riskClass || el.dataset?.securityLink || ''}]` : 'none';
 });
 
-/** Focus an element, make sure it has the focus, then press Enter on it. */
+/**
+ * Focus an element, make sure it has the focus, then press Enter on it. The
+ * page redraws its rows after a change, so every attempt focuses the element
+ * that is there now — a button replaced in between would never get it (#469).
+ */
 async function pressEnterOn(page, selector) {
-  await page.locator(selector).focus();
-  await poll(() => page.evaluate((sel) => document.activeElement === document.querySelector(sel), selector),
-    { what: `focus on ${selector}` });
+  await poll(() => page.evaluate((sel) => {
+    const target = document.querySelector(sel);
+    if (!target) return false;
+    if (document.activeElement !== target) target.focus();
+    return document.activeElement === target;
+  }, selector), { what: `focus on ${selector}` });
   await page.keyboard.press('Enter');
 }
 
