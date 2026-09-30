@@ -1,5 +1,6 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage, onLocaleChange } from '../i18n.js';
+import { describeConnection, connectionStatusElement } from '../utils/mcp-connection-view.js';
 
 const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contracts;
 
@@ -53,30 +54,8 @@ export function joinArgs(args) {
     .join(' ');
 }
 
-/**
- * Statuszeile eines Servers. Die Form trägt die Aussage, nicht die Farbe
- * (Regelwerk: keine grünen Statusfarben) — gefüllter Punkt heißt verbunden,
- * hohler Ring ausgeschaltet, Ausrufezeichen Fehler.
- */
-export function describeConnection(server, connection) {
-  if (!server?.enabled) return { kind: 'off', text: t('settings.mcp.state.off') };
-  const state = connection?.state;
-  if (state === MCP_CONNECTION_STATES.READY) {
-    return { kind: 'on', text: tPlural('settings.mcp.state.connected', connection.toolCount ?? 0) };
-  }
-  if (state === MCP_CONNECTION_STATES.FAILED) {
-    return {
-      kind: 'error',
-      text: t('settings.mcp.state.startFailed'),
-      detail: tMessage(connection.error),
-      stderr: connection.stderr,
-    };
-  }
-  if (state === MCP_CONNECTION_STATES.STARTING) return { kind: 'off', text: t('settings.mcp.state.starting') };
-  // IDLE heisst: eingeschaltet, aber noch nie gebraucht. Traeges Verbinden
-  // ist Absicht (#106) — das soll hier nicht wie ein Fehler aussehen.
-  return { kind: 'off', text: t('settings.mcp.state.notConnected') };
-}
+// The status texts are shared with Settings › Security (#462).
+export { describeConnection };
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -144,21 +123,6 @@ export function initMcpPanel({ api }) {
     node.classList.toggle('hidden', !message);
   }
 
-  function statusNode(status) {
-    const wrap = el('span', 'mcp-status');
-    if (status.kind === 'error') {
-      const badge = el('span', 'mcp-status__badge', '!');
-      badge.setAttribute('aria-hidden', 'true');
-      wrap.append(badge);
-    } else {
-      const dot = el('span', `mcp-status__dot mcp-status__dot--${status.kind}`);
-      dot.setAttribute('aria-hidden', 'true');
-      wrap.append(dot);
-    }
-    wrap.append(el('span', null, status.text));
-    return wrap;
-  }
-
   function render() {
     if (!list) return;
     list.replaceChildren();
@@ -176,7 +140,7 @@ export function initMcpPanel({ api }) {
       main.append(meta);
       row.append(main);
 
-      row.append(statusNode(status));
+      row.append(connectionStatusElement(status));
 
       const actions = el('div', 'mcp-row__actions');
       const edit = el('button', 'btn-secondary btn-compact', t('settings.mcp.edit'));

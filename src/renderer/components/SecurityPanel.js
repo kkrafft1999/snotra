@@ -1,3 +1,4 @@
+import contracts from '../generated/contracts.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
 import { riskClassLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
@@ -7,6 +8,7 @@ import {
   describeSecurityRow,
   linkLabel,
 } from '../utils/security-overview-view.js';
+import { connectionStatusElement } from '../utils/mcp-connection-view.js';
 import { initWorkspaceModeSetting, SECURITY_PAGE_IDS } from './WorkspaceModeSetting.js';
 
 /**
@@ -25,6 +27,10 @@ import { initWorkspaceModeSetting, SECURITY_PAGE_IDS } from './WorkspaceModeSett
  * Rows are disclosure buttons (`aria-expanded`); which ones are open survives
  * a redraw, so a live update does not fold the row the user is reading.
  */
+
+const MCP_STARTING = contracts.MCP_CONNECTION_STATES.STARTING;
+/** How soon the page asks again while an MCP server is starting (#462). */
+const STARTING_POLL_MS = 1000;
 
 const SVG_ATTRS = 'width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
 
@@ -101,6 +107,10 @@ export function initSecurityPanel({
   let isOpen = false;
   let unsubscribe = null;
   let requestSeq = 0;
+  /** The MCP catalog (servers and connections), for the external row (#462). */
+  let mcp = null;
+  /** Asks again while a server is still starting and the page is open. */
+  let pendingTimer = null;
   /** The rule form opened in a row: `{ riskClass, effect }`, or null. */
   let ruleDraft = null;
   /** What to focus after the next draw (a removed rule's list, say). */
@@ -227,6 +237,20 @@ export function initSecurityPanel({
     body.appendChild(wrap);
   }
 
+  function toolList(tools) {
+    return itemList(tools.map((tool) => ({
+      label: tool.label,
+      code: tool.name,
+      tag: tool.tag,
+      scope: tool.muted || !tool.switchable ? null : 'global',
+      muted: tool.muted,
+      codeFirst: true,
+      // A tool that is not set up has nothing to switch yet; its tag and
+      // the link under the list say where it is set up.
+      control: tool.switchable && !tool.switchDisabled ? toolSwitch(tool) : null,
+    })));
+  }
+
   function renderMay(view, body) {
     body.appendChild(el('p', 'settings-security-answer', view.answer));
     if (view.note) body.appendChild(el('p', 'settings-security-note', view.note));
@@ -234,20 +258,29 @@ export function initSecurityPanel({
       placeSlot('shell', body);
       placeSlot('python', body);
     }
-    if (view.tools.length > 0) {
-      body.appendChild(itemList(view.tools.map((tool) => ({
-        label: tool.label,
-        code: tool.name,
-        tag: tool.tag,
-        scope: tool.muted || !tool.switchable ? null : 'global',
-        muted: tool.muted,
-        codeFirst: true,
-        // A tool that is not set up has nothing to switch yet; its tag and
-        // the link under the list say where it is set up.
-        control: tool.switchable && !tool.switchDisabled ? toolSwitch(tool) : null,
-      }))));
-    }
+    if (view.tools.length > 0) body.appendChild(toolList(view.tools));
+    for (const group of view.mcpGroups) body.appendChild(serverGroup(group));
     if (view.links.length > 0) body.appendChild(linksRow(view.links));
+  }
+
+  /**
+   * One MCP server in the external row (#462): its name and connection state
+   * as the head, its tools with their switches below.
+   */
+  function serverGroup(group) {
+    const wrap = el('div', 'settings-security-server');
+    wrap.dataset.mcpServer = group.id;
+    const head = el('p', 'settings-security-server__head');
+    const name = el('span', 'settings-security-server__name', group.name);
+    name.id = `settings-security-server-${group.id}`;
+    head.appendChild(name);
+    if (group.status) head.appendChild(connectionStatusElement(group.status));
+    wrap.appendChild(head);
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-labelledby', name.id);
+    if (group.detail) wrap.appendChild(el('p', 'settings-security-server__detail', group.detail));
+    if (group.tools.length > 0) wrap.appendChild(toolList(group.tools));
+    return wrap;
   }
 
   function renderAsk(view, body, riskClass) {
@@ -327,7 +360,7 @@ export function initSecurityPanel({
   }
 
   function renderRow(row) {
-    const view = describeSecurityRow(row, overview);
+    const view = describeSecurityRow(row, overview, mcp);
     const open = expanded.has(row.riskClass);
     const li = el('li', `settings-security-row settings-security-row--${view.pill.kind}${open ? ' settings-security-row--open' : ''}`);
     li.dataset.riskClass = row.riskClass;
@@ -593,20 +626,27 @@ export function initSecurityPanel({
   async function refresh() {
     const seq = ++requestSeq;
     let next;
+    let nextMcp;
+    // The page stands without the MCP catalog; the groups then carry no state.
+    const catalog = typeof api.getMcpCatalog === 'function'
+      ? Promise.resolve().then(() => api.getMcpCatalog()).catch(() => null)
+      : Promise.resolve(null);
     try {
-      next = await api.getSecurityOverview();
+      [next, nextMcp] = await Promise.all([api.getSecurityOverview(), catalog]);
     } catch {
       next = null;
     }
     // A slower answer to an older request must not overwrite a newer one.
     if (seq !== requestSeq) return;
+    mcp = nextMcp && Array.isArray(nextMcp.servers) ? nextMcp : null;
+    followStartingServers();
     if (!next || !Array.isArray(next.classes)) {
       showError(tMessage(next?.error) || t('security.error.load'));
       return;
     }
     showError('');
     overview = next;
-    const key = JSON.stringify(next);
+    const key = JSON.stringify({ next, mcp });
     if (key === drawnKey) {
       // The mode control follows the renderer state, which may have moved.
       modeSetting.render();
@@ -618,6 +658,22 @@ export function initSecurityPanel({
     }
     drawnKey = key;
     render();
+  }
+
+  /**
+   * A server that is starting settles on its own, with no event to tell the
+   * page; while one does and the page is open, ask again shortly.
+   */
+  function followStartingServers() {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+    const starting = (mcp?.connections || []).some((entry) => entry.state === MCP_STARTING
+      && (mcp.servers || []).some((server) => server.id === entry.serverId && server.enabled));
+    if (!isOpen || !starting) return;
+    pendingTimer = setTimeout(() => {
+      pendingTimer = null;
+      if (isOpen) void refresh();
+    }, STARTING_POLL_MS);
   }
 
   function open() {
@@ -632,6 +688,8 @@ export function initSecurityPanel({
 
   function close() {
     isOpen = false;
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
     ruleDraft = null;
     if (typeof unsubscribe === 'function') unsubscribe();
     unsubscribe = null;

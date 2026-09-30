@@ -7760,6 +7760,48 @@ select.modal-input {
   border-radius: var(--ds-radius-md);
 }
 
+/* One MCP server in the external row (#462): name and connection state as
+   the head of a card, its tools as the rows below. */
+.settings-security-server {
+  margin: 0 0 8px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  overflow: hidden;
+}
+
+.settings-security-server__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+}
+
+.settings-security-server__name {
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.settings-security-server__detail {
+  margin: 0;
+  padding: 6px 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  overflow-wrap: anywhere;
+}
+
+.settings-security-server > .settings-security-items {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  border-radius: 0;
+}
+
 .settings-security-item {
   display: flex;
   align-items: baseline;

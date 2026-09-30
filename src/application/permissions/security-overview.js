@@ -80,6 +80,7 @@ function cleanTools(raw) {
         riskClasses: Array.isArray(tool.riskClasses) ? tool.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls)) : [],
         mayOverwrite: tool.mayOverwrite === true,
         mcpServer: typeof tool.mcpServer === 'string' && tool.mcpServer ? tool.mcpServer : null,
+        mcpServerId: typeof tool.mcpServerId === 'string' && tool.mcpServerId ? tool.mcpServerId : null,
         // Why a tool is not offered matters for what the user does next:
         // switched off → switch it on; unavailable → set it up (a key, the
         // execution switch, a server).

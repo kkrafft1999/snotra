@@ -265,6 +265,8 @@ function createToolRegistry(initialDefinitions = []) {
         mcpServer: definition.mcp
           ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
           : null,
+        // The label names the server; the id matches its connection (#462).
+        mcpServerId: definition.mcp ? String(definition.mcp.serverId || '') || null : null,
       };
     });
   }
