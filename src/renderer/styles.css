@@ -4039,6 +4039,24 @@ select.modal-input {
   margin-bottom: 10px;
 }
 
+/* A lead-in sentence above a field needs air before the field's label;
+   otherwise the two read as one line. */
+.settings-tools-card > .modal-hint:has(+ .modal-field-group) {
+  margin: 0 0 12px;
+}
+
+/* A note right below a field is that field's hint and sits close to it,
+   not a group's distance away. */
+.settings-tools-card > .modal-field-group:has(+ .settings-note) {
+  margin-bottom: 4px;
+}
+
+/* The card's own padding is the bottom edge — a trailing note's margin
+   would double it. */
+.settings-tools-card > :last-child {
+  margin-bottom: 0;
+}
+
 .settings-tool-list {
   list-style: none;
   margin: 0;
@@ -4306,6 +4324,7 @@ select.modal-input {
 }
 
 .modal-field-label.eyebrow-row {
+  display: block;
   font-size: var(--ds-font-size-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -6457,10 +6476,6 @@ select.modal-input {
   display: none;
 }
 
-.settings-rule-form__field .modal-field-label.eyebrow-row {
-  display: block;
-}
-
 .settings-rule-form__actions {
   margin-top: 10px;
   display: flex;
@@ -7360,7 +7375,8 @@ select.modal-input {
 
 /* The dialog: program and hosts in the typeface they are typed in, folders
    as a list of rows with their own remove button. */
-#dialog-program-allowance .modal-input--mono {
+#dialog-program-allowance .modal-input--mono,
+.settings-tools-card .modal-input--mono {
   font-family: var(--font-mono);
   font-size: var(--ds-font-size-md);
 }
