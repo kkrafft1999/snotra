@@ -27,7 +27,8 @@ const {
   normalizeSessionForStore: buildNormalizedSessionForStore,
   normalizeSessionForLoad,
 } = require('./chat-history-normalization');
-const { renameWithRetry } = require('./rename-with-retry');
+const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
+const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 
 function createStorageService({
   app,
@@ -75,6 +76,22 @@ function createStorageService({
     } catch (err) {
       await fs.unlink(tmp).catch(() => {});
       throw err;
+    }
+  }
+
+  /**
+   * Reads a file that is about to be written back (#473). Only a missing file
+   * means "start from the defaults". Any other error — after the retry for
+   * Windows' transient locks — is thrown, so the caller writes nothing and the
+   * file on disk stays as it was. A read for display may still fall back; the
+   * harm is only in writing the defaults over what is there.
+   */
+  async function readForUpdate(filePath) {
+    try {
+      return await readFileWithRetry(fs, filePath, { platform });
+    } catch (error) {
+      if (error?.code === 'ENOENT') return null;
+      throw error;
     }
   }
 
@@ -324,14 +341,28 @@ function createStorageService({
     return migrateLLMConfigToV5(v4, { persist });
   }
 
-  async function readLLMConfigRaw() {
+  /**
+   * `unreadable`: the file is there but could not be read (#473). That is not
+   * a missing file, and the migrations below must not write their defaults
+   * over it. With `forUpdate` such a read throws instead.
+   */
+  async function readLLMConfigRaw({ forUpdate = false } = {}) {
+    let raw;
+    if (forUpdate) {
+      raw = await readForUpdate(getLLMConfigPath());
+      if (raw === null) return { data: null, unreadable: false };
+    } else {
+      try {
+        raw = await fs.readFile(getLLMConfigPath(), 'utf8');
+      } catch (error) {
+        return { data: null, unreadable: error?.code !== 'ENOENT' };
+      }
+    }
     try {
-      const raw = await fs.readFile(getLLMConfigPath(), 'utf8');
       const data = JSON.parse(raw);
-      if (!data || typeof data !== 'object') return null;
-      return data;
+      return { data: data && typeof data === 'object' ? data : null, unreadable: false };
     } catch {
-      return null;
+      return { data: null, unreadable: false };
     }
   }
 
@@ -356,8 +387,10 @@ function createStorageService({
     return config;
   }
 
-  async function readLLMConfig({ persistMigration = true } = {}) {
-    const existing = await readLLMConfigRaw();
+  async function readLLMConfig({ persistMigration = true, forUpdate = false } = {}) {
+    const { data: existing, unreadable } = await readLLMConfigRaw({ forUpdate });
+    // Shown as defaults, but never written over the file that is there (#473).
+    const persist = persistMigration && !unreadable;
     if (existing && existing.version === LLM_CONFIG_VERSION && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
         existing.providers = {};
@@ -369,7 +402,7 @@ function createStorageService({
     if (existing && existing.version === 4 && existing.providers) {
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return withDefaultPresetId(await migrateLLMConfigToV5(existing, { persist: persistMigration }));
+      return withDefaultPresetId(await migrateLLMConfigToV5(existing, { persist }));
     }
     if (existing && existing.version === 3 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
@@ -377,7 +410,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return withDefaultPresetId(await migrateFromV3(existing, { persist: persistMigration }));
+      return withDefaultPresetId(await migrateFromV3(existing, { persist }));
     }
     if (existing && existing.version === 2 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {
@@ -385,7 +418,7 @@ function createStorageService({
       }
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       const v3 = await migrateLLMConfigToV3(existing, { persist: false });
-      return withDefaultPresetId(await migrateFromV3(v3, { persist: persistMigration }));
+      return withDefaultPresetId(await migrateFromV3(v3, { persist }));
     }
     // Migrate from legacy openai-config.json (if present)
     const legacy = await readLegacyOpenAIConfig();
@@ -398,7 +431,7 @@ function createStorageService({
       migrated.activeProvider = 'openai';
     }
     const withV3 = await migrateLLMConfigToV3(migrated, { persist: false });
-    return withDefaultPresetId(await migrateFromV3(withV3, { persist: persistMigration }));
+    return withDefaultPresetId(await migrateFromV3(withV3, { persist }));
   }
 
   async function writeLLMConfig(config) {
@@ -407,7 +440,7 @@ function createStorageService({
 
   async function updateLLMConfig(updater) {
     return withFileLock(getLLMConfigPath(), async () => {
-      const config = await readLLMConfig({ persistMigration: false });
+      const config = await readLLMConfig({ persistMigration: false, forUpdate: true });
       const updated = await updater(config);
       await writeJsonAtomic(getLLMConfigPath(), updated);
       return updated;
@@ -596,9 +629,20 @@ function createStorageService({
     return path.join(app.getPath('userData'), MCP_CONFIG_FILENAME);
   }
 
-  async function readMcpConfigRaw() {
+  /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
+  async function readMcpConfigRaw({ forUpdate = false } = {}) {
+    let raw;
+    if (forUpdate) {
+      raw = await readForUpdate(getMcpConfigPath());
+      if (raw === null) return { servers: [] };
+    } else {
+      try {
+        raw = await fs.readFile(getMcpConfigPath(), 'utf8');
+      } catch {
+        return { servers: [] };
+      }
+    }
     try {
-      const raw = await fs.readFile(getMcpConfigPath(), 'utf8');
       const data = JSON.parse(raw);
       if (!data || typeof data !== 'object' || !Array.isArray(data.servers)) return { servers: [] };
       return data;
@@ -608,8 +652,8 @@ function createStorageService({
   }
 
   /** Gespeicherte Eintraege in geprueftem Zustand, env in gespeicherter Form. */
-  async function readMcpStoredServers() {
-    const data = await readMcpConfigRaw();
+  async function readMcpStoredServers({ forUpdate = false } = {}) {
+    const data = await readMcpConfigRaw({ forUpdate });
     const out = [];
     const seen = new Set();
     for (const entry of data.servers) {
@@ -677,7 +721,7 @@ function createStorageService({
     if (!ok) return { ok: false, errors };
 
     return withFileLock(getMcpConfigPath(), async () => {
-      const servers = await readMcpStoredServers();
+      const servers = await readMcpStoredServers({ forUpdate: true });
       const previous = servers.find((server) => server.id === value.id);
       const storedEnv = {};
       const unencryptable = [];
@@ -731,7 +775,7 @@ function createStorageService({
     const names = normalizeKnownTools(toolNames);
     if (!wanted || names.length === 0) return { ok: false };
     return withFileLock(getMcpConfigPath(), async () => {
-      const servers = await readMcpStoredServers();
+      const servers = await readMcpStoredServers({ forUpdate: true });
       const current = servers.find((server) => server.id === wanted);
       if (!current) return { ok: false };
       const before = current.knownTools || [];
@@ -753,7 +797,7 @@ function createStorageService({
    */
   async function clearMcpServerDisabledTools() {
     return withFileLock(getMcpConfigPath(), async () => {
-      const servers = await readMcpStoredServers();
+      const servers = await readMcpStoredServers({ forUpdate: true });
       const cleared = servers
         .filter((server) => Array.isArray(server.disabledTools) && server.disabledTools.length > 0)
         .map((server) => ({ id: server.id, disabledTools: [...server.disabledTools] }));
@@ -768,7 +812,7 @@ function createStorageService({
     const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
     if (!wanted) return { ok: false, errors: [createMessage('mcp.error.idMissingForDelete')] };
     return withFileLock(getMcpConfigPath(), async () => {
-      const servers = await readMcpStoredServers();
+      const servers = await readMcpStoredServers({ forUpdate: true });
       const next = servers.filter((server) => server.id !== wanted);
       if (next.length === servers.length) {
         return { ok: false, errors: [createMessage('mcp.error.unknownServer', { id: wanted })] };
@@ -848,8 +892,17 @@ function createStorageService({
    * `updateUIPrefs` persists it anyway.
    */
   async function readUIPrefs() {
+    let raw;
     try {
-      const raw = await fs.readFile(getUIPrefsPath(), 'utf8');
+      raw = await fs.readFile(getUIPrefsPath(), 'utf8');
+    } catch {
+      return normalizeUiPrefs({});
+    }
+    return uiPrefsFromFile(raw);
+  }
+
+  function uiPrefsFromFile(raw) {
+    try {
       const data = JSON.parse(raw);
       if (data && typeof data === 'object' && !('appLocale' in data)) {
         return normalizeUiPrefs({ ...data, appLocale: APP_LOCALES.DE });
@@ -866,7 +919,10 @@ function createStorageService({
 
   async function updateUIPrefs(updater) {
     return withFileLock(getUIPrefsPath(), async () => {
-      const current = await readUIPrefs();
+      // Not `readUIPrefs`: its defaults for an unreadable file would be
+      // written back, and every other preference with them (#473).
+      const raw = await readForUpdate(getUIPrefsPath());
+      const current = raw === null ? normalizeUiPrefs({}) : uiPrefsFromFile(raw);
       const updated = await updater({ ...current });
       const normalized = normalizeUiPrefs(updated);
       await writeJsonAtomic(getUIPrefsPath(), normalized);
@@ -933,10 +989,16 @@ function createStorageService({
   async function loadChatHistoryStoreFromDisk() {
     let raw;
     try {
-      raw = await fs.readFile(getChatHistoryPath(), 'utf8');
-    } catch {
-      // Keine Datei (Erststart) oder nicht lesbar: leer starten, nichts zu retten.
-      return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false };
+      raw = await readFileWithRetry(fs, getChatHistoryPath(), { platform });
+    } catch (error) {
+      // Keine Datei (Erststart): leer starten, nichts zu retten.
+      if (error?.code === 'ENOENT') {
+        return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false };
+      }
+      // There is a file, it just could not be read (#473). Nothing to
+      // quarantine, since its content may be fine — but nothing to write
+      // back either.
+      return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false, readFailed: true };
     }
 
     // Ab hier existiert eine Datei. Laesst sie sich nicht interpretieren
@@ -992,8 +1054,24 @@ function createStorageService({
     }
   }
 
+  /**
+   * An empty store handed out because the file could not be read (#473).
+   * Readers get it like any other, so the list simply shows nothing; only
+   * `writeChatHistoryStore` refuses it. The handlers read, change and write
+   * back the very same object, so this catches every write path at once —
+   * including readers that only display and never write.
+   */
+  const storesFromFailedReads = new WeakSet();
+
+  function storeFromFailedRead() {
+    const store = defaultChatHistoryStore();
+    storesFromFailedReads.add(store);
+    return store;
+  }
+
   async function readChatHistoryStore({ skipMigration = false } = {}) {
-    const { store, wasEncrypted, unreadable } = await loadChatHistoryStoreFromDisk();
+    const { store, wasEncrypted, unreadable, readFailed } = await loadChatHistoryStoreFromDisk();
+    if (readFailed) return storeFromFailedRead();
     if (unreadable) {
       await quarantineUnreadableChatHistory();
       return defaultChatHistoryStore();
@@ -1002,6 +1080,7 @@ function createStorageService({
     if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
       return withChatHistoryLock(async () => {
         const fresh = await loadChatHistoryStoreFromDisk();
+        if (fresh.readFailed) return storeFromFailedRead();
         if (fresh.unreadable) {
           await quarantineUnreadableChatHistory();
           return defaultChatHistoryStore();
@@ -1014,6 +1093,13 @@ function createStorageService({
   }
 
   async function writeChatHistoryStore(store) {
+    if (storesFromFailedReads.has(store)) {
+      log?.warn?.('[chat-history] The history file could not be read; this save is skipped rather than written over it.');
+      throw Object.assign(
+        new Error('The chat history could not be read; it is not overwritten with an empty one.'),
+        { code: CHAT_HISTORY_UNREADABLE },
+      );
+    }
     if (safeStorage.isEncryptionAvailable()) {
       const payload = encryptIfPossible(JSON.stringify(store));
       if (payload) {
@@ -1042,9 +1128,20 @@ function createStorageService({
     return path.join(app.getPath('userData'), FOLDER_HISTORY_FILENAME);
   }
 
-  async function readFolderHistoryRaw() {
+  /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
+  async function readFolderHistoryRaw({ forUpdate = false } = {}) {
+    let raw;
+    if (forUpdate) {
+      raw = await readForUpdate(getFolderHistoryPath());
+      if (raw === null) return [];
+    } else {
+      try {
+        raw = await fs.readFile(getFolderHistoryPath(), 'utf8');
+      } catch {
+        return [];
+      }
+    }
     try {
-      const raw = await fs.readFile(getFolderHistoryPath(), 'utf8');
       const data = JSON.parse(raw);
       if (Array.isArray(data?.paths)) {
         return data.paths.filter((p) => typeof p === 'string' && p.trim());
@@ -1060,7 +1157,15 @@ function createStorageService({
   }
 
   async function addFolderToHistory(resolvedPath) {
-    const list = await readFolderHistoryRaw();
+    let list;
+    try {
+      list = await readFolderHistoryRaw({ forUpdate: true });
+    } catch (error) {
+      // Opening the folder goes on; the history just misses this one entry
+      // rather than every other (#473).
+      log?.warn?.(`[folder-history] Could not read the folder history, left it as it is: ${error?.message || error}`);
+      return;
+    }
     const filtered = list.filter((p) => p !== resolvedPath);
     filtered.unshift(resolvedPath);
     const trimmed = filtered.slice(0, MAX_FOLDER_HISTORY);
@@ -1076,7 +1181,12 @@ function createStorageService({
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return false;
     const resolved = path.resolve(raw);
-    const list = await readFolderHistoryRaw();
+    let list;
+    try {
+      list = await readFolderHistoryRaw({ forUpdate: true });
+    } catch {
+      return false;
+    }
     const filtered = list.filter((p) => p !== resolved && p !== raw);
     if (filtered.length === list.length) return false;
     await writeFolderHistory(filtered);

@@ -10,6 +10,7 @@
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 
 const { CHAT_ACTIVATION } = require('../services/chat-session-settings');
+const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 const { storedChatMessagesChanged } = require('../services/chat-history-normalization');
 
 /**
@@ -65,6 +66,21 @@ function registerChatHistoryHandlers({
   // Welcher Bucket bekommt die aktive Chat-ID? Der der Session selbst — sonst
   // schriebe das `setActiveChatId` direkt nach dem Sichern (Issue #131) die
   // alte Konversation in den Bucket des neuen Ordners.
+  /**
+   * The history file is there but could not be read (#473), so the store
+   * refuses to write its empty stand-in over it. The chat goes on in memory
+   * and this one save is skipped — the new chat or the folder switch that
+   * asked for it must not fail over it.
+   */
+  async function skipWhenUnreadable(run) {
+    try {
+      return await run();
+    } catch (error) {
+      if (error?.code !== CHAT_HISTORY_UNREADABLE) throw error;
+      return { ok: false };
+    }
+  }
+
   function bucketKeyForSession(store, id) {
     const session = typeof id === 'string' ? store.sessions.find((s) => s.id === id) : null;
     const root = session
@@ -84,7 +100,7 @@ function registerChatHistoryHandlers({
   });
 
   ipcMain.handle(REQ.CHAT_HISTORY_UPSERT, async (_event, sessionRow) =>
-    chatHistoryStore.withChatHistoryLock(async () => {
+    skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       const existing =
         sessionRow && typeof sessionRow.id === 'string'
@@ -149,10 +165,10 @@ function registerChatHistoryHandlers({
       // Quarantaene gestellten Verlaufsdatei.
       await chatAttachments.pruneChats(store.sessions.map((s) => s.id));
       return { ok: true };
-    }));
+    })));
 
   ipcMain.handle(REQ.CHAT_HISTORY_DELETE, async (_event, id) =>
-    chatHistoryStore.withChatHistoryLock(async () => {
+    skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
       if (typeof id !== 'string' || !id.trim()) return { ok: false };
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       store.sessions = store.sessions.filter((s) => s.id !== id);
@@ -163,10 +179,10 @@ function registerChatHistoryHandlers({
       await chatAttachments.deleteChat(id);
       chatSessionSettings.forget(id);
       return { ok: true };
-    }));
+    })));
 
   ipcMain.handle(REQ.CHAT_HISTORY_SET_ACTIVE, async (_event, id) =>
-    chatHistoryStore.withChatHistoryLock(async () => {
+    skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       const wsKey = bucketKeyForSession(store, id);
       if (id === null || id === undefined || id === '') {
@@ -176,7 +192,7 @@ function registerChatHistoryHandlers({
       }
       await chatHistoryStore.writeChatHistoryStore(store);
       return { ok: true };
-    }));
+    })));
 
   // Modell und Freigabemodus des Chats herstellen (Issue #211). Der Renderer
   // liefert nur die Kennung; welche Werte dahinterstehen, weiss der Main.

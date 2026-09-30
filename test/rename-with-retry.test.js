@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { renameWithRetry } = require('../src/main/services/rename-with-retry');
+const { renameWithRetry, readFileWithRetry } = require('../src/main/services/rename-with-retry');
 
 function flakyFs(failures, code = 'EPERM') {
   let calls = 0;
@@ -46,4 +46,24 @@ test('the waits grow with each attempt', async () => {
   const waits = [];
   await renameWithRetry(flakyFs(3), 'a', 'b', { platform: 'win32', delayMs: 10, sleep: async (ms) => waits.push(ms) });
   assert.deepEqual(waits, [10, 20, 30]);
+});
+
+test('a read is retried under the same rules, and a missing file is not (#473)', async () => {
+  let calls = 0;
+  const fs = {
+    async readFile(file, encoding) {
+      calls += 1;
+      if (calls <= 2) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      return `${file}:${encoding}`;
+    },
+  };
+  assert.equal(await readFileWithRetry(fs, 'prefs.json', { platform: 'win32', sleep: noSleep }), 'prefs.json:utf8');
+  assert.equal(calls, 3);
+
+  const missing = {
+    async readFile() {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    },
+  };
+  await assert.rejects(readFileWithRetry(missing, 'prefs.json', { platform: 'win32', sleep: noSleep }), { code: 'ENOENT' });
 });
