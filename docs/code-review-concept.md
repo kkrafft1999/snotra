@@ -83,9 +83,13 @@ and are used as a checklist, not as the standard.
 
 ### Given, not findings
 
-The project's founding decisions are not questioned and do not produce issues:
-plain JavaScript without TypeScript, no linter and no formatter, a renderer
-without a framework, Electron Forge as the build tool.
+The code review takes the project's founding decisions as given and does not
+decide on them — neither the choice of technology (plain JavaScript without
+TypeScript, no linter and no formatter, a renderer without a framework,
+Electron Forge as the build tool) nor the overall architecture (the layers,
+the port/adapter cut, the split between main process and renderer). They do
+not produce issues here; they belong to the
+[architecture review](#afterwards-an-architecture-review) that follows.
 
 ### What counts as a finding
 
@@ -156,3 +160,12 @@ issue, so that each block can be read at a glance.
   three to four weeks and fit into that window.
 - Wave 5 starts only once #341 and #343 are through; reviewing it earlier would
   mean reviewing code that is about to be rebuilt.
+
+## Afterwards: an architecture review
+
+Once the code review is done, an architecture review follows. That is where
+the founding decisions are open to question: the choice of technology and the
+overall architecture listed under [Given, not findings](#given-not-findings).
+It gets a concept of its own when it is due. Until then, a place where a
+founding decision is visibly costly may be noted in the block issue — as input
+for the architecture review, not as a finding.
