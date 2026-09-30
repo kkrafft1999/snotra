@@ -64,6 +64,9 @@ export function initSecurityPanel({ api, toolPermissions, onNavigate = () => {} 
   const modeSetting = initWorkspaceModeSetting({ toolPermissions, ids: SECURITY_PAGE_IDS });
   const expanded = new Set();
   let overview = null;
+  // What was drawn last: an update that changes nothing redraws nothing,
+  // so focus and hover stay where they are.
+  let drawnKey = '';
   let isOpen = false;
   let unsubscribe = null;
   let requestSeq = 0;
@@ -260,10 +263,7 @@ export function initSecurityPanel({ api, toolPermissions, onNavigate = () => {} 
     toggle.addEventListener('click', () => {
       if (expanded.has(row.riskClass)) expanded.delete(row.riskClass);
       else expanded.add(row.riskClass);
-      const nowOpen = expanded.has(row.riskClass);
-      toggle.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
-      li.classList.toggle('settings-security-row--open', nowOpen);
-      body.hidden = !nowOpen;
+      syncRow(row.riskClass);
     });
     heading.appendChild(toggle);
     li.appendChild(heading);
@@ -282,6 +282,20 @@ export function initSecurityPanel({ api, toolPermissions, onNavigate = () => {} 
     body.appendChild(questions);
     li.appendChild(body);
     return li;
+  }
+
+  /**
+   * Opens or closes the row as it stands in the list now. A live update can
+   * replace the rows between a press and its click; the press still counts.
+   */
+  function syncRow(riskClass) {
+    const li = rowsEl.querySelector(`.settings-security-row[data-risk-class="${riskClass}"]`);
+    if (!li) return;
+    const open = expanded.has(riskClass);
+    li.classList.toggle('settings-security-row--open', open);
+    li.querySelector('.settings-security-row__toggle')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const body = li.querySelector('.settings-security-row__body');
+    if (body) body.hidden = !open;
   }
 
   function renderHeader() {
@@ -355,6 +369,13 @@ export function initSecurityPanel({ api, toolPermissions, onNavigate = () => {} 
     }
     showError('');
     overview = next;
+    const key = JSON.stringify(next);
+    if (key === drawnKey) {
+      // The mode control follows the renderer state, which may have moved.
+      modeSetting.render();
+      return;
+    }
+    drawnKey = key;
     render();
   }
 
@@ -377,6 +398,8 @@ export function initSecurityPanel({ api, toolPermissions, onNavigate = () => {} 
   // Tool names come from main in the interface language: a language change
   // asks again rather than mixing two languages on one page.
   onLocaleChange(() => {
+    // The page's own texts change even when main's answer does not.
+    drawnKey = '';
     if (isOpen) void refresh();
     else render();
   });

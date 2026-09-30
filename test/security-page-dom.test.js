@@ -372,3 +372,36 @@ test('German: the same page, derived and complete', async () => {
     dom.cleanup();
   }
 });
+
+test('a press still counts when a live update replaced the row in between', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    const stale = row(doc, 'write').querySelector('.settings-security-row__toggle');
+    page.setOverview(overviewWith({ globalRules: [{ id: 'x', effect: 'deny', scope: 'global', root: null, tool: null, riskClass: 'write', pathPattern: 'x/**' }] }));
+    page.toolPermissions.emit();
+    await settle();
+    assert.notEqual(row(doc, 'write').querySelector('.settings-security-row__toggle'), stale, 'the row was redrawn');
+    stale.click();
+    const fresh = row(doc, 'write').querySelector('.settings-security-row__toggle');
+    assert.equal(fresh.getAttribute('aria-expanded'), 'true');
+    assert.equal(doc.getElementById(fresh.getAttribute('aria-controls')).hidden, false);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('an update that changes nothing leaves the rows as they are', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    const before = row(doc, 'read').querySelector('.settings-security-row__toggle');
+    page.toolPermissions.emit();
+    await settle();
+    assert.equal(row(doc, 'read').querySelector('.settings-security-row__toggle'), before);
+  } finally {
+    dom.cleanup();
+  }
+});
