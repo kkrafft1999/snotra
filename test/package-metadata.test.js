@@ -27,6 +27,9 @@ test('deb maker points at the packaged executable', () => {
   assert.deepEqual(deb.platforms, ['linux']);
   assert.equal(deb.config.options.bin, pkg.config.forge.packagerConfig.executableName);
   assert.match(deb.config.options.maintainer, /^.+ <.+@.+>$/);
+  // The .deb control file publishes this address with every Linux download;
+  // it is the project's contact address, not an employer's (#453).
+  assert.equal(deb.config.options.maintainer, 'Konrad Krafft <konrad.krafft@gmail.com>');
   assert.equal(deb.config.options.icon['512x512'], 'icon.png');
 });
 
