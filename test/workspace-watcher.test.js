@@ -12,7 +12,11 @@ const nodePath = require('path');
 const nodeFs = require('fs');
 const os = require('os');
 
-const { createDirectoryWatcher } = require('../src/main/services/directory-watcher');
+const {
+  createDirectoryWatcher,
+  DEFAULT_DEBOUNCE_MS,
+  DEFAULT_START_RECHECK_MS,
+} = require('../src/main/services/directory-watcher');
 const {
   createWorkspaceWatcher,
   isIgnoredWorkspacePath,
@@ -412,6 +416,66 @@ test('ein eigener Zuordner darf den Ordner selbst bestimmen', () => {
   assert.deepEqual(meldungen[0].directories, [path.join(WS, 'immer', 'hierhin')]);
 });
 
+// ── Start window (#478) ─────────────────────────────────────────────────────
+
+test('reports once more a moment after the start, as incomplete', () => {
+  // Nothing fires: that is what a change lost in the start window looks like.
+  const { clock, meldungen, watcher } = setupWorkspace();
+  watcher.watchWorkspace(WS);
+
+  clock.advance(DEFAULT_START_RECHECK_MS - 1);
+  clock.tickDue();
+  assert.equal(meldungen.length, 0, 'not before its time');
+
+  clock.advance(1);
+  clock.tickDue();
+  clock.advance(DEFAULT_DEBOUNCE_MS);
+  clock.tickDue();
+  assert.deepEqual(meldungen, [{ directories: [], complete: false }], 'the receiver checks all it shows');
+
+  clock.tick();
+  assert.equal(meldungen.length, 1, 'once, not over and over');
+});
+
+test('a folder switch starts the wait over, and close() drops it', () => {
+  const ANDERE = path.join(path.sep, 'projekte', 'andere');
+  const { clock, meldungen, watcher } = setupWorkspace();
+  watcher.watchWorkspace(WS);
+  clock.advance(DEFAULT_START_RECHECK_MS / 2);
+  watcher.watchWorkspace(ANDERE);
+
+  clock.advance(DEFAULT_START_RECHECK_MS / 2);
+  clock.tickDue();
+  assert.equal(meldungen.length, 0, 'the first folder no longer reports');
+
+  clock.advance(DEFAULT_START_RECHECK_MS / 2);
+  clock.tickDue();
+  clock.advance(DEFAULT_DEBOUNCE_MS);
+  clock.tickDue();
+  assert.deepEqual(meldungen, [{ directories: [], complete: false }], 'the second one does, once');
+
+  watcher.watchWorkspace(WS);
+  watcher.close();
+  clock.tick();
+  clock.tick();
+  assert.equal(meldungen.length, 1, 'nothing after close()');
+});
+
+test('no report after the start while nothing is watched', () => {
+  const ohneOrdner = setupWorkspace();
+  ohneOrdner.watcher.watchWorkspace(null);
+  ohneOrdner.clock.tick();
+  ohneOrdner.clock.tick();
+  assert.equal(ohneOrdner.meldungen.length, 0, 'no folder open');
+
+  // A root that cannot be watched has no start window to cover.
+  const fehlt = setupWorkspace({ missing: [WS] });
+  fehlt.watcher.watchWorkspace(WS);
+  fehlt.clock.advance(DEFAULT_START_RECHECK_MS + DEFAULT_DEBOUNCE_MS);
+  fehlt.clock.tickDue();
+  assert.equal(fehlt.meldungen.length, 0, 'root missing');
+});
+
 test('der Kern verlangt seine Abhängigkeiten', () => {
   const fake = createFakeWatch();
   assert.throws(() => createDirectoryWatcher({ path, resolveTargets: () => [], onChange() {} }), TypeError);
@@ -484,6 +548,9 @@ function realWatcherTest(name, run) {
         meldungen.push(payload);
         aufwecken?.();
       },
+      // These runs ask whether `fs.watch` itself reports the change. The
+      // report after the start (#478) would answer in its place.
+      startRecheckMs: 0,
     });
     t.after(async () => {
       watcher.close();
