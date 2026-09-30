@@ -490,23 +490,49 @@ function realWatcherTest(name, run) {
       await nodeFs.promises.rm(root, { recursive: true, force: true });
     });
     /** Auf die nächste Meldung warten — der Watcher entprellt 250 ms. */
-    const naechsteMeldung = () =>
+    const naechsteMeldung = (fristMs = 8000) =>
       new Promise((resolve, reject) => {
-        const frist = setTimeout(() => reject(new Error('keine Meldung binnen 8 s')), 8000);
+        const frist = setTimeout(() => {
+          aufwecken = null;
+          reject(new Error(`keine Meldung binnen ${fristMs} ms`));
+        }, fristMs);
         aufwecken = () => {
           clearTimeout(frist);
           aufwecken = null;
           resolve(meldungen.at(-1));
         };
       });
-    await run({ root, watcher, naechsteMeldung, meldungen });
+    /**
+     * Makes a change and repeats it until the watcher reports one.
+     *
+     * On macOS `fs.watch()` returns before the FSEvents stream runs, and a
+     * change in that window is lost for good, not reported late (see
+     * `directory-watcher.js`). While other processes keep the file system
+     * busy — as the rest of the unit suite does — the window grows: with eight
+     * processes churning temp directories, 8 of 10 changes made right after
+     * `fs.watch()` were never reported, while one made a second later always
+     * was (#465). Every attempt is a change of the same kind, so whichever of
+     * them is reported answers the test's question.
+     */
+    const untilReported = async (change) => {
+      const deadline = Date.now() + 8000;
+      for (let attempt = 0; ; attempt += 1) {
+        await change(attempt);
+        try {
+          return await naechsteMeldung(Math.max(0, Math.min(1000, deadline - Date.now())));
+        } catch (error) {
+          if (Date.now() >= deadline) throw error;
+        }
+      }
+    };
+    await run({ root, watcher, naechsteMeldung, untilReported, meldungen });
   });
 }
 
-realWatcherTest('meldet eine von außen angelegte Datei mit ihrem Ordner', async ({ root, watcher, naechsteMeldung }) => {
+realWatcherTest('meldet eine von außen angelegte Datei mit ihrem Ordner', async ({ root, watcher, untilReported }) => {
   watcher.watchWorkspace(root);
-  await nodeFs.promises.mkdir(nodePath.join(root, 'docs'), { recursive: true });
-  const meldung = await naechsteMeldung();
+  const meldung = await untilReported((attempt) =>
+    nodeFs.promises.mkdir(nodePath.join(root, attempt === 0 ? 'docs' : `docs-${attempt}`), { recursive: true }));
   // Der Ordner „docs" entsteht direkt unter der Wurzel — die ist betroffen.
   assert.ok(
     meldung.directories.includes(nodePath.resolve(root)),
@@ -514,11 +540,12 @@ realWatcherTest('meldet eine von außen angelegte Datei mit ihrem Ordner', async
   );
 });
 
-realWatcherTest('meldet auch eine Datei tief im Baum', async ({ root, watcher, naechsteMeldung }) => {
+realWatcherTest('meldet auch eine Datei tief im Baum', async ({ root, watcher, untilReported }) => {
   await nodeFs.promises.mkdir(nodePath.join(root, 'docs'), { recursive: true });
   watcher.watchWorkspace(root);
-  await nodeFs.promises.writeFile(nodePath.join(root, 'docs', 'notiz.md'), 'hallo\n', 'utf8');
-  const meldung = await naechsteMeldung();
+  const meldung = await untilReported((attempt) =>
+    nodeFs.promises.writeFile(
+      nodePath.join(root, 'docs', attempt === 0 ? 'notiz.md' : `notiz-${attempt}.md`), 'hallo\n', 'utf8'));
   assert.ok(
     meldung.directories.includes(nodePath.join(nodePath.resolve(root), 'docs')) ||
       meldung.complete === false,
