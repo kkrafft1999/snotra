@@ -79,6 +79,7 @@ export function initToolPermissionState({ api }) {
     removeRule: (ruleId) => call('removeToolPermissionRule', ruleId),
     setSensitivePathPatterns: (patterns) => call('setSensitivePathPatterns', patterns),
     clearSessionGrants: () => call('clearToolSessionGrants'),
+    revokeSessionGrant: (grantId) => call('revokeToolSessionGrant', grantId),
     resetWorkspaceRules: () => call('resetWorkspaceToolRules'),
     resetAll: () => call('resetAllToolPermissions'),
     setWorkspaceSandbox: (enabled) => call('setWorkspaceSandbox', enabled),

@@ -120,6 +120,7 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_REMOVE_RULE: 'toolPermissions:removeRule',
   TOOL_PERMISSIONS_SET_SENSITIVE_PATHS: 'toolPermissions:setSensitivePaths',
   TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS: 'toolPermissions:clearSessionGrants',
+  TOOL_PERMISSIONS_REVOKE_SESSION_GRANT: 'toolPermissions:revokeSessionGrant',
   TOOL_PERMISSIONS_RESET_WORKSPACE_RULES: 'toolPermissions:resetWorkspaceRules',
   TOOL_PERMISSIONS_RESET_ALL: 'toolPermissions:resetAll',
   TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX: 'toolPermissions:setWorkspaceSandbox',

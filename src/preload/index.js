@@ -217,6 +217,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSensitivePathPatterns: (patterns) =>
     ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, patterns),
   clearToolSessionGrants: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS),
+  revokeToolSessionGrant: (grantId) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, grantId),
   resetWorkspaceToolRules: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES),
   resetAllToolPermissions: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_ALL),
   setWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled),

@@ -866,10 +866,12 @@ win, permanent allowances exist only for reading and ordinary modification —
 plus the shell commands you remembered from the card, listed under the workspace
 with their working folder and deletable one by one — and, like deleting a
 denial, they are confirmed in a system dialog. Alongside
-that, custom sensitive path patterns and three reset actions with a stated
-scope: "Delete session allowances", "Reset workspace rules", "Reset all
-permissions" (which also sets the mode back to *Smart*). These settings take
-effect immediately, independently of "Apply".
+that, custom sensitive path patterns, the **session allowances** — every
+"Allow for this session" still in force, grouped by chat, with what it covers
+and when it was granted, revocable one by one or all at once — and two reset
+actions with a stated scope: "Reset workspace rules" and "Reset all
+permissions" (which also removes program allowances and sets the mode back to
+*Smart*). These settings take effect immediately, independently of "Apply".
 
 ## Skills
 

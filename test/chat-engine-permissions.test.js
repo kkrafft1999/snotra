@@ -274,6 +274,12 @@ test('Für diese Sitzung erlauben: gleiche Ziele im gleichen Chat laufen ohne Ka
   assert.equal(approvals.requests.length, 2, 'a.js einmal, other.js einmal');
   assert.equal(tools.calls.length, 3);
   assert.equal(grants.count(), 2);
+  // The approval keeps the card's sentence and its chat for the settings (#447).
+  const [listed] = grants.list();
+  assert.equal(listed.chatId, 'chat-1');
+  assert.equal(listed.tool, 'edit_file');
+  assert.equal(listed.scope?.key, 'approval.sessionScope.targets');
+  assert.ok(Number.isFinite(listed.grantedAt));
 
   const second = makeEngine(rounds, { tools: makeToolPort(), approvals, sessionGrants: grants });
   await send(second.engine, { chatId: 'chat-2' });

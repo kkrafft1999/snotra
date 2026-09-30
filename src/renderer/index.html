@@ -790,6 +790,19 @@
               <p id="settings-sensitive-error" class="modal-hint error hidden" role="alert"></p>
             </div>
 
+            <div class="settings-tools-card" id="settings-grants-card">
+              <div class="settings-grants__head">
+                <h3 class="settings-subsection-title" id="heading-session-grants" data-i18n="settings.grants.heading">Session allowances</h3>
+                <span id="status-session-grants" class="settings-instant-status" role="status"></span>
+              </div>
+              <p class="settings-grants__note" data-i18n="settings.grants.note">Each applies only in its own chat. It ends when you leave that chat, change its mode or a rule, or restart Snotra.</p>
+              <div id="settings-grants" class="settings-grants" aria-labelledby="heading-session-grants"></div>
+              <p id="settings-grants-empty" class="settings-empty-hint" data-i18n="settings.grants.empty">No session allowances. When you choose “Allow for this session” on a card, it appears here.</p>
+              <div class="settings-grants__footer">
+                <button type="button" id="btn-grants-revoke-all" class="btn-secondary" data-i18n="settings.grants.revokeAll">Revoke all</button>
+              </div>
+            </div>
+
             <div class="settings-tools-card" id="settings-reset-card">
               <h3 class="settings-subsection-title" id="heading-permission-reset" data-i18n="settings.reset.heading">Reset</h3>
               <div id="settings-reset-actions" class="settings-reset-actions" aria-labelledby="heading-permission-reset"></div>

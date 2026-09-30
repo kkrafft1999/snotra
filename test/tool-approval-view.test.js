@@ -229,7 +229,38 @@ test('Integritätswarnung und Reset-Umfang sind benannt', async () => {
   assert.match(integrityWarning('invalid'), /damaged or altered.*blocks remain in force/);
   assert.match(integrityWarning('unsigned'), /Auto.*permanent allowances/);
   assert.equal(integrityWarning('ok'), '');
-  assert.deepEqual(resetActions().map((a) => a.key), ['session', 'workspace', 'all']);
-  assert.equal(resetActions()[2].confirm, true);
-  assert.match(resetActions()[2].description, /“Smart” mode/);
+  // Session allowances left the reset list for a list of their own (#447).
+  assert.deepEqual(resetActions().map((a) => a.key), ['workspace', 'all']);
+  assert.equal(resetActions()[1].confirm, true);
+  assert.match(resetActions()[1].description, /“Smart” mode/);
+  assert.match(resetActions()[1].description, /program allowances/);
+});
+
+test('session approvals are grouped by chat, the open chat first, in both languages (#447)', async () => {
+  const { sessionGrantGroups } = await load();
+  const grants = [
+    { id: 'g-bg', chatId: 'bg', chatTitle: 'Tree filter', current: false, tool: 'edit_file', classes: ['write'], scope: null, grantedAt: 5 },
+    {
+      id: 'g-1', chatId: 'cur', chatTitle: '', current: true, tool: 'write_file_text', classes: ['write'], grantedAt: 7,
+      scope: { key: 'approval.sessionScope.targets', params: { tool: 'write_file_text', paths: 'docs/a.md', effectKeys: [] } },
+    },
+    { id: '', chatId: 'cur', current: true, tool: 'x', classes: [] },
+    null,
+  ];
+  const formatTime = (ms) => `t${ms}`;
+  const groups = sessionGrantGroups(grants, { formatTime });
+  assert.deepEqual(groups.map((g) => g.label), ['New chat · open chat', 'Tree filter · running in the background']);
+  assert.equal(groups[0].items.length, 1, 'an entry without id is dropped');
+  assert.match(groups[0].items[0].text, /write_file_text.*docs\/a\.md/);
+  assert.equal(groups[0].items[0].meta, 'Granted at t7', 'the sentence names the class already');
+  assert.equal(groups[1].items[0].text, 'Applies in this session to edit_file.');
+  assert.equal(groups[1].items[0].meta, 'Change · granted at t5', 'without the sentence the class is named');
+  assert.deepEqual(sessionGrantGroups(undefined), []);
+
+  await inGerman(async () => {
+    const de = sessionGrantGroups(grants, { formatTime });
+    assert.deepEqual(de.map((g) => g.label), ['Neuer Chat · geöffneter Chat', 'Tree filter · läuft im Hintergrund']);
+    assert.equal(de[0].items[0].meta, 'Erteilt um t7');
+    assert.equal(de[1].items[0].meta, 'Ändern · erteilt um t5');
+  });
 });

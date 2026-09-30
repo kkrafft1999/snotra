@@ -6471,6 +6471,74 @@ select.modal-input {
   margin-top: 8px;
 }
 
+/* Session allowances, one by one (#447) */
+.settings-grants__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-grants__note {
+  margin: 0 0 10px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+  line-height: 1.45;
+}
+
+.settings-grants__group + .settings-grants__group {
+  margin-top: 12px;
+}
+
+.settings-grants__group-label {
+  margin: 0 0 6px;
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--ds-grey-strong);
+  overflow-wrap: anywhere;
+}
+
+.settings-grant {
+  padding: 6px 6px 6px 10px;
+}
+
+.settings-grant__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-grant__scope {
+  font-size: var(--ds-font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.settings-grant__meta {
+  font-size: var(--ds-font-size-sm);
+  color: var(--ds-grey-strong);
+}
+
+.settings-grant .btn-secondary {
+  flex-shrink: 0;
+}
+
+/* Takes the focus after the last approval is revoked, so that a screen
+   reader says the list is empty. It is not a control, so it shows no ring. */
+#settings-grants-empty:focus {
+  outline: none;
+}
+
+.settings-grants__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.settings-grants__footer.hidden {
+  display: none;
+}
+
 .settings-reset-actions {
   display: flex;
   flex-direction: column;

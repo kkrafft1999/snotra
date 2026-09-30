@@ -3,6 +3,7 @@ import {
   ruleEffectOptions,
   ruleScopeOptions,
   resetActions as resetActionOptions,
+  sessionGrantGroups,
   legacyWriteMigrationHint,
   ruleClassOptions,
   describeRule,
@@ -12,7 +13,7 @@ import {
   modeLabel,
 } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
-import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { t, tMessage, onLocaleChange, getLocale } from '../i18n.js';
 
 const TRASH_ICON_HTML =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
@@ -50,6 +51,10 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   const btnSensitiveAdd = document.getElementById('btn-sensitive-add');
   const sensitiveError = document.getElementById('settings-sensitive-error');
   const resetActions = document.getElementById('settings-reset-actions');
+  const grantsList = document.getElementById('settings-grants');
+  const grantsEmpty = document.getElementById('settings-grants-empty');
+  const grantsStatus = document.getElementById('status-session-grants');
+  const btnRevokeAll = document.getElementById('btn-grants-revoke-all');
 
   if (!modeGroup || !toolPermissions) return { open: async () => {}, close() {} };
 
@@ -302,11 +307,113 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     void addSensitive();
   });
 
+  // ── Session allowances (#447) ───────────────────────────────────────────
+  /** After a revoke: focus the revoke button at this index, or the empty hint. */
+  let grantFocusIndex = null;
+  let grantStatusTimer = null;
+
+  function formatGrantTime(ms) {
+    try {
+      return new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+    } catch {
+      return new Date(ms).toLocaleTimeString();
+    }
+  }
+
+  function showGrantStatus(key) {
+    if (!grantsStatus) return;
+    clearTimeout(grantStatusTimer);
+    grantsStatus.textContent = t(key);
+    grantsStatus.classList.add('is-visible');
+    grantStatusTimer = setTimeout(() => grantsStatus.classList.remove('is-visible'), 2400);
+  }
+
+  function renderGrants(state) {
+    if (!grantsList) return;
+    const groups = sessionGrantGroups(state?.sessionGrants, { formatTime: formatGrantTime });
+    // A push can redraw the list at any time (a card granted in the chat); a
+    // focused revoke button keeps its focus if its approval is still there.
+    const focusedId = grantsList.contains(document.activeElement) ? document.activeElement?.dataset?.grantId : null;
+    grantsList.innerHTML = '';
+    for (const group of groups) {
+      const section = document.createElement('section');
+      section.className = 'settings-grants__group';
+      const label = document.createElement('h4');
+      label.className = 'settings-grants__group-label';
+      label.textContent = group.label;
+      section.appendChild(label);
+      const list = document.createElement('ul');
+      list.className = 'settings-rule-list';
+      for (const item of group.items) {
+        const li = document.createElement('li');
+        li.className = 'settings-rule-item settings-grant';
+        const text = document.createElement('div');
+        text.className = 'settings-grant__text';
+        const scope = document.createElement('span');
+        scope.className = 'settings-grant__scope';
+        scope.textContent = item.text;
+        const meta = document.createElement('span');
+        meta.className = 'settings-grant__meta';
+        meta.textContent = item.meta;
+        text.appendChild(scope);
+        text.appendChild(meta);
+        const revoke = document.createElement('button');
+        revoke.type = 'button';
+        revoke.className = 'btn-secondary';
+        revoke.dataset.grantId = item.id;
+        revoke.textContent = t('settings.grants.revoke');
+        revoke.setAttribute('aria-label', t('settings.grants.revokeLabel', { text: item.text }));
+        li.appendChild(text);
+        li.appendChild(revoke);
+        list.appendChild(li);
+      }
+      section.appendChild(list);
+      grantsList.appendChild(section);
+    }
+    const count = groups.reduce((sum, group) => sum + group.items.length, 0);
+    grantsEmpty?.classList.toggle('hidden', count > 0);
+    btnRevokeAll?.closest('.settings-grants__footer')?.classList.toggle('hidden', count === 0);
+    const refocus = focusedId && grantFocusIndex === null
+      ? [...grantsList.querySelectorAll('button[data-grant-id]')].find((el) => el.dataset.grantId === focusedId)
+      : null;
+    if (refocus) refocus.focus();
+    if (grantFocusIndex !== null) {
+      const buttons = [...grantsList.querySelectorAll('button[data-grant-id]')];
+      const target = buttons[Math.min(grantFocusIndex, buttons.length - 1)];
+      grantFocusIndex = null;
+      if (target) target.focus();
+      else if (grantsEmpty) {
+        grantsEmpty.tabIndex = -1;
+        grantsEmpty.focus();
+      }
+    }
+  }
+
+  grantsList?.addEventListener('click', async (e) => {
+    const button = e.target.closest('button[data-grant-id]');
+    if (!button || button.disabled) return;
+    const buttons = [...grantsList.querySelectorAll('button[data-grant-id]')];
+    button.disabled = true;
+    grantFocusIndex = buttons.indexOf(button);
+    const result = await toolPermissions.revokeSessionGrant(button.dataset.grantId);
+    if (reportResult(errorEl, result)) showGrantStatus('settings.grants.revoked');
+    else {
+      grantFocusIndex = null;
+      button.disabled = false;
+    }
+  });
+
+  btnRevokeAll?.addEventListener('click', async () => {
+    grantFocusIndex = 0;
+    const result = await toolPermissions.clearSessionGrants();
+    if (reportResult(errorEl, result)) showGrantStatus('settings.grants.revokedAll');
+    else grantFocusIndex = null;
+  });
+
   // ── Zurücksetzen ─────────────────────────────────────────────────────────
   function renderResets(state) {
     if (!resetActions) return;
     resetActions.innerHTML = '';
-    const grants = Number.isInteger(state?.sessionGrantCount) ? state.sessionGrantCount : 0;
     const hasWorkspace = typeof state?.workspaceRoot === 'string' && !!state.workspaceRoot;
     for (const action of resetActionOptions()) {
       const row = document.createElement('div');
@@ -315,7 +422,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       text.className = 'settings-reset-row__text';
       const title = document.createElement('span');
       title.className = 'settings-reset-row__title';
-      title.textContent = action.key === 'session' ? `${action.label} (${grants})` : action.label;
+      title.textContent = action.label;
       const desc = document.createElement('span');
       desc.className = 'settings-reset-row__desc';
       desc.textContent = action.description;
@@ -344,7 +451,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
         button.className = 'btn-secondary';
         button.dataset.reset = action.key;
         button.textContent = action.confirm ? t('settings.reset.running') : t('settings.reset.run');
-        button.disabled = !state || (action.key === 'session' && grants === 0) || (action.key === 'workspace' && !hasWorkspace);
+        button.disabled = !state || (action.key === 'workspace' && !hasWorkspace);
         controls.appendChild(button);
       }
       row.appendChild(controls);
@@ -372,8 +479,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     }
     resetConfirmKey = null;
     let result;
-    if (key === 'session') result = await toolPermissions.clearSessionGrants();
-    else if (key === 'workspace') result = await toolPermissions.resetWorkspaceRules();
+    if (key === 'workspace') result = await toolPermissions.resetWorkspaceRules();
     else result = await toolPermissions.resetAll();
     reportResult(errorEl, result);
     renderResets(toolPermissions.get());
@@ -387,6 +493,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     renderRules(state);
     renderRuleForm(state);
     renderSensitive(state);
+    renderGrants(state);
     renderResets(state);
     if (migrationHint) {
       migrationHint.textContent = legacyWriteMigrationHint();

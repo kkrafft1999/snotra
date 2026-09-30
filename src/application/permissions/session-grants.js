@@ -6,6 +6,11 @@
  * Aufrufer als `scopeKey` zusammengefasst), dasselbe Tool, exakt dieselbe
  * Zielmenge und höchstens die freigegebenen Klassen. Sensible Lesefreigaben
  * binden zusätzlich Dateiversion und Provider-Endpunkt.
+ *
+ * Since #447 an approval also keeps what a person needs to recognise it — the
+ * card's sentence on the session scope, the chat and the time it was granted —
+ * so that it can be listed and revoked one by one. `list()` hands out only
+ * that; the scope key, the file version and the provider key stay in here.
  */
 'use strict';
 
@@ -14,6 +19,7 @@ const {
   SESSION_GRANTABLE_CLASSES,
   normalizeRiskClasses,
 } = require('../../shared/contracts/tool-permissions');
+const { isMessage } = require('../../shared/contracts/message');
 
 function pathsKey(targets) {
   const paths = (Array.isArray(targets) ? targets : [])
@@ -37,15 +43,33 @@ function sessionGrantableClasses(riskClasses) {
   return classes;
 }
 
-function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
+function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now() } = {}) {
   /** @type {Array<object>} */
   let grants = [];
+  const listeners = new Set();
+
+  /** Replaces the list and tells the listeners, but only when it changed. */
+  function replace(next) {
+    const changed = next.length !== grants.length;
+    grants = next;
+    if (changed) notify();
+  }
+
+  function notify() {
+    for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch {
+        /* a broken listener must not stop the others */
+      }
+    }
+  }
 
   /**
    * Legt eine Freigabe an. Liefert null, wenn die Klassen nicht sitzungsweise
    * freigebbar sind (delete/execute/external nur einmalig, Konzept §6).
    */
-  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null } = {}) {
+  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null, scope = null } = {}) {
     const classes = sessionGrantableClasses(riskClasses);
     if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
     const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
@@ -60,8 +84,12 @@ function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
       classes,
       versionKey: sensitive ? versionsKey(targets) : null,
       providerKey: sensitive ? providerKey ?? null : null,
+      // For display only (#447): the card's sentence, a message object.
+      scope: isMessage(scope) ? scope : null,
+      grantedAt: now(),
     };
     grants.push(entry);
+    notify();
     return entry;
   }
 
@@ -84,17 +112,17 @@ function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
   }
 
   function clear() {
-    grants = [];
+    replace([]);
   }
 
   function clearScope(scopeKey) {
-    grants = grants.filter((entry) => entry.scopeKey !== scopeKey);
+    replace(grants.filter((entry) => entry.scopeKey !== scopeKey));
   }
 
   /** Drops the approvals of one chat — its mode changed, or it was deleted (#320). */
   function clearChat(chatId) {
     const key = typeof chatId === 'string' && chatId ? chatId : null;
-    grants = grants.filter((entry) => entry.chatId !== key);
+    replace(grants.filter((entry) => entry.chatId !== key));
   }
 
   /**
@@ -104,14 +132,45 @@ function createSessionGrants({ nextId = defaultIdFactory() } = {}) {
    */
   function retainChats(chatIds) {
     const keep = new Set(chatIds);
-    grants = grants.filter((entry) => keep.has(entry.chatId));
+    replace(grants.filter((entry) => keep.has(entry.chatId)));
+  }
+
+  /**
+   * Drops one approval by its id (#447). Revoking only tightens; an id that is
+   * unknown or already gone changes nothing. Returns whether one was dropped.
+   */
+  function revoke(id) {
+    if (typeof id !== 'string' || !id) return false;
+    const next = grants.filter((entry) => entry.id !== id);
+    if (next.length === grants.length) return false;
+    replace(next);
+    return true;
+  }
+
+  /** What may be shown of each approval, oldest first (#447). */
+  function list() {
+    return grants.map((entry) => ({
+      id: entry.id,
+      chatId: entry.chatId,
+      tool: entry.tool,
+      classes: [...entry.classes],
+      scope: entry.scope,
+      grantedAt: entry.grantedAt,
+    }));
   }
 
   function count() {
     return grants.length;
   }
 
-  return { grant, find, clear, clearScope, clearChat, retainChats, count };
+  /** Called whenever the set of approvals changes; returns the unsubscribe. */
+  function onChange(listener) {
+    if (typeof listener !== 'function') return () => {};
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  return { grant, find, clear, clearScope, clearChat, retainChats, revoke, list, count, onChange };
 }
 
 function defaultIdFactory() {

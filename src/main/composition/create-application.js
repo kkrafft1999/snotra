@@ -825,9 +825,28 @@ function createApplication({
     getLocale: getAppLocale,
     describeExecutionTools,
     programAllowances,
+    describeChats,
     platform: process.platform,
     homeDir: os.homedir(),
   });
+
+  // A card granted for the session, a chat left, a rule changed: the settings
+  // list of session approvals follows at once (#447).
+  sessionGrants.onChange(notifyToolPermissionsChanged);
+
+  /** Titles of the given chats, for the list of session approvals (#447). */
+  async function describeChats(chatIds) {
+    const wanted = new Set(chatIds);
+    const titles = new Map();
+    if (wanted.size === 0) return titles;
+    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
+    for (const session of store.sessions || []) {
+      if (session && wanted.has(session.id) && typeof session.title === 'string' && session.title.trim()) {
+        titles.set(session.id, session.title.trim());
+      }
+    }
+    return titles;
+  }
 
   /**
    * Which execution tools the model is offered, and what the sandbox can do

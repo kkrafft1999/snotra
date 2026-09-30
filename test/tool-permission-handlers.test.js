@@ -37,6 +37,7 @@ async function setup(t, {
   programAllowances = null,
   openDialogResult = { canceled: true, filePaths: [] },
   encryption = true,
+  describeChats = undefined,
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
@@ -70,6 +71,7 @@ async function setup(t, {
     getLocale: () => locale,
     describeExecutionTools,
     programAllowances,
+    describeChats,
     platform: 'darwin',
     homeDir: '/Users/u',
   });
@@ -598,4 +600,60 @@ test('without encrypted storage "Auto" is refused before any dialog; "Always ask
   assert.equal(state.integrity, 'unsigned');
   assert.equal(state.mode, 'ask-all');
   assert.equal(state.workspaceMode, 'ask-all');
+});
+
+// ── Session approvals one by one (#447) ────────────────────────────────────
+
+test('the state lists session approvals with display data only, grouped by chat (#447)', async (t) => {
+  const chatSessionSettings = { getCurrentChatId: () => 'chat-a', rememberMode: async () => {} };
+  const { invoke, sessionGrants } = await setup(t, {
+    chatSessionSettings,
+    describeChats: async (ids) => new Map(ids.filter((id) => id === 'chat-a').map((id) => [id, 'Release notes'])),
+  });
+  const sender = makeSender();
+  const scope = { key: 'approval.sessionScope.targets', params: { tool: 'write_file_text', paths: 'docs/a.md', effectKeys: [] } };
+  sessionGrants.grant({ scopeKey: 'secret-scope', tool: 'write_file_text', targets: [{ path: 'docs/a.md' }], riskClasses: ['write'], chatId: 'chat-a', scope });
+  sessionGrants.grant({ scopeKey: 'other', tool: 'read_file_text', targets: [{ path: '.env', version: '3' }], riskClasses: ['read-sensitive'], chatId: 'chat-b', providerKey: 'openai|https://x' });
+
+  const state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.sessionGrantCount, 2);
+  assert.equal(state.sessionGrants.length, 2);
+  const [first, second] = state.sessionGrants;
+  assert.deepEqual(Object.keys(first).sort(), ['chatId', 'chatTitle', 'classes', 'current', 'grantedAt', 'id', 'scope', 'tool']);
+  assert.equal(first.chatTitle, 'Release notes');
+  assert.equal(first.current, true);
+  assert.deepEqual(first.scope, scope);
+  assert.equal(second.current, false);
+  assert.equal(second.chatTitle, '', 'an untitled chat is named by the renderer');
+  const serialised = JSON.stringify(state.sessionGrants);
+  for (const hidden of ['secret-scope', 'openai|https://x', '.env@3']) {
+    assert.equal(serialised.includes(hidden), false, `${hidden} must not leave main`);
+  }
+});
+
+test('revoking one session approval drops only that one, asks nothing and voids no card (#447)', async (t) => {
+  const { invoke, sessionGrants, approvals, dialogCalls } = await setup(t);
+  const sender = makeSender(3);
+  assert.equal((await invoke(REQ.TOOL_APPROVAL_SUBSCRIBE, sender)).ok, true);
+  const keep = sessionGrants.grant({ scopeKey: 's', tool: 'edit_file', targets: [{ path: 'a' }], riskClasses: ['write'] });
+  const drop = sessionGrants.grant({ scopeKey: 's', tool: 'edit_file', targets: [{ path: 'b' }], riskClasses: ['write'] });
+  const pending = approvals.requestApproval({ sessionId: 3, request: { tool: 'edit_file', riskClasses: ['write'], targets: [] } });
+
+  const result = await invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, sender, drop.id);
+  assert.equal(result.ok, true);
+  assert.equal(result.revoked, true);
+  assert.deepEqual(sessionGrants.list().map((g) => g.id), [keep.id]);
+  assert.equal(sessionGrants.find({ scopeKey: 's', tool: 'edit_file', targets: [{ path: 'b' }], riskClasses: ['write'] }), null);
+  assert.equal(dialogCalls.length, 0, 'revoking only tightens');
+  assert.equal(approvals.pendingCount(), 1, 'the open card stays');
+  assert.ok(sender.sent.some((m) => m.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
+
+  const again = await invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, sender, drop.id);
+  assert.deepEqual([again.ok, again.revoked], [true, false], 'an id that is gone is no error');
+  for (const bad of [undefined, '', '   ', 42, { id: keep.id }, 'x'.repeat(201)]) {
+    assert.equal((await invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, sender, bad)).ok, false);
+  }
+  assert.equal(sessionGrants.count(), 1);
+  approvals.invalidateAll();
+  await pending;
 });

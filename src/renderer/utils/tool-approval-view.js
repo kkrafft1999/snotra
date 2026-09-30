@@ -808,9 +808,40 @@ export function validateSensitivePattern(raw, existing = []) {
 }
 
 /** Sichtbarer Umfang der Reset-Aktionen (Konzept §7). */
+/**
+ * The session approvals grouped by chat for the settings (#447): the chat on
+ * screen first, then the chats still running in the background, each group
+ * oldest approval first. `formatTime` turns the timestamp into a clock time.
+ */
+export function sessionGrantGroups(grants, { formatTime = (ms) => new Date(ms).toLocaleTimeString() } = {}) {
+  const groups = new Map();
+  for (const grant of Array.isArray(grants) ? grants : []) {
+    if (!grant || typeof grant.id !== 'string' || !grant.id) continue;
+    const key = grant.chatId || '';
+    if (!groups.has(key)) {
+      const title = typeof grant.chatTitle === 'string' && grant.chatTitle ? grant.chatTitle : t('chat.title.new');
+      groups.set(key, {
+        chatId: grant.chatId || null,
+        current: grant.current === true,
+        label: t(grant.current === true ? 'settings.grants.group.current' : 'settings.grants.group.background', { title }),
+        items: [],
+      });
+    }
+    const classes = (Array.isArray(grant.classes) ? grant.classes : []).map(riskClassLabel).join(', ');
+    // The card's sentence names the classes already; only without it does the
+    // second line have to.
+    const sentence = tMessage(grant.scope);
+    const text = sentence || t('settings.grants.fallback', { tool: grant.tool || '' });
+    const time = Number.isFinite(grant.grantedAt) ? formatTime(grant.grantedAt) : '';
+    let meta = classes;
+    if (time) meta = sentence ? t('settings.grants.time', { time }) : t('settings.grants.meta', { classes, time });
+    groups.get(key).items.push({ id: grant.id, text, meta });
+  }
+  return [...groups.values()].sort((a, b) => Number(b.current) - Number(a.current));
+}
+
 export function resetActions() {
   return [
-    { key: 'session', label: t('permissions.reset.session'), description: t('permissions.reset.session.desc') },
     { key: 'workspace', label: t('permissions.reset.workspace'), description: t('permissions.reset.workspace.desc') },
     { key: 'all', label: t('permissions.reset.all'), description: t('permissions.reset.all.desc'), confirm: true },
   ];

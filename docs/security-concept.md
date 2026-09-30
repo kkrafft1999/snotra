@@ -422,7 +422,8 @@ state next to the mode, not to every write of the policy file, which now
 happens whenever another chat comes on screen. After a block, no permission is sought by
 rephrasing, alias paths or repeated identical requests; a rejected plan stays
 blocked until the next user request, and repeating it unchanged ends the run
-(section 6). "Sitzungsfreigaben löschen", "Workspace-Regeln zurücksetzen" and
+(section 6). The session approvals (revocable one by one since #447, or all at
+once), "Workspace-Regeln zurücksetzen" and
 "Alle Berechtigungen zurücksetzen" have separate, visible reaches. The last one
 also resets the mode to `smart`.
 
@@ -812,8 +813,9 @@ card for every change, and that the card says how far the change reaches. In
 
 ### Revision: one Security page per workspace (#437)
 
-Decided on 2026-09-29, not built yet; the work is split into
-[#447](https://github.com/kkrafft1999/snotra/issues/447) (session approvals),
+Decided on 2026-09-29. The work is split into
+[#447](https://github.com/kkrafft1999/snotra/issues/447) (session approvals,
+built — for now as a list of their own in Settings › Permissions),
 [#448](https://github.com/kkrafft1999/snotra/issues/448) (the page as an
 overview) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
 controls move into it). The permission model above stays as it is. What changes
@@ -846,7 +848,7 @@ is where a user sees it and what they can take back.
   workspaces or only to this one. A global control on a workspace page still
   applies globally: moving a setting changes where it is shown, not its scope
   or its storage (section 7).
-- **Session approvals become visible and revocable one by one.** Until now there
+- **Session approvals become visible and revocable one by one.** Until #447 there
   was a count and "Sitzungsfreigaben löschen". Main now keeps, next to what
   matches an approval (section 7), what a person needs to recognise it: the
   card's sentence on the session scope, the classes, the chat and the time it
