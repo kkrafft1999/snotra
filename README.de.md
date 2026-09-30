@@ -796,7 +796,11 @@ der Zeile *Externe Dienste*. Dort stehen die MCP-Tools nach Server gruppiert,
 und jede Gruppe sagt, wie ihr Server verbunden ist — verbunden mit der Zahl
 seiner Tools, noch nicht verbunden, wird gestartet, ausgeschaltet oder Fehler
 beim Start mit dem Grund. Ein Server verbindet sich erst, wenn er gebraucht
-wird; seine Tools erscheinen dort also nach dem ersten Chat-Lauf.
+wird, merkt sich aber die Tools, die er zuletzt gemeldet hat: Die stehen schon
+vor dem ersten Chat-Lauf da, als „Bekannt aus der letzten Verbindung“, sodass
+du ein Tool abschalten kannst, bevor das Modell es je angeboten bekommt. Ein
+Server, der noch nie verbunden war, hat noch nichts zu merken — seine Tools
+erscheinen nach der ersten Verbindung.
 
 ## Projektstruktur
 

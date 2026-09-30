@@ -1184,8 +1184,11 @@ Each tool is switched on or off under **Settings › Security**, in the row
 *External services*. There the MCP tools are grouped by server, and each group
 says how its server is connected — connected with its number of tools, not
 connected yet, starting, switched off, or failed to start with the reason. A
-server connects on first use, so its tools appear there after the first chat
-turn.
+server connects only when it is needed, but it remembers the tools it reported
+last time: those are listed before the first chat turn, marked "Known from the
+last connection", so a tool can be switched off before the model is ever offered
+it. A server that has never connected has nothing to remember yet — its tools
+appear after its first connection.
 
 ## Project layout
 

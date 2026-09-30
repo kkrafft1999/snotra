@@ -4,9 +4,12 @@
 // Settings › Security, unfolds "External services" and photographs it, light
 // and dark. Not a test — a look.
 //
-//   node e2e/manual-security-mcp.mjs [en|de]
+//   node e2e/manual-security-mcp.mjs [en|de] [before]
 //
-// Result: out/mockup/security-mcp-<locale>-<theme>.png
+// `before` skips the run: the servers are not connected yet and their tools
+// come from what they reported last time (#464).
+//
+// Result: out/mockup/security-mcp-<locale>[-before]-<theme>.png
 
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +19,7 @@ import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
+const beforeRun = process.argv.includes('before');
 const SHOTS = path.resolve('out/mockup');
 const FAKE_SERVER = path.resolve('test/helpers/fake-mcp-server.js');
 
@@ -28,9 +32,9 @@ await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
 await writeFile(path.join(userDataDir, 'mcp-servers.json'), JSON.stringify({
   servers: [
-    { id: 'github', label: 'GitHub', command: process.execPath, args: [FAKE_SERVER, 'ok'], enabled: true },
+    { id: 'github', label: 'GitHub', command: process.execPath, args: [FAKE_SERVER, 'ok'], enabled: true, knownTools: ['echo', 'add'] },
     { id: 'heimat', label: 'Heimat', command: process.execPath, args: [FAKE_SERVER, 'die-on-start'], enabled: true },
-    { id: 'jira', label: 'Jira', command: 'docker', args: ['run', '-i', '--rm', 'example.org/mcp-jira'], enabled: false },
+    { id: 'jira', label: 'Jira', command: 'docker', args: ['run', '-i', '--rm', 'example.org/mcp-jira'], enabled: false, knownTools: ['search'] },
   ],
 }), 'utf8');
 
@@ -41,7 +45,7 @@ async function shoot(name) {
   await page.evaluate(() => document.querySelector('.settings-security-row[data-risk-class="external"]')
     ?.scrollIntoView({ block: 'start' }));
   await new Promise((r) => setTimeout(r, 400));
-  const file = path.join(SHOTS, `security-mcp-${locale}-${name}.png`);
+  const file = path.join(SHOTS, `security-mcp-${locale}${beforeRun ? '-before' : ''}-${name}.png`);
   await page.locator('#modal-settings .settings-dialog').screenshot({ path: file });
   console.log('shot', file);
 }
@@ -53,14 +57,14 @@ try {
   await poll(async () =>
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });
-  await page.evaluate(() => {
+  if (!beforeRun) await page.evaluate(() => {
     const input = document.getElementById('chat-input');
     input.value = 'Hello';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('btn-chat-send').click();
   });
-  await poll(() => model.requests.some((r) => !r.isTitleRequest), { what: 'model asked', timeoutMs: 60_000 });
-  await poll(() => page.evaluate(() => !!document.querySelector('#chat-messages .chat-msg.assistant')
+  if (!beforeRun) await poll(() => model.requests.some((r) => !r.isTitleRequest), { what: 'model asked', timeoutMs: 60_000 });
+  if (!beforeRun) await poll(() => page.evaluate(() => !!document.querySelector('#chat-messages .chat-msg.assistant')
     && !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
   { what: 'run finished', timeoutMs: 60_000 });
 

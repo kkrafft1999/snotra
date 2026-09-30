@@ -75,6 +75,7 @@ const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { migrateMcpDisabledTools } = require('../services/mcp-disabled-tools-migration');
+const { describeRememberedMcpTools } = require('../services/mcp-remembered-tools');
 const { qualifiedMcpToolName } = require('../../shared/contracts/mcp');
 
 function createApplication({
@@ -860,8 +861,17 @@ function createApplication({
   async function describeToolsForSecurity() {
     const prefs = await uiPrefsStore.readUIPrefs();
     const disabled = new Set(Array.isArray(prefs.disabledTools) ? prefs.disabledTools : []);
-    return toolRegistry
-      .listRiskCatalog({ locale: prefs.appLocale })
+    const catalog = toolRegistry.listRiskCatalog({ locale: prefs.appLocale });
+    // MCP tools the registry does not have yet — no run since the start —
+    // come from what each server reported last time (#464), so they can be
+    // switched off before the first run offers them.
+    let servers = [];
+    try {
+      servers = await mcpConfigStore.readMcpServers();
+    } catch {
+      servers = [];
+    }
+    return [...catalog, ...describeRememberedMcpTools({ servers, present: catalog, locale: prefs.appLocale })]
       .map((tool) => ({ ...tool, disabled: disabled.has(tool.name) }));
   }
 

@@ -845,6 +845,14 @@ is where a user sees it and what they can take back.
   reached the catalog and could not be seen or switched back on. At start those
   lists move into the one list of deselected tools, preferences first, and the
   server keeps none.
+- **Switchable before the first run (#464).** MCP tools reach the registry only
+  when a run starts, so the first run of a session used to offer every tool of
+  every enabled server, with no way to deselect one beforehand. The page now
+  also lists the names each server reported on its last connection
+  (`knownTools`), with the minimum classes of an MCP tool (`execute`,
+  `external`) since a name carries no annotations; the real definition replaces
+  the entry once the registry has it. A server that has never connected is the
+  remaining gap: there is no name to switch yet.
 - **The chat's mode is set in the chat only.** Section 8 had Settings offer
   "the same selection" as the chat bar. The page no longer offers it: its mode
   control is the workspace default of #413, with the same rules — a
