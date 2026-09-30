@@ -36,6 +36,20 @@ async function openSecurityPage(app, page) {
     { what: 'six rows' });
 }
 
+/** Where the keyboard is, for a failure message that says more than "false". */
+const focusInfo = (page) => page.evaluate(() => {
+  const el = document.activeElement;
+  return el ? `${el.tagName.toLowerCase()}#${el.id || ''}.${el.className || ''}[${el.dataset?.riskClass || el.dataset?.securityLink || ''}]` : 'none';
+});
+
+/** Focus an element, make sure it has the focus, then press Enter on it. */
+async function pressEnterOn(page, selector) {
+  await page.locator(selector).focus();
+  await poll(() => page.evaluate((sel) => document.activeElement === document.querySelector(sel), selector),
+    { what: `focus on ${selector}` });
+  await page.keyboard.press('Enter');
+}
+
 const rowText = (page, riskClass) => page.evaluate((cls) =>
   document.querySelector(`.settings-security-row[data-risk-class="${cls}"] .settings-security-row__toggle`)?.textContent ?? '', riskClass);
 
@@ -86,21 +100,35 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
 
   // A new default for the folder: the page follows, the chat on screen is named.
   await page.evaluate(() => document.querySelector('#settings-security-mode-options input[value="ask-all"]').click());
+  // The choice is saved once its status says so; until then the control
+  // keeps the focus for itself (WorkspaceModeSetting.js).
+  await poll(() => page.evaluate(() => document.getElementById('status-security-mode').classList.contains('is-visible')),
+    { what: 'default saved' });
   await poll(async () => /Asks/.test(await rowText(page, 'read')), { what: 'read row asks' });
   const summary = await page.evaluate(() => document.getElementById('settings-security-summary').textContent);
   assert.match(summary, /asks before reading/);
   assert.match(await page.evaluate(() => document.getElementById('settings-security-other-chats').textContent), /runs on Smart/);
 
   // Keyboard: open a row with Enter, follow its link to the card it names.
-  await page.locator('.settings-security-row__toggle[data-risk-class="write"]').focus();
-  await page.keyboard.press('Enter');
-  assert.equal(await page.evaluate(() =>
-    document.querySelector('.settings-security-row__toggle[data-risk-class="write"]').getAttribute('aria-expanded')), 'true');
-  await page.locator('.settings-security-row[data-risk-class="write"] [data-security-link="rules"]').focus();
-  await page.keyboard.press('Enter');
-  const landed = await page.evaluate(() => ({
+  await pressEnterOn(page, '.settings-security-row__toggle[data-risk-class="write"]');
+  try {
+    await poll(() => page.evaluate(() =>
+      document.querySelector('.settings-security-row__toggle[data-risk-class="write"]').getAttribute('aria-expanded') === 'true'),
+    { what: 'write row opened by Enter' });
+  } catch (error) {
+    throw new Error(`${error.message}; focus is on ${await focusInfo(page)}`);
+  }
+  await pressEnterOn(page, '.settings-security-row[data-risk-class="write"] [data-security-link="rules"]');
+  const landed = () => page.evaluate(() => ({
     tab: document.querySelector('.settings-nav-item[aria-selected="true"]')?.dataset.settingsPanel,
     focus: document.activeElement?.id,
   }));
-  assert.deepEqual(landed, { tab: 'permissions', focus: 'heading-tool-rules' });
+  try {
+    await poll(async () => {
+      const where = await landed();
+      return where.tab === 'permissions' && where.focus === 'heading-tool-rules';
+    }, { what: 'link lands on the rules card' });
+  } catch (error) {
+    throw new Error(`${error.message}; landed on ${JSON.stringify(await landed())}`);
+  }
 });
