@@ -87,11 +87,16 @@ async function openToolsSettings() {
   { what: 'settings ready' });
   await pause(800);
   await poll(() => page.evaluate(() => {
-    const panel = document.getElementById('panel-settings-tools');
-    if (!panel.hidden) return true;
-    document.getElementById('tab-settings-tools').click();
+    // Since #449 the sandbox and program allowances sit in the execute row
+    // of Settings › Security.
+    const panel = document.getElementById('panel-settings-security');
+    const open = document.querySelector('.settings-security-row__toggle[data-risk-class="execute"]')?.getAttribute('aria-expanded') === 'true';
+    if (!panel.hidden && open) return true;
+    document.getElementById('tab-settings-security').click();
+    const toggle = document.querySelector('.settings-security-row__toggle[data-risk-class="execute"]');
+    if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
     return false;
-  }), { what: 'tools panel' });
+  }), { what: 'execute row of the Security page' });
   await pause(500);
 }
 

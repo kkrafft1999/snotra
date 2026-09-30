@@ -54,14 +54,14 @@ test('every path reads in both languages, and the two differ', () => {
 
 test('the sentence stays English, only the quotation follows the language', () => {
   const raw = PERMISSION_DENIED_TOOL_RESULT_MESSAGES[PERMISSION_DENIAL_REASONS.TOOL_DISABLED];
-  assert.match(raw, /\{menu:settings\.tools\}/, 'the table carries the placeholder, not a fixed language');
+  assert.match(raw, /\{menu:settings\.security\}/, 'the table carries the placeholder, not a fixed language');
   assert.equal(
     fillUiQuotes('en', raw),
-    'Tool is switched off. The user can enable it under "Settings › Tools".'
+    'Tool is switched off. The user can enable it under "Settings › Security".'
   );
   assert.equal(
     fillUiQuotes('de', raw),
-    'Tool is switched off. The user can enable it under "Einstellungen › Tools".'
+    'Tool is switched off. The user can enable it under "Einstellungen › Sicherheit".'
   );
 });
 

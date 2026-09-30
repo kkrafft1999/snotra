@@ -1,16 +1,13 @@
 import {
-  toolModeOptions,
   ruleEffectOptions,
   ruleScopeOptions,
   resetActions as resetActionOptions,
   sessionGrantGroups,
   legacyWriteMigrationHint,
   ruleClassOptions,
-  describeRule,
   validateRuleDraft,
   validateSensitivePattern,
   integrityWarning,
-  modeLabel,
 } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { t, tMessage, onLocaleChange, getLocale } from '../i18n.js';
@@ -19,24 +16,21 @@ const TRASH_ICON_HTML =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
 /**
- * Einstellungen › Tools › Berechtigungen (Issue #67, Konzept §3/§7/§8).
+ * The permission controls of Settings › Security (#67, #449; concept §3/§7/§8):
+ * the rule form, the sensitive path patterns, the list of session approvals,
+ * the reset actions and the integrity and migration hints.
  *
- * Modus, Regeln, sensible Pfadmuster und Reset-Aktionen wirken sofort über den
- * Main-Prozess – anders als der Rest des Dialogs nicht erst mit „Übernehmen“,
- * weil die Policy-Datei dem Main gehört und Lockerungen (Auto, dauerhafte
- * Erlaubnis, Sperre löschen) dort in einem nativen Dialog bestätigt werden.
- * Der Renderer zeigt den Stand und formuliert Anfragen; er entscheidet nichts.
+ * They take effect at once through main, whose policy file it is; loosening
+ * (a lasting allowance, deleting a block) is confirmed there in a native
+ * dialog. The renderer shows the state and phrases requests; it decides
+ * nothing. Since #449 the rules are listed per risk class by SecurityPanel.js,
+ * which also opens the rule form in the row it belongs to; the chat's mode is
+ * set in the chat only.
  */
 export function initToolPermissionsPanel({ toolPermissions }) {
-  const modeGroup = document.getElementById('settings-tool-mode-group');
   const migrationHint = document.getElementById('settings-permissions-migration');
   const integrityHint = document.getElementById('settings-permissions-integrity');
   const errorEl = document.getElementById('settings-permissions-error');
-  const rulesGlobal = document.getElementById('settings-rules-global');
-  const rulesGlobalEmpty = document.getElementById('settings-rules-global-empty');
-  const rulesWorkspace = document.getElementById('settings-rules-workspace');
-  const rulesWorkspaceEmpty = document.getElementById('settings-rules-workspace-empty');
-  const rulesWorkspaceName = document.getElementById('settings-rules-workspace-name');
   const ruleForm = document.getElementById('settings-rule-form');
   const ruleEffect = document.getElementById('rule-effect');
   const ruleScope = document.getElementById('rule-scope');
@@ -56,7 +50,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   const grantsStatus = document.getElementById('status-session-grants');
   const btnRevokeAll = document.getElementById('btn-grants-revoke-all');
 
-  if (!modeGroup || !toolPermissions) return { open: async () => {}, close() {} };
+  if (!resetActions || !toolPermissions) return { open: async () => {}, close() {} };
 
   let toolCatalog = [];
   let isOpen = false;
@@ -84,116 +78,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     return false;
   }
 
-  // ── Modus ────────────────────────────────────────────────────────────────
-  function renderMode(state) {
-    modeGroup.innerHTML = '';
-    const legend = document.createElement('legend');
-    // Die Karte ist seit #99 mit „Modus" ueberschrieben; die Legend wuerde den
-    // Text doppeln, bleibt aber fuer Screenreader als Gruppenname noetig.
-    legend.className = 'settings-mode-group__legend visually-hidden';
-    legend.textContent = t('settings.permissions.mode.legend');
-    modeGroup.appendChild(legend);
-    const active = state?.mode || 'smart';
-    for (const option of toolModeOptions(state, active)) {
-      const label = document.createElement('label');
-      label.className = 'settings-mode-option';
-      const input = document.createElement('input');
-      input.type = 'radio';
-      input.name = 'tool-permission-mode';
-      input.value = option.value;
-      input.checked = option.value === active;
-      input.disabled = !state || option.unavailable;
-      const main = document.createElement('span');
-      main.className = 'settings-mode-option__main';
-      const title = document.createElement('span');
-      title.className = 'settings-mode-option__title';
-      title.textContent = option.label;
-      const desc = document.createElement('span');
-      desc.className = 'settings-mode-option__desc';
-      desc.textContent = option.description;
-      main.appendChild(title);
-      main.appendChild(desc);
-      label.appendChild(input);
-      label.appendChild(main);
-      modeGroup.appendChild(label);
-    }
-  }
-
-  modeGroup.addEventListener('change', async (e) => {
-    const input = e.target.closest('input[name="tool-permission-mode"]');
-    if (!input) return;
-    const mode = input.value;
-    if (mode === toolPermissions.mode()) return;
-    const result = await toolPermissions.setMode(mode);
-    if (!reportResult(errorEl, result)) renderMode(toolPermissions.get());
-    else setError(errorEl, '');
-  });
-
-  // ── Regeln ───────────────────────────────────────────────────────────────
-  function ruleRow(rule) {
-    const desc = describeRule(rule);
-    const li = document.createElement('li');
-    li.className = 'settings-rule-item';
-    li.dataset.ruleId = rule.id;
-    const main = document.createElement('div');
-    main.className = 'settings-rule-item__main';
-    const badge = document.createElement('span');
-    badge.className = `settings-tool-item__badge settings-rule-item__badge settings-rule-item__badge--${rule.effect}`;
-    badge.textContent = desc.effectLabel;
-    main.appendChild(badge);
-    const subject = document.createElement('span');
-    subject.className = 'settings-rule-item__subject';
-    subject.textContent = desc.subject;
-    main.appendChild(subject);
-    const pattern = document.createElement('code');
-    pattern.className = 'settings-rule-item__pattern';
-    pattern.textContent = desc.patternLabel;
-    main.appendChild(pattern);
-    li.appendChild(main);
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'settings-icon-trash settings-rule-item__remove';
-    remove.dataset.ruleId = rule.id;
-    remove.setAttribute('aria-label', t('settings.rules.delete', { rule: desc.text }));
-    remove.title = rule.effect === 'deny' ? t('settings.rules.delete.deny') : t('settings.rules.delete.allow');
-    remove.innerHTML = TRASH_ICON_HTML;
-    li.appendChild(remove);
-    return li;
-  }
-
-  function renderRules(state) {
-    const globalRules = Array.isArray(state?.globalRules) ? state.globalRules : [];
-    const workspaceRules = Array.isArray(state?.workspaceRules) ? state.workspaceRules : [];
-    if (rulesGlobal) {
-      rulesGlobal.innerHTML = '';
-      for (const rule of globalRules) rulesGlobal.appendChild(ruleRow(rule));
-    }
-    rulesGlobalEmpty?.classList.toggle('hidden', globalRules.length > 0);
-    if (rulesWorkspace) {
-      rulesWorkspace.innerHTML = '';
-      for (const rule of workspaceRules) rulesWorkspace.appendChild(ruleRow(rule));
-    }
-    const root = typeof state?.workspaceRoot === 'string' ? state.workspaceRoot : '';
-    if (rulesWorkspaceName) rulesWorkspaceName.textContent = root || t('settings.rules.workspace.none');
-    if (rulesWorkspaceEmpty) {
-      rulesWorkspaceEmpty.textContent = root ? t('settings.rules.workspace.empty') : t('settings.rules.workspace.hint');
-      rulesWorkspaceEmpty.classList.toggle('hidden', workspaceRules.length > 0);
-    }
-  }
-
-  async function removeRule(ruleId) {
-    const result = await toolPermissions.removeRule(ruleId);
-    reportResult(ruleError, result);
-  }
-
-  for (const list of [rulesGlobal, rulesWorkspace]) {
-    list?.addEventListener('click', (e) => {
-      const button = e.target.closest('button[data-rule-id]');
-      if (!button) return;
-      void removeRule(button.dataset.ruleId);
-    });
-  }
-
+  // ── The rule form ───────────────────────────────────────────────────────
   function fillSelect(select, options, keepValue = true) {
     if (!select) return;
     const previous = keepValue ? select.value : '';
@@ -250,7 +135,11 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       return;
     }
     const result = await toolPermissions.addRule(draft.rule);
-    if (reportResult(ruleError, result) && rulePattern) rulePattern.value = '';
+    if (reportResult(ruleError, result)) {
+      if (rulePattern) rulePattern.value = '';
+      // The Security page closes the form it opened in a row.
+      ruleForm.dispatchEvent(new CustomEvent('rule-added', { detail: draft.rule }));
+    }
   });
 
   // ── Sensible Pfadmuster ──────────────────────────────────────────────────
@@ -489,8 +378,6 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   function render(state) {
     if (!isOpen) return;
     lastState = state;
-    renderMode(state);
-    renderRules(state);
     renderRuleForm(state);
     renderSensitive(state);
     renderGrants(state);
@@ -504,7 +391,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     else if (errorEl?.textContent === t('settings.permissions.loadFailed')) setError(errorEl, '');
   }
 
-  // Language change (epic #277): the mode list, the rules and the reset actions
+  // Language change (epic #277): the form's options and the reset actions
   // take their text from `tool-approval-view` and are built here. With the
   // section closed nothing happens — `open()` draws afresh anyway.
   onLocaleChange(() => {
@@ -529,6 +416,16 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       unsubscribe?.();
       unsubscribe = null;
     },
-    modeLabel,
+    /** The form's selects follow the catalog; SecurityPanel sets them after. */
+    refreshRuleForm() {
+      renderRuleForm(toolPermissions.get());
+    },
+    setRuleError(text) {
+      setError(ruleError, text);
+    },
+    /** A rule removed from a row of the Security page reports here. */
+    report(result) {
+      return reportResult(errorEl, result);
+    },
   };
 }

@@ -202,73 +202,25 @@ test('beim Anlegen gibt es weder Testen noch Loeschen', async () => {
   assert.equal(document.getElementById('mcp-field-id').disabled, false);
 });
 
-test('Tools sind einzeln abwaehlbar und landen in disabledTools', async () => {
+// Since #449 a tool has one switch, on the Security page. The dialog lists no
+// tools any more, and a save leaves no per-server deselection behind — an old
+// one was moved to the preferences at start (mcp-disabled-tools-migration.js).
+test('the dialog has no tool list, and saving stores no per-server deselection (#449)', async () => {
   const { calls } = await mount();
   rows()[0].querySelector('.btn-secondary').click();
   await flush();
-
-  const boxen = [...document.querySelectorAll('#mcp-tools-list input[type="checkbox"]')];
-  assert.deepEqual(boxen.map((b) => b.value), ['search', 'delete_repository']);
-  assert.deepEqual(boxen.map((b) => b.checked), [true, false], 'abgewaehltes Tool kommt ohne Haken');
-  assert.equal(document.getElementById('mcp-tools-count').textContent, '1 of 2 active');
-
-  boxen[0].checked = false;
+  assert.equal(document.getElementById('mcp-tools-list'), null);
   document.getElementById('btn-mcp-server-save').click();
   await flush();
-  assert.deepEqual(calls[0][1].disabledTools.sort(), ['delete_repository', 'search']);
+  assert.deepEqual(calls[0][1].disabledTools, []);
 });
 
-test('ohne laufende Verbindung bleibt die gespeicherte Auswahl erhalten (#170)', async () => {
-  // Der Server ist gestoppt und hat noch keinen gespeicherten Katalog: der
-  // Dialog zeigt keine Checkboxen. Frueher schrieb das Speichern dann ein
-  // leeres disabledTools und loeschte die Auswahl.
-  const { calls } = await mount({}, katalog({
-    connections: [
-      { serverId: 'github', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
-      { serverId: 'files', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
-    ],
-  }));
-  rows()[0].querySelector('.btn-secondary').click();
+test('the server switch leaves no per-server deselection either (#449)', async () => {
+  const { calls } = await mount();
+  const toggle = rows()[0].querySelector('input.ds-switch');
+  toggle.click();
   await flush();
-
-  assert.equal(document.querySelectorAll('#mcp-tools-list input[type="checkbox"]').length, 0);
-  document.getElementById('btn-mcp-server-save').click();
-  await flush();
-  assert.deepEqual(calls[0][1].disabledTools, ['delete_repository'], 'die Auswahl darf nicht verloren gehen');
-});
-
-test('der gespeicherte Katalog traegt den Dialog ohne Verbindung (#170)', async () => {
-  const { calls } = await mount({}, katalog({
-    servers: [
-      {
-        id: 'github',
-        label: 'GitHub',
-        command: 'npx',
-        args: [],
-        cwd: null,
-        enabled: true,
-        disabledTools: ['delete_repository'],
-        knownTools: ['search', 'delete_repository', 'create_issue'],
-        env: [],
-      },
-    ],
-    connections: [
-      { serverId: 'github', state: 'stopped', toolCount: 0, toolNames: [], error: '', stderr: '' },
-    ],
-  }));
-  rows()[0].querySelector('.btn-secondary').click();
-  await flush();
-
-  const boxen = [...document.querySelectorAll('#mcp-tools-list input[type="checkbox"]')];
-  assert.deepEqual(boxen.map((b) => b.value), ['search', 'delete_repository', 'create_issue']);
-  assert.deepEqual(boxen.map((b) => b.checked), [true, false, true]);
-  assert.equal(document.getElementById('mcp-tools-count').textContent, '2 of 3 active');
-
-  boxen[2].checked = false;
-  document.getElementById('btn-mcp-server-save').click();
-  await flush();
-  assert.deepEqual(calls[0][1].disabledTools.sort(), ['create_issue', 'delete_repository']);
-  assert.deepEqual(calls[0][1].knownTools, ['search', 'delete_repository', 'create_issue']);
+  assert.deepEqual(calls[0][1].disabledTools, []);
 });
 
 test('ein Fehlschlag beim Speichern haelt den Dialog offen und nennt den Grund', async () => {

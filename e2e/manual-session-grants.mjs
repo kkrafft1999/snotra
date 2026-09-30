@@ -77,7 +77,7 @@ try {
   });
   await poll(() => page.evaluate(() => !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'settings dialog' });
-  await page.evaluate(() => document.getElementById('tab-settings-permissions').click());
+  await page.evaluate(() => document.getElementById('tab-settings-security').click());
   await poll(() => page.evaluate(() => document.querySelectorAll('#settings-grants .settings-grant').length === 2),
     { what: 'two approvals listed' });
   await page.evaluate(() => document.getElementById('settings-grants-card').scrollIntoView({ block: 'center' }));

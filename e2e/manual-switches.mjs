@@ -16,7 +16,7 @@ import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
-const PANELS = ['models', 'tools', 'mcp'];
+const PANELS = ['models', 'security', 'mcp'];
 
 const model = await startFakeModel();
 const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-switches-'));
@@ -105,13 +105,17 @@ const measure = (selector) => page.evaluate((selector) => {
 // is measured.
 const SWITCH_OF = {
   models: '#pref-model-list .ds-switch',
-  tools: '#panel-settings-tools .ds-switch',
+  security: '#panel-settings-security .ds-switch',
   mcp: '#settings-mcp-list .ds-switch',
 };
 
 const openPanel = async (panel) => {
-  await page.evaluate((name) =>
-    document.querySelector(`.settings-nav-item[data-settings-panel="${name}"]`).click(), panel);
+  await page.evaluate((name) => {
+    document.querySelector(`.settings-nav-item[data-settings-panel="${name}"]`).click();
+    // The tool switches of the Security page sit in its rows (#449).
+    const row = document.querySelector('.settings-security-row__toggle[data-risk-class="write"]');
+    if (name === 'security' && row?.getAttribute('aria-expanded') === 'false') row.click();
+  }, panel);
   // The model list and the MCP panel fill in after the tab opens.
   await poll(() => page.evaluate((selector) => [...document.querySelectorAll(selector)]
     .some((node) => node.getBoundingClientRect().width > 0), SWITCH_OF[panel]),

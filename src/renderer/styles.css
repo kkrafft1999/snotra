@@ -7899,3 +7899,89 @@ select.modal-input {
 .settings-security-header [hidden] {
   display: none;
 }
+
+/* The link to Settings › Security under the mode menu (#449). */
+.chat-tool-mode-more {
+  padding: 8px 12px 6px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-tool-mode-more .chat-tool-mode-notice-link {
+  margin-top: 0;
+}
+
+/* ── Settings › Security: the controls in the rows (#449) ───────────────── */
+.settings-security-item__end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.settings-security-item {
+  align-items: center;
+}
+
+.settings-security-item .ds-switch {
+  flex: 0 0 auto;
+}
+
+.settings-security-revoke {
+  padding: 4px 12px;
+  font-size: var(--ds-font-size-sm);
+}
+
+.settings-security-actions {
+  margin: 8px 0 4px;
+}
+
+.settings-security-add {
+  padding: 5px 14px;
+  font-size: var(--ds-font-size-sm);
+}
+
+/* A block that lives in a row: the execution switches, the sandbox, program
+   allowances, the sensitive patterns, the rule form. Flat, divided by space
+   and a quiet rule, not a card inside a card. */
+.settings-security-slot,
+.settings-security-q__body > .settings-rule-form {
+  margin: 12px 0 8px;
+}
+
+.settings-security-slot + .settings-security-slot {
+  padding-top: 12px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.settings-security-slot[hidden] {
+  display: none;
+}
+
+.settings-security-slot .settings-exec-toggle {
+  margin-top: 6px;
+}
+
+.settings-security-slot .modal-hint {
+  margin: 6px 0 0;
+}
+
+.settings-security-q__body > .settings-rule-form {
+  padding: 12px 14px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-blue-soft);
+}
+
+.settings-security-q__body > .settings-rule-form .settings-rules-heading {
+  margin-top: 0;
+}
+
+.settings-rule-form__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#settings-security-slots > .settings-rule-form #btn-rule-cancel {
+  display: none;
+}

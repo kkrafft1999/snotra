@@ -964,14 +964,20 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   await poll(() => page.evaluate(() => !!document.activeElement?.closest('#modal-settings')),
     { what: 'Fokus im Einstellungsdialog' });
 
+  // Since #449 the tools are switched on Settings › Security, one row per
+  // risk class; Settings › Tools only keeps the interpreter and the key.
   await page.evaluate(() =>
-    document.querySelector('.settings-nav-item[data-settings-panel="tools"]').click());
+    document.querySelector('.settings-nav-item[data-settings-panel="security"]').click());
   const tabs = await page.evaluate(() => ({
-    toolsVisible: !document.getElementById('panel-settings-tools').hidden,
+    securityVisible: !document.getElementById('panel-settings-security').hidden,
     modelsHidden: document.getElementById('panel-settings-models').hidden,
     heading: document.getElementById('settings-panel-heading').textContent,
+    permissionsTab: !!document.getElementById('tab-settings-permissions'),
   }));
-  assert.deepEqual(tabs, { toolsVisible: true, modelsHidden: true, heading: 'Tools' });
+  assert.equal(tabs.securityVisible, true);
+  assert.equal(tabs.modelsHidden, true);
+  assert.match(tabs.heading, /^(Security|Sicherheit)$/);
+  assert.equal(tabs.permissionsTab, false, 'the Permissions tab is gone');
 
   // Die Grundausstattung steht nicht in der Liste (#195). Hier statt im
   // Unit-Test, weil erst die gerenderte Liste beweist, dass der Katalog aus
@@ -980,8 +986,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // zurueckholen.
   const toolRows = await poll(async () => {
     const names = await page.evaluate(() =>
-      [...document.querySelectorAll('#settings-tool-list input[data-tool-name]')].map(
-        (input) => input.dataset.toolName
+      [...document.querySelectorAll('#settings-security-rows input[data-tool-switch]')].map(
+        (input) => input.dataset.toolSwitch
       )
     );
     return names.length > 0 ? names : null;

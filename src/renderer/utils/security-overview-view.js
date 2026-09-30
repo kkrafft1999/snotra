@@ -1,12 +1,12 @@
 import { t, tPlural, tMessage, getLocale } from '../i18n.js';
 import { modeLabel, riskClassLabel, describeRule } from './tool-approval-view.js';
 import { describeSandboxStatus } from './sandbox-status-view.js';
-import { programLabel, tildePath } from './program-allowance-view.js';
 
 /**
- * Texts for Settings › Security (#448). Main has decided every verdict — runs,
- * asks, off, no sandbox — and hands it over in the overview DTO; this module
- * only puts it into words. Nothing here derives a permission.
+ * Texts for Settings › Security (#448, #449). Main has decided every verdict —
+ * runs, asks, off, no sandbox — and hands it over in the overview DTO; this
+ * module only puts it into words and says which control goes where. Nothing
+ * here derives a permission.
  */
 
 /** Catalog segment per risk class, for the class-specific texts. */
@@ -22,19 +22,18 @@ const CLASS_KEYS = Object.freeze({
 /** The classes the one-sentence summary speaks about, in its order. */
 const SUMMARY_CLASSES = Object.freeze(['read', 'write', 'execute', 'external']);
 
-/** Where each setting is changed today; #449 moves the controls onto the page. */
+/**
+ * What is set up elsewhere since #449: configuration without a security effect
+ * of its own — the interpreter, the search key, the MCP server connections.
+ */
 export const SECURITY_LINK_TARGETS = Object.freeze({
-  tools: { panel: 'tools', target: 'heading-tool-catalog' },
   python: { panel: 'tools', target: 'heading-python' },
-  shell: { panel: 'tools', target: 'heading-shell' },
-  sandbox: { panel: 'tools', target: 'heading-workspace-sandbox', fallback: 'heading-shell' },
-  allowances: { panel: 'tools', target: 'heading-program-allowances', fallback: 'heading-shell' },
   webSearch: { panel: 'tools', target: 'heading-web-search' },
-  rules: { panel: 'permissions', target: 'heading-tool-rules' },
-  sensitive: { panel: 'permissions', target: 'heading-sensitive-paths' },
-  grants: { panel: 'permissions', target: 'heading-session-grants' },
   mcp: { panel: 'mcp', target: 'heading-mcp-servers' },
 });
+
+/** The only classes a rule can allow for good (concept §7). */
+const ALLOWABLE_CLASSES = Object.freeze(['read', 'write']);
 
 function classKey(riskClass) {
   return CLASS_KEYS[riskClass] || 'read';
@@ -56,7 +55,7 @@ function rowOf(overview, riskClass) {
 /** "Change under Tools" — the target named by its section in the nav. */
 export function linkLabel(key) {
   const target = SECURITY_LINK_TARGETS[key];
-  return t('security.link', { place: t(`settings.nav.${target?.panel || 'tools'}`) });
+  return t(`security.link.${key}`, { place: t(`settings.nav.${target?.panel || 'tools'}`) });
 }
 
 /**
@@ -150,20 +149,42 @@ function scopeLabel(scope) {
   return t(scope === 'workspace' ? 'security.scope.workspace' : 'security.scope.global');
 }
 
-function toolItem(tool) {
+/**
+ * One tool of a row. Its switch sits in the row of its own class; a row that
+ * shows it only because a call can turn into this class names that row. The
+ * execution tools are switched by their execution switch (a slot), so they
+ * are no items here.
+ */
+function toolItem(tool, row) {
+  const ownRow = tool.mcpServer ? 'external' : tool.riskClasses[0];
+  const switchable = ownRow === row.riskClass;
   let tag = scopeLabel('global');
   let muted = false;
   if (tool.blocked) {
     tag = t('security.tool.blocked');
     muted = true;
-  } else if (tool.state === 'disabled') {
-    tag = t('security.tool.disabled');
-    muted = true;
   } else if (tool.state === 'unavailable') {
     tag = t('security.tool.unavailable');
     muted = true;
+  } else if (tool.state === 'disabled') {
+    tag = t('security.tool.disabled');
+    muted = true;
   }
-  return { name: tool.name, label: tool.shortDescription || tool.name, tag, muted };
+  if (!switchable) {
+    tag = t('security.tool.switchedIn', { row: riskClassLabel(ownRow) });
+    muted = tool.state !== 'on';
+  }
+  return {
+    name: tool.name,
+    label: tool.shortDescription || tool.name,
+    tag,
+    muted,
+    switchable,
+    checked: tool.state !== 'disabled',
+    // Without its key or server a tool cannot be switched on here; the link
+    // under the list goes where it is set up.
+    switchDisabled: tool.state === 'unavailable',
+  };
 }
 
 function describeMay(row) {
@@ -171,18 +192,26 @@ function describeMay(row) {
   let answer;
   if (row.status === 'off') {
     answer = t(row.offReason === 'blocked' ? 'security.a.may.blocked' : 'security.a.may.no');
+  } else if (row.riskClass === 'read-sensitive') {
+    // Its tools are the reading ones, switched in the row above.
+    answer = t('security.a.may.readSensitive.note');
   } else {
     answer = t('security.a.may.yes');
   }
-  const links = [row.riskClass === 'external' ? 'webSearch' : 'tools'];
-  if (row.riskClass === 'execute') links.splice(0, 1, 'shell', 'python');
-  if (row.riskClass === 'external' || row.tools.some((tool) => tool.mcpServer)) links.push('mcp');
+  const links = [];
+  if (row.riskClass === 'execute') links.push('python');
+  if (row.riskClass === 'external') links.push('webSearch', 'mcp');
+  const isExecute = row.riskClass === 'execute';
   return {
     question: t(`security.q.may.${key}`),
     answer,
-    note: ['read-sensitive', 'delete'].includes(row.riskClass) ? t(`security.a.may.${key}.note`) : '',
-    tools: row.riskClass === 'read-sensitive' ? [] : row.tools.map(toolItem),
-    links: [...new Set(links)],
+    note: row.riskClass === 'delete' ? t('security.a.may.delete.note') : '',
+    // The execution tools come as their switches (slots), not as items.
+    execution: isExecute,
+    tools: row.riskClass === 'read-sensitive'
+      ? []
+      : row.tools.filter((tool) => !(isExecute && !tool.mcpServer)).map((tool) => toolItem(tool, row)),
+    links,
   };
 }
 
@@ -200,20 +229,34 @@ function describeAsk(row, overview) {
     ...row.allowRules.map((rule) => {
       const view = describeRule(rule);
       return {
+        id: rule.id,
         code: rule.pathPattern === '**' ? '' : rule.pathPattern,
         label: rule.tool ? t('security.allow.tool', { tool: rule.tool }) : view?.subject || '',
         tag: scopeLabel(rule.scope),
         scope: rule.scope === 'workspace' ? 'workspace' : 'global',
+        removeLabel: t('settings.rules.delete', { rule: view?.text || rule.pathPattern }),
       };
     }),
-    ...row.commandRules.map((rule) => ({ code: rule.command, label: '', tag: scopeLabel('workspace'), scope: 'workspace' })),
+    ...row.commandRules.map((rule) => ({
+      id: rule.id,
+      code: rule.command,
+      label: '',
+      tag: scopeLabel('workspace'),
+      scope: 'workspace',
+      removeLabel: t('security.command.remove', { command: rule.command }),
+    })),
   ];
-  const grants = row.sessionGrants.map((grant) => ({
-    text: tMessage(grant.scope) || t('settings.grants.fallback', { tool: grant.tool || '' }),
-    tag: t(grant.current ? 'security.grant.current' : 'security.grant.background', {
-      title: grant.chatTitle || t('chat.title.new'),
-    }),
-  }));
+  const grants = row.sessionGrants.map((grant) => {
+    const text = tMessage(grant.scope) || t('settings.grants.fallback', { tool: grant.tool || '' });
+    return {
+      id: grant.id,
+      text,
+      tag: t(grant.current ? 'security.grant.current' : 'security.grant.background', {
+        title: grant.chatTitle || t('chat.title.new'),
+      }),
+      revokeLabel: t('settings.grants.revokeLabel', { text }),
+    };
+  });
   const applies = overview.allowancesApply === true;
   return {
     question: t('security.q.ask'),
@@ -225,20 +268,31 @@ function describeAsk(row, overview) {
     allowancesMuted: !applies,
     grantsHeading: grants.length > 0 ? t('security.a.ask.grants') : '',
     grants,
-    links: grants.length > 0 ? ['rules', 'grants'] : ['rules'],
+    // Reading and changing can be allowed for good; the rest only per call.
+    addAllowance: ALLOWABLE_CLASSES.includes(row.riskClass)
+      ? t('security.rule.addAllow')
+      : '',
+    // The answers for "Smart" already say how far the other classes can be
+    // allowed; only the remembered command is a way of its own.
+    onlyOnce: row.riskClass === 'execute' ? t('security.rule.onlyOnce.execute') : '',
   };
 }
 
 function blocksOf(row) {
-  return row.denyRules.map((rule) => ({
-    code: rule.pathPattern === '**' ? '' : rule.pathPattern,
-    label: rule.tool ? t('security.allow.tool', { tool: rule.tool }) : rule.pathPattern === '**' ? t('permissions.rule.allPaths') : '',
-    tag: scopeLabel(rule.scope),
-    scope: rule.scope === 'workspace' ? 'workspace' : 'global',
-  }));
+  return row.denyRules.map((rule) => {
+    const view = describeRule(rule);
+    return {
+      id: rule.id,
+      code: rule.pathPattern === '**' ? '' : rule.pathPattern,
+      label: rule.tool ? t('security.allow.tool', { tool: rule.tool }) : rule.pathPattern === '**' ? t('permissions.rule.allPaths') : '',
+      tag: scopeLabel(rule.scope),
+      scope: rule.scope === 'workspace' ? 'workspace' : 'global',
+      removeLabel: t('settings.rules.delete', { rule: view?.text || rule.pathPattern }),
+    };
+  });
 }
 
-function describeExecuteReach(overview, { homeDir = '' } = {}) {
+function describeExecuteReach(overview) {
   const execution = overview.execution || {};
   const sandbox = execution.sandbox;
   let state;
@@ -257,30 +311,7 @@ function describeExecuteReach(overview, { homeDir = '' } = {}) {
     facts: state.kind === 'isolated'
       ? [t('security.a.where.execute.fact.write'), t('security.a.where.execute.fact.secrets'), t('security.a.where.execute.fact.network')]
       : [],
-    allowancesHeading: t('security.a.where.execute.allowances'),
-    allowances: (execution.programAllowances || []).map((entry) => ({
-      text: describeAllowanceSentence(entry, homeDir),
-      tag: scopeLabel('global'),
-    })),
-    allowancesEmpty: t('security.a.where.execute.allowancesEmpty'),
   };
-}
-
-/** "gh may also reach api.github.com and write in ~/.config/gh". */
-function describeAllowanceSentence(entry, homeDir) {
-  const facts = [];
-  if (Array.isArray(entry?.domains) && entry.domains.length > 0) {
-    facts.push(t('security.allowance.network', { domains: joinList(entry.domains) }));
-  }
-  if (Array.isArray(entry?.writePaths) && entry.writePaths.length > 0) {
-    const folders = entry.writePaths.map((folder) => tildePath(folder, homeDir));
-    facts.push(t('security.allowance.folders', { folders: joinList(folders) }));
-  }
-  if (entry?.trustd === true) facts.push(t('security.allowance.trustd'));
-  return t('security.allowance.sentence', {
-    program: programLabel(entry?.path),
-    facts: facts.length > 0 ? joinList(facts) : t('security.allowance.nothing'),
-  });
 }
 
 function describeExternalReach(row) {
@@ -294,21 +325,20 @@ function describeExternalReach(row) {
   return [...new Set(facts)];
 }
 
-function describeWhere(row, overview, options) {
+function describeWhere(row, overview) {
   const key = classKey(row.riskClass);
   const where = {
     question: t(`security.q.where.${key}`),
     answer: '',
     blocksHeading: '',
     blocks: blocksOf(row),
-    links: [],
+    // Every class can be blocked, on a path or as a whole.
+    addBlock: t('security.rule.addDeny'),
   };
   if (where.blocks.length > 0) where.blocksHeading = t('security.a.where.blocks');
   switch (row.riskClass) {
     case 'read':
       where.answer = t(overview.workspace ? 'security.a.where.read' : 'security.a.where.read.noWorkspace');
-      // The rules link already stands under question 2; here only with blocks.
-      where.links = where.blocks.length > 0 ? ['rules'] : [];
       break;
     case 'read-sensitive':
       where.answer = t('security.a.where.readSensitive');
@@ -318,32 +348,22 @@ function describeWhere(row, overview, options) {
           ...(overview.sensitive?.builtInNames || []),
           ...(overview.sensitive?.builtInDirectories || []).map((name) => `${name}/`),
         ],
-        userHeading: t('security.a.where.readSensitive.user'),
-        user: overview.sensitive?.userPatterns || [],
-        userEmpty: t('security.a.where.readSensitive.userEmpty'),
       };
-      where.links = ['sensitive'];
       break;
     case 'write':
       where.answer = t(overview.workspace ? 'security.a.where.write' : 'security.a.where.write.noWorkspace');
-      // The rules link already stands under question 2; here only with blocks.
-      where.links = where.blocks.length > 0 ? ['rules'] : [];
       break;
     case 'delete':
       where.answer = t('security.a.where.delete');
-      // The rules link already stands under question 2; here only with blocks.
-      where.links = where.blocks.length > 0 ? ['rules'] : [];
       break;
     case 'execute':
-      where.execute = describeExecuteReach(overview, options);
-      where.links = ['sandbox', 'allowances'];
+      where.execute = describeExecuteReach(overview);
       break;
     case 'external': {
       const facts = describeExternalReach(row);
       where.answer = facts.length > 0 ? t('security.a.where.external') : t('security.a.where.external.none');
       where.facts = facts;
       where.note = t('security.a.where.external.provider');
-      where.links = ['webSearch', 'mcp'];
       break;
     }
     default:
@@ -353,7 +373,7 @@ function describeWhere(row, overview, options) {
 }
 
 /** One row: the closed line and the three questions it opens to. */
-export function describeSecurityRow(row, overview, options = {}) {
+export function describeSecurityRow(row, overview) {
   const pill = {
     runs: { text: t('security.status.runs'), kind: 'runs' },
     asks: { text: t('security.status.asks'), kind: 'asks' },
@@ -369,6 +389,6 @@ export function describeSecurityRow(row, overview, options = {}) {
     noSandbox: row.noSandbox === true ? t('security.status.noSandbox') : '',
     may: describeMay(row),
     ask: describeAsk(row, overview),
-    where: describeWhere(row, overview, options),
+    where: describeWhere(row, overview),
   };
 }

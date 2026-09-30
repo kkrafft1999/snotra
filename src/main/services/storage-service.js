@@ -741,6 +741,24 @@ function createStorageService({
     });
   }
 
+  /**
+   * Empties the per-server tool deselection (#449). Since the Security page
+   * the switch of an MCP tool is `uiPrefs.disabledTools`; a list left here
+   * would hide a tool from that page for good. Returns what was cleared.
+   */
+  async function clearMcpServerDisabledTools() {
+    return withFileLock(getMcpConfigPath(), async () => {
+      const servers = await readMcpStoredServers();
+      const cleared = servers
+        .filter((server) => Array.isArray(server.disabledTools) && server.disabledTools.length > 0)
+        .map((server) => ({ id: server.id, disabledTools: [...server.disabledTools] }));
+      if (cleared.length === 0) return cleared;
+      const next = servers.map((server) => ({ ...server, disabledTools: [] }));
+      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      return cleared;
+    });
+  }
+
   async function deleteMcpServer(id) {
     const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
     if (!wanted) return { ok: false, errors: [createMessage('mcp.error.idMissingForDelete')] };
@@ -1110,6 +1128,7 @@ function createStorageService({
     getMcpSecretValues,
     saveMcpServer,
   updateMcpServerKnownTools,
+  clearMcpServerDisabledTools,
     deleteMcpServer,
     normalizeWorkspaceRoot,
     workspaceBucketKey,

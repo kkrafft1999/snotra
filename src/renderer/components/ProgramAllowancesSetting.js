@@ -58,7 +58,6 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     return { update() {}, focus: () => false, close() {} };
   }
 
-  let shellOn = false;
   let sandbox = null;
   /** The entry the dialog edits; null while adding. */
   let editing = null;
@@ -84,7 +83,9 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   // ── The list ─────────────────────────────────────────────────────────
 
   function renderList() {
-    const visible = shellOn && !!sandbox && sandbox.reason !== 'platform' && state().platform !== 'win32';
+    // Shown while shell_execute is off as well (#449); the Security page says
+    // that it only matters while it is on. Hidden where there is no sandbox.
+    const visible = sandbox?.reason !== 'platform' && state().platform !== 'win32';
     card.hidden = !visible;
     list.replaceChildren();
     const all = entries();
@@ -359,9 +360,8 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   });
 
   return {
-    /** What the settings know about shell_execute; shows or hides the card. */
+    /** What the settings know about the sandbox; shows or hides the list. */
     update(next = {}) {
-      shellOn = next.shellOn === true;
       sandbox = next.sandbox && typeof next.sandbox === 'object' ? next.sandbox : null;
       status.clear();
       setText(cardError, '');

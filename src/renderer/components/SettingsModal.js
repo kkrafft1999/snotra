@@ -1,17 +1,8 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
-import {
-  groupToolCatalog,
-  groupCountLabel,
-  groupToggleLabel,
-  toolShortText,
-  toolDetailText,
-  toolStatusBadge,
-} from '../utils/tool-catalog-view.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
-import { initWorkspaceModeSetting } from './WorkspaceModeSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 
@@ -23,7 +14,7 @@ import { initSecurityPanel } from './SecurityPanel.js';
  */
 // Security (#448) shows the state and carries one instant control, the
 // workspace default mode.
-const IMMEDIATE_PANELS = new Set(['security', 'permissions', 'mcp', 'memory']);
+const IMMEDIATE_PANELS = new Set(['security', 'mcp', 'memory']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -39,11 +30,12 @@ const APPLY_HINT_KEYS = {
   general: 'settings.applyHint.general',
 };
 
-const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'permissions', 'skills', 'memory', 'mcp', 'general'];
+const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'skills', 'memory', 'mcp', 'general'];
 
-/** Aufklapp-Pfeil der Tool-Zeilen (Issue #98); dreht sich per CSS. */
+/** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
   '<svg class="settings-tool-row__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+
 const {
   formatPresetSublabelFromView,
   presetIdentityKey,
@@ -145,8 +137,6 @@ export function initSettingsModal(deps) {
   const choiceAppTheme = document.getElementById('choice-app-theme');
   const selectSkillSuggestionMode = document.getElementById('settings-skill-suggestion-mode');
   const inputMaxToolRounds = document.getElementById('input-max-tool-rounds');
-  const settingsToolList = document.getElementById('settings-tool-list');
-  const settingsToolListEmpty = document.getElementById('settings-tool-list-empty');
   // Websuche (Issue #63): eigener Schluessel, wirkt sofort und haengt nicht am
   // Entwurf, der mit „Uebernehmen" gespeichert wird.
   const inputWebSearchKey = document.getElementById('input-web-search-key');
@@ -173,13 +163,17 @@ export function initSettingsModal(deps) {
   let pythonSandboxState = null;
   let shellSandboxState = null;
   const workspaceSandbox = initWorkspaceSandboxSetting({ toolPermissions, onChange: () => renderSandboxLines() });
-  // What new chats in the open folder start with (#413).
-  initWorkspaceModeSetting({ toolPermissions });
   // Program allowances (#408): only shell_execute runs a program by name.
   const programAllowances = initProgramAllowancesSetting({ api, toolPermissions });
-  // Settings › Security (#448): the state per risk class, computed by main.
-  // Its lines link to the places where a setting is changed today.
-  const securityPanel = initSecurityPanel({ api, toolPermissions, onNavigate: navigateToSetting });
+  // Settings › Security (#448, #449): the state per risk class, computed by
+  // main, with every control that changes it.
+  const securityPanel = initSecurityPanel({
+    api,
+    toolPermissions,
+    permissionsPanel: toolPermissionsPanel,
+    onNavigate: navigateToSetting,
+    onToggleTool: setToolEnabled,
+  });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
@@ -1026,168 +1020,6 @@ export function initSettingsModal(deps) {
     }
   }
 
-  /**
-   * Einstellungen › Tools › Verfügbare Tools (Issue #98).
-   *
-   * Gruppiert nach Risikoklasse; je Zeile Häkchen, Name und Kurztext. Der
-   * Volltext aus der Registry klappt auf Wunsch darunter auf — als Button mit
-   * `aria-expanded`, damit er auch per Tastatur erreichbar ist. Die Klasse
-   * steht einmal im Gruppenkopf statt als Badge in jeder Zeile.
-   */
-  function renderToolList() {
-    if (!settingsToolList) return;
-    settingsToolList.innerHTML = '';
-    const empty = settingsToolCatalog.length === 0;
-    settingsToolListEmpty?.classList.toggle('hidden', !empty);
-
-    for (const group of groupToolCatalog(settingsToolCatalog)) {
-      settingsToolList.appendChild(renderToolGroup(group));
-    }
-    syncToolGroupHeads();
-  }
-
-  function renderToolGroup(group) {
-    const section = document.createElement('section');
-    section.className = 'settings-tool-group';
-    section.dataset.riskClass = group.riskClass;
-
-    const head = document.createElement('div');
-    head.className = 'settings-tool-group__head';
-
-    const title = document.createElement('h4');
-    title.className = 'settings-tool-group__title';
-    title.id = `heading-tool-group-${group.riskClass}`;
-    title.textContent = group.label;
-    head.appendChild(title);
-
-    if (group.note) {
-      const note = document.createElement('span');
-      note.className = 'settings-tool-group__note';
-      note.textContent = group.note;
-      head.appendChild(note);
-    }
-
-    const count = document.createElement('span');
-    count.className = 'settings-tool-group__count';
-    head.appendChild(count);
-
-    const toggleAll = document.createElement('button');
-    toggleAll.type = 'button';
-    toggleAll.className = 'settings-tool-group__all';
-    toggleAll.dataset.riskClass = group.riskClass;
-    head.appendChild(toggleAll);
-
-    section.appendChild(head);
-
-    const list = document.createElement('ul');
-    list.className = 'settings-tool-rows';
-    list.setAttribute('aria-labelledby', title.id);
-    for (const tool of group.tools) list.appendChild(renderToolRow(tool));
-    section.appendChild(list);
-    return section;
-  }
-
-  function renderToolRow(tool) {
-    const li = document.createElement('li');
-    li.className = 'settings-tool-row';
-
-    const label = document.createElement('label');
-    label.className = 'settings-tool-row__check';
-
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.dataset.toolName = tool.name;
-    input.checked = !settingsDisabledToolsDraft.has(tool.name);
-    label.appendChild(input);
-
-    const name = document.createElement('code');
-    name.className = 'settings-tool-row__name';
-    name.setAttribute('lang', 'en');
-    name.textContent = tool.name;
-    label.appendChild(name);
-    li.appendChild(label);
-
-    const short = toolShortText(tool);
-    const detail = toolDetailText(tool);
-    const badge = toolStatusBadge(tool, { pythonReady, shellReady, webSearchHasKey });
-
-    if (detail) {
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'settings-tool-row__summary';
-      toggle.setAttribute('aria-expanded', 'false');
-      const descId = `tool-desc-${tool.name}`;
-      toggle.setAttribute('aria-controls', descId);
-
-      const shortEl = document.createElement('span');
-      shortEl.className = 'settings-tool-row__short';
-      shortEl.textContent = short;
-      toggle.appendChild(shortEl);
-      if (badge) toggle.appendChild(toolBadgeElement(badge));
-      toggle.insertAdjacentHTML('beforeend', CHEVRON_ICON_HTML);
-      li.appendChild(toggle);
-
-      const desc = document.createElement('p');
-      desc.className = 'settings-tool-row__desc';
-      desc.id = descId;
-      desc.textContent = detail;
-      desc.hidden = true;
-      li.appendChild(desc);
-
-      toggle.addEventListener('click', () => {
-        const open = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-        desc.hidden = open;
-        li.classList.toggle('settings-tool-row--open', !open);
-      });
-    } else {
-      const shortEl = document.createElement('span');
-      shortEl.className = 'settings-tool-row__short settings-tool-row__short--plain';
-      shortEl.textContent = short;
-      li.appendChild(shortEl);
-      if (badge) li.appendChild(toolBadgeElement(badge));
-    }
-
-    return li;
-  }
-
-  function toolBadgeElement({ text, title }) {
-    const badge = document.createElement('span');
-    badge.className = 'settings-tool-item__badge settings-tool-row__badge';
-    badge.textContent = text;
-    badge.title = title;
-    return badge;
-  }
-
-  /** Zähler und Schalterbeschriftung je Gruppe nach jeder Änderung angleichen. */
-  function syncToolGroupHeads() {
-    if (!settingsToolList) return;
-    for (const section of settingsToolList.querySelectorAll('.settings-tool-group')) {
-      const boxes = [...section.querySelectorAll('input[type="checkbox"][data-tool-name]')];
-      if (boxes.length === 0) continue;
-      const active = boxes.filter((box) => box.checked).length;
-      const count = section.querySelector('.settings-tool-group__count');
-      if (count) count.textContent = groupCountLabel(boxes.length, active);
-      const toggleAll = section.querySelector('.settings-tool-group__all');
-      if (toggleAll) toggleAll.textContent = groupToggleLabel(boxes.length, active);
-    }
-  }
-
-  /** „alle an/aus“ im Gruppenkopf: setzt nur den Entwurf, gespeichert wird mit „Übernehmen“. */
-  function toggleToolGroup(section) {
-    const boxes = [...section.querySelectorAll('input[type="checkbox"][data-tool-name]')];
-    if (boxes.length === 0) return;
-    const turnOn = boxes.some((box) => !box.checked);
-    for (const box of boxes) {
-      box.checked = turnOn;
-      const name = box.dataset.toolName;
-      if (!name) continue;
-      if (turnOn) settingsDisabledToolsDraft.delete(name);
-      else settingsDisabledToolsDraft.add(name);
-    }
-    syncToolGroupHeads();
-  }
-
   function renderSkillList() {
     if (!settingsSkillList) return;
     settingsSkillList.innerHTML = '';
@@ -1340,7 +1172,6 @@ export function initSettingsModal(deps) {
     } catch {
       settingsToolCatalog = [];
     }
-    renderToolList();
   }
 
   function setWebSearchStatus(text, isError = false) {
@@ -1500,8 +1331,8 @@ export function initSettingsModal(deps) {
     }
     webSearchHasKey = result.hasApiKey === true;
     syncWebSearchUI();
-    // Das Haekchen-Abzeichen „Schluessel fehlt" haengt am selben Zustand.
-    renderToolList();
+    // Without a key web_search is not offered; the Security page says so.
+    void securityPanel.refresh();
   }
 
   btnWebSearchSave?.addEventListener('click', () => {
@@ -1817,10 +1648,13 @@ export function initSettingsModal(deps) {
       // Mit Sprungziel steht der Fokus auf dem gemeinten Schalter, sonst wie
       // bisher auf dem ersten Reiter.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
-      // From the approval card's "Sandbox setting" link (#357).
-      if (jump?.focus === 'sandbox' && workspaceSandbox.focus()) return;
-      // From the card's "Program allowances" link (#408).
-      if (jump?.focus === 'allowances' && programAllowances.focus()) return;
+      // From the approval card's "Sandbox setting" and "Program allowances"
+      // links, the mode pill and the folder shield (#357, #408, #449): the
+      // execute row of the Security page, opened on the control.
+      if (jump?.panel === 'security' && (jump.focus === 'sandbox' || jump.focus === 'allowances')) {
+        void securityPanel.reveal(jump.focus);
+        return;
+      }
       try {
         settingsNavTabs[0]?.focus();
       } catch {
@@ -2109,7 +1943,6 @@ export function initSettingsModal(deps) {
             const n = parseInt(inputMaxToolRounds?.value || '', 10);
             return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
           })(),
-          disabledTools: [...settingsDisabledToolsDraft],
           activeSkills: [...settingsActiveSkillsDraft],
           pythonInterpreterPath: inputPythonInterpreter?.value || '',
         },
@@ -2125,9 +1958,6 @@ export function initSettingsModal(deps) {
         return;
       }
       await refreshLLMState();
-      // Ticking a tool off in the catalogue can take the warning off the pill
-      // and the folder shield (#357, #398).
-      void toolPermissions?.refresh?.();
       closeSettingsModal();
     } finally {
       btnSettingsSave.disabled = false;
@@ -2334,10 +2164,36 @@ export function initSettingsModal(deps) {
     return prefs?.[key] === value;
   }
 
+  /**
+   * A tool switch on the Security page (#449): at once, like every
+   * permission. The list is read afresh so that two quick switches do not
+   * undo each other, and the answer is checked like any other instant pref.
+   */
+  async function setToolEnabled(name, on) {
+    let current = [];
+    try {
+      const prefs = await api.getUIPrefs();
+      current = Array.isArray(prefs?.disabledTools) ? prefs.disabledTools : [];
+    } catch {
+      current = [...settingsDisabledToolsDraft];
+    }
+    const next = new Set(current);
+    if (on) next.delete(name);
+    else next.add(name);
+    if (next.size === current.length && current.every((entry) => next.has(entry))) return true;
+    const prefs = await api.setUIPrefs({ disabledTools: [...next] });
+    const saved = Array.isArray(prefs?.disabledTools) ? prefs.disabledTools : null;
+    const ok = !!saved && saved.includes(name) !== on;
+    if (ok) settingsDisabledToolsDraft = new Set(saved);
+    // The pill and the folder shield follow the execution tools (#357, #398).
+    void toolPermissions?.refresh?.();
+    return ok;
+  }
+
   function bindPrefSwitch(input, statusId, key, after) {
     return bindInstantSwitch(input, document.getElementById(statusId), async (value) => {
       const ok = await saveUiPref(key, value);
-      if (ok) await after?.();
+      if (ok) await after?.(value);
       return ok;
     });
   }
@@ -2367,17 +2223,20 @@ export function initSettingsModal(deps) {
   // line and the tool list follow what main now reports.
   // The mode pill turns red for "Auto" with an unisolated execution tool
   // (#357), so it has to hear about both switches too.
+  //
+  // Since #449 the switch is the one control of its tool: switching it on
+  // also clears an old tick-off from the tool list, which no longer exists.
   const pythonSwitch = bindPrefSwitch(
-    inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async () => {
+    inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async (on) => {
+      if (on) await setToolEnabled('run_python', true);
       await loadPythonState();
-      renderToolList();
       void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
-    inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async () => {
+    inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async (on) => {
+      if (on) await setToolEnabled('shell_execute', true);
       await loadShellState();
-      renderToolList();
       void toolPermissions?.refresh?.();
     }
   );
@@ -2389,23 +2248,6 @@ export function initSettingsModal(deps) {
     pythonSwitch,
     shellSwitch,
   ];
-
-  settingsToolList?.addEventListener('change', (e) => {
-    const input = e.target.closest('input[type="checkbox"][data-tool-name]');
-    if (!input) return;
-    const name = input.dataset.toolName;
-    if (!name) return;
-    if (input.checked) settingsDisabledToolsDraft.delete(name);
-    else settingsDisabledToolsDraft.add(name);
-    syncToolGroupHeads();
-  });
-
-  settingsToolList?.addEventListener('click', (e) => {
-    const button = e.target.closest('.settings-tool-group__all');
-    if (!button) return;
-    const section = button.closest('.settings-tool-group');
-    if (section) toggleToolGroup(section);
-  });
 
   settingsSkillList?.addEventListener('change', (e) => {
     const input = e.target.closest('input[type="checkbox"][data-skill-name]');

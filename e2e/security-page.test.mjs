@@ -1,6 +1,7 @@
-// Settings › Security in the running app (#448): the page reads main's
+// Settings › Security in the running app (#448, #449): the page reads main's
 // overview, shows six rows, follows a session approval granted on a card and a
-// new workspace default, and its links land on the card they name.
+// new workspace default, opens the rule form in place and switches a tool at
+// once.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -118,17 +119,31 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
   } catch (error) {
     throw new Error(`${error.message}; focus is on ${await focusInfo(page)}`);
   }
-  await pressEnterOn(page, '.settings-security-row[data-risk-class="write"] [data-security-link="rules"]');
-  const landed = () => page.evaluate(() => ({
-    tab: document.querySelector('.settings-nav-item[aria-selected="true"]')?.dataset.settingsPanel,
-    focus: document.activeElement?.id,
-  }));
-  try {
-    await poll(async () => {
-      const where = await landed();
-      return where.tab === 'permissions' && where.focus === 'heading-tool-rules';
-    }, { what: 'link lands on the rules card' });
-  } catch (error) {
-    throw new Error(`${error.message}; landed on ${JSON.stringify(await landed())}`);
-  }
+  // The rule form opens in place, prefilled, and Escape gives the keyboard
+  // back to the button that opened it (#449).
+  await pressEnterOn(page, '.settings-security-row[data-risk-class="write"] [data-rule-add="deny"]');
+  const form = await poll(() => page.evaluate(() => {
+    const inRow = document.querySelector('.settings-security-row[data-risk-class="write"] #settings-rule-form');
+    return inRow ? {
+      effect: document.getElementById('rule-effect').value,
+      riskClass: document.getElementById('rule-class').value,
+      focus: document.activeElement?.id,
+    } : null;
+  }), { what: 'rule form in the write row' });
+  assert.deepEqual(form, { effect: 'deny', riskClass: 'write', focus: 'rule-pattern' });
+  await page.keyboard.press('Escape');
+  await poll(() => page.evaluate(() => document.activeElement?.dataset?.ruleAdd === 'deny'
+    && !document.querySelector('.settings-security-row #settings-rule-form')), { what: 'form closed, focus back' });
+  assert.equal(await page.evaluate(() => !document.getElementById('modal-settings').classList.contains('hidden')), true,
+    'Escape in the form closes the form, not the dialog');
+
+  // A tool switch applies at once — no "Apply".
+  const editSwitch = '.settings-security-row[data-risk-class="write"] input[data-tool-switch="edit_file"]';
+  await page.locator(editSwitch).click();
+  await poll(async () => (await page.evaluate(() => window.electronAPI.getUIPrefs())).disabledTools?.includes('edit_file'),
+    { what: 'edit_file switched off in the preferences' });
+  await poll(async () => /3 tools on/.test(await rowText(page, 'write')), { what: 'the row counts one tool less' });
+  await page.locator(editSwitch).click();
+  await poll(async () => !(await page.evaluate(() => window.electronAPI.getUIPrefs())).disabledTools?.includes('edit_file'),
+    { what: 'edit_file back on' });
 });

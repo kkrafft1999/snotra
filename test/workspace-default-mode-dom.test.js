@@ -200,23 +200,22 @@ test('menu: hidden with nothing to remember, and the same in German', async () =
   }
 });
 
-test('settings: the card shows the default, asks main to change it and follows main\'s answer', async () => {
+test('settings: the Security page shows the default, asks main to change it and follows main\'s answer', async () => {
   const dom = setupRendererDom();
   try {
-    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
     let answer = { ok: true };
     const permissions = fakePermissions(baseState({ workspaceMode: 'ask-all' }), { answer: async () => answer });
-    initWorkspaceModeSetting({ toolPermissions: permissions });
+    initWorkspaceModeSetting({ toolPermissions: permissions, ids: SECURITY_PAGE_IDS });
     const doc = dom.document;
-    const radios = () => [...doc.querySelectorAll('#settings-workspace-mode-options input')];
+    const radios = () => [...doc.querySelectorAll('#settings-security-mode-options input')];
     const checked = () => radios().find((input) => input.checked)?.value ?? null;
 
     assert.deepEqual(radios().map((input) => input.value), ['smart', 'ask-all', 'auto']);
     assert.deepEqual(
-      [...doc.querySelectorAll('#settings-workspace-mode-options label')].map((label) => label.textContent),
+      [...doc.querySelectorAll('#settings-security-mode-options label')].map((label) => label.textContent),
       ['Smart', 'Always ask', 'Auto'],
     );
-    assert.equal(doc.getElementById('settings-workspace-mode-name').textContent, ROOT);
     assert.equal(checked(), 'ask-all');
 
     const auto = radios().find((input) => input.value === 'auto');
@@ -233,7 +232,7 @@ test('settings: the card shows the default, asks main to change it and follows m
     smart.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(checked(), 'auto');
-    assert.equal(doc.getElementById('settings-workspace-mode-state').hidden, true);
+    assert.equal(doc.getElementById('settings-security-mode-state').hidden, true);
 
     // A failed save says so.
     answer = { ok: false, error: { key: 'permissions.error.autoNeedsEncryption' } };
@@ -241,7 +240,7 @@ test('settings: the card shows the default, asks main to change it and follows m
     smart.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(checked(), 'auto');
-    assert.equal(doc.getElementById('settings-workspace-mode-state').textContent, 'Auto cannot be switched on without encrypted storage.');
+    assert.equal(doc.getElementById('settings-security-mode-state').textContent, 'Auto cannot be switched on without encrypted storage.');
   } finally {
     dom.cleanup();
   }
@@ -250,17 +249,17 @@ test('settings: the card shows the default, asks main to change it and follows m
 test('settings: no folder, nothing to choose; no encrypted storage, no "Auto"', async () => {
   const dom = setupRendererDom();
   try {
-    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
     const permissions = fakePermissions(baseState({ workspaceRoot: null, workspaceMode: null }));
-    initWorkspaceModeSetting({ toolPermissions: permissions });
+    initWorkspaceModeSetting({ toolPermissions: permissions, ids: SECURITY_PAGE_IDS });
     const doc = dom.document;
-    const radios = () => [...doc.querySelectorAll('#settings-workspace-mode-options input')];
+    const radios = () => [...doc.querySelectorAll('#settings-security-mode-options input')];
     assert.ok(radios().every((input) => input.disabled && !input.checked));
-    assert.equal(doc.getElementById('settings-workspace-mode-state').textContent, 'Open a folder to choose its default.');
+    assert.equal(doc.getElementById('settings-security-mode-state').textContent, 'Open a folder to choose its default.');
 
     permissions.push(baseState({ encryptionAvailable: false }));
     assert.deepEqual(radios().filter((input) => input.disabled).map((input) => input.value), ['auto']);
-    assert.match(doc.getElementById('settings-workspace-mode-state').textContent, /not available as a default/);
+    assert.match(doc.getElementById('settings-security-mode-state').textContent, /not available as a default/);
   } finally {
     dom.cleanup();
   }

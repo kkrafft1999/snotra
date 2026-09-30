@@ -107,9 +107,6 @@ export function initMcpPanel({ api }) {
   const fieldCwd = document.getElementById('mcp-field-cwd');
   const envList = document.getElementById('mcp-env-list');
   const btnEnvAdd = document.getElementById('btn-mcp-env-add');
-  const toolsBlock = document.getElementById('mcp-tools-block');
-  const toolsList = document.getElementById('mcp-tools-list');
-  const toolsCount = document.getElementById('mcp-tools-count');
   const formError = document.getElementById('mcp-form-error');
   const testResult = document.getElementById('mcp-test-result');
 
@@ -287,7 +284,9 @@ export function initMcpPanel({ api }) {
       args: server.args,
       cwd: server.cwd,
       enabled: server.enabled,
-      disabledTools: server.disabledTools,
+      // One switch per tool since #449, on the Security page; the server keeps
+      // no deselection of its own (mcp-disabled-tools-migration.js).
+      disabledTools: [],
       knownTools: server.knownTools,
       ...patch,
     };
@@ -368,39 +367,6 @@ export function initMcpPanel({ api }) {
     return Array.isArray(server?.knownTools) ? server.knownTools : [];
   }
 
-  function renderTools(server) {
-    const known = knownToolsOf(server);
-    toolsBlock?.classList.toggle('hidden', !server || known.length === 0);
-    if (!toolsList) return;
-    toolsList.replaceChildren();
-    const disabled = new Set(server?.disabledTools || []);
-    for (const name of known) {
-      const row = el('label', 'mcp-tool-row');
-      const box = el('input');
-      box.type = 'checkbox';
-      box.value = name;
-      box.checked = !disabled.has(name);
-      row.append(box, el('code', null, name));
-      toolsList.append(row);
-    }
-    if (toolsCount) {
-      const active = known.length - known.filter((name) => disabled.has(name)).length;
-      toolsCount.textContent = t('settings.mcp.state.toolsActive', { active, total: known.length });
-    }
-  }
-
-  /**
-   * Die abgewaehlten Tools aus dem Dialog. Zeigt der Dialog gar keine Liste —
-   * weil der Server nicht laeuft und noch kein Katalog gespeichert ist —,
-   * bleibt die gespeicherte Auswahl stehen. Ein leeres Formularfeld heisst
-   * „unbekannt", nicht „alles wieder einschalten" (Issue #170).
-   */
-  function readDisabledTools() {
-    const boxes = [...(toolsList?.querySelectorAll('input[type="checkbox"]') || [])];
-    if (boxes.length === 0) return editing?.disabledTools || [];
-    return boxes.filter((box) => !box.checked).map((box) => box.value);
-  }
-
   function openDialog(server) {
     editing = server || null;
     lastFocus = document.activeElement;
@@ -416,7 +382,6 @@ export function initMcpPanel({ api }) {
     fieldCwd.value = server?.cwd || '';
     envList.replaceChildren();
     for (const entry of server?.env || []) envList.append(envRow(entry));
-    renderTools(server);
     btnDelete.classList.toggle('hidden', !server);
     btnTest.classList.toggle('hidden', !server);
 
@@ -444,7 +409,7 @@ export function initMcpPanel({ api }) {
       args: splitArgs(fieldArgs.value),
       cwd: String(fieldCwd.value || '').trim(),
       enabled: editing ? editing.enabled : true,
-      disabledTools: readDisabledTools(),
+      disabledTools: [],
       knownTools: knownToolsOf(editing),
       env: readEnv(),
     };
@@ -483,8 +448,6 @@ export function initMcpPanel({ api }) {
       const count = result.tools?.length ?? 0;
       testResult.append(el('p', 'mcp-test__ok', tPlural('mcpDialog.test.ok', count)));
       if (count > 0) testResult.append(el('p', 'mcp-test__tools', result.tools.join(', ')));
-      // Der Katalog des Servers ist jetzt bekannt — Haekchen anbieten.
-      renderTools({ ...editing, knownTools: result.tools || [] });
     } else {
       testResult.append(el('p', 'mcp-test__fail', tMessage(status.error) || t('mcpDialog.test.noAnswer')));
       if (status.stderr) testResult.append(el('pre', null, status.stderr));

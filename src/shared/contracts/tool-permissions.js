@@ -213,7 +213,7 @@ const PERMISSION_DENIED_TOOL_RESULT_MESSAGES = Object.freeze({
   [PERMISSION_DENIAL_REASONS.OWN_SECRET]:
     "The output contained this app's own credentials and was withheld.",
   [PERMISSION_DENIAL_REASONS.TOOL_DISABLED]:
-    'Tool is switched off. The user can enable it under "{menu:settings.tools}".',
+    'Tool is switched off. The user can enable it under "{menu:settings.security}".',
   [PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL]: 'Unknown tool.',
   [PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS]: 'Invalid tool arguments.',
   [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]:

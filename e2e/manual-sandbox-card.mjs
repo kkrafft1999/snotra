@@ -129,7 +129,12 @@ try {
   });
   await poll(() => page.evaluate(() => !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'settings dialog' });
-  await page.evaluate(() => document.getElementById('tab-settings-tools').click());
+  // Since #449 the shell switch sits in the execute row of Settings › Security.
+  await page.evaluate(() => {
+    document.getElementById('tab-settings-security').click();
+    const toggle = document.querySelector('.settings-security-row__toggle[data-risk-class="execute"]');
+    if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+  });
   await poll(() => page.evaluate(() => {
     const el = document.getElementById('settings-shell-sandbox');
     return el && !el.hidden && el.textContent ? el.textContent : null;

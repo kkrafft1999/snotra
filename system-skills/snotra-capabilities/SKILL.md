@@ -13,8 +13,9 @@ interface, no terminal session. Answer capability questions from this skill, not
 from assumptions about AI assistants.
 
 The tool list of this conversation is what counts. Every tool can be switched
-off (`{menu:settings.tools}`); `web_search` needs a search service, `run_python`
-a Python 3 interpreter. Not in the list = not possible.
+off (`{menu:settings.security}`); `web_search` needs a search service (its key
+under `{menu:settings.tools}`), `run_python` a Python 3 interpreter. Not in the
+list = not possible.
 
 Menu paths and mode names below are quoted verbatim in the language of the
 app's interface, so that pointing the user somewhere names what they actually
@@ -39,7 +40,7 @@ project folder and a temporary directory, no access to keys, cloud credentials
 or browser data, network only for the domains in `network_domains`. Reading
 other files stays possible. On Windows there is no sandbox: every run has the
 user's full rights. The user can switch the sandbox off for one folder
-(`{menu:settings.tools}` › `{label:settings.sandbox.workspace.heading}`), and
+(`{menu:settings.security}` › `{label:settings.sandbox.workspace.heading}`), and
 on Linux it does not start without `bubblewrap`, `socat` and `ripgrep`, or when
 the system restricts user namespaces (Ubuntu 24.04 and later). Every result
 says in `sandbox.isolated` whether that run was isolated — go by that, not by
@@ -51,9 +52,10 @@ Tools of MCP servers that are switched on appear in the tool list as
 `mcp__<id>__<toolname>`; names longer than 64 characters are dropped. Only
 stdio servers (a local process), no HTTP/SSE. They always count as `execute`
 **and** `external`, plus `delete` when the server reports the tool as
-destructive — so approval on every call. Managed under `{menu:settings.mcp}`
-(create, import, test, deselect individual tools); a crashing server reports an
-error and the chat carries on.
+destructive — so approval on every call. Servers are managed under
+`{menu:settings.mcp}` (create, import, test); single tools are switched on and
+off under `{menu:settings.security}`. A crashing server reports an error and the
+chat carries on.
 
 ## Limits
 
@@ -80,9 +82,8 @@ Per call, by risk class and mode.
 | `{label:permissions.mode.auto}` | no prompts |
 
 The mode belongs to the chat. A folder can have a default mode that every new
-chat there starts with (`{menu:settings.permissions}` ›
-`{label:settings.workspaceMode.heading}`, or the checkbox under the modes in the
-chat bar); with `{label:permissions.mode.auto}` as the default it also survives
+chat there starts with (`{menu:settings.security}`, or the checkbox under the
+modes in the chat bar); with `{label:permissions.mode.auto}` as the default it also survives
 a restart. Only the user sets it — you cannot.
 
 Session approval exists for `read`, `read-sensitive`, `write`; permanent
@@ -94,7 +95,7 @@ dialog). It then runs without asking in `{label:permissions.mode.smart}`; any
 other arguments, folder or network domains ask again, and commands with
 chaining, pipes, redirection, variables or quotes cannot be remembered at all.
 Remembered commands are listed and deleted under
-{menu:settings.permissions}. Hard limits in every mode: the
+{menu:settings.security}. Hard limits in every mode: the
 project folder, skill directories readable only, Snotra's own configuration.
 For file changes the confirmation card shows the target path, the reason and a
 preview; for `run_python` the full source; for `shell_execute` the command, the
@@ -156,11 +157,11 @@ menu. Update notices come from GitHub releases.
 | Topic | Place |
 | --- | --- |
 | Model, provider, API keys | `{menu:settings.models}` |
-| Tools on/off | `{menu:settings.tools}` |
-| Permission mode, deny and allow rules, sensitive path patterns, resetting permissions | `{menu:settings.permissions}` — the mode is also the pill in the chat bar |
+| What Snotra may do in the open folder, per risk class: tools on/off, the folder's default mode, deny and allow rules, remembered commands, sensitive path patterns, sandbox and program allowances, session approvals, resetting permissions | `{menu:settings.security}` — the chat's own mode is the pill in the chat bar |
+| Python interpreter, search key | `{menu:settings.tools}` |
 | Skills on/off, reload, suggestions in the chat | `{menu:settings.skills}` |
 | View, delete, switch off what is remembered | `{menu:settings.memory}` |
-| Creating, importing and testing MCP servers, deselecting individual tools | `{menu:settings.mcp}` |
+| Creating, importing and testing MCP servers | `{menu:settings.mcp}` |
 | Own system prompt, interface language, appearance, tool rounds | `{menu:settings.general}` |
 
 ## How to answer
@@ -168,5 +169,5 @@ menu. Update notices come from GitHub releases.
 Short and concrete: what works, what does not, where the next step is. Do not
 claim anything that is not in the tool list. On `permission_denied`, say so
 openly, name the reason from the result and suggest what could be approved or
-changed under `{menu:settings.tools}` — do not describe that change as if it
+changed under `{menu:settings.security}` — do not describe that change as if it
 had already happened. If no folder is open, ask for one to be opened.

@@ -396,8 +396,8 @@ rule beats them, they need `safeStorage`, a failed signature drops them, and
 "reset workspace rules" removes them. Adding one discards no open card and no
 session approval, because it can only turn a question into an allowance. Deny rules can block every class. "Sensitive paths" is a separate
 classification setting, not an allow rule. Rules can be created, reviewed and
-deleted individually in Settings › Tools; the chat card creates no permanent
-rule unnoticed.
+deleted individually in Settings › Security, each in the row of its class; the
+chat card creates no permanent rule unnoticed.
 
 Session approvals live exclusively in memory and apply to the same chat,
 workspace, tool, exact set of targets and classes. Sensitive read approvals
@@ -429,8 +429,10 @@ also resets the mode to `smart`.
 
 ## 8. Where it lives in the UI, and migration
 
-The chat bar shows the active mode next to the model selection; Settings › Tools
-offers the same selection plus the rule management. A change applies to
+The chat bar shows the active mode next to the model selection, and that is
+where a chat's mode is changed. Settings › Security offers the workspace default
+(#413), the rule management and every other control of this concept, sorted by
+risk class (revision #437 below). A change applies to
 subsequent calls; actions already started cannot be prevented retroactively by
 it. Open approvals are discarded and re-evaluated.
 
@@ -598,7 +600,8 @@ being switched off entirely — writing to a sibling repository or to
 predates the certifi fallback.
 
 - **Scope and storage.** One switch for both execution tools, per workspace,
-  off by default, in Settings › Tools. It lives in the policy file (section 7)
+  off by default, in Settings › Security › *Execute*. It lives in the policy
+  file (section 7)
   as a list of canonical workspace roots — not in the folder, so a checked-out
   repository cannot switch it off for itself, and a folder of the same name
   elsewhere shares nothing. Switching it off is a protection-loosening action:
@@ -646,7 +649,8 @@ card, the refreshed token could not be written back, and Go's TLS check was
 refused. A program allowance grants exactly those three things, to one
 program.
 
-- **Scope and storage.** Global, in Settings › Tools › *Program allowances*,
+- **Scope and storage.** Global, in Settings › Security › *Execute* › *Program
+  allowances*,
   none by default. An entry names the program by its absolute path and adds
   host names, writable folders and — macOS only — the trust service. It lives
   in the policy file next to the rules (section 7), is dropped by a failed
@@ -723,8 +727,8 @@ workspace can now carry a default mode of its own.
   approval: it changes nothing for a chat that is open.
 - **Where it is set.** A checkbox under the modes in the mode pill's menu makes
   the chat's current mode the default ("“Auto” for new chats in ‹folder›
-  too"), unticking it goes back to `smart`; Settings › Permissions shows the
-  same value as a choice of three right under the mode. The option that is the
+  too"), unticking it goes back to `smart`; Settings › Security shows the
+  same value as a choice of three at the top of the page. The option that is the
   default carries the tag "Default in ‹folder›", and the pill's tooltip says
   when the chat runs at the default. "Workspace-Regeln zurücksetzen" puts the
   default back to `smart`, "Alle Berechtigungen zurücksetzen" does so for every
@@ -815,12 +819,12 @@ card for every change, and that the card says how far the change reaches. In
 
 Decided on 2026-09-29. The work is split into
 [#447](https://github.com/kkrafft1999/snotra/issues/447) (session approvals,
-built — for now as a list of their own in Settings › Permissions),
+built),
 [#448](https://github.com/kkrafft1999/snotra/issues/448) (the page as an
 overview, built — main computes it in
 `src/application/permissions/security-overview.js` from the policy store and
-the planner's matrix, and every line links to where it is changed today) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
-controls move into it). The permission model above stays as it is. What changes
+the planner's matrix) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
+controls move into it, built — Settings › Permissions is gone). The permission model above stays as it is. What changes
 is where a user sees it and what they can take back.
 
 - **One place.** The settings that decide what a tool call may do leave
@@ -831,8 +835,16 @@ is where a user sees it and what they can take back.
   may Snotra do this, does it ask first, where or what exactly. Tools keeps the
   configuration without a security effect (the interpreter path, API keys), MCP
   keeps the server connections. Where sections 7 and 8 and the revisions for
-  #357, #408 and #413 name Settings › Tools or Settings › Permissions, they mean
-  this page from #449 on, and they are rewritten in that pull request.
+  #357, #408 and #413 named Settings › Tools or Settings › Permissions, they now
+  name this page (#449).
+- **One switch per tool.** A tool is switched in the row of its own class and
+  applies at once, like every other permission; there is no *Apply* for it any
+  more. The execution tools are switched by their execution switch, which also
+  clears an old tick-off. An MCP tool used to have a second switch, per server
+  in the MCP dialog, stored with the server; a tool deselected there never
+  reached the catalog and could not be seen or switched back on. At start those
+  lists move into the one list of deselected tools, preferences first, and the
+  server keeps none.
 - **The chat's mode is set in the chat only.** Section 8 had Settings offer
   "the same selection" as the chat bar. The page no longer offers it: its mode
   control is the workspace default of #413, with the same rules — a

@@ -108,15 +108,30 @@ try {
   }
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
-  for (const riskClass of ['write', 'execute']) {
+  const rows = ['read', 'read-sensitive', 'write', 'execute', 'external'];
+  for (const riskClass of rows) {
     await page.locator(`.settings-security-row__toggle[data-risk-class="${riskClass}"]`).click();
   }
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
-    await shoot(`open-write-${theme}`, '.settings-security-row[data-risk-class="write"]');
-    await shoot(`open-execute-${theme}`, '.settings-security-row[data-risk-class="execute"]');
+    for (const riskClass of rows) {
+      await shoot(`open-${riskClass}-${theme}`, `.settings-security-row[data-risk-class="${riskClass}"]`);
+    }
+    await shoot(`bottom-${theme}`, '#settings-grants-card');
   }
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+
+  // The rule form opens where it belongs, prefilled (#449).
+  await page.locator('.settings-security-row[data-risk-class="write"] [data-rule-add="deny"]').click();
+  await poll(() => page.evaluate(() => !!document.querySelector('.settings-security-row[data-risk-class="write"] #settings-rule-form')),
+    { what: 'rule form in the write row' });
+  console.log('rule form:', await page.evaluate(() => ({
+    effect: document.getElementById('rule-effect').value,
+    riskClass: document.getElementById('rule-class').value,
+    focus: document.activeElement?.id,
+  })));
+  await shoot('rule-form', '.settings-security-row[data-risk-class="write"] #settings-rule-form');
+  await page.keyboard.press('Escape');
 
   if (!withoutFolder) {
     await page.evaluate(() => document.querySelector('#settings-security-mode-options input[value="ask-all"]').click());
@@ -128,6 +143,7 @@ try {
 
   // Keyboard: the link of an open row lands on the card it names.
   const link = page.locator('.settings-security-row[data-risk-class="execute"] [data-security-link]').first();
+  await page.locator('.settings-security-row__toggle[data-risk-class="execute"]').scrollIntoViewIfNeeded();
   await link.focus();
   await page.keyboard.press('Enter');
   console.log('after link:', await page.evaluate(() => ({
