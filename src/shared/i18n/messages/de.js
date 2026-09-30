@@ -628,8 +628,8 @@ module.exports = {
   'settings.mcp.deleteFailed': 'Der Server konnte nicht gelöscht werden.',
 
   // ── MCP dialog ─────────────────────────────────────────────────────────────
-  'mcpDialog.title.add': 'Server hinzufügen',
-  'mcpDialog.title.edit': 'Server bearbeiten',
+  'mcpDialog.title.add': 'MCP-Server hinzufügen',
+  'mcpDialog.title.edit': 'MCP-Server bearbeiten',
   'mcpDialog.close': 'Popup schließen',
   'mcpDialog.id.label': 'Kennung',
   'mcpDialog.id.hint': 'Kleinbuchstaben, Ziffern, Punkt, Bindestrich, Unterstrich. Sie steckt im Tool-Namen (<code lang="en">mcp__github__…</code>) und lässt sich später nicht ändern.',
@@ -657,7 +657,7 @@ module.exports = {
   'mcpDialog.save': 'Speichern',
 
   // ── MCP import ─────────────────────────────────────────────────────────────
-  'mcpImport.title': 'Server importieren',
+  'mcpImport.title': 'MCP-Server importieren',
   'mcpImport.input.label': 'Konfiguration einfügen',
   'mcpImport.input.hint': 'Der Block aus Claude Desktop, Claude Code oder Cursor — mit oder ohne umschließendes <code lang="en">mcpServers</code>. Kommentare und angehängte Kommas stören nicht. Gelesen wird nur, was hier steht; es wird keine fremde Konfigurationsdatei geöffnet.',
   'mcpImport.list.label': 'Erkannte Server',

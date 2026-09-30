@@ -135,7 +135,7 @@ test('„Bearbeiten" fuellt den Unterdialog, ohne das Geheimnis zu zeigen', asyn
   await flush();
 
   assert.equal(dialogOffen(), true);
-  assert.equal(document.getElementById('dialog-mcp-server-title').textContent, 'Edit server');
+  assert.equal(document.getElementById('dialog-mcp-server-title').textContent, 'Edit MCP server');
   assert.equal(document.getElementById('mcp-field-id').value, 'github');
   // Die Kennung steckt im Tool-Namen und ist nachtraeglich nicht aenderbar.
   assert.equal(document.getElementById('mcp-field-id').disabled, true);

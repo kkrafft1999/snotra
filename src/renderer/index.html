@@ -1022,7 +1022,7 @@
           id="dialog-mcp-server"
           aria-labelledby="dialog-mcp-server-title">
           <header class="add-model-dialog__header">
-            <h2 id="dialog-mcp-server-title" class="add-model-dialog__title" data-i18n="mcpDialog.title.add">Add server</h2>
+            <h2 id="dialog-mcp-server-title" class="add-model-dialog__title" data-i18n="mcpDialog.title.add">Add MCP server</h2>
             <button type="button" id="btn-mcp-server-close" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:mcpDialog.close">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                 <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
@@ -1067,11 +1067,13 @@
             </div>
             <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>
           </div>
-          <footer class="modal-actions">
-            <button type="button" id="btn-mcp-server-delete" class="btn-destructive hidden" data-i18n="mcpDialog.delete">Remove server</button>
-            <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden" data-i18n="mcpDialog.test">Test connection</button>
-            <button type="button" id="btn-mcp-server-cancel" class="btn-secondary" data-i18n="mcpDialog.cancel">Cancel</button>
-            <button type="button" id="btn-mcp-server-save" class="btn-primary" data-i18n="mcpDialog.save">Save</button>
+          <footer class="add-model-dialog__bottom">
+            <div class="modal-actions">
+              <button type="button" id="btn-mcp-server-delete" class="btn-destructive hidden" data-i18n="mcpDialog.delete">Remove server</button>
+              <button type="button" id="btn-mcp-server-test" class="btn-secondary hidden" data-i18n="mcpDialog.test">Test connection</button>
+              <button type="button" id="btn-mcp-server-cancel" class="btn-secondary" data-i18n="mcpDialog.cancel">Cancel</button>
+              <button type="button" id="btn-mcp-server-save" class="btn-primary" data-i18n="mcpDialog.save">Save</button>
+            </div>
           </footer>
         </div>
       </div>
@@ -1084,7 +1086,7 @@
           id="dialog-mcp-import"
           aria-labelledby="dialog-mcp-import-title">
           <header class="add-model-dialog__header">
-            <h2 id="dialog-mcp-import-title" class="add-model-dialog__title" data-i18n="mcpImport.title">Import servers</h2>
+            <h2 id="dialog-mcp-import-title" class="add-model-dialog__title" data-i18n="mcpImport.title">Import MCP servers</h2>
             <button type="button" id="btn-mcp-import-close" class="settings-dialog__icon-close" aria-label="Close popup" data-i18n-attr="aria-label:mcpDialog.close">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                 <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
@@ -1112,9 +1114,11 @@
               and brings its tools to the model &mdash; that stays a deliberate step.
             </p>
           </div>
-          <footer class="modal-actions">
-            <button type="button" id="btn-mcp-import-cancel" class="btn-secondary" data-i18n="mcpImport.cancel">Cancel</button>
-            <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled data-i18n="mcpImport.apply">Apply</button>
+          <footer class="add-model-dialog__bottom">
+            <div class="modal-actions">
+              <button type="button" id="btn-mcp-import-cancel" class="btn-secondary" data-i18n="mcpImport.cancel">Cancel</button>
+              <button type="button" id="btn-mcp-import-apply" class="btn-primary" disabled data-i18n="mcpImport.apply">Apply</button>
+            </div>
           </footer>
         </div>
       </div>
