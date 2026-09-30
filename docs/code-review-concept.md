@@ -44,7 +44,7 @@ the volatile ones last.
 | **Wave 3 — state and lifecycle** |||||
 | B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `userdata-migration` | 3.6k | mostly stable (#473 touches it) |
 | B08 | Chat history and attachments | `chat-history-normalization`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image`, `contracts/workspace-pdf` | 1.5k | stable |
-| B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `application-menu`, `.github/workflows/`, `scripts/` | 2.3k | stable |
+| B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `application-menu`, `.github/workflows/`, `scripts/`, `package.json` | 2.3k | stable |
 | B10 | Skills, memory, project instructions | `skills-*`, `skill-suggestion-service`, `memory-adapter`, `project-instructions-adapter`, their contracts and runtime helpers, `system-skills/` | 2.0k | stable (#160 comes later) |
 | **Wave 4 — renderer** |||||
 | B11 | Chat UI | `app.js`, `ChatStream`, `renderer/chat/`, pickers, autocomplete, `ChatHistoryPanel`, `TokenBreakdownPanel`, `renderer/state/` | 4.5k | medium |
@@ -61,11 +61,62 @@ colour and spacing values instead of tokens (against
 [`ui-design-tokens.md`](../.claude/rules/ui-design-tokens.md)), key parity
 between `en` and `de`, and orphaned selectors.
 
+## Guardrails
+
+Decided on 2026-09-30 in [#482](https://github.com/kkrafft1999/snotra/issues/482).
+
+### What the review measures against
+
+The project's own documents are binding. The general references come second
+and are used as a checklist, not as the standard.
+
+- **Binding:** [`architecture.md`](./architecture.md) (layers, ports, boundary
+  guards), [`security-concept.md`](./security-concept.md) (risk classes,
+  approval flow, workspace as trust boundary, sandbox),
+  [`CONTRIBUTING.md`](../CONTRIBUTING.md) (code conventions),
+  [`ux-ui-standards.md`](../.claude/rules/ux-ui-standards.md) and
+  [`ui-design-tokens.md`](../.claude/rules/ui-design-tokens.md),
+  [`language.md`](../.claude/rules/language.md), and the coverage ratchet in
+  `scripts/coverage.js`.
+- **Checklist:** the Electron security checklist, OWASP, and common Node.js
+  practice.
+
+### Given, not findings
+
+The project's founding decisions are not questioned and do not produce issues:
+plain JavaScript without TypeScript, no linter and no formatter, a renderer
+without a framework, Electron Forge as the build tool.
+
+### What counts as a finding
+
+- **Always:** bugs, security gaps, possible data loss, and violations of the
+  binding documents above — including WCAG 2.1 AA in the renderer.
+- **Maintainability only with a nameable cost:** a duplicate that has already
+  started to drift apart, a module in a core path that can no longer be
+  followed, dead code that misleads. "Could be nicer" is not a finding.
+- **Tests:** a finding when security- or data-relevant behaviour is untested,
+  or when a test checks the wrong thing. Low renderer coverage alone is not a
+  finding.
+- **Performance:** only with a concrete symptom or an unbounded input (size,
+  count, time), not on suspicion.
+- **Code and documentation disagree:** that is a finding either way; the issue
+  decides which side is right.
+- **Dependencies:** outdated or vulnerable packages and the vendored libraries
+  (`pdfjs`, `marked`, `DOMPurify`) are checked once, in B09, together with
+  `package.json` and `scripts/sync-renderer-vendor.js`.
+
+### How many issues per block
+
+At most about **eight** issues of their own per block, for the weightiest
+findings. Everything else above the threshold goes into the block's bundle
+issue, so that each block can be read at a glance.
+
 ## Procedure per block
 
 1. **Block issue.** File list, the commit SHA the review is pinned to, the
    matching section of `architecture.md`, and the checklist below.
-2. **Review against that SHA**, along a fixed checklist:
+2. **Review against that SHA**, within the [guardrails](#guardrails) above,
+   along a fixed checklist:
    - correctness and edge cases
    - trust boundaries and security
    - error handling and cancellation
@@ -78,8 +129,10 @@ between `en` and `de`, and orphaned selectors.
 3. **Compare with open issues** so nothing is filed twice.
 4. **File the findings** as issues, in English, labelled `bug` or
    `enhancement`, on the board in *Backlog*:
-   - one issue per finding, sized to one pull request
-   - low-severity items bundled into one issue per block
+   - one issue per finding, sized to one pull request, at most about eight per
+     block (see [Guardrails](#how-many-issues-per-block))
+   - low-severity items and anything beyond the cap bundled into one issue per
+     block
    - ID scheme `CR-Bnn-mm` (e.g. `CR-B05-03`) in the title, so it does not
      collide with the earlier `SNO-nn`
    - each issue states severity (critical / high / medium / low), effort
