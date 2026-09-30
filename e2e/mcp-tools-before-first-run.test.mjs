@@ -72,7 +72,9 @@ test('an MCP tool switched off before the first run is not offered in it', { tim
   await poll(() => page.evaluate(async () =>
     (await window.electronAPI.getUIPrefs()).disabledTools?.includes('mcp__github__echo') === true),
   { what: 'switch saved' });
-  await page.keyboard.press('Escape');
+  // By its button: the switch just redrew, and the keyboard may not be in
+  // the dialog for a moment.
+  await page.evaluate(() => document.getElementById('btn-settings-close').click());
   await poll(() => page.evaluate(() => document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'settings closed' });
 
