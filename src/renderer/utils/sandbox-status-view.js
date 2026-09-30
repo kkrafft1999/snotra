@@ -56,12 +56,14 @@ export function describeSandboxStatus(sandbox, enabled, { workspaceDisabled = fa
  *
  * @param {object} input
  * @param {object|null} input.permissions  tool permission state from main
- * @param {boolean} input.toolsOn          run_python or shell_execute is on
+ * @param {boolean} [input.toolsOn]        no longer decides whether it shows (#449)
  * @param {object|undefined} input.sandbox `describe()` of the sandbox service
  * @param {string} input.autoLabel         the name of the "Auto" mode
  */
 export function describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLabel }) {
-  const visible = toolsOn === true && !!sandbox && typeof sandbox === 'object' && sandbox.reason !== 'platform';
+  // Shown whether or not an execution tool is on, so that it can be checked
+  // beforehand (#448/#449); hidden only where no sandbox exists (Windows).
+  const visible = !(sandbox && typeof sandbox === 'object' && sandbox.reason === 'platform');
   const root = typeof permissions?.workspaceRoot === 'string' ? permissions.workspaceRoot : '';
   if (!root) {
     return {

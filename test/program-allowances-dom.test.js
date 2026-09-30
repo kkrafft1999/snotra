@@ -55,13 +55,13 @@ async function mount({ platform = 'darwin', entries = [], setResults = [], chose
   return { dom, setting, sent, $, overlayOpen };
 }
 
-test('the card shows only with shell_execute on and a sandbox; empty says so', async (t) => {
+test('the list shows whenever there is a sandbox, shell_execute on or off (#449); empty says so', async (t) => {
   const { dom, setting, $ } = await mount();
   t.after(dom.cleanup);
   assert.equal($('settings-allowances-card').hidden, false);
   assert.equal($('settings-allowance-empty').hidden, false);
   setting.update({ shellOn: false, sandbox: { isolated: true } });
-  assert.equal($('settings-allowances-card').hidden, true);
+  assert.equal($('settings-allowances-card').hidden, false, 'it can be checked before switching the shell on');
   setting.update({ shellOn: true, sandbox: { isolated: false, reason: 'platform' } });
   assert.equal($('settings-allowances-card').hidden, true, 'Windows has nothing to allow');
 });

@@ -145,8 +145,11 @@ test('six rows, each a closed disclosure button with its status in words', async
     const questions = [...body.querySelectorAll('.settings-security-q__text')].map((el) => el.textContent);
     assert.deepEqual(questions, ['May Snotra run commands?', 'Does Snotra ask first?', 'What can a command reach?']);
     assert.match(body.textContent, /Commands run in the sandbox/);
-    assert.match(body.textContent, /run_python/);
-    assert.match(body.textContent, /not available/);
+    // The execution switches, the sandbox and the allowances sit in the row (#449).
+    assert.ok(body.querySelector('#input-shell-enabled'));
+    assert.ok(body.querySelector('#input-python-enabled'));
+    assert.ok(body.querySelector('#input-workspace-sandbox'));
+    assert.ok(body.querySelector('#btn-add-program-allowance'));
     toggles[4].click();
     assert.equal(body.hidden, true);
   } finally {
@@ -154,20 +157,21 @@ test('six rows, each a closed disclosure button with its status in words', async
   }
 });
 
-test('every link names its section and navigates there', async () => {
+test('what is set up elsewhere is linked: the interpreter, the search key, MCP servers', async () => {
   const dom = setupRendererDom();
   try {
     const { navigations } = await openPage(overviewWith());
     const doc = dom.document;
     row(doc, 'external').querySelector('.settings-security-row__toggle').click();
     const labels = [...row(doc, 'external').querySelectorAll('[data-security-link]')].map((b) => b.textContent);
-    assert.ok(labels.includes('Change under Tools'));
-    assert.ok(labels.includes('Change under MCP'));
+    assert.deepEqual(labels, ['Set up the search key under Tools', 'Set up MCP servers under MCP']);
     row(doc, 'external').querySelector('[data-security-link="mcp"]').click();
     assert.deepEqual(navigations.at(-1), ['mcp', 'heading-mcp-servers', null]);
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
-    row(doc, 'execute').querySelector('[data-security-link="sandbox"]').click();
-    assert.deepEqual(navigations.at(-1), ['tools', 'heading-workspace-sandbox', 'heading-shell']);
+    row(doc, 'execute').querySelector('[data-security-link="python"]').click();
+    assert.deepEqual(navigations.at(-1), ['tools', 'heading-python', null]);
+    // Nothing links to a page that no longer has a security control.
+    assert.equal(doc.querySelector('[data-security-link="rules"], [data-security-link="sandbox"]'), null);
     // Every link target exists in the markup.
     const { SECURITY_LINK_TARGETS } = await importRenderer('utils', 'security-overview-view.js');
     for (const [key, target] of Object.entries(SECURITY_LINK_TARGETS)) {
@@ -269,16 +273,15 @@ test('Windows without a sandbox: the platform reason, not the workspace switch',
   }
 });
 
-test('without safeStorage: the integrity warning shows and "Auto" cannot be chosen', async () => {
+test('without safeStorage: "Auto" cannot be the default', async () => {
   const dom = setupRendererDom();
   try {
     await openPage(overviewWith({ integrity: 'unsigned', encryptionAvailable: false }), {
       state: permissionsState({ encryptionAvailable: false }),
     });
     const doc = dom.document;
-    const warning = doc.getElementById('settings-security-integrity');
-    assert.equal(warning.classList.contains('hidden'), false);
-    assert.ok(warning.textContent.length > 0);
+    // The warning itself is ToolPermissionsPanel's, in the same header.
+    assert.ok(doc.querySelector('#settings-security-header #settings-permissions-integrity'));
     assert.equal(doc.querySelector('#settings-security-mode-options input[value="auto"]').disabled, true);
     assert.equal(doc.querySelector('#settings-security-mode-options input[value="ask-all"]').disabled, false);
   } finally {

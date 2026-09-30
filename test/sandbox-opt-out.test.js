@@ -306,13 +306,13 @@ test('settings: the isolation line of each tool names the switched-off workspace
   assert.equal(describeSandboxStatus({ isolated: true }, false, { workspaceDisabled: true }), null);
 });
 
-test('settings: the workspace switch — hidden, no folder, on, off', async () => {
+test('settings: the workspace switch — shown with tools off, hidden on Windows, no folder, on, off', async () => {
   const { describeWorkspaceSandbox } = await loadRenderer('sandbox-status-view.js');
   const sandbox = { isolated: true, status: 'isolated' };
   const autoLabel = 'Auto';
 
-  // Hidden while both tools are off, and on Windows.
-  assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: false, sandbox, autoLabel }).visible, false);
+  // Shown while both tools are off as well (#449), hidden only on Windows.
+  assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: false, sandbox, autoLabel }).visible, true);
   assert.equal(describeWorkspaceSandbox({
     permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: { isolated: false, reason: 'platform' }, autoLabel,
   }).visible, false);

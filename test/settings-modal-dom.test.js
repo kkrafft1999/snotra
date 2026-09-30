@@ -537,7 +537,7 @@ test('geoeffnet startet der Dialog auf dem Modell-Tab', async (t) => {
   assert.equal(panelFor('models').hidden, false);
   assert.equal(document.getElementById('settings-panel-heading').textContent, 'Modelle');
   // Alle uebrigen Panels sind wirklich weg, nicht nur unsichtbar.
-  for (const key of ['tools', 'permissions', 'skills', 'mcp', 'general']) {
+  for (const key of ['security', 'tools', 'skills', 'mcp', 'general']) {
     assert.equal(panelFor(key).hidden, true, `Panel ${key} muesste versteckt sein`);
   }
 });
@@ -547,8 +547,8 @@ test('ein Klick auf einen Tab schaltet Panel, aria-selected und Ueberschrift um'
   t.after(dom.cleanup);
 
   for (const [key, heading] of [
+    ['security', 'Sicherheit'],
     ['tools', 'Tools'],
-    ['permissions', 'Berechtigungen'],
     ['skills', 'Skills'],
     ['general', 'Allgemein'],
     ['models', 'Modelle'],
@@ -779,9 +779,9 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
 
   assert.match(hint(), /erst mit Übernehmen/, 'Modelle sammeln bis „Übernehmen“');
 
-  // Berechtigungen (#67) und MCP (#109) schreiben beim Klick — ein Hinweis
-  // auf „Übernehmen“ waere dort schlicht falsch.
-  tabFor('permissions').click();
+  // Security (#448, #449) and MCP (#109) write on the click — a hint at
+  // "Apply" would simply be wrong there.
+  tabFor('security').click();
   await flush();
   assert.match(hint(), /wirken sofort/);
 
@@ -790,13 +790,14 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
   assert.match(hint(), /wirken sofort/);
 
   // Memory is immediate throughout since #297; tools and general are split.
+  assert.equal(document.getElementById('tab-settings-permissions'), null, 'the Permissions tab is gone (#449)');
   tabFor('memory').click();
   await flush();
   assert.match(hint(), /wirken sofort/);
 
   tabFor('tools').click();
   await flush();
-  assert.match(hint(), /Schalter wirken sofort, alles andere erst mit Übernehmen/);
+  assert.match(hint(), /Schlüssel wird mit seinem Knopf gespeichert, der Interpreter mit Übernehmen/);
 
   tabFor('general').click();
   await flush();

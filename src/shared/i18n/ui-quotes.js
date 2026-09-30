@@ -25,7 +25,8 @@ const MENU_SEPARATOR = ' › ';
 const MENU_PATHS = Object.freeze({
   settings: ['settings.title'],
   'settings.tools': ['settings.title', 'settings.nav.tools'],
-  'settings.permissions': ['settings.title', 'settings.nav.permissions'],
+  // Since #449 the one page for what a tool call may do; Permissions is gone.
+  'settings.security': ['settings.title', 'settings.nav.security'],
   'settings.skills': ['settings.title', 'settings.nav.skills'],
   'settings.skills.suggestions': ['settings.title', 'settings.nav.skills', 'settings.skills.suggestion.label'],
   'settings.memory': ['settings.title', 'settings.nav.memory'],

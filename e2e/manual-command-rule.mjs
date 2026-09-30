@@ -146,15 +146,22 @@ try {
   });
   await poll(() => page.evaluate(() => !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'settings dialog' });
-  await page.evaluate(() => document.getElementById('tab-settings-permissions').click());
+  // Since #449 a remembered command is listed in the execute row of
+  // Settings › Security, under "Does Snotra ask first?".
+  await page.evaluate(() => {
+    document.getElementById('tab-settings-security').click();
+    const toggle = document.querySelector('.settings-security-row__toggle[data-risk-class="execute"]');
+    if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+  });
   const row = await poll(() => page.evaluate(() => {
-    const el = document.querySelector('#settings-rules-workspace .settings-rule-item');
+    const el = document.querySelector('.settings-security-row[data-risk-class="execute"] [data-rule-remove]')?.closest('.settings-security-item');
     return el ? el.textContent.replace(/\s+/g, ' ') : null;
-  }), { what: 'remembered command in the rule list' });
+  }), { what: 'remembered command in the execute row' });
   console.log('rule row:', row);
-  await page.evaluate(() => document.getElementById('settings-rules-workspace').closest('section, .settings-card, fieldset, div').scrollIntoView());
+  const item = page.locator('.settings-security-row[data-risk-class="execute"] [data-rule-remove]').first().locator('xpath=ancestor::ul[1]');
+  await item.scrollIntoViewIfNeeded();
   await new Promise((r) => setTimeout(r, 300));
-  await page.locator('#settings-rules-workspace').screenshot({ path: path.join(SHOTS, `command-rule-${locale}-settings.png`) });
+  await item.screenshot({ path: path.join(SHOTS, `command-rule-${locale}-settings.png`) });
   console.log('Screenshots in', SHOTS);
 } finally {
   await snotra.stop().catch(() => {});

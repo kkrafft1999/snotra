@@ -74,6 +74,8 @@ const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
+const { migrateMcpDisabledTools } = require('../services/mcp-disabled-tools-migration');
+const { qualifiedMcpToolName } = require('../../shared/contracts/mcp');
 
 function createApplication({
   app,
@@ -949,8 +951,11 @@ function createApplication({
         shellSettings.refresh(),
         webSearchSettings.refresh(),
         // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
-        // keinen Prozess — der Dienst verbindet traege.
-        reloadMcpServers(),
+        // keinen Prozess — der Dienst verbindet traege. Before that, a tool
+        // deselected per server moves to the one switch it has since #449.
+        migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify: qualifiedMcpToolName, log: console })
+          .catch(() => {})
+          .then(() => reloadMcpServers()),
       ]).then((result) => {
         // Only now is it known which execution tools are there and whether
         // they run isolated; the mode pill read its state before that (#357).

@@ -1,5 +1,5 @@
 // Without encrypted storage (#419) "Auto" cannot be stored: the mode pill and
-// the mode card show it, say why, and do not offer it — unless it is the mode
+// the default on the Security page show it, say why, and do not offer it — unless it is the mode
 // already set, so that it can be left. "Always ask" stays available.
 
 const test = require('node:test');
@@ -72,17 +72,22 @@ test('mode pill: "Auto" is shown but disabled, and the arrow keys pass over it',
   }
 });
 
-test('mode card: the "Auto" radio is disabled with the reason, and the notice says what still works', async () => {
+// Since #449 the chat's mode is set in the chat only; Settings › Security has
+// the folder's default, which refuses "Auto" the same way.
+test('Security page: the default cannot be "Auto", and the notice says what still works', async () => {
   const dom = setupRendererDom();
   try {
     const { initToolPermissionsPanel } = await importRenderer('components', 'ToolPermissionsPanel.js');
-    const panel = initToolPermissionsPanel({ toolPermissions: permissions(stateWith({})) });
+    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const toolPermissions = permissions(stateWith({ workspaceRoot: '/work/projekt', workspaceMode: 'smart' }));
+    const panel = initToolPermissionsPanel({ toolPermissions });
+    initWorkspaceModeSetting({ toolPermissions, ids: SECURITY_PAGE_IDS });
     await panel.open([]);
     const doc = dom.document;
-    const radio = (value) => doc.querySelector(`#settings-tool-mode-group input[value="${value}"]`);
+    const radio = (value) => doc.querySelector(`#settings-security-mode-options input[value="${value}"]`);
     assert.equal(radio('auto').disabled, true);
     assert.equal(radio('ask-all').disabled, false);
-    assert.match(radio('auto').closest('label').textContent, /Not available/);
+    assert.equal(doc.getElementById('settings-tool-mode-group'), null, 'no second mode control in the settings');
     assert.match(doc.getElementById('settings-permissions-integrity').textContent, /“Smart” and “Always ask” work as usual/);
   } finally {
     dom.cleanup();

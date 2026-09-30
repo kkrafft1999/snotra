@@ -411,12 +411,17 @@ function createToolRegistry(initialDefinitions = []) {
     if (disabled && disabled.has(name)) {
       return JSON.stringify({
         // English sentence, quoted page in the interface language (#294/#276).
-        error: fillUiQuotes(context.locale, `Tool is switched off: ${name}. The user can enable it under "{menu:settings.tools}".`),
+        error: fillUiQuotes(context.locale, `Tool is switched off: ${name}. The user can enable it under "{menu:settings.security}".`),
       });
     }
     if (definition.isAvailable() !== true) {
       return JSON.stringify({
-        error: fillUiQuotes(context.locale, `Tool is not configured: ${name}. See "{menu:settings.tools}".`),
+        // The search key is set up under Tools; the execution tools are
+        // switched on under Security (#449).
+        error: fillUiQuotes(
+          context.locale,
+          `Tool is not configured: ${name}. See "{menu:${name === 'web_search' ? 'settings.tools' : 'settings.security'}}".`
+        ),
       });
     }
     return definition.handler(args || {}, context);

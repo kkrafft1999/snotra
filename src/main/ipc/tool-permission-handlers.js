@@ -82,7 +82,7 @@ function allowRuleDialog(rule, t) {
       // Mode and page are quoted from the entries the interface renders, so
       // that the dialog names what the user will actually find.
       mode: t('permissions.mode.smart'),
-      place: menuPath(t.locale, 'settings.permissions'),
+      place: menuPath(t.locale, 'settings.security'),
     }),
     buttons: [t('permissionDialog.allowRule.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
@@ -123,7 +123,7 @@ function commandRuleDialog(rule, t) {
       facts: facts.join('\n'),
       root: rule.root,
       mode: t('permissions.mode.smart'),
-      place: menuPath(t.locale, 'settings.permissions'),
+      place: menuPath(t.locale, 'settings.security'),
     }),
     buttons: [t('permissionDialog.commandRule.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
@@ -132,7 +132,7 @@ function commandRuleDialog(rule, t) {
 }
 
 /** Where the sandbox switch lives, quoted in its dialog (#357). */
-const SANDBOX_SETTING_PAGE = 'settings.tools';
+const SANDBOX_SETTING_PAGE = 'settings.security';
 
 function sandboxOffDialog(root, t) {
   return {
@@ -160,7 +160,7 @@ function workspaceAutoDialog(root, t) {
       root,
       mode: t('permissions.mode.auto'),
       smart: t('permissions.mode.smart'),
-      place: menuPath(t.locale, 'settings.permissions'),
+      place: menuPath(t.locale, 'settings.security'),
     }),
     buttons: [t('permissionDialog.workspaceAuto.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,

@@ -231,9 +231,10 @@ const toolPermissions = initToolPermissionState({ api });
 // The way to the sandbox switch — from the card (#357), the mode menu (#396)
 // and the shield next to the folder name (#398). The settings are built
 // further down and only reached on a click.
-const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'sandbox' });
-const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'tools', focus: 'allowances' });
-initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
+const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'security', focus: 'sandbox' });
+const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'security', focus: 'allowances' });
+const openSecuritySettings = () => settingsModal.openSettingsModal({ panel: 'security' });
+initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings, onOpenSecuritySettings: openSecuritySettings });
 // A narrow chat puts the pills on a row of their own (#400).
 initComposerBarLayout();
 initFolderSandboxShield({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });

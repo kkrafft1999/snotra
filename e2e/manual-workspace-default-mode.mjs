@@ -107,15 +107,15 @@ try {
   { what: 'settings ready' });
   await pause(800);
   await poll(() => page.evaluate(() => {
-    if (!document.getElementById('panel-settings-permissions').hidden) return true;
-    document.getElementById('tab-settings-permissions').click();
+    if (!document.getElementById('panel-settings-security').hidden) return true;
+    document.getElementById('tab-settings-security').click();
     return false;
-  }), { what: 'permissions panel' });
+  }), { what: 'security panel' });
   await pause(500);
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
     await pause();
-    const card = page.locator('#settings-workspace-mode-card');
+    const card = page.locator('#settings-security-header');
     await card.scrollIntoViewIfNeeded();
     await pause();
     await card.screenshot({ path: shot(`4-settings-${theme}`) });

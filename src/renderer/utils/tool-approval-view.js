@@ -259,7 +259,7 @@ export function offersAlways(dto) {
  */
 export function alwaysActionHint(dto) {
   if (dto?.alwaysAllowed === true) {
-    return t('approval.alwaysHint.allowed', { page: t('settings.nav.permissions') });
+    return t('approval.alwaysHint.allowed', { page: t('settings.nav.security') });
   }
   const key = ALWAYS_UNAVAILABLE_KEYS[dto?.alwaysUnavailableReason];
   return key ? t(key) : '';
@@ -604,7 +604,7 @@ export function describeApprovalOutcome({ response, invalidated, reason, aborted
       label: t('approval.outcome.always.label'),
       detail: t('approval.outcome.always.detail', {
         mode: modeLabel(TOOL_PERMISSION_MODES.SMART),
-        page: t('settings.nav.permissions'),
+        page: t('settings.nav.security'),
       }),
     };
   }

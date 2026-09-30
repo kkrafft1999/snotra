@@ -90,7 +90,7 @@ test('a session approval is listed, used, and revoked one by one', { timeout: 18
   });
   await poll(() => page.evaluate(() => !document.getElementById('modal-settings').classList.contains('hidden')),
     { what: 'settings dialog' });
-  await page.evaluate(() => document.getElementById('tab-settings-permissions').click());
+  await page.evaluate(() => document.getElementById('tab-settings-security').click());
   const row = await poll(() => page.evaluate(() => {
     const el = document.querySelector('#settings-grants .settings-grant');
     return el ? el.textContent.replace(/\s+/g, ' ') : null;

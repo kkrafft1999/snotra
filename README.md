@@ -463,7 +463,8 @@ deliberately not used — both require a code signature.
   budget decision).
 
 - **Running Python (off by default):** after switching it on under Settings ›
-  Tools › "Run Python", the model gets the `run_python` tool:
+  Security › *Execute* › "Allow Python execution", the model gets the
+  `run_python` tool:
   it writes a Python 3 program, Snotra runs it in the opened project folder and
   returns output, error output and exit code. That way analyses are computed
   instead of guessed — sums over a CSV, unit conversions, data reshaping, testing
@@ -473,8 +474,8 @@ deliberately not used — both require a code signature.
   up in **your** PATH — Snotra reads it once at startup from your shell profile,
   so that an app launched from Finder also finds the Homebrew, pyenv or asdf
   Python instead of the system Python; subprocesses inside the script
-  (`subprocess`) see the same PATH. Which interpreter was found is shown under
-  Settings › Tools.
+  (`subprocess`) see the same PATH. Which interpreter was found is shown next to
+  the switch; your own interpreter is set under Settings › Tools.
 
   **This is the riskiest setting in the app — how risky depends on your
   system.** On **macOS and Linux** the code runs in a sandbox: it can write only
@@ -491,7 +492,7 @@ deliberately not used — both require a code signature.
   (10 s by default); "Stop" in the chat ends it as well.
 
 - **Running shell commands (off by default):** after switching it on under
-  Settings › Tools › "Run shell commands", the model
+  Settings › Security › *Execute* › "Allow shell commands", the model
   gets the `shell_execute` tool: it runs a command in your operating system's
   shell — macOS and Linux in your login shell (zsh, bash, …), Windows in
   PowerShell or `cmd.exe` — and returns output, error output and exit code. That
@@ -568,8 +569,8 @@ list with a line saying how many more there are.
 ### The sandbox per operating system
 
 Whether a run is isolated is decided once per app start by a short self-test,
-not assumed. Settings › Tools shows the result under each execution tool, and
-the approval card shows it on every run.
+not assumed. Settings › Security shows the result in the *Execute* row, and the
+approval card shows it on every run.
 
 - **macOS:** built in, nothing to install.
 - **Linux:** needs `bubblewrap`, `socat` and `ripgrep`; the `.deb` installs
@@ -592,8 +593,8 @@ the approval card shows it on every run.
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —
-you can switch it off for that folder under Settings › Tools › *Sandbox for this
-workspace*. It applies to that one folder, never globally and never by default.
+you can switch it off for that folder under Settings › Security › *Execute* ›
+*Sandbox for this workspace*. It applies to that one folder, never globally and never by default.
 You confirm it in a system dialog, and it is stored with your permissions rather
 than in the folder, so a checked-out repository cannot switch it off for itself.
 From then on the approval card says "Not isolated" with the reason and a link
@@ -606,7 +607,8 @@ rules" and "Reset all permissions" switch the sandbox back on.
 
 **Program allowances.** When it is one program that needs more — a tool whose
 login has to be refreshed, `gh` or `terraform` on macOS — you don't have to
-switch the sandbox off. Under Settings › Tools › *Program allowances* you give
+switch the sandbox off. Under Settings › Security › *Execute* › *Program
+allowances* you give
 that program the domains it may reach, folders it may also write in (its token
 cache, say) and, on macOS, the certificate check through the system, which
 programs written in Go need to reach the network at all. The allowance applies
@@ -783,9 +785,8 @@ and is not an estimate. From a skill row you jump straight to its switch under
 
 **Tool permissions:** whether a tool call runs is decided by Snotra per call,
 based on risk class (`read`, `read-sensitive`, `write`, `delete`, `execute`,
-`external`) and mode. You choose the mode in the **chat bar** (the pill next to
-the model selection) or under **Settings › Permissions** — both show the same
-state. Switching to *Auto* requires a confirmation in a system dialog; the way
+`external`) and mode. You choose the chat's mode in the **chat bar** (the pill
+next to the model selection). Switching to *Auto* requires a confirmation in a system dialog; the way
 back to *Smart* is always possible without asking. The mode belongs to the
 conversation: a chat from the history brings its own back, and a **new** chat
 starts at *Smart*. *Auto* also does not survive an app restart — after
@@ -794,7 +795,7 @@ history.
 
 A folder can have a **default mode** of its own. Tick "*Auto* for new chats in
 ‹folder› too" under the modes in the pill's menu — or pick the default under
-**Settings › Permissions › Default mode for this workspace** — and every new chat in
+**Settings › Security** at the top of the page — and every new chat in
 that folder starts in that mode. A folder you trust stays on *Auto*, also after
 a restart; a sensitive one starts every chat at *Always ask*. You confirm *Auto*
 as a default once in a system dialog that names the folder; the tag "Default in
@@ -859,19 +860,31 @@ change while a card is open, the request lapses and the run ends visibly
 result; the tool line shows the decision ("· denied", "· blocked") with reason,
 class and status as a tooltip — in saved histories too.
 
-**Rule management (Settings › Permissions):** denials and allowances per tool or
-risk class with path patterns (`*` within a folder, `**` across subfolders),
-kept separately for all workspaces and for the opened workspace; denials always
-win, permanent allowances exist only for reading and ordinary modification —
-plus the shell commands you remembered from the card, listed under the workspace
-with their working folder and deletable one by one — and, like deleting a
-denial, they are confirmed in a system dialog. Alongside
-that, custom sensitive path patterns, the **session allowances** — every
-"Allow for this session" still in force, grouped by chat, with what it covers
-and when it was granted, revocable one by one or all at once — and two reset
-actions with a stated scope: "Reset workspace rules" and "Reset all
-permissions" (which also removes program allowances and sets the mode back to
-*Smart*). These settings take effect immediately, independently of "Apply".
+**Settings › Security** shows everything that decides a tool call in the open
+workspace on one page, sorted by the six risk classes. Each row says whether its
+calls run, ask or are off — worked out by Snotra from the same rules that decide
+every call — and, opened, answers three questions: may Snotra do this (the
+tools, each with its switch), does it ask first (the mode, your allowances,
+remembered commands and session allowances), and where or what exactly (the
+folders, the sensitive patterns, the sandbox and program allowances, blocks,
+what leaves your computer). Every control there applies at once; loosening is
+confirmed in a system dialog. Settings › Tools keeps only the Python
+interpreter and the search key, Settings › MCP the server connections.
+
+**Rules:** denials and allowances per tool or risk class with path patterns
+(`*` within a folder, `**` across subfolders), for all workspaces or only the
+opened one, each listed in the row of its class and created there — the form
+opens in place, with the class already chosen. Denials always win; permanent
+allowances exist only for reading and ordinary modification — plus the shell
+commands you remembered from the card, listed in the *Execute* row and deletable
+one by one — and, like deleting a denial, they are confirmed in a system dialog.
+Alongside that, custom sensitive path patterns in the *Read sensitive data*
+row, the **session allowances** — every "Allow for this session" still in
+force, in the row of its class and once more at the bottom of the page grouped
+by chat, with what it covers and when it was granted, revocable one by one or
+all at once — and two reset actions with a stated scope: "Reset workspace
+rules" and "Reset all permissions" (which also removes program allowances and
+sets the mode back to *Smart*). These settings take effect immediately.
 
 ## Skills
 
@@ -925,7 +938,7 @@ which the operating system reports no change — on network drives, for instance
 **Folder skills are never automatically active:** they are foreign content and
 therefore a prompt-injection risk, so each one needs an explicit selection.
 `allowed-tools` from the front matter is ignored — what counts remains the tool
-checkboxes under Settings › Tools.
+switches under Settings › Security.
 
 ### Invoking a skill in the chat: `/name`
 
@@ -1125,8 +1138,8 @@ system, nothing is stored at all rather than putting a token down in the open.
 
 **"Test connection"** starts the server once and shows whether
 it responds and which tools it offers — or an understandable error message
-including `stderr` if it does not start. Only after that can individual tools be
-deselected.
+including `stderr` if it does not start. Its tools are switched on and off one
+by one under Settings › Security › *External services*, like every other tool.
 
 ### Importing servers
 

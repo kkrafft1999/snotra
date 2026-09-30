@@ -74,18 +74,17 @@ try {
   for (const locale of ['de', 'en']) {
     await applyLocale(locale);
     await openSettings();
-    await page.evaluate(() =>
-      document.querySelector('.settings-nav-item[data-settings-panel="tools"]').click());
+    // Since #449 the tools are listed in the rows of Settings › Security.
+    await page.evaluate(() => {
+      document.querySelector('.settings-nav-item[data-settings-panel="security"]').click();
+      document.querySelector('.settings-security-row__toggle[data-risk-class="read"]')?.click();
+    });
     await wait(500);
-    // Einen Volltext aufklappen, damit beide Texte im Bild stehen.
-    await page.evaluate(() => { document.querySelector('.settings-tool-row__summary')?.click(); });
-    await wait(200);
     await page.screenshot({ path: path.join(SHOTS, `i18n-tools-${locale}.png`) });
     console.log(locale, JSON.stringify(await page.evaluate(() =>
-      [...document.querySelectorAll('.settings-tool-row')].slice(0, 2).map((li) => ({
-        name: li.querySelector('.settings-tool-row__name')?.textContent,
-        short: li.querySelector('.settings-tool-row__short')?.textContent,
-        detail: li.querySelector('.settings-tool-row__desc')?.textContent?.slice(0, 80),
+      [...document.querySelectorAll('.settings-security-item--tool')].slice(0, 2).map((li) => ({
+        name: li.querySelector('.settings-security-item__code')?.textContent,
+        short: li.querySelector('.settings-security-item__label')?.textContent,
       }))), null, 2));
     await page.keyboard.press('Escape');
     await wait(400);

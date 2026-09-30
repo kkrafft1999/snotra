@@ -1272,7 +1272,7 @@ is the switch, not the placement.
 ### Baseline equipment of the tools
 
 Principle since [#180](https://github.com/kkrafft1999/snotra/issues/180): what is
-in Settings › Tools goes to the model — and vice versa. Otherwise a schema costs
+switched on in Settings › Security goes to the model — and vice versa. Otherwise a schema costs
 tokens in every round that nobody can deselect, because it does not appear in the
 list.
 

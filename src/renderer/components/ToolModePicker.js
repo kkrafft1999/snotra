@@ -16,7 +16,7 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
  * chat's mode the one every new chat in this folder starts with, and a tag on
  * the option that is the default. Main confirms "Auto" natively.
  */
-export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
+export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onOpenSecuritySettings }) {
   const wrap = document.getElementById('chat-tool-mode-wrap');
   const btn = document.getElementById('btn-chat-tool-mode');
   const label = document.getElementById('chat-tool-mode-label');
@@ -26,6 +26,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
   const noticeHeading = document.getElementById('chat-tool-mode-notice-heading');
   const noticeText = document.getElementById('chat-tool-mode-notice-text');
   const noticeLink = document.getElementById('chat-tool-mode-notice-link');
+  const securityLink = document.getElementById('chat-tool-mode-security-link');
   const status = document.getElementById('chat-tool-mode-status');
   const footer = document.getElementById('chat-tool-mode-footer');
   const remember = document.getElementById('chat-tool-mode-remember');
@@ -244,6 +245,12 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings }) {
     close();
     btn.focus();
     onOpenSandboxSettings?.();
+  });
+  if (securityLink) securityLink.hidden = typeof onOpenSecuritySettings !== 'function';
+  securityLink?.addEventListener('click', () => {
+    close();
+    btn.focus();
+    onOpenSecuritySettings?.();
   });
 
   menu.addEventListener('keydown', (e) => {
