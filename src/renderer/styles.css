@@ -7132,6 +7132,14 @@ select.modal-input {
   margin-right: auto;
 }
 
+/* Four buttons in German ("Server entfernen", "Verbindung testen", "Abbrechen",
+   "Speichern") need a little more than 560px once the footer has its padding;
+   below that "Speichern" drops into a second row (#459). The window is at least
+   900px wide, so 600px always fits. */
+.modal-dialog.modal-dialog--nested.add-model-dialog#dialog-mcp-server {
+  max-width: 600px;
+}
+
 /* Die Kennung steckt im Tool-Namen und ist nachtraeglich nicht aenderbar. Das
    muss man dem Feld ansehen, sonst tippt man dagegen an. */
 .modal-input:disabled {
