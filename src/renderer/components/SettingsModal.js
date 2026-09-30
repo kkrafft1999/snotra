@@ -1568,6 +1568,10 @@ export function initSettingsModal(deps) {
     modalSettings.classList.remove('hidden');
     modalSettings.setAttribute('aria-hidden', 'false');
     modalSettings.addEventListener('keydown', handleModalKeydown);
+    // The section is chosen before the first wait, not after it: the dialog
+    // is on screen from here, and a section picked while it is still loading
+    // must not be switched back (#469).
+    activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
     try {
       await refreshLLMState();
       setupDraftFromServerState();
@@ -1579,7 +1583,6 @@ export function initSettingsModal(deps) {
       btnSettingsSave.disabled = false;
     }
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
-    activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
     // localStorage (see ThemeManager.js).
@@ -1645,8 +1648,8 @@ export function initSettingsModal(deps) {
     syncPopupProviderUI(selectProvider.value, true);
 
     queueMicrotask(() => {
-      // Mit Sprungziel steht der Fokus auf dem gemeinten Schalter, sonst wie
-      // bisher auf dem ersten Reiter.
+      // With a jump target the focus is on the switch it means, otherwise on
+      // the selected section's tab.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
       // From the approval card's "Sandbox setting" and "Program allowances"
       // links, the mode pill and the folder shield (#357, #408, #449): the
@@ -1655,8 +1658,11 @@ export function initSettingsModal(deps) {
         void securityPanel.reveal(jump.focus);
         return;
       }
+      // Loading takes a moment; whoever is already working in the dialog
+      // keeps the focus where they put it (#469).
+      if (modalSettings.contains(document.activeElement)) return;
       try {
-        settingsNavTabs[0]?.focus();
+        (settingsNavTabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || settingsNavTabs[0])?.focus();
       } catch {
         const fb = getFocusableInSettingsModal();
         fb[0]?.focus();
