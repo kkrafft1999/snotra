@@ -62,7 +62,7 @@
           "config": {
             "options": {
               "bin": "Snotra AI",
-              "maintainer": "Konrad Krafft <konrad@doubleslash.de>",
+              "maintainer": "Konrad Krafft <konrad.krafft@gmail.com>",
               "homepage": "https://github.com/kkrafft1999/snotra",
               "description": "Workspace-bewusster KI-Assistent mit Datei-Explorer",
               "genericName": "KI-Assistent",
