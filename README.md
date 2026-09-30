@@ -1180,6 +1180,13 @@ server would decide how strictly we treat it.
 A server that does not start or that crashes does not break the chat: the error is
 reported and everything else keeps running.
 
+Each tool is switched on or off under **Settings › Security**, in the row
+*External services*. There the MCP tools are grouped by server, and each group
+says how its server is connected — connected with its number of tools, not
+connected yet, starting, switched off, or failed to start with the reason. A
+server connects on first use, so its tools appear there after the first chat
+turn.
+
 ## Project layout
 
 ```

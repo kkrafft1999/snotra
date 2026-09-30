@@ -25,7 +25,7 @@ const TOOLS = [
   tool('run_python', ['execute'], { available: false }),
   tool('web_search', ['external'], { available: false }),
   tool('fetch_url', ['external']),
-  tool('mcp__gh__issues', ['execute', 'external'], { mcpServer: 'GitHub' }),
+  tool('mcp__gh__issues', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh' }),
 ];
 
 const SANDBOX = { status: 'isolated', isolated: true, reason: '', platform: 'darwin' };
@@ -62,9 +62,10 @@ function fakePermissions(state = permissionsState()) {
   };
 }
 
-async function openPage(overview, { state, onNavigate } = {}) {
+async function openPage(overview, { state, onNavigate, mcp } = {}) {
   const { initSecurityPanel } = await importRenderer('components', 'SecurityPanel.js');
   let current = overview;
+  let currentMcp = mcp;
   const api = {
     calls: 0,
     async getSecurityOverview() {
@@ -72,6 +73,12 @@ async function openPage(overview, { state, onNavigate } = {}) {
       return current;
     },
   };
+  if (mcp !== undefined) {
+    api.getMcpCatalog = async () => {
+      if (currentMcp instanceof Error) throw currentMcp;
+      return currentMcp;
+    };
+  }
   const toolPermissions = fakePermissions(state);
   const navigations = [];
   const panel = initSecurityPanel({
@@ -87,6 +94,9 @@ async function openPage(overview, { state, onNavigate } = {}) {
     navigations,
     setOverview(next) {
       current = next;
+    },
+    setMcp(next) {
+      currentMcp = next;
     },
   };
 }
@@ -408,3 +418,105 @@ test('an update that changes nothing leaves the rows as they are', async () => {
     dom.cleanup();
   }
 });
+
+// #462: the MCP tools of the external row, grouped by server with its state.
+
+const MCP_CATALOG = {
+  servers: [
+    { id: 'gh', label: 'GitHub', enabled: true },
+    { id: 'heimat', label: 'Heimat', enabled: true },
+    { id: 'jira', label: 'Jira', enabled: false },
+  ],
+  connections: [
+    { serverId: 'gh', state: 'ready', toolCount: 1 },
+    { serverId: 'heimat', state: 'failed', error: { key: 'mcp.connection.unreachable', params: {} }, stderr: 'token expired' },
+  ],
+};
+
+function servers(doc) {
+  return [...row(doc, 'external').querySelectorAll('.settings-security-server')];
+}
+
+test('the external row groups MCP tools by server and says how each is connected', async () => {
+  const dom = setupRendererDom();
+  try {
+    await openPage(overviewWith(), { mcp: MCP_CATALOG });
+    const doc = dom.document;
+    row(doc, 'external').querySelector('.settings-security-row__toggle').click();
+    const groups = servers(doc);
+    assert.deepEqual(groups.map((group) => group.dataset.mcpServer), ['gh', 'heimat', 'jira']);
+    const heads = groups.map((group) => group.querySelector('.settings-security-server__head').textContent);
+    assert.deepEqual(heads, ['GitHubconnected · 1 tool', 'Heimat!Failed to start', 'Jiraswitched off']);
+    // The shape carries the state: a dot, an exclamation mark, a ring.
+    assert.ok(groups[0].querySelector('.mcp-status__dot--on'));
+    assert.ok(groups[1].querySelector('.mcp-status__badge'));
+    assert.ok(groups[2].querySelector('.mcp-status__dot--off'));
+    // Each group is named by its server for assistive technology.
+    assert.equal(groups[0].getAttribute('role'), 'group');
+    assert.equal(doc.getElementById(groups[0].getAttribute('aria-labelledby')).textContent, 'GitHub');
+    // The tool sits with its server and keeps its switch there.
+    assert.ok(groups[0].querySelector('[data-tool-switch="mcp__gh__issues"]'));
+    // A failed server without tools still explains itself, without its stderr.
+    assert.equal(groups[1].querySelectorAll('.settings-security-item').length, 0);
+    assert.ok(groups[1].querySelector('.settings-security-server__detail'));
+    assert.doesNotMatch(groups[1].textContent, /token expired/);
+    // The built-in external tools stay a flat list above the servers.
+    const flat = row(doc, 'external').querySelector('.settings-security-q__body > .settings-security-items');
+    assert.deepEqual([...flat.querySelectorAll('[data-tool-switch]')].map((input) => input.dataset.toolSwitch), ['fetch_url']);
+    assert.equal(row(doc, 'external').querySelectorAll('[data-tool-switch="mcp__gh__issues"]').length, 1);
+    // Only the external row groups by server.
+    row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
+    assert.equal(row(doc, 'execute').querySelector('.settings-security-server'), null);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('without the MCP catalog the tools are still grouped by server, without a state', async () => {
+  const dom = setupRendererDom();
+  try {
+    await openPage(overviewWith(), { mcp: new Error('unreadable') });
+    const doc = dom.document;
+    row(doc, 'external').querySelector('.settings-security-row__toggle').click();
+    const groups = servers(doc);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].querySelector('.settings-security-server__head').textContent, 'GitHub');
+    assert.equal(groups[0].querySelector('.mcp-status'), null);
+    assert.ok(groups[0].querySelector('[data-tool-switch="mcp__gh__issues"]'));
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('a server that is starting is followed until it has settled', async () => {
+  const dom = setupRendererDom();
+  try {
+    const starting = {
+      servers: [{ id: 'gh', label: 'GitHub', enabled: true }],
+      connections: [{ serverId: 'gh', state: 'starting' }],
+    };
+    const page = await openPage(overviewWith(), { mcp: starting });
+    const doc = dom.document;
+    row(doc, 'external').querySelector('.settings-security-row__toggle').click();
+    assert.match(servers(doc)[0].textContent, /starting/);
+    page.setMcp({ ...starting, connections: [{ serverId: 'gh', state: 'ready', toolCount: 1 }] });
+    await poll(() => /connected · 1 tool/.test(servers(doc)[0]?.textContent || ''));
+    const calls = page.api.calls;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    // Settled: no more asking.
+    assert.equal(page.api.calls, calls);
+    // The open row stayed open through the redraw.
+    assert.equal(row(doc, 'external').querySelector('.settings-security-row__toggle').getAttribute('aria-expanded'), 'true');
+    page.panel.close();
+  } finally {
+    dom.cleanup();
+  }
+});
+
+async function poll(check, timeoutMs = 3000) {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) throw new Error('timed out');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}

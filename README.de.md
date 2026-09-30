@@ -791,6 +791,13 @@ sonst entschiede der fremde Server darüber, wie streng wir ihn behandeln.
 Ein Server, der nicht startet oder abstürzt, macht den Chat nicht kaputt: Der
 Fehler wird gemeldet, alles andere läuft weiter.
 
+Ein- und ausgeschaltet wird jedes Tool unter **Einstellungen › Sicherheit**, in
+der Zeile *Externe Dienste*. Dort stehen die MCP-Tools nach Server gruppiert,
+und jede Gruppe sagt, wie ihr Server verbunden ist — verbunden mit der Zahl
+seiner Tools, noch nicht verbunden, wird gestartet, ausgeschaltet oder Fehler
+beim Start mit dem Grund. Ein Server verbindet sich erst, wenn er gebraucht
+wird; seine Tools erscheinen dort also nach dem ersten Chat-Lauf.
+
 ## Projektstruktur
 
 ```

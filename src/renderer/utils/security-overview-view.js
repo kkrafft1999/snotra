@@ -1,6 +1,7 @@
 import { t, tPlural, tMessage, getLocale } from '../i18n.js';
 import { modeLabel, riskClassLabel, describeRule } from './tool-approval-view.js';
 import { describeSandboxStatus } from './sandbox-status-view.js';
+import { describeConnection } from './mcp-connection-view.js';
 
 /**
  * Texts for Settings › Security (#448, #449). Main has decided every verdict —
@@ -187,7 +188,45 @@ function toolItem(tool, row) {
   };
 }
 
-function describeMay(row) {
+/**
+ * The MCP tools of the external row, one group per server with its
+ * connection state (#462) — the same words as Settings › MCP. Every
+ * configured server gets a group, also one without tools: an off or failed
+ * server is exactly what explains a tool that is missing. Tools of a server
+ * the catalog does not know (it could not be read) still get their group,
+ * without a state.
+ */
+export function describeMcpGroups(row, mcp) {
+  const servers = Array.isArray(mcp?.servers) ? mcp.servers : [];
+  const connections = Array.isArray(mcp?.connections) ? mcp.connections : [];
+  const mcpTools = row.tools.filter((tool) => tool.mcpServer);
+  const serverIdOf = (tool) => tool.mcpServerId || tool.mcpServer;
+  const groups = servers.map((server) => {
+    const connection = connections.find((entry) => entry.serverId === server.id) || null;
+    const status = describeConnection(server, connection);
+    return {
+      id: server.id,
+      name: server.label || server.id,
+      status: { kind: status.kind, text: status.text, pending: status.pending === true },
+      detail: status.kind === 'error' ? status.detail || '' : '',
+      tools: mcpTools.filter((tool) => serverIdOf(tool) === server.id).map((tool) => toolItem(tool, row)),
+    };
+  });
+  const known = new Set(servers.map((server) => server.id));
+  for (const tool of mcpTools) {
+    const id = serverIdOf(tool);
+    if (known.has(id)) continue;
+    let group = groups.find((entry) => entry.id === id);
+    if (!group) {
+      group = { id, name: tool.mcpServer, status: null, detail: '', tools: [] };
+      groups.push(group);
+    }
+    group.tools.push(toolItem(tool, row));
+  }
+  return groups;
+}
+
+function describeMay(row, mcp) {
   const key = classKey(row.riskClass);
   let answer;
   if (row.status === 'off') {
@@ -202,15 +241,20 @@ function describeMay(row) {
   if (row.riskClass === 'execute') links.push('python');
   if (row.riskClass === 'external') links.push('webSearch', 'mcp');
   const isExecute = row.riskClass === 'execute';
+  const isExternal = row.riskClass === 'external';
+  let tools = row.tools;
+  if (row.riskClass === 'read-sensitive') tools = [];
+  // The execution tools come as their switches (slots), not as items.
+  else if (isExecute) tools = tools.filter((tool) => tool.mcpServer);
+  // MCP tools are listed under their server instead.
+  else if (isExternal) tools = tools.filter((tool) => !tool.mcpServer);
   return {
     question: t(`security.q.may.${key}`),
     answer,
     note: row.riskClass === 'delete' ? t('security.a.may.delete.note') : '',
-    // The execution tools come as their switches (slots), not as items.
     execution: isExecute,
-    tools: row.riskClass === 'read-sensitive'
-      ? []
-      : row.tools.filter((tool) => !(isExecute && !tool.mcpServer)).map((tool) => toolItem(tool, row)),
+    tools: tools.map((tool) => toolItem(tool, row)),
+    mcpGroups: isExternal ? describeMcpGroups(row, mcp) : [],
     links,
   };
 }
@@ -372,8 +416,11 @@ function describeWhere(row, overview) {
   return where;
 }
 
-/** One row: the closed line and the three questions it opens to. */
-export function describeSecurityRow(row, overview) {
+/**
+ * One row: the closed line and the three questions it opens to. `mcp` is
+ * the MCP catalog (servers and their connections), for the external row.
+ */
+export function describeSecurityRow(row, overview, mcp = null) {
   const pill = {
     runs: { text: t('security.status.runs'), kind: 'runs' },
     asks: { text: t('security.status.asks'), kind: 'asks' },
@@ -387,7 +434,7 @@ export function describeSecurityRow(row, overview) {
     exceptions: exceptionParts(row, overview.allowancesApply === true).join(' · '),
     pill,
     noSandbox: row.noSandbox === true ? t('security.status.noSandbox') : '',
-    may: describeMay(row),
+    may: describeMay(row, mcp),
     ask: describeAsk(row, overview),
     where: describeWhere(row, overview),
   };
