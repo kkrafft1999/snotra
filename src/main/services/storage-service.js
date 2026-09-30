@@ -27,6 +27,7 @@ const {
   normalizeSessionForStore: buildNormalizedSessionForStore,
   normalizeSessionForLoad,
 } = require('./chat-history-normalization');
+const { renameWithRetry } = require('./rename-with-retry');
 
 function createStorageService({
   app,
@@ -38,6 +39,7 @@ function createStorageService({
   maxFolderHistory,
   defaultProviderId,
   log = console,
+  platform = process.platform,
 }) {
   const LLM_CONFIG_FILENAME = 'llm-config.json';
   const LEGACY_OPENAI_CONFIG_FILENAME = 'openai-config.json';
@@ -66,7 +68,10 @@ function createStorageService({
     const tmp = `${targetPath}.tmp-${randomUUID()}`;
     await fs.writeFile(tmp, JSON.stringify(data), 'utf8');
     try {
-      await fs.rename(tmp, targetPath);
+      // These files are read all the time (every preferences read, every
+      // chat run), and on Windows a reader, the indexer or a virus scanner
+      // can hold the target for a moment (#472, as for the policy in #419).
+      await renameWithRetry(fs, tmp, targetPath, { platform });
     } catch (err) {
       await fs.unlink(tmp).catch(() => {});
       throw err;
