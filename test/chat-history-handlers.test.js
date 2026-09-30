@@ -16,7 +16,7 @@ const mockProviders = {
   },
 };
 
-async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
+async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs } = {}) {
   // Der Zeitstempel kommt seit Issue #245 aus dem Main. Im Test laeuft dafuer
   // eine eigene Uhr: echte Millisekunden lagen bei aufeinanderfolgenden
   // Upserts gleichauf, und eine Reihenfolge waere nicht mehr pruefbar.
@@ -27,7 +27,7 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings } = {}) {
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage: { isEncryptionAvailable: () => false },
-    fs,
+    fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
     maxChatSessions,
@@ -630,4 +630,34 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
   });
 
   assert.equal((await storedSession(storage, 'legacy')).updatedAt, 1234);
+});
+
+test('#473: with an unreadable history file a save is skipped, not written over it', async (t) => {
+  let locked = false;
+  const lockable = {
+    ...fs,
+    async readFile(file, ...rest) {
+      if (locked && path.basename(String(file)) === 'chat-history.json') {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      }
+      return fs.readFile(file, ...rest);
+    },
+  };
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { fsImpl: lockable });
+  setActiveRoot(tmpDir);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+  const target = path.join(tmpDir, 'chat-history.json');
+  const original = await fs.readFile(target, 'utf8');
+
+  locked = true;
+  // The new chat, the folder switch and the delete that ask for these go on.
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b')), { ok: false });
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'b'), { ok: false });
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a'), { ok: false });
+  assert.equal(await fs.readFile(target, 'utf8'), original, 'the file stays as it was');
+
+  locked = false;
+  const back = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.deepEqual(back.sessions.map((s) => s.id), ['a'], 'chat a is still there');
 });

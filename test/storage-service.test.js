@@ -304,6 +304,180 @@ test('elsewhere the first failed rename is the answer, and the file stays as it 
   }
 });
 
+/**
+ * fs whose `readFile` of one file fails `times` times with `code` (Infinity:
+ * every time). Everything else, including the other files, goes through.
+ */
+function fsWithFailingRead(fileName, code, times = Infinity) {
+  const calls = { read: 0 };
+  const wrapped = {
+    ...fs,
+    async readFile(file, ...rest) {
+      if (path.basename(String(file)) === fileName) {
+        calls.read += 1;
+        if (calls.read <= times) {
+          const error = new Error(`${code}: resource busy or locked, open '${file}'`);
+          error.code = code;
+          throw error;
+        }
+      }
+      return fs.readFile(file, ...rest);
+    },
+  };
+  return { fs: wrapped, calls };
+}
+
+async function withTmpDir(fn) {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  try {
+    return await fn(tmpDir);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+test('on Windows a briefly held preferences file is read on a later attempt, and nothing is lost (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    await makeStorage(tmpDir).writeUIPrefs({ sidebarWidth: 312, appLocale: 'de', disabledTools: [] });
+    const { fs: flaky, calls } = fsWithFailingRead('ui-preferences.json', 'EBUSY', 2);
+    const storage = makeStorageWith(tmpDir, flaky, 'win32');
+    const saved = await storage.updateUIPrefs((prefs) => ({ ...prefs, disabledTools: ['edit_file'] }));
+    assert.equal(calls.read, 3);
+    assert.equal(saved.sidebarWidth, 312, 'the other preferences survive');
+    assert.equal(saved.appLocale, 'de');
+    assert.deepEqual(saved.disabledTools, ['edit_file']);
+  }));
+
+test('a preferences file that cannot be read fails the update and stays as it was (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    await makeStorage(tmpDir).writeUIPrefs({ sidebarWidth: 312, appLocale: 'de' });
+    const target = path.join(tmpDir, 'ui-preferences.json');
+    const original = await fs.readFile(target, 'utf8');
+    const { fs: flaky } = fsWithFailingRead('ui-preferences.json', 'EACCES');
+    const storage = makeStorageWith(tmpDir, flaky, 'linux');
+    await assert.rejects(
+      () => storage.updateUIPrefs((prefs) => ({ ...prefs, disabledTools: ['edit_file'] })),
+      { code: 'EACCES' },
+    );
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+    // A read for display still falls back instead of failing.
+    assert.notEqual((await storage.readUIPrefs()).sidebarWidth, 312);
+  }));
+
+test('a missing preferences file still starts the update from the defaults (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    const saved = await makeStorage(tmpDir).updateUIPrefs((prefs) => ({ ...prefs, disabledTools: ['edit_file'] }));
+    assert.deepEqual(saved.disabledTools, ['edit_file']);
+  }));
+
+test('an LLM configuration that cannot be read is shown as defaults but never written over (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    await makeStorage(tmpDir).writeLLMConfig({
+      version: LLM_CONFIG_VERSION,
+      activeProvider: 'openai',
+      providers: { openai: { apiKeyEnc: 'secret-key', model: 'gpt-4o' } },
+      presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+      activePresetId: 'p1',
+    });
+    const target = path.join(tmpDir, 'llm-config.json');
+    const original = await fs.readFile(target, 'utf8');
+    const { fs: flaky } = fsWithFailingRead('llm-config.json', 'EACCES');
+    const storage = makeStorageWith(tmpDir, flaky, 'linux');
+
+    // The plain read lands in the migration from the legacy file, whose
+    // defaults used to be persisted — right over the unreadable file.
+    const shown = await storage.readLLMConfig();
+    assert.equal(shown.providers.openai?.apiKeyEnc, undefined, 'defaults are shown');
+    assert.equal(await fs.readFile(target, 'utf8'), original, 'but not written');
+
+    await assert.rejects(() => storage.updateLLMConfig((config) => config), { code: 'EACCES' });
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+  }));
+
+test('an MCP configuration that cannot be read fails the save and keeps the other servers (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    const lang = { LANG: { secret: false, value: 'de_DE' } };
+    await makeStorage(tmpDir).saveMcpServer({ id: 'files', label: 'Files', command: 'npx', args: [], env: lang });
+    const target = path.join(tmpDir, 'mcp-servers.json');
+    const original = await fs.readFile(target, 'utf8');
+    const { fs: flaky } = fsWithFailingRead('mcp-servers.json', 'EACCES');
+    const storage = makeStorageWith(tmpDir, flaky, 'linux');
+    await assert.rejects(
+      () => storage.saveMcpServer({ id: 'search', label: 'Search', command: 'npx', args: [], env: lang }),
+      { code: 'EACCES' },
+    );
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+  }));
+
+test('a chat history that cannot be read is shown empty but never written back (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    const before = await makeStorage(tmpDir).readChatHistoryStore({ skipMigration: true });
+    before.sessions.push({ id: 'c1', title: 'Kept', messages: [], updatedAt: 1 });
+    await makeStorage(tmpDir).writeChatHistoryStore(before);
+    const target = path.join(tmpDir, 'chat-history.json');
+    const original = await fs.readFile(target, 'utf8');
+
+    const { fs: flaky } = fsWithFailingRead('chat-history.json', 'EACCES');
+    const storage = createStorageService({
+      app: { getPath: () => tmpDir },
+      // With encryption available, a plain read migrates — and used to write
+      // the empty store it got from the failed read.
+      safeStorage: makeEncryptedSafeStorage(),
+      fs: flaky,
+      path,
+      providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
+      maxChatSessions: 3,
+      maxFolderHistory: 5,
+      defaultProviderId: 'openai',
+      platform: 'linux',
+    });
+
+    const shown = await storage.readChatHistoryStore();
+    assert.deepEqual(shown.sessions, [], 'shown empty');
+    assert.equal(await fs.readFile(target, 'utf8'), original, 'the migration wrote nothing');
+
+    const forUpsert = await storage.readChatHistoryStore({ skipMigration: true });
+    forUpsert.sessions.push({ id: 'c2', title: 'New', messages: [], updatedAt: 2 });
+    await assert.rejects(() => storage.writeChatHistoryStore(forUpsert), /could not be read/);
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+    assert.deepEqual(
+      (await fs.readdir(tmpDir)).filter((name) => name.startsWith('chat-history.json.')),
+      [],
+      'nothing was quarantined: the content may be fine',
+    );
+  }));
+
+test('a folder history that cannot be read stays as it was when a folder opens (#473)', () =>
+  withTmpDir(async (tmpDir) => {
+    const first = path.join(tmpDir, 'first');
+    const second = path.join(tmpDir, 'second');
+    await fs.mkdir(first);
+    await fs.mkdir(second);
+    await makeStorage(tmpDir).persistLastFolder(first);
+    const target = path.join(tmpDir, 'folder-history.json');
+    const original = await fs.readFile(target, 'utf8');
+
+    const { fs: flaky } = fsWithFailingRead('folder-history.json', 'EACCES');
+    const storage = createStorageService({
+      app: { getPath: () => tmpDir },
+      safeStorage: { isEncryptionAvailable: () => false },
+      fs: flaky,
+      path,
+      providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
+      maxChatSessions: 3,
+      maxFolderHistory: 5,
+      defaultProviderId: 'openai',
+      platform: 'linux',
+      log: { warn() {} },
+    });
+    await storage.persistLastFolder(second);
+    assert.equal(await fs.readFile(target, 'utf8'), original, 'the history keeps its entries');
+    assert.equal(JSON.parse(await fs.readFile(path.join(tmpDir, 'last-folder.json'), 'utf8')).path, second,
+      'the folder still opens');
+    assert.equal(await storage.removeFolderFromHistory(first), false, 'nothing removed without a read');
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+  }));
+
 test('withChatHistoryLock serializes concurrent upserts', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);

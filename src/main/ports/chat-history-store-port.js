@@ -13,4 +13,11 @@
  * @property {(sessionRow: object, workspaceRoot: string|null) => boolean} sessionMatchesWorkspace
  */
 
-module.exports = {};
+/**
+ * Error code of `writeChatHistoryStore` for a store that came from a failed
+ * read (#473). The file is there and may be fine, so it is not overwritten
+ * with the empty stand-in.
+ */
+const CHAT_HISTORY_UNREADABLE = 'CHAT_HISTORY_UNREADABLE';
+
+module.exports = { CHAT_HISTORY_UNREADABLE };
