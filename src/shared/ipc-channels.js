@@ -115,6 +115,8 @@ const REQUEST_CHANNELS = Object.freeze({
    * dauerhafte Erlaubnis, Sperre loeschen) bestaetigt Main nativ.
    */
   TOOL_PERMISSIONS_GET_STATE: 'toolPermissions:getState',
+  /** The effective state of the open workspace per risk class (#448). */
+  TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW: 'toolPermissions:getSecurityOverview',
   TOOL_PERMISSIONS_SET_MODE: 'toolPermissions:setMode',
   TOOL_PERMISSIONS_ADD_RULE: 'toolPermissions:addRule',
   TOOL_PERMISSIONS_REMOVE_RULE: 'toolPermissions:removeRule',

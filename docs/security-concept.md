@@ -817,7 +817,9 @@ Decided on 2026-09-29. The work is split into
 [#447](https://github.com/kkrafft1999/snotra/issues/447) (session approvals,
 built — for now as a list of their own in Settings › Permissions),
 [#448](https://github.com/kkrafft1999/snotra/issues/448) (the page as an
-overview) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
+overview, built — main computes it in
+`src/application/permissions/security-overview.js` from the policy store and
+the planner's matrix, and every line links to where it is changed today) and [#449](https://github.com/kkrafft1999/snotra/issues/449) (the
 controls move into it). The permission model above stays as it is. What changes
 is where a user sees it and what they can take back.
 

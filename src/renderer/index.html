@@ -401,6 +401,10 @@
             <span data-i18n="settings.nav.models">Models</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.models.desc">API, connection, preferences</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security">
+            <span data-i18n="settings.nav.security">Security</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">What Snotra may do</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools">
             <span data-i18n="settings.nav.tools">Tools</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">What the model can use</span>
@@ -454,6 +458,32 @@
             <ul id="pref-model-list" class="settings-pref-list" aria-labelledby="heading-pref-models"></ul>
 
             <p id="pref-list-empty" class="settings-empty-hint hidden" data-i18n="settings.models.empty">No entries yet &ndash; open &ldquo;Add model&rdquo;.</p>
+          </section>
+
+          <section class="settings-panel" id="panel-settings-security" role="tabpanel" aria-labelledby="tab-settings-security" hidden>
+            <p class="settings-security-intro" data-i18n="security.intro">What Snotra may do in this workspace, and why.</p>
+            <details class="settings-note">
+              <summary class="settings-note__summary"><span data-i18n="security.note.summary">This page shows what applies. Each line links to where you change it.</span></summary>
+              <div class="settings-note__body" data-i18n-html="security.note.body">
+                <p>Main works the state out from the same rules that decide every tool call, so this page cannot show something different from what happens. The default mode changes at once, like every permission.</p>
+              </div>
+            </details>
+            <div class="settings-tools-card settings-security-header" id="settings-security-header">
+              <h3 class="settings-subsection-title" id="heading-security-workspace"><span>Applies to workspace</span> <code id="settings-security-workspace-name" class="settings-rules-heading__root"></code></h3>
+              <p id="settings-security-scope" class="settings-security-header__scope"></p>
+              <p id="settings-security-integrity" class="modal-warning hidden" role="alert"></p>
+              <div class="settings-workspace-mode-row" id="settings-security-mode-row">
+                <span id="settings-security-mode-legend" class="settings-workspace-mode-row__label" data-i18n="security.header.defaultMode">Default mode</span>
+                <div id="settings-security-mode-options" class="settings-segmented" role="radiogroup" aria-labelledby="settings-security-mode-legend heading-security-workspace" aria-describedby="settings-security-mode-note"></div>
+                <span id="status-security-mode" class="settings-instant-status" role="status"></span>
+              </div>
+              <p id="settings-security-mode-state" class="modal-hint" role="status" hidden></p>
+              <p id="settings-security-mode-note" class="settings-security-header__note" data-i18n="security.header.modeNote">Every new chat starts like this; chats that are already open keep their mode. In a chat you change the mode with the mode pill.</p>
+              <div id="settings-security-other-chats" class="settings-security-header__chats" hidden></div>
+              <p id="settings-security-summary" class="settings-security-summary" role="status"></p>
+            </div>
+            <p id="settings-security-error" class="modal-hint error hidden" role="alert"></p>
+            <ul id="settings-security-rows" class="settings-security-rows" aria-label="Risk classes" data-i18n-attr="aria-label:security.rows.label"></ul>
           </section>
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>

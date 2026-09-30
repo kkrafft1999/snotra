@@ -211,6 +211,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPythonState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_PYTHON_STATE),
   getShellState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SHELL_STATE),
   getToolPermissionState: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_STATE),
+  getSecurityOverview: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW),
   setToolPermissionMode: (mode) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, mode),
   addToolPermissionRule: (rule) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, rule),
   removeToolPermissionRule: (ruleId) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_RULE, ruleId),

@@ -826,6 +826,8 @@ function createApplication({
     describeExecutionTools,
     programAllowances,
     describeChats,
+    describeTools: describeToolsForSecurity,
+    describeWorkspaceChats,
     platform: process.platform,
     homeDir: os.homedir(),
   });
@@ -846,6 +848,35 @@ function createApplication({
       }
     }
     return titles;
+  }
+
+  /**
+   * Every tool the settings list, with its classes and whether it is offered
+   * — for the Security page (#448). A tick in Settings › Tools and the
+   * availability (the execution switches, a search key, a server) both count.
+   */
+  async function describeToolsForSecurity() {
+    const prefs = await uiPrefsStore.readUIPrefs();
+    const disabled = new Set(Array.isArray(prefs.disabledTools) ? prefs.disabledTools : []);
+    return toolRegistry
+      .listRiskCatalog({ locale: prefs.appLocale })
+      .map((tool) => ({ ...tool, disabled: disabled.has(tool.name) }));
+  }
+
+  /**
+   * The chats of a workspace with the mode stored for each (#448); `null`
+   * where a chat has none and starts on the workspace default.
+   */
+  async function describeWorkspaceChats(root) {
+    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
+    const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(root);
+    return (store.sessions || [])
+      .filter((session) => session && typeof session.id === 'string' && chatHistoryStore.sessionMatchesWorkspace(session, wsRoot))
+      .map((session) => ({
+        id: session.id,
+        title: typeof session.title === 'string' ? session.title.trim() : '',
+        mode: typeof session.toolPermissionMode === 'string' ? session.toolPermissionMode : null,
+      }));
   }
 
   /**
