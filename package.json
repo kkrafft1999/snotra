@@ -115,7 +115,7 @@
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.77",
     "@fontsource/inter": "^5.2.8",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.16",
     "marked": "^17.0.5",
     "undici": "^7.30.0"
   },
