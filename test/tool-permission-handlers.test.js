@@ -38,6 +38,8 @@ async function setup(t, {
   openDialogResult = { canceled: true, filePaths: [] },
   encryption = true,
   describeChats = undefined,
+  describeTools = undefined,
+  describeWorkspaceChats = undefined,
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
@@ -72,6 +74,8 @@ async function setup(t, {
     describeExecutionTools,
     programAllowances,
     describeChats,
+    describeTools,
+    describeWorkspaceChats,
     platform: 'darwin',
     homeDir: '/Users/u',
   });
@@ -656,4 +660,65 @@ test('revoking one session approval drops only that one, asks nothing and voids 
   assert.equal(sessionGrants.count(), 1);
   approvals.invalidateAll();
   await pending;
+});
+
+// ── Settings › Security (#448) ─────────────────────────────────────────────
+
+const SECURITY_TOOLS = [
+  { name: 'read_file_text', shortDescription: 'Read a file', riskClasses: ['read'], available: true, disabled: false, mcpServer: null },
+  { name: 'write_file_text', shortDescription: 'Write a file', riskClasses: ['write'], available: true, disabled: false, mayOverwrite: true, mcpServer: null },
+  { name: 'shell_execute', shortDescription: 'Shell', riskClasses: ['execute'], available: true, disabled: false, mcpServer: null },
+  { name: 'web_search', shortDescription: 'Search', riskClasses: ['external'], available: false, disabled: false, mcpServer: null },
+];
+
+test('the Security overview follows the workspace default, not the chat on screen (#448)', async (t) => {
+  const chatSessionSettings = { getCurrentChatId: () => 'chat-a', rememberMode: async () => {} };
+  const { invoke, sessionGrants } = await setup(t, {
+    dialogResponse: 0,
+    chatSessionSettings,
+    describeTools: async () => SECURITY_TOOLS,
+    describeWorkspaceChats: async (root) => {
+      assert.equal(root, '/work/projekt', "main's own root, never one from the renderer");
+      return [
+        { id: 'chat-a', title: 'On screen', mode: null },
+        { id: 'chat-b', title: 'Check dependencies', mode: 'ask-all' },
+        { id: 'chat-c', title: 'Plain', mode: null },
+      ];
+    },
+    describeExecutionTools: async () => ({ active: ['shell_execute'], sandbox: { status: 'isolated', isolated: true } }),
+  });
+  const sender = makeSender();
+  // The chat on screen switches to Auto; the folder default stays Smart.
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto')).ok, true);
+  sessionGrants.grant({ scopeKey: 's', tool: 'write_file_text', targets: [{ path: 'a' }], riskClasses: ['write'], chatId: 'chat-a' });
+  sessionGrants.grant({ scopeKey: 's', tool: 'write_file_text', targets: [{ path: 'b' }], riskClasses: ['write'], chatId: 'other-folder' });
+
+  const overview = await invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, sender, { root: '/evil' });
+  assert.deepEqual(overview.workspace, { root: '/work/projekt', name: 'projekt' });
+  assert.equal(overview.defaultMode, 'smart');
+  const status = Object.fromEntries(overview.classes.map((entry) => [entry.riskClass, entry.status]));
+  assert.deepEqual(status, {
+    read: 'runs', 'read-sensitive': 'asks', write: 'asks', delete: 'asks', execute: 'asks', external: 'off',
+  });
+  assert.deepEqual(
+    overview.chatsWithOtherMode.map((chat) => [chat.title, chat.mode, chat.current]),
+    [['On screen', 'auto', true], ['Check dependencies', 'ask-all', false]]
+  );
+  const write = overview.classes.find((entry) => entry.riskClass === 'write');
+  assert.deepEqual(write.sessionGrants.map((grant) => grant.chatId), ['chat-a'], 'another folder\'s approval stays off this page');
+  assert.equal(overview.execution.toolsOn, true);
+  assert.equal(overview.execution.sandbox.isolated, true);
+});
+
+test('the Security overview without a folder, and with failing describers (#448)', async (t) => {
+  const { invoke } = await setup(t, {
+    workspaceRoot: null,
+    describeTools: async () => { throw new Error('registry gone'); },
+    describeWorkspaceChats: async () => { throw new Error('must not be asked'); },
+  });
+  const overview = await invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, makeSender());
+  assert.equal(overview.workspace, null);
+  assert.equal(overview.defaultMode, 'smart');
+  assert.ok(overview.classes.every((entry) => entry.status === 'off' && entry.offReason === 'no-tools'));
+  assert.deepEqual(overview.chatsWithOtherMode, []);
 });

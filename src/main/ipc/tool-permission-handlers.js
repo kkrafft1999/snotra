@@ -44,6 +44,7 @@ const { createMessage } = require('../../shared/contracts/message');
 const { createTranslator } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { isNarrowing, normalizeAllowancePath } = require('../../shared/contracts/program-allowances');
+const { describeSecurityOverview } = require('../../application/permissions/security-overview');
 
 // The three dialogs are built for the language the interface speaks at the
 // moment they open (#353). They live only until the click, so there is nothing
@@ -220,6 +221,10 @@ function registerToolPermissionHandlers({
   programAllowances = null,
   // Titles of the chats that hold session approvals (#447): chatId → title.
   describeChats = async () => new Map(),
+  // The Security page (#448): every tool with its classes and whether it is
+  // offered, and the chats of a workspace with the mode each one runs on.
+  describeTools = async () => [],
+  describeWorkspaceChats = async () => [],
   platform = process.platform,
   homeDir = '',
 }) {
@@ -359,6 +364,60 @@ function registerToolPermissionHandlers({
   }
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_GET_STATE, async () => buildState());
+
+  /**
+   * Settings › Security (#448): what may run in the open workspace, per risk
+   * class. Computed here from the same store read and the same matrix the
+   * planner uses; the renderer only draws it. The page describes the folder,
+   * so its mode is the folder's default — chats that differ are named.
+   */
+  async function buildSecurityOverview() {
+    const state = await toolPolicyStore.read();
+    const root = getActiveWorkspaceRoot();
+    const workspaceSandboxDisabled = !!root && Array.isArray(state.unsandboxedWorkspaces)
+      && state.unsandboxedWorkspaces.includes(root);
+    const [tools, chats, isolation, grants, described] = await Promise.all([
+      Promise.resolve().then(describeTools).catch(() => []),
+      root ? Promise.resolve().then(() => describeWorkspaceChats(root)).catch(() => []) : [],
+      describeUnisolatedExecution(workspaceSandboxDisabled),
+      describeSessionGrants(),
+      typeof describeExecutionTools === 'function'
+        ? Promise.resolve().then(describeExecutionTools).catch(() => null)
+        : null,
+    ]);
+    const chatIds = new Set((Array.isArray(chats) ? chats : []).map((chat) => chat.id));
+    const currentChatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    const mode = root
+      ? (state.workspaceModes && state.workspaceModes[root]) || TOOL_PERMISSION_MODES.SMART
+      : TOOL_PERMISSION_MODES.SMART;
+    return describeSecurityOverview({
+      root,
+      mode,
+      globalRules: state.globalRules,
+      workspaceRules: root && state.workspaceRules[root] ? state.workspaceRules[root] : [],
+      tools,
+      // Approvals of this folder's chats; one of another folder that is still
+      // running in the background belongs to that folder's page.
+      sessionGrants: grants.filter((grant) => grant.current || chatIds.has(grant.chatId)),
+      chats: (Array.isArray(chats) ? chats : []).map((chat) =>
+        // The chat on screen runs on the store's mode, which may not be saved
+        // with the chat yet (chat-session-settings.js).
+        // A chat without a mode of its own starts on the default.
+        (chat.id === currentChatId ? { ...chat, mode: state.mode, current: true } : { ...chat, mode: chat.mode || mode })),
+      execution: {
+        sandbox: described?.sandbox || null,
+        workspaceSandboxDisabled,
+        unisolated: isolation.unisolated,
+        pending: isolation.pending,
+        programAllowances: Array.isArray(state.programAllowances) ? state.programAllowances : [],
+      },
+      sensitivePathPatterns: state.sensitivePathPatterns,
+      integrity: state.integrity,
+      encryptionAvailable: state.encryptionAvailable,
+    });
+  }
+
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, async () => buildSecurityOverview());
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_MODE, async (event, rawMode) => {
     const mode = normalizeToolPermissionMode(rawMode);

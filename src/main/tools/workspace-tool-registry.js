@@ -242,6 +242,34 @@ function createToolRegistry(initialDefinitions = []) {
   }
 
   /**
+   * What the Security page needs per tool (#448): every class a call can
+   * carry, whether it is offered at all (a key, a switch) and, for an MCP
+   * tool, its server. Texts in the interface language, like `listCatalog`.
+   */
+  function listRiskCatalog({ locale } = {}) {
+    const byName = new Map(allDefinitions().map((definition) => [definition.name, definition]));
+    return listCatalog({ locale }).map((entry) => {
+      const definition = byName.get(entry.name);
+      let available = false;
+      try {
+        available = definition.isAvailable() === true;
+      } catch {
+        available = false;
+      }
+      return {
+        name: entry.name,
+        shortDescription: entry.shortDescription,
+        riskClasses: [definition.riskClass, ...definition.additionalRiskClasses],
+        available,
+        mayOverwrite: definition.mayOverwrite === true,
+        mcpServer: definition.mcp
+          ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
+          : null,
+      };
+    });
+  }
+
+  /**
    * Schemas fuer den Anbieter.
    *
    * Die Beschreibung hat zwei Leser mit gegensaetzlichen Interessen (Issue
@@ -402,6 +430,7 @@ function createToolRegistry(initialDefinitions = []) {
     getTools,
     buildSystemPrompt,
     listCatalog,
+    listRiskCatalog,
     getDefinition,
     execute,
   };
@@ -932,6 +961,9 @@ function createWorkspaceToolRegistry({
       name: 'write_file_text',
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
+      // Overwriting a file without a copy in the trash is `delete` (planner);
+      // the Security page lists this tool in that row as well (#448).
+      mayOverwrite: true,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write', overwrite: true }],
       descriptionKey: 'tools.desc.write_file_text',
       modelDescription:

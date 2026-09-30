@@ -13,6 +13,7 @@ import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
 import { initWorkspaceModeSetting } from './WorkspaceModeSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
+import { initSecurityPanel } from './SecurityPanel.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -20,7 +21,9 @@ import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
  * write on the click. The hint in the footer has to say so — otherwise it
  * promises a safety net that is not there.
  */
-const IMMEDIATE_PANELS = new Set(['permissions', 'mcp', 'memory']);
+// Security (#448) shows the state and carries one instant control, the
+// workspace default mode.
+const IMMEDIATE_PANELS = new Set(['security', 'permissions', 'mcp', 'memory']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -36,7 +39,7 @@ const APPLY_HINT_KEYS = {
   general: 'settings.applyHint.general',
 };
 
-const SETTINGS_NAV_KEYS = ['models', 'tools', 'permissions', 'skills', 'memory', 'mcp', 'general'];
+const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'permissions', 'skills', 'memory', 'mcp', 'general'];
 
 /** Aufklapp-Pfeil der Tool-Zeilen (Issue #98); dreht sich per CSS. */
 const CHEVRON_ICON_HTML =
@@ -174,6 +177,9 @@ export function initSettingsModal(deps) {
   initWorkspaceModeSetting({ toolPermissions });
   // Program allowances (#408): only shell_execute runs a program by name.
   const programAllowances = initProgramAllowancesSetting({ api, toolPermissions });
+  // Settings › Security (#448): the state per risk class, computed by main.
+  // Its lines link to the places where a setting is changed today.
+  const securityPanel = initSecurityPanel({ api, toolPermissions, onNavigate: navigateToSetting });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
@@ -1511,6 +1517,25 @@ export function initSettingsModal(deps) {
     saveWebSearchApiKey('');
   });
 
+  /**
+   * A link on the Security page (#448): open the section and bring the card
+   * into view, its heading focused. A card hidden in the current state (the
+   * sandbox while execution is off) falls back to the one that explains it.
+   */
+  function navigateToSetting(panelKey, targetId, fallbackId = null) {
+    activateSettingsPanel(panelKey);
+    const visible = (node) => !!node && !node.closest('[hidden], .hidden');
+    let target = document.getElementById(targetId);
+    if (!visible(target) && fallbackId) target = document.getElementById(fallbackId);
+    if (!visible(target)) target = document.getElementById(`tab-settings-${panelKey}`);
+    if (!target) return;
+    if (target.tabIndex < 0 && !target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+    try {
+      target.scrollIntoView({ block: 'start' });
+    } catch { /* happy-dom and older engines */ }
+    target.focus();
+  }
+
   function activateSettingsPanel(panelKey) {
     document.querySelectorAll('.settings-panel').forEach((p) => {
       const on = p.id === `panel-settings-${panelKey}`;
@@ -1525,6 +1550,9 @@ export function initSettingsModal(deps) {
     });
     activePanelKey = SETTINGS_NAV_KEYS.includes(panelKey) ? panelKey : 'models';
     settingsPanelHeadingEl.textContent = t(`settings.nav.${activePanelKey}`);
+    // A tool switched in Tools a moment ago changes the page: read it again
+    // whenever it comes into view.
+    if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
       let hintKey = APPLY_HINT_KEYS.deferred;
@@ -1772,6 +1800,7 @@ export function initSettingsModal(deps) {
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
     // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.
     await toolPermissionsPanel?.open?.(settingsToolCatalog);
+    await securityPanel.open();
     // MCP (Issue #109) liest wie die Berechtigungen direkt vom Main und
     // wirkt sofort — die Serverliste haengt nicht am Entwurf.
     await mcpPanel?.open?.();
@@ -1818,6 +1847,7 @@ export function initSettingsModal(deps) {
 
   function closeSettingsModal() {
     toolPermissionsPanel?.close?.();
+    securityPanel.close();
     mcpPanel?.close?.();
     programAllowances.close();
     closeChatModelMenu(false);
