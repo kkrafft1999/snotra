@@ -239,6 +239,71 @@ test('writeJsonAtomic keeps previous file on interrupted write simulation', asyn
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
+/** fs whose rename fails `times` times with `code` before it goes through. */
+function fsWithFailingRename(code, times) {
+  const calls = { rename: 0 };
+  const wrapped = {
+    ...fs,
+    async rename(from, to) {
+      calls.rename += 1;
+      if (calls.rename <= times) {
+        const error = new Error(`${code}: operation not permitted, rename '${from}' -> '${to}'`);
+        error.code = code;
+        throw error;
+      }
+      return fs.rename(from, to);
+    },
+  };
+  return { fs: wrapped, calls };
+}
+
+function makeStorageWith(tmpDir, fsImpl, platform) {
+  return createStorageService({
+    app: { getPath: () => tmpDir },
+    safeStorage: { isEncryptionAvailable: () => false },
+    fs: fsImpl,
+    path,
+    providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
+    maxChatSessions: 3,
+    maxFolderHistory: 5,
+    defaultProviderId: 'openai',
+    platform,
+  });
+}
+
+test('on Windows a briefly held preferences file is replaced on a later attempt (#472)', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  try {
+    const { fs: flaky, calls } = fsWithFailingRename('EPERM', 2);
+    const storage = makeStorageWith(tmpDir, flaky, 'win32');
+    const saved = await storage.updateUIPrefs((prefs) => ({ ...prefs, disabledTools: ['edit_file'] }));
+    assert.deepEqual(saved.disabledTools, ['edit_file']);
+    assert.equal(calls.rename, 3);
+    assert.deepEqual((await storage.readUIPrefs()).disabledTools, ['edit_file']);
+    // No temporary file is left behind.
+    assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('elsewhere the first failed rename is the answer, and the file stays as it was (#472)', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  try {
+    await makeStorage(tmpDir).writeUIPrefs({ contentPaneVisible: true, appLocale: 'de' });
+    const target = path.join(tmpDir, 'ui-preferences.json');
+    const original = await fs.readFile(target, 'utf8');
+    const { fs: flaky, calls } = fsWithFailingRename('EPERM', 1);
+    const storage = makeStorageWith(tmpDir, flaky, 'linux');
+    await assert.rejects(() => storage.updateUIPrefs((prefs) => ({ ...prefs, disabledTools: ['edit_file'] })), { code: 'EPERM' });
+    assert.equal(calls.rename, 1);
+    assert.equal(await fs.readFile(target, 'utf8'), original);
+    assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('withChatHistoryLock serializes concurrent upserts', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);

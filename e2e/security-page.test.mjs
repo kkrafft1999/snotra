@@ -170,8 +170,21 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
   // A tool switch applies at once — no "Apply".
   const editSwitch = '.settings-security-row[data-risk-class="write"] input[data-tool-switch="edit_file"]';
   await page.locator(editSwitch).click();
-  await poll(async () => (await page.evaluate(() => window.electronAPI.getUIPrefs())).disabledTools?.includes('edit_file'),
-    { what: 'edit_file switched off in the preferences' });
+  try {
+    await poll(async () => (await page.evaluate(() => window.electronAPI.getUIPrefs())).disabledTools?.includes('edit_file'),
+      { what: 'edit_file switched off in the preferences' });
+  } catch (error) {
+    // Whether the switch took the click, and whether saving failed (#472).
+    const seen = await page.evaluate((selector) => {
+      const input = document.querySelector(selector);
+      const errorLine = document.getElementById('settings-security-error');
+      return {
+        switch: input ? { checked: input.checked, disabled: input.disabled } : 'missing',
+        pageError: errorLine && !errorLine.classList.contains('hidden') ? errorLine.textContent : '',
+      };
+    }, editSwitch);
+    throw new Error(`${error.message}; ${JSON.stringify(seen)}`);
+  }
   await poll(async () => /3 tools on/.test(await rowText(page, 'write')), { what: 'the row counts one tool less' });
   await page.locator(editSwitch).click();
   await poll(async () => !(await page.evaluate(() => window.electronAPI.getUIPrefs())).disabledTools?.includes('edit_file'),
