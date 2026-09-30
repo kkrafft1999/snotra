@@ -122,6 +122,10 @@ function setup({ missing = [], onChange, retryMs } = {}) {
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
     ...(retryMs === undefined ? {} : { retryMs }),
+    // The report a moment after the start (#478) is a third timer. These
+    // tests step through debounce and retry with `tick()` and leave it out;
+    // workspace-watcher.test.js covers it.
+    startRecheckMs: 0,
   });
   return { fake, clock, changes, watcher };
 }

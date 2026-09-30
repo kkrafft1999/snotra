@@ -43,6 +43,14 @@
  * erwartetes Pfadstück (Issue #155). Dagegen steht eine Wiedervorlage: Solange
  * ein Ziel fehlt, wird alle paar Sekunden nachgesehen, ob es inzwischen da
  * ist. Im Normalfall — Ziel vorhanden — läuft dieser Timer nicht.
+ *
+ * The window also swallows changes inside a target that exists (#478). Under
+ * file-system load it grows: in the measurement from #465, eight processes
+ * churning temp directories made 8 of 10 changes right after `fs.watch()` go
+ * unreported. So once the watchers are open and a target is among them, the
+ * service reports one more time a moment later, without a cause and with
+ * `complete: false`. The receiver then checks everything it shows once, and
+ * whatever fell into the window turns up there.
  */
 
 /** Ereignisse zusammenfassen, statt bei jedem einzelnen zu melden. */
@@ -66,6 +74,14 @@ const DEFAULT_MAX_WAIT_MS = 1000;
  * Hintergrund nicht aufzufallen.
  */
 const DEFAULT_RETRY_MS = 3000;
+
+/**
+ * How long after opening its watchers the service reports once more (#478).
+ * In the measurement from #465 a change made one second after `fs.watch()`
+ * always arrived, even under load. Two seconds leave room for a busier
+ * machine and are still soon enough that nobody sits waiting for the tree.
+ */
+const DEFAULT_START_RECHECK_MS = 2000;
 
 /**
  * Wie weit dürfen die Wächter aufsteigen, wenn das Ziel nichts anderes sagt?
@@ -101,6 +117,7 @@ function createDirectoryWatcher({
   debounceMs = DEFAULT_DEBOUNCE_MS,
   maxWaitMs = DEFAULT_MAX_WAIT_MS,
   retryMs = DEFAULT_RETRY_MS,
+  startRecheckMs = DEFAULT_START_RECHECK_MS,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
   nowImpl = Date.now,
@@ -127,6 +144,8 @@ function createDirectoryWatcher({
   let pendingUnattributed = false;
   /** Läuft nur, solange ein Ziel fehlt (Wiedervorlage, #155). */
   let retryTimer = null;
+  /** The one report a moment after the watchers were opened (#478). */
+  let startRecheckTimer = null;
   let closed = false;
 
   /** Die Ziele in einheitlicher Form — Zeichenkette oder Objekt ist erlaubt. */
@@ -368,11 +387,32 @@ function createDirectoryWatcher({
     }, retryMs);
   }
 
+  /**
+   * One report without a cause, a moment after the watchers were opened
+   * (#478): `complete: false` makes the receiver check everything it shows,
+   * which catches what fell into the start window. Only a watched target
+   * needs it. While a chain hangs on an ancestor, the retry above is already
+   * looking for the target and reports once it is there.
+   */
+  function scheduleStartRecheck() {
+    if (startRecheckTimer) {
+      clearTimeoutImpl(startRecheckTimer);
+      startRecheckTimer = null;
+    }
+    if (closed || !startRecheckMs || !slots.some((slot) => slot.isTarget)) return;
+
+    startRecheckTimer = setTimeoutImpl(() => {
+      startRecheckTimer = null;
+      if (!closed) notifyLater({ rebuild: false });
+    }, startRecheckMs);
+  }
+
   function build(workspaceRoot) {
     closeSlots();
     currentRoot = workspaceRoot ?? null;
     for (const target of targets(workspaceRoot)) watchChain(target);
     scheduleRetry();
+    scheduleStartRecheck();
   }
 
   /**
@@ -395,6 +435,10 @@ function createDirectoryWatcher({
     if (retryTimer) {
       clearTimeoutImpl(retryTimer);
       retryTimer = null;
+    }
+    if (startRecheckTimer) {
+      clearTimeoutImpl(startRecheckTimer);
+      startRecheckTimer = null;
     }
     pendingSince = null;
     pendingRebuild = false;
@@ -422,5 +466,6 @@ module.exports = {
   DEFAULT_DEBOUNCE_MS,
   DEFAULT_MAX_WAIT_MS,
   DEFAULT_RETRY_MS,
+  DEFAULT_START_RECHECK_MS,
   DEFAULT_FALLBACK_LEVELS,
 };
