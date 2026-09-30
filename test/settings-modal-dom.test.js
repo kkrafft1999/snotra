@@ -567,6 +567,34 @@ test('ein Klick auf einen Tab schaltet Panel, aria-selected und Ueberschrift um'
   }
 });
 
+test('a section picked while the dialog is still loading stays picked (#469)', async (t) => {
+  let release = null;
+  const { dom, modal } = await mountSettings({
+    modalDeps: {
+      // The first open (while mounting) loads at once, the second one waits.
+      refreshLLMState: () => (release === undefined ? new Promise((resolve) => { release = resolve; }) : undefined),
+    },
+  });
+  t.after(dom.cleanup);
+  modal.closeSettingsModal();
+  release = undefined;
+  const opening = modal.openSettingsModal();
+  await flush();
+  // On screen and on its default section before loading is done.
+  assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false);
+  assert.equal(panelFor('models').hidden, false);
+
+  tabFor('security').click();
+  tabFor('security').focus();
+  release();
+  await opening;
+  await flush();
+
+  assert.equal(panelFor('security').hidden, false, 'the dialog went back to Models');
+  assert.equal(tabFor('security').getAttribute('aria-selected'), 'true');
+  assert.equal(document.activeElement, tabFor('security'), 'the focus was taken away');
+});
+
 test('nur der aktive Tab liegt in der Tabreihenfolge (Roving Tabindex)', async (t) => {
   const { dom } = await mountSettings();
   t.after(dom.cleanup);
