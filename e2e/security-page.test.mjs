@@ -118,13 +118,16 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
   { what: 'run finished', timeoutMs: 60_000 });
 
   await openSecurityPage(app, page);
+  // The grant reaches the page through main's change event, which under the
+  // load of the parallel e2e files can land after the first draw (#460).
+  await poll(async () => /Runs/.test(await rowText(page, 'read')), { what: 'read row runs' });
+  await poll(async () => /1 session allowance/.test(await rowText(page, 'write')),
+    { what: 'write row with the session allowance' });
+  assert.match(await rowText(page, 'write'), /Asks/);
   const overview = await page.evaluate(() => window.electronAPI.getSecurityOverview());
   assert.equal(overview.workspace.root.endsWith(path.basename(workspace)), true);
   assert.equal(overview.defaultMode, 'smart');
   assert.deepEqual(overview.classes.map((c) => c.riskClass), ['read', 'read-sensitive', 'write', 'delete', 'execute', 'external']);
-  assert.match(await rowText(page, 'read'), /Runs/);
-  assert.match(await rowText(page, 'write'), /1 session allowance/);
-  assert.match(await rowText(page, 'write'), /Asks/);
   // Nothing that matches an approval reaches the renderer.
   const grant = overview.classes.find((c) => c.riskClass === 'write').sessionGrants[0];
   assert.equal('scopeKey' in grant, false);
