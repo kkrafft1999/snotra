@@ -43,13 +43,43 @@ const focusInfo = (page) => page.evaluate(() => {
   return el ? `${el.tagName.toLowerCase()}#${el.id || ''}.${el.className || ''}[${el.dataset?.riskClass || el.dataset?.securityLink || ''}]` : 'none';
 });
 
-/** Focus an element, make sure it has the focus, then press Enter on it. */
+/**
+ * Focus an element, make sure it has the focus, then press Enter on it. The
+ * page redraws its rows after a change, so every attempt focuses the element
+ * that is there now — a button replaced in between would never get it (#469).
+ */
 async function pressEnterOn(page, selector) {
-  await page.locator(selector).focus();
-  await poll(() => page.evaluate((sel) => document.activeElement === document.querySelector(sel), selector),
-    { what: `focus on ${selector}` });
+  try {
+    await poll(() => page.evaluate((sel) => {
+      const target = document.querySelector(sel);
+      if (!target) return false;
+      if (document.activeElement !== target) target.focus();
+      return document.activeElement === target;
+    }, selector), { what: `focus on ${selector}` });
+  } catch (error) {
+    throw new Error(`${error.message}; ${await focusBlocker(page, selector)}`);
+  }
   await page.keyboard.press('Enter');
 }
+
+/** Why an element does not take the focus, for the failure message. */
+const focusBlocker = (page, selector) => page.evaluate((sel) => {
+  const target = document.querySelector(sel);
+  const active = document.activeElement;
+  const describe = (el) => (el ? `${el.tagName.toLowerCase()}#${el.id || ''}.${String(el.className || '').split(' ')[0]}` : 'none');
+  if (!target) return 'target missing';
+  const hiddenBy = target.closest('[hidden], .hidden, [inert], [aria-hidden="true"]');
+  return JSON.stringify({
+    connected: target.isConnected,
+    disabled: target.disabled === true,
+    rects: target.getClientRects().length,
+    hiddenBy: describe(hiddenBy),
+    settingsHidden: document.getElementById('modal-settings')?.classList.contains('hidden'),
+    panelHidden: document.getElementById('panel-settings-security')?.hidden,
+    hasFocus: document.hasFocus(),
+    active: describe(active),
+  });
+}, selector);
 
 const rowText = (page, riskClass) => page.evaluate((cls) =>
   document.querySelector(`.settings-security-row[data-risk-class="${cls}"] .settings-security-row__toggle`)?.textContent ?? '', riskClass);
