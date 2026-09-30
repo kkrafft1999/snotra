@@ -1004,6 +1004,7 @@ module.exports = {
   'tools.mcp.desc.empty': 'Über den MCP-Server „{server}“. Kein Beschreibungstext vom Server.',
   'tools.mcp.short': '{text} (MCP: {server})',
   'tools.mcp.short.empty': 'Tool des MCP-Servers „{server}“.',
+  'tools.mcp.short.remembered': 'Bekannt aus der letzten Verbindung mit „{server}“.',
 
   // ── Errors the chat run reports ────────────────────────────────────────────
   'chat.error.noMessages': 'Keine Nachrichten übergeben.',
