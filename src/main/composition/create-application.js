@@ -946,6 +946,11 @@ function createApplication({
     // laufen in einer eigenen Prozessgruppe — ohne das hier ueberlebten sie
     // die App (Issue #106).
     mcpService.disposeSync();
+    // The same for a command or script still running (#506): both start it
+    // in a process group of their own, and the timer that would end it goes
+    // with this process.
+    shellRunnerService.disposeSync();
+    pythonRunnerService.disposeSync();
     // The proxy servers live in this process and go with it; this only
     // tidies up what the runtime keeps on disk.
     void sandboxService.shutdown();

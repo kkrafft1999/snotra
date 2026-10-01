@@ -188,6 +188,9 @@ function createPythonRunnerService({
     return shellPath ? 'login-shell' : 'inherited';
   }
 
+  // The stop of every script still running, for `disposeSync()` (#506).
+  const running = new Set();
+
   /** Prozessbaum beenden — ein Skript kann selbst Kinder gestartet haben. */
   function killTree(child) {
     if (!child || child.killed) return;
@@ -286,12 +289,14 @@ function createPythonRunnerService({
           killTree(child);
         };
         abortSignal?.addEventListener('abort', onAbort, { once: true });
+        running.add(onAbort);
 
         const finish = (result) => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
           abortSignal?.removeEventListener('abort', onAbort);
+          running.delete(onAbort);
           resolve(result);
         };
 
@@ -326,11 +331,23 @@ function createPythonRunnerService({
     }
   }
 
+  /**
+   * For the app quitting (#506): ends every script still running, at once and
+   * synchronously, as `mcpService.disposeSync()` does for the MCP servers.
+   * The child runs in a process group of its own and the timeout timer lives
+   * in this process — without this it would outlive the app.
+   */
+  function disposeSync() {
+    for (const stop of [...running]) stop();
+    running.clear();
+  }
+
   return {
     detect,
     describe: () => ({ ...detected }),
     isAvailable: () => detected.found === true,
     run,
+    disposeSync,
   };
 }
 
