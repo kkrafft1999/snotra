@@ -31,35 +31,50 @@ A block holds at most about 2k–4.5k lines of production code; its tests are
 reviewed with it. The order puts stable and security-relevant blocks first and
 the volatile ones last.
 
+The table names the core paths. The exact file lists, tests included, are in
+the block issues #486–#503, measured on 2026-10-01 at `08013d2`; the line
+counts below come from that measurement. Every source and test file in
+`src/`, `test/` and `e2e/` belongs to exactly one block — except the vendored
+fonts, the image assets and the manual screenshot scripts `e2e/manual-*.mjs`,
+which do not run in CI.
+
 | # | Block | Core paths | ≈ LOC | Stability |
 |---|---|---|---|---|
 | **Wave 1 — foundation and trust boundaries** |||||
-| B01 | Skeleton and boundaries | `main/index.js`, `main/window*.js`, `preload/`, `shared/ipc-channels.js`, `main/composition/`, `contracts/index.js`, `contracts/enums.js`, boundary guards | 2.8k | stable |
-| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `runtime/sensitive-*`, `runtime/path-pattern` | 3.9k | stable |
+| B01 | Skeleton and boundaries | `main/index.js`, `main/window*.js`, `main/permissions.js`, `preload/`, `shared/ipc-channels.js`, `shared/limits.js`, `main/composition/`, `contracts/index.js`, `contracts/enums.js`, `ipc/shell-handlers`, `ipc/request-lifecycle`, boundary guards | 2.8k | stable |
+| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `contracts/program-allowances`, `runtime/sensitive-*`, `runtime/path-pattern` | 4.1k | stable |
 | B03 | Sandbox and process execution | `sandbox-service`, `sandboxed-spawn`, `shell-runner-service`, `python-runner-service`, `runtime/shell-command-guard`, `runtime/simple-command`, `runtime/sandbox-domains`, `child-output-sink` | 2.0k | stable |
 | **Wave 2 — chat core** |||||
-| B04 | Chat engine | `application/chat/`, `application/ports/`, `contracts/chat`, `contracts/context-breakdown`, `contracts/usage` | 3.7k | stable |
-| B05 | Providers | `main/providers/`, `provider-*-adapter`, `credential-adapter`, `provider-secrets-adapter`, `request-timeout`, `contracts/llm-target`, `contracts/provider-endpoint` | 2.8k | mostly stable (#428 adds a provider) |
-| B06 | Tools | `main/tools/`, `workspace-tool-adapter`, `http-url-fetch-adapter`, `tavily-web-search-adapter`, `runtime/url-safety`, `runtime/html-to-text` | 3.2k | stable |
+| B04 | Chat engine | `application/chat/`, `application/ports/`, `ipc/chat-handlers`, `contracts/chat`, `contracts/message`, `contracts/context-breakdown`, `contracts/usage`, `runtime/abort`, `runtime/partial-json` | 3.9k | stable |
+| B05 | Providers | `main/providers/`, `provider-*-adapter`, `credential-adapter`, `provider-secrets-adapter`, `request-timeout`, `contracts/llm-target`, `contracts/provider-endpoint`, `runtime/fetch-errors`; voice input in the main process: `whisper-service`, `speech-adapter`, `contracts/voice` | 2.9k | mostly stable (#428 adds a provider) |
+| B06 | Tools | `main/tools/`, `workspace-tool-adapter`, `workspace-path-adapter`, `http-url-fetch-adapter`, `tavily-web-search-adapter`, `presentation/tool-display`, `contracts/tool-categories`, `runtime/url-safety`, `runtime/html-to-text` | 3.7k | stable |
 | **Wave 3 — state and lifecycle** |||||
-| B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `userdata-migration` | 3.6k | mostly stable (#473 touches it) |
-| B08 | Chat history and attachments | `chat-history-normalization`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image`, `contracts/workspace-pdf` | 1.5k | stable |
-| B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `application-menu`, `.github/workflows/`, `scripts/`, `package.json` | 2.3k | stable |
-| B10 | Skills, memory, project instructions | `skills-*`, `skill-suggestion-service`, `memory-adapter`, `project-instructions-adapter`, their contracts and runtime helpers, `system-skills/` | 2.0k | stable (#160 comes later) |
+| B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `chat-preferences-adapter`, `userdata-migration`, `rename-with-retry` | 3.8k | stable (#473 is fixed) |
+| B08 | Chat history and attachments | `chat-history-normalization`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image` | 1.3k | stable |
+| B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `AppVersionBadge`, `application-menu`, `.github/workflows/`, `scripts/`, `package.json` | 2.0k, plus 1.0k outside `src/` | stable |
+| B10 | Skills, memory, project instructions | `skills-*`, `skill-suggestion-service`, `memory-adapter`, `project-instructions-adapter`, `environment-adapter`, their contracts and runtime helpers, `system-skills/` | 2.1k | stable (#160 comes later) |
 | **Wave 4 — renderer** |||||
-| B11 | Chat UI | `app.js`, `ChatStream`, `renderer/chat/`, pickers, autocomplete, `ChatHistoryPanel`, `TokenBreakdownPanel`, `renderer/state/` | 4.5k | medium |
-| B12 | Approval and security UI | `ToolApprovalCard`, `tool-approval-*`, `ToolPermissionsPanel`, `SecurityPanel`, `security-overview-view`, `ProgramAllowancesSetting`, `sandbox-status-view` | 4.0k | stable |
-| B13 | Settings dialog | `SettingsModal`, `McpPanel`, `MemoryPanel`, `*Setting.js` | 3.5k | medium |
-| B14 | Styling and language catalogue | `styles.css`, `styles/tokens.css`, `index.html`, `shared/i18n/` | 13k, mostly tool-assisted | stable |
+| B11 | Chat stream | `ChatStream`, tool log (`renderer/chat/toolLog*`, `utils/tool-log-*`), images and links in the chat (`renderer/chat/`), `ImageLightbox`, `state/store`, `utils/helpers` | 3.1k | medium |
+| B12 | Composer and chat panels | `app.js`, pickers, autocomplete (with its sources in `renderer/chat/`), `SkillSuggestion`, `WhisperRecorder`, `ChatHistoryPanel`, `TokenBreakdownPanel`, `state/tool-permissions` | 3.2k | medium |
+| B13 | Approval and security UI | `ToolApprovalCard`, `tool-approval-*`, `ToolPermissionsPanel`, `SecurityPanel`, `security-overview-view`, `ProgramAllowancesSetting`, `FolderSandboxShield`, `sandbox-status-view`, `tool-catalog-view` | 3.9k | stable |
+| B14 | Settings dialog | `SettingsModal`, `McpPanel`, `MemoryPanel`, `*Setting.js`, `ThemeManager` | 3.6k | medium |
+| B15 | Styling and language catalogue | `styles.css`, `styles/`, `index.html`, `shared/i18n/`, `renderer/i18n.js` | 13.6k, mostly tool-assisted | stable |
 | **Wave 5 — once the areas have settled** |||||
-| B15 | MCP | `mcp-service`, `mcp-stdio-transport`, `mcp-adapter`, `contracts/mcp*` | 2.1k | after #341 |
-| B16 | File system and watchers (main) | `fs-service`, `ipc/fs-handlers`, `filesystem-ipc-adapter`, `directory-watcher`, `workspace-watcher`, `file-info`, search | 4.4k | after #343 |
-| B17 | Workspace UI | `FileTree`, `file-views/`, `SidebarResizer`, `renderer/tree/` | 4.0k | after #343, #479, #74 |
+| B16 | MCP | `mcp-service`, `mcp-stdio-transport`, `mcp-adapter`, the MCP tool migrations, `contracts/mcp*` | 2.1k | after #341 |
+| B17 | File system and watchers (main) | `fs-service`, `ipc/fs-handlers`, `ipc/dialog-handlers`, `filesystem-ipc-adapter`, `workspace-activation`, `directory-watcher`, `workspace-watcher`, `file-info`, search, `pdf-assets`, `contracts/workspace-tree`, `contracts/workspace-pdf` | 4.8k | after #343 |
+| B18 | Workspace UI | `FileTree`, `file-views/`, `SidebarResizer`, `renderer/tree/`, `nativePath`, `startupLayout` | 4.3k | after #343, #479, #74 |
 
-B14 is not read line by line. It is checked with targeted searches: raw
+The first draft of this table had seventeen blocks. Once every file was
+assigned, the chat UI came to 6.3k lines, so it became B11 and B12, and the
+blocks after it moved up by one.
+
+B15 is not read line by line. It is checked with targeted searches: raw
 colour and spacing values instead of tokens (against
 [`ui-design-tokens.md`](../.claude/rules/ui-design-tokens.md)), key parity
-between `en` and `de`, and orphaned selectors.
+between `en` and `de`, and orphaned selectors. Its few code files —
+`shared/i18n/index.js`, `shared/i18n/ui-quotes.js`, `renderer/i18n.js` — are
+read as usual, and the Content-Security-Policy in `index.html` is reviewed in
+B01.
 
 ## Guardrails
 
@@ -118,7 +133,9 @@ issue, so that each block can be read at a glance.
 ## Procedure per block
 
 1. **Block issue.** File list, the commit SHA the review is pinned to, the
-   matching section of `architecture.md`, and the checklist below.
+   matching section of `architecture.md`, and the checklist below. The block
+   issues were filed ahead of time (#486–#503); the SHA is recorded when the
+   review of a block starts.
 2. **Review against that SHA**, within the [guardrails](#guardrails) above,
    along a fixed checklist:
    - correctness and edge cases
@@ -141,6 +158,7 @@ issue, so that each block can be read at a glance.
      collide with the earlier `SNO-nn`
    - each issue states severity (critical / high / medium / low), effort
      (S / M / L), the affected places and a definition of done
+   - each issue is linked to its block issue as a sub-issue
 5. **Close the block issue** when the review is done — not when the fixes are.
    The fixes are prioritised afterwards like any other issue.
 
@@ -156,7 +174,7 @@ issue, so that each block can be read at a glance.
 ## Pace
 
 - One block per sitting, two to four a week.
-- Waves 1–4 (B01–B14) cover areas that are expected to stay quiet for the next
+- Waves 1–4 (B01–B15) cover areas that are expected to stay quiet for the next
   three to four weeks and fit into that window.
 - Wave 5 starts only once #341 and #343 are through; reviewing it earlier would
   mean reviewing code that is about to be rebuilt.
