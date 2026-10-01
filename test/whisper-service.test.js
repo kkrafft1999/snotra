@@ -132,7 +132,7 @@ test('transcribeAudio surfaces a JSON error message from a failed HTTP response'
   assert.deepEqual(res, { error: 'Datei zu groß' });
 });
 
-test('transcribeAudio falls back to statusText when the error body is not JSON', async (t) => {
+test('transcribeAudio quotes an error body that is not JSON, as the providers do (#541)', async (t) => {
   const { fetchImpl } = makeFetchStub(t, async () => ({
     ok: false,
     statusText: 'Service Unavailable',
@@ -146,7 +146,34 @@ test('transcribeAudio falls back to statusText when the error body is not JSON',
   });
 
   const res = await svc.transcribeAudio(Buffer.from('x'));
-  assert.deepEqual(res, { error: 'Service Unavailable' });
+  assert.deepEqual(res, { error: 'not json at all' });
+});
+
+test('an empty error body without a status text still says something (#541)', async (t) => {
+  const { fetchImpl } = makeFetchStub(t, async () => ({ ok: false, status: 503, statusText: '', text: async () => '' }));
+  const svc = createWhisperService({ fetchImpl, credentials: { getApiKey: async () => 'sk-test' } });
+  assert.deepEqual(await svc.transcribeAudio(Buffer.from('x')), { error: 'HTTP 503' });
+});
+
+test('a network failure names its cause, as a chat does (#541)', async () => {
+  const svc = createWhisperService({
+    fetchImpl: async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND api.openai.com' } });
+    },
+    credentials: { getApiKey: async () => 'sk-test' },
+  });
+  const res = await svc.transcribeAudio(Buffer.from('x'));
+  assert.equal(res.error, 'fetch failed (ENOTFOUND: getaddrinfo ENOTFOUND api.openai.com)');
+});
+
+test('a view wider than a byte is sent as its bytes, not its element values (#541)', async (t) => {
+  const { fetchImpl, calls } = makeFetchStub(t, async () => ({ ok: true, json: async () => ({ text: 'ok' }) }));
+  const svc = createWhisperService({ fetchImpl, credentials: { getApiKey: async () => 'sk-test' } });
+  const samples = new Uint16Array([0x0201, 0x0403]);
+  await svc.transcribeAudio(samples);
+  const body = calls[0].options.body;
+  const start = body.indexOf('Content-Type: audio/webm\r\n\r\n') + 'Content-Type: audio/webm\r\n\r\n'.length;
+  assert.deepEqual([...body.subarray(start, start + 4)], [...new Uint8Array(samples.buffer)]);
 });
 
 test('transcribeAudio reports network failures as an error instead of throwing', async () => {

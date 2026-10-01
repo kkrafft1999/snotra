@@ -500,3 +500,10 @@ test('die Vorlagen decken die im Issue genannten Ziele ab', () => {
   }
   assert.equal(isLocalEndpoint(compat.TEMPLATES.find((t) => t.id === 'openrouter').baseUrl), false);
 });
+
+test('an extra header replaces a built one in any spelling (#541)', () => {
+  const headers = compat.buildHeaders({ apiKey: 'sk-1', extraHeaders: 'authorization: Basic abc\nx-a: 1\nX-A: 2' });
+  assert.equal(new Headers(headers).get('authorization'), 'Basic abc', 'the key does not go along');
+  assert.equal(new Headers(headers).get('x-a'), '2', 'the last of two spellings wins');
+  assert.equal(Object.keys(headers).filter((k) => k.toLowerCase() === 'authorization').length, 1);
+});

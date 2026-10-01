@@ -8,6 +8,12 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 // Model-IDs kommen teils aus User-Input (Settings) und landen im API-Pfad.
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
+// The key goes in a header, not in the URL: URLs end up in proxy logs and
+// error output where headers do not (#541).
+function authHeaders(apiKey) {
+  return { 'x-goog-api-key': apiKey };
+}
+
 function bareModelId(modelOrPath) {
   const s = String(modelOrPath || '').trim();
   if (s.startsWith('models/')) return s.slice('models/'.length);
@@ -47,7 +53,7 @@ async function listModelsRequest(config) {
   if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
   let res;
   try {
-    res = await fetch(`${API_BASE}/models?key=${encodeURIComponent(apiKey)}&pageSize=200`, { signal: config.signal });
+    res = await fetch(`${API_BASE}/models?pageSize=200`, { headers: authHeaders(apiKey), signal: config.signal });
   } catch (err) {
     return { error: describeFetchErrorMessage(err, API_BASE) };
   }
@@ -195,9 +201,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
   if (tooling) body.tools = tooling;
 
-  const url = `${API_BASE}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const url = `${API_BASE}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`;
 
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', ...authHeaders(apiKey) };
   let res;
   try {
     res = await fetch(url, {
@@ -237,11 +243,13 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       if (!cand) continue;
       const parts = cand.content?.parts || [];
       for (const p of parts) {
-        if (typeof p.text === 'string' && p.text.length > 0) {
+        // A thought part carries its text in `text` as well, so it is checked
+        // first — otherwise the thinking would stream as the answer (#541).
+        if (p.thought === true) {
+          if (typeof p.text === 'string' && p.text) callbacks.onReasoningDelta?.(p.text);
+        } else if (typeof p.text === 'string' && p.text.length > 0) {
           textOut += p.text;
           callbacks.onTextDelta(p.text);
-        } else if (p.thought === true && typeof p.text === 'string') {
-          callbacks.onReasoningDelta(p.text);
         } else if (p.functionCall) {
           callbacks.onMarkGenerating();
           const fc = p.functionCall;

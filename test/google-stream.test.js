@@ -136,3 +136,36 @@ test('a thought signature survives stream → history → request (#540)', async
     thoughtSignature: 'sig-123',
   });
 });
+
+test('the key travels as a header, never in a URL (#541)', async (t) => {
+  const calls = mockFetch(t, (url) => (url.includes('/models?')
+    ? { ok: true, json: async () => ({ models: [] }) }
+    : helperSse([`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }] })}\n\n`])));
+  await google.listModels({ apiKey: 'AIza-secret' });
+  await google.streamChatRound({
+    config: { apiKey: 'AIza-secret' },
+    model: 'gemini-2.5-flash',
+    messages: [{ role: 'user', content: 'hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.url.includes('AIza-secret'), false, call.url);
+    assert.equal(call.options.headers['x-goog-api-key'], 'AIza-secret');
+  }
+});
+
+test('a thought part is thinking, not answer text (#541)', async (t) => {
+  mockFetch(t, () => helperSse([
+    `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Let me think', thought: true }, { text: 'Answer' }] }, finishReason: 'STOP' }] })}\n\n`,
+  ]));
+  const sink = collectCallbacks();
+  const res = await google.streamChatRound({
+    config: { apiKey: 'k' },
+    model: 'gemini-2.5-flash',
+    messages: [{ role: 'user', content: 'q' }],
+    callbacks: sink.callbacks,
+  });
+  assert.equal(res.message.content, 'Answer');
+  assert.deepEqual(sink.reasoningDeltas, ['Let me think']);
+});

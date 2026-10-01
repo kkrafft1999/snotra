@@ -1,6 +1,16 @@
 const { withRequestTimeout, userMessageOf, TRANSCRIPTION_TIMEOUT_MS } = require('./request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
 const { checkTranscriptionPayload } = require('../../shared/contracts/voice');
+const { readErrorMessage } = require('../providers/stream-helpers');
+const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors');
+
+const TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
+
+/** The bytes of an ArrayBuffer or of any view on one — not its element values (#541). */
+function bytesOf(payload) {
+  if (ArrayBuffer.isView(payload)) return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+  return Buffer.from(payload);
+}
 
 function createWhisperService({ fetchImpl, credentials, speechProviderId = 'openai', getAppLocale }) {
   const fetchFn = fetchImpl;
@@ -56,11 +66,12 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
     );
     const fileFooter = Buffer.from(`\r\n--${boundary}--\r\n`);
     const textParts = Buffer.from(fieldParts.join(''));
-    const fileBuf = Buffer.from(audioBuffer);
+    const fileBuf = bytesOf(audioBuffer);
     const body = Buffer.concat([textParts, fileHeader, fileBuf, fileFooter]);
 
+    let res;
     try {
-      const res = await fetchFn('https://api.openai.com/v1/audio/transcriptions', {
+      res = await fetchFn(TRANSCRIPTIONS_URL, {
         method: 'POST',
         signal: options.signal,
         headers: {
@@ -69,20 +80,14 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
         },
         body,
       });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        let msg = res.statusText;
-        try {
-          const j = JSON.parse(errText);
-          msg = j.error?.message || msg;
-        } catch { /* ignore */ }
-        return { error: msg };
-      }
-      const json = await res.json();
-      return { text: json.text || '' };
     } catch (err) {
-      return { error: err.message || createMessage('chat.voice.failed') };
+      // The same words as for a chat that cannot reach its provider (#541).
+      return { error: describeFetchErrorMessage(err) };
     }
+    if (!res.ok) return { error: await readErrorMessage(res) };
+    const json = await res.json().catch(() => null);
+    if (!json) return { error: createMessage('chat.voice.failed') };
+    return { text: json.text || '' };
   }
 
   return {

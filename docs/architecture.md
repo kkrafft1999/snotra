@@ -707,7 +707,8 @@ idempotent and leaves an already existing connection in place.
 ### Local or remote: by host, not by ID
 
 Three places treat local providers differently from cloud providers: the timeout
-of the model listing (`services/request-timeout.js`), the character budget of the
+of the model listing (`modelsTimeoutFor` in `providers/openai-compatible.js`, with
+the limits from `services/request-timeout.js`), the character budget of the
 history (`application/chat/chat-history-trim.js`) and the characters→tokens
 divisor of the context breakdown (`shared/contracts/context-breakdown.js`).
 

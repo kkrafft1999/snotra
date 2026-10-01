@@ -250,7 +250,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           }
         } else if (d.type === 'thinking_delta' && typeof d.thinking === 'string') {
           block.text = (block.text || '') + d.thinking;
-          callbacks.onReasoningDelta(d.thinking);
+          callbacks.onReasoningDelta?.(d.thinking);
         }
       } else if (type === 'content_block_stop') {
         // no-op; data already accumulated

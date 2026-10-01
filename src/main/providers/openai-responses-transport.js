@@ -188,7 +188,7 @@ async function streamResponsesRound({
         || ev === 'response.reasoning.delta'
       ) {
         const delta = typeof json.delta === 'string' ? json.delta : '';
-        if (delta) callbacks.onReasoningDelta(delta);
+        if (delta) callbacks.onReasoningDelta?.(delta);
         continue;
       }
 
