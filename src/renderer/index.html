@@ -690,7 +690,7 @@
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
             <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them. Which tools the model may use, and when Snotra asks first, is on the <strong>Security</strong> page.</p>
-            <div class="settings-tools-card" id="settings-python-card">
+            <div class="settings-tools-card">
               <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
               <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Security.</p>
               <div class="modal-field-group">
@@ -1015,7 +1015,7 @@
         <p id="modal-save-error" class="modal-save-error hidden" role="alert"></p>
         <div class="settings-dialog__footer-row">
           <div class="settings-version">
-            <span id="settings-version-label">Version —</span>
+            <span id="settings-version-label" data-i18n="settings.version.unknown">Version —</span>
             <button type="button" id="btn-check-updates" class="settings-version-link" data-i18n="settings.checkUpdates">Check for updates</button>
           </div>
           <div class="modal-actions">
@@ -1308,7 +1308,7 @@
                     <datalist id="model-name-options"></datalist>
                     <button type="button" id="btn-load-models" class="btn-secondary" data-i18n="addModel.model.load">Load models</button>
                   </div>
-                  <p id="model-status" class="modal-hint"></p>
+                  <p id="model-status" class="modal-hint" role="status"></p>
                   <p id="popup-model-catalog-hint" class="modal-hint"><span data-i18n="addModel.catalogHint.prefix">The model list refers to</span> <strong id="model-load-provider-label">Ollama</strong><span data-i18n="addModel.catalogHint.suffix">.</span></p>
                 </div>
               </div>

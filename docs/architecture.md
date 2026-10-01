@@ -1680,14 +1680,15 @@ Anything coming from a file, a model answer or a text field still goes through
 The menu bar and the context menu are built **synchronously**; an `await` on
 the preferences would mean a menu opening without labels. `create-application`
 therefore keeps the locale in memory (the same construction as the web search
-key) and hands `getAppLocale()` around. A language change runs like this:
+key) and hands `getAppLocale()` around. The language saves the moment it is
+picked in *Settings › General*, not on Apply (#297). A change runs like this:
 
 ```
-Renderer: Apply
+Renderer: language picked -> setUIPrefs({ appLocale })
   -> settings-handlers writes appLocale
   -> onAppLocaleChanged -> create-application remembers the locale
                         -> main/index.js rebuilds the menu bar
-  -> Renderer: setLocale() redraws the interface
+  -> Renderer: once the stored value comes back, setLocale() redraws the interface
 ```
 
 Electron cannot rename a menu item after the fact — the menu is set anew as a

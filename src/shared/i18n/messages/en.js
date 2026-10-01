@@ -376,6 +376,7 @@ module.exports = {
   'settings.loadFailed': 'Settings could not be loaded: {error}',
   'settings.loadFailed.unknown': 'Unknown error',
   'settings.saveFailed': 'Saving failed.',
+  'settings.savedButNotReloaded': 'Saved, but the new settings could not be read back: {error}',
 
   // ── Settings: models ─────────────────────────────────────────────────────
   'settings.models.encryptionWarning': 'Encrypted storage is not available on this system. A key cannot be stored safely.',
@@ -515,6 +516,7 @@ module.exports = {
   'settings.webSearch.status.noEncryption': 'Encrypted storage is not available on this system — a key cannot be stored safely.',
   'settings.webSearch.status.present': 'A key is stored; web_search is offered to the model.',
   'settings.webSearch.status.missing': 'No key stored — web_search is not offered to the model.',
+  'settings.webSearch.status.loadFailed': 'The web search state could not be read — whether a key is stored is unknown.',
   'settings.webSearch.saveFailed': 'The key could not be saved.',
   'settings.webSearch.needKey': 'Please enter a key first.',
 
@@ -761,6 +763,7 @@ module.exports = {
   'addModel.model.subhead': 'Model',
   'addModel.model.load': 'Load models',
   'addModel.model.empty': '— no models loaded yet —',
+  'addModel.model.manualPlaceholder': 'Model name, e.g. qwen2.5-coder-7b',
   'addModel.catalogHint.prefix': 'The model list refers to',
   'addModel.catalogHint.suffix': '.',
   'addModel.close.footer': 'Close',

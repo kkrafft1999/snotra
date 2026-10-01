@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
 async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   const dom = setupRendererDom();
@@ -34,7 +34,8 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
     getSkillCatalog: async () => ({ skills: [], activeSkills: [] }),
     getPythonState: async () => ({ enabled: false }),
     getShellState: async () => ({ enabled: false }),
-    getWebSearchState: async () => ({ hasKey: false }),
+    // The shape main answers with (settings-handlers.js): `hasApiKey`.
+    getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
     getAppVersion: async () => '1.5.3',
     cancelModelListing: async () => {},
     listModels: async () => ({ models: [] }),
@@ -405,6 +406,170 @@ test('die Vorlage belegt Adresse und API-Stil vor (#193)', async (t) => {
   assert.equal(document.getElementById('input-base-url').value, 'https://openrouter.ai/api/v1');
   assert.equal(document.getElementById('select-api-style').value, 'chat');
   assert.match(document.getElementById('provider-template-hint').textContent, /Router-Dienst/);
+});
+
+// --- The connection on screen (CR-B14-05) -----------------------------------
+
+const type = (id, value) => {
+  const el = document.getElementById(id);
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+async function openCompatPopup() {
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+}
+
+/** A stored gateway row as main sends it: yes/no about secrets, never values. */
+const STORED_GATEWAY_ROW = {
+  id: 'p1',
+  providerId: 'openai-compatible',
+  model: 'gpt-4o',
+  menuVisible: true,
+  configured: true,
+  connection: {
+    displayName: 'Gateway',
+    baseUrl: 'https://gw.example/v1',
+    apiStyle: 'chat',
+    insecureTls: false,
+    supportsImages: false,
+    sendTools: true,
+    hasKey: true,
+    keyUnreadable: false,
+    hasExtraHeaders: true,
+  },
+};
+
+test('"Load models" asks the server typed into the popup, with its key and headers (CR-B14-05)', async (t) => {
+  const requests = [];
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async (request) => { requests.push(request); return { models: [] }; },
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  type('input-base-url', 'https://gw.example/v1');
+  type('input-api-key', 'sk-gw');
+  type('input-extra-headers', 'X-Tenant: acme');
+  document.getElementById('btn-load-models').click();
+  await flush();
+
+  // Before the fix: the provider's default server, no key, no headers.
+  assert.deepEqual(requests, [{
+    providerId: 'openai-compatible',
+    apiKey: 'sk-gw',
+    baseUrl: 'https://gw.example/v1',
+    insecureTls: false,
+    extraHeaders: 'X-Tenant: acme',
+    presetId: undefined,
+  }]);
+});
+
+test('"Load models" on an edited row names the row, so main can use its stored key (CR-B14-05)', async (t) => {
+  const requests = [];
+  const { dom, appStore } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async (request) => { requests.push(request); return { models: [] }; },
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [STORED_GATEWAY_ROW];
+  appStore.llmState.activePresetId = 'p1';
+  await dom.reopenSettings();
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  document.getElementById('btn-load-models').click();
+  await flush();
+
+  assert.deepEqual(requests, [{
+    providerId: 'openai-compatible',
+    apiKey: undefined,
+    baseUrl: 'https://gw.example/v1',
+    insecureTls: false,
+    extraHeaders: undefined,
+    presetId: 'p1',
+  }]);
+});
+
+test('the same model on a second server is a second entry (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  await zeileAnlegen({ name: 'Gateway', baseUrl: 'https://gw.example/v1', model: 'qwen2.5' });
+
+  assert.deepEqual(zeilenTitel(), ['LM Studio · qwen2.5', 'Gateway · qwen2.5']);
+  assert.ok(document.getElementById('add-model-overlay').classList.contains('hidden'));
+});
+
+test('the same model on the same server is refused as a duplicate (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  // A trailing slash does not make it another server.
+  await zeileAnlegen({ name: 'Again', baseUrl: 'http://localhost:1234/v1/', model: 'qwen2.5' });
+
+  assert.deepEqual(zeilenTitel(), ['LM Studio · qwen2.5']);
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), false, 'the popup stays open');
+  assert.equal(document.getElementById('model-status').textContent, 'Diese Kombination gibt es bereits in der Liste.');
+});
+
+test('typing a key keeps a loaded model list and the model picked from it (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [OPENAI_VIEW],
+    listModels: async () => ({ models: [{ id: 'gpt-4o' }, { id: 'gpt-4.1' }, { id: 'o3' }] }),
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  document.getElementById('btn-load-models').click();
+  await flush();
+  const select = document.getElementById('select-model');
+  const options = () => [...select.options].map((o) => o.value);
+  const loaded = options();
+  assert.ok(['gpt-4o', 'gpt-4.1', 'o3'].every((id) => loaded.includes(id)));
+  select.value = 'o3';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  type('input-api-key', 's');
+  await flush();
+
+  // Before the fix one keystroke left only the stored model.
+  assert.deepEqual(options(), loaded);
+  assert.equal(select.value, 'o3');
+  assert.equal(document.getElementById('model-status').textContent, '3 Modelle gefunden.');
+  // What the keystroke is for still happens: the status line knows about the key.
+  assert.match(document.getElementById('provider-status').textContent, /Key/);
+});
+
+test('typing a header keeps the loaded name suggestions (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async () => ({ models: [{ id: 'gpt-4o' }, { id: 'gpt-4.1' }, { id: 'o3' }] }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  document.getElementById('btn-load-models').click();
+  await flush();
+  type('input-model', 'o3');
+  type('input-extra-headers', 'X-Tenant: a');
+  await flush();
+
+  assert.deepEqual(
+    [...document.querySelectorAll('#model-name-options option')].map((o) => o.value),
+    ['gpt-4o', 'gpt-4.1', 'o3'],
+  );
+  assert.equal(document.getElementById('input-model').value, 'o3');
+  assert.equal(document.getElementById('model-status').textContent, '3 Modelle gefunden.');
 });
 
 /**
@@ -876,11 +1041,10 @@ test('ein zweiter Menueaufruf bei offenem Dialog laesst den gemerkten Fokus steh
 
 // —— Erscheinungsbild (hell/dunkel) ——
 //
-// Der Umschalter sass bis v1.7.3 als Knopf in der Titelleiste; seitdem steht
-// er als Auswahl unter „Allgemein". Geprueft wird der Weg, der dabei neu ist:
-// Der offene Dialog zeigt den geltenden Stand, und uebernommen wird er erst
-// mit „Uebernehmen" — sonst aenderte ein versehentliches Antippen das Theme
-// dauerhaft, waehrend daneben steht, dass nichts ohne „Uebernehmen" gilt.
+// The switch sat in the title bar as a button until v1.7.3; since then it is
+// a choice under "General". The open dialog shows the appearance in force,
+// and since #297 a pick takes effect at once — no Apply involved, and the
+// footer of that section says so.
 
 function mountMitTheme({ theme = 'light', ...overrides } = {}) {
   const gesetzt = [];
@@ -1044,4 +1208,531 @@ test('„Uebernehmen" schickt die Sofort-Einstellungen nicht noch einmal mit (#2
   ]) {
     assert.equal(key in gesendet.uiPrefs, false, `${key} must not travel with Apply`);
   }
+});
+
+// --- Apply and the open sequence (CR-B14-06) ---------------------------------
+
+/** A promise the test resolves by hand. */
+function gate() {
+  let release;
+  const promise = new Promise((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
+/** Collects unhandled rejections for the duration of a test. */
+function watchUnhandledRejections(t) {
+  const seen = [];
+  const onUnhandled = (reason) => { seen.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  t.after(() => process.off('unhandledRejection', onUnhandled));
+  return seen;
+}
+
+const SYSTEM_SKILLS = [
+  { name: 'pdf', description: 'PDF', source: 'system', status: 'active', path: '/sys/pdf', detail: '', builtin: true },
+  { name: 'xlsx', description: 'Excel', source: 'system', status: 'active', path: '/sys/xlsx', detail: '', builtin: true },
+];
+
+const applyButton = () => document.getElementById('btn-settings-save');
+const footerError = () => document.getElementById('modal-save-error');
+
+test('Apply stays disabled until the whole open sequence has finished (CR-B14-06)', async (t) => {
+  let pending = null;
+  const commits = [];
+  const { dom, modal } = await mountSettings({
+    getSkillCatalog: () => (pending ? pending.promise : Promise.resolve({ skills: SYSTEM_SKILLS })),
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  modal.closeSettingsModal();
+
+  // The skill catalogue comes last; until then the dialog is only half there.
+  pending = gate();
+  const opening = modal.openSettingsModal();
+  await flush();
+  assert.equal(applyButton().disabled, true, 'enabled before the catalogue arrived');
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0, 'Apply during loading sent something');
+
+  pending.release({ skills: SYSTEM_SKILLS });
+  await opening;
+  await flush();
+  assert.equal(applyButton().disabled, false);
+  applyButton().click();
+  await flush();
+  assert.deepEqual(commits.map((c) => c.uiPrefs.activeSkills), [['pdf', 'xlsx']]);
+});
+
+test('without a skill catalogue Apply leaves the selection alone instead of sending none (CR-B14-06)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => { throw new Error('scan failed'); },
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+
+  assert.ok(sent, 'the rest is still saved');
+  assert.equal('activeSkills' in sent.uiPrefs, false, 'an empty list would switch every skill off');
+});
+
+test('after a failed load Apply stays disabled and sends nothing (CR-B14-06)', async (t) => {
+  let fail = false;
+  const commits = [];
+  const { dom } = await mountSettings({
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+    modalDeps: {
+      refreshLLMState: async () => { if (fail) throw new Error('main is gone'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  fail = true;
+  await dom.reopenSettings();
+
+  assert.equal(footerError().textContent, 'Einstellungen konnten nicht geladen werden: main is gone');
+  assert.equal(applyButton().disabled, true);
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0);
+});
+
+test('unreadable preferences keep Apply off instead of writing defaults over them (CR-B14-06)', async (t) => {
+  let fail = false;
+  const commits = [];
+  const { dom } = await mountSettings({
+    getUIPrefs: async () => {
+      if (fail) throw new Error('disk error');
+      return { baseSystemPrompt: 'Be brief.', appLocale: 'de', disabledTools: [], maxToolRounds: 30 };
+    },
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  fail = true;
+  await dom.reopenSettings();
+
+  assert.match(footerError().textContent, /disk error/);
+  assert.equal(applyButton().disabled, true);
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0, 'the stored system prompt and round limit would be gone');
+});
+
+test('each opening starts from fresh drafts (CR-B14-06)', async (t) => {
+  let fail = false;
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    modalDeps: {
+      refreshLLMState: async () => { if (fail) throw new Error('main is gone'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  // A row added and then cancelled with Close.
+  await zeileAnlegen({ name: 'Cancelled', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  assert.equal(zeilenTitel().length, 1);
+
+  fail = true;
+  await dom.reopenSettings();
+  assert.deepEqual(zeilenTitel(), [], 'the cancelled row is back on screen');
+  assert.equal(document.getElementById('pref-list-empty').classList.contains('hidden'), true,
+    'nothing was loaded, so the list does not claim to be empty');
+
+  fail = false;
+  await dom.reopenSettings();
+  assert.deepEqual(zeilenTitel(), []);
+});
+
+for (const [where, gatedKey] of [
+  ['while the model state loads', 'refreshLLMState'],
+  ['in the middle of the sequence', 'getPythonState'],
+]) {
+  test(`a close ${where} opens no sub-panel on the hidden dialog (CR-B14-06)`, async (t) => {
+    let pending = null;
+    const opened = [];
+    const spyPanel = (name) => ({
+      open: async () => { opened.push(name); },
+      refresh: async () => { opened.push(name); },
+      close() {},
+    });
+    const waitIfGated = (key, value) => () => (pending && gatedKey === key ? pending.promise : Promise.resolve(value));
+    const { dom, modal } = await mountSettings({
+      getPythonState: waitIfGated('getPythonState', { enabled: false }),
+      modalDeps: {
+        refreshLLMState: waitIfGated('refreshLLMState', undefined),
+        toolPermissionsPanel: spyPanel('permissions'),
+        mcpPanel: spyPanel('mcp'),
+        memoryPanel: spyPanel('memory'),
+      },
+    });
+    t.after(dom.cleanup);
+    modal.closeSettingsModal();
+    opened.length = 0;
+
+    pending = gate();
+    const opening = modal.openSettingsModal();
+    await flush();
+    modal.closeSettingsModal();
+    pending.release({ enabled: false });
+    await opening;
+    await flush();
+
+    assert.deepEqual(opened, []);
+    assert.ok(document.getElementById('modal-settings').classList.contains('hidden'));
+    assert.equal(applyButton().disabled, true);
+  });
+}
+
+test('a rejected Apply shows the failure in the footer, without an unhandled rejection (CR-B14-06)', async (t) => {
+  const unhandled = watchUnhandledRejections(t);
+  const { dom } = await mountSettings({
+    commitSettings: async () => { throw new Error('IPC closed'); },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+  await flush();
+
+  assert.equal(footerError().textContent, 'Speichern fehlgeschlagen.');
+  assert.equal(footerError().classList.contains('hidden'), false);
+  assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false, 'the dialog stays open');
+  assert.equal(applyButton().disabled, false, 'and Apply can be tried again');
+  assert.deepEqual(unhandled, []);
+});
+
+test('a failing reload after a successful save says so and keeps the dialog open (CR-B14-06)', async (t) => {
+  let saved = false;
+  const unhandled = watchUnhandledRejections(t);
+  const { dom } = await mountSettings({
+    commitSettings: async () => { saved = true; return { ok: true }; },
+    modalDeps: {
+      refreshLLMState: async () => { if (saved) throw new Error('state unreadable'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+  await flush();
+
+  assert.equal(footerError().textContent,
+    'Gespeichert, aber die neuen Einstellungen ließen sich nicht zurücklesen: state unreadable');
+  assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false);
+  assert.deepEqual(unhandled, []);
+});
+
+// --- Keyboard focus after delete, redraw and edit (CR-B14-07) ---------------
+
+/** Chromium drops the focus from a removed or disabled control; replay that. */
+const replayFrame = () => focusFixup(document, { isLaidOut: (el) => el.isConnected });
+
+const storedRow = (id, name, model, baseUrl = 'http://localhost:1234/v1') => ({
+  id,
+  providerId: 'openai-compatible',
+  model,
+  menuVisible: true,
+  configured: true,
+  connection: {
+    displayName: name,
+    baseUrl,
+    apiStyle: 'chat',
+    insecureTls: false,
+    supportsImages: false,
+    sendTools: true,
+    hasKey: false,
+    keyUnreadable: false,
+    hasExtraHeaders: false,
+  },
+});
+
+async function mountWithRows(t, rows, overrides = {}) {
+  const mounted = await mountSettings({ providers: [COMPAT_VIEW], ...overrides });
+  t.after(mounted.dom.cleanup);
+  mounted.appStore.llmState.presets = rows;
+  mounted.appStore.llmState.activePresetId = rows[0]?.id ?? null;
+  await mounted.dom.reopenSettings();
+  return mounted;
+}
+
+const trashOf = (id) => document.querySelector(`#pref-model-list .settings-icon-trash[data-preset-id="${id}"]`);
+const editOf = (id) => document.querySelector(`#pref-model-list .settings-icon-edit[data-edit-preset-id="${id}"]`);
+
+test('deleting a row moves the focus to the next row, the previous one, then "Add model" (CR-B14-07)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2'), storedRow('c', 'C', 'm3')]);
+
+  trashOf('b').focus();
+  trashOf('b').click();
+  replayFrame();
+  assert.ok(document.activeElement === trashOf('c'), 'the next row');
+
+  trashOf('c').click();
+  replayFrame();
+  assert.ok(document.activeElement === trashOf('a'), 'no next row: the previous one');
+
+  trashOf('a').click();
+  replayFrame();
+  assert.ok(document.activeElement === document.getElementById('btn-open-add-model'), 'an empty list: "Add model"');
+});
+
+test('editing a row moves the focus into the popup and back to the row on close (CR-B14-07)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2')]);
+  const overlay = document.getElementById('add-model-overlay');
+
+  editOf('b').focus();
+  editOf('b').click();
+  replayFrame();
+  // The provider is fixed while editing, so its choice is disabled; the
+  // first field the keyboard can reach is the display name.
+  assert.ok(overlay.contains(document.activeElement), 'the focus stayed behind the popup');
+  assert.equal(document.activeElement.id, 'input-display-name');
+
+  document.getElementById('btn-add-model-close').click();
+  replayFrame();
+  assert.ok(document.activeElement === editOf('b'), 'Close returns to the row, not to "Add model"');
+
+  // "Apply changes" redraws the list; the focus finds the row's new button.
+  editOf('b').click();
+  document.getElementById('btn-add-preset-row').click();
+  replayFrame();
+  assert.ok(document.activeElement === editOf('b'));
+
+  // Escape closes the popup the same way.
+  editOf('a').click();
+  document.getElementById('modal-settings').dispatchEvent(
+    new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  replayFrame();
+  assert.ok(overlay.classList.contains('hidden'));
+  assert.ok(document.activeElement === editOf('a'));
+});
+
+test('"Add model" still opens on the provider choice and returns to its button (CR-B14-07)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+  const add = document.getElementById('btn-open-add-model');
+
+  add.focus();
+  add.click();
+  assert.ok(document.activeElement === document.getElementById('select-provider'));
+  document.getElementById('btn-add-model-close-x').click();
+  replayFrame();
+  assert.ok(document.activeElement === add);
+});
+
+const TWO_SKILLS = [
+  { name: 'pdf', description: 'PDF', source: 'user-agents', status: 'active', path: '/s/pdf', detail: '', builtin: false },
+  { name: 'xlsx', description: 'Excel', source: 'user-agents', status: 'active', path: '/s/xlsx', detail: '', builtin: false },
+];
+const skillBox = (name) => document.querySelector(`#settings-skill-list input[data-skill-name="${name}"]`);
+
+test('a skill list redraw by the file watcher keeps the focus on the same skill (CR-B14-07)', async (t) => {
+  let onChanged = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    onSkillsChanged: (callback) => { onChanged = callback; },
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+
+  const before = skillBox('xlsx');
+  before.focus();
+  // Its description is open, too.
+  before.closest('li').querySelector('.settings-skill-item__summary').click();
+  onChanged();
+  await flush();
+  replayFrame();
+
+  assert.ok(skillBox('xlsx') !== before, 'the list was redrawn');
+  assert.ok(document.activeElement === skillBox('xlsx'));
+  const summary = skillBox('xlsx').closest('li').querySelector('.settings-skill-item__summary');
+  assert.equal(summary.getAttribute('aria-expanded'), 'true', 'the open description stays open');
+});
+
+test('"Reload skills" gives the focus back to its button after the busy state (CR-B14-07)', async (t) => {
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    reloadSkills: async () => ({ skills: TWO_SKILLS }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  const reload = document.getElementById('btn-reload-skills');
+
+  reload.focus();
+  reload.click();
+  // Disabled while it runs: Chromium drops the focus here.
+  replayFrame();
+  assert.ok(document.activeElement === document.body);
+  await flush();
+  replayFrame();
+
+  assert.equal(reload.disabled, false);
+  assert.ok(document.activeElement === reload);
+});
+
+// --- WCAG details of the model list (CR-B14-08) -----------------------------
+
+test('a model row title carries no lang, it holds translated and user-given names (CR-B14-08)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'Mein Gateway', 'gpt-4o')]);
+  const title = document.querySelector('#pref-model-list strong');
+  assert.equal(title.textContent, 'Mein Gateway · gpt-4o');
+  assert.equal(title.hasAttribute('lang'), false);
+});
+
+test('the duplicate message lands in the announced status region (CR-B14-08)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'A', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  await zeileAnlegen({ name: 'B', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+
+  const status = document.getElementById('model-status');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(status.textContent, 'Diese Kombination gibt es bereits in der Liste.');
+});
+
+// --- Smaller findings of block B14 (CR-B14-09) ------------------------------
+
+test('"Reload skills" keeps an unsaved untick; a new skill takes its saved state (CR-B14-09, 6)', async (t) => {
+  const docx = { name: 'docx', description: 'Word', source: 'user-agents', status: 'active', path: '/s/docx', detail: '', builtin: false };
+  let sent = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    reloadSkills: async () => ({ skills: [...TWO_SKILLS, docx] }),
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+
+  skillBox('xlsx').click();
+  assert.equal(skillBox('xlsx').checked, false);
+  document.getElementById('btn-reload-skills').click();
+  await flush();
+
+  assert.equal(skillBox('xlsx').checked, false, 'the untick was undone');
+  assert.equal(skillBox('pdf').checked, true);
+  assert.equal(skillBox('docx').checked, true, 'a new skill shows what is saved for it');
+  applyButton().click();
+  await flush();
+  assert.deepEqual(sent.uiPrefs.activeSkills, ['pdf', 'docx']);
+});
+
+test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t) => {
+  // A store that answers a moment later, like IPC does.
+  const store = { baseSystemPrompt: '', appLocale: 'de', disabledTools: ['run_python', 'shell_execute'] };
+  const later = (value) => new Promise((resolve) => { setTimeout(() => resolve(structuredClone(value)), 5); });
+  const { dom } = await mountSettings({
+    getUIPrefs: () => later(store),
+    setUIPrefs: async (patch) => { await later(null); Object.assign(store, patch); return structuredClone(store); },
+  });
+  t.after(dom.cleanup);
+
+  // Switching execution on also clears the tool's old tick-off (#449): two
+  // read-modify-writes of the same list, overlapping.
+  document.getElementById('input-python-enabled').click();
+  document.getElementById('input-shell-enabled').click();
+  await new Promise((resolve) => { setTimeout(resolve, 120); });
+
+  assert.deepEqual(store.disabledTools, [], 'one switch undid the other');
+});
+
+test('a language change keeps a typed web search key that is not saved yet (CR-B14-09, 8)', async (t) => {
+  const { dom } = await mountSettings({
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const key = document.getElementById('input-web-search-key');
+
+  key.value = 'tvly-typed';
+  key.dispatchEvent(new Event('input', { bubbles: true }));
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.equal(key.value, 'tvly-typed');
+  assert.equal(document.getElementById('settings-web-search-status').textContent,
+    'No key stored — web_search is not offered to the model.');
+});
+
+test('an unreadable web search state says so instead of "no key" (CR-B14-09, 8)', async (t) => {
+  const { dom } = await mountSettings({
+    getWebSearchState: async () => { throw new Error('IPC closed'); },
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const status = document.getElementById('settings-web-search-status');
+
+  assert.equal(status.textContent,
+    'Der Stand der Websuche ließ sich nicht lesen — ob ein Schlüssel hinterlegt ist, ist unbekannt.');
+  assert.ok(status.classList.contains('error'));
+  assert.equal(document.getElementById('btn-web-search-clear').disabled, false, 'a stored key can still be removed');
+
+  // And it stays said in the new language.
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(status.textContent, 'The web search state could not be read — whether a key is stored is unknown.');
+});
+
+test('a double click on a trash icon deletes one row, not two (CR-B14-09, 9)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2'), storedRow('c', 'C', 'm3')]);
+  const clickTrash = (id, detail) => trashOf(id).dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail }));
+
+  clickTrash('a', 1);
+  // The second click of the double click: row b has moved up under the pointer.
+  clickTrash('b', 2);
+
+  assert.deepEqual(zeilenTitel(), ['B · m2', 'C · m3']);
+  // A keyboard press (detail 0) still deletes.
+  clickTrash('b', 0);
+  assert.deepEqual(zeilenTitel(), ['C · m3']);
+});
+
+test('the model name placeholder comes from the catalogue, in both languages (CR-B14-09, 11)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  const input = document.getElementById('input-model');
+  assert.equal(input.placeholder, 'Modellname, z. B. qwen2.5-coder-7b');
+
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(input.placeholder, 'Model name, e.g. qwen2.5-coder-7b');
+});
+
+test('the version label speaks the catalogue and survives a language change (CR-B14-09, 12)', async (t) => {
+  const { dom } = await mountSettings({
+    getAppVersion: async () => ({ version: '1.13.2' }),
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const label = document.getElementById('settings-version-label');
+
+  assert.equal(label.textContent, 'Version 1.13.2');
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(label.textContent, 'Version 1.13.2', 'the markup key took the known version away');
+});
+
+test('a language change does not fetch a tool catalogue nothing redraws (CR-B14-09, 12)', async (t) => {
+  let fetched = 0;
+  const { dom, modal } = await mountSettings({
+    getToolCatalog: async () => { fetched += 1; return { tools: [] }; },
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const before = fetched;
+
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.equal(fetched, before);
+  assert.deepEqual(Object.keys(modal).sort(), ['closeSettingsModal', 'openSettingsModal'],
+    'nothing unused is handed out');
 });

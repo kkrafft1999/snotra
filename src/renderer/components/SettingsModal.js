@@ -49,17 +49,6 @@ const {
   isSkillSuggestionMode,
 } = contracts;
 
-let settingsDraftPresets = [];
-let settingsDraftActivePresetId = null;
-let settingsCredentialDraft = {};
-let popupPresetFieldValues = {};
-let settingsToolCatalog = [];
-let settingsDisabledToolsDraft = new Set();
-let settingsSkillCatalog = [];
-let settingsActiveSkillsDraft = new Set();
-/** Which section is open — needed to relabel it after a language change. */
-let activePanelKey = 'models';
-
 export function initSettingsModal(deps) {
   const {
     api,
@@ -81,6 +70,42 @@ export function initSettingsModal(deps) {
     setTheme = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
+
+  // The drafts of one opening. Each open starts them afresh (CR-B14-06): a
+  // cancelled session must not reach the next Apply.
+  let settingsDraftPresets = [];
+  let settingsDraftActivePresetId = null;
+  let settingsCredentialDraft = {};
+  let popupPresetFieldValues = {};
+  let settingsToolCatalog = [];
+  let settingsDisabledToolsDraft = new Set();
+  let settingsSkillCatalog = [];
+  let settingsActiveSkillsDraft = new Set();
+  /** Whether the skill catalogue arrived; until then Apply leaves the skills alone. */
+  let settingsSkillCatalogLoaded = false;
+  /** Which section is open — needed to relabel it after a language change. */
+  let activePanelKey = 'models';
+
+  function resetDrafts() {
+    settingsDraftPresets = [];
+    settingsDraftActivePresetId = null;
+    settingsCredentialDraft = {};
+    popupPresetFieldValues = {};
+    settingsToolCatalog = [];
+    settingsDisabledToolsDraft = new Set();
+    settingsSkillCatalog = [];
+    settingsActiveSkillsDraft = new Set();
+    settingsSkillCatalogLoaded = false;
+  }
+
+  /**
+   * One opening of the dialog. A close (or the next open) moves the
+   * generation on, and the open sequence still running stops at its next
+   * step. `settingsReady` is true once the whole sequence has finished
+   * without a failed load — only then may Apply write anything (CR-B14-06).
+   */
+  let openGeneration = 0;
+  let settingsReady = false;
 
   const modalSettings = document.getElementById('modal-settings');
   const modalSettingsBackdrop = document.getElementById('modal-settings-backdrop');
@@ -145,6 +170,10 @@ export function initSettingsModal(deps) {
   const btnWebSearchClear = document.getElementById('btn-web-search-clear');
   const webSearchStatusEl = document.getElementById('settings-web-search-status');
   let webSearchHasKey = false;
+  // What main last reported besides the key: whether one can be stored, and
+  // whether the state could be read at all (CR-B14-09).
+  let webSearchEncryption = true;
+  let webSearchStateUnknown = false;
   // Python execution (issue #86). The switch saves at once (issue #297); the
   // interpreter path is still part of the draft that Apply saves. The
   // interpreter that was found comes straight from main.
@@ -659,7 +688,7 @@ export function initSettingsModal(deps) {
       inputModel.value = typed || currentValue || '';
       inputModel.placeholder = known.length
         ? known[0].id
-        : 'Modellname, z. B. qwen2.5-coder-7b';
+        : t('addModel.model.manualPlaceholder');
       modelNameOptions.innerHTML = '';
       for (const m of known) {
         const opt = document.createElement('option');
@@ -723,6 +752,10 @@ export function initSettingsModal(deps) {
     }
     if (modelLoadProviderLabel) {
       modelLoadProviderLabel.textContent = draftProviderName(popupProviderId) || pv.name;
+    }
+    // Without loaded suggestions the name field's placeholder is a sentence.
+    if (allowsManualModel(pv) && modelNameOptions.children.length === 0) {
+      inputModel.placeholder = t('addModel.model.manualPlaceholder');
     }
     renderProviderStatusLine(popupProviderId);
   }
@@ -789,7 +822,6 @@ export function initSettingsModal(deps) {
       settingsCredentialDraft[providerId] = credentialDraftFor(pv);
     }
     const draft = activeDraft(providerId) || credentialDraftFor(pv);
-    const stored = activeStored(providerId);
 
     renderProviderTemplates(pv);
 
@@ -806,9 +838,7 @@ export function initSettingsModal(deps) {
       providerKeyRow.classList.remove('hidden');
       inputApiKey.value = draft.apiKey || '';
       syncSecretPlaceholders(providerId);
-      const showTrash =
-        stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
-      btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
+      syncSecretTrash(providerId);
       // Ein optionaler Key braucht die Ansage, dass leer in Ordnung ist —
       // sonst liest sich das leere Feld wie eine fehlende Angabe (Issue #193).
       providerKeyHint?.classList.toggle('hidden', form.apiKeyOptional !== true);
@@ -823,9 +853,7 @@ export function initSettingsModal(deps) {
       providerExtraHeadersRow.classList.remove('hidden');
       inputExtraHeaders.value = draft.extraHeaders || '';
       syncSecretPlaceholders(providerId);
-      const showHeaderTrash =
-        stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
-      btnRemoveExtraHeaders?.classList.toggle('hidden', !showHeaderTrash);
+      syncSecretTrash(providerId);
     } else {
       providerExtraHeadersRow.classList.add('hidden');
       inputExtraHeaders.value = '';
@@ -931,6 +959,38 @@ export function initSettingsModal(deps) {
     }
   }
 
+  /** The trash next to the key and the header field: shown while there is something to remove. */
+  function syncSecretTrash(providerId) {
+    const pv = findProviderView(providerId);
+    if (!pv) return;
+    const form = pv.form || {};
+    const draft = activeDraft(providerId) || credentialDraftFor(pv);
+    const stored = activeStored(providerId);
+    if (form.showApiKey) {
+      const showTrash = stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
+      btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
+    }
+    if (form.showExtraHeaders) {
+      const showTrash =
+        stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
+      btnRemoveExtraHeaders?.classList.toggle('hidden', !showTrash);
+    }
+  }
+
+  /**
+   * What a keystroke in the key or header field changes: the trash, the
+   * placeholders and the status line — never the model list, which a full
+   * `syncPopupProviderUI` would reset to the stored model (CR-B14-05).
+   */
+  function syncSecretControls(providerId) {
+    syncSecretTrash(providerId);
+    syncSecretPlaceholders(providerId);
+    renderProviderStatusLine(providerId);
+    // An error ("Enter an API key first", a refused key) was about the value
+    // before this keystroke; "3 models found" still holds and stays.
+    if (modelStatus.classList.contains('error')) setModelStatus('');
+  }
+
   /** The line below the provider choice: where it goes and what is stored. */
   function renderProviderStatusLine(providerId) {
     const pv = findProviderView(providerId);
@@ -1008,7 +1068,8 @@ export function initSettingsModal(deps) {
       const main = document.createElement('div');
       main.className = 'settings-pref-main';
       const title = document.createElement('strong');
-      title.lang = 'en';
+      // No `lang`: the title holds the provider name in the interface language
+      // ("OpenAI-kompatibel") or a name the user gave it (CR-B14-08).
       // Bei Verbindung je Eintrag traegt die Zeile ihren eigenen Namen.
       const zeilenName = pr.connection
         ? (pr.connection.displayName?.trim() || pv.builtInName || pv.name)
@@ -1071,6 +1132,16 @@ export function initSettingsModal(deps) {
 
   function renderSkillList() {
     if (!settingsSkillList) return;
+    // A redraw (file watcher, "Reload skills", a language change) replaces
+    // every node. The control that had the focus gets it back, found by the
+    // skill's name, and an open description stays open (CR-B14-07).
+    const focused = settingsSkillList.contains(document.activeElement) ? document.activeElement : null;
+    const focusName = focused?.closest('li[data-skill-item]')?.dataset.skillItem ?? null;
+    const focusOnSummary = !!focused?.closest('.settings-skill-item__summary');
+    const expanded = new Set(
+      [...settingsSkillList.querySelectorAll('li.settings-tool-row--open[data-skill-item]')]
+        .map((li) => li.dataset.skillItem)
+    );
     settingsSkillList.innerHTML = '';
     settingsSkillListEmpty?.classList.toggle('hidden', settingsSkillCatalog.length > 0);
 
@@ -1084,17 +1155,32 @@ export function initSettingsModal(deps) {
       settingsSkillList.appendChild(heading);
 
       for (const skill of group) {
-        settingsSkillList.appendChild(renderSkillItem(skill));
+        settingsSkillList.appendChild(renderSkillItem(skill, expanded.has(skill.name)));
       }
     }
+    if (focusName !== null) restoreSkillFocus(focusName, focusOnSummary);
+  }
+
+  /** Focus back onto a redrawn skill row; a skill that is gone hands it to "Reload skills". */
+  function restoreSkillFocus(name, onSummary) {
+    const li = settingsSkillList.querySelector(`li[data-skill-item="${CSS.escape(name)}"]`);
+    const checkbox = li?.querySelector('input[type="checkbox"]:not(:disabled)');
+    const summary = li?.querySelector('.settings-skill-item__summary');
+    const target = (onSummary ? summary : checkbox) || checkbox || summary || btnReloadSkills;
+    target?.focus();
   }
 
   let skillBodyId = 0;
 
-  function renderSkillItem(skill) {
+  function isUsableSkill(skill) {
+    return skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
+  }
+
+  function renderSkillItem(skill, open = false) {
     const li = document.createElement('li');
     li.className = 'settings-tool-item';
-    const usable = skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
+    li.dataset.skillItem = skill.name;
+    const usable = isUsableSkill(skill);
 
     const label = document.createElement('label');
     label.className = 'modal-checkbox settings-tool-item__checkbox';
@@ -1134,8 +1220,9 @@ export function initSettingsModal(deps) {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'settings-tool-row__summary settings-skill-item__summary';
-    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     toggle.setAttribute('aria-controls', bodyId);
+    li.classList.toggle('settings-tool-row--open', open);
 
     const shortEl = document.createElement('span');
     shortEl.className = 'settings-tool-row__short';
@@ -1147,7 +1234,7 @@ export function initSettingsModal(deps) {
     const body = document.createElement('div');
     body.className = 'settings-skill-item__body';
     body.id = bodyId;
-    body.hidden = true;
+    body.hidden = !open;
     if (detailText) {
       const desc = document.createElement('p');
       desc.className = 'settings-tool-item__desc';
@@ -1173,6 +1260,9 @@ export function initSettingsModal(deps) {
   }
 
   function adoptSkillCatalog(result) {
+    // An unreadable catalogue is not an empty selection: Apply would switch
+    // off every skill, the system skills included (CR-B14-06).
+    settingsSkillCatalogLoaded = Array.isArray(result?.skills);
     settingsSkillCatalog = Array.isArray(result?.skills) ? result.skills : [];
     // Der Katalog kennt bereits die Voreinstellung (System-Skills an), wenn in
     // den Prefs noch nichts gespeichert ist — daher den Entwurf daraus ableiten.
@@ -1205,11 +1295,15 @@ export function initSettingsModal(deps) {
    */
   async function refreshSkillCatalogKeepingSelection({ reload = false } = {}) {
     const previous = new Set(settingsActiveSkillsDraft);
+    const wasUsable = new Set(settingsSkillCatalog.filter(isUsableSkill).map((skill) => skill.name));
     await loadSkillCatalog({ reload });
-    for (const name of previous) {
-      if (settingsSkillCatalog.some((skill) => skill.name === name)) {
-        settingsActiveSkillsDraft.add(name);
-      }
+    // The fresh catalogue starts from what is saved. A skill that was
+    // already usable keeps what the user has ticked *or unticked* since; only
+    // a skill new to the list takes the saved state (CR-B14-09).
+    for (const skill of settingsSkillCatalog) {
+      if (!wasUsable.has(skill.name) || !isUsableSkill(skill)) continue;
+      if (previous.has(skill.name)) settingsActiveSkillsDraft.add(skill.name);
+      else settingsActiveSkillsDraft.delete(skill.name);
     }
     renderSkillList();
   }
@@ -1229,12 +1323,19 @@ export function initSettingsModal(deps) {
     webSearchStatusEl.classList.toggle('error', !!isError);
   }
 
-  function syncWebSearchUI({ encryptionAvailable = true } = {}) {
+  /**
+   * Draws the web search card from what main last reported. `keepInput`
+   * leaves a typed key that is not saved yet in its field: a language change
+   * only rewords the card (CR-B14-09).
+   */
+  function syncWebSearchUI({ keepInput = false } = {}) {
     if (!inputWebSearchKey) return;
-    inputWebSearchKey.value = '';
+    if (!keepInput) inputWebSearchKey.value = '';
     inputWebSearchKey.placeholder = webSearchHasKey ? t('settings.webSearch.key.stored') : 'tvly-…';
-    if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey;
-    if (!encryptionAvailable) {
+    // With the state unknown, removing stays possible: removing a key that is
+    // not there costs nothing.
+    if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey && !webSearchStateUnknown;
+    if (!webSearchEncryption) {
       if (btnWebSearchSave) btnWebSearchSave.disabled = true;
       setWebSearchStatus(
         t('settings.webSearch.status.noEncryption'),
@@ -1243,6 +1344,10 @@ export function initSettingsModal(deps) {
       return;
     }
     if (btnWebSearchSave) btnWebSearchSave.disabled = false;
+    if (webSearchStateUnknown) {
+      setWebSearchStatus(t('settings.webSearch.status.loadFailed'), true);
+      return;
+    }
     setWebSearchStatus(
       webSearchHasKey
         ? t('settings.webSearch.status.present')
@@ -1361,8 +1466,12 @@ export function initSettingsModal(deps) {
     } catch {
       state = null;
     }
+    // No answer is not "no key": the card says the state is unknown rather
+    // than inviting a key that may well be stored (CR-B14-09).
+    webSearchStateUnknown = !state || typeof state !== 'object';
     webSearchHasKey = state?.hasApiKey === true;
-    syncWebSearchUI({ encryptionAvailable: state?.encryptionAvailable !== false });
+    webSearchEncryption = state?.encryptionAvailable !== false;
+    syncWebSearchUI();
   }
 
   async function saveWebSearchApiKey(value) {
@@ -1379,6 +1488,7 @@ export function initSettingsModal(deps) {
       return;
     }
     webSearchHasKey = result.hasApiKey === true;
+    webSearchStateUnknown = false;
     syncWebSearchUI();
     // Without a key web_search is not offered; the Security page says so.
     void securityPanel.refresh();
@@ -1456,15 +1566,6 @@ export function initSettingsModal(deps) {
       appStore.llmState.activePresetId || settingsDraftPresets[0]?.id || null;
     hydrateCredentialDraftFromLlmState();
     popupPresetFieldValues = {};
-  }
-
-  /**
-   * Applies the language. This used to set `lang` on `<html>` and nothing else;
-   * since epic #277 `setLocale` genuinely redraws the interface — inside the
-   * dialog and outside it, without a restart.
-   */
-  function applyShellLocale(lc) {
-    setLocale(lc);
   }
 
   /**
@@ -1557,6 +1658,20 @@ export function initSettingsModal(deps) {
     // Beim Bearbeiten steht der Anbieter fest: Ein Wechsel waere ein anderer
     // Eintrag, kein bearbeiteter.
     selectProvider.disabled = !!row;
+    focusFirstPopupField();
+  }
+
+  /**
+   * Into the popup, onto its first field: the provider choice when adding,
+   * the row's first field when editing, where the choice is disabled. Left
+   * on the button behind the `aria-modal` popup, Tab would walk on in the
+   * list behind it (CR-B14-07).
+   */
+  function focusFirstPopupField() {
+    const dialog = addModelOverlay.querySelector('.add-model-dialog');
+    const field = [...(dialog?.querySelectorAll('select, input, textarea') || [])]
+      .find((el) => !el.disabled && el.type !== 'hidden' && !el.closest('.hidden, [hidden]'));
+    field?.focus();
   }
 
   /** Beschriftungen des Popups: anlegen oder bearbeiten. */
@@ -1586,6 +1701,8 @@ export function initSettingsModal(deps) {
   }
 
   function closeAddModelOverlay() {
+    const wasOpen = !addModelOverlay.classList.contains('hidden');
+    const editedPresetId = popupEditPresetId;
     cancelModelListing();
     stashPopupCredentialInputs();
     popupEditPresetId = null;
@@ -1594,7 +1711,14 @@ export function initSettingsModal(deps) {
     setDialogMode(false);
     addModelOverlay.classList.add('hidden');
     addModelOverlay.setAttribute('aria-hidden', 'true');
-    btnOpenAddModel?.focus?.();
+    if (!wasOpen) return;
+    // Back to where the popup was opened from: an edited row's edit button —
+    // redrawn by now, so found again by the row's id — otherwise "Add model"
+    // (CR-B14-07).
+    const editButton = editedPresetId
+      ? prefModelList?.querySelector(`.settings-icon-edit[data-edit-preset-id="${CSS.escape(editedPresetId)}"]`)
+      : null;
+    (editButton || btnOpenAddModel)?.focus?.();
   }
 
   /**
@@ -1607,10 +1731,19 @@ export function initSettingsModal(deps) {
   async function openSettingsModal(request) {
     const jump =
       request && typeof request === 'object' && typeof request.panel === 'string' ? request : null;
+    const generation = ++openGeneration;
+    // Every step below waits; a close or the next open in the meantime ends
+    // this opening, and it touches nothing more (CR-B14-06).
+    const stale = () => generation !== openGeneration;
+    settingsReady = false;
+    resetDrafts();
     stopChatVoiceListening();
     setModalError('');
     setProviderStatus('');
     setModelStatus('');
+    // Apply waits for the whole sequence: until the skill catalogue is in, it
+    // would send an empty selection, and after a failed load it would write
+    // defaults over what is stored (CR-B14-06).
     btnSettingsSave.disabled = true;
     closeChatModelMenu(false);
     appStore.lastFocusBeforeModal = document.activeElement;
@@ -1623,14 +1756,44 @@ export function initSettingsModal(deps) {
     activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
     try {
       await refreshLLMState();
-      setupDraftFromServerState();
     } catch (err) {
-      setModalError(t('settings.loadFailed', { error: err.message || t('settings.loadFailed.unknown') }));
+      if (stale()) return;
+      showLoadFailed(err);
+      // Nothing of a previous opening stays on screen as if it were loaded,
+      // and no list claims to be empty.
+      renderDraftPresetList();
+      prefListEmpty.classList.add('hidden');
+      renderSkillList();
+      settingsSkillListEmpty?.classList.add('hidden');
       modalEncryptionWarning.classList.add('hidden');
       return;
-    } finally {
-      btnSettingsSave.disabled = false;
     }
+    if (stale()) return;
+    try {
+      await loadRestOfSettings(jump, stale);
+    } catch (err) {
+      if (!stale()) showLoadFailed(err);
+    }
+  }
+
+  function showLoadFailed(err) {
+    setModalError(t('settings.loadFailed', { error: err?.message || t('settings.loadFailed.unknown') }));
+  }
+
+  /**
+   * A sub-panel that finished opening after the dialog was closed: the close
+   * already ran its `close()`, so it runs again — unless a newer opening owns
+   * the dialog by now.
+   */
+  function abandonPanel(panel) {
+    if (modalSettings.classList.contains('hidden')) panel?.close?.();
+  }
+
+  /** The open sequence after the model state is in; returns early once `stale()`. */
+  async function loadRestOfSettings(jump, stale) {
+    setupDraftFromServerState();
+    renderDraftPresetList();
+    let loadError = null;
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
@@ -1638,6 +1801,7 @@ export function initSettingsModal(deps) {
     themeChoice.set(getTheme?.() === 'dark' ? 'dark' : 'light');
     try {
       const up = await api.getUIPrefs();
+      if (stale()) return;
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
       localeChoice.set(up.appLocale === 'de' ? 'de' : 'en');
       if (selectSkillSuggestionMode) {
@@ -1661,7 +1825,13 @@ export function initSettingsModal(deps) {
       shellSwitch.set(up.shellExecutionEnabled === true);
       environmentSwitch.set(up.environmentInfoEnabled !== false);
       projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
-    } catch {
+    } catch (err) {
+      if (stale()) return;
+      // The fields below show defaults, not what is stored; Apply would write
+      // them over the system prompt, the interpreter path and the round
+      // limit. It stays off, and the footer says why (CR-B14-06).
+      loadError = err || new Error('');
+      showLoadFailed(loadError);
       inputGlobalSystemPrompt.value = '';
       // Without readable preferences the dialog shows the language it is
       // currently standing in — not a third one nobody picked.
@@ -1677,26 +1847,40 @@ export function initSettingsModal(deps) {
       projectInstructionsSwitch.set(true);
     }
     await loadPythonState();
+    if (stale()) return;
     await loadShellState();
+    if (stale()) return;
     await loadWebSearchState();
+    if (stale()) return;
     await loadToolCatalog();
+    if (stale()) return;
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
     // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.
     await toolPermissionsPanel?.open?.(settingsToolCatalog);
+    if (stale()) return abandonPanel(toolPermissionsPanel);
     await securityPanel.open();
+    if (stale()) return abandonPanel(securityPanel);
     // MCP (Issue #109) liest wie die Berechtigungen direkt vom Main und
     // wirkt sofort — die Serverliste haengt nicht am Entwurf.
     await mcpPanel?.open?.();
-    // Gedaechtnis (Issue #166): Die Eintraege kommen wie die Serverliste
-    // direkt vom Main, das Vergessen wirkt sofort. Nur die drei Schalter
-    // gehoeren zum Entwurf und werden mit „Übernehmen“ gespeichert.
+    if (stale()) return abandonPanel(mcpPanel);
+    // Memory (#166) reads its entries straight from main as well. Since #297
+    // forgetting and the three switches all take effect at once; none of it
+    // is part of the draft that Apply saves.
     await memoryPanel?.refresh?.();
+    if (stale()) return;
     await loadSkillCatalog();
+    if (stale()) return;
     renderDraftPresetList();
     renderProviderSelect();
     syncPopupProviderUI(selectProvider.value, true);
+    // The popup sync clears the footer; a failed load has to stay said there.
+    if (loadError) showLoadFailed(loadError);
+    settingsReady = !loadError;
+    btnSettingsSave.disabled = !settingsReady;
 
     queueMicrotask(() => {
+      if (stale()) return;
       // With a jump target the focus is on the switch it means, otherwise on
       // the selected section's tab.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
@@ -1735,6 +1919,9 @@ export function initSettingsModal(deps) {
   }
 
   function closeSettingsModal() {
+    // Ends an open sequence that is still loading (CR-B14-06).
+    openGeneration += 1;
+    settingsReady = false;
     toolPermissionsPanel?.close?.();
     securityPanel.close();
     mcpPanel?.close?.();
@@ -1758,15 +1945,20 @@ export function initSettingsModal(deps) {
     if (!pv) return;
     stashPopupCredentialInputs();
 
-    const d = settingsCredentialDraft[providerId] || {};
+    // The connection on screen: for a provider with a connection per entry
+    // that is the row being edited, not the provider (#202, CR-B14-05).
+    const d = activeDraft(providerId) || {};
+    const stored = activeStored(providerId);
+    const perPreset = usesPresetConnection(pv);
     const form = pv.form || {};
-    const apiKey = d.apiKey;
+    const apiKey = (d.apiKey || '').trim();
     const baseUrl = (d.baseUrl || '').trim();
     const insecureTls = form.showInsecureTls ? !!d.insecureTls : undefined;
+    const extraHeaders = form.showExtraHeaders && !d.removeExtraHeaders ? (d.extraHeaders || '') : '';
 
     // Ein optionaler Key darf fehlen (Issue #193) — dort ist die Server-URL die
     // einzige Voraussetzung.
-    if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!pv.hasKey || d.removeApiKey)) {
+    if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!stored.hasKey || d.removeApiKey)) {
       setModelStatus(t('addModel.needKey'), true);
       return;
     }
@@ -1778,11 +1970,16 @@ export function initSettingsModal(deps) {
     btnLoadModels.disabled = true;
     setModelStatus(t('addModel.models.loading'));
     try {
+      // `presetId` names the stored connection main may fall back on; main
+      // hands its key and headers only to the address they were stored with
+      // (#537).
       const result = await api.listModels({
         providerId,
         apiKey: apiKey || undefined,
         baseUrl: baseUrl || undefined,
         insecureTls,
+        extraHeaders: extraHeaders.trim() ? extraHeaders : undefined,
+        presetId: perPreset && popupEditPresetId ? popupEditPresetId : undefined,
       });
       if (generation !== modelRequestGeneration) return;
       // Eine fehlgeschlagene oder leere Liste ist bei einem frei gewaehlten
@@ -1842,6 +2039,11 @@ export function initSettingsModal(deps) {
     for (const field of pv.presetFields || []) {
       const value = popupPresetFieldValues[providerId]?.[field.key] || field.defaultValue;
       if (value) row[field.key] = value;
+    }
+    // With a connection per entry the server is part of what makes a row
+    // unique (#202): the same model on a second server is a second entry.
+    if (usesPresetConnection(pv)) {
+      row.connection = { baseUrl: (activeDraft(providerId)?.baseUrl || pv.defaultBaseUrl || '').trim() };
     }
     return row;
   }
@@ -1943,7 +2145,13 @@ export function initSettingsModal(deps) {
     };
   }
 
+  let settingsSaving = false;
+
   async function commitSettingsFromModal() {
+    // Apply writes only what the dialog has completely loaded, and one save
+    // at a time (CR-B14-06). The button is disabled in both cases; this holds
+    // even for a call that does not come through it.
+    if (!settingsReady || settingsSaving) return;
     stashPopupCredentialInputs();
     setModalError('');
     // Eine leere Liste lehnt der Main-Prozess ab — und speichert dabei System-
@@ -1985,37 +2193,63 @@ export function initSettingsModal(deps) {
       providerPatches[pid] = patch;
     }
 
+    const generation = openGeneration;
+    settingsSaving = true;
     btnSettingsSave.disabled = true;
     try {
-      const res = await api.commitSettings({
-        presets: settingsDraftPresets.map(presetToWireRow),
-        activePresetId,
-        providerPatches,
-        uiPrefs: {
-          baseSystemPrompt: inputGlobalSystemPrompt.value || '',
-          skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
-          maxToolRounds: (() => {
-            const n = parseInt(inputMaxToolRounds?.value || '', 10);
-            return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
-          })(),
-          activeSkills: [...settingsActiveSkillsDraft],
-          pythonInterpreterPath: inputPythonInterpreter?.value || '',
-        },
-      });
+      let res;
+      try {
+        res = await api.commitSettings({
+          presets: settingsDraftPresets.map(presetToWireRow),
+          activePresetId,
+          providerPatches,
+          uiPrefs: {
+            baseSystemPrompt: inputGlobalSystemPrompt.value || '',
+            skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
+            maxToolRounds: (() => {
+              const n = parseInt(inputMaxToolRounds?.value || '', 10);
+              return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
+            })(),
+            // Without a catalogue there is no selection to send — an empty
+            // list would switch every skill off (CR-B14-06).
+            ...(settingsSkillCatalogLoaded ? { activeSkills: [...settingsActiveSkillsDraft] } : {}),
+            pythonInterpreterPath: inputPythonInterpreter?.value || '',
+          },
+        });
+      } catch {
+        if (generation === openGeneration) setModalError(t('settings.saveFailed'));
+        return;
+      }
       if (res?.ok || res?.uiPrefsSaved) {
         // Sofort wirksam, ohne Neustart — wie die Sprache (Issue #97).
         onSkillSuggestionModeChanged?.(
           selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE
         );
       }
+      if (generation !== openGeneration) return;
       if (!res?.ok) {
         setModalError(tMessage(res?.error) || t('settings.saveFailed'));
         return;
       }
-      await refreshLLMState();
+      try {
+        await refreshLLMState();
+      } catch (err) {
+        // Saved, but the app could not read the new state back: the dialog
+        // stays open and says so rather than closing over a stale model menu.
+        if (generation === openGeneration) {
+          setModalError(t('settings.savedButNotReloaded', {
+            error: err?.message || t('settings.loadFailed.unknown'),
+          }));
+        }
+        return;
+      }
+      // Closed, or closed and opened again, while saving: that dialog is not
+      // this one's to close.
+      if (generation !== openGeneration) return;
       closeSettingsModal();
     } finally {
-      btnSettingsSave.disabled = false;
+      settingsSaving = false;
+      btnSettingsSave.disabled = !settingsReady;
     }
   }
 
@@ -2023,14 +2257,26 @@ export function initSettingsModal(deps) {
   btnSettingsClose.addEventListener('click', closeSettingsModal);
   btnSettingsFooterClose?.addEventListener('click', closeSettingsModal);
 
+  // Until the version is known the markup's `settings.version.unknown`
+  // stands there. The known one carries a value, which `data-i18n` cannot,
+  // so it leaves the attribute and is redrawn on a language change.
+  let appVersion = null;
+  function renderVersionLabel() {
+    if (!settingsVersionLabel || !appVersion) return;
+    settingsVersionLabel.removeAttribute('data-i18n');
+    settingsVersionLabel.textContent = t('settings.version.known', { version: appVersion });
+  }
+
   if (settingsVersionLabel && api.getAppVersion) {
-    api.getAppVersion()
+    Promise.resolve()
+      .then(() => api.getAppVersion())
       .then((info) => {
         if (info && typeof info.version === 'string') {
-          settingsVersionLabel.textContent = t('settings.version.known', { version: info.version });
+          appVersion = info.version;
+          renderVersionLabel();
         }
       })
-      .catch(() => { /* Label bleibt auf t('settings.version.unknown') */ });
+      .catch(() => { /* the label keeps settings.version.unknown */ });
   }
 
   btnCheckUpdates?.addEventListener('click', () => {
@@ -2063,11 +2309,6 @@ export function initSettingsModal(deps) {
 
   btnOpenAddModel?.addEventListener('click', () => {
     openAddModelOverlay();
-    queueMicrotask(() => {
-      try {
-        selectProvider.focus();
-      } catch { /* ignore */ }
-    });
   });
 
   btnAddModelCloseX?.addEventListener('click', closeAddModelOverlay);
@@ -2088,7 +2329,7 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.apiKey = inputApiKey.value;
     if (inputApiKey.value.trim()) draft.removeApiKey = false;
-    syncPopupProviderUI(id, true);
+    syncSecretControls(id);
   });
 
   btnRemoveApiKey?.addEventListener('click', () => {
@@ -2097,7 +2338,8 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.apiKey = '';
     draft.removeApiKey = true;
-    syncPopupProviderUI(id, true);
+    inputApiKey.value = '';
+    syncSecretControls(id);
   });
 
   inputBaseUrl.addEventListener('input', () => {
@@ -2145,7 +2387,7 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.extraHeaders = inputExtraHeaders.value;
     if (inputExtraHeaders.value.trim()) draft.removeExtraHeaders = false;
-    syncPopupProviderUI(id, true);
+    syncSecretControls(id);
   });
 
   btnRemoveExtraHeaders?.addEventListener('click', () => {
@@ -2154,7 +2396,8 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.extraHeaders = '';
     draft.removeExtraHeaders = true;
-    syncPopupProviderUI(id, true);
+    inputExtraHeaders.value = '';
+    syncSecretControls(id);
     inputExtraHeaders.focus();
   });
 
@@ -2181,7 +2424,9 @@ export function initSettingsModal(deps) {
   });
 
   btnSettingsSave.addEventListener('click', () => {
-    commitSettingsFromModal();
+    // Its own failures are caught inside; anything else still reaches the
+    // footer instead of becoming an unhandled rejection (CR-B14-06).
+    commitSettingsFromModal().catch(() => setModalError(t('settings.saveFailed')));
   });
 
   prefModelList?.addEventListener('click', (e) => {
@@ -2192,12 +2437,25 @@ export function initSettingsModal(deps) {
     }
     const rm = e.target.closest('.settings-icon-trash');
     if (rm && prefModelList.contains(rm)) {
+      // The second click of a double click lands on the next row's trash,
+      // which has just moved up under the pointer (CR-B14-09). A keyboard
+      // press has detail 0, a single click 1.
+      if (e.detail > 1) return;
       const id = rm.dataset.presetId;
+      const trashes = [...prefModelList.querySelectorAll('.settings-icon-trash')];
+      const at = trashes.indexOf(rm);
+      const neighbourId = (trashes[at + 1] || trashes[at - 1])?.dataset.presetId || null;
       settingsDraftPresets = settingsDraftPresets.filter((p) => p.id !== id);
       if (settingsDraftActivePresetId === id) {
         settingsDraftActivePresetId = settingsDraftPresets[0]?.id || null;
       }
       renderDraftPresetList();
+      // The trash went with its row. The focus moves to the next row's trash,
+      // else the previous one's, else to "Add model" (CR-B14-07).
+      const neighbour = neighbourId
+        ? prefModelList.querySelector(`.settings-icon-trash[data-preset-id="${CSS.escape(neighbourId)}"]`)
+        : null;
+      (neighbour || btnOpenAddModel)?.focus();
     }
   });
 
@@ -2224,10 +2482,20 @@ export function initSettingsModal(deps) {
 
   /**
    * A tool switch on the Security page (#449): at once, like every
-   * permission. The list is read afresh so that two quick switches do not
-   * undo each other, and the answer is checked like any other instant pref.
+   * permission. Each call reads the whole `disabledTools` list and writes it
+   * back, so the calls run one after another — two overlapping ones would
+   * both read the old list and the second would undo the first (CR-B14-09).
+   * The answer is checked like any other instant pref.
    */
-  async function setToolEnabled(name, on) {
+  let toolSwitchQueue = Promise.resolve();
+  function setToolEnabled(name, on) {
+    const run = toolSwitchQueue.then(() => writeToolEnabled(name, on));
+    // A failed write must not stop the ones queued behind it.
+    toolSwitchQueue = run.catch(() => {});
+    return run;
+  }
+
+  async function writeToolEnabled(name, on) {
     let current = [];
     try {
       const prefs = await api.getUIPrefs();
@@ -2262,7 +2530,9 @@ export function initSettingsModal(deps) {
     async (lc) => {
       const ok = await saveUiPref('appLocale', lc);
       // Switch first, then report — the status speaks the new language.
-      if (ok) applyShellLocale(lc);
+      // Since epic #277 `setLocale` redraws the whole interface, inside the
+      // dialog and outside it, without a restart.
+      if (ok) setLocale(lc);
       return ok;
     }
   );
@@ -2279,8 +2549,8 @@ export function initSettingsModal(deps) {
   );
   // Both decide whether run_python / shell_execute are offered; the status
   // line and the tool list follow what main now reports.
-  // The mode pill turns red for "Auto" with an unisolated execution tool
-  // (#357), so it has to hear about both switches too.
+  // The mode pill turns amber for "Auto" with an unisolated execution tool
+  // (#357, amber since #396), so it has to hear about both switches too.
   //
   // Since #449 the switch is the one control of its tool: switching it on
   // also clears an old tick-off from the tool list, which no longer exists.
@@ -2320,12 +2590,17 @@ export function initSettingsModal(deps) {
   });
 
   btnReloadSkills?.addEventListener('click', async () => {
+    // Disabled while it runs, which drops the keyboard focus in Chromium; it
+    // comes back once the button is usable again (CR-B14-07).
+    const hadFocus = document.activeElement === btnReloadSkills;
     btnReloadSkills.disabled = true;
     try {
       // Neu gefundene Skills sollen die bisherige Auswahl nicht verlieren.
       await refreshSkillCatalogKeepingSelection({ reload: true });
     } finally {
       btnReloadSkills.disabled = false;
+      const active = document.activeElement;
+      if (hadFocus && (!active || active === document.body)) btnReloadSkills.focus();
     }
   });
 
@@ -2359,19 +2634,19 @@ export function initSettingsModal(deps) {
     renderDraftPresetList();
     // Provider names, hints and option labels come from the main process in
     // the stored language as well (#310): fetch, then redraw what shows them.
-    void refreshLLMState().then(retranslateModels);
-    // Die Tool-Beschreibungen stehen im Main-Prozess und kommen in der
-    // gespeicherten Sprache zurueck (#291) — hier reicht kein Neuzeichnen, die
-    // Liste muss neu geholt werden. Der Main hat die neue Sprache bereits
-    // geschrieben, bevor dieser Rueckruf laeuft.
-    void loadToolCatalog();
+    // A failed read keeps the views it has; what the interface words itself
+    // is redrawn all the same.
+    void Promise.resolve().then(refreshLLMState).catch(() => {}).then(retranslateModels);
+    // The tool catalogue is not fetched again here: only the permission
+    // panel's rule form reads it, by tool name, which no language changes.
     renderSkillList();
-    syncWebSearchUI({ encryptionAvailable: appStore.llmState.encryptionAvailable !== false });
+    syncWebSearchUI({ keepInput: true });
     void loadPythonState();
     void loadShellState();
     // The open popup keeps its mode by itself: `setDialogMode` puts the key
     // into `data-i18n`, `applyTranslations` does the rest.
     applyTranslations(modalSettings);
+    renderVersionLabel();
     // A "Not saved" left standing would keep the language it was written in;
     // it belongs to an attempt that is over, so it goes rather than lingering
     // half-translated. The one next to the language itself is written after
@@ -2381,5 +2656,5 @@ export function initSettingsModal(deps) {
     }
   });
 
-  return { openSettingsModal, closeSettingsModal, applyShellLocale };
+  return { openSettingsModal, closeSettingsModal };
 }
