@@ -170,6 +170,10 @@ export function initSettingsModal(deps) {
   const btnWebSearchClear = document.getElementById('btn-web-search-clear');
   const webSearchStatusEl = document.getElementById('settings-web-search-status');
   let webSearchHasKey = false;
+  // What main last reported besides the key: whether one can be stored, and
+  // whether the state could be read at all (CR-B14-09).
+  let webSearchEncryption = true;
+  let webSearchStateUnknown = false;
   // Python execution (issue #86). The switch saves at once (issue #297); the
   // interpreter path is still part of the draft that Apply saves. The
   // interpreter that was found comes straight from main.
@@ -684,7 +688,7 @@ export function initSettingsModal(deps) {
       inputModel.value = typed || currentValue || '';
       inputModel.placeholder = known.length
         ? known[0].id
-        : 'Modellname, z. B. qwen2.5-coder-7b';
+        : t('addModel.model.manualPlaceholder');
       modelNameOptions.innerHTML = '';
       for (const m of known) {
         const opt = document.createElement('option');
@@ -748,6 +752,10 @@ export function initSettingsModal(deps) {
     }
     if (modelLoadProviderLabel) {
       modelLoadProviderLabel.textContent = draftProviderName(popupProviderId) || pv.name;
+    }
+    // Without loaded suggestions the name field's placeholder is a sentence.
+    if (allowsManualModel(pv) && modelNameOptions.children.length === 0) {
+      inputModel.placeholder = t('addModel.model.manualPlaceholder');
     }
     renderProviderStatusLine(popupProviderId);
   }
@@ -1164,11 +1172,15 @@ export function initSettingsModal(deps) {
 
   let skillBodyId = 0;
 
+  function isUsableSkill(skill) {
+    return skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
+  }
+
   function renderSkillItem(skill, open = false) {
     const li = document.createElement('li');
     li.className = 'settings-tool-item';
     li.dataset.skillItem = skill.name;
-    const usable = skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
+    const usable = isUsableSkill(skill);
 
     const label = document.createElement('label');
     label.className = 'modal-checkbox settings-tool-item__checkbox';
@@ -1283,11 +1295,15 @@ export function initSettingsModal(deps) {
    */
   async function refreshSkillCatalogKeepingSelection({ reload = false } = {}) {
     const previous = new Set(settingsActiveSkillsDraft);
+    const wasUsable = new Set(settingsSkillCatalog.filter(isUsableSkill).map((skill) => skill.name));
     await loadSkillCatalog({ reload });
-    for (const name of previous) {
-      if (settingsSkillCatalog.some((skill) => skill.name === name)) {
-        settingsActiveSkillsDraft.add(name);
-      }
+    // The fresh catalogue starts from what is saved. A skill that was
+    // already usable keeps what the user has ticked *or unticked* since; only
+    // a skill new to the list takes the saved state (CR-B14-09).
+    for (const skill of settingsSkillCatalog) {
+      if (!wasUsable.has(skill.name) || !isUsableSkill(skill)) continue;
+      if (previous.has(skill.name)) settingsActiveSkillsDraft.add(skill.name);
+      else settingsActiveSkillsDraft.delete(skill.name);
     }
     renderSkillList();
   }
@@ -1307,12 +1323,19 @@ export function initSettingsModal(deps) {
     webSearchStatusEl.classList.toggle('error', !!isError);
   }
 
-  function syncWebSearchUI({ encryptionAvailable = true } = {}) {
+  /**
+   * Draws the web search card from what main last reported. `keepInput`
+   * leaves a typed key that is not saved yet in its field: a language change
+   * only rewords the card (CR-B14-09).
+   */
+  function syncWebSearchUI({ keepInput = false } = {}) {
     if (!inputWebSearchKey) return;
-    inputWebSearchKey.value = '';
+    if (!keepInput) inputWebSearchKey.value = '';
     inputWebSearchKey.placeholder = webSearchHasKey ? t('settings.webSearch.key.stored') : 'tvly-…';
-    if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey;
-    if (!encryptionAvailable) {
+    // With the state unknown, removing stays possible: removing a key that is
+    // not there costs nothing.
+    if (btnWebSearchClear) btnWebSearchClear.disabled = !webSearchHasKey && !webSearchStateUnknown;
+    if (!webSearchEncryption) {
       if (btnWebSearchSave) btnWebSearchSave.disabled = true;
       setWebSearchStatus(
         t('settings.webSearch.status.noEncryption'),
@@ -1321,6 +1344,10 @@ export function initSettingsModal(deps) {
       return;
     }
     if (btnWebSearchSave) btnWebSearchSave.disabled = false;
+    if (webSearchStateUnknown) {
+      setWebSearchStatus(t('settings.webSearch.status.loadFailed'), true);
+      return;
+    }
     setWebSearchStatus(
       webSearchHasKey
         ? t('settings.webSearch.status.present')
@@ -1439,8 +1466,12 @@ export function initSettingsModal(deps) {
     } catch {
       state = null;
     }
+    // No answer is not "no key": the card says the state is unknown rather
+    // than inviting a key that may well be stored (CR-B14-09).
+    webSearchStateUnknown = !state || typeof state !== 'object';
     webSearchHasKey = state?.hasApiKey === true;
-    syncWebSearchUI({ encryptionAvailable: state?.encryptionAvailable !== false });
+    webSearchEncryption = state?.encryptionAvailable !== false;
+    syncWebSearchUI();
   }
 
   async function saveWebSearchApiKey(value) {
@@ -1457,6 +1488,7 @@ export function initSettingsModal(deps) {
       return;
     }
     webSearchHasKey = result.hasApiKey === true;
+    webSearchStateUnknown = false;
     syncWebSearchUI();
     // Without a key web_search is not offered; the Security page says so.
     void securityPanel.refresh();
@@ -1534,15 +1566,6 @@ export function initSettingsModal(deps) {
       appStore.llmState.activePresetId || settingsDraftPresets[0]?.id || null;
     hydrateCredentialDraftFromLlmState();
     popupPresetFieldValues = {};
-  }
-
-  /**
-   * Applies the language. This used to set `lang` on `<html>` and nothing else;
-   * since epic #277 `setLocale` genuinely redraws the interface — inside the
-   * dialog and outside it, without a restart.
-   */
-  function applyShellLocale(lc) {
-    setLocale(lc);
   }
 
   /**
@@ -1841,9 +1864,9 @@ export function initSettingsModal(deps) {
     // wirkt sofort — die Serverliste haengt nicht am Entwurf.
     await mcpPanel?.open?.();
     if (stale()) return abandonPanel(mcpPanel);
-    // Gedaechtnis (Issue #166): Die Eintraege kommen wie die Serverliste
-    // direkt vom Main, das Vergessen wirkt sofort. Nur die drei Schalter
-    // gehoeren zum Entwurf und werden mit „Übernehmen“ gespeichert.
+    // Memory (#166) reads its entries straight from main as well. Since #297
+    // forgetting and the three switches all take effect at once; none of it
+    // is part of the draft that Apply saves.
     await memoryPanel?.refresh?.();
     if (stale()) return;
     await loadSkillCatalog();
@@ -2234,14 +2257,26 @@ export function initSettingsModal(deps) {
   btnSettingsClose.addEventListener('click', closeSettingsModal);
   btnSettingsFooterClose?.addEventListener('click', closeSettingsModal);
 
+  // Until the version is known the markup's `settings.version.unknown`
+  // stands there. The known one carries a value, which `data-i18n` cannot,
+  // so it leaves the attribute and is redrawn on a language change.
+  let appVersion = null;
+  function renderVersionLabel() {
+    if (!settingsVersionLabel || !appVersion) return;
+    settingsVersionLabel.removeAttribute('data-i18n');
+    settingsVersionLabel.textContent = t('settings.version.known', { version: appVersion });
+  }
+
   if (settingsVersionLabel && api.getAppVersion) {
-    api.getAppVersion()
+    Promise.resolve()
+      .then(() => api.getAppVersion())
       .then((info) => {
         if (info && typeof info.version === 'string') {
-          settingsVersionLabel.textContent = t('settings.version.known', { version: info.version });
+          appVersion = info.version;
+          renderVersionLabel();
         }
       })
-      .catch(() => { /* Label bleibt auf t('settings.version.unknown') */ });
+      .catch(() => { /* the label keeps settings.version.unknown */ });
   }
 
   btnCheckUpdates?.addEventListener('click', () => {
@@ -2402,6 +2437,10 @@ export function initSettingsModal(deps) {
     }
     const rm = e.target.closest('.settings-icon-trash');
     if (rm && prefModelList.contains(rm)) {
+      // The second click of a double click lands on the next row's trash,
+      // which has just moved up under the pointer (CR-B14-09). A keyboard
+      // press has detail 0, a single click 1.
+      if (e.detail > 1) return;
       const id = rm.dataset.presetId;
       const trashes = [...prefModelList.querySelectorAll('.settings-icon-trash')];
       const at = trashes.indexOf(rm);
@@ -2443,10 +2482,20 @@ export function initSettingsModal(deps) {
 
   /**
    * A tool switch on the Security page (#449): at once, like every
-   * permission. The list is read afresh so that two quick switches do not
-   * undo each other, and the answer is checked like any other instant pref.
+   * permission. Each call reads the whole `disabledTools` list and writes it
+   * back, so the calls run one after another — two overlapping ones would
+   * both read the old list and the second would undo the first (CR-B14-09).
+   * The answer is checked like any other instant pref.
    */
-  async function setToolEnabled(name, on) {
+  let toolSwitchQueue = Promise.resolve();
+  function setToolEnabled(name, on) {
+    const run = toolSwitchQueue.then(() => writeToolEnabled(name, on));
+    // A failed write must not stop the ones queued behind it.
+    toolSwitchQueue = run.catch(() => {});
+    return run;
+  }
+
+  async function writeToolEnabled(name, on) {
     let current = [];
     try {
       const prefs = await api.getUIPrefs();
@@ -2481,7 +2530,9 @@ export function initSettingsModal(deps) {
     async (lc) => {
       const ok = await saveUiPref('appLocale', lc);
       // Switch first, then report — the status speaks the new language.
-      if (ok) applyShellLocale(lc);
+      // Since epic #277 `setLocale` redraws the whole interface, inside the
+      // dialog and outside it, without a restart.
+      if (ok) setLocale(lc);
       return ok;
     }
   );
@@ -2498,8 +2549,8 @@ export function initSettingsModal(deps) {
   );
   // Both decide whether run_python / shell_execute are offered; the status
   // line and the tool list follow what main now reports.
-  // The mode pill turns red for "Auto" with an unisolated execution tool
-  // (#357), so it has to hear about both switches too.
+  // The mode pill turns amber for "Auto" with an unisolated execution tool
+  // (#357, amber since #396), so it has to hear about both switches too.
   //
   // Since #449 the switch is the one control of its tool: switching it on
   // also clears an old tick-off from the tool list, which no longer exists.
@@ -2586,18 +2637,16 @@ export function initSettingsModal(deps) {
     // A failed read keeps the views it has; what the interface words itself
     // is redrawn all the same.
     void Promise.resolve().then(refreshLLMState).catch(() => {}).then(retranslateModels);
-    // Die Tool-Beschreibungen stehen im Main-Prozess und kommen in der
-    // gespeicherten Sprache zurueck (#291) — hier reicht kein Neuzeichnen, die
-    // Liste muss neu geholt werden. Der Main hat die neue Sprache bereits
-    // geschrieben, bevor dieser Rueckruf laeuft.
-    void loadToolCatalog();
+    // The tool catalogue is not fetched again here: only the permission
+    // panel's rule form reads it, by tool name, which no language changes.
     renderSkillList();
-    syncWebSearchUI({ encryptionAvailable: appStore.llmState.encryptionAvailable !== false });
+    syncWebSearchUI({ keepInput: true });
     void loadPythonState();
     void loadShellState();
     // The open popup keeps its mode by itself: `setDialogMode` puts the key
     // into `data-i18n`, `applyTranslations` does the rest.
     applyTranslations(modalSettings);
+    renderVersionLabel();
     // A "Not saved" left standing would keep the language it was written in;
     // it belongs to an attempt that is over, so it goes rather than lingering
     // half-translated. The one next to the language itself is written after
@@ -2607,5 +2656,5 @@ export function initSettingsModal(deps) {
     }
   });
 
-  return { openSettingsModal, closeSettingsModal, applyShellLocale };
+  return { openSettingsModal, closeSettingsModal };
 }

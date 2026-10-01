@@ -519,6 +519,7 @@ module.exports = {
   'settings.webSearch.status.noEncryption': 'Verschlüsselter Speicher ist auf diesem System nicht verfügbar — ein Schlüssel kann nicht sicher abgelegt werden.',
   'settings.webSearch.status.present': 'Ein Schlüssel ist hinterlegt; web_search wird dem Modell angeboten.',
   'settings.webSearch.status.missing': 'Kein Schlüssel hinterlegt — web_search wird dem Modell nicht angeboten.',
+  'settings.webSearch.status.loadFailed': 'Der Stand der Websuche ließ sich nicht lesen — ob ein Schlüssel hinterlegt ist, ist unbekannt.',
   'settings.webSearch.saveFailed': 'Der Schlüssel konnte nicht gespeichert werden.',
   'settings.webSearch.needKey': 'Bitte zuerst einen Schlüssel eingeben.',
 
@@ -756,6 +757,7 @@ module.exports = {
   'addModel.model.subhead': 'Modell',
   'addModel.model.load': 'Modelle laden',
   'addModel.model.empty': '— noch keine Modelle geladen —',
+  'addModel.model.manualPlaceholder': 'Modellname, z. B. qwen2.5-coder-7b',
   'addModel.catalogHint.prefix': 'Modellliste bezieht sich auf',
   'addModel.catalogHint.suffix': '.',
   'addModel.close.footer': 'Schließen',

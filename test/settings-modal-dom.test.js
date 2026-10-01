@@ -34,7 +34,8 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
     getSkillCatalog: async () => ({ skills: [], activeSkills: [] }),
     getPythonState: async () => ({ enabled: false }),
     getShellState: async () => ({ enabled: false }),
-    getWebSearchState: async () => ({ hasKey: false }),
+    // The shape main answers with (settings-handlers.js): `hasApiKey`.
+    getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
     getAppVersion: async () => '1.5.3',
     cancelModelListing: async () => {},
     listModels: async () => ({ models: [] }),
@@ -1040,11 +1041,10 @@ test('ein zweiter Menueaufruf bei offenem Dialog laesst den gemerkten Fokus steh
 
 // —— Erscheinungsbild (hell/dunkel) ——
 //
-// Der Umschalter sass bis v1.7.3 als Knopf in der Titelleiste; seitdem steht
-// er als Auswahl unter „Allgemein". Geprueft wird der Weg, der dabei neu ist:
-// Der offene Dialog zeigt den geltenden Stand, und uebernommen wird er erst
-// mit „Uebernehmen" — sonst aenderte ein versehentliches Antippen das Theme
-// dauerhaft, waehrend daneben steht, dass nichts ohne „Uebernehmen" gilt.
+// The switch sat in the title bar as a button until v1.7.3; since then it is
+// a choice under "General". The open dialog shows the appearance in force,
+// and since #297 a pick takes effect at once — no Apply involved, and the
+// footer of that section says so.
 
 function mountMitTheme({ theme = 'light', ...overrides } = {}) {
   const gesetzt = [];
@@ -1593,4 +1593,146 @@ test('the duplicate message lands in the announced status region (CR-B14-08)', a
   const status = document.getElementById('model-status');
   assert.equal(status.getAttribute('role'), 'status');
   assert.equal(status.textContent, 'Diese Kombination gibt es bereits in der Liste.');
+});
+
+// --- Smaller findings of block B14 (CR-B14-09) ------------------------------
+
+test('"Reload skills" keeps an unsaved untick; a new skill takes its saved state (CR-B14-09, 6)', async (t) => {
+  const docx = { name: 'docx', description: 'Word', source: 'user-agents', status: 'active', path: '/s/docx', detail: '', builtin: false };
+  let sent = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    reloadSkills: async () => ({ skills: [...TWO_SKILLS, docx] }),
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+
+  skillBox('xlsx').click();
+  assert.equal(skillBox('xlsx').checked, false);
+  document.getElementById('btn-reload-skills').click();
+  await flush();
+
+  assert.equal(skillBox('xlsx').checked, false, 'the untick was undone');
+  assert.equal(skillBox('pdf').checked, true);
+  assert.equal(skillBox('docx').checked, true, 'a new skill shows what is saved for it');
+  applyButton().click();
+  await flush();
+  assert.deepEqual(sent.uiPrefs.activeSkills, ['pdf', 'docx']);
+});
+
+test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t) => {
+  // A store that answers a moment later, like IPC does.
+  const store = { baseSystemPrompt: '', appLocale: 'de', disabledTools: ['run_python', 'shell_execute'] };
+  const later = (value) => new Promise((resolve) => { setTimeout(() => resolve(structuredClone(value)), 5); });
+  const { dom } = await mountSettings({
+    getUIPrefs: () => later(store),
+    setUIPrefs: async (patch) => { await later(null); Object.assign(store, patch); return structuredClone(store); },
+  });
+  t.after(dom.cleanup);
+
+  // Switching execution on also clears the tool's old tick-off (#449): two
+  // read-modify-writes of the same list, overlapping.
+  document.getElementById('input-python-enabled').click();
+  document.getElementById('input-shell-enabled').click();
+  await new Promise((resolve) => { setTimeout(resolve, 120); });
+
+  assert.deepEqual(store.disabledTools, [], 'one switch undid the other');
+});
+
+test('a language change keeps a typed web search key that is not saved yet (CR-B14-09, 8)', async (t) => {
+  const { dom } = await mountSettings({
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const key = document.getElementById('input-web-search-key');
+
+  key.value = 'tvly-typed';
+  key.dispatchEvent(new Event('input', { bubbles: true }));
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.equal(key.value, 'tvly-typed');
+  assert.equal(document.getElementById('settings-web-search-status').textContent,
+    'No key stored — web_search is not offered to the model.');
+});
+
+test('an unreadable web search state says so instead of "no key" (CR-B14-09, 8)', async (t) => {
+  const { dom } = await mountSettings({
+    getWebSearchState: async () => { throw new Error('IPC closed'); },
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const status = document.getElementById('settings-web-search-status');
+
+  assert.equal(status.textContent,
+    'Der Stand der Websuche ließ sich nicht lesen — ob ein Schlüssel hinterlegt ist, ist unbekannt.');
+  assert.ok(status.classList.contains('error'));
+  assert.equal(document.getElementById('btn-web-search-clear').disabled, false, 'a stored key can still be removed');
+
+  // And it stays said in the new language.
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(status.textContent, 'The web search state could not be read — whether a key is stored is unknown.');
+});
+
+test('a double click on a trash icon deletes one row, not two (CR-B14-09, 9)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2'), storedRow('c', 'C', 'm3')]);
+  const clickTrash = (id, detail) => trashOf(id).dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail }));
+
+  clickTrash('a', 1);
+  // The second click of the double click: row b has moved up under the pointer.
+  clickTrash('b', 2);
+
+  assert.deepEqual(zeilenTitel(), ['B · m2', 'C · m3']);
+  // A keyboard press (detail 0) still deletes.
+  clickTrash('b', 0);
+  assert.deepEqual(zeilenTitel(), ['C · m3']);
+});
+
+test('the model name placeholder comes from the catalogue, in both languages (CR-B14-09, 11)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  const input = document.getElementById('input-model');
+  assert.equal(input.placeholder, 'Modellname, z. B. qwen2.5-coder-7b');
+
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(input.placeholder, 'Model name, e.g. qwen2.5-coder-7b');
+});
+
+test('the version label speaks the catalogue and survives a language change (CR-B14-09, 12)', async (t) => {
+  const { dom } = await mountSettings({
+    getAppVersion: async () => ({ version: '1.13.2' }),
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const label = document.getElementById('settings-version-label');
+
+  assert.equal(label.textContent, 'Version 1.13.2');
+  pick('app-locale', 'en');
+  await flush();
+  assert.equal(label.textContent, 'Version 1.13.2', 'the markup key took the known version away');
+});
+
+test('a language change does not fetch a tool catalogue nothing redraws (CR-B14-09, 12)', async (t) => {
+  let fetched = 0;
+  const { dom, modal } = await mountSettings({
+    getToolCatalog: async () => { fetched += 1; return { tools: [] }; },
+    setUIPrefs: async (patch) => ({ appLocale: 'de', ...patch }),
+  });
+  t.after(dom.cleanup);
+  const before = fetched;
+
+  pick('app-locale', 'en');
+  await flush();
+
+  assert.equal(fetched, before);
+  assert.deepEqual(Object.keys(modal).sort(), ['closeSettingsModal', 'openSettingsModal'],
+    'nothing unused is handed out');
 });
