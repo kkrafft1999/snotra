@@ -581,7 +581,7 @@ module.exports = {
   'settings.skills.suggestion.lexical': 'From the descriptions (no model)',
   'settings.skills.suggestion.model': 'Ask the model',
   'settings.skills.suggestion.off': 'No suggestions',
-  'settings.skills.suggestion.hint': 'Type a <code>/</code> in the chat and Snotra suggests a fitting skill below the input, based on what you have written so far. Taking it up stays your click. “From the descriptions” runs on your machine and costs nothing; “Ask the model” also understands jargon, but sends the line and the skill names to the provider and takes a moment.',
+  'settings.skills.suggestion.hint': 'Type a <code>/</code> in the chat and Snotra suggests a fitting skill below the input, based on what you have written so far. Taking it up stays your click. “From the descriptions” runs on your machine and costs nothing; “Ask the model” also understands jargon, but sends what you have written before the <code>/</code> (up to 2,000 characters) and the skill names to the provider and takes a moment.',
   'settings.skills.catalog.heading': 'Available skills',
   'settings.skills.reload': 'Reload skills',
   'settings.skills.empty': 'No skills found.',

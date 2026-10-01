@@ -103,6 +103,14 @@ test('die Anfrage bleibt klein: keine Tools, keine Historie, gekappte Eingabe', 
   assert.equal(args.messages[1].content.length, MAX_QUERY_CHARS, 'Eingabe gekappt');
 });
 
+test('a long draft keeps its end — the request sits right before the slash (#586)', async () => {
+  const { service, runden } = setup();
+  await service.suggest(`${'a'.repeat(MAX_QUERY_CHARS)} write the minutes of yesterday's meeting`);
+  const sent = runden[0].messages[1].content;
+  assert.equal(sent.length, MAX_QUERY_CHARS);
+  assert.ok(sent.endsWith("write the minutes of yesterday's meeting"));
+});
+
 test('übergibt vollständige Rückmeldungen, weil Provider sie ungeprüft aufrufen', async () => {
   // Im Rauchtest gegen einen echten Provider endete `callbacks: {}` in einem
   // "callbacks.onTextDelta is not a function" mitten im Lauf — die Provider

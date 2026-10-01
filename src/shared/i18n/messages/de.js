@@ -587,7 +587,7 @@ module.exports = {
   'settings.skills.suggestion.lexical': 'Aus den Beschreibungen (ohne Modell)',
   'settings.skills.suggestion.model': 'Das Modell fragen',
   'settings.skills.suggestion.off': 'Keine Vorschläge',
-  'settings.skills.suggestion.hint': 'Tippst du im Chat ein <code>/</code>, schlägt Snotra unter dem Eingabefeld einen passenden Skill zu dem vor, was du bis dahin geschrieben hast. Das Übernehmen bleibt dein Klick. „Aus den Beschreibungen“ rechnet auf deinem Rechner und kostet nichts; „Das Modell fragen“ versteht auch Fachkürzel, schickt dafür aber die Zeile und die Skill-Namen an den Anbieter und braucht einen Moment.',
+  'settings.skills.suggestion.hint': 'Tippst du im Chat ein <code>/</code>, schlägt Snotra unter dem Eingabefeld einen passenden Skill zu dem vor, was du bis dahin geschrieben hast. Das Übernehmen bleibt dein Klick. „Aus den Beschreibungen“ rechnet auf deinem Rechner und kostet nichts; „Das Modell fragen“ versteht auch Fachkürzel, schickt dafür aber, was du vor dem <code>/</code> geschrieben hast (bis zu 2.000 Zeichen), und die Skill-Namen an den Anbieter und braucht einen Moment.',
   'settings.skills.catalog.heading': 'Verfügbare Skills',
   'settings.skills.reload': 'Skills neu laden',
   'settings.skills.empty': 'Keine Skills gefunden.',
