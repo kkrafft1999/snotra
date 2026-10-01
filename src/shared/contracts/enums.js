@@ -1,19 +1,20 @@
 /**
- * Versionierte Enums der Contract-Schicht (Roadmap-Etappe 1).
+ * Enums der Contract-Schicht (Roadmap-Etappe 1).
  *
  * Diese Werte sind der gemeinsame Wortschatz zwischen Main und Renderer für
  * Chat, Streaming und Tools. Sie MÜSSEN mit den bisher an der IPC-Grenze
  * verwendeten String-Literalen übereinstimmen — beim Ändern eines Werts hier
- * ändert sich das Wire-Format, daher CONTRACT_VERSION mitziehen.
+ * ändert sich das Wire-Format.
+ *
+ * There is no version number to raise with it (#509): main and renderer
+ * always ship together, so there is nothing to negotiate. What is stored on
+ * disk carries its own file version where a migration needs one.
  *
  * CommonJS, damit Main (require) und die node:test-Suite die Datei direkt
  * nutzen können. Der Renderer erhält dieselben Werte über das aus dieser
  * Schicht generierte ESM-Bundle (siehe scripts/sync-renderer-vendor.js).
  */
 'use strict';
-
-// Erhöhen, sobald sich Form oder Bedeutung eines Contracts unverträglich ändert.
-const CONTRACT_VERSION = 1;
 
 // Fehlercodes eines Chat-Ergebnisses (result.code).
 const CHAT_ERROR_CODES = Object.freeze({
@@ -114,7 +115,6 @@ const PRESET_FIELD_CONTROLS = Object.freeze({
 });
 
 module.exports = {
-  CONTRACT_VERSION,
   CHAT_ERROR_CODES,
   CHAT_PHASES,
   TOOL_LINE_PHASES,

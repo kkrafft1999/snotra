@@ -29,7 +29,7 @@ implementations nor the file system.
 
 | Layer | Path | Role |
 | ------- | ---- | ----- |
-| **Contracts** | `src/shared/contracts/` | Versioned DTOs, events, enums, validators for the IPC boundary and persistence |
+| **Contracts** | `src/shared/contracts/` | DTOs, events, enums, validators for the IPC boundary and persistence |
 | **Presentation (shared)** | `src/shared/presentation/` | Domain-adjacent display helpers for main adapters and tests (e.g. tool lines); not imported by the core |
 | **Application** | `src/application/chat/`, `src/application/ports/` | Chat orchestration, tool loop, history trimming — only through injected ports |
 | **Main adapters** | `src/main/adapters/` | Concrete port implementations (LLM, tools, storage, FS, speech, updates, …) |

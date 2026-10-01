@@ -20,6 +20,8 @@
 
 const { isLocalEndpoint } = require('./provider-endpoint');
 
+// Stamped on a breakdown, which is stored with the chat. Nothing reads it yet;
+// it lets a later shape tell the old stored ones apart.
 const CONTEXT_BREAKDOWN_VERSION = 1;
 
 /** Grobe Blöcke des Prompts — die Anzeige gruppiert danach. */

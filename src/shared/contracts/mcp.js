@@ -20,8 +20,6 @@
 const { TOOL_RISK_CLASSES } = require('./tool-permissions');
 const { createMessage, isMessage } = require('./message');
 
-const MCP_CONTRACT_VERSION = 1;
-
 /**
  * Protokollversion, die im `initialize`-Handshake angeboten wird. Ein Server
  * darf mit einer anderen antworten; der Dienst übernimmt dann seine Angabe,
@@ -584,7 +582,6 @@ function validateMcpServerInput(raw) {
 }
 
 module.exports = {
-  MCP_CONTRACT_VERSION,
   MCP_PROTOCOL_VERSION,
   MCP_TRANSPORTS,
   MCP_TRANSPORT_LIST,

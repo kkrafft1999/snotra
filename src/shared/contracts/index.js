@@ -11,7 +11,6 @@
 'use strict';
 
 const {
-  CONTRACT_VERSION,
   CHAT_ERROR_CODES,
   CHAT_PHASES,
   TOOL_LINE_PHASES,
@@ -202,7 +201,6 @@ const {
 } = require('./tool-permissions');
 
 const {
-  MCP_CONTRACT_VERSION,
   MCP_PROTOCOL_VERSION,
   MCP_TRANSPORTS,
   MCP_TRANSPORT_LIST,
@@ -252,7 +250,6 @@ const { createMessage, isMessage } = require('./message');
 module.exports = {
   createMessage,
   isMessage,
-  CONTRACT_VERSION,
   CHAT_ERROR_CODES,
   CHAT_PHASES,
   TOOL_LINE_PHASES,
@@ -414,7 +411,6 @@ module.exports = {
   isToolApprovalRequestDto,
   normalizeToolApprovalResponse,
   createPermissionAuditEntry,
-  MCP_CONTRACT_VERSION,
   MCP_PROTOCOL_VERSION,
   MCP_TRANSPORTS,
   MCP_TRANSPORT_LIST,
