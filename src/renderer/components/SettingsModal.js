@@ -1123,6 +1123,16 @@ export function initSettingsModal(deps) {
 
   function renderSkillList() {
     if (!settingsSkillList) return;
+    // A redraw (file watcher, "Reload skills", a language change) replaces
+    // every node. The control that had the focus gets it back, found by the
+    // skill's name, and an open description stays open (CR-B14-07).
+    const focused = settingsSkillList.contains(document.activeElement) ? document.activeElement : null;
+    const focusName = focused?.closest('li[data-skill-item]')?.dataset.skillItem ?? null;
+    const focusOnSummary = !!focused?.closest('.settings-skill-item__summary');
+    const expanded = new Set(
+      [...settingsSkillList.querySelectorAll('li.settings-tool-row--open[data-skill-item]')]
+        .map((li) => li.dataset.skillItem)
+    );
     settingsSkillList.innerHTML = '';
     settingsSkillListEmpty?.classList.toggle('hidden', settingsSkillCatalog.length > 0);
 
@@ -1136,16 +1146,27 @@ export function initSettingsModal(deps) {
       settingsSkillList.appendChild(heading);
 
       for (const skill of group) {
-        settingsSkillList.appendChild(renderSkillItem(skill));
+        settingsSkillList.appendChild(renderSkillItem(skill, expanded.has(skill.name)));
       }
     }
+    if (focusName !== null) restoreSkillFocus(focusName, focusOnSummary);
+  }
+
+  /** Focus back onto a redrawn skill row; a skill that is gone hands it to "Reload skills". */
+  function restoreSkillFocus(name, onSummary) {
+    const li = settingsSkillList.querySelector(`li[data-skill-item="${CSS.escape(name)}"]`);
+    const checkbox = li?.querySelector('input[type="checkbox"]:not(:disabled)');
+    const summary = li?.querySelector('.settings-skill-item__summary');
+    const target = (onSummary ? summary : checkbox) || checkbox || summary || btnReloadSkills;
+    target?.focus();
   }
 
   let skillBodyId = 0;
 
-  function renderSkillItem(skill) {
+  function renderSkillItem(skill, open = false) {
     const li = document.createElement('li');
     li.className = 'settings-tool-item';
+    li.dataset.skillItem = skill.name;
     const usable = skill.status === SKILL_STATUS.ACTIVE || skill.status === SKILL_STATUS.AVAILABLE;
 
     const label = document.createElement('label');
@@ -1186,8 +1207,9 @@ export function initSettingsModal(deps) {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'settings-tool-row__summary settings-skill-item__summary';
-    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     toggle.setAttribute('aria-controls', bodyId);
+    li.classList.toggle('settings-tool-row--open', open);
 
     const shortEl = document.createElement('span');
     shortEl.className = 'settings-tool-row__short';
@@ -1199,7 +1221,7 @@ export function initSettingsModal(deps) {
     const body = document.createElement('div');
     body.className = 'settings-skill-item__body';
     body.id = bodyId;
-    body.hidden = true;
+    body.hidden = !open;
     if (detailText) {
       const desc = document.createElement('p');
       desc.className = 'settings-tool-item__desc';
@@ -1612,6 +1634,20 @@ export function initSettingsModal(deps) {
     // Beim Bearbeiten steht der Anbieter fest: Ein Wechsel waere ein anderer
     // Eintrag, kein bearbeiteter.
     selectProvider.disabled = !!row;
+    focusFirstPopupField();
+  }
+
+  /**
+   * Into the popup, onto its first field: the provider choice when adding,
+   * the row's first field when editing, where the choice is disabled. Left
+   * on the button behind the `aria-modal` popup, Tab would walk on in the
+   * list behind it (CR-B14-07).
+   */
+  function focusFirstPopupField() {
+    const dialog = addModelOverlay.querySelector('.add-model-dialog');
+    const field = [...(dialog?.querySelectorAll('select, input, textarea') || [])]
+      .find((el) => !el.disabled && el.type !== 'hidden' && !el.closest('.hidden, [hidden]'));
+    field?.focus();
   }
 
   /** Beschriftungen des Popups: anlegen oder bearbeiten. */
@@ -1641,6 +1677,8 @@ export function initSettingsModal(deps) {
   }
 
   function closeAddModelOverlay() {
+    const wasOpen = !addModelOverlay.classList.contains('hidden');
+    const editedPresetId = popupEditPresetId;
     cancelModelListing();
     stashPopupCredentialInputs();
     popupEditPresetId = null;
@@ -1649,7 +1687,14 @@ export function initSettingsModal(deps) {
     setDialogMode(false);
     addModelOverlay.classList.add('hidden');
     addModelOverlay.setAttribute('aria-hidden', 'true');
-    btnOpenAddModel?.focus?.();
+    if (!wasOpen) return;
+    // Back to where the popup was opened from: an edited row's edit button —
+    // redrawn by now, so found again by the row's id — otherwise "Add model"
+    // (CR-B14-07).
+    const editButton = editedPresetId
+      ? prefModelList?.querySelector(`.settings-icon-edit[data-edit-preset-id="${CSS.escape(editedPresetId)}"]`)
+      : null;
+    (editButton || btnOpenAddModel)?.focus?.();
   }
 
   /**
@@ -2228,11 +2273,6 @@ export function initSettingsModal(deps) {
 
   btnOpenAddModel?.addEventListener('click', () => {
     openAddModelOverlay();
-    queueMicrotask(() => {
-      try {
-        selectProvider.focus();
-      } catch { /* ignore */ }
-    });
   });
 
   btnAddModelCloseX?.addEventListener('click', closeAddModelOverlay);
@@ -2362,11 +2402,20 @@ export function initSettingsModal(deps) {
     const rm = e.target.closest('.settings-icon-trash');
     if (rm && prefModelList.contains(rm)) {
       const id = rm.dataset.presetId;
+      const trashes = [...prefModelList.querySelectorAll('.settings-icon-trash')];
+      const at = trashes.indexOf(rm);
+      const neighbourId = (trashes[at + 1] || trashes[at - 1])?.dataset.presetId || null;
       settingsDraftPresets = settingsDraftPresets.filter((p) => p.id !== id);
       if (settingsDraftActivePresetId === id) {
         settingsDraftActivePresetId = settingsDraftPresets[0]?.id || null;
       }
       renderDraftPresetList();
+      // The trash went with its row. The focus moves to the next row's trash,
+      // else the previous one's, else to "Add model" (CR-B14-07).
+      const neighbour = neighbourId
+        ? prefModelList.querySelector(`.settings-icon-trash[data-preset-id="${CSS.escape(neighbourId)}"]`)
+        : null;
+      (neighbour || btnOpenAddModel)?.focus();
     }
   });
 
@@ -2489,12 +2538,17 @@ export function initSettingsModal(deps) {
   });
 
   btnReloadSkills?.addEventListener('click', async () => {
+    // Disabled while it runs, which drops the keyboard focus in Chromium; it
+    // comes back once the button is usable again (CR-B14-07).
+    const hadFocus = document.activeElement === btnReloadSkills;
     btnReloadSkills.disabled = true;
     try {
       // Neu gefundene Skills sollen die bisherige Auswahl nicht verlieren.
       await refreshSkillCatalogKeepingSelection({ reload: true });
     } finally {
       btnReloadSkills.disabled = false;
+      const active = document.activeElement;
+      if (hadFocus && (!active || active === document.body)) btnReloadSkills.focus();
     }
   });
 

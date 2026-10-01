@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
 async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   const dom = setupRendererDom();
@@ -1424,4 +1424,152 @@ test('a failing reload after a successful save says so and keeps the dialog open
     'Gespeichert, aber die neuen Einstellungen ließen sich nicht zurücklesen: state unreadable');
   assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false);
   assert.deepEqual(unhandled, []);
+});
+
+// --- Keyboard focus after delete, redraw and edit (CR-B14-07) ---------------
+
+/** Chromium drops the focus from a removed or disabled control; replay that. */
+const replayFrame = () => focusFixup(document, { isLaidOut: (el) => el.isConnected });
+
+const storedRow = (id, name, model, baseUrl = 'http://localhost:1234/v1') => ({
+  id,
+  providerId: 'openai-compatible',
+  model,
+  menuVisible: true,
+  configured: true,
+  connection: {
+    displayName: name,
+    baseUrl,
+    apiStyle: 'chat',
+    insecureTls: false,
+    supportsImages: false,
+    sendTools: true,
+    hasKey: false,
+    keyUnreadable: false,
+    hasExtraHeaders: false,
+  },
+});
+
+async function mountWithRows(t, rows, overrides = {}) {
+  const mounted = await mountSettings({ providers: [COMPAT_VIEW], ...overrides });
+  t.after(mounted.dom.cleanup);
+  mounted.appStore.llmState.presets = rows;
+  mounted.appStore.llmState.activePresetId = rows[0]?.id ?? null;
+  await mounted.dom.reopenSettings();
+  return mounted;
+}
+
+const trashOf = (id) => document.querySelector(`#pref-model-list .settings-icon-trash[data-preset-id="${id}"]`);
+const editOf = (id) => document.querySelector(`#pref-model-list .settings-icon-edit[data-edit-preset-id="${id}"]`);
+
+test('deleting a row moves the focus to the next row, the previous one, then "Add model" (CR-B14-07)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2'), storedRow('c', 'C', 'm3')]);
+
+  trashOf('b').focus();
+  trashOf('b').click();
+  replayFrame();
+  assert.ok(document.activeElement === trashOf('c'), 'the next row');
+
+  trashOf('c').click();
+  replayFrame();
+  assert.ok(document.activeElement === trashOf('a'), 'no next row: the previous one');
+
+  trashOf('a').click();
+  replayFrame();
+  assert.ok(document.activeElement === document.getElementById('btn-open-add-model'), 'an empty list: "Add model"');
+});
+
+test('editing a row moves the focus into the popup and back to the row on close (CR-B14-07)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'A', 'm1'), storedRow('b', 'B', 'm2')]);
+  const overlay = document.getElementById('add-model-overlay');
+
+  editOf('b').focus();
+  editOf('b').click();
+  replayFrame();
+  // The provider is fixed while editing, so its choice is disabled; the
+  // first field the keyboard can reach is the display name.
+  assert.ok(overlay.contains(document.activeElement), 'the focus stayed behind the popup');
+  assert.equal(document.activeElement.id, 'input-display-name');
+
+  document.getElementById('btn-add-model-close').click();
+  replayFrame();
+  assert.ok(document.activeElement === editOf('b'), 'Close returns to the row, not to "Add model"');
+
+  // "Apply changes" redraws the list; the focus finds the row's new button.
+  editOf('b').click();
+  document.getElementById('btn-add-preset-row').click();
+  replayFrame();
+  assert.ok(document.activeElement === editOf('b'));
+
+  // Escape closes the popup the same way.
+  editOf('a').click();
+  document.getElementById('modal-settings').dispatchEvent(
+    new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  replayFrame();
+  assert.ok(overlay.classList.contains('hidden'));
+  assert.ok(document.activeElement === editOf('a'));
+});
+
+test('"Add model" still opens on the provider choice and returns to its button (CR-B14-07)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+  const add = document.getElementById('btn-open-add-model');
+
+  add.focus();
+  add.click();
+  assert.ok(document.activeElement === document.getElementById('select-provider'));
+  document.getElementById('btn-add-model-close-x').click();
+  replayFrame();
+  assert.ok(document.activeElement === add);
+});
+
+const TWO_SKILLS = [
+  { name: 'pdf', description: 'PDF', source: 'user-agents', status: 'active', path: '/s/pdf', detail: '', builtin: false },
+  { name: 'xlsx', description: 'Excel', source: 'user-agents', status: 'active', path: '/s/xlsx', detail: '', builtin: false },
+];
+const skillBox = (name) => document.querySelector(`#settings-skill-list input[data-skill-name="${name}"]`);
+
+test('a skill list redraw by the file watcher keeps the focus on the same skill (CR-B14-07)', async (t) => {
+  let onChanged = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    onSkillsChanged: (callback) => { onChanged = callback; },
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+
+  const before = skillBox('xlsx');
+  before.focus();
+  // Its description is open, too.
+  before.closest('li').querySelector('.settings-skill-item__summary').click();
+  onChanged();
+  await flush();
+  replayFrame();
+
+  assert.ok(skillBox('xlsx') !== before, 'the list was redrawn');
+  assert.ok(document.activeElement === skillBox('xlsx'));
+  const summary = skillBox('xlsx').closest('li').querySelector('.settings-skill-item__summary');
+  assert.equal(summary.getAttribute('aria-expanded'), 'true', 'the open description stays open');
+});
+
+test('"Reload skills" gives the focus back to its button after the busy state (CR-B14-07)', async (t) => {
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: TWO_SKILLS }),
+    reloadSkills: async () => ({ skills: TWO_SKILLS }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  const reload = document.getElementById('btn-reload-skills');
+
+  reload.focus();
+  reload.click();
+  // Disabled while it runs: Chromium drops the focus here.
+  replayFrame();
+  assert.ok(document.activeElement === document.body);
+  await flush();
+  replayFrame();
+
+  assert.equal(reload.disabled, false);
+  assert.ok(document.activeElement === reload);
 });
