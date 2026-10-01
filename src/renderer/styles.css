@@ -7087,14 +7087,21 @@ select.modal-input {
   align-items: center;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(1) {
+.mcp-env-row__key {
   flex: 1 1 150px;
   min-width: 130px;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(2) {
+.mcp-env-row__value {
   flex: 2 1 190px;
   min-width: 150px;
+}
+
+/* A stored secret locks its name until a new value is typed (CR-B14-02) —
+   the field shows it the way the fixed identifier does. */
+.mcp-env-row__key[readonly] {
+  background: var(--ds-grey-card);
+  color: var(--ds-grey-strong);
 }
 
 /* Haekchen und Entfernen gehoeren zusammen — beim Umbruch darf das Kreuz
@@ -7114,6 +7121,10 @@ select.modal-input {
   color: var(--ds-grey-strong);
   white-space: nowrap;
   cursor: pointer;
+}
+
+.mcp-env-row__secret:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .mcp-tool-list {

@@ -1070,9 +1070,10 @@
               <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
               <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
               <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
-              <p class="modal-hint" data-i18n-html="mcpDialog.env.hint">
+              <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
                 Values are <strong>secret</strong> by default and are stored encrypted in the system
                 keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
+                To rename it or store it in plain text, enter the value again.
               </p>
             </div>
             <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>

@@ -254,3 +254,30 @@ test('erneutes Öffnen beginnt wieder leer', async () => {
   assert.deepEqual(zeilen(), []);
   assert.equal(uebernehmen().disabled, true);
 });
+
+// Encrypted is the default — what is stored readable has to be said, and so
+// does the folder the server will start in (CR-B14-02).
+test('the preview lists the plain-text variables and the working directory', async () => {
+  await mount();
+  await oeffnen();
+  await einfuegen(JSON.stringify({
+    mcpServers: {
+      db: {
+        command: 'npx',
+        args: ['-y', 'server-postgres'],
+        cwd: '/srv/db',
+        env: { DATABASE_URL: 'postgres://admin:hunter2@db/prod', LOG: 'debug', DB_TOKEN: '', API_TOKEN: 'abc' },
+      },
+    },
+  }));
+
+  const notes = [...zeilen()[0].querySelectorAll('.mcp-import__note')].map((note) => note.textContent);
+  const said = notes.join(' | ');
+  assert.ok(notes.includes('plain textDATABASE_URL, LOG will be stored in plain text.'), said);
+  assert.ok(notes.includes('secretAPI_TOKEN will be stored encrypted.'), said);
+  assert.ok(notes.includes('Working directory: /srv/db'), said);
+  // An empty value is neither a secret nor plain text worth naming — it has
+  // its own note.
+  assert.ok(notes.some((note) => note.includes('DB_TOKEN') && note.includes('has no value')), said);
+  assert.equal(notes.some((note) => note.includes('DB_TOKEN') && note.includes('stored')), false, said);
+});

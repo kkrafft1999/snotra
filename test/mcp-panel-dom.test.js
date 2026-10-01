@@ -67,6 +67,18 @@ async function mount(apiOverrides = {}, daten = null) {
 
 const rows = () => [...document.querySelectorAll('#settings-mcp-list .mcp-row')];
 const dialogOffen = () => !document.getElementById('mcp-server-overlay').classList.contains('hidden');
+const envRows = () => [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+/** The three controls of an environment row. */
+const envFields = (row) => ({
+  key: row.querySelector('.mcp-env-row__key'),
+  value: row.querySelector('.mcp-env-row__value'),
+  secret: row.querySelector('.mcp-env-row__secret input[type="checkbox"]'),
+});
+/** Typing as the browser reports it: the value changes, then `input` fires. */
+function type(input, text) {
+  input.value = text;
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+}
 
 test('die Liste zeigt Server, Kommando und Status', async () => {
   await mount();
@@ -141,9 +153,9 @@ test('„Bearbeiten" fuellt den Unterdialog, ohne das Geheimnis zu zeigen', asyn
   assert.equal(document.getElementById('mcp-field-id').disabled, true);
   assert.equal(document.getElementById('mcp-field-args').value, '-y @modelcontextprotocol/server-github');
 
-  const werte = [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+  const werte = envRows();
   assert.equal(werte.length, 2);
-  const [, geheimerWert] = werte[0].querySelectorAll('input[type="text"]');
+  const { value: geheimerWert } = envFields(werte[0]);
   assert.equal(geheimerWert.value, TOKEN_PLACEHOLDER, 'nur ein Platzhalter, nie der Wert');
   assert.equal(geheimerWert.dataset.keep, 'true');
 });
@@ -167,11 +179,11 @@ test('wer in das Feld klickt, ersetzt das Geheimnis wirklich', async () => {
   rows()[0].querySelector('.btn-secondary').click();
   await flush();
 
-  const [, wert] = document.querySelectorAll('#mcp-env-list .mcp-env-row')[0].querySelectorAll('input[type="text"]');
+  const { value: wert } = envFields(envRows()[0]);
   // Der Fokus leert den Platzhalter — sonst schriebe man in „••••" hinein.
-  wert.dispatchEvent(new window.Event('focus'));
+  wert.focus();
   assert.equal(wert.value, '');
-  wert.value = 'ghp_neu';
+  type(wert, 'ghp_neu');
 
   document.getElementById('btn-mcp-server-save').click();
   await flush();
@@ -315,9 +327,9 @@ test('Variablen lassen sich hinzufuegen und entfernen', async () => {
 
   document.getElementById('btn-mcp-env-add').click();
   await flush();
-  const zeilen = [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+  const zeilen = envRows();
   assert.equal(zeilen.length, 3);
-  const [name, wert] = zeilen[2].querySelectorAll('input[type="text"]');
+  const { key: name, value: wert } = envFields(zeilen[2]);
   name.value = 'NEU';
   wert.value = 'wert';
 
@@ -341,4 +353,118 @@ test('Escape schliesst nur den Unterdialog', async () => {
   document.getElementById('dialog-mcp-server').dispatchEvent(event);
   await flush();
   assert.equal(dialogOffen(), false);
+});
+
+// --- CR-B14-02: a stored secret survives focus, rename and untick ---
+
+async function editGithub(apiOverrides) {
+  const mounted = await mount(apiOverrides);
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  return mounted;
+}
+
+test('focus and blur on a stored secret leave it stored (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { value } = envFields(envRows()[0]);
+
+  value.focus();
+  assert.equal(value.value, '', 'the field empties for typing');
+  assert.equal(value.placeholder, 'stored — type to replace');
+  value.blur();
+  assert.equal(value.value, TOKEN_PLACEHOLDER, 'nothing typed — the placeholder is back');
+  assert.equal(value.dataset.keep, 'true');
+
+  // Tab through the field to Save, or click into it and save straight away:
+  // both keep the token.
+  value.focus();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env.GITHUB_TOKEN, { secret: true, keep: true });
+});
+
+test('typing and erasing again keeps the stored secret as well (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { key, value } = envFields(envRows()[0]);
+  value.focus();
+  type(value, 'g');
+  assert.equal(value.dataset.keep, undefined);
+  type(value, '');
+  value.blur();
+  assert.equal(value.dataset.keep, 'true');
+  assert.equal(key.value, 'GITHUB_TOKEN');
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env.GITHUB_TOKEN, { secret: true, keep: true });
+});
+
+test('a kept row locks its name and its secret box, and says why (CR-B14-02)', async () => {
+  await editGithub();
+  const { key, value, secret } = envFields(envRows()[0]);
+  assert.equal(key.readOnly, true);
+  assert.equal(secret.disabled, true);
+  assert.equal(secret.checked, true);
+  for (const node of [key, secret]) assert.equal(node.getAttribute('aria-describedby'), 'mcp-env-hint');
+  assert.match(document.getElementById('mcp-env-hint').textContent, /enter the value again/);
+
+  // A new value unlocks both: now there is something to rename or to store
+  // in plain text.
+  value.focus();
+  type(value, 'ghp_neu');
+  assert.equal(key.readOnly, false);
+  assert.equal(secret.disabled, false);
+  assert.equal(key.hasAttribute('aria-describedby'), false);
+});
+
+test('renaming a row with a new value sends the new name with the value (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { key, value, secret } = envFields(envRows()[0]);
+  value.focus();
+  type(value, 'ghp_neu');
+  value.blur();
+  key.value = 'GITHUB_PERSONAL_ACCESS_TOKEN';
+  secret.click();
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  const { env } = calls[0][1];
+  assert.deepEqual(env.GITHUB_PERSONAL_ACCESS_TOKEN, { secret: false, value: 'ghp_neu' });
+  assert.equal('GITHUB_TOKEN' in env, false);
+});
+
+test('a stored row whose name was changed behind its back still keeps its own name (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  // The field is read-only; a programmatic change must not move the keep
+  // onto a name main has nothing stored under.
+  envFields(envRows()[0]).key.value = 'GITHUB_PAT';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env, {
+    GITHUB_TOKEN: { secret: true, keep: true },
+    LANG: { secret: false, value: 'de_DE' },
+  });
+});
+
+test('the value is masked while "secret" is ticked, and never spell-checked (CR-B14-02)', async () => {
+  await editGithub();
+  const [stored, plain] = envRows().map(envFields);
+  assert.equal(stored.value.type, 'password');
+  assert.equal(plain.value.type, 'text', 'a plain value stays readable');
+
+  document.getElementById('btn-mcp-env-add').click();
+  const fresh = envFields(envRows()[2]);
+  assert.equal(fresh.secret.checked, true, 'secret is the default');
+  assert.equal(fresh.value.type, 'password');
+  fresh.secret.click();
+  assert.equal(fresh.value.type, 'text');
+  fresh.secret.click();
+  assert.equal(fresh.value.type, 'password');
+
+  for (const field of [stored, plain, fresh]) {
+    for (const input of [field.key, field.value]) {
+      assert.equal(input.spellcheck, false);
+      assert.equal(input.getAttribute('autocomplete'), 'off');
+    }
+  }
 });

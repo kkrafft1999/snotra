@@ -161,7 +161,12 @@ adapters, so a change to what the engine passes changes the port as well:
 
   A stored secret appears in the form only as a placeholder; whoever does not
   touch it sends `{ keep: true }` instead of a value the renderer does not even
-  know.
+  know. Focus alone changes nothing, and while the value is kept its name and
+  its "secret" box stay locked — renaming it or storing it in plain text needs
+  the value again. Main checks the same: a `keep` with nothing stored under its
+  name, or one that would flip between secret and plain text, is refused rather
+  than dropped, and an empty secret value counts as "no value" unless it would
+  replace a stored secret (CR-B14-02).
 
   Two read paths, deliberately separate and nailed down in
   `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns

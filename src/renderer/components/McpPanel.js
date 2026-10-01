@@ -258,31 +258,30 @@ export function initMcpPanel({ api }) {
 
   // --- Unterdialog -------------------------------------------------------
 
+  /**
+   * One environment variable. A stored secret never comes back: it shows as
+   * a placeholder and goes out as `keep` until the user types a new value
+   * (CR-B14-02). Focus alone changes nothing — the field empties for typing
+   * and fills again on blur when nothing was typed. While the stored value is
+   * kept, its name and its "secret" box are locked: renaming it or storing it
+   * in plain text needs the value, which this side does not know.
+   */
   function envRow(entry = { key: '', secret: true, hasValue: false, value: '' }) {
+    const stored = entry.secret === true && entry.hasValue === true;
     const row = el('div', 'mcp-env-row');
-    const key = el('input', 'modal-input modal-input--mono');
+
+    const key = el('input', 'modal-input modal-input--mono mcp-env-row__key');
     key.type = 'text';
     key.value = entry.key || '';
     key.placeholder = 'NAME';
+    key.autocomplete = 'off';
+    key.spellcheck = false;
     key.setAttribute('aria-label', t('mcpDialog.env.name'));
 
-    const value = el('input', 'modal-input modal-input--mono');
-    value.type = 'text';
+    const value = el('input', 'modal-input modal-input--mono mcp-env-row__value');
+    value.autocomplete = 'off';
+    value.spellcheck = false;
     value.setAttribute('aria-label', t('mcpDialog.env.value'));
-    // Ein gespeichertes Geheimnis kommt nicht zurueck — es steht als
-    // Platzhalter da und bleibt unangetastet, solange niemand hineinschreibt.
-    if (entry.secret && entry.hasValue) {
-      value.value = SECRET_PLACEHOLDER;
-      value.dataset.keep = 'true';
-      value.addEventListener('focus', () => {
-        if (value.dataset.keep === 'true') {
-          value.value = '';
-          delete value.dataset.keep;
-        }
-      });
-    } else {
-      value.value = entry.value || '';
-    }
 
     const opts = el('div', 'mcp-env-row__opts');
     const secretLabel = el('label', 'mcp-env-row__secret');
@@ -291,6 +290,47 @@ export function initMcpPanel({ api }) {
     secret.checked = entry.secret !== false;
     secretLabel.append(secret, el('span', null, t('mcpDialog.env.secret')));
     opts.append(secretLabel);
+
+    // A value meant to be secret is masked while it is typed.
+    const syncMask = () => { value.type = secret.checked ? 'password' : 'text'; };
+    secret.addEventListener('change', syncMask);
+
+    function setKept(kept) {
+      if (kept) {
+        value.dataset.keep = 'true';
+        value.value = SECRET_PLACEHOLDER;
+        key.value = entry.key;
+        secret.checked = true;
+        syncMask();
+      } else {
+        delete value.dataset.keep;
+      }
+      key.readOnly = kept;
+      secret.disabled = kept;
+      // The hint below the list says why both are locked.
+      for (const node of [key, secret]) {
+        if (kept) node.setAttribute('aria-describedby', 'mcp-env-hint');
+        else node.removeAttribute('aria-describedby');
+      }
+    }
+
+    if (stored) {
+      row.dataset.storedKey = entry.key;
+      value.placeholder = t('mcpDialog.env.keptPlaceholder');
+      setKept(true);
+      value.addEventListener('focus', () => {
+        if (value.dataset.keep === 'true') value.value = '';
+      });
+      value.addEventListener('input', () => {
+        if (value.dataset.keep === 'true' && value.value !== '') setKept(false);
+      });
+      value.addEventListener('blur', () => {
+        if (value.value === '') setKept(true);
+      });
+    } else {
+      value.value = entry.value || '';
+      syncMask();
+    }
 
     const remove = el('button', 'settings-dialog__icon-close');
     remove.type = 'button';
@@ -306,14 +346,20 @@ export function initMcpPanel({ api }) {
   function readEnv() {
     const env = {};
     for (const row of envList?.querySelectorAll('.mcp-env-row') || []) {
-      const [key, value] = row.querySelectorAll('input[type="text"]');
-      const secret = row.querySelector('input[type="checkbox"]');
-      const name = String(key?.value || '').trim();
-      if (!name) continue;
-      if (value?.dataset.keep === 'true') {
-        env[name] = { secret: true, keep: true };
+      const key = row.querySelector('.mcp-env-row__key');
+      const value = row.querySelector('.mcp-env-row__value');
+      const secret = row.querySelector('.mcp-env-row__secret input');
+      // A stored secret with an empty field is unchanged — also while the
+      // field still has the focus and its blur has not run yet. It goes out
+      // under the name it is stored under.
+      const unchanged = value?.value === ''
+        || (value?.dataset.keep === 'true' && value.value === SECRET_PLACEHOLDER);
+      if (row.dataset.storedKey && unchanged) {
+        env[row.dataset.storedKey] = { secret: true, keep: true };
         continue;
       }
+      const name = String(key?.value || '').trim();
+      if (!name) continue;
       env[name] = { secret: secret?.checked === true, value: String(value?.value ?? '') };
     }
     return env;
@@ -450,10 +496,19 @@ export function initMcpPanel({ api }) {
       notes.push(importNoteRow(
         t('mcpImport.candidate.duplicate', { id: candidate.id }), t('mcpImport.candidate.replaces'), true));
     }
+    if (candidate.cwd) notes.push(importNoteRow(t('mcpImport.candidate.cwd', { cwd: candidate.cwd })));
     const secrets = candidate.env.filter((entry) => entry.secret).map((entry) => entry.key);
     if (secrets.length > 0) {
       notes.push(importNoteRow(
         tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), t('mcpImport.candidate.secret')));
+    }
+    // Encrypted is the default, so what is not encrypted has to be said —
+    // a `DATABASE_URL` can carry a password without looking like a secret
+    // (CR-B14-02). An empty value has its own note below.
+    const plain = candidate.env.filter((entry) => !entry.secret && entry.value !== '').map((entry) => entry.key);
+    if (plain.length > 0) {
+      notes.push(importNoteRow(
+        tPlural('mcpImport.candidate.plainValues', plain.length, { names: plain.join(', ') }), t('mcpImport.candidate.plain')));
     }
     // A placeholder or a missing value has to be dealt with before the server
     // is switched on — that is what the loud mark is for. Recognised by the

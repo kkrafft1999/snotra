@@ -122,11 +122,55 @@ test('keep behält das gespeicherte Geheimnis beim Ändern anderer Felder', asyn
   assert.equal(server.env.LANG, 'en_US');
 });
 
-test('keep auf einen unbekannten Schlüssel legt nichts an', async (t) => {
+// Until CR-B14-02 such an entry was dropped without a word — renaming a kept
+// variable in the dialog lost the token that way.
+test('a keep with nothing stored under its name is refused, not dropped', async (t) => {
   const { storage } = await makeStore(t);
-  await storage.saveMcpServer({ id: 'x', command: 'npx', env: { NEU: { keep: true } } });
+  await storage.saveMcpServer(GITHUB);
+  const result = await storage.saveMcpServer({ ...GITHUB, env: { GITHUB_PAT: { keep: true } } });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [{ key: 'mcp.error.envKeepMissing', params: { names: 'GITHUB_PAT' } }]);
   const [server] = await storage.getMcpServersForRuntime();
-  assert.deepEqual(server.env, {});
+  assert.equal(server.env.GITHUB_TOKEN, TOKEN, 'the stored token is untouched');
+});
+
+test('a keep cannot flip a stored value between secret and plain text', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  const result = await storage.saveMcpServer({
+    ...GITHUB,
+    env: { GITHUB_TOKEN: { secret: false, keep: true }, LANG: { secret: true, keep: true } },
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors,
+    [{ key: 'mcp.error.envKeepChanged', params: { names: 'GITHUB_TOKEN, LANG' } }]);
+  const [server] = await storage.getMcpServersForRuntime();
+  assert.deepEqual(server.env, { GITHUB_TOKEN: TOKEN, LANG: 'de_DE' });
+});
+
+// An empty value has nothing to encrypt — `encryptIfPossible('')` gives null,
+// which used to surface as "encrypted storage is not available".
+test('an empty secret value counts as no value, never as missing encryption', async (t) => {
+  for (const encryption of [true, false]) {
+    const { storage } = await makeStore(t, { encryption });
+    const result = await storage.saveMcpServer({ id: 'x', command: 'npx', env: { GITHUB_TOKEN: { value: '' } } });
+    assert.equal(result.ok, true, `encryption ${encryption}: ${JSON.stringify(result.errors)}`);
+    const [server] = await storage.readMcpServers();
+    assert.deepEqual(server.env, [{ key: 'GITHUB_TOKEN', secret: false, hasValue: false, value: '' }]);
+  }
+});
+
+test('an empty secret value never replaces a stored secret', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  const result = await storage.saveMcpServer({ ...GITHUB, env: { GITHUB_TOKEN: { secret: true, value: '' } } });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [{ key: 'mcp.error.envSecretEmpty', params: { names: 'GITHUB_TOKEN' } }]);
+  const [server] = await storage.getMcpServersForRuntime();
+  assert.equal(server.env.GITHUB_TOKEN, TOKEN);
 });
 
 test('ein zweites Speichern ersetzt den Server, statt ihn zu verdoppeln', async (t) => {
