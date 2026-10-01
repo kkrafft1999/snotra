@@ -49,6 +49,7 @@ const { createMessage } = require('../../shared/contracts/message');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildMemorySystemPrompt } = require('./memory-prompt');
+const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
 const {
@@ -337,6 +338,8 @@ function buildSkillsSystemPrompt(
   // einzelnen Skill und bekommt deshalb eine eigene Zeile.
   const parts = [];
   let catalogChars = 0;
+  // A skill the secret protection touched says so in its row (#528).
+  const skillDetailKey = (skill, plain) => (skill.guard ? `context.detail.skill.${skill.guard}` : plain);
   lazy.forEach((skill, index) => {
     const chars = catalogLines[index].length;
     catalogChars += chars;
@@ -345,7 +348,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detailKey: 'context.detail.skill.short',
+        detailKey: skillDetailKey(skill, 'context.detail.skill.short'),
         chars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
         skillName: skill.name,
@@ -358,7 +361,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detailKey: 'context.detail.skill.full',
+        detailKey: skillDetailKey(skill, 'context.detail.skill.full'),
         chars: sections[index].length,
         contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
         skillName: skill.name,
@@ -694,6 +697,8 @@ function createChatEngine({
   memory = null,
   toolPolicy = null,
   approvals = null,
+  // The app's own secrets, for the text the prompt embeds by itself (#528).
+  ownSecrets = null,
   sessionGrants = createSessionGrants(),
   maxToolRounds,
   // Called once a run has ended, however it ended (#320).
@@ -813,6 +818,17 @@ function createChatEngine({
     return { target };
   }
 
+  /** The own secrets; a failed read compares against nothing — as for a tool result (§5). */
+  async function readOwnSecrets() {
+    if (!ownSecrets || typeof ownSecrets.read !== 'function') return [];
+    try {
+      const list = await ownSecrets.read();
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
   async function readPolicySnapshot(chatId) {
     if (!toolPolicy || typeof toolPolicy.read !== 'function') return defaultPolicySnapshot();
     try {
@@ -878,6 +894,12 @@ function createChatEngine({
     // Whether the await under way is the provider's: a throw there is a
     // network or provider error, anywhere else it is the app's own (#527).
     let awaitingProvider = false;
+    // Read once per run, and only when something is embedded (#528).
+    let embeddedSecrets = null;
+    const readOwnSecretList = async () => {
+      if (!embeddedSecrets) embeddedSecrets = await readOwnSecrets();
+      return embeddedSecrets;
+    };
     // An error result after tools ran still carries them — without the trace
     // the renderer drops the turn, and with it the record of what was done (#527).
     const failRun = (error, code) => {
@@ -957,6 +979,7 @@ function createChatEngine({
             // instructions around it stay English (#276).
             locale: appLocale,
           });
+          activeSkills = guardEmbeddedSkills(activeSkills, await readOwnSecretList());
           skillRoots = activeSkills
             .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
             .map((skill) => ({ name: skill.name, dir: skill.path }));
@@ -1054,8 +1077,9 @@ function createChatEngine({
       let projectInstructionParts = [];
       if (projectInstructions && uiPrefs.projectInstructionsEnabled !== false) {
         try {
+          const files = await projectInstructions.load({ workspaceRoot });
           const built = buildProjectInstructionsSystemPrompt(
-            await projectInstructions.load({ workspaceRoot })
+            guardEmbeddedFiles(files, await readOwnSecretList())
           );
           projectInstructionsSystem = built.text;
           projectInstructionParts = built.parts;
@@ -1079,7 +1103,7 @@ function createChatEngine({
               ? uiPrefs.memoryWorkspaceEnabled !== false
               : uiPrefs.memoryUserEnabled !== false
           );
-          const built = buildMemorySystemPrompt(files);
+          const built = buildMemorySystemPrompt(guardEmbeddedFiles(files, await readOwnSecretList()));
           memorySystem = built.text;
           memoryParts = built.parts;
         } catch {

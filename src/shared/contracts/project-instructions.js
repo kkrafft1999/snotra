@@ -108,7 +108,10 @@ function normalizeProjectInstructionFile(raw) {
   if (!isProjectInstructionSource(data.source)) return null;
   const text = typeof data.text === 'string' ? data.text.trim() : '';
   if (!text) return null;
-  return { source: data.source, text, truncated: data.truncated === true };
+  const file = { source: data.source, text, truncated: data.truncated === true };
+  // What the secret protection did to it (#528), for the context breakdown.
+  if (data.guard === 'masked' || data.guard === 'withheld') file.guard = data.guard;
+  return file;
 }
 
 /**

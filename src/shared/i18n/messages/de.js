@@ -1182,6 +1182,12 @@ module.exports = {
   'context.detail.pathTruncated': '{path} · gekürzt',
   'context.detail.folderPath': '<Ordner>/{path}',
   'context.detail.folderPathTruncated': '<Ordner>/{path} · gekürzt',
+  'context.detail.pathMasked': '{path} · Zugangsdaten maskiert',
+  'context.detail.folderPathMasked': '<Ordner>/{path} · Zugangsdaten maskiert',
+  'context.detail.pathWithheld': '{path} · weggelassen, enthält einen Schlüssel der App',
+  'context.detail.folderPathWithheld': '<Ordner>/{path} · weggelassen, enthält einen Schlüssel der App',
+  'context.detail.skill.masked': 'Zugangsdaten maskiert',
+  'context.detail.skill.withheld': 'weggelassen, enthält einen Schlüssel der App',
 
   // ── Approval card in the chat ──────────────────────────────────────────────
   'approval.title.execute': 'Ausführung bestätigen',

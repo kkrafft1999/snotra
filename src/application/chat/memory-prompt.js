@@ -54,7 +54,8 @@ function buildMemorySystemPrompt(files) {
 
   const sections = usable.map((file) => {
     const heading = MEMORY_SCOPE_PROMPT_LABELS[file.scope];
-    const body = file.truncated ? `${file.text}\n${TRUNCATION_NOTE}` : file.text;
+    // A text that was left out (#528) has nothing left to be shortened.
+    const body = file.truncated && file.guard !== 'withheld' ? `${file.text}\n${TRUNCATION_NOTE}` : file.text;
     return `## ${heading}\n\n${body}`;
   });
 
@@ -69,6 +70,7 @@ function buildMemorySystemPrompt(files) {
       ...shortPathDetail(MEMORY_SCOPE_PATHS[file.scope], {
         inFolder: file.scope === MEMORY_SCOPES.WORKSPACE,
         truncated: file.truncated,
+        guard: file.guard,
       }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,

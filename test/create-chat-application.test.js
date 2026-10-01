@@ -184,7 +184,7 @@ test('createChatApplication kommt ohne Skill-Service aus', async () => {
 
 /* ── Umgebungsangaben im Systemprompt (Issue #138) ───────────────────────── */
 
-function environmentHarness({ uiPrefs = {}, environment, projectInstructions, memory } = {}) {
+function environmentHarness({ uiPrefs = {}, environment, projectInstructions, memory, toolAdapterDeps } = {}) {
   const calls = [];
   const engine = createChatApplication({
     llmConfigStore: {
@@ -209,6 +209,7 @@ function environmentHarness({ uiPrefs = {}, environment, projectInstructions, me
     memory,
     path,
     maxToolRounds: 2,
+    toolAdapterDeps,
   }).engine;
   return { engine, calls, system: () => calls[0].messages.find((m) => m.role === 'system')?.content || '' };
 }
@@ -527,4 +528,19 @@ test('a rules file that cannot be read blocks tools instead of running without b
   assert.equal(executed, 0);
   const toolMessage = seen[1].messages.find((m) => m.role === 'tool');
   assert.match(toolMessage.content, /cannot be read/);
+});
+
+test('the own secrets of the tool adapter also guard the embedded AGENTS.md (#528)', async () => {
+  const key = 'sk-own-provider-key-1234567890';
+  const { port } = instructionsPort([{ source: PI.WORKSPACE_AGENTS, text: `Deploy with ${key}.` }]);
+  const { engine, system } = environmentHarness({
+    projectInstructions: port,
+    toolAdapterDeps: { readOwnSecrets: async () => [key] },
+  });
+  await engine.send({
+    sessionId: 'agents-528',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+  assert.equal(system().includes(key), false);
+  assert.match(system(), /Left out by Snotra AI/);
 });

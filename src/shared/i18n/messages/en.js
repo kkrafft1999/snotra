@@ -1176,6 +1176,12 @@ module.exports = {
   'context.detail.pathTruncated': '{path} · shortened',
   'context.detail.folderPath': '<folder>/{path}',
   'context.detail.folderPathTruncated': '<folder>/{path} · shortened',
+  'context.detail.pathMasked': '{path} · credentials masked',
+  'context.detail.folderPathMasked': '<folder>/{path} · credentials masked',
+  'context.detail.pathWithheld': '{path} · left out, contains a key of the app',
+  'context.detail.folderPathWithheld': '<folder>/{path} · left out, contains a key of the app',
+  'context.detail.skill.masked': 'credentials masked',
+  'context.detail.skill.withheld': 'left out, contains a key of the app',
 
   // ── Approval card in the chat ────────────────────────────────────────────
   'approval.title.execute': 'Confirm execution',
