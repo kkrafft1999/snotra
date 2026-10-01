@@ -400,6 +400,10 @@ module.exports = {
   'settings.models.row.configured': 'Configured',
   'settings.models.row.headersKept': 'Stored headers will be kept',
   'settings.models.row.headersStored': 'Headers stored',
+  // A stored secret goes only to the address it was saved for (#560).
+  'settings.models.row.keyDroppedByAddress': 'New address: stored key will be removed on save',
+  'settings.models.row.headersDroppedByAddress': 'New address: stored headers will be removed on save',
+  'settings.models.row.secretsDroppedByAddress': 'New address: stored key and headers will be removed on save',
 
   // ── Settings: tools ──────────────────────────────────────────────────────
   'settings.tools.count': '{active} of {total} active',
