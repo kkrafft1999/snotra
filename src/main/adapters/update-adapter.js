@@ -23,8 +23,11 @@ function createUpdateAdapter(updateService) {
     installUpdate() {
       return updateService.installUpdate();
     },
-    takeInstallFailure() {
-      return updateService.takeInstallFailure();
+    readInstallFailure() {
+      return updateService.readInstallFailure();
+    },
+    clearInstallFailure() {
+      return updateService.clearInstallFailure();
     },
   };
 }
@@ -49,16 +52,18 @@ function createUpdateCheck({ updates, getMainWindow, PUSH, env = process.env }) 
     // Only the automatic check steps aside. Choosing "Check for updates" in
     // the menu is an explicit request and still gets an answer.
     if (silent && env.SNOTRA_NO_UPDATE_CHECK === '1') return;
-    // A swap that failed after the last quit is told on the next start, and
-    // only then (#442).
-    const lastInstallFailure = silent && typeof updates.takeInstallFailure === 'function'
-      ? await updates.takeInstallFailure()
+    // A swap that failed after the last quit is told on the next start (#442)
+    // — on the first start that actually gets to show it. Until then the
+    // record stays: a check that cannot reach GitHub shows nothing (#573).
+    const lastInstallFailure = silent && typeof updates.readInstallFailure === 'function'
+      ? await updates.readInstallFailure()
       : null;
     const result = await updates.checkForUpdate({ respectIgnored: silent && !lastInstallFailure });
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return;
     if (silent && !result.updateAvailable) return;
     win.webContents.send(PUSH.UPDATE_AVAILABLE, { ...result, lastInstallFailure, manual: !silent });
+    if (lastInstallFailure) await updates.clearInstallFailure?.();
   };
 }
 

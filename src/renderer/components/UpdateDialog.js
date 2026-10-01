@@ -121,6 +121,16 @@ export function initUpdateDialog({ api }) {
     return state !== 'downloading' && state !== 'installing';
   }
 
+  /**
+   * A step the user started and that a check must not draw over (#568): a
+   * running download, a running install, or a download waiting for "Install".
+   * A check from the menu or the settings would otherwise turn it back into
+   * "available" and offer a second download over the first.
+   */
+  function isMidFlow() {
+    return isOpen() && (state === 'downloading' || state === 'installing' || state === 'ready');
+  }
+
   function close() {
     if (!isOpen()) return;
     root.classList.add('hidden');
@@ -171,7 +181,10 @@ export function initUpdateDialog({ api }) {
   function focusFirstAction() {
     const first = actionsEl.querySelector(FOCUSABLE);
     if (first) first.focus();
-    else closeBtn.focus();
+    else if (!closeBtn.disabled) closeBtn.focus();
+    // While installing there is nothing to press and the close button is off.
+    // Focus stays on the dialog itself instead of falling out of it (#573).
+    else dialog?.focus();
   }
 
   async function openReleasePage() {
@@ -350,6 +363,7 @@ export function initUpdateDialog({ api }) {
 
   function handlePayload(payload) {
     if (!payload || typeof payload !== 'object') return;
+    if (isMidFlow()) return;
     if (payload.updateAvailable) {
       info = payload;
       showNotes(payload.notes);
@@ -390,7 +404,11 @@ export function initUpdateDialog({ api }) {
     // der Dialog blendet genau so aus, und es bleibt ohne Layout pruefbar.
     const items = Array.from(dialog?.querySelectorAll(FOCUSABLE) || [])
       .filter((el) => !el.disabled && !el.closest('.hidden'));
-    if (items.length === 0) return;
+    // Nothing to tab to (installing): Tab must not leave the modal either.
+    if (items.length === 0) {
+      event.preventDefault();
+      return;
+    }
     const first = items[0];
     const last = items[items.length - 1];
     if (event.shiftKey && document.activeElement === first) {
@@ -405,10 +423,12 @@ export function initUpdateDialog({ api }) {
   /** „Nach Updates suchen…" aus dem Menue. */
   async function checkNow() {
     if (!api.checkForUpdate) return;
+    if (isMidFlow()) return;
     try {
       const result = await api.checkForUpdate();
       handlePayload({ ...result, manual: true });
     } catch {
+      if (isMidFlow()) return;
       info = null;
       open();
       render('info', createMessage('update.check.failedPlain'));

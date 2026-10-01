@@ -384,7 +384,7 @@ test('installUpdate gibt dem Installer Protokoll und Status im Benutzerordner mi
   assert.equal(seen[0].statusFile, statusFile);
 });
 
-test('takeInstallFailure meldet einen gescheiterten Tausch genau einmal', async (t) => {
+test('readInstallFailure reports a failed swap until it is cleared (#573)', async (t) => {
   const fs = require('node:fs');
   const { app: userApp, statusFile } = makeUserDataApp(t);
   // Windows PowerShell 5 writes a byte order mark in front of the JSON.
@@ -395,31 +395,93 @@ test('takeInstallFailure meldet einen gescheiterten Tausch genau einmal', async 
   })}`);
   const svc = createUpdateService({ app: userApp, storage: makeStorage() });
 
-  assert.deepEqual(await svc.takeInstallFailure(), {
+  const expected = {
     version: '1.13.0',
     error: 'The process cannot access the file because it is being used by another process.',
     logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
-  });
+  };
+  assert.deepEqual(await svc.readInstallFailure(), expected);
+  // Reading alone does not forget it: the check that follows may still fail.
+  assert.deepEqual(await svc.readInstallFailure(), expected);
+  await svc.clearInstallFailure();
   assert.equal(fs.existsSync(statusFile), false);
-  assert.equal(await svc.takeInstallFailure(), null);
+  assert.equal(await svc.readInstallFailure(), null);
 });
 
-test('takeInstallFailure verwirft eine Meldung, die inzwischen ueberholt ist', async (t) => {
+test('readInstallFailure verwirft eine Meldung, die inzwischen ueberholt ist', async (t) => {
   const fs = require('node:fs');
   const { app: userApp, statusFile } = makeUserDataApp(t, '1.13.0');
   fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0', error: 'locked' }));
   const svc = createUpdateService({ app: userApp, storage: makeStorage() });
-  assert.equal(await svc.takeInstallFailure(), null);
+  assert.equal(await svc.readInstallFailure(), null);
   assert.equal(fs.existsSync(statusFile), false);
 });
 
-test('takeInstallFailure uebersteht eine kaputte Datei und faellt auf das eigene Protokoll zurueck', async (t) => {
+test('readInstallFailure uebersteht eine kaputte Datei und faellt auf das eigene Protokoll zurueck', async (t) => {
   const fs = require('node:fs');
   const { app: userApp, statusFile, logFile } = makeUserDataApp(t);
   fs.writeFileSync(statusFile, '{ not json');
   const svc = createUpdateService({ app: userApp, storage: makeStorage() });
-  assert.equal(await svc.takeInstallFailure(), null);
+  assert.equal(await svc.readInstallFailure(), null);
+  assert.equal(fs.existsSync(statusFile), false, 'a file that cannot be read is dropped');
 
   fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0' }));
-  assert.deepEqual(await svc.takeInstallFailure(), { version: '1.13.0', error: '', logFile });
+  assert.deepEqual(await svc.readInstallFailure(), { version: '1.13.0', error: '', logFile });
+});
+
+// #568: Cancel used to reach only the transfer. Pressed while the fresh check
+// still ran, it did nothing, and the download started anyway.
+test('cancelDownload during the fresh check ends the run before anything is fetched', async () => {
+  const downloader = fakeDownloader();
+  let releaseRequest;
+  const svc = createUpdateService({
+    app: { getVersion: () => '1.3.0', isPackaged: true },
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: (_url, opts) => new Promise((resolve, reject) => {
+      releaseRequest = () => resolve(jsonResponse(releaseWithAssets()));
+      opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    }),
+  });
+
+  const pending = svc.downloadUpdate();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(svc.cancelDownload(), { ok: true });
+  assert.deepEqual(await pending, { ok: false, canceled: true });
+  assert.equal(downloader.calls.length, 0);
+  assert.equal(typeof releaseRequest, 'function');
+});
+
+test('a second downloadUpdate while the first is checking is refused (#568)', async () => {
+  const downloader = fakeDownloader();
+  const svc = createUpdateService({
+    app: { getVersion: () => '1.3.0', isPackaged: true },
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: async () => jsonResponse(releaseWithAssets()),
+  });
+  const [first, second] = await Promise.all([svc.downloadUpdate(), svc.downloadUpdate()]);
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, false);
+  assert.equal(second.error.key, 'update.error.downloadRunning');
+  assert.equal(downloader.calls.length, 1);
+});
+
+test('downloadUpdate hands the asset digest and a signal to the downloader (#568, #569)', async () => {
+  const downloader = fakeDownloader();
+  const digest = `sha256:${'ab'.repeat(32)}`;
+  const release = releaseWithAssets();
+  release.assets[0].digest = digest;
+  const svc = createUpdateService({
+    app: { getVersion: () => '1.3.0', isPackaged: true },
+    storage: makeStorage(),
+    runtime: MAC_RUNTIME,
+    downloader,
+    fetchImpl: async () => jsonResponse(release),
+  });
+  await svc.downloadUpdate();
+  assert.equal(downloader.calls[0].asset.digest, digest);
+  assert.ok(downloader.calls[0].signal instanceof AbortSignal);
 });

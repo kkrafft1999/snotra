@@ -5,12 +5,14 @@
 // UND die halbe Datei verschwindet. Es bleibt nie ein Torso liegen, der beim
 // naechsten Versuch als fertiger Download durchginge.
 
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 const { createMessage } = require('../../shared/contracts/message');
+const { assetDigest } = require('./update-targets');
 
 /** Nur von dort holen wir Dateien — GitHub-Releases und deren Ablage. */
 const ALLOWED_HOSTS = Object.freeze([
@@ -65,29 +67,40 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
    * zurueck, damit der Renderer sie anzeigen kann statt sie zu verschlucken.
    *
    * @param {object} args
-   * @param {{url: string, name: string, size: number}} args.asset
+   * @param {{url: string, name: string, size: number, digest?: string}} args.asset
+   *        `digest` is GitHub's `sha256:<hex>`; when present, a file that does
+   *        not hash to it is discarded like a short one (#569).
    * @param {string} args.version
    * @param {(p: {receivedBytes: number, totalBytes: number}) => void} [args.onProgress]
+   * @param {AbortSignal} [args.signal]  the caller's cancellation (#568)
    */
-  async function download({ asset, version, onProgress } = {}) {
+  async function download({ asset, version, onProgress, signal } = {}) {
     if (active) return { ok: false, error: createMessage('update.error.downloadRunning') };
     if (!asset || !isAllowedAssetUrl(asset.url)) {
       return { ok: false, error: createMessage('update.error.foreignUrl') };
     }
 
-    // Jeder Lauf startet auf der gruenen Wiese: ein alter Rest aus einem
-    // abgebrochenen Versuch darf nicht als Teil-Download weiterleben.
-    await removeWorkDir();
-    ready = null;
-
+    // The slot is claimed before the first await (#568). Claimed later, two
+    // calls arriving together would both pass the check above and write the
+    // same file.
     const controller = new AbortController();
     active = controller;
+    const abortFromCaller = () => controller.abort();
+    if (signal?.aborted) controller.abort();
+    else signal?.addEventListener('abort', abortFromCaller, { once: true });
 
     const fileName = safeFileName(asset.name);
     const filePath = path.join(workDir, fileName);
     const declaredSize = Number.isFinite(asset.size) && asset.size > 0 ? asset.size : 0;
+    const expectedDigest = assetDigest(asset.digest);
 
     try {
+      // Jeder Lauf startet auf der gruenen Wiese: ein alter Rest aus einem
+      // abgebrochenen Versuch darf nicht als Teil-Download weiterleben.
+      await removeWorkDir();
+      ready = null;
+      if (controller.signal.aborted) return { ok: false, canceled: true };
+
       await fsp.mkdir(workDir, { recursive: true });
 
       const res = await doFetch(asset.url, {
@@ -98,6 +111,12 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
           'User-Agent': 'Snotra-AI-Updater',
         },
       });
+      // GitHub answers with a redirect to its storage. Where it ends up has to
+      // pass the same test as the address we asked for — HTTPS included (#573).
+      if (res.url && !isAllowedAssetUrl(res.url)) {
+        await res.body?.cancel?.().catch(() => {});
+        return { ok: false, error: createMessage('update.error.foreignUrl') };
+      }
       if (!res.ok) {
         return { ok: false, error: createMessage('update.error.downloadHttp', { status: res.status }) };
       }
@@ -121,9 +140,11 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
       };
       emit(true);
 
+      const hash = crypto.createHash('sha256');
       const source = Readable.fromWeb(res.body);
       source.on('data', (chunk) => {
         receivedBytes += chunk.length;
+        hash.update(chunk);
         emit(false);
       });
 
@@ -140,6 +161,11 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
           error: createMessage('update.error.downloadIncomplete', { received: receivedBytes, expected: declaredSize }),
         };
       }
+      // The right length with the wrong bytes: only the checksum tells.
+      if (expectedDigest && `sha256:${hash.digest('hex')}` !== expectedDigest) {
+        await removeWorkDir();
+        return { ok: false, error: createMessage('update.error.downloadDigest') };
+      }
 
       ready = { filePath, version, assetName: fileName, bytes: receivedBytes };
       return { ok: true, filePath, version, assetName: fileName, bytes: receivedBytes };
@@ -150,6 +176,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
       }
       return { ok: false, error: err?.message || createMessage('update.download.failed') };
     } finally {
+      signal?.removeEventListener('abort', abortFromCaller);
       if (active === controller) active = null;
     }
   }

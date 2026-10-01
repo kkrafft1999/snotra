@@ -1368,6 +1368,7 @@
     <div class="modal-backdrop" id="modal-update-backdrop"></div>
     <div
       class="modal-dialog update-dialog"
+      tabindex="-1"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-update-title"
@@ -1381,7 +1382,7 @@
         </button>
       </header>
       <div class="modal-dialog__body update-dialog__body">
-        <p id="modal-update-summary" class="update-dialog__summary"></p>
+        <p id="modal-update-summary" class="update-dialog__summary" role="status" aria-live="polite"></p>
         <div id="modal-update-progress" class="update-progress hidden">
           <div
             class="update-progress__track"
@@ -1392,7 +1393,7 @@
             aria-valuemax="100">
             <div id="modal-update-bar" class="update-progress__bar"></div>
           </div>
-          <p id="modal-update-progress-text" class="update-progress__text" role="status" aria-live="polite"></p>
+          <p id="modal-update-progress-text" class="update-progress__text"></p>
         </div>
         <p id="modal-update-hint" class="modal-hint update-dialog__hint hidden"></p>
         <details id="modal-update-notes" class="update-notes hidden">

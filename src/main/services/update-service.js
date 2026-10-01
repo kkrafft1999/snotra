@@ -175,10 +175,13 @@ function createUpdateService({
     }
   }
 
-  async function fetchLatestRelease() {
+  async function fetchLatestRelease(signal) {
     const url = `${GITHUB_API}/repos/${repo}/releases/latest`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const abortFromCaller = () => controller.abort();
+    if (signal?.aborted) controller.abort();
+    else signal?.addEventListener('abort', abortFromCaller, { once: true });
     try {
       const res = await doFetch(url, {
         signal: controller.signal,
@@ -195,6 +198,7 @@ function createUpdateService({
       return { release: json };
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abortFromCaller);
     }
   }
 
@@ -205,13 +209,14 @@ function createUpdateService({
    * @param {object} [opts]
    * @param {boolean} [opts.respectIgnored] true -> uebersprungene Version meldet
    *        kein Update (fuer Auto-Check beim Start). Bei manuellem Check false.
+   * @param {AbortSignal} [opts.signal] ends the request early (#568)
    */
   async function checkForUpdate(opts = {}) {
     const respectIgnored = opts.respectIgnored === true;
     const currentVersion = getCurrentVersion();
     let result;
     try {
-      result = await fetchLatestRelease();
+      result = await fetchLatestRelease(opts.signal);
     } catch (err) {
       const offline = err && (err.name === 'AbortError' || err.cause);
       return {
@@ -268,6 +273,13 @@ function createUpdateService({
   }
 
   /**
+   * The download that is under way, from the click on "Download" on: the
+   * fresh check below belongs to it as much as the transfer. Cancelling has to
+   * reach both — the check alone can take seconds (#568).
+   */
+  let pendingDownload = null;
+
+  /**
    * Laedt das Paket der neuesten Version. `onProgress` bekommt geladene und
    * erwartete Bytes; `cancelDownload()` bricht ab.
    *
@@ -276,22 +288,36 @@ function createUpdateService({
    * immer direkt von GitHub und nie aus dem Renderer.
    */
   async function downloadUpdate({ onProgress } = {}) {
-    const result = await checkForUpdate({ respectIgnored: false });
-    if (!result.updateAvailable) {
-      return { ok: false, error: result.error || createMessage('update.error.noNewerVersion') };
+    if (pendingDownload) return { ok: false, error: createMessage('update.error.downloadRunning') };
+    const controller = new AbortController();
+    pendingDownload = controller;
+    try {
+      const result = await checkForUpdate({ respectIgnored: false, signal: controller.signal });
+      if (controller.signal.aborted) return { ok: false, canceled: true };
+      if (!result.updateAvailable) {
+        return { ok: false, error: result.error || createMessage('update.error.noNewerVersion') };
+      }
+      if (!result.canSelfUpdate || !lastAsset) {
+        return {
+          ok: false,
+          manualOnly: true,
+          releaseUrl: result.releaseUrl,
+          error: result.selfUpdateBlockedReason || createMessage('update.error.selfUpdateImpossible'),
+        };
+      }
+      return await downloader.download({
+        asset: lastAsset, version: result.latestVersion, onProgress, signal: controller.signal,
+      });
+    } finally {
+      if (pendingDownload === controller) pendingDownload = null;
     }
-    if (!result.canSelfUpdate || !lastAsset) {
-      return {
-        ok: false,
-        manualOnly: true,
-        releaseUrl: result.releaseUrl,
-        error: result.selfUpdateBlockedReason || createMessage('update.error.selfUpdateImpossible'),
-      };
-    }
-    return downloader.download({ asset: lastAsset, version: result.latestVersion, onProgress });
   }
 
   function cancelDownload() {
+    if (pendingDownload) {
+      pendingDownload.abort();
+      return { ok: true };
+    }
     return { ok: downloader.cancel() };
   }
 
@@ -324,13 +350,16 @@ function createUpdateService({
 
   /**
    * Did the last install fail after this app had already quit? Reads the
-   * helper's status file once and removes it. A record for a version that is
-   * not newer than the running one is stale — the user has updated some other
-   * way since — and is dropped without a word.
+   * helper's status file. A record for a version that is not newer than the
+   * running one is stale — the user has updated some other way since — and is
+   * dropped without a word, as is one that cannot be read.
+   *
+   * A valid record stays until `clearInstallFailure()` (#573): the start check
+   * that reads it may still fail to reach GitHub, and then nothing is shown.
    *
    * @returns {Promise<{version: string, error: string, logFile: string} | null>}
    */
-  async function takeInstallFailure() {
+  async function readInstallFailure() {
     const { statusFile, logFile } = getHelperFiles();
     let raw;
     try {
@@ -338,21 +367,29 @@ function createUpdateService({
     } catch {
       return null;
     }
-    await fsp.rm(statusFile, { force: true }).catch(() => {});
     let record;
     try {
       // Windows PowerShell 5 writes UTF-8 with a byte order mark.
       record = JSON.parse(raw.replace(/^\uFEFF/, ''));
     } catch {
+      await clearInstallFailure();
       return null;
     }
     const version = typeof record?.version === 'string' ? record.version : '';
-    if (!version || !isNewerVersion(version, getCurrentVersion())) return null;
+    if (!version || !isNewerVersion(version, getCurrentVersion())) {
+      await clearInstallFailure();
+      return null;
+    }
     return {
       version,
       error: typeof record.error === 'string' ? record.error.trim() : '',
       logFile: typeof record.log === 'string' && record.log ? record.log : logFile,
     };
+  }
+
+  /** Forgets a failed install once the user has been told. */
+  async function clearInstallFailure() {
+    await fsp.rm(getHelperFiles().statusFile, { force: true }).catch(() => {});
   }
 
   async function getIgnoredVersion() {
@@ -387,7 +424,8 @@ function createUpdateService({
     cancelDownload,
     discardDownload,
     installUpdate,
-    takeInstallFailure,
+    readInstallFailure,
+    clearInstallFailure,
   };
 }
 

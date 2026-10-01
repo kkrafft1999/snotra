@@ -508,3 +508,55 @@ test('ohne Fehlschlag beim letzten Mal bleibt der Hinweis weg', async (t) => {
   await ui.push({ ...AVAILABLE, lastInstallFailure: null });
   assert.equal(ui.hint().classList.contains('hidden'), true);
 });
+
+// #568: a check from the menu or the settings used to draw "available" over a
+// running step — during the install with a live "Download" button.
+for (const step of ['downloading', 'ready', 'installing']) {
+  test(`a check result while ${step} leaves the step on screen`, async (t) => {
+    const ui = await mount({
+      api: {
+        downloadUpdate: () => (step === 'downloading' ? new Promise(() => {}) : Promise.resolve({ ok: true })),
+        installUpdate: () => new Promise(() => {}),
+      },
+    });
+    t.after(ui.dom.cleanup);
+    await ui.push({ ...AVAILABLE });
+    await ui.click('Download');
+    if (step === 'installing') await ui.click('Install and restart');
+    const before = { title: ui.title(), labels: ui.labels(), closeDisabled: ui.$('modal-update-close').disabled };
+
+    await ui.push({ ...AVAILABLE, manual: true });
+    await ui.push({ updateAvailable: false, manual: true, error: 'offline' });
+    await ui.dialog.checkNow();
+    await flush();
+
+    assert.deepEqual(
+      { title: ui.title(), labels: ui.labels(), closeDisabled: ui.$('modal-update-close').disabled },
+      before,
+    );
+  });
+}
+
+test('while installing, focus stays in the dialog and Tab cannot leave it (#573)', async (t) => {
+  const ui = await mount({ api: { installUpdate: () => new Promise(() => {}) } });
+  t.after(ui.dom.cleanup);
+  await ui.push({ ...AVAILABLE });
+  await ui.click('Download');
+  await ui.click('Install and restart');
+
+  const dialog = ui.dom.document.querySelector('#modal-update .update-dialog');
+  assert.equal(ui.dom.document.activeElement, dialog);
+  const tab = new ui.dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+  dialog.dispatchEvent(tab);
+  assert.equal(tab.defaultPrevented, true);
+});
+
+test('the live region announces the step, not every progress figure (#573)', async (t) => {
+  const ui = await mount({ api: { downloadUpdate: () => new Promise(() => {}) } });
+  t.after(ui.dom.cleanup);
+  await ui.push({ ...AVAILABLE });
+  await ui.click('Download');
+  assert.equal(ui.$('modal-update-progress-text').getAttribute('aria-live'), null);
+  assert.equal(ui.$('modal-update-progress-text').getAttribute('role'), null);
+  assert.equal(ui.$('modal-update-summary').getAttribute('aria-live'), 'polite');
+});

@@ -5732,6 +5732,14 @@ select.modal-input {
   color: var(--text-secondary);
 }
 
+/* While installing, the dialog holds the focus itself — there is nothing to
+ * press and the close button is off (#573). It is a container, not a control,
+ * so it gets no ring: the indeterminate bar and the status text carry the
+ * state. Every control inside keeps the global ring. */
+.update-dialog[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
 /* Der leise Knopf bekommt eine eigene Zeile ueber den beiden anderen und
    steht dort links: ein Angebot, keine Empfehlung. Drei Knoepfe nebeneinander
    passen in 480px nicht zuverlaessig — „Release-Seite öffnen" allein misst

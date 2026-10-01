@@ -258,17 +258,26 @@ Behind it sit three modules in `services/`, separated by what can go wrong in
 each:
 
 - `update-targets.js` — **pure**, without file system and processes. Answers
-  "what kind of installation is running here" (macOS bundle, Windows directory,
-  AppImage, extracted Linux directory, system package, development build) and
+  "what kind of installation is running here" (macOS bundle, a Mac bundle
+  running read-only from the disk image or under App Translocation, Windows
+  directory, AppImage, extracted Linux directory, system package, development
+  build) and
   "which release asset fits it". This decision comes out differently on every
   platform and can be tried out safely on none, which is why it stands on its own
   as a pure function.
 - `update-download.js` — stream to disk, with progress and real cancellation.
-  Downloads only from `github.com` or `*.githubusercontent.com` over HTTPS and
-  discards a file whose length does not match the announced one; a torso must not
-  pass as a finished download on the next attempt.
+  Downloads only from `github.com` or `*.githubusercontent.com` over HTTPS —
+  the address it asks for and the one GitHub redirects it to — and discards a
+  file whose length does not match the announced one, or whose SHA-256 differs
+  from the `digest` GitHub lists for the asset (#569, #573); a torso must not
+  pass as a finished download on the next attempt. Cancellation covers the
+  whole step from the click on, including the fresh check of the release that
+  precedes the transfer (#568).
 - `update-installer.js` — the replacement. The same pattern everywhere: the new
-  version is fully unpacked and verified **next to** the old one, and only then
+  version is fully unpacked and verified **next to** the old one — on macOS the
+  DMG's own checksum, the bundle identifier and the version in `Info.plist`; in a
+  Windows or Linux folder the product name and version in the `package.json`
+  inside `resources/app.asar` (#569) — and only then
   does a detached helper script take over that waits for this process to end,
   renames and restarts. It would not work inside the running process — on Windows
   the `.exe` is locked, on Linux the AppImage is mounted as a file system inside
