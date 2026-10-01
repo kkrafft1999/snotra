@@ -850,6 +850,7 @@ export function resetActions() {
 export function integrityWarning(integrity) {
   if (integrity === 'invalid') return t('permissions.integrity.invalid');
   if (integrity === 'unsigned') return t('permissions.integrity.unsigned');
+  if (integrity === 'unreadable') return t('permissions.integrity.unreadable');
   return '';
 }
 

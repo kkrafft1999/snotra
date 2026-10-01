@@ -218,3 +218,18 @@ test('an unknown mode falls back to Smart, like the planner', () => {
   assert.equal(overview.defaultMode, 'smart');
   assert.equal(row(overview, 'read').status, 'runs');
 });
+
+test('the Delete row is blocked by a block on writes exactly when the policy is (#515)', () => {
+  const { decideToolPolicy } = require('../src/application/permissions/tool-policy');
+  const denyWrite = { id: 'd', effect: 'deny', scope: 'global', root: null, tool: null, riskClass: 'write', pathPattern: '**', createdAt: 0 };
+  const overview = describeSecurityOverview({
+    mode: 'auto',
+    globalRules: [denyWrite],
+    tools: [{ name: 'write_file_text', riskClasses: ['write'], mayOverwrite: true }],
+  });
+  const row = overview.classes.find((entry) => entry.riskClass === 'delete');
+  assert.equal(row.status, 'off');
+  assert.equal(row.offReason, 'blocked');
+  const verdict = decideToolPolicy({ mode: 'auto', toolName: 'write_file_text', riskClasses: ['delete'], targets: [{ path: 'a.txt' }], rules: [denyWrite] });
+  assert.equal(verdict.decision, 'deny');
+});

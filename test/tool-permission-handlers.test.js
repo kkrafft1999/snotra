@@ -722,3 +722,95 @@ test('the Security overview without a folder, and with failing describers (#448)
   assert.ok(overview.classes.every((entry) => entry.status === 'off' && entry.offReason === 'no-tools'));
   assert.deepEqual(overview.chatsWithOtherMode, []);
 });
+
+// ── Removing protection is confirmed natively (#514) ────────────────────────
+
+test('dropping a sensitive path pattern needs the native dialog; adding one does not (#514)', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 1, locale: 'en' });
+  const sender = makeSender();
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, sender, ['personal/**', 'hr/**'])).ok, true);
+  assert.equal(dialogCalls.length, 0, 'adding only tightens');
+
+  const cancelled = await invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, sender, ['hr/**']);
+  assert.equal(cancelled.ok, false);
+  assert.equal(dialogCalls[0].message, 'Remove sensitive path patterns?');
+  assert.match(dialogCalls[0].detail, /personal\/\*\*/);
+  assert.deepEqual((await toolPolicyStore.read()).sensitivePathPatterns, ['personal/**', 'hr/**']);
+});
+
+test('a reset that removes blocks names them in a native dialog; cancelling keeps everything (#514)', async (t) => {
+  let answer = 1;
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: () => answer, locale: 'en' });
+  const sender = makeSender();
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', riskClass: 'read', scope: 'workspace', pathPattern: 'private/**' });
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', tool: 'edit_file' });
+  await invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, sender, ['personal/**']);
+  await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'ask-all');
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, sender)).ok, false);
+  const workspaceDialog = dialogCalls.at(-1);
+  assert.equal(workspaceDialog.message, 'Reset workspace rules?');
+  assert.match(workspaceDialog.detail, /\/work\/projekt/);
+  assert.match(workspaceDialog.detail, /Blocks: 1/);
+  assert.match(workspaceDialog.detail, /“Always ask” as their default: 1/);
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_ALL, sender)).ok, false);
+  const allDialog = dialogCalls.at(-1);
+  assert.equal(allDialog.message, 'Reset all permissions?');
+  assert.match(allDialog.detail, /Blocks: 2/);
+  assert.match(allDialog.detail, /personal\/\*\*/);
+
+  let state = await toolPolicyStore.read();
+  assert.equal(state.rules.length, 2, 'nothing reset after cancelling');
+  assert.equal(state.workspaceModes['/work/projekt'], 'ask-all');
+
+  answer = 0;
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_ALL, sender)).ok, true);
+  state = await toolPolicyStore.read();
+  assert.deepEqual(state.rules, []);
+  assert.deepEqual(state.sensitivePathPatterns, []);
+});
+
+test('a reset that only takes allowances away asks nothing (#514)', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 0 });
+  const sender = makeSender();
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', riskClass: 'read', scope: 'workspace', pathPattern: 'docs/**' });
+  const before = dialogCalls.length;
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, sender)).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_ALL, sender)).ok, true);
+  assert.equal(dialogCalls.length, before);
+  assert.deepEqual((await toolPolicyStore.read()).rules, []);
+});
+
+// ── Rules the settings channel does not take (#517) ─────────────────────────
+
+test('a command rule is not taken from the settings channel, and no dialog is shown (#517)', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 0 });
+  const result = await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, makeSender(), {
+    effect: 'allow', scope: 'workspace', tool: 'shell_execute', command: 'git status', cwd: '', networkDomains: [],
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.key, 'permissions.error.commandRuleFromCard');
+  assert.equal(dialogCalls.length, 0);
+  assert.deepEqual((await toolPolicyStore.read()).rules, []);
+});
+
+test('an allow rule for a tool that can never be allowed permanently is refused before the dialog (#517)', async (t) => {
+  const describeTools = async () => [
+    { name: 'shell_execute', riskClasses: ['execute'] },
+    { name: 'fetch_url', riskClasses: ['external'] },
+    { name: 'edit_file', riskClasses: ['write'] },
+  ];
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 0, describeTools });
+  const sender = makeSender();
+  for (const tool of ['shell_execute', 'fetch_url']) {
+    const result = await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', tool });
+    assert.equal(result.ok, false, tool);
+    assert.equal(result.error.key, 'permissions.error.allowNotForTool');
+  }
+  assert.equal(dialogCalls.length, 0);
+  // A deny rule for the same tool stays possible, and so does an allow rule for a writing tool.
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', tool: 'shell_execute' })).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', tool: 'edit_file' })).ok, true);
+  assert.equal((await toolPolicyStore.read()).rules.length, 2);
+});

@@ -76,17 +76,25 @@ function decide(overrides = {}) {
 test('only simple commands have a remembered form; spaces collapse', () => {
   assert.equal(normalizeRememberableCommand('  git   status  '), 'git status');
   assert.equal(normalizeRememberableCommand('npm test'), 'npm test');
-  assert.equal(normalizeRememberableCommand('ls -la src/*.js'), 'ls -la src/*.js');
+  assert.equal(normalizeRememberableCommand('ls -la src/main.js'), 'ls -la src/main.js');
   assert.equal(normalizeRememberableCommand('npx eslint --fix=false src'), 'npx eslint --fix=false src');
   for (const unsafe of [
     'git status && rm x', 'git status; rm x', 'git log | head', 'echo hi > out.txt', 'cat < in',
     'echo $HOME', 'echo `id`', 'echo $(id)', 'git commit -m "x"', "echo 'x'", 'type C:\\x',
     'dir %TEMP%', 'git status\nrm x', 'npm test &', '-rf', '', '   ',
+    // A glob and zsh's `=command` expand when the line runs (#516).
+    'ls -la src/*.js', 'tar czf backup.tgz *', 'ls =python', '=ls',
   ]) {
     assert.equal(normalizeRememberableCommand(unsafe), null, unsafe);
   }
   assert.equal(normalizeRememberableCommand('a'.repeat(401)), null);
   assert.equal(normalizeRememberableCommand(42), null);
+});
+
+test('a stored command rule with a glob is dropped, not read as a wider one (#516)', () => {
+  const stored = { ...commandRule(), command: 'tar czf backup.tgz *' };
+  assert.equal(normalizePermissionRule(stored), null);
+  assert.equal(normalizeRememberableCommand('npm run build --mode=production'), 'npm run build --mode=production');
 });
 
 test('the working folder of a rule is relative and stays inside', () => {

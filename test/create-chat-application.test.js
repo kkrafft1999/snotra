@@ -472,3 +472,59 @@ test('ein unlesbares Gedächtnis blockiert den Chat nicht', async () => {
   assert.equal(result.content, 'ok');
   assert.equal(/Your memory/.test(system()), false);
 });
+
+test('a rules file that cannot be read blocks tools instead of running without blocks (#512)', async () => {
+  let round = 0;
+  const seen = [];
+  const provider = {
+    id: 'test',
+    name: 'Test',
+    defaultModel: 'test-model',
+    fields: {},
+    async streamChatRound(args) {
+      seen.push(args);
+      round += 1;
+      return round === 1 ? assistantToolCall('call_1', 'list_directory', { relative_path: '.' }) : assistantText('done');
+    },
+  };
+  let executed = 0;
+  const { engine } = createChatApplication({
+    llmConfigStore: {
+      readLLMConfig: async () => ({}),
+      resolveChatModelTarget: () => ({ providerId: 'test', model: 'test-model' }),
+    },
+    providerRuntime: { getProvider: () => provider },
+    providerSecrets: { getEffectiveProviderConfig: async () => ({ apiKey: 'sk-test', model: 'test-model' }) },
+    uiPrefsStore: { readUIPrefs: async () => ({}) },
+    toolRegistry: {
+      getTools: () => [{ type: 'function', function: { name: 'list_directory' } }],
+      buildSystemPrompt: () => 'Tools: list_directory',
+      execute: async () => {
+        executed += 1;
+        return JSON.stringify({ ok: true });
+      },
+    },
+    // What the store reports while its file is locked: nothing granted, nothing blocked.
+    toolPolicyStore: {
+      read: async () => ({
+        integrity: 'unreadable',
+        mode: 'smart',
+        rules: [],
+        sensitivePathPatterns: [],
+        policyVersion: '0:unreadable',
+        encryptionAvailable: true,
+      }),
+    },
+    path,
+    maxToolRounds: 3,
+  });
+
+  await engine.send({
+    sessionId: 'unreadable-1',
+    payload: { messages: [{ role: 'user', content: 'Liste' }], workspaceRoot: '/tmp/snotra-project' },
+  });
+
+  assert.equal(executed, 0);
+  const toolMessage = seen[1].messages.find((m) => m.role === 'tool');
+  assert.match(toolMessage.content, /cannot be read/);
+});

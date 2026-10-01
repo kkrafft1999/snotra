@@ -32,7 +32,7 @@ const {
   DEFAULT_SENSITIVE_NAME_PATTERNS,
   DEFAULT_SENSITIVE_DIRECTORY_NAMES,
 } = require('../../shared/runtime/sensitive-paths');
-const { matrixDecision } = require('./tool-policy');
+const { matrixDecision, ruleNamesCall } = require('./tool-policy');
 
 const SECURITY_ROW_STATUSES = Object.freeze({
   RUNS: 'runs',
@@ -114,13 +114,12 @@ function ruleNamesRow(rule, riskClass, toolNames) {
 /**
  * A block for every path (`**`) that catches this tool in this row: named by
  * the tool, by the row's class or by one of the classes every call carries.
+ * The policy's own `ruleNamesCall` decides, so the page cannot call a row
+ * blocked that the policy lets through (#515).
  */
 function toolFullyBlocked(tool, riskClass, denyRules) {
-  return denyRules.some(
-    (rule) =>
-      rule.pathPattern === '**' &&
-      (rule.tool ? rule.tool === tool.name : rule.riskClass === riskClass || tool.riskClasses.includes(rule.riskClass))
-  );
+  const callClasses = [riskClass, ...tool.riskClasses];
+  return denyRules.some((rule) => rule.pathPattern === '**' && ruleNamesCall(rule, tool.name, callClasses));
 }
 
 function cleanChats(raw, defaultMode) {

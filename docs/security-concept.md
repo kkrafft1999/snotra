@@ -104,7 +104,9 @@ The binding order:
    and check the hard boundaries. A capability that is not available is never
    made available again by a cell of the matrix.
 2. A matching global or workspace deny rule → `deny`. Any block beats any
-   permission, including a more specific or a later one.
+   permission, including a more specific or a later one. A block on `write`
+   also covers a call classified `delete` — overwriting without a recovery
+   copy destroys a file all the same (#515).
 3. `ask-all` → `ask`, explicitly including read tools. Allow lists and session
    approvals skip no question here.
 4. `auto` → `allow` within the boundaries, without asking about tools. That
@@ -248,10 +250,13 @@ stored with the history in the encrypted store.
 - **The trust model:** the main process and the application layer are the trust
   base. The renderer counts as trustworthy for ordinary operation, but not as a
   security boundary: it renders foreign content and can be compromised through a
-  bug while doing so. That is why main confirms the three actions that loosen
+  bug while doing so. That is why main confirms the actions that loosen
   the protection overall in a native dialog (`dialog.showMessageBox`) rather
   than on an IPC message alone: enabling auto, creating a permanent allow rule,
-  deleting a deny rule. The renderer only triggers these actions. The same
+  deleting a deny rule — also several at once, by "Workspace-Regeln
+  zurücksetzen" or "Alle Berechtigungen zurücksetzen", which name what goes —
+  and dropping a sensitive path pattern (#514). The renderer only triggers
+  these actions. The same
   pattern applies to the import from outside (#101): main counts, confirms
   natively (always for folders, above a threshold for files) and only then
   copies; the renderer merely picks the target folder, and the numbers in the
@@ -361,7 +366,11 @@ tampering can be told apart from corruption. If the check fails, the fail-safe
 applies: mode `smart` — unless it was `ask-all`, which only tightens and stays
 (#419) —, all allow rules and session approvals discarded, readable deny rules
 and sensitive path patterns stay in force, with a visible note to the user.
-Without `safeStorage` available, auto cannot be enabled and permanent allow
+A file that is there but **cannot be read** — a Windows lock, a permission —
+is not a failed check: nothing is known about its blocks, so tools stay
+blocked until it can be read again, and no change is written over it (#512).
+The same holds for a key file that cannot be read; only a key that was read
+and does not decrypt counts as lost. Without `safeStorage` available, auto cannot be enabled and permanent allow
 rules are not stored; `smart` and `ask-all` work as usual. That protects against accidental editing and against
 tools that change files blindly. The signature secures the integrity of the file
 at rest, not against a compromised main process: whoever runs with the user's
@@ -377,7 +386,11 @@ A rule holds an id, `allow | deny`, an exact tool name or an explicit risk
 class, the root, the target path or pattern, and the scope. Permissions have to
 cover every effect. For path rules, `*` (within a segment) and `**` (including
 subdirectories) are defined; no shell expressions and no freely executed regular
-expressions. `skill:` rules additionally bind the real skill root. Global path
+expressions. A rule is matched against the place a call touches, not against
+the spelling the model chose (#511): each target counts in its root-relative
+form, resolved lexically and as its real path. A deny rule blocks when any of
+those forms matches, ignoring case (on macOS and Windows `Private/` is
+`private/`); an allow rule covers a call only when all of them match exactly. `skill:` rules additionally bind the real skill root. Global path
 rules apply relative to every root, only within the hard boundaries, and are
 labelled "Alle Workspaces". Global blocks stay in force everywhere.
 
@@ -392,10 +405,11 @@ card showed is the same: the command line (runs of spaces collapsed), the
 working folder relative to the root, the declared network domains, no input on
 stdin, and a call that is `execute` and nothing else (a call escalated to
 sensitive output asks again). Only simple commands can be remembered: letters,
-digits, spaces and `_ - . / : = , @ + * ~`. That allowlist fails closed on
-every shell Snotra runs — chaining, pipes, redirection, substitution,
-variables, quoting and escapes are all outside it — so the meaning of a
-remembered line cannot shift between approval and a later call. What such a
+digits, spaces and `_ - . / : = , @ + ~`, with no word starting with `=`.
+That allowlist fails closed on every shell Snotra runs — chaining, pipes,
+redirection, substitution, variables, globs (#516), quoting and escapes are
+all outside it — so the meaning of a remembered line cannot shift between
+approval and a later call. What such a
 line does is still up to the program: `npm test` runs whatever the project's
 scripts say at that moment, and the sandbox (section 9) is what bounds it.
 Command rules are allow rules like any other: `ask-all` ignores them, a deny

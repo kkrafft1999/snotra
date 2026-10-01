@@ -167,3 +167,44 @@ test('Workspace-Regeln gelten nur für ihre kanonische Wurzel, globale überall'
   assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'edit_file', riskClasses: ['write'], targets: [{ path: 'a' }], root: '/other/projekt', rules }).decision, 'allow');
   assert.equal(decideToolPolicy({ mode: 'auto', toolName: 'edit_file', riskClasses: ['write'], targets: [{ path: 'a' }], root: ROOT, rules }).decision, 'deny');
 });
+
+// ── Rules decide on the place a call touches (#511) ─────────────────────────
+
+function decideFor({ rules, riskClasses = ['read'], target, mode = 'smart' }) {
+  return decideToolPolicy({ mode, toolName: 'read_file_text', riskClasses, targets: [target], root: ROOT, rules }).decision;
+}
+
+test('an allow rule covers only what lies under its pattern, whatever the spelling (#511)', () => {
+  const allowSrc = rule({ effect: 'allow', scope: 'workspace', root: ROOT, riskClass: 'write', pathPattern: 'src/**' });
+  const write = (target) => decideFor({ rules: [allowSrc], riskClasses: ['write'], target });
+  assert.equal(write({ path: 'src/a.js', rulePaths: ['src/a.js'] }), 'allow');
+  // The planner resolves `src/../package.json` to `package.json`.
+  assert.equal(write({ path: 'src/../package.json', rulePaths: ['package.json'] }), 'ask');
+  // A symlink inside src/ pointing elsewhere: the real path is outside the pattern.
+  assert.equal(write({ path: 'src/link', rulePaths: ['src/link', 'config/secret.json'] }), 'ask');
+  // Without resolved forms, a spelling that leaves its folder covers nothing.
+  assert.equal(write({ path: 'src/../package.json' }), 'ask');
+  assert.equal(write({ path: '/work/projekt/src/a.js' }), 'ask');
+  // Exact case for allowing: `Src/` is not what the rule names.
+  assert.equal(write({ path: 'Src/a.js', rulePaths: ['Src/a.js'] }), 'ask');
+});
+
+test('a deny rule catches every form of every target, case-insensitively (#511)', () => {
+  const denyPrivate = rule({ scope: 'workspace', root: ROOT, riskClass: 'read', pathPattern: 'private/**' });
+  const read = (target) => decideFor({ rules: [denyPrivate], target });
+  assert.equal(read({ path: 'x/../private/a', rulePaths: ['private/a'] }), 'deny');
+  assert.equal(read({ path: '/work/projekt/private/a', rulePaths: ['private/a'] }), 'deny');
+  assert.equal(read({ path: 'Private/a', rulePaths: ['Private/a'] }), 'deny');
+  assert.equal(read({ path: 'link/a', rulePaths: ['link/a', 'private/a'] }), 'deny');
+  assert.equal(read({ path: 'public/a', rulePaths: ['public/a'] }), 'allow');
+});
+
+test('a block on writes covers an overwrite without recovery, classified delete (#515)', () => {
+  const denyWrite = rule({ riskClass: 'write', pathPattern: '**' });
+  for (const mode of ['smart', 'auto', 'ask-all']) {
+    assert.equal(decideFor({ rules: [denyWrite], riskClasses: ['delete'], target: { path: 'a.txt' }, mode }), 'deny', mode);
+  }
+  // A block on deletes does not, in turn, block ordinary writes.
+  const denyDelete = rule({ riskClass: 'delete', pathPattern: '**' });
+  assert.equal(decideFor({ rules: [denyDelete], riskClasses: ['write'], target: { path: 'a.txt' } }), 'ask');
+});

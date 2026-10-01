@@ -301,7 +301,15 @@ function normalizeRulePathPattern(raw) {
  * is a program with plain words as arguments, and its meaning cannot shift
  * between the moment it was approved and a later call.
  */
-const REMEMBERABLE_COMMAND_PATTERN = /^[A-Za-z0-9 _\-./:=,@+*~]+$/;
+const REMEMBERABLE_COMMAND_PATTERN = /^[A-Za-z0-9 _\-./:=,@+~]+$/;
+
+/**
+ * `*` is not on the list (#516): the shell replaces it with the names in the
+ * folder when the line runs, so `tar czf b.tgz *` gets whatever arguments the
+ * files there spell out. Nor is a word starting with `=`, which zsh expands to
+ * the path of the command of that name.
+ */
+const EXPANDING_WORD_START = /(?:^|\s)=/;
 
 /**
  * The form in which a command is remembered and compared (#121): runs of
@@ -315,6 +323,7 @@ function normalizeRememberableCommand(raw) {
   const text = raw.replace(/[ \t]+/g, ' ').trim();
   if (!text || text.length > MAX_COMMAND_RULE_CHARS) return null;
   if (!REMEMBERABLE_COMMAND_PATTERN.test(text) || text.startsWith('-')) return null;
+  if (EXPANDING_WORD_START.test(text)) return null;
   return text;
 }
 

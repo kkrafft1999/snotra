@@ -19,12 +19,18 @@ const SENSITIVE_CONTENT_RULES_VERSION = 1;
 /** Standardbegrenzung: größere Texte gelten als „nicht prüfbar“ (Konzept §4). */
 const DEFAULT_SCAN_LIMIT_CHARS = 4 * 1024 * 1024;
 
-const MASK_TEXT = '[maskiert]';
+// Shown in previews and in the MCP status, in either language (#517): a mark
+// rather than a word. Eight bullets read as a placeholder to the scan below,
+// so masked text does not look like a secret again.
+const MASK_TEXT = '••••••••';
 
 // Schluesselnamen duerfen ein Praefix tragen (OPENAI_API_KEY, DB_PASSWORD,
 // github_token); nach dem Namen muss das Wort enden (password_hint zaehlt nicht).
+// The prefix is bounded (#513): unbounded, it was tried from every word
+// boundary to the end of the run, and a hyphen is a boundary — 400 KB of
+// base64url held the main process for seconds, the 4 MB limit for minutes.
 const CREDENTIAL_KEYS =
-  '[A-Za-z0-9_-]*?(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|' +
+  '[A-Za-z0-9_-]{0,64}?(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|' +
   'secret[_-]?key|private[_-]?key|passw(?:or)?d|secret|token)';
 
 // Platzhalter, die typisch für Beispiel-Konfigurationen sind. Sie zählen
@@ -81,7 +87,9 @@ const CONTENT_RULES = Object.freeze([
     id: 'credential-assignment',
     // key = value  |  key: value  |  "key": "value"  |  export KEY=value
     regex: new RegExp(
-      `(["']?)\\b${CREDENTIAL_KEYS}\\b\\1\\s*[:=]\\s*(?:["']([^"'\\r\\n]{8,})["']|([^\\s"',;#()]{8,}))`,
+      // The name starts where a run of name characters starts, not at every
+      // hyphen inside one (#513).
+      `(["']?)(?<![A-Za-z0-9_-])${CREDENTIAL_KEYS}\\b\\1\\s*[:=]\\s*(?:["']([^"'\\r\\n]{8,})["']|([^\\s"',;#()]{8,}))`,
       'gi'
     ),
     // Gruppe 2 = in Anführungszeichen, Gruppe 3 = nackt (.env-Stil).
