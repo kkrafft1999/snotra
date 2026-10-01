@@ -162,3 +162,48 @@ test('stopping by hand clears the limit timers and leaves no notice behind', asy
   assert.equal(sent.length, 1, 'no second stop fires later');
   assert.equal(state.elements.get('chat-voice-status').textContent, '');
 });
+
+for (const failure of ['constructor', 'start']) {
+  test(`a recorder that fails in its ${failure} releases the microphone and says so (#586)`, async () => {
+    let stopped = 0;
+    const elements = new Map();
+    const document = {
+      addEventListener() {},
+      getElementById(id) {
+        if (!elements.has(id)) elements.set(id, {
+          value: '', textContent: '', disabled: false,
+          classList: { toggle() {}, add() {}, remove() {} },
+          setAttribute(name, value) { this[`attr:${name}`] = value; }, focus() {},
+          addEventListener(event, fn) { this[event] = fn; },
+        });
+        return elements.get(id);
+      },
+    };
+    class Recorder {
+      static isTypeSupported() { return true; }
+      constructor() { if (failure === 'constructor') throw new Error('NotSupportedError'); }
+      start() { if (failure === 'start') throw new Error('InvalidStateError'); }
+      stop() {}
+    }
+    const context = vm.createContext({ document, Blob, MediaRecorder: Recorder, contracts,
+      setTimeout, clearTimeout,
+      t, tMessage: t.message, onLocaleChange() {},
+      navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { stopped += 1; } }] }) } },
+    });
+    vm.runInContext(source, context);
+    context.initWhisperRecorder({ api: { transcribeAudio: async () => ({}) }, onInputChanged() {} });
+
+    const mic = elements.get('btn-chat-mic');
+    mic.click();
+    await tick();
+
+    assert.equal(stopped, 1, 'the track of the stream is stopped');
+    assert.equal(mic['attr:aria-pressed'], undefined, 'the button never switched to recording');
+    assert.match(elements.get('chat-voice-status').textContent, /Error|Fehler|Mikrofon/i);
+
+    // The next attempt is possible: no recording is left half-started.
+    mic.click();
+    await tick();
+    assert.equal(stopped, 2);
+  });
+}

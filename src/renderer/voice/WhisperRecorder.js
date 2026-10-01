@@ -92,10 +92,20 @@ export function initWhisperRecorder({
     voiceChunks = [];
     voiceBytes = 0;
     autoStopNotice = '';
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm';
-    voiceMediaRecorder = new MediaRecorder(voiceStream, { mimeType });
+    let recorder;
+    try {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      recorder = new MediaRecorder(voiceStream, { mimeType });
+    } catch (err) {
+      // The stream is already open: without this the microphone would stay
+      // on while the button shows "not recording" (#586).
+      releaseVoiceStream();
+      setVoiceStatus(t('chat.voice.micFailed', { error: err?.message || '' }));
+      return;
+    }
+    voiceMediaRecorder = recorder;
     voiceMediaRecorder.ondataavailable = (e) => {
       if (started !== generation || !(e.data?.size > 0)) return;
       voiceChunks.push(e.data);
@@ -105,7 +115,15 @@ export function initWhisperRecorder({
       }
     };
     voiceMediaRecorder.onstop = () => handleVoiceStopped();
-    voiceMediaRecorder.start(250);
+    try {
+      voiceMediaRecorder.start(250);
+    } catch (err) {
+      voiceMediaRecorder.onstop = null;
+      voiceMediaRecorder = null;
+      releaseVoiceStream();
+      setVoiceStatus(t('chat.voice.micFailed', { error: err?.message || '' }));
+      return;
+    }
 
     voiceRecording = true;
     setMicUi(true);

@@ -81,6 +81,11 @@ export function initChatHistoryPanel({
    * wollte, soll ein Platzmangel nicht ueberschreiben.
    */
   function setHistoryOpen(open, { persist = true } = {}) {
+    // Folded away — by hand or for lack of room — the column does not take
+    // the focus with it (#586).
+    if (!open && document.getElementById('chat-history')?.contains(document.activeElement)) {
+      btnChatHistory?.focus();
+    }
     appRoot.classList.toggle('app--no-history', !open);
     const label = open ? t('titlebar.history.hide') : t('titlebar.history.show');
     // aria-pressed statt aria-expanded: Der Knopf schaltet eine Spalte, er

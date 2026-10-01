@@ -20,6 +20,7 @@ module.exports = {
   // ── Title bar ──────────────────────────────────────────────────────────────
   'titlebar.sidebar.hide': 'Seitenleiste ausblenden',
   'titlebar.sidebar.show': 'Seitenleiste einblenden',
+  'titlebar.sidebar.shortcut': 'Strg+B',
   'titlebar.preview.hide': 'Mittlere Vorschau ausblenden',
   'titlebar.preview.show': 'Mittlere Vorschau einblenden',
   'titlebar.chat.hide': 'Chat ausblenden',

@@ -49,7 +49,8 @@ export function formatTokensShort(value) {
  */
 export function formatShare(share) {
   const value = Number(share);
-  if (!Number.isFinite(value) || value <= 0) return '0 %';
+  // From the formatter like every other share: "0%" in English (#586).
+  if (!Number.isFinite(value) || value <= 0) return percentWholeFormatter().format(0);
   if (value < 0.01) return `< ${percentWholeFormatter().format(0.01)}`;
   if (value < 0.1) return percentFormatter().format(value);
   if (value < 0.995) return percentWholeFormatter().format(value);

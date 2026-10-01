@@ -11,6 +11,9 @@ import { t } from '../i18n.js';
 export function initToolPermissionState({ api }) {
   let state = null;
   let loading = null;
+  // Asked again while a read was running: that read may have been answered
+  // before the change it is asked about (#586), so one more follows.
+  let readAgain = false;
   const listeners = new Set();
 
   function notify() {
@@ -29,12 +32,20 @@ export function initToolPermissionState({ api }) {
       notify();
       return null;
     }
-    if (loading) return loading;
+    if (loading) {
+      readAgain = true;
+      return loading;
+    }
     loading = (async () => {
       try {
-        state = await api.getToolPermissionState();
-      } catch {
-        state = null;
+        do {
+          readAgain = false;
+          try {
+            state = await api.getToolPermissionState();
+          } catch {
+            state = null;
+          }
+        } while (readAgain);
       } finally {
         loading = null;
       }

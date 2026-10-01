@@ -15,6 +15,7 @@ module.exports = {
   // ── Title bar ────────────────────────────────────────────────────────────
   'titlebar.sidebar.hide': 'Hide sidebar',
   'titlebar.sidebar.show': 'Show sidebar',
+  'titlebar.sidebar.shortcut': 'Ctrl+B',
   'titlebar.preview.hide': 'Hide preview pane',
   'titlebar.preview.show': 'Show preview pane',
   'titlebar.chat.hide': 'Hide chat',
