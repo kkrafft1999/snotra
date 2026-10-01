@@ -467,6 +467,18 @@ test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async
   assert.deepEqual(launches, [], 'ohne gepruefte Dateien wird kein Helfer gestartet');
 });
 
+test('the minimal test archive is a real asar, and the reader reads it (#569)', async (t) => {
+  const asar = require('@electron/asar');
+  const { writeMinimalAsar } = require('./helpers/asar.js');
+  const dir = makeTempDir();
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'app.asar');
+  writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra AI","version":"3.0.1"}' });
+  assert.deepEqual(asar.listPackage(file, { isPack: false }).sort(), ['/LICENSE', '/package.json']);
+  assert.equal(asar.extractFile(file, 'package.json').toString(), '{"productName":"Snotra AI","version":"3.0.1"}');
+  assert.equal(readAsarPackageJson(file).version, '3.0.1');
+});
+
 test('readAsarPackageJson reads package.json from a packed archive (#569)', async (t) => {
   const dir = makeTempDir();
   t.after(() => fsp.rm(dir, { recursive: true, force: true }));
