@@ -19,10 +19,9 @@ const { createMessage } = require('../src/shared/contracts/message');
 const SRC = path.join(__dirname, '..', 'src');
 
 /**
- * The counterpart to `test/website-i18n.test.js` for the app (epic #277).
- * Without it a gap only shows once somebody switches the language and finds
- * English sentences left standing in a German interface — exactly the failure
- * mode of issue #118.
+ * Both catalogues in step (epic #277). Without this a gap only shows once
+ * somebody switches the language and finds English sentences left standing in
+ * a German interface — exactly the failure mode of issue #118.
  */
 
 test('every language carries exactly the same keys', () => {
@@ -101,12 +100,14 @@ test('every key used in the code exists', () => {
   };
   collect(SRC);
 
-  // `t('…')`, `tPlural('…')`, `data-i18n="…"` — literals only. A key assembled
-  // from parts escapes this check, which is why the code has none: branching
-  // happens over whole keys. `createMessage('…')` belongs in the list since
-  // #293: the contracts name their keys the same way, only far from the place
-  // that shows them.
-  const literal = /\b(t|tPlural|translate|translateMessage|translatePlural|createMessage)\(\s*'([\w.]+)'/g;
+  // `t('…')`, `tPlural('…')`, `t.plural('…')`, `data-i18n="…"` — literals
+  // only, in either quote. A key assembled from parts escapes this check,
+  // which is why the code has none: branching happens over whole keys.
+  // `createMessage('…')` belongs in the list since #293: the contracts name
+  // their keys the same way, only far from the place that shows them.
+  // `t.plural` is how the main process counts (`fs-handlers.js`,
+  // `file-info.js`); until CR-B15-07 it slipped through.
+  const literal = /(?:\b(t|tPlural|translate|translateMessage|translatePlural|createMessage)|\.(plural))\(\s*['"]([\w.]+)['"]/g;
   const attribute = /data-i18n(?:-html)?="([\w.]+)"/g;
   const attrPair = /data-i18n-attr="([^"]+)"/g;
 
@@ -118,11 +119,11 @@ test('every key used in the code exists', () => {
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8');
     for (const m of text.matchAll(literal)) {
-      const [, fn, key] = m;
+      const [, fn, method, key] = m;
       // `translate(locale, key)` has the key in second place — a match without
       // a dot is the locale there, not a key.
       if (!key.includes('.')) continue;
-      const ok = fn.endsWith('Plural') ? knowsPlural(key) : knows(key);
+      const ok = method || fn.endsWith('Plural') ? knowsPlural(key) : knows(key);
       if (!ok) missing.add(`${path.relative(SRC, file)}: ${key}`);
     }
     for (const m of text.matchAll(attribute)) {

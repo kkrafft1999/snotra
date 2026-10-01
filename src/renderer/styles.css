@@ -6,14 +6,14 @@
 
 :root {
   --bg-primary: var(--ds-surface);
-  --bg-secondary: #F7F2EC;
-  --bg-tertiary: #ECE7E1;
+  --bg-secondary: var(--ds-bg-secondary);
+  --bg-tertiary: var(--ds-bg-tertiary);
   --chat-output-bg: var(--ds-chat-bg);
-  --bg-hover: #ECE7E1;
-  --bg-active: #DAD5CF;
-  --bg-header: #ECE7E1;
-  --text-primary: #1F1E1C;
-  --text-secondary: #63615D;
+  --bg-hover: var(--ds-bg-hover);
+  --bg-active: var(--ds-bg-active);
+  --bg-header: var(--ds-bg-header);
+  --text-primary: var(--ds-text-primary);
+  --text-secondary: var(--ds-text-secondary);
   --text-muted: var(--ds-grey-muted);   /* 4.84:1 statt 2.85:1 */
   --text-muted-strong: var(--ds-grey-strong); /* fuer Text < 14px */
   /* Ink of the deck chair drawing that fills the empty area (#315). Muted on
@@ -23,8 +23,8 @@
   --accent: var(--ds-blue);             /* Mono-Blue: einzige Akzentfarbe — Border, Outline, BG, Schrift */
   --accent-text: var(--ds-blue);        /* Alias bleibt fuer farbigen Text (Links etc.) */
   --accent-hover: var(--ds-btn-primary-bg-hover); /* dunklere Akzent-Stufe, z. B. Primary-Hover */
-  --border: #D8D3CD;
-  --scrollbar-thumb: #C5C0BB;
+  --border: var(--ds-border);
+  --scrollbar-thumb: var(--ds-scrollbar-thumb);
   --scrollbar-track: transparent;
 
   /* Horizontal inset of the chat (text, header, composer). It grows with the
@@ -92,26 +92,12 @@
   --btn-secondary-fg: var(--text-primary);
 }
 
+/* The colours themselves switch in tokens.css ([data-theme='dark']); the
+   aliases above follow on their own. Only what is not a colour stays here. */
 [data-theme="dark"] {
-  --bg-primary: var(--ds-surface);
-  --bg-secondary: #262523;
-  --bg-tertiary: #2E2D2B;
-  --chat-output-bg: var(--ds-chat-bg);
-  --bg-hover: #2E2C2A;
-  --bg-active: #393735;
-  --bg-header: #333230;
-  --text-primary: #D0CBC6;
-  --text-secondary: #999691;
   /* Five points below the light value: the same share of ink reads brighter
      on a dark ground, and the drawing would start to look chalky. */
   --empty-canvas-ink: color-mix(in srgb, var(--text-primary) 40%, transparent);
-  /* --text-muted / --accent / --accent-text / --accent-hover werden
-     ueber tokens.css ([data-theme='dark']) automatisch hell genug. */
-  --border: #3E3C39;
-  --scrollbar-thumb: #44423F;
-  --scrollbar-track: transparent;
-
-  /* Phase 5: Dark-Mode-Override jetzt in tokens.css. */
 }
 
 html, body {
@@ -758,7 +744,6 @@ summary:focus-visible,
   padding-right: 8px;
   border-left: 2px solid transparent;
   font-size: var(--ds-font-size-md);
-  font-style: italic;
   line-height: 1.3;
   color: var(--text-muted-strong);
   cursor: default;
@@ -1825,7 +1810,7 @@ summary:focus-visible,
 .chat-tool-line--running .chat-tool-line-text,
 .chat-tool-line--pending .chat-tool-line-text {
   --chat-tool-shimmer-base: var(--text-muted-strong);
-  --chat-tool-shimmer-highlight: color-mix(in srgb, var(--ds-white) 72%, var(--ds-blue) 28%);
+  --chat-tool-shimmer-highlight: var(--ds-tool-shimmer-highlight);
   display: inline-block;
   color: transparent;
   background-image: linear-gradient(
@@ -2268,8 +2253,11 @@ summary:focus-visible,
   display: none;
 }
 
-#chat-input::placeholder {
-  color: var(--text-muted);
+/* One placeholder colour for every field (CR-B15-03): without this rule the
+ * Settings inputs fell back to Chromium's #757575, 3.6:1 on the dark surface. */
+::placeholder {
+  color: var(--ds-placeholder);
+  opacity: 1;
 }
 
 /* #chat-input:focus: kein outline-Reset noetig — globales :focus greift,
@@ -3027,7 +3015,7 @@ button.chat-msg-attachment:hover {
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--ds-backdrop);
 }
 
 .modal-dialog {
@@ -3372,13 +3360,6 @@ select.modal-input {
   cursor: pointer;
 }
 
-.modal-note {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.45;
-  margin-bottom: 14px;
-}
-
 .modal-save-error {
   margin-top: 10px;
   font-size: 13px;
@@ -3391,17 +3372,6 @@ select.modal-input {
   color: var(--ds-error);
   margin-bottom: 12px;
   line-height: 1.4;
-}
-
-.modal-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-  margin-top: 10px;
 }
 
 .modal-input {
@@ -3688,7 +3658,7 @@ select.modal-input {
 .settings-nav-item[aria-selected='true'] {
   border-color: var(--ds-blue);
   background: var(--ds-blue-soft);
-  color: var(--ds-blue);
+  color: var(--ds-blue-strong);
 }
 
 .settings-nav-item__desc {
@@ -3984,43 +3954,6 @@ select.modal-input {
   padding-top: 6px;
 }
 
-.settings-placeholder-card {
-  border: 1px dashed var(--ds-grey-divider);
-  border-radius: var(--ds-radius-md);
-  padding: 16px 18px;
-  background: var(--bg-primary);
-  margin-bottom: 14px;
-}
-
-.settings-placeholder-card__title {
-  margin: 0 0 6px;
-  font-size: var(--ds-font-size-md);
-  font-weight: 600;
-}
-
-.settings-placeholder-card__text {
-  margin: 0;
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
-  line-height: var(--ds-line-height-prose, 1.5);
-}
-
-.settings-soon-pill {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: var(--ds-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 9px;
-  border-radius: var(--ds-radius-pill);
-  border: 1px solid var(--ds-grey-divider);
-  color: var(--ds-grey-muted);
-}
-
-/* Einstellungen › Tools: Liste der Workspace-Tools mit An/Aus-Häkchen.
- * Solider Rahmen (im Gegensatz zur gestrichelten Placeholder-Card),
- * weil hier echter Datenfluss dahintersteht. */
 /* The default mode of a workspace (#413): a label and three segments in a
    row, the saved status after them. */
 .settings-workspace-mode-row {
@@ -4172,109 +4105,6 @@ select.modal-input {
   max-width: 64ch;
 }
 
-/* Einstellungen › Tools › Verfügbare Tools (Issue #98).
- *
- * Ein gemeinsames Grid über alle Gruppen: die Namensspalte fluchtet dadurch
- * auch gruppenübergreifend und waechst mit dem laengsten Tool-Namen mit —
- * wichtig, sobald MCP-Tools mit Server-Praefix dazukommen (#62). Gruppen und
- * Zeilen reichen die Spalten per `subgrid` durch, statt `display: contents`
- * zu nutzen, damit die Listen-Semantik fuer Screenreader erhalten bleibt. */
-.settings-tool-groups {
-  display: grid;
-  grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr);
-  row-gap: 2px;
-}
-
-.settings-tool-group,
-.settings-tool-rows,
-.settings-tool-row {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-}
-
-.settings-tool-rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.settings-tool-group__head {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  margin-top: 14px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--ds-grey-divider);
-}
-
-.settings-tool-group:first-child .settings-tool-group__head {
-  margin-top: 0;
-}
-
-.settings-tool-group__title {
-  font-size: var(--ds-font-size-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ds-grey-strong);
-}
-
-.settings-tool-group__note,
-.settings-tool-group__count {
-  font-size: var(--ds-font-size-xs);
-  color: var(--ds-grey-muted);
-}
-
-.settings-tool-group__count {
-  margin-left: auto;
-}
-
-.settings-tool-group__all {
-  font: inherit;
-  font-size: var(--ds-font-size-xs);
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 32px;
-  padding: 4px 12px;
-  border-radius: var(--ds-radius-pill);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--ds-grey-strong);
-}
-
-.settings-tool-group__all:hover {
-  border-color: var(--ds-blue);
-  color: var(--ds-blue);
-  background: var(--ds-blue-soft);
-}
-
-.settings-tool-row {
-  align-items: center;
-  column-gap: 10px;
-  border-bottom: 1px solid var(--ds-grey-divider);
-}
-
-.settings-tool-rows .settings-tool-row:last-child {
-  border-bottom: 0;
-}
-
-.settings-tool-row__check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* Klickflaeche mindestens 32 px hoch (Regel ui-design-tokens). */
-  min-height: 32px;
-  cursor: pointer;
-}
-
-.settings-tool-row__name {
-  font-family: var(--ds-font-mono);
-  font-size: 0.92em;
-  white-space: nowrap;
-}
-
 /* Kurztext samt Pfeil ist ein Button: ein grosses Klickziel, das denselben
  * Zustand per Tastatur und fuer Screenreader traegt (aria-expanded). */
 .settings-tool-row__summary {
@@ -4305,15 +4135,6 @@ select.modal-input {
   white-space: nowrap;
 }
 
-.settings-tool-row__short--plain {
-  align-self: center;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
-}
-
 .settings-tool-row__chevron {
   flex: none;
   transition: transform var(--ds-motion-fast, 0.15s ease);
@@ -4323,30 +4144,9 @@ select.modal-input {
   transform: rotate(90deg);
 }
 
-.settings-tool-row__desc {
-  grid-column: 2;
-  align-self: start;
-  margin: 0;
-  padding: 0 0 11px;
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-strong);
-  line-height: var(--ds-line-height-prose, 1.5);
-  max-width: 66ch;
-}
-
-/* Schmaler Dialog: Name und Kurztext untereinander statt in zwei Spalten. */
+/* Narrow dialog: the summary moves under the name. */
 @media (max-width: 640px) {
-  .settings-tool-groups {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-tool-row__desc {
-    grid-column: 1 / -1;
-    padding-left: 24px;
-  }
-
-  .settings-tool-row__summary,
-  .settings-tool-row__short--plain {
+  .settings-tool-row__summary {
     min-height: 0;
     padding-bottom: 8px;
     padding-left: 24px;
@@ -4436,8 +4236,6 @@ select.modal-input {
   font-size: 0.92em;
 }
 
-
-
 .add-model-overlay.hidden {
   display: none !important;
 }
@@ -4450,11 +4248,7 @@ select.modal-input {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-[data-theme='dark'] .add-model-overlay {
-  background: rgba(0, 0, 0, 0.62);
+  background: var(--ds-backdrop-nested);
 }
 
 .modal-dialog.modal-dialog--nested.add-model-dialog {
@@ -6398,7 +6192,6 @@ select.modal-input {
   color: var(--text-muted-strong);
 }
 
-
 /* Einstellungen › Tools › Berechtigungen */
 .settings-permissions-migration {
   margin: 0 0 10px;
@@ -6406,90 +6199,6 @@ select.modal-input {
   border-radius: var(--ds-radius-md);
   background: var(--ds-blue-soft);
   color: var(--text-primary);
-}
-
-.settings-mode-group {
-  margin: 0;
-  padding: 0;
-  border: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.settings-mode-group__legend {
-  padding: 0;
-  margin-bottom: 6px;
-  font-size: var(--ds-font-size-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ds-grey-muted);
-}
-
-/* Radio-Rows in Card-Form: einladender Hover, gewählt wie Hover (Regelwerk). */
-.settings-mode-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--ds-grey-divider);
-  border-radius: var(--ds-radius-md);
-  background: var(--bg-primary);
-  cursor: pointer;
-  transition:
-    border-color var(--ds-motion-fast),
-    background var(--ds-motion-fast);
-}
-
-.settings-mode-option:hover,
-.settings-mode-option:has(input:checked) {
-  border-color: var(--ds-blue);
-  background: var(--ds-blue-soft);
-}
-
-.settings-mode-option:has(input:disabled) {
-  cursor: default;
-}
-
-.settings-mode-option:has(input:disabled):not(:has(input:checked)):hover {
-  border-color: var(--ds-grey-divider);
-  background: var(--bg-primary);
-}
-
-.settings-mode-option:has(input:disabled) .settings-mode-option__title {
-  color: var(--text-muted-strong);
-}
-
-.settings-mode-option:has(input:focus-visible) {
-  outline: var(--ds-focus-ring);
-  outline-offset: var(--ds-focus-offset);
-}
-
-.settings-mode-option input[type='radio'] {
-  margin: 3px 0 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--ds-blue);
-  flex-shrink: 0;
-}
-
-.settings-mode-option__main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.settings-mode-option__title {
-  font-weight: 600;
-  font-size: var(--ds-font-size-base);
-}
-
-.settings-mode-option__desc {
-  font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-strong);
-  line-height: 1.45;
 }
 
 .settings-rules-heading {
@@ -6535,25 +6244,6 @@ select.modal-input {
   border: 1px solid var(--ds-grey-divider);
   border-radius: var(--ds-radius-md);
   min-width: 0;
-}
-
-.settings-rule-item__main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  font-size: var(--ds-font-size-md);
-}
-
-.settings-rule-item__badge--deny {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
-}
-
-.settings-rule-item__badge--allow {
-  border-color: var(--ds-blue-border);
-  color: var(--ds-blue);
 }
 
 .settings-rule-item__pattern {
@@ -7114,30 +6804,6 @@ select.modal-input {
   color: var(--ds-grey-strong);
   white-space: nowrap;
   cursor: pointer;
-}
-
-.mcp-tool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mcp-tool-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.mcp-tool-row:hover {
-  background: var(--ds-blue-soft);
-}
-
-.mcp-tool-row code {
-  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
-  font-size: 12.5px;
 }
 
 .mcp-test:empty {

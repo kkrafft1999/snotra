@@ -34,7 +34,12 @@ There are **two token layers**:
 step …) belong in `renderer/styles/tokens.css`, with the light value in `:root`
 and, where needed, the dark value in `[data-theme='dark']`. `styles.css` may add
 a semantic alias (`--btn-…`, `--accent-…`) that maps onto the token — **never**
-hex values directly in a component.
+hex values directly in a component. That includes the component greys behind
+`--text-primary`, `--bg-hover`, `--border` and their neighbours
+(`--ds-text-*`, `--ds-bg-*`, `--ds-border`) and the backdrops
+(`--ds-backdrop`, `--ds-backdrop-nested`). `test/renderer-style-tokens.test.js`
+fails on a colour value in `styles.css`; the one it cannot see is the select
+chevron, an SVG in a data URI that cannot take a custom property.
 
 ## Tokens
 
@@ -48,6 +53,7 @@ In `tokens.css` these are the channel names (light values in `:root`, dark in
 | `--ds-blue` | `#00759E` | the one accent colour |
 | `--ds-blue-soft` | `rgba(0,117,158,0.05)` | hover wash, active radio states |
 | `--ds-blue-border` | `rgba(0,117,158,0.25)` | active-state borders |
+| `--ds-blue-strong` | `#006A8F` | small blue text on a `--ds-blue-soft` wash over a grey ground, where `--ds-blue` drops below 4.5:1; dark it is `--ds-blue` |
 | `--ds-black` | `#000000` | primary type, destructive action |
 | `--ds-white` | `#FFFFFF` | **ink only**: type on blue, check marks |
 | `--ds-surface` | `#FFFCF5` | primary surface (cards, dialogs, composer) |
@@ -56,6 +62,7 @@ In `tokens.css` these are the channel names (light values in `:root`, dark in
 | `--ds-grey-divider` | `#EFEAE3` | borders, dividing lines |
 | `--ds-grey-muted` | `#6F6D69` | secondary type, metadata (only ≥ 14 px) |
 | `--ds-grey-strong` | `#5E5C59` | smaller secondary type (< 14 px) |
+| `--ds-placeholder` | `--ds-grey-muted` | placeholder text of every field, through one `::placeholder` rule; dark has a value of its own for the composer ground |
 | `--ds-btn-primary-*` | see `tokens.css` | primary/save/send: background, foreground, hover, active shadow |
 
 The three greys are **warm-toned** (b\* +4, R–B span 12). Until 2026-09-17 the
@@ -244,7 +251,8 @@ visible.
 ### The chat ground
 
 Since the same change, the chat has a **ground token of its own**,
-`--ds-chat-bg` (light `#FAFBFC`, dark `#313133`), instead of `--ds-grey-bg`.
+`--ds-chat-bg` (light `#FDF8F1`, dark `#33312F` — warm since the shift of the
+grey scale), instead of `--ds-grey-bg`.
 Because the shadow carries the depth of the composer card, the ground may sit
 lighter than the ΔL\* rule of the grey scale would allow.
 

@@ -520,7 +520,10 @@ void initAppVersionBadge({ api });
     // Kein Zurueckschreiben: Der gemerkte Stand ist kein neuer Wunsch.
     setChatPanelVisible(uiPrefs.chatPanelVisible !== false);
     skillSuggestion.setMode(uiPrefs.skillSuggestionMode);
-    setLocale(uiPrefs.appLocale);
+    // Forced, so the catalogue paints over the markup in English as well:
+    // otherwise an English start keeps the static fallback, and the two drift
+    // apart unseen (CR-B15-01).
+    setLocale(uiPrefs.appLocale, { force: true });
     // Before the folder opens, so its first listing already follows the
     // switch (#436). The stored value is no new wish: not written back.
     await fileTree.setShowHiddenFiles(uiPrefs.showHiddenFiles === true, { persist: false });

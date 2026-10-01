@@ -11,9 +11,11 @@
  * Per `.claude/rules/language.md`, English is the source version and German is
  * derived from it — `en.js` is written, `de.js` is translated, and both are
  * held to the same standard. When a key is missing, the lookup falls back to
- * `DEFAULT_LOCALE` and finally to the key itself: visibly wrong beats silently
- * English in a German app. That it never gets that far is what
- * `test/i18n-keys.test.js` is for.
+ * `DEFAULT_LOCALE` and finally to the key itself — a raw key in the English
+ * interface is noticed, a German sentence in it would not be (see
+ * `docs/architecture.md`, "One catalogue for all three layers"). A key missing
+ * only from `de.js` therefore reads as English, which is why it never gets that
+ * far: `test/i18n-keys.test.js` keeps both catalogues on the same keys.
  */
 
 const { APP_LOCALES } = require('../contracts/enums');
@@ -37,8 +39,9 @@ const MESSAGES = Object.freeze({
 const LOCALES = Object.freeze([APP_LOCALES.DE, APP_LOCALES.EN]);
 
 /**
- * Anything not in the list is not a language — not `de-DE` and not `EN`. The
- * value comes from a file on disk and is not taken on trust.
+ * Anything not in the list is not a language — `de-DE` is not, while `EN` is
+ * read as `en`: case says nothing, a region would claim more than the
+ * catalogue has. The value comes from a file on disk and is not taken on trust.
  */
 function normalizeLocale(raw) {
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';

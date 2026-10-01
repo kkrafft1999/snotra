@@ -19,6 +19,11 @@
   --ds-blue: #00759E;          /* einzige Akzentfarbe (5,1:1 auf --ds-surface) */
   --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
   --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
+  /* Blue text on a blue wash. --ds-blue keeps 4.7:1 on the wash over
+   * --ds-surface but drops to 4.45:1 over --ds-grey-bg — the ground of the
+   * Settings navigation, where the selected item sits (CR-B15-03). A darker
+   * step of the same blue, not a second accent: 5.2:1 there. */
+  --ds-blue-strong: #006A8F;
   /* User-Bubble: Blau-Wash, der die Frage als eigenen Block vom Fliesstext
    * der Antwort abhebt. 8 % ergibt dL* 4,13 gegen den Grund — klar als
    * eigene Flaeche lesbar, aber bewusst zurueckhaltend: Der Wash soll die
@@ -66,6 +71,14 @@
    * damit unter der 3:1-Schwelle aus WCAG 1.4.11. Rein dekorative Rahmen
    * (Karten, Panels, Chips) behalten --ds-grey-divider. */
   --ds-grey-control-border: #8D8A86;  /* 3,4:1 auf --ds-surface */
+  /* Placeholder text of every input. Light it is the secondary grey (5.0:1 on
+   * --ds-surface, the composer's ground too); dark has a value of its own,
+   * see there (CR-B15-03). */
+  --ds-placeholder: var(--ds-grey-muted);
+  /* The moving highlight of a running tool line. Light needs a darker sweep:
+   * a light one fades the text to 1.4:1 on the chat ground (CR-B15-03).
+   * --ds-blue keeps 4.9:1 there. */
+  --ds-tool-shimmer-highlight: var(--ds-blue);
 
   /* ── Status-Tokens (rote Ausnahmeregel) ───────────────────────────────────
    * Rot ist im Mono-Blue-System NICHT als allgemeiner Akzent erlaubt. Diese
@@ -130,6 +143,24 @@
    * carries the contrast to the column. */
   --ds-paper: #FFFFFF;
   --ds-paper-ground: #E9E4DC;
+
+  /* ── Component greys ──────────────────────────────────────────────────
+   * The scale behind the aliases at the top of styles.css (--text-primary,
+   * --bg-hover, --border …). Until CR-B15-05 these lived there as hex
+   * values; they are tokens like every other colour now. Warm like the
+   * --ds-grey-* scale: whoever shifts that one shifts this one with it. */
+  --ds-text-primary: #1F1E1C;    /* 16.3:1 on --ds-surface */
+  --ds-text-secondary: #63615D;  /* 6.0:1 on --ds-surface, 5.0:1 on --ds-bg-tertiary */
+  --ds-bg-secondary: #F7F2EC;
+  --ds-bg-tertiary: #ECE7E1;
+  --ds-bg-hover: #ECE7E1;
+  --ds-bg-active: #DAD5CF;
+  --ds-bg-header: #ECE7E1;
+  --ds-border: #D8D3CD;
+  --ds-scrollbar-thumb: #C5C0BB;
+  /* Dimming behind a dialog, and behind a dialog opened from a dialog. */
+  --ds-backdrop: rgba(0, 0, 0, 0.5);
+  --ds-backdrop-nested: rgba(0, 0, 0, 0.45);
 
   /* ── Typografie ───────────────────────────────────────────────────────── */
   --ds-font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -247,8 +278,14 @@
   --ds-grey-muted: #A5A19C;    /* 6,8:1 auf --ds-grey-bg */
   --ds-grey-strong: #C8C4BE;   /* 10,0:1 auf --ds-grey-bg */
   --ds-grey-control-border: #8D8A86;  /* 5,1:1 auf --ds-grey-bg */
+  /* --ds-grey-muted reaches only 4.4:1 on the composer (#3C3A38). 4.85:1 there,
+   * 7.1:1 on --ds-surface, and still 1.45:1 apart from typed text. */
+  --ds-placeholder: #ADA9A4;
 
   --ds-blue: #3FB8E5;          /* 7,6:1 auf --ds-grey-bg */
+  --ds-blue-strong: var(--ds-blue); /* the wash is dark here, --ds-blue holds */
+  /* A light sweep raises the contrast on a dark ground: 10.3:1. */
+  --ds-tool-shimmer-highlight: color-mix(in srgb, var(--ds-white) 72%, var(--ds-blue) 28%);
   --ds-blue-soft: rgba(63, 184, 229, 0.08);
   --ds-blue-border: rgba(63, 184, 229, 0.30);
   --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
@@ -264,7 +301,10 @@
     0 1px 2px rgba(0, 0, 0, 0.28),
     0 8px 26px rgba(63, 184, 229, 0.22);
 
-  --ds-error: #FF8080;
+  /* 4.8:1 on its own tint over --ds-chat-bg — the error bubble (CR-B15-03;
+   * #FF8080 had 4.4:1 there) — and 7.6:1 on --ds-surface. The tint keeps the
+   * old channels: a lighter one would lower the contrast again. */
+  --ds-error: #FF8F8F;
   --ds-error-bg: rgba(255, 128, 128, 0.12);
   --ds-error-border: rgba(255, 128, 128, 0.35);
 
@@ -290,6 +330,17 @@
   --ds-checker-light: #4A4845;
   --ds-checker-dark: #3A3836;
   --ds-paper-ground: #141312;
+
+  --ds-text-primary: #D0CBC6;    /* 10.3:1 on --ds-surface */
+  --ds-text-secondary: #999691;  /* 5.7:1 on --ds-surface; 3.8:1 on the composer, so not there */
+  --ds-bg-secondary: #262523;
+  --ds-bg-tertiary: #2E2D2B;
+  --ds-bg-hover: #2E2C2A;
+  --ds-bg-active: #393735;
+  --ds-bg-header: #333230;
+  --ds-border: #3E3C39;
+  --ds-scrollbar-thumb: #44423F;
+  --ds-backdrop-nested: rgba(0, 0, 0, 0.62);
 }
 
 /* ── Reduced-Motion-Token-Override ─────────────────────────────────────────
