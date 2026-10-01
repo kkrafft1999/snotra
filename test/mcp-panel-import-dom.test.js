@@ -254,3 +254,115 @@ test('erneutes Öffnen beginnt wieder leer', async () => {
   assert.deepEqual(zeilen(), []);
   assert.equal(uebernehmen().disabled, true);
 });
+
+test('the partial count follows the number, in German as well (CR-B14-09)', async () => {
+  const { setLocale } = await importRenderer('i18n.js');
+  await mount();
+  try {
+    setLocale('de');
+    await oeffnen();
+    const remote = { url: 'https://example.com/mcp' };
+    await einfuegen(JSON.stringify({ mcpServers: { a: { command: 'npx' }, b: remote, c: remote } }));
+    assert.equal(document.getElementById('mcp-import-count').textContent,
+      '1 von 3 Einträgen kann übernommen werden.');
+    await einfuegen(JSON.stringify({ mcpServers: { a: { command: 'npx' }, b: { command: 'npx' }, c: remote } }));
+    assert.equal(document.getElementById('mcp-import-count').textContent,
+      '2 von 3 Einträgen können übernommen werden.');
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('an import error is shown on every keystroke but said only when its kind changes (CR-B14-09)', async () => {
+  let fail = false;
+  await mount({
+    saveMcpServer: async () => (fail ? { ok: false, errors: ['kaputt'] } : { ok: true, ...katalog() }),
+  });
+  await oeffnen();
+  const announcer = document.getElementById('mcp-import-announcer');
+  assert.equal(fehler().hasAttribute('role'), false, 'the rewritten line is no live region');
+  assert.equal(announcer.getAttribute('role'), 'status');
+  assert.equal(feld().getAttribute('aria-describedby'), 'mcp-import-error');
+
+  await einfuegen('{ "mcpServers": ');
+  const first = fehler().textContent;
+  assert.match(first, /not valid JSON/);
+  assert.equal(announcer.textContent, first);
+  assert.equal(feld().getAttribute('aria-invalid'), 'true');
+
+  await einfuegen('{ "mcpServers": { "a"');
+  assert.notEqual(fehler().textContent, first, 'the line shows the current position');
+  assert.equal(announcer.textContent, first, 'the same kind of error is not said again');
+
+  await einfuegen('[]');
+  assert.match(announcer.textContent, /JSON object/, 'a different kind is said');
+
+  await einfuegen(BLOCK);
+  assert.equal(announcer.textContent, '');
+  assert.equal(feld().getAttribute('aria-invalid'), 'false');
+
+  fail = true;
+  uebernehmen().click();
+  await flush();
+  assert.match(announcer.textContent, /^Not imported/, 'a failed import is said once');
+});
+
+test('an import closed while it saves leaves the reopened dialog alone (CR-B14-04)', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const gespeichert = [];
+  await mount({
+    saveMcpServer: async (payload) => {
+      gespeichert.push(payload.id);
+      await gate;
+      return { ok: false, errors: ['kaputt'] };
+    },
+  });
+  await oeffnen();
+  await einfuegen(BLOCK);
+  uebernehmen().focus();
+  uebernehmen().click();
+  await flush();
+  // Saving: inert, but the button keeps the focus.
+  assert.equal(uebernehmen().getAttribute('aria-disabled'), 'true');
+  assert.equal(document.activeElement === uebernehmen(), true);
+  uebernehmen().click();
+  await flush();
+  assert.deepEqual(gespeichert, ['atlassian-jira'], 'a second press starts nothing');
+
+  document.getElementById('btn-mcp-import-cancel').click();
+  await oeffnen();
+  release();
+  await flush();
+  await flush();
+  assert.equal(offen(), true);
+  assert.equal(fehler().classList.contains('hidden'), true, 'the old report does not land here');
+  assert.equal(uebernehmen().hasAttribute('aria-disabled'), false);
+});
+
+// Encrypted is the default — what is stored readable has to be said, and so
+// does the folder the server will start in (CR-B14-02).
+test('the preview lists the plain-text variables and the working directory', async () => {
+  await mount();
+  await oeffnen();
+  await einfuegen(JSON.stringify({
+    mcpServers: {
+      db: {
+        command: 'npx',
+        args: ['-y', 'server-postgres'],
+        cwd: '/srv/db',
+        env: { DATABASE_URL: 'postgres://admin:hunter2@db/prod', LOG: 'debug', DB_TOKEN: '', API_TOKEN: 'abc' },
+      },
+    },
+  }));
+
+  const notes = [...zeilen()[0].querySelectorAll('.mcp-import__note')].map((note) => note.textContent);
+  const said = notes.join(' | ');
+  assert.ok(notes.includes('plain textDATABASE_URL, LOG will be stored in plain text.'), said);
+  assert.ok(notes.includes('secretAPI_TOKEN will be stored encrypted.'), said);
+  assert.ok(notes.includes('Working directory: /srv/db'), said);
+  // An empty value is neither a secret nor plain text worth naming — it has
+  // its own note.
+  assert.ok(notes.some((note) => note.includes('DB_TOKEN') && note.includes('has no value')), said);
+  assert.equal(notes.some((note) => note.includes('DB_TOKEN') && note.includes('stored')), false, said);
+});

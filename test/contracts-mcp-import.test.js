@@ -178,6 +178,11 @@ test('leere Werte und Platzhalter werden angesprochen', () => {
     (n) => n.key === 'mcpImport.note.envValueEmpty' && n.params.name === 'A_TOKEN'));
   assert.ok(candidates[0].notes.some(
     (n) => n.key === 'mcpImport.note.envPlaceholder' && n.params.name === 'B_TOKEN'));
+  // An empty value has nothing to encrypt, so it is not promised as a secret
+  // (CR-B14-02); the placeholder still is one.
+  const env = Object.fromEntries(candidates[0].env.map((entry) => [entry.key, entry]));
+  assert.equal(env.A_TOKEN.secret, false);
+  assert.equal(env.B_TOKEN.secret, true);
 });
 
 test('kaputtes JSON erzeugt eine verständliche Meldung statt eines stillen Fehlschlags', () => {

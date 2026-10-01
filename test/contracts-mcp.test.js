@@ -417,3 +417,11 @@ test('validateMcpServerInput prüft Server und env zusammen', () => {
   assert.ok(schlecht.errors.some((e) => e.key === 'mcp.error.commandMissing'));
   assert.match(flat(schlecht.errors), /2X/);
 });
+
+test('validateMcpServerInput carries the create flag beside the stored value (CR-B14-03)', () => {
+  assert.equal(validateMcpServerInput({ id: 'gh', command: 'npx', create: true }).create, true);
+  assert.equal(validateMcpServerInput({ id: 'gh', command: 'npx', create: 'yes' }).create, false, 'only a real true');
+  assert.equal(validateMcpServerInput({ id: 'gh', command: 'npx' }).create, false);
+  assert.equal('create' in validateMcpServerInput({ id: 'gh', command: 'npx', create: true }).value, false,
+    'not part of the configuration');
+});

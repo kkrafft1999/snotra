@@ -203,7 +203,9 @@ function readEnv(raw, notes) {
       continue;
     }
     text = text.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS);
-    const secret = looksSecret(key, text);
+    // An empty value has nothing to encrypt; marking it secret would only
+    // promise "stored encrypted" for nothing (CR-B14-02).
+    const secret = text !== '' && looksSecret(key, text);
     if (!text) notes.push(createMessage('mcpImport.note.envValueEmpty', { name: key }));
     else if (PLACEHOLDER_PATTERN.test(text)) notes.push(createMessage('mcpImport.note.envPlaceholder', { name: key }));
     entries.push({ key, value: text, secret });

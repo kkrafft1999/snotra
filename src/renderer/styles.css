@@ -7000,9 +7000,12 @@ select.modal-input {
   min-width: 0;
 }
 
+/* A name without a break point wraps instead of pushing the status and the
+   switch out of the row (CR-B14-09). */
 .mcp-row__name {
   display: block;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Lange npx-Aufrufe sind der Normalfall — abschneiden statt die Zeile
@@ -7105,14 +7108,21 @@ select.modal-input {
   align-items: center;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(1) {
+.mcp-env-row__key {
   flex: 1 1 150px;
   min-width: 130px;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(2) {
+.mcp-env-row__value {
   flex: 2 1 190px;
   min-width: 150px;
+}
+
+/* A stored secret locks its name until a new value is typed (CR-B14-02) —
+   the field shows it the way the fixed identifier does. */
+.mcp-env-row__key[readonly] {
+  background: var(--ds-grey-card);
+  color: var(--ds-grey-strong);
 }
 
 /* Haekchen und Entfernen gehoeren zusammen — beim Umbruch darf das Kreuz
@@ -7134,28 +7144,8 @@ select.modal-input {
   cursor: pointer;
 }
 
-.mcp-tool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mcp-tool-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.mcp-tool-row:hover {
-  background: var(--ds-blue-soft);
-}
-
-.mcp-tool-row code {
-  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
-  font-size: 12.5px;
+.mcp-env-row__secret:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .mcp-test:empty {
@@ -7221,10 +7211,12 @@ select.modal-input {
   line-height: 1.5;
 }
 
+/* Small secondary text in the import takes --ds-grey-strong: --ds-grey-muted
+   only reaches 4.5:1 from 14px on (CR-B14-08). */
 .mcp-import__count {
   margin: 0;
   font-size: 13px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 .mcp-import__count:empty {
@@ -7261,20 +7253,21 @@ select.modal-input {
 .mcp-import__name {
   font-weight: 600;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .mcp-import__id {
   margin-left: 8px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 .mcp-import__cmd {
   margin-top: 3px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
   overflow-wrap: anywhere;
 }
 
@@ -7308,11 +7301,13 @@ select.modal-input {
 }
 
 /* Ein Hinweis, der eine Entscheidung verlangt (Platzhalter, Ueberschreiben),
-   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg. */
+   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg.
+   Filled black rather than red: red is reserved for errors, and nothing has
+   gone wrong yet (CR-B14-09, ui-design-tokens.md). */
 .mcp-import__badge--warn {
-  color: var(--ds-error);
-  border-color: var(--ds-error-border);
-  background: var(--ds-error-bg);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+  background: var(--text-primary);
 }
 
 .mcp-import__skipped {
@@ -7328,12 +7323,14 @@ select.modal-input {
   font-weight: 600;
 }
 
+/* 12.5px on --ds-grey-card: --ds-grey-strong gives 5.7:1 (light) and 9.0:1
+   (dark); --ds-grey-muted stayed at 4.43:1 (CR-B14-08). */
 .mcp-import__skipped ul {
   margin: 0;
   padding-left: 18px;
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 @media (max-width: 640px) {
@@ -7345,6 +7342,14 @@ select.modal-input {
   .mcp-row__actions {
     justify-content: flex-end;
   }
+}
+
+/* A request is running (CR-B14-04): the action takes no second press. It is
+   aria-disabled rather than disabled so that it keeps the focus. */
+#dialog-mcp-server .modal-actions button[aria-disabled='true'],
+#btn-mcp-import-apply[aria-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 /* Der Loeschknopf gehoert nicht neben „Speichern" — ein Fehlklick waere hier
