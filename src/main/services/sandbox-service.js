@@ -52,8 +52,13 @@ const LIMITS = Object.freeze({
 
 /**
  * Locations a sandboxed run must not read: keys, cloud and package-registry
- * credentials, browser profiles, the keychain, and Snotra's own settings and
- * key storage. `~` is expanded by the runtime.
+ * credentials, CLI token stores, shell and REPL histories, other AI tools'
+ * credentials, browser and mail profiles, the keychain, and Snotra's own
+ * settings and key storage. `~` is expanded by the runtime.
+ *
+ * Files that ordinary builds read stay readable even where they may hold a
+ * credential (`~/.m2/settings.xml`, `~/.gradle/gradle.properties`) — denying
+ * them would break `mvn` and `gradle` inside the sandbox (CR-B03-04).
  */
 function sensitiveReadPaths({ platform, userDataPath } = {}) {
   const common = [
@@ -70,6 +75,36 @@ function sensitiveReadPaths({ platform, userDataPath } = {}) {
     '~/.npmrc',
     '~/.pypirc',
     '~/.password-store',
+    // CLI token stores (CR-B03-04)
+    '~/.config/op',
+    '~/.vault-token',
+    '~/.terraform.d',
+    '~/.cargo/credentials',
+    '~/.cargo/credentials.toml',
+    '~/.gem/credentials',
+    '~/.config/hub',
+    '~/.config/glab-cli',
+    '~/.config/hcloud',
+    '~/.config/doctl',
+    '~/.oci',
+    '~/.databrickscfg',
+    '~/.pgpass',
+    '~/.my.cnf',
+    '~/.config/rclone',
+    // Shell and REPL histories: where `export TOKEN=…` ends up. The runs are
+    // not interactive and never need them (CR-B03-04).
+    '~/.zsh_history',
+    '~/.bash_history',
+    '~/.local/share/fish/fish_history',
+    '~/.python_history',
+    '~/.node_repl_history',
+    '~/.psql_history',
+    '~/.mysql_history',
+    // Other AI tools, with API keys or OAuth tokens in their files (CR-B03-04)
+    '~/.claude.json',
+    '~/.claude/.credentials.json',
+    '~/.codex',
+    '~/.config/github-copilot',
   ];
   const perPlatform = platform === 'darwin'
     ? [
@@ -82,6 +117,11 @@ function sensitiveReadPaths({ platform, userDataPath } = {}) {
       '~/Library/Application Support/Microsoft Edge',
       '~/Library/Application Support/Arc',
       '~/Library/Application Support/Firefox',
+      '~/Library/Application Support/Vivaldi',
+      '~/Library/Application Support/com.operasoftware.Opera',
+      '~/Library/Thunderbird',
+      '~/Library/Mail',
+      '~/Library/Messages',
     ]
     : [
       '~/.local/share/keyrings',
@@ -89,7 +129,10 @@ function sensitiveReadPaths({ platform, userDataPath } = {}) {
       '~/.config/chromium',
       '~/.config/BraveSoftware',
       '~/.config/microsoft-edge',
+      '~/.config/vivaldi',
+      '~/.config/opera',
       '~/.mozilla',
+      '~/.thunderbird',
     ];
   const own = typeof userDataPath === 'string' && userDataPath ? [userDataPath] : [];
   return [...common, ...perPlatform, ...own];

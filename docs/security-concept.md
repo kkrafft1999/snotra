@@ -538,7 +538,13 @@ circumvented, but recorded here:
   with the full command, the detected shell and the working directory. Both
   tools are **off** as shipped and are enabled in the settings with a visible
   warning. A time limit, output truncation and "Stop" end the process tree, not
-  just the shell.
+  just the shell. When the shell or interpreter exits, whatever it left in its
+  process group is ended with it, so a command put into the background does not
+  outlive its run (#519). A process that leaves the group on purpose (`setsid`,
+  a daemon that forks twice) escapes that on macOS and without the sandbox; on
+  Linux the sandbox's PID namespace ends it as well. Windows has no process
+  group to address once the parent is gone, so there a process started in the
+  background outlives the run.
 - **The residual risk, stated plainly.** There is no sandbox. An approved
   command can do anything the logged-in user can — outside the project folder as
   well, and on the network. In "auto" mode it runs without a question, because
@@ -563,8 +569,15 @@ replaced by an operating system boundary:
   nowhere else. Read everything except the credential and profile locations:
   `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`,
   `~/.config/gcloud`, `~/.config/gh`, `~/.netrc`, `~/.git-credentials`,
-  `~/.npmrc`, `~/.pypirc`, `~/.password-store`, the keychain and cookie stores,
-  the common browser profiles, and Snotra's own `userData`. Reach the network
+  `~/.npmrc`, `~/.pypirc`, `~/.password-store`; the token stores of other CLIs
+  (1Password, Vault, Terraform, Cargo, RubyGems, `hub`, `glab`, `hcloud`,
+  `doctl`, OCI, Databricks, `.pgpass`, `.my.cnf`, rclone); shell and REPL
+  histories, where an `export TOKEN=…` ends up; the credential files of other AI
+  tools (`~/.claude.json`, `~/.codex`, GitHub Copilot); the keychain and cookie
+  stores, the common browser and mail profiles, and Snotra's own `userData`
+  (#522). What ordinary builds read stays readable even where it may hold a
+  credential — `~/.m2/settings.xml`, `~/.gradle/gradle.properties` — since
+  denying it would break `mvn` and `gradle` inside the sandbox. Reach the network
   only for the domains the approval card names: what the model declares in
   `network_domains`, plus the registry of a detected package install (`pip`,
   `uv`, `poetry` → PyPI; `npm`, `pnpm`, `npx` → the npm registry; `yarn`).
@@ -583,7 +596,7 @@ replaced by an operating system boundary:
   must be refused. The library's dependency check alone is not trusted — on
   Ubuntu 24.04 it passes, and every command then fails. The result is visible in
   three places: a pill on the approval card ("Isolated", or "Not isolated" in
-  red), a status line in the settings with the reason and the remedy, and a
+  amber since #396), a status line in the settings with the reason and the remedy, and a
   `sandbox` field in the tool result for the model.
 - **The fallback.** Windows, Linux without `bubblewrap`, `socat` and `ripgrep`,
   a kernel that restricts unprivileged user namespaces (Ubuntu 24.04+ as
@@ -594,7 +607,11 @@ replaced by an operating system boundary:
   it never runs unisolated instead.
 - **Concurrency.** The proxy consults one process-wide domain list. Runs with
   the same set share it; a run with a different set waits until the others are
-  done, so no run reaches a domain its card did not name.
+  done, so no run reaches a domain its card did not name. A run counts as done
+  once its process group is gone, not when the shell has closed its output —
+  otherwise a process left in the background would use the proxy under the
+  domains of the next card (#519). The exception is the one named above: a
+  process that left the group on purpose.
 - **TLS on macOS.** The Seatbelt profile keeps `com.apple.trustd.agent` closed;
   the runtime calls opening it a potential exfiltration channel. pip from 24.2
   on verifies certificates through exactly that service, so inside the sandbox
@@ -938,7 +955,7 @@ not a claim that the product modes are identical.
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |
 | Safe process execution and recovery for a future delete tool | To be settled before such capabilities are introduced; the recovery copy on overwrite (section 9) is already part of #66. The shell has been registered since #102 with an approval before every run and off as shipped, and has run isolated on macOS and Linux since #329 (the revisions in section 9). |
-| Real isolation for `run_python` and `shell_execute` | Done for macOS and Linux in #329 (section 9). Open: **Windows** — the runtime brings an alpha of its own there, not used yet — and restricted user namespaces on Ubuntu 24.04+, where isolation needs the user's `sysctl` or an AppArmor profile. Until then the first revision in section 9 applies on those systems, and the card says so in red. |
+| Real isolation for `run_python` and `shell_execute` | Done for macOS and Linux in #329 (section 9). Open: **Windows** — the runtime brings an alpha of its own there, not used yet — and restricted user namespaces on Ubuntu 24.04+, where isolation needs the user's `sysctl` or an AppArmor profile. Until then the first revision in section 9 applies on those systems, and the card says so in amber. |
 
 **#66 — the core:** registry classes and dynamic attributes, the complete matrix
 and rule priority, path and content protection including indirect output, the
