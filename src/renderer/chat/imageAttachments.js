@@ -197,7 +197,8 @@ export async function prepareImageAttachment(file) {
       mediaType,
       dataBase64,
       bytes: blob.size,
-      name: typeof file.name === 'string' && file.name ? file.name : 'Screenshot',
+      // No name of our own: the chip and the gallery fall back to the catalogue (#595).
+      name: typeof file.name === 'string' ? file.name : '',
     },
   };
 }

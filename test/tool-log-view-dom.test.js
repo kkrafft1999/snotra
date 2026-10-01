@@ -45,6 +45,16 @@ test('buildToolLine zeigt einen laufenden Schritt als beschäftigt an', async ()
   });
 });
 
+test('a tool line with markup in it stays text (#595)', async () => {
+  await withDom(({ buildToolLine }) => {
+    // Paths and arguments in a line come from the model's calls.
+    const line = 'Reading <img src=x onerror="globalThis.__pwnedToolLine = true">.md';
+    const row = buildToolLine(line, 'done');
+    assert.equal(row.querySelector('img'), null);
+    assert.equal(textOf(row), line);
+  });
+});
+
 test('buildToolLine schließt einen erledigten Schritt mit Marke ab', async () => {
   await withDom(({ buildToolLine }) => {
     const row = buildToolLine('Hat README.md gelesen', 'done');

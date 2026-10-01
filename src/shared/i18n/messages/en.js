@@ -1036,6 +1036,7 @@ module.exports = {
   'chat.error.provider.fallback': 'This provider',
   'chat.error.toolLimit': 'Too many tool rounds ({limit} at the moment). Raise the limit under Settings › General, or ask a narrower question.',
   'chat.error.runLost': 'The answer did not come through. Ask again.',
+  'chat.error.prefix': 'Error:',
   'chat.error.cutOff.length': 'The answer was cut off: the model reached its output limit. Ask it to carry on, or to answer in smaller parts.',
   'chat.error.cutOff.lengthTool': 'The answer was cut off while the model was writing a tool call, so the call did not run. Ask for smaller steps, for example one file at a time.',
   'chat.error.cutOff.contentFilter': 'The provider stopped the answer with its content filter.',

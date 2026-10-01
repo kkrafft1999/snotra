@@ -124,6 +124,17 @@ test('fremde Quellen werden nicht gefragt — data: bleibt unangetastet', async 
   assert.equal(bleibt[0].getAttribute('src'), PNG_DATA_URL);
 });
 
+test('a percent-encoded SVG data: image keeps its encoding (#595)', async () => {
+  // Decoded first, `%23` became a raw `#`, and everything after it was the
+  // fragment of the URL — a broken image without a placeholder.
+  const svg = 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%3E%3Crect%20fill=%22%23f00%22/%3E%3C/svg%3E';
+  const el = bubble(`<p><img src="${svg}" alt="Red"></p>`);
+  await images.applyWorkspaceImages(el, { api, workspaceRoot: '/ws' });
+
+  assert.deepEqual(asked, []);
+  assert.equal(el.querySelector('img')?.getAttribute('src'), svg);
+});
+
 test('the fragment carries no image address in src (#402)', () => {
   const fragment = inertHtmlFragment(
     '<p><img src="/tmp/outside/x.png" alt="Outside"><img src="D:\\pics\\x.png"></p>'

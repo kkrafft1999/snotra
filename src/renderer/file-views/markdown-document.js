@@ -7,7 +7,7 @@
 
 import contracts from '../generated/contracts.js';
 import frontmatterParser from '../generated/skill-frontmatter.js';
-import { ALLOWED_LINK_PROTOS, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
+import { inertHtmlFragment, isOpenableLink, markdownToSafeHtml } from '../utils/helpers.js';
 import { resolveNative } from '../utils/nativePath.js';
 
 const { decodeWorkspaceImageSource, isWindowsDrivePath } = contracts;
@@ -113,7 +113,7 @@ export function classifyLink(anchor) {
   const workspaceHref = anchor.getAttribute('data-workspace-href');
   const href = (workspaceHref ?? anchor.getAttribute('href') ?? '').trim();
   if (!href) return null;
-  if (workspaceHref === null && ALLOWED_LINK_PROTOS.test(href)) return { kind: 'external', href };
+  if (workspaceHref === null && isOpenableLink(href)) return { kind: 'external', href };
   if (href.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(href)) return null;
   if (href.startsWith('#')) return { kind: 'anchor', slug: decodeFragment(href.slice(1)) };
   const hashAt = href.indexOf('#');

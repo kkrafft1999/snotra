@@ -77,9 +77,15 @@ function folderNameFromPath(p) {
 // Begrüßung als erste, rein anzeigende Assistant-Nachricht (greeting: true).
 // Sie wird weder ans Modell geschickt noch persistiert — die App setzt keinen
 // eigenen System-Prompt mehr, der Einstieg passiert über diese Nachricht.
+// The greeting is Markdown; a folder name is not. `a*b*c` would turn italic
+// and `[x](https://…)` into a link (#595).
+function escapeMarkdown(text) {
+  return String(text).replace(/[\\`*_{}[\]()#+\-.!<>|~]/g, '\\$&');
+}
+
 function buildGreetingMessage(workspaceRoot) {
   if (!workspaceRoot) return null;
-  const name = folderNameFromPath(workspaceRoot);
+  const name = escapeMarkdown(folderNameFromPath(workspaceRoot));
   return {
     role: 'assistant',
     greeting: true,
@@ -139,12 +145,25 @@ export function initChatStream({
   const chatTokenUsageValueEl = document.getElementById('chat-token-usage-value');
   const chatTokenBreakdownEl = document.getElementById('chat-token-breakdown');
   const chatAttachmentsEl = document.getElementById('chat-attachments');
+  // The list is not a live region of its own: it is redrawn as a whole, and
+  // each redraw would read the conversation out again (#592). What a turn
+  // ended with is said here, once.
+  const chatAnnouncerEl = document.getElementById('chat-announcer');
 
   // Anhaenge des noch nicht abgeschickten Zuges (Issue #84). Sie leben nur im
   // Composer; mit dem Senden wandern sie an die Nachricht.
   let pendingAttachments = [];
+  // Images still being decoded and scaled (#589). They hold their slot from
+  // the moment they are accepted, and a send waits for them.
+  let preparingImages = 0;
+  let sendWhenPrepared = false;
+  // Bumped whenever the composer is emptied; an image that finishes preparing
+  // after that belongs to no draft any more (#588).
+  let composerGeneration = 0;
 
-  const imageLightbox = initImageLightbox();
+  // A thumbnail rebuilt while the lightbox was open is gone; focus then goes
+  // back to where the user writes (#595).
+  const imageLightbox = initImageLightbox({ fallbackFocus: () => chatInput });
 
   const tokenBreakdownPanel = initTokenBreakdownPanel({
     trigger: chatTokenUsageEl,
@@ -279,6 +298,30 @@ export function initChatStream({
     syncLiveDot();
   }
 
+  function announce(text) {
+    if (!chatAnnouncerEl) return;
+    chatAnnouncerEl.textContent = String(text || '').trim();
+  }
+
+  function announceError(text) {
+    announce(`${t('chat.error.prefix')} ${text || ''}`);
+  }
+
+  /** An error bubble, the same from a full redraw and from a live settle (#591). */
+  function buildErrorMessage(text) {
+    const li = document.createElement('li');
+    li.classList.add('chat-msg', 'assistant', 'error');
+    const prefix = document.createElement('span');
+    prefix.className = 'chat-msg-error-prefix';
+    prefix.textContent = t('chat.error.prefix');
+    li.appendChild(prefix);
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-msg-text';
+    textEl.textContent = text || '';
+    li.appendChild(textEl);
+    return li;
+  }
+
   /**
    * A chat answer as nodes, never as `innerHTML` on a live node (#402): the
    * images in it have no `src` yet, `showWorkspaceImages()` decides on them.
@@ -297,6 +340,26 @@ export function initChatStream({
     return applyWorkspaceImages(container, { api, workspaceRoot: appStore.rootPath, streaming });
   }
 
+  // The list follows new output only while the user is at its end (#587): a
+  // run must not pull someone back down who scrolled up to read. The flag is
+  // what the list looked like before an update — afterwards it has grown and
+  // is never "at the bottom".
+  const FOLLOW_SLACK_PX = 40;
+  let followOutput = true;
+  chatMessagesEl.addEventListener('scroll', () => {
+    followOutput =
+      chatMessagesEl.scrollHeight - chatMessagesEl.scrollTop - chatMessagesEl.clientHeight <= FOLLOW_SLACK_PX;
+  }, { passive: true });
+
+  function scrollToEnd() {
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    followOutput = true;
+  }
+
+  function followNewOutput() {
+    if (followOutput) scrollToEnd();
+  }
+
   let streamRenderRaf = 0;
 
   function cancelStreamRender() {
@@ -312,7 +375,7 @@ export function initChatStream({
       streamRenderRaf = 0;
       streamEl.replaceChildren(renderAnswer(text));
       void showWorkspaceImages(streamEl, { streaming: true });
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      followNewOutput();
     });
   }
 
@@ -335,7 +398,7 @@ export function initChatStream({
         reasoningEl.classList.add('hidden');
       }
     }
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    followNewOutput();
   }
 
   /**
@@ -451,17 +514,26 @@ export function initChatStream({
     showImage(toDataUrl(attachment));
   }
 
-  function renderChatMessages() {
+  /**
+   * Draws the whole list. `follow: true` is a redraw in the middle of a run:
+   * it keeps the user's place unless they were at the end (#587). Every other
+   * caller — a switch, a send — lands at the end.
+   */
+  function renderChatMessages({ follow = false } = {}) {
+    const keepScrollTop = follow && !followOutput ? chatMessagesEl.scrollTop : null;
     // Der Kurztitel in der Kopfzeile leitet sich aus der ersten Nutzerfrage
     // ab und steht deshalb erst nach dem Rendern der Nachrichten fest.
     syncChatTitle?.();
     chatMessagesEl.innerHTML = '';
     for (const m of appStore.chatMessages) {
+      if (m.isError) {
+        chatMessagesEl.appendChild(buildErrorMessage(m.content));
+        continue;
+      }
       const li = document.createElement('li');
       const roleClass = m.role === 'user' ? 'user' : 'assistant';
       li.classList.add('chat-msg', roleClass);
-      if (m.isError) li.classList.add('error');
-      if (m.role === 'assistant' && !m.isError) {
+      if (m.role === 'assistant') {
         if (m.streaming) {
           const phaseEl = document.createElement('div');
           phaseEl.className = 'chat-phase';
@@ -542,7 +614,8 @@ export function initChatStream({
       chatMessagesEl.appendChild(li);
     }
     syncChatBusyState();
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    if (keepScrollTop === null) scrollToEnd();
+    else chatMessagesEl.scrollTop = keepScrollTop;
   }
 
   function seedGreetingIfWorkspace(workspaceRoot) {
@@ -607,6 +680,11 @@ export function initChatStream({
         setChatTokenUsage(restore.tokenUsage);
       }
       syncChatInFlight(); // before the round trips, see startNewChat (#411)
+      // Drawn before the round trips as well: from here on this chat's run
+      // counts as on screen, and its events would otherwise land in the list
+      // of the chat that was there before (#593).
+      clearComposer();
+      renderChatMessages();
       // Die zuletzt gefuehrte Konversation wird damit auch die aktive dieses
       // Ordners — sonst begaenne der naechste Wechsel wieder von vorn.
       if (!wasActive) await api.setActiveChatId(restore.id);
@@ -614,9 +692,6 @@ export function initChatStream({
       // dieses Chats gelten wieder — „Auto“ aber nicht, das faellt auf
       // „Intelligent“ zurueck (Issue #211).
       await activateChatSession(restore.id, CHAT_ACTIVATION.AUTO);
-      chatInput.value = '';
-      onInputChanged();
-      renderChatMessages();
       afterChatSwitch();
       return { restored: true, wasActive };
     }
@@ -628,10 +703,9 @@ export function initChatStream({
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     syncChatInFlight(); // before the round trip, see startNewChat (#411)
-    await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.AUTO);
-    chatInput.value = '';
-    onInputChanged();
+    clearComposer();
     renderChatMessages();
+    await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.AUTO);
     afterChatSwitch();
     return { restored: false, wasActive: false };
   }
@@ -648,16 +722,15 @@ export function initChatStream({
     appStore.currentChatTitle = '';
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
-    chatInput.value = '';
-    onInputChanged();
+    clearComposer();
     // The composer belongs to the new chat from here on, not only once the
     // round trips below are done — until then it showed the old chat's stop
-    // button (#411).
+    // button (#411). The list follows at once as well (#593).
     syncChatInFlight();
+    renderChatMessages();
     await api.setActiveChatId(null);
     // Neuer Chat: Standard-Modell aus den Einstellungen, Modus „Intelligent“.
     await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.EXPLICIT);
-    renderChatMessages();
     afterChatSwitch();
   }
 
@@ -670,10 +743,10 @@ export function initChatStream({
     if (bubble) {
       finalizeStreamingAssistantBubble(bubble, last);
       syncChatBusyState();
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      followNewOutput();
       return true;
     }
-    renderChatMessages();
+    renderChatMessages({ follow: true });
     return true;
   }
 
@@ -863,7 +936,7 @@ export function initChatStream({
     if (streamEl) {
       scheduleStreamRender(streamEl, last.content);
     } else {
-      renderChatMessages();
+      renderChatMessages({ follow: true });
     }
     // Erster Text: „denkt nach“ endet, Phasen-Zeile und Einzeiler nachziehen.
     if (!hadContent && last.content) updateStreamingChrome();
@@ -923,6 +996,9 @@ export function initChatStream({
       last.runningCallIndex = callIndex;
       delete last.permissionNote;
     } else if (phase === 'done') {
+      // Any finished step may have written an image — `run_python` and
+      // `shell_execute` do so without a `fileWritten` event (#590).
+      clearWorkspaceImageCache();
       if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
       else last.toolTrace.push(entry);
       delete last.toolRunning;
@@ -934,7 +1010,7 @@ export function initChatStream({
 
     const wrap = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type .chat-tool-log');
     if (!wrap) {
-      renderChatMessages();
+      renderChatMessages({ follow: true });
       return;
     }
 
@@ -972,7 +1048,7 @@ export function initChatStream({
 
     syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
     syncPhaseLine(wrap.closest('.chat-msg')?.querySelector('.chat-phase'), last);
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    followNewOutput();
   }
 
   function onChatProgress(p) {
@@ -1050,6 +1126,12 @@ export function initChatStream({
 
   async function sendChatMessage() {
     if (appStore.chatInFlight) return;
+    // An image pasted a moment ago is still being scaled. The send waits for
+    // it rather than leaving without it (#589).
+    if (preparingImages > 0) {
+      sendWhenPrepared = true;
+      return;
+    }
     stopChatVoiceListening();
     const text = chatInput.value.trim();
     // Ein Screenshot ohne Begleitfrage ist eine gueltige Eingabe (Issue #84).
@@ -1191,20 +1273,20 @@ export function initChatStream({
     if (outcome.kind === 'finalize' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
       syncChatBusyState();
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      followNewOutput();
+      announce(bubble.querySelector('.chat-md')?.textContent);
       return;
     }
     if (outcome.kind === 'finalize-with-error' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
-      const errorLi = document.createElement('li');
-      errorLi.classList.add('chat-msg', 'assistant', 'error');
-      errorLi.textContent = outcome.errorText;
-      chatMessagesEl.appendChild(errorLi);
+      chatMessagesEl.appendChild(buildErrorMessage(outcome.errorText));
       syncChatBusyState();
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      followNewOutput();
+      announceError(outcome.errorText);
       return;
     }
-    renderChatMessages();
+    renderChatMessages({ follow: true });
+    if (outcome.errorText) announceError(outcome.errorText);
   }
 
   async function settleRun(run, result) {
@@ -1306,9 +1388,26 @@ export function initChatStream({
 
   function formatAttachmentSize(bytes) {
     const value = Number(bytes) || 0;
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
-    return `${Math.round((value / (1024 * 1024)) * 10) / 10} MB`;
+    if (value < 1024) return `${tokenCount(value)} B`;
+    if (value < 1024 * 1024) return `${tokenCount(Math.round(value / 1024))} KB`;
+    // "2,3 MB" in German, "2.3 MB" in English (#595).
+    return `${new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 1 }).format(value / (1024 * 1024))} MB`;
+  }
+
+  /**
+   * Empties the composer as one unit — text, images and anything still being
+   * prepared (#588). A chat or folder switch that clears the text must not
+   * leave a screenshot behind that the next send would carry into the new chat.
+   */
+  function clearComposer() {
+    composerGeneration += 1;
+    sendWhenPrepared = false;
+    chatInput.value = '';
+    if (pendingAttachments.length > 0) {
+      pendingAttachments = [];
+      renderAttachmentChips();
+    }
+    onInputChanged();
   }
 
   function renderAttachmentChips() {
@@ -1358,12 +1457,16 @@ export function initChatStream({
   // bleibt unberuehrt — nur wenn wirklich Bilder in der Zwischenablage liegen,
   // wird das Standardverhalten unterdrueckt.
   async function takeImageFiles(files) {
-    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length, files, {
+    // Images still being prepared count: two quick pastes would otherwise
+    // both see the same free slots, and main would drop the extra (#589).
+    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length + preparingImages, files, {
       imagesSupported: activeProviderSupportsImages?.() === true,
     });
     for (const reason of rejections) flashTokenUsageNote(rejectionMessage(reason));
     if (accepted.length === 0) return;
 
+    const generation = composerGeneration;
+    preparingImages += accepted.length;
     for (const file of accepted) {
       let result;
       try {
@@ -1371,12 +1474,19 @@ export function initChatStream({
       } catch {
         result = { ok: false, reason: '' };
       }
+      preparingImages -= 1;
+      // The composer was emptied meanwhile — a chat or folder switch.
+      if (generation !== composerGeneration) continue;
       if (!result.ok) {
         flashTokenUsageNote(rejectionMessage(result.reason));
         continue;
       }
       pendingAttachments.push(result.attachment);
       renderAttachmentChips();
+    }
+    if (preparingImages === 0 && sendWhenPrepared) {
+      sendWhenPrepared = false;
+      void sendChatMessage();
     }
   }
 
@@ -1390,7 +1500,7 @@ export function initChatStream({
   // Links aus Modellantworten oeffnet der Main-Prozess (Issue #82/#83).
   // Ohne Auswertung des Ergebnisses sieht ein Fehlschlag aus wie ein toter
   // Link, darum die Rueckmeldung ueber die Statuszeile.
-  chatMessagesEl.addEventListener('click', (e) => {
+  function onChatLinkClick(e) {
     const a = e.target.closest('a');
     if (!a) return;
     const href = a.getAttribute('href');
@@ -1399,6 +1509,12 @@ export function initChatStream({
     openChatLink(api, href).then((result) => {
       if (!result.ok) flashTokenUsageNote(result.error);
     });
+  }
+  chatMessagesEl.addEventListener('click', onChatLinkClick);
+  // A middle click is no `click`: it would go to the window-open handler,
+  // where a failure has no way back to the user (#595).
+  chatMessagesEl.addEventListener('auxclick', (e) => {
+    if (e.button === 1) onChatLinkClick(e);
   });
 
   function onSendOrStopClick() {
@@ -1472,7 +1588,7 @@ export function initChatStream({
       const fresh = buildGreetingMessage(workspaceRoot);
       if (fresh) message.content = fresh.content;
     }
-    renderChatMessages();
+    renderChatMessages({ follow: true });
     syncChatSendButton();
     syncChatTokenUsageDisplay();
   });

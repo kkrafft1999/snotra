@@ -222,7 +222,9 @@
             <span id="chat-title" data-i18n="chat.title">Chat</span>
           </div>
         </div>
-        <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="polite" aria-busy="false"></ol>
+        <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false"></ol>
+        <!-- The list is redrawn as a whole; announcing it would read the conversation out again (#592). A turn's outcome is said here. -->
+        <p id="chat-announcer" class="sr-only" role="status" aria-live="polite"></p>
         <div id="chat-hint" class="hidden"></div>
         <div id="chat-input-row">
           <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Files and folders in the project" data-i18n-attr="aria-label:chat.mentionMenu"></ul>

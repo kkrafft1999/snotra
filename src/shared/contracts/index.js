@@ -129,6 +129,7 @@ const {
   workspaceImageErrorMessageKey,
   workspaceImageDataUrl,
 } = require('./workspace-image');
+const { isOpenableUrl } = require('./links');
 const {
   MAX_WORKSPACE_PDF_BYTES,
   WORKSPACE_PDF_ERRORS,
@@ -352,6 +353,7 @@ module.exports = {
   decodeWorkspaceImageSource,
   isWorkspaceImageSource,
   isWindowsDrivePath,
+  isOpenableUrl,
   createWorkspaceImageResult,
   createWorkspaceImageError,
   workspaceImageErrorMessageKey,

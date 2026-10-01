@@ -107,11 +107,13 @@ export function formatTimestamp(value) {
 }
 
 /**
- * Protokolle, die im Chat als Link stehen bleiben duerfen. Der Klick-Handler
- * in ChatStream muss dieselbe Liste verwenden, sonst zeigt der Chat Links an,
- * die nichts tun (Issue #82).
+ * Links that may stay clickable in an answer (#82): http, https and a strict
+ * `mailto:`. The same contract decides in the main process whether to open
+ * one, so the chat never shows a link that then does nothing (CR-B11-09).
  */
-export const ALLOWED_LINK_PROTOS = /^(https?|mailto):/i;
+export function isOpenableLink(href) {
+  return contracts.isOpenableUrl(href);
+}
 let domPurifyConfigured = false;
 // Set for the duration of one sanitize call that renders a workspace file
 // (#344). DOMPurify runs synchronously, so a module flag is enough to tell the
@@ -152,7 +154,7 @@ function configureDomPurify() {
       node.setAttribute('target', '_blank');
       node.setAttribute('rel', 'noopener noreferrer');
       const href = node.getAttribute('href') || '';
-      if (!ALLOWED_LINK_PROTOS.test(href)) {
+      if (!isOpenableLink(href)) {
         // A link to another file of the workspace means nothing to the chat,
         // but it does in the file preview. It never stays an `href`: the
         // viewer resolves it and opens the file itself (#344).
@@ -190,8 +192,10 @@ export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keep
         // local file `'self'` covers (#423). The chat has no use for them —
         // the CSP now says `media-src 'none'`.
         // `background` is a table's image, loaded under `img-src 'self'`.
-        FORBID_TAGS: ['style', 'iframe', 'form', 'video', 'audio', 'source', 'track', 'picture'],
-        FORBID_ATTR: ['style', 'srcset', 'poster', 'background'],
+        // An image map would be a second kind of link the hook above never
+        // sees: `<area href="?x">` reloads the app (CR-B11-08).
+        FORBID_TAGS: ['style', 'iframe', 'form', 'video', 'audio', 'source', 'track', 'picture', 'map', 'area'],
+        FORBID_ATTR: ['style', 'srcset', 'poster', 'background', 'usemap'],
       });
     } finally {
       keepRelativeLinks = false;

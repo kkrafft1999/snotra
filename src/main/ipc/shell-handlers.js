@@ -16,29 +16,8 @@ const { createMessage } = require('../../shared/contracts/message');
 /** Groesstes Textstueck, das in die Zwischenablage darf (Issue #83). */
 const MAX_CLIPBOARD_TEXT_BYTES = 1024 * 1024;
 
-/**
- * Web-Links und E-Mail-Adressen; alles andere (file:, javascript:, …) wird
- * abgewiesen. `mailto:` ist erlaubt, weil der Markdown-Sanitizer im Renderer
- * solche Links stehen laesst (Issue #82) — dann muss die Kette dahinter sie
- * auch oeffnen koennen.
- *
- * Bei `mailto:` zusaetzlich streng: keine Zeilenumbrueche, auch nicht
- * prozentkodiert. Sonst liesse sich ueber `%0A` ein zweiter Header (Bcc, …)
- * in die vorbereitete Mail schmuggeln.
- */
-function isOpenableUrl(url) {
-  if (typeof url !== 'string' || !url.trim()) return false;
-  const trimmed = url.trim();
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return true;
-    if (parsed.protocol !== 'mailto:') return false;
-    if (!parsed.pathname.trim()) return false;
-    return !/[\u0000-\u001f\u007f]/.test(trimmed) && !/%0[ad]/i.test(trimmed);
-  } catch {
-    return false;
-  }
-}
+// One predicate with the renderer's sanitizer (CR-B11-09), see the contract.
+const { isOpenableUrl } = require('../../shared/contracts/links');
 
 function registerShellHandlers({ ipcMain, shell, clipboard = null, REQ }) {
   ipcMain.handle(REQ.SHELL_OPEN_EXTERNAL, async (_event, url) => {

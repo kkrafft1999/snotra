@@ -104,6 +104,19 @@ test('ein Klick auf einen Link aus der Antwort geht an den Main-Prozess', async 
   assert.equal(event.defaultPrevented, true);
 });
 
+test('a middle click on a link takes the same way, with feedback (#595)', async () => {
+  const chat = await getHarness();
+  chat.showAnswer(`Siehe ${sanitizedLink('https://example.com/docs', 'die Doku')}.`);
+
+  const event = new window.MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
+  linkIn('die Doku').dispatchEvent(event);
+  await flush();
+
+  assert.deepEqual(chat.opened, ['https://example.com/docs']);
+  // Without it, the window-open handler would take it, where a failure reaches nobody.
+  assert.equal(event.defaultPrevented, true);
+});
+
 test('auch ein Klick auf Text innerhalb des Links zaehlt', async () => {
   const chat = await getHarness();
   chat.showAnswer(sanitizedLink('https://example.com', '<strong>fett</strong> verlinkt'));

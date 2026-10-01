@@ -1,4 +1,4 @@
-import { ALLOWED_LINK_PROTOS } from '../utils/helpers.js';
+import { isOpenableLink } from '../utils/helpers.js';
 import { t, tMessage } from '../i18n.js';
 
 /**
@@ -11,7 +11,7 @@ import { t, tMessage } from '../i18n.js';
 
 /** Klickbar ist nur, was der Markdown-Sanitizer auch stehen laesst. */
 export function isOpenableChatLink(href) {
-  return typeof href === 'string' && ALLOWED_LINK_PROTOS.test(href.trim());
+  return isOpenableLink(href);
 }
 
 /**

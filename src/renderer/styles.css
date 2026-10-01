@@ -1597,7 +1597,7 @@ summary:focus-visible,
 
 .chat-msg {
   max-width: 100%;
-  font-size: 15px;
+  font-size: var(--ds-font-size-lg);
   line-height: 1.6;
   word-break: break-word;
   user-select: text;
@@ -1615,7 +1615,7 @@ summary:focus-visible,
    * hinfaellig — die Bubble erreicht die linke Spaltenkante nie. */
   max-width: var(--ds-chat-user-max-width);
   padding: 9px 13px;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-bubble);
   white-space: pre-wrap;
 }
 
@@ -2144,16 +2144,20 @@ summary:focus-visible,
   color: var(--text-primary);
   border: 1px solid var(--ds-error-border);
   padding: 9px 13px;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-bubble);
   position: relative;
 }
 
-.chat-msg.error::before {
-  content: 'Fehler:';
-  display: inline-block;
+/* The prefix is a catalogue text in the DOM, not generated content: CSS
+   cannot follow the interface language (#591). */
+.chat-msg-error-prefix {
   margin-right: 6px;
   font-weight: var(--ds-font-weight-bold);
   color: var(--ds-error);
+}
+
+.chat-msg.error .chat-msg-text {
+  display: inline;
 }
 
 #chat-hint {
@@ -2319,18 +2323,18 @@ summary:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--ds-font-size-sm);
 }
 
 .chat-attachment-size {
-  font-size: 11px;
+  font-size: var(--ds-font-size-xs);
   color: var(--ds-grey-strong);
 }
 
 .chat-attachment-remove {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -2419,7 +2423,7 @@ button.chat-msg-attachment:hover {
 }
 
 .chat-msg-attachment-note {
-  font-size: 12px;
+  font-size: var(--ds-font-size-sm);
   color: var(--ds-grey-strong);
 }
 
@@ -2485,7 +2489,7 @@ button.chat-msg-attachment:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--ds-font-size-sm);
   color: var(--ds-grey-strong);
 }
 

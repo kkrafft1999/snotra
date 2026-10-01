@@ -411,7 +411,8 @@ test('a cut-off answer keeps its text and shows the reason below it (#538)', asy
   );
   assert.match(screenText(), /The first half of the summary/);
   const error = document.querySelector('#chat-messages .chat-msg.assistant.error');
-  assert.equal(error?.textContent, 'The answer was cut off.');
+  assert.equal(error?.querySelector('.chat-msg-text')?.textContent, 'The answer was cut off.');
+  assert.equal(error?.querySelector('.chat-msg-error-prefix')?.textContent, 'Error:');
 });
 
 test('an error without partial keeps removing the half answer, as before', async (t) => {

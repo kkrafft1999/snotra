@@ -26,6 +26,18 @@ test('isOpenableChatLink deckt sich mit dem, was der Sanitizer stehen laesst', a
   }
 });
 
+test('a mailto: link main would refuse is not clickable either (#595)', async () => {
+  const { isOpenableChatLink } = await modulePromise;
+  const { isOpenableUrl } = require('../src/main/ipc/shell-handlers.js');
+
+  // Clickable in the renderer and refused in main, until both used one predicate.
+  for (const href of ['mailto:a@example.com?body=Hi%0D%0ABye', 'mailto:', 'mailto:?subject=x']) {
+    assert.equal(isOpenableChatLink(href), false, href);
+    assert.equal(isOpenableUrl(href), false, href);
+  }
+  assert.equal(isOpenableChatLink('mailto:a@example.com?subject=Hello'), true);
+});
+
 test('openChatLink reicht den Link an den Main-Prozess weiter', async () => {
   const { openChatLink } = await modulePromise;
   const calls = [];

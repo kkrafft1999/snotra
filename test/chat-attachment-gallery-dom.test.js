@@ -145,7 +145,11 @@ test('ein Chatwechsel während des Nachladens schreibt nicht in den neuen Chat',
   const { show, appStore } = await getHarness();
   let release = null;
   readAttachmentImpl = () => new Promise((resolve) => { release = resolve; });
-  show([{ kind: 'image', mediaType: 'image/png', file: STORED_FILE }]);
+  const attachment = { kind: 'image', mediaType: 'image/png', file: STORED_FILE };
+  show([attachment]);
+  // Held on to: a check of the emptied list would hold with or without the
+  // guard, since a detached tile is not in it either (#595).
+  const [tile] = tiles();
 
   appStore.chatSessionId += 1;
   appStore.chatMessages = [];
@@ -153,7 +157,8 @@ test('ein Chatwechsel während des Nachladens schreibt nicht in den neuen Chat',
   release({ ok: true, mediaType: 'image/png', dataBase64: PNG_1PX });
   await flush();
 
-  assert.deepEqual(tiles(), []);
+  assert.equal(attachment.dataBase64, undefined, 'the late read is not kept');
+  assert.equal(tile.querySelector('img'), null, 'the tile of the old chat stays as it was');
 });
 
 test('Klick auf das Thumbnail öffnet das Bild größer und gibt den Fokus zurück', async () => {
@@ -176,6 +181,18 @@ test('Klick auf das Thumbnail öffnet das Bild größer und gibt den Fokus zurü
   assert.equal(lightbox().classList.contains('hidden'), true);
   assert.equal(big.getAttribute('src'), null, 'Bilddaten bleiben im geschlossenen Dialog liegen');
   assert.equal(document.activeElement, tile);
+});
+
+test('a thumbnail redrawn while the lightbox is open sends focus back to the composer (#595)', async () => {
+  const { show } = await getHarness();
+  show([{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX, name: 'Fehler.png' }]);
+  await flush();
+
+  tiles()[0].click();
+  // The run settles meanwhile and redraws the list: the trigger is gone.
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('image-lightbox-close').click();
+  assert.equal(document.activeElement, document.getElementById('chat-input'));
 });
 
 test('Escape und ein Klick auf den Hintergrund schließen das große Bild', async () => {
