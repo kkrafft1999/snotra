@@ -884,7 +884,11 @@ force, in the row of its class and once more at the bottom of the page grouped
 by chat, with what it covers and when it was granted, revocable one by one or
 all at once — and two reset actions with a stated scope: "Reset workspace
 rules" and "Reset all permissions" (which also removes program allowances and
-sets the mode back to *Smart*). These settings take effect immediately.
+sets the mode back to *Smart*). "Reset all permissions" always asks in a system
+dialog, "Reset workspace rules" whenever it would remove a denial or "Always
+ask" as the folder's default, and removing one of your sensitive path patterns
+asks as well; the dialog lists the protection that goes. These settings take
+effect immediately.
 
 ## Skills
 

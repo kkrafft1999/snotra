@@ -552,8 +552,6 @@ module.exports = {
   'settings.grants.revoked': 'Widerrufen. Der nächste gleiche Aufruf fragt wieder.',
   'settings.grants.revokedAll': 'Alle Sitzungsfreigaben widerrufen.',
   'settings.reset.heading': 'Zurücksetzen',
-  'settings.reset.confirm': 'Ja, alles zurücksetzen',
-  'settings.reset.cancel': 'Abbrechen',
   'settings.reset.running': 'Zurücksetzen …',
   'settings.reset.run': 'Ausführen',
 

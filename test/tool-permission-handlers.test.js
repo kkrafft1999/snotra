@@ -771,14 +771,26 @@ test('a reset that removes blocks names them in a native dialog; cancelling keep
   assert.deepEqual(state.sensitivePathPatterns, []);
 });
 
-test('a reset that only takes allowances away asks nothing (#514)', async (t) => {
-  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 0 });
+test('resetting a workspace that only has allowances asks nothing; "reset all" always asks (#514)', async (t) => {
+  let answer = 0;
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: () => answer, locale: 'en' });
   const sender = makeSender();
   await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', riskClass: 'read', scope: 'workspace', pathPattern: 'docs/**' });
   const before = dialogCalls.length;
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, sender)).ok, true);
+  assert.equal(dialogCalls.length, before, 'taking allowances away only tightens');
+  assert.deepEqual((await toolPolicyStore.read()).rules, []);
+
+  // Nothing protective to lose: still one confirmation, without a list of losses.
+  await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', riskClass: 'read', pathPattern: 'docs/**' });
+  answer = 1;
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_ALL, sender)).ok, false);
+  const dialog = dialogCalls.at(-1);
+  assert.equal(dialog.message, 'Reset all permissions?');
+  assert.doesNotMatch(dialog.detail, /removes protection/);
+  assert.equal((await toolPolicyStore.read()).rules.length, 1, 'cancelled');
+  answer = 0;
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_RESET_ALL, sender)).ok, true);
-  assert.equal(dialogCalls.length, before);
   assert.deepEqual((await toolPolicyStore.read()).rules, []);
 });
 

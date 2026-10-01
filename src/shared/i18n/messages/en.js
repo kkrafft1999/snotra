@@ -546,8 +546,6 @@ module.exports = {
   'settings.grants.revoked': 'Revoked. The next identical call asks again.',
   'settings.grants.revokedAll': 'All session allowances revoked.',
   'settings.reset.heading': 'Reset',
-  'settings.reset.confirm': 'Yes, reset everything',
-  'settings.reset.cancel': 'Cancel',
   'settings.reset.running': 'Reset …',
   'settings.reset.run': 'Run',
 

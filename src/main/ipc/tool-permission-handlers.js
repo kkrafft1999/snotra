@@ -128,8 +128,9 @@ function resetDialog(kind, losses, t, root = '') {
     message: t(`permissionDialog.${kind}.title`),
     detail: [
       t(`permissionDialog.${kind}.detail`, { root }),
-      t('permissionDialog.losses.intro'),
-      losses.map((line) => `• ${line}`).join('\n'),
+      ...(losses.length > 0
+        ? [t('permissionDialog.losses.intro'), losses.map((line) => `• ${line}`).join('\n')]
+        : []),
     ].join('\n\n'),
     buttons: [t(`permissionDialog.${kind}.confirm`), t('permissionDialog.cancel')],
     defaultId: 1,
@@ -705,10 +706,10 @@ function registerToolPermissionHandlers({
       askAllDefaults: Object.values(state.workspaceModes || {}).filter((mode) => mode === TOOL_PERMISSION_MODES.ASK_ALL).length,
       askAllMode: state.mode === TOOL_PERMISSION_MODES.ASK_ALL,
     }, t);
-    if (losses.length > 0) {
-      const confirmed = await confirmNatively(resetDialog('resetAll', losses, t));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
-    }
+    // The widest action asks every time — it is the only confirmation the
+    // page has for it; what protection goes with it is listed (#514).
+    const confirmed = await confirmNatively(resetDialog('resetAll', losses, t));
+    if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
     const result = await toolPolicyStore.resetAll();
     if (!result.ok) return createSettingsError(result.error);
     // Back to `smart` means every chat, including those in the background.
