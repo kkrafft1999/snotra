@@ -7214,10 +7214,12 @@ select.modal-input {
   line-height: 1.5;
 }
 
+/* Small secondary text in the import takes --ds-grey-strong: --ds-grey-muted
+   only reaches 4.5:1 from 14px on (CR-B14-08). */
 .mcp-import__count {
   margin: 0;
   font-size: 13px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 .mcp-import__count:empty {
@@ -7260,14 +7262,14 @@ select.modal-input {
   margin-left: 8px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 .mcp-import__cmd {
   margin-top: 3px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
   overflow-wrap: anywhere;
 }
 
@@ -7321,12 +7323,14 @@ select.modal-input {
   font-weight: 600;
 }
 
+/* 12.5px on --ds-grey-card: --ds-grey-strong gives 5.7:1 (light) and 9.0:1
+   (dark); --ds-grey-muted stayed at 4.43:1 (CR-B14-08). */
 .mcp-import__skipped ul {
   margin: 0;
   padding-left: 18px;
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--ds-grey-muted);
+  color: var(--ds-grey-strong);
 }
 
 @media (max-width: 640px) {
