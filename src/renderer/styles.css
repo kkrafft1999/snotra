@@ -3755,12 +3755,13 @@ select.modal-input {
   background: var(--bg-primary);
   transition:
     border-color var(--ds-motion-fast),
-    background var(--ds-motion-fast),
-    opacity var(--ds-motion-fast);
+    background var(--ds-motion-fast);
 }
 
+/* Hidden from the model menu: the dashed border, the muted title and the
+ * switch say so. No opacity — the row stays usable, so its text keeps
+ * 4.5:1 (CR-B14-08). */
 .settings-pref-row-inner[data-pref-menu-off='true'] {
-  opacity: 0.78;
   border-style: dashed;
 }
 
@@ -3784,7 +3785,8 @@ select.modal-input {
 .settings-pref-detail {
   display: block;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  /* 12 px: below the 14-px line for --ds-grey-muted (CR-B14-08). */
+  color: var(--text-muted-strong);
   line-height: var(--ds-line-height-prose, 1.5);
 }
 
@@ -3854,7 +3856,7 @@ select.modal-input {
 .settings-empty-hint {
   margin: 0 0 12px;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong); /* 12 px, see .settings-pref-detail */
 }
 
 

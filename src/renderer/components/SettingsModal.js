@@ -1060,7 +1060,8 @@ export function initSettingsModal(deps) {
       const main = document.createElement('div');
       main.className = 'settings-pref-main';
       const title = document.createElement('strong');
-      title.lang = 'en';
+      // No `lang`: the title holds the provider name in the interface language
+      // ("OpenAI-kompatibel") or a name the user gave it (CR-B14-08).
       // Bei Verbindung je Eintrag traegt die Zeile ihren eigenen Namen.
       const zeilenName = pr.connection
         ? (pr.connection.displayName?.trim() || pv.builtInName || pv.name)

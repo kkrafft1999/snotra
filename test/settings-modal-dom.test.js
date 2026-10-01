@@ -1573,3 +1573,24 @@ test('"Reload skills" gives the focus back to its button after the busy state (C
   assert.equal(reload.disabled, false);
   assert.ok(document.activeElement === reload);
 });
+
+// --- WCAG details of the model list (CR-B14-08) -----------------------------
+
+test('a model row title carries no lang, it holds translated and user-given names (CR-B14-08)', async (t) => {
+  await mountWithRows(t, [storedRow('a', 'Mein Gateway', 'gpt-4o')]);
+  const title = document.querySelector('#pref-model-list strong');
+  assert.equal(title.textContent, 'Mein Gateway · gpt-4o');
+  assert.equal(title.hasAttribute('lang'), false);
+});
+
+test('the duplicate message lands in the announced status region (CR-B14-08)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'A', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  await zeileAnlegen({ name: 'B', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+
+  const status = document.getElementById('model-status');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(status.textContent, 'Diese Kombination gibt es bereits in der Liste.');
+});

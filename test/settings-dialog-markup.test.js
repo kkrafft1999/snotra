@@ -220,3 +220,31 @@ test('die Sofort-Schalter sind echte Schalter, keine Kaestchen (#297)', () => {
     assert.match(html.slice(at, html.indexOf('>', at) + 1), /role="status"/, id);
   }
 });
+
+// CR-B14-08: what the Add model popup reports ("Loading models …", "3 models
+// found", an error, a duplicate) is announced without moving the focus.
+test('the model status in the Add model popup is a status region (CR-B14-08)', () => {
+  const at = html.indexOf('id="model-status"');
+  assert.ok(at > -1);
+  const tag = html.slice(html.lastIndexOf('<p', at), html.indexOf('>', at) + 1);
+  assert.match(tag, /role="status"/);
+});
+
+// CR-B14-08: secondary text in the model list reaches 4.5:1 in both themes.
+// `--ds-grey-muted` holds that only from 14 px, and an opacity on a row that
+// stays usable pulls any colour below it.
+test('the model list keeps its secondary text at 4.5:1 (CR-B14-08)', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'styles.css'), 'utf8').replace(/\r\n/g, '\n');
+  const rule = (selector) => {
+    const at = css.indexOf(`${selector} {`);
+    assert.notEqual(at, -1, `${selector} is missing`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  const hidden = rule(".settings-pref-row-inner[data-pref-menu-off='true']");
+  assert.doesNotMatch(hidden, /opacity/);
+  assert.match(hidden, /border-style:\s*dashed/, 'the hidden state stays visible by shape');
+  for (const selector of ['.settings-pref-detail', '.settings-empty-hint']) {
+    assert.match(rule(selector), /font-size:\s*var\(--ds-font-size-sm\)/, `${selector} is no longer small text`);
+    assert.match(rule(selector), /color:\s*var\(--text-muted-strong\)/, selector);
+  }
+});
