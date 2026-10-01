@@ -144,8 +144,10 @@ function translateMessagesToAnthropic(messages) {
           });
         }
       }
-      if (blocks.length === 0) blocks.push({ type: 'text', text: '' });
-      out.push({ role: 'assistant', content: blocks });
+      // A turn stopped before its first token has nothing to say, and the API
+      // refuses an empty text block — for this and every later message of the
+      // chat (#540). Two user turns in a row are merged by the API.
+      if (blocks.length > 0) out.push({ role: 'assistant', content: blocks });
       continue;
     }
   }

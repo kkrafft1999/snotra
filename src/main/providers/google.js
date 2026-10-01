@@ -116,6 +116,17 @@ function buildToolCallNameMap(messages) {
 }
 
 
+/**
+ * Turns alternate: a turn of the same role as the one before joins it. That
+ * keeps the history valid when an empty answer was left out, and gives the
+ * responses to parallel calls one turn, as the API expects them (#540).
+ */
+function pushContent(contents, role, parts) {
+  const last = contents[contents.length - 1];
+  if (last?.role === role) last.parts.push(...parts);
+  else contents.push({ role, parts });
+}
+
 function translateMessagesToGoogle(messages) {
   const toolNameById = buildToolCallNameMap(messages);
   let systemText = '';
@@ -127,7 +138,7 @@ function translateMessagesToGoogle(messages) {
       continue;
     }
     if (m.role === 'user') {
-      contents.push({ role: 'user', parts: [{ text: typeof m.content === 'string' ? m.content : '' }] });
+      pushContent(contents, 'user', [{ text: typeof m.content === 'string' ? m.content : '' }]);
       continue;
     }
     if (m.role === 'assistant') {
@@ -143,11 +154,16 @@ function translateMessagesToGoogle(messages) {
               name: tc.function.name,
               args: safeJsonParse(tc.function.arguments, {}),
             },
+            // Gemini 3 refuses the next round of a tool loop without the
+            // signature it attached to the call (#540).
+            ...(typeof tc.thoughtSignature === 'string' && tc.thoughtSignature
+              ? { thoughtSignature: tc.thoughtSignature }
+              : {}),
           });
         }
       }
-      if (parts.length === 0) parts.push({ text: '' });
-      contents.push({ role: 'model', parts });
+      // A turn stopped before its first token has nothing to say (#540).
+      if (parts.length > 0) pushContent(contents, 'model', parts);
       continue;
     }
     if (m.role === 'tool') {
@@ -156,10 +172,7 @@ function translateMessagesToGoogle(messages) {
       // immer JSON; der { result }-Fallback greift nur, falls je ein Tool
       // Plaintext zurückgibt, und verpackt ihn dann API-konform.
       const response = safeJsonParse(m.content, { result: m.content });
-      contents.push({
-        role: 'user',
-        parts: [{ functionResponse: { name, response } }],
-      });
+      pushContent(contents, 'user', [{ functionResponse: { name, response } }]);
       continue;
     }
   }
@@ -244,6 +257,11 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
               name: String(fc.name || ''),
               arguments: JSON.stringify(fc.args ?? {}),
             },
+            // Travels with the call through the tool loop and goes back on the
+            // same part (#540).
+            ...(typeof p.thoughtSignature === 'string' && p.thoughtSignature
+              ? { thoughtSignature: p.thoughtSignature }
+              : {}),
           });
         }
       }
