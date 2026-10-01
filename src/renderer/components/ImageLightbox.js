@@ -8,9 +8,11 @@
  * Der Dialog hat genau ein bedienbares Element (Schliessen), deshalb ist der
  * Fokus-Kaefig eine Zeile: Tab bleibt auf dem Knopf. Escape und ein Klick auf
  * den Hintergrund schliessen ebenfalls, danach steht der Fokus wieder auf dem
- * Thumbnail, von dem der Dialog ausging.
+ * Thumbnail, von dem der Dialog ausging. Is that thumbnail gone — the list
+ * was redrawn while the dialog was open — focus goes to `fallbackFocus()`
+ * instead of falling to the page (#595, WCAG 2.4.3).
  */
-export function initImageLightbox() {
+export function initImageLightbox({ fallbackFocus = () => null } = {}) {
   const root = document.getElementById('image-lightbox');
   const backdrop = document.getElementById('image-lightbox-backdrop');
   const imgEl = document.getElementById('image-lightbox-img');
@@ -35,6 +37,7 @@ export function initImageLightbox() {
     const back = lastTrigger;
     lastTrigger = null;
     if (back && back.isConnected) back.focus();
+    else fallbackFocus()?.focus?.();
   }
 
   function open({ src, alt = '', trigger = null } = {}) {

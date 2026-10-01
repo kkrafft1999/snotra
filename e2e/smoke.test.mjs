@@ -86,7 +86,11 @@ const MEMORY_NEW_ENTRY = 'Frisch-gemerkt-im-Smoke-Test.';
  * sich aus weg — an dem Link haengt also nur die Grundausstattung, nicht die
  * Regel der App. `tel:` laesst DOMPurify hingegen stehen; dass es trotzdem
  * verschwindet, kann nur der eigene Hook aus helpers.js gewesen sein
- * (ALLOWED_LINK_PROTOS: http, https, mailto — sonst nichts).
+ * (isOpenableLink: http, https, mailto — sonst nichts).
+ *
+ * The image map is the second kind of link the hook never saw: `<area
+ * href="?x">` would reload the app (#594). And a `mailto:` with a line break
+ * in it is refused by main, so it must not stay clickable either (#595).
  */
 const ANSWER_WITH_LINKS = [
   'Siehe [die Doku](https://example.com/docs).',
@@ -98,6 +102,10 @@ const ANSWER_WITH_LINKS = [
   '<img src=x onerror="globalThis.__pwned = true">',
   '',
   '<iframe src="https://example.com"></iframe>',
+  '',
+  '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" usemap="#karte" alt="Karte"><map name="karte"><area href="?reload" shape="rect" coords="0,0,1,1" alt="Neu laden"></map>',
+  '',
+  '[Mail mit Zeilen](mailto:a@example.com?body=Hi%0D%0ABye)',
 ].join('\n');
 
 /**
@@ -639,10 +647,11 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
           links,
           hasIframe: !!last.querySelector('iframe'),
           hasOnerror: !!last.querySelector('[onerror]'),
+          hasImageMap: !!last.querySelector('map, area, [usemap]'),
           pwned: globalThis.__pwned === true,
         };
       });
-      return state && !state.busy && state.links.length >= 3 ? state : null;
+      return state && !state.busy && state.links.length >= 4 ? state : null;
     },
     { what: 'fertig gerenderte Antwort mit Links' }
   );
@@ -661,6 +670,10 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(rendered.hasIframe, false, 'iframe haette entfernt werden muessen');
   assert.equal(rendered.hasOnerror, false, 'onerror haette entfernt werden muessen');
   assert.equal(rendered.pwned, false, 'das onerror-Skript ist gelaufen');
+  assert.equal(rendered.hasImageMap, false, 'an image map must not survive the sanitizer (#594)');
+
+  const mail = rendered.links.find((l) => l.text.includes('Mail mit Zeilen'));
+  assert.equal(mail.href, null, 'a mailto: main would refuse must not stay clickable (#595)');
   step('Sanitizing geprueft');
 
   // --- Umgebungsangaben im Systemprompt (Issue #138) -----------------------

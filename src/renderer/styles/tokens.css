@@ -159,6 +159,7 @@
   --ds-radius-sm: 4px;         /* Fokus-Ring Radius */
   --ds-radius-md: 6px;         /* Karten, Buttons, Chips */
   --ds-radius-pill: 999px;
+  --ds-radius-bubble: 12px;    /* Chat-Blasen (Frage, Fehler) */
   --ds-card-border: 1px solid var(--ds-grey-divider);
 
   /* ── Touch-Targets ────────────────────────────────────────────────────── */

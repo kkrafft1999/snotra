@@ -32,6 +32,18 @@ let appStore = null;
 const asked = [];
 let readImpl = async () => ({ ok: true, mime: 'image/png', base64: PNG_1PX, mtimeMs: 1, size: 70 });
 
+// Animation frames run in order: once ours has run, one scheduled before it
+// has run as well. No wall clock, so a slow runner cannot turn a test red.
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+async function until(check, what) {
+  for (let i = 0; i < 200; i += 1) {
+    if (check()) return;
+    await flush();
+  }
+  assert.fail(`timed out waiting for ${what}`);
+}
+
 test.before(async () => {
   dom = setupRendererDom();
 
@@ -113,7 +125,7 @@ test('ein gespeicherter Verlauf holt sein Bild und zeigt es', async () => {
   assert.equal(img.getAttribute('alt'), 'Diagramm');
 });
 
-test('ein Verlauf im falschen Ordner zeigt den Platzhalter, nicht fremde Bilder', async () => {
+test('a refused image read ends as a placeholder, not as a broken image', async () => {
   readImpl = async () => ({ ok: false, reason: 'not-found' });
   show('![Diagramm](diagramm.png)');
   await flush();
@@ -179,8 +191,10 @@ test('ein nachlaufender Stream-Frame ueberschreibt das fertige Bild nicht', asyn
   input.dispatchEvent(new Event('input', { bubbles: true }));
   document.getElementById('btn-chat-send').click();
 
-  // Lange genug, dass ein nicht abbestellter Frame gelaufen waere.
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  // A frame that was not cancelled would have run by now.
+  await until(() => !appStore.chatInFlight, 'the settled run');
+  await nextFrame();
+  await nextFrame();
   await flush();
 
   const blase = letzteBlase();
@@ -219,7 +233,9 @@ test('no chat render path puts anything but a data: URI into an <img src> (#402)
     // A live run: a streaming frame first, then the final answer.
     chatImpl = async (_messages, options) => {
       deltaCallback?.({ text: OUTSIDE, chatId: options?.chatId, runId: options?.runId });
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      // Let the streaming frame draw before the answer settles.
+      await nextFrame();
+      await nextFrame();
       return { ok: true, content: OUTSIDE, toolTrace: [] };
     };
     appStore.chatMessages = [];
@@ -228,8 +244,10 @@ test('no chat render path puts anything but a data: URI into an <img src> (#402)
     input.value = 'Show it.';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('btn-chat-send').click();
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    await flush();
+    await until(
+      () => !appStore.chatInFlight && letzteBlase()?.querySelector('.chat-md-image--placeholder'),
+      'the settled answer with its placeholder'
+    );
   } finally {
     observer.disconnect();
   }

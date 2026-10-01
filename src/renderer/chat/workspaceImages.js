@@ -143,18 +143,22 @@ function markLoaded(img, dataUrl) {
 async function resolveOne(img, { api, workspaceRoot }) {
   // Markdown liefert eine URL, kein Dateipfad — zurueck in den Pfad, den das
   // Modell geschrieben hat (Backslashes, Umlaute, Leerzeichen).
-  const src = decodeWorkspaceImageSource(img.getAttribute('data-md-src'));
+  const raw = (img.getAttribute('data-md-src') || '').trim();
   const altText = img.getAttribute('alt') || '';
 
+  // `data:` trägt seine Bytes selbst und ist per CSP erlaubt — das kommt
+  // unverändert zurück, und zwar vor dem Dekodieren: ein prozentkodiertes
+  // SVG trüge danach ein rohes `#`, und alles dahinter wäre Fragment (#595).
+  if (/^data:image\//i.test(raw)) {
+    img.removeAttribute('data-md-src');
+    img.src = raw;
+    return;
+  }
+  const src = decodeWorkspaceImageSource(raw);
+
   if (!isWorkspaceImageSource(src)) {
-    // `data:` trägt seine Bytes selbst und ist per CSP erlaubt — das kommt
-    // unverändert zurück. Alles andere (http(s), file://) lädt unter dieser
-    // CSP nichts; statt eines kaputten Bildes steht dort, warum.
-    if (/^data:image\//i.test(src.trim())) {
-      img.removeAttribute('data-md-src');
-      img.src = src.trim();
-      return;
-    }
+    // Alles andere (http(s), file://) lädt unter dieser CSP nichts; statt
+    // eines kaputten Bildes steht dort, warum.
     img.replaceWith(placeholderFor(altText, externalSourceMessage()));
     return;
   }
@@ -177,7 +181,9 @@ async function resolveOne(img, { api, workspaceRoot }) {
     entry = result?.ok
       ? { dataUrl: workspaceImageDataUrl(result) }
       : { message: t(workspaceImageErrorMessageKey(result?.reason)) };
-    rememberResult(key, entry);
+    // Only an image is remembered. A failure is asked again next time — the
+    // file may exist by then, or the read failed only once (#590).
+    if (result?.ok) rememberResult(key, entry);
   }
 
   // Zwischen Anfrage und Antwort kann der Verlauf neu gezeichnet worden sein —

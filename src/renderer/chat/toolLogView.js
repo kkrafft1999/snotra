@@ -284,11 +284,6 @@ export function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {
 }
 
 /**
- * Kategorie eines Trace-Eintrags. Vor #60 gespeicherte Sessions enthalten
- * bloße Strings ohne Tool-Namen — die bleiben ohne Symbol und lassen die
- * Zusammenfassung auf die alte Form zurückfallen.
- */
-/**
  * Trace-Eintrag für Store und Verlauf: nur Anzeige-Zeile und Tool-Name. Die
  * Argumente aus dem Engine-Ergebnis bleiben bewusst draußen (write_file_text
  * trägt dort bis zu 2 MB Dateiinhalt).
@@ -308,6 +303,11 @@ export function toolTraceEntryForStore(entry) {
   return out;
 }
 
+/**
+ * Kategorie eines Trace-Eintrags. Vor #60 gespeicherte Sessions enthalten
+ * bloße Strings ohne Tool-Namen — die bleiben ohne Symbol und lassen die
+ * Zusammenfassung auf die alte Form zurückfallen.
+ */
 export function traceEntryCategory(entry) {
   if (typeof entry === 'string' || !entry) return null;
   const hasInfo =

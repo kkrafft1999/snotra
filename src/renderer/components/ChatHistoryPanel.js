@@ -188,14 +188,16 @@ export function initChatHistoryPanel({
     }
     onInputChanged();
     // The composer follows the chat on screen at once, not after the round
-    // trips below (#411).
+    // trips below (#411) — and so does the list: from here on this chat's
+    // run counts as on screen, and its events would otherwise be drawn into
+    // the previous chat's list (#593).
     runs.syncComposer();
+    renderChatMessages();
     await api.setActiveChatId(id);
     // Ausdruecklicher Wechsel: Dieser Chat bekommt sein Modell und seinen
     // Freigabemodus zurueck — auch „Auto“, das er nur nach einer nativen
     // Bestaetigung tragen kann (Issue #211).
     await activateChatSession(id, CHAT_ACTIVATION.EXPLICIT);
-    renderChatMessages();
     runs.afterSwitch();
     updateChatChrome();
     await renderHistoryList();

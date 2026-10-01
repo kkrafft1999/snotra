@@ -325,6 +325,10 @@ You **always** make sure that:
 - English terms (`RUNNING`, `DONE`, `BAT AGENT`) carry `lang="en"`.
 - Live regions: `role="log"` plus `aria-live="polite"`. No `assertive` except
   for errors.
+- A list that is redrawn as a whole is **not** a live region — every redraw
+  would read it out again. The chat's message list keeps `role="log"` but
+  carries `aria-live="off"`; what a turn ended with is said once through the
+  visually hidden `#chat-announcer` (`role="status"`, #592).
 - Native HTML is used: `<button>`, `<input>`, `<ol>`/`<ul>`. **No** `<div>` with
   an `onclick`.
 
