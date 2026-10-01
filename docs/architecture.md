@@ -590,10 +590,15 @@ one another (pruning chat-scoped permissions, telling the renderer to read
 again). They exist because two services meet there, not because of a rule of
 their own.
 
-Before `createApplication()`, `src/main/index.js` calls only the one-time
-userData migration (`services/userdata-migration.js`, taking over from the folder
-of the predecessor identity "Weyouze Anything") — no scattered wiring in the
-handlers.
+Before `createApplication()`, `src/main/index.js` does only two things. It
+claims the single-instance lock (`claimSingleInstance` in `app-lifecycle.js`,
+#507): a second launch on the same userData folder brings the existing window
+to the front and quits before it has started anything. And it runs the
+one-time userData migration (`services/userdata-migration.js`, taking over from
+the folder of the predecessor identity "Weyouze Anything") — no scattered
+wiring in the handlers. A start-up that throws ends in an error box and
+`app.exit(1)` (`createStartupFailureHandler`, #509) instead of leaving a
+process without a window behind.
 
 The **menu bar** lives as a pure template in `services/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,

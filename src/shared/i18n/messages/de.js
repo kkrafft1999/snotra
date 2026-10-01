@@ -1443,6 +1443,9 @@ module.exports = {
   'menu.app.hideOthers': 'Andere ausblenden',
   'menu.app.unhide': 'Alle einblenden',
   'menu.app.quit': '{appName} beenden',
+  // Start-up failure (#509): the error box before the app ends.
+  'app.startupFailed.title': '{appName} konnte nicht starten',
+  'app.startupFailed.message': 'Beim Start ist etwas schiefgegangen. Die App wird jetzt beendet.\n\n{detail}',
   'menu.file': 'Datei',
   'menu.file.mac': 'Ablage',
   'menu.file.newChat': 'Neuer Chat',

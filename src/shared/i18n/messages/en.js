@@ -1437,6 +1437,9 @@ module.exports = {
   'menu.app.hideOthers': 'Hide Others',
   'menu.app.unhide': 'Show All',
   'menu.app.quit': 'Quit {appName}',
+  // Start-up failure (#509): the error box before the app ends.
+  'app.startupFailed.title': '{appName} could not start',
+  'app.startupFailed.message': 'Something went wrong while starting. The app will close now.\n\n{detail}',
   'menu.file': 'File',
   'menu.file.mac': 'File',
   'menu.file.newChat': 'New Chat',
