@@ -1,7 +1,8 @@
 // The default mode per workspace in the renderer (#413): the checkbox under
 // the mode pill's menu, the tag on the option that is the default, and the
-// card in Settings › Permissions. Main is faked; what it decides is tested in
-// tool-permission-handlers.test.js and chat-session-settings.test.js.
+// control in the header of Settings › Security (#448). Main is faked; what it
+// decides is tested in tool-permission-handlers.test.js and
+// chat-session-settings.test.js.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -203,10 +204,10 @@ test('menu: hidden with nothing to remember, and the same in German', async () =
 test('settings: the Security page shows the default, asks main to change it and follows main\'s answer', async () => {
   const dom = setupRendererDom();
   try {
-    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
     let answer = { ok: true };
     const permissions = fakePermissions(baseState({ workspaceMode: 'ask-all' }), { answer: async () => answer });
-    initWorkspaceModeSetting({ toolPermissions: permissions, ids: SECURITY_PAGE_IDS });
+    initWorkspaceModeSetting({ toolPermissions: permissions });
     const doc = dom.document;
     const radios = () => [...doc.querySelectorAll('#settings-security-mode-options input')];
     const checked = () => radios().find((input) => input.checked)?.value ?? null;
@@ -249,9 +250,9 @@ test('settings: the Security page shows the default, asks main to change it and 
 test('settings: no folder, nothing to choose; no encrypted storage, no "Auto"', async () => {
   const dom = setupRendererDom();
   try {
-    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
     const permissions = fakePermissions(baseState({ workspaceRoot: null, workspaceMode: null }));
-    initWorkspaceModeSetting({ toolPermissions: permissions, ids: SECURITY_PAGE_IDS });
+    initWorkspaceModeSetting({ toolPermissions: permissions });
     const doc = dom.document;
     const radios = () => [...doc.querySelectorAll('#settings-security-mode-options input')];
     assert.ok(radios().every((input) => input.disabled && !input.checked));
@@ -260,6 +261,102 @@ test('settings: no folder, nothing to choose; no encrypted storage, no "Auto"', 
     permissions.push(baseState({ encryptionAvailable: false }));
     assert.deepEqual(radios().filter((input) => input.disabled).map((input) => input.value), ['auto']);
     assert.match(doc.getElementById('settings-security-mode-state').textContent, /not available as a default/);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+// CR-B14-08 (#621): the reason for a disabled "Auto" was only in a `title`.
+test('settings: the state line describes the radiogroup, and each option carries its sentence', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const permissions = fakePermissions(baseState());
+    initWorkspaceModeSetting({ toolPermissions: permissions });
+    const doc = dom.document;
+    const group = doc.getElementById('settings-security-mode-options');
+    assert.deepEqual(group.getAttribute('aria-describedby').split(' '), ['settings-security-mode-state', 'settings-security-mode-note']);
+    const radio = (value) => group.querySelector(`input[value="${value}"]`);
+    const description = (value) => doc.getElementById(radio(value).getAttribute('aria-describedby'));
+    assert.equal(description('smart').textContent, 'Reading runs without asking. File changes and sensitive files ask first. The default.');
+    assert.equal(description('smart').hidden, true, 'read with the radio, not shown twice');
+    assert.equal(description('smart').closest('label'), null, 'not part of the radio\'s name');
+    assert.equal(radio('smart').closest('label').title, description('smart').textContent);
+    assert.match(description('auto').textContent, /^No questions about tool calls/);
+
+    permissions.push(baseState({ encryptionAvailable: false }));
+    assert.equal(radio('auto').disabled, true);
+    assert.equal(description('auto').textContent, 'Not available: this system offers no encrypted storage.');
+    assert.equal(radio('auto').closest('label').title, 'Not available: this system offers no encrypted storage.');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+// CR-B14-09, item 3: a "Not saved" outlived the attempt it belonged to.
+test('settings: a failed save is gone on the next open, in another folder and after a language change', async () => {
+  const dom = setupRendererDom();
+  const { setLocale } = await importRenderer('i18n.js');
+  try {
+    setLocale('en', { force: true });
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const permissions = fakePermissions(baseState(), { answer: async () => ({ ok: false }) });
+    const setting = initWorkspaceModeSetting({ toolPermissions: permissions });
+    const doc = dom.document;
+    const stateLine = doc.getElementById('settings-security-mode-state');
+    const status = doc.getElementById('status-security-mode');
+    const fail = async () => {
+      const ask = doc.querySelector('#settings-security-mode-options input[value="ask-all"]');
+      ask.checked = true;
+      ask.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(stateLine.textContent, 'Not saved', 'no reason from main: the catalogue\'s own');
+      assert.equal(status.textContent, 'Not saved');
+    };
+    const gone = (why) => {
+      assert.equal(stateLine.hidden, true, why);
+      assert.equal(status.textContent, '', why);
+    };
+
+    await fail();
+    setting.reset();
+    gone('opened again');
+
+    await fail();
+    permissions.push(baseState());
+    assert.equal(stateLine.textContent, 'Not saved', 'the same folder keeps it');
+    permissions.push(baseState({ workspaceRoot: '/Users/me/Projects/other' }));
+    gone('another folder');
+
+    await fail();
+    setLocale('de');
+    gone('language change');
+    assert.deepEqual(
+      [...doc.querySelectorAll('#settings-security-mode-options label')].map((label) => label.textContent),
+      ['Intelligent', 'Immer fragen', 'Auto'],
+    );
+  } finally {
+    setLocale('en', { force: true });
+    dom.cleanup();
+  }
+});
+
+// CR-B14-09, item 5.
+test('settings: an unreadable permission state says so instead of "open a folder"', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const permissions = fakePermissions(null);
+    initWorkspaceModeSetting({ toolPermissions: permissions });
+    const doc = dom.document;
+    const radios = [...doc.querySelectorAll('#settings-security-mode-options input')];
+    assert.ok(radios.every((input) => input.disabled && !input.checked));
+    const stateLine = doc.getElementById('settings-security-mode-state');
+    assert.equal(stateLine.textContent, 'The permission state could not be read. Close the settings and open them again.');
+    assert.equal(stateLine.classList.contains('error'), true);
+
+    permissions.push(baseState());
+    assert.equal(stateLine.hidden, true, 'readable again: nothing to say');
   } finally {
     dom.cleanup();
   }

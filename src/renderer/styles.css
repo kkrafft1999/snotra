@@ -6819,7 +6819,14 @@ select.modal-input {
   color: var(--ds-warning);
 }
 
-.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title {
+.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title,
+.settings-sandbox-tile:has(.ds-switch[aria-disabled='true']) .settings-sandbox-tile__title {
+  cursor: not-allowed;
+}
+
+/* Not to be pressed, yet still focusable (CR-B14-07): looks like `:disabled`. */
+.settings-sandbox-tile .ds-switch[aria-disabled='true'] {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -6830,6 +6837,17 @@ select.modal-input {
 }
 
 .settings-sandbox-tile__body:empty {
+  display: none;
+}
+
+/* Why the switch cannot be turned off here (CR-B14-09). */
+.settings-sandbox-tile__note {
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-tile__note:empty {
   display: none;
 }
 
@@ -7372,7 +7390,8 @@ select.modal-input {
 .memory-card__path {
   font-family: var(--ds-font-mono);
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  /* Below 14 px: the stronger grey, 6.5:1 light and 9.6:1 dark (CR-B14-08). */
+  color: var(--text-muted-strong);
   word-break: break-all;
 }
 
@@ -7418,7 +7437,7 @@ select.modal-input {
   padding: 1px 7px;
   border-radius: var(--ds-radius-pill);
   border: 1px solid var(--ds-grey-divider);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
   white-space: nowrap;
 }
 
@@ -7439,12 +7458,14 @@ select.modal-input {
   transition: color var(--ds-motion-fast, 120ms) ease, border-color var(--ds-motion-fast, 120ms) ease;
 }
 
-.memory-item__forget:hover:not(:disabled) {
+.memory-item__forget:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--ds-grey-muted);
   color: var(--text-primary);
 }
 
-.memory-item__forget:disabled {
+/* Busy while main forgets: marked, not disabled, so it keeps the focus (CR-B14-07). */
+.memory-item__forget:disabled,
+.memory-item__forget[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }
@@ -7453,10 +7474,26 @@ select.modal-input {
   margin: 10px 0 0;
 }
 
+.memory-card__status {
+  margin: 10px 0 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.memory-card__status:empty {
+  margin: 0;
+}
+
+/* A forget that failed is an error, and stays red (ui-design-tokens.md). */
+.memory-card__status.is-error {
+  color: var(--ds-error);
+}
+
 .memory-meta {
   margin: 10px 0 0;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
   font-variant-numeric: tabular-nums;
 }
 
