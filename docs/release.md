@@ -77,12 +77,15 @@ package `squashfs-tools`) — macOS has none of them, and Forge aborts there wit
 *"Cannot make for …"*; `npm run package:linux` (packaging only, without the
 maker) does work from macOS.
 
-The AppImage maker downloads the **type-2 runtime** from GitHub at build time.
-By default it pulls it from the rolling `continuous` tag; in
-[`package.json`](../package.json) a **dated release is pinned** instead, so that
-a different foreign binary doesn't end up in the artifact with every build. A
-test guards this. To raise it, point the `runtime` URL deliberately at a newer
-tag — `continuous` is not a valid option.
+Every AppImage starts with the **type-2 runtime**, a binary from
+`AppImage/type2-runtime`. Left alone, the maker would download it at build time
+from the rolling `continuous` tag, unchecked. Instead `npm run make:linux` first
+runs [`scripts/fetch-appimage-runtime.js`](../scripts/fetch-appimage-runtime.js),
+which downloads a **dated release** and writes it to
+`out/appimage-runtime/runtime-x86_64` only if its SHA-256 matches the pinned one
+(#573). The maker's `runtime` in [`package.json`](../package.json) points at
+that file. A test guards both. To raise it, change URL and SHA-256 in the script
+together — GitHub lists the digest next to each release asset.
 
 The artifacts end up under `out/`. The app's comparison uses **the release tag
 only**, not the file names — so the asset names can be chosen freely, but should
@@ -128,8 +131,14 @@ Two GitHub Actions workflows under [`.github/workflows/`](../.github/workflows/)
   24) on **macOS, Windows and Linux** for every **pull request** and every
   **push to `main`**. A red run is visible on the pull request or on the commit.
 - [`release.yml`](../.github/workflows/release.yml) starts on a tag push
-  `vX.Y.Z`. Its first job runs the same test suite as a **test gate** (`ci.yml`
-  via `workflow_call`); only when all three platforms are green do the build
+  `vX.Y.Z`. Its first job checks the **tag**: `X.Y.Z` has to be exactly the
+  `version` in `package.json` at the tagged commit, and that commit has to be on
+  `main` (#570). A tag that fails either check stops the run before anything is
+  built — a release is offered to every running installation, so a tag on the
+  wrong commit must not get that far. Prerelease tags (with a `-`) are never
+  offered as an update and skip this check. Then the same test suite runs as a
+  **test gate** (`ci.yml` via `workflow_call`); only when all three platforms
+  are green do the build
   jobs (`build-macos`, `build-windows`, `build-linux`) run and attach their
   artifacts to the release. If a test fails, **no** build and **no** release
   comes into existence — fix the cause, set the tag again

@@ -1,6 +1,12 @@
 # Haelt die auf Commit-SHAs gepinnten GitHub Actions in .github/workflows/
 # aktuell (Issue #71). Dependabot erkennt den Versions-Kommentar hinter der
 # SHA und schlaegt neue SHA + Kommentar gemeinsam vor.
+#
+# Since #571 it watches npm as well: Electron, pdfjs-dist, DOMPurify, marked
+# and undici reach every user, and nothing else proposes their updates.
+# Security updates come as soon as an advisory is out; version updates
+# weekly, grouped so that the board does not fill up. The Electron Forge
+# tool chain waits for the move to Forge 8 (#88), which changes its config.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,3 +15,32 @@ updates:
       interval: monthly
     labels:
       - dependencies
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      electron:
+        patterns:
+          - electron
+      renderer-vendor:
+        patterns:
+          - dompurify
+          - marked
+          - pdfjs-dist
+          - "@fontsource/*"
+      dev-tooling:
+        dependency-type: development
+        exclude-patterns:
+          - electron
+          - dompurify
+          - marked
+          - pdfjs-dist
+          - "@fontsource/*"
+    ignore:
+      - dependency-name: "@electron-forge/*"
+        update-types:
+          - version-update:semver-major

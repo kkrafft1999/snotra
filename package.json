@@ -17,7 +17,7 @@
     "package:win": "npm run sync-vendor && electron-forge package --platform win32 --arch x64",
     "package:linux": "npm run sync-vendor && electron-forge package --platform linux --arch x64",
     "make": "npm run sync-vendor && electron-forge make --arch arm64 --platform darwin",
-    "make:linux": "npm run sync-vendor && electron-forge make --platform linux --arch x64",
+    "make:linux": "npm run sync-vendor && node scripts/fetch-appimage-runtime.js && electron-forge make --platform linux --arch x64",
     "check-package": "node scripts/check-asar-contents.js"
   },
   "config": {
@@ -40,6 +40,18 @@
       "hooks": {
         "prePackage": "node scripts/sync-renderer-vendor.js"
       },
+      "plugins": [
+        {
+          "name": "@electron-forge/plugin-fuses",
+          "config": {
+            "0": false,
+            "2": false,
+            "3": false,
+            "5": true,
+            "version": "1"
+          }
+        }
+      ],
       "makers": [
         {
           "name": "@electron-forge/maker-dmg",
@@ -98,7 +110,7 @@
               ],
               "icon": "icon.png",
               "compressor": "xz",
-              "runtime": "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64"
+              "runtime": "out/appimage-runtime/runtime-x86_64"
             }
           }
         }
@@ -114,9 +126,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.77",
-    "@fontsource/inter": "^5.2.8",
-    "dompurify": "^3.4.16",
-    "marked": "^17.0.5",
     "undici": "^7.30.0"
   },
   "devDependencies": {
@@ -124,11 +133,16 @@
     "@electron-forge/maker-deb": "^7.11.2",
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron/asar": "^3.4.1",
+    "@electron/fuses": "^1.8.0",
+    "@fontsource/inter": "^5.2.8",
     "@reforged/maker-appimage": "^5.3.1",
-    "electron": "^44.2.0",
+    "dompurify": "^3.4.16",
+    "electron": "^44.5.1",
     "esbuild": "^0.28.1",
     "happy-dom": "^20.14.5",
+    "marked": "^17.0.5",
     "pdfjs-dist": "^6.3.289",
     "playwright-core": "^1.63.0"
   },

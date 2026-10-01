@@ -1,5 +1,6 @@
-# Alle Aenderungen brauchen ein Review von @kkrafft1999.
-# Wirkt zusammen mit dem Ruleset "main geschuetzt" (Require pull request +
-# Require review from Code Owners). Der Repository-Admin bypasst das Ruleset,
-# fuer alle anderen Mitwirkenden haengt jeder Merge nach main an diesem Review.
+# Owner of everything: @kkrafft1999. GitHub requests a review from here on
+# every pull request; nothing waits for it. Since #240 the ruleset on main
+# (23177645) asks for a pull request and the three required test checks
+# instead of a review, and has no bypass, not even for the owner. See
+# .claude/rules/git-workflow.md.
 * @kkrafft1999
