@@ -90,13 +90,24 @@ export function initMemoryPanel({ api }) {
     forget.setAttribute('aria-label', t('settings.memory.forget.label', { text: entry.text }));
     forget.title = t('settings.memory.forget.title');
     forget.addEventListener('click', async () => {
-      forget.disabled = true;
-      const result = await api.forgetMemoryEntry(scope.scope, entry.line, entry.text);
+      // One forget at a time. Marked busy rather than disabled: a disabled
+      // button loses the focus to the top of the window (CR-B14-07).
+      if (forget.getAttribute('aria-disabled') === 'true') return;
+      forget.setAttribute('aria-disabled', 'true');
+      const index = scope.entries.indexOf(entry);
+      let result;
+      try {
+        result = await api.forgetMemoryEntry(scope.scope, entry.line, entry.text);
+      } catch {
+        result = null;
+      }
       if (result?.ok && result.state) {
+        const hadFocus = document.activeElement === forget;
         state = result.state;
         render();
+        if (hadFocus) focusAfterForget(scope.scope, index);
       } else {
-        forget.disabled = false;
+        forget.removeAttribute('aria-disabled');
       }
     });
     item.appendChild(forget);
@@ -106,6 +117,7 @@ export function initMemoryPanel({ api }) {
   function renderScope(scope) {
     const card = document.createElement('div');
     card.className = 'settings-tools-card memory-card';
+    card.dataset.scope = scope.scope;
 
     const head = document.createElement('div');
     head.className = 'memory-card__head';
@@ -169,6 +181,8 @@ export function initMemoryPanel({ api }) {
     } else {
       const empty = document.createElement('p');
       empty.className = 'settings-empty-hint memory-empty';
+      // Where the keyboard lands once the last entry is forgotten.
+      empty.tabIndex = -1;
       empty.textContent = scope.path
         ? t('settings.memory.empty')
         : t('settings.memory.empty.noFolder');
@@ -187,6 +201,18 @@ export function initMemoryPanel({ api }) {
     card.appendChild(meta);
 
     return card;
+  }
+
+  /**
+   * After a forget the list is drawn anew and the pressed button is gone: the
+   * keyboard moves to the entry that took its place, else the one before it,
+   * else the card's empty hint (CR-B14-07).
+   */
+  function focusAfterForget(scopeKey, index) {
+    const card = [...host.querySelectorAll('.memory-card')].find((node) => node.dataset.scope === scopeKey);
+    const buttons = card ? [...card.querySelectorAll('.memory-item__forget')] : [];
+    const target = buttons[index] || buttons[index - 1] || card?.querySelector('.memory-empty') || selfToggle;
+    target?.focus();
   }
 
   function render() {

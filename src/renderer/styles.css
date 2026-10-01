@@ -6819,7 +6819,14 @@ select.modal-input {
   color: var(--ds-warning);
 }
 
-.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title {
+.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title,
+.settings-sandbox-tile:has(.ds-switch[aria-disabled='true']) .settings-sandbox-tile__title {
+  cursor: not-allowed;
+}
+
+/* Not to be pressed, yet still focusable (CR-B14-07): looks like `:disabled`. */
+.settings-sandbox-tile .ds-switch[aria-disabled='true'] {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -7439,12 +7446,14 @@ select.modal-input {
   transition: color var(--ds-motion-fast, 120ms) ease, border-color var(--ds-motion-fast, 120ms) ease;
 }
 
-.memory-item__forget:hover:not(:disabled) {
+.memory-item__forget:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--ds-grey-muted);
   color: var(--text-primary);
 }
 
-.memory-item__forget:disabled {
+/* Busy while main forgets: marked, not disabled, so it keeps the focus (CR-B14-07). */
+.memory-item__forget:disabled,
+.memory-item__forget[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }

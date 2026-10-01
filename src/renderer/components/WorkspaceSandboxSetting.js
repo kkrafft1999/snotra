@@ -36,7 +36,11 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     card.hidden = !view.visible;
     if (rootEl) rootEl.textContent = view.rootLabel;
     if (!busy) input.checked = view.checked;
-    input.disabled = busy || !view.hasWorkspace;
+    input.disabled = !view.hasWorkspace;
+    // While main decides, the switch is marked busy rather than disabled: a
+    // disabled control loses the focus to the top of the window (CR-B14-07).
+    if (busy) input.setAttribute('aria-disabled', 'true');
+    else input.removeAttribute('aria-disabled');
     if (tile) tile.dataset.tone = view.tone;
     if (titleEl) titleEl.textContent = view.title;
     if (bodyEl) bodyEl.textContent = view.body;
@@ -47,8 +51,15 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     }
   }
 
+  // A switch that is busy takes no second press, by mouse or by Space.
+  input.addEventListener('click', (event) => {
+    if (input.getAttribute('aria-disabled') === 'true') event.preventDefault();
+  });
+
   input.addEventListener('change', async () => {
+    if (busy) return;
     const enabled = input.checked;
+    const hadFocus = document.activeElement === input;
     busy = true;
     error = '';
     status.clear();
@@ -64,6 +75,10 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     // Whatever happened, the switch shows what main holds.
     render();
     onChange();
+    // Nothing here moves the focus; should a redraw around it have dropped
+    // it, the keyboard comes back to the switch it was on.
+    const active = document.activeElement;
+    if (hadFocus && input.isConnected && (!active || active === document.body)) input.focus();
   });
 
   toolPermissions.subscribe(() => {
