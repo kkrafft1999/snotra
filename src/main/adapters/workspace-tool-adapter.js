@@ -128,6 +128,11 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
       return definition ? definition.requiresWorkspace !== false : true;
     },
+    // A stored switch-off never reaches the basic equipment (#195, #552).
+    isSwitchedOff(name, disabledNames) {
+      if (typeof toolRegistry.isSwitchedOff === 'function') return toolRegistry.isSwitchedOff(name, disabledNames);
+      return Array.isArray(disabledNames) && disabledNames.includes(name);
+    },
     // Takes `skill:<name>/…` paths, and so works without an open folder while
     // a skill is switched on (#429).
     supportsSkillPaths(name) {

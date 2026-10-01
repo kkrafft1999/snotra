@@ -428,6 +428,26 @@ test('die Grundausstattung lässt sich nicht abwählen und steht nicht im Katalo
   }
 });
 
+// #552: what the model is offered and what `execute` lets through follow the
+// same rule — before, `execute` refused an essential tool with a stale switch.
+test('a stale switch-off neither hides nor refuses an essential tool (#552)', async () => {
+  const fsService = { ...makeFsServiceStub(), runListDirectoryTool: async () => JSON.stringify({ entries: [] }) };
+  const registry = createWorkspaceToolRegistry({ fsService });
+  const disabledNames = ['list_directory', 'read_file_text'];
+
+  assert.equal(registry.isSwitchedOff('list_directory', disabledNames), false);
+  assert.equal(registry.isSwitchedOff('read_file_text', disabledNames), true);
+  assert.equal(registry.isSwitchedOff('unknown_tool', ['unknown_tool']), true);
+  const offered = registry.getTools({ disabledNames }).map((tool) => tool.function.name);
+  assert.ok(offered.includes('list_directory'));
+  assert.ok(!offered.includes('read_file_text'));
+
+  const listing = JSON.parse(await registry.execute('list_directory', {}, { ...APPROVED, disabledNames }));
+  assert.deepEqual(listing, { entries: [] });
+  const refused = JSON.parse(await registry.execute('read_file_text', { relative_path: 'a' }, { ...APPROVED, disabledNames }));
+  assert.match(refused.error, /switched off/);
+});
+
 // Grundausstattung heisst nicht ‚immer da': list_directory braucht weiterhin
 // einen Ordner, load_skill einen eingeschalteten Skill (#96/#173).
 test('die Grundausstattung hält sich weiter an Ordner und Skills (#195)', () => {
