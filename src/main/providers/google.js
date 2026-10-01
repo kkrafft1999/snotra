@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -7,10 +8,29 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 // Model-IDs kommen teils aus User-Input (Settings) und landen im API-Pfad.
 const MODEL_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
+// The key goes in a header, not in the URL: URLs end up in proxy logs and
+// error output where headers do not (#541).
+function authHeaders(apiKey) {
+  return { 'x-goog-api-key': apiKey };
+}
+
 function bareModelId(modelOrPath) {
   const s = String(modelOrPath || '').trim();
   if (s.startsWith('models/')) return s.slice('models/'.length);
   return s;
+}
+
+// Gemini's finish reasons that mean "cut off" (#538); STOP and the rest end a
+// round normally.
+const LENGTH_REASONS = new Set(['MAX_TOKENS']);
+const FILTER_REASONS = new Set([
+  'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY',
+]);
+
+function cutOffOf(finishReason) {
+  if (LENGTH_REASONS.has(finishReason)) return FINISH_REASONS.LENGTH;
+  if (FILTER_REASONS.has(finishReason)) return FINISH_REASONS.CONTENT_FILTER;
+  return null;
 }
 
 function isValidModelId(id) {
@@ -33,7 +53,7 @@ async function listModelsRequest(config) {
   if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
   let res;
   try {
-    res = await fetch(`${API_BASE}/models?key=${encodeURIComponent(apiKey)}&pageSize=200`, { signal: config.signal });
+    res = await fetch(`${API_BASE}/models?pageSize=200`, { headers: authHeaders(apiKey), signal: config.signal });
   } catch (err) {
     return { error: describeFetchErrorMessage(err, API_BASE) };
   }
@@ -102,6 +122,17 @@ function buildToolCallNameMap(messages) {
 }
 
 
+/**
+ * Turns alternate: a turn of the same role as the one before joins it. That
+ * keeps the history valid when an empty answer was left out, and gives the
+ * responses to parallel calls one turn, as the API expects them (#540).
+ */
+function pushContent(contents, role, parts) {
+  const last = contents[contents.length - 1];
+  if (last?.role === role) last.parts.push(...parts);
+  else contents.push({ role, parts });
+}
+
 function translateMessagesToGoogle(messages) {
   const toolNameById = buildToolCallNameMap(messages);
   let systemText = '';
@@ -113,7 +144,7 @@ function translateMessagesToGoogle(messages) {
       continue;
     }
     if (m.role === 'user') {
-      contents.push({ role: 'user', parts: [{ text: typeof m.content === 'string' ? m.content : '' }] });
+      pushContent(contents, 'user', [{ text: typeof m.content === 'string' ? m.content : '' }]);
       continue;
     }
     if (m.role === 'assistant') {
@@ -129,11 +160,16 @@ function translateMessagesToGoogle(messages) {
               name: tc.function.name,
               args: safeJsonParse(tc.function.arguments, {}),
             },
+            // Gemini 3 refuses the next round of a tool loop without the
+            // signature it attached to the call (#540).
+            ...(typeof tc.thoughtSignature === 'string' && tc.thoughtSignature
+              ? { thoughtSignature: tc.thoughtSignature }
+              : {}),
           });
         }
       }
-      if (parts.length === 0) parts.push({ text: '' });
-      contents.push({ role: 'model', parts });
+      // A turn stopped before its first token has nothing to say (#540).
+      if (parts.length > 0) pushContent(contents, 'model', parts);
       continue;
     }
     if (m.role === 'tool') {
@@ -142,10 +178,7 @@ function translateMessagesToGoogle(messages) {
       // immer JSON; der { result }-Fallback greift nur, falls je ein Tool
       // Plaintext zurückgibt, und verpackt ihn dann API-konform.
       const response = safeJsonParse(m.content, { result: m.content });
-      contents.push({
-        role: 'user',
-        parts: [{ functionResponse: { name, response } }],
-      });
+      pushContent(contents, 'user', [{ functionResponse: { name, response } }]);
       continue;
     }
   }
@@ -168,9 +201,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
   if (tooling) body.tools = tooling;
 
-  const url = `${API_BASE}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const url = `${API_BASE}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`;
 
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', ...authHeaders(apiKey) };
   let res;
   try {
     res = await fetch(url, {
@@ -190,7 +223,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
   const collectedToolCalls = [];
-  let finishReason = null;
+  // The last chunk of a round carries a finish reason; a stream without one
+  // was cut off on the way (#538). A prompt the API blocked has no candidate.
+  let rawFinishReason = null;
+  let promptBlocked = false;
   let usage = null;
   let malformedFunctionCall = false;
 
@@ -202,15 +238,18 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       try { payload = JSON.parse(evt.data); } catch { continue; }
       const nextUsage = normalizeUsage(payload.usageMetadata);
       if (nextUsage) usage = nextUsage;
+      if (payload.promptFeedback?.blockReason) promptBlocked = true;
       const cand = payload.candidates?.[0];
       if (!cand) continue;
       const parts = cand.content?.parts || [];
       for (const p of parts) {
-        if (typeof p.text === 'string' && p.text.length > 0) {
+        // A thought part carries its text in `text` as well, so it is checked
+        // first — otherwise the thinking would stream as the answer (#541).
+        if (p.thought === true) {
+          if (typeof p.text === 'string' && p.text) callbacks.onReasoningDelta?.(p.text);
+        } else if (typeof p.text === 'string' && p.text.length > 0) {
           textOut += p.text;
           callbacks.onTextDelta(p.text);
-        } else if (p.thought === true && typeof p.text === 'string') {
-          callbacks.onReasoningDelta(p.text);
         } else if (p.functionCall) {
           callbacks.onMarkGenerating();
           const fc = p.functionCall;
@@ -226,15 +265,17 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
               name: String(fc.name || ''),
               arguments: JSON.stringify(fc.args ?? {}),
             },
+            // Travels with the call through the tool loop and goes back on the
+            // same part (#540).
+            ...(typeof p.thoughtSignature === 'string' && p.thoughtSignature
+              ? { thoughtSignature: p.thoughtSignature }
+              : {}),
           });
         }
       }
       if (cand.finishReason) {
-        const fr = String(cand.finishReason).toUpperCase();
-        if (fr === 'STOP') finishReason = 'stop';
-        else if (fr === 'TOOL_CALLS') finishReason = 'tool_calls';
-        else if (fr === 'MALFORMED_FUNCTION_CALL') malformedFunctionCall = true;
-        else finishReason = cand.finishReason;
+        rawFinishReason = String(cand.finishReason).toUpperCase();
+        if (rawFinishReason === 'MALFORMED_FUNCTION_CALL') malformedFunctionCall = true;
       }
     }
   } catch (err) {
@@ -259,8 +300,13 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     };
   }
 
-  if (collectedToolCalls.length > 0 && !finishReason) {
-    finishReason = 'tool_calls';
+  let finishReason = FINISH_REASONS.INCOMPLETE;
+  if (promptBlocked) finishReason = FINISH_REASONS.CONTENT_FILTER;
+  else if (rawFinishReason) {
+    finishReason = finishReasonOf({
+      cutOff: cutOffOf(rawFinishReason),
+      toolCalls: collectedToolCalls.length > 0,
+    });
   }
 
   const message = {

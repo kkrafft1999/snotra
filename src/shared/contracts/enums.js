@@ -28,6 +28,8 @@ const CHAT_ERROR_CODES = Object.freeze({
   PERMISSION: 'PERMISSION',
   /** The app's own error — a tool, a port or the engine threw, not the provider (#527). */
   INTERNAL: 'INTERNAL',
+  /** The provider's round was cut off — output limit, content filter or a dropped stream (#538). */
+  INCOMPLETE: 'INCOMPLETE',
 });
 
 // Phasen der laufenden Antwort (chat:progress, type='phase').

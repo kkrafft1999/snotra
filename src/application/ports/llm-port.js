@@ -21,7 +21,9 @@
 /**
  * @typedef {Object} LlmRoundResult
  * @property {{ role: 'assistant', content: string|null, tool_calls?: Array }} [message]
- * @property {string} [finishReason]
+ * @property {'stop'|'tool_calls'|'length'|'content_filter'|'incomplete'} [finishReason]
+ *   How the round ended, from `shared/contracts/finish-reason.js` (#538). The last three
+ *   mean "cut off": the text is partial and the tool calls must not run.
  * @property {{ prompt: number, completion: number, total: number }|null} [usage]
  * @property {boolean} [cancelled]
  * @property {string} [error]

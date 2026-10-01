@@ -299,3 +299,16 @@ test('streamChatRound ignores malformed JSON data lines', async (t) => {
   });
   assert.equal(res.message.content, 'ok');
 });
+
+test('an assistant turn stopped before its first token is left out (#540)', () => {
+  const { messages } = anthropic.translateMessagesToAnthropic([
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: '' },
+    { role: 'user', content: 'again' },
+  ]);
+  assert.deepEqual(messages, [
+    { role: 'user', content: 'q' },
+    { role: 'user', content: 'again' },
+  ]);
+  assert.equal(JSON.stringify(messages).includes('"text":""'), false, 'no empty text block');
+});

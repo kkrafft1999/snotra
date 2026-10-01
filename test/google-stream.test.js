@@ -72,3 +72,100 @@ test('google streamChatRound maps function calls to tool_calls', async () => {
   assert.equal(result.message.tool_calls.length, 1);
   assert.equal(result.message.tool_calls[0].function.name, 'list_directory');
 });
+
+// #540: empty answers and Gemini's thought signatures.
+const { sseResponse: helperSse, mockFetch, collectCallbacks } = require('./helpers/sse');
+
+test('an empty assistant turn is left out and the turns still alternate (#540)', () => {
+  const { contents } = google.translateMessagesToGoogle([
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: '' },
+    { role: 'user', content: 'again' },
+  ]);
+  assert.deepEqual(contents, [{ role: 'user', parts: [{ text: 'q' }, { text: 'again' }] }]);
+});
+
+test('the responses to parallel calls share one turn (#540)', () => {
+  const { contents } = google.translateMessagesToGoogle([
+    { role: 'user', content: 'q' },
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        { id: 'a', type: 'function', function: { name: 'one', arguments: '{}' } },
+        { id: 'b', type: 'function', function: { name: 'two', arguments: '{}' } },
+      ],
+    },
+    { role: 'tool', tool_call_id: 'a', content: '{"ok":1}' },
+    { role: 'tool', tool_call_id: 'b', content: '{"ok":2}' },
+  ]);
+  assert.deepEqual(contents.map((c) => c.role), ['user', 'model', 'user']);
+  assert.deepEqual(contents[2].parts.map((p) => p.functionResponse.name), ['one', 'two']);
+});
+
+test('a thought signature survives stream → history → request (#540)', async (t) => {
+  const calls = mockFetch(t, () => helperSse([
+    `data: ${JSON.stringify({
+      candidates: [{
+        content: { parts: [{ functionCall: { name: 'list_directory', args: { relative_path: '.' } }, thoughtSignature: 'sig-123' }] },
+        finishReason: 'STOP',
+      }],
+    })}\n\n`,
+  ]));
+  const first = await google.streamChatRound({
+    config: { apiKey: 'k' },
+    model: 'gemini-3-pro-preview',
+    messages: [{ role: 'user', content: 'list' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(first.message.tool_calls[0].thoughtSignature, 'sig-123');
+
+  await google.streamChatRound({
+    config: { apiKey: 'k' },
+    model: 'gemini-3-pro-preview',
+    messages: [
+      { role: 'user', content: 'list' },
+      first.message,
+      { role: 'tool', tool_call_id: first.message.tool_calls[0].id, content: '{"entries":[]}' },
+    ],
+    callbacks: collectCallbacks().callbacks,
+  });
+  const body = JSON.parse(calls[1].options.body);
+  assert.deepEqual(body.contents[1].parts[0], {
+    functionCall: { name: 'list_directory', args: { relative_path: '.' } },
+    thoughtSignature: 'sig-123',
+  });
+});
+
+test('the key travels as a header, never in a URL (#541)', async (t) => {
+  const calls = mockFetch(t, (url) => (url.includes('/models?')
+    ? { ok: true, json: async () => ({ models: [] }) }
+    : helperSse([`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }] })}\n\n`])));
+  await google.listModels({ apiKey: 'AIza-secret' });
+  await google.streamChatRound({
+    config: { apiKey: 'AIza-secret' },
+    model: 'gemini-2.5-flash',
+    messages: [{ role: 'user', content: 'hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(call.url.includes('AIza-secret'), false, call.url);
+    assert.equal(call.options.headers['x-goog-api-key'], 'AIza-secret');
+  }
+});
+
+test('a thought part is thinking, not answer text (#541)', async (t) => {
+  mockFetch(t, () => helperSse([
+    `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Let me think', thought: true }, { text: 'Answer' }] }, finishReason: 'STOP' }] })}\n\n`,
+  ]));
+  const sink = collectCallbacks();
+  const res = await google.streamChatRound({
+    config: { apiKey: 'k' },
+    model: 'gemini-2.5-flash',
+    messages: [{ role: 'user', content: 'q' }],
+    callbacks: sink.callbacks,
+  });
+  assert.equal(res.message.content, 'Answer');
+  assert.deepEqual(sink.reasoningDeltas, ['Let me think']);
+});

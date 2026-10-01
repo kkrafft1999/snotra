@@ -1848,3 +1848,41 @@ test('the history window starts with a user message after the trim, too (#532)',
   assert.deepEqual(calls[0].messages.map((m) => m.role), ['user']);
   assert.equal(calls[0].messages[0].content, 'q');
 });
+
+// #538: a round that was cut off keeps its text, says why, and runs none of
+// its tool calls.
+test('a cut-off round runs no tool call and keeps its text (#538)', async () => {
+  const executed = [];
+  const tools = makeToolPort((name) => {
+    executed.push(name);
+    return { content: '{}' };
+  });
+  const cutOffCall = {
+    ...assistantToolCall('c1', 'list_directory', { relative_path: '.' }),
+    finishReason: 'length',
+  };
+  const { engine, calls } = makeEngine([cutOffCall, assistantText('never')], { tools });
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-538' },
+  });
+  assert.equal(result.code, 'INCOMPLETE');
+  assert.equal(result.partial, true);
+  assert.deepEqual(executed, [], 'the cut-off call must not run');
+  assert.equal(calls.length, 1, 'no further round');
+  assert.match(errorText(result, 'en'), /writing a tool call, so the call did not run/);
+
+  const reasons = [
+    ['length', /output limit/],
+    ['content_filter', /content filter/],
+    ['incomplete', /connection ended/],
+  ];
+  for (const [finishReason, sentence] of reasons) {
+    const { engine: textEngine } = makeEngine([assistantText('Half an ans', { finishReason })]);
+    const res = await textEngine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+    assert.equal(res.code, 'INCOMPLETE', finishReason);
+    assert.equal(res.partial, true, finishReason);
+    assert.match(errorText(res, 'en'), sentence, finishReason);
+    assert.ok(errorText(res, 'de').length > 0, `${finishReason}: German sentence`);
+  }
+});

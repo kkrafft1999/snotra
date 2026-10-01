@@ -173,9 +173,22 @@ function parseExtraHeaders(raw) {
     if (PROTECTED_HEADERS.has(name.toLowerCase())) continue;
     // Steuerzeichen würden die Anfrage aufspalten (Header-Injection).
     if (CONTROL_CHARS_PATTERN.test(value)) continue;
-    out[name] = value;
+    setHeader(out, name, value);
   }
   return out;
+}
+
+/**
+ * Sets a header, replacing one of the same name in any spelling. Header names
+ * are case-insensitive; two keys that differ only in case would go out joined
+ * (`Bearer sk-…, Basic …`) instead of one replacing the other (#541).
+ */
+function setHeader(headers, name, value) {
+  const lower = name.toLowerCase();
+  for (const existing of Object.keys(headers)) {
+    if (existing.toLowerCase() === lower) delete headers[existing];
+  }
+  headers[name] = value;
 }
 
 /**
@@ -188,7 +201,10 @@ function buildHeaders(config, { json = true } = {}) {
   const headers = json ? { 'Content-Type': 'application/json' } : {};
   const apiKey = typeof config?.apiKey === 'string' ? config.apiKey.trim() : '';
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  return { ...headers, ...parseExtraHeaders(config?.extraHeaders) };
+  for (const [name, value] of Object.entries(parseExtraHeaders(config?.extraHeaders))) {
+    setHeader(headers, name, value);
+  }
+  return headers;
 }
 
 // --- Modellliste -----------------------------------------------------------

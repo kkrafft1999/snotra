@@ -21,6 +21,9 @@ function describeFetchError(err, baseUrl) {
  * key. Without `baseUrl` the sentence names the provider instead of an address.
  */
 function describeFetchErrorMessage(err, baseUrl) {
+  // A failure Snotra describes itself — a stream over its limit, say (#539)
+  // — travels as a key in `userMessage`.
+  if (err?.userMessage) return err.userMessage;
   const cause = fetchErrorCause(err);
   const main = err?.message || (baseUrl
     ? createMessage('provider.error.connectionFailed', { url: baseUrl })

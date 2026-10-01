@@ -9,6 +9,7 @@
 
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const {
   iterSseEvents,
   describeFetchErrorMessage,
@@ -154,7 +155,10 @@ async function streamResponsesRound({
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   const fullContentRef = { v: '' };
   const toolCalls = [];
-  let finishReason = null;
+  // A round ends with `response.completed` or `response.incomplete`; a stream
+  // that stops before either was cut off on the way (#538).
+  let ended = false;
+  let cutOff = null;
   let streamError = null;
   let usage = null;
 
@@ -167,7 +171,8 @@ async function streamResponsesRound({
       let json;
       try { json = JSON.parse(data); } catch { continue; }
 
-      if (ev === 'response.output_text.delta') {
+      // A refusal is the answer the user gets to read, not an empty bubble (#538).
+      if (ev === 'response.output_text.delta' || ev === 'response.refusal.delta') {
         const delta = typeof json.delta === 'string' ? json.delta : '';
         if (delta) {
           fullContentRef.v += delta;
@@ -183,7 +188,7 @@ async function streamResponsesRound({
         || ev === 'response.reasoning.delta'
       ) {
         const delta = typeof json.delta === 'string' ? json.delta : '';
-        if (delta) callbacks.onReasoningDelta(delta);
+        if (delta) callbacks.onReasoningDelta?.(delta);
         continue;
       }
 
@@ -217,9 +222,19 @@ async function streamResponsesRound({
         continue;
       }
 
-      if (ev === 'response.completed') {
-        finishReason = toolCalls.length ? 'tool_calls' : 'stop';
+      if (ev === 'response.completed' || ev === 'response.incomplete') {
+        ended = true;
+        if (ev === 'response.incomplete') {
+          cutOff = json.response?.incomplete_details?.reason === 'content_filter'
+            ? FINISH_REASONS.CONTENT_FILTER
+            : FINISH_REASONS.LENGTH;
+        }
         usage = normalizeUsage(json.response?.usage);
+        continue;
+      }
+
+      if (ev === 'response.failed') {
+        streamError = json.response?.error?.message || createMessage('provider.error.streamFailed');
         continue;
       }
 
@@ -256,6 +271,9 @@ async function streamResponsesRound({
     content: fullContent.length > 0 ? fullContent : toolCalls.length ? null : '',
     ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
   };
+  const finishReason = ended
+    ? finishReasonOf({ cutOff, toolCalls: toolCalls.length > 0 })
+    : FINISH_REASONS.INCOMPLETE;
   return { message, finishReason, usage };
 }
 

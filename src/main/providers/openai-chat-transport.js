@@ -11,6 +11,7 @@
 
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const {
   iterSseEvents,
   describeFetchErrorMessage,
@@ -92,17 +93,20 @@ function translateToolsToChatCompletions(tools) {
   return out.length ? out : undefined;
 }
 
+// Tool calls by the index the server gives them. A Map, not an array: the
+// index comes from the stream, and `toolCalls[2e9] = …` would make a sparse
+// array that every later walk crawls through for half a minute (#539).
 function applyToolCallDelta(toolCalls, deltaToolCall, callIdPrefix) {
-  const index = Number.isInteger(deltaToolCall?.index) ? deltaToolCall.index : toolCalls.length;
-  if (!toolCalls[index]) {
-    toolCalls[index] = {
+  const index = Number.isInteger(deltaToolCall?.index) ? deltaToolCall.index : toolCalls.size;
+  if (!toolCalls.has(index)) {
+    toolCalls.set(index, {
       id: deltaToolCall?.id || `${callIdPrefix}${index}_${Date.now().toString(36)}`,
       type: 'function',
       function: { name: '', arguments: '' },
-    };
+    });
   }
 
-  const target = toolCalls[index];
+  const target = toolCalls.get(index);
   if (deltaToolCall.id) target.id = deltaToolCall.id;
   if (deltaToolCall.type) target.type = deltaToolCall.type;
   if (deltaToolCall.function?.name) target.function.name += deltaToolCall.function.name;
@@ -123,8 +127,18 @@ function announceToolCallDelta(callbacks, announced, { index, target, argumentsD
   notifyToolCallArgumentsDelta(callbacks, { index, delta: argumentsDelta });
 }
 
+/** Chat Completions' own stop reasons that mean "cut off" (#538). */
+function cutOffOf(finishReason) {
+  if (finishReason === 'length') return FINISH_REASONS.LENGTH;
+  if (finishReason === 'content_filter') return FINISH_REASONS.CONTENT_FILTER;
+  return null;
+}
+
 function assistantMessageOf(content, toolCalls) {
-  const complete = toolCalls.filter((tc) => tc?.function?.name);
+  const complete = [...toolCalls.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, tc]) => tc)
+    .filter((tc) => tc?.function?.name);
   return {
     role: 'assistant',
     content: content.length > 0 ? content : complete.length ? null : '',
@@ -214,9 +228,12 @@ async function streamChatCompletionsRound({
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let content = '';
-  const toolCalls = [];
+  const toolCalls = new Map();
   const announcedToolCalls = new Set();
   let finishReason = null;
+  // `[DONE]` or a `finish_reason` closes a round; without either the stream
+  // was cut off on the way (#538).
+  let sawDone = false;
   let streamError = null;
   let usage = null;
 
@@ -224,6 +241,7 @@ async function streamChatCompletionsRound({
     for await (const evt of iterSseEvents(reader, abortSignal)) {
       abortIfRequested(abortSignal);
       const data = evt.data;
+      if (data === '[DONE]') sawDone = true;
       if (!data || data === '[DONE]') continue;
       let json;
       try { json = JSON.parse(data); } catch { continue; }
@@ -243,6 +261,11 @@ async function streamChatCompletionsRound({
       if (typeof delta.content === 'string' && delta.content.length > 0) {
         content += delta.content;
         callbacks.onTextDelta(delta.content);
+      }
+      // A refusal is the answer the user gets to read, not an empty bubble (#538).
+      if (typeof delta.refusal === 'string' && delta.refusal.length > 0) {
+        content += delta.refusal;
+        callbacks.onTextDelta(delta.refusal);
       }
 
       // Manche Server (vLLM, llama.cpp mit Reasoning-Modellen) streamen das
@@ -283,7 +306,9 @@ async function streamChatCompletionsRound({
   const message = assistantMessageOf(content, toolCalls);
   return {
     message,
-    finishReason: message.tool_calls ? 'tool_calls' : (finishReason || 'stop'),
+    finishReason: finishReason || sawDone
+      ? finishReasonOf({ cutOff: cutOffOf(finishReason), toolCalls: !!message.tool_calls })
+      : FINISH_REASONS.INCOMPLETE,
     usage,
   };
 }

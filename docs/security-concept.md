@@ -277,7 +277,11 @@ stored with the history in the encrypted store.
   dialog come from main's own check, not from the IPC message. Binding approval
   answers to the `requestId`, the plan and the file version (section 6) protects
   against stale cards, double clicks, race conditions and programming errors; it
-  alone does not protect against a fully compromised renderer. Local processes
+  alone does not protect against a fully compromised renderer. Stored secrets
+  follow the same rule: main sends an API key or extra headers only to the
+  endpoint they were stored with. A model listing for a URL the renderer names
+  gets only the credentials the request itself carries, and a provider without
+  a URL field ignores a requested one (#537). Local processes
   running with the user's rights are outside the protection goal; they could
   modify the app itself.
 
