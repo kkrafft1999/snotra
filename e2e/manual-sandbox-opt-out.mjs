@@ -161,7 +161,7 @@ try {
     { what: 'sandbox card', timeoutMs: 30_000 });
   await page.evaluate(() => document.getElementById('settings-sandbox-card').scrollIntoView({ block: 'center' }));
   await pause();
-  await page.locator('#settings-sandbox-card').screenshot({ path: shot('switch-on') });
+  await themed('switch-on', (file) => page.locator('#settings-sandbox-card').screenshot({ path: file }));
   console.log('isolation line (on):', await page.evaluate(() => document.getElementById('settings-shell-sandbox').textContent));
   await closeSettings();
   // With the sandbox working, "Auto" stays blue.
@@ -179,11 +179,10 @@ try {
 
   // … and off, through the native dialog.
   await page.evaluate(() => document.getElementById('input-workspace-sandbox').click());
-  // Off is a warning, not an error (#396).
-  await poll(() => page.evaluate(() => {
-    const el = document.getElementById('settings-sandbox-state');
-    return !el.hidden && el.classList.contains('warning') && !el.classList.contains('error') ? el.textContent : null;
-  }), { what: 'switched-off state' });
+  // Off is a warning, not an error (#396): the tile turns amber (#543).
+  await poll(() => page.evaluate(() =>
+    document.getElementById('settings-sandbox-tile').dataset.tone === 'off'
+      && document.getElementById('settings-sandbox-state').hidden), { what: 'switched-off tile' });
   const dialog = await app.evaluate(() => globalThis.__dialogs.at(-1));
   console.log('dialog:', JSON.stringify({ message: dialog.message, detail: dialog.detail, buttons: dialog.buttons }));
   await page.evaluate(() => {
@@ -198,7 +197,10 @@ try {
     const el = document.getElementById('settings-shell-sandbox');
     return `${el.textContent} [${el.className}]`;
   }));
-  console.log('switch state:', await page.evaluate(() => document.getElementById('settings-sandbox-state').textContent));
+  console.log('switch state:', await page.evaluate(() => {
+    const tile = document.getElementById('settings-sandbox-tile');
+    return `${tile.dataset.tone}: ${tile.innerText.replace(/\s+/g, ' ').trim()}`;
+  }));
   await closeSettings();
 
   // The shield follows the switch, in any mode.

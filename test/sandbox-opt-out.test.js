@@ -306,7 +306,7 @@ test('settings: the isolation line of each tool names the switched-off workspace
   assert.equal(describeSandboxStatus({ isolated: true }, false, { workspaceDisabled: true }), null);
 });
 
-test('settings: the workspace switch — shown with tools off, hidden on Windows, no folder, on, off', async () => {
+test('settings: the workspace switch — shown with tools off, hidden on Windows, no folder, on, off, unavailable', async () => {
   const { describeWorkspaceSandbox } = await loadRenderer('sandbox-status-view.js');
   const sandbox = { isolated: true, status: 'isolated' };
   const autoLabel = 'Auto';
@@ -319,19 +319,39 @@ test('settings: the workspace switch — shown with tools off, hidden on Windows
 
   const none = describeWorkspaceSandbox({ permissions: { workspaceRoot: null }, toolsOn: true, sandbox, autoLabel });
   assert.deepEqual(
-    { visible: none.visible, hasWorkspace: none.hasWorkspace, checked: none.checked, stateIsWarning: none.stateIsWarning },
-    { visible: true, hasWorkspace: false, checked: true, stateIsWarning: false },
+    { visible: none.visible, hasWorkspace: none.hasWorkspace, checked: none.checked, tone: none.tone },
+    { visible: true, hasWorkspace: false, checked: true, tone: 'neutral' },
   );
-  assert.equal(none.stateText, 'Open a folder to decide for it.');
+  assert.equal(none.body, 'Open a folder to decide for it.');
 
+  // The tile names the state (#543).
   const on = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: false }, toolsOn: true, sandbox, autoLabel });
   assert.equal(on.checked, true);
   assert.equal(on.rootLabel, WORKSPACE);
-  assert.equal(on.stateText, '');
+  assert.equal(on.tone, 'on');
+  assert.equal(on.title, 'Sandbox active');
+  assert.match(on.body, /^Commands run isolated:/);
 
   const off = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox, autoLabel });
   assert.equal(off.checked, false);
-  assert.equal(off.stateIsWarning, true);
-  assert.match(off.stateText, /^Off in this workspace: every run has your full rights\./);
-  assert.match(off.stateText, /in “Auto” mode it runs without asking/);
+  assert.equal(off.tone, 'off');
+  assert.equal(off.title, 'Sandbox off');
+  assert.match(off.body, /^Every run has your full rights:/);
+  assert.match(off.body, /in “Auto” mode it runs without asking/);
+
+  // Switched on, but the system cannot isolate: never "active".
+  const broken = { isolated: false, status: 'unavailable', reason: 'dependencies', missing: ['bubblewrap'] };
+  const unavailable = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: broken, autoLabel });
+  assert.equal(unavailable.checked, true);
+  assert.equal(unavailable.tone, 'unavailable');
+  assert.equal(unavailable.title, 'Sandbox unavailable');
+  assert.match(unavailable.body, /needs the packages bubblewrap/);
+  // The user's own choice still outranks it.
+  assert.equal(describeWorkspaceSandbox({
+    permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox: broken, autoLabel,
+  }).tone, 'off');
+  // Not checked yet, or no tool asked: the switch decides.
+  for (const pending of [null, { isolated: false, status: 'unknown' }, { isolated: false, status: 'testing' }]) {
+    assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: pending, autoLabel }).tone, 'on');
+  }
 });

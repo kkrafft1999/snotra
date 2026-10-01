@@ -584,12 +584,20 @@
                   </p>
                 </div>
               </details>
-              <div class="settings-switch-row settings-exec-toggle">
-                <label for="input-workspace-sandbox" class="settings-switch-row__label" data-i18n="settings.sandbox.workspace.toggle">Run isolated</label>
+              <!-- The state at a glance (#543): shield, title and text say it, not the colour alone. -->
+              <div class="settings-sandbox-tile" id="settings-sandbox-tile" data-tone="on">
+                <svg class="settings-sandbox-tile__shield" width="28" height="28" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
+                  <path class="settings-sandbox-tile__slash" d="M1.8 1.8 14.2 14.2"/>
+                </svg>
+                <div class="settings-sandbox-tile__text">
+                  <label for="input-workspace-sandbox" class="settings-sandbox-tile__title" id="settings-sandbox-tile-title">Sandbox active</label>
+                  <p class="settings-sandbox-tile__body" id="settings-sandbox-tile-body"></p>
+                </div>
                 <span id="status-workspace-sandbox" class="settings-instant-status" role="status"></span>
-                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" aria-describedby="settings-sandbox-state" checked>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" data-i18n-attr="aria-label:settings.sandbox.workspace.toggle" aria-label="Sandbox" aria-describedby="settings-sandbox-tile-body settings-sandbox-state" checked>
               </div>
-              <p id="settings-sandbox-state" class="modal-hint" role="status" hidden></p>
+              <p id="settings-sandbox-state" class="modal-hint error" role="status" hidden></p>
             </div>
             <div class="settings-security-slot" id="settings-allowances-card">
               <h4 class="settings-security-subhead" id="heading-program-allowances" data-i18n="settings.allowances.heading">Program allowances</h4>

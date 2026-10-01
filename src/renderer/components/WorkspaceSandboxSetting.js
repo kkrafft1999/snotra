@@ -16,6 +16,9 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
   const card = document.getElementById('settings-sandbox-card');
   const input = document.getElementById('input-workspace-sandbox');
   const rootEl = document.getElementById('settings-sandbox-workspace-name');
+  const tile = document.getElementById('settings-sandbox-tile');
+  const titleEl = document.getElementById('settings-sandbox-tile-title');
+  const bodyEl = document.getElementById('settings-sandbox-tile-body');
   const stateEl = document.getElementById('settings-sandbox-state');
   const status = createInstantStatus(document.getElementById('status-workspace-sandbox'));
   if (!card || !input || !toolPermissions) {
@@ -34,13 +37,13 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     if (rootEl) rootEl.textContent = view.rootLabel;
     if (!busy) input.checked = view.checked;
     input.disabled = busy || !view.hasWorkspace;
-    const text = error || view.stateText;
+    if (tile) tile.dataset.tone = view.tone;
+    if (titleEl) titleEl.textContent = view.title;
+    if (bodyEl) bodyEl.textContent = view.body;
+    // The tile carries the state (#543); the line below it only a failed save.
     if (stateEl) {
-      stateEl.hidden = !text;
-      stateEl.textContent = text;
-      // A failed switch is an error; the switch being off is a warning (#396).
-      stateEl.classList.toggle('error', !!error);
-      stateEl.classList.toggle('warning', !error && view.stateIsWarning);
+      stateEl.hidden = !error;
+      stateEl.textContent = error;
     }
   }
 
