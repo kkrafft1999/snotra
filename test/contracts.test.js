@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const contracts = require('../src/shared/contracts');
 const {
-  CONTRACT_VERSION,
   CHAT_ERROR_CODES,
   CHAT_PHASES,
   TOOL_LINE_PHASES,
@@ -23,11 +22,6 @@ const {
   isChatPhase,
   isToolLinePhase,
 } = contracts;
-
-test('CONTRACT_VERSION is a positive integer', () => {
-  assert.equal(Number.isInteger(CONTRACT_VERSION), true);
-  assert.ok(CONTRACT_VERSION >= 1);
-});
 
 test('enums are frozen and carry the wire values used at the IPC boundary', () => {
   assert.equal(Object.isFrozen(CHAT_ERROR_CODES), true);

@@ -281,6 +281,20 @@ test('run bricht bei AbortSignal ab — „Stop" im Chat beendet auch das Skript
   assert.equal(result.timedOut, false);
 });
 
+test('disposeSync ends a running script when the app quits (#506)', async (t) => {
+  const service = await ready();
+  if (!service) return t.skip('Kein Python 3 auf diesem Rechner.');
+
+  const started = Date.now();
+  const pending = service.run({ code: 'import time\ntime.sleep(30)', timeoutMs: 60_000 });
+  setTimeout(() => service.disposeSync(), 400);
+  const result = await pending;
+
+  assert.equal(result.aborted, true);
+  assert.equal(result.timedOut, false);
+  assert.ok(Date.now() - started < 10_000, 'must not run until its own timeout');
+});
+
 test('run läuft gar nicht erst, wenn schon vorher abgebrochen wurde', async (t) => {
   const service = await ready();
   if (!service) return t.skip('Kein Python 3 auf diesem Rechner.');

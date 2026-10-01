@@ -10,6 +10,9 @@
 
 const { isMessage } = require('./message');
 
+// Stamped on every approval request; the renderer draws no card for another
+// value (`isToolApprovalRequestDto`). Raise it when a card of the old shape
+// must not be drawn any more.
 const TOOL_PERMISSIONS_CONTRACT_VERSION = 1;
 
 /** Risikoklassen eines Tool-Aufrufs (Konzept §2). */

@@ -14,6 +14,17 @@ let mainWindow = null;
 // sonst dutzendfach pro Sekunde eine Datei auf die Platte.
 const STATE_SAVE_DELAY_MS = 500;
 
+// The window is shown once the page has painted (#509), so the theme is in
+// place before anyone sees it. Should that signal never come — a renderer
+// that dies on the way — it is shown anyway rather than staying invisible.
+const SHOW_FALLBACK_MS = 3000;
+
+// What shows behind the page while it lags behind a resize: `--ds-surface` of
+// the light theme (tokens.css), not pure white, which is no surface there.
+// The main process does not know the theme — it lives in the renderer's
+// localStorage — so the dark one shows its own colour only once painted.
+const WINDOW_BACKGROUND = '#FFFCF5';
+
 function windowStateStore() {
   return createWindowStateStore({
     filePath: path.join(app.getPath('userData'), 'window-state.json'),
@@ -70,10 +81,22 @@ function createWindow() {
       sandbox: true,
     },
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#ffffff',
+    backgroundColor: WINDOW_BACKGROUND,
+    show: false,
   });
 
-  if (maximized && !fullScreen) window.maximize();
+  let shown = false;
+  const showWhenPainted = () => {
+    if (shown || window.isDestroyed()) return;
+    shown = true;
+    clearTimeout(showFallback);
+    // Before show: maximize() would show the window itself on Windows.
+    if (maximized && !fullScreen) window.maximize();
+    window.show();
+    if (fullScreen && !window.isFullScreen()) window.setFullScreen(true);
+  };
+  const showFallback = setTimeout(showWhenPainted, SHOW_FALLBACK_MS);
+  window.once('ready-to-show', showWhenPainted);
 
   // Ohne das setzt das <title> des Renderers den Fenstertitel sofort wieder
   // auf "Snotra AI" zurueck und die Version waere nur einen Wimpernschlag
@@ -107,6 +130,7 @@ function createWindow() {
 
   mainWindow = window;
   window.on('closed', () => {
+    clearTimeout(showFallback);
     if (saveTimer !== null) {
       clearTimeout(saveTimer);
       saveTimer = null;

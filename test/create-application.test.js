@@ -114,31 +114,7 @@ test('createApplication registers IPC handlers and disposes provider runtime', a
   assert.equal(disposed.called, true);
 });
 
-test('runUpdateCheck silent mode suppresses push when no update is available', async (t) => {
-  const sent = [];
-  const build = await makeApplication(t, {
-    getMainWindow: () => ({
-      isDestroyed: () => false,
-      webContents: {
-        send: (channel, payload) => sent.push({ channel, payload }),
-      },
-    }),
-    updates: {
-      getCurrentVersion: () => '1.0.0',
-      checkForUpdate: async () => ({
-        updateAvailable: false,
-        currentVersion: '1.0.0',
-        latestVersion: '1.0.0',
-      }),
-      ignoreVersion: async () => ({ ok: true }),
-    },
-  })();
-  const { app } = build;
-
-  await app.runUpdateCheck({ silent: true });
-  assert.equal(sent.length, 0);
-});
-
+// The flow itself is tested in update-check.test.js; this checks the wiring.
 test('runUpdateCheck silent mode pushes when an update is available', async (t) => {
   const sent = [];
   const build = await makeApplication(t, {
@@ -166,95 +142,6 @@ test('runUpdateCheck silent mode pushes when an update is available', async (t) 
   assert.equal(sent[0].channel, PUSH.UPDATE_AVAILABLE);
   assert.equal(sent[0].payload.manual, false);
   assert.equal(sent[0].payload.updateAvailable, true);
-});
-
-test('runUpdateCheck manual mode always pushes even when up to date', async (t) => {
-  const sent = [];
-  const build = await makeApplication(t, {
-    getMainWindow: () => ({
-      isDestroyed: () => false,
-      webContents: {
-        send: (channel, payload) => sent.push({ channel, payload }),
-      },
-    }),
-    updates: {
-      getCurrentVersion: () => '1.0.0',
-      checkForUpdate: async () => ({
-        updateAvailable: false,
-        currentVersion: '1.0.0',
-        latestVersion: '1.0.0',
-      }),
-      ignoreVersion: async () => ({ ok: true }),
-    },
-  })();
-  const { app } = build;
-
-  await app.runUpdateCheck({ silent: false });
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].channel, PUSH.UPDATE_AVAILABLE);
-  assert.equal(sent[0].payload.manual, true);
-  assert.equal(sent[0].payload.updateAvailable, false);
-});
-
-function makeCountingUpdates() {
-  const calls = [];
-  return {
-    calls,
-    updates: {
-      getCurrentVersion: () => '1.0.0',
-      checkForUpdate: async (options) => {
-        calls.push(options);
-        return { updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0' };
-      },
-      ignoreVersion: async () => ({ ok: true }),
-    },
-  };
-}
-
-test('SNOTRA_NO_UPDATE_CHECK=1 skips the silent start-up check (#407)', async (t) => {
-  const sent = [];
-  const { calls, updates } = makeCountingUpdates();
-  const { app } = await makeApplication(t, {
-    getMainWindow: () => ({
-      isDestroyed: () => false,
-      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
-    }),
-    updates,
-    env: { SNOTRA_NO_UPDATE_CHECK: '1' },
-  })();
-
-  await app.runUpdateCheck({ silent: true });
-  assert.equal(calls.length, 0, 'no request to the update service');
-  assert.equal(sent.length, 0);
-});
-
-test('SNOTRA_NO_UPDATE_CHECK=1 still answers a check the user asked for', async (t) => {
-  const sent = [];
-  const { calls, updates } = makeCountingUpdates();
-  const { app } = await makeApplication(t, {
-    getMainWindow: () => ({
-      isDestroyed: () => false,
-      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
-    }),
-    updates,
-    env: { SNOTRA_NO_UPDATE_CHECK: '1' },
-  })();
-
-  await app.runUpdateCheck({ silent: false });
-  assert.equal(calls.length, 1);
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].payload.manual, true);
-});
-
-test('other values of SNOTRA_NO_UPDATE_CHECK leave the start-up check on', async (t) => {
-  const { calls, updates } = makeCountingUpdates();
-  const { app } = await makeApplication(t, {
-    updates,
-    env: { SNOTRA_NO_UPDATE_CHECK: 'true' },
-  })();
-
-  await app.runUpdateCheck({ silent: true });
-  assert.equal(calls.length, 1);
 });
 
 test('createApplication wires the skill catalog channels', async (t) => {
@@ -309,37 +196,4 @@ test('createApplication findet System-Skills unter app.getAppPath()/system-skill
     catalog.skills.map((skill) => [skill.name, skill.source, skill.status]),
     [['demo-system-skill', 'system', 'active']]
   );
-});
-
-// #442: a failed swap is read once on the silent start check and travels with
-// the update it concerns; the ignored version must not hide it.
-test('runUpdateCheck reports a failed install from the last quit on the silent check', async (t) => {
-  const sent = [];
-  const checks = [];
-  let takes = 0;
-  const failure = { version: '2.0.0', error: 'in use', logFile: '/tmp/update-install.log' };
-  const build = await makeApplication(t, {
-    getMainWindow: () => ({
-      isDestroyed: () => false,
-      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
-    }),
-    updates: {
-      getCurrentVersion: () => '1.0.0',
-      checkForUpdate: async (options) => {
-        checks.push(options);
-        return { updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0' };
-      },
-      takeInstallFailure: async () => { takes += 1; return takes === 1 ? failure : null; },
-      ignoreVersion: async () => ({ ok: true }),
-    },
-  })();
-  const { app } = build;
-
-  await app.runUpdateCheck({ silent: true });
-  assert.deepEqual(checks[0], { respectIgnored: false });
-  assert.deepEqual(sent[0].payload.lastInstallFailure, failure);
-
-  await app.runUpdateCheck({ silent: false });
-  assert.equal(takes, 1, 'a manual check leaves the record alone');
-  assert.equal(sent[1].payload.lastInstallFailure, null);
 });

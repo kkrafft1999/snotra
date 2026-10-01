@@ -29,7 +29,7 @@ implementations nor the file system.
 
 | Layer | Path | Role |
 | ------- | ---- | ----- |
-| **Contracts** | `src/shared/contracts/` | Versioned DTOs, events, enums, validators for the IPC boundary and persistence |
+| **Contracts** | `src/shared/contracts/` | DTOs, events, enums, validators for the IPC boundary and persistence |
 | **Presentation (shared)** | `src/shared/presentation/` | Domain-adjacent display helpers for main adapters and tests (e.g. tool lines); not imported by the core |
 | **Application** | `src/application/chat/`, `src/application/ports/` | Chat orchestration, tool loop, history trimming — only through injected ports |
 | **Main adapters** | `src/main/adapters/` | Concrete port implementations (LLM, tools, storage, FS, speech, updates, …) |
@@ -150,10 +150,11 @@ existing imports stay stable.
   `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns
   the display form without secrets and is what handlers and renderer reach;
   `createMcpSecretsPort` decrypts and exists only for the service that starts
-  the processes. MCP secrets additionally feed into `readOwnSecrets` — an MCP
-  server could otherwise return its own token via a tool result — and are masked
-  out of error messages and stderr excerpts (`redactOwnSecrets`) before a status
-  leaves the main process.
+  the processes. MCP secrets additionally feed into `readOwnSecrets`
+  (`main/services/own-secrets.js`) — an MCP server could otherwise return its
+  own token via a tool result — and are masked out of error messages and stderr
+  excerpts (`main/services/mcp-status-masking.js`) before a status leaves the
+  main process.
 - `shell-execution-port` — running a command in the operating system's shell
   (issue #102); shell detection (POSIX as a login shell, so that the PATH from
   the user profile applies), time limit and process-tree kill live in
@@ -571,10 +572,33 @@ Electron bootstrap:
    preferences adapters → `createChatEngine`)
 4. Registers IPC handlers with injected dependencies
 
-Before `createApplication()`, `src/main/index.js` calls only the one-time
-userData migration (`services/userdata-migration.js`, taking over from the folder
-of the predecessor identity "Weyouze Anything") — no scattered wiring in the
-handlers.
+It holds wiring and nothing else (#508). Whatever makes a decision or shapes
+data lives next to its topic and is tested there:
+
+| Topic | Module |
+| ----- | ------ |
+| Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
+| Masking the status of an MCP server | `services/mcp-status-masking.js` |
+| The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
+| What Settings › Security and the mode pill read | `services/security-page-data.js` |
+| The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
+
+What stays in the module are the small state holders the wiring needs — the
+remembered language, the hidden-files switch, whether a web search key is
+present, the two execution switches — and the callbacks that tie services to
+one another (pruning chat-scoped permissions, telling the renderer to read
+again). They exist because two services meet there, not because of a rule of
+their own.
+
+Before `createApplication()`, `src/main/index.js` does only two things. It
+claims the single-instance lock (`claimSingleInstance` in `app-lifecycle.js`,
+#507): a second launch on the same userData folder brings the existing window
+to the front and quits before it has started anything. And it runs the
+one-time userData migration (`services/userdata-migration.js`, taking over from
+the folder of the predecessor identity "Weyouze Anything") — no scattered
+wiring in the handlers. A start-up that throws ends in an error box and
+`app.exit(1)` (`createStartupFailureHandler`, #509) instead of leaving a
+process without a window behind.
 
 The **menu bar** lives as a pure template in `services/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,
@@ -659,7 +683,7 @@ Four things follow from it that are easily overlooked:
   as a DTO all the way into the renderer.
 - **`configured` is a property of the entry**, not of the provider:
   `buildPresetView` decides it, not `buildProviderView`.
-- **The redaction of own keys** (`readOwnSecrets` in `create-application.js`)
+- **The redaction of own keys** (`readOwnSecrets` in `services/own-secrets.js`)
   runs over `providers` *and* over the entries — otherwise exactly the gateway
   token would slip through.
 - **The provider entry must not come back.** The renderer and

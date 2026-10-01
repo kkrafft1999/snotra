@@ -455,6 +455,38 @@ test('run bricht bei AbortSignal ab — „Stop" im Chat beendet auch den Befehl
   assert.equal(result.timedOut, false);
 });
 
+test('disposeSync ends a running command and its grandchild when the app quits (#506)', async (t) => {
+  const service = await ready();
+  if (!service) return t.skip('Keine Shell auf diesem Rechner.');
+  const state = service.describe();
+  const posix = state.invocation === INVOCATIONS.LOGIN || state.invocation === INVOCATIONS.POSIX;
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-dispose-'));
+  const marker = path.join(dir, 'enkel.txt');
+  try {
+    const started = Date.now();
+    const pending = service.run({
+      // POSIX: a grandchild that writes late, as in the "Stop" test below.
+      command: posix ? `(sleep 2; echo da > "${marker}") & wait` : commandFor(service, 'sleep'),
+      timeoutMs: 60_000,
+    });
+    setTimeout(() => service.disposeSync(), 400);
+    const result = await pending;
+
+    assert.equal(result.aborted, true);
+    assert.equal(result.timedOut, false);
+    assert.ok(Date.now() - started < 10_000, 'must not run until its own timeout');
+    if (posix) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await assert.rejects(fs.access(marker), 'the grandchild must not have kept running');
+    }
+    // Nothing left to end: a second call is harmless.
+    service.disposeSync();
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('run läuft gar nicht erst, wenn schon vorher abgebrochen wurde', async (t) => {
   const service = await ready();
   if (!service) return t.skip('Keine Shell auf diesem Rechner.');

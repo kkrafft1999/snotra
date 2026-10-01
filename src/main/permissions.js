@@ -35,16 +35,23 @@ function createPermissionRequestHandler() {
       callback(false);
       return;
     }
-    if (permission === 'media' || permission === 'audioCapture') {
-      callback(true);
-      return;
-    }
-    callback(false);
+    callback(permission === 'media' && isAudioOnlyRequest(details));
   };
 }
 
 /**
- * Allows microphone capture for voice input (Whisper) in the renderer.
+ * A `media` request covers the camera as well; `mediaTypes` says what it asks
+ * for (#509). Only the microphone alone is granted — a request without the
+ * list, or with `video` in it, is not.
+ */
+function isAudioOnlyRequest(details) {
+  const types = details && details.mediaTypes;
+  return Array.isArray(types) && types.length > 0 && types.every((type) => type === 'audio');
+}
+
+/**
+ * Allows microphone capture for voice input (Whisper) in the renderer — the
+ * microphone only, never the camera.
  * Denies other permission prompts explicitly (default Electron behavior is prompt/deny depending on OS).
  */
 function registerMediaCapturePermissions(browserSession) {

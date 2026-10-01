@@ -1168,14 +1168,18 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     return { x, y, width, height };
   });
   const mitZeichnung = await page.screenshot({ clip });
+  // A constructed sheet, not a <style> element: the CSP has no
+  // 'unsafe-inline' for styles since #509, and CSSOM is outside it.
   await page.evaluate(() => {
-    const style = document.createElement('style');
-    style.id = 'ohne-zeichnung';
-    style.textContent = '#empty-canvas::before { display: none; }';
-    document.head.appendChild(style);
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync('#empty-canvas::before { display: none; }');
+    globalThis.__ohneZeichnung = sheet;
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   });
   const ohneZeichnung = await page.screenshot({ clip });
-  await page.evaluate(() => document.getElementById('ohne-zeichnung').remove());
+  await page.evaluate(() => {
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== globalThis.__ohneZeichnung);
+  });
   assert.ok(mitZeichnung.length > ohneZeichnung.length * 3,
     `Flaeche sieht leer aus: ${mitZeichnung.length} vs. ${ohneZeichnung.length} Bytes`);
 

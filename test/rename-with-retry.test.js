@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { renameWithRetry, readFileWithRetry } = require('../src/main/services/rename-with-retry');
+const { renameWithRetry, renameSyncWithRetry, readFileWithRetry } = require('../src/main/services/rename-with-retry');
 
 function flakyFs(failures, code = 'EPERM') {
   let calls = 0;
@@ -66,4 +66,39 @@ test('a read is retried under the same rules, and a missing file is not (#473)',
     },
   };
   await assert.rejects(readFileWithRetry(missing, 'prefs.json', { platform: 'win32', sleep: noSleep }), { code: 'ENOENT' });
+});
+
+// The synchronous variant, for the window state written on `close` (#509).
+test('renameSyncWithRetry retries a locked target on Windows and blocks between attempts', () => {
+  let calls = 0;
+  const fs = {
+    renameSync() {
+      calls += 1;
+      if (calls < 3) throw Object.assign(new Error('locked'), { code: 'EACCES' });
+    },
+  };
+  const waits = [];
+  renameSyncWithRetry(fs, 'a.tmp', 'a', { platform: 'win32', sleep: (ms) => waits.push(ms) });
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [25, 50]);
+});
+
+test('renameSyncWithRetry fails at once elsewhere and for other errors', () => {
+  const locked = { renameSync() { throw Object.assign(new Error('locked'), { code: 'EPERM' }); } };
+  assert.throws(() => renameSyncWithRetry(locked, 'a.tmp', 'a', { platform: 'linux', sleep: () => assert.fail('no wait') }), /locked/);
+  const missing = { renameSync() { throw Object.assign(new Error('gone'), { code: 'ENOENT' }); } };
+  assert.throws(() => renameSyncWithRetry(missing, 'a.tmp', 'a', { platform: 'win32', sleep: () => assert.fail('no wait') }), /gone/);
+});
+
+test('renameSyncWithRetry really waits with its default sleep', () => {
+  let calls = 0;
+  const fs = {
+    renameSync() {
+      calls += 1;
+      if (calls < 2) throw Object.assign(new Error('locked'), { code: 'EBUSY' });
+    },
+  };
+  const started = Date.now();
+  renameSyncWithRetry(fs, 'a.tmp', 'a', { platform: 'win32', delayMs: 30 });
+  assert.ok(Date.now() - started >= 25, 'blocked for the delay');
 });
