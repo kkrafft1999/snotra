@@ -61,6 +61,8 @@ function createStorageService({
   const RETIRED_MLX_LM_ID = 'mlx-lm';
   const MLX_LM_DEFAULT_BASE_URL = 'http://127.0.0.1:8080/v1';
   const OPENAI_COMPATIBLE_ID = 'openai-compatible';
+  const KNOWN_LLM_CONFIG_VERSIONS = Object.freeze([2, 3, 4, LLM_CONFIG_VERSION]);
+  const MCP_CONFIG_VERSION = 1;
 
   const fileLocks = new Map();
 
@@ -93,6 +95,53 @@ function createStorageService({
       if (error?.code === 'ENOENT') return null;
       throw error;
     }
+  }
+
+  function parseJson(raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function isJsonObject(data) {
+    return !!data && typeof data === 'object' && !Array.isArray(data);
+  }
+
+  /**
+   * Moves a file that is there but cannot be understood out of the way
+   * before anything is written to its path (#557) — broken JSON, a stray
+   * edit, or a version newer than this build knows (an older release
+   * installed over a newer one). The copy keeps every byte; the caller then
+   * starts from its defaults as before. A move that fails throws, so the
+   * caller writes nothing.
+   */
+  async function setAsideUnreadable(filePath) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const target = `${filePath}.unreadable-${stamp}`;
+    try {
+      await renameWithRetry(fs, filePath, target, { platform });
+    } catch (error) {
+      if (error?.code === 'ENOENT') return;
+      log?.warn?.(`[storage] ${path.basename(filePath)} could not be understood and could not be moved aside, left it as it is: ${error?.message || error}`);
+      throw error;
+    }
+    log?.warn?.(`[storage] ${path.basename(filePath)} could not be understood; kept it as ${target}`);
+  }
+
+  /**
+   * Reads a JSON file that is about to be written back, under its file lock
+   * (#473, #557). `null` means "start from the defaults": the file is
+   * missing, or it was not understood and has just been moved aside.
+   */
+  async function readJsonForUpdate(filePath, isUnderstood) {
+    const raw = await readForUpdate(filePath);
+    if (raw === null) return null;
+    const data = parseJson(raw);
+    if (isUnderstood(data)) return data;
+    await setAsideUnreadable(filePath);
+    return null;
   }
 
   function withFileLock(targetPath, fn) {
@@ -347,23 +396,26 @@ function createStorageService({
    * over it. With `forUpdate` such a read throws instead.
    */
   async function readLLMConfigRaw({ forUpdate = false } = {}) {
-    let raw;
     if (forUpdate) {
-      raw = await readForUpdate(getLLMConfigPath());
-      if (raw === null) return { data: null, unreadable: false };
-    } else {
-      try {
-        raw = await fs.readFile(getLLMConfigPath(), 'utf8');
-      } catch (error) {
-        return { data: null, unreadable: error?.code !== 'ENOENT' };
-      }
+      return { data: await readJsonForUpdate(getLLMConfigPath(), isKnownLLMConfig), unreadable: false };
     }
+    let raw;
     try {
-      const data = JSON.parse(raw);
-      return { data: data && typeof data === 'object' ? data : null, unreadable: false };
-    } catch {
-      return { data: null, unreadable: false };
+      raw = await fs.readFile(getLLMConfigPath(), 'utf8');
+    } catch (error) {
+      return { data: null, unreadable: error?.code !== 'ENOENT' };
     }
+    // A file that is there but not understood counts as unreadable too
+    // (#557): shown as defaults, and moved aside before the next save.
+    const data = parseJson(raw);
+    return isKnownLLMConfig(data) ? { data, unreadable: false } : { data: null, unreadable: true };
+  }
+
+  /** A version `readLLMConfig` can read or migrate — nothing newer (#557). */
+  function isKnownLLMConfig(data) {
+    return isJsonObject(data)
+      && KNOWN_LLM_CONFIG_VERSIONS.includes(data.version)
+      && !!data.providers;
   }
 
   async function readLegacyOpenAIConfig() {
@@ -595,6 +647,12 @@ function createStorageService({
   async function setWebSearchApiKey(plaintext) {
     const value = typeof plaintext === 'string' ? plaintext.trim() : '';
     return withFileLock(getWebSearchConfigPath(), async () => {
+      // Read only to move a broken file aside before it is replaced (#557).
+      try {
+        await readJsonForUpdate(getWebSearchConfigPath(), isJsonObject);
+      } catch {
+        return { ok: false, hasApiKey: await hasWebSearchApiKey() };
+      }
       if (!value) {
         await writeJsonAtomic(getWebSearchConfigPath(), {});
         return { ok: true, hasApiKey: false };
@@ -631,24 +689,23 @@ function createStorageService({
 
   /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
   async function readMcpConfigRaw({ forUpdate = false } = {}) {
-    let raw;
     if (forUpdate) {
-      raw = await readForUpdate(getMcpConfigPath());
-      if (raw === null) return { servers: [] };
-    } else {
-      try {
-        raw = await fs.readFile(getMcpConfigPath(), 'utf8');
-      } catch {
-        return { servers: [] };
-      }
+      return (await readJsonForUpdate(getMcpConfigPath(), isKnownMcpConfig)) || { servers: [] };
     }
+    let raw;
     try {
-      const data = JSON.parse(raw);
-      if (!data || typeof data !== 'object' || !Array.isArray(data.servers)) return { servers: [] };
-      return data;
+      raw = await fs.readFile(getMcpConfigPath(), 'utf8');
     } catch {
       return { servers: [] };
     }
+    const data = parseJson(raw);
+    return isKnownMcpConfig(data) ? data : { servers: [] };
+  }
+
+  function isKnownMcpConfig(data) {
+    return isJsonObject(data)
+      && Array.isArray(data.servers)
+      && !(typeof data.version === 'number' && data.version > MCP_CONFIG_VERSION);
   }
 
   /** Gespeicherte Eintraege in geprueftem Zustand, env in gespeicherter Form. */
@@ -760,7 +817,7 @@ function createStorageService({
       const next = servers.filter((server) => server.id !== value.id);
       next.push({ ...value, knownTools, env: storedEnv });
       next.sort((a, b) => a.id.localeCompare(b.id));
-      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
       return { ok: true, errors: [] };
     });
   }
@@ -785,7 +842,7 @@ function createStorageService({
       const next = servers.map((server) => (
         server.id === wanted ? { ...server, knownTools: names } : server
       ));
-      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
       return { ok: true, changed: true };
     });
   }
@@ -803,7 +860,7 @@ function createStorageService({
         .map((server) => ({ id: server.id, disabledTools: [...server.disabledTools] }));
       if (cleared.length === 0) return cleared;
       const next = servers.map((server) => ({ ...server, disabledTools: [] }));
-      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
       return cleared;
     });
   }
@@ -817,7 +874,7 @@ function createStorageService({
       if (next.length === servers.length) {
         return { ok: false, errors: [createMessage('mcp.error.unknownServer', { id: wanted })] };
       }
-      await writeJsonAtomic(getMcpConfigPath(), { version: 1, servers: next });
+      await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
       return { ok: true, errors: [] };
     });
   }
@@ -902,15 +959,13 @@ function createStorageService({
   }
 
   function uiPrefsFromFile(raw) {
-    try {
-      const data = JSON.parse(raw);
-      if (data && typeof data === 'object' && !('appLocale' in data)) {
-        return normalizeUiPrefs({ ...data, appLocale: APP_LOCALES.DE });
-      }
-      return normalizeUiPrefs(data);
-    } catch {
-      return normalizeUiPrefs({});
-    }
+    const data = parseJson(raw);
+    return isJsonObject(data) ? uiPrefsFromData(data) : normalizeUiPrefs({});
+  }
+
+  function uiPrefsFromData(data) {
+    if (!('appLocale' in data)) return normalizeUiPrefs({ ...data, appLocale: APP_LOCALES.DE });
+    return normalizeUiPrefs(data);
   }
 
   async function writeUIPrefs(data) {
@@ -920,9 +975,10 @@ function createStorageService({
   async function updateUIPrefs(updater) {
     return withFileLock(getUIPrefsPath(), async () => {
       // Not `readUIPrefs`: its defaults for an unreadable file would be
-      // written back, and every other preference with them (#473).
-      const raw = await readForUpdate(getUIPrefsPath());
-      const current = raw === null ? normalizeUiPrefs({}) : uiPrefsFromFile(raw);
+      // written back, and every other preference with them (#473). A file
+      // that does not parse is moved aside first (#557).
+      const data = await readJsonForUpdate(getUIPrefsPath(), isJsonObject);
+      const current = data === null ? normalizeUiPrefs({}) : uiPrefsFromData(data);
       const updated = await updater({ ...current });
       const normalized = normalizeUiPrefs(updated);
       await writeJsonAtomic(getUIPrefsPath(), normalized);
@@ -1031,21 +1087,32 @@ function createStorageService({
   // wenn sie mit skipMigration lesen; ein verschachtelter Lock wuerde
   // deadlocken. rename ist atomar, ein parallel lesender Zweiter scheitert
   // harmlos mit ENOENT.
+  /**
+   * Returns false when the file is still where it was (#561) — the caller
+   * must then not hand out a store that could be written over it.
+   */
   async function quarantineUnreadableChatHistory() {
     const source = getChatHistoryPath();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const target = `${source}.undecryptable-${stamp}`;
     try {
-      await fs.rename(source, target);
+      await renameWithRetry(fs, source, target, { platform });
       if (typeof log?.warn === 'function') {
         log.warn(`[chat-history] Verlauf nicht lesbar, gesichert als ${target}`);
       }
+      return true;
     } catch (err) {
-      if (err && err.code === 'ENOENT') return;
+      if (err && err.code === 'ENOENT') return true;
       if (typeof log?.warn === 'function') {
         log.warn(`[chat-history] Verlauf nicht lesbar, Sicherung fehlgeschlagen: ${err?.message || err}`);
       }
+      return false;
     }
+  }
+
+  /** An empty store for an unreadable file — writable only once it is moved aside. */
+  async function storeAfterQuarantine() {
+    return (await quarantineUnreadableChatHistory()) ? defaultChatHistoryStore() : storeFromFailedRead();
   }
 
   async function migrateChatHistoryToEncryptedIfNeeded(store, wasEncrypted) {
@@ -1072,19 +1139,13 @@ function createStorageService({
   async function readChatHistoryStore({ skipMigration = false } = {}) {
     const { store, wasEncrypted, unreadable, readFailed } = await loadChatHistoryStoreFromDisk();
     if (readFailed) return storeFromFailedRead();
-    if (unreadable) {
-      await quarantineUnreadableChatHistory();
-      return defaultChatHistoryStore();
-    }
+    if (unreadable) return storeAfterQuarantine();
     if (skipMigration) return store;
     if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
       return withChatHistoryLock(async () => {
         const fresh = await loadChatHistoryStoreFromDisk();
         if (fresh.readFailed) return storeFromFailedRead();
-        if (fresh.unreadable) {
-          await quarantineUnreadableChatHistory();
-          return defaultChatHistoryStore();
-        }
+        if (fresh.unreadable) return storeAfterQuarantine();
         await migrateChatHistoryToEncryptedIfNeeded(fresh.store, fresh.wasEncrypted);
         return fresh.store;
       });
@@ -1130,46 +1191,53 @@ function createStorageService({
 
   /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
   async function readFolderHistoryRaw({ forUpdate = false } = {}) {
-    let raw;
+    let data;
     if (forUpdate) {
-      raw = await readForUpdate(getFolderHistoryPath());
-      if (raw === null) return [];
+      data = await readJsonForUpdate(getFolderHistoryPath(), isKnownFolderHistory);
     } else {
       try {
-        raw = await fs.readFile(getFolderHistoryPath(), 'utf8');
+        data = parseJson(await fs.readFile(getFolderHistoryPath(), 'utf8'));
       } catch {
         return [];
       }
     }
-    try {
-      const data = JSON.parse(raw);
-      if (Array.isArray(data?.paths)) {
-        return data.paths.filter((p) => typeof p === 'string' && p.trim());
-      }
-      return [];
-    } catch {
-      return [];
-    }
+    if (!isKnownFolderHistory(data)) return [];
+    return data.paths.filter((p) => typeof p === 'string' && p.trim());
+  }
+
+  function isKnownFolderHistory(data) {
+    return isJsonObject(data) && Array.isArray(data.paths);
   }
 
   async function writeFolderHistory(paths) {
     await writeJsonAtomic(getFolderHistoryPath(), { paths });
   }
 
+  /**
+   * Read, change and write the history under its file lock (#562): two
+   * folders opened while the list is being validated must not cost an entry.
+   * `change` returns the new list, or `null` to leave the file alone.
+   */
+  function updateFolderHistory(change) {
+    return withFileLock(getFolderHistoryPath(), async () => {
+      const next = change(await readFolderHistoryRaw({ forUpdate: true }));
+      if (next) await writeFolderHistory(next);
+      return next;
+    });
+  }
+
   async function addFolderToHistory(resolvedPath) {
-    let list;
     try {
-      list = await readFolderHistoryRaw({ forUpdate: true });
+      await updateFolderHistory((list) => {
+        const filtered = list.filter((p) => p !== resolvedPath);
+        filtered.unshift(resolvedPath);
+        return filtered.slice(0, MAX_FOLDER_HISTORY);
+      });
     } catch (error) {
       // Opening the folder goes on; the history just misses this one entry
       // rather than every other (#473).
-      log?.warn?.(`[folder-history] Could not read the folder history, left it as it is: ${error?.message || error}`);
-      return;
+      log?.warn?.(`[folder-history] Could not update the folder history, left it as it is: ${error?.message || error}`);
     }
-    const filtered = list.filter((p) => p !== resolvedPath);
-    filtered.unshift(resolvedPath);
-    const trimmed = filtered.slice(0, MAX_FOLDER_HISTORY);
-    await writeFolderHistory(trimmed);
   }
 
   /**
@@ -1181,35 +1249,44 @@ function createStorageService({
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return false;
     const resolved = path.resolve(raw);
-    let list;
+    let removed = false;
     try {
-      list = await readFolderHistoryRaw({ forUpdate: true });
+      await updateFolderHistory((list) => {
+        const filtered = list.filter((p) => p !== resolved && p !== raw);
+        removed = filtered.length !== list.length;
+        return removed ? filtered : null;
+      });
     } catch {
       return false;
     }
-    const filtered = list.filter((p) => p !== resolved && p !== raw);
-    if (filtered.length === list.length) return false;
-    await writeFolderHistory(filtered);
-    return true;
+    return removed;
   }
 
   async function getValidatedFolderHistory() {
     const list = await readFolderHistoryRaw();
     const out = [];
-    let changed = false;
+    const gone = new Set();
     for (const p of list) {
       try {
         const st = await fs.stat(p);
         if (st.isDirectory()) {
           out.push(p);
         } else {
-          changed = true;
+          gone.add(p);
         }
       } catch {
-        changed = true;
+        gone.add(p);
       }
     }
-    if (changed) await writeFolderHistory(out);
+    // Drop only what was found gone, from the list as it is now — a folder
+    // opened meanwhile stays (#562).
+    if (gone.size > 0) {
+      try {
+        await updateFolderHistory((current) => current.filter((p) => !gone.has(p)));
+      } catch (error) {
+        log?.warn?.(`[folder-history] Could not drop missing folders, left the history as it is: ${error?.message || error}`);
+      }
+    }
     return out;
   }
 

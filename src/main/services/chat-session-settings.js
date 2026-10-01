@@ -78,6 +78,8 @@ function createChatSessionSettings({
    * @type {Map<string, string>}
    */
   const backgroundModes = new Map();
+  /** The switch still in progress; the next one waits for it (#559). */
+  let activationQueue = Promise.resolve();
 
   function normalizeChatId(raw) {
     if (typeof raw !== 'string') return null;
@@ -127,9 +129,18 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * What the chat has stored, with this session's changes on top (#558). The
+   * local copy only holds what was changed here — on its own it would drop a
+   * stored mode the moment the model changed, and the other way round.
+   */
   async function storedValuesFor(chatId) {
-    const local = remembered.get(chatId);
-    if (local) return local;
+    const local = remembered.get(chatId) || {};
+    if (local.modelPresetId && local.toolPermissionMode) return { ...local };
+    return { ...(await readStoredValues(chatId)), ...local };
+  }
+
+  async function readStoredValues(chatId) {
     try {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       const session = store.sessions.find((s) => s && s.id === chatId);
@@ -175,7 +186,16 @@ function createChatSessionSettings({
    * anwenden. Liefert, was danach gilt — die Oberfläche liest ihren Stand
    * anschließend ohnehin neu, der Rückgabewert macht es für Tests prüfbar.
    */
-  async function activate(rawChatId, { activation = CHAT_ACTIVATION.EXPLICIT } = {}) {
+  function activate(rawChatId, options) {
+    // One switch at a time (#559): each one reads the mode the previous one
+    // left. Side by side, the chat that ends up on screen could keep the mode
+    // of the one clicked just before it.
+    const run = activationQueue.then(() => activateNow(rawChatId, options));
+    activationQueue = run.catch(() => {});
+    return run;
+  }
+
+  async function activateNow(rawChatId, { activation = CHAT_ACTIVATION.EXPLICIT } = {}) {
     const chatId = normalizeChatId(rawChatId);
     const previousChatId = currentChatId;
     const activeMode = await getActiveMode();
@@ -193,8 +213,10 @@ function createChatSessionSettings({
     // Nur anfassen, was sich wirklich ändert — dasselbe gilt für die
     // Konfigurationsdatei des Modells. Writing the mode here only mirrors the
     // chat on screen into the store; it discards nothing on its own (#320).
-    if (presetId && presetId !== (await getActivePresetId())) await applyPreset(presetId);
+    // The mode goes first (#559): a model switch that fails must not leave
+    // this chat running under the mode of the one before it.
     if (mode !== activeMode) await applyMode(mode);
+    if (presetId && presetId !== (await getActivePresetId())) await applyPreset(presetId);
     // Only the chat's *own* mode changing voids its cards and approvals — a
     // chat restored from "auto" to "smart", say (concept §7).
     if (chatId && modeBefore && modeBefore !== mode) notify(onChatModeChanged, chatId);
