@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
 const TOKEN_PLACEHOLDER = '••••••••••••';
 
@@ -526,4 +526,125 @@ test('editing only the label leaves the arguments exactly as stored (CR-B14-03)'
   document.getElementById('btn-mcp-server-save').click();
   await flush();
   assert.deepEqual(calls[1][1].args, [...args, '--extra']);
+});
+
+// --- CR-B14-04: busy state, stale answers, rejected calls ---
+
+/** A promise the test settles by hand — a request that is still running. */
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+const openEdit = async (index) => {
+  rows()[index].querySelector('.btn-secondary').click();
+  await flush();
+};
+
+test('a test answer after Cancel does not reach the next dialog (CR-B14-04)', async () => {
+  const pending = deferred();
+  let loads = 0;
+  await mount({
+    testMcpServer: () => pending.promise,
+    getMcpCatalog: async () => { loads += 1; return katalog(); },
+  });
+  await openEdit(0);
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await openEdit(1);
+  assert.equal(document.getElementById('mcp-field-id').value, 'files');
+  assert.equal(document.getElementById('btn-mcp-server-test').hasAttribute('aria-disabled'), false,
+    'the new dialog is not busy with the old test');
+
+  const before = loads;
+  pending.resolve({ ok: true, status: { serverId: 'github', state: 'ready' }, tools: ['a', 'b', 'c'] });
+  await flush();
+  await flush();
+  assert.equal(document.getElementById('mcp-test-result').textContent, '', 'the files dialog shows nothing of it');
+  assert.equal(loads, before + 1, 'the list still learns the new status');
+});
+
+test('a save answer does not close a newer dialog (CR-B14-04)', async () => {
+  const pending = deferred();
+  await mount({ saveMcpServer: () => pending.promise });
+  await openEdit(0);
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await openEdit(1);
+  document.getElementById('mcp-field-label').value = 'Typed meanwhile';
+
+  pending.resolve({ ok: true, ...katalog() });
+  await flush();
+  assert.equal(dialogOffen(), true, 'the newer dialog stays open');
+  assert.equal(document.getElementById('mcp-field-label').value, 'Typed meanwhile');
+});
+
+test('Test, Save and Remove are inert while a request runs (CR-B14-04)', async () => {
+  const pending = deferred();
+  const calls = [];
+  await mount({
+    saveMcpServer: (payload) => { calls.push(['save', payload.id]); return pending.promise; },
+    testMcpServer: async (id) => { calls.push(['test', id]); return { ok: true, status: { state: 'ready' }, tools: [] }; },
+    deleteMcpServer: async (id) => { calls.push(['delete', id]); return { ok: true, ...katalog() }; },
+  });
+  await openEdit(0);
+  const save = document.getElementById('btn-mcp-server-save');
+  save.focus();
+  save.click();
+  await flush();
+  for (const id of ['btn-mcp-server-save', 'btn-mcp-server-test', 'btn-mcp-server-delete']) {
+    const button = document.getElementById(id);
+    assert.equal(button.getAttribute('aria-disabled'), 'true', id);
+    assert.equal(button.disabled, false, `${id} keeps its focusability`);
+    button.click();
+  }
+  await flush();
+  focusFixup(document);
+  assert.equal(document.activeElement, save, 'the pressed button keeps the focus');
+  assert.deepEqual(calls, [['save', 'github']], 'no second request while the first runs');
+  assert.equal(document.getElementById('btn-mcp-server-cancel').hasAttribute('aria-disabled'), false,
+    'Cancel stays live');
+
+  pending.resolve({ ok: false, errors: ['nope'] });
+  await flush();
+  assert.equal(save.hasAttribute('aria-disabled'), false, 'live again after the answer');
+});
+
+test('a rejected save, remove or test shows the failure message (CR-B14-04)', async () => {
+  const boom = async () => { throw new Error('EPERM'); };
+  await mount({ saveMcpServer: boom, deleteMcpServer: boom, testMcpServer: boom });
+  await openEdit(0);
+  const formError = document.getElementById('mcp-form-error');
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.equal(dialogOffen(), true);
+  assert.equal(formError.textContent, 'The server could not be saved.');
+
+  document.getElementById('btn-mcp-server-delete').click();
+  await flush();
+  assert.equal(formError.textContent, 'The server could not be deleted.');
+
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  const result = document.getElementById('mcp-test-result');
+  assert.equal(result.textContent, 'The test failed.', 'not left on "Testing …"');
+  for (const id of ['btn-mcp-server-save', 'btn-mcp-server-test', 'btn-mcp-server-delete']) {
+    assert.equal(document.getElementById(id).hasAttribute('aria-disabled'), false, id);
+  }
+});
+
+test('a rejected switch goes back and says so (CR-B14-04)', async () => {
+  await mount({ saveMcpServer: async () => { throw new Error('EACCES'); } });
+  const toggle = rows()[0].querySelector('.ds-switch');
+  toggle.click();
+  await flush();
+  assert.equal(rows()[0].querySelector('.ds-switch').checked, true);
+  const error = document.getElementById('settings-mcp-error');
+  assert.equal(error.classList.contains('hidden'), false);
+  assert.equal(error.textContent, 'The server could not be changed.');
 });

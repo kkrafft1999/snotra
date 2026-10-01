@@ -255,6 +255,39 @@ test('erneutes Öffnen beginnt wieder leer', async () => {
   assert.equal(uebernehmen().disabled, true);
 });
 
+test('an import closed while it saves leaves the reopened dialog alone (CR-B14-04)', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const gespeichert = [];
+  await mount({
+    saveMcpServer: async (payload) => {
+      gespeichert.push(payload.id);
+      await gate;
+      return { ok: false, errors: ['kaputt'] };
+    },
+  });
+  await oeffnen();
+  await einfuegen(BLOCK);
+  uebernehmen().focus();
+  uebernehmen().click();
+  await flush();
+  // Saving: inert, but the button keeps the focus.
+  assert.equal(uebernehmen().getAttribute('aria-disabled'), 'true');
+  assert.equal(document.activeElement, uebernehmen());
+  uebernehmen().click();
+  await flush();
+  assert.deepEqual(gespeichert, ['atlassian-jira'], 'a second press starts nothing');
+
+  document.getElementById('btn-mcp-import-cancel').click();
+  await oeffnen();
+  release();
+  await flush();
+  await flush();
+  assert.equal(offen(), true);
+  assert.equal(fehler().classList.contains('hidden'), true, 'the old report does not land here');
+  assert.equal(uebernehmen().hasAttribute('aria-disabled'), false);
+});
+
 // Encrypted is the default — what is stored readable has to be said, and so
 // does the folder the server will start in (CR-B14-02).
 test('the preview lists the plain-text variables and the working directory', async () => {

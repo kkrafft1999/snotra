@@ -154,6 +154,17 @@ export function initMcpPanel({ api }) {
   /** Der gerade bearbeitete Server; null = neu anlegen. */
   let editing = null;
   let lastFocus = null;
+  /**
+   * Counts the openings and closings of each dialog. A request remembers the
+   * count it started under; an answer that arrives under another one belongs
+   * to an earlier dialog and is dropped there (CR-B14-04) — a slow test must
+   * not write into the next server's dialog, a slow save not close it.
+   */
+  let dialogGeneration = 0;
+  let importGeneration = 0;
+  /** A request of the server dialog is running; its actions are inert. */
+  let dialogBusy = false;
+  let importBusy = false;
   /** Erkannte Kandidaten des Import-Dialogs, in der Reihenfolge der Anzeige. */
   let importCandidates = [];
   /** Kennungen der abgewaehlten Kandidaten — abwaehlen ueberlebt das Neulesen. */
@@ -260,7 +271,13 @@ export function initMcpPanel({ api }) {
   /** Ein-/Ausschalten geht ohne Umweg über den Dialog. */
   async function setEnabled(server, enabled) {
     const payload = toPayload(server, { enabled, env: keepAllEnv(server) });
-    const result = await api.saveMcpServer?.(payload);
+    let result = null;
+    try {
+      result = await api.saveMcpServer?.(payload);
+    } catch {
+      // A rejected call is a failed save — the switch goes back (CR-B14-04).
+      result = null;
+    }
     if (result?.ok) {
       // The list is redrawn with the new status; the switch that was just
       // used keeps the focus instead of losing it to the page.
@@ -423,7 +440,23 @@ export function initMcpPanel({ api }) {
     return Array.isArray(server?.knownTools) ? server.knownTools : [];
   }
 
+  /**
+   * Test, Save and Remove take no second press while a request runs. They are
+   * marked `aria-disabled` rather than disabled: a disabled button loses the
+   * focus to the top of the window (CR-B13-03). Cancel stays live — it is how
+   * a slow test is left behind.
+   */
+  function setDialogBusy(busy) {
+    dialogBusy = busy;
+    for (const button of [btnTest, btnSave, btnDelete]) {
+      if (busy) button?.setAttribute('aria-disabled', 'true');
+      else button?.removeAttribute('aria-disabled');
+    }
+  }
+
   function openDialog(server) {
+    dialogGeneration += 1;
+    setDialogBusy(false);
     editing = server || null;
     lastFocus = document.activeElement;
     setError(formError, '');
@@ -447,6 +480,8 @@ export function initMcpPanel({ api }) {
   }
 
   function closeDialog() {
+    dialogGeneration += 1;
+    setDialogBusy(false);
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     editing = null;
@@ -463,7 +498,27 @@ export function initMcpPanel({ api }) {
     return splitArgs(fieldArgs.value);
   }
 
+  /**
+   * Runs one request of the server dialog: inert while it runs, its answer
+   * dropped once the dialog has moved on. A rejection counts as no answer.
+   * Returns `{ stale, result }`.
+   */
+  async function dialogRequest(call) {
+    const generation = dialogGeneration;
+    setDialogBusy(true);
+    let result = null;
+    try {
+      result = await call();
+    } catch {
+      result = null;
+    }
+    const stale = generation !== dialogGeneration;
+    if (!stale) setDialogBusy(false);
+    return { stale, result };
+  }
+
   async function save() {
+    if (dialogBusy) return;
     const payload = {
       id: String(fieldId.value || '').trim().toLowerCase(),
       label: String(fieldLabel.value || '').trim(),
@@ -478,9 +533,12 @@ export function initMcpPanel({ api }) {
       // (CR-B14-03). Editing — and the import, which says "replaces" — do.
       ...(editing ? {} : { create: true }),
     };
-    const result = await api.saveMcpServer?.(payload);
+    const { stale, result } = await dialogRequest(() => api.saveMcpServer?.(payload));
+    // What was saved is saved: the list shows it even when the dialog that
+    // asked is gone. Only that dialog is closed or told why not.
+    if (result?.ok) adopt(result);
+    if (stale) return;
     if (result?.ok) {
-      adopt(result);
       closeDialog();
       setError(errorEl, '');
       return;
@@ -489,10 +547,12 @@ export function initMcpPanel({ api }) {
   }
 
   async function remove() {
-    if (!editing) return;
-    const result = await api.deleteMcpServer?.(editing.id);
+    if (!editing || dialogBusy) return;
+    const id = editing.id;
+    const { stale, result } = await dialogRequest(() => api.deleteMcpServer?.(id));
+    if (result?.ok) adopt(result);
+    if (stale) return;
     if (result?.ok) {
-      adopt(result);
       closeDialog();
       return;
     }
@@ -500,9 +560,15 @@ export function initMcpPanel({ api }) {
   }
 
   async function test() {
-    if (!editing || !testResult) return;
+    if (!editing || !testResult || dialogBusy) return;
+    const id = editing.id;
     testResult.replaceChildren(el('p', 'mcp-test__pending', t('mcpDialog.test.running')));
-    const result = await api.testMcpServer?.(editing.id);
+    const { stale, result } = await dialogRequest(() => api.testMcpServer?.(id));
+    if (stale) {
+      // The test still changed the connection; the list shows it.
+      await load();
+      return;
+    }
     testResult.replaceChildren();
     if (!result?.ok || !result.status) {
       testResult.append(el('p', 'mcp-test__fail', tMessage(result?.error) || t('mcpDialog.test.failed')));
@@ -639,6 +705,13 @@ export function initMcpPanel({ api }) {
     return importCandidates.filter((candidate) => !importUnchecked.has(candidate.id));
   }
 
+  /** While the import saves, its button is inert but keeps the focus. */
+  function setImportBusy(busy) {
+    importBusy = busy;
+    if (busy) btnImportApply?.setAttribute('aria-disabled', 'true');
+    else btnImportApply?.removeAttribute('aria-disabled');
+  }
+
   function updateImportApply() {
     if (!btnImportApply) return;
     const count = selectedImportCandidates().length;
@@ -675,6 +748,8 @@ export function initMcpPanel({ api }) {
   }
 
   function openImport() {
+    importGeneration += 1;
+    setImportBusy(false);
     lastFocus = document.activeElement;
     if (importInput) importInput.value = '';
     importCandidates = [];
@@ -687,6 +762,8 @@ export function initMcpPanel({ api }) {
   }
 
   function closeImport() {
+    importGeneration += 1;
+    setImportBusy(false);
     importOverlay?.classList.add('hidden');
     importOverlay?.setAttribute('aria-hidden', 'true');
     try {
@@ -706,9 +783,10 @@ export function initMcpPanel({ api }) {
    */
   async function applyImport() {
     const auswahl = selectedImportCandidates();
-    if (auswahl.length === 0) return;
+    if (auswahl.length === 0 || importBusy) return;
 
-    if (btnImportApply) btnImportApply.disabled = true;
+    const generation = importGeneration;
+    setImportBusy(true);
     const gescheitert = [];
     let letztes = null;
 
@@ -724,6 +802,10 @@ export function initMcpPanel({ api }) {
     }
 
     if (letztes) adopt(letztes);
+    // Closed or reopened meanwhile: what went through is in the list, the
+    // report belonged to the dialog that is gone (CR-B14-04).
+    if (generation !== importGeneration) return;
+    setImportBusy(false);
     if (gescheitert.length === 0) {
       closeImport();
       setError(errorEl, '');

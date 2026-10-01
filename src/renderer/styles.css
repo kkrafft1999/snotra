@@ -7340,6 +7340,14 @@ select.modal-input {
   }
 }
 
+/* A request is running (CR-B14-04): the action takes no second press. It is
+   aria-disabled rather than disabled so that it keeps the focus. */
+#dialog-mcp-server .modal-actions button[aria-disabled='true'],
+#btn-mcp-import-apply[aria-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 /* Der Loeschknopf gehoert nicht neben „Speichern" — ein Fehlklick waere hier
    nicht rueckgaengig zu machen (Issue #109). */
 #dialog-mcp-server .modal-actions #btn-mcp-server-delete {
