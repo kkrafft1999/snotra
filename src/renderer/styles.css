@@ -6639,10 +6639,94 @@ select.modal-input {
   margin-bottom: 10px;
 }
 
-/* The workspace sandbox switch (#357) often has no line below it; the card
-   then ends with the switch instead of an empty margin. */
-#settings-sandbox-card .settings-exec-toggle {
-  margin-bottom: 0;
+/* The workspace sandbox switch (#357) as a status tile (#543): the most
+   consequential switch on the page, so its state reads at a glance — shield,
+   title and text, in blue while isolated and in the warning amber (#396) when
+   not. Never the colour alone: the shield is struck through and the title
+   names the state. */
+.settings-sandbox-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  transition: background var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.settings-sandbox-tile[data-tone='on'] {
+  border-color: var(--ds-blue-border);
+  background: var(--ds-blue-soft);
+}
+
+.settings-sandbox-tile[data-tone='off'],
+.settings-sandbox-tile[data-tone='unavailable'] {
+  border-color: var(--ds-warning-border);
+  background: var(--ds-warning-bg);
+}
+
+.settings-sandbox-tile__shield {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.settings-sandbox-tile[data-tone='on'] .settings-sandbox-tile__shield {
+  stroke: var(--ds-blue);
+}
+
+.settings-sandbox-tile[data-tone='off'] .settings-sandbox-tile__shield,
+.settings-sandbox-tile[data-tone='unavailable'] .settings-sandbox-tile__shield {
+  stroke: var(--ds-warning);
+}
+
+.settings-sandbox-tile__slash {
+  display: none;
+}
+
+.settings-sandbox-tile[data-tone='off'] .settings-sandbox-tile__slash,
+.settings-sandbox-tile[data-tone='unavailable'] .settings-sandbox-tile__slash {
+  display: inline;
+}
+
+.settings-sandbox-tile__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-sandbox-tile__title {
+  display: block;
+  font-size: var(--ds-font-size-lg);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-sandbox-tile[data-tone='on'] .settings-sandbox-tile__title {
+  color: var(--ds-blue);
+}
+
+.settings-sandbox-tile[data-tone='off'] .settings-sandbox-tile__title,
+.settings-sandbox-tile[data-tone='unavailable'] .settings-sandbox-tile__title,
+.settings-sandbox-tile[data-tone='off'] .settings-sandbox-tile__body,
+.settings-sandbox-tile[data-tone='unavailable'] .settings-sandbox-tile__body {
+  color: var(--ds-warning);
+}
+
+.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title {
+  cursor: not-allowed;
+}
+
+.settings-sandbox-tile__body {
+  margin: 2px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-tile__body:empty {
+  display: none;
 }
 
 #settings-sandbox-state {

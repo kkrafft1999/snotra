@@ -48,22 +48,27 @@ export function describeSandboxStatus(sandbox, enabled, { workspaceDisabled = fa
 }
 
 /**
- * The per-workspace sandbox switch in Settings › Tools (#357).
+ * The per-workspace sandbox switch in Settings › Tools (#357), drawn as a
+ * status tile since #543: the state is the tile's title, what it means is the
+ * text below it, and the tone colours shield and frame.
  *
- * Shown while at least one execution tool is on, like the isolation lines —
- * and never on Windows, which has no sandbox to switch off. Without an open
- * folder the switch shows the default and stays disabled.
+ * Shown whether or not an execution tool is on, so that it can be checked
+ * beforehand (#448/#449) — and never on Windows, which has no sandbox to
+ * switch off. Without an open folder the switch shows the default and stays
+ * disabled. A switch that is on does not claim "active" when the system cannot
+ * isolate at all: the tile then says "unavailable" and why.
  *
  * @param {object} input
  * @param {object|null} input.permissions  tool permission state from main
  * @param {boolean} [input.toolsOn]        no longer decides whether it shows (#449)
  * @param {object|undefined} input.sandbox `describe()` of the sandbox service
  * @param {string} input.autoLabel         the name of the "Auto" mode
+ * @returns {{visible: boolean, hasWorkspace: boolean, checked: boolean, rootLabel: string,
+ *   tone: 'neutral'|'on'|'off'|'unavailable', title: string, body: string}}
  */
 export function describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLabel }) {
-  // Shown whether or not an execution tool is on, so that it can be checked
-  // beforehand (#448/#449); hidden only where no sandbox exists (Windows).
-  const visible = !(sandbox && typeof sandbox === 'object' && sandbox.reason === 'platform');
+  const known = !!sandbox && typeof sandbox === 'object';
+  const visible = !(known && sandbox.reason === 'platform');
   const root = typeof permissions?.workspaceRoot === 'string' ? permissions.workspaceRoot : '';
   if (!root) {
     return {
@@ -71,18 +76,39 @@ export function describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLa
       hasWorkspace: false,
       checked: true,
       rootLabel: t('settings.rules.workspace.none'),
-      stateText: t('settings.sandbox.workspace.none'),
-      stateIsWarning: false,
+      tone: 'neutral',
+      title: t('settings.sandbox.workspace.tile.on'),
+      body: t('settings.sandbox.workspace.none'),
     };
   }
-  const off = permissions?.workspaceSandboxDisabled === true;
+  const base = { visible, hasWorkspace: true, rootLabel: root };
+  if (permissions?.workspaceSandboxDisabled === true) {
+    return {
+      ...base,
+      checked: false,
+      tone: 'off',
+      title: t('settings.sandbox.workspace.tile.off'),
+      body: t('settings.sandbox.workspace.off', { mode: autoLabel }),
+    };
+  }
+  // Still being checked, or not asked yet: the switch is what decides.
+  const unavailable = known && sandbox.isolated === false
+    && sandbox.status !== 'unknown' && sandbox.status !== 'testing';
+  if (unavailable) {
+    return {
+      ...base,
+      checked: true,
+      tone: 'unavailable',
+      title: t('settings.sandbox.workspace.tile.unavailable'),
+      body: describeSandboxStatus(sandbox, true).text,
+    };
+  }
   return {
-    visible,
-    hasWorkspace: true,
-    checked: !off,
-    rootLabel: root,
-    stateText: off ? t('settings.sandbox.workspace.off', { mode: autoLabel }) : '',
-    stateIsWarning: off,
+    ...base,
+    checked: true,
+    tone: 'on',
+    title: t('settings.sandbox.workspace.tile.on'),
+    body: t('settings.sandbox.workspace.tile.onBody'),
   };
 }
 
