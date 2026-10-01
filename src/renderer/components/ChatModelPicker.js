@@ -1,4 +1,4 @@
-import { dismissOnOutsideClick } from '../utils/helpers.js';
+import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
@@ -314,10 +314,10 @@ export function initChatModelPicker({
   }
 
   // Tabbing out closes the menu; it does not stay open behind the focus.
-  chatModelPickerWrap?.addEventListener('focusout', (e) => {
-    if (!chatModelMenuOpen) return;
-    if (e.relatedTarget && chatModelPickerWrap.contains(e.relatedTarget)) return;
-    closeChatModelMenu();
+  dismissOnFocusLeave({
+    container: chatModelPickerWrap,
+    isOpen: () => chatModelMenuOpen,
+    onDismiss: () => closeChatModelMenu(),
   });
 
   // The pill, the hint below the composer and the label of the live dot are

@@ -272,3 +272,19 @@ export function dismissOnOutsideClick({ isOpen, ownsTarget, onDismiss }) {
     onDismiss();
   });
 }
+
+/**
+ * The keyboard half of the pattern above (#583, #585): a popup closes when
+ * the focus moves on to something outside `container` — Tab past its last
+ * item, say. Leaving the window is not "elsewhere": the popup is still there
+ * when the user comes back. `isPaused()` covers a popup that rebuilds itself
+ * and drops the focus for a moment.
+ */
+export function dismissOnFocusLeave({ container, isOpen, onDismiss, isPaused = () => false }) {
+  container?.addEventListener('focusout', (e) => {
+    if (!isOpen() || isPaused()) return;
+    if (e.relatedTarget && container.contains(e.relatedTarget)) return;
+    if (!e.relatedTarget && !document.hasFocus()) return;
+    onDismiss();
+  });
+}

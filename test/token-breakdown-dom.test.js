@@ -356,3 +356,65 @@ test('ein Klick auf die Gruppe schließt die Fläche nicht', async () => {
   click(groupHead(panel, 'tools'));
   assert.equal(api.isOpen(), true);
 });
+
+// Focus (#585): the panel is rebuilt on every send and every finished turn,
+// and it is a dialog — it has to take the focus and keep it.
+
+test('opening moves the focus into the dialog', async () => {
+  const { dom, trigger, panel } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+  assert.equal(dom.document.activeElement, panel);
+  assert.equal(panel.getAttribute('aria-labelledby'), 'chat-token-breakdown-title');
+});
+
+test('a refresh keeps the focus on the same group head', async () => {
+  const { dom, trigger, panel, api, current } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+  groupHead(panel, CONTEXT_PART_GROUPS.TOOLS).focus();
+
+  current.breakdown = demoBreakdown(12000);
+  current.inFlight = true;
+  api.refresh();
+
+  assert.equal(api.isOpen(), true, 'the rebuild is no "focus left the panel"');
+  assert.equal(dom.document.activeElement, groupHead(panel, CONTEXT_PART_GROUPS.TOOLS));
+});
+
+test('a refresh keeps the focus on the same skill row, and falls back to the panel when it is gone', async () => {
+  const { dom, trigger, panel, api, current } = await mount(
+    {
+      breakdown: demoBreakdown(),
+      usage: { prompt: 10000, completion: 200, total: 10200 },
+    },
+    { onOpenSkillSettings: () => {} }
+  );
+  click(trigger);
+  click(groupHead(panel, CONTEXT_PART_GROUPS.SKILLS));
+  const skillRow = () => panel.querySelector('.token-breakdown__row--action[data-skill-name="grosser-skill"]');
+  skillRow().focus();
+
+  api.refresh();
+  assert.equal(dom.document.activeElement, skillRow());
+
+  current.breakdown = null;
+  api.refresh();
+  assert.equal(api.isOpen(), true);
+  assert.equal(dom.document.activeElement, panel);
+});
+
+test('tabbing out of the panel closes it', async () => {
+  const { dom, trigger, panel, api } = await mount({
+    breakdown: demoBreakdown(),
+    usage: { prompt: 10000, completion: 200, total: 10200 },
+  });
+  click(trigger);
+  groupHead(panel, CONTEXT_PART_GROUPS.TOOLS).focus();
+  dom.document.getElementById('btn-chat-send').focus();
+  assert.equal(api.isOpen(), false);
+});
