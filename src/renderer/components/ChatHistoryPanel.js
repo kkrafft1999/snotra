@@ -36,6 +36,9 @@ const RUN_STATE_LABELS = Object.freeze({
   awaiting: 'history.entry.awaiting',
 });
 
+const BIN_ICON_HTML =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
 export function initChatHistoryPanel({
   api,
   appStore,
@@ -65,6 +68,8 @@ export function initChatHistoryPanel({
   // Der Schalter steht in der Titelzeile, gespiegelt zu denen der linken
   // Haelfte — nicht mehr in der Kopfzeile des Chats.
   const btnChatHistory = document.getElementById('btn-toggle-chat-history');
+  // The row that asks "Delete this chat?" right now, if any (#582).
+  let pendingRemoval = null;
 
   function isHistoryOpen() {
     return !appRoot.classList.contains('app--no-history');
@@ -87,64 +92,176 @@ export function initChatHistoryPanel({
     if (persist) void api.setUIPrefs({ chatHistoryVisible: open }).catch(() => {});
   }
 
+  /**
+   * A failed read shows a line in place of the list (#586) — before, the
+   * rejection escaped the click handler and the column never opened.
+   */
   async function renderHistoryList() {
-    const hist = await api.getChatHistory();
+    let hist;
+    try {
+      hist = await api.getChatHistory();
+    } catch {
+      hist = null;
+    }
+    pendingRemoval = null;
+    chatHistoryList.innerHTML = '';
+    if (!hist) {
+      chatHistoryEmpty.textContent = t('history.loadFailed');
+      chatHistoryEmpty.classList.remove('hidden');
+      return;
+    }
     const sessions = Array.isArray(hist.sessions) ? [...hist.sessions] : [];
     sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    chatHistoryList.innerHTML = '';
+    chatHistoryEmpty.textContent = t('history.empty');
     if (sessions.length === 0) {
       chatHistoryEmpty.classList.remove('hidden');
       return;
     }
     chatHistoryEmpty.classList.add('hidden');
     for (const s of sessions) {
-      const row = document.createElement('div');
-      row.className = 'chat-history-row';
-      row.setAttribute('role', 'button');
-      row.tabIndex = 0;
-      if (s.id === appStore.currentChatId) row.classList.add('chat-history-row--current');
-      const main = document.createElement('div');
-      main.className = 'chat-history-row-main';
-      const titleEl = document.createElement('span');
-      titleEl.className = 'chat-history-row-title';
-      titleEl.textContent = tMessage(resolveChatTitle(s.title, s.messages));
-      const meta = document.createElement('span');
-      meta.className = 'chat-history-row-meta';
-      const time = document.createElement('span');
-      time.className = 'chat-history-row-time';
-      time.textContent = formatHistoryTime(s.updatedAt);
-      meta.appendChild(time);
-      main.appendChild(titleEl);
-      main.appendChild(meta);
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'chat-history-row-delete';
-      del.title = t('history.entry.remove');
-      del.setAttribute('aria-label', t('history.entry.remove'));
-      del.innerHTML =
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-      row.appendChild(main);
-      row.appendChild(del);
-      row.dataset.chatId = s.id;
-      applyRunState(row, runs.stateOf(s.id));
-
-      const openThis = () => openChatSession(s.id);
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('.chat-history-row-delete')) return;
-        openThis();
-      });
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openThis();
-        }
-      });
-      del.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeChatFromHistory(s.id);
-      });
-      chatHistoryList.appendChild(row);
+      chatHistoryList.appendChild(buildRow(s));
     }
+  }
+
+  /**
+   * One row: the button that opens the chat and the bin next to it, as
+   * siblings (#582). Nested inside a `role="button"`, the bin was presentational
+   * for screen readers, and its Enter bubbled up and opened the chat instead.
+   */
+  function buildRow(s) {
+    const row = document.createElement('div');
+    row.className = 'chat-history-row';
+    const current = s.id === appStore.currentChatId;
+    if (current) row.classList.add('chat-history-row--current');
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'chat-history-row-main';
+    if (current) open.setAttribute('aria-current', 'true');
+    const title = tMessage(resolveChatTitle(s.title, s.messages));
+    const titleEl = document.createElement('span');
+    titleEl.className = 'chat-history-row-title';
+    titleEl.textContent = title;
+    // Cut off with an ellipsis, a long title is readable on hover (#586).
+    open.title = title;
+    const meta = document.createElement('span');
+    meta.className = 'chat-history-row-meta';
+    const time = document.createElement('span');
+    time.className = 'chat-history-row-time';
+    time.textContent = formatHistoryTime(s.updatedAt);
+    meta.appendChild(time);
+    open.appendChild(titleEl);
+    open.appendChild(meta);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'chat-history-row-delete';
+    del.title = t('history.entry.remove');
+    del.setAttribute('aria-label', t('history.entry.remove'));
+    del.innerHTML = BIN_ICON_HTML;
+    row.appendChild(open);
+    row.appendChild(del);
+    row.dataset.chatId = s.id;
+    applyRunState(row, runs.stateOf(s.id));
+
+    // The padding around the button opens the chat as well; the bin and the
+    // confirmation are excluded.
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.chat-history-row-delete, .chat-history-row-confirm')) return;
+      void openChatSession(s.id);
+    });
+    del.addEventListener('click', () => askToRemove(row, s.id));
+    return row;
+  }
+
+  /**
+   * The bin asks first (#582): one click used to delete the chat and its
+   * attachments for good. The question takes the row's place; Cancel sits
+   * where the bin was, so a double click on the bin cancels instead of
+   * deleting, and Cancel also has the focus for the same reason.
+   */
+  function askToRemove(row, id) {
+    cancelPendingRemoval();
+    row.classList.add('chat-history-row--confirm');
+    const box = document.createElement('div');
+    box.className = 'chat-history-row-confirm';
+    box.setAttribute('role', 'group');
+    const promptId = `chat-history-confirm-${id}`;
+    box.setAttribute('aria-labelledby', promptId);
+    const prompt = document.createElement('span');
+    prompt.className = 'chat-history-row-confirm-text';
+    prompt.id = promptId;
+    prompt.textContent = t('history.entry.remove.confirm');
+    const yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'chat-history-row-confirm-delete btn-destructive';
+    yes.textContent = t('history.entry.remove.yes');
+    const no = document.createElement('button');
+    no.type = 'button';
+    no.className = 'chat-history-row-confirm-cancel btn-secondary';
+    no.textContent = t('history.entry.remove.no');
+    box.append(prompt, yes, no);
+    row.appendChild(box);
+
+    const cancel = ({ focusBin = false } = {}) => {
+      if (pendingRemoval?.row !== row) return;
+      pendingRemoval = null;
+      box.remove();
+      row.classList.remove('chat-history-row--confirm');
+      if (focusBin) row.querySelector('.chat-history-row-delete')?.focus();
+    };
+    pendingRemoval = { row, cancel };
+    // Busy rather than disabled: a disabled button drops the focus, and the
+    // focus is what moves on to the next row afterwards.
+    let busy = false;
+
+    no.addEventListener('click', () => {
+      if (!busy) cancel({ focusBin: true });
+    });
+    yes.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      box.setAttribute('aria-busy', 'true');
+      const result = await removeChatFromHistory(id, { restoreFocus: true });
+      if (result.ok) return;
+      // The chat stays where it is, and the row says why.
+      busy = false;
+      box.removeAttribute('aria-busy');
+      prompt.textContent = t('history.entry.remove.failed');
+      prompt.setAttribute('role', 'alert');
+      yes.focus();
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!busy) cancel({ focusBin: true });
+    });
+    // A click or a Tab elsewhere is a "no".
+    box.addEventListener('focusout', (e) => {
+      if (busy) return;
+      if (e.relatedTarget && box.contains(e.relatedTarget)) return;
+      cancel();
+    });
+    no.focus();
+  }
+
+  function cancelPendingRemoval() {
+    pendingRemoval?.cancel();
+  }
+
+  /**
+   * After a delete the focus stays in the list (#582): on the row that took
+   * the place of the deleted one, on the one before it if that was the last,
+   * and on the empty state when nothing is left.
+   */
+  function focusAfterRemoval(index) {
+    const rows = chatHistoryList.querySelectorAll('.chat-history-row-main');
+    const target = rows[Math.min(index, rows.length - 1)];
+    if (target) {
+      target.focus();
+      return;
+    }
+    chatHistoryEmpty.tabIndex = -1;
+    chatHistoryEmpty.focus();
   }
 
   /**
@@ -201,10 +318,28 @@ export function initChatHistoryPanel({
     await renderHistoryList();
   }
 
-  async function removeChatFromHistory(id) {
+  /**
+   * `restoreFocus`: the delete came from the row, so the focus moves on to a
+   * neighbour once the list is redrawn.
+   * @returns {Promise<{ ok: boolean }>} `ok: false` when main did not delete
+   *   it (#582) — the chat then stays on screen and in the list.
+   */
+  async function removeChatFromHistory(id, { restoreFocus = false } = {}) {
+    const rows = [...chatHistoryList.querySelectorAll('.chat-history-row[data-chat-id]')];
+    const index = rows.findIndex((row) => row.dataset.chatId === id);
     // First the run: it must not write the chat back once it is gone (#320).
+    // A delete that fails afterwards has stopped it all the same.
     runs.discard(id);
-    await api.deleteChatSession(id);
+    let result;
+    try {
+      result = await api.deleteChatSession(id);
+    } catch {
+      result = null;
+    }
+    if (!result?.ok) {
+      runs.afterSwitch();
+      return { ok: false };
+    }
     if (id === appStore.currentChatId) {
       stopChatVoiceListening();
       appStore.chatSessionId += 1;
@@ -223,6 +358,8 @@ export function initChatHistoryPanel({
     }
     runs.afterSwitch();
     await renderHistoryList();
+    if (restoreFocus) focusAfterRemoval(Math.max(0, index));
+    return { ok: true };
   }
 
   /**

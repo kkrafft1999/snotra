@@ -332,7 +332,12 @@ module.exports = {
   'chat.title.new': 'New chat',
   'chat.title.image': 'Image',
   'chat.title.images': '{count} images',
-  'history.entry.remove': 'Remove from history',
+  'history.entry.remove': 'Delete chat',
+  'history.entry.remove.confirm': 'Delete this chat?',
+  'history.entry.remove.yes': 'Delete',
+  'history.entry.remove.no': 'Cancel',
+  'history.entry.remove.failed': 'The chat could not be deleted.',
+  'history.loadFailed': 'The history could not be read.',
   'history.entry.running': 'Working…',
   'history.entry.awaiting': 'Needs your approval',
 

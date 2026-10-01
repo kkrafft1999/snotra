@@ -338,7 +338,12 @@ module.exports = {
   'chat.title.new': 'Neuer Chat',
   'chat.title.image': 'Bild',
   'chat.title.images': '{count} Bilder',
-  'history.entry.remove': 'Aus Verlauf entfernen',
+  'history.entry.remove': 'Chat löschen',
+  'history.entry.remove.confirm': 'Diesen Chat löschen?',
+  'history.entry.remove.yes': 'Löschen',
+  'history.entry.remove.no': 'Abbrechen',
+  'history.entry.remove.failed': 'Der Chat ließ sich nicht löschen.',
+  'history.loadFailed': 'Der Verlauf ließ sich nicht lesen.',
   'history.entry.running': 'Arbeitet…',
   'history.entry.awaiting': 'Wartet auf deine Freigabe',
 

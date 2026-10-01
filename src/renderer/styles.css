@@ -1381,18 +1381,17 @@ summary:focus-visible,
   padding: 4px 0;
 }
 
+/* A row holds two buttons side by side (#582): the one that opens the chat
+ * and the bin. The row only paints the hover and the current state. */
 .chat-history-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 0 10px 0 0;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--ds-font-size-md);
   color: var(--text-primary);
-  border: none;
-  background: none;
   width: 100%;
-  text-align: left;
   transition: background 0.12s;
 }
 
@@ -1410,6 +1409,13 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 8px 0 8px 10px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .chat-history-row-title {
@@ -1496,6 +1502,49 @@ summary:focus-visible,
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* "Delete this chat?" in place of the row (#582). Cancel sits where the bin
+ * was, so a double click on the bin lands on Cancel. */
+.chat-history-row--confirm {
+  cursor: default;
+}
+
+.chat-history-row--confirm:hover {
+  background: none;
+}
+
+.chat-history-row--confirm .chat-history-row-main,
+.chat-history-row--confirm .chat-history-row-delete {
+  display: none;
+}
+
+.chat-history-row-confirm {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 8px;
+  padding: 6px 0 6px 10px;
+}
+
+.chat-history-row-confirm-text {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.chat-history-row-confirm[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.chat-history-row-confirm .btn-destructive,
+.chat-history-row-confirm .btn-secondary {
+  min-height: var(--ds-touch-min);
+  padding: 0 14px;
+  font-size: var(--ds-font-size-sm);
 }
 
 #chat-messages {
