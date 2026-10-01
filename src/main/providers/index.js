@@ -20,7 +20,8 @@
  *
  * @typedef {Object} ChatRoundResult
  * @property {AssistantMessage} [message]   Bei Erfolg die Assistant-Nachricht der Runde.
- * @property {'stop'|'tool_calls'|string} [finishReason]
+ * @property {'stop'|'tool_calls'|'length'|'content_filter'|'incomplete'} [finishReason]
+ *   Mapped onto `shared/contracts/finish-reason.js` (#538), never the provider's raw value.
  * @property {{prompt: number, completion: number, total: number}|null} [usage]
  * @property {boolean} [cancelled]          true, wenn per AbortSignal abgebrochen.
  * @property {string} [error]               Fehlertext (schließt message aus).

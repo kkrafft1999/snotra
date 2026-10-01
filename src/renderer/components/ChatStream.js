@@ -1155,14 +1155,18 @@ export function initChatStream({
       const errorText = tMessage(result.error);
       let kind = 'render';
       if (streaming) {
-        if (Array.isArray(result.toolTrace) && result.toolTrace.length > 0) {
+        const ranTools = Array.isArray(result.toolTrace) && result.toolTrace.length > 0;
+        // A round that was cut off keeps the text it streamed (#538): the
+        // user reads how far it got, and the reason follows below it.
+        const keepsPartial = result.partial === true && !!last.content;
+        if (ranTools || keepsPartial) {
           // Tools ran before the error — an expired approval (#66/#67), the
           // round limit, a provider error in a later round (#527): the steps
           // done until then stay visible with their audit and card, and the
           // error follows as a message of its own. No full rebuild, or the
           // card with the reason for the expiry would vanish.
           finish();
-          last.toolTrace = result.toolTrace.map(toolTraceEntryForStore);
+          last.toolTrace = ranTools ? result.toolTrace.map(toolTraceEntryForStore) : last.toolTrace || [];
           if (!last.content) last.content = '';
           kind = 'finalize-with-error';
         } else {

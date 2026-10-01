@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { Agent } = require('undici');
 const { iterStreamLines, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
@@ -155,7 +156,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
   const collectedToolCalls = [];
-  let finishReason = null;
+  // A round ends with `done: true`; a stream without it was cut off on the
+  // way (#538).
+  let finishReason = FINISH_REASONS.INCOMPLETE;
   let usage = null;
 
   try {
@@ -197,7 +200,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
         }
       }
       if (payload.done === true) {
-        finishReason = collectedToolCalls.length ? 'tool_calls' : (payload.done_reason || 'stop');
+        finishReason = finishReasonOf({
+          cutOff: payload.done_reason === 'length' ? FINISH_REASONS.LENGTH : null,
+          toolCalls: collectedToolCalls.length > 0,
+        });
         usage = normalizeUsage(payload);
         break;
       }

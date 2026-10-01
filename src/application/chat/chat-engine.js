@@ -47,6 +47,7 @@ const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
 const { sanitizeChatId } = require('../../shared/contracts/chat');
+const { FINISH_REASONS, isCutOff } = require('../../shared/contracts/finish-reason');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
@@ -182,6 +183,15 @@ function buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles = false }) {
     toolsPrompt,
     TOOL_RESULTS_ARE_DATA_RULE,
   ].join('\n\n');
+}
+
+/** The sentence for a round that was cut off (#538). */
+function cutOffMessageKey(finishReason, assistantMessage) {
+  if (finishReason === FINISH_REASONS.CONTENT_FILTER) return 'chat.error.cutOff.contentFilter';
+  if (finishReason === FINISH_REASONS.INCOMPLETE) return 'chat.error.cutOff.incomplete';
+  return Array.isArray(assistantMessage?.tool_calls) && assistantMessage.tool_calls.length > 0
+    ? 'chat.error.cutOff.lengthTool'
+    : 'chat.error.cutOff.length';
 }
 
 function parseToolArguments(rawArguments) {
@@ -899,7 +909,7 @@ function createChatEngine({
     };
     // An error result after tools ran still carries them — without the trace
     // the renderer drops the turn, and with it the record of what was done (#527).
-    const failRun = (error, code) => {
+    const failRun = (error, code, { partial = false } = {}) => {
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
         error,
@@ -908,6 +918,7 @@ function createChatEngine({
         contextUsage,
         contextBreakdown,
         toolTrace,
+        partial,
       });
     };
 
@@ -1696,6 +1707,17 @@ function createChatEngine({
         const assistantMessage = streamed.message;
         if (!assistantMessage) {
           return failRun(createMessage('chat.error.invalidApiAnswer'), CHAT_ERROR_CODES.INVALID);
+        }
+        if (isCutOff(streamed.finishReason)) {
+          // A round that did not end on its own keeps the text streamed so
+          // far, says why it stopped, and runs none of its tool calls — a
+          // call cut off mid-argument would run with arguments it never
+          // finished (#538).
+          return failRun(
+            createMessage(cutOffMessageKey(streamed.finishReason, assistantMessage)),
+            CHAT_ERROR_CODES.INCOMPLETE,
+            { partial: true }
+          );
         }
         apiMessages.push(assistantMessage);
 

@@ -385,3 +385,46 @@ test('opening another folder frees the composer before the round trips return (#
   assert.equal(stopShown(), false);
   assert.equal(chat.runs.stateOf('chat-a'), 'running', 'chat A keeps working in the background');
 });
+
+// #538: a round that was cut off keeps the text it streamed; the reason
+// follows as a message of its own, and only the reason is left out of the
+// history the model sees next time.
+test('a cut-off answer keeps its text and shows the reason below it (#538)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { appStore, sends, ask, emitDelta, screenText } = env;
+
+  ask('Write the summary.');
+  await flush();
+  emitDelta(sends[0], 'The first half of the summary');
+  sends[0].resolve({ error: 'The answer was cut off.', code: 'INCOMPLETE', partial: true });
+  await flush();
+  await flush();
+
+  assert.deepEqual(
+    appStore.chatMessages.map((m) => [m.content, !!m.isError]),
+    [
+      ['Write the summary.', false],
+      ['The first half of the summary', false],
+      ['The answer was cut off.', true],
+    ]
+  );
+  assert.match(screenText(), /The first half of the summary/);
+  const error = document.querySelector('#chat-messages .chat-msg.assistant.error');
+  assert.equal(error?.textContent, 'The answer was cut off.');
+});
+
+test('an error without partial keeps removing the half answer, as before', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { appStore, sends, ask, emitDelta } = env;
+
+  ask('Write the summary.');
+  await flush();
+  emitDelta(sends[0], 'Half');
+  sends[0].resolve({ error: 'rate limited', code: 'API' });
+  await flush();
+  await flush();
+
+  assert.deepEqual(appStore.chatMessages.map((m) => m.content), ['Write the summary.', 'rate limited']);
+});

@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
@@ -60,6 +61,13 @@ function translateToolsToAnthropic(tools) {
     });
   }
   return out.length ? out : undefined;
+}
+
+/** Anthropic's stop reasons that mean "cut off" (#538). */
+function cutOffOf(stopReason) {
+  if (stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded') return FINISH_REASONS.LENGTH;
+  if (stopReason === 'refusal') return FINISH_REASONS.CONTENT_FILTER;
+  return null;
 }
 
 function isLikelyJsonString(s) {
@@ -185,6 +193,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const blocks = new Map(); // index -> { type, text?, toolCall: {id, name, args} }
   let textOut = '';
   let stopReason = null;
+  // `message_stop` (or at least a stop reason) closes a round; without it the
+  // stream was cut off on the way (#538).
+  let messageStopped = false;
   let usage = null;
 
   try {
@@ -253,7 +264,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
         const sr = payload.delta?.stop_reason;
         if (sr) stopReason = sr;
       } else if (type === 'message_stop') {
-        // end
+        messageStopped = true;
       } else if (type === 'error') {
         const msg = payload.error?.message || createMessage('provider.error.streamFailed');
         return { error: msg, code: 'API' };
@@ -313,10 +324,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     ...(tool_calls.length ? { tool_calls } : {}),
   };
 
-  let finishReason = null;
-  if (stopReason === 'tool_use') finishReason = 'tool_calls';
-  else if (stopReason === 'end_turn') finishReason = 'stop';
-  else if (stopReason) finishReason = stopReason;
+  const finishReason = stopReason || messageStopped
+    ? finishReasonOf({ cutOff: cutOffOf(stopReason), toolCalls: tool_calls.length > 0 })
+    : FINISH_REASONS.INCOMPLETE;
 
   return { message, finishReason, usage };
 }

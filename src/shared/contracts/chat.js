@@ -198,8 +198,11 @@ function createChatErrorResult({
   contextUsage,
   contextBreakdown,
   toolTrace,
+  partial = false,
 } = {}) {
   const result = { error, code };
+  // The answer streamed so far stays: the round was cut off, not refused (#538).
+  if (partial) result.partial = true;
   if (usage !== undefined) result.usage = usage;
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
   if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;

@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -11,6 +12,19 @@ function bareModelId(modelOrPath) {
   const s = String(modelOrPath || '').trim();
   if (s.startsWith('models/')) return s.slice('models/'.length);
   return s;
+}
+
+// Gemini's finish reasons that mean "cut off" (#538); STOP and the rest end a
+// round normally.
+const LENGTH_REASONS = new Set(['MAX_TOKENS']);
+const FILTER_REASONS = new Set([
+  'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY',
+]);
+
+function cutOffOf(finishReason) {
+  if (LENGTH_REASONS.has(finishReason)) return FINISH_REASONS.LENGTH;
+  if (FILTER_REASONS.has(finishReason)) return FINISH_REASONS.CONTENT_FILTER;
+  return null;
 }
 
 function isValidModelId(id) {
@@ -190,7 +204,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
   const collectedToolCalls = [];
-  let finishReason = null;
+  // The last chunk of a round carries a finish reason; a stream without one
+  // was cut off on the way (#538). A prompt the API blocked has no candidate.
+  let rawFinishReason = null;
+  let promptBlocked = false;
   let usage = null;
   let malformedFunctionCall = false;
 
@@ -202,6 +219,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       try { payload = JSON.parse(evt.data); } catch { continue; }
       const nextUsage = normalizeUsage(payload.usageMetadata);
       if (nextUsage) usage = nextUsage;
+      if (payload.promptFeedback?.blockReason) promptBlocked = true;
       const cand = payload.candidates?.[0];
       if (!cand) continue;
       const parts = cand.content?.parts || [];
@@ -230,11 +248,8 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
         }
       }
       if (cand.finishReason) {
-        const fr = String(cand.finishReason).toUpperCase();
-        if (fr === 'STOP') finishReason = 'stop';
-        else if (fr === 'TOOL_CALLS') finishReason = 'tool_calls';
-        else if (fr === 'MALFORMED_FUNCTION_CALL') malformedFunctionCall = true;
-        else finishReason = cand.finishReason;
+        rawFinishReason = String(cand.finishReason).toUpperCase();
+        if (rawFinishReason === 'MALFORMED_FUNCTION_CALL') malformedFunctionCall = true;
       }
     }
   } catch (err) {
@@ -259,8 +274,13 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     };
   }
 
-  if (collectedToolCalls.length > 0 && !finishReason) {
-    finishReason = 'tool_calls';
+  let finishReason = FINISH_REASONS.INCOMPLETE;
+  if (promptBlocked) finishReason = FINISH_REASONS.CONTENT_FILTER;
+  else if (rawFinishReason) {
+    finishReason = finishReasonOf({
+      cutOff: cutOffOf(rawFinishReason),
+      toolCalls: collectedToolCalls.length > 0,
+    });
   }
 
   const message = {
