@@ -209,3 +209,103 @@ test('ein neuer Lauf raeumt Reste des vorigen weg', async () => {
   assert.equal(fs.existsSync(leftover), false);
   await downloader.discard();
 });
+
+// #568: the slot used to be claimed only after the first await, so two calls
+// arriving together both started and wrote the same file.
+test('a second download while one is starting is refused, one request only', async () => {
+  const tempDir = makeTempDir();
+  let fetches = 0;
+  const downloader = createUpdateDownloader({
+    tempDir,
+    fetchImpl: async () => { fetches += 1; return makeResponse([Buffer.alloc(100, 1)]); },
+  });
+  const asset = { url: GITHUB_URL, name: 'snotra.dmg', size: 100 };
+  const [first, second] = await Promise.all([
+    downloader.download({ asset, version: '1.8.0' }),
+    downloader.download({ asset, version: '1.8.0' }),
+  ]);
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, false);
+  assert.match(de(second.error), /läuft bereits ein Download/);
+  assert.equal(fetches, 1);
+});
+
+test('a signal aborted before the request starts ends the run without a request (#568)', async () => {
+  const tempDir = makeTempDir();
+  let fetches = 0;
+  const downloader = createUpdateDownloader({
+    tempDir,
+    fetchImpl: async () => { fetches += 1; return makeResponse([Buffer.alloc(10)]); },
+  });
+  const controller = new AbortController();
+  controller.abort();
+  const result = await downloader.download({
+    asset: { url: GITHUB_URL, name: 'snotra.dmg', size: 10 },
+    version: '1.8.0',
+    signal: controller.signal,
+  });
+  assert.deepEqual(result, { ok: false, canceled: true });
+  assert.equal(fetches, 0);
+  assert.equal(fs.existsSync(downloader.getWorkDir()), false);
+});
+
+// #573: the allowlist used to apply to the first address only.
+for (const finalUrl of ['https://evil.example/snotra.dmg', 'http://objects.githubusercontent.com/snotra.dmg']) {
+  test(`a redirect to ${finalUrl} is refused`, async () => {
+    const tempDir = makeTempDir();
+    const downloader = createUpdateDownloader({
+      tempDir,
+      fetchImpl: async () => ({ ...makeResponse([Buffer.alloc(10)]), url: finalUrl }),
+    });
+    const result = await downloader.download({
+      asset: { url: GITHUB_URL, name: 'snotra.dmg', size: 10 },
+      version: '1.8.0',
+    });
+    assert.equal(result.ok, false);
+    assert.match(de(result.error), /gehört nicht zu den GitHub-Releases/);
+    assert.equal(downloader.getReady(), null);
+  });
+}
+
+test('a redirect within GitHub is followed as before', async () => {
+  const tempDir = makeTempDir();
+  const downloader = createUpdateDownloader({
+    tempDir,
+    fetchImpl: async () => ({
+      ...makeResponse([Buffer.alloc(10, 2)]),
+      url: 'https://release-assets.githubusercontent.com/github-production-release-asset/1/2?sp=r',
+    }),
+  });
+  const result = await downloader.download({
+    asset: { url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.8.0/snotra.dmg', name: 'snotra.dmg', size: 10 },
+    version: '1.8.0',
+  });
+  assert.equal(result.ok, true);
+});
+
+// #569: the right length with the wrong bytes used to pass.
+test('a file that does not hash to the release digest is discarded', async () => {
+  const crypto = require('node:crypto');
+  const body = Buffer.from('the real package');
+  const digest = `sha256:${crypto.createHash('sha256').update(body).digest('hex')}`;
+  const tempDir = makeTempDir();
+  const tampered = Buffer.from('the fake package');
+  assert.equal(tampered.length, body.length);
+
+  const bad = createUpdateDownloader({ tempDir, fetchImpl: async () => makeResponse([tampered]) });
+  const refused = await bad.download({
+    asset: { url: GITHUB_URL, name: 'snotra.dmg', size: body.length, digest },
+    version: '1.8.0',
+  });
+  assert.equal(refused.ok, false);
+  assert.match(de(refused.error), /passt nicht zur Prüfsumme/);
+  assert.equal(bad.getReady(), null);
+  assert.equal(fs.existsSync(bad.getWorkDir()), false);
+
+  const good = createUpdateDownloader({ tempDir, fetchImpl: async () => makeResponse([body.subarray(0, 4), body.subarray(4)]) });
+  const accepted = await good.download({
+    asset: { url: GITHUB_URL, name: 'snotra.dmg', size: body.length, digest: digest.toUpperCase().replace('SHA256', 'sha256') },
+    version: '1.8.0',
+  });
+  assert.equal(accepted.ok, true);
+});

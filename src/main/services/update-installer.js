@@ -12,9 +12,21 @@
 // Alles, was vor dem Neustart schiefgehen kann, geht vorher schief: fehlende
 // Schreibrechte, ein kaputtes Archiv, eine falsche Version im Paket. Nach dem
 // `rename` gibt es nur noch den Rueckweg auf die gesicherte alte Version.
+//
+// What is verified, per platform (#569): the download's SHA-256 against the
+// release everywhere (update-download.js); on macOS the DMG's own checksum,
+// the bundle identifier and the version in Info.plist; in a Windows or Linux
+// folder the product name and the version in the package's `package.json`.
+// The AppImage is a single file and is checked by its checksum only.
 
 const fs = require('fs');
 const fsp = require('fs/promises');
+// Inside Electron, `fs` treats an `.asar` file as a folder and will not hand
+// out its raw bytes; `original-fs` is the unpatched module. Outside Electron
+// (the tests) there is no such module and plain `fs` does the same job.
+const rawFs = (() => {
+  try { return require('original-fs'); } catch { return fs; }
+})();
 const path = require('path');
 const { execFile, spawn } = require('child_process');
 
@@ -205,6 +217,45 @@ function buildWindowsSwapScript({
   ].join('\n');
 }
 
+/** Largest asar header this reader accepts; the app's own is a few hundred KB. */
+const MAX_ASAR_HEADER_BYTES = 64 * 1024 * 1024;
+
+/**
+ * `package.json` from an `app.asar`, read straight from the archive (#569).
+ *
+ * The format: a 16-byte prefix whose second word is the size of the header
+ * block and whose fourth is the length of the JSON header; the files follow
+ * the header block, each at the `offset` the header names.
+ *
+ * @returns {object} the parsed package.json
+ * @throws when the archive cannot be read or has no package.json
+ */
+function readAsarPackageJson(asarPath, fsImpl = rawFs) {
+  const fd = fsImpl.openSync(asarPath, 'r');
+  try {
+    const prefix = Buffer.alloc(16);
+    if (fsImpl.readSync(fd, prefix, 0, 16, 0) !== 16) throw new Error('truncated archive');
+    const headerBlock = prefix.readUInt32LE(4);
+    const jsonLength = prefix.readUInt32LE(12);
+    if (jsonLength === 0 || jsonLength > MAX_ASAR_HEADER_BYTES || jsonLength > headerBlock) {
+      throw new Error('implausible archive header');
+    }
+    const json = Buffer.alloc(jsonLength);
+    if (fsImpl.readSync(fd, json, 0, jsonLength, 16) !== jsonLength) throw new Error('truncated archive');
+    const entry = JSON.parse(json.toString('utf8'))?.files?.['package.json'];
+    const size = Number(entry?.size);
+    const offset = Number(entry?.offset);
+    if (!entry || entry.unpacked || !Number.isSafeInteger(size) || !Number.isSafeInteger(offset)) {
+      throw new Error('no package.json in the archive');
+    }
+    const data = Buffer.alloc(size);
+    if (fsImpl.readSync(fd, data, 0, size, 8 + headerBlock + offset) !== size) throw new Error('truncated archive');
+    return JSON.parse(data.toString('utf8'));
+  } finally {
+    fsImpl.closeSync(fd);
+  }
+}
+
 /** `update-install.log` → `update-install-output.log`, next to it. */
 function helperOutputFile(logFile) {
   const ext = path.extname(logFile);
@@ -312,6 +363,32 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     }
   }
 
+  /**
+   * A Windows or Linux package folder: does its `resources/app.asar` hold
+   * this app, at the version that was announced? Without this, a release
+   * whose package is not its tag would be installed, found "newer" again on
+   * the restart, and offered for ever (#569, #570).
+   */
+  function verifyPackageFolder(packageDir, expectedVersion) {
+    let pkg;
+    try {
+      pkg = readAsarPackageJson(path.join(packageDir, 'resources', 'app.asar'));
+    } catch (err) {
+      throw installError('update.error.verifyFailed', { error: err.message });
+    }
+    const name = typeof pkg?.productName === 'string' ? pkg.productName : '';
+    const found = typeof pkg?.version === 'string' ? pkg.version : '';
+    if (name !== APP_NAME) {
+      throw installError('update.error.wrongApp', name ? { id: name } : { idKey: 'update.unknownValue' });
+    }
+    if (expectedVersion && found !== expectedVersion) {
+      throw installError('update.error.wrongVersion', {
+        ...(found ? { version: found } : { versionKey: 'update.unknownValue' }),
+        expected: expectedVersion,
+      });
+    }
+  }
+
   async function installMacos({ filePath, version, target, workDir }) {
     const appBundlePath = target.appBundlePath;
     const parentDir = path.dirname(appBundlePath);
@@ -323,8 +400,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     const backupPath = path.join(parentDir, `.snotra-old-${stamp}.app`);
 
     await fsp.mkdir(mountPoint, { recursive: true });
+    // Without `-noverify`: hdiutil checks the image's own checksums, the last
+    // line of defence against damaged bytes when a release lists no digest.
     await exec('/usr/bin/hdiutil', [
-      'attach', filePath, '-nobrowse', '-readonly', '-noverify', '-mountpoint', mountPoint,
+      'attach', filePath, '-nobrowse', '-readonly', '-mountpoint', mountPoint,
     ]);
     try {
       const entries = await fsp.readdir(mountPoint);
@@ -392,6 +471,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
         throw installError('update.error.archiveMissing', { file: WINDOWS_EXE_NAME });
       }
     }
+    try {
+      verifyPackageFolder(rootDir, version);
+    } catch (err) {
+      await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
+    }
 
     const carryOver = await listForeignEntries(installDir, rootDir);
     const helperLog = logFile || path.join(path.dirname(workDir), 'snotra-update.log');
@@ -433,7 +518,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     return { ok: true, relaunching: true };
   }
 
-  async function installLinuxDir({ filePath, target, workDir }) {
+  async function installLinuxDir({ filePath, version, target, workDir }) {
     const installDir = target.installDir;
     const parentDir = path.posix.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
@@ -449,6 +534,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     if (!fs.existsSync(path.join(extracted, LINUX_BINARY_NAME))) {
       await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
       throw installError('update.error.archiveMissing', { file: LINUX_BINARY_NAME });
+    }
+    try {
+      verifyPackageFolder(extracted, version);
+    } catch (err) {
+      await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
     }
 
     // Vor dem Tausch auf dasselbe Dateisystem bringen — ein `mv` ueber
@@ -512,6 +603,7 @@ module.exports = {
   buildWindowsSwapScript,
   listForeignEntries,
   helperOutputFile,
+  readAsarPackageJson,
   shQuote,
   psQuote,
 };

@@ -24,12 +24,31 @@ const {
   buildLinuxDirScript,
   buildWindowsSwapScript,
   listForeignEntries,
+  readAsarPackageJson,
   shQuote,
   psQuote,
 } = require('../src/main/services/update-installer');
 
 function makeTempDir(prefix = 'snotra-inst-test-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+/**
+ * A real `resources/app.asar` in a package folder, packed by @electron/asar
+ * the way the release build packs it (#569).
+ */
+async function writeAppAsar(packageDir, pkg = { productName: 'Snotra AI', version: '1.13.0' }) {
+  const asar = require('@electron/asar');
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-asar-src-'));
+  try {
+    await fsp.writeFile(path.join(src, 'package.json'), JSON.stringify({ name: 'snotra', ...pkg }));
+    await fsp.mkdir(path.join(src, 'src', 'main'), { recursive: true });
+    await fsp.writeFile(path.join(src, 'src', 'main', 'index.js'), "'use strict';\n");
+    await fsp.mkdir(path.join(packageDir, 'resources'), { recursive: true });
+    await asar.createPackage(src, path.join(packageDir, 'resources', 'app.asar'));
+  } finally {
+    await fsp.rm(src, { recursive: true, force: true });
+  }
 }
 
 /** Installer, der keine echten Befehle ausfuehrt, aber alle mitschreibt. */
@@ -210,6 +229,7 @@ test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokol
       const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
       await fsp.mkdir(path.join(dest, 'Snotra AI-win32-x64'), { recursive: true });
       await fsp.writeFile(path.join(dest, 'Snotra AI-win32-x64', 'Snotra AI.exe'), 'new');
+      await writeAppAsar(path.join(dest, 'Snotra AI-win32-x64'));
       return '';
     },
   });
@@ -324,6 +344,7 @@ test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t)
   assert.deepEqual(result, { ok: true, relaunching: true });
   const commands = runs.map((r) => path.basename(r.cmd));
   assert.deepEqual(commands, ['hdiutil', 'ditto', 'hdiutil', 'plutil', 'xattr']);
+  assert.ok(!runs[0].args.includes('-noverify'), 'the DMG checks its own checksums (#569)');
   assert.equal(runs[2].args[0], 'detach', 'das Image muss wieder ausgehaengt werden');
 
   // Am Ort der alten App steht jetzt die neue, die alte liegt als Sicherung daneben.
@@ -444,6 +465,107 @@ test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async
   assert.equal(result.ok, false);
   assert.match(de(result.error), /fehlt „Snotra AI“/);
   assert.deepEqual(launches, [], 'ohne gepruefte Dateien wird kein Helfer gestartet');
+});
+
+test('the minimal test archive is a real asar, and the reader reads it (#569)', async (t) => {
+  const asar = require('@electron/asar');
+  const { writeMinimalAsar } = require('./helpers/asar.js');
+  const dir = makeTempDir();
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'app.asar');
+  writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra AI","version":"3.0.1"}' });
+  // @electron/asar lists with the platform's separator.
+  const listed = asar.listPackage(file, { isPack: false }).map((entry) => entry.replace(/\\/g, '/')).sort();
+  assert.deepEqual(listed, ['/LICENSE', '/package.json']);
+  assert.equal(asar.extractFile(file, 'package.json').toString(), '{"productName":"Snotra AI","version":"3.0.1"}');
+  assert.equal(readAsarPackageJson(file).version, '3.0.1');
+});
+
+test('readAsarPackageJson reads package.json from a packed archive (#569)', async (t) => {
+  const dir = makeTempDir();
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  await writeAppAsar(dir, { productName: 'Snotra AI', version: '2.4.6' });
+  const pkg = readAsarPackageJson(path.join(dir, 'resources', 'app.asar'));
+  assert.equal(pkg.productName, 'Snotra AI');
+  assert.equal(pkg.version, '2.4.6');
+
+  const garbage = path.join(dir, 'garbage.asar');
+  await fsp.writeFile(garbage, Buffer.alloc(64, 0xff));
+  assert.throws(() => readAsarPackageJson(garbage), /implausible archive header/);
+  const short = path.join(dir, 'short.asar');
+  await fsp.writeFile(short, Buffer.alloc(4));
+  assert.throws(() => readAsarPackageJson(short), /truncated archive/);
+});
+
+// #569: a package that is not the announced version would be installed, found
+// "newer" again after the restart and offered for ever.
+for (const [label, pkg, pattern] of [
+  ['another version', { productName: 'Snotra AI', version: '1.12.9' }, /meldet Version 1\.12\.9, erwartet war 1\.13\.0/],
+  ['another app', { productName: 'Something Else', version: '1.13.0' }, /nicht Snotra AI \(Kennung Something Else\)/],
+]) {
+  test(`Windows: a package with ${label} stops before the swap`, async (t) => {
+    if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+    const dir = makeTempDir();
+    t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+    const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+    await fsp.mkdir(installDir, { recursive: true });
+    await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
+    const zip = path.join(dir, 'new.zip');
+    await fsp.writeFile(zip, 'zip');
+
+    const { installer, launches } = makeInstaller({
+      onRun: async (cmd, args) => {
+        const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+        await fsp.mkdir(dest, { recursive: true });
+        await fsp.writeFile(path.join(dest, 'Snotra AI.exe'), 'new');
+        await writeAppAsar(dest, pkg);
+        return '';
+      },
+    });
+    const res = await installer.install({
+      filePath: zip,
+      version: '1.13.0',
+      target: { kind: 'windows-dir', canSelfUpdate: true, installDir },
+      workDir: path.join(dir, 'work'),
+    });
+
+    assert.equal(res.ok, false);
+    assert.match(de(res.error), pattern);
+    assert.deepEqual(launches, [], 'no helper for an unverified package');
+    const left = (await fsp.readdir(path.join(dir, 'tools'))).filter((n) => n.startsWith('.snotra-new-'));
+    assert.deepEqual(left, [], 'the unpacked package is removed again');
+  });
+}
+
+test('Linux-Ordner: a package with another version is not swapped in (#569)', async (t) => {
+  if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+  const root = makeTempDir();
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const installDir = path.join(root, 'apps', 'snotra-ai');
+  await fsp.mkdir(installDir, { recursive: true });
+  const filePath = path.join(root, 'snotra.tar.gz');
+  await fsp.writeFile(filePath, 'tar');
+
+  const { installer, launches } = makeInstaller({
+    onRun: async (cmd, args) => {
+      if (cmd !== 'tar') return '';
+      const pkgDir = path.join(args[args.indexOf('-C') + 1], 'snotra-ai-1.8.0');
+      await fsp.mkdir(pkgDir, { recursive: true });
+      await fsp.writeFile(path.join(pkgDir, 'Snotra AI'), 'bin');
+      await writeAppAsar(pkgDir, { productName: 'Snotra AI', version: '1.7.9' });
+      return '';
+    },
+  });
+  const result = await installer.install({
+    filePath,
+    version: '1.8.0',
+    target: { kind: 'linux-dir', canSelfUpdate: true, installDir },
+    workDir: path.join(root, 'work'),
+  });
+  assert.equal(result.ok, false);
+  assert.match(de(result.error), /meldet Version 1\.7\.9, erwartet war 1\.8\.0/);
+  assert.deepEqual(launches, []);
+  assert.deepEqual((await fsp.readdir(path.join(root, 'apps'))).filter((n) => n.startsWith('.snotra-')), []);
 });
 
 test('Linux-AppImage: die neue Datei wird danebengelegt, nicht sofort getauscht', async (t) => {

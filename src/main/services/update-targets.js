@@ -20,7 +20,23 @@ const REASONS = Object.freeze({
   package: createMessage('update.reason.package'),
   platform: createMessage('update.reason.platform'),
   layout: createMessage('update.reason.layout'),
+  readOnly: createMessage('update.reason.readOnly'),
 });
+
+/**
+ * Where a Mac bundle runs that cannot replace itself (#573): straight from the
+ * mounted disk image, or from the read-only copy macOS starts an unsigned,
+ * quarantined app from (App Translocation). Both are told up front instead of
+ * after a download that cannot be installed.
+ */
+const MAC_READ_ONLY_BUNDLE = /^\/Volumes\/Snotra AI(?: \d+)?\/[^/]+\.app$|\/AppTranslocation\//;
+
+/** A release asset's SHA-256 as GitHub lists it (`sha256:<hex>`), or ''. */
+function assetDigest(digest) {
+  return typeof digest === 'string' && /^sha256:[0-9a-f]{64}$/i.test(digest)
+    ? digest.toLowerCase()
+    : '';
+}
 
 /**
  * Pfad des .app-Bundles aus dem Pfad der ausfuehrbaren Datei.
@@ -60,6 +76,9 @@ function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }
     const appBundlePath = macAppBundlePath(execPath);
     if (!appBundlePath) {
       return { kind: 'unsupported', canSelfUpdate: false, reason: REASONS.layout };
+    }
+    if (MAC_READ_ONLY_BUNDLE.test(appBundlePath)) {
+      return { kind: 'macos-read-only', canSelfUpdate: false, reason: REASONS.readOnly, appBundlePath };
     }
     return { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath };
   }
@@ -125,6 +144,7 @@ function pickReleaseAsset({ assets, kind, arch = 'x64' } = {}) {
       name: asset.name,
       url: asset.browser_download_url,
       size: Number.isFinite(asset.size) ? asset.size : 0,
+      digest: assetDigest(asset.digest),
     }));
 
   if (candidates.length === 0) return null;
@@ -141,5 +161,6 @@ module.exports = {
   pickReleaseAsset,
   macAppBundlePath,
   isLinuxSystemPath,
+  assetDigest,
   REASONS,
 };

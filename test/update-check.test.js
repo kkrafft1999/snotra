@@ -16,15 +16,21 @@ function makeWindow(sent, { destroyed = false } = {}) {
   };
 }
 
-function makeUpdates({ updateAvailable = true, takeInstallFailure } = {}) {
+function makeUpdates({ updateAvailable = true, readInstallFailure, clearInstallFailure, error } = {}) {
   const calls = [];
   const updates = {
     checkForUpdate: async (options) => {
       calls.push(options);
-      return { updateAvailable, currentVersion: '1.0.0', latestVersion: updateAvailable ? '2.0.0' : '1.0.0' };
+      return {
+        updateAvailable,
+        currentVersion: '1.0.0',
+        latestVersion: updateAvailable ? '2.0.0' : '1.0.0',
+        ...(error ? { error } : {}),
+      };
     },
   };
-  if (takeInstallFailure) updates.takeInstallFailure = takeInstallFailure;
+  if (readInstallFailure) updates.readInstallFailure = readInstallFailure;
+  if (clearInstallFailure) updates.clearInstallFailure = clearInstallFailure;
   return { calls, updates };
 }
 
@@ -101,18 +107,39 @@ test('other values of SNOTRA_NO_UPDATE_CHECK leave the start-up check on', async
 // the update it concerns; the ignored version must not hide it.
 test('the silent check reports a failed install from the last quit', async () => {
   const sent = [];
-  let takes = 0;
+  let reads = 0;
+  let cleared = 0;
   const failure = { version: '2.0.0', error: 'in use', logFile: '/tmp/update-install.log' };
   const { calls, updates } = makeUpdates({
-    takeInstallFailure: async () => { takes += 1; return takes === 1 ? failure : null; },
+    readInstallFailure: async () => { reads += 1; return cleared ? null : failure; },
+    clearInstallFailure: async () => { cleared += 1; },
   });
   const runUpdateCheck = makeCheck({ updates, sent });
 
   await runUpdateCheck({ silent: true });
   assert.deepEqual(calls[0], { respectIgnored: false });
   assert.deepEqual(sent[0].payload.lastInstallFailure, failure);
+  assert.equal(cleared, 1, 'shown, so it is cleared');
 
   await runUpdateCheck({ silent: false });
-  assert.equal(takes, 1, 'a manual check leaves the record alone');
+  assert.equal(reads, 1, 'a manual check leaves the record alone');
   assert.equal(sent[1].payload.lastInstallFailure, null);
+});
+
+// #573: the record used to be deleted before the check. A start without
+// GitHub showed nothing and lost it for good.
+test('a failed install is kept for the next start when the check cannot reach GitHub', async () => {
+  const sent = [];
+  let cleared = 0;
+  const failure = { version: '2.0.0', error: 'in use', logFile: '/tmp/update-install.log' };
+  const { updates } = makeUpdates({
+    updateAvailable: false,
+    error: { key: 'update.error.offline' },
+    readInstallFailure: async () => failure,
+    clearInstallFailure: async () => { cleared += 1; },
+  });
+
+  await makeCheck({ updates, sent })({ silent: true });
+  assert.equal(sent.length, 0);
+  assert.equal(cleared, 0);
 });

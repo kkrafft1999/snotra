@@ -17,6 +17,7 @@ const {
   pickReleaseAsset,
   macAppBundlePath,
   isLinuxSystemPath,
+  assetDigest,
 } = require('../src/main/services/update-targets');
 
 const RELEASE_ASSETS = [
@@ -156,4 +157,39 @@ test('ein einzelner Kandidat ohne Arch-Kennung wird genommen', () => {
 test('Assets ohne Download-Adresse werden verworfen', () => {
   const assets = [{ name: 'Snotra-AI-1.8.0-mac-arm64.dmg', size: 5 }];
   assert.equal(pickReleaseAsset({ assets, kind: 'macos-bundle', arch: 'arm64' }), null);
+});
+
+// #573: a bundle that cannot replace itself used to learn it only after the
+// download.
+for (const [label, execPath] of [
+  ['the mounted disk image', '/Volumes/Snotra AI/Snotra AI.app/Contents/MacOS/Snotra AI'],
+  ['the disk image mounted a second time', '/Volumes/Snotra AI 1/Snotra AI.app/Contents/MacOS/Snotra AI'],
+  ['App Translocation', '/private/var/folders/xy/T/AppTranslocation/0B1C2D3E/d/Snotra AI.app/Contents/MacOS/Snotra AI'],
+]) {
+  test(`macOS: running from ${label} gives a reason instead of a self-update`, () => {
+    const target = detectInstallTarget({ platform: 'darwin', execPath });
+    assert.equal(target.kind, 'macos-read-only');
+    assert.equal(target.canSelfUpdate, false);
+    assert.match(de(target.reason), /Programme/);
+    assert.equal(pickReleaseAsset({ assets: RELEASE_ASSETS, kind: target.kind, arch: 'arm64' }), null);
+  });
+}
+
+test('macOS: a bundle on another volume of the user\'s still updates itself', () => {
+  const target = detectInstallTarget({
+    platform: 'darwin',
+    execPath: '/Volumes/External/Apps/Snotra AI.app/Contents/MacOS/Snotra AI',
+  });
+  assert.equal(target.kind, 'macos-bundle');
+  assert.equal(target.canSelfUpdate, true);
+});
+
+test('the asset keeps GitHub\'s SHA-256 digest, and only a well-formed one (#569)', () => {
+  const hex = 'AB'.repeat(32);
+  const assets = [{ ...RELEASE_ASSETS[0], digest: `sha256:${hex}` }];
+  assert.equal(pickReleaseAsset({ assets, kind: 'macos-bundle', arch: 'arm64' }).digest, `sha256:${hex.toLowerCase()}`);
+  assert.equal(pickReleaseAsset({ assets: RELEASE_ASSETS, kind: 'macos-bundle', arch: 'arm64' }).digest, '');
+  assert.equal(assetDigest('md5:abc'), '');
+  assert.equal(assetDigest(`sha256:${'a'.repeat(63)}`), '');
+  assert.equal(assetDigest(null), '');
 });

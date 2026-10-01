@@ -21,6 +21,7 @@ const {
   buildWindowsSwapScript,
   helperOutputFile,
 } = require('../src/main/services/update-installer');
+const { writeMinimalAsar } = require('./helpers/asar.js');
 
 const onWindows = process.platform === 'win32';
 const EXE = 'Snotra AI.exe';
@@ -73,6 +74,11 @@ async function makeFixture(t) {
   await fsp.mkdir(packageDir, { recursive: true });
   await fsp.copyFile(hostname, path.join(packageDir, EXE));
   await fsp.writeFile(path.join(packageDir, 'version'), 'new');
+  // The installer reads name and version from the package before the swap (#569).
+  await fsp.mkdir(path.join(packageDir, 'resources'));
+  writeMinimalAsar(path.join(packageDir, 'resources', 'app.asar'), {
+    'package.json': JSON.stringify({ productName: 'Snotra AI', version: '1.13.0' }),
+  });
   const zip = path.join(dir, `${FOLDER}-1.13.0.zip`);
   execFileSync('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-Command',
