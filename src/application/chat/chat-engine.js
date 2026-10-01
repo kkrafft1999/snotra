@@ -502,7 +502,7 @@ function buildHistoryContextParts(messages) {
         /* Ein unserialisierbarer Aufruf bleibt ungezaehlt — besser als kein Ergebnis. */
       }
     }
-    imageChars += attachmentsCharCost(message.attachments);
+    imageChars += attachmentsCharCost(message);
   }
 
   const parts = [];

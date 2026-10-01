@@ -501,10 +501,13 @@ On loading, the renderer receives only the reference and fetches the image data
 only when displaying, via `CHAT_ATTACHMENT_READ`; a folder with many sessions thus
 does not send its entire image stock over IPC. A missing file is `{ ok: false }`
 and is shown as a placeholder, not as an error. Cleanup happens under the history
-lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and every
-`CHAT_HISTORY_UPSERT` additionally removes everything for which there is no longer
-a session (dropped out of `MAX_CHAT_SESSIONS`, remnants of a quarantined history
-file).
+lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and a
+`CHAT_HISTORY_UPSERT` removes the folders of the sessions it drops out of
+`MAX_CHAT_SESSIONS`. After that it sweeps everything for which there is no longer a
+session — but only while no history lies moved aside next to the live one
+(`chat-history.json.undecryptable-*` or `.unreadable-*`). Those folders may belong
+to the chats in that copy, and the copy is kept so that it can be recovered, images
+included (#565). Once the copy is gone, the next save sweeps them.
 
 ### Model and permission mode belong to the chat (issue #211)
 
@@ -629,9 +632,13 @@ What it does with a file it finds but cannot use is one rule for all of them:
   byte, and the store starts from its defaults. A move that fails throws, so
   nothing is written (#557).
 
-The chat history follows the same idea with its own name: an unreadable history
-is moved aside as `chat-history.json.undecryptable-<stamp>` on the first read,
-and when that move fails, no save may write over it (#561).
+The chat history follows the same idea with its own names: a history that
+cannot be decrypted or parsed is moved aside as
+`chat-history.json.undecryptable-<stamp>` on the first read, one written by a
+newer release (`version` above this build's) as
+`chat-history.json.unreadable-<stamp>` (#566), and when that move fails, no save
+may write over it (#561). While such a copy lies there, the images of its chats
+are not swept (#565).
 
 The **menu bar** lives as a pure template in `services/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,

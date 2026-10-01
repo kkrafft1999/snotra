@@ -64,22 +64,25 @@ function messageContentForStore(content) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     const parts = [];
-    let unknown = false;
+    const unknown = [];
     for (const part of content) {
       if (typeof part === 'string') parts.push(part);
       else if (part && typeof part === 'object' && typeof part.text === 'string') parts.push(part.text);
       else if (isImageContentPart(part)) continue;
-      else unknown = true;
+      else unknown.push(part);
     }
     if (parts.length) return parts.join('\n');
     // Eine Nachricht, die nur aus Bildern bestand, hat schlicht keinen Text.
-    if (!unknown) return '';
+    if (unknown.length === 0) return '';
+    // Only the unknown parts are kept as JSON — the image parts next to them
+    // would bring their base64 along (#567).
     try {
-      return JSON.stringify(content);
+      return JSON.stringify(unknown);
     } catch {
-      return String(content);
+      return String(unknown);
     }
   }
+  if (isImageContentPart(content)) return '';
   if (typeof content === 'object') {
     try {
       return JSON.stringify(content);
@@ -100,12 +103,6 @@ function toolTraceEntryToString(entry) {
   return '';
 }
 
-/**
- * Trace-Eintrag für Speicher und Renderer. Ist der Tool-Name bekannt, bleibt
- * er als `{ line, tool }` erhalten — daraus leitet die Anzeige Symbol und
- * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
- * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
- */
 /**
  * Bereinigter Berechtigungs-Audit-Eintrag (Issue #66) für den Verlauf:
  * Entscheidung, Quelle, Grund, Klassen, Modus, Status, Ziel-Pfade. Nie
@@ -143,6 +140,12 @@ function schemaViolationsForStore(raw) {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Trace-Eintrag für Speicher und Renderer. Ist der Tool-Name bekannt, bleibt
+ * er als `{ line, tool }` erhalten — daraus leitet die Anzeige Symbol und
+ * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
+ * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
+ */
 function toolTraceEntryForStore(entry) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';

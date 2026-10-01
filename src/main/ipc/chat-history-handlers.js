@@ -9,9 +9,8 @@
 // geoeffneter Ordner ist (`isKnownWorkspaceRoot`). Alles andere faellt auf den
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 
-const { CHAT_ACTIVATION } = require('../services/chat-session-settings');
+const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
-const { storedChatMessagesChanged } = require('../services/chat-history-normalization');
 
 /**
  * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten
@@ -144,32 +143,39 @@ function registerChatHistoryHandlers({
       if (!normalized) return { ok: false };
       const previousUpdatedAt = Number.isFinite(existing?.updatedAt) ? existing.updatedAt : null;
       normalized.updatedAt =
-        previousUpdatedAt !== null && !storedChatMessagesChanged(existing.messages, normalized.messages)
+        previousUpdatedAt !== null && !chatHistoryStore.storedChatMessagesChanged(existing.messages, normalized.messages)
           ? previousUpdatedAt
           : now();
       const idx = store.sessions.findIndex((x) => x.id === normalized.id);
       if (idx >= 0) store.sessions[idx] = normalized;
       else store.sessions.push(normalized);
       store.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      let droppedIds = new Set();
       if (store.sessions.length > chatHistoryStore.MAX_CHAT_SESSIONS) {
         const dropped = store.sessions.slice(chatHistoryStore.MAX_CHAT_SESSIONS);
         store.sessions = store.sessions.slice(0, chatHistoryStore.MAX_CHAT_SESSIONS);
-        const droppedIds = new Set(dropped.map((s) => s.id));
+        droppedIds = new Set(dropped.map((s) => s.id));
         for (const [k, v] of Object.entries(store.activeByWorkspace)) {
           if (droppedIds.has(v)) delete store.activeByWorkspace[k];
         }
       }
       await chatHistoryStore.writeChatHistoryStore(store);
-      // Unter demselben Lock aufraeumen: Bilder von Chats, die es nicht mehr
-      // gibt — aus dem Limit gefallen, von Hand geloescht oder Reste einer in
-      // Quarantaene gestellten Verlaufsdatei.
-      await chatAttachments.pruneChats(store.sessions.map((s) => s.id));
+      // Under the same lock: the images of the chats this save dropped go by
+      // id. Everything else without a session is swept only while no history
+      // lies moved aside next to this one — the folders may belong to its
+      // chats, and the copy is kept so that it can be recovered (#565).
+      for (const id of droppedIds) await chatAttachments.deleteChat(id);
+      if (!(await chatHistoryStore.hasSetAsideChatHistory())) {
+        await chatAttachments.pruneChats(store.sessions.map((s) => s.id));
+      }
       return { ok: true };
     })));
 
-  ipcMain.handle(REQ.CHAT_HISTORY_DELETE, async (_event, id) =>
+  ipcMain.handle(REQ.CHAT_HISTORY_DELETE, async (_event, rawId) =>
     skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
-      if (typeof id !== 'string' || !id.trim()) return { ok: false };
+      // One id for the list, the pointers, the folder and the settings (#567).
+      const id = sanitizeChatId(rawId);
+      if (!id) return { ok: false };
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       store.sessions = store.sessions.filter((s) => s.id !== id);
       for (const [k, v] of Object.entries(store.activeByWorkspace)) {
@@ -197,8 +203,10 @@ function registerChatHistoryHandlers({
   // Modell und Freigabemodus des Chats herstellen (Issue #211). Der Renderer
   // liefert nur die Kennung; welche Werte dahinterstehen, weiss der Main.
   ipcMain.handle(REQ.CHAT_HISTORY_ACTIVATE, async (_event, id, activation) => {
-    const chatId = typeof id === 'string' ? id.trim().slice(0, 128) : null;
-    const explicit = activation !== CHAT_ACTIVATION.AUTO;
+    const chatId = sanitizeChatId(id);
+    // Only exactly `explicit` may bring a stored "Auto" back; a missing or
+    // unknown value is the automatic restore (#567).
+    const explicit = activation === CHAT_ACTIVATION.EXPLICIT;
     const applied = await chatSessionSettings.activate(chatId, {
       activation: explicit ? CHAT_ACTIVATION.EXPLICIT : CHAT_ACTIVATION.AUTO,
     });

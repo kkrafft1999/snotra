@@ -1,3 +1,4 @@
+import contracts from './generated/contracts.js';
 import { appStore } from './state/store.js';
 import { initTheme } from './components/ThemeManager.js';
 import { initSidebarResizer } from './components/SidebarResizer.js';
@@ -259,7 +260,7 @@ const memoryPanel = initMemoryPanel({ api });
  * den ausdruecklichen Wechsel im Verlauf vom automatischen Wiederherstellen
  * beim Start oder Ordnerwechsel — nur der ausdrueckliche holt „Auto“ zurueck.
  */
-async function activateChatSession(chatId, activation = 'explicit') {
+async function activateChatSession(chatId, activation = contracts.CHAT_ACTIVATION.EXPLICIT) {
   try {
     await api.activateChatSession?.(chatId, activation);
   } catch {

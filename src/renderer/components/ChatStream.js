@@ -44,7 +44,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
-const { coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
+const { CHAT_ACTIVATION, coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -613,7 +613,7 @@ export function initChatStream({
       // Automatisch hergestellt (App-Start, Ordnerwechsel): Modell und Modus
       // dieses Chats gelten wieder — „Auto“ aber nicht, das faellt auf
       // „Intelligent“ zurueck (Issue #211).
-      await activateChatSession(restore.id, 'auto');
+      await activateChatSession(restore.id, CHAT_ACTIVATION.AUTO);
       chatInput.value = '';
       onInputChanged();
       renderChatMessages();
@@ -628,7 +628,7 @@ export function initChatStream({
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     syncChatInFlight(); // before the round trip, see startNewChat (#411)
-    await activateChatSession(appStore.currentChatId, 'auto');
+    await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.AUTO);
     chatInput.value = '';
     onInputChanged();
     renderChatMessages();
@@ -656,7 +656,7 @@ export function initChatStream({
     syncChatInFlight();
     await api.setActiveChatId(null);
     // Neuer Chat: Standard-Modell aus den Einstellungen, Modus „Intelligent“.
-    await activateChatSession(appStore.currentChatId, 'explicit');
+    await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.EXPLICIT);
     renderChatMessages();
     afterChatSwitch();
   }

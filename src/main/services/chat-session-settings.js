@@ -39,15 +39,10 @@ const {
   chatModelPresetIdForStore,
   chatToolPermissionModeForStore,
 } = require('./chat-history-normalization');
+const { CHAT_ACTIVATION } = require('../../shared/contracts/chat');
 
 /** So viele Chats behält der Speicher — deutlich mehr als der Verlauf hält. */
 const MAX_REMEMBERED_CHATS = 500;
-
-/** Wie ein Chat aktiv wurde. `auto` = ohne Zutun (Start, Ordnerwechsel). */
-const CHAT_ACTIVATION = Object.freeze({
-  EXPLICIT: 'explicit',
-  AUTO: 'auto',
-});
 
 function createChatSessionSettings({
   chatHistoryStore,
@@ -175,7 +170,8 @@ function createChatSessionSettings({
   function resolveModeFor(values, activation, workspaceMode) {
     const stored = values.toolPermissionMode;
     if (!stored) return workspaceMode;
-    if (activation === CHAT_ACTIVATION.AUTO && stored === TOOL_PERMISSION_MODES.AUTO) {
+    // Only an explicit switch brings a stored "Auto" back (#567).
+    if (activation !== CHAT_ACTIVATION.EXPLICIT && stored === TOOL_PERMISSION_MODES.AUTO) {
       return workspaceMode;
     }
     return stored;

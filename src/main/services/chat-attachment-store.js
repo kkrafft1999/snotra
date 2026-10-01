@@ -20,6 +20,7 @@
 
 const { createHash, randomUUID } = require('crypto');
 const { LIMITS } = require('../../shared/limits');
+const { renameWithRetry } = require('./rename-with-retry');
 const {
   ATTACHMENT_KINDS,
   attachmentFileExtension,
@@ -34,7 +35,7 @@ const ATTACHMENTS_DIRNAME = 'chat-attachments';
 /** Chat-IDs sind UUIDs aus dem Renderer; das hier ist die harmlose Teilmenge. */
 const SAFE_CHAT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 
-function createChatAttachmentStore({ app, fs, path, log = console }) {
+function createChatAttachmentStore({ app, fs, path, log = console, platform = process.platform }) {
   function rootDir() {
     return path.join(app.getPath('userData'), ATTACHMENTS_DIRNAME);
   }
@@ -77,7 +78,8 @@ function createChatAttachmentStore({ app, fs, path, log = console }) {
       const tmp = `${target}.tmp-${randomUUID()}`;
       await fs.writeFile(tmp, buf);
       try {
-        await fs.rename(tmp, target);
+        // The same transient Windows locks as for the store's files (#472).
+        await renameWithRetry(fs, tmp, target, { platform });
       } catch (err) {
         await fs.unlink(tmp).catch(() => {});
         throw err;

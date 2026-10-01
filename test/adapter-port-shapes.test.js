@@ -23,11 +23,13 @@ const UI_PREFS_STORE_KEYS = ['readUIPrefs', 'updateUIPrefs'];
 
 const CHAT_HISTORY_STORE_KEYS = [
   'MAX_CHAT_SESSIONS',
+  'hasSetAsideChatHistory',
   'normalizeSessionForLoad',
   'normalizeSessionForStore',
   'normalizeWorkspaceRoot',
   'readChatHistoryStore',
   'sessionMatchesWorkspace',
+  'storedChatMessagesChanged',
   'withChatHistoryLock',
   'workspaceBucketKey',
   'writeChatHistoryStore',
@@ -75,6 +77,8 @@ function makeStorageStub() {
     readChatHistoryStore: async () => ({ sessions: [], activeByWorkspace: {} }),
     writeChatHistoryStore: async () => {},
     withChatHistoryLock: async (fn) => fn(),
+    hasSetAsideChatHistory: async () => false,
+    storedChatMessagesChanged: () => true,
     normalizeSessionForStore: () => null,
     normalizeSessionForLoad: () => null,
     normalizeWorkspaceRoot: () => null,

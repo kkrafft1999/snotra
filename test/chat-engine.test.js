@@ -1663,6 +1663,31 @@ test('engine zaehlt Tool-Ergebnisse der letzten Runde in den Verlauf (#174)', as
   assert.ok(row.share > 0.5, `Das grosse Ergebnis dominiert den Prompt, war aber ${row.share}`);
 });
 
+test('engine zeigt Bilder als eigene Zeile im Verlauf (#567)', async () => {
+  const { engine } = makeEngine([
+    assistantText('Ein Pixel.', { usage: { prompt: 3000, completion: 10, total: 3010 } }),
+  ]);
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{
+        role: 'user',
+        content: 'Was ist das?',
+        attachments: [{
+          kind: 'image',
+          mediaType: 'image/png',
+          dataBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        }],
+      }],
+    },
+  });
+
+  const row = result.contextBreakdown.parts.find((p) => p.id === 'history:images');
+  assert.ok(row, 'das Bild steht als eigene Zeile im Verlauf');
+  assert.ok(row.share > 0);
+});
+
 // ── Skill folders are read-only, skill data lives in the project (#548) ────
 
 function skillToolPort({ loadOutput, toolDefs } = {}) {
