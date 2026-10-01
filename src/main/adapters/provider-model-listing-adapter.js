@@ -3,6 +3,11 @@
 const { createListModelsResult } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
 
+/** A base URL as the providers build it: trimmed, without a trailing slash. */
+function normalizeBaseUrl(url) {
+  return typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
+}
+
 function createProviderModelListingAdapter({ providerRuntime, providerSecrets }) {
   return {
     async listModels(providerId, request) {
@@ -16,10 +21,18 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
       const stored = (await providerSecrets.getEffectiveProviderConfig(providerId, {
         presetId: request.presetId,
       })) || {};
+      // A stored secret goes only to the endpoint it was stored with (#537).
+      // A provider without a URL field talks to its own base, whatever the
+      // request names; for the others a draft URL that differs from the stored
+      // one gets only what the request itself brings — the renderer is not a
+      // security boundary and must not be able to point a stored key elsewhere.
+      const storedBaseUrl = normalizeBaseUrl(stored.baseUrl || provider.defaultBaseUrl);
+      const requestedBaseUrl = provider.fields?.baseUrl ? normalizeBaseUrl(request.baseUrl) : '';
+      const sameEndpoint = !requestedBaseUrl || requestedBaseUrl === storedBaseUrl;
       const config = {
         signal: request.signal,
-        apiKey: request.apiKey || stored.apiKey || '',
-        baseUrl: request.baseUrl || stored.baseUrl || provider.defaultBaseUrl || '',
+        apiKey: request.apiKey || (sameEndpoint ? stored.apiKey : '') || '',
+        baseUrl: requestedBaseUrl || storedBaseUrl,
         insecureTls: typeof request.insecureTls === 'boolean'
           ? request.insecureTls
           : (typeof stored.insecureTls === 'boolean'
@@ -32,7 +45,7 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
       // gespeicherten nie.
       const extraHeaders = typeof request.extraHeaders === 'string' && request.extraHeaders.trim()
         ? request.extraHeaders
-        : stored.extraHeaders;
+        : (sameEndpoint ? stored.extraHeaders : undefined);
       if (typeof extraHeaders === 'string' && extraHeaders) {
         config.extraHeaders = extraHeaders;
       }
