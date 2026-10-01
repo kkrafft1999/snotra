@@ -129,7 +129,7 @@ test('der Schalter ist die native Checkbox und behaelt nach dem Neuzeichnen den 
   await flush();
   // The list was redrawn with the new status — a new node, same server.
   const now = rows()[0].querySelector('.ds-switch');
-  assert.equal(document.activeElement, now);
+  assert.equal(document.activeElement === now, true);
 });
 
 test('lehnt der Speicher ab, springt der Schalter zurueck (#336)', async () => {
@@ -604,7 +604,7 @@ test('Test, Save and Remove are inert while a request runs (CR-B14-04)', async (
   }
   await flush();
   focusFixup(document);
-  assert.equal(document.activeElement, save, 'the pressed button keeps the focus');
+  assert.equal(document.activeElement === save, true, 'the pressed button keeps the focus');
   assert.deepEqual(calls, [['save', 'github']], 'no second request while the first runs');
   assert.equal(document.getElementById('btn-mcp-server-cancel').hasAttribute('aria-disabled'), false,
     'Cancel stays live');
@@ -647,4 +647,102 @@ test('a rejected switch goes back and says so (CR-B14-04)', async () => {
   const error = document.getElementById('settings-mcp-error');
   assert.equal(error.classList.contains('hidden'), false);
   assert.equal(error.textContent, 'The server could not be changed.');
+});
+
+// --- CR-B14-07: the focus stays where the user was ---
+
+/**
+ * Chromium drops the focus from a removed control, or one in a dialog that
+ * was hidden; happy-dom does not. (The Settings modal around the panel is
+ * hidden in this fixture as a whole, so only the sub-dialogs count.)
+ */
+const fixFocus = () => focusFixup(document, {
+  isLaidOut: (node) => node.isConnected && !node.closest('#mcp-server-overlay.hidden, #mcp-import-overlay.hidden'),
+});
+const editButton = (index) => rows()[index].querySelector('button[data-mcp-action="edit"]');
+
+async function editByKeyboard(index) {
+  editButton(index).focus();
+  editButton(index).click();
+  await flush();
+}
+
+test('after saving an edited server the focus is back on its Edit button (CR-B14-07)', async () => {
+  await mount();
+  const before = editButton(0);
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-save').focus();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  fixFocus();
+  assert.equal(editButton(0) !== before, true, 'the list was redrawn');
+  assert.equal(document.activeElement === editButton(0), true);
+});
+
+test('after removing a server the focus lands on "Add server" (CR-B14-07)', async () => {
+  const ohneGithub = () => { const k = katalog(); k.servers = k.servers.slice(1); k.connections = k.connections.slice(1); return k; };
+  await mount({ deleteMcpServer: async () => ({ ok: true, ...ohneGithub() }) });
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-delete').focus();
+  document.getElementById('btn-mcp-server-delete').click();
+  await flush();
+  fixFocus();
+  assert.equal(rows().length, 1);
+  assert.equal(document.activeElement === document.getElementById('btn-add-mcp-server'), true);
+});
+
+test('Cancel after a test returns the focus to the redrawn Edit button (CR-B14-07)', async () => {
+  await mount();
+  const before = editButton(0);
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').focus();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await flush();
+  fixFocus();
+  assert.equal(editButton(0) !== before, true, 'the test reloaded the list');
+  assert.equal(document.activeElement === editButton(0), true);
+});
+
+test('a redraw keeps the focus on the same control of the same server (CR-B14-07)', async () => {
+  await mount();
+  for (const redraw of [
+    () => document.getElementById('btn-reload-mcp').click(),
+    // The answer of a save that comes in while an Edit button has the focus.
+    () => rows()[1].querySelector('.ds-switch').click(),
+  ]) {
+    editButton(1).focus();
+    const before = editButton(1);
+    redraw();
+    await flush();
+    fixFocus();
+    assert.equal(editButton(1) !== before, true, 'the list was redrawn');
+    assert.equal(document.activeElement === editButton(1), true);
+  }
+});
+
+test('removing an environment variable moves the focus to the next, previous or "Add variable" (CR-B14-07)', async () => {
+  await mount();
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-env-add').click();
+  assert.equal(envRows().length, 3);
+  const removeOf = (index) => envRows()[index].querySelector('.settings-dialog__icon-close');
+
+  removeOf(0).focus();
+  removeOf(0).click();
+  fixFocus();
+  assert.equal(document.activeElement === envFields(envRows()[0]).key, true, 'the next row, now first');
+  assert.equal(envFields(envRows()[0]).key.value, 'LANG');
+
+  removeOf(1).focus();
+  removeOf(1).click();
+  fixFocus();
+  assert.equal(document.activeElement === envFields(envRows()[0]).key, true, 'no next row — the previous one');
+
+  removeOf(0).focus();
+  removeOf(0).click();
+  fixFocus();
+  assert.equal(envRows().length, 0);
+  assert.equal(document.activeElement === document.getElementById('btn-mcp-env-add'), true);
 });

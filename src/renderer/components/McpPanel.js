@@ -153,7 +153,13 @@ export function initMcpPanel({ api }) {
   let skipped = [];
   /** Der gerade bearbeitete Server; null = neu anlegen. */
   let editing = null;
-  let lastFocus = null;
+  /**
+   * Where the focus goes when a dialog closes. The server dialog remembers
+   * the server rather than the button: by then the list may have been
+   * redrawn and the button replaced (CR-B14-07).
+   */
+  let dialogOpener = { node: null, serverId: null };
+  let importOpener = null;
   /**
    * Counts the openings and closings of each dialog. A request remembers the
    * count it started under; an answer that arrives under another one belongs
@@ -180,8 +186,24 @@ export function initMcpPanel({ api }) {
     node.classList.toggle('hidden', !message);
   }
 
+  /** The list control that has the focus, by server and kind — it survives a redraw. */
+  function focusedListControl() {
+    const active = document.activeElement;
+    if (!active || !list?.contains(active)) return null;
+    return { serverId: active.dataset?.serverId || null, action: active.dataset?.mcpAction || null };
+  }
+
+  function listControl(serverId, action) {
+    return [...(list?.querySelectorAll('[data-mcp-action]') || [])]
+      .find((node) => node.dataset.serverId === serverId && node.dataset.mcpAction === action) || null;
+  }
+
   function render() {
     if (!list) return;
+    // A redraw replaces every row. The control that had the focus gets it
+    // back on its new node; a server that is gone hands it to "Add server"
+    // instead of dropping it to the page (CR-B14-07).
+    const focused = focusedListControl();
     list.replaceChildren();
     empty?.classList.toggle('hidden', servers.length > 0);
 
@@ -203,6 +225,8 @@ export function initMcpPanel({ api }) {
       const edit = el('button', 'btn-secondary btn-compact', t('settings.mcp.edit'));
       edit.type = 'button';
       edit.setAttribute('aria-label', t('settings.mcp.edit.label', { name: server.label || server.id }));
+      edit.dataset.serverId = server.id;
+      edit.dataset.mcpAction = 'edit';
       edit.addEventListener('click', () => openDialog(server));
       actions.append(edit);
 
@@ -212,6 +236,7 @@ export function initMcpPanel({ api }) {
       toggle.checked = Boolean(server.enabled);
       toggle.setAttribute('aria-label', t('settings.mcp.enabled.label', { name: server.label || server.id }));
       toggle.dataset.serverId = server.id;
+      toggle.dataset.mcpAction = 'switch';
       toggle.addEventListener('change', async () => {
         // A refused save leaves the list as it was, so the box has to go back.
         if (!(await setEnabled(server, toggle.checked))) toggle.checked = Boolean(server.enabled);
@@ -235,6 +260,8 @@ export function initMcpPanel({ api }) {
         + skipped.map((entry) => `${entry.serverId}/${entry.name}`).join(', ')));
       list.append(note);
     }
+
+    if (focused) (listControl(focused.serverId, focused.action) || btnAdd)?.focus();
   }
 
   function adopt(result) {
@@ -279,15 +306,10 @@ export function initMcpPanel({ api }) {
       result = null;
     }
     if (result?.ok) {
-      // The list is redrawn with the new status; the switch that was just
-      // used keeps the focus instead of losing it to the page.
-      const hadFocus = document.activeElement?.dataset?.serverId === server.id;
+      // The list is redrawn with the new status; render() hands the focus
+      // to the new switch.
       adopt(result);
       setError(errorEl, '');
-      if (hadFocus) {
-        [...(list?.querySelectorAll('.ds-switch') || [])]
-          .find((node) => node.dataset.serverId === server.id)?.focus();
-      }
       return true;
     }
     setError(errorEl, tMessage(result?.errors?.[0]) || tMessage(result?.error) || t('settings.mcp.updateFailed'));
@@ -399,7 +421,13 @@ export function initMcpPanel({ api }) {
     remove.type = 'button';
     remove.innerHTML = CLOSE_ICON_HTML;
     remove.setAttribute('aria-label', t('mcpDialog.env.remove'));
-    remove.addEventListener('click', () => row.remove());
+    remove.addEventListener('click', () => {
+      // The pressed button goes with its row; the focus moves to the next
+      // row, else the previous one, else "Add variable" (CR-B14-07).
+      const neighbour = row.nextElementSibling || row.previousElementSibling;
+      row.remove();
+      (neighbour?.querySelector('.mcp-env-row__key') || btnEnvAdd)?.focus();
+    });
     opts.append(remove);
 
     row.append(key, value, opts);
@@ -458,7 +486,7 @@ export function initMcpPanel({ api }) {
     dialogGeneration += 1;
     setDialogBusy(false);
     editing = server || null;
-    lastFocus = document.activeElement;
+    dialogOpener = { node: document.activeElement, serverId: server?.id || null };
     setError(formError, '');
     if (testResult) testResult.replaceChildren();
 
@@ -480,16 +508,21 @@ export function initMcpPanel({ api }) {
   }
 
   function closeDialog() {
+    const wasOpen = !overlay.classList.contains('hidden');
     dialogGeneration += 1;
     setDialogBusy(false);
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     editing = null;
-    try {
-      lastFocus?.focus();
-    } catch {
-      /* das Element kann inzwischen weg sein */
-    }
+    if (!wasOpen) return;
+    // Back to the row's Edit button — the one on screen now, after a save,
+    // a test or a reload redrew the list. A removed server leaves "Add
+    // server" as the nearest place.
+    const { node, serverId } = dialogOpener;
+    const target = serverId
+      ? listControl(serverId, 'edit') || btnAdd
+      : (node?.isConnected ? node : btnAdd);
+    target?.focus();
   }
 
   /** The arguments as typed — or exactly as stored when the line was not edited. */
@@ -750,7 +783,7 @@ export function initMcpPanel({ api }) {
   function openImport() {
     importGeneration += 1;
     setImportBusy(false);
-    lastFocus = document.activeElement;
+    importOpener = document.activeElement;
     if (importInput) importInput.value = '';
     importCandidates = [];
     importUnchecked = new Set();
@@ -762,15 +795,12 @@ export function initMcpPanel({ api }) {
   }
 
   function closeImport() {
+    const wasOpen = importOverlay ? !importOverlay.classList.contains('hidden') : false;
     importGeneration += 1;
     setImportBusy(false);
     importOverlay?.classList.add('hidden');
     importOverlay?.setAttribute('aria-hidden', 'true');
-    try {
-      lastFocus?.focus();
-    } catch {
-      /* das Element kann inzwischen weg sein */
-    }
+    if (wasOpen) (importOpener?.isConnected ? importOpener : btnImportOpen)?.focus();
   }
 
   /**

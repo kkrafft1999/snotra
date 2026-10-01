@@ -273,7 +273,7 @@ test('an import closed while it saves leaves the reopened dialog alone (CR-B14-0
   await flush();
   // Saving: inert, but the button keeps the focus.
   assert.equal(uebernehmen().getAttribute('aria-disabled'), 'true');
-  assert.equal(document.activeElement, uebernehmen());
+  assert.equal(document.activeElement === uebernehmen(), true);
   uebernehmen().click();
   await flush();
   assert.deepEqual(gespeichert, ['atlassian-jira'], 'a second press starts nothing');
