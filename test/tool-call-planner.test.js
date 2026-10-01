@@ -202,6 +202,10 @@ test('ungültige Argumente blockieren vor jeder Pfadauflösung', async (t) => {
   assert.equal((await planner.plan(def, [], { workspaceRoot: workspace })).reason, 'invalid_arguments');
   assert.equal(validateArguments({ parameters: { required: ['x'], properties: { x: { type: 'boolean' } } } }, { x: 'ja' }), 'Argument "x" must be true or false.');
   assert.equal(validateArguments({ parameters: {} }, { extra: 1 }), null, 'unbekannte Felder stören nicht');
+  // #553: a value outside its enum is refused, with the allowed values named.
+  const withEnum = { parameters: { properties: { mode: { type: 'string', enum: ['a', 'b'] } } } };
+  assert.equal(validateArguments(withEnum, { mode: 'b' }), null);
+  assert.equal(validateArguments(withEnum, { mode: 'c' }), 'Argument "mode" must be one of "a", "b".');
   const unknown = await planner.plan(null, {}, { workspaceRoot: workspace });
   assert.equal(unknown.reason, 'unknown_tool');
   assert.equal(unknown.unknownTool, true);

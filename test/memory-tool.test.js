@@ -5,6 +5,7 @@ const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-too
 const { MEMORY_SCOPES, MEMORY_ORIGINS } = require('../src/shared/contracts/memory');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { validateArguments } = require('../src/main/tools/tool-call-planner');
 
 function makeFsServiceStub() {
   return new Proxy({}, { get: () => async () => ({}) });
@@ -87,14 +88,26 @@ test('gemerkt wird mit Ebene, Text und dem Ordner aus dem Aufrufkontext', async 
   assert.match(result.file, /memory\.md$/);
 });
 
-test('eine unbekannte Herkunft gilt als vom Nutzer erbeten, nicht als selbst gemerkt', async () => {
+// #553: an unknown origin is refused before planning (enum check), so a typo
+// costs one round, not the entry. Should one reach the handler anyway, it
+// counts as unprompted: read as "requested", it would pass the switch the user
+// set for exactly these entries.
+test('an unknown origin is refused, and the handler never reads it as requested (#553)', async () => {
+  const definition = registryWith(makeMemoryStub()).getDefinition('remember');
+  assert.equal(
+    validateArguments(definition, { scope: 'user', text: 'x', origin: 'quatsch' }),
+    'Argument "origin" must be one of "requested", "self".'
+  );
+  assert.equal(
+    validateArguments(definition, { scope: 'global', text: 'x', origin: 'requested' }),
+    'Argument "scope" must be one of "workspace", "user".'
+  );
+
   const memory = makeMemoryStub();
   await registryWith(memory)
     .getDefinition('remember')
     .handler({ scope: 'user', text: 'x', origin: 'quatsch' }, {});
-  // Im Zweifel die harmlosere Auslegung: „self" waere der Fall, den der
-  // Nutzer abschalten kann — den darf ein Tippfehler nicht herbeifuehren.
-  assert.equal(memory.calls[0].origin, MEMORY_ORIGINS.REQUESTED);
+  assert.equal(memory.calls[0].origin, MEMORY_ORIGINS.SELF);
 });
 
 test('ein abgelehnter Merkversuch kommt als Fehlertext zurueck, nicht als Absturz', async () => {

@@ -1508,7 +1508,9 @@ function createWorkspaceToolRegistry({
           const saved = await memory.remember({
             scope: args?.scope,
             text: args?.text,
-            origin: args?.origin === 'self' ? MEMORY_ORIGINS.SELF : MEMORY_ORIGINS.REQUESTED,
+            // Only what is declared as requested counts as requested (#553):
+            // anything else would pass the switch for unprompted remembering.
+            origin: args?.origin === MEMORY_ORIGINS.REQUESTED ? MEMORY_ORIGINS.REQUESTED : MEMORY_ORIGINS.SELF,
             workspaceRoot,
           });
           // Der Pfad geht mit zurueck, damit im Chat steht, *wohin* gemerkt

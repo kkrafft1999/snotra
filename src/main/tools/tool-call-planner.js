@@ -102,6 +102,11 @@ function buildPreview(toolName, args, options = {}) {
  * Minimale Argumentprüfung gegen das JSON-Schema der Definition: Pflichtfelder
  * müssen vorhanden sein und den deklarierten Grundtyp haben. Ungültige
  * Argumente werden blockiert, nicht „irgendwie“ ausgeführt.
+ *
+ * A value outside its `enum` is refused too (#553): the handlers read it as
+ * one of the allowed values otherwise — `remember` took any origin for
+ * "requested" — and the message names the values, so the model corrects
+ * itself in one round.
  */
 function validateArguments(definition, args) {
   const schema = definition.parameters || {};
@@ -125,6 +130,9 @@ function validateArguments(definition, args) {
     if (expected === 'boolean' && actual !== 'boolean') return `Argument "${key}" must be true or false.`;
     if (expected === 'array' && actual !== 'array') return `Argument "${key}" must be an array.`;
     if (expected === 'object' && actual !== 'object') return `Argument "${key}" must be an object.`;
+    if (Array.isArray(spec.enum) && spec.enum.length > 0 && !spec.enum.includes(value)) {
+      return `Argument "${key}" must be one of ${spec.enum.map((entry) => JSON.stringify(entry)).join(', ')}.`;
+    }
   }
   return null;
 }
