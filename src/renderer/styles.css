@@ -6011,7 +6011,9 @@ select.modal-input {
   color: var(--text-muted-strong);
 }
 
-.chat-tool-mode-option:focus-visible {
+/* Inside the menu, so the scrolling list does not cut the ring off (#583). */
+.chat-tool-mode-option:focus-visible,
+.chat-model-menu-option:focus-visible {
   outline: var(--ds-focus-ring);
   outline-offset: calc(-1 * var(--ds-focus-offset));
 }
