@@ -165,3 +165,64 @@ test('ein fehlgeschlagener Schreibversuch bleibt folgenlos', () => {
   assert.equal(errors.length, 1, 'der Fehlschlag wird gemeldet, nicht verschluckt');
   assert.equal(store.read(), null);
 });
+
+function lockedRenameFs({ failures, code = 'EPERM' }) {
+  const calls = { rename: 0, unlink: 0, written: null };
+  return {
+    calls,
+    fs: {
+      mkdirSync() {},
+      writeFileSync(_file, data) { calls.written = data; },
+      renameSync() {
+        calls.rename += 1;
+        if (calls.rename <= failures) throw Object.assign(new Error('locked'), { code });
+      },
+      unlinkSync() { calls.unlink += 1; },
+      readFileSync() { return calls.written; },
+    },
+  };
+}
+
+test('a transient lock on Windows does not drop the window state (#509)', () => {
+  const { fs: lockedFs, calls } = lockedRenameFs({ failures: 2 });
+  const sleeps = [];
+  const errors = [];
+  const store = createWindowStateStore({
+    filePath: 'C:\\Users\\me\\AppData\\Roaming\\Snotra AI\\window-state.json',
+    fs: lockedFs,
+    log: { error: (...args) => errors.push(args) },
+    retry: { platform: 'win32', sleep: (ms) => sleeps.push(ms) },
+  });
+  store.write({ width: 100, height: 100 });
+  assert.equal(calls.rename, 3);
+  assert.deepEqual(sleeps, [25, 50]);
+  assert.equal(errors.length, 0);
+  assert.equal(calls.unlink, 0, 'the temporary file became the state');
+});
+
+test('a lasting lock gives up after the attempts and tidies up', () => {
+  const { fs: lockedFs, calls } = lockedRenameFs({ failures: Infinity, code: 'EBUSY' });
+  const errors = [];
+  const store = createWindowStateStore({
+    filePath: 'C:\\state\\window-state.json',
+    fs: lockedFs,
+    log: { error: (...args) => errors.push(args) },
+    retry: { platform: 'win32', sleep: () => {} },
+  });
+  store.write({ width: 100, height: 100 });
+  assert.equal(calls.rename, 8);
+  assert.equal(errors.length, 1);
+  assert.equal(calls.unlink, 1);
+});
+
+test('elsewhere the first failed rename is the answer', () => {
+  const { fs: lockedFs, calls } = lockedRenameFs({ failures: 1 });
+  const store = createWindowStateStore({
+    filePath: '/state/window-state.json',
+    fs: lockedFs,
+    log: { error: () => {} },
+    retry: { platform: 'darwin', sleep: () => { throw new Error('must not wait'); } },
+  });
+  store.write({ width: 100, height: 100 });
+  assert.equal(calls.rename, 1);
+});

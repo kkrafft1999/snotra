@@ -17,11 +17,14 @@ function attemptNavigation(url) {
   return { prevented };
 }
 
-function decide(permission, { requestingUrl, webContentsUrl } = {}) {
+function decide(permission, { requestingUrl, webContentsUrl, mediaTypes = ['audio'] } = {}) {
   const handler = createPermissionRequestHandler();
   let result = null;
   const webContents = webContentsUrl !== undefined ? { getURL: () => webContentsUrl } : null;
-  const details = requestingUrl !== undefined ? { requestingUrl } : undefined;
+  // `mediaTypes: null` leaves the list out, as a request that does not say.
+  const details = requestingUrl !== undefined || mediaTypes !== null
+    ? { ...(requestingUrl !== undefined ? { requestingUrl } : {}), ...(mediaTypes !== null ? { mediaTypes } : {}) }
+    : undefined;
   handler(webContents, permission, (granted) => {
     result = granted;
   }, details);
@@ -52,9 +55,19 @@ test('renderer navigation allows only the app URL including query and hash', () 
   assert.equal(attemptNavigation('not a url').prevented, true);
 });
 
-test('grants media permissions to the trusted renderer', () => {
+test('grants the microphone to the trusted renderer', () => {
   assert.equal(decide('media', { requestingUrl: RENDERER_URL }), true);
-  assert.equal(decide('audioCapture', { requestingUrl: RENDERER_URL }), true);
+});
+
+test('denies a media request that asks for the camera, or does not say what it asks for (#509)', () => {
+  assert.equal(decide('media', { requestingUrl: RENDERER_URL, mediaTypes: ['video'] }), false);
+  assert.equal(decide('media', { requestingUrl: RENDERER_URL, mediaTypes: ['audio', 'video'] }), false);
+  assert.equal(decide('media', { requestingUrl: RENDERER_URL, mediaTypes: [] }), false);
+  assert.equal(decide('media', { requestingUrl: RENDERER_URL, mediaTypes: null }), false);
+});
+
+test('audioCapture is no permission Electron asks for and is denied like any other', () => {
+  assert.equal(decide('audioCapture', { requestingUrl: RENDERER_URL }), false);
 });
 
 test('denies other permissions even for the trusted renderer', () => {
@@ -67,11 +80,12 @@ test('denies media permissions for foreign requesting URLs (e.g. external iframe
   assert.equal(decide('audioCapture', { requestingUrl: 'file:///tmp/evil.html' }), false);
 });
 
-test('falls back to webContents.getURL() when details are missing', () => {
+test('falls back to webContents.getURL() when the details carry no URL', () => {
   assert.equal(decide('media', { webContentsUrl: RENDERER_URL }), true);
   assert.equal(decide('media', { webContentsUrl: 'https://example.com/' }), false);
 });
 
 test('denies when no URL can be determined', () => {
   assert.equal(decide('media', {}), false);
+  assert.equal(decide('media', { mediaTypes: null }), false);
 });

@@ -13,6 +13,7 @@
 
 const fsSync = require('fs');
 const path = require('path');
+const { renameSyncWithRetry } = require('./services/rename-with-retry');
 
 // Erster Start ohne gespeicherten Zustand (Issue #208): 20 % mehr als die
 // frueheren 1280 x 800. Drei Spalten brauchen Platz — kleiner faengt jedes
@@ -133,7 +134,7 @@ function resolveWindowBounds({ saved = null, displays = [], primaryWorkArea = nu
  * Dateisystem auskommt; geschrieben wird synchron, weil der letzte Stand beim
  * Schliessen des Fensters faellig ist und der Prozess danach nicht mehr wartet.
  */
-function createWindowStateStore({ filePath, fs = fsSync, log = console } = {}) {
+function createWindowStateStore({ filePath, fs = fsSync, log = console, retry } = {}) {
   return {
     read() {
       try {
@@ -150,7 +151,8 @@ function createWindowStateStore({ filePath, fs = fsSync, log = console } = {}) {
         // Erst daneben schreiben, dann umbenennen: ein Absturz mitten im
         // Schreiben laesst sonst eine halbe Datei zurueck.
         fs.writeFileSync(tmp, JSON.stringify(state), 'utf8');
-        fs.renameSync(tmp, filePath);
+        // A transient lock on Windows would drop the state otherwise (#509).
+        renameSyncWithRetry(fs, tmp, filePath, retry);
       } catch (err) {
         log.error?.('Fensterzustand konnte nicht gesichert werden:', err);
         try { fs.unlinkSync(tmp); } catch { /* dann eben nicht */ }
