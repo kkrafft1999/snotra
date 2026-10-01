@@ -6,6 +6,8 @@
  * @property {(options?: { skipMigration?: boolean }) => Promise<object>} readChatHistoryStore
  * @property {(store: object) => Promise<void>} writeChatHistoryStore
  * @property {(fn: () => Promise<unknown>) => Promise<unknown>} withChatHistoryLock
+ * @property {() => Promise<boolean>} hasSetAsideChatHistory A history moved aside (#565) lies next to the live one
+ * @property {(existingMessages: unknown, nextMessages: object[]) => boolean} storedChatMessagesChanged
  * @property {(sessionRow: object, options?: object) => object|null} normalizeSessionForStore
  * @property {(sessionRow: object) => object|null} normalizeSessionForLoad
  * @property {(raw: unknown) => string|null} normalizeWorkspaceRoot

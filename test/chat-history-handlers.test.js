@@ -445,14 +445,16 @@ test('der Wechsel meldet dem Main, ob er ausdruecklich war', async (t) => {
 
   await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'a', 'explicit');
   await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'b', 'auto');
-  // Unbekannte Angabe gilt als ausdruecklich — sie kann nur aus der App kommen,
-  // und ein automatischer Wechsel nennt sich ausdruecklich `auto`.
+  // A missing or unknown value is the cautious case, the automatic restore:
+  // only an explicit switch may bring a stored "Auto" back (#567).
   await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'c');
+  await ipcMain.invoke(REQ.CHAT_HISTORY_ACTIVATE, 'd', 'Explicit');
 
   assert.deepEqual(chatSessionSettings.calls.activate, [
     { chatId: 'a', activation: 'explicit' },
     { chatId: 'b', activation: 'auto' },
-    { chatId: 'c', activation: 'explicit' },
+    { chatId: 'c', activation: 'auto' },
+    { chatId: 'd', activation: 'auto' },
   ]);
 });
 

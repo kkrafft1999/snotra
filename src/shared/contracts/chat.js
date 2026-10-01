@@ -28,6 +28,16 @@ const CHAT_TITLE_MAX_LENGTH = 48;
 const CHAT_ID_MAX_LENGTH = 128;
 
 /**
+ * How a chat became the active one (#211). `auto` = without the user doing
+ * anything (start, folder switch); only `explicit` brings a stored "Auto"
+ * back, and anything that is not exactly `explicit` counts as `auto` (#567).
+ */
+const CHAT_ACTIVATION = Object.freeze({
+  EXPLICIT: 'explicit',
+  AUTO: 'auto',
+});
+
+/**
  * A chat id as main and the engine both take it (#532): a trimmed, non-empty
  * string of at most 128 characters, otherwise `null` — never cut down, since
  * two ids sharing a prefix would then share one run.
@@ -278,6 +288,7 @@ function isToolLinePhase(phase) {
 
 module.exports = {
   CHAT_ID_MAX_LENGTH,
+  CHAT_ACTIVATION,
   sanitizeChatId,
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,

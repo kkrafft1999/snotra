@@ -2,7 +2,7 @@ import { formatHistoryTime } from '../chat/messageUtils.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
 import contracts from '../generated/contracts.js';
 
-const { resolveChatTitle } = contracts;
+const { CHAT_ACTIVATION, resolveChatTitle } = contracts;
 
 /**
  * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
@@ -194,7 +194,7 @@ export function initChatHistoryPanel({
     // Ausdruecklicher Wechsel: Dieser Chat bekommt sein Modell und seinen
     // Freigabemodus zurueck — auch „Auto“, das er nur nach einer nativen
     // Bestaetigung tragen kann (Issue #211).
-    await activateChatSession(id, 'explicit');
+    await activateChatSession(id, CHAT_ACTIVATION.EXPLICIT);
     renderChatMessages();
     runs.afterSwitch();
     updateChatChrome();
@@ -217,7 +217,7 @@ export function initChatHistoryPanel({
       onInputChanged();
       await api.setActiveChatId(null);
       // Der Ersatz ist ein neuer Chat: Standard-Modell, Modus „Intelligent“.
-      await activateChatSession(appStore.currentChatId, 'explicit');
+      await activateChatSession(appStore.currentChatId, CHAT_ACTIVATION.EXPLICIT);
       renderChatMessages();
       updateChatChrome();
     }

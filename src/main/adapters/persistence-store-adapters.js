@@ -23,6 +23,8 @@ function createChatHistoryStorePort(storage) {
     readChatHistoryStore: (...args) => storage.readChatHistoryStore(...args),
     writeChatHistoryStore: (...args) => storage.writeChatHistoryStore(...args),
     withChatHistoryLock: (...args) => storage.withChatHistoryLock(...args),
+    hasSetAsideChatHistory: (...args) => storage.hasSetAsideChatHistory(...args),
+    storedChatMessagesChanged: (...args) => storage.storedChatMessagesChanged(...args),
     normalizeSessionForStore: (...args) => storage.normalizeSessionForStore(...args),
     normalizeSessionForLoad: (...args) => storage.normalizeSessionForLoad(...args),
     normalizeWorkspaceRoot: (...args) => storage.normalizeWorkspaceRoot(...args),

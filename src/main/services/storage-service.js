@@ -26,6 +26,7 @@ const {
   normalizeLoadedMessages,
   normalizeSessionForStore: buildNormalizedSessionForStore,
   normalizeSessionForLoad,
+  storedChatMessagesChanged,
 } = require('./chat-history-normalization');
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
@@ -48,6 +49,15 @@ function createStorageService({
   const FOLDER_HISTORY_FILENAME = 'folder-history.json';
   const UI_PREFS_FILENAME = 'ui-preferences.json';
   const CHAT_HISTORY_FILENAME = 'chat-history.json';
+  const CHAT_HISTORY_VERSION = 2;
+  /**
+   * Suffixes of a history moved aside: one that could not be decrypted or
+   * parsed, and one written by a newer release (#566).
+   */
+  const CHAT_HISTORY_SET_ASIDE_SUFFIXES = Object.freeze({
+    UNDECRYPTABLE: 'undecryptable',
+    UNREADABLE: 'unreadable',
+  });
   const WEB_SEARCH_CONFIG_FILENAME = 'web-search-config.json';
   const MCP_CONFIG_FILENAME = 'mcp-servers.json';
 
@@ -991,7 +1001,7 @@ function createStorageService({
   }
 
   function defaultChatHistoryStore() {
-    return { version: 2, activeByWorkspace: {}, sessions: [] };
+    return { version: CHAT_HISTORY_VERSION, activeByWorkspace: {}, sessions: [] };
   }
 
   function normalizeWorkspaceRoot(raw) {
@@ -1019,6 +1029,9 @@ function createStorageService({
 
   function parseChatHistoryStoreData(data) {
     if (!data || typeof data !== 'object') return null;
+    // Written by a newer release (#566): its sessions may carry what this
+    // build would drop on the next write, so it is not read at all.
+    if (isNewerChatHistoryVersion(data.version)) return null;
     const sessionsIn = Array.isArray(data.sessions) ? data.sessions : [];
     const sessions = sessionsIn
       .map((x) => normalizeSessionForStore(x))
@@ -1036,10 +1049,14 @@ function createStorageService({
     }
 
     return {
-      version: 2,
+      version: CHAT_HISTORY_VERSION,
       activeByWorkspace,
       sessions,
     };
+  }
+
+  function isNewerChatHistoryVersion(version) {
+    return Number.isFinite(version) && version > CHAT_HISTORY_VERSION;
   }
 
   async function loadChatHistoryStoreFromDisk() {
@@ -1075,7 +1092,12 @@ function createStorageService({
         data = JSON.parse(decrypted);
       }
       const store = parseChatHistoryStoreData(data);
-      if (!store) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
+      if (!store) {
+        const setAsideAs = isNewerChatHistoryVersion(data?.version)
+          ? CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNREADABLE
+          : CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE;
+        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true, setAsideAs };
+      }
       return { store, wasEncrypted, unreadable: false };
     } catch {
       return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
@@ -1091,10 +1113,10 @@ function createStorageService({
    * Returns false when the file is still where it was (#561) — the caller
    * must then not hand out a store that could be written over it.
    */
-  async function quarantineUnreadableChatHistory() {
+  async function quarantineUnreadableChatHistory(suffix = CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE) {
     const source = getChatHistoryPath();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const target = `${source}.undecryptable-${stamp}`;
+    const target = `${source}.${suffix}-${stamp}`;
     try {
       await renameWithRetry(fs, source, target, { platform });
       if (typeof log?.warn === 'function') {
@@ -1111,8 +1133,27 @@ function createStorageService({
   }
 
   /** An empty store for an unreadable file — writable only once it is moved aside. */
-  async function storeAfterQuarantine() {
-    return (await quarantineUnreadableChatHistory()) ? defaultChatHistoryStore() : storeFromFailedRead();
+  async function storeAfterQuarantine(suffix) {
+    return (await quarantineUnreadableChatHistory(suffix)) ? defaultChatHistoryStore() : storeFromFailedRead();
+  }
+
+  /**
+   * Is a history moved aside still lying next to the live one (#565)? Its
+   * chats are not in the store, but their images may still be wanted — the
+   * copy is kept so that it can be recovered, images included.
+   */
+  async function hasSetAsideChatHistory() {
+    const prefixes = Object.values(CHAT_HISTORY_SET_ASIDE_SUFFIXES).map(
+      (suffix) => `${CHAT_HISTORY_FILENAME}.${suffix}-`
+    );
+    let names;
+    try {
+      names = await fs.readdir(app.getPath('userData'));
+    } catch {
+      // Not listable: assume there is one, so nothing is swept on a guess.
+      return true;
+    }
+    return names.some((name) => prefixes.some((prefix) => name.startsWith(prefix)));
   }
 
   async function migrateChatHistoryToEncryptedIfNeeded(store, wasEncrypted) {
@@ -1137,15 +1178,15 @@ function createStorageService({
   }
 
   async function readChatHistoryStore({ skipMigration = false } = {}) {
-    const { store, wasEncrypted, unreadable, readFailed } = await loadChatHistoryStoreFromDisk();
+    const { store, wasEncrypted, unreadable, readFailed, setAsideAs } = await loadChatHistoryStoreFromDisk();
     if (readFailed) return storeFromFailedRead();
-    if (unreadable) return storeAfterQuarantine();
+    if (unreadable) return storeAfterQuarantine(setAsideAs);
     if (skipMigration) return store;
     if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
       return withChatHistoryLock(async () => {
         const fresh = await loadChatHistoryStoreFromDisk();
         if (fresh.readFailed) return storeFromFailedRead();
-        if (fresh.unreadable) return storeAfterQuarantine();
+        if (fresh.unreadable) return storeAfterQuarantine(fresh.setAsideAs);
         await migrateChatHistoryToEncryptedIfNeeded(fresh.store, fresh.wasEncrypted);
         return fresh.store;
       });
@@ -1332,6 +1373,8 @@ function createStorageService({
     normalizeSessionForStore,
     readChatHistoryStore,
     writeChatHistoryStore,
+    hasSetAsideChatHistory,
+    storedChatMessagesChanged,
     withChatHistoryLock,
     persistLastFolder,
     getValidatedFolderHistory,
