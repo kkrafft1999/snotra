@@ -601,6 +601,7 @@ module.exports = {
   'settings.memory.scope.workspace.named': 'Projekt · {folder}',
   'settings.memory.forget.label': 'Vergessen: {text}',
   'settings.memory.forget.title': 'Diesen Eintrag vergessen',
+  'settings.memory.forget.notFound': 'Nicht entfernt: Die Datei hat sich inzwischen geändert. Die Liste zeigt jetzt, was darin steht.',
   'settings.memory.origin.self': 'selbst gemerkt',
   'settings.memory.scope.noFolder': 'Kein Ordner geöffnet',
   'settings.memory.scope.send': 'Mitschicken',

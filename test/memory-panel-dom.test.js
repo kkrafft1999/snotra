@@ -169,3 +169,94 @@ test('a "Forget" in flight keeps the focus and takes no second press; a failed o
   assert.equal(button.hasAttribute('aria-disabled'), false);
   assert.equal(ui.doc.activeElement === button, true, 'nothing was redrawn, the focus stays');
 });
+
+// CR-B14-08 (#621): a failed "Forget" used to show nothing at all.
+test('a failed "Forget" says why in its card\'s status line, and keeps the focus', async (t) => {
+  let answer = { ok: false, error: { key: 'settings.error.memory.invalidRequest' } };
+  const ui = await mount({
+    memory: userMemory(['First.', 'Second.']),
+    api: { forgetMemoryEntry: async () => answer },
+  });
+  t.after(ui.cleanup);
+  const status = ui.card('user').querySelector('.memory-card__status');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(status.textContent, '', 'present and empty before anything happened');
+  assert.equal(ui.trash('Second.').getAttribute('aria-describedby'), status.id);
+
+  ui.trash('Second.').focus();
+  ui.trash('Second.').click();
+  await flush();
+  focusFixup(ui.doc);
+  assert.equal(status.textContent, 'This entry cannot be forgotten: the request is incomplete.', 'main\'s own reason');
+  assert.equal(status.classList.contains('is-error'), true);
+  assert.equal(ui.doc.activeElement === ui.trash('Second.'), true);
+
+  // No reason from main: the catalogue's own sentence.
+  answer = { ok: false };
+  ui.trash('Second.').click();
+  await flush();
+  assert.equal(status.textContent, 'The entry could not be removed.');
+
+  // A language change speaks the new language.
+  answer = { ok: false, error: { key: 'settings.error.memory.forgetFailed' } };
+  ui.trash('First.').click();
+  await flush();
+  ui.setLocale('de');
+  await flush();
+  assert.equal(ui.card('user').querySelector('.memory-card__status').textContent, 'Der Eintrag ließ sich nicht entfernen.');
+});
+
+test('an entry main did not find says so after the redraw, and keeps the focus where it still stands', async (t) => {
+  const changed = userMemory(['First.', 'Second.', 'Added in the editor.']);
+  const ui = await mount({
+    memory: userMemory(['First.', 'Second.']),
+    api: { forgetMemoryEntry: async () => ({ ok: true, removed: false, state: structuredClone(changed) }) },
+  });
+  t.after(ui.cleanup);
+  ui.trash('Second.').focus();
+  ui.trash('Second.').click();
+  await flush();
+  focusFixup(ui.doc);
+  assert.deepEqual(ui.texts('user'), ['First.', 'Second.', 'Added in the editor.'], 'drawn from main\'s answer');
+  const status = ui.card('user').querySelector('.memory-card__status');
+  assert.equal(status.textContent, 'Not removed: the file has changed in the meantime. The list now shows what it holds.');
+  assert.equal(status.classList.contains('is-error'), false, 'nothing failed, the file moved on');
+  assert.equal(ui.doc.activeElement === ui.trash('Second.'), true);
+  assert.equal(ui.doc.activeElement.getAttribute('aria-describedby'), status.id, 'read out with the focus');
+
+  // Reopening the dialog starts without it.
+  await ui.panel.refresh();
+  assert.equal(ui.card('user').querySelector('.memory-card__status').textContent, '');
+});
+
+test('the memory card\'s small texts use the stronger grey, 4.5:1 or more in light and dark', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'src', 'renderer');
+  const css = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8').replace(/\r\n/g, '\n');
+  const tokens = fs.readFileSync(path.join(dir, 'styles', 'tokens.css'), 'utf8').replace(/\r\n/g, '\n');
+  const rule = (selector) => {
+    const at = css.indexOf(`\n${selector} {`);
+    assert.notEqual(at, -1, `${selector} is missing`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  for (const selector of ['.memory-card__path', '.memory-item__origin', '.memory-meta', '.memory-card__status']) {
+    assert.match(rule(selector), /color:\s*var\(--text-muted-strong\)/, selector);
+  }
+  assert.match(css, /--text-muted-strong:\s*var\(--ds-grey-strong\)/);
+
+  const value = (block, name) => new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(block)[1];
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const dark = tokens.slice(tokens.indexOf("[data-theme='dark']"));
+  for (const block of [tokens, dark]) {
+    assert.ok(ratio(value(block, '--ds-grey-strong'), value(block, '--ds-surface')) >= 4.5);
+  }
+});

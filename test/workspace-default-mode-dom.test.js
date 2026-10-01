@@ -264,3 +264,30 @@ test('settings: no folder, nothing to choose; no encrypted storage, no "Auto"', 
     dom.cleanup();
   }
 });
+
+// CR-B14-08 (#621): the reason for a disabled "Auto" was only in a `title`.
+test('settings: the state line describes the radiogroup, and each option carries its sentence', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const permissions = fakePermissions(baseState());
+    initWorkspaceModeSetting({ toolPermissions: permissions, ids: SECURITY_PAGE_IDS });
+    const doc = dom.document;
+    const group = doc.getElementById('settings-security-mode-options');
+    assert.deepEqual(group.getAttribute('aria-describedby').split(' '), ['settings-security-mode-state', 'settings-security-mode-note']);
+    const radio = (value) => group.querySelector(`input[value="${value}"]`);
+    const description = (value) => doc.getElementById(radio(value).getAttribute('aria-describedby'));
+    assert.equal(description('smart').textContent, 'Reading runs without asking. File changes and sensitive files ask first. The default.');
+    assert.equal(description('smart').hidden, true, 'read with the radio, not shown twice');
+    assert.equal(description('smart').closest('label'), null, 'not part of the radio\'s name');
+    assert.equal(radio('smart').closest('label').title, description('smart').textContent);
+    assert.match(description('auto').textContent, /^No questions about tool calls/);
+
+    permissions.push(baseState({ encryptionAvailable: false }));
+    assert.equal(radio('auto').disabled, true);
+    assert.equal(description('auto').textContent, 'Not available: this system offers no encrypted storage.');
+    assert.equal(radio('auto').closest('label').title, 'Not available: this system offers no encrypted storage.');
+  } finally {
+    dom.cleanup();
+  }
+});

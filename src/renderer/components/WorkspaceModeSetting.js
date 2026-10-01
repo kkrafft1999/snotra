@@ -52,7 +52,6 @@ export function initWorkspaceModeSetting({ toolPermissions, ids = PERMISSIONS_ID
     for (const option of toolModeOptions()) {
       const label = document.createElement('label');
       label.className = 'settings-segmented__option';
-      label.title = option.description;
       const input = document.createElement('input');
       input.type = 'radio';
       input.name = ids.name;
@@ -62,6 +61,25 @@ export function initWorkspaceModeSetting({ toolPermissions, ids = PERMISSIONS_ID
       label.appendChild(input);
       label.appendChild(text);
       group.appendChild(label);
+      // The `title` only reaches a mouse; the same sentence is the radio's
+      // description, kept outside the label so it is not part of the name
+      // (CR-B14-08). For a blocked "Auto" it is the reason.
+      const desc = document.createElement('span');
+      desc.id = `${ids.name}-desc-${option.value}`;
+      desc.hidden = true;
+      input.setAttribute('aria-describedby', desc.id);
+      group.appendChild(desc);
+    }
+  }
+
+  function describeOptions(state, current) {
+    for (const option of toolModeOptions(state, current)) {
+      const input = group.querySelector(`input[value="${option.value}"]`);
+      if (!input) continue;
+      const label = input.closest('label');
+      if (label) label.title = option.description;
+      const desc = document.getElementById(input.getAttribute('aria-describedby'));
+      if (desc) desc.textContent = option.description;
     }
   }
 
@@ -73,6 +91,7 @@ export function initWorkspaceModeSetting({ toolPermissions, ids = PERMISSIONS_ID
     // selectable, so that it can be seen and taken back.
     const autoBlocked = state?.encryptionAvailable === false && current !== 'auto';
     if (rootEl) rootEl.textContent = root || t('settings.rules.workspace.none');
+    describeOptions(state, current);
     for (const input of group.querySelectorAll('input')) {
       if (!busy) input.checked = !!root && input.value === current;
       input.disabled = busy || !root || (input.value === 'auto' && autoBlocked);

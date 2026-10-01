@@ -19,7 +19,7 @@
  */
 
 import contracts from '../generated/contracts.js';
-import { getLocale, t, tPlural, onLocaleChange } from '../i18n.js';
+import { getLocale, t, tMessage, tPlural, onLocaleChange } from '../i18n.js';
 import { bindInstantSwitch } from './InstantSetting.js';
 
 const { MEMORY_SCOPES, MEMORY_ORIGINS, MAX_MEMORY_CHARS } = contracts;
@@ -44,6 +44,12 @@ export function initMemoryPanel({ api }) {
 
   /** Zuletzt geladener Stand. */
   let state = { available: false, scopes: [] };
+  /**
+   * What the last "Forget" has to say, shown in its card's status line:
+   * `{ scope, message, isError }`. The message stays a message object and is
+   * put into words when drawn, so a language change does not strand it.
+   */
+  let notice = null;
 
   const PREF_KEYS = {
     [MEMORY_SCOPES.WORKSPACE]: 'memoryWorkspaceEnabled',
@@ -89,11 +95,14 @@ export function initMemoryPanel({ api }) {
     // einer Liste gleichaussehender Knöpfe ist das keine Bedienung.
     forget.setAttribute('aria-label', t('settings.memory.forget.label', { text: entry.text }));
     forget.title = t('settings.memory.forget.title');
+    // The keyboard lands on a button after a forget; what went wrong is read with it.
+    forget.setAttribute('aria-describedby', statusId(scope.scope));
     forget.addEventListener('click', async () => {
       // One forget at a time. Marked busy rather than disabled: a disabled
       // button loses the focus to the top of the window (CR-B14-07).
       if (forget.getAttribute('aria-disabled') === 'true') return;
       forget.setAttribute('aria-disabled', 'true');
+      showNotice(null);
       const index = scope.entries.indexOf(entry);
       let result;
       try {
@@ -103,11 +112,19 @@ export function initMemoryPanel({ api }) {
       }
       if (result?.ok && result.state) {
         const hadFocus = document.activeElement === forget;
+        // Main found no such line with that text — the file changed in the
+        // meantime. The list shows what it holds now, and says why the entry
+        // may still be there.
+        const missed = result.removed === false;
+        notice = missed
+          ? { scope: scope.scope, message: { key: 'settings.memory.forget.notFound' }, isError: false }
+          : null;
         state = result.state;
         render();
-        if (hadFocus) focusAfterForget(scope.scope, index);
+        if (hadFocus) focusAfterForget(scope.scope, index, missed ? entry.text : null);
       } else {
         forget.removeAttribute('aria-disabled');
+        showNotice({ scope: scope.scope, message: result?.error ?? null, isError: true });
       }
     });
     item.appendChild(forget);
@@ -183,11 +200,21 @@ export function initMemoryPanel({ api }) {
       empty.className = 'settings-empty-hint memory-empty';
       // Where the keyboard lands once the last entry is forgotten.
       empty.tabIndex = -1;
+      empty.setAttribute('aria-describedby', statusId(scope.scope));
       empty.textContent = scope.path
         ? t('settings.memory.empty')
         : t('settings.memory.empty.noFolder');
       card.appendChild(empty);
     }
+
+    // Present while empty, so that a screen reader is listening when a
+    // failed forget writes into it.
+    const noticeEl = document.createElement('p');
+    noticeEl.className = 'memory-card__status';
+    noticeEl.id = statusId(scope.scope);
+    noticeEl.setAttribute('role', 'status');
+    fillNotice(noticeEl, scope.scope);
+    card.appendChild(noticeEl);
 
     const meta = document.createElement('p');
     meta.className = 'memory-meta';
@@ -203,15 +230,43 @@ export function initMemoryPanel({ api }) {
     return card;
   }
 
+  function statusId(scopeKey) {
+    return `memory-status-${scopeKey}`;
+  }
+
+  function fillNotice(el, scopeKey) {
+    const own = notice && notice.scope === scopeKey ? notice : null;
+    el.textContent = own
+      ? tMessage(own.message) || (own.isError ? t('settings.error.memory.forgetFailed') : '')
+      : '';
+    el.classList.toggle('is-error', !!own?.isError);
+  }
+
+  /** A new notice (or none) without redrawing the list — the focus stays put. */
+  function showNotice(next) {
+    notice = next;
+    for (const el of host.querySelectorAll('.memory-card__status')) {
+      fillNotice(el, el.id.slice('memory-status-'.length));
+    }
+  }
+
+  function cardOf(scopeKey) {
+    return [...host.querySelectorAll('.memory-card')].find((node) => node.dataset.scope === scopeKey) || null;
+  }
+
   /**
    * After a forget the list is drawn anew and the pressed button is gone: the
    * keyboard moves to the entry that took its place, else the one before it,
-   * else the card's empty hint (CR-B14-07).
+   * else the card's empty hint (CR-B14-07). An entry main did not remove
+   * (`keepText`) keeps the focus where it still stands.
    */
-  function focusAfterForget(scopeKey, index) {
-    const card = [...host.querySelectorAll('.memory-card')].find((node) => node.dataset.scope === scopeKey);
+  function focusAfterForget(scopeKey, index, keepText = null) {
+    const card = cardOf(scopeKey);
     const buttons = card ? [...card.querySelectorAll('.memory-item__forget')] : [];
-    const target = buttons[index] || buttons[index - 1] || card?.querySelector('.memory-empty') || selfToggle;
+    const entries = state.scopes?.find((scope) => scope.scope === scopeKey)?.entries || [];
+    const kept = keepText === null ? -1 : entries.findIndex((entry) => entry.text === keepText);
+    const target = buttons[kept] || buttons[index] || buttons[index - 1]
+      || card?.querySelector('.memory-empty') || selfToggle;
     target?.focus();
   }
 
@@ -234,6 +289,7 @@ export function initMemoryPanel({ api }) {
     /** Stand vom Main holen und neu zeichnen — beim Öffnen des Dialogs. */
     async refresh() {
       selfSwitch.status.clear();
+      notice = null;
       try {
         state = (await api.getMemory()) || { available: false, scopes: [] };
       } catch {
