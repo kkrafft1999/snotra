@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-const { registerChatHandlers, resolveToolRoundLimit } = require('../src/main/ipc/chat-handlers');
+const { registerChatHandlers } = require('../src/main/ipc/chat-handlers');
+const { resolveToolRoundLimit } = require('../src/application/chat/chat-engine');
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 

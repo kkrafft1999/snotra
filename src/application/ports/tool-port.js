@@ -16,6 +16,8 @@
  * @property {boolean} sensitive
  * @property {string} [sensitiveReason]
  * @property {string} [recovery]  z. B. 'trash', wenn eine Wiederherstellungskopie angelegt wird
+ * @property {string} [skillName]  the skill the path belongs to, also when given absolutely (#427)
+ * @property {string} [skillPath]  the path inside that skill's folder
  */
 
 /**
@@ -31,6 +33,8 @@
  * @property {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} [shellCommand]
  *   `shell_execute` only: the call in the form a remembered command is compared in (#121);
  *   `command` is null when the command line cannot be remembered
+ * @property {{ disabled: boolean, root: string, allowance?: object, allowanceSkipped?: string, skillFolders?: string[] }} [sandbox]
+ *   the tools that run a process only: what the run is isolated with, as approved (#329, #357, #408)
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
  */
@@ -49,11 +53,24 @@
  * @property {string} workspaceRoot
  * @property {Array<{name: string, dir: string}>} [skillRoots]
  * @property {string[]} [writableSkills]  as in ToolPlanContext (#429)
+ * @property {string[]} [sensitivePathPatterns]  the user's patterns; the broad tools leave out
+ *   hits under them as under the built-in ones (#525)
  * @property {AbortSignal} abortSignal
  * @property {string[]} [disabledNames] — in den Einstellungen abgewählte Tools
  * @property {boolean} approved — Policy hat den Aufruf freigegeben (Pflicht)
  * @property {ToolPlan} [plan] — der geprüfte Plan; Versionen werden vor Ausführung erneut verglichen
  * @property {string[]} [riskClasses]
+ * @property {string} [locale]  the interface language, for sentences that quote a settings page (#294)
+ * @property {boolean} [ownSecretsCheck]  hold the output back when it contains an own secret (§5)
+ */
+
+/**
+ * Options for the tool list and the prompt built from it.
+ * @typedef {Object} ToolListOptions
+ * @property {string[]} [disabledNames]
+ * @property {boolean} [workspaceOpen]
+ * @property {string[]} [skillNames]  the switched-on skills: `load_skill` lists them, and the
+ *   file tools stay without a folder while there is one (#173, #429)
  */
 
 /**
@@ -88,13 +105,13 @@
 
 /**
  * @typedef {Object} ToolPort
- * @property {() => Promise<void>} [prepare] — optional: Tools auffrischen, die
+ * @property {(options?: ToolListOptions) => Promise<void>} [prepare] — optional: Tools auffrischen, die
  *   erst zur Laufzeit feststehen (Issue #107: die der MCP-Server). Wird einmal
  *   je Lauf aufgerufen, bevor Systemprompt und Tool-Liste gebaut werden. Darf
  *   nicht werfen — ein nicht erreichbarer Server ist kein Grund, den Chat zu
  *   beenden
- * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => Array} getTools
- * @property {(options?: { disabledNames?: string[], workspaceOpen?: boolean }) => string} buildSystemPrompt
+ * @property {(options?: ToolListOptions) => Array} getTools
+ * @property {(options?: ToolListOptions) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
  * @property {(name: string) => boolean} [supportsSkillPaths] — takes `skill:` paths, and so works without a folder while a skill is on (#429)
  * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry

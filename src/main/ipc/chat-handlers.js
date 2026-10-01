@@ -1,4 +1,4 @@
-const { CHAT_ENGINE_EVENTS, resolveToolRoundLimit } = require('../chat-engine');
+const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
 
 function registerChatHandlers({
   ipcMain,
@@ -64,5 +64,4 @@ function sanitizeRouteId(raw, maxLength) {
 
 module.exports = {
   registerChatHandlers,
-  resolveToolRoundLimit,
 };

@@ -1156,10 +1156,11 @@ export function initChatStream({
       let kind = 'render';
       if (streaming) {
         if (Array.isArray(result.toolTrace) && result.toolTrace.length > 0) {
-          // Lauf durch verfallene Freigabe beendet (Issue #66/#67): Die bis
-          // dahin gelaufenen Schritte samt Audit und Karte bleiben sichtbar,
-          // der Fehler folgt als eigene Nachricht. Kein vollständiger
-          // Neuaufbau, sonst verschwände die Karte mit dem Verfallsgrund.
+          // Tools ran before the error — an expired approval (#66/#67), the
+          // round limit, a provider error in a later round (#527): the steps
+          // done until then stay visible with their audit and card, and the
+          // error follows as a message of its own. No full rebuild, or the
+          // card with the reason for the expiry would vanish.
           finish();
           last.toolTrace = result.toolTrace.map(toolTraceEntryForStore);
           if (!last.content) last.content = '';

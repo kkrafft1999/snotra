@@ -37,6 +37,8 @@
  * @typedef {Object} LlmSendBundle
  * @property {object} config  Per-send snapshot der Provider-Konfiguration
  * @property {string} model
+ * @property {string} [providerName]  display name, for messages to the user
+ * @property {{ images?: boolean }} [capabilities]  what the provider passes on (#93)
  */
 
 /**

@@ -184,8 +184,9 @@ function createChatErrorResult({
   if (usage !== undefined) result.usage = usage;
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
   if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
-  // Nur bei Abbruch durch verfallene Freigabe (Issue #66): die bis dahin
-  // gelaufenen Tool-Schritte bleiben im Verlauf sichtbar.
+  // Whenever tools ran before the error — an expired approval (#66), the
+  // tool round limit, a provider error in a later round (#527): the steps
+  // done until then stay visible in the history.
   if (Array.isArray(toolTrace) && toolTrace.length > 0) result.toolTrace = toolTrace;
   return result;
 }

@@ -6,10 +6,15 @@
 
 const { attachmentsCharCost } = require('../../shared/contracts/attachments');
 const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
+// One source for the bounds: the settings validate against them, the engine
+// windows with them (#531).
+const {
+  HISTORY_CHAR_LIMIT_MIN,
+  HISTORY_CHAR_LIMIT_MAX,
+  clampHistoryCharLimit,
+} = require('../../shared/contracts/settings');
 
 const CHARS_PER_TOKEN = 4;
-const HISTORY_CHAR_LIMIT_MIN = 4000;
-const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // Lokale Modelle verarbeiten den Prompt um Groessenordnungen langsamer als
 // Cloud-Anbieter (gemessen: ~93 tok/s Prefill auf MLX-LM, also ~9 Minuten
@@ -18,14 +23,10 @@ const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 const DEFAULT_LOCAL_HISTORY_CHAR_LIMIT = 40_000;
 const LOCAL_PROVIDER_IDS = new Set(['ollama']);
 
+// Model channel, so English (#276, #532).
 const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
-  note: 'Ältere Tool-Ausgabe wurde gekürzt, um den Verlauf kompakt zu halten.',
+  note: 'An older tool output was shortened to keep the history compact.',
 });
-
-function clampHistoryCharLimit(raw) {
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
-  return Math.min(HISTORY_CHAR_LIMIT_MAX, Math.max(HISTORY_CHAR_LIMIT_MIN, Math.round(raw)));
-}
 
 /**
  * Lokal ist, wessen ID in der Liste steht **oder** wessen Server-URL auf diesen

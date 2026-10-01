@@ -8,8 +8,8 @@
  * am Core eine Zeile anders wird — deshalb taucht hier nichts aus dem
  * Protokoll auf außer den Begriffen, die MCP dem Nutzer ohnehin zeigt.
  *
- * Die Anbindung an die Tool-Registry (Namensraum, Risikoklasse, Freigaben)
- * ist ausdrücklich nicht Teil dieses Ports, sondern die nächste Scheibe (#107).
+ * The binding to the tool registry (namespace, risk class, approvals) is not
+ * part of this port; it lives in `main/adapters/mcp-adapter.js` (#107).
  */
 
 /**

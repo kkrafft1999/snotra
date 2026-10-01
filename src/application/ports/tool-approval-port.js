@@ -13,12 +13,15 @@
  * @typedef {Object} ToolApprovalRequest
  * @property {string} tool
  * @property {string[]} riskClasses
- * @property {Array<{ path: string, kind: string, exists: boolean, sensitive: boolean, version?: string|null }>} targets
- * @property {string} reason  Klartext-Begründung für die Karte
+ * @property {Array<{ path: string, kind: string, exists: boolean, sensitive: boolean, version?: string|null,
+ *   sensitiveReason?: string, recovery?: string, skillName?: string, skillPath?: string }>} targets
+ * @property {Array<object>} reasonParts  the card's explanation as catalogue keys, worded in the renderer (#306)
  * @property {string} mode
+ * @property {'access'|'output'} checkpoint  before the call runs, or before its sensitive output goes out (§4)
  * @property {boolean} sessionAllowed  ob „Für diese Sitzung erlauben“ angeboten wird
- * @property {string} [sessionScopeLabel]
+ * @property {object} [sessionScope]  what a session approval covers, as the card says it (#447)
  * @property {string} [providerLabel]  bei read-sensitive: Provider, an den der Inhalt geht
+ * @property {string} [providerKey]  bei read-sensitive: the endpoint the content is bound to (§4)
  * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
  * @property {string} planKey  stabiler Schlüssel des validierten Plans
  * @property {string} policyVersion

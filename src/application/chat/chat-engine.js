@@ -50,6 +50,7 @@ const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildMemorySystemPrompt } = require('./memory-prompt');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
+const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
@@ -120,15 +121,11 @@ function resolveAppLocale(uiPrefs) {
   return normalizeLocale(uiPrefs?.appLocale);
 }
 
+/** The setting where there is one, otherwise main's default — within the bounds the settings use (#531). */
 function resolveToolRoundLimit(uiPrefs, mainDefault) {
-  const MIN = 1;
-  const MAX_CAP = 500;
-  let value =
-    typeof uiPrefs?.maxToolRounds === 'number' && Number.isFinite(uiPrefs.maxToolRounds)
-      ? Math.round(uiPrefs.maxToolRounds)
-      : mainDefault;
-  if (!Number.isFinite(value)) value = mainDefault;
-  return Math.min(MAX_CAP, Math.max(MIN, value));
+  return clampMaxToolRounds(uiPrefs?.maxToolRounds)
+    ?? clampMaxToolRounds(mainDefault)
+    ?? MAX_TOOL_ROUNDS_MIN;
 }
 
 /**
@@ -699,7 +696,6 @@ function createChatEngine({
   approvals = null,
   sessionGrants = createSessionGrants(),
   maxToolRounds,
-  clock = () => Date.now(),
   // Called once a run has ended, however it ended (#320).
   onRunSettled = () => {},
 }) {
@@ -879,6 +875,22 @@ function createChatEngine({
     let contextUsage = null;
     // Woraus sich der zuletzt gesendete Prompt zusammensetzt (Issue #174).
     let contextBreakdown = null;
+    // Whether the await under way is the provider's: a throw there is a
+    // network or provider error, anywhere else it is the app's own (#527).
+    let awaitingProvider = false;
+    // An error result after tools ran still carries them — without the trace
+    // the renderer drops the turn, and with it the record of what was done (#527).
+    const failRun = (error, code) => {
+      emitPhase(onEvent, CHAT_PHASES.IDLE);
+      return createChatErrorResult({
+        error,
+        code,
+        usage: requestUsage,
+        contextUsage,
+        contextBreakdown,
+        toolTrace,
+      });
+    };
 
     try {
       const messages = payload?.messages;
@@ -889,7 +901,9 @@ function createChatEngine({
       const resolved = await resolveTarget(true);
       if (resolved.error) return resolved.error;
       const { target } = resolved;
+      awaitingProvider = true;
       const sendBundle = await llm.prepareSendBundle(target);
+      awaitingProvider = false;
       // Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter sie
       // nicht weiterreicht (Issue #93). Hier greift der Fall, dass nach dem
       // Anhaengen auf ein anderes Modell umgeschaltet wurde: lieber eine klare
@@ -1321,7 +1335,46 @@ function createChatEngine({
         if (outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS && request.alwaysAllowed) {
           return { response: APPROVAL_RESPONSES.ALLOW_ALWAYS, ruleId: outcome.ruleId };
         }
-        return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
+        // A wider answer than the card offered counts as once; an answer that
+        // is none of the four allows nothing (#532) — fail-safe, as the port says.
+        if (
+          outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE
+          || outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION
+          || outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS
+        ) {
+          return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
+        }
+        return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+      }
+
+      /** A denial that also ends the run, without another provider request (§6). */
+      function endRunDenied(entry, details, invalidatedReason) {
+        return { ...permissionDenied(entry, details), endRun: true, invalidatedReason };
+      }
+
+      /**
+       * What a card's answer comes to when it did not allow the call. One
+       * function for both checkpoints, so that they cannot drift apart again:
+       * the output checkpoint once lost the repeated denial (#526).
+       */
+      function refusalFromAnswer(answer, entry, details) {
+        if (answer.invalidated) {
+          return endRunDenied(entry, {
+            ...details,
+            reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED,
+            message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason],
+          }, answer.reason);
+        }
+        if (answer.response !== APPROVAL_RESPONSES.DENY) return null;
+        if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+          return endRunDenied(entry, { ...details, reason: answer.reason }, answer.reason);
+        }
+        return permissionDenied(entry, { ...details, reason: answer.reason });
+      }
+
+      /** The key a withheld output is remembered under — the plan's, at the output checkpoint. */
+      function outputPlanKey(plan) {
+        return `${plan.planKey}#sensitive`;
       }
 
       /**
@@ -1372,6 +1425,16 @@ function createChatEngine({
             }
           }
           const riskClasses = normalizeRiskClasses(plan.riskClasses);
+          // The same plan whose output the user withheld: running it again
+          // would only fetch what was refused, so the run ends here (§6, #526).
+          if (deniedPlanKeys.has(outputPlanKey(plan))) {
+            return endRunDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL,
+              riskClasses,
+              mode: policy.mode,
+              targets: plan.targets,
+            }, PERMISSION_DENIAL_REASONS.REPEATED_DENIAL);
+          }
           const scopeKey = buildScopeKey(policy);
           const grant = riskClasses
             ? sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses, providerKey })
@@ -1404,16 +1467,8 @@ function createChatEngine({
           let ruleId = verdict.ruleId;
           if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
-            if (answer.invalidated) {
-              return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
-            }
-            if (answer.response === APPROVAL_RESPONSES.DENY) {
-              const denied = permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
-              if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
-                return { ...denied, endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
-              }
-              return denied;
-            }
+            const refusal = refusalFromAnswer(answer, entry, { riskClasses, mode: policy.mode, targets: plan.targets });
+            if (refusal) return refusal;
             source =
               answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                 ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
@@ -1432,7 +1487,7 @@ function createChatEngine({
             });
             if (!recheck || recheck.error || recheck.planKey !== plan.planKey) {
               if (lastPlanKey === (recheck?.planKey ?? null) || attempt === MAX_PLAN_ATTEMPTS - 1) {
-                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+                return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
               }
               lastPlanKey = plan.planKey;
               continue;
@@ -1453,6 +1508,9 @@ function createChatEngine({
             workspaceRoot,
             skillRoots,
             writableSkills: writableSkills(),
+            // The broad tools leave out hits under these patterns (#525); a
+            // targeted call has been planned against them already.
+            sensitivePathPatterns: policy.sensitivePathPatterns,
             abortSignal,
             disabledNames,
             // For the sentences the registry writes itself — they quote a
@@ -1465,7 +1523,7 @@ function createChatEngine({
           });
 
           if (execution?.invalidated) {
-            return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+            return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
           }
           if (Array.isArray(execution?.reclassify) && execution.reclassify.length > 0) {
             // Beispiel: Wiederherstellungskopie fehlgeschlagen → der Aufruf
@@ -1491,7 +1549,7 @@ function createChatEngine({
             // Zweite Prüfstelle (Konzept §4): unerwartet sensibler Inhalt bleibt
             // im Puffer, bis die Policy ihn als read-sensitive freigibt.
             const escalated = normalizeRiskClasses([...riskClasses, TOOL_RISK_CLASSES.READ_SENSITIVE]);
-            const escalatedPlan = { ...plan, riskClasses: escalated, planKey: `${plan.planKey}#sensitive` };
+            const escalatedPlan = { ...plan, riskClasses: escalated, planKey: outputPlanKey(plan) };
             const escalatedGrant = sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses: escalated, providerKey });
             const outputVerdict = decideToolPolicy({
               mode: policy.mode,
@@ -1509,12 +1567,8 @@ function createChatEngine({
             let outputSource = outputVerdict.source;
             if (outputVerdict.decision === POLICY_DECISIONS.ASK) {
               const answer = await askUser({ entry, callIndex, toolName, plan: escalatedPlan, verdict: outputVerdict, policy, checkpoint: 'output' });
-              if (answer.invalidated) {
-                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses: escalated, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
-              }
-              if (answer.response === APPROVAL_RESPONSES.DENY) {
-                return permissionDenied(entry, { reason: answer.reason, riskClasses: escalated, mode: policy.mode, targets: plan.targets });
-              }
+              const refusal = refusalFromAnswer(answer, entry, { riskClasses: escalated, mode: policy.mode, targets: plan.targets });
+              if (refusal) return refusal;
               outputSource =
                 answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                   ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
@@ -1542,7 +1596,7 @@ function createChatEngine({
           };
         }
 
-        return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, mode: policy.mode }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+        return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, mode: policy.mode }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
       }
 
       for (let round = 0; round < toolRoundLimit; round += 1) {
@@ -1572,6 +1626,7 @@ function createChatEngine({
           ...buildHistoryContextParts(sentMessages),
         ];
 
+        awaitingProvider = true;
         const streamed = await llm.streamRound({
           target,
           sendBundle,
@@ -1583,6 +1638,7 @@ function createChatEngine({
           // (Issue #179); ohne Chat-ID bleibt es beim Verhalten des Anbieters.
           cacheKey: chatId || undefined,
         });
+        awaitingProvider = false;
         requestUsage = mergeUsage(requestUsage, streamed.usage);
         // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
         const roundUsage = normalizeUsage(streamed.usage);
@@ -1605,19 +1661,12 @@ function createChatEngine({
           return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, contextUsage, contextBreakdown);
         }
         if (streamed.error) {
-          emitPhase(onEvent, CHAT_PHASES.IDLE);
-          return createChatErrorResult({
-            error: streamed.error,
-            code: streamed.code || CHAT_ERROR_CODES.API,
-            usage: requestUsage,
-            contextUsage,
-            contextBreakdown,
-          });
+          return failRun(streamed.error, streamed.code || CHAT_ERROR_CODES.API);
         }
 
         const assistantMessage = streamed.message;
         if (!assistantMessage) {
-          return createChatErrorResult({ error: createMessage('chat.error.invalidApiAnswer'), code: CHAT_ERROR_CODES.INVALID });
+          return failRun(createMessage('chat.error.invalidApiAnswer'), CHAT_ERROR_CODES.INVALID);
         }
         apiMessages.push(assistantMessage);
 
@@ -1690,37 +1739,26 @@ function createChatEngine({
           if (outcome.endRun) {
             // Verfall oder wiederholte Ablehnung beenden den Lauf ohne weiteren
             // Provider-Request; das Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
-            emitPhase(onEvent, CHAT_PHASES.IDLE);
-            return createChatErrorResult({
-              error: createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
+            return failRun(
+              createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
                 || RUN_ENDED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]),
-              code: CHAT_ERROR_CODES.PERMISSION,
-              usage: requestUsage,
-              contextUsage,
-              contextBreakdown,
-              toolTrace,
-            });
+              CHAT_ERROR_CODES.PERMISSION
+            );
           }
         }
       }
 
-      emitPhase(onEvent, CHAT_PHASES.IDLE);
-      return createChatErrorResult({
-        error: createMessage('chat.error.toolLimit', { limit: toolRoundLimit }),
-        code: CHAT_ERROR_CODES.TOOL_LIMIT,
-        usage: requestUsage,
-        contextUsage,
-        contextBreakdown,
-      });
+      return failRun(createMessage('chat.error.toolLimit', { limit: toolRoundLimit }), CHAT_ERROR_CODES.TOOL_LIMIT);
     } catch (error) {
       if (isAbortError(error)) {
         return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
       }
-      emitPhase(onEvent, CHAT_PHASES.IDLE);
-      return createChatErrorResult({
-        error: llm.formatRoundError(error),
-        code: CHAT_ERROR_CODES.NETWORK,
-      });
+      if (awaitingProvider) return failRun(llm.formatRoundError(error), CHAT_ERROR_CODES.NETWORK);
+      // Not the provider: a tool, a port or the engine itself threw (#527).
+      return failRun(
+        createMessage('chat.error.internal', { detail: String(error?.message || error) }),
+        CHAT_ERROR_CODES.INTERNAL
+      );
     } finally {
       if (activeRuns.get(key)?.controller === abortController) {
         activeRuns.delete(key);

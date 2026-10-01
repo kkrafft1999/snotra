@@ -197,7 +197,6 @@ function makeEngine(results, {
       approvals: approvals || null,
       sessionGrants,
       maxToolRounds,
-      clock: () => 1234,
     }),
   };
 }
@@ -1774,4 +1773,59 @@ test('without a folder a file tool runs for the skill folders instead of being r
   ], { tools: noSkill, skills: skillsPort([]) });
   await second.engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
   assert.equal(noSkill.calls.filter((call) => call.toolName === 'read_file_text').length, 0);
+});
+
+// #527: an error after a tool round keeps the tools that ran, so the renderer
+// does not drop the turn and its record with it.
+test('an error after a tool round carries the tool trace and the usage (#527)', async () => {
+  const toolRound = () => ({
+    ...assistantToolCall(`c${Math.random()}`, 'list_directory', { relative_path: '.' }),
+    usage: { prompt: 10, completion: 2, total: 12 },
+  });
+  const cases = [
+    { name: 'tool limit', results: () => toolRound(), code: 'TOOL_LIMIT', traced: 3 },
+    { name: 'provider error', results: (_, i) => (i === 0 ? toolRound() : { error: 'rate limited', code: 'API' }), code: 'API', traced: 1 },
+    { name: 'no message', results: (_, i) => (i === 0 ? toolRound() : {}), code: 'INVALID', traced: 1 },
+    {
+      name: 'provider throws',
+      results: (_, i) => {
+        if (i === 0) return toolRound();
+        throw new Error('socket hang up');
+      },
+      code: 'NETWORK',
+      traced: 1,
+    },
+  ];
+  for (const { name, results, code, traced } of cases) {
+    const llm = makeLlmPort(results);
+    const { engine } = makeEngine(null, { llm });
+    const result = await engine.send({
+      sessionId: 'renderer-1',
+      payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-527' },
+    });
+    assert.equal(result.code, code, name);
+    assert.equal(result.toolTrace?.length, traced, `${name}: the tools that ran are in the result`);
+    assert.equal(result.usage?.prompt > 0, true, `${name}: the usage so far is in the result`);
+  }
+});
+
+test('a throw outside the provider is the app\'s own error, not a network error (#527)', async () => {
+  const tools = makeToolPort(() => {
+    throw new Error('handler exploded');
+  });
+  const { engine } = makeEngine([assistantToolCall('c1', 'list_directory', { relative_path: '.' }), assistantText('never')], { tools });
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-527' },
+  });
+  assert.equal(result.code, 'INTERNAL');
+  assert.match(errorText(result, 'en'), /error of its own.*handler exploded/);
+  assert.equal(result.toolTrace.length, 1);
+});
+
+test('an error before any tool ran carries no trace (#527)', async () => {
+  const { engine } = makeEngine([{ error: 'rate limited', code: 'API' }]);
+  const result = await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+  assert.equal(result.code, 'API');
+  assert.equal('toolTrace' in result, false);
 });
