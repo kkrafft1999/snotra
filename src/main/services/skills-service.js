@@ -90,10 +90,16 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       return [];
     }
 
+    // Hidden entries are skipped and the rest sorted before the cap applies
+    // (#579): `readdir` order is the file system's (hash order on ext4), and
+    // which skills a crowded folder keeps must not depend on it.
+    const visible = entries
+      .filter((entry) => !entry.name.startsWith('.'))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .slice(0, MAX_SKILLS_PER_DIRECTORY);
     const found = [];
-    for (const entry of entries.slice(0, MAX_SKILLS_PER_DIRECTORY)) {
+    for (const entry of visible) {
       const dirName = entry.name;
-      if (dirName.startsWith('.')) continue;
       const skillDir = path.join(dir, dirName);
       if (!entry.isDirectory()) {
         // Häufiger Praxisfall: ein heruntergeladenes `foo.zip` liegt daneben.
@@ -210,18 +216,45 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return Array.isArray(activeSkills) ? activeSkills : defaultActiveNames(skills);
   }
 
-  async function listCatalog({ workspaceRoot = null, activeSkills = null, locale = null } = {}) {
+  /** The names switched on for this folder's own skills (#576). */
+  function workspaceActiveNames(workspaceRoot, activeWorkspaceSkills) {
+    const key = cacheKey(workspaceRoot);
+    if (!key || !activeWorkspaceSkills || typeof activeWorkspaceSkills !== 'object') return [];
+    if (!Object.prototype.hasOwnProperty.call(activeWorkspaceSkills, key)) return [];
+    const names = activeWorkspaceSkills[key];
+    return Array.isArray(names) ? names : [];
+  }
+
+  /**
+   * Which skills are switched on here. A switch-on is bound to where it was
+   * made (#576): the global list switches on system and global skills only,
+   * and a workspace skill only through its own folder's list. A name alone
+   * would hand the user's choice to any skill that happens to win the name —
+   * a cloned repository with `.agents/skills/<name>` would take over the
+   * user's own global skill.
+   */
+  function switchedOn(skills, { workspaceRoot, activeSkills, activeWorkspaceSkills }) {
+    const global = new Set(resolveActiveNames(skills, activeSkills));
+    const workspace = new Set(workspaceActiveNames(workspaceRoot, activeWorkspaceSkills));
+    return (skill) =>
+      skill.status === SKILL_STATUS.AVAILABLE
+      && (skill.source === SKILL_SOURCES.WORKSPACE_AGENTS ? workspace : global).has(skill.name);
+  }
+
+  async function listCatalog({
+    workspaceRoot = null,
+    activeSkills = null,
+    activeWorkspaceSkills = null,
+    locale = null,
+  } = {}) {
     const { skills } = await scan(workspaceRoot);
-    const active = new Set(resolveActiveNames(skills, activeSkills));
+    const isOn = switchedOn(skills, { workspaceRoot, activeSkills, activeWorkspaceSkills });
     return {
       skills: skills.map((raw) => withMenuPaths(raw, locale)).map((skill) => ({
         name: skill.name,
         description: skill.description,
         source: skill.source,
-        status:
-          skill.status === SKILL_STATUS.AVAILABLE && active.has(skill.name)
-            ? SKILL_STATUS.ACTIVE
-            : skill.status,
+        status: isOn(skill) ? SKILL_STATUS.ACTIVE : skill.status,
         path: skill.path,
         detail: skill.detail,
       })),
@@ -235,15 +268,21 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * (Issue #124). Sie kommen zusätzlich zur dauerhaften Auswahl dazu und
    * gelten nur für diesen Verlauf.
    */
-  async function getActiveSkills({ workspaceRoot = null, activeSkills = null, invokedSkills = null, locale = null } = {}) {
+  async function getActiveSkills({
+    workspaceRoot = null,
+    activeSkills = null,
+    activeWorkspaceSkills = null,
+    invokedSkills = null,
+    locale = null,
+  } = {}) {
     const { skills } = await scan(workspaceRoot);
-    const active = new Set(resolveActiveNames(skills, activeSkills));
+    const isOn = switchedOn(skills, { workspaceRoot, activeSkills, activeWorkspaceSkills });
     const invoked = new Set(Array.isArray(invokedSkills) ? invokedSkills : []);
     return skills
       .filter(
         (skill) =>
           skill.status === SKILL_STATUS.AVAILABLE
-          && (active.has(skill.name) || invoked.has(skill.name))
+          && (isOn(skill) || invoked.has(skill.name))
       )
       .map((raw) => withMenuPaths(raw, locale))
       .map((skill) => ({
@@ -253,13 +292,55 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
         path: skill.path,
         body: skill.body,
         /** Kam dieser Skill per `/name` dazu statt über die Einstellungen? */
-        invoked: invoked.has(skill.name) && !active.has(skill.name),
+        invoked: invoked.has(skill.name) && !isOn(skill),
       }));
+  }
+
+  /**
+   * Turn the ticks the settings show for the open folder into what is stored
+   * (#576). `selected` is the names ticked in this catalogue; each is bound to
+   * the skill that is usable here — a workspace skill to this folder's list,
+   * anything else to the global one.
+   *
+   * What this catalogue cannot see stays as it was: another folder's list,
+   * and a global name whose skill is shadowed or missing here. Otherwise
+   * saving in a folder whose own skill shadows a global one would switch the
+   * global one off everywhere.
+   */
+  async function bindSelection({
+    workspaceRoot = null,
+    selected = [],
+    activeSkills = null,
+    activeWorkspaceSkills = null,
+  } = {}) {
+    const { skills } = await scan(workspaceRoot);
+    const chosen = new Set(Array.isArray(selected) ? selected : []);
+    const usable = skills.filter((skill) => skill.status === SKILL_STATUS.AVAILABLE);
+    const isWorkspace = (skill) => skill.source === SKILL_SOURCES.WORKSPACE_AGENTS;
+    const decidedHere = new Set(usable.filter((skill) => !isWorkspace(skill)).map((skill) => skill.name));
+
+    const global = resolveActiveNames(skills, activeSkills).filter((name) => !decidedHere.has(name));
+    for (const skill of usable) {
+      if (!isWorkspace(skill) && chosen.has(skill.name)) global.push(skill.name);
+    }
+
+    const perFolder = {};
+    if (activeWorkspaceSkills && typeof activeWorkspaceSkills === 'object') {
+      for (const [root, names] of Object.entries(activeWorkspaceSkills)) perFolder[root] = names;
+    }
+    const key = cacheKey(workspaceRoot);
+    if (key) {
+      const names = usable.filter((skill) => isWorkspace(skill) && chosen.has(skill.name)).map((skill) => skill.name);
+      if (names.length > 0) perFolder[key] = names;
+      else delete perFolder[key];
+    }
+    return { activeSkills: [...new Set(global)], activeWorkspaceSkills: perFolder };
   }
 
   return {
     listCatalog,
     getActiveSkills,
+    bindSelection,
     reload,
   };
 }

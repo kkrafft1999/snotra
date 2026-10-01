@@ -89,3 +89,9 @@ test('snotra-capabilities says where runs are isolated and where not (#405)', ()
   assert.match(isolation, /\{label:settings\.sandbox\.workspace\.heading\}/);
   assert.match(isolation, /`sandbox\.isolated`/);
 });
+
+test('snotra-capabilities says system skills can be switched off and folder skills are bound to their folder (#579, #576)', () => {
+  assert.doesNotMatch(skillText, /System skills are built in and on\./);
+  assert.match(skillText, /on by default; the user can switch them off/);
+  assert.match(skillText, /switched on for that\s+folder only/);
+});

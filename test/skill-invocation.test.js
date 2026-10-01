@@ -163,17 +163,19 @@ async function withSkillDir(run) {
       path,
       os: { homedir: () => path.join(dir, '__kein-home__') },
     });
-    await run({ service, workspaceRoot: dir });
+    // These are the folder's own skills, so they are switched on for it (#576).
+    const on = (names) => ({ activeWorkspaceSkills: { [path.resolve(dir)]: names } });
+    await run({ service, workspaceRoot: dir, on });
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
 }
 
 test('ein aufgerufener Skill kommt zur dauerhaften Auswahl dazu', async () => {
-  await withSkillDir(async ({ service, workspaceRoot }) => {
+  await withSkillDir(async ({ service, workspaceRoot, on }) => {
     const active = await service.getActiveSkills({
       workspaceRoot,
-      activeSkills: ['alpha'],
+      ...on(['alpha']),
       invokedSkills: ['beta'],
     });
     assert.deepEqual(active.map((s) => s.name).sort(), ['alpha', 'beta']);
@@ -184,13 +186,13 @@ test('ein aufgerufener Skill kommt zur dauerhaften Auswahl dazu', async () => {
 });
 
 test('der Aufruf verändert die dauerhafte Auswahl nicht', async () => {
-  await withSkillDir(async ({ service, workspaceRoot }) => {
+  await withSkillDir(async ({ service, workspaceRoot, on }) => {
     await service.getActiveSkills({
       workspaceRoot,
-      activeSkills: ['alpha'],
+      ...on(['alpha']),
       invokedSkills: ['beta'],
     });
-    const { skills } = await service.listCatalog({ workspaceRoot, activeSkills: ['alpha'] });
+    const { skills } = await service.listCatalog({ workspaceRoot, ...on(['alpha']) });
     const byName = Object.fromEntries(skills.map((s) => [s.name, s.status]));
     assert.equal(byName.alpha, SKILL_STATUS.ACTIVE);
     assert.equal(byName.beta, SKILL_STATUS.AVAILABLE, 'bleibt nur verfügbar, nicht eingeschaltet');
@@ -198,13 +200,13 @@ test('der Aufruf verändert die dauerhafte Auswahl nicht', async () => {
 });
 
 test('ein Aufruf zählt nicht gegen das 8er-Limit und greift nur bei nutzbaren Skills', async () => {
-  await withSkillDir(async ({ service, workspaceRoot }) => {
+  await withSkillDir(async ({ service, workspaceRoot, on }) => {
     // Ein voller Satz aus acht Namen — „gamma“ passt nicht mehr hinein und
     // kommt trotzdem durch, weil er aufgerufen wurde.
     const full = ['alpha', 'beta', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6'];
     const active = await service.getActiveSkills({
       workspaceRoot,
-      activeSkills: full,
+      ...on(full),
       invokedSkills: ['gamma', 'gibt-es-nicht'],
     });
     assert.deepEqual(active.map((s) => s.name).sort(), ['alpha', 'beta', 'gamma']);

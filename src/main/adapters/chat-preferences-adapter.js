@@ -20,6 +20,10 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
       if (Array.isArray(prefs.activeSkills)) {
         out.activeSkills = prefs.activeSkills.filter((name) => typeof name === 'string' && name.trim());
       }
+      // The folders' own switch-ons (#576), already normalised by the store.
+      if (prefs.activeWorkspaceSkills && typeof prefs.activeWorkspaceSkills === 'object') {
+        out.activeWorkspaceSkills = prefs.activeWorkspaceSkills;
+      }
       if (typeof prefs.maxToolRounds === 'number' && Number.isFinite(prefs.maxToolRounds)) {
         out.maxToolRounds = prefs.maxToolRounds;
       }

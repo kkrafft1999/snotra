@@ -198,3 +198,14 @@ test('a following line that looks like a key stays a key', () => {
   assert.equal(parsed.frontmatter.description, 'Erste Zeile');
   assert.equal(parsed.frontmatter.tags, 'a, b');
 });
+
+test('front-matter keys like __proto__ are ordinary keys (#579)', () => {
+  const parsed = parseSkillDocument(
+    '---\nname: x\ndescription: d\n__proto__:\n  - a\nhasOwnProperty: yes\n---\nbody'
+  );
+  assert.equal(Object.getPrototypeOf(parsed.frontmatter), null);
+  assert.deepEqual(parsed.frontmatter.__proto__, ['a']);
+  assert.equal(parsed.frontmatter.hasOwnProperty, 'yes');
+  assert.equal(parsed.frontmatter.name, 'x');
+  assert.equal(parsed.frontmatter.length, undefined);
+});

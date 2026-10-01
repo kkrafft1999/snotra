@@ -122,12 +122,33 @@ function registerSettingsHandlers({
   // false heisst: der Schreibversuch selbst ist fehlgeschlagen.
   async function writeUiPrefsPatch(uiPatch) {
     try {
-      await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
+      await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, await bindSkillSelection(out, uiPatch)));
       await applyUiPrefsPatch(uiPatch);
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * The renderer sends the names it shows ticked; which skill each name means
+   * is decided here, against the open folder (#576). A workspace skill goes
+   * into that folder's own list, everything else into the global one, and
+   * what this folder's catalogue cannot see is kept. Runs under the
+   * preferences lock, on the stored state it is about to write over.
+   */
+  async function bindSkillSelection(current, uiPatch) {
+    if (!Array.isArray(uiPatch.activeSkills) || typeof skillCatalog?.bindSelection !== 'function') {
+      return uiPatch;
+    }
+    const workspaceRoot = getActiveWorkspaceRoot();
+    const bound = await skillCatalog.bindSelection({
+      workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
+      selected: uiPatch.activeSkills,
+      activeSkills: Array.isArray(current.activeSkills) ? current.activeSkills : null,
+      activeWorkspaceSkills: current.activeWorkspaceSkills || null,
+    });
+    return { ...uiPatch, activeSkills: bound.activeSkills, activeWorkspaceSkills: bound.activeWorkspaceSkills };
   }
 
   /**
@@ -381,6 +402,7 @@ function registerSettingsHandlers({
     return skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
       activeSkills: Array.isArray(prefs.activeSkills) ? prefs.activeSkills : null,
+      activeWorkspaceSkills: prefs.activeWorkspaceSkills || null,
       // A system skill quotes settings pages; in the catalogue they read in the
       // language of the interface showing them (#294).
       locale: prefs.appLocale,
@@ -443,11 +465,14 @@ function registerSettingsHandlers({
     if (!memory) return createSettingsError(createMessage('settings.error.memory.unavailable'));
     const scope = payload?.scope;
     const line = payload?.line;
-    if (!isMemoryScope(scope) || !Number.isInteger(line)) {
+    // The entry's text names it; the line alone may point at another one by
+    // now (#577). An entry is capped far below this.
+    const text = typeof payload?.text === 'string' ? payload.text.slice(0, MAX_MEMORY_CHARS) : '';
+    if (!isMemoryScope(scope) || !Number.isInteger(line) || !text.trim()) {
       return createSettingsError(createMessage('settings.error.memory.invalidRequest'));
     }
     try {
-      const result = await memory.forget({ scope, line, workspaceRoot: getActiveWorkspaceRoot() });
+      const result = await memory.forget({ scope, line, text, workspaceRoot: getActiveWorkspaceRoot() });
       // Der neue Stand geht direkt mit zurueck: Ein zweiter Aufruf koennte
       // zwischen Loeschen und Nachladen eine andere Datei sehen, und dann
       // zeigte die Liste Zeilennummern, die nicht mehr stimmen.
@@ -551,7 +576,8 @@ function registerSettingsHandlers({
     if (Object.keys(patch).length === 0) {
       return uiPrefsStore.readUIPrefs();
     }
-    const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
+    // Ticked skills are bound to the open folder here as well (#576).
+    const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, await bindSkillSelection(out, patch)));
     await applyUiPrefsPatch(patch);
     return updated;
   });

@@ -69,7 +69,17 @@ adapters, so a change to what the engine passes changes the port as well:
   (`workspace` | `user`), never a path — which is why writing to `~/.snotra`
   does not soften the workspace boundary of the file tools. The adapter writes
   serially per file, so that two windows on the same folder do not overwrite
-  each other.
+  each other. *Forget* names an entry by its line **and** its text, so a line
+  that moved since the list was drawn cannot take another entry with it (#577).
+- Both adapters below and the memory adapter read and write through
+  `main/services/embedded-text-file.js` (#534): the folder's `AGENTS.md` and
+  `.agents/memory.md` count only when their real path is a regular file inside
+  the folder — a symlink that leads out is treated as absent and refused on
+  write; the global files in the home folder only have to be regular files,
+  because a dotfiles manager links them elsewhere. A read stops at its limit,
+  a write goes to a temporary file next to the real target and is renamed onto
+  it, and a read for a write that fails for any reason but a missing file
+  writes nothing.
 - `project-instructions-port` — the `AGENTS.md` files that were found, for the
   block with the project instructions (issue #212). Where they live is known
   only to `main/adapters/project-instructions-adapter.js`; the core sees neither
@@ -292,7 +302,20 @@ belongs to Snotra and for which no vendor-neutral standard exists (issue #251).
 `~/.snotra/skills/` is the standard location for global skills and takes
 precedence over the legacy location `~/.agents/skills/`; the workspace remains
 the strongest folder source. Nothing is created and nothing is migrated — a
-missing directory is no more an error than anything else. It is strictly
+missing directory is no more an error than anything else.
+
+**A switch-on is bound to where it was made** (#576). The UI preferences keep
+two lists: `activeSkills` for system and global skills, and
+`activeWorkspaceSkills` with one entry per workspace root for that folder's own
+skills. The renderer only sends the names it shows ticked; the settings handler
+binds each to the skill that is usable in the open folder
+(`skillsService.bindSelection`) and keeps what that catalogue cannot see —
+another folder's list, a global name whose skill is shadowed there. A name in
+the global list therefore never switches on a workspace skill: a cloned
+repository with `.agents/skills/<name>` would otherwise inherit the user's
+choice of their own skill of that name. Where a folder skill shadows a
+switched-on global one, neither is on in that folder until its own skill is
+ticked there. It is strictly
 separated from the `userData` folder: that is Electron-managed app state and off
 limits for tools. Parsing the front matter lives as a pure function in
 `shared/runtime/skill-frontmatter.js`, the enums and DTOs in
@@ -314,7 +337,10 @@ On top of it sit two thin shells that only say *what* is being watched:
 - `services/skills-watcher.js` — `.agents/skills` in the workspace as well as
   `~/.snotra/skills` and `~/.agents/skills` in the home directory, each with an
   ancestor chain (the directories are usually missing). Reports without a
-  payload; the skill catalogue is read completely afresh anyway.
+  payload; the skill catalogue is read completely afresh anyway. It follows
+  only the open folder, so a folder switch also drops the cached scans — a
+  folder that comes back is read afresh instead of from a scan nothing watched
+  (#578).
 - `services/workspace-watcher.js` — the project folder, recursively and without a
   chain upwards. It reports the affected **folders**, so that the file tree does
   not have to reload everything on every event (issue

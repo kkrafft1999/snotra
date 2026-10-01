@@ -9,7 +9,8 @@
  * @property {number} [maxToolRounds]
  * @property {number} [historyCharLimit]
  * @property {string} [appLocale]  the interface language; unset means the app default (#277)
- * @property {string[]|null} [activeSkills]  the switched-on skills; null means the default set
+ * @property {string[]|null} [activeSkills]  the switched-on system and global skills; null means the default set
+ * @property {Record<string, string[]>} [activeWorkspaceSkills]  per workspace root, that folder's own switched-on skills (#576)
  * @property {boolean} [environmentInfoEnabled]  false leaves the environment block out (#138)
  * @property {boolean} [projectInstructionsEnabled]  false leaves AGENTS.md out (#212)
  * @property {boolean} [memoryWorkspaceEnabled]  false leaves the folder's memory out (#166)

@@ -155,6 +155,57 @@ test('createApplication wires the skill catalog channels', async (t) => {
   assert.ok(Array.isArray(reloaded.skills));
 });
 
+test('a folder switch drops the cached skill scans, so a folder that comes back is read afresh (#578)', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-rescan-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const a = path.join(tmpDir, 'a');
+  const b = path.join(tmpDir, 'b');
+  const skillDir = path.join(a, '.agents', 'skills', 'gone-soon');
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.mkdir(b);
+  await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: gone-soon\ndescription: d\n---\nbody\n');
+
+  let root = null;
+  let next = null;
+  const ipcMain = createMockIpcMain();
+  createApplication({
+    app: { getPath: () => tmpDir, getVersion: () => '9.9.9', getAppPath: () => path.join(tmpDir, 'no-app') },
+    ipcMain,
+    dialog: { showOpenDialog: async () => ({ canceled: false, filePaths: [next] }) },
+    safeStorage: { isEncryptionAvailable: () => false },
+    fs,
+    path,
+    os: { homedir: () => path.join(tmpDir, 'no-home') },
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }),
+    providersModule: makeProvidersModule({ called: false }),
+    workspaceState: { getActiveWorkspaceRoot: () => root, setActiveWorkspaceRoot: (value) => { root = value; } },
+    getMainWindow: () => null,
+    REQ,
+    PUSH,
+    LIMITS: {
+      MAX_CHAT_SESSIONS: 5,
+      MAX_FOLDER_HISTORY: 3,
+      MAX_READ_FILE_BYTES: 1024,
+      MAX_WRITE_FILE_BYTES: 1024,
+      MAX_TOOL_ROUNDS: 3,
+    },
+    defaultProviderId: 'openai',
+  });
+  const open = async (folder) => {
+    next = folder;
+    await ipcMain.invoke(REQ.DIALOG_OPEN_FOLDER);
+  };
+  const names = async () => (await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG)).skills.map((s) => s.name);
+
+  await open(a);
+  assert.deepEqual(await names(), ['gone-soon']);
+  await open(b);
+  // Deleted while another folder is open — nothing watches `a` now.
+  await fs.rm(skillDir, { recursive: true, force: true });
+  await open(a);
+  assert.deepEqual(await names(), []);
+});
+
 test('createApplication findet System-Skills unter app.getAppPath()/system-skills', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-skills-'));
   t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));

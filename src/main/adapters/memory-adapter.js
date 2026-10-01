@@ -9,7 +9,7 @@
  * Datei-Tools nicht auf: Es gibt nichts, wohin das Modell zeigen könnte.
  *
  * Gelesen wird wie bei den Projektanweisungen **ohne Cache und ohne Watcher**
- * (siehe `project-instructions-adapter.js`): zwei `readFile` je Anfrage kosten
+ * (siehe `project-instructions-adapter.js`): zwei Lesezugriffe je Anfrage kosten
  * gegen einen Modellaufruf nichts, und eine von Hand geänderte Datei wirkt ab
  * der nächsten Nachricht.
  *
@@ -31,6 +31,7 @@ const {
   formatMemoryDate,
 } = require('../../shared/contracts/memory');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
+const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
 
 function createMemoryAdapter({
   fs,
@@ -50,8 +51,13 @@ function createMemoryAdapter({
    * damit ein Sprachwechsel sofort gilt.
    */
   getLocale = null,
+  platform = process.platform,
 }) {
   if (!fs || !path) throw new TypeError('createMemoryAdapter benötigt fs und path.');
+
+  // Symlink-safe, bounded and atomic (#534): the project file comes with the
+  // folder, so its real path has to stay inside it.
+  const textFiles = createEmbeddedTextFiles({ fs, path, platform });
 
   /** Laufende Schreibvorgänge je Datei — der Lock ist eine Promise-Kette. */
   const queues = new Map();
@@ -66,28 +72,25 @@ function createMemoryAdapter({
     return typeof home === 'string' && home.trim() ? path.resolve(home) : null;
   }
 
-  /** Absoluter Pfad einer Ebene, oder null, wenn es sie gerade nicht gibt. */
-  function fileFor(scope, workspaceRoot) {
+  /**
+   * Absoluter Pfad einer Ebene samt der Wurzel, die er nicht verlassen darf,
+   * oder null, wenn es die Ebene gerade nicht gibt. The global file has no
+   * such root: it is the user's own, and a dotfiles manager links it elsewhere.
+   */
+  function targetFor(scope, workspaceRoot) {
     if (scope === MEMORY_SCOPES.WORKSPACE) {
       const root =
         typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
       // Ohne geöffneten Ordner gibt es kein Projekt-Gedächtnis — kein Fehler,
       // nur nichts zu tun.
-      return root ? path.join(root, '.agents', MEMORY_FILE) : null;
+      return root ? { file: path.join(root, '.agents', MEMORY_FILE), root } : null;
     }
     const home = homeDir();
-    return home ? path.join(home, '.snotra', MEMORY_FILE) : null;
+    return home ? { file: path.join(home, '.snotra', MEMORY_FILE), root: null } : null;
   }
 
-  async function readFileOrNull(file) {
-    try {
-      const raw = await fs.readFile(file, 'utf8');
-      return typeof raw === 'string' ? raw : null;
-    } catch {
-      // Fehlend, unlesbar, ein Verzeichnis statt einer Datei: alles derselbe
-      // Normalfall. Ein Gedächtnis, das es nicht gibt, ist kein Fehler.
-      return null;
-    }
+  function fileFor(scope, workspaceRoot) {
+    return targetFor(scope, workspaceRoot)?.file || null;
   }
 
   /** Vorgänge auf derselben Datei laufen nacheinander. */
@@ -103,29 +106,20 @@ function createMemoryAdapter({
     return next;
   }
 
-  async function writeFileAtomic(file, text) {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, text, 'utf8');
-  }
-
   return {
     /** Beide Ebenen in Lesereihenfolge; leere und fehlende fallen weg. */
     async load({ workspaceRoot = null } = {}) {
       const targets = MEMORY_SCOPE_ORDER.map((scope) => ({
         scope,
-        file: fileFor(scope, workspaceRoot),
-      })).filter((target) => Boolean(target.file));
+        target: targetFor(scope, workspaceRoot),
+      })).filter(({ target }) => Boolean(target));
       const results = await Promise.all(
-        targets.map(async ({ scope, file }) => {
-          const raw = await readFileOrNull(file);
-          if (!raw || !raw.trim()) return null;
-          const truncated = raw.length > maxChars;
-          return {
-            scope,
-            file,
-            text: truncated ? raw.slice(0, maxChars) : raw,
-            truncated,
-          };
+        targets.map(async ({ scope, target }) => {
+          // Fehlend, unlesbar, ein Verzeichnis, ein Symlink aus dem Ordner
+          // hinaus: alles derselbe Normalfall — kein Gedächtnis.
+          const read = await textFiles.readForPrompt({ ...target, maxChars });
+          if (!read || !read.text.trim()) return null;
+          return { scope, file: target.file, text: read.text, truncated: read.truncated };
         })
       );
       return results.filter(Boolean);
@@ -157,7 +151,8 @@ function createMemoryAdapter({
           ));
         }
       }
-      const file = fileFor(scope, workspaceRoot);
+      const target = targetFor(scope, workspaceRoot);
+      const file = target?.file;
       if (!file) {
         throw new Error(
           scope === MEMORY_SCOPES.WORKSPACE
@@ -166,12 +161,16 @@ function createMemoryAdapter({
         );
       }
       return serialize(file, async () => {
-        const current = (await readFileOrNull(file)) || '';
+        // Only a missing file starts empty; any other failure is thrown, so
+        // the file is not replaced by one holding just this entry.
+        const current = (await textFiles.readForUpdate(target)) || '';
         const next = appendMemoryEntry(current, {
           scope,
           text: body,
           origin,
           date: formatMemoryDate(new Date()),
+          // A new file starts with a heading in the interface language (#579).
+          locale: typeof getLocale === 'function' ? getLocale() : null,
         });
         if (next.length > maxChars) {
           throw new RangeError(fillUiQuotes(
@@ -180,38 +179,27 @@ function createMemoryAdapter({
               + `(${maxChars} characters). The user can delete entries under "{menu:settings.memory}".`
           ));
         }
-        await writeFileAtomic(file, next);
+        await textFiles.write({ ...target, text: next });
         return { scope, file, text: body };
       });
     },
 
-    /** Eine Eintragszeile entfernen (Einstellungen › Gedächtnis › Vergessen). */
-    async forget({ scope, workspaceRoot = null, line } = {}) {
+    /**
+     * Einen Eintrag entfernen (Einstellungen › Gedächtnis › Vergessen). Named
+     * by its line *and* its text, so a line that moved meanwhile cannot take
+     * another entry with it (#577).
+     */
+    async forget({ scope, workspaceRoot = null, line, text } = {}) {
       if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
-      const file = fileFor(scope, workspaceRoot);
-      if (!file) return { removed: false };
-      return serialize(file, async () => {
-        const current = await readFileOrNull(file);
+      const target = targetFor(scope, workspaceRoot);
+      if (!target) return { removed: false };
+      return serialize(target.file, async () => {
+        const current = await textFiles.readForUpdate(target);
         if (current === null) return { removed: false };
-        const { text, removed } = removeMemoryEntryLine(current, line);
-        if (!removed) return { removed: false };
-        await writeFileAtomic(file, text);
-        return { removed: true, scope, file };
-      });
-    },
-
-    /** Den ganzen Text einer Ebene ersetzen — für die Bearbeitung von Hand. */
-    async replace({ scope, workspaceRoot = null, text } = {}) {
-      if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
-      const file = fileFor(scope, workspaceRoot);
-      if (!file) throw new Error('This scope has no file right now.');
-      const next = typeof text === 'string' ? text : '';
-      if (next.length > maxChars) {
-        throw new RangeError(`At most ${maxChars} characters per scope.`);
-      }
-      return serialize(file, async () => {
-        await writeFileAtomic(file, next);
-        return { scope, file };
+        const result = removeMemoryEntryLine(current, line, text);
+        if (!result.removed) return { removed: false };
+        await textFiles.write({ ...target, text: result.text });
+        return { removed: true, scope, file: target.file };
       });
     },
 

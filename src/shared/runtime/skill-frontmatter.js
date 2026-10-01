@@ -155,7 +155,10 @@ function splitFrontmatter(text) {
 
 function parseFrontmatterLines(rawLines) {
   const lines = rawLines.map((rawLine) => rawLine.replace(/\t/g, '  '));
-  const data = {};
+  // Without a prototype (#579): any `.md` file can name its keys, and in a
+  // plain object `__proto__:` would replace the prototype instead of being a
+  // key, while `hasOwnProperty:` would shadow the method.
+  const data = Object.create(null);
   let currentKey = null;
   let currentList = null;
   // Schlüssel eines Plain-Skalars, dessen Wert in Folgezeilen weitergeht.

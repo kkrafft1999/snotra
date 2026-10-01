@@ -944,7 +944,12 @@ which the operating system reports no change — on network drives, for instance
 
 **Folder skills are never automatically active:** they are foreign content and
 therefore a prompt-injection risk, so each one needs an explicit selection.
-`allowed-tools` from the front matter is ignored — what counts remains the tool
+A skill in the opened folder is switched on **for that folder only**: ticking
+`review` in one repository does not switch on a `review` skill in the next, and
+if a folder brings a skill with the same name as one of your global skills,
+yours is shadowed there and its tick does not carry over — the folder's skill
+stays off until you tick it in that folder. `allowed-tools` from the front
+matter is ignored — what counts remains the tool
 switches under Settings › Security.
 
 ### Invoking a skill in the chat: `/name`

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 
 const { createMemoryAdapter } = require('../src/main/adapters/memory-adapter');
+const { createMemoryFs } = require('./helpers/memory-fs');
 const {
   MEMORY_SCOPES,
   MEMORY_ORIGINS,
@@ -18,28 +19,10 @@ const ROOT = path.resolve(path.join('/tmp', 'projekt'));
 const WORKSPACE_FILE = path.join(ROOT, '.agents', 'memory.md');
 const USER_FILE = path.join(HOME, '.snotra', 'memory.md');
 
+const OTHER = path.resolve(path.join('/tmp', 'anderes'));
+
 function makeFs(files = {}) {
-  const made = [];
-  return {
-    files,
-    made,
-    async readFile(target) {
-      const hit = files[target];
-      if (hit === undefined) {
-        const e = new Error(`ENOENT: ${target}`);
-        e.code = 'ENOENT';
-        throw e;
-      }
-      if (hit instanceof Error) throw hit;
-      return hit;
-    },
-    async writeFile(target, content) {
-      files[target] = content;
-    },
-    async mkdir(dir) {
-      made.push(dir);
-    },
-  };
+  return createMemoryFs(files, { dirs: [HOME, ROOT, OTHER] });
 }
 
 const os = { homedir: () => HOME };
@@ -76,7 +59,7 @@ test('ohne geoeffneten Ordner bleibt nur die globale Ebene', async () => {
 });
 
 test('zwei Ordner haben getrennte Gedaechtnisse', async () => {
-  const other = path.resolve(path.join('/tmp', 'anderes'));
+  const other = OTHER;
   const fs = makeFs({
     [WORKSPACE_FILE]: '- 2026-09-21 — Gehört zu projekt.',
     [path.join(other, '.agents', 'memory.md')]: '- 2026-09-21 — Gehört zu anderes.',
@@ -204,14 +187,57 @@ test('ein gescheiterter Vorgang blockiert die Datei nicht dauerhaft', async () =
 test('vergessen entfernt die Zeile und schreibt die Datei zurueck', async () => {
   const fs = makeFs({ [USER_FILE]: '# Kopf\n\n- 2026-09-19 — Eins.\n- 2026-09-21 — Zwei.\n' });
   const adapter = createMemoryAdapter({ fs, path, os });
-  const result = await adapter.forget({ scope: MEMORY_SCOPES.USER, line: 2 });
+  const result = await adapter.forget({ scope: MEMORY_SCOPES.USER, line: 2, text: 'Eins.' });
   assert.equal(result.removed, true);
   assert.equal(fs.files[USER_FILE], '# Kopf\n\n- 2026-09-21 — Zwei.\n');
 });
 
+test('two quick forgets remove exactly the two clicked entries (#577)', async () => {
+  const fs = makeFs({
+    [USER_FILE]: '# Kopf\n\n- 2026-09-19 — A\n- 2026-09-19 — B\n- 2026-09-19 — C\n- 2026-09-19 — D\n',
+  });
+  const adapter = createMemoryAdapter({ fs, path, os });
+  // Both line numbers come from the same rendered list; the second request
+  // arrives before the first has answered. By line number alone the second
+  // one would remove D, which moved up into C's line.
+  const results = await Promise.all([
+    adapter.forget({ scope: MEMORY_SCOPES.USER, line: 3, text: 'B' }),
+    adapter.forget({ scope: MEMORY_SCOPES.USER, line: 4, text: 'C' }),
+  ]);
+  assert.deepEqual(results.map((r) => r.removed), [true, true]);
+  assert.equal(fs.files[USER_FILE], '# Kopf\n\n- 2026-09-19 — A\n- 2026-09-19 — D\n');
+});
+
+test('an entry that is gone is not replaced by another one (#577)', async () => {
+  const before = '# Kopf\n\n- 2026-09-19 — A\n- 2026-09-19 — C\n';
+  const fs = makeFs({ [USER_FILE]: before });
+  const adapter = createMemoryAdapter({ fs, path, os });
+  assert.deepEqual(await adapter.forget({ scope: MEMORY_SCOPES.USER, line: 2, text: 'B' }), { removed: false });
+  assert.equal(fs.files[USER_FILE], before);
+});
+
+test('a failed read does not let remember replace the file with the new entry (#534)', async () => {
+  const fs = makeFs({ [USER_FILE]: Object.assign(new Error('EBUSY'), { code: 'EBUSY' }) });
+  const adapter = createMemoryAdapter({ fs, path, os, platform: 'linux' });
+  await assert.rejects(() =>
+    adapter.remember({ scope: MEMORY_SCOPES.USER, text: 'neu', origin: MEMORY_ORIGINS.REQUESTED })
+  );
+  assert.ok(fs.files[USER_FILE] instanceof Error, 'the file was not written over');
+});
+
+test('a new file gets its heading and marker in the interface language (#579)', async () => {
+  const fs = makeFs();
+  const en = createMemoryAdapter({ fs, path, os, getLocale: () => 'en' });
+  await en.remember({ scope: MEMORY_SCOPES.USER, text: 'eins', origin: MEMORY_ORIGINS.SELF });
+  assert.match(fs.files[USER_FILE], /^# Memory · global\n\n- \d{4}-\d{2}-\d{2} \(remembered on its own\) — eins\n$/);
+  const de = createMemoryAdapter({ fs, path, os, getLocale: () => 'de' });
+  await de.remember({ scope: MEMORY_SCOPES.WORKSPACE, workspaceRoot: ROOT, text: 'zwei', origin: MEMORY_ORIGINS.SELF });
+  assert.match(fs.files[WORKSPACE_FILE], /^# Gedächtnis · Projekt\n\n- \d{4}-\d{2}-\d{2} \(selbst gemerkt\) — zwei\n$/);
+});
+
 test('vergessen ohne Datei und ohne Treffer meldet schlicht nichts getan', async () => {
   const adapter = createMemoryAdapter({ fs: makeFs(), path, os });
-  assert.deepEqual(await adapter.forget({ scope: MEMORY_SCOPES.USER, line: 3 }), { removed: false });
+  assert.deepEqual(await adapter.forget({ scope: MEMORY_SCOPES.USER, line: 3, text: 'x' }), { removed: false });
 });
 
 test('die Pfade sind ohne Lesen abfragbar', () => {

@@ -77,6 +77,7 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
     const { skills } = await skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
       activeSkills: Array.isArray(prefs.activeSkills) ? prefs.activeSkills : null,
+      activeWorkspaceSkills: prefs.activeWorkspaceSkills || null,
     });
     // Verdeckte und kaputte Skills kann man nicht aufrufen, also auch nicht
     // vorschlagen.

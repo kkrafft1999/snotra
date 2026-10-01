@@ -232,7 +232,15 @@ stored with the history in the encrypted store.
   Both stand below the user's own prompt and memory and above the
   folder/tool block, and the folder's memory is introduced by its origin, not as
   the user's own words (#529). The switches "Send `AGENTS.md`" and the per-level
-  memory switches are the emergency brake.
+  memory switches are the emergency brake. Since the §4 path check only runs for
+  the file tools, these two files are contained on their own (#534): a symlinked
+  `AGENTS.md`, `.agents/memory.md` or `.agents/` folder that leads out of the
+  folder is treated as absent on read and refused by `remember` and *Forget*, so
+  a cloned repository can neither put a file from elsewhere into the prompt nor
+  have an entry appended to it. A device or pipe is never opened, and reads stop
+  at the limit. A folder skill reaches the prompt only after being switched on
+  **in that folder** (#576); a switch-on of a global skill never carries over to
+  a folder skill that shadows its name.
 - **Network addresses (`fetch_url`, #95):** a fetch whose address the model
   picks otherwise points at this machine and the local network as well — router
   interfaces, databases on `localhost`, cloud metadata at `169.254.169.254`.

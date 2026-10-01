@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 
 const { createProjectInstructionsAdapter } = require('../src/main/adapters/project-instructions-adapter');
+const { createMemoryFs } = require('./helpers/memory-fs');
 const {
   PROJECT_INSTRUCTION_SOURCES: SRC,
   MAX_PROJECT_INSTRUCTION_CHARS,
@@ -24,21 +25,18 @@ const P = {
   workspaceDotAgents: path.join(ROOT, '.agents', 'AGENTS.md'),
 };
 
-/** `files` bildet Pfad auf Inhalt ab; ein `Error` als Wert wird geworfen. */
+/**
+ * `files` bildet Pfad auf Inhalt ab; ein `Error` als Wert wird geworfen. The
+ * log records every instruction file the adapter looks up.
+ */
 function makeFs(files, log = null) {
-  return {
-    async readFile(target) {
-      if (log) log.push(target);
-      const hit = files[target];
-      if (hit === undefined) {
-        const e = new Error(`ENOENT: ${target}`);
-        e.code = 'ENOENT';
-        throw e;
-      }
-      if (hit instanceof Error) throw hit;
-      return hit;
-    },
+  const fs = createMemoryFs(files, { dirs: [HOME, ROOT] });
+  const realpath = fs.realpath;
+  fs.realpath = async (target) => {
+    if (log && /AGENTS\.md$/.test(target)) log.push(target);
+    return realpath(target);
   };
+  return fs;
 }
 
 function build(files, { home = HOME, log = null, ...rest } = {}) {

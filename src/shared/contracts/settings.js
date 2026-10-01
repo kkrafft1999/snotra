@@ -15,7 +15,7 @@ const {
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
 } = require('./enums');
-const { normalizeActiveSkills } = require('./skills');
+const { normalizeActiveSkills, normalizeActiveWorkspaceSkills } = require('./skills');
 const { createMessage, isMessage } = require('./message');
 
 /**
@@ -423,6 +423,7 @@ function normalizeUiPrefs(raw) {
   const chatHistoryWidth = clampChatHistoryWidth(data.chatHistoryWidth);
   const historyCharLimit = clampHistoryCharLimit(data.historyCharLimit);
   const activeSkills = normalizeActiveSkills(data.activeSkills);
+  const activeWorkspaceSkills = normalizeActiveWorkspaceSkills(data.activeWorkspaceSkills);
   const ignoredUpdateVersion = typeof data.ignoredUpdateVersion === 'string'
     ? data.ignoredUpdateVersion
     : undefined;
@@ -489,6 +490,9 @@ function normalizeUiPrefs(raw) {
     // der Policy-Datei; beide Altwerte laufen auf `smart` hinaus.
     disabledTools: normalizeDisabledTools(data.disabledTools) || [],
     ...(activeSkills ? { activeSkills } : {}),
+    // Per folder, and written by main only: the renderer sends its ticks, and
+    // the settings handler binds them to the open folder (#576).
+    ...(activeWorkspaceSkills ? { activeWorkspaceSkills } : {}),
     ...(typeof maxToolRounds === 'number' ? { maxToolRounds } : {}),
     ...(typeof sidebarWidth === 'number' ? { sidebarWidth } : {}),
     ...(typeof chatPanelWidth === 'number' ? { chatPanelWidth } : {}),
