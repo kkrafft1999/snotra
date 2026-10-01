@@ -606,6 +606,24 @@ test('without encrypted storage "Auto" is refused before any dialog; "Always ask
   assert.equal(state.workspaceMode, 'ask-all');
 });
 
+// CR-B14-09, item 1: the dialog used to come first and the refusal after it.
+test('without encrypted storage switching the sandbox off is refused before any dialog; on works', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { encryption: false, dialogResponse: 0 });
+  const sender = makeSender();
+  const off = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, false);
+  assert.equal(off.ok, false);
+  assert.deepEqual(off.error, { key: 'permissions.error.sandboxOffNeedsEncryption' });
+  assert.equal(off.code, undefined, 'refused, not cancelled: the renderer shows the reason');
+  assert.equal(dialogCalls.length, 0, 'no confirmation that leads nowhere');
+  assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled('/work/projekt'), false);
+  assert.equal(sender.sent.length, 0);
+
+  const on = await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, sender, true);
+  assert.equal(on.ok, true);
+  assert.equal(dialogCalls.length, 0);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceSandboxDisabled, false);
+});
+
 // ── Session approvals one by one (#447) ────────────────────────────────────
 
 test('the state lists session approvals with display data only, grouped by chat (#447)', async (t) => {

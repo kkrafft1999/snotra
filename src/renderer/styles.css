@@ -6840,6 +6840,17 @@ select.modal-input {
   display: none;
 }
 
+/* Why the switch cannot be turned off here (CR-B14-09). */
+.settings-sandbox-tile__note {
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-tile__note:empty {
+  display: none;
+}
+
 #settings-sandbox-state {
   margin-top: 10px;
 }

@@ -357,3 +357,33 @@ test('settings: the workspace switch — shown with tools off, hidden on Windows
     assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: pending, autoLabel }).tone, 'on');
   }
 });
+
+test('settings: without safeStorage "off" is not offered while on; an unreadable state is not "no folder" (CR-B14-09)', async () => {
+  const { describeWorkspaceSandbox } = await loadRenderer('sandbox-status-view.js');
+  const sandbox = { isolated: true, status: 'isolated' };
+  const autoLabel = 'Auto';
+  const view = (permissions, box = sandbox) => describeWorkspaceSandbox({ permissions, toolsOn: true, sandbox: box, autoLabel });
+
+  const blocked = view({ workspaceRoot: WORKSPACE, encryptionAvailable: false });
+  assert.deepEqual([blocked.checked, blocked.offBlocked, blocked.tone], [true, true, 'on']);
+  assert.equal(blocked.note, 'It cannot be switched off here: this system offers no encrypted storage.');
+  // Also when the system cannot isolate: the switch is still on.
+  const broken = { isolated: false, status: 'unavailable', reason: 'dependencies', missing: ['bubblewrap'] };
+  assert.equal(view({ workspaceRoot: WORKSPACE, encryptionAvailable: false }, broken).offBlocked, true);
+  // Off already: switching back on stays possible, and needs no reason.
+  const off = view({ workspaceRoot: WORKSPACE, encryptionAvailable: false, workspaceSandboxDisabled: true });
+  assert.deepEqual([off.checked, off.offBlocked, off.note], [false, false, '']);
+  // With safeStorage, or without a folder, nothing is blocked.
+  assert.equal(view({ workspaceRoot: WORKSPACE, encryptionAvailable: true }).offBlocked, false);
+  assert.equal(view({ workspaceRoot: null, encryptionAvailable: false }).offBlocked, false);
+
+  for (const unreadable of [null, undefined]) {
+    const unknown = view(unreadable);
+    assert.deepEqual(
+      { hasWorkspace: unknown.hasWorkspace, offBlocked: unknown.offBlocked, tone: unknown.tone, rootLabel: unknown.rootLabel },
+      { hasWorkspace: false, offBlocked: false, tone: 'neutral', rootLabel: '' },
+    );
+    assert.equal(unknown.title, 'Sandbox state unknown');
+    assert.equal(unknown.body, 'The permission state could not be read. Close the settings and open them again.');
+  }
+});

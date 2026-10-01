@@ -189,6 +189,16 @@ export function initMemoryPanel({ api }) {
     });
     row.append(label, status, box);
     card.appendChild(row);
+    if (scope.scope === MEMORY_SCOPES.WORKSPACE) {
+      // The card names one folder, the preference behind the switch is one
+      // for all of them: on in a trusted folder is on in any other (CR-B14-09).
+      const hint = document.createElement('p');
+      hint.className = 'modal-hint';
+      hint.id = `${box.id}-hint`;
+      hint.textContent = t('settings.memory.scope.workspace.allFolders');
+      box.setAttribute('aria-describedby', hint.id);
+      card.appendChild(hint);
+    }
 
     if (scope.entries.length > 0) {
       const list = document.createElement('ul');
@@ -283,7 +293,12 @@ export function initMemoryPanel({ api }) {
   }
 
   // Language change (epic #277): the cards are built here, not in the markup.
-  onLocaleChange(() => { render(); });
+  // The self switch's "Not saved" sits in the markup and would keep the old
+  // language; it belongs to an attempt that is over (CR-B14-09).
+  onLocaleChange(() => {
+    selfSwitch.status.clear();
+    render();
+  });
 
   return {
     /** Stand vom Main holen und neu zeichnen — beim Öffnen des Dialogs. */

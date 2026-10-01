@@ -147,3 +147,110 @@ test('the sandbox switch keeps the focus while main decides and after the page r
   assert.equal(doc.querySelector('.settings-security-row[data-risk-class="execute"]').contains(ui.input()), true);
   assert.equal(doc.activeElement === ui.input(), true, 'the keyboard is still on the switch');
 });
+
+// ── The change handler (CR-B14-09, item 14) ─────────────────────────────
+
+test('a cancelled system dialog puts the switch back without a word', async (t) => {
+  const ui = await mount({ answer: async () => ({ ok: false, code: 'cancelled', error: { key: 'permissions.error.sandboxNotSwitchedOff' } }) });
+  t.after(ui.cleanup);
+  ui.flip(false);
+  await settle();
+  assert.deepEqual(ui.toolPermissions.calls, [false]);
+  assert.equal(ui.input().checked, true, 'main holds "on"');
+  assert.equal(ui.stateLine().hidden, true);
+  assert.equal(ui.status().textContent, '');
+  assert.equal(ui.input().hasAttribute('aria-disabled'), false, 'ready for the next try');
+});
+
+test('a failed save shows main\'s reason under the tile and "Not saved" next to the switch', async (t) => {
+  const ui = await mount({ answer: async () => ({ ok: false, error: { key: 'permissions.error.policyUnreadable' } }) });
+  t.after(ui.cleanup);
+  ui.flip(false);
+  await settle();
+  assert.equal(ui.input().checked, true);
+  assert.equal(ui.stateLine().hidden, false);
+  assert.equal(ui.stateLine().textContent, 'The permissions file could not be read, so nothing was changed. Try again in a moment.');
+  assert.equal(ui.status().textContent, 'Not saved');
+  assert.equal(ui.status().classList.contains('is-error'), true);
+  assert.deepEqual(ui.input().getAttribute('aria-describedby').split(' '),
+    ['settings-sandbox-tile-body', 'settings-sandbox-tile-note', 'settings-sandbox-state']);
+});
+
+// CR-B14-09, item 3: the text belonged to an attempt that is over.
+test('a failure is gone after a language change, in another folder and on the next open', async (t) => {
+  const ui = await mount({ answer: async () => ({ ok: false }) });
+  t.after(ui.cleanup);
+  const fail = async () => {
+    ui.flip(false);
+    await settle();
+    assert.equal(ui.stateLine().textContent, 'Not saved', 'no reason from main: the catalogue\'s own');
+    assert.equal(ui.status().textContent, 'Not saved');
+  };
+  const gone = (why) => {
+    assert.equal(ui.stateLine().hidden, true, why);
+    assert.equal(ui.stateLine().textContent, '', why);
+    assert.equal(ui.status().textContent, '', why);
+  };
+
+  await fail();
+  ui.setLocale('de');
+  gone('language change');
+  assert.equal(ui.doc.getElementById('settings-sandbox-tile-title').textContent, 'Sandbox aktiv');
+  ui.setLocale('en');
+
+  await fail();
+  ui.toolPermissions.push(permissionsState({ workspaceRoot: '/work/other' }));
+  gone('another folder');
+
+  await fail();
+  ui.toolPermissions.push(permissionsState({ workspaceRoot: '/work/other' }));
+  assert.equal(ui.stateLine().textContent, 'Not saved', 'the same folder keeps it');
+  ui.sandbox.update({ toolsOn: true, sandbox: SANDBOX });
+  gone('the settings were opened');
+});
+
+// CR-B14-09, item 1: "off" cannot be stored without safeStorage.
+test('without encrypted storage the switch does not offer "off", says why, and still switches back on', async (t) => {
+  const ui = await mount({ state: permissionsState({ encryptionAvailable: false }) });
+  t.after(ui.cleanup);
+  const { doc: d, dom } = ui;
+  const note = d.getElementById('settings-sandbox-tile-note');
+  assert.equal(ui.input().checked, true);
+  assert.equal(ui.input().getAttribute('aria-disabled'), 'true');
+  assert.equal(ui.input().disabled, false, 'still focusable, with its reason');
+  assert.equal(note.textContent, 'It cannot be switched off here: this system offers no encrypted storage.');
+  const click = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true });
+  ui.input().dispatchEvent(click);
+  assert.equal(click.defaultPrevented, true);
+  // Past the guard, from code: the flip does not count and main is not asked.
+  ui.flip(false);
+  await settle();
+  assert.equal(ui.input().checked, true);
+  assert.deepEqual(ui.toolPermissions.calls, []);
+
+  // Switched off before (a system that had a keyring then): back on works.
+  ui.toolPermissions.push(permissionsState({ encryptionAvailable: false, workspaceSandboxDisabled: true }));
+  assert.equal(ui.input().checked, false);
+  assert.equal(ui.input().hasAttribute('aria-disabled'), false);
+  assert.equal(note.textContent, '');
+  ui.input().focus();
+  ui.flip(true);
+  await settle();
+  focusFixup(d);
+  assert.deepEqual(ui.toolPermissions.calls, [true]);
+  assert.equal(ui.input().checked, true);
+  assert.equal(ui.input().getAttribute('aria-disabled'), 'true', 'and from now on "off" is not offered');
+  assert.equal(d.activeElement === ui.input(), true, 'the keyboard stays on the switch');
+});
+
+// CR-B14-09, item 5.
+test('an unreadable permission state is not "no folder" and not "Sandbox active"', async (t) => {
+  const ui = await mount({ state: null });
+  t.after(ui.cleanup);
+  const d = ui.doc;
+  assert.equal(d.getElementById('settings-sandbox-tile-title').textContent, 'Sandbox state unknown');
+  assert.equal(d.getElementById('settings-sandbox-tile-body').textContent, 'The permission state could not be read. Close the settings and open them again.');
+  assert.equal(d.getElementById('settings-sandbox-tile').dataset.tone, 'neutral');
+  assert.equal(d.getElementById('settings-sandbox-workspace-name').textContent, '');
+  assert.equal(ui.input().disabled, true);
+});

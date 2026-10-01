@@ -289,7 +289,12 @@ function registerToolPermissionHandlers({
     return result?.response === 0;
   }
 
-  async function canStoreAuto() {
+  /**
+   * Whether a loosening ("Auto", the sandbox off) can be stored at all: it
+   * needs the signature, and so `safeStorage`. Asked before the native
+   * dialog, so that no confirmation leads nowhere (#419, CR-B14-09).
+   */
+  async function canStoreLoosening() {
     try {
       return (await toolPolicyStore.read()).encryptionAvailable === true;
     } catch {
@@ -473,7 +478,7 @@ function registerToolPermissionHandlers({
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
       // Without safeStorage "Auto" cannot be stored (#419): say so instead of
       // asking for a confirmation that leads nowhere.
-      if (!(await canStoreAuto())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
+      if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
       const confirmed = await confirmNatively(autoModeDialog(createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
@@ -594,13 +599,15 @@ function registerToolPermissionHandlers({
   });
 
   // The sandbox of the execution tools, per workspace (#357). Off is a
-  // loosening and goes through the native dialog; on never asks. The root is
-  // the active one from main, never a path the renderer names.
+  // loosening and goes through the native dialog — unless it cannot be stored,
+  // which is said before any dialog; on never asks. The root is the active
+  // one from main, never a path the renderer names.
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, async (event, enabled) => {
     if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
     const root = getActiveWorkspaceRoot();
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     if (!enabled) {
+      if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.sandboxOffNeedsEncryption'));
       const confirmed = await confirmNatively(sandboxOffDialog(root, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.sandboxNotSwitchedOff'), 'cancelled');
     }
@@ -619,7 +626,7 @@ function registerToolPermissionHandlers({
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const current = await toolPolicyStore.readWorkspaceMode(root);
     if (mode === TOOL_PERMISSION_MODES.AUTO && current !== TOOL_PERMISSION_MODES.AUTO) {
-      if (!(await canStoreAuto())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
+      if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
       const confirmed = await confirmNatively(workspaceAutoDialog(root, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.workspaceAutoNotSet'), 'cancelled');
     }

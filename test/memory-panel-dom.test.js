@@ -260,3 +260,128 @@ test('the memory card\'s small texts use the stronger grey, 4.5:1 or more in lig
     assert.ok(ratio(value(block, '--ds-grey-strong'), value(block, '--ds-surface')) >= 4.5);
   }
 });
+
+// ── CR-B14-09 (#622) ────────────────────────────────────────────────────
+
+/** Both memories: the project one of an open folder and the global one. */
+function bothMemories() {
+  const user = userMemory(['Prefers tabs.']).scopes[0];
+  return {
+    available: true,
+    selfEnabled: true,
+    scopes: [
+      {
+        scope: 'workspace',
+        folderName: 'snotra',
+        path: '/work/snotra/.agents/memory.md',
+        shortPath: '.agents/memory.md',
+        enabled: true,
+        chars: 40,
+        maxChars: 8000,
+        truncated: false,
+        entries: [
+          { line: 2, date: '2026-09-21', text: 'Uses node 24.', origin: 'requested' },
+          { line: 3, date: '2026-09-22', text: 'Tests with node --test.', origin: 'self' },
+        ],
+      },
+      user,
+    ],
+  };
+}
+
+// Item 14: the payload and the redraw had no test.
+test('"Forget" names the entry by scope, line and text, and the list is what main answers', async (t) => {
+  const calls = [];
+  // Main re-read the file: besides the forgotten entry, another one is gone.
+  const answer = bothMemories();
+  answer.scopes[0].entries = [];
+  const ui = await mount({
+    memory: bothMemories(),
+    api: {
+      forgetMemoryEntry: async (...args) => {
+        calls.push(args);
+        return { ok: true, removed: true, state: structuredClone(answer) };
+      },
+    },
+  });
+  t.after(ui.cleanup);
+  ui.trash('Tests with node --test.').click();
+  await flush();
+  assert.deepEqual(calls, [['workspace', 3, 'Tests with node --test.']]);
+  assert.equal(ui.card('workspace').querySelector('.memory-list'), null, 'drawn from main\'s state, not patched locally');
+  assert.match(ui.card('workspace').querySelector('.memory-empty').textContent, /^Nothing remembered yet/);
+  assert.deepEqual(ui.texts('user'), ['Prefers tabs.']);
+});
+
+test('each "Send along" switch saves its own preference at once and snaps back when it is not stored', async (t) => {
+  const saved = [];
+  let accept = true;
+  const ui = await mount({
+    memory: bothMemories(),
+    api: {
+      setUIPrefs: async (prefs) => {
+        saved.push(prefs);
+        return accept ? prefs : {};
+      },
+    },
+  });
+  t.after(ui.cleanup);
+  const project = ui.doc.getElementById('memory-send-workspace');
+  const global = ui.doc.getElementById('memory-send-user');
+  const flip = (box, on) => {
+    box.checked = on;
+    box.dispatchEvent(new ui.dom.window.Event('change', { bubbles: true }));
+  };
+
+  flip(project, false);
+  await flush();
+  assert.deepEqual(saved, [{ memoryWorkspaceEnabled: false }]);
+  assert.equal(project.checked, false);
+  assert.equal(project.parentElement.querySelector('.settings-instant-status').textContent, 'Saved');
+
+  accept = false;
+  flip(global, false);
+  await flush();
+  assert.deepEqual(saved.at(-1), { memoryUserEnabled: false });
+  assert.equal(global.checked, true, 'not stored: back to what is');
+  assert.equal(global.parentElement.querySelector('.settings-instant-status').textContent, 'Not saved');
+});
+
+// Item 4: the card names one folder, the preference is one for all of them.
+test('the project memory switch says that it applies to every folder', async (t) => {
+  const ui = await mount({ memory: bothMemories() });
+  t.after(ui.cleanup);
+  const project = ui.doc.getElementById('memory-send-workspace');
+  const hint = ui.doc.getElementById(project.getAttribute('aria-describedby'));
+  assert.equal(hint.textContent, 'This switch applies to every folder, not just this one.');
+  assert.equal(ui.card('workspace').contains(hint), true);
+  assert.equal(ui.doc.getElementById('memory-send-user').hasAttribute('aria-describedby'), false,
+    'the global card already says "applies in every folder" in its title');
+
+  ui.setLocale('de');
+  await flush();
+  const again = ui.doc.getElementById(ui.doc.getElementById('memory-send-workspace').getAttribute('aria-describedby'));
+  assert.equal(again.textContent, 'Dieser Schalter gilt für alle Ordner, nicht nur für diesen.');
+});
+
+// Item 3: the self switch's status sits in the markup and kept its language.
+test('a "Not saved" next to the self switch is gone after a language change and on the next open', async (t) => {
+  const ui = await mount({ api: { setUIPrefs: async () => ({}) } });
+  t.after(ui.cleanup);
+  const self = ui.doc.getElementById('input-memory-self');
+  const status = ui.doc.getElementById('status-memory-self');
+  const fail = async () => {
+    self.checked = !self.checked;
+    self.dispatchEvent(new ui.dom.window.Event('change', { bubbles: true }));
+    await flush();
+    assert.equal(status.textContent, 'Not saved');
+  };
+  await fail();
+  ui.setLocale('de');
+  await flush();
+  assert.equal(status.textContent, '');
+  ui.setLocale('en');
+  await fail();
+  await ui.panel.refresh();
+  assert.equal(status.textContent, '');
+});
