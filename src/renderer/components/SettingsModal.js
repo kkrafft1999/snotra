@@ -789,7 +789,6 @@ export function initSettingsModal(deps) {
       settingsCredentialDraft[providerId] = credentialDraftFor(pv);
     }
     const draft = activeDraft(providerId) || credentialDraftFor(pv);
-    const stored = activeStored(providerId);
 
     renderProviderTemplates(pv);
 
@@ -806,9 +805,7 @@ export function initSettingsModal(deps) {
       providerKeyRow.classList.remove('hidden');
       inputApiKey.value = draft.apiKey || '';
       syncSecretPlaceholders(providerId);
-      const showTrash =
-        stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
-      btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
+      syncSecretTrash(providerId);
       // Ein optionaler Key braucht die Ansage, dass leer in Ordnung ist —
       // sonst liest sich das leere Feld wie eine fehlende Angabe (Issue #193).
       providerKeyHint?.classList.toggle('hidden', form.apiKeyOptional !== true);
@@ -823,9 +820,7 @@ export function initSettingsModal(deps) {
       providerExtraHeadersRow.classList.remove('hidden');
       inputExtraHeaders.value = draft.extraHeaders || '';
       syncSecretPlaceholders(providerId);
-      const showHeaderTrash =
-        stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
-      btnRemoveExtraHeaders?.classList.toggle('hidden', !showHeaderTrash);
+      syncSecretTrash(providerId);
     } else {
       providerExtraHeadersRow.classList.add('hidden');
       inputExtraHeaders.value = '';
@@ -929,6 +924,38 @@ export function initSettingsModal(deps) {
         inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
       }
     }
+  }
+
+  /** The trash next to the key and the header field: shown while there is something to remove. */
+  function syncSecretTrash(providerId) {
+    const pv = findProviderView(providerId);
+    if (!pv) return;
+    const form = pv.form || {};
+    const draft = activeDraft(providerId) || credentialDraftFor(pv);
+    const stored = activeStored(providerId);
+    if (form.showApiKey) {
+      const showTrash = stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
+      btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
+    }
+    if (form.showExtraHeaders) {
+      const showTrash =
+        stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
+      btnRemoveExtraHeaders?.classList.toggle('hidden', !showTrash);
+    }
+  }
+
+  /**
+   * What a keystroke in the key or header field changes: the trash, the
+   * placeholders and the status line — never the model list, which a full
+   * `syncPopupProviderUI` would reset to the stored model (CR-B14-05).
+   */
+  function syncSecretControls(providerId) {
+    syncSecretTrash(providerId);
+    syncSecretPlaceholders(providerId);
+    renderProviderStatusLine(providerId);
+    // An error ("Enter an API key first", a refused key) was about the value
+    // before this keystroke; "3 models found" still holds and stays.
+    if (modelStatus.classList.contains('error')) setModelStatus('');
   }
 
   /** The line below the provider choice: where it goes and what is stored. */
@@ -1758,15 +1785,20 @@ export function initSettingsModal(deps) {
     if (!pv) return;
     stashPopupCredentialInputs();
 
-    const d = settingsCredentialDraft[providerId] || {};
+    // The connection on screen: for a provider with a connection per entry
+    // that is the row being edited, not the provider (#202, CR-B14-05).
+    const d = activeDraft(providerId) || {};
+    const stored = activeStored(providerId);
+    const perPreset = usesPresetConnection(pv);
     const form = pv.form || {};
-    const apiKey = d.apiKey;
+    const apiKey = (d.apiKey || '').trim();
     const baseUrl = (d.baseUrl || '').trim();
     const insecureTls = form.showInsecureTls ? !!d.insecureTls : undefined;
+    const extraHeaders = form.showExtraHeaders && !d.removeExtraHeaders ? (d.extraHeaders || '') : '';
 
     // Ein optionaler Key darf fehlen (Issue #193) — dort ist die Server-URL die
     // einzige Voraussetzung.
-    if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!pv.hasKey || d.removeApiKey)) {
+    if (form.showApiKey && !form.apiKeyOptional && !apiKey && (!stored.hasKey || d.removeApiKey)) {
       setModelStatus(t('addModel.needKey'), true);
       return;
     }
@@ -1778,11 +1810,16 @@ export function initSettingsModal(deps) {
     btnLoadModels.disabled = true;
     setModelStatus(t('addModel.models.loading'));
     try {
+      // `presetId` names the stored connection main may fall back on; main
+      // hands its key and headers only to the address they were stored with
+      // (#537).
       const result = await api.listModels({
         providerId,
         apiKey: apiKey || undefined,
         baseUrl: baseUrl || undefined,
         insecureTls,
+        extraHeaders: extraHeaders.trim() ? extraHeaders : undefined,
+        presetId: perPreset && popupEditPresetId ? popupEditPresetId : undefined,
       });
       if (generation !== modelRequestGeneration) return;
       // Eine fehlgeschlagene oder leere Liste ist bei einem frei gewaehlten
@@ -1842,6 +1879,11 @@ export function initSettingsModal(deps) {
     for (const field of pv.presetFields || []) {
       const value = popupPresetFieldValues[providerId]?.[field.key] || field.defaultValue;
       if (value) row[field.key] = value;
+    }
+    // With a connection per entry the server is part of what makes a row
+    // unique (#202): the same model on a second server is a second entry.
+    if (usesPresetConnection(pv)) {
+      row.connection = { baseUrl: (activeDraft(providerId)?.baseUrl || pv.defaultBaseUrl || '').trim() };
     }
     return row;
   }
@@ -2088,7 +2130,7 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.apiKey = inputApiKey.value;
     if (inputApiKey.value.trim()) draft.removeApiKey = false;
-    syncPopupProviderUI(id, true);
+    syncSecretControls(id);
   });
 
   btnRemoveApiKey?.addEventListener('click', () => {
@@ -2097,7 +2139,8 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.apiKey = '';
     draft.removeApiKey = true;
-    syncPopupProviderUI(id, true);
+    inputApiKey.value = '';
+    syncSecretControls(id);
   });
 
   inputBaseUrl.addEventListener('input', () => {
@@ -2145,7 +2188,7 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.extraHeaders = inputExtraHeaders.value;
     if (inputExtraHeaders.value.trim()) draft.removeExtraHeaders = false;
-    syncPopupProviderUI(id, true);
+    syncSecretControls(id);
   });
 
   btnRemoveExtraHeaders?.addEventListener('click', () => {
@@ -2154,7 +2197,8 @@ export function initSettingsModal(deps) {
     if (!draft) return;
     draft.extraHeaders = '';
     draft.removeExtraHeaders = true;
-    syncPopupProviderUI(id, true);
+    inputExtraHeaders.value = '';
+    syncSecretControls(id);
     inputExtraHeaders.focus();
   });
 

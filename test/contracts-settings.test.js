@@ -23,6 +23,30 @@ test('settings contract helpers are exported from the aggregate', () => {
   assert.equal(typeof formatConnectionDetail, 'function');
 });
 
+test('presetIdentityKey tells servers apart for the renderer view as well (CR-B14-05)', () => {
+  // The provider in main carries the flag at the top, the renderer's view
+  // under `form`; both must count the server as part of the identity.
+  const compat = require('../src/main/providers/openai-compatible');
+  const view = { id: 'openai-compatible', defaultBaseUrl: 'http://localhost:1234/v1', form: { connectionPerPreset: true } };
+  const at = (baseUrl) => ({ providerId: 'openai-compatible', model: 'qwen2.5', connection: { baseUrl } });
+
+  for (const source of [compat, view]) {
+    assert.notEqual(
+      presetIdentityKey(at('http://localhost:1234/v1'), source),
+      presetIdentityKey(at('https://gw.example/v1'), source),
+    );
+    // A trailing slash or the default address left implicit is the same server.
+    assert.equal(
+      presetIdentityKey(at('https://gw.example/v1/'), source),
+      presetIdentityKey(at('https://gw.example/v1'), source),
+    );
+  }
+  assert.equal(
+    presetIdentityKey({ providerId: 'openai-compatible', model: 'qwen2.5' }, view),
+    presetIdentityKey(at('http://localhost:1234/v1'), view),
+  );
+});
+
 test('normalizePresetWire accepts legacy reasoningEffort for OpenAI', () => {
   const preset = normalizePresetWire(
     { id: 'p1', providerId: 'openai', model: 'gpt-4o', reasoningEffort: 'high' },

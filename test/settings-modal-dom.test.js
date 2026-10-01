@@ -407,6 +407,170 @@ test('die Vorlage belegt Adresse und API-Stil vor (#193)', async (t) => {
   assert.match(document.getElementById('provider-template-hint').textContent, /Router-Dienst/);
 });
 
+// --- The connection on screen (CR-B14-05) -----------------------------------
+
+const type = (id, value) => {
+  const el = document.getElementById(id);
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+async function openCompatPopup() {
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+}
+
+/** A stored gateway row as main sends it: yes/no about secrets, never values. */
+const STORED_GATEWAY_ROW = {
+  id: 'p1',
+  providerId: 'openai-compatible',
+  model: 'gpt-4o',
+  menuVisible: true,
+  configured: true,
+  connection: {
+    displayName: 'Gateway',
+    baseUrl: 'https://gw.example/v1',
+    apiStyle: 'chat',
+    insecureTls: false,
+    supportsImages: false,
+    sendTools: true,
+    hasKey: true,
+    keyUnreadable: false,
+    hasExtraHeaders: true,
+  },
+};
+
+test('"Load models" asks the server typed into the popup, with its key and headers (CR-B14-05)', async (t) => {
+  const requests = [];
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async (request) => { requests.push(request); return { models: [] }; },
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  type('input-base-url', 'https://gw.example/v1');
+  type('input-api-key', 'sk-gw');
+  type('input-extra-headers', 'X-Tenant: acme');
+  document.getElementById('btn-load-models').click();
+  await flush();
+
+  // Before the fix: the provider's default server, no key, no headers.
+  assert.deepEqual(requests, [{
+    providerId: 'openai-compatible',
+    apiKey: 'sk-gw',
+    baseUrl: 'https://gw.example/v1',
+    insecureTls: false,
+    extraHeaders: 'X-Tenant: acme',
+    presetId: undefined,
+  }]);
+});
+
+test('"Load models" on an edited row names the row, so main can use its stored key (CR-B14-05)', async (t) => {
+  const requests = [];
+  const { dom, appStore } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async (request) => { requests.push(request); return { models: [] }; },
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [STORED_GATEWAY_ROW];
+  appStore.llmState.activePresetId = 'p1';
+  await dom.reopenSettings();
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  document.getElementById('btn-load-models').click();
+  await flush();
+
+  assert.deepEqual(requests, [{
+    providerId: 'openai-compatible',
+    apiKey: undefined,
+    baseUrl: 'https://gw.example/v1',
+    insecureTls: false,
+    extraHeaders: undefined,
+    presetId: 'p1',
+  }]);
+});
+
+test('the same model on a second server is a second entry (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  await zeileAnlegen({ name: 'Gateway', baseUrl: 'https://gw.example/v1', model: 'qwen2.5' });
+
+  assert.deepEqual(zeilenTitel(), ['LM Studio · qwen2.5', 'Gateway · qwen2.5']);
+  assert.ok(document.getElementById('add-model-overlay').classList.contains('hidden'));
+});
+
+test('the same model on the same server is refused as a duplicate (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  // A trailing slash does not make it another server.
+  await zeileAnlegen({ name: 'Again', baseUrl: 'http://localhost:1234/v1/', model: 'qwen2.5' });
+
+  assert.deepEqual(zeilenTitel(), ['LM Studio · qwen2.5']);
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), false, 'the popup stays open');
+  assert.equal(document.getElementById('model-status').textContent, 'Diese Kombination gibt es bereits in der Liste.');
+});
+
+test('typing a key keeps a loaded model list and the model picked from it (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [OPENAI_VIEW],
+    listModels: async () => ({ models: [{ id: 'gpt-4o' }, { id: 'gpt-4.1' }, { id: 'o3' }] }),
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  document.getElementById('btn-load-models').click();
+  await flush();
+  const select = document.getElementById('select-model');
+  const options = () => [...select.options].map((o) => o.value);
+  const loaded = options();
+  assert.ok(['gpt-4o', 'gpt-4.1', 'o3'].every((id) => loaded.includes(id)));
+  select.value = 'o3';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  type('input-api-key', 's');
+  await flush();
+
+  // Before the fix one keystroke left only the stored model.
+  assert.deepEqual(options(), loaded);
+  assert.equal(select.value, 'o3');
+  assert.equal(document.getElementById('model-status').textContent, '3 Modelle gefunden.');
+  // What the keystroke is for still happens: the status line knows about the key.
+  assert.match(document.getElementById('provider-status').textContent, /Key/);
+});
+
+test('typing a header keeps the loaded name suggestions (CR-B14-05)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async () => ({ models: [{ id: 'gpt-4o' }, { id: 'gpt-4.1' }, { id: 'o3' }] }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  document.getElementById('btn-load-models').click();
+  await flush();
+  type('input-model', 'o3');
+  type('input-extra-headers', 'X-Tenant: a');
+  await flush();
+
+  assert.deepEqual(
+    [...document.querySelectorAll('#model-name-options option')].map((o) => o.value),
+    ['gpt-4o', 'gpt-4.1', 'o3'],
+  );
+  assert.equal(document.getElementById('input-model').value, 'o3');
+  assert.equal(document.getElementById('model-status').textContent, '3 Modelle gefunden.');
+});
+
 /**
  * OpenAI as the main process describes it: two options of its own, drawn as a
  * segmented control and a switch (#414).
