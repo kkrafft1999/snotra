@@ -1305,6 +1305,11 @@ module.exports = {
   'approval.preview.maskedNote': 'Credentials that were recognised are masked in the preview and stay masked when it is unfolded.',
   'approval.preview.expand': 'Show in full',
   'approval.preview.collapse': 'Collapse preview',
+  // Markers inside the preview of edit_file and apply_patch (#555).
+  'approval.preview.edit.old': 'old',
+  'approval.preview.edit.new': 'new',
+  'approval.preview.edit.all': 'all occurrences',
+  'approval.preview.edit.step': 'Step {n}',
   'approval.shell.login': '{shell} (login shell)',
 
   'approval.fact.effect': 'Effect',
@@ -1373,6 +1378,13 @@ module.exports = {
   'tools.line.loadSkill.done': 'Skill {name} loaded',
   'tools.line.loadSkill.start.plain': 'Loading skill …',
   'tools.line.loadSkill.done.plain': 'Skill loaded',
+  // remember (#555): where the entry went is the information.
+  'tools.line.remember.start': 'Remembering in {scope} …',
+  'tools.line.remember.done': 'Remembered in {scope}',
+  'tools.line.remember.start.plain': 'Remembering …',
+  'tools.line.remember.done.plain': 'Remembered',
+  'tools.line.remember.scope.workspace': 'the project memory',
+  'tools.line.remember.scope.user': 'the global memory',
 
   'tools.line.listDirectory.start': 'Searching folder {path} …',
   'tools.line.listDirectory.done': 'Folder {path} searched',

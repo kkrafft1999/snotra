@@ -46,6 +46,7 @@
  * @property {string[]} [writableSkills]  skills loaded in this run, whose folders a write may reach (#429)
  * @property {string[]} [sensitivePathPatterns]  Nutzer-Muster zusätzlich zu den Standardmustern
  * @property {string[]} [forcedClasses]  Klassen, die eine Neubewertung erzwingt (z. B. 'delete')
+ * @property {string} [locale]  interface language for the words inside the preview (#555)
  */
 
 /**

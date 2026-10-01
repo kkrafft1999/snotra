@@ -288,3 +288,20 @@ test('the guarded lookup answers in the shape net.connect asks for (#554)', asyn
   const empty = createGuardedLookup(async () => []);
   assert.equal((await ask(empty, {})).error.code, 'ENOTFOUND');
 });
+
+// #555: a body that is not read is cancelled, so its connection is released.
+test('fetch_url cancels the bodies it does not read (#555)', async () => {
+  const cancelled = [];
+  const withBody = (response, label) => ({ ...response, body: { cancel: async () => { cancelled.push(label); } } });
+  const redirect = withBody(makeResponse({ status: 302, headers: { location: 'https://example.org/next' } }), 'redirect');
+  const { adapter } = makeAdapter([redirect, withBody(makeResponse({ status: 500 }), 'error')]);
+  const result = await adapter.fetchUrl({ url: 'https://example.org/' });
+  assert.equal(result.ok, false);
+  assert.deepEqual(cancelled, ['redirect', 'error']);
+
+  const binary = withBody(makeResponse({ headers: { 'content-type': 'application/pdf' } }), 'pdf');
+  const big = withBody(makeResponse({ headers: { 'content-type': 'text/html', 'content-length': String(URL_FETCH_LIMITS.MAX_BYTES + 1) } }), 'big');
+  await makeAdapter(binary).adapter.fetchUrl({ url: 'https://example.org/a.pdf' });
+  await makeAdapter(big).adapter.fetchUrl({ url: 'https://example.org/big' });
+  assert.deepEqual(cancelled, ['redirect', 'error', 'pdf', 'big']);
+});

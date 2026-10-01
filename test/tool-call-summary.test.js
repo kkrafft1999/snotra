@@ -166,3 +166,12 @@ test('summarizeToolCall makes skill paths recognisable as skills (issue #61)', (
     'File src/app.js read'
   );
 });
+
+// #555: remember had no line of its own and showed its identifier.
+test('remember says where the entry went (#555)', () => {
+  assert.equal(summarizeToolCall('remember', { scope: 'workspace', text: 'x' }, 'done'), 'Remembered in the project memory');
+  assert.equal(summarizeToolCall('remember', { scope: 'user', text: 'x' }, 'start'), 'Remembering in the global memory …');
+  assert.equal(summarizeToolCall('remember', { scope: 'user', text: 'x' }, 'done', 'de'), 'Im globalen Gedächtnis gemerkt');
+  assert.equal(summarizeToolCall('remember', { scope: 'workspace' }, 'start', 'de'), 'Wird im Projektgedächtnis gemerkt …');
+  assert.equal(summarizeToolCall('remember', {}, 'done'), 'Remembered');
+});

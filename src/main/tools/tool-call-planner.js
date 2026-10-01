@@ -28,6 +28,8 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
+const { createTranslator } = require('../../shared/i18n');
+const { isPathInside } = require('../../shared/runtime/path-inside');
 
 const PREVIEW_MAX_CHARS = 4000;
 /** The tools that run a process and have a sandbox (#329). */
@@ -35,7 +37,19 @@ const EXECUTION_TOOLS = new Set(['shell_execute', 'run_python']);
 
 const RECOVERY_TRASH = 'trash';
 
+/**
+ * One replacement as the card shows it. The markers are words the user reads,
+ * so they follow the interface language (#555), not the language the code
+ * happened to be written in.
+ */
+function replacementText(t, edit, heading = '') {
+  const all = edit?.replace_all === true ? ` (${t('approval.preview.edit.all')})` : '';
+  const head = heading ? `${heading}${all}\n--- ${t('approval.preview.edit.old')}` : `--- ${t('approval.preview.edit.old')}${all}`;
+  return `${head}\n${String(edit?.old_string ?? '')}\n+++ ${t('approval.preview.edit.new')}\n${String(edit?.new_string ?? '')}`;
+}
+
 function buildPreview(toolName, args, options = {}) {
+  const t = createTranslator(options.locale);
   let kind = 'text';
   let text = '';
   let extra = null;
@@ -43,18 +57,14 @@ function buildPreview(toolName, args, options = {}) {
     text = typeof args?.content === 'string' ? args.content : '';
   } else if (toolName === 'edit_file') {
     kind = 'replace';
-    const all = args?.replace_all === true ? ' (alle Vorkommen)' : '';
-    text = `--- alt${all}\n${String(args?.old_string ?? '')}\n+++ neu\n${String(args?.new_string ?? '')}`;
+    text = replacementText(t, args);
   } else if (toolName === 'apply_patch') {
     kind = 'diff';
     if (typeof args?.patch === 'string') {
       text = args.patch;
     } else if (Array.isArray(args?.edits)) {
       text = args.edits
-        .map((edit, index) => {
-          const all = edit?.replace_all === true ? ' (alle Vorkommen)' : '';
-          return `# Schritt ${index + 1}${all}\n--- alt\n${String(edit?.old_string ?? '')}\n+++ neu\n${String(edit?.new_string ?? '')}`;
-        })
+        .map((edit, index) => replacementText(t, edit, `# ${t('approval.preview.edit.step', { n: index + 1 })}`))
         .join('\n\n');
     }
   } else if (toolName === 'run_python') {
@@ -192,8 +202,7 @@ function createToolCallPlanner({
   }
 
   function containsPath(root, candidate) {
-    const rel = path.relative(root, candidate);
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    return isPathInside(path, root, candidate);
   }
 
   function isProtected(absPath) {
@@ -453,6 +462,7 @@ function createToolCallPlanner({
     const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance, skillFolders);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
+      locale: context.locale,
       cwd: shellCwdLabel || shellCwd,
       shellLabel: shell?.label || '',
       shellLogin: shell?.login === true,

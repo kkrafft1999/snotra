@@ -1,5 +1,7 @@
 'use strict';
 
+const { isPathInside } = require('../../shared/runtime/path-inside');
+
 function createNodeWorkspacePathAdapter({ path: pathMod }) {
   return {
     resolveRoot(rawRoot) {
@@ -12,8 +14,8 @@ function createNodeWorkspacePathAdapter({ path: pathMod }) {
       const absolutePath = pathMod.isAbsolute(trimmed)
         ? pathMod.resolve(trimmed)
         : pathMod.resolve(root, trimmed);
+      if (!isPathInside(pathMod, root, absolutePath)) return null;
       const relativePath = pathMod.relative(root, absolutePath);
-      if (relativePath.startsWith('..') || pathMod.isAbsolute(relativePath)) return null;
       // Posix-Schreibweise wie bei Tool-Pfaden und @-Referenzen, auch unter Windows.
       const relativePosix = relativePath.split(pathMod.sep).join('/');
       return {

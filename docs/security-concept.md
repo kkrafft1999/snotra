@@ -313,8 +313,10 @@ later: service or server, action, target and the data that is actually going to
 be transmitted, safely masked. All texts, paths and previews are rendered as
 data, never as active HTML.
 
-For new files, `write_file_text` shows the new text; for existing ones, the
-comparison including an overwrite warning. `edit_file` and `apply_patch` show
+`write_file_text` shows the new text; for an existing file the card adds an
+overwrite warning and says whether a copy goes to the trash first. The card
+does not compare with the current content — the planner never reads a target
+for the preview; a comparison view is planned in #348. `edit_file` and `apply_patch` show
 diffs of every target. Large previews are clearly marked as truncated and can be
 expanded in full; sensitive values stay hidden while doing so. Preview and
 execution come from the same validated plan, not from a freely worded

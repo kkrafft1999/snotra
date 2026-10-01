@@ -47,6 +47,20 @@ function charsetOf(response) {
 }
 
 /**
+ * Lets go of a body that is not read (#555): undici holds the connection until
+ * the body is consumed or collected, so a redirect or an error answer would
+ * otherwise keep its socket for an unknown time.
+ */
+function discardBody(response) {
+  try {
+    const pending = response?.body?.cancel?.();
+    if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+  } catch {
+    /* a body that cannot be cancelled is left to the garbage collector */
+  }
+}
+
+/**
  * Liest den Koerper bis zur Byte-Grenze und bricht danach ab. Ohne diese
  * Grenze koennte eine einzige Adresse den Speicher fuellen — `content-length`
  * allein genuegt nicht, weil der Server ihn weglassen oder luegen darf.
@@ -54,6 +68,7 @@ function charsetOf(response) {
 async function readLimitedBody(response) {
   const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > URL_FETCH_LIMITS.MAX_BYTES) {
+    discardBody(response);
     return { tooLarge: true };
   }
   if (!response.body || typeof response.body.getReader !== 'function') {
@@ -221,6 +236,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
             // gegen die Adressregeln geprueft (ein 302 auf 127.0.0.1 ist der
             // klassische Weg um eine einmalige Pruefung herum).
             if (response.status >= 300 && response.status < 400) {
+              discardBody(response);
               const location = response.headers?.get?.('location');
               if (!location) {
                 return fail(
@@ -241,6 +257,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
             }
 
             if (!response.ok) {
+              discardBody(response);
               return fail(
                 URL_FETCH_ERROR_CODES.SERVICE,
                 `The page could not be read: HTTP ${response.status}.`
@@ -249,6 +266,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
 
             const contentType = contentTypeOf(response);
             if (contentType && !URL_FETCH_ALLOWED_CONTENT_TYPES.includes(contentType)) {
+              discardBody(response);
               return fail(
                 URL_FETCH_ERROR_CODES.UNSUPPORTED_CONTENT,
                 `The address returns "${contentType}" — only text content is read (HTML, plain text, Markdown, JSON).`

@@ -127,12 +127,23 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   assert.equal(plan.preview.text.includes('abcdefgh12345678'), false);
   assert.match(plan.preview.text, /\n…$/);
 
+  // The markers follow the interface language (#555).
   const edit = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true });
   assert.equal(edit.kind, 'replace');
-  assert.match(edit.text, /--- alt \(alle Vorkommen\)\na\n\+\+\+ neu\nb/);
-  const patch = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }] });
+  assert.equal(edit.text, '--- old (all occurrences)\na\n+++ new\nb');
+  const editDe = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true }, { locale: 'de' });
+  assert.equal(editDe.text, '--- alt (alle Vorkommen)\na\n+++ neu\nb');
+  const patch = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }, { old_string: 'p', new_string: 'q', replace_all: true }] });
   assert.equal(patch.kind, 'diff');
-  assert.match(patch.text, /# Schritt 1/);
+  assert.equal(patch.text, '# Step 1\n--- old\nx\n+++ new\ny\n\n# Step 2 (all occurrences)\n--- old\np\n+++ new\nq');
+  const patchDe = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }] }, { locale: 'de' });
+  assert.equal(patchDe.text, '# Schritt 1\n--- alt\nx\n+++ neu\ny');
+  const planned = await planner.plan(
+    registry.getDefinition('edit_file'),
+    { relative_path: 'src/a.js', old_string: 'a', new_string: 'b' },
+    { workspaceRoot: workspace, locale: 'de' }
+  );
+  assert.match(planned.preview.text, /^--- alt\n/);
   assert.equal(buildPreview('read_file_text', {}), null);
 });
 

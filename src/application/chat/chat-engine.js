@@ -1449,6 +1449,8 @@ function createChatEngine({
             writableSkills: writableSkills(),
             sensitivePathPatterns: policy.sensitivePathPatterns,
             forcedClasses,
+            // The preview on the card speaks the user's language (#555).
+            locale: appLocale,
           });
           if (!plan || plan.error) {
             return permissionDenied(entry, {
