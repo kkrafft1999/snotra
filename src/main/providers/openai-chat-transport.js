@@ -93,17 +93,20 @@ function translateToolsToChatCompletions(tools) {
   return out.length ? out : undefined;
 }
 
+// Tool calls by the index the server gives them. A Map, not an array: the
+// index comes from the stream, and `toolCalls[2e9] = …` would make a sparse
+// array that every later walk crawls through for half a minute (#539).
 function applyToolCallDelta(toolCalls, deltaToolCall, callIdPrefix) {
-  const index = Number.isInteger(deltaToolCall?.index) ? deltaToolCall.index : toolCalls.length;
-  if (!toolCalls[index]) {
-    toolCalls[index] = {
+  const index = Number.isInteger(deltaToolCall?.index) ? deltaToolCall.index : toolCalls.size;
+  if (!toolCalls.has(index)) {
+    toolCalls.set(index, {
       id: deltaToolCall?.id || `${callIdPrefix}${index}_${Date.now().toString(36)}`,
       type: 'function',
       function: { name: '', arguments: '' },
-    };
+    });
   }
 
-  const target = toolCalls[index];
+  const target = toolCalls.get(index);
   if (deltaToolCall.id) target.id = deltaToolCall.id;
   if (deltaToolCall.type) target.type = deltaToolCall.type;
   if (deltaToolCall.function?.name) target.function.name += deltaToolCall.function.name;
@@ -132,7 +135,10 @@ function cutOffOf(finishReason) {
 }
 
 function assistantMessageOf(content, toolCalls) {
-  const complete = toolCalls.filter((tc) => tc?.function?.name);
+  const complete = [...toolCalls.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, tc]) => tc)
+    .filter((tc) => tc?.function?.name);
   return {
     role: 'assistant',
     content: content.length > 0 ? content : complete.length ? null : '',
@@ -222,7 +228,7 @@ async function streamChatCompletionsRound({
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let content = '';
-  const toolCalls = [];
+  const toolCalls = new Map();
   const announcedToolCalls = new Set();
   let finishReason = null;
   // `[DONE]` or a `finish_reason` closes a round; without either the stream

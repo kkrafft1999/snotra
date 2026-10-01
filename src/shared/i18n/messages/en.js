@@ -1108,6 +1108,7 @@ module.exports = {
   'provider.error.unexpectedAnswer.api': 'Unexpected answer from the {provider} API.',
   'provider.error.unexpectedAnswer.server': 'Unexpected answer from the {provider} server.',
   'provider.error.unexpectedAnswer.generic': 'Unexpected answer from the server.',
+  'provider.error.lineTooLong': 'The server sent a piece of its answer larger than {megabytes} MB, so Snotra AI stopped reading it.',
   'provider.error.noStream': 'The answer did not arrive as a stream.',
   'provider.error.streamFailed': 'Error in the answer stream.',
   'provider.error.invalidModelId': 'Invalid model ID: “{model}”.',

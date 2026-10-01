@@ -167,3 +167,101 @@ test('iterSseEvents stops with an AbortError when the signal fires mid-stream', 
   );
   assert.deepEqual(out, [{ event: null, data: 'one' }]);
 });
+
+// --- Limits on what a server sends (#539) ------------------------------------
+
+const {
+  iterStreamLines,
+  readErrorMessage,
+  MAX_ERROR_BODY_BYTES,
+} = require('../src/main/providers/stream-helpers');
+const { sseResponse, mockFetch, collectCallbacks } = require('./helpers/sse');
+const { translateMessage } = require('../src/shared/i18n');
+
+async function drain(iterable) {
+  const out = [];
+  for await (const item of iterable) out.push(item);
+  return out;
+}
+
+test('a line without an end stops at the limit instead of growing forever (#539)', async () => {
+  const chunk = 'x'.repeat(1000);
+  let reads = 0;
+  let cancelled = false;
+  const endless = {
+    async read() {
+      reads += 1;
+      return { done: false, value: new TextEncoder().encode(chunk) };
+    },
+    async cancel() { cancelled = true; },
+  };
+  await assert.rejects(
+    () => drain(iterStreamLines(endless, undefined, { maxLineChars: 10_000 })),
+    (err) => /longer than/.test(err.message)
+      && /larger than 8 MB/.test(translateMessage('en', describeFetchErrorMessage(err)))
+  );
+  assert.ok(reads <= 11, `stopped right after the limit, read ${reads} chunks`);
+  assert.equal(cancelled, true, 'the rest of the stream is not fetched');
+});
+
+test('lines and events below the limit pass unchanged', async () => {
+  const big = 'y'.repeat(5000);
+  const lines = await drain(iterStreamLines(readerFromChunks([`${big}\nshort\r\n`]), undefined, { maxLineChars: 5000 }));
+  assert.deepEqual(lines, [big, 'short']);
+
+  const events = await drain(iterSseEvents(readerFromChunks([`data: ${big}\n\n`]), undefined, { maxEventChars: 5010 }));
+  assert.equal(events[0].data, big);
+});
+
+test('an event split over many data lines counts as one (#539)', async () => {
+  const lines = Array.from({ length: 20 }, () => `data: ${'z'.repeat(100)}\n`).join('');
+  await assert.rejects(
+    () => drain(iterSseEvents(readerFromChunks([lines, '\n']), undefined, { maxEventChars: 1000 })),
+    /longer than/
+  );
+});
+
+test('an error body is read only as far as it is shown (#539)', async () => {
+  let delivered = 0;
+  let cancelled = false;
+  const res = {
+    ok: false,
+    status: 500,
+    statusText: 'Internal Server Error',
+    body: {
+      getReader: () => ({
+        async read() {
+          delivered += 16 * 1024;
+          return { done: false, value: new Uint8Array(16 * 1024).fill(0x61) };
+        },
+        async cancel() { cancelled = true; },
+      }),
+    },
+  };
+  const message = await readErrorMessage(res);
+  assert.equal(message.length, 300, 'the shown excerpt is unchanged');
+  assert.ok(delivered <= MAX_ERROR_BODY_BYTES + 16 * 1024, `read ${delivered} bytes`);
+  assert.equal(cancelled, true);
+
+  const json = sseResponse([JSON.stringify({ error: { message: 'quota' } })], { status: 429 });
+  assert.equal(await readErrorMessage(json), 'quota');
+});
+
+test('a hostile tool-call index neither blocks nor loses the other calls (#539)', async (t) => {
+  const compatible = require('../src/main/providers/openai-compatible');
+  const data = (payload) => `data: ${JSON.stringify(payload)}\n\n`;
+  mockFetch(t, () => sseResponse([
+    data({ choices: [{ delta: { tool_calls: [{ index: 2e9, id: 'b', function: { name: 'second', arguments: '{}' } }] } }] }),
+    data({ choices: [{ delta: { tool_calls: [{ index: -1, id: 'a', function: { name: 'first', arguments: '{}' } }] } }] }),
+    data({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
+  ]));
+  const started = Date.now();
+  const res = await compatible.streamChatRound({
+    config: { baseUrl: 'http://127.0.0.1:1/v1' },
+    model: 'm',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.ok(Date.now() - started < 1000, 'no walk over a sparse array');
+  assert.deepEqual(res.message.tool_calls.map((tc) => tc.function.name), ['first', 'second']);
+});
