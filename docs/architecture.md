@@ -38,18 +38,25 @@ implementations nor the file system.
 | **IPC** | `src/main/ipc/` | Thin driving adapters: IPC ↔ use-case calls, event push to the renderer |
 | **Renderer** | `src/renderer/` | Pure presentation: DOM, CSS, local formatting; only `window.electronAPI` + contracts |
 
-Legacy re-exports under `src/main/chat-engine.js` and
-`src/main/chat-history-trim.js` forward to `src/application/chat/`, so that
-existing imports stay stable.
+Main imports the chat core from `src/application/chat/` directly; the former
+re-exports under `src/main/` are gone (#531).
 
 ## Ports
 
-**Application ports** (`src/application/ports/`) — consumed by the chat core:
+**Application ports** (`src/application/ports/`) — the contracts between the
+application layer and main. Most are consumed by the chat core; `web-search`,
+`url-fetch`, `code-execution`, `shell-execution` and `mcp` describe what main's
+tool registry calls, and `memory`'s `remember`/`forget`/`paths` serve the tools
+and the settings. The typedefs are prose — nothing checks them against the
+adapters, so a change to what the engine passes changes the port as well:
 
 - `llm-port` — streaming rounds against a provider
 - `tool-port` — tool registry and execution
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
 - `workspace-path-port` — path helpers (e.g. `basename`)
+- `own-secrets-port` — the app's own secrets, compared against the text the
+  prompt embeds by itself (#528); wired to the list in
+  `main/services/own-secrets.js` that the tool results are checked against
 - `skill-port` — bodies of the enabled skills for the system prompt
 - `environment-port` — environment details for the environment block in the
   system prompt (issue #138): working directory, git yes/no, platform, system
@@ -1236,16 +1243,15 @@ ratchet, not a merge condition.
 
 ## System prompt
 
-The system prompt is assembled per request from five building blocks
+The system prompt is assembled per request from seven building blocks
 (`application/chat/chat-engine.js`), in this order:
 
 1. **Base prompt** from the settings — it stands first and keeps precedence.
-2. **Memory block** (`application/chat/memory-prompt.js`,
-   [#166](https://github.com/kkrafft1999/snotra/issues/166)) — the two
-   `memory.md` files from `<workspace>/.agents` and `~/.snotra`. It stands
-   directly behind the base prompt, because it is the same thing: what the user
-   said themselves, only across several conversations — nothing foreign should
-   push itself in between. At most 8,000 characters per level
+2. **The user's memory** (`application/chat/memory-prompt.js`,
+   [#166](https://github.com/kkrafft1999/snotra/issues/166)) — `~/.snotra/memory.md`.
+   It stands directly behind the base prompt, because it is the same thing: what
+   the user said themselves, only across several conversations — nothing foreign
+   should push itself in between. The folder's memory is block 6. At most 8,000 characters per level
    (`MAX_MEMORY_CHARS`), oversized content is visibly truncated, and each level
    gets its own line in the context breakdown (#174). Can be switched off per
    level under Settings › Gedächtnis (Memory; on by default). It is written only
@@ -1280,11 +1286,28 @@ The system prompt is assembled per request from five building blocks
    bodies), oversized content is visibly truncated rather than discarded, and each
    file gets its own line in the context breakdown (#174). Can be switched off via
    "`AGENTS.md` mitschicken" (Send `AGENTS.md`) in the settings (on by default).
-6. **Folder/tool block** (`buildWorkspaceSystemPrompt`, otherwise
+6. **The folder's memory** (`<workspace>/.agents/memory.md`, #529) — it lives in
+   the opened folder like its `AGENTS.md`, where a teammate or a cloned
+   repository can have put it. It is therefore introduced by its origin ("notes
+   kept in this folder"), not as the user's own words, and stands with the
+   project instructions rather than with the user's memory.
+7. **Folder/tool block** (`buildWorkspaceSystemPrompt`, otherwise
    `buildNoWorkspaceSystemPrompt`) — the open folder, tool descriptions, the tree
    selection and the rule that tool results are data.
 
-The order of the last two is deliberate: the content of an `AGENTS.md` is
+Behind them, whenever the app contributes English scaffolding of its own (the
+folder/tool block or the skill frame), comes one sentence: reply in the
+language the user writes in, unless the instructions above say otherwise
+(`REPLY_LANGUAGE_RULE`, #276).
+
+Skills, `AGENTS.md` and both memory files are **embedded without being asked
+for**, so they pass the secret protection of a tool result before they go out
+(`application/chat/embedded-text-guard.js`, #528): a text that contains an own
+secret is replaced by a short notice, credential patterns are masked, and a
+text too large to scan is left out. The context breakdown marks the row.
+
+The order of the project instructions, the folder's memory and the folder/tool
+block is deliberate: the content of an `AGENTS.md` is
 **instruction, not data** — unlike tool results, for which
 `TOOL_RESULTS_ARE_DATA_RULE` applies. It is meant to change the model's
 behaviour, otherwise it would be pointless; that is defensible because the user

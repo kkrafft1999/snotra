@@ -1079,6 +1079,12 @@ opens a foreign folder also adopts its instructions. The emergency brake for tha
 is the switch **Settings › General › "Send `AGENTS.md`"** (on by default), which
 turns off all three places.
 
+**Keys stay out.** Before an `AGENTS.md`, a memory file or a skill goes to the
+provider, Snotra checks it the way it checks a file read by a tool: a file that
+contains one of the app's own keys (a provider key, an MCP secret, the web search
+key) is left out entirely, and credentials such as tokens or `password = …` are
+masked. The breakdown below the input field says which file it was.
+
 ## Memory: `memory.md`
 
 Snotra does not start every chat from scratch. Say **"please remember …"** in
@@ -1101,7 +1107,10 @@ you can read and edit them in an editor, and the project memory moves along when
 the folder moves. But it therefore also lives **inside your project** and can end
 up in a repository — what concerns only you belongs in the global memory, or
 nowhere. **Never passwords, keys or credentials:** the memory goes to the provider
-with every request.
+with every request. Should one slip in anyway, it is masked, as in an
+`AGENTS.md` (see above). And because a repository can bring a project memory
+along, the model reads it as notes kept in the folder, next to its
+`AGENTS.md` — not as something you said.
 
 Snotra also remembers **by itself** what looks permanently important. Every act of
 remembering requires approval and appears with its target and path in the tool
