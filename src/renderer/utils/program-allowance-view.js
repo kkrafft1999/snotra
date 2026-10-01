@@ -1,9 +1,9 @@
 import { t } from '../i18n.js';
 
 /**
- * Program allowances as the interface shows them (#408): a row in
- * Settings › Tools and a sentence on the approval card. Pure functions over
- * what main sends, so both places say the same.
+ * Program allowances as the interface shows them (#408): a row on
+ * Settings › Security › Execute (#449) and a sentence on the approval card.
+ * Pure functions over what main sends, so both places say the same.
  */
 
 /** `/Users/me/x` → `~/x`; anything outside the home folder stays as it is. */

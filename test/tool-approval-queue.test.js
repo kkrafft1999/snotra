@@ -55,15 +55,15 @@ test('Verfall durch Main überschreibt eine laufende Antwort', async () => {
   assert.equal(queue.failResponse('req-1'), false, 'verfallen bleibt verfallen');
 });
 
-test('invalidateAll und forgetResolved räumen auf', async () => {
+test('forgetWhere drops entries whatever their state, and only those', async () => {
   const { createToolApprovalQueue } = await load();
   const queue = createToolApprovalQueue();
-  queue.add(dto('a'));
-  queue.add(dto('b'));
+  queue.add({ ...dto('a'), chatId: 'left' });
+  queue.add({ ...dto('b'), chatId: 'left' });
+  queue.add({ ...dto('c'), chatId: 'kept' });
   queue.resolve({ requestId: 'a', response: 'allow-once' });
-  const gone = queue.invalidateAll('request_invalidated');
-  assert.deepEqual(gone.map((e) => e.dto.requestId), ['b']);
-  assert.equal(gone[0].outcome.invalidated, true);
-  queue.forgetResolved();
-  assert.equal(queue.size(), 0);
+  const gone = queue.forgetWhere((entry) => entry.dto.chatId === 'left');
+  assert.deepEqual(gone.map((e) => e.dto.requestId), ['a', 'b'], 'resolved and pending alike');
+  assert.equal(queue.size(), 1);
+  assert.equal(queue.has('c'), true);
 });

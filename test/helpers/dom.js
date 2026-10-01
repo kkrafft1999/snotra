@@ -141,6 +141,24 @@ function dispatchDragEvent(target, type, { dataTransfer, relatedTarget = null } 
 /** Wartet, bis die Microtask-Queue leer ist (async Handler ohne Rueckgabewert). */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
+/**
+ * What a frame does in Chromium and happy-dom does not: a focused control
+ * that is disabled — or, with `isLaidOut`, no longer laid out — loses the
+ * focus to `body`. Without this a test can confirm a focus the running app
+ * drops (CR-B13-03). Call it where the app would get a frame, typically
+ * around an `await`.
+ */
+function focusFixup(document, { isLaidOut = () => true } = {}) {
+  const active = document.activeElement;
+  if (!active || active === document.body) return;
+  if (active.disabled !== true && isLaidOut(active)) return;
+  // happy-dom's blur() ignores a disabled element.
+  const disabled = active.disabled === true;
+  if (disabled) active.disabled = false;
+  active.blur();
+  if (disabled) active.disabled = true;
+}
+
 module.exports = {
   RENDERER_DIR,
   importRenderer,
@@ -149,4 +167,5 @@ module.exports = {
   createDataTransfer,
   dispatchDragEvent,
   flush,
+  focusFixup,
 };

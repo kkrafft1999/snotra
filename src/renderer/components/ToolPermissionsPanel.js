@@ -64,7 +64,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     target.classList.toggle('hidden', !text);
   }
 
-  function reportResult(target, result, successText) {
+  function reportResult(target, result, fallbackError) {
     if (result?.ok) {
       setError(target, '');
       return true;
@@ -73,7 +73,7 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       setError(target, t('settings.permissions.dialogCancelled'));
       return false;
     }
-    setError(target, tMessage(result?.error) || successText || t('settings.permissions.actionFailed'));
+    setError(target, tMessage(result?.error) || fallbackError || t('settings.permissions.actionFailed'));
     return false;
   }
 
@@ -142,9 +142,15 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   });
 
   // ── Sensible Pfadmuster ──────────────────────────────────────────────────
+  /** After a removal: focus the remove button at this index, or the input. */
+  let sensitiveFocusIndex = null;
+
   function renderSensitive(state) {
     const patterns = Array.isArray(state?.sensitivePathPatterns) ? state.sensitivePathPatterns : [];
     if (sensitiveList) {
+      // The list is rebuilt on every push; a focused button keeps its focus
+      // when its pattern is still there (CR-B13-03).
+      const focused = sensitiveList.contains(document.activeElement) ? document.activeElement?.dataset?.pattern : null;
       sensitiveList.innerHTML = '';
       for (const pattern of patterns) {
         const li = document.createElement('li');
@@ -162,6 +168,14 @@ export function initToolPermissionsPanel({ toolPermissions }) {
         li.appendChild(remove);
         sensitiveList.appendChild(li);
       }
+      const buttons = [...sensitiveList.querySelectorAll('button[data-pattern]')];
+      if (sensitiveFocusIndex !== null) {
+        const target = buttons[Math.min(sensitiveFocusIndex, buttons.length - 1)] || sensitiveInput;
+        sensitiveFocusIndex = null;
+        target?.focus();
+      } else if (focused) {
+        buttons.find((button) => button.dataset.pattern === focused)?.focus();
+      }
     }
     sensitiveEmpty?.classList.toggle('hidden', patterns.length > 0);
   }
@@ -171,11 +185,13 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     return reportResult(sensitiveError, result);
   }
 
-  sensitiveList?.addEventListener('click', (e) => {
+  sensitiveList?.addEventListener('click', async (e) => {
     const button = e.target.closest('button[data-pattern]');
     if (!button) return;
     const current = toolPermissions.get()?.sensitivePathPatterns || [];
-    void saveSensitive(current.filter((p) => p !== button.dataset.pattern));
+    // The redraw after the removal moves the focus on to the next pattern.
+    sensitiveFocusIndex = [...sensitiveList.querySelectorAll('button[data-pattern]')].indexOf(button);
+    if (!await saveSensitive(current.filter((p) => p !== button.dataset.pattern))) sensitiveFocusIndex = null;
   });
 
   async function addSensitive() {
@@ -288,6 +304,8 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     else {
       grantFocusIndex = null;
       button.disabled = false;
+      // Disabling it dropped the focus; it goes back where it was (CR-B13-03).
+      if (button.isConnected) button.focus();
     }
   });
 
@@ -301,6 +319,9 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   // ── Zurücksetzen ─────────────────────────────────────────────────────────
   function renderResets(state) {
     if (!resetActions) return;
+    // Rebuilt after every action and push; the focused button keeps its focus
+    // (CR-B13-03).
+    const focusedKey = resetActions.contains(document.activeElement) ? document.activeElement?.dataset?.reset : null;
     resetActions.innerHTML = '';
     const hasWorkspace = typeof state?.workspaceRoot === 'string' && !!state.workspaceRoot;
     for (const action of resetActionOptions()) {
@@ -310,9 +331,11 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       text.className = 'settings-reset-row__text';
       const title = document.createElement('span');
       title.className = 'settings-reset-row__title';
+      title.id = `settings-reset-${action.key}-title`;
       title.textContent = action.label;
       const desc = document.createElement('span');
       desc.className = 'settings-reset-row__desc';
+      desc.id = `settings-reset-${action.key}-desc`;
       desc.textContent = action.description;
       text.appendChild(title);
       text.appendChild(desc);
@@ -326,11 +349,15 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       button.className = 'btn-secondary';
       button.dataset.reset = action.key;
       button.textContent = action.confirm ? t('settings.reset.running') : t('settings.reset.run');
+      // "Run" alone does not say what runs: the row's title and text do
+      // (CR-B13-06, WCAG 2.4.6).
+      button.setAttribute('aria-describedby', `${title.id} ${desc.id}`);
       button.disabled = !state || (action.key === 'workspace' && !hasWorkspace);
       controls.appendChild(button);
       row.appendChild(controls);
       resetActions.appendChild(row);
     }
+    if (focusedKey) resetActions.querySelector(`button[data-reset="${focusedKey}"]:not([disabled])`)?.focus();
   }
 
   resetActions?.addEventListener('click', async (e) => {

@@ -48,9 +48,9 @@ export function describeSandboxStatus(sandbox, enabled, { workspaceDisabled = fa
 }
 
 /**
- * The per-workspace sandbox switch in Settings › Tools (#357), drawn as a
- * status tile since #543: the state is the tile's title, what it means is the
- * text below it, and the tone colours shield and frame.
+ * The per-workspace sandbox switch on Settings › Security (#357, #449),
+ * drawn as a status tile since #543: the state is the tile's title, what it
+ * means is the text below it, and the tone colours shield and frame.
  *
  * Shown whether or not an execution tool is on, so that it can be checked
  * beforehand (#448/#449) — and never on Windows, which has no sandbox to
@@ -108,7 +108,8 @@ export function describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLa
     checked: true,
     tone: 'on',
     title: t('settings.sandbox.workspace.tile.on'),
-    body: t('settings.sandbox.workspace.tile.onBody'),
+    // Names "Auto", where no card confirms the domains (CR-B13-04).
+    body: t('settings.sandbox.workspace.tile.onBody', { mode: autoLabel }),
   };
 }
 

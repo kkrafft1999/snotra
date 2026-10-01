@@ -1,6 +1,7 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
+import { isCancelledResult } from '../state/tool-permissions.js';
 
 /**
  * Bestätigungskarte im Chat (Issue #67, Konzept §4/§6).
@@ -239,7 +240,7 @@ export function initToolApprovalCards({
   function appendHeadline(node, headline) {
     const slots = {
       '{target}': () => code(headline.targetLabel),
-      '{tool}': () => code(headline.tool || 'Tool', 'en'),
+      '{tool}': () => code(headline.tool || t('tools.line.generic.fallbackName'), 'en'),
     };
     for (const part of headline.template.split(/(\{target\}|\{tool\})/)) {
       if (!part) continue;
@@ -344,6 +345,15 @@ export function initToolApprovalCards({
       card.appendChild(warning);
     }
 
+    // Invisible characters in what the model chose (CR-B13-01): marked where
+    // they sit, and said once here, above the preview most of them are in.
+    if (view.invisibleWarning) {
+      const note = el('p', 'chat-approval-card__warning chat-approval-card__warning--invisible');
+      note.appendChild(el('strong', null, t('approval.warning.prefix')));
+      note.append(view.invisibleWarning);
+      card.appendChild(note);
+    }
+
     const preview = buildPreview(view);
     if (preview) card.appendChild(preview);
 
@@ -405,6 +415,12 @@ export function initToolApprovalCards({
     const card = cards.get(requestId);
     const entry = queue.get(requestId);
     const view = card?.__approvalView;
+    // The buttons are about to be disabled and then hidden, and a disabled
+    // button loses the focus to the top of the window. The card takes it —
+    // it has tabindex -1 for this — and its status line says what happens
+    // (CR-B13-03).
+    const hadFocus = !!card?.contains(document.activeElement);
+    if (hadFocus) card.focus({ preventScroll: true });
     if (card && view) {
       setButtonsEnabled(card, view, false);
       setStatus(card, t('approval.status.sending'));
@@ -420,9 +436,20 @@ export function initToolApprovalCards({
     if (result?.ok) return; // Auflösung kommt per Push vom Main.
     if (entry?.state === APPROVAL_ENTRY_STATES.RESOLVED) return; // inzwischen verfallen
     queue.failResponse(requestId);
-    if (card && view) {
-      setButtonsEnabled(card, view, true);
-      setStatus(card, t('approval.error.rejected', { error: tMessage(result?.error) || t('approval.error.unknown.short') }));
+    // The card may have been rebuilt meanwhile (a language change).
+    const current = cards.get(requestId);
+    const currentView = current?.__approvalView;
+    if (current && currentView) {
+      setButtonsEnabled(current, currentView, true);
+      // A cancelled native dialog ("always", #121) is the user's own answer:
+      // the card stays open and says nothing went wrong (CR-B13-06).
+      setStatus(current, isCancelledResult(result)
+        ? t('approval.status.waiting')
+        : t('approval.error.rejected', { error: tMessage(result?.error) || t('approval.error.unknown.short') }));
+      // Back to the button that was pressed, if the focus is still on the card.
+      if (hadFocus && (document.activeElement === current || document.activeElement === document.body)) {
+        current.querySelector(`.chat-approval-card__actions button[data-response="${response}"]`)?.focus();
+      }
     }
   }
 
@@ -469,6 +496,8 @@ export function initToolApprovalCards({
       if (!entry) continue;
       const view = buildApprovalCardView(entry.dto, { homeDir: readHomeDir() });
       if (!view) continue;
+      // The focus follows into the new card: the same button, or the card.
+      const focused = card.contains(document.activeElement) ? document.activeElement.dataset?.response || '' : null;
       const fresh = buildCard(entry, view);
       fresh.__approvalView = view;
       card.replaceWith(fresh);
@@ -479,6 +508,10 @@ export function initToolApprovalCards({
       else if (entry.state === APPROVAL_ENTRY_STATES.RESPONDING) {
         setButtonsEnabled(fresh, view, false);
         setStatus(fresh, t('approval.status.sending'));
+      }
+      if (focused !== null) {
+        const button = focused ? fresh.querySelector(`.chat-approval-card__actions button[data-response="${focused}"]`) : null;
+        (button && !button.disabled && !button.closest('[hidden]') ? button : fresh).focus({ preventScroll: true });
       }
     }
   });
@@ -495,7 +528,20 @@ export function initToolApprovalCards({
     for (const id of ['chat-mention-menu', 'chat-model-menu', 'chat-tool-mode-menu']) {
       if (isVisible(document.getElementById(id))) return true;
     }
-    return [...document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"]')].some(isVisible);
+    // The completions of the composer (`@` and `/`) are listboxes; Escape
+    // closes them (CR-B13-02).
+    return [...document.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]')]
+      .some(isVisible);
+  }
+
+  /**
+   * Escape from a field of its own — the PDF page number, a rename, a search
+   * — belongs to that field. The composer is the exception: it is where the
+   * user is when a card arrives (CR-B13-02).
+   */
+  function fromOtherField(target) {
+    if (!(target instanceof Element) || target.id === 'chat-input') return false;
+    return target.matches('input, textarea, select') || target.isContentEditable === true;
   }
 
   // Esc lehnt ab – bewusst nur die älteste offene Karte und nur, wenn kein
@@ -505,10 +551,10 @@ export function initToolApprovalCards({
     'keydown',
     (e) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      // Only a card the user can see: a chat in the background is not declined
-      // by a key press in another one (#320).
-      const pending = queue.pending().filter(isOnScreen);
-      if (pending.length === 0 || overlayOpen()) return;
+      // Only a card the user can see: not one of a chat in the background
+      // (#320), and not while the chat column is switched off (CR-B13-02).
+      const pending = queue.pending().filter((entry) => isOnScreen(entry) && isVisible(cards.get(entry.dto.requestId)));
+      if (pending.length === 0 || fromOtherField(e.target) || overlayOpen()) return;
       e.preventDefault();
       e.stopPropagation();
       void respond(pending[0].dto.requestId, 'deny');

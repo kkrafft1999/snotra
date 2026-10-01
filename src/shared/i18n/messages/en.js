@@ -406,8 +406,6 @@ module.exports = {
   'settings.models.row.secretsDroppedByAddress': 'New address: stored key and headers will be removed on save',
 
   // ── Settings: tools ──────────────────────────────────────────────────────
-  'settings.tools.count': '{active} of {total} active',
-
   'settings.python.warning.summary': '<strong>Careful:</strong> <code>run_python</code> runs the model’s code — isolated on macOS and Linux, with your full rights on Windows.',
   'settings.python.warning.body': '<p>On <strong>macOS and Linux</strong> the code runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains named on the approval card. It can still <strong>read</strong> your other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: the code can read and write anywhere, reach the network and start programs. Snotra shows you the full source before <em>every</em> run for approval, and the card says whether the run is isolated. Only switch this on if you are aware of that.</p>',
   'settings.python.toggle': 'Allow Python execution',
@@ -444,7 +442,7 @@ module.exports = {
   'settings.shell.status.plainShell': ' — your PATH from the profile, read once at startup',
   'settings.shell.status.disabled': '{where}. Not allowed yet, shell_execute will not be offered.',
   'settings.shell.status.enabled': '{where}. shell_execute is offered to the model.',
-  'settings.sandbox.isolated': 'Isolated: writes only in the project folder and a temporary folder, no access to keys or browser data, network only for the domains on the approval card.',
+  'settings.sandbox.isolated': 'Isolated: writes only in the project folder and a temporary folder, no access to keys or browser data, network only for the domains the call names — on the approval card, or in “Auto” without asking.',
   'settings.sandbox.pending': 'Isolation is checked the first time the tool runs.',
   'settings.sandbox.reason.platform': 'Not isolated: Windows has no sandbox yet — every run has your full rights.',
   'settings.sandbox.reason.dependencies': 'Not isolated: the sandbox needs the packages {packages}. Install them (for example “sudo apt install bubblewrap socat ripgrep”) and restart Snotra.',
@@ -461,7 +459,7 @@ module.exports = {
   'settings.sandbox.workspace.tile.on': 'Sandbox active',
   'settings.sandbox.workspace.tile.off': 'Sandbox off',
   'settings.sandbox.workspace.tile.unavailable': 'Sandbox unavailable',
-  'settings.sandbox.workspace.tile.onBody': 'Commands run isolated: they write only here and in a temporary folder, cannot read your keys and reach the network only for the domains you approve.',
+  'settings.sandbox.workspace.tile.onBody': 'Commands run isolated: they write only here and in a temporary folder, cannot read your keys and reach the network only for the domains a call names — you approve them on the card, except in “{mode}”.',
   'settings.workspaceMode.none': 'Open a folder to choose its default.',
   'settings.workspaceMode.needsEncryption': '“Auto” is not available as a default: this system offers no encrypted storage.',
   'settings.allowances.heading': 'Program allowances',
@@ -941,19 +939,6 @@ module.exports = {
   'tools.riskClass.delete': 'Overwrite with no way back',
   'tools.riskClass.execute': 'Execute',
   'tools.riskClass.external': 'External services',
-  'tools.class.execute': 'asks before every run',
-  'tools.gate.notConfigured': 'Not set up',
-  'tools.group.allOn': 'all on',
-  'tools.group.allOff': 'all off',
-  'tools.class.safe': 'runs without asking',
-  'tools.class.sensitiveRead': 'asks before sensitive files',
-  'tools.class.write': 'asks before changes',
-  'tools.class.overwrite': 'asks before every overwrite',
-  'tools.class.external': 'leaves your machine, asks first',
-  'tools.gate.python': 'Without an allowed and detected Python installation the tool is not offered to the model (see “Run Python”).',
-  'tools.gate.shell': 'Without an allowed and detected shell the tool is not offered to the model (see “Run shell commands”).',
-  'tools.gate.webSearch': 'Without a Tavily key the tool is not offered to the model (see “Web search” below).',
-  'tools.gate.keyMissing': 'key missing',
 
   // ── Tool catalogue (descriptions, Settings › Tools) ──────────────────────
   // Per tool a short line for the collapsed row (`tools.short.…`) and the full
@@ -1276,6 +1261,9 @@ module.exports = {
   'approval.warning.overwriteTrash': 'The existing file will be overwritten completely. The previous version goes to the trash as a copy first.',
   'approval.warning.overwrite': 'The existing file will be overwritten completely.',
   'approval.warning.prefix': 'Careful: ',
+  // Invisible characters on the card (CR-B13-01).
+  'approval.warning.invisible.one': 'This call contains an invisible character that can change how its text reads. It is shown as ⟨U+…⟩ where it sits; what runs is the text with it.',
+  'approval.warning.invisible.other': 'This call contains {count} invisible characters that can change how its text reads. They are shown as ⟨U+…⟩ where they sit; what runs is the text with them.',
 
   'approval.action.once': 'Allow once',
   'approval.action.session': 'Allow for this session',
@@ -1738,6 +1726,7 @@ module.exports = {
   'security.a.where.execute.fact.write': 'Writes only in this folder and a temporary folder',
   'security.a.where.execute.fact.secrets': 'Cannot read your keys or browser data',
   'security.a.where.execute.fact.network': 'Reaches the internet only for domains you confirm on the approval card',
+  'security.a.where.execute.fact.network.auto': 'Reaches the internet only for the domains a call names — in “Auto” without asking',
   'security.a.where.execute.pending': 'The sandbox is still being checked.',
   'security.a.where.execute.workspaceOff': 'You switched the sandbox off for this workspace. A command runs with your full rights.',
   'security.a.where.execute.unavailable': 'The sandbox is not available. A command runs with your full rights.',

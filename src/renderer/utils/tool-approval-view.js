@@ -10,7 +10,7 @@
  */
 import { describeAllowanceOnCard } from './program-allowance-view.js';
 import contracts from '../generated/contracts.js';
-import { t, tMessage } from '../i18n.js';
+import { t, tMessage, tPlural } from '../i18n.js';
 
 const {
   TOOL_PERMISSION_MODES,
@@ -124,6 +124,46 @@ function hasClass(classes, riskClass) {
   return Array.isArray(classes) && classes.includes(riskClass);
 }
 
+/**
+ * Control, format and line-separator characters. A bidi control can reorder
+ * what the card shows — `echo safe \u202E\u2066; echo x \u2069 \u2066#\u2069\u202C`
+ * reads as if the second command were commented out, while the shell runs it
+ * (CR-B13-01) — and a zero-width character makes two different paths look
+ * alike.
+ */
+const INVISIBLE_PATTERN = /\r\n|[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+const JOINERS = new Set(['\u200c', '\u200d']);
+
+function isNonAscii(code) {
+  return Number.isFinite(code) && code > 0x7f;
+}
+
+/**
+ * A text from the model as the card shows it: every invisible character as
+ * `⟨U+202E⟩` where it sits, so that what is read is what runs. Tab, line feed
+ * and a CRLF line ending are ordinary text (#244). A joiner between two
+ * non-ASCII characters belongs to an emoji sequence or to a script that needs
+ * it, and stays.
+ */
+export function revealInvisible(text) {
+  if (typeof text !== 'string' || text === '') return { text: typeof text === 'string' ? text : '', count: 0 };
+  let count = 0;
+  const out = text.replace(INVISIBLE_PATTERN, (match, offset, whole) => {
+    if (match === '\r\n' || match === '\n' || match === '\t') return match;
+    if (JOINERS.has(match) && isNonAscii(whole.charCodeAt(offset - 1)) && isNonAscii(whole.charCodeAt(offset + 1))) {
+      return match;
+    }
+    count += 1;
+    return `⟨U+${match.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}⟩`;
+  });
+  return { text: out, count };
+}
+
+/** Only the text of `revealInvisible`, where the count is taken elsewhere. */
+function revealed(text) {
+  return revealInvisible(text).text;
+}
+
 /** Title of the card (concept §6): change, execution, external access or file access. */
 export function approvalCardTitle(riskClasses) {
   if (hasClass(riskClasses, TOOL_RISK_CLASSES.EXECUTE)) return t('approval.title.execute');
@@ -169,7 +209,8 @@ export function approvalHeadline(dto) {
   let targetLabel = '';
   if (targets.length === 1) targetLabel = targetPathLabel(targets[0]);
   else if (targets.length > 1) targetLabel = t('approval.targets.count', { count: targets.length });
-  const tool = typeof dto?.tool === 'string' ? dto.tool : '';
+  // An MCP tool is named by its server, so its name is not ours either.
+  const tool = typeof dto?.tool === 'string' ? revealed(dto.tool) : '';
   // A placeholder without a value stays standing — that is what carries the
   // two slots through to the component untouched.
   const template = targetLabel
@@ -184,11 +225,11 @@ export function approvalHeadline(dto) {
 /**
  * The path of a target as the card shows it: a file in a skill folder in the
  * tools' own spelling (`skill:<name>/…`), even when the model gave its
- * absolute path (#427).
+ * absolute path (#427). Invisible characters are shown (CR-B13-01).
  */
 function targetPathLabel(target) {
-  if (typeof target?.skillPath === 'string' && target.skillPath) return target.skillPath;
-  return typeof target?.path === 'string' ? target.path : '';
+  if (typeof target?.skillPath === 'string' && target.skillPath) return revealed(target.skillPath);
+  return typeof target?.path === 'string' ? revealed(target.path) : '';
 }
 
 function describeTarget(target) {
@@ -274,9 +315,10 @@ const ISOLATION_REASON_KEYS = Object.freeze({
 
 /**
  * Isolation of an execution tool as the card shows it (#329): a pill next to
- * the title — "Isolated", or "Not isolated" in red — plus, when isolated, the
- * domains the run may reach and a one-line note on what stays closed. Null
- * when the card carries no isolation state at all (no sandbox wired).
+ * the title — "Isolated", or "Not isolated" in amber (#396) — plus, when
+ * isolated, the domains the run may reach and a one-line note on what stays
+ * closed. Null when the card carries no isolation state at all (no sandbox
+ * wired).
  *
  * `switchedOff` marks the user's own opt-out for the workspace (#357): the
  * card then offers the way back to the setting.
@@ -448,8 +490,18 @@ export function overwriteWarning(dto) {
  */
 export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
   if (!isToolApprovalRequestDto(dto)) return null;
+  // Every text the model chose, revealed and counted once (CR-B13-01); the
+  // headline and the session scope repeat them and are revealed uncounted.
+  let invisible = 0;
+  const reveal = (text) => {
+    const result = revealInvisible(text);
+    invisible += result.count;
+    return result.text;
+  };
   const classes = dto.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls));
   const targets = dto.targets.map(describeTarget);
+  for (const target of dto.targets) reveal(target?.skillPath || target?.path);
+  reveal(dto.tool);
   const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE) || targets.some((entry) => entry.sensitive);
   const view = {
     requestId: dto.requestId,
@@ -474,6 +526,7 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     memoryScopeLabel: '',
     cwdLabel: '',
     isolation: describeIsolation(dto.preview?.isolation, { homeDir }),
+    invisibleWarning: '',
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },
@@ -511,8 +564,9 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
       );
     }
     if (classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) parts.push(t('approval.scope.sensitive'));
-    view.scopeNote = parts.join(' ');
+    view.scopeNote = revealed(parts.join(' '));
   }
+  if (view.isolation?.domains?.length > 0) view.isolation.domains = view.isolation.domains.map(reveal);
   if (dto.preview && typeof dto.preview.text === 'string') {
     const kind = PREVIEW_KIND_KEYS[dto.preview.kind] ? dto.preview.kind : 'text';
     const kindLabel = t(PREVIEW_KIND_KEYS[kind]);
@@ -522,7 +576,7 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     view.preview = {
       kind,
       kindLabel,
-      text: dto.preview.text,
+      text: reveal(dto.preview.text),
       truncated: dto.preview.truncated === true,
       masked: dto.preview.masked === true,
       summary: notes.length > 0
@@ -535,13 +589,13 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
       blocks: [],
     };
     if (typeof dto.preview.stdin === 'string' && dto.preview.stdin) {
-      view.preview.blocks.push({ id: 'stdin', label: t('approval.preview.stdin'), text: dto.preview.stdin });
+      view.preview.blocks.push({ id: 'stdin', label: t('approval.preview.stdin'), text: reveal(dto.preview.stdin) });
     }
     if (Array.isArray(dto.preview.argv) && dto.preview.argv.length > 0) {
       // One argument per line, quoted: a space or a line break inside one
       // stays visible as such.
       const text = dto.preview.argv.map((entry) => JSON.stringify(String(entry))).join('\n');
-      view.preview.blocks.push({ id: 'argv', label: t('approval.preview.argv'), text });
+      view.preview.blocks.push({ id: 'argv', label: t('approval.preview.argv'), text: reveal(text) });
     }
     // For a shell command both belong visibly on the card rather than in the
     // preview: what it runs with, and where (issue #102).
@@ -550,13 +604,14 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
         ? t('approval.shell.login', { shell: dto.preview.shell })
         : dto.preview.shell;
     }
-    if (typeof dto.preview.cwd === 'string' && dto.preview.cwd) view.cwdLabel = dto.preview.cwd;
+    if (typeof dto.preview.cwd === 'string' && dto.preview.cwd) view.cwdLabel = reveal(dto.preview.cwd);
     // When remembering, the reach belongs on the card: "project" or "global"
     // is the whole difference being decided here.
     if (MEMORY_SCOPE_KEYS[dto.preview.memoryScope]) {
       view.memoryScopeLabel = t(MEMORY_SCOPE_KEYS[dto.preview.memoryScope]);
     }
   }
+  if (invisible > 0) view.invisibleWarning = tPlural('approval.warning.invisible', invisible);
   return view;
 }
 
@@ -713,8 +768,10 @@ export function ruleClassOptions(effect) {
  */
 function describeCommandRule(rule, effectLabel) {
   const scopeLabel = t('permissions.rule.scope.workspace');
+  // The command came from the model once; it reads here as it did on the card.
+  const command = revealed(rule.command);
   const parts = [rule.cwd
-    ? t('permissions.rule.subject.commandIn', { cwd: rule.cwd })
+    ? t('permissions.rule.subject.commandIn', { cwd: revealed(rule.cwd) })
     : t('permissions.rule.subject.command')];
   if (Array.isArray(rule.networkDomains) && rule.networkDomains.length > 0) {
     parts.push(t('permissions.rule.subject.commandNetwork', { domains: rule.networkDomains.join(', ') }));
@@ -725,11 +782,11 @@ function describeCommandRule(rule, effectLabel) {
     effect: rule.effect,
     effectLabel,
     subject,
-    pattern: rule.command,
-    patternLabel: rule.command,
+    pattern: command,
+    patternLabel: command,
     scopeLabel,
     command: true,
-    text: t('permissions.rule.text.command', { effect: effectLabel, subject, command: rule.command, scope: scopeLabel }),
+    text: t('permissions.rule.text.command', { effect: effectLabel, subject, command, scope: scopeLabel }),
   };
 }
 
@@ -799,7 +856,6 @@ export function validateSensitivePattern(raw, existing = []) {
   return { ok: true, pattern };
 }
 
-/** Sichtbarer Umfang der Reset-Aktionen (Konzept §7). */
 /**
  * The session approvals grouped by chat for the settings (#447): the chat on
  * screen first, then the chats still running in the background, each group
@@ -822,8 +878,9 @@ export function sessionGrantGroups(grants, { formatTime = (ms) => new Date(ms).t
     const classes = (Array.isArray(grant.classes) ? grant.classes : []).map(riskClassLabel).join(', ');
     // The card's sentence names the classes already; only without it does the
     // second line have to.
-    const sentence = tMessage(grant.scope);
-    const text = sentence || t('settings.grants.fallback', { tool: grant.tool || '' });
+    // The card's sentence carries the paths it named, revealed as on the card.
+    const sentence = revealed(tMessage(grant.scope));
+    const text = sentence || t('settings.grants.fallback', { tool: revealed(grant.tool || '') });
     const time = Number.isFinite(grant.grantedAt) ? formatTime(grant.grantedAt) : '';
     let meta = classes;
     if (time) meta = sentence ? t('settings.grants.time', { time }) : t('settings.grants.meta', { classes, time });
@@ -832,6 +889,7 @@ export function sessionGrantGroups(grants, { formatTime = (ms) => new Date(ms).t
   return [...groups.values()].sort((a, b) => Number(b.current) - Number(a.current));
 }
 
+/** Sichtbarer Umfang der Reset-Aktionen (Konzept §7). */
 export function resetActions() {
   return [
     { key: 'workspace', label: t('permissions.reset.workspace'), description: t('permissions.reset.workspace.desc') },

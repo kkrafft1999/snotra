@@ -1,5 +1,5 @@
 import { t, tPlural, tMessage, getLocale } from '../i18n.js';
-import { modeLabel, riskClassLabel, describeRule } from './tool-approval-view.js';
+import { modeLabel, riskClassLabel, describeRule, revealInvisible } from './tool-approval-view.js';
 import { describeSandboxStatus } from './sandbox-status-view.js';
 import { describeConnection } from './mcp-connection-view.js';
 
@@ -281,17 +281,23 @@ function describeAsk(row, overview) {
         removeLabel: t('settings.rules.delete', { rule: view?.text || rule.pathPattern }),
       };
     }),
-    ...row.commandRules.map((rule) => ({
-      id: rule.id,
-      code: rule.command,
-      label: '',
-      tag: scopeLabel('workspace'),
-      scope: 'workspace',
-      removeLabel: t('security.command.remove', { command: rule.command }),
-    })),
+    // A remembered command and an approval's sentence came from the model;
+    // they read as they did on the card (CR-B13-01).
+    ...row.commandRules.map((rule) => {
+      const command = revealInvisible(rule.command).text;
+      return {
+        id: rule.id,
+        code: command,
+        label: '',
+        tag: scopeLabel('workspace'),
+        scope: 'workspace',
+        removeLabel: t('security.command.remove', { command }),
+      };
+    }),
   ];
   const grants = row.sessionGrants.map((grant) => {
-    const text = tMessage(grant.scope) || t('settings.grants.fallback', { tool: grant.tool || '' });
+    const text = revealInvisible(tMessage(grant.scope)).text
+      || t('settings.grants.fallback', { tool: revealInvisible(grant.tool || '').text });
     return {
       id: grant.id,
       text,
@@ -349,11 +355,15 @@ function describeExecuteReach(overview) {
   } else {
     state = { kind: 'warning', text: describeSandboxStatus(sandbox, true)?.text || t('security.a.where.execute.unavailable') };
   }
+  // In "Auto" no card confirms the domains a run names (CR-B13-04).
+  const network = overview.defaultMode === 'auto'
+    ? t('security.a.where.execute.fact.network.auto')
+    : t('security.a.where.execute.fact.network');
   return {
     inactive: execution.toolsOn ? '' : t('security.a.where.execute.inactive'),
     state,
     facts: state.kind === 'isolated'
-      ? [t('security.a.where.execute.fact.write'), t('security.a.where.execute.fact.secrets'), t('security.a.where.execute.fact.network')]
+      ? [t('security.a.where.execute.fact.write'), t('security.a.where.execute.fact.secrets'), network]
       : [],
   };
 }
