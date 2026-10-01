@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner, validateArguments, buildPreview } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner, validateArguments, buildPreview, PREVIEW_MAX_CHARS } = require('../src/main/tools/tool-call-planner');
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-planner-'));
@@ -118,7 +118,7 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   const planner = make({ canTrash: true });
   const plan = await planner.plan(
     registry.getDefinition('write_file_text'),
-    { relative_path: 'src/neu.md', content: 'api_key = "abcdefgh12345678"\n' + 'z'.repeat(5000) },
+    { relative_path: 'src/neu.md', content: 'api_key = "abcdefgh12345678"\n' + 'z'.repeat(PREVIEW_MAX_CHARS) },
     { workspaceRoot: workspace }
   );
   assert.equal(plan.preview.kind, 'text');
@@ -145,6 +145,41 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   );
   assert.match(planned.preview.text, /^--- alt\n/);
   assert.equal(buildPreview('read_file_text', {}), null);
+});
+
+// #551: the card of an execution tool showed neither stdin nor argv, and cut
+// everything at 4,000 characters — "show in full" showed the cut text.
+test('the preview of an execution tool carries its input, in full or not at all (#551)', async (t) => {
+  const { workspace, registry, make } = await makeFixture(t);
+  const planner = make({});
+  assert.ok(PREVIEW_MAX_CHARS >= 100_000, 'a real program fits');
+
+  const shell = await planner.plan(registry.getDefinition('shell_execute'), { command: 'sh', stdin: 'rm -rf ~/x' }, { workspaceRoot: workspace });
+  assert.equal(shell.preview.text, 'sh');
+  assert.equal(shell.preview.stdin, 'rm -rf ~/x');
+
+  const code = '# harmless\n'.repeat(400) + 'import os; os.system("payload")';
+  const python = await planner.plan(
+    registry.getDefinition('run_python'),
+    { code, stdin: 'token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"', argv: ['--out', 'a b'] },
+    { workspaceRoot: workspace }
+  );
+  assert.equal(python.preview.text, code, 'the whole program, not its first 4,000 characters');
+  assert.equal(python.preview.truncated, false);
+  assert.deepEqual(python.preview.argv, ['--out', 'a b']);
+  assert.equal(python.preview.stdin.includes('ghp_abcdefghijklmnopqrstuvwxyz0123456789'), false, 'stdin is masked');
+  assert.equal(python.preview.masked, true);
+
+  // Longer than the card can show: refused instead of approved half-seen.
+  const huge = await planner.plan(registry.getDefinition('run_python'), { code: 'x'.repeat(PREVIEW_MAX_CHARS + 1) }, { workspaceRoot: workspace });
+  assert.equal(huge.reason, 'invalid_arguments');
+  assert.match(huge.error, /longer than the approval card can show/);
+  const hugeInput = await planner.plan(registry.getDefinition('shell_execute'), { command: 'sh', stdin: 'y'.repeat(PREVIEW_MAX_CHARS + 1) }, { workspaceRoot: workspace });
+  assert.equal(hugeInput.reason, 'invalid_arguments');
+  // A file tool keeps its preview cut and marked: the write is recoverable.
+  assert.equal(buildPreview('write_file_text', { content: 'z'.repeat(PREVIEW_MAX_CHARS + 1) }).truncated, true);
+  // Only the execution tools take input.
+  assert.equal(buildPreview('write_file_text', { content: 'a', stdin: 'b' }).stdin, undefined);
 });
 
 test('apply_patch: alle Ziele eines Mehrdatei-Patches werden geprüft, kaputte Patches nennen den Grund', async (t) => {

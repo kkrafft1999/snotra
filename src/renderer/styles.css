@@ -6256,6 +6256,30 @@ select.modal-input {
   max-height: 220px;
 }
 
+/* Standard input and arguments below the source (#551). */
+.chat-approval-card__preview-label {
+  margin: 0;
+  padding: 6px 10px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__preview-label + .chat-approval-card__preview-text {
+  border-top: none;
+}
+
+.chat-approval-card__preview-text[data-kind='stdin'],
+.chat-approval-card__preview-text[data-kind='argv'] {
+  padding-top: 4px;
+}
+
+.chat-approval-card__preview-text--clamped[data-kind='stdin'],
+.chat-approval-card__preview-text--clamped[data-kind='argv'] {
+  max-height: 140px;
+}
+
 .chat-approval-card__preview-toggle {
   margin: 0 10px 8px;
   padding: 2px 0;

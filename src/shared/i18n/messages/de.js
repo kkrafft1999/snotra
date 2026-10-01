@@ -1307,10 +1307,13 @@ module.exports = {
   'approval.preview.masked': 'Geheimnisse maskiert',
   'approval.preview.summary': 'Vorschau: {kind}',
   'approval.preview.summaryNotes': 'Vorschau: {kind} ({notes})',
-  'approval.preview.truncatedNote': 'Der Kern überträgt nur den Anfang der Vorschau. Ausgeführt wird der vollständige, geprüfte Plan.',
+  'approval.preview.truncatedNote': 'Die Vorschau zeigt von einem sehr langen Text nur den Anfang. Ausgeführt wird der vollständige, geprüfte Plan.',
   'approval.preview.maskedNote': 'Erkannte Zugangsdaten sind in der Vorschau maskiert und bleiben es auch aufgeklappt.',
   'approval.preview.expand': 'Vollständig anzeigen',
   'approval.preview.collapse': 'Vorschau einklappen',
+  // What a process reads besides its source, shown below it (#551).
+  'approval.preview.stdin': 'Eingabe (stdin)',
+  'approval.preview.argv': 'Argumente (sys.argv[1:])',
   // Markers inside the preview of edit_file and apply_patch (#555).
   'approval.preview.edit.old': 'alt',
   'approval.preview.edit.new': 'neu',

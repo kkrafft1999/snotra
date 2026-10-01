@@ -1301,10 +1301,13 @@ module.exports = {
   'approval.preview.masked': 'secrets masked',
   'approval.preview.summary': 'Preview: {kind}',
   'approval.preview.summaryNotes': 'Preview: {kind} ({notes})',
-  'approval.preview.truncatedNote': 'The core only passes on the beginning of the preview. What is carried out is the complete, checked plan.',
+  'approval.preview.truncatedNote': 'The preview shows only the beginning of a very long text. What is carried out is the complete, checked plan.',
   'approval.preview.maskedNote': 'Credentials that were recognised are masked in the preview and stay masked when it is unfolded.',
   'approval.preview.expand': 'Show in full',
   'approval.preview.collapse': 'Collapse preview',
+  // What a process reads besides its source, shown below it (#551).
+  'approval.preview.stdin': 'Input (stdin)',
+  'approval.preview.argv': 'Arguments (sys.argv[1:])',
   // Markers inside the preview of edit_file and apply_patch (#555).
   'approval.preview.edit.old': 'old',
   'approval.preview.edit.new': 'new',

@@ -605,6 +605,15 @@ function createToolApprovalRequestDto({
     if (typeof preview.memoryScope === 'string' && preview.memoryScope) {
       dto.preview.memoryScope = preview.memoryScope.slice(0, 20);
     }
+    // What a process reads besides its source (#551): the planner limited and
+    // masked both already.
+    if (typeof preview.stdin === 'string' && preview.stdin) {
+      dto.preview.stdin = preview.stdin;
+    }
+    if (Array.isArray(preview.argv)) {
+      const argv = preview.argv.filter((entry) => typeof entry === 'string').slice(0, 100);
+      if (argv.length > 0) dto.preview.argv = argv;
+    }
     // Isolation of an execution tool (#329): whether the run is isolated and,
     // if so, the domains it may reach; if not, why not.
     const isolation = sanitizeIsolation(preview.isolation);

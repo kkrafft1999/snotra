@@ -168,13 +168,26 @@ export function initToolApprovalCards({
     pre.dataset.kind = preview.kind;
     pre.textContent = preview.text;
     details.appendChild(pre);
+    // Standard input and arguments below the source (#551), each under its
+    // own label and limited in height like the source.
+    const pres = [pre];
+    for (const block of preview.blocks || []) {
+      details.appendChild(el('p', 'chat-approval-card__preview-label', block.label));
+      const blockPre = el('pre', 'chat-approval-card__preview-text chat-approval-card__preview-text--clamped');
+      blockPre.dataset.kind = block.id;
+      blockPre.setAttribute('aria-label', block.label);
+      blockPre.textContent = block.text;
+      details.appendChild(blockPre);
+      pres.push(blockPre);
+    }
     // Long previews are height-limited at first; "show in full" lifts the
     // limit. The text stays the same — masked stays masked.
     const expand = el('button', 'chat-approval-card__preview-toggle', t('approval.preview.expand'));
     expand.type = 'button';
     expand.setAttribute('aria-expanded', 'false');
     expand.addEventListener('click', () => {
-      const clamped = pre.classList.toggle('chat-approval-card__preview-text--clamped');
+      const clamped = !pre.classList.contains('chat-approval-card__preview-text--clamped');
+      for (const item of pres) item.classList.toggle('chat-approval-card__preview-text--clamped', clamped);
       expand.textContent = clamped ? t('approval.preview.expand') : t('approval.preview.collapse');
       expand.setAttribute('aria-expanded', clamped ? 'false' : 'true');
     });
@@ -188,10 +201,10 @@ export function initToolApprovalCards({
     if (typeof ResizeObserver === 'function') {
       const syncToggle = () => {
         if (!pre.classList.contains('chat-approval-card__preview-text--clamped')) return;
-        expand.hidden = pre.scrollHeight <= pre.clientHeight + 1;
+        expand.hidden = pres.every((item) => item.scrollHeight <= item.clientHeight + 1);
       };
       const observer = new ResizeObserver(syncToggle);
-      observer.observe(pre);
+      for (const item of pres) observer.observe(item);
       observer.observe(details);
     }
     return details;
