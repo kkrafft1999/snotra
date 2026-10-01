@@ -130,7 +130,6 @@ test('shell_execute reicht Befehl, stdin, Zeitlimit und Arbeitsordner durch', as
     networkDomains: [],
     programAllowance: null,
     sandboxDisabled: false,
-    skillWritePaths: [],
     abortSignal: signal,
   });
 

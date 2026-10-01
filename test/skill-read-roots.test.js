@@ -150,7 +150,7 @@ test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
       workspace
     )
   );
-  assert.match(written.error, /not available here/);
+  assert.match(written.error, /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/"/);
 
   // Weder im Skill noch als Datei mit dem wörtlichen Namen „skill:demo“.
   const original = await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8');
@@ -206,79 +206,43 @@ test('list_directory und list_directory_tree zeigen den Skill-Ordner', async (t)
   assert.match(tree.tree, /anleitung\.md/);
 });
 
-test('the registry lets write tools reach only the folders of loaded skills (#429)', async (t) => {
+test('the registry keeps every write tool out of a skill folder (#548)', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
-  // `approved` stands for the engine's policy approval (#66); what counts
-  // here is which skills the write tools may reach.
-  const context = { workspaceRoot: workspace, skillRoots, approved: true };
+  // `approved` stands for the engine's policy approval (#66); a leftover
+  // `writableSkills` from the #429 days opens nothing.
+  const context = { workspaceRoot: workspace, skillRoots, approved: true, writableSkills: ['demo'] };
+  const target = path.join(skillDir, 'references', 'anleitung.md');
 
   const read = JSON.parse(
     await registry.execute('read_file_text', { relative_path: 'skill:demo/references/anleitung.md' }, context)
   );
   assert.match(read.content, /Nadelöhr/);
 
-  const write = JSON.parse(
-    await registry.execute(
-      'write_file_text',
-      { relative_path: 'skill:demo/references/anleitung.md', content: 'nein' },
-      context
-    )
-  );
-  assert.match(write.error, /read-only here/);
-  assert.match(await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8'), /Nadelöhr/);
+  const calls = [
+    ['write_file_text', { relative_path: 'skill:demo/references/anleitung.md', content: 'nein' }],
+    ['write_file_text', { relative_path: 'skill:demo/../../raus.txt', content: 'nein' }],
+    ['edit_file', { relative_path: 'skill:demo/references/anleitung.md', old_string: 'Nadelöhr', new_string: 'nein' }],
+    ['apply_patch', { relative_path: 'skill:demo/references/anleitung.md', edits: [{ old_string: 'Nadelöhr', new_string: 'nein' }] }],
+  ];
+  for (const [tool, args] of calls) {
+    const out = JSON.parse(await registry.execute(tool, args, context));
+    assert.match(out.error, /Skill folders are read-only/, `${tool} ${args.relative_path}`);
+  }
+  // An absolute path lies outside the workspace for a write tool.
+  const absolute = JSON.parse(await registry.execute('write_file_text', { relative_path: target, content: 'nein' }, context));
+  assert.ok(absolute.error);
 
-  const loaded = { ...context, writableSkills: ['demo'] };
-  const written = JSON.parse(
-    await registry.execute('write_file_text', { relative_path: 'skill:demo/assets/rules.md', content: 'Regel A\n' }, loaded)
-  );
-  assert.equal(written.error, undefined);
-  assert.equal(await fs.readFile(path.join(skillDir, 'assets', 'rules.md'), 'utf8'), 'Regel A\n');
-
-  const edited = JSON.parse(
-    await registry.execute(
-      'edit_file',
-      { relative_path: path.join(skillDir, 'assets', 'rules.md'), old_string: 'Regel A', new_string: 'Regel B' },
-      loaded
-    )
-  );
-  assert.equal(edited.error, undefined);
-
-  const patched = JSON.parse(
-    await registry.execute(
-      'apply_patch',
-      { relative_path: 'skill:demo/assets/rules.md', edits: [{ old_string: 'Regel B', new_string: 'Regel C' }] },
-      loaded
-    )
-  );
-  assert.equal(patched.error, undefined);
-  assert.equal(await fs.readFile(path.join(skillDir, 'assets', 'rules.md'), 'utf8'), 'Regel C\n');
-
-  // The folder itself is no file, and another skill stays closed.
-  const folder = JSON.parse(await registry.execute('write_file_text', { relative_path: 'skill:demo', content: 'x' }, loaded));
-  assert.match(folder.error, /skill folder itself/);
-  const other = JSON.parse(
-    await registry.execute('write_file_text', { relative_path: 'skill:demo/x.md', content: 'x' }, { ...context, writableSkills: ['anderer'] })
-  );
-  assert.match(other.error, /read-only here/);
+  assert.match(await fs.readFile(target, 'utf8'), /Nadelöhr/);
+  await assert.rejects(fs.access(path.join(base, 'raus.txt')));
 });
 
-test('a write cannot leave a loaded skill folder (#429)', async (t) => {
-  const { base, workspace, skillDir, skillRoots } = await makeFixture();
+test('load_skill says the folder is read-only and where the skill keeps its data (#548)', async (t) => {
+  const { base, workspace, skillRoots } = await makeFixture();
   t.after(() => fs.rm(base, { recursive: true, force: true }));
-  const svc = makeFsService();
-  const options = { skillRoots, writableSkills: ['demo'] };
-
-  const escape = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'skill:demo/../../raus.txt', content: 'x' }, workspace, options));
-  assert.ok(escape.error);
-  await assert.rejects(fs.access(path.join(base, 'raus.txt')));
-
-  const link = path.join(skillDir, 'raus');
-  if (!(await createSymlinkOrSkip(t, base, link, 'dir'))) return;
-  const viaLink = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'skill:demo/raus/neu.txt', content: 'x' }, workspace, options));
-  assert.ok(viaLink.error);
-  await assert.rejects(fs.access(path.join(base, 'neu.txt')));
+  const out = JSON.parse(await makeFsService().runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
+  assert.match(out.files, /It is read-only: what the skill produces and wants to keep goes into "\.agents\/data\/" in the open folder\./);
 });
 
 // ---------------------------------------------------------------------------

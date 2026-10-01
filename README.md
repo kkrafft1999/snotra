@@ -479,8 +479,7 @@ deliberately not used — both require a code signature.
 
   **This is the riskiest setting in the app — how risky depends on your
   system.** On **macOS and Linux** the code runs in a sandbox: it can write only
-  inside the project folder, a temporary folder and the folders of the skills
-  loaded in the reply (the card lists them), cannot read keys, cloud
+  inside the project folder and a temporary folder, cannot read keys, cloud
   credentials, shell histories or browser data, and reaches the network only for
   the domains it declares, which the approval card lists. It can still *read*
   your other files.
@@ -510,9 +509,8 @@ deliberately not used — both require a code signature.
   is shown in the result and on the approval card.
 
   **This is the most far-reaching setting in the app.** On **macOS and Linux**
-  every command runs in a sandbox: it writes only inside the project folder, a
-  temporary folder (caches such as pip's and npm's are redirected there) and the
-  folders of the skills loaded in the reply (the card lists them), cannot
+  every command runs in a sandbox: it writes only inside the project folder and a
+  temporary folder (caches such as pip's and npm's are redirected there), cannot
   read keys, cloud credentials, shell histories or browser data, and reaches the network only for
   the domains on the approval card — `pip install` and `npm install` get their
   registry automatically, anything else the model has to name. On **Windows**
@@ -1011,26 +1009,13 @@ unchanged, including through a symlinked skills directory such as
 cannot be read after all, the model is told to say so and name the file rather
 than carry on with what it expects the file to contain.
 
-Many skills also keep what they learn there — mapping rules, templates, a state
-file their scripts update. So once a skill is **loaded** in the current reply
-(fetched with `load_skill`, or called by `/name`), it can write to its own
-folder as well:
-
-- **Write tools.** `write_file_text`, `edit_file` and `apply_patch` take the same
-  `skill:<name>/…` paths, or an absolute path inside the folder. Such a write is
-  approved like any other write in the chosen mode; the card names the skill and
-  says that the change applies wherever the skill is switched on — for a skill
-  under `~/.snotra/skills` or `~/.agents/skills` that is every project.
-- **Scripts.** With the sandbox on, `shell_execute` and `run_python` may write to
-  the folders of the loaded skills too; the card lists them under "Loaded
-  skills". `shell_execute` runs in a skill folder with `cwd: "skill:<name>"`, so
-  a skill's own scripts find their files.
-- **Read-only otherwise.** A skill that is switched on but not loaded, and every
-  one of the app's own skills, stays read-only in every mode. A new reply starts
-  with nothing loaded.
-
 The boundaries stay narrow:
 
+- **Read-only.** `write_file_text`, `edit_file` and `apply_patch` reject `skill:`
+  paths and absolute paths into a skill folder, in every mode, and the sandbox of
+  `shell_execute` and `run_python` never opens a skill folder for writing. A
+  skill folder is shared by every project the skill is switched on in and gets
+  replaced when the skill is updated — it is no place for a project's data.
 - **Enabled skills only.** A skill that is not selected is not a path; the error
   message names the skills that actually are enabled.
 - **No escaping.** `..` and symlinks are checked against the real path, exactly as
@@ -1039,9 +1024,19 @@ The boundaries stay narrow:
   in the tool log plus "(skill ‹name›)" in the text, so that they do not look like
   access to the project; in the collapsed summary, skill accesses come first.
 
-Without an open folder the file tools stay available as long as a skill is
-switched on, and then reach the skill folders only; the execution tools need a
-folder.
+### Where a skill keeps its data
+
+What a skill produces and wants to keep — the rules it has learned, a contact
+list, the state for its next run — goes into **`.agents/data/`** in the open
+folder, for example `.agents/data/contacts.md`. The model is told so as soon as
+a skill is switched on, and the refusal of a write into a skill folder names the
+place too. Skills written for other agents often spell it
+`<workspace>/.agents/data/…`; that is the same folder. Writing there is an
+ordinary write in the project and is approved like any other.
+
+Without an open folder the read tools stay available as long as a skill is
+switched on, and then reach the skill folders only; the write and execution
+tools need a folder, so there is nowhere to keep a skill's data either.
 
 ## Project instructions: `AGENTS.md`
 
@@ -1252,14 +1247,12 @@ The details are in the [security concept](docs/security-concept.md).
 - API keys are stored **locally** and are not passed on to third parties.
 - The workspace access of the file tools is limited to the currently opened
   project folder. Exceptions: the **read** tools additionally reach the
-  directories of the enabled skills via `skill:<name>/…`, and the write tools
-  the folders of the skills loaded in the current reply (see [Skills](#skills))
-  — and the two **execution** tools `run_python`
+  directories of the enabled skills via `skill:<name>/…` (see [Skills](#skills);
+  nothing is ever written there) — and the two **execution** tools `run_python`
   and `shell_execute` do not know this boundary at all: it is not Snotra that
   accesses files there, but the interpreter or the shell. Both are therefore off
   as shipped and need an approval before every run. On macOS and Linux they run
-  in a sandbox that confines writes to the project folder (plus the folders of
-  loaded skills) and limits the network
+  in a sandbox that confines writes to the project folder and limits the network
   to the approved domains (see [The sandbox per operating
   system](#the-sandbox-per-operating-system)); on Windows they do not.
 - Every tool call passes through a policy in the main process (risk class × mode,

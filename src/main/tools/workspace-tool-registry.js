@@ -96,9 +96,10 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
       // Skill eingeschaltet ist (Issue #173).
       requiresSkills: definition.requiresSkills === true,
-      // Standard false: a file tool that also takes `skill:<name>/…` paths
+      // Standard false: a read tool that also takes `skill:<name>/…` paths
       // (#429). Without an open folder it is still offered while a skill is
-      // switched on — it then reaches the skill folders and nothing else.
+      // switched on — it then reaches the skill folders and nothing else. No
+      // write tool has it: skill folders are read-only (#548).
       skillPaths: definition.skillPaths === true,
       // Standard false: Grundausstattung, die der Nutzer nicht abwaehlen kann
       // und in Einstellungen › Tools deshalb auch nicht sieht (Issue #195).
@@ -193,7 +194,7 @@ function createToolRegistry(initialDefinitions = []) {
         // keine Einstellung, sondern eine Zusicherung des Aufrufers.
         (!disabled || !disabled.has(definition.name) || definition.essential === true) &&
         // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96),
-        // and the file tools while there are skill folders to reach (#429).
+        // and the read tools while there are skill folders to reach (#429).
         (workspaceOpen !== false
           || definition.requiresWorkspace === false
           || (definition.skillPaths === true && skillsSwitchedOn)) &&
@@ -346,9 +347,9 @@ function createToolRegistry(initialDefinitions = []) {
     if (available.some((definition) => definition.requiresWorkspace !== false)) {
       parts.push(
         options.workspaceOpen === false
-          // Without a folder the file tools are here only for the skill
-          // folders (#429) — a relative path has nothing to be relative to.
-          ? 'No folder is open, so the file tools reach only the folders of the switched-on ' +
+          // Without a folder the read tools are here only for the skill
+          // folders (#429, #548) — a relative path has nothing to be relative to.
+          ? 'No folder is open, so the read tools reach only the folders of the switched-on ' +
             'skills, as "skill:<name>/<path>"; they handle files up to 2 MB and report an ' +
             'error beyond that.'
           : 'Paths for the file tools are always relative to the folder root ' +
@@ -484,10 +485,6 @@ function describeIsolationForModel(isolation, sandboxPlan = null) {
       out.program_allowance_not_applied = `The user's allowance for ${skipped.program} did not apply: `
         + `${ALLOWANCE_SKIP_TEXT[skipped.reason]}. Run the program on its own to get it.`;
     }
-    // The folders of the skills loaded in this run (#429).
-    if (Array.isArray(isolation.skillWritePaths) && isolation.skillWritePaths.length > 0) {
-      out.skill_write_paths = isolation.skillWritePaths;
-    }
     return out;
   }
   // The user's own choice (#357): the model should not report sandbox limits
@@ -495,16 +492,6 @@ function describeIsolationForModel(isolation, sandboxPlan = null) {
   return isolation.reason === SANDBOX_REASONS.WORKSPACE
     ? { isolated: false, reason: 'The user switched the sandbox off for this workspace.' }
     : { isolated: false };
-}
-
-/**
- * The skill folders the approved plan lets a run write to (#429) — the
- * folders the card named, and only from the plan: a call without one gets
- * none.
- */
-function skillWritePathsByPlan(plan) {
-  const folders = Array.isArray(plan?.sandbox?.skillFolders) ? plan.sandbox.skillFolders : [];
-  return folders.map((folder) => folder?.path).filter((entry) => typeof entry === 'string' && entry);
 }
 
 /**
@@ -966,8 +953,6 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'write_file_text',
-      // Reaches skill folders too, and so works without an open folder (#429).
-      skillPaths: true,
       // Overwriting a file without a copy in the trash is `delete` (planner);
       // the Security page lists this tool in that row as well (#448).
       mayOverwrite: true,
@@ -992,13 +977,11 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'content'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, recovery, skillRoots, writableSkills }) =>
-        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery, skillRoots, writableSkills }),
+      handler: (args, { workspaceRoot, recovery }) =>
+        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery }),
     },
     {
       name: 'edit_file',
-      // Reaches skill folders too, and so works without an open folder (#429).
-      skillPaths: true,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write' }],
       descriptionKey: 'tools.desc.edit_file',
       // Die Eindeutigkeitsregel samt "inklusive Einrueckung und
@@ -1033,13 +1016,11 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'old_string', 'new_string'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, skillRoots, writableSkills }) =>
-        fsService.runEditFileTool(args, workspaceRoot, { skillRoots, writableSkills }),
+      handler: (args, { workspaceRoot }) =>
+        fsService.runEditFileTool(args, workspaceRoot),
     },
     {
       name: 'apply_patch',
-      // Reaches skill folders too, and so works without an open folder (#429).
-      skillPaths: true,
       targets: (args) =>
         fsService.listApplyPatchTargets(args).map((p) => ({ path: p, kind: 'file', access: 'write' })),
       descriptionKey: 'tools.desc.apply_patch',
@@ -1108,8 +1089,8 @@ function createWorkspaceToolRegistry({
         },
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, skillRoots, writableSkills }) =>
-        fsService.runApplyPatchTool(args, workspaceRoot, { skillRoots, writableSkills }),
+      handler: (args, { workspaceRoot }) =>
+        fsService.runApplyPatchTool(args, workspaceRoot),
     },
     {
       name: 'run_python',
@@ -1129,8 +1110,7 @@ function createWorkspaceToolRegistry({
         + 'checking regular expressions or data formats. Every call is a fresh script — there is '
         + 'no state between two calls, and only the standard library is guaranteed to be present. '
         + 'No pip install. On macOS and Linux the program usually runs isolated: it can write only '
-        + 'inside the project folder, a temporary directory and the folders of the skills loaded in '
-        + 'this run, cannot read credential stores, and '
+        + 'inside the project folder and a temporary directory, cannot read credential stores, and '
         + 'has no network unless you list the domains it needs in network_domains. The result says '
         + 'whether the run was isolated.',
       shortDescriptionKey: 'tools.short.run_python',
@@ -1175,7 +1155,6 @@ function createWorkspaceToolRegistry({
           workspaceRoot: workspaceRoot || undefined,
           networkDomains: resolveNetworkDomains('run_python', args),
           sandboxDisabled: sandboxDisabledByPlan(plan),
-          skillWritePaths: skillWritePathsByPlan(plan),
           abortSignal,
         });
         if (result?.error) return JSON.stringify({ error: result.error });
@@ -1223,8 +1202,7 @@ function createWorkspaceToolRegistry({
         + 'and pass input via stdin. Background processes and servers meant to outlive the call are '
         + 'not possible. Recursive force-deletes, disk operations and rewriting git history are '
         + 'blocked. On macOS and Linux commands usually run isolated: writes only inside the project '
-        + 'folder, a temporary directory (caches are redirected there) and the folders of the skills '
-        + 'loaded in this run, no access to credential '
+        + 'folder and a temporary directory (caches are redirected there), no access to credential '
         + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
         + 'get their registry automatically. Programs the user has given an allowance in Settings '
         + '(Program allowances) get its domains and folders by themselves, but only when the command '
@@ -1246,8 +1224,7 @@ function createWorkspaceToolRegistry({
           cwd: {
             type: 'string',
             description:
-              'Optional subfolder to use as the working directory (e.g. "frontend"), or the '
-              + 'folder of a switched-on skill as "skill:<name>" to run its scripts. '
+              'Optional subfolder to use as the working directory (e.g. "frontend"). '
               + 'Without it the command runs in the project folder.',
           },
           stdin: {
@@ -1264,7 +1241,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['command'],
       },
-      handler: async (args, { workspaceRoot, skillRoots, abortSignal, plan } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan } = {}) => {
         if (!shellRunner) {
           return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
@@ -1273,9 +1250,7 @@ function createWorkspaceToolRegistry({
         const guard = checkShellCommand(args?.command);
         if (guard.blocked) return JSON.stringify({ error: guard.reason, blocked: true });
         const relativeCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
-        // A skill folder is a working folder as well (#429), so that a skill's
-        // scripts run where their relative paths point.
-        const resolved = await fsService.resolveToolPath(workspaceRoot, relativeCwd, { skillRoots });
+        const resolved = await fsService.resolveToolPath(workspaceRoot, relativeCwd);
         if (resolved.error) return JSON.stringify({ error: resolved.error });
         // A program allowance (#408) comes only from the approved plan: the
         // line starts with the allowed file's absolute path, and the run gets
@@ -1290,7 +1265,6 @@ function createWorkspaceToolRegistry({
           networkDomains: resolveRunDomains('shell_execute', args, allowance),
           programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
-          skillWritePaths: skillWritePathsByPlan(plan),
           abortSignal,
         });
         if (result?.error) {

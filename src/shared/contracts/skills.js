@@ -29,6 +29,19 @@ const { createMessage, isMessage } = require('./message');
  */
 const LOAD_SKILL_TOOL = 'load_skill';
 
+/**
+ * Where a skill keeps what it produces, relative to the open folder (#548).
+ * A skill folder is read-only: it is shared by every workspace the skill is
+ * switched on in and gets replaced when the skill is updated, so its data
+ * lives with the project instead. Skills written for other agents spell the
+ * place `<workspace>/.agents/data/…`.
+ */
+const SKILL_DATA_DIR = '.agents/data';
+
+/** The refusal of a write into a skill folder — it names the place to use instead. */
+const SKILL_FOLDER_READ_ONLY =
+  `Skill folders are read-only. Keep what a skill produces in "${SKILL_DATA_DIR}/" in the open folder.`;
+
 /** Quellen in Prioritätsreihenfolge: der erste Treffer eines Namens gewinnt. */
 const SKILL_SOURCES = Object.freeze({
   /** Eingebaut, Teil der App — kann nicht überschrieben werden. */
@@ -148,6 +161,8 @@ function normalizeSkillCatalog(raw) {
 
 module.exports = {
   LOAD_SKILL_TOOL,
+  SKILL_DATA_DIR,
+  SKILL_FOLDER_READ_ONLY,
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABEL_KEYS,
