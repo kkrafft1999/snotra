@@ -722,7 +722,7 @@ not stored. The fields:
 | **Server URL** | Root of the API, e.g. `http://localhost:1234/v1`. Required; a trailing slash is stripped |
 | **API key** | **Optional.** Leaving it empty means *no* `Authorization` header goes out — the normal case for local servers. With a key: `Authorization: Bearer …` |
 | **Display name** | Appears in the chat before the model name ("LM Studio · qwen2.5") and distinguishes the rows from one another. Leave empty for "OpenAI-compatible" |
-| **Extra headers** | One `Name: Value` per line, for gateway tokens or tenant headers. Treated like a key: stored encrypted, no longer displayed after saving, never in logs or error messages |
+| **Extra headers** | One `Name: Value` per line, for gateway tokens or tenant headers. Treated like a key: stored encrypted, no longer displayed after saving, never in logs or error messages. A line `Authorization: …` replaces the `Bearer` header, in any spelling of the name |
 | **API style** | "Chat Completions only" (default, fits almost always) or "Responses, falling back to Chat Completions". Nothing is guessed; on `404`/`405` for `/responses` Snotra falls back exactly once and stays there for the session |
 | **Ignore TLS certificate (insecure)** | As with Ollama, only for self-signed or internally signed certificates you trust |
 | **Send tools along** | On by default. Turn it off for servers that choke on tool schemas — then it stays plain chat |
@@ -732,7 +732,9 @@ not stored. The fields:
 If that fails or the server returns an empty list, that is **not an error** — the
 model name can be entered by hand and the entry stays usable; the status line
 says why the list stayed empty. A manually entered name remains in place even if
-the list loads later after all.
+the list loads later after all. A stored key and stored extra headers only go to
+the server URL they were saved with: after changing the URL, enter the key again
+to load the list from the new server.
 
 **Local or remote** is decided by the host of the server URL: `localhost`,
 `127.0.0.x`, `::1` and `*.local` count as local and get the more generous timeout

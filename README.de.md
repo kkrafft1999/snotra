@@ -425,13 +425,13 @@ Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil v
 | **Server-URL** | Wurzel der API, z. B. `http://localhost:1234/v1`. Pflichtangabe; ein Schrägstrich am Ende wird abgeschnitten |
 | **API-Schlüssel** | **Optional.** Leer lassen heißt: es geht *kein* `Authorization`-Header hinaus — der Normalfall bei lokalen Servern. Mit Schlüssel: `Authorization: Bearer …` |
 | **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“) und unterscheidet die Zeilen voneinander. Leer lassen für „OpenAI-kompatibel“ |
-| **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen |
+| **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen. Eine Zeile `Authorization: …` ersetzt den `Bearer`-Header, egal wie der Name geschrieben ist |
 | **API-Stil** | „Nur Chat Completions“ (Standard, passt fast immer) oder „Responses, sonst Chat Completions“. Geraten wird nichts; bei `404`/`405` auf `/responses` fällt Snotra genau einmal zurück und bleibt für die Sitzung dabei |
 | **TLS-Zertifikat ignorieren** | Wie bei Ollama, nur für selbst- oder intern signierte Zertifikate, denen du vertraust |
 | **Tools mitschicken** | Standardmäßig an. Aus lassen bei Servern, die an Tool-Schemata scheitern — dann bleibt es beim reinen Chat |
 | **Bild-Anhänge erlauben** | Standardmäßig aus. An nur, wenn das Modell dahinter Bilder versteht; sonst werden Anhänge im Chat gar nicht erst angeboten |
 
-**Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt.
+**Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt. Ein gespeicherter Schlüssel und gespeicherte Zusatz-Header gehen nur an die Server-URL, mit der sie gespeichert wurden: Nach einem Wechsel der URL gibst du den Schlüssel neu ein, um die Liste vom neuen Server zu laden.
 
 **Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama.
 
