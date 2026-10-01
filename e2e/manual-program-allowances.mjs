@@ -1,7 +1,8 @@
 // Look instead of trust (#408): starts the real app with shell_execute on and
-//  1. adds a program allowance through Settings › Tools — the dialog, the
-//     native confirmation (answered by a stub in main, its text printed), the
-//     list — and photographs the empty card, the dialog and the list,
+//  1. adds a program allowance through Settings › Security › Execute — the
+//     dialog, the native confirmation (answered by a stub in main, its text
+//     printed), the list — and photographs the empty card, the dialog and the
+//     list,
 //  2. photographs the approval card with the allowance applied, follows its
 //     link and reports where the focus landed,
 //  3. approves the run and reports what the model was told: whether the

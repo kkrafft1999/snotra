@@ -44,7 +44,11 @@ user's full rights. The user can switch the sandbox off for one folder
 on Linux it does not start without `bubblewrap`, `socat` and `ripgrep`, or when
 the system restricts user namespaces (Ubuntu 24.04 and later). Every result
 says in `sandbox.isolated` whether that run was isolated — go by that, not by
-the operating system alone.
+the operating system alone. When a single program needs more — more domains,
+write access to its own folder or, on macOS, the system's certificate check
+(`gh`, `terraform` and other Go programs) — suggest a program allowance under
+`{menu:settings.security}` › `{label:settings.allowances.heading}` instead of
+switching the sandbox off.
 
 ## MCP tools
 
