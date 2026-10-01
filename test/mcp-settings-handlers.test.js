@@ -197,9 +197,6 @@ test('der Token taucht weder im Katalog noch in einer Fehlermeldung auf', async 
     env: { GITHUB_TOKEN: { value: TOKEN } },
   });
 
-  const katalog = await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({});
-  assert.equal(JSON.stringify(katalog).includes(TOKEN), false, 'der Katalog darf den Token nicht enthalten');
-
   const test1 = await ipcMain.handlers.get(REQ.SETTINGS_TEST_MCP_SERVER)({}, 'leck');
   assert.equal(test1.status.state, MCP_CONNECTION_STATES.FAILED);
   // Der stderr-Auszug bleibt erklärend erhalten …
@@ -207,6 +204,27 @@ test('der Token taucht weder im Katalog noch in einer Fehlermeldung auf', async 
   // … nur der Token ist heraus.
   assert.equal(JSON.stringify(test1).includes(TOKEN), false, 'der Token darf nicht im Testergebnis stehen');
   assert.ok(test1.status.stderr.includes(MASK_TEXT));
+
+  // Only now does the failed status carry a stderr excerpt — which is why the
+  // catalogue and every response that reuses it are asserted after the test
+  // (CR-B14-01), not before it.
+  const responses = {
+    catalogue: await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({}),
+    reload: await ipcMain.handlers.get(REQ.SETTINGS_RELOAD_MCP_SERVERS)({}),
+    save: await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, {
+      id: 'zweiter', label: 'Zweiter', command: process.execPath, args: [FAKE_SERVER, 'ok'],
+    }),
+    delete: await ipcMain.handlers.get(REQ.SETTINGS_DELETE_MCP_SERVER)({}, 'zweiter'),
+  };
+  for (const [name, response] of Object.entries(responses)) {
+    assert.equal(response.ok ?? true, true, `${name}: ${JSON.stringify(response.errors)}`);
+    const status = response.connections.find((entry) => entry.serverId === 'leck');
+    // The excerpt is still there, so the masking — not a lost status — is
+    // what keeps the token out.
+    assert.match(status.stderr, /Start fehlgeschlagen/, `${name}: stderr excerpt kept`);
+    assert.ok(status.stderr.includes(MASK_TEXT), `${name}: masked`);
+    assert.equal(JSON.stringify(response).includes(TOKEN), false, `${name} must not carry the token`);
+  }
 });
 
 test('a token inside a keyed status error is masked as well (#338)', async (t) => {
