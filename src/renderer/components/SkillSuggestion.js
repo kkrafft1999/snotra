@@ -63,6 +63,8 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
   const modelCache = new Map();
 
   function hide() {
+    // An answer still on its way is void too — after "Off" as well (#584).
+    seq += 1;
     current = null;
     if (row.classList.contains('hidden')) return;
     row.classList.add('hidden');
@@ -172,8 +174,11 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
     onApplied?.();
   }
 
+  /** The input, or the suggestion itself once Tab has moved there. */
+  const focusIsHere = () => document.activeElement === chatInput || row.contains(document.activeElement);
+
   async function update() {
-    if (mode === SKILL_SUGGESTION_MODES.OFF) {
+    if (mode === SKILL_SUGGESTION_MODES.OFF || !focusIsHere()) {
       hide();
       return;
     }
@@ -197,7 +202,7 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
 
     // Die Eingabe kann sich während des Ermittelns geändert haben.
     const jetzt = findSkillQuery(chatInput.value, chatInput.selectionStart);
-    if (!jetzt || !skill || anliegenVor(jetzt) !== anliegen) {
+    if (!jetzt || !skill || anliegenVor(jetzt) !== anliegen || !focusIsHere()) {
       hide();
       return;
     }

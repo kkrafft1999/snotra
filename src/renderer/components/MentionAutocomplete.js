@@ -45,8 +45,13 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   let updateSeq = 0;
 
   const isOpen = () => !menu.classList.contains('hidden');
+  // The list belongs to the input: it opens only while the input has the
+  // focus (#584), not after a slow load that outlived a blur.
+  const inputFocused = () => document.activeElement === chatInput;
 
   function close() {
+    // An update still waiting for the paths must not open the list again.
+    updateSeq += 1;
     active = null;
     items = [];
     selectedIndex = 0;
@@ -144,7 +149,7 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   }
 
   async function update() {
-    if (!appStore.rootPath) {
+    if (!appStore.rootPath || !inputFocused()) {
       close();
       return;
     }
@@ -159,7 +164,7 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
 
     // Text und Cursor können sich während des Ladens geändert haben.
     const current = findMentionQuery(chatInput.value, chatInput.selectionStart);
-    if (!current) {
+    if (!current || !inputFocused()) {
       close();
       return;
     }
