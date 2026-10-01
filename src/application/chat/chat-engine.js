@@ -1409,7 +1409,11 @@ function createChatEngine({
             }),
           };
         }
-        const toolDisabled = disabledNames.includes(toolName);
+        // The registry knows which switch-offs count — a stale one for the
+        // basic equipment does not (#552).
+        const toolDisabled = typeof tools.isSwitchedOff === 'function'
+          ? tools.isSwitchedOff(toolName, disabledNames) === true
+          : disabledNames.includes(toolName);
         let forcedClasses = [];
         let lastPlanKey = null;
 
@@ -1420,6 +1424,8 @@ function createChatEngine({
             skillRoots,
             sensitivePathPatterns: policy.sensitivePathPatterns,
             forcedClasses,
+            // The preview on the card speaks the user's language (#555).
+            locale: appLocale,
           });
           if (!plan || plan.error) {
             return permissionDenied(entry, {

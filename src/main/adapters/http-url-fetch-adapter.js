@@ -10,6 +10,7 @@
  */
 
 const dns = require('node:dns').promises;
+const { Agent } = require('undici');
 const { withRequestTimeout } = require('../services/request-timeout');
 const { describeFetchError } = require('../../shared/runtime/fetch-errors');
 const { parseHttpUrl, isBlockedHostname, isBlockedAddress } = require('../../shared/runtime/url-safety');
@@ -46,6 +47,20 @@ function charsetOf(response) {
 }
 
 /**
+ * Lets go of a body that is not read (#555): undici holds the connection until
+ * the body is consumed or collected, so a redirect or an error answer would
+ * otherwise keep its socket for an unknown time.
+ */
+function discardBody(response) {
+  try {
+    const pending = response?.body?.cancel?.();
+    if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+  } catch {
+    /* a body that cannot be cancelled is left to the garbage collector */
+  }
+}
+
+/**
  * Liest den Koerper bis zur Byte-Grenze und bricht danach ab. Ohne diese
  * Grenze koennte eine einzige Adresse den Speicher fuellen — `content-length`
  * allein genuegt nicht, weil der Server ihn weglassen oder luegen darf.
@@ -53,6 +68,7 @@ function charsetOf(response) {
 async function readLimitedBody(response) {
   const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > URL_FETCH_LIMITS.MAX_BYTES) {
+    discardBody(response);
     return { tooLarge: true };
   }
   if (!response.body || typeof response.body.getReader !== 'function') {
@@ -96,8 +112,75 @@ function acceptLanguageFor(locale) {
   return locale === 'de' ? 'de,en;q=0.8' : 'en,*;q=0.5';
 }
 
+/** The cause a connection refused by the address check carries (#554). */
+const BLOCKED_AT_CONNECT = 'ESNOTRABLOCKEDADDRESS';
+
+function familyOf(address) {
+  return address.includes(':') ? 6 : 4;
+}
+
+/**
+ * Name resolution for the moment of connecting, in the shape `net.connect`
+ * expects of its `lookup` option (#554).
+ *
+ * The check before the request resolves the name once; `fetch` would resolve
+ * it a second time, and between the two the answer can change (DNS
+ * rebinding): public for the check, `127.0.0.1` for the connection. Here the
+ * connection gets exactly the addresses that passed the check — every one of
+ * them, because the socket may try any of them.
+ */
+function createGuardedLookup(resolveHost) {
+  return (hostname, options, callback) => {
+    const done = typeof options === 'function' ? options : callback;
+    const opts = typeof options === 'object' && options !== null ? options : {};
+    Promise.resolve()
+      .then(() => resolveHost(hostname))
+      .then(
+        (answer) => {
+          const list = (Array.isArray(answer) ? answer : [answer])
+            .map((entry) => (typeof entry === 'string' ? entry : entry?.address))
+            .filter((address) => typeof address === 'string' && address)
+            .map((address) => ({ address, family: familyOf(address) }))
+            .filter((entry) => opts.family !== 4 && opts.family !== 6 ? true : entry.family === opts.family);
+          if (list.length === 0) {
+            return { error: Object.assign(new Error(`The name "${hostname}" could not be resolved.`), { code: 'ENOTFOUND' }) };
+          }
+          const blocked = list.find((entry) => isBlockedAddress(entry.address));
+          if (blocked) {
+            return {
+              error: Object.assign(
+                new Error(`The address "${hostname}" points to a private or local network (${blocked.address}) and is not fetched.`),
+                { code: BLOCKED_AT_CONNECT }
+              ),
+            };
+          }
+          return { list };
+        },
+        (error) => ({ error })
+      )
+      .then(({ error, list }) => {
+        if (error) done(error);
+        else if (opts.all) done(null, list);
+        else done(null, list[0].address, list[0].family);
+      });
+  };
+}
+
+function blockedAtConnect(error) {
+  for (let current = error; current; current = current.cause) {
+    if (current.code === BLOCKED_AT_CONNECT) return current;
+  }
+  return null;
+}
+
 function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale = () => 'en' } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
+  // Built on first use: a connection only to addresses that pass the check.
+  let dispatcher = null;
+  const guardedDispatcher = () => {
+    if (!dispatcher) dispatcher = new Agent({ connect: { lookup: createGuardedLookup(resolveHost) } });
+    return dispatcher;
+  };
 
   /** Adresspruefung vor jedem einzelnen Sprung (auch nach Weiterleitungen). */
   async function checkAddress(url) {
@@ -141,6 +224,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
               method: 'GET',
               redirect: 'manual',
               signal,
+              dispatcher: guardedDispatcher(),
               headers: {
                 accept: 'text/html,text/plain,application/json;q=0.9,*/*;q=0.1',
                 'accept-language': acceptLanguageFor(getLocale()),
@@ -152,6 +236,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
             // gegen die Adressregeln geprueft (ein 302 auf 127.0.0.1 ist der
             // klassische Weg um eine einmalige Pruefung herum).
             if (response.status >= 300 && response.status < 400) {
+              discardBody(response);
               const location = response.headers?.get?.('location');
               if (!location) {
                 return fail(
@@ -172,6 +257,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
             }
 
             if (!response.ok) {
+              discardBody(response);
               return fail(
                 URL_FETCH_ERROR_CODES.SERVICE,
                 `The page could not be read: HTTP ${response.status}.`
@@ -180,6 +266,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
 
             const contentType = contentTypeOf(response);
             if (contentType && !URL_FETCH_ALLOWED_CONTENT_TYPES.includes(contentType)) {
+              discardBody(response);
               return fail(
                 URL_FETCH_ERROR_CODES.UNSUPPORTED_CONTENT,
                 `The address returns "${contentType}" — only text content is read (HTML, plain text, Markdown, JSON).`
@@ -224,6 +311,8 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
     } catch (error) {
       // Ein Abbruch durch den Nutzer gehoert der Engine, nicht dem Tool.
       if (abortSignal?.aborted) throw error;
+      const blocked = blockedAtConnect(error);
+      if (blocked) return fail(URL_FETCH_ERROR_CODES.BLOCKED_ADDRESS, blocked.message);
       return fail(URL_FETCH_ERROR_CODES.NETWORK, describeFetchError(error, current.toString()));
     }
   }
@@ -231,4 +320,4 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale
   return { fetchUrl };
 }
 
-module.exports = { createHttpUrlFetchAdapter };
+module.exports = { createHttpUrlFetchAdapter, createGuardedLookup };

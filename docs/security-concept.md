@@ -239,15 +239,16 @@ stored with the history in the encrypted store.
   Only `http`/`https` without credentials in the address are allowed; the
   hostname is resolved and **every** resulting address is checked against the
   blocked ranges (loopback, private networks, link-local, unique-local,
-  multicast, carrier NAT, IPv4-in-IPv6). The app follows redirects itself and
-  re-checks after every hop — a `302` to `127.0.0.1` is the classic way around a
-  one-off check. On top of that: limits on time, size and characters, and a
+  multicast, carrier NAT, IPv4 inside IPv6 — mapped, compatible, NAT64 and
+  6to4). The app follows redirects itself and re-checks after every hop — a
+  `302` to `127.0.0.1` is the classic way around a one-off check. The check
+  runs once more at the moment of connecting: the fetch resolves the name
+  through it and connects only to addresses that passed, so a DNS record that
+  changes between check and connection (DNS rebinding) never reaches a blocked
+  address (#554). On top of that: limits on time, size and characters, and a
   restriction to text content; downloads and binary formats are rejected rather
-  than fetched.
-  *A known limit:* between name resolution and connecting, an attacker can
-  change the DNS record (DNS rebinding). Only connecting to the checked IP with
-  an explicit `Host` header closes that; until then the fetch stays a tool of
-  class `external`, which asks before every call in "smart" mode.
+  than fetched. The fetch stays a tool of class `external`, which asks before
+  every call in "smart" mode.
 - **Foreign page content as an injection path:** the text `fetch_url` returns
   comes from an arbitrary foreign page and is therefore the same kind of
   untrusted content as a file that was read or a search hit — only easier to
@@ -312,8 +313,10 @@ later: service or server, action, target and the data that is actually going to
 be transmitted, safely masked. All texts, paths and previews are rendered as
 data, never as active HTML.
 
-For new files, `write_file_text` shows the new text; for existing ones, the
-comparison including an overwrite warning. `edit_file` and `apply_patch` show
+`write_file_text` shows the new text; for an existing file the card adds an
+overwrite warning and says whether a copy goes to the trash first. The card
+does not compare with the current content — the planner never reads a target
+for the preview; a comparison view is planned in #348. `edit_file` and `apply_patch` show
 diffs of every target. Large previews are clearly marked as truncated and can be
 expanded in full; sensitive values stay hidden while doing so. Preview and
 execution come from the same validated plan, not from a freely worded

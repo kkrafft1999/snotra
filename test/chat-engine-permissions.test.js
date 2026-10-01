@@ -489,6 +489,33 @@ test('deaktivierte Tools, ungültige Argumente und Plan-Fehler blockieren ohne H
   assert.equal(approvals.requests.length, 0);
 });
 
+// #552: list_directory and load_skill could be switched off before #195. The
+// stored name stays, but no longer counts — the settings do not list the two
+// any more, so a refusal could never be lifted.
+test('a stale switch-off does not refuse the basic equipment (#552)', async () => {
+  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
+  const listed = [];
+  const fsService = {
+    async runListDirectoryTool(args) {
+      listed.push(args);
+      return JSON.stringify({ entries: [] });
+    },
+  };
+  const tools = createWorkspaceToolAdapter(createWorkspaceToolRegistry({ fsService }));
+  const preferences = { async read() { return { disabledTools: ['list_directory', 'web_search'] }; } };
+  const { engine, llm } = makeEngine([assistantToolCall('c1', 'list_directory', {}), assistantText('ok')], {
+    tools, preferences, toolPolicy: policy({ mode: 'auto' }),
+  });
+  const result = await send(engine);
+  assert.equal(listed.length, 1);
+  assert.deepEqual(JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content), { entries: [] });
+  assert.equal(result.toolTrace[0].permission.status, 'executed');
+  // An ordinary tool in the same list stays switched off.
+  assert.equal(tools.isSwitchedOff('web_search', ['list_directory', 'web_search']), true);
+  assert.equal(tools.isSwitchedOff('list_directory', ['list_directory', 'web_search']), false);
+});
+
 test('unlesbare Berechtigungsregeln blockieren Tools statt Sperren zu verlieren', async () => {
   const tools = makeToolPort();
   const { engine, llm } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: 'a.md' }), assistantText('ok')], {

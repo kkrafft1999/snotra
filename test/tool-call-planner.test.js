@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner, validateArguments, buildPreview } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner, validateArguments, buildPreview, PREVIEW_MAX_CHARS } = require('../src/main/tools/tool-call-planner');
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-planner-'));
@@ -118,7 +118,7 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   const planner = make({ canTrash: true });
   const plan = await planner.plan(
     registry.getDefinition('write_file_text'),
-    { relative_path: 'src/neu.md', content: 'api_key = "abcdefgh12345678"\n' + 'z'.repeat(5000) },
+    { relative_path: 'src/neu.md', content: 'api_key = "abcdefgh12345678"\n' + 'z'.repeat(PREVIEW_MAX_CHARS) },
     { workspaceRoot: workspace }
   );
   assert.equal(plan.preview.kind, 'text');
@@ -127,13 +127,59 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   assert.equal(plan.preview.text.includes('abcdefgh12345678'), false);
   assert.match(plan.preview.text, /\n…$/);
 
+  // The markers follow the interface language (#555).
   const edit = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true });
   assert.equal(edit.kind, 'replace');
-  assert.match(edit.text, /--- alt \(alle Vorkommen\)\na\n\+\+\+ neu\nb/);
-  const patch = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }] });
+  assert.equal(edit.text, '--- old (all occurrences)\na\n+++ new\nb');
+  const editDe = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true }, { locale: 'de' });
+  assert.equal(editDe.text, '--- alt (alle Vorkommen)\na\n+++ neu\nb');
+  const patch = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }, { old_string: 'p', new_string: 'q', replace_all: true }] });
   assert.equal(patch.kind, 'diff');
-  assert.match(patch.text, /# Schritt 1/);
+  assert.equal(patch.text, '# Step 1\n--- old\nx\n+++ new\ny\n\n# Step 2 (all occurrences)\n--- old\np\n+++ new\nq');
+  const patchDe = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }] }, { locale: 'de' });
+  assert.equal(patchDe.text, '# Schritt 1\n--- alt\nx\n+++ neu\ny');
+  const planned = await planner.plan(
+    registry.getDefinition('edit_file'),
+    { relative_path: 'src/a.js', old_string: 'a', new_string: 'b' },
+    { workspaceRoot: workspace, locale: 'de' }
+  );
+  assert.match(planned.preview.text, /^--- alt\n/);
   assert.equal(buildPreview('read_file_text', {}), null);
+});
+
+// #551: the card of an execution tool showed neither stdin nor argv, and cut
+// everything at 4,000 characters — "show in full" showed the cut text.
+test('the preview of an execution tool carries its input, in full or not at all (#551)', async (t) => {
+  const { workspace, registry, make } = await makeFixture(t);
+  const planner = make({});
+  assert.ok(PREVIEW_MAX_CHARS >= 100_000, 'a real program fits');
+
+  const shell = await planner.plan(registry.getDefinition('shell_execute'), { command: 'sh', stdin: 'rm -rf ~/x' }, { workspaceRoot: workspace });
+  assert.equal(shell.preview.text, 'sh');
+  assert.equal(shell.preview.stdin, 'rm -rf ~/x');
+
+  const code = '# harmless\n'.repeat(400) + 'import os; os.system("payload")';
+  const python = await planner.plan(
+    registry.getDefinition('run_python'),
+    { code, stdin: 'token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"', argv: ['--out', 'a b'] },
+    { workspaceRoot: workspace }
+  );
+  assert.equal(python.preview.text, code, 'the whole program, not its first 4,000 characters');
+  assert.equal(python.preview.truncated, false);
+  assert.deepEqual(python.preview.argv, ['--out', 'a b']);
+  assert.equal(python.preview.stdin.includes('ghp_abcdefghijklmnopqrstuvwxyz0123456789'), false, 'stdin is masked');
+  assert.equal(python.preview.masked, true);
+
+  // Longer than the card can show: refused instead of approved half-seen.
+  const huge = await planner.plan(registry.getDefinition('run_python'), { code: 'x'.repeat(PREVIEW_MAX_CHARS + 1) }, { workspaceRoot: workspace });
+  assert.equal(huge.reason, 'invalid_arguments');
+  assert.match(huge.error, /longer than the approval card can show/);
+  const hugeInput = await planner.plan(registry.getDefinition('shell_execute'), { command: 'sh', stdin: 'y'.repeat(PREVIEW_MAX_CHARS + 1) }, { workspaceRoot: workspace });
+  assert.equal(hugeInput.reason, 'invalid_arguments');
+  // A file tool keeps its preview cut and marked: the write is recoverable.
+  assert.equal(buildPreview('write_file_text', { content: 'z'.repeat(PREVIEW_MAX_CHARS + 1) }).truncated, true);
+  // Only the execution tools take input.
+  assert.equal(buildPreview('write_file_text', { content: 'a', stdin: 'b' }).stdin, undefined);
 });
 
 test('apply_patch: alle Ziele eines Mehrdatei-Patches werden geprüft, kaputte Patches nennen den Grund', async (t) => {
@@ -202,6 +248,10 @@ test('ungültige Argumente blockieren vor jeder Pfadauflösung', async (t) => {
   assert.equal((await planner.plan(def, [], { workspaceRoot: workspace })).reason, 'invalid_arguments');
   assert.equal(validateArguments({ parameters: { required: ['x'], properties: { x: { type: 'boolean' } } } }, { x: 'ja' }), 'Argument "x" must be true or false.');
   assert.equal(validateArguments({ parameters: {} }, { extra: 1 }), null, 'unbekannte Felder stören nicht');
+  // #553: a value outside its enum is refused, with the allowed values named.
+  const withEnum = { parameters: { properties: { mode: { type: 'string', enum: ['a', 'b'] } } } };
+  assert.equal(validateArguments(withEnum, { mode: 'b' }), null);
+  assert.equal(validateArguments(withEnum, { mode: 'c' }), 'Argument "mode" must be one of "a", "b".');
   const unknown = await planner.plan(null, {}, { workspaceRoot: workspace });
   assert.equal(unknown.reason, 'unknown_tool');
   assert.equal(unknown.unknownTool, true);

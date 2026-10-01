@@ -235,3 +235,73 @@ test('fetch_url asks for the page in the interface language (#338)', async () =>
 
   assert.deepEqual(requested, ['en,*;q=0.5', 'de,en;q=0.8']);
 });
+
+// #554: between the check and the connection the DNS answer can change (DNS
+// rebinding). The connection itself now resolves through the check, so a name
+// that answers "public" first and "127.0.0.1" second never reaches this machine.
+test('fetch_url does not connect to an address the name rebinds to (#554)', async (t) => {
+  const http = require('node:http');
+  let reached = 0;
+  const server = http.createServer((req, res) => {
+    reached += 1;
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('local secret');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const { port } = server.address();
+
+  let lookups = 0;
+  const lookup = async () => {
+    lookups += 1;
+    return [{ address: lookups === 1 ? '93.184.216.34' : '127.0.0.1' }];
+  };
+  const adapter = createHttpUrlFetchAdapter({ lookup });
+  const result = await adapter.fetchUrl({ url: `http://rebind.example:${port}/` });
+
+  assert.equal(reached, 0, 'the local server must not be reached');
+  assert.equal(result.ok, false);
+  assert.equal(result.code, URL_FETCH_ERROR_CODES.BLOCKED_ADDRESS);
+  assert.match(result.error, /127\.0\.0\.1/);
+  assert.ok(lookups >= 2, 'the connection resolved the name again');
+});
+
+test('the guarded lookup answers in the shape net.connect asks for (#554)', async () => {
+  const { createGuardedLookup } = require('../src/main/adapters/http-url-fetch-adapter');
+  const ask = (lookup, options) => new Promise((resolve) => {
+    lookup('example.org', options, (error, address, family) => resolve({ error, address, family }));
+  });
+  const both = createGuardedLookup(async () => [{ address: '93.184.216.34' }, { address: '2606:2800:220:1::248' }]);
+
+  assert.deepEqual((await ask(both, { all: true })).address, [
+    { address: '93.184.216.34', family: 4 },
+    { address: '2606:2800:220:1::248', family: 6 },
+  ]);
+  assert.deepEqual(await ask(both, {}), { error: null, address: '93.184.216.34', family: 4 });
+  assert.deepEqual(await ask(both, { family: 6 }), { error: null, address: '2606:2800:220:1::248', family: 6 });
+
+  // One blocked address blocks the name: the socket may try any of them.
+  const mixed = createGuardedLookup(async () => ['93.184.216.34', '10.0.0.5']);
+  assert.match((await ask(mixed, { all: true })).error.message, /10\.0\.0\.5/);
+  const failing = createGuardedLookup(async () => { throw Object.assign(new Error('nope'), { code: 'ENOTFOUND' }); });
+  assert.equal((await ask(failing, {})).error.code, 'ENOTFOUND');
+  const empty = createGuardedLookup(async () => []);
+  assert.equal((await ask(empty, {})).error.code, 'ENOTFOUND');
+});
+
+// #555: a body that is not read is cancelled, so its connection is released.
+test('fetch_url cancels the bodies it does not read (#555)', async () => {
+  const cancelled = [];
+  const withBody = (response, label) => ({ ...response, body: { cancel: async () => { cancelled.push(label); } } });
+  const redirect = withBody(makeResponse({ status: 302, headers: { location: 'https://example.org/next' } }), 'redirect');
+  const { adapter } = makeAdapter([redirect, withBody(makeResponse({ status: 500 }), 'error')]);
+  const result = await adapter.fetchUrl({ url: 'https://example.org/' });
+  assert.equal(result.ok, false);
+  assert.deepEqual(cancelled, ['redirect', 'error']);
+
+  const binary = withBody(makeResponse({ headers: { 'content-type': 'application/pdf' } }), 'pdf');
+  const big = withBody(makeResponse({ headers: { 'content-type': 'text/html', 'content-length': String(URL_FETCH_LIMITS.MAX_BYTES + 1) } }), 'big');
+  await makeAdapter(binary).adapter.fetchUrl({ url: 'https://example.org/a.pdf' });
+  await makeAdapter(big).adapter.fetchUrl({ url: 'https://example.org/big' });
+  assert.deepEqual(cancelled, ['redirect', 'error', 'pdf', 'big']);
+});

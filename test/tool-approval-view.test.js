@@ -139,11 +139,11 @@ test('card: in "always ask" the session action is off – with a reason', async 
 test('card: the preview carries its kind and the shortened and masked notes', async () => {
   const { buildApprovalCardView } = await load();
   const view = buildApprovalCardView(
-    dto({ preview: { kind: 'replace', text: '--- alt\nfoo\n+++ neu\nbar', truncated: true, masked: true } })
+    dto({ preview: { kind: 'replace', text: '--- old\nfoo\n+++ new\nbar', truncated: true, masked: true } })
   );
   assert.equal(view.preview.kindLabel, 'Replacement (old → new)');
   assert.equal(view.preview.summary, 'Preview: Replacement (old → new) (shortened, secrets masked)');
-  assert.match(view.preview.truncatedNote, /only passes on the beginning/);
+  assert.match(view.preview.truncatedNote, /only the beginning of a very long text/);
   assert.match(view.preview.maskedNote, /stay masked when it is unfolded/);
   const plain = buildApprovalCardView(dto({ preview: { kind: 'unbekannt', text: 'x', truncated: false, masked: false } }));
   assert.equal(plain.preview.kindLabel, 'New content');
@@ -263,4 +263,35 @@ test('session approvals are grouped by chat, the open chat first, in both langua
     assert.equal(de[0].items[0].meta, 'Erteilt um t7');
     assert.equal(de[1].items[0].meta, 'Ändern · erteilt um t5');
   });
+});
+
+// #551: standard input and arguments belong on the card; without them `sh` or
+// `exec(input())` could be any program.
+test('the card shows stdin and argv below the source, in both languages (#551)', async () => {
+  const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
+  const request = createToolApprovalRequestDto({
+    requestId: 'r-stdin',
+    tool: 'run_python',
+    riskClasses: ['execute'],
+    targets: [],
+    mode: 'smart',
+    sessionAllowed: false,
+    preview: { kind: 'code', text: 'import sys', truncated: false, masked: false, stdin: 'line 1\nline 2', argv: ['--out', 'a b', 7] },
+  });
+  assert.equal(request.preview.stdin, 'line 1\nline 2');
+  assert.deepEqual(request.preview.argv, ['--out', 'a b'], 'only strings pass');
+
+  const { buildApprovalCardView } = await load();
+  const view = buildApprovalCardView(request);
+  assert.deepEqual(view.preview.blocks, [
+    { id: 'stdin', label: 'Input (stdin)', text: 'line 1\nline 2' },
+    { id: 'argv', label: 'Arguments (sys.argv[1:])', text: '"--out"\n"a b"' },
+  ]);
+  await inGerman(async () => {
+    const german = buildApprovalCardView(request);
+    assert.deepEqual(german.preview.blocks.map((block) => block.label), ['Eingabe (stdin)', 'Argumente (sys.argv[1:])']);
+  });
+
+  const plain = buildApprovalCardView(dto({ preview: { kind: 'shell', text: 'git status', truncated: false, masked: false } }));
+  assert.deepEqual(plain.preview.blocks, []);
 });

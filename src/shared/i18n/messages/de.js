@@ -1302,10 +1302,18 @@ module.exports = {
   'approval.preview.masked': 'Geheimnisse maskiert',
   'approval.preview.summary': 'Vorschau: {kind}',
   'approval.preview.summaryNotes': 'Vorschau: {kind} ({notes})',
-  'approval.preview.truncatedNote': 'Der Kern überträgt nur den Anfang der Vorschau. Ausgeführt wird der vollständige, geprüfte Plan.',
+  'approval.preview.truncatedNote': 'Die Vorschau zeigt von einem sehr langen Text nur den Anfang. Ausgeführt wird der vollständige, geprüfte Plan.',
   'approval.preview.maskedNote': 'Erkannte Zugangsdaten sind in der Vorschau maskiert und bleiben es auch aufgeklappt.',
   'approval.preview.expand': 'Vollständig anzeigen',
   'approval.preview.collapse': 'Vorschau einklappen',
+  // What a process reads besides its source, shown below it (#551).
+  'approval.preview.stdin': 'Eingabe (stdin)',
+  'approval.preview.argv': 'Argumente (sys.argv[1:])',
+  // Markers inside the preview of edit_file and apply_patch (#555).
+  'approval.preview.edit.old': 'alt',
+  'approval.preview.edit.new': 'neu',
+  'approval.preview.edit.all': 'alle Vorkommen',
+  'approval.preview.edit.step': 'Schritt {n}',
   'approval.shell.login': '{shell} (Login-Shell)',
 
   'approval.fact.effect': 'Wirkung',
@@ -1374,6 +1382,13 @@ module.exports = {
   'tools.line.loadSkill.done': 'Skill {name} geladen',
   'tools.line.loadSkill.start.plain': 'Skill wird geladen …',
   'tools.line.loadSkill.done.plain': 'Skill geladen',
+  // remember (#555): where the entry went is the information.
+  'tools.line.remember.start': 'Wird im {scope} gemerkt …',
+  'tools.line.remember.done': 'Im {scope} gemerkt',
+  'tools.line.remember.start.plain': 'Wird gemerkt …',
+  'tools.line.remember.done.plain': 'Gemerkt',
+  'tools.line.remember.scope.workspace': 'Projektgedächtnis',
+  'tools.line.remember.scope.user': 'globalen Gedächtnis',
 
   'tools.line.listDirectory.start': 'Ordner {path} wird durchsucht …',
   'tools.line.listDirectory.done': 'Ordner {path} durchsucht',

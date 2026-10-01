@@ -167,3 +167,15 @@ test('search meldet eine unlesbare Antwort als Dienstfehler', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.code, WEB_SEARCH_ERROR_CODES.SERVICE);
 });
+
+// #555: the hint goes out in English, and never pushes a query over the limit.
+test('search sends the language hint in English and only within the limit (#555)', async () => {
+  const { adapter, calls } = setup();
+  await adapter.search({ query: 'Electron release notes', language: 'de' });
+  assert.equal(calls[0].body.query, 'Electron release notes (language: de)');
+
+  const atLimit = 'x'.repeat(WEB_SEARCH_LIMITS.MAX_QUERY_CHARS);
+  await adapter.search({ query: atLimit, language: 'de' });
+  assert.equal(calls[1].body.query, atLimit);
+  assert.ok(calls[1].body.query.length <= WEB_SEARCH_LIMITS.MAX_QUERY_CHARS);
+});

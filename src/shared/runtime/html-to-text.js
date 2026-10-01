@@ -82,34 +82,135 @@ function decodeEntities(text) {
   });
 }
 
+/*
+ * The page is written by a stranger, and the reduction runs in the main
+ * process, so it has to take time linear in the page (#550). Regular
+ * expressions that look for a closing counterpart (`<!--[\s\S]*?-->`,
+ * `<[^>]+>`) rescan to the end for every opening without one — 256 KB of
+ * `<!--` blocked the app for twelve seconds. The scanner below finds every
+ * delimiter with `indexOf` and never searches the same stretch twice.
+ */
+
+/** Raw text in a browser: an element that is never closed runs to the end. */
+const DROPPED_RAW_ELEMENTS = new Set(['script', 'style', 'noscript', 'iframe']);
+/** Ordinary elements whose content is not page text; unclosed, only the tag goes. */
+const DROPPED_ELEMENTS = new Set(['template', 'svg', 'canvas', 'form', 'head']);
+const BLOCK_ELEMENTS = new Set(['p', 'div', 'section', 'article', 'tr', 'ul', 'ol', 'dl', 'blockquote', 'pre', 'table']);
+const TAG_NAME_CHAR = /[a-z0-9:-]/;
+/** What opens markup after `<`, as in a browser; anything else is text ("a < b"). */
+const MARKUP_START = /[a-zA-Z/!?]/;
+
+/** Lower case for ASCII only, so that every index still matches the original. */
+function asciiLower(text) {
+  return text.replace(/[A-Z]+/g, (run) => run.toLowerCase());
+}
+
+function readTagName(lower, start) {
+  let end = start;
+  while (end < lower.length && TAG_NAME_CHAR.test(lower[end])) end += 1;
+  return lower.slice(start, end);
+}
+
+/**
+ * `indexOf` that remembers its answers: once a token was not found from one
+ * position, it is not there from any later one either, and a hit further on
+ * still holds for every start before it.
+ */
+function createFinder(text) {
+  const found = new Map();
+  return (token, from) => {
+    const known = found.get(token);
+    if (known === -1 || (known !== undefined && known >= from)) return known;
+    const at = text.indexOf(token, from);
+    found.set(token, at);
+    return at;
+  };
+}
+
+function markupFor(name, closing) {
+  if (name === 'br') return '\n';
+  const heading = /^h([1-6])$/.exec(name);
+  if (heading) return closing ? '\n\n' : `\n\n${'#'.repeat(Number(heading[1]))} `;
+  if (closing) {
+    if (BLOCK_ELEMENTS.has(name)) return '\n\n';
+    if (name === 'td' || name === 'th') return ' | ';
+  } else if (name === 'li') {
+    return '\n- ';
+  }
+  return ' ';
+}
+
 /** Titel aus dem <title>-Element, schon entschluesselt und gekuerzt. */
 function extractTitle(html) {
-  const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-  if (!match) return '';
-  const title = decodeEntities(match[1]).replace(/\s+/g, ' ').trim();
+  if (typeof html !== 'string' || !html) return '';
+  const lower = asciiLower(html);
+  let at = lower.indexOf('<title');
+  while (at !== -1 && TAG_NAME_CHAR.test(lower[at + 6] || '')) at = lower.indexOf('<title', at + 6);
+  if (at === -1) return '';
+  const open = html.indexOf('>', at);
+  const close = open === -1 ? -1 : lower.indexOf('</title>', open + 1);
+  if (close === -1) return '';
+  const title = decodeEntities(html.slice(open + 1, close)).replace(/\s+/g, ' ').trim();
   return title.length > 300 ? `${title.slice(0, 299)}…` : title;
+}
+
+/**
+ * Markup out, structure kept: comments and the dropped elements disappear with
+ * their content, headings, list items, paragraph and table ends become
+ * Markdown-like breaks, every other tag a space.
+ */
+function stripMarkup(html) {
+  const lower = asciiLower(html);
+  const find = createFinder(lower);
+  const parts = [];
+  let textStart = 0;
+  let at = 0;
+  while (at < html.length) {
+    const lt = html.indexOf('<', at);
+    if (lt === -1) break;
+    if (!MARKUP_START.test(html[lt + 1] || '')) {
+      at = lt + 1;
+      continue;
+    }
+    parts.push(html.slice(textStart, lt));
+    let end;
+    let replacement = ' ';
+    if (html.startsWith('<!--', lt)) {
+      // An unclosed comment runs to the end, as in a browser.
+      const close = html.indexOf('-->', lt + 4);
+      end = close === -1 ? html.length : close + 3;
+    } else {
+      const closing = html[lt + 1] === '/';
+      const name = html[lt + 1] === '!' || html[lt + 1] === '?' ? '' : readTagName(lower, lt + (closing ? 2 : 1));
+      const gt = html.indexOf('>', lt + 1);
+      if (gt === -1) {
+        // A tag cut off at the end: nothing after it is text.
+        end = html.length;
+      } else {
+        end = gt + 1;
+        const selfClosing = html[gt - 1] === '/';
+        const raw = DROPPED_RAW_ELEMENTS.has(name);
+        if (!closing && !selfClosing && (raw || DROPPED_ELEMENTS.has(name))) {
+          const close = find(`</${name}`, end);
+          const closeEnd = close === -1 ? -1 : html.indexOf('>', close);
+          if (closeEnd !== -1) end = closeEnd + 1;
+          else if (raw) end = html.length;
+        } else {
+          replacement = markupFor(name, closing);
+        }
+      }
+    }
+    parts.push(replacement);
+    at = end;
+    textStart = end;
+  }
+  parts.push(html.slice(textStart));
+  return parts.join('');
 }
 
 function htmlToText(html) {
   if (typeof html !== 'string' || !html) return '';
-  let text = html;
-
-  // Alles, was kein Inhalt ist: Skripte, Styles, Navigation im Kopf, SVG-Pfade.
-  text = text.replace(/<!--[\s\S]*?-->/g, ' ');
-  text = text.replace(/<(script|style|noscript|template|svg|canvas|iframe|form)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
-  text = text.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, ' ');
-
-  // Struktur, die erhalten bleiben soll, in Markdown-Naehe uebersetzen.
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<\/(p|div|section|article|tr|ul|ol|dl|blockquote|pre|table)\s*>/gi, '\n\n');
-  text = text.replace(/<li\b[^>]*>/gi, '\n- ');
-  text = text.replace(/<\/(td|th)\s*>/gi, ' | ');
-  text = text.replace(/<h([1-6])\b[^>]*>/gi, (_match, level) => `\n\n${'#'.repeat(Number(level))} `);
-  text = text.replace(/<\/h[1-6]\s*>/gi, '\n\n');
-
-  // Restliches Markup faellt weg; der Text dazwischen bleibt.
-  text = text.replace(/<[^>]+>/g, ' ');
-  text = decodeEntities(text);
+  let text = decodeEntities(stripMarkup(html));
 
   // Weissraum aufraeumen: Zeilen einzeln trimmen, mehr als eine Leerzeile
   // zusammenfassen, damit aus Layout-Luft kein Token-Verbrauch wird.

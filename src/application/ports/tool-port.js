@@ -45,6 +45,7 @@
  * @property {Array<{name: string, dir: string}>} [skillRoots]
  * @property {string[]} [sensitivePathPatterns]  Nutzer-Muster zusätzlich zu den Standardmustern
  * @property {string[]} [forcedClasses]  Klassen, die eine Neubewertung erzwingt (z. B. 'delete')
+ * @property {string} [locale]  interface language for the words inside the preview (#555)
  */
 
 /**
@@ -112,6 +113,9 @@
  * @property {(options?: ToolListOptions) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace] — Tool braucht einen geoeffneten Ordner (Issue #96)
  * @property {(name: string) => boolean} [supportsSkillPaths] — takes `skill:` paths, and so works without a folder while a skill is on (#429)
+ * @property {(name: string, disabledNames: string[]) => boolean} [isSwitchedOff] — whether the user's
+ *   switch-off applies to this tool; never to the basic equipment (#552). Without it, the name list decides
+ *   on its own
  * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry
  * @property {(name: string, args: object) => (SchemaViolations|null)} [measureArguments] — optional:
  *   schema violations the planner lets through (#187); a measurement, never a refusal

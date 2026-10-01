@@ -173,6 +173,15 @@ function createToolRegistry(initialDefinitions = []) {
   // sich durch Fehlschlaege. Ein altes Haekchen aus den Einstellungen bleibt
   // gespeichert, wirkt hier aber nicht mehr — wird ein Tool spaeter wieder
   // abwaehlbar, gilt es unveraendert weiter.
+  //
+  // That holds in every place that asks — what the model is offered, what the
+  // policy decides, what `execute` lets through — so they all ask here (#552).
+  function isSwitchedOff(name, disabledNames) {
+    const disabled = toDisabledNameSet(disabledNames);
+    if (!disabled || !disabled.has(name)) return false;
+    return getDefinition(name)?.essential !== true;
+  }
+
   function getAvailableDefinitions({
     allowedNames,
     disabledNames,
@@ -185,14 +194,13 @@ function createToolRegistry(initialDefinitions = []) {
     // Said, and not empty: only then are there skill folders without a workspace.
     const skillsSwitchedOn = Array.isArray(skillNames) && skillNames.length > 0;
     const allowed = toAllowedNameSet(allowedNames);
-    const disabled = toDisabledNameSet(disabledNames);
     return allDefinitions().filter(
       (definition) =>
         (!allowed || allowed.has(definition.name)) &&
         // Die Haekchen des Nutzers gelten nicht fuer die Grundausstattung; eine
         // programmatische Allowlist (Tests, kuenftige Modi) schon — sie ist
         // keine Einstellung, sondern eine Zusicherung des Aufrufers.
-        (!disabled || !disabled.has(definition.name) || definition.essential === true) &&
+        !isSwitchedOff(definition.name, disabledNames) &&
         // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96),
         // and the read tools while there are skill folders to reach (#429).
         (workspaceOpen !== false
@@ -410,8 +418,7 @@ function createToolRegistry(initialDefinitions = []) {
     if (allowed && !allowed.has(name)) {
       return JSON.stringify({ error: `Tool is not enabled: ${name}` });
     }
-    const disabled = toDisabledNameSet(context.disabledNames);
-    if (disabled && disabled.has(name)) {
+    if (isSwitchedOff(name, context.disabledNames)) {
       return JSON.stringify({
         // English sentence, quoted page in the interface language (#294/#276).
         error: fillUiQuotes(context.locale, `Tool is switched off: ${name}. The user can enable it under "{menu:settings.security}".`),
@@ -440,6 +447,7 @@ function createToolRegistry(initialDefinitions = []) {
     listCatalog,
     listRiskCatalog,
     getDefinition,
+    isSwitchedOff,
     execute,
   };
 }
@@ -1474,7 +1482,9 @@ function createWorkspaceToolRegistry({
           const saved = await memory.remember({
             scope: args?.scope,
             text: args?.text,
-            origin: args?.origin === 'self' ? MEMORY_ORIGINS.SELF : MEMORY_ORIGINS.REQUESTED,
+            // Only what is declared as requested counts as requested (#553):
+            // anything else would pass the switch for unprompted remembering.
+            origin: args?.origin === MEMORY_ORIGINS.REQUESTED ? MEMORY_ORIGINS.REQUESTED : MEMORY_ORIGINS.SELF,
             workspaceRoot,
           });
           // Der Pfad geht mit zurueck, damit im Chat steht, *wohin* gemerkt

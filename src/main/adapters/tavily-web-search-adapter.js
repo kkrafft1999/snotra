@@ -121,9 +121,12 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         include_answer: true,
       };
       // Tavily nimmt einen Sprach-/Regionshinweis nur als Teil der Anfrage
-      // entgegen; ein eigenes Feld dafuer gibt es nicht.
+      // entgegen; ein eigenes Feld dafuer gibt es nicht. The hint is English
+      // like the rest of what goes out, and it is optional: a query at the
+      // limit goes without it rather than over the limit (#555).
       const lang = typeof language === 'string' ? language.trim().slice(0, 16) : '';
-      if (lang) body.query = `${text} (Sprache: ${lang})`;
+      const hinted = lang ? `${text} (language: ${lang})` : text;
+      if (hinted.length <= WEB_SEARCH_LIMITS.MAX_QUERY_CHARS) body.query = hinted;
 
       let response;
       try {

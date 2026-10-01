@@ -42,9 +42,9 @@ function formatRelativePathForLabel(relativePath, t) {
 /**
  * Base key per tool. The four sentences of a line — start and done, each with
  * and without a target — hang below it. They sit in a table rather than at the
- * call sites because the alternative is the same five lines fourteen times
- * over; `test/i18n-keys.test.js` walks this table the way it walks the key
- * tables of the contract layer (#293), so nothing escapes the check.
+ * call sites because the alternative is the same five lines for every tool;
+ * `test/i18n-keys.test.js` walks this table the way it walks the key tables of
+ * the contract layer (#293), so nothing escapes the check.
  */
 const TOOL_LINE_KEYS = Object.freeze({
   list_directory: 'tools.line.listDirectory',
@@ -62,6 +62,7 @@ const TOOL_LINE_KEYS = Object.freeze({
   shell_execute: 'tools.line.shellExecute',
   web_search: 'tools.line.webSearch',
   fetch_url: 'tools.line.fetchUrl',
+  remember: 'tools.line.remember',
 });
 
 /** The four suffixes every entry of TOOL_LINE_KEYS carries. */
@@ -136,6 +137,14 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   if (toolName === 'web_search') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     return lineFor(t, 'web_search', isDone, { query: raw ? truncateToolLabel(raw, 40) : '' });
+  }
+  if (toolName === 'remember') {
+    // Where the entry went, not that a tool ran (#555): it goes along with
+    // every request from now on. Two literal keys, so the key scan sees both.
+    const scope = args?.scope === 'user'
+      ? t('tools.line.remember.scope.user')
+      : args?.scope === 'workspace' ? t('tools.line.remember.scope.workspace') : '';
+    return lineFor(t, 'remember', isDone, { scope });
   }
   if (toolName === 'fetch_url') {
     // The host is enough: the full address blows up any line (issue #95).

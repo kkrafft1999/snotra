@@ -9,10 +9,10 @@
  * wird deshalb nicht der Hostname, sondern die Adresse, zu der er aufloest —
  * und zwar nach jeder Weiterleitung erneut.
  *
- * Was hier bewusst offen bleibt: zwischen Pruefung und Verbindungsaufbau kann
- * ein Angreifer den DNS-Eintrag wechseln (DNS-Rebinding). Das schliesst erst
- * eine Verbindung auf die geprüfte IP mit mitgegebenem Host-Header; siehe
- * docs/security-concept.md.
+ * The same check runs again at the moment of connecting (#554): the fetch
+ * adapter's dispatcher resolves the name through it, so a DNS answer that
+ * changes between check and connection (DNS rebinding) never reaches a
+ * blocked address. See docs/security-concept.md.
  */
 
 /** Nur diese Schemata; alles andere traegt nichts in den Chat. */
@@ -95,9 +95,18 @@ function isBlockedIpv6(groups) {
   // IPv4-mapped (::ffff:a.b.c.d) und IPv4-compatible: nach IPv4-Regeln pruefen
   const isMapped = groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff;
   const isCompat = groups.slice(0, 6).every((g) => g === 0);
-  if (isMapped || isCompat) {
+  // NAT64 (64:ff9b::/96) carries the IPv4 address in the last two groups as
+  // well; a NAT64 gateway turns 64:ff9b::7f00:1 into 127.0.0.1 (#554).
+  const isNat64 = groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0);
+  if (isMapped || isCompat || isNat64) {
     const octets = [groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff];
     return isBlockedIpv4(octets);
+  }
+  // 64:ff9b:1::/48 is the prefix for local translation (RFC 8215) — local by definition.
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups[2] === 1) return true;
+  // 6to4 (2002::/16) carries it in the second and third group.
+  if (groups[0] === 0x2002) {
+    return isBlockedIpv4([groups[1] >> 8, groups[1] & 0xff, groups[2] >> 8, groups[2] & 0xff]);
   }
   const first = groups[0];
   if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 Unique Local

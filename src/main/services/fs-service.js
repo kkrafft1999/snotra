@@ -14,6 +14,7 @@ const {
 const { formatBytes } = require('../../shared/runtime/format-bytes');
 const { isAlwaysHiddenEntryName, isListedEntryName } = require('../../shared/runtime/hidden-entries');
 const { createTranslator } = require('../../shared/i18n');
+const { isPathInside } = require('../../shared/runtime/path-inside');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
   WORKSPACE_IMAGE_ERRORS,
@@ -816,8 +817,7 @@ function createFsService({
 
   /** true, wenn candidate (aufgelöst) innerhalb von root liegt — Root selbst zählt mit. */
   function containsPath(root, candidate) {
-    const rel = path.relative(path.resolve(root), path.resolve(candidate));
-    return !rel.startsWith('..') && !path.isAbsolute(rel);
+    return isPathInside(path, path.resolve(root), path.resolve(candidate));
   }
 
   /**

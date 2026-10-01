@@ -530,7 +530,19 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
         : t('approval.preview.summary', { kind: kindLabel }),
       truncatedNote: dto.preview.truncated === true ? t('approval.preview.truncatedNote') : '',
       maskedNote: dto.preview.masked === true ? t('approval.preview.maskedNote') : '',
+      // What a process reads besides its source, each in a block of its own
+      // below it (#551) — without them "sh" on the card could be any script.
+      blocks: [],
     };
+    if (typeof dto.preview.stdin === 'string' && dto.preview.stdin) {
+      view.preview.blocks.push({ id: 'stdin', label: t('approval.preview.stdin'), text: dto.preview.stdin });
+    }
+    if (Array.isArray(dto.preview.argv) && dto.preview.argv.length > 0) {
+      // One argument per line, quoted: a space or a line break inside one
+      // stays visible as such.
+      const text = dto.preview.argv.map((entry) => JSON.stringify(String(entry))).join('\n');
+      view.preview.blocks.push({ id: 'argv', label: t('approval.preview.argv'), text });
+    }
     // For a shell command both belong visibly on the card rather than in the
     // preview: what it runs with, and where (issue #102).
     if (typeof dto.preview.shell === 'string' && dto.preview.shell) {

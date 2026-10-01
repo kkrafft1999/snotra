@@ -28,14 +28,37 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
+const { createTranslator } = require('../../shared/i18n');
+const { isPathInside } = require('../../shared/runtime/path-inside');
 
-const PREVIEW_MAX_CHARS = 4000;
+/**
+ * How much of a preview reaches the card (#551). "Show in full" on the card
+ * has to mean in full, so the limit sits where no real call ends up — a
+ * program or a file of 200,000 characters is far beyond what a model writes
+ * into one call. Up to #551 it was 4,000, and the card could only show the
+ * beginning of what it asked to approve.
+ */
+const PREVIEW_MAX_CHARS = 200_000;
+/** Program arguments on the card; more would not be read anyway. */
+const PREVIEW_MAX_ARGV = 100;
 /** The tools that run a process and have a sandbox (#329). */
 const EXECUTION_TOOLS = new Set(['shell_execute', 'run_python']);
 
 const RECOVERY_TRASH = 'trash';
 
+/**
+ * One replacement as the card shows it. The markers are words the user reads,
+ * so they follow the interface language (#555), not the language the code
+ * happened to be written in.
+ */
+function replacementText(t, edit, heading = '') {
+  const all = edit?.replace_all === true ? ` (${t('approval.preview.edit.all')})` : '';
+  const head = heading ? `${heading}${all}\n--- ${t('approval.preview.edit.old')}` : `--- ${t('approval.preview.edit.old')}${all}`;
+  return `${head}\n${String(edit?.old_string ?? '')}\n+++ ${t('approval.preview.edit.new')}\n${String(edit?.new_string ?? '')}`;
+}
+
 function buildPreview(toolName, args, options = {}) {
+  const t = createTranslator(options.locale);
   let kind = 'text';
   let text = '';
   let extra = null;
@@ -43,18 +66,14 @@ function buildPreview(toolName, args, options = {}) {
     text = typeof args?.content === 'string' ? args.content : '';
   } else if (toolName === 'edit_file') {
     kind = 'replace';
-    const all = args?.replace_all === true ? ' (alle Vorkommen)' : '';
-    text = `--- alt${all}\n${String(args?.old_string ?? '')}\n+++ neu\n${String(args?.new_string ?? '')}`;
+    text = replacementText(t, args);
   } else if (toolName === 'apply_patch') {
     kind = 'diff';
     if (typeof args?.patch === 'string') {
       text = args.patch;
     } else if (Array.isArray(args?.edits)) {
       text = args.edits
-        .map((edit, index) => {
-          const all = edit?.replace_all === true ? ' (alle Vorkommen)' : '';
-          return `# Schritt ${index + 1}${all}\n--- alt\n${String(edit?.old_string ?? '')}\n+++ neu\n${String(edit?.new_string ?? '')}`;
-        })
+        .map((edit, index) => replacementText(t, edit, `# ${t('approval.preview.edit.step', { n: index + 1 })}`))
         .join('\n\n');
     }
   } else if (toolName === 'run_python') {
@@ -63,6 +82,9 @@ function buildPreview(toolName, args, options = {}) {
     text = typeof args?.code === 'string' ? args.code : '';
     if (options.isolation) extra = { isolation: options.isolation };
   } else if (toolName === 'shell_execute') {
+    // The command alone is not what runs: `sh` with a script on stdin is a
+    // program the card would never show (#551). Input and arguments follow
+    // below, as blocks of their own.
     // Der Nutzer soll sehen, *was* laeuft und *womit* (Issue #102): Befehl,
     // erkannte Shell und Arbeitsordner gehoeren zusammen auf die Karte.
     kind = 'shell';
@@ -84,17 +106,42 @@ function buildPreview(toolName, args, options = {}) {
   } else {
     return null;
   }
-  const masked = maskSensitiveContent(text);
+  const main = previewText(text);
+  const preview = {
+    kind,
+    text: main.text,
+    truncated: main.truncated,
+    masked: main.masked,
+    ...(extra || {}),
+  };
+  // What a process reads besides its source (#551): standard input for both
+  // execution tools, the arguments for Python. Masked and limited like the
+  // text above, and counted in the same two flags.
+  if (EXECUTION_TOOLS.has(toolName) && typeof args?.stdin === 'string' && args.stdin.length > 0) {
+    const stdin = previewText(args.stdin);
+    preview.stdin = stdin.text;
+    preview.truncated ||= stdin.truncated;
+    preview.masked ||= stdin.masked;
+  }
+  if (toolName === 'run_python' && Array.isArray(args?.argv) && args.argv.length > 0) {
+    const entries = args.argv.map((entry) => previewText(String(entry ?? '')));
+    preview.argv = entries.slice(0, PREVIEW_MAX_ARGV).map((entry) => entry.text);
+    preview.truncated ||= entries.length > PREVIEW_MAX_ARGV || entries.some((entry) => entry.truncated);
+    preview.masked ||= entries.some((entry) => entry.masked);
+  }
+  return preview;
+}
+
+function previewText(raw) {
+  const masked = maskSensitiveContent(raw);
   const truncated = masked.length > PREVIEW_MAX_CHARS;
   return {
-    kind,
     // A bare ellipsis, no word: the card says in the reader's language that
     // the preview is shortened (summary and note), so the text needs no
     // language of its own (#353).
     text: truncated ? `${masked.slice(0, PREVIEW_MAX_CHARS)}\n…` : masked,
     truncated,
-    masked: masked !== text,
-    ...(extra || {}),
+    masked: masked !== raw,
   };
 }
 
@@ -102,6 +149,11 @@ function buildPreview(toolName, args, options = {}) {
  * Minimale Argumentprüfung gegen das JSON-Schema der Definition: Pflichtfelder
  * müssen vorhanden sein und den deklarierten Grundtyp haben. Ungültige
  * Argumente werden blockiert, nicht „irgendwie“ ausgeführt.
+ *
+ * A value outside its `enum` is refused too (#553): the handlers read it as
+ * one of the allowed values otherwise — `remember` took any origin for
+ * "requested" — and the message names the values, so the model corrects
+ * itself in one round.
  */
 function validateArguments(definition, args) {
   const schema = definition.parameters || {};
@@ -125,6 +177,9 @@ function validateArguments(definition, args) {
     if (expected === 'boolean' && actual !== 'boolean') return `Argument "${key}" must be true or false.`;
     if (expected === 'array' && actual !== 'array') return `Argument "${key}" must be an array.`;
     if (expected === 'object' && actual !== 'object') return `Argument "${key}" must be an object.`;
+    if (Array.isArray(spec.enum) && spec.enum.length > 0 && !spec.enum.includes(value)) {
+      return `Argument "${key}" must be one of ${spec.enum.map((entry) => JSON.stringify(entry)).join(', ')}.`;
+    }
   }
   return null;
 }
@@ -184,8 +239,7 @@ function createToolCallPlanner({
   }
 
   function containsPath(root, candidate) {
-    const rel = path.relative(root, candidate);
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    return isPathInside(path, root, candidate);
   }
 
   function isProtected(absPath) {
@@ -426,11 +480,25 @@ function createToolCallPlanner({
     const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
     const preview = buildPreview(toolName, args, {
+      locale: context.locale,
       cwd: shellCwd,
       shellLabel: shell?.label || '',
       shellLogin: shell?.login === true,
       isolation,
     });
+    // A program runs only when the card could show all of it (#551): an
+    // approval of the first 200,000 characters is not one of the program.
+    if (preview?.truncated && EXECUTION_TOOLS.has(toolName)) {
+      return {
+        tool: toolName,
+        error: `The ${toolName === 'run_python' ? 'program' : 'command'} and its input are longer than the approval `
+          + `card can show (${PREVIEW_MAX_CHARS.toLocaleString('en')} characters each). Write it to a file `
+          + 'first, or split it.',
+        reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
+        riskClasses: [...riskClasses],
+        targets: [],
+      };
+    }
     if (preview) result.preview = preview;
     return result;
   }
@@ -551,6 +619,7 @@ module.exports = {
   createToolCallPlanner,
   validateArguments,
   buildPreview,
+  PREVIEW_MAX_CHARS,
   stableStringify,
   RECOVERY_TRASH,
 };
