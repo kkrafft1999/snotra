@@ -48,7 +48,7 @@ const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
-const { buildMemorySystemPrompt } = require('./memory-prompt');
+const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
 const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
@@ -555,6 +555,7 @@ function buildStaticContextParts({
   skillParts,
   environmentSystem,
   projectInstructionParts,
+  folderMemoryParts,
   workspaceSystem,
   toolsPrompt,
   toolDefs,
@@ -572,8 +573,8 @@ function buildStaticContextParts({
       })
     );
   }
-  // Je Gedächtnis-Ebene eine eigene Zeile (Issue #166), an derselben Stelle
-  // wie im Prompt: direkt hinter dem eigenen System-Prompt des Nutzers.
+  // The user's memory (#166), where it stands in the prompt: right behind
+  // the user's own system prompt. The folder's follows the AGENTS.md rows.
   parts.push(...(Array.isArray(memoryParts) ? memoryParts : []));
   parts.push(...(Array.isArray(skillParts) ? skillParts : []));
   if (environmentSystem) {
@@ -591,6 +592,8 @@ function buildStaticContextParts({
   // Je geladene AGENTS.md eine eigene Zeile (Issue #212) — sie stehen im
   // Prompt zwischen Umgebung und Ordnerkontext und hier an derselben Stelle.
   parts.push(...(Array.isArray(projectInstructionParts) ? projectInstructionParts : []));
+  // The folder's memory follows them, as in the prompt (#529).
+  parts.push(...(Array.isArray(folderMemoryParts) ? folderMemoryParts : []));
   const promptListChars = typeof toolsPrompt === 'string' ? toolsPrompt.length : 0;
   const workspaceChars = Math.max(0, (workspaceSystem || '').length - promptListChars);
   if (workspaceChars > 0) {
@@ -1096,6 +1099,8 @@ function createChatEngine({
       // übernehmen will.
       let memorySystem = '';
       let memoryParts = [];
+      let folderMemorySystem = '';
+      let folderMemoryParts = [];
       if (memory) {
         try {
           const files = (await memory.load({ workspaceRoot })).filter((file) =>
@@ -1103,20 +1108,23 @@ function createChatEngine({
               ? uiPrefs.memoryWorkspaceEnabled !== false
               : uiPrefs.memoryUserEnabled !== false
           );
-          const built = buildMemorySystemPrompt(guardEmbeddedFiles(files, await readOwnSecretList()));
-          memorySystem = built.text;
-          memoryParts = built.parts;
+          const guarded = guardEmbeddedFiles(files, await readOwnSecretList());
+          ({ text: memorySystem, parts: memoryParts } = buildUserMemorySystemPrompt(guarded));
+          ({ text: folderMemorySystem, parts: folderMemoryParts } = buildFolderMemorySystemPrompt(guarded));
         } catch {
           // Eine unlesbare memory.md darf den Chat nicht blockieren.
           memorySystem = '';
           memoryParts = [];
+          folderMemorySystem = '';
+          folderMemoryParts = [];
         }
       }
 
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
-      // Gedächtnis steht direkt dahinter, weil es dasselbe ist: was der Nutzer
-      // selbst gesagt hat, nur über mehrere Unterhaltungen hinweg. Zwischen
-      // beide soll sich nichts Fremdes schieben. Die
+      // Gedächtnis des Nutzers steht direkt dahinter, weil es dasselbe ist: was
+      // der Nutzer selbst gesagt hat, nur über mehrere Unterhaltungen hinweg.
+      // Zwischen beide soll sich nichts Fremdes schieben. The folder's memory
+      // lives in the folder like its AGENTS.md and stands with it (#529). Die
       // Umgebung ist Sachkontext wie der Ordner und steht deshalb bei ihm,
       // hinter den Skills, die das Wie beschreiben. Die Projektanweisungen
       // stehen bewusst *vor* dem Ordner-/Tool-Block: Der trägt die Regel, dass
@@ -1128,6 +1136,7 @@ function createChatEngine({
         skillsSystem,
         environmentSystem,
         projectInstructionsSystem,
+        folderMemorySystem,
         workspaceSystem,
         // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
         // Block oder Skill-Rahmen). Steht im Prompt ausschliesslich, was der
@@ -1146,6 +1155,7 @@ function createChatEngine({
         skillParts: skillContextParts,
         environmentSystem,
         projectInstructionParts,
+        folderMemoryParts,
         workspaceSystem,
         toolsPrompt,
         toolDefs: availableToolDefs,

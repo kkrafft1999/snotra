@@ -544,3 +544,29 @@ test('the own secrets of the tool adapter also guard the embedded AGENTS.md (#52
   assert.equal(system().includes(key), false);
   assert.match(system(), /Left out by Snotra AI/);
 });
+
+test('the folder memory stands with the AGENTS.md, not with the user\'s memory (#529)', async () => {
+  const { port } = memoryPort([
+    { scope: MEM.USER, text: 'Globalnotiz.' },
+    { scope: MEM.WORKSPACE, text: 'Ordnernotiz.' },
+  ]);
+  const { port: instructions } = instructionsPort([{ source: PI.WORKSPACE_AGENTS, text: 'Fremde Anweisung.' }]);
+  const { engine, system } = environmentHarness({
+    memory: port,
+    projectInstructions: instructions,
+    uiPrefs: { baseSystemPrompt: 'Sei knapp.' },
+  });
+  const result = await engine.send({
+    sessionId: 'mem-529',
+    payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/p' },
+  });
+  const text = system();
+  const order = ['Sei knapp.', 'Globalnotiz.', 'Fremde Anweisung.', 'Ordnernotiz.', 'You are working in the folder'];
+  for (let i = 1; i < order.length; i += 1) {
+    assert.ok(text.indexOf(order[i - 1]) < text.indexOf(order[i]), `${order[i - 1]} before ${order[i]}`);
+  }
+  assert.match(text, /Notes kept in this folder/);
+  const ids = result.contextBreakdown.parts.map((part) => part.id);
+  assert.ok(ids.indexOf('system:memory:user') < ids.indexOf('system:agents-md:workspace-agents'), ids.join(', '));
+  assert.ok(ids.indexOf('system:agents-md:workspace-agents') < ids.indexOf('system:memory:workspace'), ids.join(', '));
+});

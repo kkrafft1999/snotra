@@ -1,7 +1,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildMemorySystemPrompt, TRUNCATION_NOTE } = require('../src/application/chat/memory-prompt');
+const {
+  buildUserMemorySystemPrompt,
+  buildFolderMemorySystemPrompt,
+  TRUNCATION_NOTE,
+} = require('../src/application/chat/memory-prompt');
+
+// Both levels, each from its own builder (#529) — for the tests that look at
+// what the two have in common.
+function buildMemorySystemPrompt(files) {
+  const user = buildUserMemorySystemPrompt(files);
+  const folder = buildFolderMemorySystemPrompt(files);
+  return {
+    text: [folder.text, user.text].filter(Boolean).join('\n\n'),
+    parts: [...folder.parts, ...user.parts],
+  };
+}
 const { MEMORY_SCOPES, MAX_MEMORY_CHARS } = require('../src/shared/contracts/memory');
 
 test('ohne Gedaechtnis entsteht kein Block', () => {
@@ -73,4 +88,31 @@ test('the folder placeholder follows the interface language (#353)', () => {
   const { parts } = buildMemorySystemPrompt([{ scope: MEMORY_SCOPES.WORKSPACE, text: 'a', truncated: true }]);
   assert.equal(translate('en', parts[0].detailKey, parts[0].params), '<folder>/.agents/memory.md · shortened');
   assert.equal(translate('de', parts[0].detailKey, parts[0].params), '<Ordner>/.agents/memory.md · gekürzt');
+});
+
+test('each builder takes only its own level (#529)', () => {
+  const files = [
+    { scope: MEMORY_SCOPES.WORKSPACE, text: 'folder note' },
+    { scope: MEMORY_SCOPES.USER, text: 'user note' },
+  ];
+  const user = buildUserMemorySystemPrompt(files);
+  const folder = buildFolderMemorySystemPrompt(files);
+  assert.match(user.text, /user note/);
+  assert.doesNotMatch(user.text, /folder note/);
+  assert.match(folder.text, /folder note/);
+  assert.doesNotMatch(folder.text, /user note/);
+  assert.deepEqual(user.parts.map((p) => p.id), ['system:memory:user']);
+  assert.deepEqual(folder.parts.map((p) => p.id), ['system:memory:workspace']);
+});
+
+test('the folder memory is introduced by where it comes from, not as the user\'s words (#529)', () => {
+  const user = buildUserMemorySystemPrompt([{ scope: MEMORY_SCOPES.USER, text: 'a' }]);
+  const folder = buildFolderMemorySystemPrompt([{ scope: MEMORY_SCOPES.WORKSPACE, text: 'a' }]);
+  assert.match(user.text, /^Your memory\. The user gave you this/);
+  assert.doesNotMatch(folder.text, /The user gave you this|Your memory/);
+  assert.match(folder.text, /^Notes kept in this folder \(\.agents\/memory\.md\)/);
+  assert.match(folder.text, /not the user's own words/);
+  // Both say that an entry can be out of date.
+  assert.match(user.text, /now wins/);
+  assert.match(folder.text, /now wins/);
 });

@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { buildEnvironmentSystemPrompt } = require('../src/application/chat/environment-prompt');
-const { buildMemorySystemPrompt } = require('../src/application/chat/memory-prompt');
+const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('../src/application/chat/memory-prompt');
 const {
   buildProjectInstructionsSystemPrompt,
 } = require('../src/application/chat/project-instructions-prompt');
@@ -181,12 +181,15 @@ function ohneNutzertext(text, ...inhalte) {
 
 test('der Gedaechtnis-Rahmen ist englisch, der Inhalt des Nutzers bleibt unangetastet', () => {
   const inhalt = 'Tests laufen mit npm test, und zwar täglich.';
-  const { text } = buildMemorySystemPrompt([
+  const files = [
     { scope: MEMORY_SCOPES.WORKSPACE, text: inhalt },
     { scope: MEMORY_SCOPES.USER, text: inhalt },
-  ]);
-  assert.ok(text.includes(inhalt), 'der Merksatz des Nutzers steht unveraendert im Prompt');
-  assert.equal(istDeutsch(ohneNutzertext(text, inhalt)), false, text);
+  ];
+  for (const build of [buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt]) {
+    const { text } = build(files);
+    assert.ok(text.includes(inhalt), 'der Merksatz des Nutzers steht unveraendert im Prompt');
+    assert.equal(istDeutsch(ohneNutzertext(text, inhalt)), false, text);
+  }
 });
 
 test('der AGENTS.md-Rahmen ist englisch, der Inhalt des Nutzers bleibt unangetastet', () => {
