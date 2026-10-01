@@ -201,9 +201,16 @@ stored with the history in the encrypted store.
   configuration, the permission rules and the audit store are hard-blocked for
   model tools, even when the user opens a parent folder. The credential adapter
   hands keys only to the intended transport; never into tool arguments, prompts,
-  previews or logs. Detected copies of our own provider secrets are blocked as
-  well and cannot be approved. Errors must not contain auth headers or decrypted
-  values.
+  previews or logs. Detected copies of our own secrets are blocked as well and
+  cannot be approved. **Own secrets** are the API key of every provider and of
+  every model entry with a connection of its own, the values of a gateway's
+  extra headers, the secrets stored for the MCP servers and the web search key
+  (#505). Each counts in every form it can turn up in: a header value with an
+  auth scheme (`Bearer …`, `Basic …`, `Token …`) also as its bare token, since
+  an `env` dump or a config file carries only that. The list is collected in
+  `main/services/own-secrets.js`; the comparison is verbatim, and values under
+  eight characters do not count. Errors must not contain auth headers or
+  decrypted values.
 - **Untrusted content:** files, search hits, MCP responses and skill content
   cannot change permissions, pick a mode or fake a confirmation. Active skills
   and their `allowed-tools` are not a source of rights either. Automatically

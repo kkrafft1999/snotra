@@ -19,8 +19,7 @@ const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS, DEFAULT_TOOL_PERMISSION_MODE } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
-const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
-const { createMessage, isMessage } = require('../../shared/contracts/message');
+const { createMessage } = require('../../shared/contracts/message');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
@@ -46,12 +45,14 @@ const {
   createMcpSecretsPort,
   createWorkspaceFolderStorePort,
 } = require('../adapters/persistence-store-adapters');
-const { redactOwnSecrets } = require('../../shared/runtime/sensitive-content');
+const { createOwnSecrets } = require('../services/own-secrets');
+const { maskMcpStatuses } = require('../services/mcp-status-masking');
+const { createSecurityPageData } = require('../services/security-page-data');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../adapters/credential-adapter');
 const { createFilesystemIpcAdapter } = require('../adapters/filesystem-ipc-adapter');
 const { createSpeechAdapter } = require('../adapters/speech-adapter');
-const { createUpdateAdapter } = require('../adapters/update-adapter');
+const { createUpdateAdapter, createUpdateCheck } = require('../adapters/update-adapter');
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createPdfAssetReader } = require('../services/pdf-assets');
@@ -66,6 +67,7 @@ const {
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
+const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
@@ -75,7 +77,6 @@ const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { migrateMcpDisabledTools } = require('../services/mcp-disabled-tools-migration');
-const { describeRememberedMcpTools } = require('../services/mcp-remembered-tools');
 const { qualifiedMcpToolName } = require('../../shared/contracts/mcp');
 
 function createApplication({
@@ -482,31 +483,9 @@ function createApplication({
     mcpService.setServers(await mcpSecrets.getMcpServersForRuntime());
   }
 
-  /**
-   * Was die Oberflaeche ueber MCP erfaehrt. Der Status eines Servers traegt
-   * seine Fehlermeldung und einen stderr-Auszug — und ein Server, der beim
-   * Start stolpert, gibt gern seine Umgebung aus. Deshalb laeuft beides durch
-   * die Maskierung, bevor es den Main-Prozess verlaesst (Konzept §5).
-   */
-  async function maskMcpStatuses(statuses) {
-    const secrets = await mcpSecrets.getMcpSecretValues();
-    if (secrets.length === 0) return statuses;
-    // Since #338 the error can be a catalogue message; a server's text then
-    // sits in its parameters, and that is where the masking has to reach.
-    const mask = (value) => {
-      if (typeof value === 'string') return redactOwnSecrets(value, secrets);
-      if (!isMessage(value)) return value;
-      const params = value.params
-        ? Object.fromEntries(Object.entries(value.params).map(([name, inner]) => [name, mask(inner)]))
-        : undefined;
-      return createMessage(value.key, params);
-    };
-    return statuses.map((status) => ({
-      ...status,
-      error: mask(status.error),
-      stderr: redactOwnSecrets(status.stderr, secrets),
-    }));
-  }
+  // Provider keys, gateway headers, MCP secrets and the web search key, in
+  // every form they can turn up in (concept §5, #505).
+  const ownSecrets = createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore });
 
   const mcpSettings = {
     listServers: () => mcpConfigStore.readMcpServers(),
@@ -523,7 +502,7 @@ function createApplication({
       await reloadMcpServers();
       const status = await mcpService.connect(id);
       if (!status) return { status: null, error: createMessage('settings.error.mcp.unknownServer', { id }) };
-      const [masked] = await maskMcpStatuses([status]);
+      const [masked] = maskMcpStatuses([status], await ownSecrets.readMcpSecrets());
       const tools = (await mcpService.listTools())
         .filter((tool) => tool.serverId === id)
         .map((tool) => tool.name);
@@ -615,50 +594,6 @@ function createApplication({
     defaultProviderId,
   });
 
-  /**
-   * Werte aus „Name: Wert"-Zeilen. Geschwaerzt wird der **Wert**, nicht der
-   * Header-Name: `X-Tenant` ist kein Geheimnis, sein Inhalt kann eines sein.
-   * Sehr kurze Werte bleiben draussen, sonst schwaerzt ein `X-Env: dev` jedes
-   * Vorkommen von „dev" in jeder Tool-Ausgabe.
-   */
-  function extraHeaderSecretValues(raw) {
-    const out = [];
-    for (const line of String(raw).split(/\r?\n/)) {
-      const sep = line.indexOf(':');
-      if (sep <= 0) continue;
-      const value = line.slice(sep + 1).trim();
-      if (value.length >= 8) out.push(value);
-    }
-    return out;
-  }
-
-  // Eigene Provider-Schluessel duerfen die App nie ueber ein Tool verlassen
-  // (Konzept §5). Nur zum Vergleich gelesen, nie protokolliert.
-  async function readOwnSecrets() {
-    const config = await llmConfigStore.readLLMConfig();
-    const secrets = [];
-    const add = (effective) => {
-      if (effective?.apiKey) secrets.push(effective.apiKey);
-      // Zusatz-Header tragen bei einem Gateway das Token (Issue #193) und
-      // duerfen die App so wenig verlassen wie ein API-Key.
-      if (effective?.extraHeaders) secrets.push(...extraHeaderSecretValues(effective.extraHeaders));
-    };
-    for (const providerId of Object.keys(config?.providers || {})) {
-      add(await providerSecrets.getEffectiveProviderConfig(providerId));
-    }
-    // Anbieter mit Verbindung je Eintrag (Issue #202) stehen nicht in
-    // `providers`; ihre Schluessel haengen an den Eintraegen. Ohne diese
-    // Schleife fiele genau der Gateway-Token durch die Schwaerzung.
-    for (const preset of Array.isArray(config?.presets) ? config.presets : []) {
-      if (!preset?.id || !preset.connection) continue;
-      add(await providerSecrets.getEffectiveProviderConfig(preset.providerId, { presetId: preset.id }));
-    }
-    // Auch MCP-Tokens duerfen die App nicht ueber ein Tool-Ergebnis verlassen
-    // (Issue #108) — ein MCP-Server koennte sie sonst selbst zurueckgeben.
-    secrets.push(...(await mcpSecrets.getMcpSecretValues()));
-    return secrets;
-  }
-
   // Umgebungsangaben fuer den Systemprompt (Issue #138). Die Shell kommt aus
   // derselben Erkennung wie `shell_execute` selbst — sonst nennt der Prompt
   // eine andere Shell, als ein Befehl spaeter startet.
@@ -702,7 +637,7 @@ function createApplication({
       // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
       protectedRoots: [app.getPath('userData')],
       trashItem: shell && typeof shell.trashItem === 'function' ? (target) => shell.trashItem(target) : null,
-      readOwnSecrets,
+      readOwnSecrets: ownSecrets.readOwnSecrets,
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
       describeShell: () => shellRunnerService.describe(),
       // …and whether it would run isolated, with which domains (#329). The
@@ -786,26 +721,14 @@ function createApplication({
   // Update-Dialog und Links in Chat-Antworten wirkungslos — das sandboxed
   // Preload kennt kein `shell`.
   if (shell) registerShellHandlers({ ipcMain, shell, clipboard, REQ });
-  // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`). Laeuft neben
-  // dem Chat und darf ihn nie stoeren: Jeder Fehler endet als "kein Vorschlag".
+  // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`).
   const skillSuggestionService = createSkillSuggestionService({
     llm: chatLlm,
     skillCatalog: skillsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     uiPrefsStore,
   });
-  ipcMain.handle(REQ.SKILLS_SUGGEST, async (_event, text) => {
-    // Nur im dafuer eingeschalteten Modus ueberhaupt an den Provider gehen —
-    // der Renderer koennte das Gegenteil behaupten.
-    const prefs = await uiPrefsStore.readUIPrefs();
-    if (prefs.skillSuggestionMode !== SKILL_SUGGESTION_MODES.MODEL) return { name: '' };
-    try {
-      const treffer = await skillSuggestionService.suggest(typeof text === 'string' ? text : '');
-      return { name: treffer?.name || '' };
-    } catch {
-      return { name: '' };
-    }
-  });
+  registerSkillSuggestionHandlers({ ipcMain, skillSuggestionService, uiPrefsStore, REQ });
 
   registerChatHandlers({
     ipcMain,
@@ -813,6 +736,17 @@ function createApplication({
     REQ,
     PUSH,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+  });
+  // What Settings › Security and the mode pill read (#357, #447, #448).
+  const securityPageData = createSecurityPageData({
+    chatHistoryStore,
+    uiPrefsStore,
+    toolRegistry,
+    mcpConfigStore,
+    pythonRunner,
+    shellRunner,
+    sandboxService,
+    onSandboxDetected: notifyToolPermissionsChanged,
   });
   registerToolPermissionHandlers({
     ipcMain,
@@ -826,11 +760,11 @@ function createApplication({
     PUSH,
     chatSessionSettings,
     getLocale: getAppLocale,
-    describeExecutionTools,
+    describeExecutionTools: securityPageData.describeExecutionTools,
     programAllowances,
-    describeChats,
-    describeTools: describeToolsForSecurity,
-    describeWorkspaceChats,
+    describeChats: securityPageData.describeChats,
+    describeTools: securityPageData.describeTools,
+    describeWorkspaceChats: securityPageData.describeWorkspaceChats,
     platform: process.platform,
     homeDir: os.homedir(),
   });
@@ -839,104 +773,13 @@ function createApplication({
   // list of session approvals follows at once (#447).
   sessionGrants.onChange(notifyToolPermissionsChanged);
 
-  /** Titles of the given chats, for the list of session approvals (#447). */
-  async function describeChats(chatIds) {
-    const wanted = new Set(chatIds);
-    const titles = new Map();
-    if (wanted.size === 0) return titles;
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-    for (const session of store.sessions || []) {
-      if (session && wanted.has(session.id) && typeof session.title === 'string' && session.title.trim()) {
-        titles.set(session.id, session.title.trim());
-      }
-    }
-    return titles;
-  }
-
-  /**
-   * Every tool the settings list, with its classes and whether it is offered
-   * — for the Security page (#448). A tick in Settings › Tools and the
-   * availability (the execution switches, a search key, a server) both count.
-   */
-  async function describeToolsForSecurity() {
-    const prefs = await uiPrefsStore.readUIPrefs();
-    const disabled = new Set(Array.isArray(prefs.disabledTools) ? prefs.disabledTools : []);
-    const catalog = toolRegistry.listRiskCatalog({ locale: prefs.appLocale });
-    // MCP tools the registry does not have yet — no run since the start —
-    // come from what each server reported last time (#464), so they can be
-    // switched off before the first run offers them.
-    let servers = [];
-    try {
-      servers = await mcpConfigStore.readMcpServers();
-    } catch {
-      servers = [];
-    }
-    return [...catalog, ...describeRememberedMcpTools({ servers, present: catalog, locale: prefs.appLocale })]
-      .map((tool) => ({ ...tool, disabled: disabled.has(tool.name) }));
-  }
-
-  /**
-   * The chats of a workspace with the mode stored for each (#448); `null`
-   * where a chat has none and starts on the workspace default.
-   */
-  async function describeWorkspaceChats(root) {
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-    const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(root);
-    return (store.sessions || [])
-      .filter((session) => session && typeof session.id === 'string' && chatHistoryStore.sessionMatchesWorkspace(session, wsRoot))
-      .map((session) => ({
-        id: session.id,
-        title: typeof session.title === 'string' ? session.title.trim() : '',
-        mode: typeof session.toolPermissionMode === 'string' ? session.toolPermissionMode : null,
-      }));
-  }
-
-  /**
-   * Which execution tools the model is offered, and what the sandbox can do
-   * (#357). The mode pill turns red when "Auto" would run them unisolated.
-   * Detection only runs when one of them is on — as for the settings — and
-   * is not waited for: the self-test can take seconds, and the pill should
-   * not hang on it. Once it is known, the renderer is told to read again.
-   */
-  async function describeExecutionTools() {
-    let disabledTools = [];
-    try {
-      const prefs = await uiPrefsStore.readUIPrefs();
-      disabledTools = Array.isArray(prefs.disabledTools) ? prefs.disabledTools : [];
-    } catch {
-      disabledTools = [];
-    }
-    const active = [];
-    if (pythonRunner.isAvailable() && !disabledTools.includes('run_python')) active.push('run_python');
-    if (shellRunner.isAvailable() && !disabledTools.includes('shell_execute')) active.push('shell_execute');
-    const sandbox = sandboxService.describe();
-    if (active.length > 0 && (sandbox.status === 'unknown' || sandbox.status === 'testing')) {
-      void sandboxService.detect().then(notifyToolPermissionsChanged, () => {});
-    }
-    return { active, sandbox };
-  }
-
   /** Makes the renderer read the permission state again — the mode pill (#357). */
   function notifyToolPermissionsChanged() {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) win.webContents.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
   }
 
-  async function runUpdateCheck({ silent }) {
-    // Only the automatic check steps aside. Choosing "Check for updates" in
-    // the menu is an explicit request and still gets an answer.
-    if (silent && env.SNOTRA_NO_UPDATE_CHECK === '1') return;
-    // A swap that failed after the last quit is told on the next start, and
-    // only then (#442).
-    const lastInstallFailure = silent && typeof updates.takeInstallFailure === 'function'
-      ? await updates.takeInstallFailure()
-      : null;
-    const result = await updates.checkForUpdate({ respectIgnored: silent && !lastInstallFailure });
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return;
-    if (silent && !result.updateAvailable) return;
-    win.webContents.send(PUSH.UPDATE_AVAILABLE, { ...result, lastInstallFailure, manual: !silent });
-  }
+  const runUpdateCheck = createUpdateCheck({ updates, getMainWindow, PUSH, env });
 
   function dispose() {
     providerRuntime.disposeAll();
