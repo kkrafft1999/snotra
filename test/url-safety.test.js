@@ -80,3 +80,13 @@ test('isBlockedAddress lehnt ab, was keine Adresse ist', () => {
     assert.equal(isBlockedAddress(value), true, String(value));
   }
 });
+
+test('isBlockedAddress reads IPv4 inside NAT64 and 6to4 (#554)', () => {
+  assert.equal(isBlockedAddress('64:ff9b::7f00:1'), true); // 127.0.0.1
+  assert.equal(isBlockedAddress('64:ff9b::c0a8:101'), true); // 192.168.1.1
+  assert.equal(isBlockedAddress('64:ff9b::5db8:d822'), false); // 93.184.216.34
+  assert.equal(isBlockedAddress('64:ff9b:1::5db8:d822'), true); // local translation prefix
+  assert.equal(isBlockedAddress('2002:7f00:1::1'), true); // 127.0.0.1
+  assert.equal(isBlockedAddress('2002:a00:1::'), true); // 10.0.0.1
+  assert.equal(isBlockedAddress('2002:5db8:d822::1'), false); // 93.184.216.34
+});
