@@ -418,8 +418,6 @@ module.exports = {
   'settings.models.row.secretsDroppedByAddress': 'Neue Adresse: Gespeicherter Key und Header werden beim Speichern entfernt',
 
   // ── Settings: tools ────────────────────────────────────────────────────────
-  'settings.tools.count': '{active} von {total} aktiv',
-
   'settings.python.warning.summary': '<strong>Achtung:</strong> <code>run_python</code> führt den Code des Modells aus — isoliert unter macOS und Linux, mit deinen vollen Rechten unter Windows.',
   'settings.python.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft der Code in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die auf der Freigabekarte stehen. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Der Code kann überall lesen und schreiben, das Netzwerk erreichen und Programme starten. Snotra zeigt dir vor <em>jedem</em> Lauf den vollständigen Quelltext zur Freigabe, und die Karte sagt, ob der Lauf isoliert ist. Schalte das nur ein, wenn dir das bewusst ist.</p>',
   'settings.python.toggle': 'Python-Ausführung erlauben',
@@ -456,7 +454,7 @@ module.exports = {
   'settings.shell.status.plainShell': ' — dein PATH aus dem Profil, einmal beim Start gelesen',
   'settings.shell.status.disabled': '{where}. Noch nicht erlaubt, shell_execute wird nicht angeboten.',
   'settings.shell.status.enabled': '{where}. shell_execute wird dem Modell angeboten.',
-  'settings.sandbox.isolated': 'Isoliert: schreibt nur im Projektordner und in einem temporären Ordner, kein Zugriff auf Schlüssel und Browserdaten, Netzwerk nur für die Domains auf der Freigabekarte.',
+  'settings.sandbox.isolated': 'Isoliert: schreibt nur im Projektordner und in einem temporären Ordner, kein Zugriff auf Schlüssel und Browserdaten, Netzwerk nur für die Domains, die der Aufruf nennt — auf der Freigabekarte, in „Auto“ ohne Rückfrage.',
   'settings.sandbox.pending': 'Die Isolation wird beim ersten Lauf des Tools geprüft.',
   'settings.sandbox.reason.platform': 'Nicht isoliert: Unter Windows gibt es noch keine Sandbox — jeder Lauf hat deine vollen Rechte.',
   'settings.sandbox.reason.dependencies': 'Nicht isoliert: Die Sandbox braucht die Pakete {packages}. Installiere sie (zum Beispiel „sudo apt install bubblewrap socat ripgrep“) und starte Snotra neu.',
@@ -473,7 +471,7 @@ module.exports = {
   'settings.sandbox.workspace.tile.on': 'Sandbox aktiv',
   'settings.sandbox.workspace.tile.off': 'Sandbox aus',
   'settings.sandbox.workspace.tile.unavailable': 'Sandbox nicht verfügbar',
-  'settings.sandbox.workspace.tile.onBody': 'Befehle laufen isoliert: Sie schreiben nur hier und in einem temporären Ordner, lesen deine Schlüssel nicht und erreichen das Netz nur für Domains, die du freigibst.',
+  'settings.sandbox.workspace.tile.onBody': 'Befehle laufen isoliert: Sie schreiben nur hier und in einem temporären Ordner, lesen deine Schlüssel nicht und erreichen das Netz nur für die Domains, die ein Aufruf nennt — du gibst sie auf der Karte frei, außer in „{mode}“.',
   'settings.workspaceMode.none': 'Öffne einen Ordner, um seinen Standard festzulegen.',
   'settings.workspaceMode.needsEncryption': '„Auto“ steht als Standard nicht zur Verfügung: Dieses System bietet keinen verschlüsselten Speicher.',
   'settings.allowances.heading': 'Freigaben pro Programm',
@@ -953,19 +951,6 @@ module.exports = {
   'tools.riskClass.delete': 'Überschreiben ohne Rückweg',
   'tools.riskClass.execute': 'Ausführen',
   'tools.riskClass.external': 'Externe Dienste',
-  'tools.class.execute': 'fragt vor jedem Lauf nach',
-  'tools.gate.notConfigured': 'Nicht eingerichtet',
-  'tools.group.allOn': 'alle an',
-  'tools.group.allOff': 'alle aus',
-  'tools.class.safe': 'läuft ohne Rückfrage',
-  'tools.class.sensitiveRead': 'fragt vor sensiblen Dateien nach',
-  'tools.class.write': 'fragt vor Änderungen nach',
-  'tools.class.overwrite': 'fragt vor jedem Überschreiben nach',
-  'tools.class.external': 'verlässt deinen Rechner, fragt vorher nach',
-  'tools.gate.python': 'Ohne erlaubte und gefundene Python-Installation wird das Tool dem Modell nicht angeboten (siehe „Python ausführen“).',
-  'tools.gate.shell': 'Ohne erlaubte und gefundene Shell wird das Tool dem Modell nicht angeboten (siehe „Shell-Befehle ausführen“).',
-  'tools.gate.webSearch': 'Ohne Tavily-Schlüssel wird das Tool dem Modell nicht angeboten (siehe „Websuche“ weiter unten).',
-  'tools.gate.keyMissing': 'Schlüssel fehlt',
 
   // ── Tool catalogue (descriptions, Settings › Tools) ──────────────────────
   // Per tool a short line for the collapsed row (`tools.short.…`) and the full
@@ -1289,6 +1274,9 @@ module.exports = {
   'approval.warning.overwriteTrash': 'Die bestehende Datei wird vollständig überschrieben. Die bisherige Fassung landet vorher als Kopie im Papierkorb.',
   'approval.warning.overwrite': 'Die bestehende Datei wird vollständig überschrieben.',
   'approval.warning.prefix': 'Achtung: ',
+  // Invisible characters on the card (CR-B13-01).
+  'approval.warning.invisible.one': 'Dieser Aufruf enthält ein unsichtbares Zeichen, das verändern kann, wie sich sein Text liest. Es steht als ⟨U+…⟩ an seiner Stelle; ausgeführt wird der Text mit diesem Zeichen.',
+  'approval.warning.invisible.other': 'Dieser Aufruf enthält {count} unsichtbare Zeichen, die verändern können, wie sich sein Text liest. Sie stehen als ⟨U+…⟩ an ihrer Stelle; ausgeführt wird der Text mit ihnen.',
 
   'approval.action.once': 'Einmal erlauben',
   'approval.action.session': 'Für diese Sitzung erlauben',
@@ -1749,6 +1737,7 @@ module.exports = {
   'security.a.where.execute.fact.write': 'Schreibt nur in diesem Ordner und einem temporären Ordner',
   'security.a.where.execute.fact.secrets': 'Kann deine Schlüssel und Browserdaten nicht lesen',
   'security.a.where.execute.fact.network': 'Erreicht das Internet nur für Domains, die du auf der Freigabekarte bestätigst',
+  'security.a.where.execute.fact.network.auto': 'Erreicht das Internet nur für die Domains, die ein Aufruf nennt — in „Auto“ ohne Rückfrage',
   'security.a.where.execute.pending': 'Die Sandbox wird noch geprüft.',
   'security.a.where.execute.workspaceOff': 'Du hast die Sandbox für diesen Workspace ausgeschaltet. Ein Befehl läuft mit deinen vollen Rechten.',
   'security.a.where.execute.unavailable': 'Die Sandbox ist nicht verfügbar. Ein Befehl läuft mit deinen vollen Rechten.',

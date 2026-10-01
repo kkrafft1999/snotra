@@ -322,7 +322,16 @@ For read access: **"Dateizugriff bestätigen"**, the tool, the target, the scope
 and, where sensitive, the provider note from section 4. For external calls
 later: service or server, action, target and the data that is actually going to
 be transmitted, safely masked. All texts, paths and previews are rendered as
-data, never as active HTML.
+data, never as active HTML — and as data a person can read: whatever the
+model chose (paths, the tool name, the command or source, stdin and argv, the
+working folder, the domains) shows invisible characters as `⟨U+202E⟩` where
+they sit, with a warning on the card that names their number. A bidi control
+can otherwise reorder what is shown — `echo safe # ; echo x` on the card while
+the shell runs both commands — and a zero-width character makes two paths look
+alike (CR-B13-01, #596). Tab, line feed and a CRLF line ending are ordinary
+text, and so is a joiner between two non-ASCII characters (emoji, Persian).
+Remembered commands and session approvals read the same way on the Security
+page.
 
 `write_file_text` shows the new text; for an existing file the card adds an
 overwrite warning and says whether a copy goes to the trash first. The card
@@ -375,8 +384,12 @@ there is no second card: the call is rejected with the reason `repeated_denial`
 and the run ends, so that repetition produces neither a different answer nor
 further tool rounds, and the audit trail shows the rejection unambiguously.
 Merely changing focus or window approves nothing and leaves the card open. Esc
-rejects; there is no initial focus on "Erlauben" and no global Enter shortcut for
-approval. Buttons focused deliberately stay operable by keyboard.
+rejects the oldest card the user can see — not one of a chat in the background
+or behind a hidden chat column, and not while a menu, a completion list, a
+dialog or another input field claims the key (CR-B13-02, #597); there is no
+initial focus on "Erlauben" and no global Enter shortcut for approval. Buttons
+focused deliberately stay operable by keyboard, and after a decision the focus
+stays on the card (CR-B13-03).
 
 ## 7. Storing and resetting decisions
 

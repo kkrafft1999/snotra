@@ -331,6 +331,8 @@ test('settings: the workspace switch — shown with tools off, hidden on Windows
   assert.equal(on.tone, 'on');
   assert.equal(on.title, 'Sandbox active');
   assert.match(on.body, /^Commands run isolated:/);
+  // No card confirms the domains in "Auto" (CR-B13-04).
+  assert.match(on.body, /only for the domains a call names — you approve them on the card, except in “Auto”\.$/);
 
   const off = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox, autoLabel });
   assert.equal(off.checked, false);

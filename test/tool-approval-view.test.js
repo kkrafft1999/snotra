@@ -295,3 +295,97 @@ test('the card shows stdin and argv below the source, in both languages (#551)',
   const plain = buildApprovalCardView(dto({ preview: { kind: 'shell', text: 'git status', truncated: false, masked: false } }));
   assert.deepEqual(plain.preview.blocks, []);
 });
+
+// CR-B13-01 (#596): a bidi control reorders what the card shows, so
+// `echo safe # ; echo PWNED` can be what is read while the shell runs both.
+// Every text the model chose shows its invisible characters as ⟨U+…⟩.
+const RLO = String.fromCodePoint(0x202e);
+const LRI = String.fromCodePoint(0x2066);
+const PDI = String.fromCodePoint(0x2069);
+const PDF = String.fromCodePoint(0x202c);
+const ZWSP = String.fromCodePoint(0x200b);
+const ZWJ = String.fromCodePoint(0x200d);
+const ZWNJ = String.fromCodePoint(0x200c);
+const TAG_A = String.fromCodePoint(0xe0041);
+
+test('revealInvisible: bidi, zero-width, tag and control characters, but not line endings or joiners in scripts', async () => {
+  const { revealInvisible } = await load();
+  assert.deepEqual(revealInvisible(`a${RLO}b${ZWSP}c${TAG_A}d\u0007e`), {
+    text: 'a⟨U+202E⟩b⟨U+200B⟩c⟨U+E0041⟩d⟨U+0007⟩e',
+    count: 4,
+  });
+  // Windows content is ordinary text (#244), and so are tab and line feed.
+  assert.deepEqual(revealInvisible('line 1\r\nline 2\n\tindented'), { text: 'line 1\r\nline 2\n\tindented', count: 0 });
+  // A lone carriage return or a line separator is not a line ending here.
+  assert.equal(revealInvisible('a\rb\u2028c').text, 'a⟨U+000D⟩b⟨U+2028⟩c');
+  // A joiner inside an emoji sequence or between Persian letters stays; next
+  // to ASCII it is what makes `.env` and `.env` plus a joiner look alike.
+  const family = `👨${ZWJ}👩${ZWJ}👧`;
+  const persian = `می${ZWNJ}خواهم`;
+  assert.deepEqual(revealInvisible(`${family} ${persian}`), { text: `${family} ${persian}`, count: 0 });
+  assert.equal(revealInvisible(`.env${ZWJ}`).text, '.env⟨U+200D⟩');
+  assert.deepEqual(revealInvisible(''), { text: '', count: 0 });
+  assert.deepEqual(revealInvisible(undefined), { text: '', count: 0 });
+});
+
+test('card: invisible characters in the command, paths, tool, stdin and argv are marked and counted, in both languages', async () => {
+  const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
+  const command = `echo safe ${RLO}${LRI}; echo PWNED ${PDI} ${LRI}#${PDI}${PDF}`;
+  const request = createToolApprovalRequestDto({
+    requestId: 'r-bidi',
+    tool: 'shell_execute',
+    riskClasses: ['execute'],
+    targets: [],
+    mode: 'smart',
+    sessionAllowed: false,
+    preview: { kind: 'shell', text: command, truncated: false, masked: false, shell: 'zsh', cwd: `/work/x${ZWSP}` },
+  });
+  assert.equal(request.preview.text, command, 'the contract passes the command on as it is');
+  const { buildApprovalCardView } = await load();
+  const view = buildApprovalCardView(request);
+  assert.equal(view.preview.text, 'echo safe ⟨U+202E⟩⟨U+2066⟩; echo PWNED ⟨U+2069⟩ ⟨U+2066⟩#⟨U+2069⟩⟨U+202C⟩');
+  assert.equal(view.cwdLabel, '/work/x⟨U+200B⟩');
+  assert.equal(view.invisibleWarning,
+    'This call contains 7 invisible characters that can change how its text reads. They are shown as ⟨U+…⟩ where they sit; what runs is the text with them.');
+  await inGerman(async () => {
+    assert.match(buildApprovalCardView(request).invisibleWarning, /^Dieser Aufruf enthält 7 unsichtbare Zeichen/);
+  });
+
+  // A path, an MCP tool's name, stdin and argv.
+  const mcp = buildApprovalCardView(dto({
+    tool: `mcp__srv__read${RLO}`,
+    targets: [{ path: `invoice${RLO}fdp.exe`, kind: 'file', exists: false, sensitive: false }],
+    sessionAllowed: false,
+  }));
+  assert.equal(mcp.targets[0].path, 'invoice⟨U+202E⟩fdp.exe');
+  assert.equal(mcp.headline.targetLabel, 'invoice⟨U+202E⟩fdp.exe');
+  assert.equal(mcp.headline.tool, 'mcp__srv__read⟨U+202E⟩');
+  assert.equal(mcp.invisibleWarning,
+    'This call contains 2 invisible characters that can change how its text reads. They are shown as ⟨U+…⟩ where they sit; what runs is the text with them.');
+  const python = buildApprovalCardView(dto({
+    tool: 'run_python',
+    riskClasses: ['execute'],
+    targets: [],
+    sessionAllowed: false,
+    preview: { kind: 'code', text: 'import sys', truncated: false, masked: false, stdin: `x${RLO}`, argv: [`y${ZWSP}`] },
+  }));
+  assert.deepEqual(python.preview.blocks.map((block) => block.text), ['x⟨U+202E⟩', '"y⟨U+200B⟩"']);
+  assert.match(python.invisibleWarning, /^This call contains an invisible|^This call contains 2/);
+
+  // Plain text — CRLF included — says nothing.
+  const plain = buildApprovalCardView(dto({ tool: 'write_file_text', preview: { kind: 'text', text: 'a\r\nb\tc', truncated: false, masked: false } }));
+  assert.equal(plain.preview.text, 'a\r\nb\tc');
+  assert.equal(plain.invisibleWarning, '');
+});
+
+test('a remembered command and a session approval read on the Security page as they did on the card', async () => {
+  const { describeRule, sessionGrantGroups } = await load();
+  const rule = describeRule({ id: 'c1', effect: 'allow', scope: 'workspace', command: `gh pr list${RLO}`, cwd: '', networkDomains: [] });
+  assert.equal(rule.pattern, 'gh pr list⟨U+202E⟩');
+  assert.match(rule.text, /gh pr list⟨U\+202E⟩/);
+  const [group] = sessionGrantGroups([{
+    id: 'g1', chatId: 'a', current: true, tool: 'edit_file', classes: ['write'],
+    scope: { key: 'approval.sessionScope.targets', params: { tool: 'edit_file', paths: `docs/a${RLO}.md`, effectKeys: [] } },
+  }]);
+  assert.match(group.items[0].text, /docs\/a⟨U\+202E⟩\.md/);
+});

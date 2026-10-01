@@ -1,10 +1,10 @@
-// Program allowances in Settings › Tools, on the real markup (#408): the
+// Program allowances on Settings › Security, on the real markup (#408): the
 // list, the dialog, and what they send to main. Main's side — resolving,
 // checking, confirming natively — is faked here; it has tests of its own.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
 const TOOL = '/Users/u/.ai-workplace/bin/ms-todo-cli';
 const CACHE = '/Users/u/Library/Application Support/ms-todo';
@@ -36,6 +36,7 @@ async function mount({ platform = 'darwin', entries = [], setResults = [], chose
     },
     async removeProgramAllowance(programPath) {
       sent.remove.push(programPath);
+      await flush();
       state = { ...state, programAllowances: state.programAllowances.filter((e) => e.path !== programPath) };
       listeners.forEach((fn) => fn(state));
       return { ok: true };
@@ -52,7 +53,8 @@ async function mount({ platform = 'darwin', entries = [], setResults = [], chose
   setting.update({ shellOn: true, sandbox: { isolated: true, status: 'isolated' } });
   const $ = (id) => dom.document.getElementById(id);
   const overlayOpen = () => !$('program-allowance-overlay').classList.contains('hidden');
-  return { dom, setting, sent, $, overlayOpen };
+  const push = () => listeners.forEach((fn) => fn(state));
+  return { dom, setting, sent, $, overlayOpen, push };
 }
 
 test('the list shows whenever there is a sandbox, shell_execute on or off (#449); empty says so', async (t) => {
@@ -174,4 +176,41 @@ test('off macOS the dialog does not offer the certificate check', async (t) => {
   $('btn-add-program-allowance').click();
   await flush();
   assert.equal($('allowance-trustd-group').hidden, true);
+});
+
+// CR-B13-03 (#598) and CR-B13-06 (#601), item 7.
+test('a refused save leaves the focus on Save, inside the dialog', async (t) => {
+  const refusal = { ok: false, error: { key: 'permissions.allowance.error.folderTooBroad', params: { folder: '/Users/u' } } };
+  const { dom, $ } = await mount({ entries: [ENTRY], setResults: [refusal] });
+  t.after(dom.cleanup);
+  $('settings-allowance-list').querySelector('[data-action="edit"]').click();
+  await flush();
+  $('btn-program-allowance-save').focus();
+  $('btn-program-allowance-save').click();
+  // Save is disabled while main checks; Chromium drops the focus then.
+  focusFixup(dom.document);
+  await flush();
+  assert.equal(dom.document.activeElement === $('btn-program-allowance-save'), true);
+});
+
+test('a push redraws the list under a focused button, and the focus stays', async (t) => {
+  const second = { ...ENTRY, path: '/usr/local/bin/gh', domains: ['api.github.com'], writePaths: [], trustd: false };
+  const { dom, $, push } = await mount({ entries: [ENTRY, second] });
+  t.after(dom.cleanup);
+  const remove = () => $('settings-allowance-list').querySelector('[data-path="/usr/local/bin/gh"] [data-action="remove"]');
+  remove().focus();
+  push();
+  assert.equal(dom.document.activeElement === remove(), true);
+});
+
+test('a second press on Remove while it runs sends nothing', async (t) => {
+  const { dom, $, sent } = await mount({ entries: [ENTRY] });
+  t.after(dom.cleanup);
+  const remove = $('settings-allowance-list').querySelector('[data-action="remove"]');
+  remove.click();
+  remove.click();
+  await flush();
+  await flush();
+  assert.deepEqual(sent.remove, [TOOL]);
+  assert.equal($('settings-allowance-error').classList.contains('hidden'), true);
 });

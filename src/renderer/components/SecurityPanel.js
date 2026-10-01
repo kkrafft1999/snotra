@@ -569,18 +569,25 @@ export function initSecurityPanel({
     }
   });
 
+  // A switch that is saving takes no second press. It is marked
+  // `aria-disabled` rather than disabled: a disabled control loses the focus
+  // to the top of the window (CR-B13-03).
+  rowsEl.addEventListener('click', (e) => {
+    if (e.target.closest?.('input[data-tool-switch][aria-disabled="true"]')) e.preventDefault();
+  }, true);
+
   rowsEl.addEventListener('change', async (e) => {
     const input = e.target.closest('input[data-tool-switch]');
     if (!input) return;
     const on = input.checked;
-    input.disabled = true;
+    input.setAttribute('aria-disabled', 'true');
     let ok = false;
     try {
       ok = await onToggleTool(input.dataset.toolSwitch, on);
     } catch {
       ok = false;
     }
-    input.disabled = false;
+    input.removeAttribute('aria-disabled');
     if (!ok) input.checked = !on;
     await refresh();
     // After the redraw, which clears the line when the page could be read.
@@ -690,6 +697,10 @@ export function initSecurityPanel({
     isOpen = false;
     clearTimeout(pendingTimer);
     pendingTimer = null;
+    // A form that was open goes with the page: the next open draws afresh
+    // even when main's state is unchanged, or the form would stay in its row
+    // with nothing left to close it (CR-B13-06).
+    if (ruleDraft) drawnKey = '';
     ruleDraft = null;
     if (typeof unsubscribe === 'function') unsubscribe();
     unsubscribe = null;

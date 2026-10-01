@@ -512,8 +512,9 @@ deliberately not used — both require a code signature.
   every command runs in a sandbox: it writes only inside the project folder and a
   temporary folder (caches such as pip's and npm's are redirected there), cannot
   read keys, cloud credentials, shell histories or browser data, and reaches the network only for
-  the domains on the approval card — `pip install` and `npm install` get their
-  registry automatically, anything else the model has to name. On **Windows**
+  the domains the call names, which the approval card lists — in *Auto* they are
+  not asked about; `pip install` and `npm install` get their registry
+  automatically, anything else the model has to name. On **Windows**
   there is no sandbox yet: a command can do everything you can do yourself in a
   terminal — read and write anywhere, reach the network, install programs. Snotra
   shows you the complete command, the shell, the working directory and whether
@@ -856,8 +857,12 @@ actions: **Allow once**, **Allow for this session** (only for reading, sensitive
 reading and ordinary modification; exactly this tool on exactly these targets,
 and not in *Always ask* mode) and **Deny**; on a `shell_execute` card the middle
 button is **Always allow this command** instead, and the hint below it says what
-exactly is remembered — or why the command cannot be. Esc denies, no button is
-preselected, and there is no time limit. If chat, workspace, mode or rules
+exactly is remembered — or why the command cannot be. Invisible characters in
+what the model wrote — direction marks, zero-width characters — appear as
+`⟨U+202E⟩` where they sit, with a warning, so that a command cannot read
+differently from what runs. Esc denies the card you can see, unless a menu or
+another field is waiting for the key; no button is preselected, and there is
+no time limit. If chat, workspace, mode or rules
 change while a card is open, the request lapses and the run ends visibly
 ("Request expired"). If you deny, the model receives a `permission_denied`
 result; the tool line shows the decision ("· denied", "· blocked") with reason,

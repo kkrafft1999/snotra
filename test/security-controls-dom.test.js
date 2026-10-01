@@ -5,7 +5,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { setupRendererDom, importRenderer } = require('./helpers/dom.js');
+const { setupRendererDom, importRenderer, focusFixup } = require('./helpers/dom.js');
 const { describeSecurityOverview } = require('../src/application/permissions/security-overview');
 
 const ROOT = '/work/snotra';
@@ -86,6 +86,14 @@ async function openPage(overview, { toggle = async () => true, results = {} } = 
     },
     async setSensitivePathPatterns(patterns) {
       calls.push(['sensitive', patterns]);
+      // As `call()` in the renderer state: main stores, the state refreshes.
+      state.sensitivePathPatterns = patterns;
+      for (const listener of listeners) listener(state);
+      return { ok: true };
+    },
+    async resetWorkspaceRules() {
+      calls.push(['resetWorkspace']);
+      for (const listener of listeners) listener(state);
       return { ok: true };
     },
     async setWorkspaceMode() {
@@ -302,6 +310,129 @@ test('the card\'s "Sandbox setting" opens the execute row on the switch', async 
     assert.equal(await page.panel.reveal('allowances'), true);
     assert.equal(doc.activeElement === doc.getElementById('btn-add-program-allowance'), true);
   } finally {
+    dom.cleanup();
+  }
+});
+
+// CR-B13-03 (#598): a control used by keyboard keeps the focus. happy-dom
+// keeps it on a disabled element where Chromium does not, so `focusFixup`
+// plays the frame in between.
+
+test('a tool switch keeps the focus while it saves and after the redraw', async () => {
+  const dom = setupRendererDom();
+  try {
+    let release;
+    const page = await openPage(overviewWith(), { toggle: () => new Promise((resolve) => { release = resolve; }) });
+    const doc = dom.document;
+    const edit = () => openRow(doc, 'write').querySelector('input[data-tool-switch="edit_file"]');
+    edit().focus();
+    edit().checked = false;
+    edit().dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    // Saving: marked busy, not disabled, so the focus stays.
+    assert.equal(edit().disabled, false);
+    assert.equal(edit().getAttribute('aria-disabled'), 'true');
+    focusFixup(doc);
+    assert.equal(doc.activeElement === edit(), true);
+    // A second press while it saves does nothing.
+    const click = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true });
+    edit().dispatchEvent(click);
+    assert.equal(click.defaultPrevented, true);
+    page.setOverview(overviewWith({ disabledTools: ['edit_file'] }));
+    release(true);
+    await settle();
+    await settle();
+    focusFixup(doc);
+    assert.equal(edit().hasAttribute('aria-disabled'), false);
+    assert.equal(doc.activeElement === edit(), true, 'the redrawn switch has the focus');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('a reset button names what it resets and keeps the focus after its action', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    const reset = () => doc.querySelector('#settings-reset-actions button[data-reset="workspace"]');
+    const describedBy = reset().getAttribute('aria-describedby').split(' ').map((id) => doc.getElementById(id).textContent);
+    assert.equal(describedBy[0], 'Reset workspace rules');
+    assert.match(describedBy[1], /^Deletes blocks and allowances/);
+    reset().focus();
+    reset().click();
+    await settle();
+    focusFixup(doc);
+    assert.deepEqual(page.calls.at(-1), ['resetWorkspace']);
+    assert.equal(doc.activeElement === reset(), true);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('removing a sensitive pattern moves the focus to the next one, then to the input', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    await page.toolPermissions.setSensitivePathPatterns(['vault/**', 'keys/**']);
+    openRow(doc, 'read-sensitive');
+    const trash = (pattern) => doc.querySelector(`#settings-sensitive-list button[data-pattern="${pattern}"]`);
+    trash('vault/**').focus();
+    trash('vault/**').click();
+    await settle();
+    focusFixup(doc);
+    assert.equal(doc.activeElement === trash('keys/**'), true);
+    trash('keys/**').click();
+    await settle();
+    focusFixup(doc);
+    assert.equal(doc.activeElement === doc.getElementById('input-sensitive-pattern'), true);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+// CR-B13-06 (#601), item 1.
+test('a rule form left open does not survive closing and reopening Settings', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    openRow(doc, 'write').querySelector('[data-rule-add="allow"]').click();
+    assert.ok(row(doc, 'write').querySelector('#settings-rule-form'));
+    page.panel.close();
+    await page.panel.open();
+    // Compared as booleans: a failing assert would format the whole node.
+    assert.equal(row(doc, 'write').querySelector('#settings-rule-form') === null, true, 'the page draws afresh');
+    assert.ok(row(doc, 'write').querySelector('[data-rule-add="allow"]'));
+    // And a form opened now still closes as before.
+    row(doc, 'write').querySelector('[data-rule-add="allow"]').click();
+    doc.getElementById('btn-rule-cancel').click();
+    assert.equal(row(doc, 'write').querySelector('#settings-rule-form') === null, true);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+// CR-B13-04 (#599): in "Auto" no card confirms the domains a run names.
+test('the execute row says who confirms the domains, in the default mode of the workspace', async () => {
+  const { describeSecurityRow } = await importRenderer('utils', 'security-overview-view.js');
+  const { setLocale } = await importRenderer('i18n.js');
+  const network = (mode) => {
+    const overview = overviewWith({ mode });
+    const execute = overview.classes.find((entry) => entry.riskClass === 'execute');
+    return describeSecurityRow(execute, overview).where.execute.facts.at(-1);
+  };
+  assert.equal(network('smart'), 'Reaches the internet only for domains you confirm on the approval card');
+  assert.equal(network('auto'), 'Reaches the internet only for the domains a call names — in “Auto” without asking');
+  // The pages of the earlier tests listen to the language too; they need a
+  // document to redraw into.
+  const dom = setupRendererDom();
+  setLocale('de');
+  try {
+    assert.equal(network('auto'), 'Erreicht das Internet nur für die Domains, die ein Aufruf nennt — in „Auto“ ohne Rückfrage');
+  } finally {
+    setLocale('en');
+    await settle();
     dom.cleanup();
   }
 });

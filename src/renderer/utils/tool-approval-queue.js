@@ -72,26 +72,6 @@ export function createToolApprovalQueue() {
       };
       return entry;
     },
-    /** Alle offenen Anfragen lokal als verfallen markieren (z. B. Chat-Wechsel). */
-    invalidateAll(reason = null) {
-      const out = [];
-      for (const entry of entries.values()) {
-        if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED) continue;
-        entry.state = APPROVAL_ENTRY_STATES.RESOLVED;
-        entry.outcome = { invalidated: true, response: null, reason };
-        out.push(entry);
-      }
-      return out;
-    },
-    /**
-     * Aufgelöste Einträge vergessen, sobald ihre Karte nicht mehr angezeigt wird.
-     * `keep` spares entries — those of another chat's run, say (#320).
-     */
-    forgetResolved(keep = () => false) {
-      for (const [requestId, entry] of [...entries.entries()]) {
-        if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED && !keep(entry)) entries.delete(requestId);
-      }
-    },
     /** Drops entries outright, whatever their state — a chat that was left (#320). */
     forgetWhere(predicate) {
       const out = [];

@@ -20,8 +20,9 @@ function el(tag, className, text) {
 }
 
 /**
- * Program allowances in Settings › Tools (#408): the list of programs with
- * extra rights inside the sandbox, and the dialog that edits one.
+ * Program allowances in Settings › Security › Execute (#408, #449): the list
+ * of programs with extra rights inside the sandbox, and the dialog that edits
+ * one.
  *
  * Like the workspace switch above it, the list lives in main's policy file
  * and takes effect at once — no "Apply". Main resolves the program and checks
@@ -55,7 +56,7 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   const fieldTrustd = document.getElementById('allowance-field-trustd');
 
   if (!card || !list || !overlay || !dialog || !toolPermissions) {
-    return { update() {}, focus: () => false, close() {} };
+    return { update() {}, close() {} };
   }
 
   let sandbox = null;
@@ -66,6 +67,8 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   let saving = false;
   let resolveTimer = null;
   let resolveSeq = 0;
+  /** Programs whose removal is on its way; a second press does nothing. */
+  const removing = new Set();
   /** Last answer for the program field: {state: 'hint'|'checking'|'found'|'error', text}. */
   let programState = { state: 'hint', text: '' };
 
@@ -87,10 +90,19 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     // that it only matters while it is on. Hidden where there is no sandbox.
     const visible = sandbox?.reason !== 'platform' && state().platform !== 'win32';
     card.hidden = !visible;
+    // A push redraws the list; a focused Edit or Remove keeps its focus when
+    // its program is still listed (CR-B13-03).
+    const active = list.contains(document.activeElement) ? document.activeElement : null;
+    const focusPath = active?.closest('.allowance-row')?.dataset.path;
+    const focusAction = active?.dataset?.action;
     list.replaceChildren();
     const all = entries();
     if (empty) empty.hidden = all.length > 0;
     for (const entry of all) list.append(buildRow(entry));
+    if (focusPath && focusAction) {
+      const row = [...list.children].find((item) => item.dataset.path === focusPath);
+      row?.querySelector(`[data-action="${focusAction}"]`)?.focus();
+    }
   }
 
   function buildRow(entry) {
@@ -137,12 +149,15 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   }
 
   async function removeEntry(entry, row) {
+    if (removing.has(entry.path)) return;
     setText(cardError, '');
     status.clear();
     // The focus has to land somewhere sensible once the row is gone.
     const rows = [...list.children];
     const index = rows.indexOf(row);
+    removing.add(entry.path);
     const result = await toolPermissions.removeProgramAllowance(entry.path);
+    removing.delete(entry.path);
     if (!result?.ok) {
       setText(cardError, tMessage(result?.error) || t('settings.instant.failed'));
       status.failed();
@@ -336,6 +351,9 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     }
     setText(formError, tMessage(result?.error) || t('settings.instant.failed'));
     formError.scrollIntoView?.({ block: 'nearest' });
+    // Save was disabled while main checked, which dropped the focus out of
+    // the dialog (CR-B13-03); the error itself is announced as an alert.
+    btnSave.focus();
   }
 
   btnAdd?.addEventListener('click', () => openDialog(null));
@@ -366,13 +384,6 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
       status.clear();
       setText(cardError, '');
       renderList();
-    },
-    /** Brings the list into view for the card's "Program allowances" link. */
-    focus() {
-      if (card.hidden) return false;
-      card.scrollIntoView({ block: 'center' });
-      (list.querySelector('[data-action="edit"]') || btnAdd)?.focus();
-      return true;
     },
     close() {
       if (!overlay.classList.contains('hidden')) closeDialog();
