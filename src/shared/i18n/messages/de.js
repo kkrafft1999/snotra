@@ -1581,6 +1581,7 @@ module.exports = {
   'mcp.error.envNameInvalid': '„{name}“ ist kein gültiger Name für eine Umgebungsvariable.',
   'mcp.error.envValueNotString': 'Der Wert von „{name}“ muss eine Zeichenkette sein.',
   'mcp.error.envNeedsSecretFlag': 'Der Eintrag „{name}“ muss angeben, ob sein Wert geheim ist.',
+  'mcp.error.idExists': 'Es gibt bereits einen Server „{id}“. Wähle eine andere Kennung oder bearbeite den vorhandenen Server.',
   'mcp.error.envKeepMissing': 'Für {names} ist nichts gespeichert, es gibt also keinen Wert zu behalten. Gib den Wert neu ein.',
   'mcp.error.envKeepChanged': 'Der gespeicherte Wert von {names} lässt sich nur unverändert behalten. Um zu ändern, ob er geheim ist, gib den Wert neu ein.',
   'mcp.error.envSecretEmpty': 'Der neue Wert von {names} ist leer. Gib einen Wert ein oder entferne die Variable, um den gespeicherten zu löschen.',

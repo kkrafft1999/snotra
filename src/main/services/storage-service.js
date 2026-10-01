@@ -791,12 +791,17 @@ function createStorageService({
    * it would replace a stored secret, which it never silently does.
    */
   async function saveMcpServer(input) {
-    const { ok, value, env, errors } = validateMcpServerInput(input);
+    const { ok, value, env, create, errors } = validateMcpServerInput(input);
     if (!ok) return { ok: false, errors };
 
     return withFileLock(getMcpConfigPath(), async () => {
       const servers = await readMcpStoredServers({ forUpdate: true });
       const previous = servers.find((server) => server.id === value.id);
+      // A new server must not take over an existing one — with its token and
+      // its switch (CR-B14-03). Decided here, under the lock, not by the form.
+      if (create && previous) {
+        return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
+      }
       const storedEnv = {};
       const keepMissing = [];
       const keepChanged = [];

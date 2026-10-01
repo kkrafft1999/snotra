@@ -31,26 +31,72 @@ const SECRET_PLACEHOLDER = '••••••••••••';
 
 /**
  * Argumente stehen im Formular als eine Zeile, intern sind es einzelne
- * Werte. Bewusst simpel an Leerraum getrennt: MCP-Argumente sind Paketnamen
- * und Schalter, keine Sätze. Wer ein Leerzeichen im Argument braucht, kann
- * es in Anführungszeichen setzen.
+ * Werte. Read like a command line (CR-B14-03): whitespace separates, double
+ * or single quotes hold an argument together and may sit next to other text
+ * (`--from="mein paket"`), `""` is an empty argument. Inside double quotes
+ * `\"` and `\\` are escapes and any other backslash is literal; outside
+ * quotes a backslash is always literal, so a Windows path needs no quoting.
+ * An unclosed quote runs to the end of the line.
  */
 export function splitArgs(text) {
   const source = typeof text === 'string' ? text : '';
   const out = [];
-  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let match = re.exec(source);
-  while (match) {
-    out.push(match[1] ?? match[2] ?? match[3]);
-    match = re.exec(source);
+  let current = '';
+  let started = false;
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i];
+    if (/\s/.test(ch)) {
+      if (started) out.push(current);
+      current = '';
+      started = false;
+      i += 1;
+    } else if (ch === '"') {
+      started = true;
+      i += 1;
+      while (i < source.length && source[i] !== '"') {
+        if (source[i] === '\\' && (source[i + 1] === '"' || source[i + 1] === '\\')) i += 1;
+        current += source[i];
+        i += 1;
+      }
+      i += 1;
+    } else if (ch === "'") {
+      started = true;
+      const close = source.indexOf("'", i + 1);
+      const stop = close === -1 ? source.length : close;
+      current += source.slice(i + 1, stop);
+      i = stop + 1;
+    } else {
+      started = true;
+      current += ch;
+      i += 1;
+    }
   }
+  if (started) out.push(current);
   return out;
 }
 
-/** Rückweg für die Anzeige; Argumente mit Leerraum bekommen Anführungszeichen. */
+/**
+ * Rückweg für die Anzeige — so, dass `splitArgs` genau dieselbe Liste
+ * zurückliest: an empty argument and one with whitespace or a quote is put
+ * in double quotes, with `"` and every backslash that would read as an
+ * escape escaped.
+ */
 export function joinArgs(args) {
   return (Array.isArray(args) ? args : [])
-    .map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg))
+    .map((arg) => {
+      const value = String(arg);
+      if (value !== '' && !/[\s"']/.test(value)) return value;
+      let quoted = '';
+      for (let i = 0; i < value.length; i += 1) {
+        const ch = value[i];
+        const next = value[i + 1];
+        if (ch === '"') quoted += '\\"';
+        else if (ch === '\\' && (next === undefined || next === '"' || next === '\\')) quoted += '\\\\';
+        else quoted += ch;
+      }
+      return `"${quoted}"`;
+    })
     .join(' ');
 }
 
@@ -411,17 +457,26 @@ export function initMcpPanel({ api }) {
     }
   }
 
+  /** The arguments as typed — or exactly as stored when the line was not edited. */
+  function readArgs() {
+    if (editing && fieldArgs.value === joinArgs(editing.args)) return [...(editing.args || [])];
+    return splitArgs(fieldArgs.value);
+  }
+
   async function save() {
     const payload = {
       id: String(fieldId.value || '').trim().toLowerCase(),
       label: String(fieldLabel.value || '').trim(),
       command: String(fieldCommand.value || '').trim(),
-      args: splitArgs(fieldArgs.value),
+      args: readArgs(),
       cwd: String(fieldCwd.value || '').trim(),
       enabled: editing ? editing.enabled : true,
       disabledTools: [],
       knownTools: knownToolsOf(editing),
       env: readEnv(),
+      // "Add server" never replaces an existing one; main refuses a taken id
+      // (CR-B14-03). Editing — and the import, which says "replaces" — do.
+      ...(editing ? {} : { create: true }),
     };
     const result = await api.saveMcpServer?.(payload);
     if (result?.ok) {

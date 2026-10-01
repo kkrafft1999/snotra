@@ -468,3 +468,62 @@ test('the value is masked while "secret" is ticked, and never spell-checked (CR-
     }
   }
 });
+
+// --- CR-B14-03: add does not replace, edit does not reshape the arguments ---
+
+test('"Add server" asks main to refuse a taken id and shows the refusal in the form (CR-B14-03)', async () => {
+  const calls = [];
+  await mount({
+    saveMcpServer: async (payload) => {
+      calls.push(payload);
+      const refusal = { key: 'mcp.error.idExists', params: { id: 'github' } };
+      return payload.create && payload.id === 'github'
+        ? { ok: false, error: refusal, errors: [refusal] }
+        : { ok: true, ...katalog() };
+    },
+  });
+  document.getElementById('btn-add-mcp-server').click();
+  await flush();
+  document.getElementById('mcp-field-id').value = 'GitHub';
+  document.getElementById('mcp-field-command').value = 'npx';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+
+  assert.equal(calls[0].create, true);
+  assert.equal(dialogOffen(), true);
+  assert.equal(document.getElementById('mcp-form-error').textContent,
+    'A server \u201cgithub\u201d already exists. Choose another identifier, or edit that server.');
+});
+
+test('saving an edited server replaces it and sends no create flag (CR-B14-03)', async () => {
+  const { calls } = await editGithub();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.equal('create' in calls[0][1], false);
+});
+
+test('editing only the label leaves the arguments exactly as stored (CR-B14-03)', async () => {
+  const args = ['--json', '{"a": 1}', '--prefix', '', 'C:\\srv\\x'];
+  const daten = katalog();
+  daten.servers[0].args = args;
+  const calls = [];
+  await mount({
+    getMcpCatalog: async () => daten,
+    saveMcpServer: async (payload) => { calls.push(['save', payload]); return { ok: true, ...daten }; },
+  });
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  document.getElementById('mcp-field-label').value = 'GitHub (Arbeit)';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].args, args);
+
+  // An edited line is read back with the same rules it was written with.
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  const field = document.getElementById('mcp-field-args');
+  field.value += ' --extra';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[1][1].args, [...args, '--extra']);
+});

@@ -185,6 +185,19 @@ test('ein Server wird gespeichert, neu geladen und getestet — ohne App-Neustar
   assert.deepEqual(result.tools, ['echo', 'add']);
 });
 
+test('an add with a taken identifier is refused through the channel (CR-B14-03)', async (t) => {
+  const { ipcMain } = await makeApp(t);
+  const save = ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER);
+  const server = { id: 'fake', label: 'Fake', command: process.execPath, args: [FAKE_SERVER, 'ok'] };
+  assert.equal((await save({}, { ...server, create: true })).ok, true);
+
+  const again = await save({}, { ...server, label: 'Second account', create: true });
+  assert.equal(again.ok, false);
+  assert.deepEqual(again.errors, [{ key: 'mcp.error.idExists', params: { id: 'fake' } }]);
+  const katalog = await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({});
+  assert.deepEqual(katalog.servers.map((s) => s.label), ['Fake']);
+});
+
 test('der Token taucht weder im Katalog noch in einer Fehlermeldung auf', async (t) => {
   const { ipcMain } = await makeApp(t);
 

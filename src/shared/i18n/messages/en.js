@@ -1577,6 +1577,7 @@ module.exports = {
   'mcp.error.envNameInvalid': '“{name}” is not a valid name for an environment variable.',
   'mcp.error.envValueNotString': 'The value of “{name}” must be a string.',
   'mcp.error.envNeedsSecretFlag': 'The entry “{name}” must say whether its value is secret.',
+  'mcp.error.idExists': 'A server “{id}” already exists. Choose another identifier, or edit that server.',
   'mcp.error.envKeepMissing': 'Nothing is stored for {names}, so there is no value to keep. Enter the value again.',
   'mcp.error.envKeepChanged': 'The stored value of {names} can only be kept as it is. To change whether it is secret, enter the value again.',
   'mcp.error.envSecretEmpty': 'The new value of {names} is empty. Enter a value, or remove the variable to delete the stored one.',

@@ -183,6 +183,27 @@ test('ein zweites Speichern ersetzt den Server, statt ihn zu verdoppeln', async 
   assert.equal(servers[0].label, 'Neu');
 });
 
+// "Add server" with an id that exists used to replace that server — and drop
+// its token and its switch with it (CR-B14-03).
+test('a new server with a taken identifier is refused, the existing one stays', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer({ ...GITHUB, enabled: false });
+  const result = await storage.saveMcpServer({ id: 'GitHub', command: 'uvx', create: true });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [{ key: 'mcp.error.idExists', params: { id: 'github' } }]);
+  const [server] = await storage.getMcpServersForRuntime();
+  assert.equal(server.command, 'npx');
+  assert.equal(server.enabled, false);
+  assert.equal(server.env.GITHUB_TOKEN, TOKEN);
+
+  assert.equal((await storage.saveMcpServer({ id: 'files', command: 'npx', create: true })).ok, true);
+  // Without the flag a save still replaces by id — editing and the import
+  // rely on that.
+  assert.equal((await storage.saveMcpServer({ id: 'github', command: 'uvx' })).ok, true);
+  assert.equal((await storage.readMcpServers()).find((s) => s.id === 'github').command, 'uvx');
+});
+
 test('mehrere Server bleiben nebeneinander bestehen', async (t) => {
   const { storage } = await makeStore(t);
   await storage.saveMcpServer(GITHUB);
