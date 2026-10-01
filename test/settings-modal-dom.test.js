@@ -1209,3 +1209,219 @@ test('„Uebernehmen" schickt die Sofort-Einstellungen nicht noch einmal mit (#2
     assert.equal(key in gesendet.uiPrefs, false, `${key} must not travel with Apply`);
   }
 });
+
+// --- Apply and the open sequence (CR-B14-06) ---------------------------------
+
+/** A promise the test resolves by hand. */
+function gate() {
+  let release;
+  const promise = new Promise((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
+/** Collects unhandled rejections for the duration of a test. */
+function watchUnhandledRejections(t) {
+  const seen = [];
+  const onUnhandled = (reason) => { seen.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  t.after(() => process.off('unhandledRejection', onUnhandled));
+  return seen;
+}
+
+const SYSTEM_SKILLS = [
+  { name: 'pdf', description: 'PDF', source: 'system', status: 'active', path: '/sys/pdf', detail: '', builtin: true },
+  { name: 'xlsx', description: 'Excel', source: 'system', status: 'active', path: '/sys/xlsx', detail: '', builtin: true },
+];
+
+const applyButton = () => document.getElementById('btn-settings-save');
+const footerError = () => document.getElementById('modal-save-error');
+
+test('Apply stays disabled until the whole open sequence has finished (CR-B14-06)', async (t) => {
+  let pending = null;
+  const commits = [];
+  const { dom, modal } = await mountSettings({
+    getSkillCatalog: () => (pending ? pending.promise : Promise.resolve({ skills: SYSTEM_SKILLS })),
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  modal.closeSettingsModal();
+
+  // The skill catalogue comes last; until then the dialog is only half there.
+  pending = gate();
+  const opening = modal.openSettingsModal();
+  await flush();
+  assert.equal(applyButton().disabled, true, 'enabled before the catalogue arrived');
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0, 'Apply during loading sent something');
+
+  pending.release({ skills: SYSTEM_SKILLS });
+  await opening;
+  await flush();
+  assert.equal(applyButton().disabled, false);
+  applyButton().click();
+  await flush();
+  assert.deepEqual(commits.map((c) => c.uiPrefs.activeSkills), [['pdf', 'xlsx']]);
+});
+
+test('without a skill catalogue Apply leaves the selection alone instead of sending none (CR-B14-06)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => { throw new Error('scan failed'); },
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+
+  assert.ok(sent, 'the rest is still saved');
+  assert.equal('activeSkills' in sent.uiPrefs, false, 'an empty list would switch every skill off');
+});
+
+test('after a failed load Apply stays disabled and sends nothing (CR-B14-06)', async (t) => {
+  let fail = false;
+  const commits = [];
+  const { dom } = await mountSettings({
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+    modalDeps: {
+      refreshLLMState: async () => { if (fail) throw new Error('main is gone'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  fail = true;
+  await dom.reopenSettings();
+
+  assert.equal(footerError().textContent, 'Einstellungen konnten nicht geladen werden: main is gone');
+  assert.equal(applyButton().disabled, true);
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0);
+});
+
+test('unreadable preferences keep Apply off instead of writing defaults over them (CR-B14-06)', async (t) => {
+  let fail = false;
+  const commits = [];
+  const { dom } = await mountSettings({
+    getUIPrefs: async () => {
+      if (fail) throw new Error('disk error');
+      return { baseSystemPrompt: 'Be brief.', appLocale: 'de', disabledTools: [], maxToolRounds: 30 };
+    },
+    commitSettings: async (payload) => { commits.push(payload); return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  fail = true;
+  await dom.reopenSettings();
+
+  assert.match(footerError().textContent, /disk error/);
+  assert.equal(applyButton().disabled, true);
+  applyButton().click();
+  await flush();
+  assert.equal(commits.length, 0, 'the stored system prompt and round limit would be gone');
+});
+
+test('each opening starts from fresh drafts (CR-B14-06)', async (t) => {
+  let fail = false;
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    modalDeps: {
+      refreshLLMState: async () => { if (fail) throw new Error('main is gone'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  // A row added and then cancelled with Close.
+  await zeileAnlegen({ name: 'Cancelled', baseUrl: 'http://localhost:1234/v1', model: 'qwen2.5' });
+  assert.equal(zeilenTitel().length, 1);
+
+  fail = true;
+  await dom.reopenSettings();
+  assert.deepEqual(zeilenTitel(), [], 'the cancelled row is back on screen');
+  assert.equal(document.getElementById('pref-list-empty').classList.contains('hidden'), true,
+    'nothing was loaded, so the list does not claim to be empty');
+
+  fail = false;
+  await dom.reopenSettings();
+  assert.deepEqual(zeilenTitel(), []);
+});
+
+for (const [where, gatedKey] of [
+  ['while the model state loads', 'refreshLLMState'],
+  ['in the middle of the sequence', 'getPythonState'],
+]) {
+  test(`a close ${where} opens no sub-panel on the hidden dialog (CR-B14-06)`, async (t) => {
+    let pending = null;
+    const opened = [];
+    const spyPanel = (name) => ({
+      open: async () => { opened.push(name); },
+      refresh: async () => { opened.push(name); },
+      close() {},
+    });
+    const waitIfGated = (key, value) => () => (pending && gatedKey === key ? pending.promise : Promise.resolve(value));
+    const { dom, modal } = await mountSettings({
+      getPythonState: waitIfGated('getPythonState', { enabled: false }),
+      modalDeps: {
+        refreshLLMState: waitIfGated('refreshLLMState', undefined),
+        toolPermissionsPanel: spyPanel('permissions'),
+        mcpPanel: spyPanel('mcp'),
+        memoryPanel: spyPanel('memory'),
+      },
+    });
+    t.after(dom.cleanup);
+    modal.closeSettingsModal();
+    opened.length = 0;
+
+    pending = gate();
+    const opening = modal.openSettingsModal();
+    await flush();
+    modal.closeSettingsModal();
+    pending.release({ enabled: false });
+    await opening;
+    await flush();
+
+    assert.deepEqual(opened, []);
+    assert.ok(document.getElementById('modal-settings').classList.contains('hidden'));
+    assert.equal(applyButton().disabled, true);
+  });
+}
+
+test('a rejected Apply shows the failure in the footer, without an unhandled rejection (CR-B14-06)', async (t) => {
+  const unhandled = watchUnhandledRejections(t);
+  const { dom } = await mountSettings({
+    commitSettings: async () => { throw new Error('IPC closed'); },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+  await flush();
+
+  assert.equal(footerError().textContent, 'Speichern fehlgeschlagen.');
+  assert.equal(footerError().classList.contains('hidden'), false);
+  assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false, 'the dialog stays open');
+  assert.equal(applyButton().disabled, false, 'and Apply can be tried again');
+  assert.deepEqual(unhandled, []);
+});
+
+test('a failing reload after a successful save says so and keeps the dialog open (CR-B14-06)', async (t) => {
+  let saved = false;
+  const unhandled = watchUnhandledRejections(t);
+  const { dom } = await mountSettings({
+    commitSettings: async () => { saved = true; return { ok: true }; },
+    modalDeps: {
+      refreshLLMState: async () => { if (saved) throw new Error('state unreadable'); },
+    },
+  });
+  t.after(dom.cleanup);
+
+  applyButton().click();
+  await flush();
+  await flush();
+
+  assert.equal(footerError().textContent,
+    'Gespeichert, aber die neuen Einstellungen ließen sich nicht zurücklesen: state unreadable');
+  assert.equal(document.getElementById('modal-settings').classList.contains('hidden'), false);
+  assert.deepEqual(unhandled, []);
+});

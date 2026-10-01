@@ -49,17 +49,6 @@ const {
   isSkillSuggestionMode,
 } = contracts;
 
-let settingsDraftPresets = [];
-let settingsDraftActivePresetId = null;
-let settingsCredentialDraft = {};
-let popupPresetFieldValues = {};
-let settingsToolCatalog = [];
-let settingsDisabledToolsDraft = new Set();
-let settingsSkillCatalog = [];
-let settingsActiveSkillsDraft = new Set();
-/** Which section is open — needed to relabel it after a language change. */
-let activePanelKey = 'models';
-
 export function initSettingsModal(deps) {
   const {
     api,
@@ -81,6 +70,42 @@ export function initSettingsModal(deps) {
     setTheme = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
   } = deps;
+
+  // The drafts of one opening. Each open starts them afresh (CR-B14-06): a
+  // cancelled session must not reach the next Apply.
+  let settingsDraftPresets = [];
+  let settingsDraftActivePresetId = null;
+  let settingsCredentialDraft = {};
+  let popupPresetFieldValues = {};
+  let settingsToolCatalog = [];
+  let settingsDisabledToolsDraft = new Set();
+  let settingsSkillCatalog = [];
+  let settingsActiveSkillsDraft = new Set();
+  /** Whether the skill catalogue arrived; until then Apply leaves the skills alone. */
+  let settingsSkillCatalogLoaded = false;
+  /** Which section is open — needed to relabel it after a language change. */
+  let activePanelKey = 'models';
+
+  function resetDrafts() {
+    settingsDraftPresets = [];
+    settingsDraftActivePresetId = null;
+    settingsCredentialDraft = {};
+    popupPresetFieldValues = {};
+    settingsToolCatalog = [];
+    settingsDisabledToolsDraft = new Set();
+    settingsSkillCatalog = [];
+    settingsActiveSkillsDraft = new Set();
+    settingsSkillCatalogLoaded = false;
+  }
+
+  /**
+   * One opening of the dialog. A close (or the next open) moves the
+   * generation on, and the open sequence still running stops at its next
+   * step. `settingsReady` is true once the whole sequence has finished
+   * without a failed load — only then may Apply write anything (CR-B14-06).
+   */
+  let openGeneration = 0;
+  let settingsReady = false;
 
   const modalSettings = document.getElementById('modal-settings');
   const modalSettingsBackdrop = document.getElementById('modal-settings-backdrop');
@@ -1200,6 +1225,9 @@ export function initSettingsModal(deps) {
   }
 
   function adoptSkillCatalog(result) {
+    // An unreadable catalogue is not an empty selection: Apply would switch
+    // off every skill, the system skills included (CR-B14-06).
+    settingsSkillCatalogLoaded = Array.isArray(result?.skills);
     settingsSkillCatalog = Array.isArray(result?.skills) ? result.skills : [];
     // Der Katalog kennt bereits die Voreinstellung (System-Skills an), wenn in
     // den Prefs noch nichts gespeichert ist — daher den Entwurf daraus ableiten.
@@ -1634,10 +1662,19 @@ export function initSettingsModal(deps) {
   async function openSettingsModal(request) {
     const jump =
       request && typeof request === 'object' && typeof request.panel === 'string' ? request : null;
+    const generation = ++openGeneration;
+    // Every step below waits; a close or the next open in the meantime ends
+    // this opening, and it touches nothing more (CR-B14-06).
+    const stale = () => generation !== openGeneration;
+    settingsReady = false;
+    resetDrafts();
     stopChatVoiceListening();
     setModalError('');
     setProviderStatus('');
     setModelStatus('');
+    // Apply waits for the whole sequence: until the skill catalogue is in, it
+    // would send an empty selection, and after a failed load it would write
+    // defaults over what is stored (CR-B14-06).
     btnSettingsSave.disabled = true;
     closeChatModelMenu(false);
     appStore.lastFocusBeforeModal = document.activeElement;
@@ -1650,14 +1687,44 @@ export function initSettingsModal(deps) {
     activateSettingsPanel(jump && SETTINGS_NAV_KEYS.includes(jump.panel) ? jump.panel : 'models');
     try {
       await refreshLLMState();
-      setupDraftFromServerState();
     } catch (err) {
-      setModalError(t('settings.loadFailed', { error: err.message || t('settings.loadFailed.unknown') }));
+      if (stale()) return;
+      showLoadFailed(err);
+      // Nothing of a previous opening stays on screen as if it were loaded,
+      // and no list claims to be empty.
+      renderDraftPresetList();
+      prefListEmpty.classList.add('hidden');
+      renderSkillList();
+      settingsSkillListEmpty?.classList.add('hidden');
       modalEncryptionWarning.classList.add('hidden');
       return;
-    } finally {
-      btnSettingsSave.disabled = false;
     }
+    if (stale()) return;
+    try {
+      await loadRestOfSettings(jump, stale);
+    } catch (err) {
+      if (!stale()) showLoadFailed(err);
+    }
+  }
+
+  function showLoadFailed(err) {
+    setModalError(t('settings.loadFailed', { error: err?.message || t('settings.loadFailed.unknown') }));
+  }
+
+  /**
+   * A sub-panel that finished opening after the dialog was closed: the close
+   * already ran its `close()`, so it runs again — unless a newer opening owns
+   * the dialog by now.
+   */
+  function abandonPanel(panel) {
+    if (modalSettings.classList.contains('hidden')) panel?.close?.();
+  }
+
+  /** The open sequence after the model state is in; returns early once `stale()`. */
+  async function loadRestOfSettings(jump, stale) {
+    setupDraftFromServerState();
+    renderDraftPresetList();
+    let loadError = null;
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
@@ -1665,6 +1732,7 @@ export function initSettingsModal(deps) {
     themeChoice.set(getTheme?.() === 'dark' ? 'dark' : 'light');
     try {
       const up = await api.getUIPrefs();
+      if (stale()) return;
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
       localeChoice.set(up.appLocale === 'de' ? 'de' : 'en');
       if (selectSkillSuggestionMode) {
@@ -1688,7 +1756,13 @@ export function initSettingsModal(deps) {
       shellSwitch.set(up.shellExecutionEnabled === true);
       environmentSwitch.set(up.environmentInfoEnabled !== false);
       projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
-    } catch {
+    } catch (err) {
+      if (stale()) return;
+      // The fields below show defaults, not what is stored; Apply would write
+      // them over the system prompt, the interpreter path and the round
+      // limit. It stays off, and the footer says why (CR-B14-06).
+      loadError = err || new Error('');
+      showLoadFailed(loadError);
       inputGlobalSystemPrompt.value = '';
       // Without readable preferences the dialog shows the language it is
       // currently standing in — not a third one nobody picked.
@@ -1704,26 +1778,40 @@ export function initSettingsModal(deps) {
       projectInstructionsSwitch.set(true);
     }
     await loadPythonState();
+    if (stale()) return;
     await loadShellState();
+    if (stale()) return;
     await loadWebSearchState();
+    if (stale()) return;
     await loadToolCatalog();
+    if (stale()) return;
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
     // sofort – sie hängen nicht am Entwurf, der mit „Übernehmen“ gespeichert wird.
     await toolPermissionsPanel?.open?.(settingsToolCatalog);
+    if (stale()) return abandonPanel(toolPermissionsPanel);
     await securityPanel.open();
+    if (stale()) return abandonPanel(securityPanel);
     // MCP (Issue #109) liest wie die Berechtigungen direkt vom Main und
     // wirkt sofort — die Serverliste haengt nicht am Entwurf.
     await mcpPanel?.open?.();
+    if (stale()) return abandonPanel(mcpPanel);
     // Gedaechtnis (Issue #166): Die Eintraege kommen wie die Serverliste
     // direkt vom Main, das Vergessen wirkt sofort. Nur die drei Schalter
     // gehoeren zum Entwurf und werden mit „Übernehmen“ gespeichert.
     await memoryPanel?.refresh?.();
+    if (stale()) return;
     await loadSkillCatalog();
+    if (stale()) return;
     renderDraftPresetList();
     renderProviderSelect();
     syncPopupProviderUI(selectProvider.value, true);
+    // The popup sync clears the footer; a failed load has to stay said there.
+    if (loadError) showLoadFailed(loadError);
+    settingsReady = !loadError;
+    btnSettingsSave.disabled = !settingsReady;
 
     queueMicrotask(() => {
+      if (stale()) return;
       // With a jump target the focus is on the switch it means, otherwise on
       // the selected section's tab.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
@@ -1762,6 +1850,9 @@ export function initSettingsModal(deps) {
   }
 
   function closeSettingsModal() {
+    // Ends an open sequence that is still loading (CR-B14-06).
+    openGeneration += 1;
+    settingsReady = false;
     toolPermissionsPanel?.close?.();
     securityPanel.close();
     mcpPanel?.close?.();
@@ -1985,7 +2076,13 @@ export function initSettingsModal(deps) {
     };
   }
 
+  let settingsSaving = false;
+
   async function commitSettingsFromModal() {
+    // Apply writes only what the dialog has completely loaded, and one save
+    // at a time (CR-B14-06). The button is disabled in both cases; this holds
+    // even for a call that does not come through it.
+    if (!settingsReady || settingsSaving) return;
     stashPopupCredentialInputs();
     setModalError('');
     // Eine leere Liste lehnt der Main-Prozess ab — und speichert dabei System-
@@ -2027,37 +2124,63 @@ export function initSettingsModal(deps) {
       providerPatches[pid] = patch;
     }
 
+    const generation = openGeneration;
+    settingsSaving = true;
     btnSettingsSave.disabled = true;
     try {
-      const res = await api.commitSettings({
-        presets: settingsDraftPresets.map(presetToWireRow),
-        activePresetId,
-        providerPatches,
-        uiPrefs: {
-          baseSystemPrompt: inputGlobalSystemPrompt.value || '',
-          skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
-          maxToolRounds: (() => {
-            const n = parseInt(inputMaxToolRounds?.value || '', 10);
-            return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
-          })(),
-          activeSkills: [...settingsActiveSkillsDraft],
-          pythonInterpreterPath: inputPythonInterpreter?.value || '',
-        },
-      });
+      let res;
+      try {
+        res = await api.commitSettings({
+          presets: settingsDraftPresets.map(presetToWireRow),
+          activePresetId,
+          providerPatches,
+          uiPrefs: {
+            baseSystemPrompt: inputGlobalSystemPrompt.value || '',
+            skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
+            maxToolRounds: (() => {
+              const n = parseInt(inputMaxToolRounds?.value || '', 10);
+              return Number.isFinite(n) ? n : DEFAULT_MAX_TOOL_ROUNDS;
+            })(),
+            // Without a catalogue there is no selection to send — an empty
+            // list would switch every skill off (CR-B14-06).
+            ...(settingsSkillCatalogLoaded ? { activeSkills: [...settingsActiveSkillsDraft] } : {}),
+            pythonInterpreterPath: inputPythonInterpreter?.value || '',
+          },
+        });
+      } catch {
+        if (generation === openGeneration) setModalError(t('settings.saveFailed'));
+        return;
+      }
       if (res?.ok || res?.uiPrefsSaved) {
         // Sofort wirksam, ohne Neustart — wie die Sprache (Issue #97).
         onSkillSuggestionModeChanged?.(
           selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE
         );
       }
+      if (generation !== openGeneration) return;
       if (!res?.ok) {
         setModalError(tMessage(res?.error) || t('settings.saveFailed'));
         return;
       }
-      await refreshLLMState();
+      try {
+        await refreshLLMState();
+      } catch (err) {
+        // Saved, but the app could not read the new state back: the dialog
+        // stays open and says so rather than closing over a stale model menu.
+        if (generation === openGeneration) {
+          setModalError(t('settings.savedButNotReloaded', {
+            error: err?.message || t('settings.loadFailed.unknown'),
+          }));
+        }
+        return;
+      }
+      // Closed, or closed and opened again, while saving: that dialog is not
+      // this one's to close.
+      if (generation !== openGeneration) return;
       closeSettingsModal();
     } finally {
-      btnSettingsSave.disabled = false;
+      settingsSaving = false;
+      btnSettingsSave.disabled = !settingsReady;
     }
   }
 
@@ -2225,7 +2348,9 @@ export function initSettingsModal(deps) {
   });
 
   btnSettingsSave.addEventListener('click', () => {
-    commitSettingsFromModal();
+    // Its own failures are caught inside; anything else still reaches the
+    // footer instead of becoming an unhandled rejection (CR-B14-06).
+    commitSettingsFromModal().catch(() => setModalError(t('settings.saveFailed')));
   });
 
   prefModelList?.addEventListener('click', (e) => {
@@ -2403,7 +2528,9 @@ export function initSettingsModal(deps) {
     renderDraftPresetList();
     // Provider names, hints and option labels come from the main process in
     // the stored language as well (#310): fetch, then redraw what shows them.
-    void refreshLLMState().then(retranslateModels);
+    // A failed read keeps the views it has; what the interface words itself
+    // is redrawn all the same.
+    void Promise.resolve().then(refreshLLMState).catch(() => {}).then(retranslateModels);
     // Die Tool-Beschreibungen stehen im Main-Prozess und kommen in der
     // gespeicherten Sprache zurueck (#291) — hier reicht kein Neuzeichnen, die
     // Liste muss neu geholt werden. Der Main hat die neue Sprache bereits

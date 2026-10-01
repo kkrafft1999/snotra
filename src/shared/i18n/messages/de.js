@@ -382,6 +382,7 @@ module.exports = {
   'settings.loadFailed': 'Einstellungen konnten nicht geladen werden: {error}',
   'settings.loadFailed.unknown': 'Unbekannter Fehler',
   'settings.saveFailed': 'Speichern fehlgeschlagen.',
+  'settings.savedButNotReloaded': 'Gespeichert, aber die neuen Einstellungen ließen sich nicht zurücklesen: {error}',
 
   // ── Settings: models ───────────────────────────────────────────────────────
   'settings.models.encryptionWarning': 'Verschlüsselter Speicher ist auf diesem System nicht verfügbar. Ein Key kann nicht sicher gespeichert werden.',

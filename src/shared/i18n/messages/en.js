@@ -376,6 +376,7 @@ module.exports = {
   'settings.loadFailed': 'Settings could not be loaded: {error}',
   'settings.loadFailed.unknown': 'Unknown error',
   'settings.saveFailed': 'Saving failed.',
+  'settings.savedButNotReloaded': 'Saved, but the new settings could not be read back: {error}',
 
   // ── Settings: models ─────────────────────────────────────────────────────
   'settings.models.encryptionWarning': 'Encrypted storage is not available on this system. A key cannot be stored safely.',
