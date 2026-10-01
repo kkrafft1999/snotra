@@ -1215,9 +1215,18 @@ summary:focus-visible,
     background var(--ds-motion-fast);
 }
 
-.chat-model-pill.chat-model-pill--btn:hover {
+.chat-model-pill.chat-model-pill--btn:hover:not(:disabled) {
   border-color: var(--ds-blue);
   background: var(--ds-blue-soft);
+}
+
+/* Nothing to switch to (#583): the pill names the model and offers no menu. */
+.chat-model-pill.chat-model-pill--btn:disabled {
+  cursor: default;
+}
+
+.chat-model-pill--btn:disabled .chat-model-pill-chevron {
+  display: none;
 }
 
 .chat-model-pill-chevron {

@@ -223,7 +223,7 @@ module.exports = {
   'chat.voice.stoppingSoon': 'Recording … stops automatically in under {seconds} seconds.',
   'chat.voice.autoStopped.time': 'Recording stopped automatically after {minutes} minutes.',
   'chat.voice.autoStopped.size': 'Recording stopped automatically at {max} MB.',
-  'chat.modelPicker.label': 'Choose the active model',
+  'chat.modelPicker.button.label': 'Model {model}. Switch model',
   'chat.modelPicker.menu': 'Available models',
   'chat.toolMode.label': 'Choose the permission mode',
   'chat.toolMode.title': 'Tool permissions',

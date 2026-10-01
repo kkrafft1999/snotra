@@ -47,23 +47,36 @@ export function initChatModelPicker({
     return p?.capabilities?.images === true;
   }
 
-  function closeChatModelMenu() {
+  /**
+   * `focusPill`: back to the pill after Escape or a choice (#583), the way the
+   * mode menu next to it does it. A click elsewhere leaves the focus alone.
+   */
+  function closeChatModelMenu({ focusPill = false } = {}) {
     chatModelMenuOpen = false;
     if (chatModelMenu) chatModelMenu.classList.add('hidden');
     if (btnChatModelPicker) {
       btnChatModelPicker.setAttribute('aria-expanded', 'false');
+      if (focusPill) btnChatModelPicker.focus();
     }
+  }
+
+  /**
+   * The presets the menu offers. The active one is always among them, also
+   * when it is hidden from the menu: the menu then still shows what is
+   * selected, and the pill never opens an empty list (#583).
+   */
+  function menuPresets() {
+    const presets = Array.isArray(appStore.llmState.presets) ? appStore.llmState.presets : [];
+    const activeId = appStore.llmState.activePresetId;
+    return presets.filter((pr) => pr.configured && (pr.menuVisible !== false || pr.id === activeId));
   }
 
   function rebuildChatModelMenu() {
     if (!chatModelMenu) return 0;
     chatModelMenu.innerHTML = '';
-    const presets = Array.isArray(appStore.llmState.presets) ? appStore.llmState.presets : [];
     const activeId = appStore.llmState.activePresetId;
     let count = 0;
-    for (const pr of presets) {
-      if (pr.menuVisible === false) continue;
-      if (!pr.configured) continue;
+    for (const pr of menuPresets()) {
       count += 1;
       const li = document.createElement('li');
       li.setAttribute('role', 'none');
@@ -80,11 +93,11 @@ export function initChatModelPicker({
       // Einzeilig: Anbieter und Modell, dahinter gedaempft der Zusatz
       // (z. B. das Reasoning-Level). Weitere Preset-Details wie Serveradresse
       // stehen im Einstellungsdialog, nicht in diesem Schnellwechsel-Menue.
-      const t = document.createElement('span');
-      t.className = 'chat-model-menu-opt-title';
-      t.lang = 'en';
-      t.textContent = pr.labelBase || pr.label || '';
-      main.appendChild(t);
+      const title = document.createElement('span');
+      title.className = 'chat-model-menu-opt-title';
+      title.lang = 'en';
+      title.textContent = pr.labelBase || pr.label || '';
+      main.appendChild(title);
 
       if (pr.optionSuffix) {
         const suffix = document.createElement('span');
@@ -182,7 +195,15 @@ export function initChatModelPicker({
       if (active && target?.model && isConfigured) {
         chatModelPickerWrap.classList.remove('hidden');
         btnChatModelPicker.classList.remove('hidden');
-        chatModelPillLabel.textContent = activePreset?.label || `${active.name} · ${target.model}`;
+        const model = activePreset?.label || `${active.name} · ${target.model}`;
+        chatModelPillLabel.textContent = model;
+        // The name starts with what the pill shows (WCAG 2.5.3, #583); the
+        // model name alone is marked as English, in the markup.
+        const name = t('chat.modelPicker.button.label', { model });
+        btnChatModelPicker.setAttribute('aria-label', name);
+        btnChatModelPicker.title = name;
+        // Without a preset to switch to, the pill is a label, not a menu.
+        btnChatModelPicker.disabled = menuPresets().length === 0;
       } else {
         chatModelPickerWrap.classList.add('hidden');
         btnChatModelPicker.classList.add('hidden');
@@ -238,6 +259,13 @@ export function initChatModelPicker({
     chatModelMenuOpen = true;
     chatModelMenu.classList.remove('hidden');
     btnChatModelPicker.setAttribute('aria-expanded', 'true');
+    // Into the list, on the option that is selected (#583).
+    const options = menuOptions();
+    (options.find((o) => o.getAttribute('aria-selected') === 'true') || options[0])?.focus();
+  }
+
+  function menuOptions() {
+    return chatModelMenu ? [...chatModelMenu.querySelectorAll('.chat-model-menu-option')] : [];
   }
 
   dismissOnOutsideClick({
@@ -259,10 +287,38 @@ export function initChatModelPicker({
       if (!opt) return;
       const pid = opt.dataset.presetId;
       if (!pid) return;
-      closeChatModelMenu();
+      closeChatModelMenu({ focusPill: true });
       await persistActivePreset(pid);
     });
+
+    // The keyboard model of a listbox, the same as the mode menu's (#583).
+    chatModelMenu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeChatModelMenu({ focusPill: true });
+        return;
+      }
+      const options = menuOptions();
+      if (options.length === 0) return;
+      const index = options.indexOf(document.activeElement);
+      let next = null;
+      if (e.key === 'ArrowDown') next = options[(index + 1) % options.length];
+      else if (e.key === 'ArrowUp') next = options[(index - 1 + options.length) % options.length];
+      else if (e.key === 'Home') next = options[0];
+      else if (e.key === 'End') next = options[options.length - 1];
+      if (!next) return;
+      e.preventDefault();
+      next.focus();
+    });
   }
+
+  // Tabbing out closes the menu; it does not stay open behind the focus.
+  chatModelPickerWrap?.addEventListener('focusout', (e) => {
+    if (!chatModelMenuOpen) return;
+    if (e.relatedTarget && chatModelPickerWrap.contains(e.relatedTarget)) return;
+    closeChatModelMenu();
+  });
 
   // The pill, the hint below the composer and the label of the live dot are
   // written at runtime, so a language change has to repaint them (#290).

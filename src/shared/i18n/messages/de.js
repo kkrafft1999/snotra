@@ -229,7 +229,7 @@ module.exports = {
   'chat.voice.stoppingSoon': 'Aufnahme läuft … stoppt in weniger als {seconds} Sekunden automatisch.',
   'chat.voice.autoStopped.time': 'Aufnahme nach {minutes} Minuten automatisch beendet.',
   'chat.voice.autoStopped.size': 'Aufnahme bei {max} MB automatisch beendet.',
-  'chat.modelPicker.label': 'Aktives Modell wählen',
+  'chat.modelPicker.button.label': 'Modell {model}. Modell wechseln',
   'chat.modelPicker.menu': 'Verfügbare Modelle',
   'chat.toolMode.label': 'Berechtigungsmodus wählen',
   'chat.toolMode.title': 'Tool-Berechtigungen',
