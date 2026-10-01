@@ -11,6 +11,13 @@ name: Release
 # Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
 # Windows, Linux). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht
 # (#70).
+#
+# Tag check (#570): before anything else, a release tag has to name exactly
+# the version in package.json and point at a commit on main. A release is
+# served to every running installation as "latest"; a tag on the wrong commit
+# would be offered to all of them, and on Windows and Linux installed and
+# offered again after the restart. Prerelease tags (with a "-") are never
+# served as "latest" and are exempt, so a test build can come from a branch.
 
 on:
   push:
@@ -26,8 +33,37 @@ permissions:
   contents: read
 
 jobs:
+  verify-tag:
+    name: Tag matches package.json and main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          if [[ "$tag" == *-* ]]; then
+            echo "Prerelease tag $GITHUB_REF_NAME: not served as latest, not checked."
+            exit 0
+          fi
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$tag" != "$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the version in package.json ($version)."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main."
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches package.json and is on main."
+
   test:
     name: Test-Gate
+    needs: verify-tag
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
