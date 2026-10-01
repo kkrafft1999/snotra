@@ -197,7 +197,6 @@ function makeEngine(results, {
       approvals: approvals || null,
       sessionGrants,
       maxToolRounds,
-      clock: () => 1234,
     }),
   };
 }
@@ -271,7 +270,7 @@ test('engine bietet Tools ohne Ordnerbezug auch ohne geöffneten Ordner an (#96)
   assert.match(system.content, /No project folder is open/);
   assert.match(system.content, /Tools: web_search/);
   // Der Pfad-Hinweis der Datei-Tools hat hier nichts zu suchen.
-  assert.doesNotMatch(system.content, /geöffneten Ordner „/);
+  assert.doesNotMatch(system.content, /You are working in the folder|relative to the folder root/);
 });
 
 // Issue #182: Die Engine liest den Rueckgabewert von `buildSystemPrompt()`
@@ -318,7 +317,8 @@ test('mit Projektordner steht die Regel ebenfalls im System-Prompt (#182)', asyn
   assert.ok(system.content.includes(TOOL_RESULTS_ARE_DATA_RULE));
   // Der Konventionsblock steht darin, die Aufzaehlung der Tool-Namen nicht.
   assert.match(system.content, /relative to the folder root/);
-  assert.doesNotMatch(system.content, /Du hast folgende Tools/);
+  // Since #190 the schemas carry the tools; no line lists them again.
+  assert.doesNotMatch(system.content, /^- [a-z_]+: /m);
 });
 
 test('engine lässt Datei-Tools ohne Ordner unverändert draußen (#96)', async () => {
@@ -371,7 +371,7 @@ test('engine markiert nur ordnergebundene Tools als „kein Ordner geöffnet" (#
   const toolEvents = events.filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE);
   assert.deepEqual(toolEvents.map((event) => event.payload.phase), ['start', 'done']);
   for (const event of toolEvents) {
-    assert.doesNotMatch(event.payload.line, /kein Ordner geöffnet/);
+    assert.doesNotMatch(event.payload.line, /no folder open/);
   }
 });
 
@@ -390,7 +390,7 @@ test('engine describes the open folder and the available tools', async () => {
   assert.ok(system, 'System-Nachricht mit Workspace-Kontext erwartet');
   assert.match(system.content, /open in the app: "snotra-project"/);
   assert.match(system.content, /Tools: list_directory/);
-  assert.doesNotMatch(system.content, /ausgewählt/);
+  assert.doesNotMatch(system.content, /has just selected/);
   // @-Referenzen aus der Chat-Eingabe (#52): Konvention erklären, Inhalt nicht einbetten.
   assert.match(system.content, /"@<path>"/);
   assert.match(system.content, /not sent along automatically/);
@@ -833,7 +833,7 @@ test('generateTitle works before the first answer and reports failures instead o
     messages: [{ role: 'user', content: 'Was fehlt noch am Composer?' }],
   });
   assert.deepEqual(withoutAnswer, { title: 'Offene Frage zum Composer' });
-  assert.equal(onlyQuestion.calls[0].messages[1].content.includes('Antwort:'), false);
+  assert.equal(onlyQuestion.calls[0].messages[1].content.includes('Answer:'), false);
 
   // Ohne Nutzerfrage gibt es nichts zu benennen — und keinen Modellaufruf.
   const empty = makeEngine([assistantText('egal')]);
@@ -1774,4 +1774,77 @@ test('without a folder a file tool runs for the skill folders instead of being r
   ], { tools: noSkill, skills: skillsPort([]) });
   await second.engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
   assert.equal(noSkill.calls.filter((call) => call.toolName === 'read_file_text').length, 0);
+});
+
+// #527: an error after a tool round keeps the tools that ran, so the renderer
+// does not drop the turn and its record with it.
+test('an error after a tool round carries the tool trace and the usage (#527)', async () => {
+  const toolRound = () => ({
+    ...assistantToolCall(`c${Math.random()}`, 'list_directory', { relative_path: '.' }),
+    usage: { prompt: 10, completion: 2, total: 12 },
+  });
+  const cases = [
+    { name: 'tool limit', results: () => toolRound(), code: 'TOOL_LIMIT', traced: 3 },
+    { name: 'provider error', results: (_, i) => (i === 0 ? toolRound() : { error: 'rate limited', code: 'API' }), code: 'API', traced: 1 },
+    { name: 'no message', results: (_, i) => (i === 0 ? toolRound() : {}), code: 'INVALID', traced: 1 },
+    {
+      name: 'provider throws',
+      results: (_, i) => {
+        if (i === 0) return toolRound();
+        throw new Error('socket hang up');
+      },
+      code: 'NETWORK',
+      traced: 1,
+    },
+  ];
+  for (const { name, results, code, traced } of cases) {
+    const llm = makeLlmPort(results);
+    const { engine } = makeEngine(null, { llm });
+    const result = await engine.send({
+      sessionId: 'renderer-1',
+      payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-527' },
+    });
+    assert.equal(result.code, code, name);
+    assert.equal(result.toolTrace?.length, traced, `${name}: the tools that ran are in the result`);
+    assert.equal(result.usage?.prompt > 0, true, `${name}: the usage so far is in the result`);
+  }
+});
+
+test('a throw outside the provider is the app\'s own error, not a network error (#527)', async () => {
+  const tools = makeToolPort(() => {
+    throw new Error('handler exploded');
+  });
+  const { engine } = makeEngine([assistantToolCall('c1', 'list_directory', { relative_path: '.' }), assistantText('never')], { tools });
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-527' },
+  });
+  assert.equal(result.code, 'INTERNAL');
+  assert.match(errorText(result, 'en'), /error of its own.*handler exploded/);
+  assert.equal(result.toolTrace.length, 1);
+});
+
+test('an error before any tool ran carries no trace (#527)', async () => {
+  const { engine } = makeEngine([{ error: 'rate limited', code: 'API' }]);
+  const result = await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+  assert.equal(result.code, 'API');
+  assert.equal('toolTrace' in result, false);
+});
+
+test('the history window starts with a user message after the trim, too (#532)', async () => {
+  const { engine, calls } = makeEngine([assistantText('ok')], {
+    preferences: { async read() { return { historyCharLimit: 4100 }; } },
+  });
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        { role: 'user', content: 'u'.repeat(3000) },
+        { role: 'assistant', content: 'a'.repeat(2000) },
+        { role: 'user', content: 'q' },
+      ],
+    },
+  });
+  assert.deepEqual(calls[0].messages.map((m) => m.role), ['user']);
+  assert.equal(calls[0].messages[0].content, 'q');
 });

@@ -24,6 +24,31 @@ const {
 /** Maximale Laenge eines abgeleiteten Titels (inkl. Auslassungszeichen). */
 const CHAT_TITLE_MAX_LENGTH = 48;
 
+/** The longest chat id a run is keyed by. */
+const CHAT_ID_MAX_LENGTH = 128;
+
+/**
+ * A chat id as main and the engine both take it (#532): a trimmed, non-empty
+ * string of at most 128 characters, otherwise `null` — never cut down, since
+ * two ids sharing a prefix would then share one run.
+ */
+function sanitizeChatId(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > CHAT_ID_MAX_LENGTH) return null;
+  return trimmed;
+}
+
+/**
+ * Shortens a title by characters, not by UTF-16 units: a cut through an emoji
+ * would leave half a surrogate pair, drawn as "�" (#532).
+ */
+function clipChatTitle(text) {
+  const chars = Array.from(text);
+  if (chars.length <= CHAT_TITLE_MAX_LENGTH) return text;
+  return `${chars.slice(0, CHAT_TITLE_MAX_LENGTH - 1).join('')}…`;
+}
+
 /**
  * The short title a conversation gets from its first user message. The history
  * store (main) and the chat header (renderer) both use it — they have to show
@@ -60,10 +85,7 @@ function inferChatTitleText(messages) {
   const first = list.find((m) => m && m.role === 'user');
   if (!first || first.content == null) return '';
   const text = String(first.content).trim().replace(/\s+/g, ' ');
-  if (text.length > CHAT_TITLE_MAX_LENGTH) {
-    return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
-  }
-  return text;
+  return clipChatTitle(text);
 }
 
 /**
@@ -119,10 +141,7 @@ function sanitizeChatTitle(raw) {
   text = unquote(text);
   text = text.replace(/[.]+$/, '').trim();
   if (!text) return '';
-  if (text.length > CHAT_TITLE_MAX_LENGTH) {
-    return `${text.slice(0, CHAT_TITLE_MAX_LENGTH - 1)}…`;
-  }
-  return text;
+  return clipChatTitle(text);
 }
 
 // --- Ergebnis-DTOs (Rückgabe von CHAT_SEND) --------------------------------
@@ -184,8 +203,9 @@ function createChatErrorResult({
   if (usage !== undefined) result.usage = usage;
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
   if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
-  // Nur bei Abbruch durch verfallene Freigabe (Issue #66): die bis dahin
-  // gelaufenen Tool-Schritte bleiben im Verlauf sichtbar.
+  // Whenever tools ran before the error — an expired approval (#66), the
+  // tool round limit, a provider error in a later round (#527): the steps
+  // done until then stay visible in the history.
   if (Array.isArray(toolTrace) && toolTrace.length > 0) result.toolTrace = toolTrace;
   return result;
 }
@@ -254,6 +274,8 @@ function isToolLinePhase(phase) {
 }
 
 module.exports = {
+  CHAT_ID_MAX_LENGTH,
+  sanitizeChatId,
   CHAT_TITLE_MAX_LENGTH,
   inferChatTitle,
   inferChatTitleText,

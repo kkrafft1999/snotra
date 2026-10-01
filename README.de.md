@@ -679,6 +679,13 @@ Notbremse dafür ist der Schalter **Einstellungen › Allgemein ›
 „`AGENTS.md` mitschicken"** (voreingestellt an), der alle drei Stellen
 abschaltet.
 
+**Schlüssel bleiben draußen.** Bevor eine `AGENTS.md`, eine Gedächtnisdatei
+oder ein Skill an den Anbieter geht, prüft Snotra sie wie eine Datei, die ein
+Tool liest: Eine Datei mit einem der eigenen Schlüssel der App (ein
+Anbieter-Schlüssel, ein MCP-Geheimnis, der Schlüssel der Websuche) bleibt ganz
+weg, Zugangsdaten wie Tokens oder `password = …` werden maskiert. Die
+Aufschlüsselung unter dem Eingabefeld sagt, welche Datei es war.
+
 ## Gedächtnis: `memory.md`
 
 Snotra fängt nicht jeden Chat bei null an. Sag im Chat **„bitte merke dir …"**,
@@ -702,6 +709,10 @@ beim Verschieben des Ordners mit um. Es liegt damit aber auch **in deinem
 Projekt** und kann in ein Repository geraten — was nur dich angeht, gehört ins
 globale Gedächtnis oder gar nicht hinein. **Passwörter, Schlüssel und
 Zugangsdaten niemals:** Das Gedächtnis geht mit jeder Anfrage an den Anbieter.
+Rutscht doch etwas hinein, wird es maskiert wie in einer `AGENTS.md` (siehe
+oben). Und weil ein Repository ein Projekt-Gedächtnis mitbringen kann, liest das
+Modell es als Notizen aus dem Ordner, neben dessen `AGENTS.md` — nicht als
+etwas, das du gesagt hast.
 
 Snotra merkt sich auch **von selbst**, was dauerhaft wichtig aussieht. Jeder
 Merkvorgang ist freigabepflichtig und steht mit Ziel und Pfad im Tool-Log — und

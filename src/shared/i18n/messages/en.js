@@ -1020,6 +1020,7 @@ module.exports = {
   'chat.error.provider.fallback': 'This provider',
   'chat.error.toolLimit': 'Too many tool rounds ({limit} at the moment). Raise the limit under Settings › General, or ask a narrower question.',
   'chat.error.runLost': 'The answer did not come through. Ask again.',
+  'chat.error.internal': 'Snotra AI ran into an error of its own and stopped the answer ({detail}). Ask again to carry on.',
   'chat.error.runEnded.noApprovalUi': 'The tool call needs an approval, but no approval interface is available. The run has ended.',
   'chat.error.runEnded.requestInvalidated': 'The approval request expired (the file, the context or the rules have changed). The run has ended; ask again if you still need it.',
   'chat.error.runEnded.repeatedDenial': 'The model asked for a tool call that had already been denied, unchanged. The run has ended; the denial stands.',
@@ -1175,6 +1176,12 @@ module.exports = {
   'context.detail.pathTruncated': '{path} · shortened',
   'context.detail.folderPath': '<folder>/{path}',
   'context.detail.folderPathTruncated': '<folder>/{path} · shortened',
+  'context.detail.pathMasked': '{path} · credentials masked',
+  'context.detail.folderPathMasked': '<folder>/{path} · credentials masked',
+  'context.detail.pathWithheld': '{path} · left out, contains a key of the app',
+  'context.detail.folderPathWithheld': '<folder>/{path} · left out, contains a key of the app',
+  'context.detail.skill.masked': 'credentials masked',
+  'context.detail.skill.withheld': 'left out, contains a key of the app',
 
   // ── Approval card in the chat ────────────────────────────────────────────
   'approval.title.execute': 'Confirm execution',

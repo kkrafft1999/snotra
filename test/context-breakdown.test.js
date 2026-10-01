@@ -227,3 +227,28 @@ test('das Anbieter-Profil verschiebt Gewichte, nicht die Gesamtzahl (#178)', () 
   assert.ok(Math.abs(toolTokens(openai) - 5000) < 250, `${toolTokens(openai)}`);
   assert.ok(toolTokens(lokal) > 6000, `${toolTokens(lokal)}`);
 });
+
+test('the rows add up to the total, and none is driven to zero (#532)', () => {
+  const parts = Array.from({ length: 61 }, (_, index) => ({
+    id: `p${index}`,
+    group: 'system',
+    label: `p${index}`,
+    chars: index === 0 ? 40_000 : 40,
+  }));
+  for (const promptTokens of [61, 75, 200, 9_999]) {
+    const breakdown = createContextBreakdown({ parts, promptTokens });
+    assert.equal(breakdown.scaled, true);
+    assert.equal(breakdown.parts.reduce((sum, part) => sum + part.tokens, 0), promptTokens, `${promptTokens}`);
+    assert.ok(breakdown.parts.every((part) => part.tokens >= 1), `${promptTokens}`);
+    assert.ok(Math.abs(breakdown.parts.reduce((sum, part) => sum + part.share, 0) - 1) < 1e-9);
+  }
+});
+
+test('fewer tokens than rows keep the estimate instead of scaling to it (#532)', () => {
+  const parts = Array.from({ length: 61 }, (_, index) => ({ id: `p${index}`, group: 'system', label: `p${index}`, chars: 400 }));
+  const breakdown = createContextBreakdown({ parts, promptTokens: 30 });
+  assert.equal(breakdown.scaled, false);
+  assert.equal(breakdown.total, breakdown.estimatedTokens);
+  assert.equal(breakdown.parts.length, 61);
+  assert.equal(breakdown.parts.reduce((sum, part) => sum + part.tokens, 0), breakdown.total);
+});

@@ -185,9 +185,12 @@ function text(value) {
  * @param {string} shortPath  `.agents/memory.md` for a file in the folder,
  *   `~/.snotra/memory.md` for one outside it.
  */
-function shortPathDetail(shortPath, { inFolder = false, truncated = false } = {}) {
+function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard = null } = {}) {
   let detailKey;
-  if (inFolder) detailKey = truncated ? 'context.detail.folderPathTruncated' : 'context.detail.folderPath';
+  // What the secret protection did to an embedded file outweighs a shortening (#528).
+  if (guard === 'withheld') detailKey = inFolder ? 'context.detail.folderPathWithheld' : 'context.detail.pathWithheld';
+  else if (guard === 'masked') detailKey = inFolder ? 'context.detail.folderPathMasked' : 'context.detail.pathMasked';
+  else if (inFolder) detailKey = truncated ? 'context.detail.folderPathTruncated' : 'context.detail.folderPath';
   else detailKey = truncated ? 'context.detail.pathTruncated' : 'context.detail.path';
   return { detailKey, params: { path: text(shortPath) } };
 }
@@ -235,7 +238,7 @@ function createContextPart({
  *
  * Ohne echte Zahl (`promptTokens === 0`, etwa bei einem Anbieter ohne Usage)
  * bleiben die rohen Schaetzungen stehen; `scaled` sagt der Anzeige, welcher
- * Fall vorliegt. Der Rundungsrest landet beim groessten Posten, damit die
+ * Fall vorliegt. Der Rundungsrest landet bei den groessten Posten, damit die
  * Summe der Zeilen exakt der angezeigten Gesamtzahl entspricht.
  *
  * `providerId` — und bei einem generischen Anbieter die Server-URL — waehlt das
@@ -256,7 +259,10 @@ function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '',
   }));
   const estimatedTotal = estimated.reduce((sum, part) => sum + part.tokens, 0);
   const real = toCount(promptTokens);
-  const scaled = real > 0 && estimatedTotal > 0;
+  // Fewer tokens than rows cannot be the whole prompt — the provider counted
+  // only a part of it (Ollama's `prompt_eval_count` leaves out the cached
+  // prefix). Scaling to it would take rows to zero, so the estimate stands (#532).
+  const scaled = real > 0 && estimatedTotal > 0 && real >= estimated.length;
 
   let rows = estimated;
   if (scaled) {
@@ -269,13 +275,16 @@ function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '',
       ...part,
       tokens: Math.max(1, Math.round(part.tokens * factor)),
     }));
-    const drift = real - rows.reduce((sum, part) => sum + part.tokens, 0);
-    if (drift !== 0 && rows.length > 0) {
-      let biggest = 0;
-      for (let i = 1; i < rows.length; i += 1) {
-        if (rows[i].tokens > rows[biggest].tokens) biggest = i;
-      }
-      rows[biggest] = { ...rows[biggest], tokens: Math.max(0, rows[biggest].tokens + drift) };
+    // The rounding drift goes to the biggest rows first. Taken away, it never
+    // takes a row below 1; that always works out, since there are at least as
+    // many tokens as rows (#532).
+    let drift = real - rows.reduce((sum, part) => sum + part.tokens, 0);
+    const bySize = rows.map((_, index) => index).sort((a, b) => rows[b].tokens - rows[a].tokens);
+    for (const index of bySize) {
+      if (drift === 0) break;
+      const change = drift > 0 ? drift : -Math.min(-drift, rows[index].tokens - 1);
+      rows[index] = { ...rows[index], tokens: rows[index].tokens + change };
+      drift -= change;
     }
   }
 

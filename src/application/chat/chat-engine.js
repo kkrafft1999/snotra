@@ -46,10 +46,13 @@ const {
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
+const { sanitizeChatId } = require('../../shared/contracts/chat');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
-const { buildMemorySystemPrompt } = require('./memory-prompt');
+const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
+const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
+const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
 const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
@@ -120,15 +123,11 @@ function resolveAppLocale(uiPrefs) {
   return normalizeLocale(uiPrefs?.appLocale);
 }
 
+/** The setting where there is one, otherwise main's default — within the bounds the settings use (#531). */
 function resolveToolRoundLimit(uiPrefs, mainDefault) {
-  const MIN = 1;
-  const MAX_CAP = 500;
-  let value =
-    typeof uiPrefs?.maxToolRounds === 'number' && Number.isFinite(uiPrefs.maxToolRounds)
-      ? Math.round(uiPrefs.maxToolRounds)
-      : mainDefault;
-  if (!Number.isFinite(value)) value = mainDefault;
-  return Math.min(MAX_CAP, Math.max(MIN, value));
+  return clampMaxToolRounds(uiPrefs?.maxToolRounds)
+    ?? clampMaxToolRounds(mainDefault)
+    ?? MAX_TOOL_ROUNDS_MIN;
 }
 
 /**
@@ -340,6 +339,8 @@ function buildSkillsSystemPrompt(
   // einzelnen Skill und bekommt deshalb eine eigene Zeile.
   const parts = [];
   let catalogChars = 0;
+  // A skill the secret protection touched says so in its row (#528).
+  const skillDetailKey = (skill, plain) => (skill.guard ? `context.detail.skill.${skill.guard}` : plain);
   lazy.forEach((skill, index) => {
     const chars = catalogLines[index].length;
     catalogChars += chars;
@@ -348,7 +349,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detailKey: 'context.detail.skill.short',
+        detailKey: skillDetailKey(skill, 'context.detail.skill.short'),
         chars,
         contentKind: CONTEXT_CONTENT_KINDS.PROSE,
         skillName: skill.name,
@@ -361,7 +362,7 @@ function buildSkillsSystemPrompt(
         id: `skill:${skill.name}`,
         group: CONTEXT_PART_GROUPS.SKILLS,
         label: skill.name,
-        detailKey: 'context.detail.skill.full',
+        detailKey: skillDetailKey(skill, 'context.detail.skill.full'),
         chars: sections[index].length,
         contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
         skillName: skill.name,
@@ -555,6 +556,7 @@ function buildStaticContextParts({
   skillParts,
   environmentSystem,
   projectInstructionParts,
+  folderMemoryParts,
   workspaceSystem,
   toolsPrompt,
   toolDefs,
@@ -572,8 +574,8 @@ function buildStaticContextParts({
       })
     );
   }
-  // Je Gedächtnis-Ebene eine eigene Zeile (Issue #166), an derselben Stelle
-  // wie im Prompt: direkt hinter dem eigenen System-Prompt des Nutzers.
+  // The user's memory (#166), where it stands in the prompt: right behind
+  // the user's own system prompt. The folder's follows the AGENTS.md rows.
   parts.push(...(Array.isArray(memoryParts) ? memoryParts : []));
   parts.push(...(Array.isArray(skillParts) ? skillParts : []));
   if (environmentSystem) {
@@ -591,6 +593,8 @@ function buildStaticContextParts({
   // Je geladene AGENTS.md eine eigene Zeile (Issue #212) — sie stehen im
   // Prompt zwischen Umgebung und Ordnerkontext und hier an derselben Stelle.
   parts.push(...(Array.isArray(projectInstructionParts) ? projectInstructionParts : []));
+  // The folder's memory follows them, as in the prompt (#529).
+  parts.push(...(Array.isArray(folderMemoryParts) ? folderMemoryParts : []));
   const promptListChars = typeof toolsPrompt === 'string' ? toolsPrompt.length : 0;
   const workspaceChars = Math.max(0, (workspaceSystem || '').length - promptListChars);
   if (workspaceChars > 0) {
@@ -669,13 +673,6 @@ function findUnsupportedAttachment(messages, sendBundle) {
   });
 }
 
-function sanitizeChatId(raw) {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128) return null;
-  return trimmed;
-}
-
 /** Fail-safe-Stand, wenn kein Policy-Port angebunden ist: smart, keine Regeln. */
 function defaultPolicySnapshot() {
   return {
@@ -697,9 +694,10 @@ function createChatEngine({
   memory = null,
   toolPolicy = null,
   approvals = null,
+  // The app's own secrets, for the text the prompt embeds by itself (#528).
+  ownSecrets = null,
   sessionGrants = createSessionGrants(),
   maxToolRounds,
-  clock = () => Date.now(),
   // Called once a run has ended, however it ended (#320).
   onRunSettled = () => {},
 }) {
@@ -817,6 +815,17 @@ function createChatEngine({
     return { target };
   }
 
+  /** The own secrets; a failed read compares against nothing — as for a tool result (§5). */
+  async function readOwnSecrets() {
+    if (!ownSecrets || typeof ownSecrets.read !== 'function') return [];
+    try {
+      const list = await ownSecrets.read();
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
   async function readPolicySnapshot(chatId) {
     if (!toolPolicy || typeof toolPolicy.read !== 'function') return defaultPolicySnapshot();
     try {
@@ -879,6 +888,28 @@ function createChatEngine({
     let contextUsage = null;
     // Woraus sich der zuletzt gesendete Prompt zusammensetzt (Issue #174).
     let contextBreakdown = null;
+    // Whether the await under way is the provider's: a throw there is a
+    // network or provider error, anywhere else it is the app's own (#527).
+    let awaitingProvider = false;
+    // Read once per run, and only when something is embedded (#528).
+    let embeddedSecrets = null;
+    const readOwnSecretList = async () => {
+      if (!embeddedSecrets) embeddedSecrets = await readOwnSecrets();
+      return embeddedSecrets;
+    };
+    // An error result after tools ran still carries them — without the trace
+    // the renderer drops the turn, and with it the record of what was done (#527).
+    const failRun = (error, code) => {
+      emitPhase(onEvent, CHAT_PHASES.IDLE);
+      return createChatErrorResult({
+        error,
+        code,
+        usage: requestUsage,
+        contextUsage,
+        contextBreakdown,
+        toolTrace,
+      });
+    };
 
     try {
       const messages = payload?.messages;
@@ -889,7 +920,9 @@ function createChatEngine({
       const resolved = await resolveTarget(true);
       if (resolved.error) return resolved.error;
       const { target } = resolved;
+      awaitingProvider = true;
       const sendBundle = await llm.prepareSendBundle(target);
+      awaitingProvider = false;
       // Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter sie
       // nicht weiterreicht (Issue #93). Hier greift der Fall, dass nach dem
       // Anhaengen auf ein anderes Modell umgeschaltet wurde: lieber eine klare
@@ -943,6 +976,7 @@ function createChatEngine({
             // instructions around it stay English (#276).
             locale: appLocale,
           });
+          activeSkills = guardEmbeddedSkills(activeSkills, await readOwnSecretList());
           skillRoots = activeSkills
             .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
             .map((skill) => ({ name: skill.name, dir: skill.path }));
@@ -1040,8 +1074,9 @@ function createChatEngine({
       let projectInstructionParts = [];
       if (projectInstructions && uiPrefs.projectInstructionsEnabled !== false) {
         try {
+          const files = await projectInstructions.load({ workspaceRoot });
           const built = buildProjectInstructionsSystemPrompt(
-            await projectInstructions.load({ workspaceRoot })
+            guardEmbeddedFiles(files, await readOwnSecretList())
           );
           projectInstructionsSystem = built.text;
           projectInstructionParts = built.parts;
@@ -1058,6 +1093,8 @@ function createChatEngine({
       // übernehmen will.
       let memorySystem = '';
       let memoryParts = [];
+      let folderMemorySystem = '';
+      let folderMemoryParts = [];
       if (memory) {
         try {
           const files = (await memory.load({ workspaceRoot })).filter((file) =>
@@ -1065,20 +1102,23 @@ function createChatEngine({
               ? uiPrefs.memoryWorkspaceEnabled !== false
               : uiPrefs.memoryUserEnabled !== false
           );
-          const built = buildMemorySystemPrompt(files);
-          memorySystem = built.text;
-          memoryParts = built.parts;
+          const guarded = guardEmbeddedFiles(files, await readOwnSecretList());
+          ({ text: memorySystem, parts: memoryParts } = buildUserMemorySystemPrompt(guarded));
+          ({ text: folderMemorySystem, parts: folderMemoryParts } = buildFolderMemorySystemPrompt(guarded));
         } catch {
           // Eine unlesbare memory.md darf den Chat nicht blockieren.
           memorySystem = '';
           memoryParts = [];
+          folderMemorySystem = '';
+          folderMemoryParts = [];
         }
       }
 
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
-      // Gedächtnis steht direkt dahinter, weil es dasselbe ist: was der Nutzer
-      // selbst gesagt hat, nur über mehrere Unterhaltungen hinweg. Zwischen
-      // beide soll sich nichts Fremdes schieben. Die
+      // Gedächtnis des Nutzers steht direkt dahinter, weil es dasselbe ist: was
+      // der Nutzer selbst gesagt hat, nur über mehrere Unterhaltungen hinweg.
+      // Zwischen beide soll sich nichts Fremdes schieben. The folder's memory
+      // lives in the folder like its AGENTS.md and stands with it (#529). Die
       // Umgebung ist Sachkontext wie der Ordner und steht deshalb bei ihm,
       // hinter den Skills, die das Wie beschreiben. Die Projektanweisungen
       // stehen bewusst *vor* dem Ordner-/Tool-Block: Der trägt die Regel, dass
@@ -1090,6 +1130,7 @@ function createChatEngine({
         skillsSystem,
         environmentSystem,
         projectInstructionsSystem,
+        folderMemorySystem,
         workspaceSystem,
         // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
         // Block oder Skill-Rahmen). Steht im Prompt ausschliesslich, was der
@@ -1108,6 +1149,7 @@ function createChatEngine({
         skillParts: skillContextParts,
         environmentSystem,
         projectInstructionParts,
+        folderMemoryParts,
         workspaceSystem,
         toolsPrompt,
         toolDefs: availableToolDefs,
@@ -1134,13 +1176,14 @@ function createChatEngine({
           if (attachments.length > 0) row.attachments = attachments;
           return row;
         });
+      const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       // Die App-Begrüßung steht als Assistant-Nachricht am Chat-Anfang; einige
       // Provider (Anthropic, Google) verlangen, dass die Konversation mit einer
-      // User-Nachricht beginnt.
-      while (historyRows.length > 0 && historyRows[0].role !== 'user') {
-        historyRows.shift();
+      // User-Nachricht beginnt. Checked after the trim, which cuts from the
+      // old end and can leave an answer at the front just as well (#532).
+      while (windowedHistory.length > 1 && windowedHistory[0].role !== 'user') {
+        windowedHistory.shift();
       }
-      const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       apiMessages.push(...windowedHistory);
 
       // Eine leere Liste ist kein „keine Tools": manche Provider lehnen ein
@@ -1321,7 +1364,46 @@ function createChatEngine({
         if (outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS && request.alwaysAllowed) {
           return { response: APPROVAL_RESPONSES.ALLOW_ALWAYS, ruleId: outcome.ruleId };
         }
-        return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
+        // A wider answer than the card offered counts as once; an answer that
+        // is none of the four allows nothing (#532) — fail-safe, as the port says.
+        if (
+          outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE
+          || outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION
+          || outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS
+        ) {
+          return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
+        }
+        return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+      }
+
+      /** A denial that also ends the run, without another provider request (§6). */
+      function endRunDenied(entry, details, invalidatedReason) {
+        return { ...permissionDenied(entry, details), endRun: true, invalidatedReason };
+      }
+
+      /**
+       * What a card's answer comes to when it did not allow the call. One
+       * function for both checkpoints, so that they cannot drift apart again:
+       * the output checkpoint once lost the repeated denial (#526).
+       */
+      function refusalFromAnswer(answer, entry, details) {
+        if (answer.invalidated) {
+          return endRunDenied(entry, {
+            ...details,
+            reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED,
+            message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason],
+          }, answer.reason);
+        }
+        if (answer.response !== APPROVAL_RESPONSES.DENY) return null;
+        if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+          return endRunDenied(entry, { ...details, reason: answer.reason }, answer.reason);
+        }
+        return permissionDenied(entry, { ...details, reason: answer.reason });
+      }
+
+      /** The key a withheld output is remembered under — the plan's, at the output checkpoint. */
+      function outputPlanKey(plan) {
+        return `${plan.planKey}#sensitive`;
       }
 
       /**
@@ -1372,6 +1454,16 @@ function createChatEngine({
             }
           }
           const riskClasses = normalizeRiskClasses(plan.riskClasses);
+          // The same plan whose output the user withheld: running it again
+          // would only fetch what was refused, so the run ends here (§6, #526).
+          if (deniedPlanKeys.has(outputPlanKey(plan))) {
+            return endRunDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL,
+              riskClasses,
+              mode: policy.mode,
+              targets: plan.targets,
+            }, PERMISSION_DENIAL_REASONS.REPEATED_DENIAL);
+          }
           const scopeKey = buildScopeKey(policy);
           const grant = riskClasses
             ? sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses, providerKey })
@@ -1404,16 +1496,8 @@ function createChatEngine({
           let ruleId = verdict.ruleId;
           if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
-            if (answer.invalidated) {
-              return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
-            }
-            if (answer.response === APPROVAL_RESPONSES.DENY) {
-              const denied = permissionDenied(entry, { reason: answer.reason, riskClasses, mode: policy.mode, targets: plan.targets });
-              if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
-                return { ...denied, endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
-              }
-              return denied;
-            }
+            const refusal = refusalFromAnswer(answer, entry, { riskClasses, mode: policy.mode, targets: plan.targets });
+            if (refusal) return refusal;
             source =
               answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                 ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
@@ -1432,7 +1516,7 @@ function createChatEngine({
             });
             if (!recheck || recheck.error || recheck.planKey !== plan.planKey) {
               if (lastPlanKey === (recheck?.planKey ?? null) || attempt === MAX_PLAN_ATTEMPTS - 1) {
-                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+                return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
               }
               lastPlanKey = plan.planKey;
               continue;
@@ -1453,6 +1537,9 @@ function createChatEngine({
             workspaceRoot,
             skillRoots,
             writableSkills: writableSkills(),
+            // The broad tools leave out hits under these patterns (#525); a
+            // targeted call has been planned against them already.
+            sensitivePathPatterns: policy.sensitivePathPatterns,
             abortSignal,
             disabledNames,
             // For the sentences the registry writes itself — they quote a
@@ -1465,7 +1552,7 @@ function createChatEngine({
           });
 
           if (execution?.invalidated) {
-            return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+            return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
           }
           if (Array.isArray(execution?.reclassify) && execution.reclassify.length > 0) {
             // Beispiel: Wiederherstellungskopie fehlgeschlagen → der Aufruf
@@ -1491,7 +1578,7 @@ function createChatEngine({
             // Zweite Prüfstelle (Konzept §4): unerwartet sensibler Inhalt bleibt
             // im Puffer, bis die Policy ihn als read-sensitive freigibt.
             const escalated = normalizeRiskClasses([...riskClasses, TOOL_RISK_CLASSES.READ_SENSITIVE]);
-            const escalatedPlan = { ...plan, riskClasses: escalated, planKey: `${plan.planKey}#sensitive` };
+            const escalatedPlan = { ...plan, riskClasses: escalated, planKey: outputPlanKey(plan) };
             const escalatedGrant = sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses: escalated, providerKey });
             const outputVerdict = decideToolPolicy({
               mode: policy.mode,
@@ -1509,12 +1596,8 @@ function createChatEngine({
             let outputSource = outputVerdict.source;
             if (outputVerdict.decision === POLICY_DECISIONS.ASK) {
               const answer = await askUser({ entry, callIndex, toolName, plan: escalatedPlan, verdict: outputVerdict, policy, checkpoint: 'output' });
-              if (answer.invalidated) {
-                return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses: escalated, mode: policy.mode, targets: plan.targets, message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] }), endRun: true, invalidatedReason: answer.reason };
-              }
-              if (answer.response === APPROVAL_RESPONSES.DENY) {
-                return permissionDenied(entry, { reason: answer.reason, riskClasses: escalated, mode: policy.mode, targets: plan.targets });
-              }
+              const refusal = refusalFromAnswer(answer, entry, { riskClasses: escalated, mode: policy.mode, targets: plan.targets });
+              if (refusal) return refusal;
               outputSource =
                 answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                   ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION
@@ -1542,7 +1625,7 @@ function createChatEngine({
           };
         }
 
-        return { ...permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, mode: policy.mode }), endRun: true, invalidatedReason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+        return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, mode: policy.mode }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
       }
 
       for (let round = 0; round < toolRoundLimit; round += 1) {
@@ -1572,6 +1655,7 @@ function createChatEngine({
           ...buildHistoryContextParts(sentMessages),
         ];
 
+        awaitingProvider = true;
         const streamed = await llm.streamRound({
           target,
           sendBundle,
@@ -1583,6 +1667,7 @@ function createChatEngine({
           // (Issue #179); ohne Chat-ID bleibt es beim Verhalten des Anbieters.
           cacheKey: chatId || undefined,
         });
+        awaitingProvider = false;
         requestUsage = mergeUsage(requestUsage, streamed.usage);
         // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
         const roundUsage = normalizeUsage(streamed.usage);
@@ -1605,19 +1690,12 @@ function createChatEngine({
           return returnCancelledChat(onEvent, toolTrace, streamed.message?.content ?? '', requestUsage, contextUsage, contextBreakdown);
         }
         if (streamed.error) {
-          emitPhase(onEvent, CHAT_PHASES.IDLE);
-          return createChatErrorResult({
-            error: streamed.error,
-            code: streamed.code || CHAT_ERROR_CODES.API,
-            usage: requestUsage,
-            contextUsage,
-            contextBreakdown,
-          });
+          return failRun(streamed.error, streamed.code || CHAT_ERROR_CODES.API);
         }
 
         const assistantMessage = streamed.message;
         if (!assistantMessage) {
-          return createChatErrorResult({ error: createMessage('chat.error.invalidApiAnswer'), code: CHAT_ERROR_CODES.INVALID });
+          return failRun(createMessage('chat.error.invalidApiAnswer'), CHAT_ERROR_CODES.INVALID);
         }
         apiMessages.push(assistantMessage);
 
@@ -1690,37 +1768,26 @@ function createChatEngine({
           if (outcome.endRun) {
             // Verfall oder wiederholte Ablehnung beenden den Lauf ohne weiteren
             // Provider-Request; das Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
-            emitPhase(onEvent, CHAT_PHASES.IDLE);
-            return createChatErrorResult({
-              error: createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
+            return failRun(
+              createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
                 || RUN_ENDED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]),
-              code: CHAT_ERROR_CODES.PERMISSION,
-              usage: requestUsage,
-              contextUsage,
-              contextBreakdown,
-              toolTrace,
-            });
+              CHAT_ERROR_CODES.PERMISSION
+            );
           }
         }
       }
 
-      emitPhase(onEvent, CHAT_PHASES.IDLE);
-      return createChatErrorResult({
-        error: createMessage('chat.error.toolLimit', { limit: toolRoundLimit }),
-        code: CHAT_ERROR_CODES.TOOL_LIMIT,
-        usage: requestUsage,
-        contextUsage,
-        contextBreakdown,
-      });
+      return failRun(createMessage('chat.error.toolLimit', { limit: toolRoundLimit }), CHAT_ERROR_CODES.TOOL_LIMIT);
     } catch (error) {
       if (isAbortError(error)) {
         return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
       }
-      emitPhase(onEvent, CHAT_PHASES.IDLE);
-      return createChatErrorResult({
-        error: llm.formatRoundError(error),
-        code: CHAT_ERROR_CODES.NETWORK,
-      });
+      if (awaitingProvider) return failRun(llm.formatRoundError(error), CHAT_ERROR_CODES.NETWORK);
+      // Not the provider: a tool, a port or the engine itself threw (#527).
+      return failRun(
+        createMessage('chat.error.internal', { detail: String(error?.message || error) }),
+        CHAT_ERROR_CODES.INTERNAL
+      );
     } finally {
       if (activeRuns.get(key)?.controller === abortController) {
         activeRuns.delete(key);
@@ -1771,8 +1838,9 @@ function createChatEngine({
     if (resolved.error) return resolved.error;
     const { target } = resolved;
 
-    const parts = [`Frage:\n${clipForTitle(firstUser.content)}`];
-    if (firstAnswer) parts.push(`Antwort:\n${clipForTitle(firstAnswer.content)}`);
+    // Model channel, so English (#276, #532); the content stays as written.
+    const parts = [`Question:\n${clipForTitle(firstUser.content)}`];
+    if (firstAnswer) parts.push(`Answer:\n${clipForTitle(firstAnswer.content)}`);
 
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(createChatAbortError()), TITLE_TIMEOUT_MS);

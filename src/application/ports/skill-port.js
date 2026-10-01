@@ -17,7 +17,8 @@
 /**
  * @typedef {Object} SkillPort
  * @property {(options: { workspaceRoot?: string | null, activeSkills?: string[] | null,
- *   invokedSkills?: string[] | null }) => Promise<ActiveSkill[]>} getActiveSkills
+ *   invokedSkills?: string[] | null, locale?: string }) => Promise<ActiveSkill[]>} getActiveSkills
+ *   `locale` is the interface language the system skills quote settings pages in (#294)
  */
 
 module.exports = {};

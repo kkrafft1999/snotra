@@ -26,6 +26,8 @@ const CHAT_ERROR_CODES = Object.freeze({
   TOOL_LIMIT: 'TOOL_LIMIT',
   /** Lauf endete durch verfallene Freigabe (Issue #66): kein weiterer Provider-Request. */
   PERMISSION: 'PERMISSION',
+  /** The app's own error — a tool, a port or the engine threw, not the provider (#527). */
+  INTERNAL: 'INTERNAL',
 });
 
 // Phasen der laufenden Antwort (chat:progress, type='phase').

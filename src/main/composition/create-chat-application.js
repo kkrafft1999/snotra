@@ -77,6 +77,11 @@ function createChatApplication({
     memory,
     toolPolicy,
     approvals,
+    // The same list the tool results are compared against (§5), now also for
+    // the skills, AGENTS.md and memory the prompt embeds (#528).
+    ownSecrets: typeof toolAdapterDeps.readOwnSecrets === 'function'
+      ? { read: toolAdapterDeps.readOwnSecrets }
+      : null,
     sessionGrants,
     maxToolRounds,
     onRunSettled,

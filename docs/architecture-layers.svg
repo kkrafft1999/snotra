@@ -166,7 +166,7 @@
   <rect x="510" y="788" width="630" height="72" rx="8" fill="#f4fbf8" stroke="#0e7a5b" stroke-width="1" stroke-dasharray="4 3"/>
   <text x="522" y="808" font-size="11" font-weight="700" fill="#0b5b44">Roadmap stages 1–5 ✓ (as of 2026-07-12)</text>
   <text x="522" y="826" font-size="10.5" fill="#356b58">1 contracts · 2 core extraction · 3 providers/tools through ports · 4 infrastructure ports · 5 renderer presentation</text>
-  <text x="522" y="844" font-size="10.5" fill="#356b58">Legacy re-exports: src/main/chat-engine.js · chat-history-trim.js → src/application/chat/</text>
+  <text x="522" y="844" font-size="10.5" fill="#356b58">Main imports the core from src/application/chat/ directly (no re-exports since #531)</text>
 
   <!-- ============ CORE PORT ADAPTERS ============ -->
   <rect class="subbox" x="46" y="894" width="1148" height="72" rx="10"/>

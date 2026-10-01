@@ -1,6 +1,6 @@
 const { randomUUID } = require('crypto');
-const { clampHistoryCharLimit } = require('../chat-history-trim');
 const {
+  clampHistoryCharLimit,
   clampSidebarWidth,
   clampChatPanelWidth,
   normalizePresetWire,

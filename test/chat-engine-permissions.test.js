@@ -612,3 +612,130 @@ test('without secure storage the card does not offer to remember a command', asy
   assert.equal(approvals.requests[0].alwaysAllowed, false);
   assert.equal(approvals.requests[0].alwaysUnavailableReason, 'no-encryption');
 });
+
+// #525: the user's sensitive path patterns reach the broad tools, not only the
+// planner — against the real fs service, registry and adapter.
+test('broad searches leave out hits under a user-defined sensitive pattern (#525)', async () => {
+  const fs = require('fs/promises');
+  const os = require('os');
+  const { createFsService } = require('../src/main/services/fs-service');
+  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
+
+  const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-525-'));
+  try {
+    await fs.mkdir(path.join(ws, 'personal'));
+    await fs.writeFile(path.join(ws, 'personal', 'diary.txt'), 'salary review: 95k\n');
+    await fs.writeFile(path.join(ws, 'notes.txt'), 'salary bands are public\n');
+    const fsService = createFsService({ fs, path, maxReadFileBytes: 1e6, maxWriteFileBytes: 1e6 });
+    const tools = createWorkspaceToolAdapter(createWorkspaceToolRegistry({ fsService }), { fsService, fs, path });
+    const llm = makeLlmPort([
+      assistantToolCall('s', 'search_in_files', { query: 'salary', relative_path: '.' }),
+      assistantToolCall('f', 'find_files', { pattern: '**/*.txt' }),
+      assistantText('done'),
+    ]);
+    const approvals = makeApprovals('deny');
+    const engine = createChatEngine({
+      llm,
+      tools,
+      preferences: { async read() { return {}; } },
+      workspacePaths: makeWorkspacePaths(),
+      toolPolicy: policy({ sensitivePathPatterns: ['personal/**'] }),
+      approvals,
+      maxToolRounds: 4,
+    });
+    await engine.send({
+      sessionId: 'renderer-1',
+      payload: { messages: [{ role: 'user', content: 'search' }], workspaceRoot: ws },
+    });
+    const toolMessages = llm.calls[2].messages.filter((m) => m.role === 'tool').map((m) => m.content);
+    assert.equal(toolMessages.length, 2);
+    assert.match(toolMessages[0], /notes\.txt/);
+    assert.match(toolMessages[1], /notes\.txt/);
+    for (const content of toolMessages) {
+      assert.doesNotMatch(content, /diary|95k/, 'the hit under the user pattern stays out');
+    }
+    assert.equal(approvals.requests.length, 0, 'leaving a hit out asks nothing');
+  } finally {
+    await fs.rm(ws, { recursive: true, force: true });
+  }
+});
+
+test('the execute context carries the policy\'s sensitive path patterns (#525)', async () => {
+  const tools = makeToolPort();
+  const { engine } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: 'a.md' }), assistantText('ok')], {
+    tools, toolPolicy: policy({ sensitivePathPatterns: ['private/**'] }),
+  });
+  await send(engine);
+  assert.deepEqual(tools.calls[0].context.sensitivePathPatterns, ['private/**']);
+});
+
+// #526: the output checkpoint ends the run on a repeated plan as the access
+// checkpoint does — and does not run the call again to find out.
+test('a repeated call whose sensitive output was withheld is not run again and ends the run (#526)', async () => {
+  const secret = JSON.stringify({ content: 'TOKEN=abcdef1234567890' });
+  const tools = makeToolPort({ execute: () => ({ output: secret, progressEvents: [], sensitive: true }) });
+  const approvals = makeApprovals('deny');
+  const events = [];
+  const args = { relative_path: 'config.md' };
+  const { engine, llm } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', args),
+    assistantToolCall('c2', 'read_file_text', args),
+    assistantText('never'),
+  ], { tools, approvals });
+  const result = await send(engine, { events });
+  assert.equal(tools.calls.length, 1, 'the call ran once, for the first output check');
+  assert.equal(approvals.requests.length, 1, 'no second card');
+  assert.equal(llm.calls.length, 2, 'no provider request after the repetition');
+  assert.equal(result.code, 'PERMISSION');
+  assert.match(errorText(result, 'en'), /had already been denied/);
+  assert.equal(result.toolTrace[0].permission.reason, 'user_denied');
+  assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
+  for (const message of llm.calls[1].messages) {
+    assert.equal(String(message.content).includes('abcdef1234567890'), false);
+  }
+});
+
+test('a withheld output does not block a different call (#526)', async () => {
+  const tools = makeToolPort({
+    execute: (name, args) => ({ output: JSON.stringify({ path: args.relative_path }), progressEvents: [], sensitive: args.relative_path === 'secret.md' }),
+  });
+  const approvals = makeApprovals('deny');
+  const { engine, llm } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'secret.md' }),
+    assistantToolCall('c2', 'read_file_text', { relative_path: 'other.md' }),
+    assistantText('ok'),
+  ], { tools, approvals });
+  const result = await send(engine);
+  assert.equal(result.content, 'ok');
+  assert.equal(tools.calls.length, 2);
+  assert.equal(llm.calls.length, 3);
+});
+
+// #532: an answer that is none of the four allows nothing.
+test('an approval answer outside the four responses invalidates the request (#532)', async () => {
+  for (const outcome of [{}, { response: 'yes' }, { response: null }]) {
+    const tools = makeToolPort();
+    const { engine, llm } = makeEngine([
+      assistantToolCall('c1', 'write_file_text', { relative_path: 'a.md', content: 'x' }),
+      assistantText('never'),
+    ], { tools, approvals: makeApprovals(() => outcome) });
+    const result = await send(engine);
+    assert.equal(tools.calls.length, 0, `${JSON.stringify(outcome)} must not run the write`);
+    assert.equal(result.code, 'PERMISSION');
+    assert.equal(result.toolTrace[0].permission.reason, 'request_invalidated');
+    assert.equal(llm.calls.length, 1);
+  }
+});
+
+test('a wider answer than the card offered still counts as once (#532)', async () => {
+  const tools = makeToolPort();
+  const { engine, grants } = makeEngine([
+    assistantToolCall('c1', 'write_file_text', { relative_path: 'a.md', content: 'x' }),
+    assistantText('ok'),
+  ], { tools, approvals: makeApprovals('allow-always') });
+  const result = await send(engine);
+  assert.equal(tools.calls.length, 1);
+  assert.equal(result.toolTrace[0].permission.source, 'allow-once');
+  assert.equal(grants.count(), 0);
+});

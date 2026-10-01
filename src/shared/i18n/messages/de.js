@@ -1026,6 +1026,7 @@ module.exports = {
   'chat.error.provider.fallback': 'Dieser Anbieter',
   'chat.error.toolLimit': 'Zu viele Tool-Runden (aktuell {limit}). Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
   'chat.error.runLost': 'Die Antwort ist nicht angekommen. Frag bitte noch einmal.',
+  'chat.error.internal': 'Snotra AI ist auf einen eigenen Fehler gestoßen und hat die Antwort abgebrochen ({detail}). Frag noch einmal, um weiterzumachen.',
   'chat.error.runEnded.noApprovalUi': 'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.',
   'chat.error.runEnded.requestInvalidated': 'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
   'chat.error.runEnded.repeatedDenial': 'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',
@@ -1181,6 +1182,12 @@ module.exports = {
   'context.detail.pathTruncated': '{path} · gekürzt',
   'context.detail.folderPath': '<Ordner>/{path}',
   'context.detail.folderPathTruncated': '<Ordner>/{path} · gekürzt',
+  'context.detail.pathMasked': '{path} · Zugangsdaten maskiert',
+  'context.detail.folderPathMasked': '<Ordner>/{path} · Zugangsdaten maskiert',
+  'context.detail.pathWithheld': '{path} · weggelassen, enthält einen Schlüssel der App',
+  'context.detail.folderPathWithheld': '<Ordner>/{path} · weggelassen, enthält einen Schlüssel der App',
+  'context.detail.skill.masked': 'Zugangsdaten maskiert',
+  'context.detail.skill.withheld': 'weggelassen, enthält einen Schlüssel der App',
 
   // ── Approval card in the chat ──────────────────────────────────────────────
   'approval.title.execute': 'Ausführung bestätigen',

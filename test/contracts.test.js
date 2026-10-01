@@ -286,3 +286,13 @@ test('contracts aggregate exports settings helpers', () => {
   assert.equal(typeof contracts.normalizePresetWire, 'function');
   assert.equal(typeof contracts.formatPresetSublabelFromView, 'function');
 });
+
+test('a shortened title never splits an emoji (#532)', () => {
+  const { inferChatTitleText, sanitizeChatTitle, CHAT_TITLE_MAX_LENGTH } = require('../src/shared/contracts/chat');
+  const long = `${'a'.repeat(CHAT_TITLE_MAX_LENGTH - 2)}😀😀😀 and more`;
+  for (const title of [inferChatTitleText([{ role: 'user', content: long }]), sanitizeChatTitle(long)]) {
+    assert.equal(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(title), false, title);
+    assert.equal(Array.from(title).length, CHAT_TITLE_MAX_LENGTH);
+    assert.ok(title.endsWith('😀…'), title);
+  }
+});

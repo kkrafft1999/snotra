@@ -420,3 +420,100 @@ test('the rules version ignores the mode but follows rules, sensitive paths and 
   state.current = { ...state.current, integrity: 'invalid' };
   assert.notEqual((await toolPolicy.read()).rulesVersion, afterPatterns);
 });
+
+// --- Stop and the guards around it (#530) -------------------------------------
+
+test('stop between two calls of one round: the second is neither planned nor run, no round follows (#530)', async () => {
+  const planned = [];
+  const executed = [];
+  let llmRounds = 0;
+  let engine;
+  const tools = {
+    ...makeToolPort(),
+    getTools: () => [{ type: 'function', function: { name: 'shell_execute' } }, { type: 'function', function: { name: 'edit_file' } }],
+    async plan(toolName, args) {
+      planned.push(toolName);
+      return { tool: toolName, riskClasses: ['read'], targets: [], planKey: JSON.stringify([toolName, args]) };
+    },
+    async execute(toolName) {
+      executed.push(toolName);
+      // As the shell runner does: "Stop" ends the process, and the call
+      // comes back with a result instead of a throw.
+      engine.abort('renderer-1', 'chat-a');
+      return { output: JSON.stringify({ aborted: true }), progressEvents: [] };
+    },
+  };
+  const llm = {
+    ...makeScriptedLlm([]),
+    async streamRound() {
+      llmRounds += 1;
+      return {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            { id: 'c1', type: 'function', function: { name: 'shell_execute', arguments: '{"command":"sleep 60"}' } },
+            { id: 'c2', type: 'function', function: { name: 'edit_file', arguments: '{"relative_path":"a.md"}' } },
+          ],
+        },
+        finishReason: 'tool_calls',
+        usage: null,
+      };
+    },
+  };
+  engine = makeEngine({ llm, tools, toolPolicy: { async read() { return { mode: 'auto', rules: [], sensitivePathPatterns: [], policyVersion: '1' }; } } });
+  const result = await send(engine, 'chat-a');
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(executed, ['shell_execute']);
+  assert.deepEqual(planned, ['shell_execute'], 'the second call is not even planned');
+  assert.equal(llmRounds, 1, 'no further provider round');
+});
+
+test('stopping a chat in one window leaves the same chat in another window running (#530)', async () => {
+  const llm = makeHeldLlm();
+  const engine = makeEngine({ llm });
+  const one = send(engine, 'chat-x', { sessionId: 'renderer-1' });
+  const two = send(engine, 'chat-x', { sessionId: 'renderer-2' });
+  await flush();
+
+  engine.abort('renderer-1', 'chat-x');
+  assert.equal((await one).cancelled, true);
+  llm.held[1]('still here');
+  const result = await two;
+  assert.equal(result.cancelled, undefined);
+  assert.equal(result.content, 'still here');
+});
+
+test('closing a window stops its runs only (#530)', async () => {
+  const llm = makeHeldLlm();
+  const engine = makeEngine({ llm });
+  const a = send(engine, 'chat-a', { sessionId: 'renderer-1' });
+  const b = send(engine, 'chat-b', { sessionId: 'renderer-1' });
+  const c = send(engine, 'chat-c', { sessionId: 'renderer-2' });
+  await flush();
+
+  engine.abort('renderer-1');
+  assert.equal((await a).cancelled, true);
+  assert.equal((await b).cancelled, true);
+  assert.deepEqual([...engine.runningChatIds()], ['chat-c']);
+  llm.held[2]('c lives');
+  assert.equal((await c).content, 'c lives');
+});
+
+test('a replaced run does not take its successor out of the running chats (#530)', async () => {
+  const llm = makeHeldLlm();
+  const settled = [];
+  const engine = makeEngine({ llm, onRunSettled: (run) => settled.push(run.chatId) });
+  const first = send(engine, 'chat-a');
+  await flush();
+  const second = send(engine, 'chat-a', { content: 'again' });
+  assert.equal((await first).cancelled, true, 'the new turn replaced the old run');
+  await flush();
+  assert.deepEqual([...engine.runningChatIds()], ['chat-a'], 'the new run is still registered');
+  assert.deepEqual(settled, [], 'the replaced run does not report the chat as settled');
+
+  llm.held[1]('second answer');
+  assert.equal((await second).content, 'second answer');
+  assert.deepEqual(settled, ['chat-a']);
+  assert.equal(engine.runningChatIds().size, 0);
+});

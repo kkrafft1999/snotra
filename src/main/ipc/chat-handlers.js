@@ -1,4 +1,5 @@
-const { CHAT_ENGINE_EVENTS, resolveToolRoundLimit } = require('../chat-engine');
+const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
+const { sanitizeChatId } = require('../../shared/contracts/chat');
 
 function registerChatHandlers({
   ipcMain,
@@ -26,9 +27,11 @@ function registerChatHandlers({
   };
 
   // Stops the run of the named chat only; without one, every run of the window.
+  // An id that is given but not usable names the run without a chat, as it
+  // does on send (#532) — it does not widen the stop to the whole window.
   ipcMain.on(REQ.CHAT_ABORT, (event, payload) => {
-    const chatId = sanitizeRouteId(payload?.chatId, 128);
-    engine.abort(event.sender.id, chatId ?? undefined);
+    const chatId = payload?.chatId == null ? undefined : sanitizeChatId(payload.chatId);
+    engine.abort(event.sender.id, chatId);
   });
 
   ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => {
@@ -41,7 +44,9 @@ function registerChatHandlers({
   ipcMain.handle(REQ.CHAT_SEND, async (event, payload) => {
     // Nur ein Geltungsbereich fuer Sitzungsfreigaben (Issue #66), keine
     // Rechtequelle: ein anderer Chat teilt keine Freigaben.
-    const chatId = sanitizeRouteId(payload?.chatId, 128);
+    // The same rule as in the engine (#532), so that the events carry the id
+    // the run is keyed by.
+    const chatId = sanitizeChatId(payload?.chatId);
     // The renderer's own label for this turn; it only ever comes back to it.
     const runId = sanitizeRouteId(payload?.runId, 64);
     return engine.send({
@@ -64,5 +69,4 @@ function sanitizeRouteId(raw, maxLength) {
 
 module.exports = {
   registerChatHandlers,
-  resolveToolRoundLimit,
 };

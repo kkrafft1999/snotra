@@ -713,15 +713,27 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // --- Gedaechtnis im Systemprompt (Issue #166) ----------------------------
   // Dieselbe Begruendung: Welche memory.md gefunden wird, entscheidet der
   // Adapter am Dateisystem, nicht der Core.
-  assert.match(systemMessage, /Your memory/);
+  // The folder's memory is introduced by its origin, not as the user's own
+  // words, and stands with the folder's AGENTS.md (#529).
+  // The global memory comes from the real home folder and may or may not be
+  // there, so only the framing in front of the project section is checked.
+  assert.match(systemMessage, /Notes kept in this folder \(\.agents\/memory\.md\)/);
   assert.match(systemMessage, /## Memory \(project\)/);
+  const projectMemoryAt = systemMessage.indexOf('## Memory (project)');
+  assert.ok(
+    systemMessage.lastIndexOf('Notes kept in this folder', projectMemoryAt)
+      > systemMessage.lastIndexOf('Your memory', projectMemoryAt),
+    'the project memory is not framed as the user\'s own words'
+  );
   assert.ok(
     systemMessage.includes('Gemerkt-fuer-dieses-Projekt.'),
     'die memory.md aus .agents steht im Prompt'
   );
-  // Direkt hinter dem eigenen Prompt des Nutzers und damit vor allem Fremden.
   assert.ok(
-    systemMessage.indexOf('Your memory') < systemMessage.indexOf('Project instructions from AGENTS.md')
+    systemMessage.indexOf('Project instructions from AGENTS.md') < systemMessage.indexOf('Notes kept in this folder')
+  );
+  assert.ok(
+    systemMessage.indexOf('Notes kept in this folder') < systemMessage.indexOf('folder currently open in the app')
   );
   step('Gedaechtnis im Systemprompt geprueft');
 

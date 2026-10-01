@@ -13,7 +13,7 @@ const {
   estimateTokens,
   trimHistoryMessages,
   truncateStaleToolOutputs,
-} = require('../src/main/chat-history-trim');
+} = require('../src/application/chat/chat-history-trim');
 
 test('clampHistoryCharLimit clamps to bounds and rejects non-numbers', () => {
   assert.equal(clampHistoryCharLimit(100), HISTORY_CHAR_LIMIT_MIN);
