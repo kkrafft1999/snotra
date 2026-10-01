@@ -658,6 +658,7 @@ module.exports = {
   'mcpDialog.test.ok.one': 'Connected — {count} tool found.',
   'mcpDialog.test.ok.other': 'Connected — {count} tools found.',
   'mcpDialog.test.noAnswer': 'The server did not answer.',
+  'mcpDialog.test.unsaved': 'Test connection uses the saved configuration — save your changes first.',
   'mcpDialog.cancel': 'Cancel',
   'mcpDialog.save': 'Save',
 
@@ -686,7 +687,8 @@ module.exports = {
   'mcpImport.skipped.other': '{count} entries will not be imported',
   'mcpImport.count.all.one': '{count} entry detected.',
   'mcpImport.count.all.other': '{count} entries detected.',
-  'mcpImport.count.partial': '{count} of {total} entries can be imported.',
+  'mcpImport.count.partial.one': '{count} of {total} entries can be imported.',
+  'mcpImport.count.partial.other': '{count} of {total} entries can be imported.',
   'mcpImport.failed': 'Not imported — {details}',
   'mcpImport.failed.unknown': 'unknown error',
 

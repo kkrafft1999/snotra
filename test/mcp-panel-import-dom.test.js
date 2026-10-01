@@ -255,6 +255,58 @@ test('erneutes Öffnen beginnt wieder leer', async () => {
   assert.equal(uebernehmen().disabled, true);
 });
 
+test('the partial count follows the number, in German as well (CR-B14-09)', async () => {
+  const { setLocale } = await importRenderer('i18n.js');
+  await mount();
+  try {
+    setLocale('de');
+    await oeffnen();
+    const remote = { url: 'https://example.com/mcp' };
+    await einfuegen(JSON.stringify({ mcpServers: { a: { command: 'npx' }, b: remote, c: remote } }));
+    assert.equal(document.getElementById('mcp-import-count').textContent,
+      '1 von 3 Einträgen kann übernommen werden.');
+    await einfuegen(JSON.stringify({ mcpServers: { a: { command: 'npx' }, b: { command: 'npx' }, c: remote } }));
+    assert.equal(document.getElementById('mcp-import-count').textContent,
+      '2 von 3 Einträgen können übernommen werden.');
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('an import error is shown on every keystroke but said only when its kind changes (CR-B14-09)', async () => {
+  let fail = false;
+  await mount({
+    saveMcpServer: async () => (fail ? { ok: false, errors: ['kaputt'] } : { ok: true, ...katalog() }),
+  });
+  await oeffnen();
+  const announcer = document.getElementById('mcp-import-announcer');
+  assert.equal(fehler().hasAttribute('role'), false, 'the rewritten line is no live region');
+  assert.equal(announcer.getAttribute('role'), 'status');
+  assert.equal(feld().getAttribute('aria-describedby'), 'mcp-import-error');
+
+  await einfuegen('{ "mcpServers": ');
+  const first = fehler().textContent;
+  assert.match(first, /not valid JSON/);
+  assert.equal(announcer.textContent, first);
+  assert.equal(feld().getAttribute('aria-invalid'), 'true');
+
+  await einfuegen('{ "mcpServers": { "a"');
+  assert.notEqual(fehler().textContent, first, 'the line shows the current position');
+  assert.equal(announcer.textContent, first, 'the same kind of error is not said again');
+
+  await einfuegen('[]');
+  assert.match(announcer.textContent, /JSON object/, 'a different kind is said');
+
+  await einfuegen(BLOCK);
+  assert.equal(announcer.textContent, '');
+  assert.equal(feld().getAttribute('aria-invalid'), 'false');
+
+  fail = true;
+  uebernehmen().click();
+  await flush();
+  assert.match(announcer.textContent, /^Not imported/, 'a failed import is said once');
+});
+
 test('an import closed while it saves leaves the reopened dialog alone (CR-B14-04)', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });

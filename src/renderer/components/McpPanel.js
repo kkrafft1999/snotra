@@ -134,6 +134,7 @@ export function initMcpPanel({ api }) {
   const btnEnvAdd = document.getElementById('btn-mcp-env-add');
   const formError = document.getElementById('mcp-form-error');
   const testResult = document.getElementById('mcp-test-result');
+  const testHint = document.getElementById('mcp-test-hint');
 
   const importOverlay = document.getElementById('mcp-import-overlay');
   const importDialog = document.getElementById('dialog-mcp-import');
@@ -143,6 +144,7 @@ export function initMcpPanel({ api }) {
   const btnImportApply = document.getElementById('btn-mcp-import-apply');
   const importInput = document.getElementById('mcp-import-input');
   const importError = document.getElementById('mcp-import-error');
+  const importAnnouncer = document.getElementById('mcp-import-announcer');
   const importCount = document.getElementById('mcp-import-count');
   const importList = document.getElementById('mcp-import-list');
   const importSkipped = document.getElementById('mcp-import-skipped');
@@ -171,6 +173,17 @@ export function initMcpPanel({ api }) {
   /** A request of the server dialog is running; its actions are inert. */
   let dialogBusy = false;
   let importBusy = false;
+  /**
+   * The form as it was opened, i.e. as it is stored. *Test connection* tests
+   * the stored server, so it waits while the form says something else
+   * (CR-B14-09).
+   */
+  let storedFormState = '';
+  let formUnsaved = false;
+  /** The catalogue could not be read — then "no server yet" would be a claim. */
+  let readFailed = false;
+  /** The kind of import error last said out loud (see refreshImportPreview). */
+  let announcedImportError = null;
   /** Erkannte Kandidaten des Import-Dialogs, in der Reihenfolge der Anzeige. */
   let importCandidates = [];
   /** Kennungen der abgewaehlten Kandidaten — abwaehlen ueberlebt das Neulesen. */
@@ -205,7 +218,7 @@ export function initMcpPanel({ api }) {
     // instead of dropping it to the page (CR-B14-07).
     const focused = focusedListControl();
     list.replaceChildren();
-    empty?.classList.toggle('hidden', servers.length > 0);
+    empty?.classList.toggle('hidden', servers.length > 0 || readFailed);
 
     for (const server of servers) {
       const connection = connectionOf(server.id);
@@ -264,7 +277,8 @@ export function initMcpPanel({ api }) {
     if (focused) (listControl(focused.serverId, focused.action) || btnAdd)?.focus();
   }
 
-  function adopt(result) {
+  function adopt(result, { failed = false } = {}) {
+    readFailed = failed;
     servers = Array.isArray(result?.servers) ? result.servers : [];
     connections = Array.isArray(result?.connections) ? result.connections : [];
     skipped = Array.isArray(result?.skippedTools) ? result.skippedTools : [];
@@ -276,7 +290,7 @@ export function initMcpPanel({ api }) {
       adopt(typeof api.getMcpCatalog === 'function' ? await api.getMcpCatalog() : null);
       setError(errorEl, '');
     } catch {
-      adopt(null);
+      adopt(null, { failed: true });
       setError(errorEl, t('settings.mcp.readFailed'));
     }
   }
@@ -427,6 +441,7 @@ export function initMcpPanel({ api }) {
       const neighbour = row.nextElementSibling || row.previousElementSibling;
       row.remove();
       (neighbour?.querySelector('.mcp-env-row__key') || btnEnvAdd)?.focus();
+      updateUnsaved();
     });
     opts.append(remove);
 
@@ -476,10 +491,33 @@ export function initMcpPanel({ api }) {
    */
   function setDialogBusy(busy) {
     dialogBusy = busy;
-    for (const button of [btnTest, btnSave, btnDelete]) {
-      if (busy) button?.setAttribute('aria-disabled', 'true');
+    syncDialogActions();
+  }
+
+  function syncDialogActions() {
+    const inert = [
+      [btnSave, dialogBusy],
+      [btnDelete, dialogBusy],
+      [btnTest, dialogBusy || formUnsaved],
+    ];
+    for (const [button, off] of inert) {
+      if (off) button?.setAttribute('aria-disabled', 'true');
       else button?.removeAttribute('aria-disabled');
     }
+    // The hint says why Test waits; it is the button's description meanwhile.
+    testHint?.classList.toggle('hidden', !formUnsaved);
+    if (formUnsaved) btnTest?.setAttribute('aria-describedby', 'mcp-test-hint');
+    else btnTest?.removeAttribute('aria-describedby');
+  }
+
+  function formState() {
+    return JSON.stringify([fieldLabel.value, fieldCommand.value, fieldArgs.value, fieldCwd.value, readEnv()]);
+  }
+
+  /** Test only applies to a stored server whose form shows what is stored. */
+  function updateUnsaved() {
+    formUnsaved = Boolean(editing) && formState() !== storedFormState;
+    syncDialogActions();
   }
 
   function openDialog(server) {
@@ -501,6 +539,8 @@ export function initMcpPanel({ api }) {
     for (const entry of server?.env || []) envList.append(envRow(entry));
     btnDelete.classList.toggle('hidden', !server);
     btnTest.classList.toggle('hidden', !server);
+    storedFormState = formState();
+    updateUnsaved();
 
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
@@ -510,6 +550,7 @@ export function initMcpPanel({ api }) {
   function closeDialog() {
     const wasOpen = !overlay.classList.contains('hidden');
     dialogGeneration += 1;
+    formUnsaved = false;
     setDialogBusy(false);
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
@@ -593,7 +634,7 @@ export function initMcpPanel({ api }) {
   }
 
   async function test() {
-    if (!editing || !testResult || dialogBusy) return;
+    if (!editing || !testResult || dialogBusy || formUnsaved) return;
     const id = editing.id;
     testResult.replaceChildren(el('p', 'mcp-test__pending', t('mcpDialog.test.running')));
     const { stale, result } = await dialogRequest(() => api.testMcpServer?.(id));
@@ -765,7 +806,17 @@ export function initMcpPanel({ api }) {
       (id) => importCandidates.some((candidate) => candidate.id === id)));
 
     // Ein leeres Feld ist kein Fehler, sondern der Ausgangszustand.
-    setError(importError, text.trim() ? tMessage(result.errors[0]) : '');
+    const error = text.trim() ? result.errors[0] || null : null;
+    setError(importError, error ? tMessage(error) : '');
+    importInput?.setAttribute('aria-invalid', error ? 'true' : 'false');
+    // The line is rewritten on every keystroke, so it is no live region
+    // itself. What is said out loud is a change of the kind of error — a
+    // JSON position that moves along with the cursor is not news (CR-B14-09).
+    const kind = error?.key || null;
+    if (kind !== announcedImportError) {
+      announcedImportError = kind;
+      announceImport(error ? tMessage(error) : '');
+    }
     if (importCount) {
       const gefunden = result.candidates.length;
       const gesamt = gefunden + result.skipped.length;
@@ -773,11 +824,15 @@ export function initMcpPanel({ api }) {
         ? ''
         : gefunden === gesamt
           ? tPlural('mcpImport.count.all', gefunden)
-          : t('mcpImport.count.partial', { count: gefunden, total: gesamt });
+          : tPlural('mcpImport.count.partial', gefunden, { total: gesamt });
     }
     renderImportPreview();
     renderImportSkipped(result.skipped);
     updateImportApply();
+  }
+
+  function announceImport(message) {
+    if (importAnnouncer) importAnnouncer.textContent = message || '';
   }
 
   function openImport() {
@@ -787,6 +842,8 @@ export function initMcpPanel({ api }) {
     if (importInput) importInput.value = '';
     importCandidates = [];
     importUnchecked = new Set();
+    announcedImportError = null;
+    announceImport('');
     setError(importError, '');
     refreshImportPreview();
     importOverlay?.classList.remove('hidden');
@@ -849,7 +906,9 @@ export function initMcpPanel({ api }) {
     // loeschen. Nebenbei stehen die eben gespeicherten Server jetzt als
     // „ersetzt" da, was sie ab sofort ja auch sind.
     refreshImportPreview();
-    setError(importError, t('mcpImport.failed', { details: gescheitert.join(' · ') }));
+    const report = t('mcpImport.failed', { details: gescheitert.join(' · ') });
+    setError(importError, report);
+    announceImport(report);
   }
 
   btnReload?.addEventListener('click', reload);
@@ -859,6 +918,8 @@ export function initMcpPanel({ api }) {
   btnSave?.addEventListener('click', save);
   btnDelete?.addEventListener('click', remove);
   btnTest?.addEventListener('click', test);
+  dialog?.addEventListener('input', updateUnsaved);
+  dialog?.addEventListener('change', updateUnsaved);
   btnImportOpen?.addEventListener('click', openImport);
   btnImportClose?.addEventListener('click', closeImport);
   btnImportCancel?.addEventListener('click', closeImport);

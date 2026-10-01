@@ -1076,6 +1076,9 @@
                 To rename it or store it in plain text, enter the value again.
               </p>
             </div>
+            <p id="mcp-test-hint" class="modal-hint hidden" data-i18n="mcpDialog.test.unsaved">
+              Test connection uses the saved configuration &mdash; save your changes first.
+            </p>
             <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>
           </div>
           <footer class="add-model-dialog__bottom">
@@ -1108,7 +1111,7 @@
             <div class="modal-field-group">
               <label for="mcp-import-input" class="modal-field-label" data-i18n="mcpImport.input.label">Paste configuration</label>
               <textarea id="mcp-import-input" class="modal-input modal-input--mono mcp-import__paste" rows="6"
-                spellcheck="false" autocomplete="off"
+                spellcheck="false" autocomplete="off" aria-describedby="mcp-import-error"
                 placeholder='{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] } } }'></textarea>
               <p class="modal-hint" data-i18n-html="mcpImport.input.hint">
                 The block from Claude Desktop, Claude Code or Cursor &mdash; with or without the surrounding
@@ -1116,7 +1119,8 @@
                 Only what is here is read; no external configuration file is opened.
               </p>
             </div>
-            <p id="mcp-import-error" class="modal-warning hidden" role="alert"></p>
+            <p id="mcp-import-error" class="modal-warning hidden"></p>
+            <span id="mcp-import-announcer" class="visually-hidden" role="status"></span>
             <p id="mcp-import-count" class="mcp-import__count" aria-live="polite"></p>
             <ul id="mcp-import-list" class="mcp-import__list" aria-label="Detected servers" data-i18n-attr="aria-label:mcpImport.list.label"></ul>
             <div id="mcp-import-skipped" class="mcp-import__skipped hidden"></div>

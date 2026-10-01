@@ -664,6 +664,7 @@ module.exports = {
   'mcpDialog.test.ok.one': 'Verbindung steht — {count} Tool gefunden.',
   'mcpDialog.test.ok.other': 'Verbindung steht — {count} Tools gefunden.',
   'mcpDialog.test.noAnswer': 'Der Server hat nicht geantwortet.',
+  'mcpDialog.test.unsaved': '„Verbindung testen“ prüft die gespeicherte Konfiguration — speichere deine Änderungen zuerst.',
   'mcpDialog.cancel': 'Abbrechen',
   'mcpDialog.save': 'Speichern',
 
@@ -692,7 +693,8 @@ module.exports = {
   'mcpImport.skipped.other': '{count} Einträge werden nicht übernommen',
   'mcpImport.count.all.one': '{count} Eintrag erkannt.',
   'mcpImport.count.all.other': '{count} Einträge erkannt.',
-  'mcpImport.count.partial': '{count} von {total} Einträgen können übernommen werden.',
+  'mcpImport.count.partial.one': '{count} von {total} Einträgen kann übernommen werden.',
+  'mcpImport.count.partial.other': '{count} von {total} Einträgen können übernommen werden.',
   'mcpImport.failed': 'Nicht übernommen — {details}',
   'mcpImport.failed.unknown': 'unbekannter Fehler',
 

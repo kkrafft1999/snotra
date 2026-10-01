@@ -6982,9 +6982,12 @@ select.modal-input {
   min-width: 0;
 }
 
+/* A name without a break point wraps instead of pushing the status and the
+   switch out of the row (CR-B14-09). */
 .mcp-row__name {
   display: block;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Lange npx-Aufrufe sind der Normalfall — abschneiden statt die Zeile
@@ -7127,30 +7130,6 @@ select.modal-input {
   cursor: not-allowed;
 }
 
-.mcp-tool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mcp-tool-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.mcp-tool-row:hover {
-  background: var(--ds-blue-soft);
-}
-
-.mcp-tool-row code {
-  font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
-  font-size: 12.5px;
-}
-
 .mcp-test:empty {
   display: none;
 }
@@ -7256,6 +7235,7 @@ select.modal-input {
 .mcp-import__name {
   font-weight: 600;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .mcp-import__id {
@@ -7303,11 +7283,13 @@ select.modal-input {
 }
 
 /* Ein Hinweis, der eine Entscheidung verlangt (Platzhalter, Ueberschreiben),
-   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg. */
+   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg.
+   Filled black rather than red: red is reserved for errors, and nothing has
+   gone wrong yet (CR-B14-09, ui-design-tokens.md). */
 .mcp-import__badge--warn {
-  color: var(--ds-error);
-  border-color: var(--ds-error-border);
-  background: var(--ds-error-bg);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+  background: var(--text-primary);
 }
 
 .mcp-import__skipped {

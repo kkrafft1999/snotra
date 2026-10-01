@@ -746,3 +746,48 @@ test('removing an environment variable moves the focus to the next, previous or 
   assert.equal(envRows().length, 0);
   assert.equal(document.activeElement === document.getElementById('btn-mcp-env-add'), true);
 });
+
+// --- CR-B14-09, item 10 ---
+
+test('a catalogue that cannot be read does not also claim there is no server', async () => {
+  await mount({ getMcpCatalog: async () => { throw new Error('EACCES'); } });
+  assert.equal(document.getElementById('settings-mcp-error').textContent, 'The MCP configuration could not be read.');
+  assert.equal(document.getElementById('settings-mcp-empty').classList.contains('hidden'), true);
+  assert.equal(rows().length, 0);
+});
+
+test('Test connection waits while the form differs from what is saved (CR-B14-09)', async () => {
+  const { calls } = await editGithub();
+  const btnTest = document.getElementById('btn-mcp-server-test');
+  const hint = document.getElementById('mcp-test-hint');
+  const label = document.getElementById('mcp-field-label');
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false);
+  assert.equal(hint.classList.contains('hidden'), true);
+
+  type(label, 'GitHub (Arbeit)');
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
+  assert.equal(btnTest.disabled, false, 'still focusable, so the reason can be read');
+  assert.equal(hint.classList.contains('hidden'), false);
+  assert.equal(btnTest.getAttribute('aria-describedby'), 'mcp-test-hint');
+  assert.match(hint.textContent, /uses the saved configuration/);
+  btnTest.click();
+  await flush();
+  assert.equal(calls.some(([kind]) => kind === 'test'), false, 'nothing is tested against an unsaved form');
+
+  type(label, 'GitHub');
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false, 'back to what is saved');
+  assert.equal(hint.classList.contains('hidden'), true);
+
+  // A stored secret that is only focused is still what is saved; a new
+  // value is not.
+  const { value } = envFields(envRows()[0]);
+  value.focus();
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false);
+  type(value, 'ghp_neu');
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
+  // Removing a variable is a change, too.
+  type(value, '');
+  value.blur();
+  envRows()[1].querySelector('.settings-dialog__icon-close').click();
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
+});
