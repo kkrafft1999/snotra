@@ -141,8 +141,9 @@ export async function startFakeModel() {
         }
       }
       if (res.destroyed || res.writableEnded || record.aborted) return;
+      // `finishReason: 'length'` plays an answer cut off at the output limit (#538).
       res.write(sse({
-        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        choices: [{ index: 0, delta: {}, finish_reason: answer.finishReason ?? 'stop' }],
         usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
       }));
       res.write('data: [DONE]\n\n');
@@ -158,7 +159,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {
