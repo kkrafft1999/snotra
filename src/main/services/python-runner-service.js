@@ -191,9 +191,7 @@ function createPythonRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
-  async function run({
-    code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, skillWritePaths = [], abortSignal,
-  } = {}) {
+  async function run({ code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, abortSignal } = {}) {
     if (!detected.found) {
       return { error: 'No Python 3 interpreter is available.' };
     }
@@ -233,8 +231,6 @@ function createPythonRunnerService({
         workspaceRoot,
         runTmp: dir,
         domains: networkDomains,
-        // The folders of the skills loaded in the run (#429).
-        skillWritePaths,
         commandId: `python-${randomId()}`,
         commandText: `python ${path.basename(scriptPath)}`,
         abortSignal,

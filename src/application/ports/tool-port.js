@@ -33,7 +33,7 @@
  * @property {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} [shellCommand]
  *   `shell_execute` only: the call in the form a remembered command is compared in (#121);
  *   `command` is null when the command line cannot be remembered
- * @property {{ disabled: boolean, root: string, allowance?: object, allowanceSkipped?: string, skillFolders?: string[] }} [sandbox]
+ * @property {{ disabled: boolean, root: string, allowance?: object, allowanceSkipped?: string }} [sandbox]
  *   the tools that run a process only: what the run is isolated with, as approved (#329, #357, #408)
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
@@ -43,7 +43,6 @@
  * @typedef {Object} ToolPlanContext
  * @property {string} workspaceRoot
  * @property {Array<{name: string, dir: string}>} [skillRoots]
- * @property {string[]} [writableSkills]  skills loaded in this run, whose folders a write may reach (#429)
  * @property {string[]} [sensitivePathPatterns]  Nutzer-Muster zusätzlich zu den Standardmustern
  * @property {string[]} [forcedClasses]  Klassen, die eine Neubewertung erzwingt (z. B. 'delete')
  * @property {string} [locale]  interface language for the words inside the preview (#555)
@@ -53,7 +52,6 @@
  * @typedef {Object} ToolExecutionContext
  * @property {string} workspaceRoot
  * @property {Array<{name: string, dir: string}>} [skillRoots]
- * @property {string[]} [writableSkills]  as in ToolPlanContext (#429)
  * @property {string[]} [sensitivePathPatterns]  the user's patterns; the broad tools leave out
  *   hits under them as under the built-in ones (#525)
  * @property {AbortSignal} abortSignal
@@ -71,7 +69,7 @@
  * @property {string[]} [disabledNames]
  * @property {boolean} [workspaceOpen]
  * @property {string[]} [skillNames]  the switched-on skills: `load_skill` lists them, and the
- *   file tools stay without a folder while there is one (#173, #429)
+ *   read tools stay without a folder while there is one (#173, #429, #548)
  */
 
 /**

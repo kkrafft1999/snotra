@@ -172,9 +172,9 @@ function buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles = false }) {
   if (!toolsPrompt) return '';
   return [
     skillFiles
-      // The file tools are there for the skill folders only (#429).
+      // The read tools are there for the skill folders only (#429, #548).
       ? 'No project folder is open. You therefore have no access to project files; the '
-        + 'file tools reach only the folders of the switched-on skills, and the other tools '
+        + 'read tools reach only the folders of the switched-on skills, and the other tools '
         + 'listed below work without a folder. If the user asks about project files, say '
         + 'that they need to open a folder first.'
       : 'No project folder is open. You therefore have no access to files; the tools '
@@ -211,22 +211,6 @@ function parseToolArguments(rawArguments) {
  * könnte sich das Modell selbst Skills einschalten, und fremder Dateiinhalt
  * käme über den Umweg eines Tool-Ergebnisses an die Aktivierung heran.
  */
-/**
- * The skill a `load_skill` result delivered, or null for an error (#429).
- * Only a result that carries instructions counts as loaded.
- */
-function loadedSkillName(output) {
-  if (typeof output !== 'string') return null;
-  try {
-    const parsed = JSON.parse(output);
-    return parsed && !parsed.error && typeof parsed.skill === 'string' && typeof parsed.instructions === 'string'
-      ? parsed.skill
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function collectInvokedSkillNames(messages) {
   if (!Array.isArray(messages)) return [];
   const names = new Set();
@@ -267,7 +251,7 @@ function collectInvokedSkillNames(messages) {
  */
 function buildSkillsSystemPrompt(
   activeSkills,
-  { toolsAvailable = false, canLoadSkills = false } = {}
+  { toolsAvailable = false, canLoadSkills = false, workspaceOpen = false } = {}
 ) {
   const empty = { text: '', parts: [] };
   if (!Array.isArray(activeSkills) || activeSkills.length === 0) return empty;
@@ -325,12 +309,23 @@ function buildSkillsSystemPrompt(
         `"skill:<name>/<path>", for example "skill:${usable[0].name}/references/guide.md". ` +
         `"load_skill" also reports the skill's folder, and an absolute path inside it ` +
         `works the same, so there is no need to search for the folder. ` +
-        `Switched on are: ${names}. Once a skill is loaded in this run — with ` +
-        `"load_skill", or called by /name — the write tools reach its folder the same ` +
-        `way, so it can keep its own files up to date; every change goes through the ` +
-        `usual approval. The app's own skills stay read-only.`
+        `Switched on are: ${names}.`
     );
   }
+  // A skill folder is shared by every workspace the skill is on in and gets
+  // replaced on an update, so what a skill keeps lives in the project (#548).
+  intro.push(
+    workspaceOpen
+      ? 'Skill folders are read-only. What a skill produces and wants to keep — learned ' +
+        'rules, contacts, state for the next run — goes into ".agents/data/" in the open ' +
+        'folder, for example ".agents/data/contacts.md". Use the file name the skill ' +
+        'gives; a skill that speaks of "<workspace>/.agents/data/…" means exactly that ' +
+        'place. Without a name from the skill, pick one that says which skill the file ' +
+        'belongs to.'
+      : 'Skill folders are read-only. What a skill wants to keep belongs in ' +
+        '".agents/data/" of a project folder, and none is open: if a skill would save ' +
+        'something, say that a folder needs to be opened first.'
+  );
   // A skill whose rules live in a file next to it is not followed by guessing
   // the rules (#427): the model once answered "I know them from memory" and
   // went on without them.
@@ -970,8 +965,7 @@ function createChatEngine({
       // System-Skills beschreiben die App selbst.
       let activeSkills = [];
       // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
-      // für die Lese-Tools (Issue #61). The write tools reach only those of
-      // the skills loaded in this run (#429), see `loadedSkills` below.
+      // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie (#548).
       let skillRoots = [];
       if (skills) {
         try {
@@ -1020,8 +1014,8 @@ function createChatEngine({
       const canLoadSkills = availableToolDefs.some(
         (definition) => definition?.function?.name === LOAD_SKILL_TOOL
       );
-      // Without a folder the file tools are still there while a skill is
-      // switched on — for its folder and nothing else (#429).
+      // Without a folder the read tools are still there while a skill is
+      // switched on — for its folder and nothing else (#429, #548).
       const skillPathTool = (toolName) =>
         skillRoots.length > 0
         && typeof tools.supportsSkillPaths === 'function'
@@ -1030,26 +1024,8 @@ function createChatEngine({
         && availableToolDefs.some((definition) => skillPathTool(definition?.function?.name));
       const { text: skillsSystem, parts: skillContextParts } = buildSkillsSystemPrompt(
         activeSkills,
-        { toolsAvailable: workspaceOpen || skillFilesWithoutFolder, canLoadSkills }
+        { toolsAvailable: workspaceOpen || skillFilesWithoutFolder, canLoadSkills, workspaceOpen }
       );
-      // The skills whose folders this run may write to (#429): those whose
-      // instructions it carries — called by /name, or all of them when there
-      // is no `load_skill` — and every one it loads along the way. Never the
-      // app's own, and never one without a folder.
-      const folderSkillNames = new Set(
-        activeSkills
-          .filter((skill) => skill && skill.source !== SKILL_SOURCES.SYSTEM)
-          .map((skill) => skill.name)
-          .filter((name) => skillRoots.some((entry) => entry.name === name))
-      );
-      const loadedSkills = new Set(
-        activeSkills
-          .filter((skill) => skill && folderSkillNames.has(skill.name))
-          .filter((skill) => typeof skill.body === 'string' && skill.body.trim())
-          .filter((skill) => !canLoadSkills || skill.invoked)
-          .map((skill) => skill.name)
-      );
-      const writableSkills = () => [...loadedSkills];
       // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
       // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
       // könne keine Dateien lesen oder schreiben.
@@ -1446,7 +1422,6 @@ function createChatEngine({
           const plan = await tools.plan(toolName, args, {
             workspaceRoot,
             skillRoots,
-            writableSkills: writableSkills(),
             sensitivePathPatterns: policy.sensitivePathPatterns,
             forcedClasses,
             // The preview on the card speaks the user's language (#555).
@@ -1527,7 +1502,6 @@ function createChatEngine({
             const recheck = await tools.plan(toolName, args, {
               workspaceRoot,
               skillRoots,
-              writableSkills: writableSkills(),
               sensitivePathPatterns: policy.sensitivePathPatterns,
               forcedClasses,
             });
@@ -1553,7 +1527,6 @@ function createChatEngine({
           const execution = await tools.execute(toolName, args, {
             workspaceRoot,
             skillRoots,
-            writableSkills: writableSkills(),
             // The broad tools leave out hits under these patterns (#525); a
             // targeted call has been planned against them already.
             sensitivePathPatterns: policy.sensitivePathPatterns,
@@ -1781,10 +1754,6 @@ function createChatEngine({
             throw error;
           }
           emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
-          if (toolName === LOAD_SKILL_TOOL && !outcome.denied) {
-            const loaded = loadedSkillName(outcome.content);
-            if (loaded && folderSkillNames.has(loaded)) loadedSkills.add(loaded);
-          }
           const toolMessage = {
             role: 'tool',
             tool_call_id: toolCall.id,

@@ -8,7 +8,7 @@
  * wird, stammt aus dem validierten DTO des Main-Prozesses. Diese Funktionen
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
-import { describeAllowanceOnCard, tildePath } from './program-allowance-view.js';
+import { describeAllowanceOnCard } from './program-allowance-view.js';
 import contracts from '../generated/contracts.js';
 import { t, tMessage } from '../i18n.js';
 
@@ -191,7 +191,7 @@ function targetPathLabel(target) {
   return typeof target?.path === 'string' ? target.path : '';
 }
 
-function describeTarget(target, { writes = false } = {}) {
+function describeTarget(target) {
   const out = {
     path: targetPathLabel(target),
     kindLabel: t(TARGET_KIND_KEYS[target?.kind] || TARGET_KIND_KEYS.file),
@@ -210,11 +210,11 @@ function describeTarget(target, { writes = false } = {}) {
   }
   if (target?.kind === 'file' && !out.exists) out.notes.push(t('approval.note.new'));
   if (target?.recovery === 'trash') out.notes.push(t('approval.note.trash'));
-  // A change to a skill is a change wherever the skill is switched on (#429)
-  // — for a global skill that is every project, so the card says so.
+  // A file in a skill folder names its skill (#427); only reading reaches
+  // one (#548).
   if (typeof target?.skillName === 'string' && target.skillName) {
     out.skillName = target.skillName;
-    out.notes.push(t(writes ? 'approval.note.skillWrite' : 'approval.note.skill', { name: target.skillName }));
+    out.notes.push(t('approval.note.skill', { name: target.skillName }));
   }
   return out;
 }
@@ -240,7 +240,6 @@ const ALWAYS_UNAVAILABLE_KEYS = Object.freeze({
   [COMMAND_RULE_UNAVAILABLE_REASONS.NO_ENCRYPTION]: 'approval.alwaysHint.noEncryption',
   [COMMAND_RULE_UNAVAILABLE_REASONS.NO_WORKSPACE]: 'approval.alwaysHint.noWorkspace',
   [COMMAND_RULE_UNAVAILABLE_REASONS.CLASSES]: 'approval.alwaysHint.classes',
-  [COMMAND_RULE_UNAVAILABLE_REASONS.SKILL_FOLDER]: 'approval.alwaysHint.skillFolder',
 });
 
 /**
@@ -295,8 +294,6 @@ export function describeIsolation(isolation, { homeDir = '' } = {}) {
       note: t('approval.isolation.note'),
       // A program allowance (#408): what it adds, or why it stays off.
       allowance: describeAllowanceOnCard(isolation, { homeDir }),
-      // The folders of the skills loaded in the run (#429).
-      skillFolders: describeSkillFolders(isolation, { homeDir }),
     };
   }
   const missing = (Array.isArray(isolation.missing) ? isolation.missing : [])
@@ -311,22 +308,6 @@ export function describeIsolation(isolation, { homeDir = '' } = {}) {
     switchedOff,
     settingsLabel: switchedOff ? t('approval.isolation.settings') : '',
   };
-}
-
-/**
- * The skill folders an execution run may write to (#429), as one sentence
- * behind a prefix — the same shape as a program allowance. Null without any.
- */
-export function describeSkillFolders(isolation, { homeDir = '' } = {}) {
-  const folders = (Array.isArray(isolation?.skillFolders) ? isolation.skillFolders : [])
-    .filter((folder) => folder && typeof folder.name === 'string' && typeof folder.path === 'string');
-  if (folders.length === 0) return null;
-  const text = folders.length === 1
-    ? t('approval.skillFolders.one', { name: folders[0].name, folder: tildePath(folders[0].path, homeDir) })
-    : t('approval.skillFolders.other', {
-      folders: folders.map((folder) => `${folder.name} (${tildePath(folder.path, homeDir)})`).join(', '),
-    });
-  return { prefix: t('approval.skillFolders.prefix'), text };
 }
 
 /**
@@ -468,8 +449,7 @@ export function overwriteWarning(dto) {
 export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
   if (!isToolApprovalRequestDto(dto)) return null;
   const classes = dto.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls));
-  const writes = classes.includes(TOOL_RISK_CLASSES.WRITE) || classes.includes(TOOL_RISK_CLASSES.DELETE);
-  const targets = dto.targets.map((target) => describeTarget(target, { writes }));
+  const targets = dto.targets.map(describeTarget);
   const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE) || targets.some((entry) => entry.sensitive);
   const view = {
     requestId: dto.requestId,
