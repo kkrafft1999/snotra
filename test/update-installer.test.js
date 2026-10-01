@@ -474,7 +474,9 @@ test('the minimal test archive is a real asar, and the reader reads it (#569)', 
   t.after(() => fsp.rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'app.asar');
   writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra AI","version":"3.0.1"}' });
-  assert.deepEqual(asar.listPackage(file, { isPack: false }).sort(), ['/LICENSE', '/package.json']);
+  // @electron/asar lists with the platform's separator.
+  const listed = asar.listPackage(file, { isPack: false }).map((entry) => entry.replace(/\\/g, '/')).sort();
+  assert.deepEqual(listed, ['/LICENSE', '/package.json']);
   assert.equal(asar.extractFile(file, 'package.json').toString(), '{"productName":"Snotra AI","version":"3.0.1"}');
   assert.equal(readAsarPackageJson(file).version, '3.0.1');
 });
