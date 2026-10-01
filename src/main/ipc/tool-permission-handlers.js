@@ -34,6 +34,7 @@ const {
   PERMISSION_RULE_SCOPES,
   PERMISSION_DENIAL_REASONS,
   APPROVAL_RESPONSES,
+  PERSISTENT_ALLOW_CLASSES,
   normalizeToolPermissionMode,
   normalizePermissionRule,
   normalizeSensitivePathPatterns,
@@ -97,6 +98,53 @@ function removeDenyRuleDialog(rule, t) {
     message: t('permissionDialog.removeDeny.title'),
     detail: t('permissionDialog.removeDeny.detail', { subject: ruleSubject(rule, t), pattern: rule.pathPattern }),
     buttons: [t('permissionDialog.removeDeny.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+/**
+ * What a reset or a shorter pattern list takes away that protects (#514):
+ * blocks, the user's sensitive path patterns, "Always ask" as a default or as
+ * the mode on screen. Removing those is a loosening like deleting one deny
+ * rule, so main confirms it natively and names what goes. Allow rules,
+ * allowances and the sandbox opt-out going is a tightening and is not listed.
+ */
+function protectionLosses({ denyRules = 0, patterns = [], askAllDefaults = 0, askAllMode = false }, t) {
+  const lines = [];
+  if (denyRules > 0) lines.push(t('permissionDialog.losses.blocks', { count: denyRules }));
+  if (patterns.length > 0) lines.push(t('permissionDialog.losses.patterns', { patterns: patterns.join(', ') }));
+  if (askAllDefaults > 0) {
+    lines.push(t('permissionDialog.losses.askAllDefaults', { count: askAllDefaults, askAll: t('permissions.mode.askAll') }));
+  }
+  if (askAllMode) lines.push(t('permissionDialog.losses.askAllMode', { askAll: t('permissions.mode.askAll'), smart: t('permissions.mode.smart') }));
+  return lines;
+}
+
+function resetDialog(kind, losses, t, root = '') {
+  return {
+    type: 'warning',
+    title: t(`permissionDialog.${kind}.title`),
+    message: t(`permissionDialog.${kind}.title`),
+    detail: [
+      t(`permissionDialog.${kind}.detail`, { root }),
+      ...(losses.length > 0
+        ? [t('permissionDialog.losses.intro'), losses.map((line) => `• ${line}`).join('\n')]
+        : []),
+    ].join('\n\n'),
+    buttons: [t(`permissionDialog.${kind}.confirm`), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+function removePatternsDialog(patterns, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.removePatterns.title'),
+    message: t('permissionDialog.removePatterns.title'),
+    detail: t('permissionDialog.removePatterns.detail', { patterns: patterns.join(', '), smart: t('permissions.mode.smart') }),
+    buttons: [t('permissionDialog.removePatterns.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,
   };
@@ -450,8 +498,23 @@ function registerToolPermissionHandlers({
       delete candidate.root;
     }
     delete candidate.id;
+    // A command is remembered from its card, with the dialog that repeats the
+    // command line (#121); this channel's dialog never shows it (#517).
+    if (candidate.command !== undefined && candidate.command !== null) {
+      return createSettingsError(createMessage('permissions.error.commandRuleFromCard'));
+    }
     const preview = normalizePermissionRule({ ...candidate, id: 'preview' });
     if (!preview) return createSettingsError(createMessage('permissions.error.invalidRule'));
+    if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW && preview.tool) {
+      // An allow rule for a tool that executes or reaches out would be
+      // confirmed and listed, and then never apply (#517).
+      const tools = await Promise.resolve().then(describeTools).catch(() => []);
+      const known = (Array.isArray(tools) ? tools : []).find((tool) => tool && tool.name === preview.tool);
+      const classes = Array.isArray(known?.riskClasses) ? known.riskClasses : [];
+      if (classes.some((cls) => !PERSISTENT_ALLOW_CLASSES.includes(cls))) {
+        return createSettingsError(createMessage('permissions.error.allowNotForTool', { tool: preview.tool }));
+      }
+    }
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW) {
       const confirmed = await confirmNatively(allowRuleDialog(preview, createTranslator(getLocale())));
       if (!confirmed) return createSettingsError(createMessage('permissions.error.ruleNotCreated'), 'cancelled');
@@ -479,7 +542,15 @@ function registerToolPermissionHandlers({
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, async (event, rawPatterns) => {
     if (!Array.isArray(rawPatterns)) return createSettingsError(createMessage('permissions.error.patternsExpected'));
-    const result = await toolPolicyStore.setSensitivePathPatterns(normalizeSensitivePathPatterns(rawPatterns));
+    const next = normalizeSensitivePathPatterns(rawPatterns);
+    // Dropping a pattern turns files that asked into ordinary reads (#514).
+    const current = (await toolPolicyStore.read()).sensitivePathPatterns || [];
+    const removed = current.filter((pattern) => !next.includes(pattern));
+    if (removed.length > 0) {
+      const confirmed = await confirmNatively(removePatternsDialog(removed, createTranslator(getLocale())));
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.patternsNotRemoved'), 'cancelled');
+    }
+    const result = await toolPolicyStore.setSensitivePathPatterns(next);
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), sensitivePathPatterns: result.sensitivePathPatterns };
@@ -506,6 +577,16 @@ function registerToolPermissionHandlers({
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, async (event) => {
     const root = getActiveWorkspaceRoot();
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    const state = await toolPolicyStore.read();
+    const t = createTranslator(getLocale());
+    const losses = protectionLosses({
+      denyRules: (state.workspaceRules?.[root] || []).filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY).length,
+      askAllDefaults: state.workspaceModes?.[root] === TOOL_PERMISSION_MODES.ASK_ALL ? 1 : 0,
+    }, t);
+    if (losses.length > 0) {
+      const confirmed = await confirmNatively(resetDialog('resetWorkspace', losses, t, root));
+      if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
+    }
     const result = await toolPolicyStore.resetWorkspaceRules(root);
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
@@ -617,6 +698,18 @@ function registerToolPermissionHandlers({
   });
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_ALL, async (event) => {
+    const state = await toolPolicyStore.read();
+    const t = createTranslator(getLocale());
+    const losses = protectionLosses({
+      denyRules: (state.rules || []).filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY).length,
+      patterns: state.sensitivePathPatterns || [],
+      askAllDefaults: Object.values(state.workspaceModes || {}).filter((mode) => mode === TOOL_PERMISSION_MODES.ASK_ALL).length,
+      askAllMode: state.mode === TOOL_PERMISSION_MODES.ASK_ALL,
+    }, t);
+    // The widest action asks every time — it is the only confirmation the
+    // page has for it; what protection goes with it is listed (#514).
+    const confirmed = await confirmNatively(resetDialog('resetAll', losses, t));
+    if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
     const result = await toolPolicyStore.resetAll();
     if (!result.ok) return createSettingsError(result.error);
     // Back to `smart` means every chat, including those in the background.
@@ -687,4 +780,7 @@ module.exports = {
   workspaceAutoDialog,
   commandRuleDialog,
   programAllowanceDialog,
+  resetDialog,
+  removePatternsDialog,
+  protectionLosses,
 };

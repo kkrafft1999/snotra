@@ -9,6 +9,7 @@ const { createChatPreferencesAdapter } = require('../adapters/chat-preferences-a
 const { createNodeWorkspacePathAdapter } = require('../adapters/workspace-path-adapter');
 const { createWorkspaceToolAdapter } = require('../adapters/workspace-tool-adapter');
 const { createSkillsAdapter } = require('../adapters/skills-adapter');
+const { INTEGRITY } = require('../services/tool-policy-store');
 
 /**
  * Verdrahtet die Chat-Engine mit ihren Ports. Seit Issue #66 gehören dazu der
@@ -49,6 +50,9 @@ function createChatApplication({
     ? {
         async read({ chatId = null } = {}) {
           const state = await toolPolicyStore.read();
+          // A rules file that cannot be read grants nothing and blocks
+          // nothing; the engine stops tools on a throw (concept §3, #512).
+          if (state.integrity === INTEGRITY.UNREADABLE) throw new Error('The permission rules could not be read.');
           return {
             mode: modeForRun(state, chatId, resolveChatMode),
             rules: state.rules,

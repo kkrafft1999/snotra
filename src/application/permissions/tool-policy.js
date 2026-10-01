@@ -99,36 +99,68 @@ function selectRulesForRoot(rules, root) {
   );
 }
 
-function targetPaths(targets) {
+/**
+ * The forms of each target a rule is matched against (#511): the canonical,
+ * root-relative paths the planner resolved (`rulePaths`), lexically and as
+ * the real path. A target without them — a bare string, an older caller —
+ * falls back to its `path`.
+ */
+function targetPathForms(targets) {
   if (!Array.isArray(targets)) return [];
   return targets
-    .map((target) => (typeof target === 'string' ? target : target?.path))
-    .filter((p) => typeof p === 'string');
+    .map((target) => {
+      if (typeof target === 'string') return [target];
+      const forms = Array.isArray(target?.rulePaths) ? target.rulePaths.filter((p) => typeof p === 'string') : [];
+      if (forms.length > 0) return forms;
+      return typeof target?.path === 'string' ? [target.path] : [];
+    })
+    .filter((forms) => forms.length > 0);
 }
 
+/**
+ * A path that still leaves its folder, or names one from the top, is not a
+ * place inside the root; it never counts as covered by an allow rule.
+ */
+function isRootRelative(rawPath) {
+  const text = String(rawPath).replace(/\\/g, '/');
+  if (text.startsWith('/') || /^[A-Za-z]:/.test(text)) return false;
+  return !text.split('/').some((segment) => segment === '..');
+}
+
+/**
+ * Does the rule name the call — by its tool, or by one of its classes? An
+ * overwrite without a recovery copy is classified `delete` instead of
+ * `write` (concept §9), but it destroys a file all the same: a block on
+ * writes covers it (#515).
+ */
 function ruleNamesCall(rule, toolName, riskClasses) {
   if (rule.tool) return rule.tool === toolName;
+  if (rule.riskClass === TOOL_RISK_CLASSES.WRITE && riskClasses.includes(TOOL_RISK_CLASSES.DELETE)) return true;
   return riskClasses.includes(rule.riskClass);
 }
 
 /**
  * Eine Sperre greift, wenn Tool oder Klasse passen und mindestens ein Ziel
  * dem Pfadmuster entspricht. Ohne Ziele greift nur ein
- * Muster für „alles“.
+ * Muster für „alles“. Any form of any target is enough, and the comparison
+ * ignores case: on macOS and Windows `Private/a` is `private/a`, and a block
+ * that is too wide only tightens (#511).
  */
-function denyRuleMatches(rule, { toolName, riskClasses, paths }) {
+function denyRuleMatches(rule, { toolName, riskClasses, targets }) {
   if (!ruleNamesCall(rule, toolName, riskClasses)) return false;
-  if (paths.length === 0) return rule.pathPattern === '**';
-  return paths.some((p) => matchesPathPattern(rule.pathPattern, p));
+  if (targets.length === 0) return rule.pathPattern === '**';
+  return targets.some((forms) => forms.some((p) => matchesPathPattern(rule.pathPattern, p, { caseInsensitive: true })));
 }
 
 /**
  * Allow-Regeln decken einen Aufruf nur vollständig: jede Klasse muss durch
  * eine Regel erlaubt sein, die alle Ziele einschließt, und die Klassen müssen
- * dauerhaft erlaubbar sein (read/write, Konzept §7).
+ * dauerhaft erlaubbar sein (read/write, Konzept §7). "All targets" means every
+ * form of every target, compared exactly (#511).
  */
-function allowRulesCover(rules, { toolName, riskClasses, paths }) {
+function allowRulesCover(rules, { toolName, riskClasses, targets }) {
   if (riskClasses.some((cls) => !PERSISTENT_ALLOW_CLASSES.includes(cls))) return null;
+  if (targets.some((forms) => forms.some((p) => !isRootRelative(p)))) return null;
   // A command rule allows one command line and nothing else (#121).
   const allowRules = rules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !isCommandRule(rule));
   if (allowRules.length === 0) return null;
@@ -137,9 +169,9 @@ function allowRulesCover(rules, { toolName, riskClasses, paths }) {
     const covering = allowRules.find(
       (rule) =>
         (rule.tool ? rule.tool === toolName : rule.riskClass === cls) &&
-        (paths.length === 0
+        (targets.length === 0
           ? rule.pathPattern === '**'
-          : paths.every((p) => matchesPathPattern(rule.pathPattern, p)))
+          : targets.every((forms) => forms.every((p) => matchesPathPattern(rule.pathPattern, p))))
     );
     if (!covering) return null;
     if (!matched.includes(covering.id)) matched.push(covering.id);
@@ -217,9 +249,9 @@ function decideToolPolicy(input = {}) {
     return { decision: POLICY_DECISIONS.DENY, source: PERMISSION_DECISION_SOURCES.DENY, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, mode };
   }
 
-  const paths = targetPaths(input.targets);
+  const targets = targetPathForms(input.targets);
   const rules = selectRulesForRoot(input.rules, input.root ?? null);
-  const call = { toolName, riskClasses, paths };
+  const call = { toolName, riskClasses, targets };
 
   const deny = rules.find((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY && denyRuleMatches(rule, call));
   if (deny) {
@@ -282,6 +314,7 @@ module.exports = {
   matrixDecisionForClasses,
   classesRequiringAsk,
   selectRulesForRoot,
+  ruleNamesCall,
   commandRuleCovers,
   decideToolPolicy,
 };

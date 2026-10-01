@@ -55,7 +55,6 @@ export function initToolPermissionsPanel({ toolPermissions }) {
   let toolCatalog = [];
   let isOpen = false;
   let unsubscribe = null;
-  let resetConfirmKey = null;
   /** The last state drawn — needed to redraw after a language change. */
   let lastState = null;
 
@@ -320,53 +319,25 @@ export function initToolPermissionsPanel({ toolPermissions }) {
       row.appendChild(text);
       const controls = document.createElement('div');
       controls.className = 'settings-reset-row__controls';
-      if (action.confirm && resetConfirmKey === action.key) {
-        const confirm = document.createElement('button');
-        confirm.type = 'button';
-        confirm.className = 'btn-destructive';
-        confirm.dataset.reset = action.key;
-        confirm.dataset.confirmed = 'true';
-        confirm.textContent = t('settings.reset.confirm');
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'btn-secondary';
-        cancel.dataset.resetCancel = 'true';
-        cancel.textContent = t('settings.reset.cancel');
-        controls.appendChild(confirm);
-        controls.appendChild(cancel);
-      } else {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'btn-secondary';
-        button.dataset.reset = action.key;
-        button.textContent = action.confirm ? t('settings.reset.running') : t('settings.reset.run');
-        button.disabled = !state || (action.key === 'workspace' && !hasWorkspace);
-        controls.appendChild(button);
-      }
+      // Main confirms in a native dialog where one is needed (#514); the
+      // ellipsis says that one always follows here.
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn-secondary';
+      button.dataset.reset = action.key;
+      button.textContent = action.confirm ? t('settings.reset.running') : t('settings.reset.run');
+      button.disabled = !state || (action.key === 'workspace' && !hasWorkspace);
+      controls.appendChild(button);
       row.appendChild(controls);
       resetActions.appendChild(row);
     }
   }
 
   resetActions?.addEventListener('click', async (e) => {
-    const cancel = e.target.closest('button[data-reset-cancel]');
-    if (cancel) {
-      resetConfirmKey = null;
-      renderResets(toolPermissions.get());
-      return;
-    }
     const button = e.target.closest('button[data-reset]');
     if (!button) return;
     const key = button.dataset.reset;
-    const action = resetActionOptions().find((a) => a.key === key);
-    if (!action) return;
-    if (action.confirm && button.dataset.confirmed !== 'true') {
-      resetConfirmKey = key;
-      renderResets(toolPermissions.get());
-      resetActions.querySelector('button[data-confirmed="true"]')?.focus();
-      return;
-    }
-    resetConfirmKey = null;
+    if (!resetActionOptions().some((a) => a.key === key)) return;
     let result;
     if (key === 'workspace') result = await toolPermissions.resetWorkspaceRules();
     else result = await toolPermissions.resetAll();
@@ -403,7 +374,6 @@ export function initToolPermissionsPanel({ toolPermissions }) {
     async open(catalog) {
       toolCatalog = Array.isArray(catalog) ? catalog : [];
       isOpen = true;
-      resetConfirmKey = null;
       setError(errorEl, '');
       setError(ruleError, '');
       setError(sensitiveError, '');

@@ -346,8 +346,25 @@ function createToolCallPlanner({
       const logicalHit = matcher.classifyPath(logicalRel);
       const realHit = matcher.classifyPath(`${resolved.prefix || ''}${realRel}`);
       const sensitive = logicalHit.sensitive || realHit.sensitive;
+      // What a rule is matched against (#511): the place the call touches,
+      // root-relative — resolved lexically and as its real path — never the
+      // spelling the model chose, which may run through `..`, be absolute or
+      // take a symlink.
+      // The real path is taken relative to the real root, so a root that is
+      // itself reached through a symlink (`/var` → `/private/var`) does not
+      // turn every real path into one outside it.
+      const lexicalRel = path.relative(resolved.root, resolved.absPath).split(path.sep).join('/');
+      let realRoot = resolved.root;
+      try {
+        realRoot = await fsService.resolveExistingRealPath(resolved.root);
+      } catch {
+        /* the lexical root, then */
+      }
+      const realRuleRel = path.relative(realRoot, realAbs).split(path.sep).join('/');
+      const rulePaths = [...new Set([lexicalRel, realRuleRel].map((rel) => `${resolved.prefix || ''}${rel}`))];
       const target = {
         path: rawPath.trim() === '' ? '.' : rawPath.trim(),
+        rulePaths,
         kind: descriptor.kind === 'tree' ? 'tree' : stat.isDirectory ? 'directory' : 'file',
         access,
         exists: stat.exists,
@@ -400,7 +417,7 @@ function createToolCallPlanner({
       args,
       root: workspaceRoot,
       classes: riskClasses,
-      targets: targets.map((target) => [target.path, target.absPath, target.version]),
+      targets: targets.map((target) => [target.path, target.absPath, target.version, target.rulePaths]),
       ...(sandboxDisabled ? { sandbox: 'off' } : {}),
       ...(allowance?.allowance ? { allowance: allowance.allowance } : {}),
       ...(skillFolders.length > 0 ? { skillFolders } : {}),

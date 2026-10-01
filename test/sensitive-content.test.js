@@ -10,6 +10,7 @@ const {
   maskSensitiveContent,
   containsOwnSecret,
   looksLikeSecretValue,
+  MASK_TEXT,
 } = require('../src/shared/runtime/sensitive-content');
 
 function rules(text) {
@@ -111,11 +112,31 @@ test('Maskierung ersetzt Werte, lässt Struktur und harmlosen Code stehen', () =
   assert.equal(masked.includes('hunter2hunter2'), false);
   assert.equal(masked.includes(fake('ghp_', 'abcdefghijklmnopqrstuvwxyz0123')), false);
   assert.equal(masked.includes('MIIEsecret'), false);
-  assert.match(masked, /api_key = "\[maskiert\]"/);
+  assert.ok(masked.includes(`api_key = "${MASK_TEXT}"`));
   assert.match(masked, /token = getToken\(\);/);
-  assert.match(masked, /Bearer \[maskiert\]/);
-  assert.match(masked, /-----BEGIN RSA PRIVATE KEY-----\n\[maskiert\]\n-----END RSA PRIVATE KEY-----/);
+  assert.ok(masked.includes(`Bearer ${MASK_TEXT}`));
+  assert.ok(masked.includes(`-----BEGIN RSA PRIVATE KEY-----\n${MASK_TEXT}\n-----END RSA PRIVATE KEY-----`));
   assert.equal(maskSensitiveContent(''), '');
+  // The mask is a mark, not a word in one language (#517), and masked text
+  // does not read as a secret again.
+  assert.doesNotMatch(MASK_TEXT, /[A-Za-z]/);
+  assert.equal(scanSensitiveContent(masked.split('\n')[0]).sensitive, false);
+});
+
+test('the credential scan stays linear on long runs of name characters (#513)', () => {
+  const crypto = require('crypto');
+  const inputs = [
+    'a-'.repeat(2 * 1024 * 1024),
+    crypto.randomBytes(3 * 1024 * 1024).toString('base64url'),
+  ];
+  for (const input of inputs) {
+    const started = Date.now();
+    scanSensitiveContent(input);
+    assert.ok(Date.now() - started < 1500, `scan of ${input.length} chars took ${Date.now() - started} ms`);
+  }
+  // A long prefix in front of the name still counts.
+  assert.equal(scanSensitiveContent('VERY_LONG_PREFIX_FOR_THE_DATABASE_PASSWORD="hunter2hunter2"').sensitive, true);
+  assert.equal(scanSensitiveContent('my-db-password: s3cr3t-value-123').sensitive, true);
 });
 
 test('containsOwnSecret vergleicht nur ausreichend lange, wörtliche Treffer', () => {

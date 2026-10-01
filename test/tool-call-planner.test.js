@@ -248,3 +248,19 @@ test('reading a skill file by its absolute path plans like a skill: path (#427)'
   assert.equal(off.reason, 'hard_limit');
   assert.match(off.error, /outside the workspace/);
 });
+
+test('every target carries the root-relative paths rules are matched against (#511)', async (t) => {
+  const { workspace, registry, make } = await makeFixture(t);
+  const planner = make();
+  await fs.mkdir(path.join(workspace, 'private'), { recursive: true });
+  await fs.writeFile(path.join(workspace, 'private', 'notes.txt'), 'n\n', 'utf8');
+  await fs.symlink(path.join(workspace, 'private'), path.join(workspace, 'shortcut'));
+  const read = registry.getDefinition('read_file_text');
+  const forms = async (relative_path) =>
+    (await planner.plan(read, { relative_path }, { workspaceRoot: workspace })).targets[0].rulePaths;
+
+  assert.deepEqual(await forms('private/notes.txt'), ['private/notes.txt']);
+  assert.deepEqual(await forms('src/../private/notes.txt'), ['private/notes.txt']);
+  assert.deepEqual(await forms(path.join(workspace, 'private', 'notes.txt')), ['private/notes.txt']);
+  assert.deepEqual(await forms('shortcut/notes.txt'), ['shortcut/notes.txt', 'private/notes.txt']);
+});

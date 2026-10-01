@@ -434,3 +434,109 @@ test('a tampered or unsigned file keeps "Always ask", never anything looser than
   assert.equal(state.integrity, 'unsigned');
   assert.equal(state.mode, 'ask-all');
 });
+
+// ── A file that cannot be read is not a broken file (#512) ──────────────────
+
+async function makeFlakyStore(t) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-policy-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const failures = new Map();
+  const flakyFs = {
+    ...fs,
+    readFile: async (file, ...rest) => {
+      const name = path.basename(file);
+      const code = failures.get(name);
+      if (code) {
+        if (!code.endsWith('!')) failures.delete(name);
+        const error = new Error(code.replace('!', ''));
+        error.code = code.replace('!', '');
+        throw error;
+      }
+      return fs.readFile(file, ...rest);
+    },
+  };
+  const store = createToolPolicyStore({
+    app: { getPath: () => dir },
+    safeStorage: makeSafeStorage(true),
+    fs: flakyFs,
+    path,
+    crypto,
+    log: { warn() {} },
+    now: () => 1000,
+  });
+  await store.read();
+  await store.addRule({ effect: 'deny', scope: 'global', riskClass: 'read', pathPattern: 'private/**' });
+  await store.addRule({ effect: 'allow', scope: 'global', riskClass: 'read', pathPattern: 'docs/**' });
+  await store.setSensitivePathPatterns(['personal/**']);
+  await store.setMode('ask-all');
+  // `once` fails the next read of that file, `always` every read.
+  const fail = (file, code, always = false) => failures.set(file, always ? `${code}!` : code);
+  const heal = () => failures.clear();
+  return { dir, store, fail, heal };
+}
+
+for (const code of ['EBUSY', 'EACCES']) {
+  test(`an unreadable policy file (${code}) is reported, and no update writes over it (#512)`, async (t) => {
+    const { store, fail, heal } = await makeFlakyStore(t);
+    fail(POLICY_FILENAME, code, true);
+    const during = await store.read();
+    assert.equal(during.integrity, 'unreadable');
+    assert.deepEqual(during.rules.filter((rule) => rule.effect === 'allow'), [], 'grants nothing while unreadable');
+
+    const update = await store.setMode('smart');
+    assert.equal(update.ok, false);
+    assert.equal(update.error.key, 'permissions.error.policyUnreadable');
+
+    heal();
+    const after = await store.read();
+    assert.equal(after.integrity, 'ok');
+    assert.equal(after.mode, 'ask-all');
+    assert.equal(after.rules.length, 2, 'deny and allow rule survive');
+    assert.deepEqual(after.sensitivePathPatterns, ['personal/**']);
+  });
+}
+
+test('an unreadable key file is not replaced (#512)', async (t) => {
+  const { dir, store } = await makeFlakyStore(t);
+  const keyBefore = await fs.readFile(path.join(dir, POLICY_KEY_FILENAME), 'utf8');
+  // A fresh store, so the key is not cached from the set-up.
+  const fresh = createToolPolicyStore({
+    app: { getPath: () => dir },
+    safeStorage: makeSafeStorage(true),
+    fs: { ...fs, readFile: async (file, ...rest) => {
+      if (path.basename(file) === POLICY_KEY_FILENAME) {
+        const error = new Error('EACCES');
+        error.code = 'EACCES';
+        throw error;
+      }
+      return fs.readFile(file, ...rest);
+    } },
+    path,
+    crypto,
+    log: { warn() {} },
+  });
+  const during = await fresh.read();
+  assert.equal(during.integrity, 'unreadable');
+  assert.equal((await fresh.setMode('smart')).ok, false);
+  assert.equal(await fs.readFile(path.join(dir, POLICY_KEY_FILENAME), 'utf8'), keyBefore, 'key untouched');
+  const after = await store.read();
+  assert.equal(after.integrity, 'ok');
+  assert.equal(after.rules.length, 2);
+});
+
+test('a key that is read but cannot be decrypted is lost and replaced (concept §7)', async (t) => {
+  const { dir } = await makeFlakyStore(t);
+  await fs.writeFile(path.join(dir, POLICY_KEY_FILENAME), Buffer.from('not-a-key').toString('base64'), 'utf8');
+  const fresh = createToolPolicyStore({
+    app: { getPath: () => dir },
+    safeStorage: makeSafeStorage(true),
+    fs,
+    path,
+    crypto,
+    log: { warn() {} },
+  });
+  const state = await fresh.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.equal(state.mode, 'ask-all', 'ask-all only tightens and stays (#419)');
+  assert.deepEqual(state.rules.map((rule) => rule.effect), ['deny']);
+});

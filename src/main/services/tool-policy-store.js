@@ -50,7 +50,7 @@ const {
   PROGRAM_ALLOWANCE_LIMITS,
 } = require('../../shared/contracts/program-allowances');
 
-const { renameWithRetry } = require('./rename-with-retry');
+const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
@@ -62,7 +62,19 @@ const INTEGRITY = Object.freeze({
   UNSIGNED: 'unsigned',
   INVALID: 'invalid',
   MISSING: 'missing',
+  // The file (or its key) is there but could not be read (#512). Not a broken
+  // file: nothing is known about it, so tools stay blocked and nothing is
+  // written over it.
+  UNREADABLE: 'unreadable',
 });
+
+/** Thrown by `loadKey` when the key file exists but cannot be read (#512). */
+class PolicyKeyUnreadableError extends Error {
+  constructor(cause) {
+    super(`The key of the permission rules could not be read: ${cause?.message || cause}`);
+    this.code = 'POLICY_KEY_UNREADABLE';
+  }
+}
 
 function defaultPayload() {
   return {
@@ -134,32 +146,54 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     }
   }
 
-  /** Lädt (oder erzeugt) den HMAC-Schlüssel; null ohne safeStorage. */
+  /**
+   * Lädt (oder erzeugt) den HMAC-Schlüssel; null ohne safeStorage.
+   *
+   * Only a key that was read and turns out unusable counts as lost and is
+   * replaced (concept §7). A key file that exists but cannot be read — a
+   * Windows lock, a permission — throws instead (#512): replacing it would
+   * void the signature for good and drop every loosening with it. A failure
+   * is not cached, so the next call tries again.
+   */
   async function loadKey() {
     if (!encryptionAvailable()) return null;
     if (!keyPromise) {
-      keyPromise = (async () => {
-        try {
-          const raw = await fs.readFile(keyPath(), 'utf8');
-          const decrypted = safeStorage.decryptString(Buffer.from(raw.trim(), 'base64'));
-          const key = Buffer.from(decrypted, 'hex');
-          if (key.length === HMAC_KEY_BYTES) return key;
-        } catch {
-          /* neu erzeugen */
-        }
-        const key = crypto.randomBytes(HMAC_KEY_BYTES);
-        try {
-          const encrypted = safeStorage.encryptString(key.toString('hex')).toString('base64');
-          await fs.mkdir(path.dirname(keyPath()), { recursive: true });
-          await fs.writeFile(keyPath(), encrypted, { encoding: 'utf8', mode: 0o600 });
-        } catch (error) {
-          log?.warn?.(`[tool-policy] Schlüssel konnte nicht gespeichert werden: ${error?.message || error}`);
-          return null;
-        }
-        return key;
-      })();
+      const pending = readOrCreateKey();
+      keyPromise = pending;
+      pending.then(
+        (key) => { if (!key && keyPromise === pending) keyPromise = null; },
+        () => { if (keyPromise === pending) keyPromise = null; }
+      );
     }
     return keyPromise;
+  }
+
+  async function readOrCreateKey() {
+    let raw = null;
+    try {
+      raw = await readFileWithRetry(fs, keyPath());
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw new PolicyKeyUnreadableError(error);
+    }
+    if (raw !== null) {
+      try {
+        const decrypted = safeStorage.decryptString(Buffer.from(raw.trim(), 'base64'));
+        const key = Buffer.from(decrypted, 'hex');
+        if (key.length === HMAC_KEY_BYTES) return key;
+      } catch {
+        /* unusable: a new one below */
+      }
+    }
+    const key = crypto.randomBytes(HMAC_KEY_BYTES);
+    try {
+      const encrypted = safeStorage.encryptString(key.toString('hex')).toString('base64');
+      await fs.mkdir(path.dirname(keyPath()), { recursive: true });
+      await fs.writeFile(keyPath(), encrypted, { encoding: 'utf8', mode: 0o600 });
+    } catch (error) {
+      log?.warn?.(`[tool-policy] Schlüssel konnte nicht gespeichert werden: ${error?.message || error}`);
+      return null;
+    }
+    return key;
   }
 
   function serializePayload(payload) {
@@ -250,10 +284,13 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   async function loadFromDisk() {
     let raw;
     try {
-      raw = await fs.readFile(policyPath(), 'utf8');
+      raw = await readFileWithRetry(fs, policyPath());
     } catch (error) {
       if (error && error.code === 'ENOENT') return { payload: null, integrity: INTEGRITY.MISSING };
-      return { payload: failSafe(null), integrity: INTEGRITY.INVALID };
+      // There but unreadable (#512): not the fail-safe of a broken file. The
+      // payload grants nothing, and `update` refuses to write over it.
+      log?.warn?.(`[tool-policy] Policy-Datei nicht lesbar: ${error?.message || error}`);
+      return { payload: failSafe(null), integrity: INTEGRITY.UNREADABLE };
     }
     let parsed;
     try {
@@ -264,7 +301,13 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     if (!parsed || typeof parsed !== 'object' || parsed.version !== POLICY_FILE_VERSION || !parsed.payload) {
       return { payload: failSafe(parsed?.payload), integrity: INTEGRITY.INVALID };
     }
-    const key = await loadKey();
+    let key;
+    try {
+      key = await loadKey();
+    } catch (error) {
+      log?.warn?.(`[tool-policy] ${error?.message || error}`);
+      return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNREADABLE };
+    }
     if (!key) {
       // Ohne Schlüssel lässt sich nichts verifizieren: Fail-safe, aber Sperren
       // und Muster bleiben wirksam.
@@ -339,7 +382,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       } catch (error) {
         log?.warn?.(`[tool-policy] Policy konnte nicht angelegt werden: ${error?.message || error}`);
       }
-      const key = await loadKey();
+      const key = await loadKey().catch(() => null);
       return snapshot(payload, key ? INTEGRITY.OK : INTEGRITY.UNSIGNED);
     }
     return snapshot(loaded.payload, loaded.integrity);
@@ -352,6 +395,11 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   function update(updater) {
     const task = writeChain.then(async () => {
       const loaded = await loadFromDisk();
+      // Nothing is written over a file that could not be read (#512): its
+      // blocks would be gone for good, under a fresh signature.
+      if (loaded.integrity === INTEGRITY.UNREADABLE) {
+        return { ok: false, error: createMessage('permissions.error.policyUnreadable'), ...snapshot(loaded.payload, loaded.integrity) };
+      }
       const base = loaded.integrity === INTEGRITY.MISSING ? defaultPayload() : loaded.payload;
       const draft = normalizePayload(JSON.parse(JSON.stringify(base)));
       const result = await updater(draft, { encryptionAvailable: encryptionAvailable(), integrity: loaded.integrity });
@@ -360,7 +408,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       next.revision = base.revision + 1;
       next.updatedAt = now();
       await writeToDisk(next);
-      const key = await loadKey();
+      const key = await loadKey().catch(() => null);
       return { ok: true, ...snapshot(next, key ? INTEGRITY.OK : INTEGRITY.UNSIGNED) };
     });
     writeChain = task.catch(() => {});

@@ -7,6 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { MASK_TEXT } = require('../src/shared/runtime/sensitive-content');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
@@ -205,7 +206,7 @@ test('der Token taucht weder im Katalog noch in einer Fehlermeldung auf', async 
   assert.match(test1.status.stderr, /Start fehlgeschlagen/);
   // … nur der Token ist heraus.
   assert.equal(JSON.stringify(test1).includes(TOKEN), false, 'der Token darf nicht im Testergebnis stehen');
-  assert.match(test1.status.stderr, /\[maskiert\]/);
+  assert.ok(test1.status.stderr.includes(MASK_TEXT));
 });
 
 test('a token inside a keyed status error is masked as well (#338)', async (t) => {
@@ -222,7 +223,7 @@ test('a token inside a keyed status error is masked as well (#338)', async (t) =
   assert.equal(result.status.state, MCP_CONNECTION_STATES.FAILED);
   // The server's text travels as a parameter of the catalogue message …
   assert.equal(result.status.error.key, 'mcp.transport.serverErrorCode');
-  assert.match(result.status.error.params.detail, /^bad credentials: GITHUB_TOKEN=\[maskiert\]$/);
+  assert.equal(result.status.error.params.detail, `bad credentials: GITHUB_TOKEN=${MASK_TEXT}`);
   // … and the token is nowhere in the result.
   assert.equal(JSON.stringify(result).includes(TOKEN), false);
 });
