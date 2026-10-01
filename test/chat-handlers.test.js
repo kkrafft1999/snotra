@@ -697,3 +697,33 @@ test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes 
   assert.equal(resB.cancelled, undefined);
   assert.equal(resB.content, 'still here');
 });
+
+test('main takes the chat id by the engine\'s rule: trimmed, never cut down (#532)', async () => {
+  const sends = [];
+  const aborts = [];
+  const chatEngine = {
+    async send({ payload, onEvent }) {
+      sends.push(payload.chatId);
+      onEvent({ type: 'delta', payload: { text: 'x' } });
+      return { content: '' };
+    },
+    abort: (sessionId, chatId) => aborts.push([sessionId, chatId]),
+  };
+  const ipcMain = makeIpcMain();
+  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  const send = ipcMain.handlers.get(REQ.CHAT_SEND);
+  const abort = ipcMain.onHandlers.get(REQ.CHAT_ABORT);
+  const long = 'c'.repeat(129);
+
+  for (const [raw, expected] of [[' chat-1 ', 'chat-1'], ['   ', null], [long, null], ['c'.repeat(128), 'c'.repeat(128)]]) {
+    const { event, sent } = makeFakeEvent();
+    await send(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: raw });
+    assert.equal(sends.at(-1), expected, JSON.stringify(raw).slice(0, 20));
+    assert.equal(sent.at(-1).payload.chatId, expected, 'the event carries the id the run is keyed by');
+  }
+
+  abort({ sender: { id: 7 } }, {});
+  abort({ sender: { id: 7 } }, { chatId: ' chat-1 ' });
+  abort({ sender: { id: 7 } }, { chatId: long });
+  assert.deepEqual(aborts, [[7, undefined], [7, 'chat-1'], [7, null]]);
+});

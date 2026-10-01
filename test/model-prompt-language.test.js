@@ -238,7 +238,7 @@ const { describeFetchError } = require('../src/shared/runtime/fetch-errors');
 // the words those sentences are built from. The German opening quote counts as
 // well: it framed most of the names quoted in them.
 const GERMAN_ERROR_WORDS =
-  /„|\b(?:muss|darf|kein|keine|keinen|Kein|Keine|Unbekannt\w*|unbekannt\w*|Ungültig\w*|ungültig\w*|erforderlich|gefunden|angegeben|abgebrochen|fehlgeschlagen|Ziel|Ziele|Seite|Adresse|Befehl|Aufruf)\b/;
+  /„|\b(?:muss|darf|kein|keine|keinen|Kein|Keine|Unbekannt\w*|unbekannt\w*|Ungültig\w*|ungültig\w*|erforderlich|gefunden|angegeben|abgebrochen|fehlgeschlagen|Ziel|Ziele|Seite|Adresse|Befehl|Aufruf|Frage|Antwort)\b/;
 
 function looksGerman(text) {
   const rest = ohneUiZitate(String(text ?? ''));
@@ -270,6 +270,8 @@ const MODEL_CHANNEL_SOURCES = [
   'src/main/services/mcp-service.js',
   'src/main/services/mcp-stdio-transport.js',
   'src/application/chat/chat-engine.js',
+  // The marker that replaces an old tool output in the history (#532).
+  'src/application/chat/chat-history-trim.js',
 ];
 
 // German that stays, each with the reason it is not the model's. An entry that

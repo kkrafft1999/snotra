@@ -46,6 +46,7 @@ const {
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
+const { sanitizeChatId } = require('../../shared/contracts/chat');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
@@ -672,13 +673,6 @@ function findUnsupportedAttachment(messages, sendBundle) {
   });
 }
 
-function sanitizeChatId(raw) {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128) return null;
-  return trimmed;
-}
-
 /** Fail-safe-Stand, wenn kein Policy-Port angebunden ist: smart, keine Regeln. */
 function defaultPolicySnapshot() {
   return {
@@ -1182,13 +1176,14 @@ function createChatEngine({
           if (attachments.length > 0) row.attachments = attachments;
           return row;
         });
+      const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       // Die App-Begrüßung steht als Assistant-Nachricht am Chat-Anfang; einige
       // Provider (Anthropic, Google) verlangen, dass die Konversation mit einer
-      // User-Nachricht beginnt.
-      while (historyRows.length > 0 && historyRows[0].role !== 'user') {
-        historyRows.shift();
+      // User-Nachricht beginnt. Checked after the trim, which cuts from the
+      // old end and can leave an answer at the front just as well (#532).
+      while (windowedHistory.length > 1 && windowedHistory[0].role !== 'user') {
+        windowedHistory.shift();
       }
-      const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
       apiMessages.push(...windowedHistory);
 
       // Eine leere Liste ist kein „keine Tools": manche Provider lehnen ein
@@ -1843,8 +1838,9 @@ function createChatEngine({
     if (resolved.error) return resolved.error;
     const { target } = resolved;
 
-    const parts = [`Frage:\n${clipForTitle(firstUser.content)}`];
-    if (firstAnswer) parts.push(`Antwort:\n${clipForTitle(firstAnswer.content)}`);
+    // Model channel, so English (#276, #532); the content stays as written.
+    const parts = [`Question:\n${clipForTitle(firstUser.content)}`];
+    if (firstAnswer) parts.push(`Answer:\n${clipForTitle(firstAnswer.content)}`);
 
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(createChatAbortError()), TITLE_TIMEOUT_MS);
