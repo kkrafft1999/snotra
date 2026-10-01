@@ -339,6 +339,14 @@ summary:focus-visible,
   display: none;
 }
 
+/* Isolated: blue, like the status tile in Settings (#543). Hover and press
+   keep the colour, only the background answers. */
+#tree-header #btn-tree-sandbox,
+#tree-header #btn-tree-sandbox:hover,
+#tree-header #btn-tree-sandbox:active {
+  color: var(--ds-blue);
+}
+
 /* Not isolated: amber and struck through, like the pill and the card (#396). */
 #tree-header #btn-tree-sandbox[data-unisolated='true'],
 #tree-header #btn-tree-sandbox[data-unisolated='true']:hover,
