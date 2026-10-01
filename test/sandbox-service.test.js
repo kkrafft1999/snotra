@@ -142,6 +142,22 @@ test('credential stores and Snotra’s own storage are not readable', () => {
   assert.ok(!linux.includes('~/Library/Keychains'));
 });
 
+test('histories, CLI token stores and other AI tools are not readable either (CR-B03-04)', () => {
+  const mac = sensitiveReadPaths({ platform: 'darwin' });
+  const linux = sensitiveReadPaths({ platform: 'linux' });
+  for (const entry of [
+    '~/.zsh_history', '~/.bash_history', '~/.python_history',
+    '~/.config/op', '~/.vault-token', '~/.terraform.d', '~/.cargo/credentials.toml', '~/.pgpass',
+    '~/.claude.json', '~/.codex',
+  ]) {
+    assert.ok(mac.includes(entry) && linux.includes(entry), entry);
+  }
+  assert.ok(mac.includes('~/Library/Mail') && mac.includes('~/Library/Thunderbird'));
+  assert.ok(linux.includes('~/.thunderbird') && linux.includes('~/.config/vivaldi'));
+  // What builds read stays readable — a trade-off, written down in the code.
+  assert.ok(!mac.includes('~/.m2/settings.xml') && !mac.includes('~/.gradle/gradle.properties'));
+});
+
 // ── Domain gate ─────────────────────────────────────────────────────────────
 
 test('runs with the same domain set share the gate, a different set waits', async () => {

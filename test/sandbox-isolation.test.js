@@ -132,6 +132,20 @@ test('denied locations cannot be read — ordinary files can', async (t) => {
   assert.equal(readable.stdout.trim(), 'fine');
 });
 
+test('a shell history cannot be read (CR-B03-04)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  const histories = ['.zsh_history', '.bash_history'].map((name) => path.join(os.homedir(), name));
+  const present = histories.find((file) => existsSync(file));
+  // Only an existing file proves anything, and the test does not write into
+  // the home directory to make one.
+  if (!present) return t.skip('no shell history in this home directory');
+
+  const result = await run(ctx, `wc -c < '${present}'`);
+
+  assert.notEqual(result.exitCode, 0, `read ${result.stdout.trim()} bytes of ${present}`);
+});
+
 test('no network unless a domain is allowed — an allowed domain works', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;
@@ -158,6 +172,24 @@ test('no network unless a domain is allowed — an allowed domain works', async 
   assert.equal(allowed.exitCode, 0, allowed.stderr);
   assert.match(allowed.stdout, /^[23]\d\d$/);
   assert.deepEqual(allowed.isolation, { isolated: true, domains: ['example.com'] });
+});
+
+test('a background process ends with its run and never reaches a later run\'s domains (CR-B03-01)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  const log = path.join(ctx.workspace, 'background-reach.txt');
+  const loop = 'for i in 1 2 3 4 5 6; do sleep 1; '
+    + `curl -s -m 5 -o /dev/null -w "%{http_code} " https://example.com >> "${log}"; done`;
+
+  // Run A names no domain and leaves the loop behind; run B is approved for
+  // example.com and is busy for longer than the loop would need.
+  const first = await run(ctx, `(${loop}) >/dev/null 2>&1 & echo started`, { timeoutMs: 10_000 });
+  assert.equal(first.stdout.trim(), 'started');
+  assert.equal(first.timedOut, false);
+  await run(ctx, 'sleep 7', { networkDomains: ['example.com'], timeoutMs: 20_000 });
+
+  const reached = await fs.readFile(log, 'utf8').catch(() => '');
+  assert.doesNotMatch(reached, /\b[23]\d\d\b/, `the loop of run A got through: ${reached}`);
 });
 
 test('time limit and "Stop" still end the whole process tree', async (t) => {

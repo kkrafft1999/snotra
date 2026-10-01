@@ -137,3 +137,35 @@ test('python: the script runs sandboxed from its temp dir, which is the writable
   assert.equal(sandbox.calls.released, 1);
   assert.equal(await exists(request.runTmp), false);
 });
+
+// CR-B03-05 (1): a temp file that cannot be made is an error result, and
+// nothing is left behind.
+test('python: a script that cannot be written is an error, and its folder is removed', async (t) => {
+  const python = createPythonRunnerService({ spawn: childProcess.spawn, fs, path, os });
+  await python.detect();
+  if (!python.isAvailable()) return t.skip('no Python 3');
+  let made = '';
+  const failingFs = {
+    ...fs,
+    mkdtemp: async (prefix) => { made = await fs.mkdtemp(prefix); return made; },
+    writeFile: async () => { throw new Error('ENOSPC: no space left on device'); },
+  };
+  const service = createPythonRunnerService({ spawn: childProcess.spawn, fs: failingFs, path, os });
+  await service.detect();
+
+  const result = await service.run({ code: 'print(1)' });
+
+  assert.match(result.error, /could not be written.*ENOSPC/);
+  assert.equal(await exists(made), false);
+});
+
+test('shell: a temp dir that cannot be made is an error result, not a rejection', posixOnly, async (t) => {
+  const failingFs = { ...fs, mkdtemp: async () => { throw new Error('ENOENT: no temp dir'); } };
+  const shell = createShellRunnerService({ spawn: childProcess.spawn, os, fs: failingFs, path, sandbox: fakeSandbox() });
+  await shell.detect();
+  if (!shell.isAvailable()) return t.skip('no shell');
+
+  const result = await shell.run({ command: 'echo hi' });
+
+  assert.match(result.error, /temp directory could not be created.*ENOENT/);
+});

@@ -113,3 +113,64 @@ test('die Sperre ist ausdrücklich kein vollständiger Schutz', () => {
   assert.equal(blocked('bash entfernen.sh'), false);
   assert.equal(blocked('echo cm0gLXJmIC8K | base64 -d | sh'), false);
 });
+
+// CR-B03-03: forms a model writes without trying to get around anything.
+test('shell grammar does not hide the command: loops, conditions, groups, substitutions', () => {
+  for (const command of [
+    'for d in build dist; do rm -rf "$d"; done',
+    'if [ -d build ]; then rm -rf build; fi',
+    'if false; then :; else rm -rf build; fi',
+    'while true; do rm -rf build; break; done',
+    '{ rm -rf build; }',
+    '! rm -rf build',
+    'echo $(rm -rf build)',
+    'echo `rm -rf build`',
+  ]) {
+    assert.equal(blocked(command), true, command);
+  }
+});
+
+test('a wrapper with an argument of its own does not hide the command', () => {
+  assert.equal(blocked('timeout 60 rm -rf build'), true);
+  assert.equal(blocked('sudo -u bob rm -rf /x'), true);
+  assert.equal(blocked('nice -n 5 rm -rf build'), true);
+  assert.equal(blocked('timeout 60 npm test'), false);
+  assert.equal(blocked('sudo apt install ripgrep'), false);
+});
+
+test('git options before the subcommand, a + refspec and a flag cluster are a force push', () => {
+  assert.equal(blocked('git -C repo push --force'), true);
+  assert.equal(blocked('git -c core.sshCommand=ssh push -f origin main'), true);
+  assert.equal(blocked('git --git-dir=.git push --force'), true);
+  assert.equal(blocked('git push origin +main'), true);
+  assert.equal(blocked('git push origin +HEAD:main'), true);
+  assert.equal(blocked('git push -uf origin main'), true);
+  assert.equal(blocked('git -C repo filter-branch --all'), true);
+
+  assert.equal(blocked('git -C repo status'), false);
+  assert.equal(blocked('git -C repo push origin main'), false);
+  assert.equal(blocked('git push -u origin main'), false);
+  assert.equal(blocked('git push origin main:refs/heads/x'), false);
+  assert.equal(blocked('git commit -m "+1"'), false);
+});
+
+test('PowerShell: the aliases of Remove-Item, parameter prefixes and explicit values', () => {
+  for (const command of [
+    'rm -Recurse -Force build',
+    'del build -Recurse -Force',
+    'erase build -Recurse -Force',
+    'rmdir build -Recurse -Force',
+    'rd build -Recurse -Force',
+    'Remove-Item build -r -fo',
+    'Remove-Item build -Rec -Forc',
+    'ri build -Recurse:$true -Force',
+  ]) {
+    assert.equal(blocked(command), true, command);
+  }
+  // -Force is a switch, not the letters F, o, r, c, e — and $false is off.
+  assert.equal(blocked('rm -Force x'), false);
+  assert.equal(blocked('Remove-Item x -Force'), false);
+  assert.equal(blocked('Remove-Item x -Recurse'), false);
+  assert.equal(blocked('Remove-Item x -Recurse:$false -Force'), false);
+  assert.equal(blocked('rm -rv build'), false);
+});

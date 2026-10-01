@@ -22,7 +22,7 @@
  */
 
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
-const { createOutputSink } = require('./child-output-sink');
+const { createChildRunner } = require('./child-run');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
 
@@ -188,22 +188,8 @@ function createPythonRunnerService({
     return shellPath ? 'login-shell' : 'inherited';
   }
 
-  // The stop of every script still running, for `disposeSync()` (#506).
-  const running = new Set();
-
-  /** Prozessbaum beenden — ein Skript kann selbst Kinder gestartet haben. */
-  function killTree(child) {
-    if (!child || child.killed) return;
-    try {
-      if (platform === 'win32') {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      } else {
-        process.kill(-child.pid, 'SIGKILL');
-      }
-    } catch {
-      try { child.kill('SIGKILL'); } catch { /* schon weg */ }
-    }
-  }
+  // Time limit, "Stop", output cap and the process tree (CR-B03-01).
+  const children = createChildRunner({ spawn, platform });
 
   async function run({
     code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains, sandboxDisabled = false, skillWritePaths = [], abortSignal,
@@ -219,14 +205,19 @@ function createPythonRunnerService({
 
     // Das Skript liegt im Temp-Verzeichnis, nicht im Projekt — der Ordner des
     // Nutzers soll durch einen Tool-Aufruf keine Dateien bekommen.
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-py-'));
-    const scriptPath = path.join(dir, `script-${randomId()}.py`);
-    await fs.writeFile(scriptPath, source, 'utf8');
+    let dir = '';
+    let scriptPath;
+    try {
+      dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-py-'));
+      scriptPath = path.join(dir, `script-${randomId()}.py`);
+      await fs.writeFile(scriptPath, source, 'utf8');
+    } catch (e) {
+      if (dir) await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+      return { error: `The script could not be written to a temp file: ${e?.message || e}` };
+    }
 
     const limit = clampTimeout(timeoutMs);
     const startedAt = Date.now();
-    const stdout = createOutputSink(PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
-    const stderr = createOutputSink(PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
 
     // Isolation (#329): the script's temp directory doubles as the run's own
     // writable place next to the workspace.
@@ -260,86 +251,36 @@ function createPythonRunnerService({
     }
 
     try {
-      return await new Promise((resolve) => {
-        let child;
-        try {
-          child = spawn(target.command, target.args, {
-            cwd: cwd || os.homedir(),
-            stdio: ['pipe', 'pipe', 'pipe'],
-            // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
-            detached: platform !== 'win32',
-            env: { ...childEnv({ PYTHONIOENCODING: 'utf-8' }), ...target.env },
-          });
-        } catch (e) {
-          resolve({ error: e?.message || 'Python could not be started.' });
-          return;
-        }
-
-        let timedOut = false;
-        let aborted = false;
-        let settled = false;
-
-        const timer = setTimeout(() => {
-          timedOut = true;
-          killTree(child);
-        }, limit);
-
-        const onAbort = () => {
-          aborted = true;
-          killTree(child);
-        };
-        abortSignal?.addEventListener('abort', onAbort, { once: true });
-        running.add(onAbort);
-
-        const finish = (result) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          abortSignal?.removeEventListener('abort', onAbort);
-          running.delete(onAbort);
-          resolve(result);
-        };
-
-        child.stdout?.on('data', (chunk) => stdout.push(chunk));
-        child.stderr?.on('data', (chunk) => stderr.push(chunk));
-        child.on('error', (e) => finish({ error: e?.message || 'Python could not be started.' }));
-        child.on('close', (exitCode) => {
-          const result = {
-            stdout: stdout.text(),
-            // What the sandbox refused goes to the model with the output (#329).
-            stderr: target.annotate(stderr.text()),
-            exitCode: typeof exitCode === 'number' ? exitCode : null,
-            timedOut,
-            aborted,
-            truncated: stdout.truncated || stderr.truncated,
-            durationMs: Date.now() - startedAt,
-          };
-          if (target.isolation) result.isolation = target.isolation;
-          finish(result);
-        });
-
-        if (typeof stdin === 'string' && stdin) {
-          child.stdin?.end(stdin.slice(0, PYTHON_EXECUTION_LIMITS.MAX_STDIN_CHARS));
-        } else {
-          child.stdin?.end();
-        }
-        if (abortSignal?.aborted) onAbort();
+      const outcome = await children.run({
+        command: target.command,
+        args: target.args,
+        cwd: cwd || os.homedir(),
+        env: { ...childEnv({ PYTHONIOENCODING: 'utf-8' }), ...target.env },
+        stdin,
+        maxStdinChars: PYTHON_EXECUTION_LIMITS.MAX_STDIN_CHARS,
+        maxOutputBytes: PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES,
+        timeoutMs: limit,
+        abortSignal,
+        startError: 'Python could not be started.',
       });
+      if (outcome.error) return outcome;
+      const result = {
+        ...outcome,
+        // What the sandbox refused goes to the model with the output (#329).
+        stderr: target.annotate(outcome.stderr),
+        durationMs: Date.now() - startedAt,
+      };
+      if (target.isolation) result.isolation = target.isolation;
+      return result;
     } finally {
       target.release();
       await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   }
 
-  /**
-   * For the app quitting (#506): ends every script still running, at once and
-   * synchronously, as `mcpService.disposeSync()` does for the MCP servers.
-   * The child runs in a process group of its own and the timeout timer lives
-   * in this process — without this it would outlive the app.
-   */
+  /** For the app quitting (#506): ends every script still running. */
   function disposeSync() {
-    for (const stop of [...running]) stop();
-    running.clear();
+    children.disposeSync();
   }
 
   return {

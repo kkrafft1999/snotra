@@ -26,7 +26,7 @@
  */
 
 const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
-const { createOutputSink } = require('./child-output-sink');
+const { createChildRunner } = require('./child-run');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
@@ -289,22 +289,8 @@ function createShellRunnerService({
     return detected.path ? { ...env, PATH: detected.path } : env;
   }
 
-  // The stop of every command still running, for `disposeSync()` (#506).
-  const running = new Set();
-
-  /** Prozessbaum beenden — ein Befehl startet fast immer eigene Kinder. */
-  function killTree(child) {
-    if (!child || child.killed) return;
-    try {
-      if (platform === 'win32') {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      } else {
-        process.kill(-child.pid, 'SIGKILL');
-      }
-    } catch {
-      try { child.kill('SIGKILL'); } catch { /* schon weg */ }
-    }
-  }
+  // Time limit, "Stop", output cap and the process tree (CR-B03-01).
+  const children = createChildRunner({ spawn, platform });
 
   async function run({
     command,
@@ -334,15 +320,18 @@ function createShellRunnerService({
 
     const limit = clampTimeout(timeoutMs);
     const startedAt = Date.now();
-    const stdout = createOutputSink(SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
-    const stderr = createOutputSink(SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES);
 
     // Isolation (#329): besides the workspace, the run's own temp directory
     // is the only place it may write to; caches are redirected there too.
     // Switched off for this workspace (#357), the run needs none of that.
-    const runTmp = sandbox && !sandboxDisabled && fs && path
-      ? await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-'))
-      : '';
+    let runTmp = '';
+    if (sandbox && !sandboxDisabled && fs && path) {
+      try {
+        runTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-'));
+      } catch (e) {
+        return { error: `The run's temp directory could not be created: ${e?.message || e}` };
+      }
+    }
     const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
     let target;
     try {
@@ -374,93 +363,37 @@ function createShellRunnerService({
     }
 
     try {
-      return await spawnAndCollect(target);
+      const outcome = await children.run({
+        command: target.command,
+        args: target.args,
+        cwd: cwd || os.homedir(),
+        env: { ...childEnv(), ...target.env },
+        stdin,
+        maxStdinChars: SHELL_EXECUTION_LIMITS.MAX_STDIN_CHARS,
+        maxOutputBytes: SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES,
+        timeoutMs: limit,
+        abortSignal,
+        startError: 'The shell could not be started.',
+      });
+      if (outcome.error) return outcome;
+      const result = {
+        ...outcome,
+        // What the sandbox refused goes to the model with the output (#329).
+        stderr: target.annotate(outcome.stderr),
+        durationMs: Date.now() - startedAt,
+        shell: detected.label,
+      };
+      if (target.isolation) result.isolation = target.isolation;
+      return result;
     } finally {
       target.release();
       await removeRunTmp();
     }
-
-    function spawnAndCollect(target) {
-      return new Promise((resolve) => {
-        let child;
-        try {
-          child = spawn(target.command, target.args, {
-            cwd: cwd || os.homedir(),
-            stdio: ['pipe', 'pipe', 'pipe'],
-            // Eigene Prozessgruppe, damit killTree auch Enkelprozesse erwischt.
-            detached: platform !== 'win32',
-            env: { ...childEnv(), ...target.env },
-          });
-        } catch (e) {
-          resolve({ error: e?.message || 'The shell could not be started.' });
-          return;
-        }
-
-        let timedOut = false;
-        let aborted = false;
-        let settled = false;
-
-        const timer = setTimeout(() => {
-          timedOut = true;
-          killTree(child);
-        }, limit);
-
-        const onAbort = () => {
-          aborted = true;
-          killTree(child);
-        };
-        abortSignal?.addEventListener('abort', onAbort, { once: true });
-        running.add(onAbort);
-
-        const finish = (result) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          abortSignal?.removeEventListener('abort', onAbort);
-          running.delete(onAbort);
-          resolve(result);
-        };
-
-        child.stdout?.on('data', (chunk) => stdout.push(chunk));
-        child.stderr?.on('data', (chunk) => stderr.push(chunk));
-        child.on('error', (e) => finish({ error: e?.message || 'The shell could not be started.' }));
-        child.on('close', (exitCode) => {
-          const result = {
-            stdout: stdout.text(),
-            // What the sandbox refused goes to the model with the output (#329).
-            stderr: target.annotate(stderr.text()),
-            exitCode: typeof exitCode === 'number' ? exitCode : null,
-            timedOut,
-            aborted,
-            truncated: stdout.truncated || stderr.truncated,
-            durationMs: Date.now() - startedAt,
-            shell: detected.label,
-          };
-          if (target.isolation) result.isolation = target.isolation;
-          finish(result);
-        });
-
-        // Kein TTY: was auf eine Eingabe wartet, bekommt hoechstens den
-        // mitgegebenen String und sonst ein Dateiende.
-        if (typeof stdin === 'string' && stdin) {
-          child.stdin?.end(stdin.slice(0, SHELL_EXECUTION_LIMITS.MAX_STDIN_CHARS));
-        } else {
-          child.stdin?.end();
-        }
-        if (abortSignal?.aborted) onAbort();
-      });
-    }
   }
 
-  /**
-   * For the app quitting (#506): ends every command still running, at once and
-   * synchronously, as `mcpService.disposeSync()` does for the MCP servers.
-   * The child runs in a process group of its own and the timeout timer lives
-   * in this process — without this it would outlive the app.
-   */
+  /** For the app quitting (#506): ends every command still running. */
   function disposeSync() {
-    for (const stop of [...running]) stop();
-    running.clear();
+    children.disposeSync();
   }
 
   return {

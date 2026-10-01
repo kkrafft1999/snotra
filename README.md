@@ -481,8 +481,9 @@ deliberately not used — both require a code signature.
   system.** On **macOS and Linux** the code runs in a sandbox: it can write only
   inside the project folder, a temporary folder and the folders of the skills
   loaded in the reply (the card lists them), cannot read keys, cloud
-  credentials or browser data, and reaches the network only for the domains it
-  declares, which the approval card lists. It can still *read* your other files.
+  credentials, shell histories or browser data, and reaches the network only for
+  the domains it declares, which the approval card lists. It can still *read*
+  your other files.
   On **Windows** there is no sandbox yet: the code runs with your privileges and
   can read and write anywhere, reach the network and start programs. Either way
   the approval comes first: Snotra shows you the complete source before every
@@ -512,7 +513,7 @@ deliberately not used — both require a code signature.
   every command runs in a sandbox: it writes only inside the project folder, a
   temporary folder (caches such as pip's and npm's are redirected there) and the
   folders of the skills loaded in the reply (the card lists them), cannot
-  read keys, cloud credentials or browser data, and reaches the network only for
+  read keys, cloud credentials, shell histories or browser data, and reaches the network only for
   the domains on the approval card — `pip install` and `npm install` get their
   registry automatically, anything else the model has to name. On **Windows**
   there is no sandbox yet: a command can do everything you can do yourself in a
@@ -529,7 +530,9 @@ deliberately not used — both require a code signature.
   — that is an additional safeguard, **not** complete protection, because a
   script or an interpreter in between bypasses any pattern list. In *Auto* mode a
   command runs without asking — isolated, where the sandbox works. "Stop" in the
-  chat and the time limit terminate the entire process tree, not just the shell.
+  chat and the time limit terminate the entire process tree, not just the shell,
+  and on macOS and Linux nothing a command leaves running in the background
+  outlives it.
 
 - **Web search:** with a stored Tavily key (Settings › Tools › Web search) the
   model gets the `web_search` tool — it returns title, URL and a short excerpt per
