@@ -116,6 +116,8 @@ async function mountMentionAutocomplete() {
   const menu = document.getElementById('chat-mention-menu');
 
   async function openMenu() {
+    // The list opens only while the input has the focus (#584).
+    input.focus();
     input.value = '@src';
     input.selectionStart = input.value.length;
     input.selectionEnd = input.value.length;
@@ -169,6 +171,7 @@ test('the @ menu asks for what the tree shows, and asks again after the switch (
   const menu = document.getElementById('chat-mention-menu');
 
   async function typeMention() {
+    input.focus();
     input.value = '@';
     input.selectionStart = input.value.length;
     input.selectionEnd = input.value.length;

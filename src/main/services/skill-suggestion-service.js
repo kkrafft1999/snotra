@@ -91,7 +91,9 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
    * @returns {Promise<{ name: string } | null>}
    */
   async function suggest(text, { abortSignal = null } = {}) {
-    const frage = String(text || '').trim().slice(0, MAX_QUERY_CHARS);
+    // The request sits right before the "/", so a long draft keeps its end
+    // rather than its beginning (#586).
+    const frage = String(text || '').trim().slice(-MAX_QUERY_CHARS);
     if (!frage) return null;
 
     const skills = await verfuegbareSkills();

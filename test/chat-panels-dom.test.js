@@ -120,17 +120,18 @@ test('derselbe Chat noch einmal angeklickt holt nichts zurueck', async () => {
   assert.equal(revealCount(), 0);
 });
 
-test('eine Zeile im Verlauf oeffnet ihren Chat per Maus und per Tastatur', async () => {
+test('a history row opens its chat through a real button, so mouse and keyboard both reach it', async () => {
   const { dom, panel, appStore, revealCount } = await setup();
 
   await panel.renderHistoryList();
-  const row = dom.document.querySelector('.chat-history-row');
-  assert.ok(row, 'die Liste muss eine Zeile haben');
-  assert.equal(row.tabIndex, 0, 'die Zeile ist per Tabulator erreichbar');
+  const open = dom.document.querySelector('.chat-history-row .chat-history-row-main');
+  assert.ok(open, 'the list must have a row');
+  // A native button turns Enter and Space into a click by itself (#582).
+  assert.equal(open.tagName, 'BUTTON');
+  assert.equal(open.closest('.chat-history-row').getAttribute('role'), null,
+    'the row itself is no button, or the bin would be nested in one');
 
-  row.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
-    key: 'Enter', bubbles: true, cancelable: true,
-  }));
+  open.click();
   await flush();
 
   assert.equal(appStore.currentChatId, 'chat-alt');

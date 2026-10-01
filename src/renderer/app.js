@@ -77,7 +77,13 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+/** A column that is hidden must not take the focus with it (#586). */
+function keepFocusOutOf(columnId, toggle) {
+  if (document.getElementById(columnId)?.contains(document.activeElement)) toggle?.focus();
+}
+
 function setContentPaneVisible(visible) {
+  if (!visible) keepFocusOutOf('content', btnToggleContentPane);
   if (visible) {
     appRoot.classList.remove('app--no-preview');
     btnToggleContentPane.title = t('titlebar.preview.hide');
@@ -135,6 +141,7 @@ btnToggleContentPane.addEventListener('click', async () => {
 // #app, derselbe Knopf — nur auf der anderen Seite der Titelzeile. Bleibt der
 // Chat weg, steht rechts nur noch der Verlauf.
 function setChatPanelVisible(visible) {
+  if (!visible) keepFocusOutOf('chat-panel', btnToggleChatPanel);
   const label = t(visible ? 'titlebar.chat.hide' : 'titlebar.chat.show');
   appRoot.classList.toggle('app--no-chat', !visible);
   btnToggleChatPanel.title = label;
@@ -170,7 +177,9 @@ btnToggleChatPanel.addEventListener('click', async () => {
 // Der Zustand steht am Knopf (aria-pressed) und an #app; das Aussehen kommt
 // vollstaendig aus dem CSS. Das Kuerzel steht im Tooltip, weil der Knopf sonst
 // nichts davon verraet — geschaltet wird es im Menue des Main-Prozesses.
-const SIDEBAR_SHORTCUT = navigator.userAgent.includes('Mac') ? '\u2318B' : 'Strg+B';
+// Off the Mac the key name follows the interface language (#586): "Ctrl+B"
+// in English, "Strg+B" in German.
+const sidebarShortcut = () => (navigator.userAgent.includes('Mac') ? '\u2318B' : t('titlebar.sidebar.shortcut'));
 
 // Nur fuer die Dauer des Umschaltens laeuft die Breiten-Transition; danach muss
 // sie wieder weg, sonst haengt der Trenner beim Ziehen hinterher.
@@ -187,10 +196,12 @@ function runSidebarTransition() {
 }
 
 function setSidebarVisible(visible, { animate = true } = {}) {
+  // Cmd/Ctrl+B with the focus in the tree, say.
+  if (!visible) keepFocusOutOf('sidebar', btnToggleSidebar);
   if (animate) runSidebarTransition();
   appRoot.classList.toggle('app--no-sidebar', !visible);
   const label = t(visible ? 'titlebar.sidebar.hide' : 'titlebar.sidebar.show');
-  btnToggleSidebar.title = `${label} (${SIDEBAR_SHORTCUT})`;
+  btnToggleSidebar.title = `${label} (${sidebarShortcut()})`;
   btnToggleSidebar.setAttribute('aria-label', label);
   btnToggleSidebar.setAttribute('aria-pressed', visible ? 'true' : 'false');
 }

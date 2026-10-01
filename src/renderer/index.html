@@ -247,13 +247,13 @@
                   type="button"
                   id="btn-chat-model-picker"
                   class="chat-model-pill chat-model-pill--btn hidden"
-                  lang="en"
                   aria-haspopup="listbox"
                   aria-expanded="false"
-                  aria-controls="chat-model-menu"
-                  data-i18n-attr="aria-label:chat.modelPicker.label"
-                  aria-label="Choose the active model">
-                  <span id="chat-model-pill-label">—</span>
+                  aria-controls="chat-model-menu">
+                  <!-- The name ("Model … Switch model") is set at runtime and
+                       starts with this label (#583). Only the model name is
+                       English. -->
+                  <span id="chat-model-pill-label" lang="en">—</span>
                   <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
                     <path fill="currentColor" d="M0 0l5 6 5-6z"/>
                   </svg>

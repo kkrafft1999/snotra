@@ -11,7 +11,7 @@
  * geschätzt. Beides wird in der Anzeige auseinandergehalten.
  */
 import contracts from '../generated/contracts.js';
-import { dismissOnOutsideClick } from '../utils/helpers.js';
+import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { getLocale, onLocaleChange, t } from '../i18n.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
@@ -49,7 +49,8 @@ export function formatTokensShort(value) {
  */
 export function formatShare(share) {
   const value = Number(share);
-  if (!Number.isFinite(value) || value <= 0) return '0 %';
+  // From the formatter like every other share: "0%" in English (#586).
+  if (!Number.isFinite(value) || value <= 0) return percentWholeFormatter().format(0);
   if (value < 0.01) return `< ${percentWholeFormatter().format(0.01)}`;
   if (value < 0.1) return percentFormatter().format(value);
   if (value < 0.995) return percentWholeFormatter().format(value);
@@ -119,6 +120,9 @@ export function initTokenBreakdownPanel({
   onOpen,
 } = {}) {
   let open = false;
+  // True while render() rebuilds the panel: the focused node goes away for a
+  // moment, and that is no "focus left the panel".
+  let rendering = false;
   // Welche Gruppen aufgeklappt sind. Lebt so lange wie die Fläche selbst,
   // damit ein Blick auf die Skills nicht nach jeder Antwort neu erarbeitet
   // werden muss.
@@ -212,7 +216,37 @@ export function initTokenBreakdownPanel({
     return item;
   }
 
+  /** What has the focus inside the panel, in a form that survives a rebuild. */
+  function focusedSpot() {
+    const active = document.activeElement;
+    if (!active || !panel.contains(active)) return null;
+    if (active.dataset?.group && active.classList.contains('token-breakdown__group-head')) {
+      return `.token-breakdown__group-head[data-group="${CSS.escape(active.dataset.group)}"]`;
+    }
+    if (active.dataset?.skillName) {
+      return `.token-breakdown__row--action[data-skill-name="${CSS.escape(active.dataset.skillName)}"]`;
+    }
+    return 'panel';
+  }
+
+  /**
+   * Redraws in place and keeps the focus where it was (#585) — the panel is
+   * rebuilt on every send and every finished turn.
+   */
   function render() {
+    const spot = focusedSpot();
+    rendering = true;
+    try {
+      build();
+    } finally {
+      rendering = false;
+    }
+    if (!spot) return;
+    const target = spot === 'panel' ? null : panel.querySelector(spot);
+    (target || panel).focus();
+  }
+
+  function build() {
     const state = typeof getState === 'function' ? getState() : {};
     const breakdown = normalizeContextBreakdown(state?.breakdown);
     const usage = state?.usage || { prompt: 0, completion: 0, total: 0, cached: 0 };
@@ -279,6 +313,8 @@ export function initTokenBreakdownPanel({
     render();
     panel.classList.remove('hidden');
     trigger?.setAttribute('aria-expanded', 'true');
+    // A dialog takes the focus, so its title and content are announced (#585).
+    panel.focus();
     onOpen?.();
   }
 
@@ -309,6 +345,14 @@ export function initTokenBreakdownPanel({
   dismissOnOutsideClick({
     isOpen: () => open,
     ownsTarget: (target) => !!target?.closest?.('.chat-token-usage-wrap'),
+    onDismiss: () => closePanel(),
+  });
+
+  // Tabbing past the panel closes it, as a click elsewhere does.
+  dismissOnFocusLeave({
+    container: panel?.closest('.chat-token-usage-wrap'),
+    isOpen: () => open,
+    isPaused: () => rendering,
     onDismiss: () => closePanel(),
   });
 

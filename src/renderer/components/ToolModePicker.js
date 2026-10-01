@@ -1,4 +1,4 @@
-import { dismissOnOutsideClick } from '../utils/helpers.js';
+import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { toolModeOptions, modeLabel, describeModePill, describeWorkspaceDefault } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
@@ -39,6 +39,8 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
   let open = false;
   let statusTimer = 0;
   let rememberBusy = false;
+  // True while the list is rebuilt: the focused option goes away for a moment.
+  let rebuilding = false;
 
   function setStatus(text) {
     if (!status) return;
@@ -54,6 +56,18 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
   }
 
   function rebuild(activeMode, defaults = describeWorkspaceDefault(toolPermissions.get())) {
+    const focusedMode = list.contains(document.activeElement) ? document.activeElement.dataset.mode : null;
+    rebuilding = true;
+    try {
+      fillList(activeMode, defaults);
+    } finally {
+      rebuilding = false;
+    }
+    // A state change while the menu is open keeps the focus on its option.
+    if (focusedMode) list.querySelector(`[data-mode="${CSS.escape(focusedMode)}"]`)?.focus();
+  }
+
+  function fillList(activeMode, defaults) {
     list.innerHTML = '';
     for (const option of toolModeOptions(toolPermissions.get(), activeMode)) {
       const li = document.createElement('li');
@@ -277,6 +291,14 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
   dismissOnOutsideClick({
     isOpen: () => open,
     ownsTarget: (t) => !!t?.closest?.('#chat-tool-mode-wrap'),
+    onDismiss: close,
+  });
+  // Tab past the menu closes it as well (#586). The checkbox is disabled
+  // while main decides, which drops its focus for a moment.
+  dismissOnFocusLeave({
+    container: wrap,
+    isOpen: () => open,
+    isPaused: () => rebuilding || rememberBusy,
     onDismiss: close,
   });
 

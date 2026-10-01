@@ -16,8 +16,14 @@ export function initSkillAutocomplete({ catalog, onInputChanged }) {
   let updateSeq = 0;
 
   const isOpen = () => !menu.classList.contains('hidden');
+  // Only while the input has the focus (#584): a skill change or a folder
+  // switch with the focus elsewhere must not open the list over the composer.
+  const inputFocused = () => document.activeElement === chatInput;
 
   function close() {
+    // An update still waiting for the catalogue must not open the list again
+    // — `onWorkspaceChanged` invalidates the catalogue and then closes.
+    updateSeq += 1;
     active = null;
     items = [];
     selectedIndex = 0;
@@ -88,7 +94,7 @@ export function initSkillAutocomplete({ catalog, onInputChanged }) {
   }
 
   async function update() {
-    const found = findSkillQuery(chatInput.value, chatInput.selectionStart);
+    const found = inputFocused() ? findSkillQuery(chatInput.value, chatInput.selectionStart) : null;
     if (!found) {
       close();
       return;
@@ -99,7 +105,7 @@ export function initSkillAutocomplete({ catalog, onInputChanged }) {
 
     // Text und Cursor können sich während des Ladens geändert haben.
     const current = findSkillQuery(chatInput.value, chatInput.selectionStart);
-    if (!current) {
+    if (!current || !inputFocused()) {
       close();
       return;
     }
