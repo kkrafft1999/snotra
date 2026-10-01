@@ -296,3 +296,100 @@ test('the workspace default is not written into the chat', async () => {
   await settings.activate('chat-new');
   assert.deepEqual(settings.valuesFor('chat-new'), {});
 });
+
+// #558: the local copy only holds what changed in this session. It must not
+// hide what the chat has stored — above all not a stricter mode.
+test('a chat keeps its stored mode after its model changed', async () => {
+  for (const workspaceMode of [null, 'auto']) {
+    const { settings } = setup({
+      sessions: [{ id: 'chat-x', toolPermissionMode: 'ask-all' }, { id: 'chat-y' }],
+      workspaceMode,
+    });
+    await settings.activate('chat-x');
+    await settings.rememberPreset('preset-b');
+    await settings.activate('chat-y');
+
+    const result = await settings.activate('chat-x');
+
+    assert.equal(result.toolPermissionMode, 'ask-all', `workspace default ${workspaceMode}`);
+    assert.equal(result.modelPresetId, 'preset-b');
+  }
+});
+
+test('a chat keeps its stored model after its mode changed', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-x', modelPresetId: 'preset-b' }, { id: 'chat-y' }],
+  });
+  await settings.activate('chat-x');
+  await settings.rememberMode('ask-all');
+  await settings.activate('chat-y');
+
+  const result = await settings.activate('chat-x');
+
+  assert.equal(result.modelPresetId, 'preset-b');
+  assert.equal(result.toolPermissionMode, 'ask-all');
+});
+
+/** A service whose stores hold one mode and one preset, as the real ones do. */
+function setupStateful({ sessions, applyPreset }) {
+  const history = createFakeChatHistoryStore(sessions);
+  const state = { mode: 'smart', preset: 'preset-a' };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 2));
+  const settings = createChatSessionSettings({
+    chatHistoryStore: history,
+    applyPreset: async (presetId) => {
+      await tick();
+      if (applyPreset) await applyPreset(presetId);
+      state.preset = presetId;
+    },
+    getDefaultPresetId: async () => 'preset-a',
+    isPresetUsable: async () => true,
+    getActivePresetId: async () => state.preset,
+    getActiveMode: async () => {
+      await tick();
+      return state.mode;
+    },
+    applyMode: async (mode) => {
+      await tick();
+      state.mode = mode;
+    },
+    log: { warn() {} },
+  });
+  return { settings, state };
+}
+
+// #559: the chat on screen runs under its own mode, whatever happened on the way.
+test('two overlapping switches end with the second chat\'s mode', async () => {
+  const { settings, state } = setupStateful({
+    sessions: [{ id: 'chat-p' }, { id: 'chat-x', toolPermissionMode: 'auto' }, { id: 'chat-y' }],
+  });
+  await settings.activate('chat-p');
+
+  const [, second] = await Promise.all([settings.activate('chat-x'), settings.activate('chat-y')]);
+
+  assert.equal(settings.getCurrentChatId(), 'chat-y');
+  assert.equal(second.toolPermissionMode, 'smart');
+  assert.equal(state.mode, 'smart');
+});
+
+test('a failed model switch still applies the new chat\'s mode', async () => {
+  const { settings, state } = setupStateful({
+    sessions: [
+      { id: 'chat-x', toolPermissionMode: 'auto' },
+      { id: 'chat-y', toolPermissionMode: 'ask-all', modelPresetId: 'preset-b' },
+    ],
+    applyPreset: async (presetId) => {
+      if (presetId === 'preset-b') throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    },
+  });
+  await settings.activate('chat-x');
+  assert.equal(state.mode, 'auto');
+
+  await assert.rejects(settings.activate('chat-y'), /EPERM/);
+
+  assert.equal(settings.getCurrentChatId(), 'chat-y');
+  assert.equal(state.mode, 'ask-all');
+  // The queue goes on after a failure.
+  const again = await settings.activate('chat-x');
+  assert.equal(again.toolPermissionMode, 'auto');
+});

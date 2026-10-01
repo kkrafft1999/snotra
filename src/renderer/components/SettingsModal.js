@@ -39,6 +39,7 @@ const CHEVRON_ICON_HTML =
 const {
   formatPresetSublabelFromView,
   presetIdentityKey,
+  normalizeBaseUrl,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_CONTROLS,
   SKILL_SOURCE_ORDER,
@@ -254,7 +255,20 @@ export function initSettingsModal(deps) {
       hasKey: conn.hasKey === true,
       keyUnreadable: conn.keyUnreadable === true,
       hasExtraHeaders: conn.hasExtraHeaders === true,
+      addressChanged: addressChangedSinceSave(pv),
     };
+  }
+
+  /**
+   * Does the entry being edited point somewhere else than when it was saved?
+   * Then main drops its stored key and headers on saving — a stored secret
+   * goes only to the endpoint it was stored with (#537, #560).
+   */
+  function addressChangedSinceSave(pv) {
+    const saved = (appStore.llmState.presets || []).find((p) => p.id === popupEditPresetId);
+    if (!saved || !popupConnectionDraft) return false;
+    const before = normalizeBaseUrl(saved.connection?.baseUrl || pv.defaultBaseUrl);
+    return normalizeBaseUrl(popupConnectionDraft.baseUrl || pv.defaultBaseUrl) !== before;
   }
 
   function findProviderView(providerId) {
@@ -791,13 +805,7 @@ export function initSettingsModal(deps) {
     if (form.showApiKey) {
       providerKeyRow.classList.remove('hidden');
       inputApiKey.value = draft.apiKey || '';
-      if (draft.removeApiKey && stored.hasKey) {
-        inputApiKey.placeholder = t('settings.models.row.keyWillBeRemoved');
-      } else if (stored.hasKey) {
-        inputApiKey.placeholder = t('settings.models.row.keyKept');
-      } else {
-        inputApiKey.placeholder = form.apiKeyPlaceholder || '••••••';
-      }
+      syncSecretPlaceholders(providerId);
       const showTrash =
         stored.hasKey || !!(draft.apiKey || '').trim() || draft.removeApiKey;
       btnRemoveApiKey?.classList.toggle('hidden', !showTrash);
@@ -814,13 +822,7 @@ export function initSettingsModal(deps) {
     if (form.showExtraHeaders) {
       providerExtraHeadersRow.classList.remove('hidden');
       inputExtraHeaders.value = draft.extraHeaders || '';
-      if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
-        inputExtraHeaders.placeholder = t('settings.models.row.headersWillBeRemoved');
-      } else if (stored.hasExtraHeaders) {
-        inputExtraHeaders.placeholder = t('settings.models.row.headersKept');
-      } else {
-        inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
-      }
+      syncSecretPlaceholders(providerId);
       const showHeaderTrash =
         stored.hasExtraHeaders || !!(draft.extraHeaders || '').trim() || draft.removeExtraHeaders;
       btnRemoveExtraHeaders?.classList.toggle('hidden', !showHeaderTrash);
@@ -894,6 +896,41 @@ export function initSettingsModal(deps) {
     setModalError('');
   }
 
+  /**
+   * What happens to the stored key and headers on saving, as the placeholder
+   * of their (empty) fields. Called again on every keystroke in the address
+   * field: a changed address drops both (#560).
+   */
+  function syncSecretPlaceholders(providerId) {
+    const pv = findProviderView(providerId);
+    if (!pv) return;
+    const form = pv.form || {};
+    const draft = activeDraft(providerId) || credentialDraftFor(pv);
+    const stored = activeStored(providerId);
+    if (form.showApiKey) {
+      if (draft.removeApiKey && stored.hasKey) {
+        inputApiKey.placeholder = t('settings.models.row.keyWillBeRemoved');
+      } else if (stored.hasKey && stored.addressChanged) {
+        inputApiKey.placeholder = t('settings.models.row.keyDroppedByAddress');
+      } else if (stored.hasKey) {
+        inputApiKey.placeholder = t('settings.models.row.keyKept');
+      } else {
+        inputApiKey.placeholder = form.apiKeyPlaceholder || '••••••';
+      }
+    }
+    if (form.showExtraHeaders) {
+      if (draft.removeExtraHeaders && stored.hasExtraHeaders) {
+        inputExtraHeaders.placeholder = t('settings.models.row.headersWillBeRemoved');
+      } else if (stored.hasExtraHeaders && stored.addressChanged) {
+        inputExtraHeaders.placeholder = t('settings.models.row.headersDroppedByAddress');
+      } else if (stored.hasExtraHeaders) {
+        inputExtraHeaders.placeholder = t('settings.models.row.headersKept');
+      } else {
+        inputExtraHeaders.placeholder = 'X-Gateway-Token: …';
+      }
+    }
+  }
+
   /** The line below the provider choice: where it goes and what is stored. */
   function renderProviderStatusLine(providerId) {
     const pv = findProviderView(providerId);
@@ -907,9 +944,19 @@ export function initSettingsModal(deps) {
     const shownApiBase = form.showBaseUrl ? (draft.baseUrl || pv.apiBase) : pv.apiBase;
     if (shownApiBase) lines.push(`API: ${shownApiBase}`);
     if (pv.isActiveChatProvider) lines.push(t('settings.models.row.activeProvider'));
+    // A new address drops what was stored for the old one (#560); when both
+    // go, one sentence says so instead of two.
+    const keyDropped = form.showApiKey && !draft.removeApiKey && stored.hasKey
+      && stored.addressChanged && !draft.apiKey;
+    const headersDropped = form.showExtraHeaders && !draft.removeExtraHeaders && stored.hasExtraHeaders
+      && stored.addressChanged && !(draft.extraHeaders || '').trim();
     if (form.showApiKey) {
       if (draft.removeApiKey && stored.hasKey) {
         lines.push(t('settings.models.row.keyWillBeRemoved'));
+      } else if (keyDropped) {
+        lines.push(t(headersDropped
+          ? 'settings.models.row.secretsDroppedByAddress'
+          : 'settings.models.row.keyDroppedByAddress'));
       } else if (stored.keyUnreadable && !draft.apiKey) {
         lines.push(t('settings.models.row.keyUndecryptable'));
       } else if (stored.hasKey && !draft.apiKey) {
@@ -928,6 +975,8 @@ export function initSettingsModal(deps) {
         lines.push(t('settings.models.row.headersWillBeRemoved'));
       } else if ((draft.extraHeaders || '').trim()) {
         lines.push(t('settings.models.row.headersWillBeSet'));
+      } else if (headersDropped) {
+        if (!keyDropped) lines.push(t('settings.models.row.headersDroppedByAddress'));
       } else if (stored.hasExtraHeaders) {
         lines.push(t('settings.models.row.headersStored'));
       }
@@ -2052,10 +2101,13 @@ export function initSettingsModal(deps) {
   });
 
   inputBaseUrl.addEventListener('input', () => {
-    const draft = activeDraft(selectProvider.value);
+    const id = selectProvider.value;
+    const draft = activeDraft(id);
     if (!draft) return;
     draft.baseUrl = inputBaseUrl.value;
     renderDraftPresetList();
+    syncSecretPlaceholders(id);
+    renderProviderStatusLine(id);
   });
 
   inputInsecureTls.addEventListener('change', () => {

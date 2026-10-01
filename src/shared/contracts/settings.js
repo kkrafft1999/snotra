@@ -212,6 +212,15 @@ const PRESET_CONNECTION_PLAIN_FIELDS = Object.freeze([
 ]);
 const PRESET_CONNECTION_SECRET_FIELDS = Object.freeze(['apiKeyEnc', 'extraHeadersEnc']);
 
+/**
+ * A base URL as the providers build it: trimmed, without a trailing slash.
+ * Two addresses that normalise alike are one endpoint — the unit a stored
+ * secret is bound to (#537, #560).
+ */
+function normalizeBaseUrl(url) {
+  return typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
+}
+
 /** Hängt die Verbindung bei diesem Anbieter am Eintrag statt am Anbieter? */
 function hasPresetConnection(provider) {
   return provider?.connectionPerPreset === true;
@@ -877,6 +886,7 @@ module.exports = {
   normalizePresetWire,
   presetIdentityKey,
   hasPresetConnection,
+  normalizeBaseUrl,
   normalizeStoredPresetConnection,
   normalizePresetConnectionPatch,
   PRESET_CONNECTION_PLAIN_FIELDS,

@@ -8,6 +8,8 @@ const {
   isApiStyle,
   LLM_CONFIG_VERSION,
   hasPresetConnection,
+  normalizeBaseUrl,
+  normalizeProviderPatch,
   normalizePresetConnectionPatch,
   normalizeStoredPresetConnection,
   PRESET_CONNECTION_PLAIN_FIELDS,
@@ -121,18 +123,27 @@ function registerSettingsHandlers({
   async function writeUiPrefsPatch(uiPatch) {
     try {
       await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, uiPatch));
-      if ('appLocale' in uiPatch) onAppLocaleChanged?.(uiPatch.appLocale);
-      // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
-      // und muss sofort greifen, nicht erst beim naechsten App-Start.
-      if ('pythonExecutionEnabled' in uiPatch || 'pythonInterpreterPath' in uiPatch) {
-        await pythonSettings?.refresh();
-      }
-      if ('shellExecutionEnabled' in uiPatch) {
-        await shellSettings?.refresh();
-      }
+      await applyUiPrefsPatch(uiPatch);
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * What a written preferences patch changes outside the file. One place for
+   * both handlers that write preferences — two copies had drifted apart (#562).
+   */
+  async function applyUiPrefsPatch(patch) {
+    if ('appLocale' in patch) onAppLocaleChanged?.(patch.appLocale);
+    if ('showHiddenFiles' in patch) onShowHiddenFilesChanged?.(patch.showHiddenFiles);
+    // Beides entscheidet ueber die Sichtbarkeit von run_python (Issue #86)
+    // und muss sofort greifen, nicht erst beim naechsten App-Start.
+    if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {
+      await pythonSettings?.refresh();
+    }
+    if ('shellExecutionEnabled' in patch) {
+      await shellSettings?.refresh();
     }
   }
 
@@ -163,7 +174,8 @@ function registerSettingsHandlers({
       const provider = row?.providerId ? providerCatalog.getProvider(row.providerId) : null;
       if (!provider || !hasPresetConnection(provider) || typeof row.id !== 'string') continue;
       const patch = normalizePresetConnectionPatch(row.connection, provider);
-      if (patch) connectionPatches.set(row.id, patch);
+      // Keyed like the normalised preset, whose id is trimmed (#562).
+      if (patch) connectionPatches.set(row.id.trim(), patch);
     }
     const presets = rawPresets
       .map((row) => llmConfigStore.normalizePresetEntry(row))
@@ -183,10 +195,16 @@ function registerSettingsHandlers({
       activePresetId = presets[0].id;
     }
 
-    const patches =
+    // Each patch through the contract, so its limits hold here too (#562). An
+    // unknown provider keeps an empty patch; the merge below refuses it.
+    const rawPatches =
       payload?.providerPatches && typeof payload.providerPatches === 'object'
         ? payload.providerPatches
         : {};
+    const patches = Object.create(null);
+    for (const [providerId, raw] of Object.entries(rawPatches)) {
+      patches[providerId] = normalizeProviderPatch(raw, providerCatalog.getProvider(providerId));
+    }
 
     for (const pr of presets) {
       const meta = providerCatalog.getProvider(pr.providerId);
@@ -534,16 +552,7 @@ function registerSettingsHandlers({
       return uiPrefsStore.readUIPrefs();
     }
     const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, patch));
-    if ('appLocale' in patch) onAppLocaleChanged?.(patch.appLocale);
-    if ('showHiddenFiles' in patch) onShowHiddenFilesChanged?.(patch.showHiddenFiles);
-    // Beides entscheidet ueber die Sichtbarkeit von run_python und muss
-    // sofort greifen, nicht erst beim naechsten App-Start.
-    if ('pythonExecutionEnabled' in patch || 'pythonInterpreterPath' in patch) {
-      await pythonSettings?.refresh();
-    }
-    if ('shellExecutionEnabled' in patch) {
-      await shellSettings?.refresh();
-    }
+    await applyUiPrefsPatch(patch);
     return updated;
   });
 }
@@ -646,11 +655,20 @@ function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
 function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
   const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
   const draft = patch && typeof patch === 'object' ? patch : {};
+  const endpointBefore = normalizeBaseUrl(next.baseUrl || provider?.defaultBaseUrl);
 
   for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
     if (draft[key] === undefined) continue;
     if (key === 'displayName' && !String(draft[key]).trim()) delete next.displayName;
     else next[key] = draft[key];
+  }
+
+  // A stored secret goes only to the endpoint it was stored with (#537). A new
+  // address keeps neither the old key nor the old headers; what the draft
+  // brings itself is set below (#560).
+  if (normalizeBaseUrl(next.baseUrl || provider?.defaultBaseUrl) !== endpointBefore) {
+    delete next.apiKeyEnc;
+    delete next.extraHeadersEnc;
   }
 
   if (draft.removeApiKey === true) delete next.apiKeyEnc;

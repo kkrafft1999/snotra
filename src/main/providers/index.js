@@ -62,7 +62,8 @@ const PROVIDERS = {
 const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
 
 function getProvider(id) {
-  return PROVIDERS[id] || null;
+  // Own keys only: `toString` or `constructor` are no providers (#562).
+  return typeof id === 'string' && Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;
 }
 
 function listProviderMeta() {

@@ -536,6 +536,13 @@ Two deliberately different rules for a new chat:
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.
 
+The service keeps what changed in this session in memory, on top of what the
+history file holds — never in place of it: a chat whose model was changed keeps
+its stored mode, and the other way round (#558). Switches run one after
+another, and the mode is applied before the model, so the chat on screen never
+runs under the mode of the one before it — not after two quick clicks, not
+after a failed model switch (#559).
+
 ### Runs per chat ([#320](https://github.com/kkrafft1999/snotra/issues/320))
 
 A run belongs to the chat it was started in, not to the screen. Until 1.8.1 the
@@ -606,6 +613,25 @@ the folder of the predecessor identity "Weyouze Anything") — no scattered
 wiring in the handlers. A start-up that throws ends in an error box and
 `app.exit(1)` (`createStartupFailureHandler`, #509) instead of leaving a
 process without a window behind.
+
+### Files the store cannot use
+
+`storage-service` keeps one JSON file per topic in the userData folder and
+writes each atomically (temporary file, rename with the Windows retry of #472).
+What it does with a file it finds but cannot use is one rule for all of them:
+
+- **Missing** — start from the defaults; a first read may write them.
+- **Not readable** (a read error after the retry) — shown as defaults, never
+  written over; a save throws instead (#473).
+- **Not understood** (broken JSON, or a version newer than this build, as after
+  installing an older release over a newer one) — shown as defaults; before
+  the next save it is moved aside as `<name>.unreadable-<stamp>`, byte for
+  byte, and the store starts from its defaults. A move that fails throws, so
+  nothing is written (#557).
+
+The chat history follows the same idea with its own name: an unreadable history
+is moved aside as `chat-history.json.undecryptable-<stamp>` on the first read,
+and when that move fails, no save may write over it (#561).
 
 The **menu bar** lives as a pure template in `services/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,

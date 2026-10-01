@@ -282,7 +282,10 @@ stored with the history in the encrypted store.
   follow the same rule: main sends an API key or extra headers only to the
   endpoint they were stored with. A model listing for a URL the renderer names
   gets only the credentials the request itself carries, and a provider without
-  a URL field ignores a requested one (#537). Local processes
+  a URL field ignores a requested one (#537). Saving holds to the same rule: an
+  entry saved with a new address keeps neither its old key nor its old headers,
+  only what the save itself brings, and the dialog says so before saving
+  (#560). Local processes
   running with the user's rights are outside the protection goal; they could
   modify the app itself.
 

@@ -1,12 +1,7 @@
 'use strict';
 
-const { createListModelsResult } = require('../../shared/contracts/settings');
+const { createListModelsResult, normalizeBaseUrl } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
-
-/** A base URL as the providers build it: trimmed, without a trailing slash. */
-function normalizeBaseUrl(url) {
-  return typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
-}
 
 function createProviderModelListingAdapter({ providerRuntime, providerSecrets }) {
   return {
