@@ -15,6 +15,7 @@ const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
 const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
 const { claimSingleInstance, createStartupFailureHandler } = require('./app-lifecycle');
+const { guardIpcMain } = require('./ipc/trusted-sender');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
 // "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
@@ -80,7 +81,8 @@ function start() {
 
     application = createApplication({
       app,
-      ipcMain,
+      // Every handler checks who is calling (#509).
+      ipcMain: guardIpcMain(ipcMain),
       dialog,
       safeStorage,
       fs,

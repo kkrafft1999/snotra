@@ -42,9 +42,10 @@ const { page, app } = snotra;
 // checked state for a moment, so both states come from identical markup.
 const measure = (selector) => page.evaluate((selector) => {
   // Transitions would hand back a colour halfway between the two states.
-  const still = document.createElement('style');
-  still.textContent = '*, *::before, *::after { transition: none !important; }';
-  document.head.appendChild(still);
+  // A constructed sheet: the CSP refuses a <style> element since #509.
+  const still = new CSSStyleSheet();
+  still.replaceSync('*, *::before, *::after { transition: none !important; }');
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, still];
   const rgb = (value) => {
     const m = value.match(/rgba?\(([^)]+)\)/) || value.match(/color\(srgb ([^)/]+)/);
     if (!m) return null;
@@ -97,7 +98,7 @@ const measure = (selector) => page.evaluate((selector) => {
       'knob shadow': off.shadow,
     });
   }
-  still.remove();
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== still);
   return rows;
 }, selector);
 
