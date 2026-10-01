@@ -149,8 +149,6 @@ const COMMAND_RULE_UNAVAILABLE_REASONS = Object.freeze({
   NO_ENCRYPTION: 'no-encryption',
   NO_WORKSPACE: 'no-workspace',
   CLASSES: 'classes',
-  // The command runs in a skill folder (#429); a rule belongs to a workspace.
-  SKILL_FOLDER: 'skill-folder',
 });
 
 const MAX_RULES = 500;
@@ -641,13 +639,6 @@ function sanitizeIsolation(isolation) {
       && skipped.program && ALLOWANCE_SKIP_REASONS.has(skipped.reason)) {
       out.allowanceSkipped = { program: skipped.program.slice(0, 255), reason: skipped.reason };
     }
-    // The folders of the skills loaded in the run, which it may write to (#429).
-    const skillFolders = (Array.isArray(isolation.skillFolders) ? isolation.skillFolders : [])
-      .filter((folder) => folder && typeof folder.name === 'string' && folder.name
-        && typeof folder.path === 'string' && folder.path)
-      .slice(0, 20)
-      .map((folder) => ({ name: folder.name.slice(0, 64), path: folder.path.slice(0, 1024) }));
-    if (skillFolders.length > 0) out.skillFolders = skillFolders;
     return out;
   }
   return {

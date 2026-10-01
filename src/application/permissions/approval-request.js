@@ -110,7 +110,6 @@ function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, works
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) return { reason: reasons.ASK_ALL };
   if (typeof workspaceRoot !== 'string' || !workspaceRoot) return { reason: reasons.NO_WORKSPACE };
   const call = plan?.shellCommand;
-  if (call?.skillFolder === true) return { reason: reasons.SKILL_FOLDER };
   if (!call || typeof call.command !== 'string' || !call.command) return { reason: reasons.NOT_SIMPLE };
   if (call.stdin === true) return { reason: reasons.STDIN };
   // An allow rule needs the signed store; without `safeStorage` it would be

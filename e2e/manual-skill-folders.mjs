@@ -1,11 +1,10 @@
-// Look instead of trust (#429): starts the real app with a global skill under
+// Look instead of trust (#548): starts the real app with a global skill under
 // a temporary home folder and shell_execute on, then
-//  1. loads the skill and edits its asset file — photographs the approval card
-//     and reports whether the file changed,
-//  2. loads it again and appends to the file from a shell run in the skill
-//     folder — photographs the card with the skill folders the sandbox opens,
-//     and reports what the run and the model saw,
-//  3. edits the file without loading the skill and reports the refusal.
+//  1. loads the skill and tries to edit its asset file — reports the refusal
+//     the model reads and that the file stayed as it was,
+//  2. tries a shell run in the skill folder and reports the refusal,
+//  3. keeps the new rule in .agents/data/ of the open folder instead —
+//     photographs the approval card and reports the file it wrote.
 // Not a test — a look. Run it outside the Claude Code sandbox, or the app's
 // own sandbox cannot start (macOS does not nest them).
 //
@@ -24,7 +23,8 @@ const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
 const EDIT = 'Remember that stand-ups go to the project task.';
 const SHELL = 'Append the retro rule with the script.';
-const UNLOADED = 'Change the rules without loading.';
+const DATA = 'Keep the stand-up rule for this project.';
+const DATA_FILE = '.agents/data/time-booking-rules.md';
 const BODY_MARK = 'The rules live in assets/rules.md';
 
 const model = await startFakeModel();
@@ -37,7 +37,7 @@ await mkdir(SHOTS, { recursive: true });
 await mkdir(path.join(skillDir, 'assets'), { recursive: true });
 await writeFile(
   path.join(skillDir, 'SKILL.md'),
-  `---\nname: time-booking\ndescription: Books working time and keeps the learned mapping rules up to date.\n---\n\n${BODY_MARK}. Update them when the user teaches a new one.\n`,
+  `---\nname: time-booking\ndescription: Books working time and keeps the learned mapping rules up to date.\n---\n\n${BODY_MARK}. Keep new ones in <workspace>/${DATA_FILE}.\n`,
   'utf8',
 );
 await writeFile(rulesFile, '# Rules\n\n- Mail and admin → Internal\n', 'utf8');
@@ -107,7 +107,7 @@ try {
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });
 
-  // 1. Load, then edit the asset file.
+  // 1. Load, then try to edit the asset file: refused before any card.
   model.queueAnswer({ match: EDIT, toolCalls: [{ name: 'load_skill', arguments: { name: 'time-booking' } }] });
   model.queueAnswer({
     match: BODY_MARK,
@@ -121,44 +121,37 @@ try {
     }],
   });
   await ask(EDIT);
-  await waitForCard('edit card');
-  console.log('edit card:', await pendingCard().evaluate((el) => el.textContent.replace(/\s+/g, ' ').slice(0, 500)));
-  await themed('edit', (file) => pendingCard().screenshot({ path: file }));
-  await pendingCard().evaluate((el) => el.querySelector('button[data-response="allow-once"]').click());
   await idle();
-  console.log('tool log:', await page.evaluate(() =>
-    [...document.querySelectorAll('#chat-messages .chat-message')].at(-1)?.textContent.replace(/\s+/g, ' ').slice(0, 300)));
+  console.log('load_skill as the model read it:', toolResults().at(-2));
+  console.log('edit as the model read it:', toolResults().at(-1));
   console.log('file after edit:', JSON.stringify(await readFile(rulesFile, 'utf8')));
 
-  // 2. Load again (a new reply starts with nothing loaded), then a shell run
-  //    in the skill folder.
-  model.queueAnswer({ match: SHELL, toolCalls: [{ name: 'load_skill', arguments: { name: 'time-booking' } }] });
+  // 2. A shell run in the skill folder: refused as well.
   model.queueAnswer({
-    match: BODY_MARK,
+    match: SHELL,
     toolCalls: [{ name: 'shell_execute', arguments: { command: "printf -- '- Retro → Internal\\n' >> assets/rules.md", cwd: 'skill:time-booking' } }],
   });
   await ask(SHELL);
-  await waitForCard('shell card');
-  console.log('shell card:', await pendingCard().evaluate((el) => el.textContent.replace(/\s+/g, ' ').slice(0, 700)));
-  await themed('shell', (file) => pendingCard().screenshot({ path: file }));
-  await pendingCard().evaluate((el) => el.querySelector('button[data-response="allow-once"]').click());
   await idle();
-  const shellResult = toolResults().at(-1) || '';
-  let parsed = null;
-  try { parsed = JSON.parse(shellResult); } catch { /* printed raw */ }
-  console.log('shell exit code:', parsed?.exit_code, 'stderr:', String(parsed?.stderr ?? shellResult).slice(0, 400));
-  console.log('sandbox as the model read it:', JSON.stringify(parsed?.sandbox));
+  console.log('shell as the model read it:', toolResults().at(-1));
   console.log('file after shell:', JSON.stringify(await readFile(rulesFile, 'utf8')));
 
-  // 3. Without loading the skill first.
+  // 3. Keep it in the project instead: an ordinary write with a card.
   model.queueAnswer({
-    match: UNLOADED,
-    toolCalls: [{ name: 'write_file_text', arguments: { relative_path: 'skill:time-booking/assets/rules.md', content: 'gone' } }],
+    match: DATA,
+    toolCalls: [{
+      name: 'write_file_text',
+      arguments: { relative_path: DATA_FILE, content: '# Rules\n\n- Stand-ups → Project task\n' },
+    }],
   });
-  await ask(UNLOADED);
+  await ask(DATA);
+  await waitForCard('data card');
+  console.log('data card:', await pendingCard().evaluate((el) => el.textContent.replace(/\s+/g, ' ').slice(0, 500)));
+  await themed('data', (file) => pendingCard().screenshot({ path: file }));
+  await pendingCard().evaluate((el) => el.querySelector('button[data-response="allow-once"]').click());
   await idle();
-  console.log('unloaded write:', toolResults().at(-1));
-  console.log('file at the end:', JSON.stringify(await readFile(rulesFile, 'utf8')));
+  console.log('data file:', JSON.stringify(await readFile(path.join(workspace, DATA_FILE), 'utf8')));
+  console.log('skill file at the end:', JSON.stringify(await readFile(rulesFile, 'utf8')));
   console.log('Screenshots in', SHOTS);
 } finally {
   await snotra.stop().catch(() => {});

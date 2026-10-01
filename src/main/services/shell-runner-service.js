@@ -301,7 +301,6 @@ function createShellRunnerService({
     networkDomains,
     programAllowance = null,
     sandboxDisabled = false,
-    skillWritePaths = [],
     abortSignal,
   } = {}) {
     if (!detected.found) {
@@ -345,8 +344,6 @@ function createShellRunnerService({
         // A program allowance's folders and trustd (#408); its domains are
         // already part of networkDomains.
         allowance: programAllowance,
-        // The folders of the skills loaded in the run (#429).
-        skillWritePaths,
         commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         commandText: line,
         abortSignal,

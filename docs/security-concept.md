@@ -184,8 +184,8 @@ stored with the history in the encrypted store.
   process, and the active skill read roots (#68/#61). No root set freely by the
   renderer or the model, no escape through `..`, symlinks or junctions; new
   files are checked against the real existing parent path. Skill targets stay
-  read-only in every mode, except for the folder of a skill loaded in the
-  current run (see the revision for #429 in section 9). Paths, file state and root are re-checked immediately
+  read-only in every mode (#429 opened them for a while; the revision for #548
+  in section 9 closed them again). Paths, file state and root are re-checked immediately
   before access; a swap during the approval invalidates it. Plain string prefix
   checks are not enough.
 - **Import from outside (#101):** dropping from Finder or Explorer into the file
@@ -950,6 +950,38 @@ is where a user sees it and what they can take back.
   checks, and a side sheet that stacks chat, workspace and global scope. Both
   were mocked up in #437. The first may come back as a "Why?" behind a tool
   call in the chat.
+
+### Revision: skill folders read-only again (#548)
+
+Decided on 2026-10-01; it takes back the revision for #429. Writing into a
+skill folder put a skill's data in the wrong place: a global skill under
+`~/.snotra/skills` or `~/.agents/skills` is switched on in every project, often
+comes from a registry and is replaced on its next update. What it learned there
+either leaked into every other project or was lost. And the price named for
+#429 — a way for a prompt injection to persist across projects — stayed the
+same however narrow the conditions around it were.
+
+- **Read-only in every mode.** The write tools refuse a `skill:` path and an
+  absolute path into the folder of a switched-on skill as a hard limit, before
+  the policy. The engine no longer keeps a set of loaded skills, and the plan
+  carries none.
+- **No skill folder in the sandbox.** `shell_execute` and `run_python` get no
+  skill folder as a write path, and `shell_execute` no longer accepts
+  `cwd: "skill:<name>"` — a run happens in the project. The card lost its
+  "Loaded skills" line and the reason "a command in a skill folder cannot be
+  remembered".
+- **Where the data goes instead.** What a skill produces and wants to keep goes
+  into `.agents/data/` in the open folder. The model learns it from the skills
+  section of the system prompt, from every `load_skill` result and from the
+  refusal of a write into a skill folder. Skills written for other agents spell
+  the place `<workspace>/.agents/data/…`. A write there is an ordinary workspace
+  write and follows the mode matrix of section 3; nothing about it is special.
+- **Without an open folder** the read tools stay available while a skill is
+  switched on and reach only the skill folders. The write tools need a folder
+  again, so a skill has nowhere to keep its data, and the model is told to say
+  so.
+- **What stays from #427/#429.** Reading through an absolute path into a skill
+  folder, and the card naming the skill of a read target in `skill:` spelling.
 
 ## 10. Comparison with the official references
 

@@ -65,7 +65,9 @@ chat carries on.
 
 - File tools only inside the open folder, paths relative to its root; parent
   directories and other drives are blocked. Without an open folder there are no
-  file tools, only `web_search`, `fetch_url`, `load_skill` and MCP tools.
+  write or execution tools; the read tools reach only the folders of the
+  switched-on skills, next to `web_search`, `fetch_url`, `load_skill` and MCP
+  tools.
   Executed code does not know that boundary (it starts in the project folder,
   but the interpreter or shell does the access) — hence a prompt every time.
 - No image, audio or video generation. **Receiving** images works: the user
@@ -125,10 +127,11 @@ A skill is a directory with a `SKILL.md` (YAML front matter `name`,
 description of the skills that are switched on — if one fits, fetch its
 instructions with `load_skill` before starting work; neighbouring files via
 `skill:<name>/<path>`, or by an absolute path inside the folder `load_skill`
-reports. Once a skill is loaded in the current reply, the write tools reach its
-folder the same way, and `shell_execute`/`run_python` may write there too; the
-app's own skills stay read-only. Without an open folder the file tools still
-work for skill folders.
+reports. Skill folders are read-only for every tool. What a skill produces and
+wants to keep — learned rules, contacts, state for the next run — goes into
+`.agents/data/` in the open folder (a skill may spell it
+`<workspace>/.agents/data/…`); without an open folder there is nowhere to keep
+it.
 
 System skills are built in and on. Folder skills are read from
 `.agents/skills/` in the open folder and globally from `~/.snotra/skills/`
