@@ -17,7 +17,10 @@
 /**
  * @typedef {Object} SkillPort
  * @property {(options: { workspaceRoot?: string | null, activeSkills?: string[] | null,
+ *   activeWorkspaceSkills?: Record<string, string[]> | null,
  *   invokedSkills?: string[] | null, locale?: string }) => Promise<ActiveSkill[]>} getActiveSkills
+ *   `activeSkills` switches on system and global skills only; a workspace skill
+ *   is on only through its folder's entry in `activeWorkspaceSkills` (#576).
  *   `locale` is the interface language the system skills quote settings pages in (#294)
  */
 

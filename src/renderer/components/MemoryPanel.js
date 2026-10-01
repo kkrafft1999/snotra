@@ -91,7 +91,7 @@ export function initMemoryPanel({ api }) {
     forget.title = t('settings.memory.forget.title');
     forget.addEventListener('click', async () => {
       forget.disabled = true;
-      const result = await api.forgetMemoryEntry(scope.scope, entry.line);
+      const result = await api.forgetMemoryEntry(scope.scope, entry.line, entry.text);
       if (result?.ok && result.state) {
         state = result.state;
         render();

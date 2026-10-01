@@ -101,12 +101,39 @@ const MEMORY_ORIGINS = Object.freeze({
   SELF: 'self',
 });
 
-/** Klammerzusatz hinter dem Datum für selbst gemerkte Einträge. */
-const SELF_ORIGIN_MARKER = 'selbst gemerkt';
+/**
+ * Klammerzusatz hinter dem Datum für selbst gemerkte Einträge. The file is the
+ * user's to read and edit, so it is written in the interface language (#579)
+ * — the same words as the badge in the settings. Every spelling is read back,
+ * whichever language the file was started in.
+ */
+const SELF_ORIGIN_MARKERS = Object.freeze({
+  en: 'remembered on its own',
+  de: 'selbst gemerkt',
+});
+
+const KNOWN_SELF_ORIGIN_MARKERS = new Set(Object.values(SELF_ORIGIN_MARKERS));
+
+/** Heading of a freshly created file, in the interface language (#579). */
+const MEMORY_FILE_HEADINGS = Object.freeze({
+  en: Object.freeze({ user: '# Memory · global', workspace: '# Memory · project' }),
+  de: Object.freeze({ user: '# Gedächtnis · global', workspace: '# Gedächtnis · Projekt' }),
+});
+
+/** German or English; anything else is English, as in the rest of the app. */
+function memoryLanguage(locale) {
+  return locale === 'de' ? 'de' : 'en';
+}
 
 /** Kopfzeile einer frisch angelegten Datei. */
-function memoryFileHeading(scope) {
-  return scope === MEMORY_SCOPES.USER ? '# Gedächtnis · global' : '# Gedächtnis · Projekt';
+function memoryFileHeading(scope, locale) {
+  const headings = MEMORY_FILE_HEADINGS[memoryLanguage(locale)];
+  return scope === MEMORY_SCOPES.USER ? headings.user : headings.workspace;
+}
+
+/** The line ending a file already uses, so an edit keeps it (#579). */
+function lineEndingOf(text) {
+  return typeof text === 'string' && text.includes('\r\n') ? '\r\n' : '\n';
 }
 
 function isMemoryScope(value) {
@@ -130,10 +157,10 @@ function formatMemoryDate(date) {
 }
 
 /** Ein Eintrag als Markdown-Zeile. */
-function formatMemoryEntryLine({ text, date, origin }) {
+function formatMemoryEntryLine({ text, date, origin, locale }) {
   const body = String(text || '').replace(/\s+/g, ' ').trim();
   if (!body) return '';
-  const marker = origin === MEMORY_ORIGINS.SELF ? ` (${SELF_ORIGIN_MARKER})` : '';
+  const marker = origin === MEMORY_ORIGINS.SELF ? ` (${SELF_ORIGIN_MARKERS[memoryLanguage(locale)]})` : '';
   return `- ${date || formatMemoryDate()}${marker} — ${body}`;
 }
 
@@ -161,7 +188,7 @@ function parseMemoryEntries(text) {
       line: index,
       date: date || null,
       origin:
-        marker && marker.trim().toLowerCase() === SELF_ORIGIN_MARKER
+        marker && KNOWN_SELF_ORIGIN_MARKERS.has(marker.trim().toLowerCase())
           ? MEMORY_ORIGINS.SELF
           : MEMORY_ORIGINS.REQUESTED,
       text: value,
@@ -182,26 +209,40 @@ function appendMemoryEntry(currentText, entry) {
   if (!line) return typeof currentText === 'string' ? currentText : '';
   const base = typeof currentText === 'string' ? currentText.replace(/\s+$/, '') : '';
   if (!base) {
-    return `${memoryFileHeading(entry?.scope)}\n\n${line}\n`;
+    return `${memoryFileHeading(entry?.scope, entry?.locale)}\n\n${line}\n`;
   }
-  return `${base}\n${line}\n`;
+  const eol = lineEndingOf(currentText);
+  return `${base}${eol}${line}${eol}`;
+}
+
+/** The text of an entry line, or null when the line is not one. */
+function entryTextOf(rawLine) {
+  const match = ENTRY_LINE.exec(rawLine);
+  const value = match ? match[3].trim() : '';
+  return value || null;
 }
 
 /**
- * Die Zeile mit der Nummer `line` entfernen. Trifft die Nummer keine
- * Eintragszeile, bleibt der Text unverändert — ein Vergessen, das die falsche
- * Zeile trifft, wäre schlimmer als eines, das nichts tut.
+ * Den Eintrag mit dem Text `text` entfernen, der zuletzt in Zeile `line`
+ * stand. Die Nummer allein reicht nicht (#577): Zwischen Anzeige und Klick
+ * kann eine Zeile davor verschwunden sein — ein zweiter Klick, eine Änderung
+ * im Editor —, und dann stünde dort ein anderer Eintrag. Steht der Text noch
+ * in dieser Zeile, geht sie; ist er gewandert, geht die Zeile, die ihn trägt;
+ * sonst bleibt alles, wie es ist — ein Vergessen, das den falschen Eintrag
+ * trifft, wäre schlimmer als eines, das nichts tut.
  */
-function removeMemoryEntryLine(currentText, line) {
-  if (typeof currentText !== 'string' || !Number.isInteger(line) || line < 0) {
-    return { text: typeof currentText === 'string' ? currentText : '', removed: false };
+function removeMemoryEntryLine(currentText, line, text) {
+  const unchanged = { text: typeof currentText === 'string' ? currentText : '', removed: false };
+  const wanted = typeof text === 'string' ? text.trim() : '';
+  if (typeof currentText !== 'string' || !wanted || !Number.isInteger(line) || line < 0) {
+    return unchanged;
   }
   const lines = currentText.split(/\r?\n/);
-  if (line >= lines.length || !ENTRY_LINE.test(lines[line])) {
-    return { text: currentText, removed: false };
-  }
-  lines.splice(line, 1);
-  return { text: lines.join('\n'), removed: true };
+  let index = line < lines.length && entryTextOf(lines[line]) === wanted ? line : -1;
+  if (index === -1) index = lines.findIndex((candidate) => entryTextOf(candidate) === wanted);
+  if (index === -1) return unchanged;
+  lines.splice(index, 1);
+  return { text: lines.join(lineEndingOf(currentText)), removed: true };
 }
 
 /** Nur Dateien mit Inhalt; alles andere ist kein Fehler, sondern leer. */
@@ -221,7 +262,7 @@ module.exports = {
   MEMORY_SCOPE_PATHS,
   MEMORY_SCOPE_SHORT_PATHS,
   MEMORY_ORIGINS,
-  SELF_ORIGIN_MARKER,
+  SELF_ORIGIN_MARKERS,
   MAX_MEMORY_CHARS,
   MAX_MEMORY_ENTRY_CHARS,
   isMemoryScope,

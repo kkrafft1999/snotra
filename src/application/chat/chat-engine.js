@@ -972,6 +972,8 @@ function createChatEngine({
           activeSkills = await skills.getActiveSkills({
             workspaceRoot,
             activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
+            // A workspace skill is on only where it was ticked (#576).
+            activeWorkspaceSkills: uiPrefs.activeWorkspaceSkills || null,
             // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
             // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
             // prägen (Issue #124).

@@ -10,6 +10,7 @@ const {
   isPresetUsable,
 } = require('../src/main/ipc/settings-handlers');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { createSkillsService } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
 const {
@@ -691,11 +692,11 @@ test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch
   // Auch ein mitgeschickter Pfad aendert nichts: es zaehlt der aktive Root.
   const result = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG, '/tmp/fremd');
   assert.equal(result.skills[0].name, 'snotra-capabilities');
-  assert.deepEqual(calls, [{ workspaceRoot: ws, activeSkills: null, locale: 'en' }]);
+  assert.deepEqual(calls, [{ workspaceRoot: ws, activeSkills: null, activeWorkspaceSkills: null, locale: 'en' }]);
 
   await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['snotra-capabilities'] });
   await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG);
-  assert.deepEqual(calls[1], { workspaceRoot: ws, activeSkills: ['snotra-capabilities'], locale: 'en' });
+  assert.deepEqual(calls[1], { workspaceRoot: ws, activeSkills: ['snotra-capabilities'], activeWorkspaceSkills: null, locale: 'en' });
 });
 
 test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (t) => {
@@ -709,6 +710,30 @@ test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (
 
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_RELOAD_SKILLS, null), { skills: [] });
   assert.deepEqual(calls, ['reload']);
+});
+
+test('a ticked workspace skill is stored for the open folder, never in the global list (#576)', async (t) => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-bind-'));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const home = path.join(base, 'home');
+  const ws = path.join(base, 'ws');
+  const writeSkill = async (dir, name) => {
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+    await fs.writeFile(path.join(dir, name, 'SKILL.md'), `---\nname: ${name}\ndescription: d\n---\nbody\n`);
+  };
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'notes');
+  await writeSkill(path.join(ws, '.agents', 'skills'), 'local');
+  const skillCatalog = createSkillsService({ fs, path, os: { homedir: () => home } });
+  const { ipcMain, uiPrefsStore, workspaceActivation } = await setupHandlers(t, { skillCatalog });
+  await workspaceActivation.activateChosenFolder(ws);
+
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { activeSkills: ['notes', 'local'] });
+
+  const prefs = await uiPrefsStore.readUIPrefs();
+  assert.deepEqual(prefs.activeSkills, ['notes']);
+  assert.deepEqual(prefs.activeWorkspaceSkills, { [path.resolve(ws)]: ['local'] });
+  const { skills } = await ipcMain.invoke(REQ.SETTINGS_GET_SKILL_CATALOG);
+  assert.deepEqual(skills.map((skill) => [skill.name, skill.status]), [['local', 'active'], ['notes', 'active']]);
 });
 
 test('ohne Skill-Service liefern beide Kanäle eine leere Liste', async (t) => {

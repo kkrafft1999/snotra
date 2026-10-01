@@ -133,11 +133,14 @@ wants to keep — learned rules, contacts, state for the next run — goes into
 `<workspace>/.agents/data/…`); without an open folder there is nowhere to keep
 it.
 
-System skills are built in and on. Folder skills are read from
+System skills are built in and on by default; the user can switch them off
+like any other. Folder skills are read from
 `.agents/skills/` in the open folder and globally from `~/.snotra/skills/`
 (the recommended place) and `~/.agents/skills/` (the legacy place, still read),
 not from other tools' directories (such as `.claude/`), and each has to be
-switched on individually. `~/.snotra/` is Snotra's own user directory; the app
+switched on individually. A skill in the open folder is switched on for that
+folder only; a global skill of the same name is shadowed there and does not
+pass its switch on to it. `~/.snotra/` is Snotra's own user directory; the app
 does not create it by itself and does not move anything there. No skill
 manager, no marketplace: create a directory, then reload under
 `{menu:settings.skills}`.

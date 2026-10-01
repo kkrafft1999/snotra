@@ -74,7 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Gedaechtnis (Issue #166). Wie beim Skill-Katalog kennt der Main den
   // aktiven Ordner selbst — der Renderer schickt ihn bewusst nicht mit.
   getMemory: () => ipcRenderer.invoke(REQ.SETTINGS_GET_MEMORY),
-  forgetMemoryEntry: (scope, line) => ipcRenderer.invoke(REQ.SETTINGS_FORGET_MEMORY, { scope, line }),
+  forgetMemoryEntry: (scope, line, text) => ipcRenderer.invoke(REQ.SETTINGS_FORGET_MEMORY, { scope, line, text }),
   onSkillsChanged: (callback) => {
     const channel = PUSH.SKILLS_CHANGED;
     const listener = (_event, payload) => callback(payload);

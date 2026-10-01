@@ -6,7 +6,7 @@
  * in der sie im Prompt stehen sollen — dieselbe Liste wie bei den Skills
  * (Issue #251): Workspace, dann `~/.snotra`, dann `~/.agents`.
  *
- * **Bewusst ohne Cache und ohne Watcher.** Vier `readFile`-Aufrufe je Anfrage
+ * **Bewusst ohne Cache und ohne Watcher.** Drei Lesezugriffe je Anfrage
  * kosten gegen einen Modellaufruf nichts Messbares; der Skill-Katalog braucht
  * beides nur, weil er ganze Verzeichnisse scannt und Frontmatter parst
  * (`skills-service.js`). Ohne Cache gibt es hier auch nichts zu invalidieren —
@@ -19,6 +19,7 @@ const {
   PROJECT_INSTRUCTION_SOURCES,
   MAX_PROJECT_INSTRUCTION_CHARS,
 } = require('../../shared/contracts/project-instructions');
+const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
 
 /**
  * @param {Object} deps
@@ -29,6 +30,10 @@ const {
  */
 function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT_INSTRUCTION_CHARS }) {
   if (!fs || !path) throw new TypeError('createProjectInstructionsAdapter benötigt fs und path.');
+
+  // The folder's file comes with the folder: read only when its real path
+  // stays inside it, and never further than the limit (#534).
+  const textFiles = createEmbeddedTextFiles({ fs, path });
 
   function homeDir() {
     let home;
@@ -54,6 +59,7 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
       targets.push({
         source: PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
         file: path.join(root, PROJECT_INSTRUCTIONS_FILE),
+        root,
       });
     }
     const home = homeDir();
@@ -78,26 +84,20 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     });
   }
 
-  async function readInstructionFile(source, file) {
-    let raw;
-    try {
-      raw = await fs.readFile(file, 'utf8');
-    } catch {
-      // Fehlend, unlesbar, ein Verzeichnis statt einer Datei: alles derselbe
-      // Normalfall. Eine Anweisungsdatei, die es nicht gibt, ist kein Fehler.
-      return null;
-    }
-    if (typeof raw !== 'string' || !raw.trim()) return null;
-    const truncated = raw.length > maxChars;
-    return { source, text: truncated ? raw.slice(0, maxChars) : raw, truncated };
+  async function readInstructionFile({ source, file, root = null }) {
+    // Fehlend, unlesbar, ein Verzeichnis statt einer Datei, ein Symlink aus
+    // dem Ordner hinaus: alles derselbe Normalfall. Eine Anweisungsdatei, die
+    // es nicht gibt, ist kein Fehler. The global files have no root to stay
+    // in — they are the user's own, and a dotfiles manager links them.
+    const read = await textFiles.readForPrompt({ file, root, maxChars });
+    if (!read || !read.text.trim()) return null;
+    return { source, text: read.text, truncated: read.truncated };
   }
 
   return {
     async load({ workspaceRoot = null } = {}) {
       const targets = chain(workspaceRoot);
-      const results = await Promise.all(
-        targets.map(({ source, file }) => readInstructionFile(source, file))
-      );
+      const results = await Promise.all(targets.map(readInstructionFile));
       return results.filter(Boolean);
     },
   };

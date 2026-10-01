@@ -532,7 +532,13 @@ Chat ziehen sofort nach, ohne dass du etwas anklicken musst.
 keine Änderung meldet — etwa auf Netzlaufwerken.
 
 **Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder Inhalt und damit
-ein Prompt-Injection-Risiko, deshalb braucht jeder eine ausdrückliche Auswahl. `allowed-tools` aus dem Frontmatter wird ignoriert —
+ein Prompt-Injection-Risiko, deshalb braucht jeder eine ausdrückliche Auswahl.
+Ein Skill im geöffneten Ordner ist **nur für diesen Ordner** eingeschaltet: Ein
+Häkchen bei `review` in einem Repository schaltet keinen `review`-Skill im
+nächsten ein, und bringt ein Ordner einen Skill mit, der so heißt wie einer
+deiner globalen, ist deiner dort überdeckt und sein Häkchen geht nicht auf den
+fremden über — der Skill des Ordners bleibt aus, bis du ihn in diesem Ordner
+anhakst. `allowed-tools` aus dem Frontmatter wird ignoriert —
 maßgeblich bleiben die Tool-Schalter unter Einstellungen › Sicherheit.
 
 ### Einen Skill im Chat aufrufen: `/name`

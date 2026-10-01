@@ -122,6 +122,36 @@ function normalizeActiveSkills(raw) {
   return [...seen];
 }
 
+/** More folders than this with a switched-on skill of their own are not kept. */
+const MAX_WORKSPACE_SKILL_ROOTS = 500;
+
+/**
+ * Skills switched on per folder, from the UI preferences (#576): the resolved
+ * workspace root as key, the names of that folder's own skills as value.
+ *
+ * A workspace skill is somebody else's text, so its switch-on is bound to the
+ * folder it was ticked in. The global `activeSkills` list only ever switches
+ * on system and global skills — otherwise a cloned repository with a skill of
+ * the same name would inherit the user's choice.
+ *
+ * @returns {Record<string, string[]> | null} `null` when nothing is stored
+ */
+function normalizeActiveWorkspaceSkills(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  let count = 0;
+  for (const [root, names] of Object.entries(raw)) {
+    if (count >= MAX_WORKSPACE_SKILL_ROOTS) break;
+    // `__proto__` would set the prototype instead of a key; no root is named so.
+    if (typeof root !== 'string' || !root.trim() || root === '__proto__') continue;
+    const list = normalizeActiveSkills(names);
+    if (!list || list.length === 0) continue;
+    out[root] = list;
+    count += 1;
+  }
+  return count > 0 ? out : null;
+}
+
 function normalizeSkillDetail(value) {
   if (isMessage(value)) return createMessage(value.key, value.params);
   return typeof value === 'string' ? value : '';
@@ -172,6 +202,8 @@ module.exports = {
   isSkillStatus,
   isValidSkillName,
   normalizeActiveSkills,
+  normalizeActiveWorkspaceSkills,
+  MAX_WORKSPACE_SKILL_ROOTS,
   normalizeSkillSummary,
   normalizeSkillCatalog,
 };

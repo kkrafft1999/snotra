@@ -287,6 +287,8 @@ function createApplication({
   let skillsWatcher = null;
   // Dasselbe fuer den Dateibaum-Watcher (Issue #158).
   let workspaceWatcher = null;
+  // And for the skill scans: set once the skill service exists (#578).
+  let dropSkillScans = () => {};
 
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
   // Ein Workspace-Wechsel verwirft offene Freigaben und Sitzungsfreigaben (Konzept §7).
@@ -308,6 +310,10 @@ function createApplication({
         // zurueck (Issue #158).
         skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
         workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
+        // The watcher follows only the open folder, so a cached scan of the
+        // one just left would go stale unnoticed and be served again when it
+        // comes back (#578). Dropped here, it is read afresh then.
+        dropSkillScans();
       }
     },
   });
@@ -529,6 +535,8 @@ function createApplication({
   // melden sich beim Renderer (Issue #126) — „Skills neu laden“ bleibt als
   // Ausweg, ist aber nicht mehr noetig. Ohne watch-Implementierung (Tests)
   // laeuft alles wie vorher, nur ohne Watcher.
+  dropSkillScans = () => skillsService.reload();
+
   skillsWatcher = watchFile
     ? createSkillsWatcher({
         watch: watchFile,

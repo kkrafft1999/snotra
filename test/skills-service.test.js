@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createSkillsService } = require('../src/main/services/skills-service');
+const { createSkillsService, MAX_SKILLS_PER_DIRECTORY } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 
 // The service hands over keys since #353; the German wording is checked through
@@ -140,11 +140,81 @@ test('der Workspace schlägt auch ~/.snotra', async (t) => {
   await writeSkill(path.join(home, '.snotra', 'skills'), 'doppelt', { body: 'Snotra' });
   const service = makeService({ home });
 
-  const active = await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['doppelt'] });
+  // Switched on in this folder, the workspace skill is the one that counts (#576).
+  const active = await service.getActiveSkills({
+    workspaceRoot: workspace,
+    activeSkills: ['doppelt'],
+    activeWorkspaceSkills: { [path.resolve(workspace)]: ['doppelt'] },
+  });
 
   assert.equal(active.length, 1);
   assert.equal(active[0].source, SKILL_SOURCES.WORKSPACE_AGENTS);
   assert.equal(active[0].body, 'Workspace');
+});
+
+test('a global switch-on never carries over to a workspace skill of the same name (#576)', async (t) => {
+  const root = await makeTempTree(t);
+  const workspace = path.join(root, 'cloned-repo');
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'deploy', { body: 'My own steps' });
+  await writeSkill(path.join(workspace, '.agents', 'skills'), 'deploy', { body: 'Injected' });
+  const service = makeService({ home });
+
+  // The user ticked their own global `deploy`. The repository's skill wins the
+  // name, but nobody ticked it — so neither reaches the prompt here.
+  assert.deepEqual(await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['deploy'] }), []);
+  const { skills } = await service.listCatalog({ workspaceRoot: workspace, activeSkills: ['deploy'] });
+  assert.deepEqual(
+    skills.map((skill) => [skill.source, skill.status]),
+    [[SKILL_SOURCES.WORKSPACE_AGENTS, SKILL_STATUS.AVAILABLE], [SKILL_SOURCES.USER_SNOTRA, SKILL_STATUS.SHADOWED]]
+  );
+  // Without the repository's skill the global one is on as before.
+  const elsewhere = await service.getActiveSkills({ workspaceRoot: path.join(root, 'other'), activeSkills: ['deploy'] });
+  assert.deepEqual(elsewhere.map((skill) => skill.body), ['My own steps']);
+});
+
+test('a workspace skill switched on in one folder is off in another with the same name (#576)', async (t) => {
+  const root = await makeTempTree(t);
+  const a = path.join(root, 'a');
+  const b = path.join(root, 'b');
+  await writeSkill(path.join(a, '.agents', 'skills'), 'review', { body: 'A' });
+  await writeSkill(path.join(b, '.agents', 'skills'), 'review', { body: 'B' });
+  const service = makeService({ home: path.join(root, 'home') });
+  const prefs = { activeSkills: [], activeWorkspaceSkills: { [path.resolve(a)]: ['review'] } };
+
+  assert.deepEqual((await service.getActiveSkills({ workspaceRoot: a, ...prefs })).map((s) => s.body), ['A']);
+  assert.deepEqual(await service.getActiveSkills({ workspaceRoot: b, ...prefs }), []);
+});
+
+test('binding a selection keeps what the catalogue of this folder cannot see (#576)', async (t) => {
+  const root = await makeTempTree(t);
+  const workspace = path.join(root, 'ws');
+  const home = path.join(root, 'home');
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'deploy');
+  await writeSkill(path.join(home, '.snotra', 'skills'), 'notes');
+  await writeSkill(path.join(workspace, '.agents', 'skills'), 'deploy');
+  await writeSkill(path.join(workspace, '.agents', 'skills'), 'local');
+  const service = makeService({ home });
+  const other = path.resolve(path.join(root, 'other'));
+
+  const bound = await service.bindSelection({
+    workspaceRoot: workspace,
+    // Ticked here: the workspace's `deploy` and `local`; `notes` unticked.
+    selected: ['deploy', 'local'],
+    activeSkills: ['deploy', 'notes'],
+    activeWorkspaceSkills: { [other]: ['review'] },
+  });
+
+  // The global `deploy` is shadowed here and stays as stored; `notes` was
+  // decided here and is off; the ticks go to this folder's list.
+  assert.deepEqual(bound.activeSkills, ['deploy']);
+  assert.deepEqual(bound.activeWorkspaceSkills, {
+    [other]: ['review'],
+    [path.resolve(workspace)]: ['deploy', 'local'],
+  });
+
+  const cleared = await service.bindSelection({ workspaceRoot: workspace, selected: [], ...bound });
+  assert.deepEqual(cleared.activeWorkspaceSkills, { [other]: ['review'] });
 });
 
 // Kein Auto-Anlegen: Wer `~/.agents/skills` nutzt, merkt vom neuen Ort nichts.
@@ -188,17 +258,15 @@ test('gleicher Name mehrfach: der höher priorisierte Fund gewinnt', async (t) =
   await writeSkill(path.join(home, '.agents', 'skills'), 'doppelt', { body: 'Home' });
   const service = makeService({ home });
 
-  const { skills } = await service.listCatalog({
-    workspaceRoot: workspace,
-    activeSkills: ['doppelt'],
-  });
+  const activeWorkspaceSkills = { [path.resolve(workspace)]: ['doppelt'] };
+  const { skills } = await service.listCatalog({ workspaceRoot: workspace, activeWorkspaceSkills });
 
   assert.equal(skills[0].status, SKILL_STATUS.ACTIVE);
   assert.equal(skills[1].status, SKILL_STATUS.SHADOWED);
   assert.match(de(skills[1].detail), /Überdeckt von/);
   assert.ok(de(skills[1].detail).includes(winnerDir));
 
-  const active = await service.getActiveSkills({ workspaceRoot: workspace, activeSkills: ['doppelt'] });
+  const active = await service.getActiveSkills({ workspaceRoot: workspace, activeWorkspaceSkills });
   assert.equal(active.length, 1);
   assert.equal(active[0].body, 'Workspace');
 });
@@ -314,4 +382,25 @@ test('Block-Skalar ohne Inhalt zählt als fehlende description', async (t) => {
 
   assert.equal(skills[0].status, SKILL_STATUS.INVALID);
   assert.equal(de(skills[0].detail), 'Frontmatter ohne description');
+});
+
+test('the per-folder cap keeps the first skills by name, whatever the directory order (#579)', async () => {
+  const dir = path.join(path.resolve('/home/x'), '.snotra', 'skills');
+  const names = Array.from({ length: MAX_SKILLS_PER_DIRECTORY + 5 }, (_, i) => `s${String(i).padStart(3, '0')}`);
+  // Hidden entries first and the rest reversed — the order a file system may hand out.
+  const listing = ['.git', '.cache', ...[...names].reverse()].map((name) => ({ name, isDirectory: () => true }));
+  const fakeFs = {
+    async readdir(target) {
+      if (target === dir) return listing;
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    },
+    async readFile(file) {
+      const name = path.basename(path.dirname(file));
+      return `---\nname: ${name}\ndescription: d\n---\nbody\n`;
+    },
+  };
+  const service = createSkillsService({ fs: fakeFs, path, os: { homedir: () => path.resolve('/home/x') } });
+  const { skills } = await service.listCatalog({});
+  assert.equal(skills.length, MAX_SKILLS_PER_DIRECTORY);
+  assert.deepEqual(skills.map((skill) => skill.name), names.slice(0, MAX_SKILLS_PER_DIRECTORY));
 });
