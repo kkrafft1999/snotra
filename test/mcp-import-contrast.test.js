@@ -1,7 +1,8 @@
 // The import dialog's small secondary texts reach 4.5:1 in both themes
-// (CR-B14-08, WCAG 1.4.3). `--ds-grey-muted` is only allowed from 14px on;
-// below that the texts take `--ds-grey-strong`, and the ratio is computed
-// from tokens.css, so a later change to either value is caught here.
+// (CR-B14-08, WCAG 1.4.3). They sit on --ds-grey-card too, where
+// `--ds-grey-muted` has 4.4:1 only, so they take `--text-muted-strong`, the
+// alias of `--ds-grey-strong` (#610). The ratio is computed from tokens.css,
+// so a later change to either value is caught here.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -37,9 +38,10 @@ function contrast(a, b) {
 
 const SMALL_TEXTS = ['.mcp-import__count', '.mcp-import__id', '.mcp-import__cmd', '.mcp-import__skipped ul'];
 
-test('the small texts of the MCP import use --ds-grey-strong', () => {
+test('the small texts of the MCP import use --text-muted-strong, which is --ds-grey-strong', () => {
+  assert.match(styles, /--text-muted-strong:\s*var\(--ds-grey-strong\)/);
   for (const selector of SMALL_TEXTS) {
-    assert.match(block(styles, selector), /color:\s*var\(--ds-grey-strong\)/, selector);
+    assert.match(block(styles, selector), /color:\s*var\(--text-muted-strong\)/, selector);
   }
 });
 

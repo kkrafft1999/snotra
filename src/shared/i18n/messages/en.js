@@ -366,7 +366,7 @@ module.exports = {
   'settings.applyHint.immediate': 'Changes in this section take effect <strong>immediately</strong>.',
   'settings.applyHint.tools': 'The key is saved with its button, the interpreter on <strong>Apply</strong>.',
   'settings.applyHint.general': 'Switches, appearance and language take effect <strong>immediately</strong>; everything else on <strong>Apply</strong>.',
-  'settings.applyHint.body': 'API keys are stored encrypted on this device and leave the app only in requests to the provider. That holds for every settings section.',
+  'settings.applyHint.body': '<p>API keys are stored encrypted on this device and leave the app only in requests to the provider. That holds for every settings section.</p>',
 
   'settings.version.unknown': 'Version —',
   'settings.version.known': 'Version {version}',
@@ -414,7 +414,7 @@ module.exports = {
 
   // ── Settings: tools ──────────────────────────────────────────────────────
   'settings.python.warning.summary': '<strong>Careful:</strong> <code>run_python</code> runs the model’s code — isolated on macOS and Linux, with your full rights on Windows.',
-  'settings.python.warning.body': '<p>On <strong>macOS and Linux</strong> the code runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains named on the approval card. It can still <strong>read</strong> your other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: the code can read and write anywhere, reach the network and start programs. Snotra shows you the full source before <em>every</em> run for approval, and the card says whether the run is isolated. Only switch this on if you are aware of that.</p>',
+  'settings.python.warning.body': '<p>On <strong>macOS and Linux</strong> the code runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains the run declares — you approve them on the card, except in “Auto”. It can still <strong>read</strong> your other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: the code can read and write anywhere, reach the network and start programs. Outside “Auto”, Snotra shows you the full source for approval before each run, and the card says whether the run is isolated; in “Auto” the code runs without asking. Only switch this on if you are aware of that.</p>',
   'settings.python.toggle': 'Allow Python execution',
   'settings.python.interpreter.label': 'Your own interpreter (optional)',
   'settings.python.interpreter.placeholder': 'e.g. /Users/you/venv/bin/python3',
@@ -430,7 +430,7 @@ module.exports = {
   'settings.python.status.enabled': '{where}: {command}{version}{origin}. run_python is offered to the model.',
 
   'settings.shell.warning.summary': '<strong>Careful:</strong> <code>shell_execute</code> runs the model’s commands — isolated on macOS and Linux, with your full rights on Windows.',
-  'settings.shell.warning.body': '<p>On <strong>macOS and Linux</strong> every command runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains named on the approval card — <code>pip</code> and <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your other files, and tools that verify certificates through the macOS keychain (<code>gh</code>, <code>terraform</code>) cannot reach the network inside it — unless you give them a program allowance below. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: a command can do <strong>everything</strong> you can do in a terminal yourself. Snotra shows you the full command, the shell, the working directory and whether the run is isolated before <em>every</em> run for approval; recursive force-delete, disk operations and rewriting Git history are blocked. In “Auto” mode a command runs without asking. Only switch this on if you are aware of that.</p>',
+  'settings.shell.warning.body': '<p>On <strong>macOS and Linux</strong> every command runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains the call names — you approve them on the card, except in “Auto”; <code>pip</code> and <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your other files, and tools that verify certificates through the macOS keychain (<code>gh</code>, <code>terraform</code>) cannot reach the network inside it — unless you give them a program allowance below. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: a command can do <strong>everything</strong> you can do in a terminal yourself. Outside “Auto”, Snotra shows you the full command, the shell, the working directory and whether the run is isolated for approval before each run; in “Auto” a command runs without asking. Recursive force-delete, disk operations and rewriting Git history are blocked. Only switch this on if you are aware of that.</p>',
   'settings.shell.toggle': 'Allow shell commands',
   'settings.shell.status.unavailable': 'Shell execution is not available in this installation.',
   'settings.shell.status.notFound': 'No shell found{reason}. shell_execute will not be offered.',
@@ -481,7 +481,6 @@ module.exports = {
   'settings.allowances.edit.label': 'Edit the allowance for {program}',
   'settings.allowances.remove': 'Remove',
   'settings.allowances.remove.label': 'Remove the allowance for {program}',
-  'settings.allowances.removed': 'Allowance for {program} removed.',
   'settings.allowances.fact.network': 'Network',
   'settings.allowances.fact.folders': 'Also writes in',
   'settings.allowances.fact.certificates': 'Certificates',
@@ -1000,7 +999,7 @@ module.exports = {
   'tools.desc.run_python': 'Runs a Python 3 program and returns standard output, error output and the exit code. The working directory is the open project folder, so “open(\'data.csv\')” works directly. Use the tool instead of calculating or guessing: evaluations over files, conversions, reshaping data, checking regular expressions or data formats. Every call is a fresh script — there is no state between two calls, and only the standard library is guaranteed to be there. No “pip install”. On macOS and Linux the program runs isolated: it writes only in the project folder and a temporary folder and reaches the network only for the domains it declares.',
 
   'tools.short.shell_execute': 'Runs a command in the shell of the operating system (git, npm, installed CLI tools) and returns the output and the exit code.',
-  'tools.desc.shell_execute': 'Runs a command in the shell of the operating system (macOS/Linux in the user’s login shell, Windows in PowerShell or cmd.exe) and returns standard output, error output and the exit code. That reaches everything the user would do in a terminal themselves: “git status”, “npm run build”, “docker ps”, an installed CLI tool. The working directory is the open project folder or a subfolder of it. One command per call and no state between two calls: a “cd” only takes effect inside the same command (chain with && instead, or set cwd). Not interactive — there is no terminal, waiting for a prompt runs into the time limit; use non-interactive switches and pass input via stdin. Background processes and servers meant to outlive the call are not possible. Recursive force-delete, disk operations and rewriting the Git history are blocked. On macOS and Linux commands run isolated: they write only in the project folder and a temporary folder and reach the network only for the domains on the approval card. Every run needs the user’s approval.',
+  'tools.desc.shell_execute': 'Runs a command in the shell of the operating system (macOS/Linux in the user’s login shell, Windows in PowerShell or cmd.exe) and returns standard output, error output and the exit code. That reaches everything the user would do in a terminal themselves: “git status”, “npm run build”, “docker ps”, an installed CLI tool. The working directory is the open project folder or a subfolder of it. One command per call and no state between two calls: a “cd” only takes effect inside the same command (chain with && instead, or set cwd). Not interactive — there is no terminal, waiting for a prompt runs into the time limit; use non-interactive switches and pass input via stdin. Background processes and servers meant to outlive the call are not possible. Recursive force-delete, disk operations and rewriting the Git history are blocked. On macOS and Linux commands run isolated: they write only in the project folder and a temporary folder and reach the network only for the domains the call names. Outside “Auto” mode every run needs the user’s approval.',
 
   'tools.short.web_search': 'Searches the internet and returns a title, a URL and a short excerpt per hit. It is not meant for reading a page in full.',
   'tools.desc.web_search': 'Searches the internet and returns a compact list of hits (title, URL, short excerpt, a date where available) — not whole pages. Use the tool for anything more recent than your knowledge, or anything you are asked to back up: versions, prices, news, error messages, standards. The query leaves the machine and goes to an external search service.',
@@ -1540,18 +1539,14 @@ module.exports = {
   'contextMenu.info.copyPath': 'Copy path',
   'contextMenu.ok': 'OK',
   'contextMenu.delete': 'Delete…',
-  'contextMenu.openFailed': 'The file could not be opened:',
   'contextMenu.noDialog': 'No dialog available.',
   'contextMenu.delete.confirmTitle': 'Delete “{name}”?',
   'contextMenu.delete.directory': 'The folder and everything in it will be moved to the trash.',
   'contextMenu.delete.file': 'The file will be moved to the trash.',
   'contextMenu.delete.confirm': 'Delete',
   'contextMenu.delete.cancel': 'Cancel',
-  'contextMenu.delete.failed': 'The file could not be deleted:',
   'contextMenu.delete.failedTitle': 'Delete failed',
-  'contextMenu.info.readFailed': 'The information could not be read:',
   'contextMenu.info.unavailable': 'Information not available',
-  'contextMenu.info.showFailed': 'The information could not be shown:',
   // Validation messages from the contract layer (issue #293). They arise in
   // the main process and are shown in the renderer, so they travel as a key
   // plus its placeholders and are put into words here.

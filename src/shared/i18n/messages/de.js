@@ -372,7 +372,7 @@ module.exports = {
   'settings.applyHint.immediate': 'Änderungen in diesem Bereich wirken <strong>sofort</strong>.',
   'settings.applyHint.tools': 'Der Schlüssel wird mit seinem Knopf gespeichert, der Interpreter mit <strong>Übernehmen</strong>.',
   'settings.applyHint.general': 'Schalter, Erscheinungsbild und Sprache wirken <strong>sofort</strong>, alles andere erst mit <strong>Übernehmen</strong>.',
-  'settings.applyHint.body': 'API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den Anbieter. Das gilt für alle Einstellungsbereiche.',
+  'settings.applyHint.body': '<p>API-Keys werden verschlüsselt auf diesem Gerät gespeichert und verlassen die App nur bei Anfragen an den Anbieter. Das gilt für alle Einstellungsbereiche.</p>',
 
   'settings.version.unknown': 'Version —',
   'settings.version.known': 'Version {version}',
@@ -420,7 +420,7 @@ module.exports = {
 
   // ── Settings: tools ────────────────────────────────────────────────────────
   'settings.python.warning.summary': '<strong>Achtung:</strong> <code>run_python</code> führt den Code des Modells aus — isoliert unter macOS und Linux, mit deinen vollen Rechten unter Windows.',
-  'settings.python.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft der Code in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die auf der Freigabekarte stehen. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Der Code kann überall lesen und schreiben, das Netzwerk erreichen und Programme starten. Snotra zeigt dir vor <em>jedem</em> Lauf den vollständigen Quelltext zur Freigabe, und die Karte sagt, ob der Lauf isoliert ist. Schalte das nur ein, wenn dir das bewusst ist.</p>',
+  'settings.python.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft der Code in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die der Lauf angibt — du gibst sie auf der Karte frei, außer in „Auto“. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Der Code kann überall lesen und schreiben, das Netzwerk erreichen und Programme starten. Außerhalb von „Auto“ zeigt dir Snotra vor jedem Lauf den vollständigen Quelltext zur Freigabe, und die Karte sagt, ob der Lauf isoliert ist; in „Auto“ läuft der Code ohne Rückfrage. Schalte das nur ein, wenn dir das bewusst ist.</p>',
   'settings.python.toggle': 'Python-Ausführung erlauben',
   'settings.python.interpreter.label': 'Eigener Interpreter (optional)',
   'settings.python.interpreter.placeholder': 'z. B. /Users/du/venv/bin/python3',
@@ -436,7 +436,7 @@ module.exports = {
   'settings.python.status.enabled': '{where}: {command}{version}{origin}. run_python wird dem Modell angeboten.',
 
   'settings.shell.warning.summary': '<strong>Achtung:</strong> <code>shell_execute</code> führt die Befehle des Modells aus — isoliert unter macOS und Linux, mit deinen vollen Rechten unter Windows.',
-  'settings.shell.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft jeder Befehl in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die auf der Freigabekarte stehen — Installationen mit <code>pip</code> und <code>npm</code> bekommen ihre Registry automatisch. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>, und Werkzeuge, die Zertifikate über den macOS-Schlüsselbund prüfen (<code>gh</code>, <code>terraform</code>), kommen darin nicht ins Netz – es sei denn, du gibst ihnen unten eine Freigabe pro Programm. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Ein Befehl kann <strong>alles</strong>, was du selbst im Terminal kannst. Snotra zeigt dir vor <em>jedem</em> Lauf den vollständigen Befehl, die Shell, den Arbeitsordner und ob der Lauf isoliert ist; rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Im Modus „Auto“ läuft ein Befehl ohne Rückfrage. Schalte das nur ein, wenn dir das bewusst ist.</p>',
+  'settings.shell.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft jeder Befehl in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die der Aufruf nennt — du gibst sie auf der Karte frei, außer in „Auto“; Installationen mit <code>pip</code> und <code>npm</code> bekommen ihre Registry automatisch. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>, und Werkzeuge, die Zertifikate über den macOS-Schlüsselbund prüfen (<code>gh</code>, <code>terraform</code>), kommen darin nicht ins Netz – es sei denn, du gibst ihnen unten eine Freigabe pro Programm. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Ein Befehl kann <strong>alles</strong>, was du selbst im Terminal kannst. Außerhalb von „Auto“ zeigt dir Snotra vor jedem Lauf den vollständigen Befehl, die Shell, den Arbeitsordner und ob der Lauf isoliert ist, zur Freigabe; in „Auto“ läuft ein Befehl ohne Rückfrage. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Schalte das nur ein, wenn dir das bewusst ist.</p>',
   'settings.shell.toggle': 'Shell-Befehle erlauben',
   'settings.shell.status.unavailable': 'Shell-Ausführung ist in dieser Installation nicht verfügbar.',
   'settings.shell.status.notFound': 'Keine Shell gefunden{reason}. shell_execute wird nicht angeboten.',
@@ -487,7 +487,6 @@ module.exports = {
   'settings.allowances.edit.label': 'Freigabe für {program} bearbeiten',
   'settings.allowances.remove': 'Entfernen',
   'settings.allowances.remove.label': 'Freigabe für {program} entfernen',
-  'settings.allowances.removed': 'Freigabe für {program} entfernt.',
   'settings.allowances.fact.network': 'Netzwerk',
   'settings.allowances.fact.folders': 'Schreibt auch in',
   'settings.allowances.fact.certificates': 'Zertifikate',
@@ -1006,7 +1005,7 @@ module.exports = {
   'tools.desc.run_python': 'Führt ein Python-3-Programm aus und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. Arbeitsverzeichnis ist der geöffnete Projektordner, „open(\'daten.csv\')“ funktioniert also direkt. Nutze das Tool, statt zu rechnen oder zu raten: Auswertungen über Dateien, Umrechnungen, Datenumformung, das Prüfen von regulären Ausdrücken oder Datenformaten. Jeder Aufruf ist ein frisches Skript — es gibt keinen Zustand zwischen zwei Aufrufen, und nur die Standardbibliothek ist garantiert vorhanden. Kein „pip install“. Unter macOS und Linux läuft das Programm isoliert: Es schreibt nur im Projektordner und in einem temporären Ordner und erreicht das Netzwerk nur für die Domains, die es angibt.',
 
   'tools.short.shell_execute': 'Führt einen Befehl in der Shell des Betriebssystems aus (git, npm, installierte CLI-Werkzeuge) und liefert Ausgabe und Exit-Code zurück.',
-  'tools.desc.shell_execute': 'Führt einen Befehl in der Shell des Betriebssystems aus (macOS/Linux in der Login-Shell des Nutzers, Windows in PowerShell bzw. cmd.exe) und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. Damit ist alles erreichbar, was der Nutzer im Terminal tun würde: „git status“, „npm run build“, „docker ps“, ein installiertes CLI-Werkzeug. Arbeitsverzeichnis ist der geöffnete Projektordner oder ein Unterordner davon. Ein Befehl pro Aufruf und kein Zustand zwischen zwei Aufrufen: ein „cd“ wirkt nur innerhalb desselben Befehls (verkette stattdessen mit && oder setze cwd). Nicht interaktiv — es gibt kein Terminal, auf eine Eingabeaufforderung zu warten läuft ins Zeitlimit; nutze nicht-interaktive Schalter und gib Eingaben über stdin mit. Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Unter macOS und Linux laufen Befehle isoliert: Sie schreiben nur im Projektordner und in einem temporären Ordner und erreichen das Netzwerk nur für die Domains auf der Freigabekarte. Jeder Lauf braucht die Freigabe des Nutzers.',
+  'tools.desc.shell_execute': 'Führt einen Befehl in der Shell des Betriebssystems aus (macOS/Linux in der Login-Shell des Nutzers, Windows in PowerShell bzw. cmd.exe) und gibt Standardausgabe, Fehlerausgabe und Exit-Code zurück. Damit ist alles erreichbar, was der Nutzer im Terminal tun würde: „git status“, „npm run build“, „docker ps“, ein installiertes CLI-Werkzeug. Arbeitsverzeichnis ist der geöffnete Projektordner oder ein Unterordner davon. Ein Befehl pro Aufruf und kein Zustand zwischen zwei Aufrufen: ein „cd“ wirkt nur innerhalb desselben Befehls (verkette stattdessen mit && oder setze cwd). Nicht interaktiv — es gibt kein Terminal, auf eine Eingabeaufforderung zu warten läuft ins Zeitlimit; nutze nicht-interaktive Schalter und gib Eingaben über stdin mit. Hintergrundprozesse und Server, die über das Ende des Aufrufs hinaus laufen sollen, sind nicht möglich. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Unter macOS und Linux laufen Befehle isoliert: Sie schreiben nur im Projektordner und in einem temporären Ordner und erreichen das Netzwerk nur für die Domains, die der Aufruf nennt. Außerhalb des Modus „Auto“ braucht jeder Lauf die Freigabe des Nutzers.',
 
   'tools.short.web_search': 'Sucht im Internet und liefert Titel, URL und einen kurzen Auszug je Treffer. Zum Lesen einer Seite im Volltext ist es nicht gedacht.',
   'tools.desc.web_search': 'Sucht im Internet und liefert eine kompakte Trefferliste (Titel, URL, kurzer Auszug, ggf. Datum) — keine ganzen Seiten. Nutze das Tool für alles, was aktueller ist als dein Wissensstand oder was du belegen sollst: Versionen, Preise, Nachrichten, Fehlermeldungen, Normen. Die Suchanfrage verlässt den Rechner und geht an einen externen Suchdienst.',
@@ -1546,18 +1545,14 @@ module.exports = {
   'contextMenu.info.copyPath': 'Pfad kopieren',
   'contextMenu.ok': 'OK',
   'contextMenu.delete': 'Löschen…',
-  'contextMenu.openFailed': 'Datei konnte nicht geöffnet werden:',
   'contextMenu.noDialog': 'Kein Dialog verfügbar.',
   'contextMenu.delete.confirmTitle': '„{name}“ löschen?',
   'contextMenu.delete.directory': 'Der Ordner wird mit seinem gesamten Inhalt in den Papierkorb verschoben.',
   'contextMenu.delete.file': 'Die Datei wird in den Papierkorb verschoben.',
   'contextMenu.delete.confirm': 'Löschen',
   'contextMenu.delete.cancel': 'Abbrechen',
-  'contextMenu.delete.failed': 'Datei konnte nicht gelöscht werden:',
   'contextMenu.delete.failedTitle': 'Löschen fehlgeschlagen',
-  'contextMenu.info.readFailed': 'Informationen konnten nicht gelesen werden:',
   'contextMenu.info.unavailable': 'Informationen nicht verfügbar',
-  'contextMenu.info.showFailed': 'Informationen konnten nicht angezeigt werden:',
   // Validierungsmeldungen aus der Contract-Schicht (Issue #293).
   // Connection errors in the MCP status (#338). The model reads the English
   // sentences written next to them in mcp-stdio-transport.js, not these.

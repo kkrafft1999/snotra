@@ -481,13 +481,13 @@ deliberately not used — both require a code signature.
   system.** On **macOS and Linux** the code runs in a sandbox: it can write only
   inside the project folder and a temporary folder, cannot read keys, cloud
   credentials, shell histories or browser data, and reaches the network only for
-  the domains it declares, which the approval card lists. It can still *read*
-  your other files.
+  the domains it declares, which the approval card lists — in *Auto* they are
+  not asked about. It can still *read* your other files.
   On **Windows** there is no sandbox yet: the code runs with your privileges and
-  can read and write anywhere, reach the network and start programs. Either way
-  the approval comes first: Snotra shows you the complete source before every
-  single run, and a pill on the card says whether the run is isolated — "Not
-  isolated" in amber. There is deliberately no "Allow for this session" for
+  can read and write anywhere, reach the network and start programs. Either way,
+  outside *Auto* the approval comes first: Snotra shows you the complete source
+  before each run, and a pill on the card says whether the run is isolated —
+  "Not isolated" in amber. In *Auto* the code runs without asking. There is deliberately no "Allow for this session" for
   execution. If a script runs too long it is terminated after the time limit
   (10 s by default); "Stop" in the chat ends it as well.
 
@@ -516,9 +516,9 @@ deliberately not used — both require a code signature.
   not asked about; `pip install` and `npm install` get their registry
   automatically, anything else the model has to name. On **Windows**
   there is no sandbox yet: a command can do everything you can do yourself in a
-  terminal — read and write anywhere, reach the network, install programs. Snotra
-  shows you the complete command, the shell, the working directory and whether
-  the run is isolated before every single run, and there is deliberately no
+  terminal — read and write anywhere, reach the network, install programs.
+  Outside *Auto*, Snotra shows you the complete command, the shell, the working
+  directory and whether the run is isolated before each run, and there is deliberately no
   "Allow for this session" for execution. What you can do instead is remember
   one **exact, simple command line** for the open folder — "Always allow this
   command" on the card, confirmed in a system dialog: `git status` then runs
@@ -1266,7 +1266,7 @@ The details are in the [security concept](docs/security-concept.md).
   nothing is ever written there) — and the two **execution** tools `run_python`
   and `shell_execute` do not know this boundary at all: it is not Snotra that
   accesses files there, but the interpreter or the shell. Both are therefore off
-  as shipped and need an approval before every run. On macOS and Linux they run
+  as shipped and, outside *Auto*, need an approval before every run. On macOS and Linux they run
   in a sandbox that confines writes to the project folder and limits the network
   to the approved domains (see [The sandbox per operating
   system](#the-sandbox-per-operating-system)); on Windows they do not.

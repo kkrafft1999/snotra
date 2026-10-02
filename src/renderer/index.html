@@ -465,9 +465,15 @@
           <section class="settings-panel" id="panel-settings-security" role="tabpanel" aria-labelledby="tab-settings-security" hidden>
             <p class="settings-security-intro" data-i18n="security.intro">What Snotra may do in this workspace, and why.</p>
             <details class="settings-note">
-              <summary class="settings-note__summary"><span data-i18n="security.note.summary">This page shows what applies. Each line links to where you change it.</span></summary>
+              <summary class="settings-note__summary"><span data-i18n="security.note.summary">Everything here takes effect immediately. Loosening is confirmed in the system dialog.</span></summary>
               <div class="settings-note__body" data-i18n-html="security.note.body">
-                <p>Main works the state out from the same rules that decide every tool call, so this page cannot show something different from what happens. The default mode changes at once, like every permission.</p>
+                <p>Main works the state out from the same rules that decide every tool call, so this page cannot show
+                  something different from what happens. Allowing something for good, deleting a block, switching the
+                  sandbox off, a program allowance and &ldquo;Auto&rdquo; as the default are confirmed in the system
+                  dialog; switching something off or taking it back needs no confirmation.</p>
+                <p>Two tools are not listed because they are part of the basic equipment: <code>list_directory</code>
+                  is the look into the open folder, <code>load_skill</code> fetches the instructions of a skill that is
+                  switched on.</p>
               </div>
             </details>
             <div class="settings-tools-card settings-security-header" id="settings-security-header">
@@ -525,14 +531,15 @@
                   <p>
                     On <strong>macOS and Linux</strong> the code runs in a sandbox: it can write only inside the project
                     folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the
-                    network only for the domains named on the approval card. It can still <strong>read</strong> your
-                    other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and
+                    network only for the domains the run declares &mdash; you approve them on the card, except in
+                    &ldquo;Auto&rdquo;. It can still <strong>read</strong> your other files. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and
                     <code>ripgrep</code>.
                   </p>
                   <p>
                     On <strong>Windows</strong> there is no sandbox yet: the code can read and write anywhere, reach the
-                    network and start programs. Snotra shows you the full source before <em>every</em> run for approval,
-                    and the card says whether the run is isolated. Only switch this on if you are aware of that.
+                    network and start programs. Outside &ldquo;Auto&rdquo;, Snotra shows you the full source for approval
+                    before each run, and the card says whether the run is isolated; in &ldquo;Auto&rdquo; the code runs
+                    without asking. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
@@ -554,18 +561,18 @@
                   <p>
                     On <strong>macOS and Linux</strong> every command runs in a sandbox: it can write only inside the
                     project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and
-                    reaches the network only for the domains named on the approval card &mdash; <code>pip</code> and
-                    <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your
+                    reaches the network only for the domains the call names &mdash; you approve them on the card, except
+                    in &ldquo;Auto&rdquo;; <code>pip</code> and <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your
                     other files, and tools that verify certificates through the macOS keychain (<code>gh</code>,
                     <code>terraform</code>) cannot reach the network inside it &mdash; unless you give them a program allowance below. On Linux the sandbox needs the packages
                     <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.
                   </p>
                   <p>
                     On <strong>Windows</strong> there is no sandbox yet: a command can do <strong>everything</strong> you
-                    can do in a terminal yourself. Snotra shows you the full command, the shell, the working directory
-                    and whether the run is isolated before <em>every</em> run for approval; recursive force-delete, disk
-                    operations and rewriting Git history are blocked. In &ldquo;Auto&rdquo; mode a command runs without
-                    asking. Only switch this on if you are aware of that.
+                    can do in a terminal yourself. Outside &ldquo;Auto&rdquo;, Snotra shows you the full command, the shell,
+                    the working directory and whether the run is isolated for approval before each run; in
+                    &ldquo;Auto&rdquo; a command runs without asking. Recursive force-delete, disk operations and
+                    rewriting Git history are blocked. Only switch this on if you are aware of that.
                   </p>
                 </div>
               </details>
@@ -690,7 +697,7 @@
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
             <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them. Which tools the model may use, and when Snotra asks first, is on the <strong>Security</strong> page.</p>
-            <div class="settings-tools-card">
+            <div class="settings-tools-card" id="settings-python-interpreter-card">
               <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
               <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Security.</p>
               <div class="modal-field-group">
@@ -776,8 +783,8 @@
                   Type a <code>/</code> in the chat and Snotra suggests a fitting skill below the input,
                   based on what you have written so far. Taking it up stays your click.
                   &ldquo;From the descriptions&rdquo; runs on your machine and costs nothing;
-                  &ldquo;Ask the model&rdquo; also understands jargon, but sends the line and the skill
-                  names to the provider and takes a moment.
+                  &ldquo;Ask the model&rdquo; also understands jargon, but sends what you have written before the
+                  <code>/</code> (up to 2,000 characters) and the skill names to the provider and takes a moment.
                 </p>
               </div>
               <div class="settings-panel-models__head">
