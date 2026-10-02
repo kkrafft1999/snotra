@@ -56,8 +56,12 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   assert.equal(await page.evaluate(() => document.getElementById('chat-tool-mode-footer').hidden), true);
   await page.keyboard.press('Escape');
 
-  // The chat switches to "Always ask"; the checkbox offers it for the folder.
-  await page.evaluate(() => window.electronAPI.setToolPermissionMode('ask-all'));
+  // The chat switches to "Always ask" from the menu; the checkbox offers it for
+  // the folder. Through the menu, not the bare API: the menu waits for the
+  // start-up's chat switch, which would otherwise put the chat back at the
+  // folder's "Smart" a moment later and take the checkbox away (#564).
+  await page.click('#btn-chat-tool-mode');
+  await page.click('.chat-tool-mode-option[data-mode="ask-all"]');
   await poll(async () => (await pillMode(page)) === 'ask-all', { what: 'chat at "Always ask"' });
   await page.click('#btn-chat-tool-mode');
   const offer = await page.evaluate(() => ({
