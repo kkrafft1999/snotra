@@ -126,6 +126,9 @@ function setup({ missing = [], onChange, retryMs } = {}) {
     // tests step through debounce and retry with `tick()` and leave it out;
     // workspace-watcher.test.js covers it.
     startRecheckMs: 0,
+    // These tests drive the native recursive watch. The folder-by-folder
+    // watch Linux gets (#648) is covered in directory-watcher-linux.test.js.
+    platform: 'darwin',
   });
   return { fake, clock, changes, watcher };
 }

@@ -335,11 +335,39 @@ limits for tools. Parsing the front matter lives as a pure function in
 That the app notices what happens **next to** it in the file system is the work
 of a single service: `services/directory-watcher.js`. It encapsulates the
 dearly-paid quirks of `fs.watch` — missing target directories, a disappearing
-watch root (macOS goes silent, Windows fires endlessly), the Linux sham with
-`recursive: true`, event avalanches (debouncing with a maximum window), `error`
-events without listeners, and re-arming after a lost event (issues
+watch root (macOS goes silent, Windows fires endlessly), event avalanches
+(debouncing with a maximum window), `error` events without listeners, and
+re-arming after a lost event (issues
 [#126](https://github.com/kkrafft1999/snotra/issues/126),
-[#155](https://github.com/kkrafft1999/snotra/issues/155)).
+[#155](https://github.com/kkrafft1999/snotra/issues/155)). A folder switch drops
+whatever was still waiting to be reported for the folder just left
+([#650](https://github.com/kkrafft1999/snotra/issues/650)).
+
+What it does on each platform
+([#648](https://github.com/kkrafft1999/snotra/issues/648)):
+
+- **macOS and Windows** — one native `fs.watch(…, { recursive: true })` per
+  target (FSEvents, `ReadDirectoryChangesW`). It costs one handle whatever the
+  size of the folder, and it reports by path, so a file replaced by rename is
+  reported like any other.
+- **Linux** — watched folder by folder. Node's `recursive: true` is an emulation
+  there: it puts an inotify watch on every file and every folder, `node_modules/`
+  included, loses every file once it has been replaced by rename (an atomic
+  write, an editor save, git's `HEAD.lock` → `HEAD`), and returns a partial
+  watcher without a word when the kernel's watch budget runs out. Instead, every
+  folder gets one plain watch — inotify reports a change to a child by its name,
+  whatever happens to the child's inode. A folder that a rename brings in gets a
+  watch, and its content is reported, since it may have filled up before the
+  watch was set; one that goes loses its watch and those below it. The walk is
+  asynchronous and breadth first, follows no symbolic links, keeps out of the
+  folders the consumer names (`folderPolicy`), and stops at
+  `LIMITS.MAX_WATCHED_DIRECTORIES` folders per target. At that cap, or when the
+  kernel has no watch left (`ENOSPC`, `EMFILE`), the service says so through
+  `onError` and reports `complete: false`, so the tree reloads coarsely instead
+  of missing a subtree in silence.
+
+`onError` always names the folder whose watch failed. The composition writes it
+to the log, at most one line per watcher and minute.
 
 On top of it sit two thin shells that only say *what* is being watched:
 
@@ -354,10 +382,16 @@ On top of it sit two thin shells that only say *what* is being watched:
   chain upwards. It reports the affected **folders**, so that the file tree does
   not have to reload everything on every event (issue
   [#158](https://github.com/kkrafft1999/snotra/issues/158)). An ignore list keeps
-  the contents of `node_modules/` and `.git/` as well as editor temporary files
-  out; `.git/HEAD` and `.git/index` deliberately get through — they are the sign
-  of a branch switch and report as `complete: false`, whereupon the renderer
-  reloads once, more coarsely, instead of a hundred times individually.
+  the events from the contents of `node_modules/` and `.git/` out — on Linux it
+  also keeps the watches out of those folders, so a `node_modules/` of 20,000
+  files costs none, and `.git` gets one watch of its own without its subfolders.
+  Beyond that it ignores exactly the entries the listing never shows (`.git`,
+  `.DS_Store`, `Thumbs.db`, `desktop.ini`), from the one definition in
+  `shared/runtime/hidden-entries.js`; an editor's `notes.md~` is listed, so it
+  is reported too (#650). `.git/HEAD`, `.git/index` and `.git/ORIG_HEAD`
+  deliberately get through — they are the sign of a branch switch, a merge or a
+  rebase and report as `complete: false`, whereupon the renderer reloads once,
+  more coarsely, instead of a hundred times individually.
 
 The path to the tree: `fs:tree-changed`
 (`shared/contracts/workspace-tree.js`) → `FileTree.js` reloads the reported

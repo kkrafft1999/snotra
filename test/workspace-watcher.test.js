@@ -113,6 +113,9 @@ function setupWorkspace({ missing = [] } = {}) {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    // The native recursive watch. Linux watches folder by folder (#648),
+    // covered in directory-watcher-linux.test.js.
+    platform: 'darwin',
   });
   /** Ein Ereignis am Ziel auslösen, wie `fs.watch` es meldet. */
   const feuern = (filename, eventType = 'rename') => fake.aktiv(WS).handler(eventType, filename);
@@ -151,6 +154,7 @@ test('kann die Plattform nicht rekursiv beobachten, bleibt ein flacher Wächter'
     path,
     onChange: () => {},
     onError: (error) => fehler.push(error.code),
+    platform: 'darwin',
   });
 
   watcher.watchWorkspace(WS);
@@ -291,14 +295,19 @@ test('der Inhalt von node_modules und .git bleibt draußen, die Ordner selbst ni
   assert.equal(isIgnoredWorkspacePath(path.join('.git', 'objects', 'ab', '123')), true);
   // Entsteht node_modules neu, gehört es in den Baum.
   assert.equal(isIgnoredWorkspacePath('node_modules'), false);
-  assert.equal(isIgnoredWorkspacePath('.git'), false);
+  // `.git` itself is never listed, so it is noise like `.DS_Store` (#650).
+  assert.equal(isIgnoredWorkspacePath('.git'), true);
   // Ein Ordner, der nur so heißt wie eine Datei darin, bleibt unberührt.
   assert.equal(isIgnoredWorkspacePath(path.join('src', 'app.js')), false);
 });
 
 test('Editor- und Systemkram wird nicht gemeldet', () => {
-  for (const noise of ['.DS_Store', path.join('src', '.DS_Store'), '4913', '.app.js.swp', 'app.js~']) {
+  for (const noise of ['.DS_Store', path.join('src', '.DS_Store'), 'Thumbs.db', 'desktop.ini']) {
     assert.equal(isIgnoredWorkspacePath(noise), true, noise);
+  }
+  // An editor's leftovers are listed in the tree, so they are reported (#650).
+  for (const listed of ['4913', '.app.js.swp', 'app.js~']) {
+    assert.equal(isIgnoredWorkspacePath(listed), false, listed);
   }
   assert.equal(isIgnoredWorkspacePath('swap.js'), false, 'kein Fehlalarm bei normalen Namen');
 });
