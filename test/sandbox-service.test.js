@@ -444,7 +444,7 @@ test('an unavailable sandbox prepares nothing — the runner falls back', async 
 
 // ── Global skill folders (#548, #650) ───────────────────────────────────────
 
-test('the global skill folders are denied for writing when the open folder contains them', async () => {
+test('the global skill folders are denied for writing when the open folder contains them', posixOnly, async () => {
   const skills = ['/home/u/.snotra/skills', '/home/u/.agents/skills'];
   const { service, calls } = makeService({ deps: { protectedWritePaths: skills } });
 
@@ -458,7 +458,7 @@ test('the global skill folders are denied for writing when the open folder conta
   assert.equal(skills.some((dir) => denied.includes(dir)), false);
 });
 
-test('a program allowance that names a skill folder keeps it writable', async () => {
+test('a program allowance that names a skill folder keeps it writable', posixOnly, async () => {
   const { service, calls } = makeService({ deps: { protectedWritePaths: ['/home/u/.agents/skills', '/home/u/.snotra/skills'] } });
   await service.prepare({
     command: 'ls',
