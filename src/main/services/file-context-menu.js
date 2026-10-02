@@ -37,14 +37,19 @@ const LAUNCHABLE_EXTENSIONS = Object.freeze({
     '.exe', '.com', '.bat', '.cmd', '.ps1', '.psm1', '.vbs', '.vbe', '.vb', '.js', '.jse', '.wsf',
     '.wsh', '.ws', '.wsc', '.sct', '.hta', '.msi', '.msp', '.msc', '.lnk', '.url', '.scr', '.pif',
     '.cpl', '.reg', '.jar', '.application', '.appref-ms', '.chm', '.settingcontent-ms',
+    // The python.org, Strawberry Perl and RubyInstaller setups associate
+    // these with their interpreter, which runs them; run_python writes .py.
+    '.py', '.pyw', '.pyz', '.pl', '.rb',
   ]),
   darwin: Object.freeze([
     '.app', '.command', '.tool', '.sh', '.zsh', '.bash', '.csh', '.ksh', '.tcsh', '.terminal',
     '.workflow', '.action', '.pkg', '.mpkg', '.scpt', '.scptd', '.applescript', '.jar',
     '.fileloc', '.inetloc',
+    // Python Launcher, which the python.org installer sets up, runs them.
+    '.py', '.pyw', '.pyz',
   ]),
   linux: Object.freeze([
-    '.desktop', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.run', '.appimage', '.jar',
+    '.desktop', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.run', '.appimage', '.jar', '.py',
   ]),
 });
 
@@ -86,9 +91,12 @@ function createFileContextMenu({
   /**
    * Whether "Open" would run the path rather than show it (#649): a program
    * or script by its extension, an `.app` bundle, or — on macOS and Linux — a
-   * regular file with an execute bit. A link counts as what it points to, so
-   * `notes` → `tool.app` asks as well. Unreadable or gone: decided by the
-   * name alone, and shell.openPath reports the rest.
+   * regular file without an extension that has an execute bit. A file with
+   * an extension is opened by its type, so `report.pdf` from an exFAT stick,
+   * where everything is 0777, still opens in a viewer and does not ask. A
+   * link counts as what it points to, so `notes` → `tool.app` asks as well.
+   * Unreadable or gone: decided by the name alone, and shell.openPath reports
+   * the rest.
    */
   async function opensAsProgram(filePath) {
     const names = [filePath];
@@ -101,7 +109,8 @@ function createFileContextMenu({
       // Decided by the name below.
     }
     if (names.some((name) => launchable.has(launchExtension(name, platform)))) return true;
-    return platform !== 'win32' && Boolean(stats?.isFile()) && (stats.mode & 0o111) !== 0;
+    const withoutExtension = names.every((name) => launchExtension(name, platform) === '');
+    return platform !== 'win32' && withoutExtension && Boolean(stats?.isFile()) && (stats.mode & 0o111) !== 0;
   }
 
   /**

@@ -224,3 +224,21 @@ test('elsewhere the first EPERM of the rename is the answer and the file keeps i
   assert.equal(await fs.readFile(path.join(workspace, 'a.txt'), 'utf8'), 'old');
   assert.deepEqual(await listTmpFiles(workspace), []);
 });
+
+test('a new file is not written through a folder swapped for a link out of the workspace', { skip: process.platform === 'win32' }, async (t) => {
+  const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-new-file-swap-')));
+  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  const ws = path.join(base, 'ws');
+  const outside = path.join(base, 'outside');
+  await fs.mkdir(path.join(ws, 'docs'), { recursive: true });
+  await fs.mkdir(outside);
+  const svc = createFsService({ fs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 });
+  // The plan saw a real folder; then a run swaps it for a link out.
+  const resolved = await svc.resolveWorkspacePathForAccess(ws, 'docs/new.md');
+  assert.equal(resolved.error, undefined);
+  await fs.rm(path.join(ws, 'docs'), { recursive: true });
+  await fs.symlink(outside, path.join(ws, 'docs'));
+  const out = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'docs/new.md', content: 'x\n' }, ws));
+  assert.ok(out.error, 'the write is refused');
+  assert.deepEqual(await fs.readdir(outside), []);
+});

@@ -35,7 +35,6 @@ const {
   createWorkspacePdfResult,
   createWorkspacePdfError,
 } = require('../../shared/contracts/workspace-pdf');
-const { constants: FS_CONSTANTS } = require('fs');
 const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
   RegexSearchTimeoutError,
@@ -1179,6 +1178,17 @@ function createFsService({
    * `~/.agents`, …) does not turn its files into project files. Workspace
    * skills under `<workspace>/.agents/skills` are not in this list.
    */
+  /**
+   * macOS and Windows file systems ignore case by default, and `realpath`
+   * only corrects the case of what exists: with `~/.snotra/skills` not
+   * created yet, `.snotra/Skills/demo/SKILL.md` would pass a case-sensitive
+   * comparison and create the global skill under its real name. A deny check
+   * errs on the safe side, so it compares folded there (#650).
+   */
+  const foldCase = platform === 'darwin' || platform === 'win32'
+    ? (p) => p.normalize('NFC').toLowerCase()
+    : (p) => p;
+
   async function isInGlobalSkillRoot(absPath) {
     const roots = Array.isArray(globalSkillRoots)
       ? globalSkillRoots.filter((dir) => typeof dir === 'string' && dir)
@@ -1203,7 +1213,7 @@ function createFsService({
       }
       for (const root of spellings) {
         for (const candidate of [target, realTarget]) {
-          if (candidate && containsPath(root, candidate)) return true;
+          if (candidate && containsPath(foldCase(root), foldCase(candidate))) return true;
         }
       }
     }
@@ -1500,8 +1510,8 @@ function createFsService({
    * path is checked against the real workspace root right here, the temporary
    * file is created next to it exclusively, and the rename retries Windows'
    * transient locks like every other atomic writer. A file that does not
-   * exist yet is written where it was named; its folder was checked by
-   * realpath on the way in.
+   * exist yet is written into the real path of its folder, checked here
+   * again as well.
    *
    * A hard link (`nlink > 1`) still loses its other names: they keep the old
    * content, because the rename puts a new file in place of this name.
@@ -1525,10 +1535,16 @@ function createFsService({
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
     }
-    if (mode !== null) {
-      const realRoot = await fs.realpath(path.resolve(root));
-      if (!containsPath(realRoot, target)) throw new Error(WORKSPACE_TOOL_LABELS.outside);
+    const realRoot = await fs.realpath(path.resolve(root));
+    if (mode === null) {
+      // A new file: its folder was checked on the way in, but a run in the
+      // sandbox may have swapped it for a link since. So the folder is
+      // resolved and checked again here, and the file goes into the folder
+      // that was checked.
+      const realDir = await fs.realpath(path.dirname(absPath));
+      target = path.join(realDir, path.basename(absPath));
     }
+    if (!containsPath(realRoot, target)) throw new Error(WORKSPACE_TOOL_LABELS.outside);
     const suffix = `${process.pid.toString(36)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const tmpPath = path.join(path.dirname(target), `.${path.basename(target)}.snotra-tmp-${suffix}`);
     try {
@@ -1613,6 +1629,10 @@ function createFsService({
           });
         }
       }
+      // Checked again right before the folders are created: `mkdir -p`
+      // follows a link a run may have put in the way since the plan (#642).
+      const checked = await assertPathAccessibleInWorkspace(root, absPath);
+      if (checked.error) return JSON.stringify({ error: checked.error });
       await fs.mkdir(path.dirname(absPath), { recursive: true });
       await writeFileAtomic(absPath, args.content, root);
       return JSON.stringify({
@@ -2836,7 +2856,7 @@ function createFsService({
       recursive: true,
       force: false,
       dereference: false,
-      mode: FS_CONSTANTS.COPYFILE_EXCL,
+      mode: fsConstants.COPYFILE_EXCL,
       filter,
     };
     if (target.kind === 'directory') {

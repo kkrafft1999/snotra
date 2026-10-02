@@ -542,10 +542,12 @@ a link — "Open" is offered, and the trash takes the link, not its target.
 it in its app"; for a program or script it means "run it", with the user's full
 rights and outside the shell switch (#102) and the sandbox (#329). So before
 `openPath` the menu checks the target — by extension per platform
-(`LAUNCHABLE_EXTENSIONS`: `.exe`, `.bat`, `.ps1`, `.lnk`, `.url` … on Windows,
-plus `PATHEXT`; `.app`, `.command`, `.sh`, `.pkg`, `.scpt` … on macOS; `.desktop`,
-`.sh`, `.AppImage` … on Linux), following a link to what it points to, and on
-macOS and Linux a regular file with an execute bit — and asks natively first,
+(`LAUNCHABLE_EXTENSIONS`: `.exe`, `.bat`, `.ps1`, `.lnk`, `.url`, `.py` … on
+Windows, plus `PATHEXT`; `.app`, `.command`, `.sh`, `.pkg`, `.scpt`, `.py` … on
+macOS; `.desktop`, `.sh`, `.AppImage` … on Linux), following a link to what it
+points to, and on macOS and Linux a regular file *without* an extension that has
+an execute bit (a `report.pdf` from an exFAT stick, where everything is 0777,
+opens by its type and does not ask) — and asks natively first,
 "Cancel" as default and Escape answer. Files Snotra writes carry no
 Mark-of-the-Web and no quarantine attribute, so SmartScreen and Gatekeeper would
 not ask. A failed `openPath` (no app for the type) shows an error box. Every

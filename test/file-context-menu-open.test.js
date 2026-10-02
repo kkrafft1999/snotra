@@ -213,3 +213,27 @@ test('with the real file system: an executable script asks, a plain text file do
   assert.match(calls.dialogs[0].message, /“build”/);
   assert.deepEqual(calls.openPath, [text]);
 });
+
+test('a document with an execute bit opens by its type and does not ask (#649)', async () => {
+  // exFAT, NTFS and SMB mounts and many zips give every file 0777.
+  for (const platform of ['darwin', 'linux']) {
+    const { menu, calls } = createMenu({ platform, fsOptions: { mode: 0o777 } });
+    await openItem(menu, '/mnt/stick/report.pdf').click();
+    assert.deepEqual(calls.dialogs, [], platform);
+    assert.deepEqual(calls.openPath, ['/mnt/stick/report.pdf'], platform);
+  }
+});
+
+test('Python scripts ask on every platform; Perl and Ruby on Windows (#649)', async () => {
+  const cases = [
+    ['win32', 'C:\\ws\\tool.py'], ['win32', 'C:\\ws\\tool.pyw'], ['win32', 'C:\\ws\\app.pyz'],
+    ['win32', 'C:\\ws\\x.pl'], ['win32', 'C:\\ws\\x.rb'],
+    ['darwin', '/ws/tool.py'], ['darwin', '/ws/tool.pyw'], ['linux', '/ws/tool.py'],
+  ];
+  for (const [platform, filePath] of cases) {
+    const { menu, calls } = createMenu({ platform });
+    await openItem(menu, filePath).click();
+    assert.equal(calls.dialogs.length, 1, `${platform} ${filePath}`);
+    assert.deepEqual(calls.openPath, [], `${platform} ${filePath}`);
+  }
+});

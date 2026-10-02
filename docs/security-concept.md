@@ -222,7 +222,8 @@ stored with the history in the encrypted store.
   quarantine attribute, so SmartScreen and Gatekeeper do not step in. So main
   asks natively before it opens a program or script — recognised by its
   extension per platform, an `.app` bundle, a link to either, or on macOS and
-  Linux a regular file with an execute bit — naming the risk, with "Cancel" as
+  Linux a regular file without an extension that has an execute bit — naming
+  the risk, with "Cancel" as
   default. Ordinary documents open directly. Whether the path is a folder, which
   shapes "Open" and the delete confirmation, main determines itself with
   `lstat`; the renderer sends only the path, and that is used exactly as sent.

@@ -132,3 +132,29 @@ test('a workspace skill is a project file and stays writable', async (t) => {
     await fs.writeFile(path.join(local, 'SKILL.md'), SKILL_TEXT, 'utf8');
   }
 });
+
+test('a case variant of a global skill folder that does not exist yet is refused where case is ignored', async (t) => {
+  const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-global-skill-case-')));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  // Neither skills folder exists yet: realpath cannot correct the case.
+  const snotraSkills = path.join(home, '.snotra', 'skills');
+  const agentsSkills = path.join(home, '.agents', 'skills');
+  for (const platform of ['darwin', 'win32']) {
+    const fsService = createFsService({
+      fs,
+      path,
+      maxReadFileBytes: 1024 * 1024,
+      maxWriteFileBytes: 1024 * 1024,
+      platform,
+      globalSkillRoots: [snotraSkills, agentsSkills],
+    });
+    const registry = createWorkspaceToolRegistry({ fsService });
+    const planner = createToolCallPlanner({ fsService, fs, path, canTrash: false });
+    for (const target of ['.snotra/Skills/demo/SKILL.md', '.agents/SKILLS/demo/SKILL.md', path.join(home, '.Snotra', 'skills', 'x', 'SKILL.md')]) {
+      const args = { relative_path: target, content: 'INJECTED\n' };
+      const plan = await planner.plan(registry.getDefinition('write_file_text'), args, { workspaceRoot: home, skillRoots: [] });
+      assert.equal(plan.reason, 'hard_limit', `${platform} ${target}`);
+      assert.match(plan.error, READ_ONLY, `${platform} ${target}`);
+    }
+  }
+});
