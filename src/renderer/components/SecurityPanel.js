@@ -9,7 +9,7 @@ import {
   linkLabel,
 } from '../utils/security-overview-view.js';
 import { connectionStatusElement } from '../utils/mcp-connection-view.js';
-import { initWorkspaceModeSetting, SECURITY_PAGE_IDS } from './WorkspaceModeSetting.js';
+import { initWorkspaceModeSetting } from './WorkspaceModeSetting.js';
 
 /**
  * Settings › Security (#448, #449): what Snotra may do in the open workspace,
@@ -98,7 +98,7 @@ export function initSecurityPanel({
     return { open() {}, close() {}, refresh: async () => {} };
   }
 
-  const modeSetting = initWorkspaceModeSetting({ toolPermissions, ids: SECURITY_PAGE_IDS });
+  const modeSetting = initWorkspaceModeSetting({ toolPermissions });
   const expanded = new Set();
   let overview = null;
   // What was drawn last: an update that changes nothing redraws nothing,
@@ -695,6 +695,9 @@ export function initSecurityPanel({
 
   function close() {
     isOpen = false;
+    // A "Not saved" belongs to an attempt that is over once the page goes;
+    // the next visit starts without it.
+    modeSetting.reset();
     clearTimeout(pendingTimer);
     pendingTimer = null;
     // A form that was open goes with the page: the next open draws afresh

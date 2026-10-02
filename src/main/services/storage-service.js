@@ -782,25 +782,48 @@ function createStorageService({
    * seinen gespeicherten Wert — sonst loeschte das Umbenennen eines Servers
    * dessen Token, weil die Oberflaeche ihn gar nicht kennt und nicht
    * zuruecksenden kann.
+   *
+   * No entry disappears without a word (CR-B14-02): a `keep` with nothing
+   * stored under its name, or one that would flip the stored value between
+   * secret and plain text, is refused — the renderer cannot know the value,
+   * so changing either takes a new one. An empty secret value has nothing to
+   * encrypt and counts as "no value"; it is stored as an empty value, unless
+   * it would replace a stored secret, which it never silently does.
    */
   async function saveMcpServer(input) {
-    const { ok, value, env, errors } = validateMcpServerInput(input);
+    const { ok, value, env, create, errors } = validateMcpServerInput(input);
     if (!ok) return { ok: false, errors };
 
     return withFileLock(getMcpConfigPath(), async () => {
       const servers = await readMcpStoredServers({ forUpdate: true });
       const previous = servers.find((server) => server.id === value.id);
+      // A new server must not take over an existing one — with its token and
+      // its switch (CR-B14-03). Decided here, under the lock, not by the form.
+      if (create && previous) {
+        return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
+      }
       const storedEnv = {};
+      const keepMissing = [];
+      const keepChanged = [];
+      const emptySecrets = [];
       const unencryptable = [];
 
       for (const entry of env) {
+        const before = previous?.env?.[entry.key];
+        const storedSecret = typeof before?.enc === 'string';
         if (entry.keep) {
-          const before = previous?.env?.[entry.key];
-          if (before) storedEnv[entry.key] = before;
+          if (!before) keepMissing.push(entry.key);
+          else if (storedSecret !== entry.secret) keepChanged.push(entry.key);
+          else storedEnv[entry.key] = before;
           continue;
         }
         if (!entry.secret) {
           storedEnv[entry.key] = { value: entry.value };
+          continue;
+        }
+        if (!entry.value) {
+          if (storedSecret) emptySecrets.push(entry.key);
+          else storedEnv[entry.key] = { value: '' };
           continue;
         }
         const enc = encryptIfPossible(entry.value);
@@ -811,14 +834,15 @@ function createStorageService({
         storedEnv[entry.key] = { enc };
       }
 
-      if (unencryptable.length > 0) {
-        // Lieber gar nicht speichern als ein Token im Klartext ablegen. Die
-        // Meldung nennt die Schluessel, niemals die Werte.
-        return {
-          ok: false,
-          errors: [createMessage('mcp.error.noSecureStorage', { names: unencryptable.join(', ') })],
-        };
-      }
+      // Die Meldungen nennen die Schluessel, niemals die Werte.
+      const names = (list) => ({ names: list.join(', ') });
+      const refusals = [];
+      if (keepMissing.length > 0) refusals.push(createMessage('mcp.error.envKeepMissing', names(keepMissing)));
+      if (keepChanged.length > 0) refusals.push(createMessage('mcp.error.envKeepChanged', names(keepChanged)));
+      if (emptySecrets.length > 0) refusals.push(createMessage('mcp.error.envSecretEmpty', names(emptySecrets)));
+      // Lieber gar nicht speichern als ein Token im Klartext ablegen.
+      if (unencryptable.length > 0) refusals.push(createMessage('mcp.error.noSecureStorage', names(unencryptable)));
+      if (refusals.length > 0) return { ok: false, errors: refusals };
 
       // Der Tool-Katalog gehoert dem Server, nicht dem Formular: schickt die
       // Oberflaeche keinen mit (sie kennt ihn nur bei laufender Verbindung),

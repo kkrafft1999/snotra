@@ -45,33 +45,47 @@ export function createInstantStatus(el) {
  * control ends up showing what is stored — the new value on success, the
  * previous one on failure.
  *
- * `read` gives the value the control is showing, `write` puts one back. Only
- * the latest change decides: flipping twice quickly must not let the first,
- * slower answer undo the second.
+ * `read` gives the value the control is showing, `write` puts one back.
+ *
+ * Saves run one after another, never side by side, so the store ends up at
+ * the last value asked for. Every save that lands moves `confirmed`, even when
+ * a newer change is already waiting: flipped on and off quickly, with the
+ * first save landing and the second failing, the control goes back to "on" —
+ * what the store holds — not to the value before both (CR-B14-09). Only the
+ * latest change speaks in the status.
  */
 function bindInstant({ statusEl, targets, read, write, save }) {
   const status = createInstantStatus(statusEl);
   /** The value the store is known to hold — where a failed save returns to. */
   let confirmed = read();
   let latest = 0;
+  let queue = Promise.resolve();
 
-  async function run() {
-    const mine = ++latest;
-    const value = read();
+  async function attempt(value, mine) {
     let ok;
     try {
       ok = (await save(value)) !== false;
     } catch {
       ok = false;
     }
+    if (ok) confirmed = value;
     if (mine !== latest) return;
     if (ok) {
-      confirmed = value;
       status.saved();
     } else {
       write(confirmed);
       status.failed();
     }
+  }
+
+  function run() {
+    const mine = ++latest;
+    // The value of this change, read now: by the time its turn comes the
+    // control may already show the next one.
+    const value = read();
+    // A write that throws must not stall the saves queued behind it.
+    queue = queue.then(() => attempt(value, mine)).catch(() => {});
+    return queue;
   }
 
   for (const target of targets) {

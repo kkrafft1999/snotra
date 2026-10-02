@@ -334,8 +334,10 @@ function presetIdentityKey(preset, providerOrView) {
   // Zwei Zeilen mit demselben Modell, aber verschiedenen Servern sind zwei
   // verschiedene Eintraege (Issue #202) — sonst lehnt die Liste den zweiten
   // als Dublette ab.
-  if (hasPresetConnection(providerOrView) || providerOrView?.connectionPerPreset) {
-    parts.push(preset.connection?.baseUrl || '');
+  // The renderer's provider view carries the flag under `form` (CR-B14-05);
+  // an address without its trailing slash is the same server.
+  if (hasPresetConnection(providerOrView) || providerOrView?.form?.connectionPerPreset === true) {
+    parts.push(normalizeBaseUrl(preset.connection?.baseUrl || providerOrView?.defaultBaseUrl || ''));
   }
   const fields = providerOrView?.presentation?.presetFields
     || providerOrView?.presetFields;

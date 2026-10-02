@@ -111,6 +111,7 @@ function createPythonRunnerService({
         child = spawn(command, [...args, '--version'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           env: childEnv(),
+          windowsHide: true,
         });
       } catch (e) {
         resolve({ ok: false, error: e?.message || createMessage('runner.error.startFailed') });

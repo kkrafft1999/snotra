@@ -142,6 +142,16 @@ test('zwei Namen, die auf dieselbe Kennung fallen, bleiben unterscheidbar', () =
   assert.equal(candidates[1].conflict, false, 'das ist kein Konflikt mit Gespeichertem');
 });
 
+test('only one entry of a block may replace a stored server (CR-B16-07)', () => {
+  const block = JSON.stringify({
+    mcpServers: { GitHub: { command: 'a' }, github: { command: 'b' } },
+  });
+  const { candidates } = parseMcpServersBlock(block, { existingIds: ['github'] });
+  assert.deepEqual(candidates.map((c) => c.id), ['github', 'github-2']);
+  assert.deepEqual(candidates.map((c) => c.conflict), [true, false]);
+  assert.ok(candidates[1].notes.some((n) => n.key === 'mcpImport.note.idTaken' && n.params.id === 'github-2'));
+});
+
 test('token-artige Werte sind als geheim vorgemerkt, harmlose nicht', () => {
   const block = JSON.stringify({
     mcpServers: {
@@ -178,6 +188,11 @@ test('leere Werte und Platzhalter werden angesprochen', () => {
     (n) => n.key === 'mcpImport.note.envValueEmpty' && n.params.name === 'A_TOKEN'));
   assert.ok(candidates[0].notes.some(
     (n) => n.key === 'mcpImport.note.envPlaceholder' && n.params.name === 'B_TOKEN'));
+  // An empty value has nothing to encrypt, so it is not promised as a secret
+  // (CR-B14-02); the placeholder still is one.
+  const env = Object.fromEntries(candidates[0].env.map((entry) => [entry.key, entry]));
+  assert.equal(env.A_TOKEN.secret, false);
+  assert.equal(env.B_TOKEN.secret, true);
 });
 
 test('kaputtes JSON erzeugt eine verständliche Meldung statt eines stillen Fehlschlags', () => {

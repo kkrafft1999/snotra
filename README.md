@@ -599,6 +599,8 @@ you can switch it off for that folder under Settings › Security › *Execute* 
 *Sandbox for this workspace*. It applies to that one folder, never globally and never by default.
 You confirm it in a system dialog, and it is stored with your permissions rather
 than in the folder, so a checked-out repository cannot switch it off for itself.
+That needs encrypted storage (`safeStorage`); where the system has none, the
+switch stays on and the tile says why.
 From then on the approval card says "Not isolated" with the reason and a link
 back to the setting, and the model is told that the run was not isolated. In
 "Auto" mode such runs happen without asking; the mode pill in the chat bar then
@@ -1146,23 +1148,25 @@ transport). Servers reachable only over HTTP or SSE do not work yet.
 
 | Field | Meaning |
 | ---- | --------- |
-| **Identifier** | Lowercase letters, digits, `.`, `-`, `_`. It later sits inside the tool name and cannot be changed afterwards |
+| **Identifier** | Lowercase letters, digits, `.`, `-`, `_`. It later sits inside the tool name and cannot be changed afterwards; adding a server under an identifier that is already taken is refused |
 | **Display name** | Freely chosen, only for the list |
 | **Command** and **arguments** | What gets started, e.g. `npx` with `-y @modelcontextprotocol/server-github` |
-| **Working directory** | Optional; empty means the project folder |
+| **Working directory** | Optional; empty means your home folder, and a relative path starts from there |
 | **Environment variables** | Name/value pairs for the process |
 
 **Environment variables are secret by default.** A secret value is stored
 encrypted via Electron's `safeStorage` and is not displayed afterwards — only
-replaced or deleted. Anyone who deliberately wants to keep a value readable (say
+replaced or deleted. Renaming such a variable or keeping it readable takes the
+value again. Anyone who deliberately wants to keep a value readable (say
 `LANG=de_DE`) unticks the box; it then sits in the configuration in plain text.
 Forgetting should not be the expensive case. If encryption is not possible on the
 system, nothing is stored at all rather than putting a token down in the open.
 
-**"Test connection"** starts the server once and shows whether
+**"Test connection"** starts the saved server once and shows whether
 it responds and which tools it offers — or an understandable error message
 including `stderr` if it does not start. Its tools are switched on and off one
 by one under Settings › Security › *External services*, like every other tool.
+While the form holds unsaved changes, the button waits — save them first.
 
 ### Importing servers
 
@@ -1174,7 +1178,8 @@ appears below.
 
 The preview names, for each entry, the name, the identifier derived from it and
 the start command, plus the points that require a decision: values flagged as
-secret (key names such as `*_TOKEN` or known token formats), placeholders that
+secret (key names such as `*_TOKEN` or known token formats) and those that will
+be stored in plain text, the working directory, placeholders that
 have not been filled in, and identifiers that would replace an existing server.
 Entries that will not work — HTTP/SSE transport, missing command — are listed
 below with a reason, instead of quietly disappearing. Every entry can be

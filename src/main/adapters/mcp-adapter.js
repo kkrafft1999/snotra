@@ -25,7 +25,6 @@
 const {
   fitsMcpToolNameLimit,
   mcpRiskClassesFor,
-  parseQualifiedMcpToolName,
   qualifiedMcpToolName,
 } = require('../../shared/contracts/mcp');
 const { createMessage } = require('../../shared/contracts/message');
@@ -38,24 +37,46 @@ const MAX_RESULT_CHARS = 100_000;
  * Nicht-Text (Bilder, eingebettete Ressourcen) wird benannt statt eingebettet:
  * Bild-Anhaenge aus Tool-Ergebnissen sind ein eigenes Thema (#84/#85), und ein
  * base64-Block im Tool-Ergebnis waere ein stiller Kontextfresser.
+ *
+ * `structuredContent` counts only when the blocks carry no text (CR-B16-05):
+ * MCP asks a server that returns structured content to put the same JSON into
+ * a text block as well, so attaching both paid for every result twice — and
+ * the structured part went past the cap below.
  */
-function renderContent(content) {
+function renderContent(content, structuredContent) {
   const parts = [];
+  let hasText = false;
   for (const block of Array.isArray(content) ? content : []) {
     if (!block || typeof block !== 'object') continue;
     if (block.type === 'text' && typeof block.text === 'string') {
       parts.push(block.text);
+      hasText = true;
       continue;
     }
     if (block.type === 'resource' && typeof block.resource?.text === 'string') {
       parts.push(block.resource.text);
+      hasText = true;
       continue;
     }
     parts.push(`[content of type "${String(block.type || 'unknown')}" is not supported]`);
   }
+  if (!hasText && structuredContent !== undefined) {
+    let serialized;
+    try {
+      serialized = JSON.stringify(structuredContent);
+    } catch {
+      serialized = undefined;
+    }
+    if (typeof serialized === 'string') parts.push(serialized);
+  }
   const text = parts.join('\n');
   if (text.length <= MAX_RESULT_CHARS) return { text, truncated: false };
   return { text: `${text.slice(0, MAX_RESULT_CHARS)}\n… [output truncated]`, truncated: true };
+}
+
+/** Erster Satz eines Servertexts — mehr traegt die Zeile in der Liste nicht. */
+function firstSentence(text) {
+  return String(text ?? '').split(/(?<=[.!?])\s/)[0];
 }
 
 /**
@@ -66,11 +87,6 @@ function renderContent(content) {
  * dabei unangetastet, der ist nicht unserer. Die Fassung fuer den Bildschirm
  * entsteht getrennt davon aus `tools.mcp.*` (#291).
  */
-/** Erster Satz eines Servertexts — mehr traegt die Zeile in der Liste nicht. */
-function firstSentence(text) {
-  return String(text ?? '').split(/(?<=[.!?])\s/)[0];
-}
-
 function describeTool(tool, serverLabel) {
   const own = tool.description || tool.title || '';
   const origin = `Via the MCP server "${serverLabel}".`;
@@ -140,18 +156,18 @@ function createMcpAdapter({ mcpService } = {}) {
       shortDescriptionParams: { server: serverLabel, text: firstSentence(own) },
       parameters: tool.inputSchema,
       mcp: { serverId: tool.serverId, toolName: tool.name },
+      // Called by the ids it was built from, not by reading its own name back
+      // (CR-B16-07): that name is for the model and the rules.
       handler: async (args, context = {}) => {
-        const parsed = parseQualifiedMcpToolName(name);
         try {
           const result = await callTool(
-            { serverId: parsed.serverId, name: parsed.name, args },
+            { serverId: tool.serverId, name: tool.name, args },
             { signal: context.abortSignal, timeoutMs: context.timeoutMs },
           );
-          const { text, truncated } = renderContent(result.content);
+          const { text, truncated } = renderContent(result.content, result.structuredContent);
           const out = { output: text };
           if (result.isError) out.error = 'The MCP server reported an error.';
           if (truncated) out.truncated = true;
-          if (result.structuredContent !== undefined) out.structured = result.structuredContent;
           return JSON.stringify(out);
         } catch (e) {
           // Hierher kommen Startfehler, Abstuerze, Zeitlimit und Abbruch.

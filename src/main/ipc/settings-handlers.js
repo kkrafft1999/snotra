@@ -497,11 +497,13 @@ function registerSettingsHandlers({
   // die Kennung des gespeicherten Servers statt ueber mitgeschickte Werte.
   // Die Grenze ist in test/infrastructure-boundaries.test.js festgenagelt.
 
+  // The catalogue also answers save, delete and reload. Its connections come
+  // masked from the composition, never raw from the service (CR-B14-01).
   async function buildMcpCatalog() {
     if (!mcpSettings) return { servers: [], connections: [], skippedTools: [] };
     return {
       servers: await mcpSettings.listServers(),
-      connections: mcpSettings.describeConnections(),
+      connections: await mcpSettings.describeConnections(),
       skippedTools: mcpSettings.describeSkippedTools(),
     };
   }

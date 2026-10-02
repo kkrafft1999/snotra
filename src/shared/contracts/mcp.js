@@ -21,9 +21,10 @@ const { TOOL_RISK_CLASSES } = require('./tool-permissions');
 const { createMessage, isMessage } = require('./message');
 
 /**
- * Protokollversion, die im `initialize`-Handshake angeboten wird. Ein Server
- * darf mit einer anderen antworten; der Dienst übernimmt dann seine Angabe,
- * solange wir sie kennen (siehe mcp-service).
+ * Protokollversion, die im `initialize`-Handshake angeboten wird. A server may
+ * answer with another one; the service records it and carries on, since
+ * `tools/list` and `tools/call` read the same in every version so far (see
+ * mcp-service).
  */
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 
@@ -75,8 +76,10 @@ const MCP_TIMEOUTS = {
 // Dateinamen der Konfiguration (#108), deshalb keine Sonderzeichen.
 const SERVER_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 // „__" trennt im Tool-Namensraum (#107) Praefix, Server und Tool. Eine Kennung,
-// die es selbst enthaelt, waere nicht mehr eindeutig zurueckzulesen.
-const SERVER_ID_FORBIDDEN = /__/;
+// die es selbst enthaelt, waere nicht mehr eindeutig zurueckzulesen — and
+// neither would one that ends in `_`: `mcp__a___x` is server `a_` with tool
+// `x` as much as server `a` with tool `_x` (CR-B16-07).
+const SERVER_ID_FORBIDDEN = /__|_$/;
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isValidMcpServerId(value) {
@@ -572,13 +575,19 @@ function maskStoredMcpEnv(stored) {
 /**
  * Eingabe eines ganzen Servers beim Speichern. Die Felder ausser `env` sind
  * dieselben wie zur Laufzeit, deshalb prueft sie derselbe Validator.
+ *
+ * `create: true` marks a new server ("Add server"): an identifier that is
+ * already taken is refused instead of replacing that server (CR-B14-03). It
+ * is not part of the stored configuration. Without it a save replaces by
+ * identifier — editing does, and so does the import, which says so.
  */
 function validateMcpServerInput(raw) {
+  const create = raw?.create === true;
   const base = validateMcpServerConfig({ ...(raw && typeof raw === 'object' ? raw : {}), env: {} });
   const { entries, errors: envErrors } = normalizeMcpEnvInput(raw?.env);
   const errors = [...base.errors, ...envErrors];
-  if (errors.length > 0) return { ok: false, value: null, env: [], errors };
-  return { ok: true, value: base.value, env: entries, errors: [] };
+  if (errors.length > 0) return { ok: false, value: null, env: [], create, errors };
+  return { ok: true, value: base.value, env: entries, create, errors: [] };
 }
 
 module.exports = {
