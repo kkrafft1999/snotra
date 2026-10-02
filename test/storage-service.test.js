@@ -798,6 +798,19 @@ test('an undecryptable encrypted chat history is quarantined, not overwritten', 
   assert.equal(await fs.readFile(path.join(tmpDir, quarantined[0]), 'utf8'), original, 'Quarantaene unveraendert');
 });
 
+test('#658: an encrypted history is left in place while encryption is unavailable', async (t) => {
+  const tmpDir = await makeTmpDir(t, 'snotra-storage-');
+  const original = JSON.stringify({ encrypted: true, payload: Buffer.from('fine-but-out-of-reach').toString('base64') });
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), original, 'utf8');
+  const storage = makeStorage(tmpDir);
+
+  const store = await storage.readChatHistoryStore();
+  assert.deepEqual(store.sessions ?? [], []);
+  assert.deepEqual(await quarantineFiles(tmpDir), [], 'nothing set aside');
+  await assert.rejects(storage.writeChatHistoryStore(store), { code: 'CHAT_HISTORY_UNREADABLE' });
+  assert.equal(await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8'), original, 'file untouched');
+});
+
 test('parallel reads of an unreadable history create exactly one quarantine file', async (t) => {
   const tmpDir = await makeTmpDir(t, 'snotra-storage-');
   const storage = makeStorageWithEncryption(tmpDir);
