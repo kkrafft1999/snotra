@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const {
   windowsLaunch,
   findWindowsCommand,
+  mergeWindowsEnv,
   escapeCmdArgument,
   escapeCmdCommand,
 } = require('../src/main/services/windows-command');
@@ -99,6 +100,14 @@ test('an argument is quoted for the program and its metacharacters escaped for b
   assert.equal(twoReads(escapeCmdArgument('C:\\dir\\')), '"C:\\dir\\\\"');
   // Every metacharacter carries a caret for each read, quotes included.
   assert.equal(escapeCmdArgument('x&y'), '^^^"x^^^&y^^^"');
+});
+
+test('a later variable replaces an earlier one whatever its case — Path and PATH are one', () => {
+  const env = mergeWindowsEnv({ Path: 'C:\\old', HOME: 'h' }, { PATH: 'C:\\new' }, { path: 'C:\\newest', x: '1' });
+  assert.deepEqual(env, { HOME: 'h', path: 'C:\\newest', x: '1' });
+  assert.equal(findWindowsCommand('npx', {
+    env: mergeWindowsEnv({ Path: 'C:\\old' }, { PATH: NODEJS }), cwd: '', isFile: filesystem(`${NODEJS}\\npx.cmd`),
+  }), `${NODEJS}\\npx.cmd`);
 });
 
 test('the path of the batch file is escaped once — cmd reads it once', () => {

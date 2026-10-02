@@ -70,11 +70,13 @@ function tmpHome(t) {
   // realpath: on macOS the temp folder is reached through a symlink, and the
   // child reports the resolved path.
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-mcp-home-')));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Windows keeps a folder that is still some process's working directory, so
+  // every test below closes its server before this runs.
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   return dir;
 }
 
-async function whoami(t, { cwd, homeDir, args = [] }) {
+async function whoami({ cwd, homeDir, args = [] }) {
   const transport = createStdioTransport({
     config: normalizeMcpServerConfig({
       id: 'who', label: 'who', command: process.execPath, args: [FAKE, 'whoami', ...args], cwd,
@@ -82,22 +84,25 @@ async function whoami(t, { cwd, homeDir, args = [] }) {
     spawn: childProcess.spawn,
     homeDir,
   });
-  t.after(() => transport.close());
-  await transport.start();
-  await transport.request('initialize', {}, { timeoutMs: 4_000 });
-  const result = await transport.request('tools/call', { name: 'echo', arguments: {} }, { timeoutMs: 4_000 });
-  return JSON.parse(result.content[0].text);
+  try {
+    await transport.start();
+    await transport.request('initialize', {}, { timeoutMs: 4_000 });
+    const result = await transport.request('tools/call', { name: 'echo', arguments: {} }, { timeoutMs: 4_000 });
+    return JSON.parse(result.content[0].text);
+  } finally {
+    await transport.close();
+  }
 }
 
 test('an empty working directory is the home folder, not the app’s own', async (t) => {
   const home = tmpHome(t);
-  assert.equal((await whoami(t, { cwd: '', homeDir: home })).cwd, home);
+  assert.equal((await whoami({ cwd: '', homeDir: home })).cwd, home);
 });
 
 test('a relative working directory starts from the home folder', async (t) => {
   const home = tmpHome(t);
   fs.mkdirSync(path.join(home, 'servers'));
-  assert.equal((await whoami(t, { cwd: 'servers', homeDir: home })).cwd, path.join(home, 'servers'));
+  assert.equal((await whoami({ cwd: 'servers', homeDir: home })).cwd, path.join(home, 'servers'));
 });
 
 test('a missing working directory is named, not reported as a missing command', async (t) => {
@@ -147,12 +152,16 @@ test('on Windows a server behind a .cmd launcher on PATH starts, and its argumen
   const transport = createStdioTransport({
     config: normalizeMcpServerConfig({ id: 'cmd', label: 'cmd', command: 'fake-mcp', args }),
     spawn: childProcess.spawn,
-    baseEnv: { ...process.env, PATH: `${bin};${process.env.PATH || process.env.Path || ''}` },
+    // A spread of process.env keeps Windows' `Path`; this `PATH` has to win.
+    baseEnv: { ...process.env, PATH: `${bin};${process.env.PATH || ''}` },
     homeDir: home,
   });
-  t.after(() => transport.close());
-  await transport.start();
-  await transport.request('initialize', {}, { timeoutMs: 10_000 });
-  const result = await transport.request('tools/call', { name: 'echo', arguments: {} }, { timeoutMs: 10_000 });
-  assert.deepEqual(JSON.parse(result.content[0].text).argv, args.slice(1));
+  try {
+    await transport.start();
+    await transport.request('initialize', {}, { timeoutMs: 10_000 });
+    const result = await transport.request('tools/call', { name: 'echo', arguments: {} }, { timeoutMs: 10_000 });
+    assert.deepEqual(JSON.parse(result.content[0].text).argv, args.slice(1));
+  } finally {
+    await transport.close();
+  }
 });

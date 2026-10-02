@@ -38,6 +38,26 @@ function envValue(env, name) {
 }
 
 /**
+ * Merges environments the way Windows reads them: names ignore case, so a
+ * later `PATH` replaces an earlier `Path` instead of standing next to it. A
+ * plain spread keeps both, and which one a child then sees depends on Node's
+ * sort order — not on which was meant to win.
+ */
+function mergeWindowsEnv(...sources) {
+  const out = {};
+  const keyOf = new Map();
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source || {})) {
+      const previous = keyOf.get(key.toUpperCase());
+      if (previous !== undefined) delete out[previous];
+      out[key] = value;
+      keyOf.set(key.toUpperCase(), key);
+    }
+  }
+  return out;
+}
+
+/**
  * Quotes one argument for a program that splits its command line the usual
  * way (`CommandLineToArgvW`), then escapes it for `cmd`, twice.
  */
@@ -107,4 +127,4 @@ function windowsLaunch({ command, args = [], env = {}, cwd = '', isFile }) {
   };
 }
 
-module.exports = { windowsLaunch, findWindowsCommand, escapeCmdArgument, escapeCmdCommand };
+module.exports = { windowsLaunch, findWindowsCommand, mergeWindowsEnv, escapeCmdArgument, escapeCmdCommand };

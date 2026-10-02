@@ -26,7 +26,7 @@ const path = require('path');
 const { MCP_LIMITS, MCP_TIMEOUTS } = require('../../shared/contracts/mcp');
 const { createOutputSink } = require('./child-output-sink');
 const { createMessage } = require('../../shared/contracts/message');
-const { windowsLaunch } = require('./windows-command');
+const { mergeWindowsEnv, windowsLaunch } = require('./windows-command');
 
 /**
  * A transport error is read on two channels (#338): a failed `tools/call`
@@ -242,7 +242,9 @@ function createStdioTransport({
   /** Startet den Prozess. Wirft mit Klartext, wenn das Kommando fehlt. */
   async function start() {
     if (child) return;
-    const env = { ...baseEnv, ...config.env };
+    // On Windows `Path` and `PATH` are one variable; the service's PATH from
+    // the shell profile and one in the server's own env must replace it.
+    const env = platform === 'win32' ? mergeWindowsEnv(baseEnv, config.env) : { ...baseEnv, ...config.env };
     // Empty means the home folder, and a relative path starts from there
     // (CR-B16-06) — the main process's own working directory is `/` when the
     // app is started from the Finder, and nothing a user could predict.
