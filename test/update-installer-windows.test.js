@@ -120,6 +120,42 @@ async function installFromInsideTheFolder(fixture, pid) {
   }
 }
 
+const INSTALLER = path.join(__dirname, '..', 'src', 'main', 'services', 'update-installer.js');
+
+/**
+ * Starts the install from a process of its own that quits as soon as
+ * `install()` returns, the way the app does (#654). That process is also the
+ * one the helper waits for. On Windows a child spawned without `detached` sits
+ * in a job that closes, killing what is in it, when its parent exits — the
+ * helper has to be outside it by then.
+ */
+async function installFromAProcessThatQuits(fixture) {
+  const resultFile = path.join(fixture.dir, 'install-result.json');
+  const options = {
+    filePath: fixture.zip,
+    version: '1.13.0',
+    target: { kind: 'windows-dir', canSelfUpdate: true, installDir: fixture.installDir },
+    workDir: path.join(fixture.dir, 'work'),
+    logFile: fixture.logFile,
+    statusFile: fixture.statusFile,
+  };
+  const code = [
+    `const { createUpdateInstaller } = require(${JSON.stringify(INSTALLER)});`,
+    `createUpdateInstaller().install(${JSON.stringify(options)}).then((res) => {`,
+    `  require('node:fs').writeFileSync(${JSON.stringify(resultFile)}, JSON.stringify(res));`,
+    '  process.exit(0);',
+    '});',
+  ].join('\n');
+  // No pipes: a helper that inherited one would keep this test waiting on it.
+  const app = spawn(process.execPath, ['-e', code], { cwd: fixture.installDir, stdio: 'ignore' });
+  const exitCode = await new Promise((resolve, reject) => {
+    app.on('error', reject);
+    app.on('exit', resolve);
+  });
+  assert.equal(exitCode, 0, 'the stand-in app ends normally');
+  return JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+}
+
 function describe(fixture) {
   return [
     'the helper',
@@ -175,6 +211,22 @@ test('Windows: the swap goes through although the app ran from its own folder', 
   assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'no staging or backup folder is left behind');
   assert.equal(fs.existsSync(fixture.statusFile), false);
   assert.equal(fs.existsSync(path.join(fixture.dir, 'work')), false);
+});
+
+// #654: what broke in the field from v1.12.2 on. The process that started the
+// helper quits, and the helper went down with it before it had moved anything.
+test('Windows: the helper outlives the app that started it', { skip: !onWindows, timeout: 90_000 }, async (t) => {
+  const fixture = await makeFixture(t);
+
+  const res = await installFromAProcessThatQuits(fixture);
+  assert.equal(res.ok, true, JSON.stringify(res));
+
+  const log = await waitFor(() => /updated to 1\.13\.0/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
+    timeoutMs: 60_000,
+    what: () => describe(fixture),
+  });
+  assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'new', log);
+  assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'no staging or backup folder is left behind');
 });
 
 test('Windows: a folder that stays locked rolls back, reports and keeps the old version', { skip: !onWindows, timeout: 120_000 }, async (t) => {
