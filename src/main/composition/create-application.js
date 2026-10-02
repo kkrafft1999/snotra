@@ -509,10 +509,9 @@ function createApplication({
       const status = await mcpService.connect(id);
       if (!status) return { status: null, error: createMessage('settings.error.mcp.unknownServer', { id }) };
       const [masked] = maskMcpStatuses([status], await ownSecrets.readMcpSecrets());
-      const tools = (await mcpService.listTools())
-        .filter((tool) => tool.serverId === id)
-        .map((tool) => tool.name);
-      return { status: masked, tools };
+      // The tested server's tools come with its status. `listTools()` would
+      // connect every enabled server and wait for the slowest (CR-B16-07).
+      return { status: masked, tools: status.toolNames };
     },
   };
 

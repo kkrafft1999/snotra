@@ -297,6 +297,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
 
   const existing = new Set(existingIds.filter((id) => typeof id === 'string'));
   const taken = new Set(existing);
+  const replacing = new Set();
 
   for (const name of names) {
     if (candidates.length + skipped.length >= MCP_IMPORT_MAX_SERVERS) {
@@ -330,8 +331,12 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
 
     // Eine schon vergebene Kennung ist kein Fehler: `saveMcpServer` ersetzt
     // den Eintrag, und manchmal ist genau das gewollt. Gesagt werden muss es
-    // trotzdem — stilles Überschreiben wäre die schlechteste Variante.
-    const conflict = existing.has(baseId);
+    // trotzdem — stilles Überschreiben wäre die schlechteste Variante. Only
+    // one entry of the block may replace it, though; a second one with the
+    // same identifier gets a new one, or it would overwrite the first
+    // (CR-B16-07).
+    const conflict = existing.has(baseId) && !replacing.has(baseId);
+    if (conflict) replacing.add(baseId);
     const id = conflict ? baseId : uniqueId(baseId, taken);
     if (!id) {
       skipped.push({ name, reason: createMessage('mcpImport.skippedReason.idTaken') });

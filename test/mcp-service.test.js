@@ -359,3 +359,106 @@ test('ein Fehler beim Merken kostet die Verbindung nicht (#170)', async (t) => {
 
   assert.equal(tools.length, 2, 'die Tools stehen trotzdem bereit');
 });
+
+// --- Requests from the server (CR-B16-02) ---
+
+test('a ping from the server under the id of a running call does not answer that call', async (t) => {
+  const { service } = makeService();
+  t.after(() => service.shutdown());
+  service.setServers([server('srv', 'server-request')]);
+  await service.listTools();
+
+  const result = await service.callTool({ serverId: 'srv', name: 'echo', args: {} });
+  // The call waits for its real answer, which the server only sends once the
+  // ping got `{}` and the sampling request was refused as unknown.
+  assert.deepEqual(result.content, [{ type: 'text', text: 'ping:{} sampling:-32601' }]);
+});
+
+// --- Cancellation (CR-B16-04) ---
+
+test('a stopped call is cancelled on the server as well', async (t) => {
+  const { service } = makeService();
+  t.after(() => service.shutdown());
+  service.setServers([server('srv', 'cancel-aware')]);
+  await service.listTools();
+
+  const controller = new AbortController();
+  const slow = service.callTool({ serverId: 'srv', name: 'slow', args: {} }, { signal: controller.signal });
+  setTimeout(() => controller.abort(), 50);
+  await assert.rejects(slow, /Request cancelled/);
+
+  const seen = await service.callTool({ serverId: 'srv', name: 'cancelled', args: {} });
+  const [cancelled] = JSON.parse(seen.content[0].text);
+  // initialize took id 1 and tools/list id 2, so the slow call is 3.
+  assert.deepEqual(cancelled, { requestId: 3, reason: 'The client cancelled the request.' });
+});
+
+test('a call that runs into its time limit is cancelled on the server', async (t) => {
+  const { service } = makeService();
+  t.after(() => service.shutdown());
+  service.setServers([server('srv', 'cancel-aware')]);
+  await service.listTools();
+
+  await assert.rejects(
+    service.callTool({ serverId: 'srv', name: 'slow', args: {} }, { timeoutMs: 100 }),
+    /did not answer/,
+  );
+  const seen = await service.callTool({ serverId: 'srv', name: 'cancelled', args: {} });
+  assert.deepEqual(JSON.parse(seen.content[0].text), [{ requestId: 3, reason: 'No answer within 100 ms.' }]);
+});
+
+test('initialize is never cancelled', async () => {
+  const notified = [];
+  const service = createMcpService({
+    spawn: () => null,
+    createTransport: ({ onCancel }) => ({
+      start: async () => {},
+      request: async (method) => {
+        onCancel({ id: 1, method, reason: 'No answer within 20000 ms.' });
+        throw new Error('timeout');
+      },
+      notify: (method, params) => notified.push([method, params]),
+      close: async () => {},
+      onExit: () => {},
+      isAlive: () => false,
+      stderrText: () => '',
+    }),
+  });
+  service.setServers([server('srv')]);
+  await service.listTools();
+  assert.deepEqual(notified, []);
+  assert.equal(statusOf(service, 'srv').state, MCP_CONNECTION_STATES.FAILED);
+});
+
+// --- What restarts a server (CR-B16-03) ---
+
+test('a configuration that differs only in label and remembered tools keeps the process', async (t) => {
+  const { service, children } = makeService();
+  t.after(() => service.shutdown());
+  service.setServers([server('files')]);
+  await service.listTools();
+
+  // What reload hands over after rememberTools has written the catalogue.
+  service.setServers([server('files', 'ok', { label: 'Files', knownTools: ['echo', 'add'] })]);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  assert.equal(children.length, 1, 'no second process');
+  assert.equal(children[0].exitCode, null, 'the first one still runs');
+  assert.equal(statusOf(service, 'files').label, 'Files');
+  assert.equal((await service.listTools()).length, 2);
+});
+
+test('a server changed while it starts is started again, not left failed', async (t) => {
+  const { service, children } = makeService();
+  t.after(() => service.shutdown());
+  service.setServers([server('files', 'slow-init')]);
+  const first = service.listTools();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  service.setServers([server('files', 'ok')]);
+  await first;
+  assert.equal(statusOf(service, 'files').state, MCP_CONNECTION_STATES.STOPPED);
+
+  assert.equal((await service.listTools()).length, 2, 'the new configuration connects on the next need');
+  assert.equal(children.length, 2);
+});

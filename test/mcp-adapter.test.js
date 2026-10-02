@@ -181,6 +181,37 @@ test('eine überlange Ausgabe wird gekappt und als gekappt gemeldet', async () =
   assert.match(result.output, /\[output truncated\]$/);
 });
 
+test('structured content beside its text reaches the model once (CR-B16-05)', async () => {
+  const data = { issues: [{ key: 'SNO-1' }] };
+  const service = fakeService({
+    call: async () => ({
+      content: [{ type: 'text', text: JSON.stringify(data) }],
+      structuredContent: data,
+      isError: false,
+    }),
+  });
+  const [suche] = await definitionsOf(service);
+  const result = JSON.parse(await suche.handler({}, {}));
+  assert.deepEqual(result, { output: JSON.stringify(data) });
+});
+
+test('structured content without text is the result, capped like text (CR-B16-05)', async () => {
+  const small = { total: 2 };
+  assert.equal(renderContent([], small).text, '{"total":2}');
+  // An image beside it carries no text either.
+  assert.equal(renderContent([{ type: 'image', data: 'x' }], small).text,
+    '[content of type "image" is not supported]\n{"total":2}');
+
+  const service = fakeService({
+    call: async () => ({ content: [], structuredContent: { rows: 'x'.repeat(MAX_RESULT_CHARS + 500) }, isError: false }),
+  });
+  const [suche] = await definitionsOf(service);
+  const result = JSON.parse(await suche.handler({}, {}));
+  assert.equal(result.truncated, true);
+  assert.equal(result.structured, undefined);
+  assert.ok(result.output.length < MAX_RESULT_CHARS + 100);
+});
+
 // --- Zusammenspiel mit der Registry ---
 
 function registryWithMcp(definitions) {

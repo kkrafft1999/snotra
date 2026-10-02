@@ -306,6 +306,18 @@ test('eine Serverkennung mit doppeltem Unterstrich wird abgelehnt', () => {
   assert.deepEqual(errors.map((e) => e.key), ['mcp.error.idDoubleUnderscore']);
 });
 
+test('an identifier ending in an underscore is refused — it would blur the namespace (CR-B16-07)', () => {
+  // `mcp__a___x` would be server `a_` with tool `x` and server `a` with `_x`.
+  assert.equal(isValidMcpServerId('a_'), false);
+  const { ok, errors } = validateMcpServerConfig({ id: 'files_', command: 'npx' });
+  assert.equal(ok, false);
+  assert.deepEqual(errors.map((e) => e.key), ['mcp.error.idDoubleUnderscore']);
+  // Inside the identifier a single underscore stays allowed, and so does a tool
+  // name that starts with one.
+  assert.equal(isValidMcpServerId('my_server'), true);
+  assert.deepEqual(parseQualifiedMcpToolName('mcp__srv___private'), { serverId: 'srv', name: '_private' });
+});
+
 test('kaputte oder fremde Namen ergeben null statt halber Treffer', () => {
   for (const name of ['read_file', 'mcp__', 'mcp__srv', 'mcp__srv__', 'mcp____tool', '', null]) {
     assert.equal(parseQualifiedMcpToolName(name), null, `„${name}" darf nicht zerlegbar sein`);

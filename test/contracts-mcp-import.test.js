@@ -142,6 +142,16 @@ test('zwei Namen, die auf dieselbe Kennung fallen, bleiben unterscheidbar', () =
   assert.equal(candidates[1].conflict, false, 'das ist kein Konflikt mit Gespeichertem');
 });
 
+test('only one entry of a block may replace a stored server (CR-B16-07)', () => {
+  const block = JSON.stringify({
+    mcpServers: { GitHub: { command: 'a' }, github: { command: 'b' } },
+  });
+  const { candidates } = parseMcpServersBlock(block, { existingIds: ['github'] });
+  assert.deepEqual(candidates.map((c) => c.id), ['github', 'github-2']);
+  assert.deepEqual(candidates.map((c) => c.conflict), [true, false]);
+  assert.ok(candidates[1].notes.some((n) => n.key === 'mcpImport.note.idTaken' && n.params.id === 'github-2'));
+});
+
 test('token-artige Werte sind als geheim vorgemerkt, harmlose nicht', () => {
   const block = JSON.stringify({
     mcpServers: {

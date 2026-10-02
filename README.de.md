@@ -749,7 +749,7 @@ noch nicht.
 | **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern |
 | **Anzeigename** | Frei wählbar, nur für die Liste |
 | **Kommando** und **Argumente** | Was gestartet wird, z. B. `npx` mit `-y @modelcontextprotocol/server-github` |
-| **Arbeitsverzeichnis** | Optional; leer heißt Projektordner |
+| **Arbeitsverzeichnis** | Optional; leer heißt dein Home-Ordner, und ein relativer Pfad beginnt dort |
 | **Umgebungsvariablen** | Name/Wert-Paare für den Prozess |
 
 **Umgebungsvariablen sind vorbelegt geheim.** Ein geheimer Wert wird über

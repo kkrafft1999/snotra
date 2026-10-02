@@ -200,6 +200,7 @@ function createShellRunnerService({
         child = spawn(command, buildShellArgs(invocation, probeCommandFor(invocation)), {
           stdio: ['ignore', 'pipe', 'pipe'],
           env,
+          windowsHide: true,
         });
       } catch (e) {
         resolve({ ok: false, error: e?.message || createMessage('runner.error.startFailed') });

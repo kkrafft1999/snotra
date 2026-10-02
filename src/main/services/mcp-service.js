@@ -38,6 +38,26 @@ function messageOf(error, fallback) {
 }
 
 /**
+ * What reaches the process. Only a change here restarts a server
+ * (CR-B16-03): the label only names it, and `knownTools` is what the service
+ * itself writes back after every connection — comparing those restarted a
+ * server on the next save of any other one.
+ */
+function processKey(config) {
+  const { transport, command, args, env, cwd, enabled } = config;
+  return JSON.stringify({ transport, command, args, env, cwd, enabled });
+}
+
+/**
+ * Requests a server may send us (CR-B16-02). Only `ping`, which MCP expects
+ * either side to answer at any time; the client declares no capability that
+ * would invite anything else, so everything else is "method not found".
+ */
+function answerServerRequest(method) {
+  return method === 'ping' ? { result: {} } : null;
+}
+
+/**
  * @param {Object} deps
  * @param {typeof import('child_process').spawn} deps.spawn
  * @param {(deps: Object) => Object} [deps.createTransport]
@@ -92,6 +112,9 @@ function createMcpService({
       serverVersion: '',
       protocolVersion: '',
       starting: null,
+      // Counts deliberate closes, so a start that fails because it was closed
+      // on purpose is not mistaken for a server that failed (CR-B16-03).
+      generation: 0,
     };
   }
 
@@ -139,7 +162,7 @@ function createMcpService({
     const closed = [];
     for (const [id, connection] of connections) {
       const next = servers.find((server) => server.id === id);
-      if (!next || JSON.stringify(next) !== JSON.stringify(connection.config)) {
+      if (!next || processKey(next) !== processKey(connection.config)) {
         closed.push(disconnect(id));
       }
     }
@@ -194,6 +217,13 @@ function createMcpService({
       spawn,
       baseEnv: await baseEnv(),
       platform,
+      onRequest: answerServerRequest,
+      // A request we gave up on keeps running on the server unless it is told
+      // (CR-B16-04). `initialize` must not be cancelled; a server that does not
+      // answer it is closed anyway.
+      onCancel: ({ id, method, reason }) => {
+        if (method !== 'initialize') transport.notify('notifications/cancelled', { requestId: id, reason });
+      },
     });
     connection.transport = transport;
 
@@ -278,8 +308,15 @@ function createMcpService({
     connection.state = MCP_CONNECTION_STATES.STARTING;
     connection.error = '';
     connection.modelError = '';
+    const { generation } = connection;
     connection.starting = handshake(connection)
-      .catch((error) => markFailed(connection, error))
+      .catch((error) => {
+        // Closed on purpose while it started — a changed configuration, a
+        // reconnect. That leaves it `stopped`, and the next need starts it
+        // again; `failed` would keep it off until someone presses "Test".
+        if (connection.generation !== generation) return;
+        markFailed(connection, error);
+      })
       .then(() => {
         connection.starting = null;
         return connection;
@@ -307,6 +344,7 @@ function createMcpService({
     connection.transport = null;
     connection.tools = [];
     connection.state = MCP_CONNECTION_STATES.STOPPED;
+    connection.generation += 1;
     if (transport) await transport.close().catch(() => {});
   }
 

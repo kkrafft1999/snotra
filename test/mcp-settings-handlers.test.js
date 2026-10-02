@@ -280,3 +280,20 @@ test('die gespeicherte Konfiguration übersteht einen Neustart der Anwendung', a
   const result = await zweite.ipcMain.handlers.get(REQ.SETTINGS_TEST_MCP_SERVER)({}, 'fake');
   assert.equal(result.status.state, MCP_CONNECTION_STATES.READY);
 });
+
+test('Test connection starts only the tested server (CR-B16-07)', async (t) => {
+  const { ipcMain } = await makeApp(t);
+  for (const id of ['fake', 'other']) {
+    const saved = await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, {
+      id, label: id, command: process.execPath, args: [FAKE_SERVER, 'ok'],
+    });
+    assert.equal(saved.ok, true, JSON.stringify(saved.errors));
+  }
+
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_TEST_MCP_SERVER)({}, 'fake');
+  assert.deepEqual(result.tools, ['echo', 'add']);
+
+  const katalog = await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({});
+  const other = katalog.connections.find((c) => c.serverId === 'other');
+  assert.equal(other.state, MCP_CONNECTION_STATES.IDLE, 'the other server was not started');
+});

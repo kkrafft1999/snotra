@@ -1149,7 +1149,7 @@ transport). Servers reachable only over HTTP or SSE do not work yet.
 | **Identifier** | Lowercase letters, digits, `.`, `-`, `_`. It later sits inside the tool name and cannot be changed afterwards |
 | **Display name** | Freely chosen, only for the list |
 | **Command** and **arguments** | What gets started, e.g. `npx` with `-y @modelcontextprotocol/server-github` |
-| **Working directory** | Optional; empty means the project folder |
+| **Working directory** | Optional; empty means your home folder, and a relative path starts from there |
 | **Environment variables** | Name/value pairs for the process |
 
 **Environment variables are secret by default.** A secret value is stored
