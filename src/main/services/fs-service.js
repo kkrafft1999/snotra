@@ -14,6 +14,10 @@ const {
 const { formatBytes } = require('../../shared/runtime/format-bytes');
 const { isAlwaysHiddenEntryName, isListedEntryName } = require('../../shared/runtime/hidden-entries');
 const { createTranslator } = require('../../shared/i18n');
+const { constants: fsConstants } = require('fs');
+const { randomBytes } = require('crypto');
+const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
+const { renameWithRetry } = require('./rename-with-retry');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
@@ -64,6 +68,15 @@ const PATCH_MAX_EDITS = 50;
 const PATCH_MAX_FILES = 20;
 const PATCH_MAX_HUNKS = 200;
 const PATCH_MAX_MESSAGE_LINE_CHARS = 120;
+/** How many fresh names a recovery copy tries when its name is already taken (#642). */
+const RECOVERY_COPY_NAME_ATTEMPTS = 5;
+/**
+ * Decodes a file an edit tool is about to change (#645). `fatal` refuses what
+ * is not UTF-8 instead of turning it into U+FFFD, and `ignoreBOM` keeps a
+ * byte-order mark in the text, so that it is written back.
+ */
+const UTF8_EDIT_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+const UTF8_BOM = '\uFEFF';
 /** Zeilen eines unified diff, die vor dem Dateikopf stehen dürfen und übersprungen werden. */
 const PATCH_PRELUDE_PREFIXES = [
   'diff ',
@@ -454,59 +467,84 @@ function clipPatchLine(line) {
 }
 
 /**
+ * Fits the text of an edit to a CRLF file (#647). `read_file_lines` never
+ * shows the model a `\r`, so an old_string that spans lines arrives with bare
+ * `\n` — and a new_string would put bare `\n` into the file. Text that carries
+ * a `\r` of its own is taken as written.
+ */
+function fitEditToLineEnding(text, eol) {
+  if (eol !== '\r\n' || text.includes('\r')) return text;
+  return text.replace(/\n/g, '\r\n');
+}
+
+/**
  * Wendet mehrere Ersetzungen der Reihe nach auf einen Text an. Jeder Schritt sieht
  * das Ergebnis der vorherigen Schritte; der erste Fehler bricht ab, ohne dass der
  * Aufrufer etwas geschrieben hat (alles oder nichts).
+ *
+ * `edit_file` runs its one replacement through here too (#647), with
+ * `single: true`, so that its messages carry no `edits[i]` label.
  */
-function applyEditsToText(text, edits) {
+function applyEditsToText(text, edits, { single = false } = {}) {
+  const eol = detectLineEnding(text);
   let current = text;
   let replacements = 0;
   let firstChangedIndex = -1;
 
   for (let i = 0; i < edits.length; i += 1) {
     const edit = edits[i];
-    const label = `edits[${i}]`;
+    const field = (name) => (single ? name : `edits[${i}].${name}`);
+    const where = single ? '' : `edits[${i}]: `;
     if (!edit || typeof edit !== 'object' || Array.isArray(edit)) {
-      return { error: `${label} must be an object with old_string and new_string.` };
+      return { error: `edits[${i}] must be an object with old_string and new_string.` };
     }
     if (typeof edit.old_string !== 'string' || !edit.old_string.length) {
-      return { error: `${label}.old_string (non-empty text) is required.` };
+      return { error: `${field('old_string')} (non-empty text) is required.` };
     }
     if (typeof edit.new_string !== 'string') {
-      return { error: `${label}.new_string (text, may be empty) is required.` };
+      return { error: `${field('new_string')} (text, may be empty) is required.` };
     }
     if (edit.old_string === edit.new_string) {
-      return { error: `${label}: old_string and new_string must differ.` };
+      return { error: `${where}old_string and new_string must differ.` };
     }
 
-    const firstIndex = current.indexOf(edit.old_string);
+    let oldString = fitEditToLineEnding(edit.old_string, eol);
+    let newString = fitEditToLineEnding(edit.new_string, eol);
+    // A file with mixed endings may hold the text with bare `\n` after all.
+    if (oldString !== edit.old_string && !current.includes(oldString)) {
+      oldString = edit.old_string;
+      newString = edit.new_string;
+    }
+
+    const firstIndex = current.indexOf(oldString);
     if (firstIndex === -1) {
       return {
         error:
-          `${label}: old_string was not found — the text must match exactly ` +
-          `(including indentation and line breaks) and must not have been changed by an earlier edit.`,
+          `${where}old_string was not found — the text must match exactly ` +
+          '(including indentation and line breaks)' +
+          (single ? '.' : ' and must not have been changed by an earlier edit.'),
       };
     }
     let count = 0;
     for (
       let idx = firstIndex;
       idx !== -1;
-      idx = current.indexOf(edit.old_string, idx + edit.old_string.length)
+      idx = current.indexOf(oldString, idx + oldString.length)
     ) {
       count += 1;
     }
     if (count > 1 && edit.replace_all !== true) {
       return {
-        error: `${label}: old_string is not unique (${count} matches). Include more surrounding context or set replace_all=true.`,
+        error: `${where}old_string is not unique (${count} matches). Include more surrounding context or set replace_all=true.`,
       };
     }
 
     current =
       edit.replace_all === true
-        ? current.split(edit.old_string).join(edit.new_string)
+        ? current.split(oldString).join(newString)
         : current.slice(0, firstIndex) +
-          edit.new_string +
-          current.slice(firstIndex + edit.old_string.length);
+          newString +
+          current.slice(firstIndex + oldString.length);
     replacements += edit.replace_all === true ? count : 1;
     if (firstChangedIndex === -1 || firstIndex < firstChangedIndex) firstChangedIndex = firstIndex;
   }
@@ -514,24 +552,61 @@ function applyEditsToText(text, edits) {
   return { text: current, replacements, firstChangedIndex };
 }
 
-/** Vorherrschendes Zeilenende eines Textes — CRLF-Dateien sollen CRLF bleiben. */
+/**
+ * The prevailing line ending of a text: the one most lines end with (#647),
+ * which is what new lines get. A tie, or no line break at all, is `\n`.
+ */
 function detectLineEnding(text) {
-  return text.includes('\r\n') ? '\r\n' : '\n';
+  let crlf = 0;
+  let lf = 0;
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
+    if (i > 0 && text[i - 1] === '\r') crlf += 1;
+    else lf += 1;
+  }
+  return crlf > lf ? '\r\n' : '\n';
 }
 
-/** Zerlegt Dateitext für die Patch-Anwendung in Zeilen ohne Zeilenendezeichen. */
+/**
+ * Zerlegt Dateitext für die Patch-Anwendung in Zeilen ohne Zeilenendezeichen.
+ *
+ * Only `\n` and `\r\n` end a line (#647) — a lone `\r` is content, as it is
+ * for `diff` and `patch` — and every line keeps its own ending in `endings`,
+ * so the lines no hunk touches are written back as they were. A UTF-8 BOM is
+ * set aside: hunks match line 1 without it, and it goes back to byte 0. An
+ * empty file counts as ending with a newline, so what a patch adds to it ends
+ * with one unless the patch says `\ No newline at end of file`.
+ */
 function splitTextForPatch(text) {
-  const eol = detectLineEnding(text);
-  if (text === '') return { lines: [], endsWithNewline: false, eol };
-  const lines = text.split(/\r\n|\r|\n/);
-  const endsWithNewline = lines[lines.length - 1] === '';
-  if (endsWithNewline) lines.pop();
-  return { lines, endsWithNewline, eol };
+  const bom = text.startsWith(UTF8_BOM) ? UTF8_BOM : '';
+  const body = bom ? text.slice(bom.length) : text;
+  const lines = [];
+  const endings = [];
+  let start = 0;
+  for (let nl = body.indexOf('\n'); nl !== -1; nl = body.indexOf('\n', start)) {
+    const crlf = nl > start && body[nl - 1] === '\r';
+    lines.push(body.slice(start, crlf ? nl - 1 : nl));
+    endings.push(crlf ? '\r\n' : '\n');
+    start = nl + 1;
+  }
+  const endsWithNewline = start === body.length;
+  if (!endsWithNewline) {
+    lines.push(body.slice(start));
+    endings.push('');
+  }
+  return { bom, lines, endings, endsWithNewline, eol: detectLineEnding(body) };
 }
 
-function joinPatchLines(lines, endsWithNewline, eol) {
-  if (!lines.length) return '';
-  return lines.join(eol) + (endsWithNewline ? eol : '');
+/**
+ * Joins the lines again (#647). A line without an ending of its own — a new
+ * one, or the former last line — gets `eol`; the last line ends as decided.
+ */
+function joinPatchLines({ lines, endings }, endsWithNewline, eol, bom = '') {
+  if (!lines.length) return bom;
+  const last = lines.length - 1;
+  const parts = [bom];
+  for (let i = 0; i < last; i += 1) parts.push(lines[i], endings[i] || eol);
+  parts.push(lines[last], endsWithNewline ? endings[last] || eol : '');
+  return parts.join('');
 }
 
 /** `\ No newline at end of file` gewinnt über den Ausgangszustand der Datei. */
@@ -572,12 +647,16 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
 
   const oldLines = [];
   const newLines = [];
+  // The markers in body order (#647): which new line is an old one kept, so
+  // that a kept line keeps its own line ending.
+  const ops = [];
   const hunk = {
     header,
     oldStart,
     oldCount,
     oldLines,
     newLines,
+    ops,
     noNewlineOld: false,
     noNewlineNew: false,
   };
@@ -600,12 +679,15 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
     } else if (marker === ' ') {
       oldLines.push(content);
       newLines.push(content);
+      ops.push(marker);
       lastSide = 'both';
     } else if (marker === '-') {
       oldLines.push(content);
+      ops.push(marker);
       lastSide = 'old';
     } else if (marker === '+') {
       newLines.push(content);
+      ops.push(marker);
       lastSide = 'new';
     } else {
       return {
@@ -693,9 +775,22 @@ function parseUnifiedDiff(text) {
     }
 
     const hunks = [];
+    // Old-file line index the previous hunk ended at (#647). Each hunk only
+    // searches forward from there, so one sent out of order would land on a
+    // later match — GNU patch refuses this as "misordered hunks", and so do we.
+    let previousEnd = 0;
     while (i < rawLines.length && rawLines[i].startsWith('@@')) {
       const parsed = parseUnifiedDiffHunk(rawLines, i);
       if (parsed.error) return { error: parsed.error };
+      const begin = Math.max(0, parsed.hunk.oldCount === 0 ? parsed.hunk.oldStart : parsed.hunk.oldStart - 1);
+      if (begin < previousEnd) {
+        return {
+          error:
+            `Hunk ${hunks.length + 1} for "${newPath}" ("${clipPatchLine(parsed.hunk.header)}") starts before ` +
+            `the end of the hunk in front of it — hunks must come in ascending line order and must not overlap.`,
+        };
+      }
+      previousEnd = begin + parsed.hunk.oldCount;
       hunks.push(parsed.hunk);
       totalHunks += 1;
       if (totalHunks > PATCH_MAX_HUNKS) {
@@ -724,6 +819,58 @@ function parseUnifiedDiff(text) {
 }
 
 /**
+ * The start in [minIndex, maxIndex] where `oldLines` stand in `lines` that is
+ * nearest to `start`, the earlier one on a tie; -1 if there is none.
+ *
+ * Comparing the hunk at every position costs file lines × hunk lines — a
+ * 300k-line file and a 10k-line hunk that does not match blocked the main
+ * process for seconds (#650). So the lines are turned into numbers (a line
+ * the hunk does not hold can never match) and searched with Knuth–Morris–
+ * Pratt, which finds every candidate in one pass over the file.
+ */
+function findNearestMatch(lines, oldLines, start, minIndex, maxIndex) {
+  const ids = new Map();
+  const pattern = new Int32Array(oldLines.length);
+  for (let k = 0; k < oldLines.length; k += 1) {
+    let id = ids.get(oldLines[k]);
+    if (id === undefined) {
+      id = ids.size;
+      ids.set(oldLines[k], id);
+    }
+    pattern[k] = id;
+  }
+  const m = pattern.length;
+  const fallback = new Int32Array(m);
+  for (let k = 1, j = 0; k < m; k += 1) {
+    while (j > 0 && pattern[k] !== pattern[j]) j = fallback[j - 1];
+    if (pattern[k] === pattern[j]) j += 1;
+    fallback[k] = j;
+  }
+  let best = -1;
+  let bestDistance = Infinity;
+  const end = maxIndex + m;
+  for (let i = minIndex, j = 0; i < end; i += 1) {
+    const id = ids.get(lines[i]);
+    if (id === undefined) {
+      j = 0;
+      continue;
+    }
+    while (j > 0 && id !== pattern[j]) j = fallback[j - 1];
+    if (id === pattern[j]) j += 1;
+    if (j === m) {
+      const candidate = i - m + 1;
+      const distance = Math.abs(candidate - start);
+      // Candidates come in ascending order: past `start`, they only get farther.
+      if (distance >= bestDistance) break;
+      best = candidate;
+      bestDistance = distance;
+      j = fallback[j - 1];
+    }
+  }
+  return best;
+}
+
+/**
  * Sucht die Stelle, an der die alten Zeilen eines Hunks exakt stehen: zuerst an der
  * im Kopf genannten Position, dann in wachsendem Abstand darum herum (Offset-Toleranz
  * wie bei `patch`). Nie vor dem Ende des vorherigen Hunks.
@@ -748,12 +895,8 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
   const matches = (index) => oldLines.every((line, k) => lines[index + k] === line);
   const start = Math.min(Math.max(expected, minIndex), maxIndex);
   if (matches(start)) return { index: start };
-  for (let distance = 1; distance <= lines.length; distance += 1) {
-    const before = start - distance;
-    if (before >= minIndex && matches(before)) return { index: before };
-    const after = start + distance;
-    if (after <= maxIndex && matches(after)) return { index: after };
-  }
+  const found = findNearestMatch(lines, oldLines, start, minIndex, maxIndex);
+  if (found !== -1) return { index: found };
   return {
     error:
       `the context does not match (expected at line ${expected + 1}, looked for "${clipPatchLine(oldLines[0])}"). ` +
@@ -761,9 +904,15 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
   };
 }
 
-/** Wendet alle Hunks einer Datei auf ihre Zeilen an — der erste Fehlschlag bricht ab. */
-function applyHunksToLines(lines, hunks, relativePath) {
-  const result = lines.slice();
+/**
+ * Wendet alle Hunks einer Datei auf ihre Zeilen an — der erste Fehlschlag bricht ab.
+ *
+ * `source` comes from `splitTextForPatch`: a kept line keeps its own ending,
+ * a new line gets `eol` (#647).
+ */
+function applyHunksToLines(source, hunks, relativePath, eol) {
+  const result = source.lines.slice();
+  const endings = source.endings.slice();
   const offsets = [];
   let offset = 0;
   let minIndex = 0;
@@ -778,13 +927,21 @@ function applyHunksToLines(lines, hunks, relativePath) {
         error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${found.error}`,
       };
     }
+    const newEndings = [];
+    let old = found.index;
+    for (const op of hunk.ops) {
+      if (op === ' ') newEndings.push(endings[old]);
+      else if (op === '+') newEndings.push(eol);
+      if (op !== '+') old += 1;
+    }
     result.splice(found.index, hunk.oldLines.length, ...hunk.newLines);
+    endings.splice(found.index, hunk.oldLines.length, ...newEndings);
     offsets.push(found.index - expected);
     offset += found.index - expected + (hunk.newLines.length - hunk.oldLines.length);
     minIndex = found.index + hunk.newLines.length;
   }
 
-  return { lines: result, offsets };
+  return { lines: result, endings, offsets };
 }
 
 function createFsService({
@@ -795,6 +952,11 @@ function createFsService({
   maxSearchScannedFiles,
   maxReadSliceChars,
   regexSearchTimeBudgetMs,
+  /** Decides whether a rename retries Windows' transient locks (#642). */
+  platform = process.platform,
+  /** Clock and random part of a recovery copy's name (#642), injectable for tests. */
+  now = () => new Date(),
+  randomSuffix = () => randomBytes(4).toString('hex'),
   /**
    * The folders of the global skills (`~/.snotra/skills`, `~/.agents/skills`).
    * The write tools refuse every path into them, even when the open folder
@@ -1306,13 +1468,34 @@ function createFsService({
    * Zeitstempel) und per shell.trashItem in den Papierkorb verschieben.
    * Liefert den Kopienamen oder `{ error }`; eine liegen gebliebene Kopie wird
    * entfernt, damit kein Duplikat im Arbeitsordner zurückbleibt.
+   *
+   * This process is not sandboxed, and the folder may be written by a
+   * sandboxed run as well (#642). So the folder is checked by realpath, and
+   * the copy is created exclusively under a name with a random part: an entry
+   * already at that name — a symlink, dangling or not, included — fails with
+   * EEXIST instead of being written through, and the next attempt takes a
+   * fresh name.
    */
-  async function createRecoveryCopy(absPath, trashItem) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const copyName = `${path.basename(absPath)}.snotra-backup-${stamp}`;
-    const copyPath = path.join(path.dirname(absPath), copyName);
+  async function createRecoveryCopy(absPath, root, trashItem) {
+    const dir = path.dirname(absPath);
+    let copyName = null;
+    let copyPath = null;
     try {
-      await fs.copyFile(absPath, copyPath);
+      const realRoot = await fs.realpath(path.resolve(root));
+      if (!containsPath(realRoot, await fs.realpath(dir))) {
+        throw new Error(WORKSPACE_TOOL_LABELS.outside);
+      }
+      for (let attempt = 1; !copyPath; attempt += 1) {
+        const stamp = now().toISOString().replace(/[:.]/g, '-');
+        const name = `${path.basename(absPath)}.snotra-backup-${stamp}-${randomSuffix()}`;
+        try {
+          await fs.copyFile(absPath, path.join(dir, name), fsConstants.COPYFILE_EXCL);
+          copyName = name;
+          copyPath = path.join(dir, name);
+        } catch (e) {
+          if (e.code !== 'EEXIST' || attempt >= RECOVERY_COPY_NAME_ATTEMPTS) throw e;
+        }
+      }
     } catch (e) {
       return { error: `The recovery copy could not be created: ${e.message}` };
     }
@@ -1332,8 +1515,27 @@ function createFsService({
    * ersetzt oder unverändert — nie halb geschrieben (Abbruch, voller Datenträger,
    * I/O-Fehler). Die Dateirechte (mode) einer bestehenden Datei bleiben erhalten.
    * Schlägt ein Schritt fehl, wird die temporäre Datei wieder entfernt.
+   *
+   * An existing target is written at its real path (#642): the planner checked
+   * and showed the real file, so `CLAUDE.md → AGENTS.md` changes `AGENTS.md`
+   * and stays a link, instead of being replaced by a regular file. The real
+   * path is checked against the real workspace root right here, the temporary
+   * file is created next to it exclusively, and the rename retries Windows'
+   * transient locks like every other atomic writer. A file that does not
+   * exist yet is written where it was named; its folder was checked by
+   * realpath on the way in.
+   *
+   * A hard link (`nlink > 1`) still loses its other names: they keep the old
+   * content, because the rename puts a new file in place of this name.
+   * Writing in place would keep them, but a crash midway would leave the
+   * file half written — exactly what #75 rules out. Atomicity wins.
+   *
+   * @param {string} absPath
+   * @param {string|Buffer} content  a string is written as UTF-8
+   * @param {string} root  the workspace root the target must lie in
    */
-  async function writeFileAtomic(absPath, content) {
+  async function writeFileAtomic(absPath, content, root) {
+    let target = absPath;
     let mode = null;
     try {
       const st = await fs.stat(absPath);
@@ -1341,17 +1543,29 @@ function createFsService({
         throw new Error('Path is a folder, not a file.');
       }
       mode = st.mode & 0o7777;
+      target = await fs.realpath(absPath);
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
     }
+    if (mode !== null) {
+      const realRoot = await fs.realpath(path.resolve(root));
+      if (!containsPath(realRoot, target)) throw new Error(WORKSPACE_TOOL_LABELS.outside);
+    }
     const suffix = `${process.pid.toString(36)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    const tmpPath = path.join(path.dirname(absPath), `.${path.basename(absPath)}.snotra-tmp-${suffix}`);
+    const tmpPath = path.join(path.dirname(target), `.${path.basename(target)}.snotra-tmp-${suffix}`);
     try {
-      await fs.writeFile(tmpPath, content, 'utf8');
+      // `wx`: the temporary name is created, never opened — a link planted
+      // there fails with EEXIST instead of being written through (#642).
+      await fs.writeFile(tmpPath, content, { flag: 'wx' });
+    } catch (e) {
+      if (e.code !== 'EEXIST') await fs.unlink(tmpPath).catch(() => {});
+      throw e;
+    }
+    try {
       if (mode !== null && typeof fs.chmod === 'function') {
         await fs.chmod(tmpPath, mode);
       }
-      await fs.rename(tmpPath, absPath);
+      await renameWithRetry(fs, tmpPath, target, { platform });
     } catch (e) {
       await fs.unlink(tmpPath).catch(() => {});
       throw e;
@@ -1392,6 +1606,13 @@ function createFsService({
         if (st.isDirectory()) {
           return JSON.stringify({ error: 'Path is a folder, not a file.' });
         }
+        // Copying a pipe for the recovery copy would block until a writer
+        // comes (#643), so only a regular file is overwritten.
+        if (!st.isFile()) {
+          return JSON.stringify({
+            error: 'Not a regular file (a pipe, socket or device). Only regular files can be overwritten.',
+          });
+        }
         existed = true;
       } catch {
         existed = false;
@@ -1399,7 +1620,7 @@ function createFsService({
       let recoveryCopy = null;
       if (existed && recovery) {
         if (typeof recovery.trashItem === 'function') {
-          const copy = await createRecoveryCopy(absPath, recovery.trashItem);
+          const copy = await createRecoveryCopy(absPath, root, recovery.trashItem);
           if (copy.error) {
             if (recovery.allowUnrecoverable !== true) {
               return JSON.stringify({ error: copy.error, code: 'recovery_failed' });
@@ -1415,7 +1636,7 @@ function createFsService({
         }
       }
       await fs.mkdir(path.dirname(absPath), { recursive: true });
-      await writeFileAtomic(absPath, args.content);
+      await writeFileAtomic(absPath, args.content, root);
       return JSON.stringify({
         relative_path: rel,
         created: !existed,
@@ -1425,6 +1646,41 @@ function createFsService({
       });
     } catch (e) {
       return JSON.stringify({ error: e.message });
+    }
+  }
+
+  /**
+   * Reads a file an edit tool is about to change (#645): a regular file only
+   * (#643), within the read limit, and UTF-8 text without NUL. Anything else
+   * would be re-encoded on the way back — every invalid byte turned into
+   * U+FFFD, in lines the model never touched — so it is refused and the file
+   * stays as it is. The original bytes come along for a rollback.
+   *
+   * @returns {Promise<{ text: string, buffer: Buffer } | { error: string }>}
+   */
+  async function readFileForEdit(absPath) {
+    const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
+    if (read.notFile) {
+      return { error: read.stats.isDirectory() ? 'Path is a folder, not a file.' : NOT_A_REGULAR_FILE_ERROR };
+    }
+    if (read.tooLarge) {
+      return { error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.` };
+    }
+    if (read.buffer.includes(0)) {
+      return {
+        error:
+          'The file contains NUL bytes — it is binary, or text in an encoding such as UTF-16. ' +
+          'Only UTF-8 text can be edited; the file was left unchanged.',
+      };
+    }
+    try {
+      return { text: UTF8_EDIT_DECODER.decode(read.buffer), buffer: read.buffer };
+    } catch {
+      return {
+        error:
+          'The file is not valid UTF-8 — it may use Latin-1, Windows-1252 or another legacy encoding. ' +
+          'Only UTF-8 text can be edited; the file was left unchanged.',
+      };
     }
   }
 
@@ -1442,52 +1698,29 @@ function createFsService({
     if (args.old_string === args.new_string) {
       return JSON.stringify({ error: 'old_string and new_string must differ.' });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
     if (error) return JSON.stringify({ error });
     try {
-      const st = await fs.stat(absPath);
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Path is a folder, not a file.' });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
-      const text = (await fs.readFile(absPath)).toString('utf8');
-      let count = 0;
-      const firstIndex = text.indexOf(args.old_string);
-      for (let idx = firstIndex; idx !== -1; idx = text.indexOf(args.old_string, idx + args.old_string.length)) {
-        count += 1;
-      }
-      if (count === 0) {
-        return JSON.stringify({
-          error:
-            'old_string was not found. The text must match exactly — including indentation and line breaks.',
-        });
-      }
-      if (count > 1 && args.replace_all !== true) {
-        return JSON.stringify({
-          error: `old_string is not unique (${count} matches). Include more surrounding context or set replace_all=true.`,
-        });
-      }
-      const updated =
-        args.replace_all === true
-          ? text.split(args.old_string).join(args.new_string)
-          : text.slice(0, firstIndex) +
-            args.new_string +
-            text.slice(firstIndex + args.old_string.length);
-      const byteLength = Buffer.byteLength(updated, 'utf8');
+      const original = await readFileForEdit(absPath);
+      if (original.error) return JSON.stringify({ error: original.error });
+      const { text } = original;
+      const applied = applyEditsToText(
+        text,
+        [{ old_string: args.old_string, new_string: args.new_string, replace_all: args.replace_all }],
+        { single: true }
+      );
+      if (applied.error) return JSON.stringify({ error: applied.error });
+      const byteLength = Buffer.byteLength(applied.text, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
           error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
         });
       }
-      await writeFileAtomic(absPath, updated);
+      await writeFileAtomic(absPath, applied.text, root);
       return JSON.stringify({
         relative_path: rel,
-        replacements: args.replace_all === true ? count : 1,
-        first_changed_line: text.slice(0, firstIndex).split(/\r\n|\r|\n/).length,
+        replacements: applied.replacements,
+        first_changed_line: text.slice(0, applied.firstChangedIndex).split(/\r\n|\r|\n/).length,
         bytes_written: byteLength,
       });
     } catch (e) {
@@ -1513,19 +1746,12 @@ function createFsService({
         error: `Too many steps in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Split them across several calls.`,
       });
     }
-    const { absPath, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
     if (error) return JSON.stringify({ error });
     try {
-      const st = await fs.stat(absPath);
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Path is a folder, not a file.' });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
-      const text = (await fs.readFile(absPath)).toString('utf8');
+      const original = await readFileForEdit(absPath);
+      if (original.error) return JSON.stringify({ error: original.error });
+      const { text } = original;
       const applied = applyEditsToText(text, args.edits);
       if (applied.error) return JSON.stringify({ error: applied.error });
       const byteLength = Buffer.byteLength(applied.text, 'utf8');
@@ -1534,7 +1760,7 @@ function createFsService({
           error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
         });
       }
-      await writeFileAtomic(absPath, applied.text);
+      await writeFileAtomic(absPath, applied.text, root);
       return JSON.stringify({
         mode: 'edits',
         relative_path: rel,
@@ -1548,17 +1774,32 @@ function createFsService({
     }
   }
 
-  /** Stellt nach einem fehlgeschlagenen Schreibvorgang die Ausgangsinhalte wieder her. */
+  /**
+   * Stellt nach einem fehlgeschlagenen Schreibvorgang die Ausgangsinhalte wieder her.
+   *
+   * It writes back the original bytes, not the decoded text (#645).
+   */
   async function rollbackPatchedFiles(written) {
     const failed = [];
     for (const entry of written) {
       try {
-        await writeFileAtomic(entry.absPath, entry.original);
+        await writeFileAtomic(entry.absPath, entry.original, entry.root);
       } catch {
         failed.push(entry.relativePath);
       }
     }
     return failed;
+  }
+
+  /**
+   * What makes two spellings one file (#647): device and inode, read as
+   * bigint because a Windows file ID does not fit a double. Where a file
+   * system reports no inode, the real path stands in.
+   */
+  async function fileIdentity(absPath) {
+    const st = await fs.stat(absPath, { bigint: true });
+    if (st.ino !== 0n) return `${st.dev}:${st.ino}`;
+    return fs.realpath(absPath);
   }
 
   /**
@@ -1596,37 +1837,41 @@ function createFsService({
       if (resolved.error) {
         return JSON.stringify({ error: `"${file.relativePath}": ${resolved.error}` });
       }
-      let st;
-      try {
-        st = await fs.stat(resolved.absPath);
-      } catch {
-        return JSON.stringify({
-          error:
-            `"${file.relativePath}" does not exist — apply_patch only changes existing files. ` +
-            `Create new files with write_file_text.`,
-        });
-      }
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: `"${file.relativePath}": Path is a folder, not a file.` });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `"${file.relativePath}": File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
       let original;
+      let identity;
       try {
-        original = (await fs.readFile(resolved.absPath)).toString('utf8');
+        original = await readFileForEdit(resolved.absPath);
+        if (!original.error) identity = await fileIdentity(resolved.absPath);
       } catch (e) {
+        if (e.code === 'ENOENT') {
+          return JSON.stringify({
+            error:
+              `"${file.relativePath}" does not exist — apply_patch only changes existing files. ` +
+              `Create new files with write_file_text.`,
+          });
+        }
         return JSON.stringify({ error: `"${file.relativePath}": ${e.message}` });
       }
-      const source = splitTextForPatch(original);
-      const applied = applyHunksToLines(source.lines, file.hunks, file.relativePath);
+      if (original.error) return JSON.stringify({ error: `"${file.relativePath}": ${original.error}` });
+      // The header paths are compared lexically by the parser; `src/app.js`
+      // and `src/../src/app.js` (or `src/App.js` on a case-insensitive disk)
+      // are still one file, and the second write would drop the first (#647).
+      const twin = planned.find((entry) => entry.identity === identity);
+      if (twin) {
+        return JSON.stringify({
+          error:
+            `"${file.relativePath}" appears more than once in the patch (also as "${twin.relativePath}") — ` +
+            `put all hunks for one file into a single file section.`,
+        });
+      }
+      const source = splitTextForPatch(original.text);
+      const applied = applyHunksToLines(source, file.hunks, file.relativePath, source.eol);
       if (applied.error) return JSON.stringify({ error: applied.error });
       const updated = joinPatchLines(
-        applied.lines,
+        applied,
         resolveTrailingNewline(file.hunks, source.endsWithNewline),
-        source.eol
+        source.eol,
+        source.bom
       );
       const byteLength = Buffer.byteLength(updated, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
@@ -1637,7 +1882,9 @@ function createFsService({
       planned.push({
         relativePath: file.relativePath,
         absPath: resolved.absPath,
-        original,
+        root: resolved.root,
+        identity,
+        original: original.buffer,
         updated,
         byteLength,
         hunks: file.hunks.length,
@@ -1648,7 +1895,7 @@ function createFsService({
     const written = [];
     for (const entry of planned) {
       try {
-        await writeFileAtomic(entry.absPath, entry.updated);
+        await writeFileAtomic(entry.absPath, entry.updated, entry.root);
         written.push(entry);
       } catch (e) {
         const failed = await rollbackPatchedFiles(written);
