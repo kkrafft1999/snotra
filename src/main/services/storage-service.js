@@ -1095,7 +1095,7 @@ function createStorageService({
 
     // Ab hier existiert eine Datei. Laesst sie sich nicht interpretieren
     // (kaputtes JSON, fremder safeStorage-Schluessel z. B. nach der
-    // Umbenennung der App, Verschluesselung hier nicht verfuegbar), darf sie
+    // Umbenennung der App), darf sie
     // NICHT stillschweigend ueberschrieben werden: unreadable = true, der
     // Aufrufer stellt sie in Quarantaene (quarantineUnreadableChatHistory).
     let wasEncrypted = false;
@@ -1106,6 +1106,13 @@ function createStorageService({
       }
       if (data.encrypted === true && typeof data.payload === 'string') {
         wasEncrypted = true;
+        // Without encrypted storage the key is out of reach for this run, not
+        // wrong (#658) — a refusing keychain, a broken signature as in #657.
+        // The file is fine and the next start may read it: leave it in place
+        // and refuse writes, like a failed read.
+        if (!safeStorage.isEncryptionAvailable()) {
+          return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: false, readFailed: true };
+        }
         const decrypted = decryptIfPossible(data.payload);
         if (!decrypted) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
         data = JSON.parse(decrypted);
