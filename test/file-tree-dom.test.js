@@ -516,12 +516,17 @@ test('the note in a subfolder lines up with the names and follows the language',
   const children = container.querySelector('.tree-children[data-path="/ws/docs"]');
   const note = hiddenNote(children);
   assert.equal(note.textContent, '… 1 more entry not shown');
-  assert.equal(note.style.paddingLeft, '40px', 'depth 1: indent 20 + icon 16 + gap 4, like a file name');
+  assert.equal(
+    note.style.paddingLeft,
+    '56px',
+    'depth 1: indent 20 + arrow slot 16 + icon 16 + gap 4, like a file name (#639)'
+  );
 
   const { setLocale } = await importRenderer('i18n.js');
   setLocale('de', { force: true });
   t.after(() => setLocale('en', { force: true }));
-  assert.equal(note.textContent, '… 1 weiterer Eintrag ausgeblendet');
+  // Not "ausgeblendet": that is what the hidden-files switch does (#641).
+  assert.equal(note.textContent, '… 1 weiterer Eintrag nicht angezeigt');
 });
 
 // ── The paths into the content pane go through the file views (#225) ────────
@@ -927,4 +932,555 @@ test('a hidden file opened from a link keeps its preview through a watcher repor
   await emitTreeChanged({ directories: ['/ws'], complete: true });
   assert.equal(document.getElementById('preview-filename').textContent, '.hidden-notes.md');
   assert.equal(previewShown(), true);
+});
+
+// ── Folder switches that overlap (#633) ─────────────────────────────────────
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const rowPaths = (container) => [...container.querySelectorAll('.tree-item')].map((row) => row.dataset.path);
+
+/** The usual folder plus two more to switch to. */
+function switchingFilesystem() {
+  return {
+    ...fakeFilesystem(),
+    '/slow': [fileEntry('/slow', 'slow.txt')],
+    '/other': [fileEntry('/other', 'other.txt')],
+  };
+}
+
+test('an overtaken folder switch draws nothing and reports nothing (#633)', async (t) => {
+  const listing = switchingFilesystem();
+  const reported = [];
+  const opened = [];
+  const { dom, container, tree } = await mountTree({
+    // A network share, say: the first folder takes its time to list.
+    readDirectory: async (dir) => {
+      if (dir === '/slow') await sleep(30);
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  }, {
+    onWorkspaceChanged: (folder) => { reported.push(folder); },
+    onProjectOpened: () => { opened.push(true); },
+  });
+  t.after(dom.cleanup);
+  reported.length = 0;
+  opened.length = 0;
+
+  const first = tree.openProject('/slow');
+  await sleep(5);
+  const second = tree.openProject('/other');
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+
+  assert.deepEqual(rowPaths(container), ['/other/other.txt'], 'only the folder opened last is drawn');
+  assert.deepEqual(reported, ['/other'], 'and only it reaches the chat');
+  assert.equal(opened.length, 1);
+  assert.equal(document.getElementById('project-name').textContent, 'other');
+});
+
+test('a folder main refuses overtakes nothing: the switch before it still finishes (#633)', async (t) => {
+  const listing = switchingFilesystem();
+  const reported = [];
+  const { dom, container, tree } = await mountTree({
+    // Gone since it went into the history: main keeps the folder it had.
+    activateFolder: async (folder) => ({ ok: folder !== '/gone' }),
+    readDirectory: async (dir) => {
+      if (dir === '/slow') await sleep(30);
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  }, { onWorkspaceChanged: (folder) => { reported.push(folder); } });
+  t.after(dom.cleanup);
+  reported.length = 0;
+
+  const first = tree.openProject('/slow');
+  await sleep(5);
+  const second = tree.openProject('/gone');
+  assert.deepEqual(await Promise.all([first, second]), [true, false]);
+
+  assert.deepEqual(rowPaths(container), ['/slow/slow.txt']);
+  assert.deepEqual(reported, ['/slow']);
+});
+
+test('a folder drawn while a newer activation still runs is never announced (#633)', async (t) => {
+  const listing = switchingFilesystem();
+  let mainRoot = '/ws';
+  const reports = [];
+  const { dom, container, tree } = await mountTree({
+    // Main takes the new folder at once, but answers late.
+    activateFolder: async (folder) => {
+      mainRoot = folder;
+      if (folder === '/other') await sleep(25);
+      return { ok: true };
+    },
+    readDirectory: async (dir) => {
+      if (dir === '/slow') await sleep(15);
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  }, {
+    onWorkspaceChanged: async (folder) => {
+      reports.push({ folder, mainRoot });
+      await sleep(5);
+    },
+  });
+  t.after(dom.cleanup);
+  reports.length = 0;
+
+  // /slow is listed before /other's activation answers.
+  const first = tree.openProject('/slow');
+  await sleep(5);
+  const second = tree.openProject('/other');
+  await Promise.all([first, second]);
+
+  assert.deepEqual(reports, [{ folder: '/other', mainRoot: '/other' }], 'the chat hears only of the folder main is on');
+  assert.deepEqual(rowPaths(container), ['/other/other.txt']);
+});
+
+test('a folder switch waits for the announcement still running before main switches (#633)', async (t) => {
+  const listing = switchingFilesystem();
+  const steps = [];
+  const { dom, tree } = await mountTree({
+    activateFolder: async (folder) => { steps.push(`activate ${folder}`); return { ok: true }; },
+    readDirectory: async (dir) => ({ entries: listing[dir] ?? [], hidden: 0 }),
+  }, {
+    onWorkspaceChanged: async (folder) => {
+      steps.push(`report ${folder}`);
+      await sleep(30);
+      steps.push(`reported ${folder}`);
+    },
+  });
+  t.after(dom.cleanup);
+  steps.length = 0;
+
+  const first = tree.openProject('/slow');
+  await until(() => steps.includes('report /slow'));
+  const second = tree.openProject('/other');
+  await Promise.all([first, second]);
+
+  assert.deepEqual(steps, [
+    'activate /slow', 'report /slow', 'reported /slow',
+    'activate /other', 'report /other', 'reported /other',
+  ], 'the chat reads the history of the folder it was told about');
+});
+
+test('the folder left goes at once, and a listing of it that hangs holds nothing up (#633)', async (t) => {
+  let releaseOld;
+  const oldGate = new Promise((resolve) => { releaseOld = resolve; });
+  let releaseNew;
+  const newGate = new Promise((resolve) => { releaseNew = resolve; });
+  const listing = switchingFilesystem();
+  let hang = false;
+  const { dom, container, tree, emitTreeChanged } = await mountTree({
+    readDirectory: async (dir) => {
+      if (dir === '/ws' && hang) await oldGate;
+      if (dir === '/other') await newGate;
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  });
+  t.after(dom.cleanup);
+
+  // A watcher report for /ws sits in the queue, its listing on a share that does not answer.
+  hang = true;
+  await emitTreeChanged({ directories: [], complete: false });
+
+  const opening = tree.openProject('/other');
+  await flush();
+  await flush();
+  assert.deepEqual(rowPaths(container), [], 'no row of /ws stays clickable under the new name');
+
+  releaseNew();
+  assert.equal(await opening, true, 'the new folder did not wait for the old listing');
+  assert.deepEqual(rowPaths(container), ['/other/other.txt']);
+
+  releaseOld();
+  await flush();
+  await flush();
+  assert.deepEqual(rowPaths(container), ['/other/other.txt'], 'the late listing of /ws draws nothing');
+});
+
+test('a file that finishes opening after a folder switch is not selected (#633)', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const listing = switchingFilesystem();
+  const { dom, container, tree, appStore } = await mountTree({
+    readDirectory: async (dir) => ({ entries: listing[dir] ?? [], hidden: 0 }),
+    readFile: async () => { await gate; return { content: '# Titel', size: 7 }; },
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  await tree.openProject('/other');
+  release();
+  await flush();
+  await flush();
+
+  assert.equal(appStore.selectedPath, null, 'README.md belongs to the folder left');
+  assert.equal(appStore.activeTreeItem, null);
+});
+
+test('a link that resolves after a folder switch selects and opens nothing (#633)', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const listing = switchingFilesystem();
+  const { fileViews, contexts } = await capturingViews();
+  const { dom, container, tree, appStore } = await mountTree({
+    readDirectory: async (dir) => {
+      if (dir === '/ws/docs') await gate;
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  }, { fileViews });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  const following = contexts[0].openFile('/ws/docs/notes.md');
+  await flush();
+  await tree.openProject('/other');
+  release();
+
+  assert.deepEqual(await following, { ok: false, reason: 'stale' });
+  assert.equal(appStore.selectedPath, null);
+  assert.equal(document.getElementById('preview-filename').textContent === 'notes.md', false);
+});
+
+test('opening another folder lets go of the selection made in the one before (#633)', async (t) => {
+  const listing = switchingFilesystem();
+  const { dom, container, tree, appStore } = await mountTree({
+    readDirectory: async (dir) => ({ entries: listing[dir] ?? [], hidden: 0 }),
+  });
+  t.after(dom.cleanup);
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(appStore.selectedPath, '/ws/README.md');
+
+  assert.equal(await tree.openProject('/other'), true);
+  assert.equal(appStore.selectedPath, null, 'the next question must not name a file of /ws');
+  assert.equal(appStore.selectedIsDirectory, false);
+  assert.equal(appStore.activeTreeItem, null);
+});
+
+// ── One queue for every rebuild (#636) ──────────────────────────────────────
+
+test('two writes in one folder at once draw every entry once (#636)', async (t) => {
+  const { dom, container, tree, entries } = await mountTree();
+  t.after(dom.cleanup);
+  entries['/ws'] = [...entries['/ws'], fileEntry('/ws', 'neu.txt')];
+
+  // One apply_patch with two files: ChatStream does not wait in between.
+  await Promise.all([tree.notifyExternalFileWrite('neu.txt'), tree.notifyExternalFileWrite('README.md')]);
+
+  assert.deepEqual(rowPaths(container), ['/ws/docs', '/ws/README.md', '/ws/neu.txt']);
+  assert.equal(container.querySelectorAll('.tree-children[data-path="/ws/docs"]').length, 1);
+});
+
+test('a second click on a folder that is still loading waits for that load (#636)', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const listing = fakeFilesystem();
+  const reads = [];
+  const { dom, container } = await mountTree({
+    readDirectory: async (dir) => {
+      reads.push(dir);
+      if (dir === '/ws/docs') await gate;
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  release();
+  await until(() => rowFor(container, '/ws/docs').getAttribute('aria-busy') === null);
+
+  const children = container.querySelector('.tree-children[data-path="/ws/docs"]');
+  assert.deepEqual(rowPaths(children), ['/ws/docs/notes.md'], 'one row per child');
+  assert.equal(reads.filter((dir) => dir === '/ws/docs').length, 1, 'listed once');
+  assert.ok(children.classList.contains('expanded'));
+});
+
+/**
+ * README.md selected, the focus on its @ button, the tree scrolled — and a
+ * `b.txt` next to it that the test writes, deletes or moves.
+ */
+async function mountFocusedTree(t) {
+  const listing = fakeFilesystem();
+  listing['/ws'] = [...listing['/ws'], fileEntry('/ws', 'b.txt')];
+  let deletedListener = null;
+  const mounted = await mountTree({
+    readDirectory: async (dir) => ({ entries: listing[dir] ?? [], hidden: 0 }),
+    moveItem: async (source, dest) => {
+      const from = source.slice(0, source.lastIndexOf('/'));
+      const item = listing[from].find((entry) => entry.path === source);
+      listing[from] = listing[from].filter((entry) => entry !== item);
+      listing[dest] = [...(listing[dest] ?? []), { ...item, path: `${dest}/${item.name}` }];
+      return {};
+    },
+    onFsItemDeleted: (callback) => { deletedListener = callback; },
+  }, { insertChatReference() {} });
+  t.after(mounted.dom.cleanup);
+
+  const { container, appStore } = mounted;
+  rowFor(container, '/ws/README.md').click();
+  await flush();
+  assert.equal(appStore.selectedPath, '/ws/README.md');
+  rowFor(container, '/ws/README.md').querySelector('.tree-item-reference').focus();
+  container.scrollTop = 42;
+  return { ...mounted, listing, deleted: (payload) => deletedListener(payload) };
+}
+
+/** Until the root is drawn again without b.txt where it was. */
+const rootRedrawnWithout = (container, path) =>
+  until(() => rowFor(container, '/ws/README.md') && !rowFor(container, path));
+
+const viewKeepingChanges = {
+  'an agent write': async ({ tree, listing }) => {
+    listing['/ws'] = [...listing['/ws'], fileEntry('/ws', 'neu.txt')];
+    await tree.notifyExternalFileWrite('neu.txt');
+  },
+  'a delete from the context menu': async ({ container, listing, deleted }) => {
+    listing['/ws'] = listing['/ws'].filter((item) => item.name !== 'b.txt');
+    deleted({ path: '/ws/b.txt' });
+    await rootRedrawnWithout(container, '/ws/b.txt');
+  },
+  'a move in the tree': async ({ container, calls }) => {
+    const dataTransfer = createDataTransfer();
+    dispatchDragEvent(rowFor(container, '/ws/b.txt'), 'dragstart', { dataTransfer });
+    dispatchDragEvent(rowFor(container, '/ws/docs'), 'drop', { dataTransfer });
+    await rootRedrawnWithout(container, '/ws/b.txt');
+    assert.deepEqual(calls.moveItem, [], 'the fake above stands in for the recording one');
+  },
+};
+
+for (const [what, change] of Object.entries(viewKeepingChanges)) {
+  test(`selection, focus and scroll survive ${what} (#636)`, async (t) => {
+    const mounted = await mountFocusedTree(t);
+    await change(mounted);
+    await flush();
+
+    const { container, appStore } = mounted;
+    const row = rowFor(container, '/ws/README.md');
+    assert.ok(row.classList.contains('active'), 'the selection stays highlighted');
+    assert.equal(appStore.activeTreeItem, row, 'and points at the new node');
+    assert.equal(
+      document.activeElement,
+      row.querySelector('.tree-item-reference'),
+      'the focus stays on the same place of the new row'
+    );
+    assert.equal(container.scrollTop, 42);
+  });
+}
+
+// ── States of the tree (#639) ───────────────────────────────────────────────
+
+test('a file row keeps the arrow slot, so names of one level line up (#639)', async (t) => {
+  const { dom, container } = await mountTree();
+  t.after(dom.cleanup);
+
+  const arrow = rowFor(container, '/ws/README.md').querySelector('.arrow');
+  assert.ok(arrow.classList.contains('arrow--placeholder'));
+  // The global `hidden` is `display: none !important` and takes the slot along.
+  assert.equal(arrow.classList.contains('hidden'), false);
+  // Measured with the real stylesheet in e2e/hidden-files.test.mjs.
+});
+
+test('a folder that cannot be read says so in its place, in both languages (#639)', async (t) => {
+  const listing = fakeFilesystem();
+  const { dom, container } = await mountTree({
+    readDirectory: async (dir) => (dir === '/ws/docs'
+      ? { entries: [], hidden: 0, unreadable: 'permission' }
+      : { entries: listing[dir] ?? [], hidden: 0 }),
+  });
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  await until(() => container.querySelector('.tree-unreadable'));
+
+  const children = container.querySelector('.tree-children[data-path="/ws/docs"]');
+  const note = children.querySelector(':scope > .tree-unreadable');
+  assert.ok(note, 'in the folder, where its entries would be');
+  assert.ok(children.classList.contains('expanded'));
+  assert.equal(note.textContent, 'No permission to read this folder');
+  assert.equal(note.classList.contains('tree-item'), false, 'not an entry: no keyboard stop, no drag');
+  assert.equal(note.style.paddingLeft, '56px', 'lined up with the names one level in');
+
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('de', { force: true });
+  t.after(() => setLocale('en', { force: true }));
+  assert.equal(note.textContent, 'Keine Berechtigung, diesen Ordner zu lesen');
+});
+
+test('an unreadable project folder says why, and follows a changed reason (#639)', async (t) => {
+  let reason = 'missing';
+  const { dom, container, emitTreeChanged } = await mountTree({
+    readDirectory: async () => ({ entries: [], hidden: 0, unreadable: reason }),
+  });
+  t.after(dom.cleanup);
+  const note = () => container.querySelector(':scope > .tree-unreadable');
+
+  assert.equal(note()?.textContent, 'This folder no longer exists', 'not an empty tree without a word');
+  assert.equal(note().style.paddingLeft, '40px');
+
+  // No rows before and after: only the reason tells the listings apart.
+  reason = 'refused';
+  await emitTreeChanged({ directories: ['/ws'], complete: true });
+  assert.equal(note()?.textContent, 'This folder could not be read', 'a reason without words of its own');
+});
+
+test('a folder that takes its time shows that it is loading, a quick one does not (#639)', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const listing = fakeFilesystem();
+  const { dom, container } = await mountTree({
+    readDirectory: async (dir) => {
+      if (dir === '/ws/docs') await gate;
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  });
+  t.after(dom.cleanup);
+  const row = rowFor(container, '/ws/docs');
+
+  row.click();
+  await flush();
+  assert.equal(row.getAttribute('aria-busy'), 'true', 'busy from the click on');
+  assert.ok(row.querySelector('.arrow').classList.contains('expanded'), 'the arrow turns at once');
+  assert.equal(row.classList.contains('tree-item--loading'), false, 'nothing to see within the delay');
+
+  await sleep(200);
+  assert.ok(row.classList.contains('tree-item--loading'), 'past the delay the row shows it');
+
+  release();
+  await until(() => row.getAttribute('aria-busy') === null);
+  assert.equal(row.classList.contains('tree-item--loading'), false);
+  assert.ok(container.querySelector('.tree-children[data-path="/ws/docs"]').classList.contains('expanded'));
+});
+
+/** A tree whose `/slow` listing waits until the test lets it go. */
+async function mountWithHeldBackRoot(t) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const listing = switchingFilesystem();
+  const mounted = await mountTree({
+    readDirectory: async (dir) => {
+      if (dir === '/slow') await gate;
+      return { entries: listing[dir] ?? [], hidden: 0 };
+    },
+  });
+  t.after(mounted.dom.cleanup);
+  return { ...mounted, release };
+}
+
+const loadingNote = (container) => container.querySelector(':scope > .tree-loading');
+
+test('a project folder that takes its time to list says so in the tree (#639)', async (t) => {
+  const { container, tree, release } = await mountWithHeldBackRoot(t);
+
+  const opening = tree.openProject('/slow');
+  await flush();
+  assert.equal(container.getAttribute('aria-busy'), 'true', 'busy at once');
+  assert.equal(loadingNote(container), null, 'nothing to see within the delay');
+
+  await sleep(200);
+  const note = loadingNote(container);
+  assert.ok(note, 'past the delay a note stands in the tree');
+  assert.equal(note.textContent, 'Loading folder…');
+  assert.equal(note.classList.contains('tree-item'), false, 'not an entry');
+  assert.ok(note.querySelector('.tree-loading-ring'), 'with the ring of a loading folder');
+
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('de', { force: true });
+  t.after(() => setLocale('en', { force: true }));
+  assert.equal(note.textContent, 'Ordner wird geladen…');
+  setLocale('en', { force: true });
+
+  release();
+  assert.equal(await opening, true);
+  assert.equal(loadingNote(container), null, 'gone once the rows are there');
+  assert.equal(container.hasAttribute('aria-busy'), false);
+  assert.deepEqual(rowPaths(container), ['/slow/slow.txt']);
+});
+
+test('an overtaken switch takes its loading note along and holds nothing up (#633, #639)', async (t) => {
+  const { container, tree, release } = await mountWithHeldBackRoot(t);
+
+  const first = tree.openProject('/slow');
+  await sleep(200);
+  assert.ok(loadingNote(container), 'the share does not answer');
+
+  // The listing of /slow never came: the next folder must not wait for it.
+  assert.equal(await tree.openProject('/other'), true);
+  assert.equal(await first, true);
+  assert.deepEqual(rowPaths(container), ['/other/other.txt']);
+  assert.equal(loadingNote(container), null);
+  assert.equal(container.hasAttribute('aria-busy'), false);
+
+  release();
+  await flush();
+  assert.deepEqual(rowPaths(container), ['/other/other.txt'], 'the late listing is stale and not drawn');
+});
+
+test('a quick listing never shows the loading state (#639)', async (t) => {
+  const { dom, container } = await mountTree();
+  t.after(dom.cleanup);
+  const row = rowFor(container, '/ws/docs');
+
+  row.click();
+  await flush();
+  await sleep(200);
+  assert.equal(row.classList.contains('tree-item--loading'), false, 'the timer went with the listing');
+  assert.equal(row.hasAttribute('aria-busy'), false);
+});
+
+// ── File tree details (#641) ────────────────────────────────────────────────
+
+test('text dropped on a folder row moves nothing; only a drag from the tree does (#641)', async (t) => {
+  const { dom, container, calls } = await mountTree();
+  t.after(dom.cleanup);
+
+  // Reads like a path of the workspace, but comes from a text editor.
+  const dataTransfer = createDataTransfer({ data: { 'text/plain': '/ws/README.md' } });
+  const over = dispatchDragEvent(rowFor(container, '/ws/docs'), 'dragover', { dataTransfer });
+  assert.equal(over.defaultPrevented, false, 'the row does not offer itself as a target');
+  dispatchDragEvent(rowFor(container, '/ws/docs'), 'dragenter', { dataTransfer });
+  assert.equal(rowFor(container, '/ws/docs').classList.contains('drop-target'), false);
+
+  dispatchDragEvent(rowFor(container, '/ws/docs'), 'drop', { dataTransfer });
+  await flush();
+  assert.deepEqual(calls.moveItem, []);
+});
+
+test('an agent write to a dot path reaches its row and its preview (#641)', async (t) => {
+  let content = 'A=1';
+  const { dom, container, tree, entries } = await mountTree({
+    readFile: async () => ({ content, size: content.length }),
+  });
+  t.after(dom.cleanup);
+  entries['/ws'] = [
+    { name: '.github', path: '/ws/.github', isDirectory: true },
+    ...entries['/ws'],
+    fileEntry('/ws', '.env'),
+  ];
+  entries['/ws/.github'] = [];
+  await tree.notifyExternalFileWrite('.env');
+  rowFor(container, '/ws/.env').click();
+  await flush();
+  assert.equal(paneText(), 'A=1');
+
+  content = 'A=2';
+  await tree.notifyExternalFileWrite('.env');
+  assert.equal(paneText(), 'A=2', '.env, not env');
+
+  rowFor(container, '/ws/.github').click();
+  await until(() => container.querySelector('.tree-children[data-path="/ws/.github"].expanded'));
+  entries['/ws/.github'] = [fileEntry('/ws/.github', 'ci.yml')];
+  await tree.notifyExternalFileWrite('./.github/ci.yml');
+  assert.ok(rowFor(container, '/ws/.github/ci.yml'), '.github/, not github/');
+});
+
+test('every row carries its full name as a tooltip, for a name cut off deep in the tree (#641)', async (t) => {
+  const { dom, container } = await mountTree();
+  t.after(dom.cleanup);
+
+  assert.equal(rowFor(container, '/ws/README.md').title, 'README.md');
+  assert.equal(rowFor(container, '/ws/docs').title, 'docs');
 });

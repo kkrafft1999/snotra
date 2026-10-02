@@ -143,6 +143,11 @@
    * carries the contrast to the column. */
   --ds-paper: #FFFFFF;
   --ds-paper-ground: #E9E4DC;
+  /* Type on that paper — the note of a page that could not be drawn (#641).
+   * The paper does not follow the theme, so its ink must not either: on
+   * purpose not redefined under [data-theme='dark'], where --ds-grey-strong
+   * would give 1.7:1. 6.7:1 on --ds-paper. */
+  --ds-paper-ink: #5E5C59;
 
   /* ── Component greys ──────────────────────────────────────────────────
    * The scale behind the aliases at the top of styles.css (--text-primary,

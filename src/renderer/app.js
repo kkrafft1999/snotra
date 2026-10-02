@@ -530,6 +530,9 @@ void initAppVersionBadge({ api });
   } catch {
     setSidebarVisible(true, { animate: false });
   }
+  // The resizer lays the columns out as it is built and again after every
+  // column switch — it watches the classes on #app, so the switches above and
+  // applyStartupContentPane() below need no call of their own (#637).
   panelResizer = initSidebarResizer({
     api,
     initialSidebarWidth: uiPrefs.sidebarWidth,
@@ -539,7 +542,6 @@ void initAppVersionBadge({ api });
     // auf — ohne den gemerkten Wunsch des Nutzers zu ueberschreiben.
     setHistoryVisible: (open) => chatHistory.setHistoryOpen(open, { persist: false }),
   });
-  panelResizer.ensureRoomForWorkspace();
   // Ob am Ende ein Ordner offen ist, entscheidet ueber den Startschirm — und
   // damit ueber die Spalte (Issue #258). Deshalb vor dem try, es wird im
   // finally gebraucht.

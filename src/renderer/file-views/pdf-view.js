@@ -11,10 +11,15 @@
 // field in the column for a protected PDF.
 //
 // **Only what is near the viewport is drawn.** Every page has a placeholder
-// of its size from the start, so the scroll bar is right for 300 pages; an
-// IntersectionObserver draws a page when it comes within one screen of the
-// viewport and lets go of its canvas when it moves further away. A 300-page
-// manual therefore costs a handful of canvases, not three hundred.
+// from the start, sized like page 1 — asking pdf.js for the size of every
+// page up front would load each one, thousands in a long scan (#634). So the
+// scroll bar is right for 300 pages of one size; a page of another size takes
+// its own once it comes near the viewport. An IntersectionObserver draws a
+// page when it comes within one screen of the viewport and, when it moves
+// further away, lets go of its canvas and of what pdf.js decoded for it
+// (`page.cleanup()` — for the screen pdf.js only does that by itself after
+// printing). A 300-page manual therefore costs a handful of pages, not three
+// hundred.
 //
 // The interface it implements is documented in the header of `registry.js`.
 
@@ -105,11 +110,16 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       const { api, file } = context;
       let disposed = false;
       let loadingTimer = null;
-      // Every open draws a number; a document that arrives for an older one
-      // is destroyed instead of shown.
+      // Every open draws a number; a read that returns for an older one is
+      // dropped. Which load may show its document decides `pending` below.
       let openGeneration = 0;
       let loaded = null; // { size, mtimeMs } of what is on show
       let handle = null; // { promise, destroy } from openDocument
+      // The open still under way: { size, mtimeMs, handle, stop, stopped,
+      // ask, asked }. Kept so that leaving the view or a newer open can
+      // destroy it — a load waiting at the password prompt never settles on
+      // its own, pdf.js only rejects it in destroy() (#634).
+      let pending = null;
       let doc = null;
       let pageCount = 0;
       let defaultSize = null; // { width, height } in PDF points
@@ -125,6 +135,11 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       // ask again. Never stored, never sent anywhere.
       let password = null;
       let passwordAnswer = null;
+      // The field takes the focus when the form first appears and after the
+      // user's own wrong password — never when a change on disk redraws it
+      // while the user is somewhere else (#634).
+      let passwordAsked = false;
+      let passwordSubmitted = false;
       let observer = null;
       let scrollFrame = 0;
       let resizeTimer = null;
@@ -143,7 +158,12 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       messageEl.className = 'pdf-view__message';
       messageEl.hidden = true;
 
-      hostEl.append(viewEl, messageEl);
+      // Says the zoom after the user changed it — and only then (#641).
+      const announcerEl = document.createElement('p');
+      announcerEl.className = 'sr-only pdf-view__announcer';
+      announcerEl.setAttribute('role', 'status');
+
+      hostEl.append(viewEl, messageEl, announcerEl);
 
       // ── Header tools: page and zoom ─────────────────────────────────────
 
@@ -167,7 +187,10 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       const zoomOutButton = iconButton('pdf-tools__zoom-out', 'M3.5 8h9');
       const zoomValue = document.createElement('output');
       zoomValue.className = 'pdf-tools__zoom';
-      zoomValue.setAttribute('aria-live', 'polite');
+      // Not live: "Width" redraws on every step of a divider drag or a window
+      // resize, and each new percentage would be read out (#641). What the
+      // user zoomed to is said once, through the announcer below.
+      zoomValue.setAttribute('aria-live', 'off');
       const zoomInButton = iconButton('pdf-tools__zoom-in', 'M3.5 8h9M8 3.5v9');
       const fitButton = document.createElement('button');
       fitButton.type = 'button';
@@ -255,10 +278,12 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         return nodes;
       }
 
+      // `mtimeMs` only for 'broken': the bytes pdf.js failed on, so that a
+      // refresh does not start another worker for them.
       let shownError = null;
-      function showError(reason, size) {
+      function showError(reason, size, mtimeMs = null) {
         clearTimeout(loadingTimer);
-        shownError = { reason, size };
+        shownError = { reason, size, mtimeMs };
         const key = ERROR_KEYS[reason] ?? ERROR_KEYS[WORKSPACE_PDF_ERRORS.NOT_FOUND];
         showMessage(messageText(
           t(`fileView.pdf.error.${key}.title`),
@@ -283,6 +308,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       function showPasswordForm(state) {
         clearTimeout(loadingTimer);
         passwordState = state;
+        // A redraw — another language, the file changed on disk — keeps what
+        // is typed, and the focus only if it was in the form (#634). What the
+        // user just sent goes: it is the answer pdf.js turned down.
+        const previous = messageEl.querySelector('.pdf-view__password-input');
+        const typed = passwordSubmitted ? '' : previous?.value ?? '';
+        const takeFocus = !passwordAsked || passwordSubmitted
+          || Boolean(previous && messageEl.contains(document.activeElement));
+        passwordAsked = true;
+        passwordSubmitted = false;
         const form = document.createElement('form');
         form.className = 'pdf-view__password';
         form.noValidate = true;
@@ -295,6 +329,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         input.autocomplete = 'off';
         input.setAttribute('aria-label', t('fileView.pdf.password.field'));
         input.placeholder = t('fileView.pdf.password.field');
+        input.value = typed;
         const submit = document.createElement('button');
         submit.type = 'submit';
         submit.className = 'btn-primary pdf-view__password-submit';
@@ -318,6 +353,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           passwordAnswer = null;
           password = input.value;
           passwordState = 'checking';
+          passwordSubmitted = true;
           submit.disabled = true;
           input.disabled = true;
           answer(password);
@@ -325,11 +361,12 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         // The form is the whole message; the title is read with it.
         showMessage([form], { role: 'group' });
         form.setAttribute('aria-label', t('fileView.pdf.password.title'));
-        input.focus();
+        if (takeFocus) input.focus();
       }
 
-      function onPassword(answer, reason) {
-        if (disposed) return;
+      function onPassword(load, answer, reason) {
+        // A load that was stopped may still ask; nobody is there to answer.
+        if (disposed || pending !== load) return;
         // After a change on disk the remembered password is tried once.
         if (reason === 'need' && password && passwordState !== 'need') {
           passwordState = 'checking';
@@ -338,13 +375,24 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         }
         passwordAnswer = answer;
         showPasswordForm(reason);
+        // From here on the load waits for the user, and whoever asked for it
+        // — the tree's refresh — must not (#634).
+        load.ask();
       }
 
       // ── Opening ─────────────────────────────────────────────────────────
 
+      const sameBytes = (a, b) => Boolean(a && b && a.mtimeMs === b.mtimeMs && a.size === b.size);
+
+      /**
+       * Reads the file and shows it. Settles once the view has done what it
+       * can on its own: the document or a reason is on show, the password
+       * form waits for the user, or the load was stopped because the view
+       * went away or a newer open took over — whatever pdf.js does (#634).
+       */
       async function open() {
         const generation = ++openGeneration;
-        if (!doc) showLoading();
+        if (!doc && !pending) showLoading();
         let result = null;
         try {
           result = await api.readWorkspacePdf(file.path);
@@ -353,42 +401,87 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         }
         if (disposed || generation !== openGeneration) return;
         if (!result?.ok) {
+          stopPending();
           closeDocument();
           showError(result?.reason ?? WORKSPACE_PDF_ERRORS.NOT_FOUND, result?.size);
           return;
         }
-        // Unchanged on disk: keep the document, the zoom and the place.
-        if (doc && loaded && loaded.mtimeMs === result.mtimeMs && loaded.size === result.size) return;
+        if (pending) {
+          // These very bytes are still opening — at the password prompt, say.
+          // A second load would redraw the form, wipe what is typed and take
+          // the focus from wherever the user is (#634).
+          if (sameBytes(pending, result)) return;
+          stopPending();
+        } else if (doc && sameBytes(loaded, result)) {
+          // Unchanged on disk: keep the document, the zoom and the place.
+          return;
+        } else if (shownError?.reason === 'broken' && sameBytes(shownError, result)) {
+          // The bytes pdf.js could not read are still the same: they would
+          // fail again, in a fresh worker, on every report from the watcher.
+          return;
+        }
 
+        const load = { size: result.size, mtimeMs: result.mtimeMs, handle: null };
+        load.stopped = new Promise((resolve) => { load.stop = resolve; });
+        load.asked = new Promise((resolve) => { load.ask = resolve; });
+        pending = load;
+        await Promise.race([loadDocument(load, result.bytes), load.stopped, load.asked]);
+      }
+
+      async function loadDocument(load, bytes) {
+        const current = () => !disposed && pending === load;
         let next;
-        let nextHandle;
         try {
-          nextHandle = await openDocument(api, result.bytes, { onPassword });
-          if (disposed || generation !== openGeneration) {
-            nextHandle.destroy();
+          load.handle = await openDocument(api, bytes, {
+            onPassword: (answer, reason) => onPassword(load, answer, reason),
+          });
+          if (!current()) {
+            letGo(load.handle);
             return;
           }
-          next = await nextHandle.promise;
+          // Raced against the stop: pdf.js's promise may never settle.
+          next = await Promise.race([load.handle.promise, load.stopped]);
         } catch (err) {
-          nextHandle?.destroy();
-          if (disposed || generation !== openGeneration) return;
+          if (!current()) return;
+          pending = null;
+          letGo(load.handle);
           closeDocument();
-          showError('broken', result.size);
+          showError('broken', load.size, load.mtimeMs);
           if (err?.name !== 'InvalidPDFException') console.warn('PDF could not be opened:', err?.message ?? err);
           return;
         }
-        if (disposed || generation !== openGeneration) {
-          nextHandle.destroy();
-          return;
-        }
+        // Stopped: stopPending() has let go of the handle already.
+        if (!current()) return;
+        pending = null;
         const keepPage = doc ? currentPage : 1;
         closeDocument();
-        handle = nextHandle;
+        handle = load.handle;
         doc = next;
-        loaded = { size: result.size, mtimeMs: result.mtimeMs };
+        loaded = { size: load.size, mtimeMs: load.mtimeMs };
         passwordState = null;
         shownError = null;
         await showDocument(keepPage);
+      }
+
+      /** Destroys the open under way, wherever it stands, and settles it. */
+      function stopPending() {
+        const load = pending;
+        if (!load) return;
+        pending = null;
+        // The question belonged to that load.
+        passwordAnswer = null;
+        letGo(load.handle);
+        load.stop();
+      }
+
+      function letGo(target) {
+        if (!target) return;
+        try {
+          // pdf.js destroys asynchronously; a failure there leaves nothing to do.
+          Promise.resolve(target.destroy()).catch(() => {});
+        } catch {
+          // Nothing left to let go of.
+        }
       }
 
       function closeDocument() {
@@ -396,13 +489,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         observer?.disconnect();
         pagesEl.replaceChildren();
         pageSizes.clear();
-        if (handle) {
-          try {
-            handle.destroy();
-          } catch {
-            // Nothing left to let go of.
-          }
-        }
+        letGo(handle);
         handle = null;
         doc = null;
         loaded = null;
@@ -410,15 +497,22 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
 
       async function showDocument(startPage) {
         clearTimeout(loadingTimer);
+        const shownDoc = doc;
         pageCount = doc.numPages;
         let first;
         try {
           first = await doc.getPage(1);
         } catch {
-          showError('broken', loaded?.size);
+          if (disposed || doc !== shownDoc) return;
+          // Nothing of it can be shown: let go of document and worker, and
+          // keep the header to the reason (#641).
+          const { size, mtimeMs } = loaded ?? {};
+          closeDocument();
+          pageCount = 0;
+          showError('broken', size, mtimeMs);
           return;
         }
-        if (disposed) return;
+        if (disposed || doc !== shownDoc) return;
         const viewport = first.getViewport({ scale: 1 });
         defaultSize = { width: viewport.width, height: viewport.height };
         pageSizes.set(1, defaultSize);
@@ -515,11 +609,12 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         const generation = layoutGeneration;
         const pageEl = pagesEl.children[n - 1];
         if (!pageEl) return;
-        const entry = { task: null };
+        const entry = { task: null, page: null };
         rendering.set(n, entry);
         try {
           const page = await doc.getPage(n);
           if (disposed || generation !== layoutGeneration || rendering.get(n) !== entry) return;
+          entry.page = page;
           const base = page.getViewport({ scale: 1 });
           if (!pageSizes.has(n)) {
             pageSizes.set(n, { width: base.width, height: base.height });
@@ -562,6 +657,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         } catch {
           // Already done.
         }
+        // The decoded images and the operator list stay in the renderer
+        // otherwise — 7–9 MB a page for a scan (#634). pdf.js frees them
+        // once the cancelled render has wound down; a page drawn again
+        // fetches them anew.
+        try {
+          entry.page?.cleanup();
+        } catch {
+          // The document is gone already.
+        }
         const pageEl = pagesEl.children[n - 1];
         if (pageEl && !pageEl.classList.contains('pdf-page--failed')) pageEl.replaceChildren();
       }
@@ -584,6 +688,9 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           zoom = next;
         }
         layout({ keepPage, fraction });
+        // Only here, where the user zoomed: a re-layout for the column width
+        // stays silent (#641).
+        announcerEl.textContent = zoomValue.textContent;
       }
 
       function goToPage(n) {
@@ -657,7 +764,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           renderTools();
           context.setMeta({ size: loaded.size, detail: tPlural('fileView.pdf.pages', pageCount, { count: pageCount }) });
         } else if (shownError) {
-          showError(shownError.reason, shownError.size);
+          showError(shownError.reason, shownError.size, shownError.mtimeMs);
         } else if (passwordAnswer) {
           showPasswordForm(passwordState);
         } else {
@@ -682,7 +789,9 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           viewEl.removeEventListener('scroll', onScroll);
           viewEl.removeEventListener('keydown', onKeyDown);
           password = null;
-          passwordAnswer = null;
+          // A load left at the password prompt goes too, with its worker, and
+          // an open() or update() still waiting for it settles (#634).
+          stopPending();
           closeDocument();
         },
         /** For tests: where the view stands. */

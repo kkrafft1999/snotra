@@ -9,7 +9,7 @@ const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 const item = (name, extra = {}) => ({ path: `/ws/${name}`, name, size: 10, modified: 1, ...extra });
 
 /** A view that writes down what the host does with it. */
-function recordingView(id, { kind = 'viewer', exts = ['txt'], save } = {}) {
+function recordingView(id, { kind = 'viewer', exts = ['txt'], save, revalidate = false } = {}) {
   const log = [];
   const view = {
     id,
@@ -20,7 +20,7 @@ function recordingView(id, { kind = 'viewer', exts = ['txt'], save } = {}) {
       node.className = `${id}-node`;
       node.textContent = context.content;
       hostEl.append(node);
-      const entry = { hostEl, node, context, updates: [], unmounted: false };
+      const entry = { hostEl, node, context, updates: [], revalidations: 0, unmounted: false };
       log.push(entry);
       return {
         update(snapshot) {
@@ -31,6 +31,7 @@ function recordingView(id, { kind = 'viewer', exts = ['txt'], save } = {}) {
           entry.unmounted = true;
         },
         save: save ? () => save(entry) : undefined,
+        revalidate: revalidate ? () => { entry.revalidations += 1; } : undefined,
       };
     },
   };
@@ -114,15 +115,70 @@ test('a file no view claims goes to the info card without being read', async (t)
   assert.equal(el('info-type').textContent, 'zip');
 });
 
-test('a file over the preview limit shows the error on the info card', async (t) => {
+test('a file over the preview limit shows its size and, below it, why there is no preview', async (t) => {
   const { host, el, shows } = await mountHost(t, {
-    files: { '/ws/big.txt': { error: 'File too large for preview', size: 2 * 1024 * 1024 } },
+    files: { '/ws/big.txt': { error: 'File too large for preview', reason: 'too-large', size: 2 * 1024 * 1024 } },
   });
 
   await host.open(item('big.txt'));
   assert.deepEqual(shows(), { welcome: false, preview: false, info: true });
-  assert.equal(el('info-size').textContent, 'File too large for preview');
+  // The size main measured, not the tree's older one — and in the Size row.
+  assert.equal(el('info-size').textContent, '2.0 MB');
+  assert.equal(el('info-note').hidden, false);
+  assert.equal(el('info-note').textContent, 'This file is too large to show as text.');
   assert.equal(el('preview-body').children.length, 0);
+});
+
+test('the reason of a failed read is a sentence of the catalogue, never the system message (#641)', async (t) => {
+  const { host, el } = await mountHost(t, {
+    files: {
+      '/ws/locked.txt': { error: "EACCES: permission denied, open '/Users/k/ws/locked.txt'", reason: 'permission' },
+      '/ws/gone.txt': { error: "ENOENT: no such file or directory, open '/Users/k/ws/gone.txt'", reason: 'missing' },
+      '/ws/link.txt': { error: 'Path is outside the working folder.', reason: 'refused' },
+      '/ws/odd.txt': { error: 'EIO: i/o error, read' },
+    },
+  });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+
+  const cases = {
+    'locked.txt': 'Snotra is not allowed to read this file.',
+    'gone.txt': 'This file is no longer there. It was moved, renamed or deleted.',
+    'link.txt': 'This file points out of the open folder through a link, so it is not shown.',
+    // A failure main gives no reason for is still said, not printed raw.
+    'odd.txt': 'This file could not be read.',
+  };
+  for (const [name, sentence] of Object.entries(cases)) {
+    await host.open(item(name));
+    assert.equal(el('info-size').textContent, '10 B', `${name}: the size stays the size`);
+    assert.equal(el('info-note').textContent, sentence, name);
+  }
+
+  // The card follows the language without reading the file again.
+  setLocale('de', { force: true });
+  assert.equal(el('info-note').textContent, 'Diese Datei ließ sich nicht lesen.');
+  assert.equal(el('info-size').textContent, '10 B');
+});
+
+test('every reason has a sentence in both languages', async (t) => {
+  await mountHost(t);
+  const { READ_FAILURES, readFailureMessageKey } = await importRenderer('file-views', 'read-failures.js');
+  const { MESSAGES } = require('../src/shared/i18n');
+  for (const reason of Object.values(READ_FAILURES)) {
+    const key = readFailureMessageKey(reason);
+    assert.ok(MESSAGES.en[key] && MESSAGES.de[key], `${reason} → ${key}`);
+  }
+  assert.equal(new Set(Object.values(READ_FAILURES).map(readFailureMessageKey)).size,
+    Object.keys(READ_FAILURES).length, 'no two reasons share a sentence');
+});
+
+test('a binary file on the info card has no note', async (t) => {
+  const { host, el } = await mountHost(t, { files: { '/ws/big.txt': { error: 'x', reason: 'too-large' } } });
+  await host.open(item('big.txt'));
+  assert.equal(el('info-note').hidden, false);
+  await host.open(item('archive.zip'));
+  assert.equal(el('info-note').hidden, true);
+  assert.equal(el('info-note').textContent, '');
 });
 
 test('switching files unmounts the old view and mounts the new one in a fresh element', async (t) => {
@@ -183,6 +239,23 @@ test('a refresh with new text reaches update(), with the same text it does not',
   assert.equal(log.length, 1, 'the view stays mounted');
 });
 
+test('a refresh with the same text asks the view to revalidate instead (#640)', async (t) => {
+  const { view, log } = recordingView('rec', { revalidate: true });
+  const { host, files } = await mountHost(t, { views: [view], files: { '/ws/a.txt': text('same') } });
+
+  await host.open(item('a.txt'));
+  await host.refresh('/ws/a.txt');
+  // Clicking the open file again is a refresh as well.
+  await host.open(item('a.txt'));
+  assert.equal(log[0].revalidations, 2);
+  assert.deepEqual(log[0].updates, []);
+
+  files['/ws/a.txt'] = text('other');
+  await host.refresh('/ws/a.txt');
+  assert.equal(log[0].revalidations, 2, 'new text is an update, not a revalidation');
+  assert.equal(log[0].updates.length, 1);
+});
+
 test('the plain-text view keeps its node across a refresh', async (t) => {
   const { host, files, el } = await mountHost(t, { files: { '/ws/a.txt': text('old') } });
 
@@ -210,10 +283,11 @@ test('a file that grows past the limit shows the error instead of the stale text
   const { host, files, el, shows } = await mountHost(t, { files: { '/ws/a.txt': text('small') } });
 
   await host.open(item('a.txt'));
-  files['/ws/a.txt'] = { error: 'File too large for preview', size: 5 * 1024 * 1024 };
+  files['/ws/a.txt'] = { error: 'File too large for preview', reason: 'too-large', size: 5 * 1024 * 1024 };
   await host.refresh('/ws/a.txt');
   assert.deepEqual(shows(), { welcome: false, preview: false, info: true });
-  assert.equal(el('info-size').textContent, 'File too large for preview');
+  assert.equal(el('info-size').textContent, '5.0 MB');
+  assert.equal(el('info-note').textContent, 'This file is too large to show as text.');
 
   // Shrinks again: the next report brings the view back.
   files['/ws/a.txt'] = text('small again');
@@ -284,11 +358,15 @@ test('a view that throws on mount leaves the info card, not a half-built pane', 
     mount() { throw new Error('no canvas'); },
   };
   const { host, el, shows } = await mountHost(t, { views: [broken], files: { '/ws/a.txt': text('A') } });
-  t.mock.method(console, 'error', () => {});
+  const logged = t.mock.method(console, 'error', () => {});
 
   await host.open(item('a.txt'));
   assert.deepEqual(shows(), { welcome: false, preview: false, info: true });
-  assert.equal(el('info-size').textContent, 'no canvas');
+  // The cause goes to the console; the card says it in the user's words.
+  assert.equal(el('info-size').textContent, '10 B');
+  assert.equal(el('info-note').textContent, 'This file could not be shown.');
+  assert.equal(logged.mock.callCount(), 1);
+  assert.equal(logged.mock.calls[0].arguments[1].message, 'no canvas');
 });
 
 test('the header size follows the interface language', async (t) => {
@@ -469,6 +547,65 @@ test('a view asks for another file through the host; a view that is gone cannot 
   await host.open(item('b.txt'));
   assert.deepEqual(await first.openFile('/ws/c.txt'), { ok: false, reason: 'stale' });
   assert.deepEqual(asked, ['/ws/b.txt'], 'the replaced view no longer reaches the tree');
+});
+
+test('a watcher report for other folders reaches the view with those folders, and never throws (#640)', async (t) => {
+  const seen = [];
+  const view = {
+    id: 'rev',
+    kind: 'viewer',
+    canHandle: () => true,
+    mount: () => ({
+      update() {},
+      unmount() {},
+      revalidate(options) {
+        seen.push(options);
+        if (seen.length === 2) throw new Error('listing failed');
+      },
+    }),
+  };
+  const { host } = await mountHost(t, { views: [view], files: { '/ws/a.md': text('a') } });
+  const warned = t.mock.method(console, 'warn', () => {});
+  await host.revalidate(['/ws/docs/img']);
+  await host.open(item('a.md'));
+  await host.revalidate(['/ws/docs/img']);
+  await host.revalidate(['/ws/other']);
+  // Clicked again: the same text, checked as a whole.
+  await host.open(item('a.md'));
+  assert.deepEqual(seen, [{ directories: ['/ws/docs/img'] }, { directories: ['/ws/other'] }, undefined]);
+  assert.equal(warned.mock.callCount(), 1);
+});
+
+test('the fragment of a link reaches the view mounted for its file, and no other (#641)', async (t) => {
+  const { view, log } = recordingView('rec', { exts: ['txt', 'md'] });
+  let host;
+  ({ host } = await mountHost(t, {
+    views: [view],
+    files: { '/ws/a.md': text('a'), '/ws/guide.md': text('g'), '/ws/c.txt': text('c') },
+    // The tree selects the row; the click on it opens the file in the host.
+    // A folder is selected without opening anything.
+    openFile: async (p) => {
+      if (p.endsWith('missing.md')) return { ok: false, reason: 'not-found' };
+      if (!p.endsWith('/docs')) void host.open(item(p.split('/').pop()));
+      return { ok: true };
+    },
+  }));
+
+  await host.open(item('a.md'));
+  assert.equal(log[0].context.fragment, '', 'opened from the tree: no fragment');
+  await log[0].context.openFile('/ws/guide.md', { fragment: 'setup' });
+  await flush();
+  assert.equal(log[1].context.file.path, '/ws/guide.md');
+  assert.equal(log[1].context.fragment, 'setup');
+
+  // A failed open does not leave the fragment for a later click …
+  await log[1].context.openFile('/ws/missing.md', { fragment: 'x' });
+  // … nor does one that opened nothing, once another file is opened.
+  await log[1].context.openFile('/ws/docs', { fragment: 'y' });
+  await host.open(item('c.txt'));
+  assert.equal(log[2].context.fragment, '');
+  await host.open(item('guide.md'));
+  assert.equal(log[3].context.fragment, '', 'used once, by the open it was meant for');
 });
 
 test('without an opener a view is told the file is not there', async (t) => {

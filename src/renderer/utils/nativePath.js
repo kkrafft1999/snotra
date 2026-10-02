@@ -73,7 +73,9 @@ export function depthOf(p) {
 export function joinNative(dir, relPosix) {
   const sep = separatorOf(dir);
   const base = String(dir ?? '').replace(TRAILING_SEPS, '');
-  const rel = segmentsOf(String(relPosix ?? '').replace(/^\.\/?/, '')).join(sep);
+  // Only `.` segments drop out: the dot of `.env` or `.github/` is part of
+  // the name, not a `./` (#641).
+  const rel = segmentsOf(relPosix).filter((segment) => segment !== '.').join(sep);
   if (!rel) return base || sep;
   return `${base}${sep}${rel}`;
 }

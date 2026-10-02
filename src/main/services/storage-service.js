@@ -952,11 +952,6 @@ function createStorageService({
     }
   }
 
-  const SIDEBAR_WIDTH_MIN = 150;
-  const SIDEBAR_WIDTH_MAX = 600;
-  const CHAT_PANEL_WIDTH_MIN = 260;
-  const CHAT_PANEL_WIDTH_MAX = 2000;
-
   function clampSidebarWidthLocal(raw) {
     return clampSidebarWidth(raw);
   }

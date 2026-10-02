@@ -397,6 +397,12 @@ summary:focus-visible,
   background: var(--bg-hover);
 }
 
+/* Inside the entry, so the clipped edges of the menu do not cut the ring off
+   (#638, as in the model menu, #583). */
+#folder-history-menu [role='menuitem']:focus-visible {
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
 /* On the hover ground the secondary grey drops to 4.2:1; the small path takes
    the stronger step there (ui-design-tokens.md, #610). */
 .folder-history-item:hover .folder-history-path,
@@ -413,7 +419,7 @@ summary:focus-visible,
 }
 
 /* Entfernen-Aktion (Issue #57, Mülleimer wie im Chat-Verlauf): erst bei Hover bzw. Fokus in der Zeile
- * sichtbar, damit das Menü ruhig bleibt. focus-within deckt Tastatur ab. */
+ * sichtbar, damit das Menü ruhig bleibt. focus-visible deckt Tastatur ab. */
 .folder-history-item-remove {
   flex-shrink: 0;
   display: flex;
@@ -436,8 +442,10 @@ summary:focus-visible,
     transform 0.1s ease;
 }
 
+/* Since #638 the menu puts the focus on its first entry when it opens, also
+   on a click: the bin shows for keyboard focus only, not for that one. */
 .folder-history-item:hover .folder-history-item-remove,
-.folder-history-item:focus-within .folder-history-item-remove {
+.folder-history-item:focus-visible .folder-history-item-remove {
   opacity: 1;
 }
 
@@ -606,7 +614,11 @@ summary:focus-visible,
 
 /* Keine eigene Kante: die uebernimmt .pane-divider, der direkt daneben liegt.
  * Vorher lagen border-right und Divider nebeneinander — zwei Trenner auf
- * einmal. */
+ * einmal.
+ *
+ * Width and min-width are mirrored in SidebarResizer.js and, for the minimum,
+ * in the settings contract — as are those of #chat-panel and #chat-history.
+ * test/sidebar-resizer-dom.test.js fails if they drift apart (#637). */
 #sidebar {
   width: 280px;
   min-width: 180px;
@@ -704,8 +716,62 @@ summary:focus-visible,
   transform: rotate(90deg);
 }
 
-.tree-item .arrow.hidden {
+/* A file row keeps the arrow's slot, empty, so its name lines up with the
+   folders of its level and sits one level in under its own folder (#639).
+   A class of its own: the global `.hidden` is `display: none !important` and
+   took the slot with it. */
+.tree-item .arrow--placeholder {
   visibility: hidden;
+}
+
+/* A folder whose listing takes longer than a moment (#639; the delay is in
+   FileTree.js): the turned arrow gives way to a small ring, the place where
+   the children are about to appear. The row carries aria-busy from the
+   click on. Without motion the ring stands still and still reads as "not
+   ready yet". */
+.tree-item--loading {
+  cursor: progress;
+}
+
+.tree-item--loading .arrow svg {
+  display: none;
+}
+
+.tree-item--loading .arrow::after,
+.tree-loading-ring::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  /* Twice the heartbeat: a ring at the pulse's own pace looks stuck. */
+  animation: treeLoadingSpin calc(var(--ds-motion-pulse) / 2) linear infinite;
+}
+
+/* The project folder's own listing (#639): the same ring, in the slot of the
+   arrow of a top-level row, with the words where the names will start —
+   the icon's 16 px and its 4 px gap after the 16 px slot. */
+.tree-loading-ring {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-right: 20px;
+  color: var(--text-secondary);
+}
+
+@keyframes treeLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-item--loading .arrow::after,
+  .tree-loading-ring::after {
+    animation: none;
+  }
 }
 
 .tree-item .icon {
@@ -741,8 +807,12 @@ summary:focus-visible,
 
 /* Note under a folder cut at READ_DIRECTORY_MAX_ENTRIES (#76). At least a
    row's height so the rhythm of the tree holds, but wrapping rather than cut
-   off: the count is the whole point. No hover, since it is not an entry. */
-.tree-hidden-entries {
+   off: the count is the whole point. No hover, since it is not an entry.
+   A folder that cannot be read says so the same way, in place of its
+   entries (#639), and so does the project folder while it is loading. */
+.tree-hidden-entries,
+.tree-unreadable,
+.tree-loading {
   display: flex;
   align-items: center;
   min-height: 31px;
@@ -754,6 +824,11 @@ summary:focus-visible,
   line-height: 1.3;
   color: var(--text-muted-strong);
   cursor: default;
+}
+
+#tree-container[aria-busy='true'],
+.tree-loading {
+  cursor: progress;
 }
 
 /* @-Knopf in der Zeile (Issue #56): dragfreier Weg zur Chat-Referenz. Wie die
@@ -3251,7 +3326,9 @@ button.chat-msg-attachment:hover {
   align-items: center;
   justify-content: center;
   min-width: 88px;
-  min-height: calc(var(--ds-touch-min) - 4px);
+  /* A touch target: 32 px at least, in the settings and in the header's
+   * "Preview | Source" alike (#641). */
+  min-height: var(--ds-touch-min);
   padding: 0 16px;
   border: 1px solid transparent;
   border-radius: var(--ds-radius-pill);
@@ -4580,6 +4657,14 @@ select.modal-input {
   background: var(--ds-blue-soft);
 }
 
+/* The ring follows the pill (#638). The global ring sets the small radius on
+   every focused button, which turned the chips and the welcome button into
+   rectangles while they had the focus. */
+.chip:focus-visible,
+.welcome-cta:focus-visible {
+  border-radius: var(--ds-radius-pill);
+}
+
 .chip-cmd {
   font-family: var(--ds-font-mono);
   font-size: var(--ds-font-size-md);
@@ -4739,8 +4824,8 @@ select.modal-input {
   overflow: auto;
   padding: 12px 16px;
   font-family: var(--font-mono);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--ds-font-size-base);
+  line-height: var(--ds-line-height-base);
   color: var(--text-primary);
   tab-size: 4;
   white-space: pre;
@@ -4810,9 +4895,9 @@ select.modal-input {
   scroll-margin-top: 12px;
 }
 
+/* 600 like every other heading: 700 is the welcome hero's alone (#641). */
 .md-doc h1 {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: var(--ds-font-size-h2);
   line-height: 1.25;
   letter-spacing: -0.01em;
   margin: 0 0 0.6em;
@@ -4875,7 +4960,7 @@ select.modal-input {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--ds-radius-sm);
 }
 
 .md-doc a[href]:hover {
@@ -4904,11 +4989,12 @@ select.modal-input {
   text-decoration: none;
 }
 
+/* Relative to the text around it, so that code in a heading grows with it. */
 .md-doc code {
   font-family: var(--font-mono);
   font-size: 0.88em;
   padding: 0.1em 0.35em;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm);
   background: var(--ds-grey-card);
   border: 1px solid var(--ds-grey-divider);
 }
@@ -4921,7 +5007,7 @@ select.modal-input {
   background: var(--ds-grey-bg);
   border: 1px solid var(--ds-grey-divider);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--ds-font-size-md);
   line-height: 1.45;
   tab-size: 4;
 }
@@ -5164,6 +5250,25 @@ select.modal-input {
   font-weight: var(--ds-font-weight-bold);
 }
 
+/* The source pane of an SVG holds its text or, in its place, the reason the
+ * text is missing (#641) — the same message as above, centred in a flex
+ * column rather than a grid. */
+.img-source__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.img-source__text[hidden] {
+  display: none;
+}
+
+.img-source__message {
+  margin: auto;
+  padding: 24px;
+}
+
 /* ── PDFs in the file preview (#346) ──────────────────────────────────────
  * Pages as paper on a ground that sets them off from the column: white in
  * both themes, the ground darker than the column in light and darker still
@@ -5216,7 +5321,8 @@ select.modal-input {
 
 .pdf-page__error {
   padding: 16px;
-  color: var(--ds-grey-strong);
+  /* On the paper, which is white in dark as well (#641). */
+  color: var(--ds-paper-ink);
   font-size: var(--ds-font-size-md);
   text-align: center;
 }
@@ -5237,8 +5343,9 @@ select.modal-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: calc(var(--ds-touch-min) - 4px);
-  height: calc(var(--ds-touch-min) - 4px);
+  /* 32 × 32 at least, the touch target of ui-design-tokens.md (#641). */
+  min-width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
   padding: 0 8px;
   border: 0;
   border-radius: var(--ds-radius-pill);
@@ -5277,7 +5384,7 @@ select.modal-input {
 
 .pdf-tools__page {
   width: 3.2em;
-  height: calc(var(--ds-touch-min) - 8px);
+  height: var(--ds-touch-min);
   padding: 0 4px;
   border: 1px solid var(--ds-grey-control-border);
   border-radius: var(--ds-radius-sm);
@@ -5360,13 +5467,24 @@ select.modal-input {
   width: 220px;
 }
 
+/* A wrong password is a failed attempt, said like the other form errors
+ * (`.modal-hint.error`). Not amber: that colour means "runs without
+ * isolation" and nothing else (#641). --ds-error on --ds-surface: 6.2:1
+ * light, 7.6:1 dark. */
 .pdf-view__password-input[aria-invalid='true'] {
-  border-color: var(--ds-warning);
+  border-color: var(--ds-error);
+}
+
+/* The edge says "wrong", so it can no longer turn blue for the focus — and
+ * the field has the focus right after a wrong try. The ring says it. */
+.pdf-view__password-input[aria-invalid='true']:focus {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
 }
 
 .pdf-view__password-feedback {
   min-height: calc(var(--ds-font-size-md) * var(--ds-line-height-base));
-  color: var(--ds-warning);
+  color: var(--ds-error);
 }
 
 /* ── File Info (binary files) ── */
@@ -5399,6 +5517,17 @@ select.modal-input {
 #info-table td:first-child {
   color: var(--text-secondary);
   text-align: right;
+}
+
+/* Why a file with a view is not shown in it (#641): a sentence under the
+ * facts, not a value in the Size row. */
+#info-note {
+  max-width: 360px;
+  margin: 0;
+  text-align: center;
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-base);
+  color: var(--text-secondary);
 }
 
 /* ── Scrollbars ── */

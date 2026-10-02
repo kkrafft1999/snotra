@@ -54,6 +54,16 @@ test('joinNative appends a relative POSIX path in the style of the root', async 
   assert.equal(joinNative('C:\\repo\\', 'src/app.js'), 'C:\\repo\\src\\app.js');
   assert.equal(joinNative('C:\\', 'x.md'), 'C:\\x.md');
   assert.equal(joinNative('C:\\repo', ''), 'C:\\repo');
+  assert.equal(joinNative('/Users/k/repo', '.'), '/Users/k/repo');
+  assert.equal(joinNative('/Users/k/repo', 'src/./app.js'), '/Users/k/repo/src/app.js');
+});
+
+test('joinNative keeps the dot of a dot file or dot folder (#641)', async () => {
+  const { joinNative } = await nativePathPromise;
+  assert.equal(joinNative('/Users/k/repo', '.env'), '/Users/k/repo/.env');
+  assert.equal(joinNative('/Users/k/repo', '.github/workflows/ci.yml'), '/Users/k/repo/.github/workflows/ci.yml');
+  assert.equal(joinNative('/Users/k/repo', './.env'), '/Users/k/repo/.env');
+  assert.equal(joinNative('C:\\repo', '.github/x.yml'), 'C:\\repo\\.github\\x.yml');
 });
 
 test('treePaths helpers resolve parents and depth for Windows paths', async () => {

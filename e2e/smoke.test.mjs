@@ -18,7 +18,7 @@ import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
-import { HOSTILE_HOST, makeTextPdf } from './helpers/pdf-fixtures.mjs';
+import { HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 
@@ -51,6 +51,48 @@ const WORKSPACE_MEMORY_MD = [
  * must never be asked for, a relative link, and what the sanitizer has to cut.
  */
 const REMOTE_IMAGE = 'https://img.snotra-smoke.invalid/badge.png';
+/**
+ * Attributes that would reach into the app window from a fragment (#635): a
+ * second `#chat-panel` before the real one, a dialog role that claims Escape,
+ * the first Tab stop, and a popover in the top layer — and everything that
+ * points at an element of the app by its id: a label that flips the shell
+ * switch with one click on its text, a command button for the settings
+ * dialog, ARIA references into the chat. DOMPurify keeps all of them unless
+ * the app forbids them. Same markup for the preview and the chat.
+ */
+const HIJACK_ATTRIBUTES = [
+  'id', 'name', 'role', 'tabindex', 'popover', 'popovertarget', 'popovertargetaction',
+  'for', 'form', 'list', 'headers', 'command', 'commandfor', 'interestfor',
+  'aria-owns', 'aria-labelledby', 'aria-describedby', 'aria-controls',
+];
+const HIJACK_HTML = '<section data-smoke="hijack"><div id="chat-panel" role="dialog" tabindex="1" popover>Gekapert</div>'
+  + '<button name="hijack" popovertarget="chat-panel" popovertargetaction="show">Auf</button>'
+  + '<label for="input-shell-enabled" data-smoke="shell-label">Weiter</label>'
+  + '<button commandfor="modal-settings" command="show-modal" interestfor="chat-panel">Einstellungen</button>'
+  + '<input list="model-list" form="settings-rule-form" type="text">'
+  + '<span aria-owns="chat-panel" aria-labelledby="chat-input" aria-describedby="chat-input" aria-controls="chat-panel">Verweis</span>'
+  + '<table><tr><td headers="chat-panel">Zelle</td></tr></table></section>';
+
+/**
+ * Runs in the page (`page.evaluate(hijackState, [where, HIJACK_ATTRIBUTES])`):
+ * which of the attributes survived, and is `#chat-panel` still the column?
+ */
+function hijackState([where, attributes]) {
+  const answers = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+  const root = where === 'chat' ? answers[answers.length - 1] : document.querySelector('.md-doc');
+  const box = root?.querySelector('[data-smoke="hijack"]');
+  if (!box) return null;
+  const survivors = [box, ...box.querySelectorAll('*')].flatMap((el) => attributes
+    .filter((name) => el.hasAttribute(name))
+    .map((name) => `${el.tagName.toLowerCase()}[${name}]`));
+  const panel = document.getElementById('chat-panel');
+  return {
+    survivors,
+    chatPanelIsColumn: panel?.tagName === 'ASIDE' && !root.contains(panel)
+      && document.querySelectorAll('#chat-panel').length === 1,
+  };
+}
+
 const PREVIEW_MD = [
   '---',
   'name: vorschau',
@@ -70,6 +112,8 @@ const PREVIEW_MD = [
   '[Bitte klicken](javascript:alert(1)) [Anrufen](tel:+4912345)',
   '',
   '<iframe src="https://example.com"></iframe>',
+  '',
+  HIJACK_HTML,
   '',
 ].join('\n');
 
@@ -110,6 +154,8 @@ const ANSWER_WITH_LINKS = [
   '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" usemap="#karte" alt="Karte"><map name="karte"><area href="?reload" shape="rect" coords="0,0,1,1" alt="Neu laden"></map>',
   '',
   '[Mail mit Zeilen](mailto:a@example.com?body=Hi%0D%0ABye)',
+  '',
+  HIJACK_HTML,
 ].join('\n');
 
 /**
@@ -232,6 +278,8 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
   // #346: JavaScript on open, a link to the web and a link running JavaScript.
   await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({ pages: 3, hostile: true }));
+  // #634: left at its password prompt, it must not hold up the tree.
+  await writeFile(path.join(dir, 'notizen', 'geschuetzt.pdf'), makeEncryptedPdf({ password: 'secret' }));
   // The project source of the AGENTS.md chain (#212) and next to it the bait
   // under `.agents/`, which no longer counts since #432. The global sources
   // live in the real home of whoever runs this and are deliberately not
@@ -381,6 +429,18 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(await page.evaluate(() => globalThis.__pwnedMd ?? null), null, 'nothing hostile ran');
   assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'nothing tried to load');
   assert.deepEqual(remoteRequests, []);
+  // Nothing of the document reaches into the window around it (#635).
+  assert.deepEqual(await page.evaluate(hijackState, ['preview', HIJACK_ATTRIBUTES]),
+    { survivors: [], chatPanelIsColumn: true });
+  // A click on the label's text leaves the shell switch where it was.
+  assert.deepEqual(await page.evaluate(() => {
+    const shell = document.getElementById('input-shell-enabled');
+    const before = shell.checked;
+    let changed = 0;
+    shell.addEventListener('change', () => { changed += 1; }, { once: true });
+    document.querySelector('.md-doc [data-smoke="shell-label"]').click();
+    return { flipped: shell.checked !== before, changed };
+  }), { flipped: false, changed: 0 });
 
   // The relative link opens its file and selects it in the tree.
   await page.evaluate(() => {
@@ -485,6 +545,35 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.deepEqual(pdfRequests, []);
   assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'pdf.js stayed inside the CSP');
   step('PDF-Vorschau geprueft');
+
+  // A protected PDF left at its password prompt (#634). A write into its
+  // folder used to start a second load that waited for a password inside the
+  // tree's sync chain — wiping what was typed and taking the focus — and once
+  // the file was left, that wait never ended: the tree stopped following the
+  // disk for the rest of the session.
+  const folderLabels = () => page.evaluate(() =>
+    [...document.querySelectorAll('#tree-container .tree-item .label')].map((el) => el.textContent));
+  await openInTree('geschuetzt.pdf');
+  await poll(() => page.evaluate(() => !!document.querySelector('.pdf-view__password-input')),
+    { what: 'Passwortfeld der geschuetzten PDF' });
+  await page.fill('.pdf-view__password-input', 'halb-getipp');
+  await page.focus('#chat-input');
+  await writeFile(path.join(workspace, 'notizen', 'am-passwort.md'), '# Am Passwort\n', 'utf8');
+  await poll(async () => (await folderLabels()).includes('am-passwort.md') || null,
+    { what: 'am Passwort angelegte Datei im Baum' });
+  // The refresh of the open file comes after the tree has drawn the row.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.deepEqual(await page.evaluate(() => ({
+    typed: document.querySelector('.pdf-view__password-input')?.value ?? null,
+    focus: document.activeElement?.id ?? null,
+  })), { typed: 'halb-getipp', focus: 'chat-input' }, 'a change in the folder leaves the prompt alone');
+  await openInTree('liste.md');
+  await poll(() => page.evaluate(() => document.getElementById('preview-filename').textContent === 'liste.md'),
+    { what: 'liste.md nach der Passwortabfrage' });
+  await writeFile(path.join(workspace, 'notizen', 'nach-dem-passwort.md'), '# Danach\n', 'utf8');
+  await poll(async () => (await folderLabels()).includes('nach-dem-passwort.md') || null,
+    { what: 'nach dem Verlassen der Passwortabfrage angelegte Datei im Baum' });
+  step('geschuetzte PDF verlassen, der Baum folgt weiter');
 
   // --- Der Baum folgt dem Dateisystem (Issue #158) --------------------------
   // Kein Klick in der App: Die Datei entsteht daneben, so wie sie im Terminal,
@@ -675,6 +764,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(rendered.hasOnerror, false, 'onerror haette entfernt werden muessen');
   assert.equal(rendered.pwned, false, 'das onerror-Skript ist gelaufen');
   assert.equal(rendered.hasImageMap, false, 'an image map must not survive the sanitizer (#594)');
+  assert.deepEqual(await page.evaluate(hijackState, ['chat', HIJACK_ATTRIBUTES]),
+    { survivors: [], chatPanelIsColumn: true }, 'an answer reaches no further than its bubble (#635)');
 
   const mail = rendered.links.find((l) => l.text.includes('Mail mit Zeilen'));
   assert.equal(mail.href, null, 'a mailto: main would refuse must not stay clickable (#595)');

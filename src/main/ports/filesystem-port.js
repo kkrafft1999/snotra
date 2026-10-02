@@ -5,9 +5,12 @@
  * `test/filesystem-port-typedef.test.js` holds the two together.
  *
  * @typedef {Object} FilesystemPort
- * @property {(dirPath: string, options?: {showHidden?: boolean}) => Promise<{entries: Array, hidden: number}>} readDirectory
+ * @property {(dirPath: string, options?: {showHidden?: boolean}) => Promise<{entries: Array, hidden: number, unreadable?: 'permission'|'missing'|'refused'|'failed'}>} readDirectory
  *   `hidden` counts the entries cut off after the first READ_DIRECTORY_MAX_ENTRIES (#76);
  *   it has nothing to do with `showHidden`, which lists dot files as well (#436).
+ *   `unreadable` is set, with no entries, when the folder could not be listed (#639):
+ *   no permission (EACCES, EPERM), gone (ENOENT, ENOTDIR), outside the workspace, or
+ *   anything else. Without it an empty listing is an empty folder.
  * @property {(sourcePath: string, destDir: string) => Promise<object>} moveItem
  * @property {(sourcePaths: string[], destDir: string) => Promise<object>} inspectImport
  *   Counts an import from outside the workspace without writing (#101). The sources
@@ -19,7 +22,10 @@
  * @property {(filePath: string) => Promise<{absPath: string} | {error: string}>} resolveCheckedWorkspacePath
  *   Checks an absolute path against the real workspace (realpath), exactly as sent.
  *   Not fs-service's `resolveWorkspacePath`, which joins a relative path lexically.
- * @property {(filePath: string) => Promise<object>} readFilePreview
+ * @property {(filePath: string) => Promise<{content: string, size: number, modified: number}|{error: string, reason: 'refused'|'missing'|'permission'|'too-large'|'failed', size?: number}>} readFilePreview
+ *   A failed read carries `reason` (#641), the same codes as `unreadable` above plus
+ *   'too-large' (over the 1 MB preview limit, with the file's `size`). `error` is the
+ *   system's message, for the log; the renderer words the reason itself.
  * @property {(imagePath: string) => Promise<object>} readWorkspaceImage
  *   Relative or absolute, as the model wrote it (#244).
  * @property {(pdfPath: string) => Promise<object>} readWorkspacePdf

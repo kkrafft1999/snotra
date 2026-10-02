@@ -35,19 +35,29 @@ const SKILL = [
   '',
 ].join('\n');
 
-async function mountPane(t, { files, openFile, images = {}, openExternal } = {}) {
+async function mountPane(t, { files, openFile, images = {}, openExternal, listings = null } = {}) {
   const dom = setupRendererDom();
   require(path.join(RENDERER_DIR, 'vendor', 'marked.umd.js'));
   globalThis.marked = globalThis.marked || dom.window.marked;
   globalThis.DOMPurify = { addHook() {}, sanitize: (html) => html };
 
   const { createFileViewHost } = await importRenderer('file-views', 'host.js');
-  const calls = { images: [], opened: [], external: [] };
+  const calls = { images: [], opened: [], external: [], listings: [] };
   const api = {
+    // The folder listing of the tree, which the view uses to see whether an
+    // image changed before it reads it again (#640). Absent unless asked for.
+    ...(listings && {
+      readDirectory: async (dir, options) => {
+        calls.listings.push([dir, options]);
+        return { entries: listings[dir] ?? [], hidden: 0 };
+      },
+    }),
     readFile: async (p) => files[p] ?? { error: `ENOENT: ${p}` },
     readWorkspaceImage: async (p) => {
       calls.images.push(p);
-      return images[p] ?? { ok: false, reason: 'not_found' };
+      const entry = images[p];
+      if (typeof entry === 'function') return entry();
+      return entry ?? { ok: false, reason: 'not_found' };
     },
     openExternal: async (url) => {
       calls.external.push(url);
@@ -67,8 +77,15 @@ async function mountPane(t, { files, openFile, images = {}, openExternal } = {})
     delete globalThis.DOMPurify;
     dom.cleanup();
   });
-  return { host, calls, api };
+  return { host, calls, api, images, listings };
 }
+
+/** A listing entry as main's readDirectory gives it: lstat's size and date. */
+const listed = (p, size = 70, modified = 1) => ({ name: p.split('/').pop(), path: p, isDirectory: false, size, modified });
+
+const png = (base64 = PNG_1PX, extra = {}) => ({ ok: true, mime: 'image/png', base64, mtimeMs: 1, size: 70, ...extra });
+// Another valid-looking payload: the view only compares the bytes.
+const PNG_OTHER = `${PNG_1PX.slice(0, -4)}AAA=`;
 
 const file = (content) => ({ content, size: content.length, modified: 1 });
 const item = (p) => ({ path: p, name: p.split('/').pop(), size: 1, modified: 1 });
@@ -243,4 +260,348 @@ test('a link clicked after the file changed does not reach the tree', async (t) 
   link.click();
   await settle();
   assert.deepEqual(calls.opened, [], 'the view is gone, its links with it');
+});
+
+// ── Images that change on disk (#640) ───────────────────────────────────────
+
+const imageSrc = () => $('.md-doc img.md-image')?.getAttribute('src') ?? null;
+
+test('an image rewritten on disk shows its new content after a refresh of the same text', async (t) => {
+  const { host, calls, images } = await mountPane(t, {
+    files: { '/ws/README.md': file('# Readme\n\n![Diagram](diagram.png)\n') },
+    images: { '/ws/diagram.png': png() },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_1PX}`);
+  const article = $('.md-doc h1');
+
+  images['/ws/diagram.png'] = png(PNG_OTHER);
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_OTHER}`);
+  assert.deepEqual(calls.images, ['/ws/diagram.png', '/ws/diagram.png']);
+  assert.equal($('.md-doc h1') === article, true, 'the text was not rendered again');
+});
+
+test('an image rewritten on disk shows its new content after a click on the file and after a text change', async (t) => {
+  let content = '# Readme\n\n![Diagram](diagram.png)\n';
+  const { host, images } = await mountPane(t, {
+    files: { get '/ws/README.md'() { return file(content); } },
+    images: { '/ws/diagram.png': png() },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  images['/ws/diagram.png'] = png(PNG_OTHER);
+  await host.open(item('/ws/README.md'));
+  await settle();
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_OTHER}`, 'clicking the README again');
+
+  images['/ws/diagram.png'] = png();
+  content = '# Readme, edited\n\n![Diagram](diagram.png)\n';
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal($('.md-doc h1').textContent, 'Readme, edited');
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_1PX}`, 'after the text changed');
+});
+
+test('an unchanged image is not swapped, and shows from the cache while it is read again', async (t) => {
+  let release;
+  const { host, images } = await mountPane(t, {
+    files: { '/ws/README.md': file('![Diagram](diagram.png)\n') },
+    images: { '/ws/diagram.png': png() },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+  const img = $('.md-doc img.md-image');
+  let assigned = 0;
+  const { set } = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(img), 'src');
+  Object.defineProperty(img, 'src', { configurable: true, set(value) { assigned += 1; set.call(this, value); } });
+
+  images['/ws/diagram.png'] = () => new Promise((resolve) => { release = () => resolve(png()); });
+  const refreshed = host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_1PX}`, 'still on show while main is asked');
+  release();
+  await refreshed;
+  await settle();
+  assert.equal(assigned, 0, 'the same bytes are not set again');
+});
+
+test('a gone image turns into the placeholder, and back once it is there again', async (t) => {
+  const { host, images } = await mountPane(t, {
+    files: { '/ws/README.md': file('Text ![Diagram](diagram.png) inline.\n') },
+    images: { '/ws/diagram.png': png() },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  delete images['/ws/diagram.png'];
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(imageSrc(), null);
+  assert.match($('.md-doc .chat-md-image').textContent, /Diagram/);
+
+  images['/ws/diagram.png'] = png(PNG_OTHER);
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_OTHER}`);
+  assert.equal($('.md-doc .chat-md-image'), null);
+  assert.equal($('.md-doc img.md-image').alt, 'Diagram', 'the same image element, alt text and all');
+});
+
+test('an image that cannot be decoded ends in the placeholder, not a broken icon', async (t) => {
+  const { host } = await mountPane(t, {
+    files: { '/ws/README.md': file('# Readme\n\n![Diagram](diagram.png)\n') },
+    images: { '/ws/diagram.png': png() },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  // What Chromium reports for bytes that pass main's signature check only.
+  $('.md-doc img.md-image').dispatchEvent(new Event('error'));
+  const placeholder = $('.md-doc .chat-md-image');
+  assert.ok(placeholder, 'the placeholder stands where the image was');
+  assert.equal(placeholder.querySelector('.chat-md-image-reason').textContent, 'Image is damaged');
+  assert.equal(placeholder.getAttribute('aria-label'), 'Diagram: Image is damaged');
+  assert.equal($('.md-doc img'), null);
+
+  // The same broken bytes again: it stays the placeholder instead of flashing.
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal($('.md-doc img'), null);
+});
+
+test('the cache of a document holds 24 images at most, and four reads run at a time', async (t) => {
+  const names = Array.from({ length: 30 }, (_, i) => `img${i}.png`);
+  const images = Object.fromEntries(names.map((name) => [`/ws/${name}`, png()]));
+  let content = names.map((name) => `![${name}](${name})`).join('\n\n');
+  const { host } = await mountPane(t, {
+    files: { get '/ws/README.md'() { return file(content); } },
+    images,
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+  assert.equal($$('.md-doc img.md-image[src]').length, 30);
+
+  // Main is slow now: what shows at once after the text changed comes from
+  // the cache, and the reads queue up four at a time.
+  const pending = [];
+  let inFlight = 0;
+  let most = 0;
+  for (const name of names) {
+    images[`/ws/${name}`] = () => new Promise((resolve) => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      pending.push(() => { inFlight -= 1; resolve(png()); });
+    });
+  }
+  content = `# Images\n\n${content}`;
+  const refreshed = host.refresh('/ws/README.md');
+  await settle();
+  assert.equal($$('.md-doc img.md-image[src]').length, 24);
+  while (pending.length > 0) {
+    pending.shift()();
+    await settle();
+  }
+  await refreshed;
+  assert.equal(most, 4);
+  assert.equal($$('.md-doc img.md-image[src]').length, 30);
+});
+
+test('a language switch renders the text anew but reads no image again (#640)', async (t) => {
+  const { host, calls } = await mountPane(t, {
+    files: { '/ws/README.md': file('![Diagram](diagram.png) and ![Gone](gone.png)\n') },
+    images: { '/ws/diagram.png': png() },
+  });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+  await host.open(item('/ws/README.md'));
+  await settle();
+  assert.equal(calls.images.length, 2);
+
+  setLocale('de', { force: true });
+  await settle();
+  assert.equal(calls.images.length, 2, 'neither the image nor the missing one is asked for again');
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_1PX}`);
+  assert.equal($('.md-doc .chat-md-image-reason').textContent, 'Bild nicht gefunden', 'the reason in the new language');
+});
+
+test('a revalidation reads an image only when the listing says it changed (#640)', async (t) => {
+  const { host, calls, images, listings } = await mountPane(t, {
+    files: { '/ws/README.md': file('![Diagram](docs/img/diagram.png)\n') },
+    images: { '/ws/docs/img/diagram.png': png(PNG_1PX, { size: 70, mtimeMs: 5 }) },
+    listings: { '/ws/docs/img': [listed('/ws/docs/img/diagram.png', 70, 5)] },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+  assert.equal(calls.images.length, 1);
+
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(calls.images.length, 1, 'same size and date: no bytes over the channel');
+  assert.deepEqual(calls.listings, [['/ws/docs/img', { showHidden: true }]]);
+
+  images['/ws/docs/img/diagram.png'] = png(PNG_OTHER, { size: 70, mtimeMs: 9 });
+  listings['/ws/docs/img'] = [listed('/ws/docs/img/diagram.png', 70, 9)];
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal(calls.images.length, 2);
+  assert.equal(imageSrc(), `data:image/png;base64,${PNG_OTHER}`);
+});
+
+test('a revalidation for other folders checks only the images that lie in them', async (t) => {
+  const { host, calls, images, listings } = await mountPane(t, {
+    files: { '/ws/README.md': file('![A](a/x.png)\n\n![B](b/y.png)\n') },
+    images: {
+      '/ws/a/x.png': png(PNG_1PX, { mtimeMs: 1 }),
+      '/ws/b/y.png': png(PNG_1PX, { mtimeMs: 1 }),
+    },
+    listings: { '/ws/a': [listed('/ws/a/x.png')], '/ws/b': [listed('/ws/b/y.png')] },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  images['/ws/b/y.png'] = png(PNG_OTHER, { mtimeMs: 2 });
+  listings['/ws/b'] = [listed('/ws/b/y.png', 70, 2)];
+  await host.revalidate(['/ws/b']);
+  await settle();
+  assert.deepEqual(calls.listings.map(([dir]) => dir), ['/ws/b'], 'folder a is not even listed');
+  assert.deepEqual($$('.md-doc img.md-image').map((img) => img.getAttribute('src').slice(-4)), [PNG_1PX.slice(-4), 'AAA=']);
+});
+
+test('a missing image keeps its placeholder node while the reason stays the same', async (t) => {
+  const { host } = await mountPane(t, {
+    files: { '/ws/README.md': file('Before ![Gone](gone.png) after.\n') },
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+  const placeholder = $('.md-doc .chat-md-image');
+
+  await host.refresh('/ws/README.md');
+  await settle();
+  assert.equal($('.md-doc .chat-md-image') === placeholder, true, 'a selection across it survives');
+});
+
+// ── Links (#641) ────────────────────────────────────────────────────────────
+
+test('an anchor link moves the focus to its heading', async (t) => {
+  const { host } = await mountPane(t, { files: { '/ws/a.md': file(SKILL) } });
+  await host.open(item('/ws/a.md'));
+  await settle();
+
+  const link = $$('.md-doc a').find((a) => a.textContent === 'the steps');
+  link.focus();
+  link.click();
+  await settle();
+  const heading = $('.md-doc [data-md-anchor="steps"]');
+  assert.equal(document.activeElement === heading, true, 'the next Tab goes on from the heading');
+  assert.equal(heading.getAttribute('tabindex'), '-1', 'focusable by script, no Tab stop of its own');
+});
+
+test('a link into another file follows its fragment there', async (t) => {
+  let hostRef = null;
+  const { host, calls } = await mountPane(t, {
+    files: {
+      '/ws/README.md': file('See [the setup](docs/guide.md#setup).\n'),
+      '/ws/docs/guide.md': file('# Guide\n\nIntro.\n\n## Setup\n\nSteps.\n'),
+    },
+    // What the tree does: select the row, whose click opens the file.
+    openFile: async (p) => {
+      void hostRef.open(item(p));
+      return { ok: true };
+    },
+  });
+  hostRef = host;
+  const scrolled = [];
+  t.mock.method(HTMLElement.prototype, 'scrollIntoView', function scrollIntoView() {
+    scrolled.push(this.getAttribute('data-md-anchor'));
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  $('.md-doc a').click();
+  await settle();
+  assert.deepEqual(calls.opened, ['/ws/docs/guide.md']);
+  assert.equal($('#preview-filename').textContent, 'guide.md');
+  const heading = $('.md-doc [data-md-anchor="setup"]');
+  assert.equal(document.activeElement === heading, true);
+  assert.ok(scrolled.includes('setup'));
+
+  // Opened again from the tree, the file starts at the top.
+  scrolled.length = 0;
+  await host.open(item('/ws/README.md'));
+  await host.open(item('/ws/docs/guide.md'));
+  await settle();
+  assert.deepEqual(scrolled, []);
+});
+
+test('a fragment the other file does not have says so there', async (t) => {
+  let hostRef = null;
+  const { host } = await mountPane(t, {
+    files: {
+      '/ws/README.md': file('[Gone](guide.md#nowhere)\n'),
+      '/ws/guide.md': file('# Guide\n'),
+    },
+    openFile: async (p) => {
+      void hostRef.open(item(p));
+      return { ok: true };
+    },
+  });
+  hostRef = host;
+  await host.open(item('/ws/README.md'));
+  await settle();
+  $('.md-doc a').click();
+  await settle();
+  assert.equal($('#preview-filename').textContent, 'guide.md');
+  assert.equal($('.md-notice').textContent, 'There is no heading #nowhere in this file.');
+});
+
+test('a link to a heading of the same file by its name stays in the file', async (t) => {
+  const { host, calls } = await mountPane(t, {
+    files: { '/ws/docs/a.md': file('[Down](a.md#steps)\n\n## Steps\n') },
+  });
+  await host.open(item('/ws/docs/a.md'));
+  await settle();
+  $('.md-doc a').click();
+  await settle();
+  assert.deepEqual(calls.opened, []);
+  assert.equal(document.activeElement === $('.md-doc [data-md-anchor="steps"]'), true);
+});
+
+test('tooltips and notices show a path as it was written, not percent-encoded', async (t) => {
+  const { host, calls } = await mountPane(t, {
+    files: { '/ws/README.md': file('[grün](notizen/grün.md) and [plot](plot%231.md?x=1#top)\n') },
+    openFile: async () => ({ ok: false, reason: 'not-found' }),
+  });
+  await host.open(item('/ws/README.md'));
+  await settle();
+
+  const [green, plot] = $$('.md-doc a');
+  assert.equal(green.title, 'notizen/grün.md');
+  assert.equal(plot.title, 'plot#1.md', 'query and fragment are not part of the name');
+  green.click();
+  await settle();
+  assert.equal($('.md-notice').textContent, 'notizen/grün.md does not exist in the open folder.');
+  plot.click();
+  await settle();
+  assert.deepEqual(calls.opened, ['/ws/notizen/grün.md', '/ws/plot#1.md']);
+});
+
+test('link attributes the document writes itself do nothing', async (t) => {
+  const { host, calls } = await mountPane(t, {
+    files: {
+      '/ws/a.md': file('<a data-link-kind="file" data-target="/etc/hosts">x</a> <a data-link-kind="external" data-anchor="y">y</a>\n'),
+    },
+  });
+  await host.open(item('/ws/a.md'));
+  await settle();
+  for (const link of $$('.md-doc a')) {
+    assert.equal(link.hasAttribute('data-link-kind'), false);
+    link.click();
+  }
+  await settle();
+  assert.deepEqual(calls.opened, []);
+  assert.deepEqual(calls.external, []);
 });

@@ -5,6 +5,7 @@ import {
   svgChevron,
   svgFolder,
   svgFile,
+  dismissOnFocusLeave,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
 import { basenameOf, parentDirOf, joinNative, isInsideDir } from '../utils/nativePath.js';
@@ -74,7 +75,60 @@ export function initFileTree(deps) {
 
 
   // Meldungen des Dateisystem-Watchers laufen nacheinander ab (Issue #158).
+  // Since #636 so does everything else that rebuilds rows — an agent's write,
+  // a delete, a move, an import, a folder's first load, a folder switch: two
+  // rebuilds that both clear a container before either has appended would
+  // both append. A job already running in the queue calls the drawing
+  // functions directly; queueing and awaiting itself from in there would wait
+  // for itself forever.
   let treeSyncChain = Promise.resolve();
+
+  // Which folder the tree belongs to (#633). It counts up whenever main
+  // switches folders, and a folder switch whose number is no longer the
+  // latest has been overtaken. A listing for the folder before is not waited
+  // for once it changes — a share that does not answer must not hold up the
+  // queue, and with it the new folder — and what it brings is not drawn
+  // (`listFolder`, `loadTreeLevel`, `folderListingChanged`, `restoreTreeView`).
+  let treeGeneration = 0;
+  let leaveGeneration = () => {};
+  let generationLeft = new Promise((resolve) => { leaveGeneration = resolve; });
+
+  function startTreeGeneration() {
+    treeGeneration += 1;
+    leaveGeneration();
+    generationLeft = new Promise((resolve) => { leaveGeneration = resolve; });
+  }
+
+  /** Queues a rebuild; resolves with its result, or undefined if it failed. */
+  function enqueueTreeWork(work, failure) {
+    treeSyncChain = treeSyncChain
+      .then(work)
+      .catch((err) => console.warn(`${failure}:`, err?.message ?? err));
+    return treeSyncChain;
+  }
+
+  // Main's side of a folder switch, one step at a time (#633): activating a
+  // folder and announcing it to the chat never overlap. The chat reads main's
+  // history for the folder it is told about, so main must not change folders
+  // meanwhile — and no older call may announce a folder main has already
+  // left. `reportedRoot` is the folder last announced.
+  let switchSteps = Promise.resolve();
+  let reportedRoot = null;
+
+  function inSwitchOrder(step) {
+    const run = switchSteps.then(step);
+    switchSteps = run.catch(() => {});
+    return run;
+  }
+
+  // First loads of folders while they run, by path (#636): a second click on
+  // a folder that is still loading waits for that load instead of starting
+  // another one, which would draw every child twice.
+  const folderLoads = new Map();
+
+  // How long a listing may take before its folder shows that it is loading
+  // (#639). A quicker one would only make the state flicker.
+  const LOADING_STATE_DELAY_MS = 150;
 
   // Drag-&-Drop-State lebt komplett in diesem Component; resetDragState()
   // ist der einzige Aufräumpfad, damit keine Row-Referenzen hängenbleiben.
@@ -97,6 +151,24 @@ export function initFileTree(deps) {
     dragSourceRow = null;
   }
 
+  /**
+   * The path line under a folder name, in the welcome chips and the history
+   * menu. The box is `direction: rtl` so the ellipsis cuts the start of a
+   * long path, not the folder at its end; the path itself is isolated as
+   * left-to-right, otherwise the bidi algorithm moves a leading `/` or `\\`
+   * to the far end (#638).
+   */
+  function folderPathLine(className, folderPath, id) {
+    const line = document.createElement('span');
+    line.className = className;
+    line.id = id;
+    const text = document.createElement('bdi');
+    text.dir = 'ltr';
+    text.textContent = folderPath;
+    line.appendChild(text);
+    return line;
+  }
+
   function renderWelcomeRecent(paths) {
     if (!welcomeRecentSection || !welcomeRecentList) return;
     welcomeRecentList.innerHTML = '';
@@ -106,11 +178,17 @@ export function initFileTree(deps) {
     }
     // Top 4 reichen visuell — fuer mehr ist das Folder-History-Menu da.
     const top = paths.slice(0, 4);
-    for (const p of top) {
+    top.forEach((p, index) => {
+      // The list item holds the button (#638): `role="listitem"` on the
+      // button itself replaced its role, and Chromium announced a focusable
+      // list item without a name.
+      const item = document.createElement('div');
+      item.className = 'chip-recent-item';
+      item.setAttribute('role', 'listitem');
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'chip chip--recent';
-      btn.setAttribute('role', 'listitem');
       btn.title = p;
 
       const main = document.createElement('span');
@@ -118,11 +196,13 @@ export function initFileTree(deps) {
 
       const name = document.createElement('span');
       name.className = 'chip-recent-name';
+      name.id = `welcome-recent-${index}-name`;
       name.textContent = basenameOf(p);
 
-      const sub = document.createElement('span');
-      sub.className = 'chip-recent-path';
-      sub.textContent = p;
+      const sub = folderPathLine('chip-recent-path', p, `welcome-recent-${index}-path`);
+      // Name and path as two words: from the content, Chromium runs them
+      // together ("snotra/Users/…").
+      btn.setAttribute('aria-labelledby', `${name.id} ${sub.id}`);
 
       main.appendChild(name);
       main.appendChild(sub);
@@ -137,8 +217,9 @@ export function initFileTree(deps) {
       btn.addEventListener('click', () => {
         if (p !== appStore.rootPath) openProject(p);
       });
-      welcomeRecentList.appendChild(btn);
-    }
+      item.appendChild(btn);
+      welcomeRecentList.appendChild(item);
+    });
     welcomeRecentSection.classList.remove('hidden');
   }
 
@@ -173,36 +254,74 @@ export function initFileTree(deps) {
    * Aktiviert den Ordner zuerst im Main-Prozess und zeichnet erst danach die
    * Oberflaeche (Issue #68). Lehnt der Main ab — Ordner geloescht, Pfad nicht
    * im Verlauf —, bleibt der bisherige Workspace stehen.
+   *
+   * Only the call whose folder main switched to last draws and reports
+   * (#633). One that a newer call overtook stops after its next await,
+   * without touching the tree or the chat, and resolves to `true`: a folder
+   * is being opened — by the newer call, which answers for it — so a caller
+   * must not fall back to "no folder" underneath it.
    */
   async function openProject(folderPath) {
     // Unsaved changes in an editor are settled before main switches folders;
     // afterwards the file they belong to is out of reach.
     if (!(await contentPane.settleUnsaved('switch-folder'))) return false;
-    const activated = await api.activateFolder(folderPath);
-    if (!activated?.ok) {
+    // The number is taken in the same step as the activation, so it follows
+    // the order in which main switched. A refused folder takes none and
+    // overtakes nothing: main keeps what it had, and so does a switch to it
+    // still being drawn.
+    const ticket = await inSwitchOrder(async () => {
+      const activated = await api.activateFolder(folderPath);
+      if (!activated?.ok) return null;
+      startTreeGeneration();
+      return treeGeneration;
+    });
+    if (ticket === null) {
       await refreshFolderHistory();
       await refreshWelcomeRecent();
       return false;
     }
-    const workspaceChanged = appStore.rootPath !== folderPath;
+    const overtaken = () => ticket !== treeGeneration;
+    if (overtaken()) return true;
     appStore.rootPath = folderPath;
     const name = basenameOf(folderPath);
     projectName.textContent = name;
     projectName.title = folderPath;
     document.title = 'Snotra AI';
 
-    treeContainer.innerHTML = '';
+    // A selection belongs to the folder it was made in: left standing, the
+    // next question would tell the model about a file of the folder just
+    // left (#633).
+    clearSelection();
     contentPane.clear();
+    // The folder left goes at once, not when the queue gets round to it: its
+    // rows would stay clickable under the new name meanwhile.
+    treeContainer.innerHTML = '';
+    treeContainer.removeAttribute('aria-busy');
 
-    drawnShowHidden = appStore.showHiddenFiles === true;
-    expandedHiddenFolders = [];
-    await loadTreeLevel(treeContainer, folderPath, 0);
-    if (workspaceChanged) {
-      await onWorkspaceChanged?.(folderPath, workspaceChanged);
-    }
+    // In the queue (#636), so nothing still running for this folder can
+    // append its rows twice; a job for the folder before has been let go.
+    await enqueueTreeWork(async () => {
+      if (overtaken()) return;
+      treeContainer.innerHTML = '';
+      drawnShowHidden = appStore.showHiddenFiles === true;
+      expandedHiddenFolders = [];
+      await withTreeLoadingState(loadTreeLevel(treeContainer, folderPath, 0), ticket);
+    }, 'Folder could not be drawn');
+    if (overtaken()) return true;
+    // Announced in switch order: a newer activation still running is waited
+    // for, and then this call may be the one overtaken.
+    const announced = await inSwitchOrder(async () => {
+      if (overtaken()) return false;
+      if (reportedRoot !== folderPath) {
+        reportedRoot = folderPath;
+        await onWorkspaceChanged?.(folderPath, true);
+      }
+      onProjectOpened?.();
+      return true;
+    });
+    if (!announced) return true;
     refreshFolderHistory();
     refreshWelcomeRecent();
-    onProjectOpened?.();
     return true;
   }
 
@@ -215,16 +334,58 @@ export function initFileTree(deps) {
     }
   }
 
+  // The folder history is a menu with the keyboard model of #583: the focus
+  // goes into it on open, the arrows move it, Escape hands it back to the
+  // button, and Tab past it closes it (#638). One entry at a time is in the
+  // Tab order; its remove button is reached with Delete, not with Tab.
+
+  /** True while the menu is rebuilt: the focused entry goes away for a moment. */
+  let folderHistoryRebuilding = false;
+
+  function folderHistoryItems() {
+    return [...folderHistoryMenu.querySelectorAll('[role="menuitem"]')];
+  }
+
+  /** Makes `item` the one entry the Tab key stops at (a roving tabindex). */
+  function setCurrentFolderHistoryItem(item) {
+    for (const el of folderHistoryItems()) el.tabIndex = el === item ? 0 : -1;
+  }
+
+  /**
+   * A redraw of the open menu — a language switch, a removed entry — keeps
+   * the focus on the entry it was on (#638).
+   */
   function renderFolderHistory(paths) {
+    const focused = folderHistoryMenu.contains(document.activeElement)
+      ? document.activeElement.closest('[role="menuitem"]')
+      : null;
+    const focusedPath = focused?.dataset.path ?? null;
+    folderHistoryRebuilding = true;
+    try {
+      fillFolderHistory(paths);
+    } finally {
+      folderHistoryRebuilding = false;
+    }
+    const items = folderHistoryItems();
+    const restored = focused ? items.find((el) => el.dataset.path === focusedPath) : null;
+    setCurrentFolderHistoryItem(restored || items[0]);
+    restored?.focus();
+  }
+
+  function fillFolderHistory(paths) {
     folderHistoryMenu.innerHTML = '';
     if (!paths.length) {
+      // An entry that cannot be chosen, not a bare text: a menu holds menu
+      // items only, and the focus has somewhere to go when it opens (#638).
       const empty = document.createElement('div');
       empty.className = 'folder-history-empty';
+      empty.setAttribute('role', 'menuitem');
+      empty.setAttribute('aria-disabled', 'true');
       empty.textContent = t('sidebar.history.empty');
       folderHistoryMenu.appendChild(empty);
       return;
     }
-    for (const p of paths) {
+    paths.forEach((p, index) => {
       const displayName = basenameOf(p);
 
       // Kein <button> mehr: Der Entfernen-Button (Issue #57) läge sonst in
@@ -233,7 +394,7 @@ export function initFileTree(deps) {
       const row = document.createElement('div');
       row.className = 'folder-history-item';
       row.setAttribute('role', 'menuitem');
-      row.tabIndex = 0;
+      row.tabIndex = -1;
       row.title = p;
       row.dataset.path = p;
 
@@ -242,11 +403,15 @@ export function initFileTree(deps) {
 
       const name = document.createElement('span');
       name.className = 'folder-history-name';
+      name.id = `folder-history-${index}-name`;
       name.textContent = displayName;
 
-      const sub = document.createElement('span');
-      sub.className = 'folder-history-path';
-      sub.textContent = p;
+      const sub = folderPathLine('folder-history-path', p, `folder-history-${index}-path`);
+
+      // Named by folder and path alone: from the content, the label of the
+      // remove button ran into it (#638). Delete is announced as a hint.
+      row.setAttribute('aria-labelledby', `${name.id} ${sub.id}`);
+      row.setAttribute('aria-describedby', 'folder-history-hint');
 
       main.appendChild(name);
       main.appendChild(sub);
@@ -254,6 +419,8 @@ export function initFileTree(deps) {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'folder-history-item-remove';
+      // For the pointer; the keyboard has Delete on the entry (#638).
+      remove.tabIndex = -1;
       remove.title = t('sidebar.history.remove');
       remove.setAttribute('aria-label', t('sidebar.history.remove.label', { name: displayName }));
       remove.innerHTML =
@@ -263,7 +430,9 @@ export function initFileTree(deps) {
       row.appendChild(remove);
 
       const openThis = () => {
-        closeFolderHistoryMenu();
+        // The entry goes away with the menu; the focus goes back to its
+        // button, as after a choice in the model menu (#583, #638).
+        closeFolderHistoryMenu({ focusButton: true });
         if (p !== appStore.rootPath) openProject(p);
       };
       row.addEventListener('click', (e) => {
@@ -285,7 +454,7 @@ export function initFileTree(deps) {
         removeFolderFromHistory(p, row);
       });
       folderHistoryMenu.appendChild(row);
-    }
+    });
   }
 
   /**
@@ -314,7 +483,8 @@ export function initFileTree(deps) {
 
     // Nach dem Re-Render existieren die alten Knoten nicht mehr — den
     // Nachbarn über seinen Pfad wiederfinden, sonst ersten Eintrag bzw. Button.
-    const items = [...folderHistoryMenu.querySelectorAll('.folder-history-item')];
+    // With the last one gone, the first entry is the "nothing here" one (#638).
+    const items = folderHistoryItems();
     const target = items.find((el) => el.dataset.path === neighbourPath) || items[0] || btnFolderHistory;
     target.focus();
   }
@@ -323,12 +493,20 @@ export function initFileTree(deps) {
     folderHistoryMenu.classList.remove('hidden');
     folderHistoryMenu.setAttribute('aria-hidden', 'false');
     btnFolderHistory.setAttribute('aria-expanded', 'true');
+    // Into the menu, on its first entry (#638).
+    folderHistoryItems()[0]?.focus();
   }
 
-  function closeFolderHistoryMenu() {
+  /**
+   * `focusButton`: back to the button after Escape or a choice (#638), where
+   * the focus would otherwise drop to the page with the hidden entry. A click
+   * elsewhere or Tab past the menu leaves the focus where it went.
+   */
+  function closeFolderHistoryMenu({ focusButton = false } = {}) {
     folderHistoryMenu.classList.add('hidden');
     folderHistoryMenu.setAttribute('aria-hidden', 'true');
     btnFolderHistory.setAttribute('aria-expanded', 'false');
+    if (focusButton) btnFolderHistory.focus();
   }
 
   btnFolderHistory.addEventListener('click', async (e) => {
@@ -342,10 +520,45 @@ export function initFileTree(deps) {
     openFolderHistoryMenu();
   });
 
+  // The entry the focus is on is the one Tab comes back to (#638).
+  folderHistoryMenu.addEventListener('focusin', (e) => {
+    const item = e.target.closest('[role="menuitem"]');
+    if (item) setCurrentFolderHistoryItem(item);
+  });
+
+  // The keyboard model of a menu, the same as the model menu's (#583, #638).
+  folderHistoryMenu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFolderHistoryMenu({ focusButton: true });
+      return;
+    }
+    const items = folderHistoryItems();
+    if (items.length === 0) return;
+    const index = items.indexOf(document.activeElement?.closest('[role="menuitem"]'));
+    let next = null;
+    if (e.key === 'ArrowDown') next = items[(index + 1) % items.length];
+    else if (e.key === 'ArrowUp') next = items[index <= 0 ? items.length - 1 : index - 1];
+    else if (e.key === 'Home') next = items[0];
+    else if (e.key === 'End') next = items[items.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  });
+
   dismissOnOutsideClick({
     isOpen: () => !folderHistoryMenu.classList.contains('hidden'),
     ownsTarget: (t) => folderHistoryMenu.contains(t) || btnFolderHistory.contains(t),
     onDismiss: closeFolderHistoryMenu,
+  });
+
+  // Tabbing out closes the menu; it does not stay open behind the focus (#638).
+  dismissOnFocusLeave({
+    container: document.getElementById('folder-history-wrapper'),
+    isOpen: () => !folderHistoryMenu.classList.contains('hidden'),
+    isPaused: () => folderHistoryRebuilding,
+    onDismiss: () => closeFolderHistoryMenu(),
   });
 
   document.addEventListener('keydown', (e) => {
@@ -403,21 +616,36 @@ export function initFileTree(deps) {
     e.preventDefault();
     const sourcePath = dragSourcePath;
     if (!sourcePath) return;
-    const expandedBefore = collectExpandedFolderPaths();
     const result = await api.moveItem(sourcePath, appStore.rootPath);
     if (result.error) {
       console.error('Move failed:', result.error);
       clearDragVisualState();
       return;
     }
-    treeContainer.innerHTML = '';
-    await loadTreeLevel(treeContainer, appStore.rootPath, 0);
-    await restoreExpandedFolders(expandedBefore);
+    // In the queue and through the redraw that keeps selection, focus and
+    // scroll (#636).
+    await enqueueTreeWork(() => redrawFolders([appStore.rootPath]), 'Tree could not be redrawn after a move');
     clearDragVisualState();
   });
 
+  /**
+   * Where a name starts in a row of the given depth (#639): the indent, the
+   * arrow's slot — which a file row keeps, empty —, the icon and its gap. The
+   * notes under a folder line up with the names by it.
+   */
+  function treeNameOffset(depth) {
+    return depth * 16 + 4 + 16 + 16 + 4;
+  }
+
   async function loadTreeLevel(parentEl, dirPath, depth) {
-    const { entries: items = [], hidden = 0 } = (await listFolder(dirPath)) || {};
+    const generation = treeGeneration;
+    const { entries: items = [], hidden = 0, unreadable } = (await listFolder(dirPath)) || {};
+    // The folder changed while this listed (#633): the rows belong to the one left.
+    if (generation !== treeGeneration) return;
+    if (unreadable) {
+      parentEl.appendChild(buildUnreadableNote(unreadable, depth));
+      return;
+    }
 
     for (const item of items) {
       const row = document.createElement('div');
@@ -427,6 +655,9 @@ export function initFileTree(deps) {
       row.dataset.path = item.path;
       row.dataset.isDirectory = item.isDirectory;
       row.setAttribute('draggable', 'true');
+      // Deep in the tree or in a narrow sidebar the name is cut off, down to
+      // nothing; the tooltip still reads it in full (#641).
+      row.title = item.name;
 
       const indent = document.createElement('span');
       indent.classList.add('indent');
@@ -438,7 +669,10 @@ export function initFileTree(deps) {
       if (item.isDirectory) {
         arrow.innerHTML = svgChevron();
       } else {
-        arrow.classList.add('hidden');
+        // Keeps the arrow's slot, so a file's name lines up with a folder's
+        // of the same level. Not the global `hidden`: that is `display: none`
+        // and took the slot with it (#639).
+        arrow.classList.add('arrow--placeholder');
       }
       row.appendChild(arrow);
 
@@ -494,7 +728,7 @@ export function initFileTree(deps) {
             void openFileContextMenu(item);
             return;
           }
-          toggleFolder(row, childContainer, item.path, depth + 1);
+          void toggleFolder(row, childContainer, item.path);
         });
       } else {
         row.addEventListener('click', (e) => {
@@ -527,15 +761,97 @@ export function initFileTree(deps) {
     const note = document.createElement('div');
     note.className = 'tree-hidden-entries';
     note.dataset.hiddenCount = String(hidden);
-    // Lined up with the file names above it (a file row has no arrow):
-    // indent + icon + its gap.
-    note.style.paddingLeft = `${depth * 16 + 4 + 16 + 4}px`;
+    // Lined up with the names above it.
+    note.style.paddingLeft = `${treeNameOffset(depth)}px`;
     note.textContent = hiddenEntriesText(hidden);
     return note;
   }
 
   function hiddenEntriesText(hidden) {
     return tPlural('tree.hiddenEntries', hidden, { count: formatCount(hidden) });
+  }
+
+  /**
+   * In place of the rows of a folder that cannot be read (#639) — drawn
+   * empty, it would claim there is nothing in it. Like the cap note no
+   * `.tree-item`; main gives the reason, the catalogue the words.
+   */
+  function buildUnreadableNote(reason, depth) {
+    const note = document.createElement('div');
+    note.className = 'tree-unreadable';
+    note.dataset.reason = reason;
+    note.style.paddingLeft = `${treeNameOffset(depth)}px`;
+    note.textContent = unreadableText(reason);
+    return note;
+  }
+
+  const UNREADABLE_KEYS = {
+    permission: 'tree.unreadable.permission',
+    missing: 'tree.unreadable.missing',
+  };
+
+  function unreadableText(reason) {
+    return t(UNREADABLE_KEYS[reason] ?? 'tree.unreadable.other');
+  }
+
+  /**
+   * A folder that is loading says so (#639): `aria-busy` at once, the visible
+   * state only once the listing takes longer than a moment.
+   */
+  async function withLoadingState(row, pending) {
+    row.setAttribute('aria-busy', 'true');
+    const timer = setTimeout(() => row.classList.add('tree-item--loading'), LOADING_STATE_DELAY_MS);
+    try {
+      return await pending;
+    } finally {
+      clearTimeout(timer);
+      row.removeAttribute('aria-busy');
+      row.classList.remove('tree-item--loading');
+    }
+  }
+
+  /**
+   * The same for the project folder itself (#639): a slow root listing — a
+   * network share — would otherwise leave an empty tree without a word. The
+   * tree is busy at once; past the delay a note with the ring stands where
+   * the rows will appear, and goes when they come or the switch is overtaken.
+   */
+  async function withTreeLoadingState(pending, generation) {
+    // A listing that hangs keeps this waiting after a newer switch took
+    // over; the tree is that switch's by then, and is left alone.
+    const current = () => generation === treeGeneration;
+    treeContainer.setAttribute('aria-busy', 'true');
+    let note = null;
+    const timer = setTimeout(() => {
+      if (!current()) return;
+      note = buildLoadingNote();
+      treeContainer.prepend(note);
+    }, LOADING_STATE_DELAY_MS);
+    try {
+      return await pending;
+    } finally {
+      clearTimeout(timer);
+      note?.remove();
+      if (current()) treeContainer.removeAttribute('aria-busy');
+    }
+  }
+
+  /**
+   * Like the other notes no `.tree-item`. It starts at the top level's indent:
+   * the ring takes the arrow's slot, and the words start where the names will.
+   */
+  function buildLoadingNote() {
+    const note = document.createElement('div');
+    note.className = 'tree-loading';
+    note.style.paddingLeft = '4px';
+    const ring = document.createElement('span');
+    ring.className = 'tree-loading-ring';
+    ring.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.className = 'tree-loading-text';
+    text.textContent = t('tree.loading');
+    note.append(ring, text);
+    return note;
   }
 
   /**
@@ -582,9 +898,7 @@ export function initFileTree(deps) {
   // anderen Editor kommt. Die Meldungen laufen der Reihe nach durch: Zwei
   // gleichzeitig laufende Neuzeichnungen kämen sich am selben DOM in die Quere.
   api.onFsTreeChanged?.((payload) => {
-    treeSyncChain = treeSyncChain
-      .then(() => syncTreeWithFilesystem(payload))
-      .catch((err) => console.warn('Baum-Abgleich fehlgeschlagen:', err?.message ?? err));
+    void enqueueTreeWork(() => syncTreeWithFilesystem(payload), 'Baum-Abgleich fehlgeschlagen');
   });
 
   async function handleFsItemDeleted(deletedPath) {
@@ -598,7 +912,12 @@ export function initFileTree(deps) {
     if (openPath === deletedPath || isInsideDir(openPath, deletedPath)) {
       await contentPane.close('file-removed');
     }
-    await refreshParentOf(deletedPath);
+    // In the queue and through the redraw that keeps selection, focus and
+    // scroll (#636).
+    await enqueueTreeWork(
+      () => redrawFolders([parentDirOf(deletedPath)]),
+      'Tree could not be redrawn after a delete'
+    );
   }
 
   // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen / Löschen).
@@ -613,16 +932,28 @@ export function initFileTree(deps) {
     }
   }
 
-  function handleDragOver(e) {
+  /**
+   * A folder row takes files from outside to copy and rows of the tree to
+   * move — nothing else (#641). Text dragged in from elsewhere may well read
+   * like a path of the workspace; a drop must not move that file unasked.
+   */
+  function acceptsDrag(e) {
     const external = isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath));
-    if (external && !appStore.rootPath) return;
+    if (external) return appStore.rootPath ? 'copy' : null;
+    return dragSourcePath ? 'move' : null;
+  }
+
+  function handleDragOver(e) {
+    const effect = acceptsDrag(e);
+    if (!effect) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = external ? 'copy' : 'move';
+    e.dataTransfer.dropEffect = effect;
   }
 
   function handleDragEnter(e) {
-    const external = isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath));
-    if (external && !appStore.rootPath) return;
+    const effect = acceptsDrag(e);
+    if (!effect) return;
+    const external = effect === 'copy';
     e.preventDefault();
     const row = e.currentTarget;
     if (row === dragSourceRow) return;
@@ -699,7 +1030,11 @@ export function initFileTree(deps) {
     if (arrow) arrow.classList.add('expanded');
   }
 
-  /** Expands a folder that is already drawn, loading it on first use. */
+  /**
+   * Expands a folder that is already drawn, loading it on first use. A first
+   * load draws rows, so this runs in the queue (#636) — found by path, since
+   * a redraw ahead of it in the queue replaces the nodes.
+   */
   async function ensureFolderExpanded(dirPath) {
     const childContainer = treeContainer.querySelector(
       `.tree-children[data-path="${CSS.escape(dirPath)}"]`
@@ -732,17 +1067,28 @@ export function initFileTree(deps) {
     for (let dir = parentDirOf(targetPath); isInsideDir(dir, root); dir = parentDirOf(dir)) {
       ancestors.unshift(dir);
     }
-    for (const dir of ancestors) {
-      if (!(await ensureFolderExpanded(dir))) break;
-    }
+    // A folder switch while this waits makes the link one of the folder left
+    // (#633): nothing of it is selected or opened. The view that asked is
+    // gone by then, the same as for a view that was replaced.
+    const generation = treeGeneration;
+    const stale = () => generation !== treeGeneration;
+    await enqueueTreeWork(async () => {
+      for (const dir of ancestors) {
+        if (!(await ensureFolderExpanded(dir))) break;
+      }
+    }, 'Folders could not be opened');
+    if (stale()) return { ok: false, reason: 'stale' };
 
     const row = rowForPath(targetPath);
     if (row?.dataset.isDirectory === 'true') {
-      await ensureFolderExpanded(targetPath);
-      setActiveItem(row);
+      await enqueueTreeWork(() => ensureFolderExpanded(targetPath), 'Folder could not be opened');
+      if (stale()) return { ok: false, reason: 'stale' };
+      // A redraw queued ahead may have replaced the row meanwhile.
+      const folderRow = rowForPath(targetPath) ?? row;
+      setActiveItem(folderRow);
       appStore.selectedPath = targetPath;
       appStore.selectedIsDirectory = true;
-      row.scrollIntoView?.({ block: 'nearest' });
+      folderRow.scrollIntoView?.({ block: 'nearest' });
       return { ok: true };
     }
     if (row) {
@@ -755,6 +1101,7 @@ export function initFileTree(deps) {
     // or the link spells the name in another case than the disk. Whatever
     // reads, is shown; the tree then has no row to mark.
     const probe = await api.readFile(targetPath);
+    if (stale()) return { ok: false, reason: 'stale' };
     if (!probe || probe.error) {
       return { ok: false, reason: 'not-found' };
     }
@@ -764,6 +1111,7 @@ export function initFileTree(deps) {
       size: probe.size,
       modified: probe.modified,
     });
+    if (stale()) return { ok: false, reason: 'stale' };
     if (shown) {
       appStore.activeTreeItem?.classList.remove('active');
       appStore.activeTreeItem = null;
@@ -787,10 +1135,10 @@ export function initFileTree(deps) {
 
     clearDragVisualState();
 
-    const sourcePath = dragSourcePath || e.dataTransfer.getData('text/plain');
+    // Only a drag from the tree moves (#641) — not text that names a path.
+    const sourcePath = dragSourcePath;
     if (!sourcePath || sourcePath === destDir) return;
 
-    const expandedBefore = collectExpandedFolderPaths();
     const result = await api.moveItem(sourcePath, destDir);
     if (result.error) {
       console.error('Move failed:', result.error);
@@ -798,12 +1146,12 @@ export function initFileTree(deps) {
       return;
     }
 
-    const sourceParent = parentDirFromItemPath(sourcePath);
-    await refreshParentOf(sourcePath);
-    if (sourceParent !== destDir) {
-      await refreshFolder(destDir);
-    }
-    await restoreExpandedFolders(expandedBefore);
+    // Both folders in one redraw, in the queue, keeping selection, focus and
+    // scroll (#636).
+    await enqueueTreeWork(
+      () => redrawFolders([parentDirFromItemPath(sourcePath), destDir]),
+      'Tree could not be redrawn after a move'
+    );
     clearDragVisualState();
   }
 
@@ -850,20 +1198,16 @@ export function initFileTree(deps) {
     }
   }
 
+  /**
+   * In the queue and through the redraw that keeps selection, focus and
+   * scroll (#636). The target folder opens, so what came in can be seen; one
+   * that is drawn already keeps its open subfolders.
+   */
   async function refreshAfterImport(destDir) {
-    if (destDir === appStore.rootPath) {
-      // refreshFolder stellt fuer den Root die aufgeklappten Ordner selbst wieder her.
-      await refreshFolder(destDir);
-      return;
-    }
-    const expandedBefore = collectExpandedFolderPaths();
-    await refreshFolder(destDir);
-    await restoreExpandedFolders(expandedBefore);
-    await expandFolderAtPath(destDir);
-  }
-
-  async function refreshParentOf(itemPath) {
-    await refreshFolder(parentDirOf(itemPath));
+    await enqueueTreeWork(async () => {
+      await redrawFolders([destDir]);
+      if (destDir !== appStore.rootPath) await ensureFolderExpanded(destDir);
+    }, 'Tree could not be redrawn after an import');
   }
 
   // Wird nach einem write_file_text-Tool-Aufruf (KI hat eine Datei angelegt/
@@ -871,14 +1215,21 @@ export function initFileTree(deps) {
   // Neuladen den aktuellen Stand zeigen.
   async function notifyExternalFileWrite(relativePath) {
     if (!appStore.rootPath || typeof relativePath !== 'string') return;
-    const rel = relativePath.trim().replace(/^\.\/?/, '').replace(/^\/+/, '');
-    if (!rel) return;
+    // Only `./` and leading slashes go: the dot of `.env` or `.github/` is
+    // part of the name (#641).
+    const rel = relativePath.trim().replace(/^(?:\.\/|\/)+/, '');
+    if (!rel || rel === '.') return;
     // Relativer POSIX-Pfad aus dem Tool + nativer Workspace-Pfad -> der
     // Ergebnispfad muss dem Stil der Baum-Einträge entsprechen (Windows: `\`),
     // sonst schlägt der Vergleich mit appStore.selectedPath fehl (#73).
     const absPath = joinNative(appStore.rootPath, rel);
 
-    await refreshParentOf(absPath);
+    // One patch writes several files without waiting in between: in the queue
+    // each redraw finishes before the next clears, and the view stays (#636).
+    await enqueueTreeWork(
+      () => redrawFolders([parentDirOf(absPath)]),
+      'Tree could not be redrawn after a write'
+    );
     // The pane decides whether that is the file on show.
     await contentPane.refresh(absPath);
   }
@@ -942,6 +1293,13 @@ export function initFileTree(deps) {
     return note ? Number(note.dataset.hiddenCount) || 0 : 0;
   }
 
+  /** Why the folder's note says it cannot be read (#639); null without one. */
+  function unreadableReasonOfFolder(dirPath) {
+    const note = [...(folderContainer(dirPath)?.children ?? [])]
+      .find((el) => el.classList?.contains('tree-unreadable'));
+    return note?.dataset.reason ?? null;
+  }
+
   /**
    * Steht im Ordner etwas anderes als im Baum? Die Frage kostet ein
    * `readDirectory` und erspart im Regelfall alles Weitere: Schreibt ein
@@ -952,11 +1310,17 @@ export function initFileTree(deps) {
   async function folderListingChanged(dirPath) {
     const rows = rowsOfFolder(dirPath);
     if (!rows) return false;
-    const { entries: items = [], hidden = 0 } = (await listFolder(dirPath)) || {};
+    const generation = treeGeneration;
+    const listing = await listFolder(dirPath);
+    if (generation !== treeGeneration) return false;
+    const { entries: items = [], hidden = 0, unreadable = null } = listing || {};
     const jetzt = items.map((item) => listingSignature(item.path, item.isDirectory));
     const vorher = rows.map((row) => listingSignature(row.dataset.path, row.dataset.isDirectory === 'true'));
-    // Past the cap the drawn rows can stay the same while the count behind them moves.
-    return listingsDiffer(jetzt, vorher) || hidden !== hiddenCountOfFolder(dirPath);
+    // Past the cap the drawn rows can stay the same while the count behind them
+    // moves; an unreadable folder has no rows either way, only its reason.
+    return listingsDiffer(jetzt, vorher)
+      || hidden !== hiddenCountOfFolder(dirPath)
+      || unreadable !== unreadableReasonOfFolder(dirPath);
   }
 
   /**
@@ -968,6 +1332,7 @@ export function initFileTree(deps) {
     const active = document.activeElement;
     const inTree = active && treeContainer.contains(active) ? active : null;
     return {
+      generation: treeGeneration,
       scrollTop: treeContainer.scrollTop,
       focusPath: inTree?.closest('.tree-item')?.dataset?.path ?? null,
       focusReference: Boolean(inTree?.classList?.contains('tree-item-reference')),
@@ -975,6 +1340,8 @@ export function initFileTree(deps) {
   }
 
   function restoreTreeView(view) {
+    // A view of the folder left is no view of this one (#633).
+    if (view.generation !== treeGeneration) return;
     // Die ausgewählte Zeile ist nach dem Neuzeichnen ein anderer Knoten —
     // ohne das hier verlöre die Auswahl ihre Hervorhebung.
     const selectedRow = rowForPath(appStore.selectedPath);
@@ -1040,7 +1407,12 @@ export function initFileTree(deps) {
       await contentPane.close('file-removed');
       return;
     }
-    if (complete && !reportedDirs.includes(parentDirOf(openPath))) return;
+    if (complete && !reportedDirs.includes(parentDirOf(openPath))) {
+      // The file is the same, but an image it shows may lie in one of the
+      // reported folders (#640). The view checks by size and date first.
+      await contentPane.revalidate(reportedDirs);
+      return;
+    }
     await contentPane.refresh(openPath);
   }
 
@@ -1085,8 +1457,16 @@ export function initFileTree(deps) {
       : t('sidebar.hiddenFiles.shortcut');
   }
 
+  /**
+   * Resolves to null instead of waiting on once the folder changes (#633):
+   * the job that asked has nothing left to draw, and the queue moves on to
+   * the new folder.
+   */
   function listFolder(dirPath) {
-    return api.readDirectory(dirPath, { showHidden: appStore.showHiddenFiles === true });
+    return Promise.race([
+      api.readDirectory(dirPath, { showHidden: appStore.showHiddenFiles === true }),
+      generationLeft.then(() => null),
+    ]);
   }
 
   /** On disk, but not in the tree because hidden files are switched off. */
@@ -1138,16 +1518,13 @@ export function initFileTree(deps) {
     appStore.showHiddenFiles = next;
     renderHiddenFilesButton();
     if (!changed) return treeSyncChain;
-    treeSyncChain = treeSyncChain
-      .then(async () => {
-        await redrawForHiddenFiles();
-        // What counts is the state once the queue gets here: after two quick
-        // presses both writes store the last one. A failed write leaves the
-        // tree as asked; only the next start falls back to the stored value.
-        if (persist) await api.setUIPrefs({ showHiddenFiles: appStore.showHiddenFiles === true });
-      })
-      .catch((err) => console.warn('Hidden files could not be switched:', err?.message ?? err));
-    return treeSyncChain;
+    return enqueueTreeWork(async () => {
+      await redrawForHiddenFiles();
+      // What counts is the state once the queue gets here: after two quick
+      // presses both writes store the last one. A failed write leaves the
+      // tree as asked; only the next start falls back to the stored value.
+      if (persist) await api.setUIPrefs({ showHiddenFiles: appStore.showHiddenFiles === true });
+    }, 'Hidden files could not be switched');
   }
 
   function toggleHiddenFiles() {
@@ -1159,25 +1536,43 @@ export function initFileTree(deps) {
   });
   renderHiddenFilesButton();
 
-  async function toggleFolder(row, childContainer, dirPath, depth) {
+  /**
+   * Opens or closes a folder row. Its first load runs in the queue (#636) and
+   * is shared with a second click while it lasts. The arrow turns at once, so
+   * the click shows it was taken, and a slow listing shows itself (#639).
+   */
+  async function toggleFolder(row, childContainer, dirPath) {
     const arrow = row.querySelector('.arrow');
-    const isExpanded = childContainer.classList.contains('expanded');
-
-    if (isExpanded) {
-      childContainer.classList.remove('expanded');
-      arrow.classList.remove('expanded');
-    } else {
-      if (childContainer.dataset.loaded === 'false') {
-        await loadTreeLevel(childContainer, dirPath, depth);
-        childContainer.dataset.loaded = 'true';
-      }
-      childContainer.classList.add('expanded');
-      arrow.classList.add('expanded');
-    }
-
+    // Selected before the load: a redraw while it runs puts the highlight on
+    // the new row by the path.
     setActiveItem(row);
     appStore.selectedPath = dirPath;
     appStore.selectedIsDirectory = true;
+
+    if (childContainer.classList.contains('expanded')) {
+      childContainer.classList.remove('expanded');
+      arrow.classList.remove('expanded');
+      return;
+    }
+    if (childContainer.dataset.loaded === 'true') {
+      childContainer.classList.add('expanded');
+      arrow.classList.add('expanded');
+      return;
+    }
+    arrow.classList.add('expanded');
+    const opened = await withLoadingState(row, loadFolderOnce(dirPath));
+    // A load that failed leaves the folder closed; the arrow turns back.
+    if (!opened) arrow.classList.remove('expanded');
+  }
+
+  function loadFolderOnce(dirPath) {
+    let load = folderLoads.get(dirPath);
+    if (!load) {
+      load = enqueueTreeWork(() => ensureFolderExpanded(dirPath), 'Folder could not be opened')
+        .finally(() => folderLoads.delete(dirPath));
+      folderLoads.set(dirPath, load);
+    }
+    return load;
   }
 
   async function selectFile(row, item) {
@@ -1188,7 +1583,10 @@ export function initFileTree(deps) {
     // The selection follows only once the pane shows the file: an editor with
     // unsaved changes may keep it, and a quicker second click overtakes this
     // one — either way the row must not claim a file that is not on show.
+    const generation = treeGeneration;
     if (!(await contentPane.open(item))) return;
+    // Nor a row of a folder left meanwhile (#633).
+    if (generation !== treeGeneration) return;
     setActiveItem(row);
     appStore.selectedPath = item.path;
     appStore.selectedIsDirectory = false;
@@ -1225,6 +1623,12 @@ export function initFileTree(deps) {
     }
     for (const note of treeContainer.querySelectorAll('.tree-hidden-entries')) {
       note.textContent = hiddenEntriesText(Number(note.dataset.hiddenCount) || 0);
+    }
+    for (const note of treeContainer.querySelectorAll('.tree-unreadable')) {
+      note.textContent = unreadableText(note.dataset.reason);
+    }
+    for (const text of treeContainer.querySelectorAll('.tree-loading-text')) {
+      text.textContent = t('tree.loading');
     }
     if (!folderHistoryMenu.classList.contains('hidden')) void refreshFolderHistory();
   });

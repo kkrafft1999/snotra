@@ -196,7 +196,28 @@ export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keep
         // An image map would be a second kind of link the hook above never
         // sees: `<area href="?x">` reloads the app (CR-B11-08).
         FORBID_TAGS: ['style', 'iframe', 'form', 'video', 'audio', 'source', 'track', 'picture', 'map', 'area'],
-        FORBID_ATTR: ['style', 'srcset', 'poster', 'background', 'usemap'],
+        // The fragment lands in the app window, and the workspace is not
+        // trusted (CR-B18-03, #635): an `id` would shadow one of the app's
+        // own (`#chat-panel`), a `role="dialog"` would claim Escape from a
+        // pending approval, a positive `tabindex` the first Tab stop of the
+        // window, and a `popover` with its `popovertarget` a box in the top
+        // layer over everything. `name` is the `id` of old HTML. Heading
+        // anchors do not need any of them: the preview sets its own
+        // `data-md-anchor` after this has run.
+        // Nor may anything point at an element of the app by its id: a
+        // `<label for="input-shell-enabled">` would switch shell commands on
+        // with one click on its text, `for="btn-chat-send"` would send the
+        // composer, `form`, `commandfor` and `interestfor` would drive the
+        // app's own forms, dialogs and popovers. The ARIA references
+        // (`aria-owns`, `aria-labelledby`, …) would rewire the window's
+        // accessibility tree, so `aria-*` stays out as a whole — Markdown
+        // writes none, only raw HTML in it does.
+        FORBID_ATTR: [
+          'style', 'srcset', 'poster', 'background', 'usemap',
+          'id', 'name', 'role', 'tabindex', 'popover', 'popovertarget', 'popovertargetaction',
+          'for', 'form', 'list', 'headers', 'command', 'commandfor', 'interestfor',
+        ],
+        ALLOW_ARIA_ATTR: false,
       });
     } finally {
       keepRelativeLinks = false;

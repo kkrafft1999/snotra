@@ -690,7 +690,7 @@ test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async (
     chatPanelWidth: 100,
   });
   let prefs = await storage.readUIPrefs();
-  assert.equal(prefs.sidebarWidth, 150);
+  assert.equal(prefs.sidebarWidth, 180);
   assert.equal(prefs.chatPanelWidth, 260);
 
   await storage.writeUIPrefs({
