@@ -31,6 +31,9 @@
         "asar": {
           "unpack": "**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**"
         },
+        "afterComplete": [
+          "./scripts/sign-macos-adhoc.js"
+        ],
         "ignore": [
           "^/(?!(src|system-skills|node_modules)(/|$)|package\\.json$|LICENSE$)",
           "/\\.DS_Store$",
