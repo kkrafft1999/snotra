@@ -127,6 +127,9 @@ export function initChatStream({
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
+  onWorkspaceFileRead,
+  // The conversation on screen changed (#347); the tree redraws its marks.
+  onChatSwitched,
   approvalCards,
   openSkillSettings,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
@@ -862,6 +865,7 @@ export function initChatStream({
 
   /** After the screen switched chats: the send button, the cards and the history follow. */
   function afterChatSwitch() {
+    onChatSwitched?.();
     syncChatInFlight();
     approvalCards?.retainChats?.(liveChatIds());
     notifyRunsChanged();
@@ -1088,13 +1092,19 @@ export function initChatStream({
         syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
       }
     }
+    // The tree marks what a run in the open folder read (#347).
+    if (p.type === 'workspace' && p.event === 'fileRead' && typeof p.relativePath === 'string') {
+      if (run.toolRoot === appStore.rootPath && typeof onWorkspaceFileRead === 'function') {
+        onWorkspaceFileRead(p.relativePath, run.chatId);
+      }
+    }
     if (p.type === 'workspace' && p.event === 'fileWritten' && typeof p.relativePath === 'string') {
       // Ein ueberschriebenes Bild traegt seinen neuen Inhalt nicht im
       // Pfad — der Cache aus #244 zeigte sonst weiter den alten Stand.
       clearWorkspaceImageCache();
       // The tree shows the open folder; a run in another one wrote elsewhere.
       if (run.toolRoot === appStore.rootPath && typeof onWorkspaceFileWritten === 'function') {
-        onWorkspaceFileWritten(p.relativePath);
+        onWorkspaceFileWritten(p.relativePath, run.chatId);
       }
     }
   }

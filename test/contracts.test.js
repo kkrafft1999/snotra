@@ -18,6 +18,7 @@ const {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
+  createWorkspaceFileReadEvent,
   isChatErrorCode,
   isChatPhase,
   isToolLinePhase,
@@ -270,6 +271,11 @@ test('event factories match the push payload shapes', () => {
   assert.deepEqual(createWorkspaceFileWrittenEvent('src/a.js'), {
     type: 'workspace',
     event: 'fileWritten',
+    relativePath: 'src/a.js',
+  });
+  assert.deepEqual(createWorkspaceFileReadEvent('src/a.js'), {
+    type: 'workspace',
+    event: 'fileRead',
     relativePath: 'src/a.js',
   });
   assert.deepEqual(

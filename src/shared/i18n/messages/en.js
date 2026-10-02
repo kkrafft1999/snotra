@@ -46,6 +46,14 @@ module.exports = {
   'sidebar.history.removeHint': 'Press Delete or Backspace to remove the folder from the history.',
   'tree.reference': 'Reference in the chat',
   'tree.reference.label': 'Reference {name} in the chat',
+  // What the agent read or changed (#347): tooltip and aria-label of the mark.
+  'tree.mark.unseen': 'Changed by the agent, not looked at yet',
+  'tree.mark.changed': 'Changed by the agent',
+  'tree.mark.read': 'Read by the agent',
+  'tree.mark.folder.unseen': 'Contains files the agent changed that you have not looked at yet',
+  'tree.mark.folder.changed': 'Contains files the agent changed',
+  'tree.mark.folder.read': 'Contains files the agent read',
+  'sidebar.clearMarks': 'Clear the agent’s marks',
   'tree.hiddenEntries.one': '… {count} more entry not shown',
   'tree.hiddenEntries.other': '… {count} more entries not shown',
   // In place of a folder's entries when it cannot be listed (#639).
@@ -1562,6 +1570,8 @@ module.exports = {
   'contextMenu.info': 'Information',
   'contextMenu.info.title': 'Information about “{name}”',
   'contextMenu.info.copyPath': 'Copy path',
+  'contextMenu.clearAgentMark': 'Remove mark',
+  'contextMenu.clearAgentMark.folder': 'Remove marks in this folder',
   'contextMenu.ok': 'OK',
   'contextMenu.delete': 'Delete…',
   'contextMenu.noDialog': 'No dialog available.',

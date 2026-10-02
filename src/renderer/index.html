@@ -85,6 +85,15 @@
                deshalb FileTree selbst. -->
           <span id="project-name">No folder open</span>
           <div class="icon-btn-row">
+            <!-- Clears what the agent read or changed (#347). Only there while
+                 the conversation on screen has marks; FileTree shows it. -->
+            <button id="btn-tree-clear-marks" type="button" hidden title="Clear the agent’s marks" aria-label="Clear the agent’s marks" data-i18n-attr="title:sidebar.clearMarks;aria-label:sidebar.clearMarks">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L11 21"/>
+                <path d="M22 21H7"/>
+                <path d="m5 11 9 9"/>
+              </svg>
+            </button>
             <!-- Hidden files in the tree (#436). The label stays the same and
                  aria-pressed says whether it is on; the title names the next
                  step and the shortcut, so FileTree sets it, not `data-i18n`.

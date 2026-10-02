@@ -350,6 +350,18 @@ three platforms the same way.
   the preview like any other text file. The `@` list in the chat follows the
   tree. `.git`, `.DS_Store`, `Thumbs.db` and `desktop.ini` stay out either way.
   The switch applies to every folder and is still set after a restart.
+- **What the agent read or changed:** while the agent works, the tree marks
+  the files it touched, at the right edge of the row. A filled **M** is a file
+  it changed that you have not looked at yet; once you open it in the preview,
+  the M keeps only its outline, until the agent changes the file again. A quiet
+  grey **R** is a file it only read. A closed folder carries the mark of what
+  lies inside it, so a change deep down is not hidden. Hovering a mark says it
+  in words, and so does a screen reader. Searching and commands run in the
+  shell mark nothing — only what is certainly the agent's. The marks belong to
+  the conversation: switching chats shows that chat's marks, a new chat starts
+  without any, and opening another folder or restarting the app clears them.
+  The eraser in the tree's header clears them all, *Remove mark* in the context
+  menu one file or folder.
 - **Moving:** dragging a file or folder in the tree onto a folder row moves the
   entry there; dropping it on the free area below the tree puts it in the project
   folder. If the name already exists, it becomes `name (2).ext`.

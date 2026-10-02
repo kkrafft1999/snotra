@@ -190,6 +190,8 @@ const PUSH_CHANNELS = Object.freeze({
   UPDATE_PROGRESS: 'update:progress',
   /** Main hat eine Datei aus dem Workspace gelöscht (Kontextmenü, Issue #59); Renderer aktualisiert den Baum. */
   FS_ITEM_DELETED: 'fs:item-deleted',
+  /** "Remove mark" in the tree's context menu (#347); payload { path }, the path the renderer asked for. */
+  FS_CLEAR_AGENT_MARK: 'fs:clear-agent-mark',
   /**
    * Im Projektordner hat sich etwas geändert (Issue #158) — von wem auch
    * immer: KI, Terminal, Finder, anderer Editor. Nutzlast ist ein

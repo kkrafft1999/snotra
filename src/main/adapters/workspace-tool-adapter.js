@@ -1,6 +1,6 @@
 'use strict';
 
-const { createWorkspaceFileWrittenEvent } = require('../../shared/contracts/chat');
+const { createWorkspaceFileWrittenEvent, createWorkspaceFileReadEvent } = require('../../shared/contracts/chat');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -305,9 +305,26 @@ function writtenRelativePaths(toolName, args, parsed) {
   return paths;
 }
 
+/**
+ * Tools that read one file of the workspace, for the marks in the tree (#347).
+ * `search_in_files` is left out on purpose: a search is not a read, and what
+ * the agent opens after it is marked by these anyway.
+ */
+const FILE_READING_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file']);
+
+/**
+ * The workspace path a reading tool read, or null. A `skill:` path lies
+ * outside the open folder (#429) and has no row in the tree.
+ */
+function readRelativePath(args) {
+  const rel = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
+  if (!rel || parseSkillPath(rel)) return null;
+  return rel;
+}
+
 function collectProgressEvents(toolName, args, output) {
   const events = [];
-  if (!WRITING_TOOLS.has(toolName)) return events;
+  if (!WRITING_TOOLS.has(toolName) && !FILE_READING_TOOLS.has(toolName)) return events;
   let parsed = null;
   try {
     parsed = JSON.parse(output);
@@ -315,6 +332,11 @@ function collectProgressEvents(toolName, args, output) {
     return events;
   }
   if (!parsed || typeof parsed !== 'object' || parsed.error) return events;
+  if (FILE_READING_TOOLS.has(toolName)) {
+    const relativePath = readRelativePath(args);
+    if (relativePath) events.push(createWorkspaceFileReadEvent(relativePath));
+    return events;
+  }
   for (const relativePath of new Set(writtenRelativePaths(toolName, args, parsed))) {
     events.push(createWorkspaceFileWrittenEvent(relativePath));
   }

@@ -70,6 +70,8 @@ const PERMISSION_PROGRESS_EVENTS = Object.freeze({
 /** Untertyp eines chat:progress-Events mit type='workspace'. */
 const WORKSPACE_PROGRESS_EVENTS = Object.freeze({
   FILE_WRITTEN: 'fileWritten',
+  /** A reading tool read a file of the workspace (#347). */
+  FILE_READ: 'fileRead',
 });
 
 // App-Sprache (ui-preferences.json, Einstellungen).

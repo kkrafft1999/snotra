@@ -167,7 +167,7 @@ function registerFsHandlers({
   // compromised renderer — and whether "Open" is offered, so it cannot be a
   // flag the renderer sends. lstat, not stat: a symlink is a link, and the
   // trash takes the link, not what it points to.
-  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath) => {
+  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath, options) => {
     if (!fileContextMenu) return { error: createTranslator(getLocale())('import.noContextMenu') };
     const { absPath, error } = await filesystem.resolveCheckedWorkspacePath(filePath);
     if (error) return { error };
@@ -180,6 +180,15 @@ function registerFsHandlers({
     const win = getMainWindow();
     fileContextMenu.popup(absPath, win, {
       isDirectory,
+      // Whether to offer "Remove mark" (#347). The renderer's word is enough:
+      // the item only sends the path back, it touches nothing on disk.
+      onClearAgentMark: options?.agentMark === true
+        ? () => {
+            if (PUSH && win && !win.isDestroyed()) {
+              win.webContents.send(PUSH.FS_CLEAR_AGENT_MARK, { path: filePath });
+            }
+          }
+        : null,
       // Nach dem Löschen (Papierkorb) den Baum im Renderer nachziehen.
       onDeleted: (deletedPath) => {
         if (PUSH && win && !win.isDestroyed()) {
