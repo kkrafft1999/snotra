@@ -290,6 +290,16 @@ to the release page:
 What *can* update itself: the macOS app bundle, the Windows directory, a running
 AppImage and an extracted Linux directory.
 
+**Windows up to version 1.13.2:** the self-update of these versions closes the
+app but leaves the old version in place, with a folder `.snotra-new-…` next to
+the app folder ([#442](https://github.com/kkrafft1999/snotra/issues/442),
+[#654](https://github.com/kkrafft1999/snotra/issues/654)). Install a newer
+version by hand once: quit Snotra, rename the app folder (to `Snotra-AI.old`,
+say), unzip the new ZIP under the old folder name and start it. Settings and
+chats are kept — they live in `%APPDATA%\Snotra AI`. The leftover
+`.snotra-new-…` folders and the renamed old folder can then be deleted. From
+that version on the self-update works.
+
 Because the artifacts are **unsigned**, `electron-updater` and Squirrel are
 deliberately not used — both require a code signature.
 

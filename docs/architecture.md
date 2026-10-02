@@ -314,8 +314,12 @@ each:
   does a detached helper script take over that waits for this process to end,
   renames and restarts. It would not work inside the running process — on Windows
   the `.exe` is locked, on Linux the AppImage is mounted as a file system inside
-  its own process. The scripts themselves are built as plain strings and are
-  therefore testable without an installation.
+  its own process. On Windows the helper starts in two stages (#654): a child
+  that Node spawns without `detached` is killed together with the app, so that
+  child only starts the swap script with `Start-Process` and waits until the
+  script reports that it runs. The app quits only then, and can still report a
+  helper that did not start. The scripts themselves are built as plain strings
+  and are therefore testable without an installation.
 
 The address of the package never leaves the main process: from `checkForUpdate`
 the renderer learns only name and size, and triggers the download without

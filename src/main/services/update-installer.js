@@ -127,10 +127,13 @@ function buildLinuxDirScript({ pid, installDir, stagedDir, backupDir, workDir, b
  * `carryOver` lists entries of the app folder that are not part of the new
  * package (the downloaded ZIP, say). They move into the new folder instead of
  * being deleted along with the backup.
+ *
+ * `startedFile` is written as soon as the script runs, before it waits for
+ * the app: the launcher holds the app back until it sees that file (#654).
  */
 function buildWindowsSwapScript({
   pid, installDir, stagedDir, stageRoot = stagedDir, backupDir, workDir,
-  logFile, statusFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
+  logFile, statusFile, startedFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
 }) {
   const carry = carryOver.length > 0 ? `@(${carryOver.map(psQuote).join(', ')})` : '@()';
   return [
@@ -143,6 +146,7 @@ function buildWindowsSwapScript({
     `$work    = ${psQuote(workDir)}`,
     `$log     = ${psQuote(logFile)}`,
     `$status  = ${psQuote(statusFile)}`,
+    `$started = ${psQuote(startedFile)}`,
     `$version = ${psQuote(version)}`,
     `$carry   = ${carry}`,
     `$exe     = Join-Path $install ${psQuote(exeName)}`,
@@ -164,6 +168,7 @@ function buildWindowsSwapScript({
     '',
     'Set-Location -LiteralPath (Split-Path -Parent $install)',
     "Write-Log ('update to ' + $version + ': waiting for process ' + $procId)",
+    'Set-Content -LiteralPath $started -Value $PID -Encoding ASCII',
     '$deadline = (Get-Date).AddSeconds(120)',
     'while ((Get-Date) -lt $deadline) {',
     '  if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { break }',
@@ -217,6 +222,71 @@ function buildWindowsSwapScript({
   ].join('\n');
 }
 
+/** How long the launcher waits for the swap script to report that it runs. */
+const WINDOWS_HELPER_START_SECONDS = 30;
+
+/**
+ * Windows: the first stage of the helper start (#654).
+ *
+ * A child that Node spawns without `detached` is put into a job that kills
+ * it when this process exits — exactly when the swap script has to do its
+ * work. A process that such a child starts in turn is no longer part of that
+ * job. So this stage, run as a child of the app, only starts the swap script
+ * with `Start-Process`, waits until the script has written `startedFile`, and
+ * ends. The app quits only after that; until then it can still show an error.
+ *
+ * What the swap script prints while starting goes to `outputFile`, and is
+ * quoted when it ends before reporting. The outcome lands in `resultFile` as
+ * `{ ok: true, pid }` or `{ ok: false, error }`: this stage runs without
+ * stdio, since a pipe inherited by the swap script would keep the app waiting
+ * on a process that is itself waiting for the app.
+ */
+function buildWindowsLaunchCommand({
+  script, cwd, outputFile, startedFile, resultFile, timeoutSeconds = WINDOWS_HELPER_START_SECONDS,
+}) {
+  // Start-Process joins its argument list with spaces and quotes nothing;
+  // a Windows path cannot contain a double quote.
+  const helperArgs = `-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${script}"`;
+  const seconds = Number(timeoutSeconds);
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `$result  = ${psQuote(resultFile)}`,
+    `$output  = ${psQuote(outputFile)}`,
+    `$started = ${psQuote(startedFile)}`,
+    'function Write-Result($value) {',
+    '  $value | ConvertTo-Json -Compress | Set-Content -LiteralPath $result -Encoding UTF8',
+    '}',
+    'try {',
+    `  $p = Start-Process -FilePath 'powershell.exe' -ArgumentList ${psQuote(helperArgs)}`
+      + ` -WorkingDirectory ${psQuote(cwd)} -WindowStyle Hidden -RedirectStandardError $output -PassThru`,
+    // Without the handle .NET forgets the exit code of a process it did not wait for.
+    '  $null = $p.Handle',
+    `  $deadline = (Get-Date).AddSeconds(${seconds})`,
+    '  while (-not (Test-Path -LiteralPath $started)) {',
+    '    if ($p.HasExited) {',
+    "      $said = ''",
+    '      try { $said = [string](Get-Content -LiteralPath $output -Raw) } catch { }',
+    "      throw ('the helper ended before it started (exit code ' + $p.ExitCode + '). ' + $said.Trim())",
+    '    }',
+    '    if ((Get-Date) -gt $deadline) {',
+    '      Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue',
+    `      throw 'the helper did not report back within ${seconds} seconds'`,
+    '    }',
+    '    Start-Sleep -Milliseconds 100',
+    '  }',
+    '  Write-Result @{ ok = $true; pid = $p.Id }',
+    '} catch {',
+    '  Write-Result @{ ok = $false; error = $_.Exception.Message.Trim() }',
+    '}',
+    '',
+  ].join('\n');
+}
+
+/** A PowerShell script as `-EncodedCommand` wants it: UTF-16LE, base64. */
+function encodePowerShell(text) {
+  return Buffer.from(text, 'utf16le').toString('base64');
+}
+
 /** Largest asar header this reader accepts; the app's own is a few hundred KB. */
 const MAX_ASAR_HEADER_BYTES = 64 * 1024 * 1024;
 
@@ -256,6 +326,26 @@ function readAsarPackageJson(asarPath, fsImpl = rawFs) {
   }
 }
 
+/**
+ * What the Windows launcher left in `resultFile`. PowerShell writes UTF-8 with
+ * a byte order mark; no file means the launcher itself did not get that far.
+ */
+async function readLaunchResult(resultFile, exitCode) {
+  let raw;
+  try {
+    raw = await fsp.readFile(resultFile, 'utf8');
+  } catch {
+    return { ok: false, error: `the launcher ended with exit code ${exitCode} and left no result` };
+  }
+  try {
+    const record = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    if (record?.ok === true) return { ok: true, pid: record.pid };
+    return { ok: false, error: String(record?.error || 'no reason given') };
+  } catch {
+    return { ok: false, error: `the launcher left an unreadable result: ${raw.trim().slice(0, 200)}` };
+  }
+}
+
 /** `update-install.log` → `update-install-output.log`, next to it. */
 function helperOutputFile(logFile) {
   const ext = path.extname(logFile);
@@ -281,9 +371,12 @@ async function listForeignEntries(installDir, packageDir) {
  * @param {object} [deps]
  * @param {() => number} [deps.getPid]     Test-Haken; default process.pid.
  * @param {function} [deps.run]            (cmd, args) => Promise<stdout>; default execFile.
- * @param {function} [deps.spawnDetached]  Test-Haken fuer den Helferstart.
+ * @param {function} [deps.spawnDetached]  Test-Haken fuer den Helferstart (macOS, Linux).
+ * @param {function} [deps.runQuiet]       (cmd, args, options) => Promise<exit code>,
+ *                                         without stdio; default spawn. Starts the
+ *                                         Windows helper (#654).
  */
-function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
+function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
   const pidOf = getPid || (() => process.pid);
 
   const exec = run || ((cmd, args, options = {}) => new Promise((resolve, reject) => {
@@ -299,27 +392,21 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     });
   }));
 
-  // `outputFile` catches what the helper prints — above all what PowerShell
-  // says when the script cannot even start. The helper outlives this process,
-  // so a file is the only place that can still hear it (#442).
-  const launch = spawnDetached || ((cmd, args, { outputFile, ...options } = {}) => {
-    let fd = null;
-    if (outputFile) {
-      try { fd = fs.openSync(outputFile, 'w'); } catch { fd = null; }
-    }
-    const stdio = fd === null ? 'ignore' : ['ignore', fd, fd];
-    // Not detached on Windows: there it means DETACHED_PROCESS, a process
-    // without any console, and powershell.exe ends at once without a word.
-    // A child outlives its parent on Windows anyway; attached, it gets a
-    // console of its own, which `windowsHide` keeps out of sight (#442).
-    const detached = process.platform !== 'win32';
-    try {
-      const child = spawn(cmd, args, { detached, stdio, windowsHide: true, ...options });
-      child.unref();
-    } finally {
-      if (fd !== null) fs.closeSync(fd);
-    }
+  // On macOS and Linux a detached child outlives this process. Windows starts
+  // its helper through `runQuiet` and a launcher of its own instead (#654).
+  const launch = spawnDetached || ((cmd, args) => {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
   });
+
+  // No stdio at all: the swap script the child starts would inherit a pipe,
+  // and reading it to the end would wait for that script — which in turn
+  // waits for this app to quit.
+  const quiet = runQuiet || ((cmd, args, options = {}) => new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: 'ignore', windowsHide: true, ...options });
+    child.once('error', reject);
+    child.once('exit', (code) => resolve(code));
+  }));
 
   /** @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`. */
   async function assertWritable(dir, placeKey) {
@@ -481,6 +568,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
     const carryOver = await listForeignEntries(installDir, rootDir);
     const helperLog = logFile || path.join(path.dirname(workDir), 'snotra-update.log');
     const script = path.join(workDir, 'swap.ps1');
+    const startedFile = path.join(workDir, 'helper-started');
+    const resultFile = path.join(workDir, 'helper-launch.json');
+    // Left over from an earlier attempt, either would pass for this one.
+    await Promise.all([startedFile, resultFile].map((file) => fsp.rm(file, { force: true })));
     await fsp.writeFile(script, buildWindowsSwapScript({
       pid: pidOf(),
       installDir,
@@ -490,15 +581,29 @@ function createUpdateInstaller({ getPid, run, spawnDetached } = {}) {
       workDir,
       logFile: helperLog,
       statusFile: statusFile || path.join(path.dirname(workDir), 'snotra-update-failed.json'),
+      startedFile,
       version,
       carryOver,
     }), 'utf8');
+
     // Not from the app's own folder: Windows keeps a process's working
     // directory from being renamed, and the helper would inherit it (#442).
-    launch('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-      '-File', script,
-    ], { cwd: parentDir, outputFile: helperOutputFile(helperLog) });
+    let launched;
+    try {
+      const code = await quiet('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-EncodedCommand',
+        encodePowerShell(buildWindowsLaunchCommand({
+          script, cwd: parentDir, outputFile: helperOutputFile(helperLog), startedFile, resultFile,
+        })),
+      ], { cwd: parentDir });
+      launched = await readLaunchResult(resultFile, code);
+    } catch (err) {
+      launched = { ok: false, error: err?.message || String(err) };
+    }
+    if (!launched.ok) {
+      await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+      throw installError('update.error.helperFailed', { error: launched.error });
+    }
     return { ok: true, relaunching: true, logFile: helperLog };
   }
 
@@ -601,6 +706,8 @@ module.exports = {
   buildLinuxAppImageScript,
   buildLinuxDirScript,
   buildWindowsSwapScript,
+  buildWindowsLaunchCommand,
+  encodePowerShell,
   listForeignEntries,
   helperOutputFile,
   readAsarPackageJson,
