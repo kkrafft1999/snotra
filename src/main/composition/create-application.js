@@ -304,10 +304,11 @@ function createApplication({
         // one (#320), and keeps its cards and approvals with it. Everything
         // else of the folder just left goes, as before (concept §7).
         pruneChatScopedPermissions();
-        // Die Ordner-Skills des alten Workspace gehen uns nichts mehr an;
-        // der Watcher zieht mit (Issue #126). Ebenso der Dateibaum: Sonst
-        // kaemen Meldungen fuer den alten Ordner an — und ein Handle bliebe
-        // zurueck (Issue #158).
+        // The folder skills of the workspace just left are none of our
+        // business any more; the watcher moves along (#126). So does the
+        // tree's: it closes the old folder's watches, or a handle would stay
+        // behind (#158), and drops what it had not reported yet, or a report
+        // naming the old folder would still arrive (#650).
         skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
         workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
         // The watcher follows only the open folder, so a cached scan of the
@@ -545,11 +546,35 @@ function createApplication({
   // laeuft alles wie vorher, nur ohne Watcher.
   dropSkillScans = () => skillsService.reload();
 
+  // A watch that fails — the kernel out of watches, the folder cap reached,
+  // a folder that cannot be watched — is said in the log, naming the folder
+  // (#648). A folder that keeps failing must not flood it, though: one line
+  // per watcher and minute, with a count of what was held back since.
+  const WATCHER_WARNING_INTERVAL_MS = 60_000;
+  const createWatcherWarning = (label) => {
+    let lastWarnedAt = -Infinity;
+    let heldBack = 0;
+    return (error, dir) => {
+      const now = Date.now();
+      if (now - lastWarnedAt < WATCHER_WARNING_INTERVAL_MS) {
+        heldBack += 1;
+        return;
+      }
+      lastWarnedAt = now;
+      const more = heldBack > 0 ? ` (${heldBack} more since the last warning)` : '';
+      heldBack = 0;
+      const reason = [error?.code, error?.message].filter(Boolean).join(' ');
+      console.warn(`[${label}] cannot watch ${dir}: ${reason}${more}`);
+    };
+  };
+
   skillsWatcher = watchFile
     ? createSkillsWatcher({
         watch: watchFile,
         path,
         os,
+        fs,
+        onError: createWatcherWarning('skills-watcher'),
         onChange: () => {
           skillsService.reload();
           const win = getMainWindow();
@@ -574,6 +599,8 @@ function createApplication({
         // Nur zum Beobachten: Ein 8.3-Kurzname im Pfad bringt libuv unter
         // Windows zum Abbruch des ganzen Prozesses (siehe workspace-watcher).
         realpath: realpathNative,
+        fs,
+        onError: createWatcherWarning('workspace-watcher'),
         onChange: ({ directories, complete }) => {
           const win = getMainWindow();
           if (!win || win.isDestroyed()) return;
