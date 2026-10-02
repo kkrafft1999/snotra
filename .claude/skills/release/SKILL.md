@@ -147,8 +147,9 @@ whether the tag and release are deleted and re-tagged after a fix.
   builds, it does not tag. The app compares `app.getVersion()` (that is,
   `package.json`) against the `latest` release — which is why the tagged commit
   has to carry the matching version.
-- The artifacts are **unsigned** (Gatekeeper and SmartScreen warnings are
-  expected) — stage 1.
+- The macOS app and DMG are **signed with a Developer ID and notarised** (#662);
+  the release job fails when Gatekeeper would reject them. Windows is still
+  **unsigned** (SmartScreen warns), Linux needs no signature.
 - The pipeline starts with a **test gate** (the job `Test-Gate`, calling
   `ci.yml`: `npm test` on macOS, Windows and Linux). Red there means: no build,
   no release — reproduce `npm test` locally, fix it, tag anew.

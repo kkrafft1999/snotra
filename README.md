@@ -57,21 +57,14 @@ Get the latest release from the
 | Windows (x64) | `Snotra-AI-<version>-win-x64.zip` |
 | Linux (x64) | `.deb` (recommended), `.AppImage` or `.tar.gz` — see [Installing on Linux](#installing-on-linux) |
 
-**The builds are not signed yet**
-([#19](https://github.com/kkrafft1999/snotra/issues/19)), so macOS and Windows
-warn you on first launch:
-
-- **macOS:** open the DMG and drag the app into Applications. Launch it and
-  dismiss the warning, then *System Settings › Privacy & Security › Open
-  Anyway*. If that option is missing or doesn't help, remove the quarantine
-  flag by hand:
-
-  ```bash
-  xattr -dr com.apple.quarantine "/Applications/Snotra AI.app"
-  ```
-
-- **Windows:** unzip, start `Snotra AI.exe`, then *SmartScreen › More info ›
-  Run anyway*.
+- **macOS:** the app is signed with a Developer ID and notarised by Apple
+  ([#662](https://github.com/kkrafft1999/snotra/issues/662)). Open the DMG,
+  drag the app into Applications and start it — macOS only asks once whether
+  you want to open an app downloaded from the internet.
+- **Windows:** the build is not signed yet
+  ([#19](https://github.com/kkrafft1999/snotra/issues/19)), so SmartScreen
+  warns on first launch. Unzip, start `Snotra AI.exe`, then *SmartScreen › More
+  info › Run anyway*.
 
 ## Why Snotra?
 
@@ -300,8 +293,9 @@ chats are kept — they live in `%APPDATA%\Snotra AI`. The leftover
 `.snotra-new-…` folders and the renamed old folder can then be deleted. From
 that version on the self-update works.
 
-Because the artifacts are **unsigned**, `electron-updater` and Squirrel are
-deliberately not used — both require a code signature.
+`electron-updater` and Squirrel are deliberately not used: both require a code
+signature, and the Windows build has none. One updater of its own serves all
+three platforms the same way.
 
 ## File tree
 

@@ -4,9 +4,10 @@ name: Release
 # zugehoerige GitHub-Release. Die Version kommt aus dem Tag bzw. package.json
 # (Single Source of Truth) — die Pipeline baut nur, sie taggt nicht.
 #
-# Artefakte bleiben UNSIGNIERT (kein Apple Developer-ID / kein Windows-Cert):
-# macOS zeigt Gatekeeper, Windows ggf. SmartScreen. Das ist Stufe 1 by design.
-# Linux braucht keine Signatur und ist damit die reibungsloseste Plattform.
+# Signing (#662): the macOS app and its DMG are signed with a Developer ID,
+# notarised and stapled; the secrets are listed at the build-macos job.
+# Windows stays unsigned (SmartScreen may warn, deferred in #19). Linux needs
+# no signature.
 #
 # Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
 # Windows, Linux). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht
@@ -81,14 +82,66 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Developer ID signing (#662). The certificate goes into a throwaway
+      # keychain that exists for this job only; the App Store Connect key for
+      # notarytool into RUNNER_TEMP. Both are removed in the last step, also
+      # when the job fails. Secrets:
+      #   MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD  Developer ID Application
+      #   APPLE_API_KEY_P8_BASE64, APPLE_API_KEY_ID, APPLE_API_ISSUER
+      #   APPLE_TEAM_ID                                 expected team in the signature
+      # The intermediate "Developer ID - G2" is fetched from Apple and pinned
+      # by its SHA-256, since the runner image does not promise to carry it.
+      - name: Set up the signing keychain
+        shell: bash
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -base64 32)"
+          umask 077
+          printf '%s' "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          echo "F16CD3C54C7F83CEA4BF1A3E6A0819C8AAA8E4A1528FD144715F350643D2DF3A  $RUNNER_TEMP/DeveloperIDG2CA.cer" \
+            | tr 'A-F' 'a-f' | shasum -a 256 -c -
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -f pkcs12 \
+            -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          identity="$(security find-identity -v -p codesigning "$keychain" \
+            | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
+          if [[ "$identity" != *"($APPLE_TEAM_ID)" ]]; then
+            echo "::error::No valid Developer ID Application identity for team $APPLE_TEAM_ID in the keychain."
+            exit 1
+          fi
+          {
+            echo "SNOTRA_MACOS_SIGN_IDENTITY=$identity"
+            echo "SNOTRA_MACOS_KEYCHAIN=$keychain"
+            echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
+          } >> "$GITHUB_ENV"
+          echo "Signing as: $identity"
       # 'npm run make' scheitert gelegentlich beim DMG-Schritt an einem flaky
       # 'hdiutil detach' (appdmg-Race: Volume ist beim Unmount schon weg ->
       # "No such file or directory"). Kein Config-Bug (identische Config baute
       # fruehere Releases erfolgreich), daher hier gegen die Flakiness haerten:
       # bis zu 3 Versuche, dazwischen Alt-Volumes zwangsweise loesen und
       # partielle Outputs entfernen.
+      # The afterComplete hook (scripts/sign-macos.js) signs the app with the
+      # identity from the step above, notarises it and staples the ticket.
       - name: Build distributables (retry flaky hdiutil detach)
         shell: bash
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -uo pipefail
           attempts=3
@@ -114,6 +167,64 @@ jobs:
           mkdir -p dist
           dmg="$(ls out/make/*.dmg | head -1)"
           cp "$dmg" "dist/Snotra-AI-${version}-mac-arm64.dmg"
+      # The DMG is the container users download: sign it, notarise it on its
+      # own and staple the ticket, so Gatekeeper accepts it even offline.
+      - name: Sign, notarise and staple the DMG
+        shell: bash
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          dmg="$(ls dist/*.dmg)"
+          codesign --sign "$SNOTRA_MACOS_SIGN_IDENTITY" --keychain "$SNOTRA_MACOS_KEYCHAIN" --timestamp "$dmg"
+          result="$(xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER" --wait --output-format json)"
+          echo "$result"
+          id="$(node -p "JSON.parse(process.argv[1]).id" "$result")"
+          status="$(node -p "JSON.parse(process.argv[1]).status" "$result")"
+          if [[ "$status" != "Accepted" ]]; then
+            xcrun notarytool log "$id" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" || true
+            echo "::error::Notarisation of the DMG ended with status $status (submission $id)."
+            exit 1
+          fi
+          xcrun stapler staple "$dmg"
+      # Gate (#662): a release only goes out when Gatekeeper accepts both the
+      # app and the DMG, both carry a stapled ticket, and the signature names
+      # the expected team.
+      - name: Verify signatures and notarisation
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          app="$(ls -d out/*-darwin-arm64/*.app | head -1)"
+          dmg="$(ls dist/*.dmg)"
+          # spctl reports "override=security disabled" instead of a verdict when
+          # Gatekeeper is switched off on the runner; only a real verdict counts.
+          assess() {
+            local out
+            out="$(spctl --assess -vvv "$@" 2>&1)" || { echo "$out"; return 1; }
+            echo "$out"
+            if [[ "$out" == *"security disabled"* ]]; then
+              echo "::warning::Gatekeeper is disabled on this runner; relying on codesign and stapler."
+            elif [[ "$out" != *"source=Notarized Developer ID"* ]]; then
+              echo "::error::Gatekeeper accepts $* but not as notarised Developer ID."
+              return 1
+            fi
+          }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          details="$(codesign -dvv "$app" 2>&1)"
+          grep -qx "TeamIdentifier=$APPLE_TEAM_ID" <<< "$details" \
+            || { echo "::error::The app is not signed by team $APPLE_TEAM_ID."; exit 1; }
+          grep -q 'flags=.*(runtime)' <<< "$details" \
+            || { echo "::error::The app is signed without the hardened runtime."; exit 1; }
+          assess --type execute "$app"
+          xcrun stapler validate "$app"
+          codesign --verify --verbose=2 "$dmg"
+          assess --type open --context context:primary-signature "$dmg"
+          xcrun stapler validate "$dmg"
+          shasum -a 256 "$dmg"
       # Paketinhalt gegen die Allowlist aus package.json pruefen (#72): keine
       # .claude/, docs/, test/ usw. im ausgelieferten app.asar.
       - name: Check package contents (allowlist)
@@ -122,6 +233,12 @@ jobs:
         with:
           name: macos
           path: dist/*
+      - name: Remove the signing keychain and the API key
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/developer-id.p12"
 
   build-windows:
     name: Build Windows (x64)

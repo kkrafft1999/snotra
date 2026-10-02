@@ -15,11 +15,16 @@ procedure that creates them.
 
 ## Prerequisites (once)
 
-- The repository has to be **public**, otherwise the unsigned app cannot read
+- The repository has to be **public**, otherwise the app cannot read
   the releases API without a token:
   ```sh
   gh repo edit kkrafft1999/snotra --visibility public
   ```
+- The **macOS signing secrets** are set in the repository (#662):
+  `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `APPLE_API_KEY_P8_BASE64`,
+  `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` and `APPLE_TEAM_ID`. How they were made
+  and when they expire is in
+  [`release/macos-signing-plan.md`](release/macos-signing-plan.md).
 - `gh` has to be authenticated (`gh auth status`).
 
 ## The flow at a glance
@@ -202,10 +207,12 @@ pipeline as a **prerelease**. That is the safeguard for test runs: the app calls
 so a test build is never offered as an update to running installations. Without
 a suffix, a regular release is created as before.
 
-> Note: as long as the app is **not code-signed**, macOS shows the Gatekeeper
-> dialog the first time a new version starts. That is expected and not a fault
-> of the update path. Linux needs no signature; the only relevant point there is
-> the sandbox note about the tarball (see the README).
+> Note: the macOS build is signed with a Developer ID, notarised and stapled
+> (#662) — the job `Build macOS` fails if Gatekeeper would not accept it. A
+> prerelease is signed the same way, so a `-rc` tag is the test run for a change
+> to the signing. Windows is still unsigned; SmartScreen warns there on first
+> launch. Linux needs no signature; the only relevant point there is the sandbox
+> note about the tarball (see the README).
 
 ## What the app checks
 

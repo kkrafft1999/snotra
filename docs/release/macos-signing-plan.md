@@ -1,5 +1,53 @@
 # A plan for signing and shipping a macOS app
 
+## How Snotra does it (#662, 2026-10-02)
+
+The generic checklist below is the plan this started from. What it turned into:
+
+| Item | Value |
+| --- | --- |
+| Distribution | DMG for direct download, no PKG, no Mac App Store (#19) |
+| Bundle identifier | `dev.snotra-ai.app`, Apple Silicon (`arm64`) only |
+| Developer account | Apple Developer Program, individual, team `D58G5W8L8S` |
+| Signing identity | `Developer ID Application: Konrad Krafft (D58G5W8L8S)`, G2 sub-CA |
+| Certificate expiry | **2031-09-17** — renew before, see below |
+| Notarisation | App Store Connect team key `snotra-notarize` (role *Developer*), key ID `BJM5SLHHCS` |
+| Entitlements | [`assets/macos/entitlements.plist`](../../assets/macos/entitlements.plist): JIT and microphone, nothing else |
+
+**Where it happens.** `scripts/sign-macos.js` runs as the packager's
+`afterComplete` hook. With `SNOTRA_MACOS_SIGN_IDENTITY` set it signs with the
+hardened runtime via `@electron/osx-sign`, notarises with `@electron/notarize`
+and staples the app; without it, the build is signed ad hoc, so local builds
+need no certificate. The job `Build macOS` in `.github/workflows/release.yml`
+sets up a throwaway keychain, then signs, notarises and staples the DMG and
+refuses to publish unless `codesign`, `spctl` and `stapler` all accept app and
+DMG.
+
+**Secrets** (GitHub Actions, repository level): `MACOS_CERT_P12_BASE64`,
+`MACOS_CERT_PASSWORD`, `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`,
+`APPLE_API_ISSUER`, `APPLE_TEAM_ID`. The `.p12` and the `.p8` are kept outside
+the repository, in the owner's password manager and under `~/env/apple/`.
+
+**A signed build on your own machine** — with the certificate in the login
+keychain:
+
+```bash
+SNOTRA_MACOS_SIGN_IDENTITY="Developer ID Application: Konrad Krafft (D58G5W8L8S)" npm run package
+```
+
+Add `APPLE_API_KEY` (path to the `.p8`), `APPLE_API_KEY_ID` and
+`APPLE_API_ISSUER` to notarise as well.
+
+**Renewing the certificate** (before 2031-09-17): create a new *Developer ID
+Application* certificate from a fresh CSR, export it as `.p12` (Keychain Access
+› File › Export Items), replace `MACOS_CERT_P12_BASE64` and
+`MACOS_CERT_PASSWORD`. Apps signed with the old certificate keep working — the
+secure timestamp vouches for the time they were signed.
+
+**If a key leaks:** revoke the certificate in the developer portal or the API
+key in App Store Connect right away, create new ones, replace the secrets, cut a
+new release.
+
 ## Goal
 
 The app is to be signed, notarised and published as a DMG or PKG for
