@@ -23,6 +23,8 @@ const {
   buildLinuxAppImageScript,
   buildLinuxDirScript,
   buildWindowsSwapScript,
+  buildWindowsLaunchCommand,
+  encodePowerShell,
   listForeignEntries,
   readAsarPackageJson,
   shQuote,
@@ -51,10 +53,20 @@ async function writeAppAsar(packageDir, pkg = { productName: 'Snotra AI', versio
   }
 }
 
-/** Installer, der keine echten Befehle ausfuehrt, aber alle mitschreibt. */
-function makeInstaller({ onRun } = {}) {
+/** The script inside a `-EncodedCommand` call, and the result file it names. */
+function decodeLauncher(args) {
+  const text = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+  return { text, resultFile: text.match(/^\$result {2}= '([^']+)'$/m)[1] };
+}
+
+/**
+ * Installer, der keine echten Befehle ausfuehrt, aber alle mitschreibt. The
+ * Windows launcher reports a started helper unless `onQuiet` says otherwise.
+ */
+function makeInstaller({ onRun, onQuiet } = {}) {
   const runs = [];
   const launches = [];
+  const quiets = [];
   const installer = createUpdateInstaller({
     getPid: () => 4242,
     run: async (cmd, args) => {
@@ -63,8 +75,15 @@ function makeInstaller({ onRun } = {}) {
       return '';
     },
     spawnDetached: (cmd, args, options) => { launches.push({ cmd, args, options }); },
+    runQuiet: async (cmd, args, options) => {
+      quiets.push({ cmd, args, options });
+      if (onQuiet) return onQuiet(cmd, args, options);
+      // PowerShell's UTF-8 comes with a byte order mark.
+      await fsp.writeFile(decodeLauncher(args).resultFile, '\uFEFF{"ok":true,"pid":77}');
+      return 0;
+    },
   });
-  return { installer, runs, launches };
+  return { installer, runs, launches, quiets };
 }
 
 test('Pfade werden fuer beide Skriptsprachen sicher eingebettet', () => {
@@ -125,6 +144,7 @@ const WINDOWS_SCRIPT_ARGS = Object.freeze({
   workDir: 'C:\\Temp\\snotra-update',
   logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
   statusFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-failed.json',
+  startedFile: 'C:\\Temp\\snotra-update\\helper-started',
   version: '1.13.0',
 });
 
@@ -154,6 +174,51 @@ test('das Windows-Skript versucht jeden Zug mehrmals, bevor es aufgibt', () => {
   assert.match(script, /Start-Sleep -Milliseconds 500/);
   // Every move of a folder goes through the retry, none around it.
   assert.doesNotMatch(script.replace(/function Move-WithRetry[\s\S]*?\n\}\n/, ''), /Move-Item/);
+});
+
+// #654: the launcher holds the app back until the script demonstrably runs.
+test('the Windows script reports that it runs before it waits for the app', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  assert.match(script, /\$started = 'C:\\Temp\\snotra-update\\helper-started'/);
+  const report = script.indexOf('Set-Content -LiteralPath $started -Value $PID');
+  assert.ok(report > 0);
+  assert.ok(report < script.indexOf('while ((Get-Date) -lt $deadline)'));
+});
+
+const LAUNCH_ARGS = Object.freeze({
+  script: 'C:\\Users\\Kon Rad\\AppData\\Local\\Temp\\snotra-update\\swap.ps1',
+  cwd: "C:\\Users\\k\\Kon's tools",
+  outputFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-output.log',
+  startedFile: 'C:\\Temp\\snotra-update\\helper-started',
+  resultFile: 'C:\\Temp\\snotra-update\\helper-launch.json',
+});
+
+// #654: a child of the app dies with the app; a process the child starts does not.
+test('the Windows launcher starts the swap script as a process of its own and waits for its report', () => {
+  const text = buildWindowsLaunchCommand(LAUNCH_ARGS);
+  assert.ok(text.includes(
+    "Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile -NonInteractive -ExecutionPolicy Bypass"
+      + ' -WindowStyle Hidden -File "C:\\Users\\Kon Rad\\AppData\\Local\\Temp\\snotra-update\\swap.ps1"\'',
+  ));
+  assert.ok(text.includes(" -WorkingDirectory 'C:\\Users\\k\\Kon''s tools' "));
+  assert.match(text, /-RedirectStandardError \$output -PassThru/);
+  assert.match(text, /while \(-not \(Test-Path -LiteralPath \$started\)\)/);
+  assert.match(text, /Write-Result @\{ ok = \$true; pid = \$p\.Id \}/);
+});
+
+test('the Windows launcher reports a helper that ends early or never answers, and stops the latter', () => {
+  const text = buildWindowsLaunchCommand({ ...LAUNCH_ARGS, timeoutSeconds: 12 });
+  const early = text.slice(text.indexOf('if ($p.HasExited)'), text.indexOf('if ((Get-Date) -gt $deadline)'));
+  assert.match(early, /Get-Content -LiteralPath \$output -Raw/);
+  assert.match(early, /throw \('the helper ended before it started \(exit code '/);
+  const late = text.slice(text.indexOf('if ((Get-Date) -gt $deadline)'));
+  assert.match(late, /Stop-Process -Id \$p\.Id -Force/);
+  assert.match(late, /within 12 seconds/);
+  assert.match(text, /\} catch \{\n {2}Write-Result @\{ ok = \$false; error = \$_\.Exception\.Message\.Trim\(\) \}\n\}/);
+});
+
+test('a PowerShell script for -EncodedCommand is UTF-16LE in base64', () => {
+  assert.equal(encodePowerShell('ä\n'), Buffer.from([0xe4, 0x00, 0x0a, 0x00]).toString('base64'));
 });
 
 test('ein gescheiterter Tausch wird protokolliert, gemeldet und startet die alte Version', () => {
@@ -211,54 +276,128 @@ test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gr
   );
 });
 
-test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokoll, Status und Mitbringsel', async (t) => {
-  if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+/**
+ * A Windows install with POSIX paths: an app folder holding the ZIP it came
+ * in, and an Expand-Archive stand-in that unpacks a package with a top-level
+ * folder, as electron-forge packs it.
+ */
+async function prepareWindowsInstall(t) {
   const dir = makeTempDir();
   t.after(() => fsp.rm(dir, { recursive: true, force: true }));
   const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
   await fsp.mkdir(installDir, { recursive: true });
   await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
   await fsp.writeFile(path.join(installDir, 'Snotra AI-win32-x64-1.12.0.zip'), 'zip');
-  const workDir = path.join(dir, 'work');
   const zip = path.join(dir, 'new.zip');
   await fsp.writeFile(zip, 'zip');
-
-  const { installer, runs, launches } = makeInstaller({
-    // Stands in for Expand-Archive: the ZIP carries a top-level folder.
-    onRun: async (cmd, args) => {
-      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
-      await fsp.mkdir(path.join(dest, 'Snotra AI-win32-x64'), { recursive: true });
-      await fsp.writeFile(path.join(dest, 'Snotra AI-win32-x64', 'Snotra AI.exe'), 'new');
-      await writeAppAsar(path.join(dest, 'Snotra AI-win32-x64'));
-      return '';
-    },
-  });
-  const logFile = path.join(dir, 'userData', 'update-install.log');
-  const statusFile = path.join(dir, 'userData', 'update-install-failed.json');
-  const res = await installer.install({
+  const onRun = async (cmd, args) => {
+    const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+    await fsp.mkdir(path.join(dest, 'Snotra AI-win32-x64'), { recursive: true });
+    await fsp.writeFile(path.join(dest, 'Snotra AI-win32-x64', 'Snotra AI.exe'), 'new');
+    await writeAppAsar(path.join(dest, 'Snotra AI-win32-x64'));
+    return '';
+  };
+  const options = {
     filePath: zip,
     version: '1.13.0',
     target: { kind: 'windows-dir', canSelfUpdate: true, installDir },
-    workDir,
-    logFile,
-    statusFile,
-  });
+    workDir: path.join(dir, 'work'),
+    logFile: path.join(dir, 'userData', 'update-install.log'),
+    statusFile: path.join(dir, 'userData', 'update-install-failed.json'),
+  };
+  return { dir, installDir, onRun, options };
+}
+
+test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokoll, Status und Mitbringsel', async (t) => {
+  if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+  const { dir, onRun, options } = await prepareWindowsInstall(t);
+  const { workDir, logFile, statusFile } = options;
+  const { installer, runs, launches, quiets } = makeInstaller({ onRun });
+  const res = await installer.install(options);
 
   assert.deepEqual(res, { ok: true, relaunching: true, logFile });
   assert.equal(runs[0].cmd, 'powershell.exe');
-  assert.equal(launches.length, 1);
-  assert.equal(launches[0].cmd, 'powershell.exe');
-  assert.deepEqual(launches[0].options, {
-    cwd: path.join(dir, 'tools'),
-    outputFile: path.join(dir, 'userData', 'update-install-output.log'),
-  });
+  assert.equal(launches.length, 0, 'nothing is spawned detached on Windows');
+  assert.equal(quiets.length, 1);
+  assert.equal(quiets[0].cmd, 'powershell.exe');
+  assert.deepEqual(quiets[0].options, { cwd: path.join(dir, 'tools') });
+  const { text } = decodeLauncher(quiets[0].args);
+  assert.ok(text.includes(`-File "${path.join(workDir, 'swap.ps1')}"`));
+  assert.ok(text.includes(`$output  = ${psQuote(path.join(dir, 'userData', 'update-install-output.log'))}`));
+  assert.ok(text.includes(`$started = ${psQuote(path.join(workDir, 'helper-started'))}`));
+
   const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
   assert.ok(script.includes(`$log     = ${psQuote(logFile)}`));
   assert.ok(script.includes(`$status  = ${psQuote(statusFile)}`));
+  assert.ok(script.includes(`$started = ${psQuote(path.join(workDir, 'helper-started'))}`));
   assert.ok(script.includes("$version = '1.13.0'"));
   assert.ok(script.includes("$carry   = @('Snotra AI-win32-x64-1.12.0.zip')"));
   assert.match(script, /\$staged {2}= '[^']*\.snotra-new-\d+\/Snotra AI-win32-x64'/);
   assert.match(script, /\$stage {3}= '[^']*\.snotra-new-\d+'/);
+});
+
+/** After a failed helper start nothing may be left beside the app folder. */
+async function assertUntouched(dir, installDir) {
+  assert.deepEqual(await fsp.readdir(path.join(dir, 'tools')), ['Snotra AI-win32-x64'], 'the staged folder is gone');
+  assert.equal(await fsp.readFile(path.join(installDir, 'Snotra AI.exe'), 'utf8'), 'old');
+}
+
+// #654: as long as the app is still running, a helper that did not start can
+// be reported instead of leaving the user with a closed app and the old version.
+test('Windows: a helper that does not start is reported, and the app stays as it is', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const { dir, installDir, onRun, options } = await prepareWindowsInstall(t);
+  const { installer } = makeInstaller({
+    onRun,
+    onQuiet: async (cmd, args) => {
+      await fsp.writeFile(decodeLauncher(args).resultFile, JSON.stringify({
+        ok: false, error: 'the helper ended before it started (exit code 1). Running scripts is disabled.',
+      }));
+      return 0;
+    },
+  });
+  const res = await installer.install(options);
+
+  assert.equal(res.ok, false);
+  assert.equal(de(res.error), 'Der Update-Helfer ließ sich nicht starten: the helper ended before it started (exit code 1). Running scripts is disabled.');
+  await assertUntouched(dir, installDir);
+});
+
+test('Windows: a launcher that leaves no result counts as failed, a stale one from before is not used', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const { dir, installDir, onRun, options } = await prepareWindowsInstall(t);
+  await fsp.mkdir(options.workDir, { recursive: true });
+  await fsp.writeFile(path.join(options.workDir, 'helper-started'), '1');
+  await fsp.writeFile(path.join(options.workDir, 'helper-launch.json'), '{"ok":true,"pid":1}');
+  const seen = [];
+  const { installer } = makeInstaller({
+    onRun,
+    onQuiet: async () => {
+      seen.push(fs.existsSync(path.join(options.workDir, 'helper-started')),
+        fs.existsSync(path.join(options.workDir, 'helper-launch.json')));
+      return 1;
+    },
+  });
+  const res = await installer.install(options);
+
+  assert.deepEqual(seen, [false, false], 'both files of the earlier attempt are removed before the launch');
+  assert.equal(res.ok, false);
+  assert.match(de(res.error), /the launcher ended with exit code 1 and left no result/);
+  await assertUntouched(dir, installDir);
+});
+
+test('Windows: a launcher that cannot be spawned is reported', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const { dir, installDir, onRun, options } = await prepareWindowsInstall(t);
+  const { installer } = makeInstaller({
+    onRun,
+    onQuiet: async () => { throw new Error('spawn powershell.exe ENOENT'); },
+  });
+  const res = await installer.install(options);
+
+  assert.equal(res.ok, false);
+  assert.match(de(res.error), /nicht starten: spawn powershell\.exe ENOENT$/);
+  await assertUntouched(dir, installDir);
 });
 
 test('eine PID wird als Zahl eingesetzt, nie als Text', () => {

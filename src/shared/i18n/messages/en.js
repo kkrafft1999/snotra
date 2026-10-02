@@ -826,6 +826,7 @@ module.exports = {
   'update.error.wrongApp': 'The downloaded program is not Snotra AI (identifier {id}).',
   'update.error.wrongVersion': 'The downloaded program reports version {version}; {expected} was expected.',
   'update.error.archiveMissing': 'The downloaded archive has no “{file}”.',
+  'update.error.helperFailed': 'The update helper could not be started: {error}',
   'update.unknownValue': 'unknown',
   'update.place.appFolder': 'the applications folder',
   'update.place.installFolder': 'the installation folder',

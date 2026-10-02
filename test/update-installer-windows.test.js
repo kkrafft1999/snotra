@@ -19,6 +19,7 @@ const { execFileSync, spawn } = require('node:child_process');
 const {
   createUpdateInstaller,
   buildWindowsSwapScript,
+  buildWindowsLaunchCommand,
   helperOutputFile,
 } = require('../src/main/services/update-installer');
 const { writeMinimalAsar } = require('./helpers/asar.js');
@@ -162,8 +163,25 @@ function describe(fixture) {
     `output: ${readIfThere(helperOutputFile(fixture.logFile)) || '(none)'}`,
     `log: ${readIfThere(fixture.logFile) || '(none)'}`,
     `status: ${readIfThere(fixture.statusFile) || '(none)'}`,
+    `launcher: ${readIfThere(path.join(fixture.dir, 'work', 'helper-launch.json')) || '(none)'}`,
     `next to the app: ${fs.readdirSync(fixture.parentDir).join(', ')}`,
   ].join('\n');
+}
+
+/** What PowerShell's parser objects to in `script`, one line per error. */
+function parseErrors(script) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-parse-'));
+  try {
+    const file = path.join(dir, 'script.ps1');
+    fs.writeFileSync(file, script, 'utf8');
+    return execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${file}', [ref]$null, [ref]$e); `
+        + '$e | ForEach-Object { $_.Extent.StartLineNumber.ToString() + ": " + $_.Message }',
+    ], { encoding: 'utf8' }).trim();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 test('Windows: the swap script parses', { skip: !onWindows }, () => {
@@ -176,22 +194,24 @@ test('Windows: the swap script parses', { skip: !onWindows }, () => {
     workDir: 'C:\\t\\w',
     logFile: 'C:\\t\\l.log',
     statusFile: 'C:\\t\\s.json',
+    startedFile: 'C:\\t\\w\\helper-started',
     version: '1.13.0',
     carryOver: ["Kon's.zip"],
   });
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-parse-'));
-  try {
-    const file = path.join(dir, 'swap.ps1');
-    fs.writeFileSync(file, script, 'utf8');
-    const out = execFileSync('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${file}', [ref]$null, [ref]$e); `
-        + '$e | ForEach-Object { $_.Extent.StartLineNumber.ToString() + ": " + $_.Message }',
-    ], { encoding: 'utf8' });
-    assert.equal(out.trim(), '', out);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  const errors = parseErrors(script);
+  assert.equal(errors, '', errors);
+});
+
+test('Windows: the helper launcher parses', { skip: !onWindows }, () => {
+  const text = buildWindowsLaunchCommand({
+    script: 'C:\\t\\Kon Rad\\swap.ps1',
+    cwd: "C:\\a\\Kon's tools",
+    outputFile: 'C:\\t\\out.log',
+    startedFile: 'C:\\t\\w\\helper-started',
+    resultFile: 'C:\\t\\w\\helper-launch.json',
+  });
+  const errors = parseErrors(text);
+  assert.equal(errors, '', errors);
 });
 
 test('Windows: the swap goes through although the app ran from its own folder', { skip: !onWindows, timeout: 90_000 }, async (t) => {
