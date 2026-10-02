@@ -175,9 +175,11 @@ function createFilesystemIpcAdapter({
       if (error) return { error, reason };
       try {
         const result = await fsService.readFilePreview(absPath);
-        // The one refusal the service answers instead of throwing: a file
-        // over the preview limit. It brings the size along.
-        return result?.error ? { ...result, reason: 'too-large' } : result;
+        if (!result?.error) return result;
+        // The two refusals the service answers instead of throwing: a file
+        // over the preview limit, which brings its size along, and a path
+        // that is no regular file (a folder, a pipe, #643).
+        return { ...result, reason: result.size !== undefined ? 'too-large' : 'failed' };
       } catch (err) {
         return { error: err.message, reason: unreadableReason(err) };
       }
