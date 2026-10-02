@@ -998,7 +998,9 @@ same however narrow the conditions around it were.
   project files and stay writable. The engine no longer keeps a set of loaded skills, and the plan
   carries none.
 - **No skill folder in the sandbox.** `shell_execute` and `run_python` get no
-  skill folder as a write path, and `shell_execute` no longer accepts
+  skill folder as a write path; when the open folder contains a global skill
+  folder, the sandbox denies writing there (#650), unless a program allowance
+  names that folder itself. `shell_execute` no longer accepts
   `cwd: "skill:<name>"` — a run happens in the project. The card lost its
   "Loaded skills" line and the reason "a command in a skill folder cannot be
   remembered".

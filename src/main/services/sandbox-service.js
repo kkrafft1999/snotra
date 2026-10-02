@@ -28,6 +28,7 @@
  */
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
+const { isPathInside } = require('../../shared/runtime/path-inside');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -309,6 +310,12 @@ function createSandboxService({
   readShellPath = async () => '',
   readPythonCommand = async () => 'python3',
   env = process.env,
+  /**
+   * Folders a run may never write, even when the open folder contains them:
+   * the global skill folders (#548, #650). Opened as `~`, the workspace would
+   * otherwise make them writable for every command.
+   */
+  protectedWritePaths = [],
 }) {
   let state = { status: 'unknown' };
   let runtime = null;
@@ -350,12 +357,23 @@ function createSandboxService({
   } = {}) {
     const allowWrite = [workspaceRoot, runTmp, ...(Array.isArray(extraWritePaths) ? extraWritePaths : [])]
       .filter((p, index, all) => typeof p === 'string' && p && all.indexOf(p) === index);
+    // A protected folder is denied only where a writable folder contains it —
+    // elsewhere it is not writable anyway, and on Linux the runtime would
+    // mount /dev/null over a missing one for every run. A program allowance
+    // that names the folder itself, or a folder inside it, is the user's
+    // explicit decision and wins; the open folder merely containing it does
+    // not (#650).
+    const extras = Array.isArray(extraWritePaths) ? extraWritePaths.filter((p) => typeof p === 'string' && p) : [];
+    const protectedPaths = (Array.isArray(protectedWritePaths) ? protectedWritePaths : [])
+      .filter((p) => typeof p === 'string' && p)
+      .filter((p) => allowWrite.some((dir) => isPathInside(path, dir, p)))
+      .filter((p) => !extras.some((extra) => isPathInside(path, p, extra)));
     return {
       network: { allowedDomains: normalizeDomains(allowedDomains), deniedDomains: [] },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
         allowWrite,
-        denyWrite: [...DENY_WRITE_DEFAULTS],
+        denyWrite: [...DENY_WRITE_DEFAULTS, ...protectedPaths],
       },
       ...(platform === 'darwin' && weakerNetworkIsolation === true ? { enableWeakerNetworkIsolation: true } : {}),
       ...vendorPaths(),

@@ -321,6 +321,10 @@ function createApplication({
   const credentials = createCredentialAdapter({ providerSecrets });
   const providerModels = createProviderModelListingAdapter({ providerRuntime, providerSecrets });
 
+  // The global skill folders stay read-only for every tool, also when the
+  // open folder contains them (#548, #650): fs-service refuses the write
+  // tools, the sandbox denies the commands.
+  const globalSkillRoots = [path.join(os.homedir(), '.snotra', 'skills'), path.join(os.homedir(), '.agents', 'skills')];
   const fsService = createFsService({
     fs,
     path,
@@ -328,7 +332,7 @@ function createApplication({
     maxWriteFileBytes: LIMITS.MAX_WRITE_FILE_BYTES,
     // The user folders skills-service scans: read-only for the write tools
     // even when the open folder contains them (#650).
-    globalSkillRoots: [path.join(os.homedir(), '.snotra', 'skills'), path.join(os.homedir(), '.agents', 'skills')],
+    globalSkillRoots,
     // Nur für die Wege, die beim Nutzer enden — Baum, Vorschau, Drag & Drop
     // (#292). Was an das Modell zurückgeht, bleibt englisch.
     getLocale: getAppLocale,
@@ -356,6 +360,7 @@ function createApplication({
     existsSync,
     spawn: childProcess.spawn,
     userDataPath: app.getPath('userData'),
+    protectedWritePaths: globalSkillRoots,
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     // The interpreter run_python would use decides whether pip needs its
     // certifi fallback inside the sandbox (decision 2b on #329).

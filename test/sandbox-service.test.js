@@ -441,3 +441,34 @@ test('an unavailable sandbox prepares nothing — the runner falls back', async 
   assert.equal(await service.prepare({ command: 'ls', runTmp: '/tmp/x' }), null);
   assert.equal(service.isAvailable(), false);
 });
+
+// ── Global skill folders (#548, #650) ───────────────────────────────────────
+
+test('the global skill folders are denied for writing when the open folder contains them', async () => {
+  const skills = ['/home/u/.snotra/skills', '/home/u/.agents/skills'];
+  const { service, calls } = makeService({ deps: { protectedWritePaths: skills } });
+
+  await service.prepare({ command: 'ls', workspaceRoot: '/home/u', runTmp: '/tmp/snotra-sh-1', commandId: 'a', commandText: 'ls' });
+  assert.deepEqual(calls.updateConfig.at(-1).filesystem.denyWrite.slice(-2), skills);
+
+  // Not under a writable folder: nothing to deny, and nothing for the runtime
+  // to mount over a missing path.
+  await service.prepare({ command: 'ls', workspaceRoot: '/home/u/project', runTmp: '/tmp/snotra-sh-2', commandId: 'b', commandText: 'ls' });
+  const denied = calls.updateConfig.at(-1).filesystem.denyWrite;
+  assert.equal(skills.some((dir) => denied.includes(dir)), false);
+});
+
+test('a program allowance that names a skill folder keeps it writable', async () => {
+  const { service, calls } = makeService({ deps: { protectedWritePaths: ['/home/u/.agents/skills', '/home/u/.snotra/skills'] } });
+  await service.prepare({
+    command: 'ls',
+    workspaceRoot: '/home/u',
+    runTmp: '/tmp/snotra-sh-3',
+    extraWritePaths: ['/home/u/.agents/skills/mine'],
+    commandId: 'c',
+    commandText: 'ls',
+  });
+  const denied = calls.updateConfig.at(-1).filesystem.denyWrite;
+  assert.equal(denied.includes('/home/u/.agents/skills'), false);
+  assert.equal(denied.includes('/home/u/.snotra/skills'), true);
+});
