@@ -82,6 +82,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Electron's binary comes separately since Electron 44 (#666).
+      - name: Download the Electron binary
+        run: node scripts/install-electron.js
       # Developer ID signing (#662). The certificate goes into a throwaway
       # keychain that exists for this job only; the App Store Connect key for
       # notarytool into RUNNER_TEMP. Both are removed in the last step, also
@@ -253,6 +256,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Electron's binary comes separately since Electron 44 (#666).
+      - name: Download the Electron binary
+        run: node scripts/install-electron.js
       - run: npm run package:win
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
@@ -298,6 +304,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends dpkg fakeroot squashfs-tools
       - run: npm ci
+      # Electron's binary comes separately since Electron 44 (#666).
+      - name: Download the Electron binary
+        run: node scripts/install-electron.js
       - run: npm run make:linux
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
