@@ -29,7 +29,7 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
   const stateEl = document.getElementById('settings-sandbox-state');
   const status = createInstantStatus(document.getElementById('status-workspace-sandbox'));
   if (!card || !input || !toolPermissions) {
-    return { update() {}, isDisabledHere: () => false, focus: () => false };
+    return { update() {}, reset() {}, isDisabledHere: () => false, focus: () => false };
   }
 
   let toolsOn = false;
@@ -41,9 +41,26 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
   let error = null;
   let shownRoot = toolPermissions.get()?.workspaceRoot ?? null;
 
+  // Only a failure is cleared, never a fresh "Saved": that one fades by
+  // itself, and clearing it would take back what the user just did.
   function clearFailure() {
+    if (!error) return;
     error = null;
     status.clear();
+  }
+
+  /**
+   * A failure in one folder says nothing about the next one. Only a state
+   * that could be read names a folder: a failed read in between (`null`,
+   * e.g. while main writes the policy file on Windows) is not a move.
+   */
+  function noteFolder() {
+    const state = toolPermissions.get();
+    if (!state || typeof state !== 'object') return;
+    const root = state.workspaceRoot ?? null;
+    if (root === shownRoot) return;
+    shownRoot = root;
+    clearFailure();
   }
 
   function render() {
@@ -104,28 +121,31 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
   });
 
   toolPermissions.subscribe(() => {
-    // A failure in one folder says nothing about the next one.
-    const root = toolPermissions.get()?.workspaceRoot ?? null;
-    if (root !== shownRoot) {
-      shownRoot = root;
-      clearFailure();
-    }
+    noteFolder();
     render();
     onChange();
   });
   onLocaleChange(() => {
-    clearFailure();
+    // Every status goes here, a "Saved" included: it would stay in the
+    // language it was written in.
+    error = null;
+    status.clear();
     render();
   });
 
   return {
     /**
      * What the settings know about the execution tools; redraws the card.
-     * Settings calls it on every open, which ends a failure left standing.
+     * It runs whenever their state is read again, so it leaves the status
+     * alone — a failure ends with `reset()`.
      */
     update(next = {}) {
       toolsOn = next.toolsOn === true;
       sandbox = next.sandbox && typeof next.sandbox === 'object' ? next.sandbox : null;
+      render();
+    },
+    /** Settings was closed: a failure from this visit is over. */
+    reset() {
       clearFailure();
       render();
     },

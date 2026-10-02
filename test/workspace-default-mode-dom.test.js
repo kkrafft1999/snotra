@@ -294,6 +294,34 @@ test('settings: the state line describes the radiogroup, and each option carries
 });
 
 // CR-B14-09, item 3: a "Not saved" outlived the attempt it belonged to.
+// The Windows CI of #623: a read of main's state that fails while main writes
+// came back as null, counted as "another folder" and took the fresh "Saved"
+// with it — the e2e test waited for it in vain.
+test('settings: a fresh "Saved" survives an unreadable state in between', async () => {
+  const dom = setupRendererDom();
+  const { setLocale } = await importRenderer('i18n.js');
+  try {
+    setLocale('en', { force: true });
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const permissions = fakePermissions(baseState());
+    initWorkspaceModeSetting({ toolPermissions: permissions });
+    const doc = dom.document;
+    const status = doc.getElementById('status-security-mode');
+    const ask = doc.querySelector('#settings-security-mode-options input[value="ask-all"]');
+    ask.checked = true;
+    ask.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(status.textContent, 'Saved');
+    const after = permissions.get();
+    permissions.push(null);
+    permissions.push(after);
+    assert.equal(status.textContent, 'Saved');
+    assert.equal(status.classList.contains('is-visible'), true);
+  } finally {
+    dom.cleanup();
+  }
+});
+
 test('settings: a failed save is gone on the next open, in another folder and after a language change', async () => {
   const dom = setupRendererDom();
   const { setLocale } = await importRenderer('i18n.js');
@@ -320,7 +348,7 @@ test('settings: a failed save is gone on the next open, in another folder and af
 
     await fail();
     setting.reset();
-    gone('opened again');
+    gone('the page was closed');
 
     await fail();
     permissions.push(baseState());

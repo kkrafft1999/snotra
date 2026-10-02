@@ -1926,6 +1926,7 @@ export function initSettingsModal(deps) {
     securityPanel.close();
     mcpPanel?.close?.();
     programAllowances.close();
+    workspaceSandbox.reset();
     closeChatModelMenu(false);
     stashPopupCredentialInputs();
     closeAddModelOverlay();

@@ -177,7 +177,7 @@ test('a failed save shows main\'s reason under the tile and "Not saved" next to 
 });
 
 // CR-B14-09, item 3: the text belonged to an attempt that is over.
-test('a failure is gone after a language change, in another folder and on the next open', async (t) => {
+test('a failure is gone after a language change, in another folder and once Settings closes', async (t) => {
   const ui = await mount({ answer: async () => ({ ok: false }) });
   t.after(ui.cleanup);
   const fail = async () => {
@@ -205,8 +205,29 @@ test('a failure is gone after a language change, in another folder and on the ne
   await fail();
   ui.toolPermissions.push(permissionsState({ workspaceRoot: '/work/other' }));
   assert.equal(ui.stateLine().textContent, 'Not saved', 'the same folder keeps it');
+  // Settings reads the execution tools again on its own schedule; that is
+  // not the end of the attempt.
   ui.sandbox.update({ toolsOn: true, sandbox: SANDBOX });
-  gone('the settings were opened');
+  assert.equal(ui.stateLine().textContent, 'Not saved', 'a re-read of the tools keeps it');
+  ui.sandbox.reset();
+  gone('the settings were closed');
+});
+
+// The Windows CI of #623: a read of main's state that fails while main writes
+// came back as null, counted as "another folder" and took the fresh "Saved"
+// with it.
+test('a fresh "Saved" survives an unreadable state in between and a re-read of the tools', async (t) => {
+  const ui = await mount();
+  t.after(ui.cleanup);
+  ui.flip(false);
+  await settle();
+  assert.equal(ui.status().textContent, 'Saved');
+  const after = ui.toolPermissions.get();
+  ui.toolPermissions.push(null);
+  ui.toolPermissions.push(after);
+  ui.sandbox.update({ toolsOn: true, sandbox: SANDBOX });
+  assert.equal(ui.status().textContent, 'Saved');
+  assert.equal(ui.status().classList.contains('is-visible'), true);
 });
 
 // CR-B14-09, item 1: "off" cannot be stored without safeStorage.

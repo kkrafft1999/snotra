@@ -685,8 +685,6 @@ export function initSecurityPanel({
 
   function open() {
     isOpen = true;
-    // A "Not saved" from an earlier visit belongs to an attempt that is over.
-    modeSetting.reset();
     if (!unsubscribe && typeof toolPermissions?.subscribe === 'function') {
       unsubscribe = toolPermissions.subscribe(() => {
         if (isOpen) void refresh();
@@ -697,6 +695,9 @@ export function initSecurityPanel({
 
   function close() {
     isOpen = false;
+    // A "Not saved" belongs to an attempt that is over once the page goes;
+    // the next visit starts without it.
+    modeSetting.reset();
     clearTimeout(pendingTimer);
     pendingTimer = null;
     // A form that was open goes with the page: the next open draws afresh
