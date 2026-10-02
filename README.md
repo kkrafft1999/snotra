@@ -357,7 +357,10 @@ deliberately not used — both require a code signature.
   [Keyboard shortcuts](#keyboard-shortcuts)) on a row opens "Open",
   "Reveal in Finder" ("Show in Explorer" on Windows, "Show in file manager" on
   Linux), "Information" and "Delete…". Deleting moves to the trash, after
-  a confirmation.
+  a confirmation. "Open" shows a document in its app. A program or script —
+  `setup.bat`, `run.command`, an `.app`, a file marked executable — would be run
+  instead, with your rights and outside Snotra's sandbox, so Snotra asks first,
+  with "Cancel" preselected. If no app can open a file, a message says so.
 - **Information:** the "Information" entry shows a file's name, full path, type,
   size (human-readable and to the byte), modification and creation date, plus the
   program "Open" would launch it with. For a folder, the number of its direct
@@ -375,10 +378,12 @@ deliberately not used — both require a code signature.
   in, Snotra asks first: always for folders, and for files from 20 items or 10 MB
   on — stating count, size and target folder in plain words, with "Cancel"
   preselected. Files that look like credentials (`.env`, `*.pem`, `id_*`,
-  anything under `.ssh/` …) are not taken in: what the model could later read
-  should not slip in casually via a drop — the route through the file manager
-  stays open. Symlinks are skipped, and a drop is rejected outright rather than
-  half-copied if it exceeds 2000 entries or 200 MB.
+  anything under `.ssh/` …) are not taken in, not even through a symlinked
+  folder: what the model could later read should not slip in casually via a
+  drop — the route through the file manager stays open. Symlinks, pipes and
+  sockets are skipped, and a drop is rejected outright rather than half-copied
+  if it exceeds 2000 entries or 200 MB; if copying fails partway, what was
+  already copied is removed again.
 
 ## Chat
 

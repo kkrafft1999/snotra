@@ -251,10 +251,16 @@ injected via composition:
 
 - Storage: `llm-config-store-port`, `ui-prefs-store-port`,
   `chat-history-store-port`, `workspace-folder-store-port`,
-  `provider-secrets-port`, `web-search-store-port`
+  `provider-secrets-port`
 - Runtime: `provider-runtime-port`, `provider-catalog-port`,
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
+
+The web search key and the MCP stores are narrowed in
+`adapters/persistence-store-adapters.js` (`createWebSearchStorePort`,
+`createMcpConfigStorePort`, `createMcpSecretsPort`) without a typedef of their
+own in `ports/`. A typedef lists every member its adapter provides;
+`test/filesystem-port-typedef.test.js` holds `filesystem-port` to that.
 
 ### Self-update: three steps, three modules
 
@@ -451,28 +457,66 @@ and that is meant to stay:
 - `fs:inspectImport` — counts folders, files and bytes, without writing.
 - `fs:importItems` — confirms natively and copies.
 
+**Where the source comes from** (issue
+[#646](https://github.com/kkrafft1999/snotra/issues/646)): the page cannot name
+one. `FileTree.js` hands the preload the dropped `File` objects, and the preload
+resolves each path itself with `webUtils.getPathForFile` — Electron's documented
+pattern for a sandboxed preload behind `contextBridge`. A string, an object that
+only looks like a `File`, or a `File` the page made has no path there and is
+dropped; a drop with nothing from the file system in it does not reach main at
+all. Between preload and main the channel still carries path strings, so main
+keeps every check below: page script cannot choose those strings, but a
+renderer process compromised below the page could.
+
 In the adapter only the **target** goes through `boundPath()` (realpath-checked).
 The **source** is deliberately not checked against the workspace — that is
-exactly what the channel is for — but it must be absolute and must not match
-`shared/runtime/sensitive-paths.js`; a hit rejects the drop. The rest lives in
-`services/fs-service.js`: `inspectImportSources` counts recursively (symlinks and
-sensitive names are counted and skipped, not followed), `importExternalItems`
-copies with `fs.cp` — copies, not moves, because `fs.rename` only works within one
-file system, and deleting the source outside would not be recoverable. Both
-routes share the collision scheme `name (2).ext` via `findFreeTargetPath`. The
-limits (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`) live in
-`shared/limits.js`; exceeding one rejects the whole drop instead of copying half
-of it. Confirmation happens natively in `ipc/fs-handlers.js` via
-`dialog.showMessageBox` — the renderer only triggers it, see
-`docs/security-concept.md` §5.
+exactly what the channel is for — but it must be absolute, and neither its
+written nor its real path (`fs.realpath`) may match
+`shared/runtime/sensitive-paths.js`; a hit rejects the drop, so `~/k8s → ~/.kube`
+does not pass as `k8s/config`. The rest lives in `services/fs-service.js`:
+`inspectImportSources` counts recursively (symlinks, sensitive names and
+anything that is neither a regular file nor a folder — pipes, sockets, devices —
+are counted and skipped, not followed), `importExternalItems` copies with
+`fs.cp` — copies, not moves, because `fs.rename` only works within one file
+system, and deleting the source outside would not be recoverable. Both routes
+share the collision scheme `name (2).ext` via `findFreeTargetPath`; within one
+drop the names handed out compare case-insensitively on macOS and Windows, where
+`README.md` and `readme.md` are the same file. The copy is all or nothing: a
+folder target is created exclusively before it is filled, files are copied with
+`COPYFILE_EXCL`, and when one target fails, what this import created is removed
+again — never what was there before. The limits (`MAX_IMPORT_ENTRIES`,
+`MAX_IMPORT_TOTAL_BYTES`) live in `shared/limits.js`; exceeding one rejects the
+whole drop instead of copying half of it. Confirmation happens natively in
+`ipc/fs-handlers.js` via `dialog.showMessageBox`, with the skipped entries named
+in it — the renderer only triggers it, see `docs/security-concept.md` §5.
 
 ### Context menu of the file tree
 
 `services/file-context-menu.js` builds the native menu (open, reveal,
-information, delete). The renderer only triggers it via `fs:showFileContextMenu`;
-the path is checked beforehand by `resolveWorkspacePath()` in the handler, so
-only an already-checked absolute path arrives in the menu. `isDirectory` from the
-renderer merely tailors the menu and is therefore uncritical.
+information, delete). The renderer only triggers it via `fs:showFileContextMenu`
+and sends nothing but the path; the handler checks it with the adapter's
+`resolveCheckedWorkspacePath()` (realpath-checked, not fs-service's lexical
+`resolveWorkspacePath`), exactly as sent — a name may end in a space, and only
+paths the model types are trimmed. Whether the path is a folder the handler
+looks up itself with `lstat` (issue
+[#649](https://github.com/kkrafft1999/snotra/issues/649)): it decides whether
+"Open" is offered and how the delete confirmation words it, and that
+confirmation is a safeguard against a compromised renderer. A symlink counts as
+a link — "Open" is offered, and the trash takes the link, not its target.
+
+**"Open"** hands the path to `shell.openPath`. For a document that means "show
+it in its app"; for a program or script it means "run it", with the user's full
+rights and outside the shell switch (#102) and the sandbox (#329). So before
+`openPath` the menu checks the target — by extension per platform
+(`LAUNCHABLE_EXTENSIONS`: `.exe`, `.bat`, `.ps1`, `.lnk`, `.url` … on Windows,
+plus `PATHEXT`; `.app`, `.command`, `.sh`, `.pkg`, `.scpt` … on macOS; `.desktop`,
+`.sh`, `.AppImage` … on Linux), following a link to what it points to, and on
+macOS and Linux a regular file with an execute bit — and asks natively first,
+"Cancel" as default and Escape answer. Files Snotra writes carry no
+Mark-of-the-Web and no quarantine attribute, so SmartScreen and Gatekeeper would
+not ask. A failed `openPath` (no app for the type) shows an error box. Every
+click that opens a dialog is guarded against a rejection, which would otherwise
+take down the main process when the window closes while the dialog is up.
 
 The information behind it lives in `services/file-info.js` (issue
 [#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns a field

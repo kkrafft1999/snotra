@@ -5,6 +5,37 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
+// Drag & Drop von aussen (Issue #101). In Electron 44 gibt es File.path
+// nicht mehr; webUtils.getPathForFile ist der dokumentierte Ersatz und einer
+// der wenigen Bausteine, die ein sandboxed Preload bekommt.
+//
+// The sources of an import are the dropped File objects and nothing else
+// (#646): the preload resolves each path itself, so page script cannot name
+// one — a compromised page would otherwise copy `~/.git-credentials` in
+// without a dialog. A string or any other non-File makes getPathForFile
+// throw, a File made by the page (or dragged out of a browser) has no path;
+// both are dropped here.
+function droppedFilePaths(files) {
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file) => {
+      try {
+        return webUtils.getPathForFile(file) || '';
+      } catch {
+        return '';
+      }
+    })
+    .filter((filePath) => typeof filePath === 'string' && filePath);
+}
+
+// A drop with nothing from the file system in it does not reach main at all;
+// the answer is the one main gives for an empty drop.
+function invokeImport(channel, files, destDir) {
+  const sources = droppedFilePaths(files);
+  if (sources.length === 0) return Promise.resolve({ ok: true, copied: [], dirs: 0, files: 0, bytes: 0 });
+  return ipcRenderer.invoke(channel, sources, destDir);
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   openFolder: () => ipcRenderer.invoke(REQ.DIALOG_OPEN_FOLDER),
   // `showHidden` lists dot files as well (#436); only the flag crosses over.
@@ -17,23 +48,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readWorkspacePdf: (pdfPath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_PDF, pdfPath),
   readPdfAsset: (kind, filename) => ipcRenderer.invoke(REQ.PDF_READ_ASSET, kind, filename),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
-  // Drag & Drop von aussen (Issue #101). In Electron 44 gibt es File.path
-  // nicht mehr; webUtils.getPathForFile ist der dokumentierte Ersatz und einer
-  // der wenigen Bausteine, die ein sandboxed Preload bekommt. Ein leerer
-  // Rueckgabewert heisst „stammt nicht aus dem Dateisystem" (z. B. Drag aus
-  // dem Browser) — der Renderer verwirft solche Eintraege.
-  getPathForFile: (file) => {
-    try {
-      return webUtils.getPathForFile(file) || '';
-    } catch {
-      return '';
-    }
-  },
-  inspectImport: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_INSPECT_IMPORT, sourcePaths, destDir),
-  importItems: (sourcePaths, destDir) => ipcRenderer.invoke(REQ.FS_IMPORT_ITEMS, sourcePaths, destDir),
+  // Both take the dropped File objects, not paths (#646).
+  inspectImport: (files, destDir) => invokeImport(REQ.FS_INSPECT_IMPORT, files, destDir),
+  importItems: (files, destDir) => invokeImport(REQ.FS_IMPORT_ITEMS, files, destDir),
   listWorkspacePaths: (options) =>
     ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: options?.showHidden === true }),
-  showFileContextMenu: (filePath, options) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, options),
+  // Only the path: whether it is a folder main looks up itself (#649).
+  showFileContextMenu: (filePath) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath),
   onFsItemDeleted: (callback) => {
     const channel = PUSH.FS_ITEM_DELETED;
     const listener = (_event, payload) => callback(payload);

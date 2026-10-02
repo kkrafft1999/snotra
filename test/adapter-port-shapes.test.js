@@ -57,7 +57,7 @@ const FILESYSTEM_PORT_KEYS = [
   'inspectImport',
   'importItems',
   'listWorkspacePaths',
-  'resolveWorkspacePath',
+  'resolveCheckedWorkspacePath',
   'readFilePreview',
   'readWorkspaceImage',
   'readWorkspacePdf',

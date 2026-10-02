@@ -31,6 +31,7 @@ const {
   createWorkspacePdfResult,
   createWorkspacePdfError,
 } = require('../../shared/contracts/workspace-pdf');
+const { constants: FS_CONSTANTS } = require('fs');
 const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
   RegexSearchTimeoutError,
@@ -864,12 +865,15 @@ function createFsService({
     return resolvePathInRoot(workspaceRoot, relativePath, workspaceLabels());
   }
 
+  // The path is used exactly as it arrives: a name may end in a space, and
+  // trimming would swap `report.txt ` for its twin `report.txt` (#649). Paths
+  // the model types are trimmed where they are typed, in resolvePathInRoot.
   function assertAbsolutePathInRoot(rootPath, absPath, labels) {
     if (!rootPath) {
       return { error: labels.missing };
     }
-    const raw = typeof absPath === 'string' ? absPath.trim() : '';
-    if (!raw) {
+    const raw = typeof absPath === 'string' ? absPath : '';
+    if (!raw.trim()) {
       return { error: labels.required };
     }
     const resolved = path.resolve(raw);
@@ -2284,6 +2288,51 @@ function createFsService({
     return typeof isSensitiveName === 'function' && isSensitiveName(entryName);
   }
 
+  // Only regular files and folders are copied. A pipe, a socket or a device
+  // makes fs.cp throw halfway — a git repository with core.fsmonitor has a
+  // socket in .git — so they are skipped and reported like symlinks (#646).
+  function isCopyableEntry(stat) {
+    return stat.isFile() || stat.isDirectory();
+  }
+
+  /**
+   * The target names one import has handed out but not yet created. On APFS
+   * and NTFS `README.md` and `readme.md` are the same file, so the comparison
+   * folds case there — otherwise the second copy fails with EEXIST (#646).
+   */
+  function createClaimedTargets(platform) {
+    const foldsCase = platform === 'darwin' || platform === 'win32';
+    const keyOf = (candidate) => (foldsCase ? candidate.normalize('NFC').toLowerCase() : candidate);
+    const keys = new Set();
+    return {
+      has: (candidate) => keys.has(keyOf(candidate)),
+      add: (candidate) => {
+        keys.add(keyOf(candidate));
+      },
+    };
+  }
+
+  /**
+   * A source is refused when its path as written *or* its real path looks
+   * like credentials: a drop through `~/k8s → ~/.kube` must not pass as
+   * `k8s/config` (#646). Returns the matching verdict or null.
+   */
+  async function sensitiveSourceVerdict(source, classifySourcePath) {
+    if (typeof classifySourcePath !== 'function') return null;
+    const written = classifySourcePath(source);
+    if (written?.sensitive) return written;
+    let realSource;
+    try {
+      realSource = await fs.realpath(source);
+    } catch {
+      // Missing or a dangling link: the lstat below reports or skips it.
+      return null;
+    }
+    if (realSource === source) return null;
+    const real = classifySourcePath(realSource);
+    return real?.sensitive ? real : null;
+  }
+
   /**
    * Zählt rekursiv, was ein Import anfassen würde, ohne etwas zu schreiben.
    * Symlinks werden gezählt und übersprungen, nicht verfolgt — ein Symlink im
@@ -2325,14 +2374,20 @@ function createFsService({
 
   /**
    * Prüft und zählt einen Import, ohne zu kopieren.
+   *
+   * `classifySourcePath` decides whether a source looks like credentials, on
+   * its written and on its real path; `platform` decides whether target names
+   * compare case-insensitively (both #646, injectable for tests).
    * @returns {{ error: string } | { ok: true, dirs, files, bytes, skippedSymlinks,
-   *            skippedSensitive, targets: Array<{ source, targetPath, kind }> }}
+   *            skippedSensitive, skippedOther, targets: Array<{ source, targetPath, kind }> }}
    */
   async function inspectImportSources(sourcePaths, destDir, options = {}) {
     const {
       maxEntries = Number.POSITIVE_INFINITY,
       maxTotalBytes = Number.POSITIVE_INFINITY,
       isSensitiveName = null,
+      classifySourcePath = null,
+      platform = process.platform,
     } = options;
 
     const t = ui();
@@ -2358,11 +2413,16 @@ function createFsService({
       maxEntries,
     };
     const targets = [];
-    const claimed = new Set();
+    const claimed = createClaimedTargets(platform);
 
     for (const source of sources) {
       if (!path.isAbsolute(source)) return { error: t('fs.error.sourceNotAbsolute', { path: source }) };
       const resolvedSource = path.resolve(source);
+
+      const verdict = await sensitiveSourceVerdict(resolvedSource, classifySourcePath);
+      if (verdict) {
+        return { error: t('fs.error.sourceSensitive', { name: path.basename(resolvedSource), pattern: verdict.pattern }) };
+      }
 
       let srcStat;
       try {
@@ -2383,6 +2443,10 @@ function createFsService({
 
       if (srcStat.isSymbolicLink()) {
         acc.skippedSymlinks += 1;
+        continue;
+      }
+      if (!isCopyableEntry(srcStat)) {
+        acc.skippedOther += 1;
         continue;
       }
 
@@ -2409,56 +2473,104 @@ function createFsService({
       bytes: acc.bytes,
       skippedSymlinks: acc.skippedSymlinks,
       skippedSensitive: acc.skippedSensitive,
+      skippedOther: acc.skippedOther,
       targets,
     };
+  }
+
+  // "Already there" from fs.cp's own check or from the exclusive copyFile.
+  function isTargetTakenError(err) {
+    return err?.code === 'EEXIST' || err?.code === 'ERR_FS_CP_EEXIST';
+  }
+
+  /**
+   * Copies one checked target and records in `created` what it created, so a
+   * failure can take it back without touching anything that was there before
+   * (#646). A folder is created here, exclusively, and then filled: one that
+   * turned up since the check is somebody else's and is not merged into.
+   * Files are copied with COPYFILE_EXCL, so nothing existing is overwritten.
+   */
+  async function copyImportTarget(target, isSensitiveName, created) {
+    const filter = async (src) => {
+      if (src !== target.source && isSensitiveEntryName(path.basename(src), isSensitiveName)) return false;
+      try {
+        return isCopyableEntry(await fs.lstat(src));
+      } catch {
+        return false;
+      }
+    };
+    const cpOptions = {
+      recursive: true,
+      force: false,
+      dereference: false,
+      mode: FS_CONSTANTS.COPYFILE_EXCL,
+      filter,
+    };
+    if (target.kind === 'directory') {
+      await fs.mkdir(target.targetPath);
+      created.push(target.targetPath);
+      // errorOnExist is off only because the folder itself now exists; what
+      // goes into it is still copied exclusively.
+      await fs.cp(target.source, target.targetPath, { ...cpOptions, errorOnExist: false });
+      return;
+    }
+    try {
+      await fs.cp(target.source, target.targetPath, { ...cpOptions, errorOnExist: true });
+    } catch (err) {
+      // Anything but "already there" may have left a partial file of ours.
+      if (!isTargetTakenError(err)) created.push(target.targetPath);
+      throw err;
+    }
+    created.push(target.targetPath);
+  }
+
+  /** Removes what a failed import created; returns what could not be removed. */
+  async function removeCreatedTargets(created) {
+    const leftOver = [];
+    for (const createdPath of [...created].reverse()) {
+      try {
+        await fs.rm(createdPath, { recursive: true, force: true });
+      } catch {
+        leftOver.unshift(createdPath);
+      }
+    }
+    return leftOver;
   }
 
   /**
    * Kopiert geprüfte Quellen in den Zielordner. Prüft selbst noch einmal über
    * inspectImportSources — der Aufrufer darf sich nicht darauf verlassen, dass
    * zwischen Zählen und Kopieren nichts passiert ist.
+   *
+   * All or nothing (#646): when one target fails, what this import created so
+   * far is removed again, and `copied` names only what could not be removed.
    */
   async function importExternalItems(sourcePaths, destDir, options = {}) {
     const inspection = await inspectImportSources(sourcePaths, destDir, options);
     if (inspection.error) return { error: inspection.error };
 
     const { isSensitiveName = null } = options;
-    const copied = [];
+    const created = [];
     for (const target of inspection.targets) {
-      const filter = async (src) => {
-        if (src !== target.source && isSensitiveEntryName(path.basename(src), isSensitiveName)) return false;
-        try {
-          const st = await fs.lstat(src);
-          return !st.isSymbolicLink();
-        } catch {
-          return false;
-        }
-      };
       try {
-        await fs.cp(target.source, target.targetPath, {
-          recursive: true,
-          errorOnExist: true,
-          force: false,
-          dereference: false,
-          filter,
-        });
+        await copyImportTarget(target, isSensitiveName, created);
       } catch (err) {
         return {
           error: ui()('fs.error.copyFailed', { error: err?.message ?? String(err) }),
-          copied,
+          copied: await removeCreatedTargets(created),
         };
       }
-      copied.push(target.targetPath);
     }
 
     return {
       ok: true,
-      copied,
+      copied: created,
       dirs: inspection.dirs,
       files: inspection.files,
       bytes: inspection.bytes,
       skippedSymlinks: inspection.skippedSymlinks,
       skippedSensitive: inspection.skippedSensitive,
+      skippedOther: inspection.skippedOther,
     };
   }
 
