@@ -9,6 +9,7 @@ import {
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
 import { basenameOf, parentDirOf, joinNative, isInsideDir } from '../utils/nativePath.js';
+import { createAgentMarks, markPathFor } from '../tree/agentMarks.js';
 import {
   TREE_DRAG_MIME,
   encodeTreeDragPayload,
@@ -52,6 +53,7 @@ export function initFileTree(deps) {
     // Both only for tests; the app runs with the defaults of the host.
     fileViews,
     confirmLeave,
+    agentMarks = createAgentMarks(),
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -67,6 +69,7 @@ export function initFileTree(deps) {
   const projectName = document.getElementById('project-name');
   const btnFolderHistory = document.getElementById('btn-folder-history');
   const btnHiddenFiles = document.getElementById('btn-toggle-hidden-files');
+  const btnClearMarks = document.getElementById('btn-tree-clear-marks');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
   const welcomeRecentSection = document.getElementById('welcome-recent');
   const welcomeRecentList = document.getElementById('welcome-recent-list');
@@ -95,6 +98,8 @@ export function initFileTree(deps) {
 
   function startTreeGeneration() {
     treeGeneration += 1;
+    // The marks name paths of the folder left (#347).
+    agentMarks.clearAll();
     leaveGeneration();
     generationLeft = new Promise((resolve) => { leaveGeneration = resolve; });
   }
@@ -750,6 +755,13 @@ export function initFileTree(deps) {
     }
 
     if (hidden > 0) parentEl.appendChild(buildHiddenEntriesNote(hidden, depth));
+
+    // A complete listing tells which marked entries are gone — deleted,
+    // renamed or moved, by whoever (#347). One cut at the cap (#76) does not.
+    if (hidden === 0) {
+      agentMarks.pruneListing(dirPath, items.map((item) => item.path), hiddenByFilter);
+    }
+    applyAgentMarks(parentEl.querySelectorAll(':scope > .tree-item'));
   }
 
   /**
@@ -903,6 +915,7 @@ export function initFileTree(deps) {
 
   async function handleFsItemDeleted(deletedPath) {
     if (!appStore.rootPath || typeof deletedPath !== 'string' || !deletedPath) return;
+    agentMarks.forget(deletedPath);
     // Bei einem gelöschten Ordner (#120) ist auch die Vorschau einer Datei
     // darin hinfällig, nicht nur die des gelöschten Eintrags selbst.
     if (appStore.selectedPath === deletedPath || isInsideDir(appStore.selectedPath, deletedPath)) {
@@ -925,7 +938,9 @@ export function initFileTree(deps) {
   // dazu die Information, ob es ein Ordner ist, damit „Öffnen“ entfällt (#120).
   async function openFileContextMenu(item) {
     try {
-      const result = await api.showFileContextMenu(item.path);
+      const result = await api.showFileContextMenu(item.path, {
+        agentMark: Boolean(rowForPath(item.path)?.querySelector(':scope > .tree-mark')),
+      });
       if (result?.error) console.warn('Context menu refused:', result.error);
     } catch (err) {
       console.warn('Context menu failed:', err?.message ?? err);
@@ -1113,6 +1128,7 @@ export function initFileTree(deps) {
     });
     if (stale()) return { ok: false, reason: 'stale' };
     if (shown) {
+      agentMarks.markSeen(targetPath);
       appStore.activeTreeItem?.classList.remove('active');
       appStore.activeTreeItem = null;
       appStore.selectedPath = targetPath;
@@ -1210,8 +1226,8 @@ export function initFileTree(deps) {
     }, 'Tree could not be redrawn after an import');
   }
 
-  // Wird nach einem write_file_text-Tool-Aufruf (KI hat eine Datei angelegt/
-  // überschrieben) aus app.js gerufen, damit Baum und Vorschau ohne manuelles
+  // Wird nach jedem schreibenden Tool-Aufruf (write_file_text, edit_file,
+  // apply_patch: KI hat eine Datei angelegt/geändert) aus app.js gerufen, damit Baum und Vorschau ohne manuelles
   // Neuladen den aktuellen Stand zeigen.
   async function notifyExternalFileWrite(relativePath) {
     if (!appStore.rootPath || typeof relativePath !== 'string') return;
@@ -1259,6 +1275,92 @@ export function initFileTree(deps) {
       }
     }
   }
+
+  // ── What the agent read or changed (#347) ─────────────────────────────────
+  // The state lives in agentMarks, per conversation; here it becomes a letter
+  // at the right edge of the row. A folder row always carries the loudest
+  // mark below it, and the stylesheet hides it while the folder is open —
+  // so no expand or collapse has to remember to redraw it.
+
+  const MARK_LETTERS = Object.freeze({ read: 'R', changed: 'M', unseen: 'M' });
+  const MARK_LABELS = Object.freeze({
+    read: 'tree.mark.read',
+    changed: 'tree.mark.changed',
+    unseen: 'tree.mark.unseen',
+  });
+  const FOLDER_MARK_LABELS = Object.freeze({
+    read: 'tree.mark.folder.read',
+    changed: 'tree.mark.folder.changed',
+    unseen: 'tree.mark.folder.unseen',
+  });
+
+  function applyAgentMarkToRow(row, summaries) {
+    const isDirectory = row.dataset.isDirectory === 'true';
+    const mark = isDirectory
+      ? summaries.get(row.dataset.path) || null
+      : agentMarks.markOf(appStore.currentChatId, row.dataset.path);
+    let el = row.querySelector(':scope > .tree-mark');
+    if (!mark) {
+      el?.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('span');
+      el.className = 'tree-mark';
+      // Not colour alone, nor the letter alone: the label says it in words.
+      el.setAttribute('role', 'img');
+      row.insertBefore(el, row.querySelector(':scope > .tree-item-reference'));
+    }
+    el.dataset.mark = mark;
+    el.classList.toggle('tree-mark--folder', isDirectory);
+    el.textContent = MARK_LETTERS[mark];
+    const label = t((isDirectory ? FOLDER_MARK_LABELS : MARK_LABELS)[mark]);
+    el.setAttribute('aria-label', label);
+    el.title = label;
+  }
+
+  function applyAgentMarks(rows) {
+    const summaries = agentMarks.folderSummaries(appStore.currentChatId, appStore.rootPath);
+    for (const row of rows) applyAgentMarkToRow(row, summaries);
+  }
+
+  /** Draws the marks of the conversation on screen, e.g. after a chat switch. */
+  function syncAgentMarks() {
+    applyAgentMarks(treeContainer.querySelectorAll('.tree-item'));
+    if (btnClearMarks) btnClearMarks.hidden = !agentMarks.hasMarks(appStore.currentChatId);
+  }
+
+  /**
+   * A tool of the chat `chatId` read or changed `relativePath`. ChatStream
+   * passes only runs in the open folder; the path is the tool's, relative.
+   */
+  function recordAgentFile(kind, relativePath, chatId) {
+    const path = markPathFor(appStore.rootPath, relativePath);
+    if (!path || !chatId) return;
+    if (kind === 'write') agentMarks.recordWrite(chatId, path);
+    else agentMarks.recordRead(chatId, path);
+  }
+
+  // One patch marks many files at once: one redraw for all of them.
+  let agentMarksQueued = false;
+  agentMarks.onChange(() => {
+    if (agentMarksQueued) return;
+    agentMarksQueued = true;
+    queueMicrotask(() => {
+      agentMarksQueued = false;
+      syncAgentMarks();
+    });
+  });
+
+  btnClearMarks?.addEventListener('click', () => {
+    agentMarks.clearChat(appStore.currentChatId);
+    // The button hides under the focus; its neighbour in the header takes it.
+    btnHiddenFiles?.focus();
+  });
+
+  api.onFsClearAgentMark?.(({ path } = {}) => {
+    if (typeof path === 'string' && path) agentMarks.clear(appStore.currentChatId, path);
+  });
 
   // ── Abgleich mit dem Dateisystem (Issue #158) ─────────────────────────────
 
@@ -1587,6 +1689,7 @@ export function initFileTree(deps) {
     if (!(await contentPane.open(item))) return;
     // Nor a row of a folder left meanwhile (#633).
     if (generation !== treeGeneration) return;
+    agentMarks.markSeen(item.path);
     setActiveItem(row);
     appStore.selectedPath = item.path;
     appStore.selectedIsDirectory = false;
@@ -1631,6 +1734,7 @@ export function initFileTree(deps) {
       text.textContent = t('tree.loading');
     }
     if (!folderHistoryMenu.classList.contains('hidden')) void refreshFolderHistory();
+    syncAgentMarks();
   });
 
   return {
@@ -1639,6 +1743,10 @@ export function initFileTree(deps) {
     refreshWelcomeRecent,
     closeFolderHistoryMenu,
     notifyExternalFileWrite,
+    /** What the agent read ('read') or changed ('write') in a run (#347). */
+    recordAgentFile,
+    /** The conversation on screen changed: its marks take the tree (#347). */
+    syncAgentMarks,
     /** Hidden files on or off (#436); resolves once the tree is redrawn. */
     setShowHiddenFiles,
     toggleHiddenFiles,

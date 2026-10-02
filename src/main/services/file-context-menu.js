@@ -246,7 +246,7 @@ function createFileContextMenu({
    * flag: it decides whether "Open" is offered and how the delete
    * confirmation words it.
    */
-  function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false } = {}) {
+  function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null } = {}) {
     const t = createTranslator(getLocale());
     // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
     // das Fenster während des Dialogs zugeht — wäre sonst eine
@@ -265,6 +265,11 @@ function createFileContextMenu({
         label: t('contextMenu.info'),
         click: () => guarded(showInfo(filePath, window, { isDirectory }), 'The information could not be shown'),
       },
+      // Only when the row carries what the agent read or changed (#347).
+      ...(typeof onClearAgentMark === 'function' ? [{
+        label: t(isDirectory ? 'contextMenu.clearAgentMark.folder' : 'contextMenu.clearAgentMark'),
+        click: () => onClearAgentMark(filePath),
+      }] : []),
       { type: 'separator' },
       {
         label: t('contextMenu.delete'),
@@ -277,8 +282,8 @@ function createFileContextMenu({
     ];
   }
 
-  function popup(filePath, window, { onDeleted = null, isDirectory = false } = {}) {
-    const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted, isDirectory }));
+  function popup(filePath, window, { onDeleted = null, isDirectory = false, onClearAgentMark = null } = {}) {
+    const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted, isDirectory, onClearAgentMark }));
     menu.popup(window ? { window } : {});
     return menu;
   }

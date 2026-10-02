@@ -248,6 +248,15 @@ function createWorkspaceFileWrittenEvent(relativePath) {
   };
 }
 
+/** chat:progress with type='workspace': a reading tool read the file (#347). */
+function createWorkspaceFileReadEvent(relativePath) {
+  return {
+    type: CHAT_PROGRESS_TYPES.WORKSPACE,
+    event: WORKSPACE_PROGRESS_EVENTS.FILE_READ,
+    relativePath: String(relativePath ?? ''),
+  };
+}
+
 /**
  * chat:progress mit type='permission' (Issue #66). Trägt nur bereinigte
  * Daten: Tool, Aufruf-Index, Ereignis und ggf. die Entscheidung.
@@ -305,6 +314,7 @@ module.exports = {
   createPhaseEvent,
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
+  createWorkspaceFileReadEvent,
   createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,

@@ -321,3 +321,22 @@ test('„Informationen“: ein abstürzender Dialog reißt den Main-Prozess nich
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(warnings.join(' '), /Fenster ist weg/);
 });
+
+test('"Remove mark" appears only for a marked row and hands the path back (#347)', () => {
+  const { shell, Menu } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
+  assert.ok(!menu.buildTemplate('/ws/a.txt').some((item) => item.label === 'Remove mark'));
+
+  const cleared = [];
+  const file = menu.popup('/ws/a.txt', { id: 1 }, { onClearAgentMark: (p) => cleared.push(p) });
+  const item = file.template.find((entry) => entry.label === 'Remove mark');
+  assert.ok(item, 'offered for a marked file');
+  item.click();
+  assert.deepEqual(cleared, ['/ws/a.txt']);
+
+  const folder = menu.popup('/ws/docs', { id: 1 }, { isDirectory: true, onClearAgentMark: () => {} });
+  assert.deepEqual(
+    folder.template.map((t) => t.label ?? t.type),
+    ['Reveal in Finder', 'Information', 'Remove marks in this folder', 'separator', 'Delete…'],
+  );
+});

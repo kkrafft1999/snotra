@@ -141,3 +141,29 @@ test('buildTraceEntry marks reads from a skill directory with the skill name', (
   assert.equal(adapter.buildTraceEntry('read_file_text', { relative_path: 'README.md' }).skill, undefined);
   assert.equal(adapter.buildTraceEntry('list_directory', {}).skill, undefined);
 });
+
+// #347: reading tools mark the file they read in the tree.
+for (const tool of ['read_file_text', 'read_file_lines', 'outline_file']) {
+  test(`workspace tool adapter emits fileRead after a successful ${tool}`, async () => {
+    const adapter = createWorkspaceToolAdapter(makeRegistry(() => JSON.stringify({ ok: true, text: 'x' })));
+    const result = await adapter.execute(tool, { relative_path: ' src/a.js ' }, { workspaceRoot: '/tmp/project' });
+    assert.deepEqual(result.progressEvents, [
+      { type: CHAT_PROGRESS_TYPES.WORKSPACE, event: WORKSPACE_PROGRESS_EVENTS.FILE_READ, relativePath: 'src/a.js' },
+    ]);
+  });
+}
+
+test('workspace tool adapter emits no fileRead for a failed read, a skill path or a search', async () => {
+  const failing = createWorkspaceToolAdapter(makeRegistry(() => JSON.stringify({ error: 'not found' })));
+  assert.deepEqual((await failing.execute('read_file_text', { relative_path: 'a.js' }, {})).progressEvents, []);
+
+  const ok = createWorkspaceToolAdapter(makeRegistry(() => JSON.stringify({ ok: true, text: 'x' })));
+  assert.deepEqual(
+    (await ok.execute('read_file_text', { relative_path: 'skill:traffic/SKILL.md' }, {})).progressEvents,
+    []
+  );
+  assert.deepEqual(
+    (await ok.execute('search_in_files', { query: 'x' }, { workspaceRoot: '/tmp/project' })).progressEvents,
+    []
+  );
+});

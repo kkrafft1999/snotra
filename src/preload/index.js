@@ -53,8 +53,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importItems: (files, destDir) => invokeImport(REQ.FS_IMPORT_ITEMS, files, destDir),
   listWorkspacePaths: (options) =>
     ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: options?.showHidden === true }),
-  // Only the path: whether it is a folder main looks up itself (#649).
-  showFileContextMenu: (filePath) => ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath),
+  // Only the path: whether it is a folder main looks up itself (#649). The
+  // one option says whether the row carries an agent mark (#347).
+  showFileContextMenu: (filePath, options) =>
+    ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, { agentMark: options?.agentMark === true }),
+  onFsClearAgentMark: (callback) => {
+    const channel = PUSH.FS_CLEAR_AGENT_MARK;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   onFsItemDeleted: (callback) => {
     const channel = PUSH.FS_ITEM_DELETED;
     const listener = (_event, payload) => callback(payload);

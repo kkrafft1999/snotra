@@ -51,6 +51,14 @@ module.exports = {
   'sidebar.history.removeHint': 'Mit Entf oder der Rücktaste entfernst du den Ordner aus dem Verlauf.',
   'tree.reference': 'Im Chat referenzieren',
   'tree.reference.label': '{name} im Chat referenzieren',
+  // What the agent read or changed (#347): tooltip and aria-label of the mark.
+  'tree.mark.unseen': 'Vom Agenten geändert, noch nicht angesehen',
+  'tree.mark.changed': 'Vom Agenten geändert',
+  'tree.mark.read': 'Vom Agenten gelesen',
+  'tree.mark.folder.unseen': 'Enthält Dateien, die der Agent geändert hat und die du noch nicht angesehen hast',
+  'tree.mark.folder.changed': 'Enthält Dateien, die der Agent geändert hat',
+  'tree.mark.folder.read': 'Enthält Dateien, die der Agent gelesen hat',
+  'sidebar.clearMarks': 'Markierungen des Agenten entfernen',
   // "nicht angezeigt", not "ausgeblendet": since #436 that is the verb of the
   // hidden-files switch, which has nothing to do with the cap (#641).
   'tree.hiddenEntries.one': '… {count} weiterer Eintrag nicht angezeigt',
@@ -1570,6 +1578,8 @@ module.exports = {
   'contextMenu.info': 'Informationen',
   'contextMenu.info.title': 'Informationen zu „{name}“',
   'contextMenu.info.copyPath': 'Pfad kopieren',
+  'contextMenu.clearAgentMark': 'Markierung entfernen',
+  'contextMenu.clearAgentMark.folder': 'Markierungen in diesem Ordner entfernen',
   'contextMenu.ok': 'OK',
   'contextMenu.delete': 'Löschen…',
   'contextMenu.noDialog': 'Kein Dialog verfügbar.',
