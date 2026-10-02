@@ -185,7 +185,8 @@ stored with the history in the encrypted store.
   renderer or the model, no escape through `..`, symlinks or junctions; new
   files are checked against the real existing parent path. Skill targets stay
   read-only in every mode (#429 opened them for a while; the revision for #548
-  in section 9 closed them again). Paths, file state and root are re-checked immediately
+  in section 9 closed them again), a global skill folder also when the open
+  folder contains it (#650). Paths, file state and root are re-checked immediately
   before access; a swap during the approval invalidates it. Plain string prefix
   checks are not enough.
 - **Import from outside (#101):** dropping from Finder or Explorer into the file
@@ -990,7 +991,11 @@ same however narrow the conditions around it were.
 
 - **Read-only in every mode.** The write tools refuse a `skill:` path and an
   absolute path into the folder of a switched-on skill as a hard limit, before
-  the policy. The engine no longer keeps a set of loaded skills, and the plan
+  the policy. The global folders `~/.snotra/skills` and `~/.agents/skills` are
+  refused by any spelling, also when the open folder contains them — the home
+  folder, say (#650); the workspace winning over a skill folder applies to
+  reading only. Workspace skills under `.agents/skills/` in the open folder are
+  project files and stay writable. The engine no longer keeps a set of loaded skills, and the plan
   carries none.
 - **No skill folder in the sandbox.** `shell_execute` and `run_python` get no
   skill folder as a write path, and `shell_execute` no longer accepts

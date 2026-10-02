@@ -796,6 +796,12 @@ function createFsService({
   maxReadSliceChars,
   regexSearchTimeBudgetMs,
   /**
+   * The folders of the global skills (`~/.snotra/skills`, `~/.agents/skills`).
+   * The write tools refuse every path into them, even when the open folder
+   * contains them (#650).
+   */
+  globalSkillRoots = [],
+  /**
    * Sprache der Oberfläche (#292). Sie gilt nur für die Wege, die beim Nutzer
    * enden — Baum, Vorschau, Drag & Drop. Was ein Tool dem Modell zurückgibt,
    * ist ein anderer Kanal und bleibt englisch (#276); dort wird `ui()` nicht
@@ -992,7 +998,9 @@ function createFsService({
    *
    * Returns null when the path is not absolute, is already a skill path, lies
    * in the workspace (the workspace wins) or in no skill folder. Whether it
-   * stays inside the folder is checked afterwards, like any skill path.
+   * stays inside the folder is checked afterwards, like any skill path. The
+   * workspace winning is about reading: a write into a global skill folder is
+   * refused in `resolveToolPath` wherever the open folder is (#650).
    */
   async function skillPathForAbsolute(workspaceRoot, relativePath, skillRoots) {
     const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
@@ -1029,19 +1037,64 @@ function createFsService({
     return null;
   }
 
+  /**
+   * True when a path lies in a global skill folder (#650), compared as given
+   * and by realpath against each folder as configured and by realpath — the
+   * same spellings `skillPathForAbsolute` matches. A global skill is switched
+   * on in every project, so an open folder that contains it (the home folder,
+   * `~/.agents`, …) does not turn its files into project files. Workspace
+   * skills under `<workspace>/.agents/skills` are not in this list.
+   */
+  async function isInGlobalSkillRoot(absPath) {
+    const roots = Array.isArray(globalSkillRoots)
+      ? globalSkillRoots.filter((dir) => typeof dir === 'string' && dir)
+      : [];
+    if (roots.length === 0) return false;
+    const target = path.resolve(absPath);
+    let realTarget = null;
+    try {
+      realTarget = await resolveExistingRealPath(target);
+    } catch {
+      /* the lexical path, then */
+    }
+    for (const dir of roots) {
+      const configured = path.resolve(dir);
+      const spellings = [configured];
+      try {
+        // Through the nearest existing parent: a missing skills folder under a
+        // symlinked `~/.snotra` still has its real spelling.
+        spellings.push(await resolveExistingRealPath(configured));
+      } catch {
+        /* the folder as configured, then */
+      }
+      for (const root of spellings) {
+        for (const candidate of [target, realTarget]) {
+          if (candidate && containsPath(root, candidate)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
+    const access = options.access === 'write' ? 'write' : 'read';
     const asSkillPath = await skillPathForAbsolute(workspaceRoot, relativePath, options.skillRoots);
     const chosen = resolveAccessRoot(
       workspaceRoot,
       asSkillPath || relativePath,
       options.skillRoots,
-      options.access === 'write' ? 'write' : 'read'
+      access
     );
     if (chosen.error) return { error: chosen.error };
     const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
     if (lexical.error) return lexical;
     const checked = await assertPathAccessibleInRoot(chosen.root, lexical.absPath, chosen.labels);
     if (checked.error) return checked;
+    // Read-only in every mode (#548), also where the open folder contains a
+    // global skill folder and the path reaches it as a workspace path (#650).
+    if (access === 'write' && (await isInGlobalSkillRoot(checked.absPath))) {
+      return { error: SKILL_FOLDER_READ_ONLY };
+    }
     return {
       absPath: checked.absPath,
       root: path.resolve(chosen.root),
@@ -1053,7 +1106,9 @@ function createFsService({
   /**
    * The path of a write tool: the workspace only. A `skill:` path fails with
    * a clear message instead of landing in the workspace as a file named
-   * "skill:…" (#548).
+   * "skill:…" (#548), and so does a path into a global skill folder inside
+   * the workspace (#650) — checked again here, at execution, not only when
+   * the call was planned.
    */
   async function resolveWorkspacePathForAccess(workspaceRoot, relativePath) {
     return resolveToolPath(workspaceRoot, relativePath, { access: 'write' });
