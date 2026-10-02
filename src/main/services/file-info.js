@@ -106,12 +106,17 @@ function extensionOf(absPath) {
  * „unbekannt“, wenn niemand zustimmt. Für eine Info-Zeile ist das zu teuer.
  * `URLForApplicationToOpenURL:` fragt dieselbe Launch-Services-Datenbank
  * direkt, ohne Freigabe und in rund 70 ms.
+ *
+ * The name is the one Finder shows (#650): `displayNameAtPath:` gives the
+ * localized name — "Vorschau" on a German Mac — where the bundle's file name
+ * (`lastPathComponent`) is always "Preview.app". It may carry the ".app",
+ * depending on the Finder setting for extensions; `onMacOs` strips it.
  */
 function macDefaultAppScript(absPath) {
   // JSON.stringify liefert ein gültiges JS-String-Literal samt Escaping.
   return "ObjC.import('AppKit');"
     + `var u = $.NSWorkspace.sharedWorkspace.URLForApplicationToOpenURL($.NSURL.fileURLWithPath(${JSON.stringify(absPath)}));`
-    + " u ? ObjC.unwrap(u.lastPathComponent) : ''";
+    + " u ? ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(u.path)) : ''";
 }
 
 /** Windows-CI-Falle: PowerShell und `xdg-mime` liefern CRLF. */
