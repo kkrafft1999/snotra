@@ -35,6 +35,11 @@ function formatSkipNote(inspection, t) {
   if (inspection.skippedSensitive > 0) {
     notes.push(t.plural('import.skipped.sensitive', inspection.skippedSensitive));
   }
+  // Pipes, sockets and devices are skipped like symlinks, so the dialog
+  // counts what is really copied (#646).
+  if (inspection.skippedOther > 0) {
+    notes.push(t.plural('import.skipped.other', inspection.skippedOther));
+  }
   return notes.join(' ');
 }
 
@@ -53,6 +58,8 @@ function registerFsHandlers({
   // Reader for the pdf.js data files (#346); without it the channel stays
   // unregistered and pdf.js renders without CMaps, fonts and decoders.
   pdfAssets = null,
+  // For the context menu's own look at the path (#649).
+  fs = require('fs').promises,
 }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath, options) =>
     filesystem.readDirectory(dirPath, options));
@@ -89,6 +96,8 @@ function registerFsHandlers({
   // Issue #101: Dateien und Ordner von außen per Drag & Drop übernehmen.
   // Nur zählen, nichts schreiben — der Renderer nutzt das beratend (Busy-
   // Anzeige, leerer Drop). Verbindlich prüft FS_IMPORT_ITEMS noch einmal.
+  // The source paths on both channels come from the preload, which resolves
+  // the dropped File objects itself; page script cannot name one (#646).
   ipcMain.handle(REQ.FS_INSPECT_IMPORT, async (_event, sourcePaths, destDir) =>
     filesystem.inspectImport(sourcePaths, destDir));
 
@@ -153,12 +162,21 @@ function registerFsHandlers({
 
   // Issue #58: Kontextmenü im Dateibaum. Der Pfad wird wie bei allen fs-Kanälen
   // gegen den aktiven Workspace geprüft, bevor er an die Shell geht.
-  // isDirectory steuert nur den Zuschnitt des Menüs (#120) — die Pfadprüfung
-  // hängt nicht daran, das Flag aus dem Renderer ist also unkritisch.
-  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath, { isDirectory = false } = {}) => {
+  // Whether it is a folder main looks up itself (#649): it decides the wording
+  // of the delete confirmation — the safeguard §5 relies on against a
+  // compromised renderer — and whether "Open" is offered, so it cannot be a
+  // flag the renderer sends. lstat, not stat: a symlink is a link, and the
+  // trash takes the link, not what it points to.
+  ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath) => {
     if (!fileContextMenu) return { error: createTranslator(getLocale())('import.noContextMenu') };
-    const { absPath, error } = await filesystem.resolveWorkspacePath(filePath);
+    const { absPath, error } = await filesystem.resolveCheckedWorkspacePath(filePath);
     if (error) return { error };
+    let isDirectory;
+    try {
+      isDirectory = (await fs.lstat(absPath)).isDirectory();
+    } catch (err) {
+      return { error: err.message };
+    }
     const win = getMainWindow();
     fileContextMenu.popup(absPath, win, {
       isDirectory,

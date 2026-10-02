@@ -15,7 +15,7 @@
  * Beide liefern den aufgeloesten Pfad oder `null`; `null` heisst „nicht
  * aktiviert“, der bisherige Root bleibt dann unveraendert.
  */
-function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWorkspaceRoot }) {
+function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWorkspaceRoot, log = console }) {
   function resolveCandidate(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return null;
@@ -49,7 +49,13 @@ function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWo
 
   async function activate(resolved) {
     if (!resolved || !(await isExistingDirectory(resolved))) return null;
-    await workspaceFolderStore.persistLastFolder(resolved);
+    // Remembering the folder is a convenience; opening it goes on when that
+    // fails — a full disk or a read-only userData (#473, #650).
+    try {
+      await workspaceFolderStore.persistLastFolder(resolved);
+    } catch (error) {
+      log.warn?.(`Could not remember the last opened folder: ${error?.message ?? error}`);
+    }
     setActiveWorkspaceRoot(resolved);
     return resolved;
   }

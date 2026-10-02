@@ -11,6 +11,12 @@
  * watcher, so a tree drawn inside it would go stale. The comparison ignores
  * case, since Windows and a default macOS volume do too.
  *
+ * This list is also the workspace watcher's definition of noise (#650): it
+ * drops the events of exactly these entries and of no others. Were the two
+ * apart, a row could outlive its file — the watcher keeping quiet about
+ * something the tree shows — or a file the tree never shows could keep
+ * reloading it. An entry added here is therefore both unlisted and unwatched.
+ *
  * What the model lists through its own tools follows its own rules
  * (`readWorkspaceEntries` in fs-service.js); this module is only about what the
  * user sees.

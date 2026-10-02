@@ -22,6 +22,13 @@ const LIMITS = Object.freeze({
   // Rückfrage durch; Ordner werden immer bestätigt (siehe fs-handlers).
   IMPORT_CONFIRM_MIN_ENTRIES: 20,
   IMPORT_CONFIRM_MIN_BYTES: 10 * 1024 * 1024,
+  // Folders one watched target may hold a watch on, where the platform is
+  // watched folder by folder (Linux, #648). The kernel's watch budget is per
+  // user and shared with the user's IDE and every other watcher; on older
+  // kernels it is 8,192. A project outside `node_modules/` rarely has more
+  // than a few hundred folders, a home folder opened as a workspace has far
+  // more — there the cap is reached, said so, and the tree reloads coarsely.
+  MAX_WATCHED_DIRECTORIES: 2000,
 });
 
 module.exports = { LIMITS };

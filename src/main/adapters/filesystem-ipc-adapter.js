@@ -28,6 +28,11 @@ function createFilesystemIpcAdapter({
   // Zugangsdaten aussehen (.env*, *.pem, id_*, .ssh/ …, Konzept §4). Wer so
   // eine Datei wirklich im Projekt haben will, legt sie über den Dateimanager
   // ab; beiläufig per Drop in Modellreichweite rutschen soll sie nicht.
+  //
+  // The sensitivity check itself runs in the service (`classifySourcePath`
+  // below), because it needs the real path as well as the written one (#646).
+  // Which paths arrive here at all is bound in the preload: it resolves the
+  // dropped File objects itself, so page script cannot name a source.
   function checkImportSources(sourcePaths) {
     const sources = Array.isArray(sourcePaths)
       ? sourcePaths.filter((p) => typeof p === 'string' && p.trim())
@@ -38,12 +43,6 @@ function createFilesystemIpcAdapter({
       if (!path.isAbsolute(source)) {
         return { error: t('fs.error.sourceNotAbsolute', { path: source }) };
       }
-      const verdict = sensitivePathMatcher.classifyPath(source);
-      if (verdict.sensitive) {
-        return {
-          error: t('fs.error.sourceSensitive', { name: path.basename(source), pattern: verdict.pattern }),
-        };
-      }
     }
     return { sources };
   }
@@ -53,6 +52,7 @@ function createFilesystemIpcAdapter({
     maxEntries: limits.MAX_IMPORT_ENTRIES,
     maxTotalBytes: limits.MAX_IMPORT_TOTAL_BYTES,
     isSensitiveName: (name) => sensitivePathMatcher.isSensitivePath(name),
+    classifySourcePath: (sourcePath) => sensitivePathMatcher.classifyPath(sourcePath),
   };
 
   async function prepareImport(sourcePaths, destDir) {
@@ -123,8 +123,11 @@ function createFilesystemIpcAdapter({
       }
     },
     // Nur Pfadprüfung, keine Dateizugriffe: der Aufrufer (z. B. Kontextmenü)
-    // arbeitet danach mit dem bereinigten absoluten Pfad weiter.
-    async resolveWorkspacePath(filePath) {
+    // arbeitet danach mit dem geprüften absoluten Pfad weiter. It has a name
+    // of its own: fs-service's `resolveWorkspacePath` joins a relative path
+    // lexically, this one checks an absolute path against the real workspace
+    // (#650).
+    async resolveCheckedWorkspacePath(filePath) {
       return boundPath(filePath);
     },
     // Bild aus dem Arbeitsordner fuer die Chat-Antwort (Issue #244). Der Pfad

@@ -15,18 +15,21 @@
  * - **Das Ziel existiert.** Ein Workspace-Root, den es nicht gibt, ist keiner
  *   — die Kette nach oben (`fallbackLevels: 0`) entfällt, und damit auch jede
  *   Beobachtung fremder Verzeichnisse oberhalb des Projekts.
- * - **Rauschfilter.** Über den ganzen Ordner hinweg ist eine Ignorierliste
- *   unverzichtbar: `node_modules/` und `.git/` erzeugen bei jedem
- *   `npm install` und jedem Git-Befehl Tausende Ereignisse, die im Baum
- *   nichts bewegen.
- * - **Git-Signale.** `.git/HEAD` und `.git/index` bleiben ausdrücklich drin:
- *   Sie sind das eine verlässliche Zeichen dafür, dass gerade halbe
- *   Verzeichnisbäume ausgetauscht werden. Gemeldet werden sie als
- *   „nicht zuzuordnen“, damit der Empfänger einmal gröber neu lädt, statt
- *   hundert Einzelmeldungen zu verarbeiten.
+ * - **Noise filter.** Across the whole folder an ignore list is a must:
+ *   `node_modules/` and `.git/` produce thousands of events on every
+ *   `npm install` and every git command, and none of them moves the tree.
+ *   Where the folder is watched folder by folder (Linux, #648), the same list
+ *   keeps the watches out of those folders, so they cost nothing at all.
+ *   Beyond that, the watcher ignores exactly the entries the listing never
+ *   shows — one definition in `hidden-entries.js` (#650).
+ * - **Git signals.** `.git/HEAD`, `.git/index` and `.git/ORIG_HEAD` get
+ *   through on purpose: they are the one reliable sign that half the tree is
+ *   being swapped. They report as "not attributable", so that the receiver
+ *   reloads once, more coarsely, instead of handling a hundred single reports.
  */
 
 const { createDirectoryWatcher } = require('./directory-watcher');
+const { isAlwaysHiddenEntryName } = require('../../shared/runtime/hidden-entries');
 
 /**
  * Verzeichnisse, deren **Inhalt** uns nichts angeht. Das Verzeichnis selbst
@@ -41,17 +44,27 @@ const { createDirectoryWatcher } = require('./directory-watcher');
 const IGNORED_CONTENT_DIRS = new Set(['node_modules', '.git']);
 
 /**
- * Was aus `.git/` trotzdem durchkommt: die beiden Dateien, an denen ein
- * `git checkout`, `git pull` oder `git switch` erkennbar ist.
+ * Folder names compare without case, as in `hidden-entries.js` (#648): the
+ * listing hides `.GIT` as it hides `.git`, so its content has to be noise to
+ * the watcher too, or a tree nobody sees would keep reporting — and on Linux
+ * draw a watch on every folder in it.
  */
-const GIT_SIGNAL_FILES = new Set(['HEAD', 'index', 'ORIG_HEAD']);
+function isIgnoredContentDir(name) {
+  return IGNORED_CONTENT_DIRS.has(name.toLowerCase());
+}
+
+/** `.git` in whatever case — see `isIgnoredContentDir`. */
+function isGitDir(name) {
+  return name.toLowerCase() === '.git';
+}
 
 /**
- * Editor- und Systemkram, der im Baum nie erscheint. `vim` legt beim
- * Speichern `4913` und `.datei.swp` an, `sed -i`/atomare Schreiber hantieren
- * mit `.tmp`-Dateien, macOS pflegt `.DS_Store` im Hintergrund.
+ * What gets out of `.git/` all the same: the three files that give away a
+ * `git checkout`, `git pull`, `git switch`, `git merge` or `git rebase`. Their
+ * names compare exactly, unlike the folder's: git writes them in this case
+ * and no other.
  */
-const NOISE_FILE_PATTERN = /(^|[\\/])(\.DS_Store|4913|\.?[^\\/]*\.sw[px]|[^\\/]*~)$/;
+const GIT_SIGNAL_FILES = new Set(['HEAD', 'index', 'ORIG_HEAD']);
 
 /** Zerlegt einen von `fs.watch` gemeldeten Pfad — je nach Plattform `/` oder `\`. */
 function segmentsOf(relativePath) {
@@ -61,21 +74,39 @@ function segmentsOf(relativePath) {
 /** Ein Git-Signal — `.git/HEAD` und Verwandte, sonst nichts. */
 function isGitSignal(relativePath) {
   const segments = segmentsOf(relativePath);
-  return segments.length === 2 && segments[0] === '.git' && GIT_SIGNAL_FILES.has(segments[1]);
+  return segments.length === 2 && isGitDir(segments[0]) && GIT_SIGNAL_FILES.has(segments[1]);
 }
 
 /**
- * Rauschen? Gemeint ist nur der Inhalt der Ignorierliste, nicht sie selbst:
- * `node_modules` meldet sich, `node_modules/left-pad/index.js` nicht.
+ * Noise? Two kinds:
+ *
+ * - the content of an ignored folder, not the folder itself: `node_modules`
+ *   reports, `node_modules/left-pad/index.js` does not;
+ * - an entry the listing never shows (`.git`, `.DS_Store`, `Thumbs.db`, …),
+ *   wherever it sits (#650). Nothing beyond that: an editor's `notes.md~` or
+ *   `.notes.md.swp` is listed in the tree, so its removal has to reach it.
  */
 function isIgnoredWorkspacePath(relativePath) {
   if (typeof relativePath !== 'string' || !relativePath) return false;
   if (isGitSignal(relativePath)) return false;
-  if (NOISE_FILE_PATTERN.test(relativePath)) return true;
   const segments = segmentsOf(relativePath);
+  if (isAlwaysHiddenEntryName(segments.at(-1))) return true;
   // Das letzte Stück ist der Eintrag selbst — erst ein Stück davor macht ihn
   // zum Inhalt eines ignorierten Verzeichnisses.
-  return segments.slice(0, -1).some((segment) => IGNORED_CONTENT_DIRS.has(segment));
+  return segments.slice(0, -1).some(isIgnoredContentDir);
+}
+
+/**
+ * Which folders get a watch of their own where the workspace is watched
+ * folder by folder (Linux, #648). The ignore list above filters events; this
+ * keeps the watches out of the same folders in the first place, so a
+ * `node_modules/` of 20,000 files costs none. `.git` at the root is watched
+ * on its own, without its subfolders: the signal files sit right in it.
+ */
+function workspaceFolderPolicy(relativeDir) {
+  const segments = segmentsOf(relativeDir);
+  if (segments.length === 1 && isGitDir(segments[0])) return 'flat';
+  return segments.some(isIgnoredContentDir) ? 'skip' : 'recursive';
 }
 
 /**
@@ -129,6 +160,7 @@ function createWorkspaceWatcher({ watch, path, onChange, realpath = null, ...wat
       return angezeigterRoot ? [{ dir: watchablePath(angezeigterRoot), fallbackLevels: 0 }] : [];
     },
     ignores: isIgnoredWorkspacePath,
+    folderPolicy: workspaceFolderPolicy,
     changedDirectoryFor: (relativePath, targetDir) => {
       // Ein Git-Signal sagt „hier wurde großflächig getauscht“, aber nicht wo.
       // `null` heißt: nicht zuzuordnen — der Empfänger lädt gröber neu.
