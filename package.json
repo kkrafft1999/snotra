@@ -32,7 +32,7 @@
           "unpack": "**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**"
         },
         "afterComplete": [
-          "./scripts/sign-macos-adhoc.js"
+          "./scripts/sign-macos.js"
         ],
         "ignore": [
           "^/(?!(src|system-skills|node_modules)(/|$)|package\\.json$|LICENSE$)",
@@ -139,6 +139,8 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron/asar": "^3.4.1",
     "@electron/fuses": "^1.8.0",
+    "@electron/notarize": "^2.5.0",
+    "@electron/osx-sign": "^1.3.3",
     "@fontsource/inter": "^5.2.8",
     "@reforged/maker-appimage": "^5.3.1",
     "dompurify": "^3.4.16",
