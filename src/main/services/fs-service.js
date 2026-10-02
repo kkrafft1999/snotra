@@ -41,7 +41,7 @@ const {
   RegexSearchTimeoutError,
   createRegexSearchWorker,
 } = require('./regex-search-worker');
-const { compileGlob, createGitignoreMatcher } = require('./glob-match');
+const { compileGitignore, compileGlob } = require('./glob-match');
 
 const READ_LINES_DEFAULT_COUNT = 200;
 const READ_LINES_MAX_COUNT = 1000;
@@ -744,22 +744,12 @@ function parseUnifiedDiff(text) {
     }
 
     const hunks = [];
-    // Old-file line index the previous hunk ended at (#647). Each hunk only
-    // searches forward from there, so one sent out of order would land on a
-    // later match — GNU patch refuses this as "misordered hunks", and so do we.
-    let previousEnd = 0;
+    // The order of the hunks is checked where they are found, not here by
+    // their header numbers (#647): models often get those wrong, and a patch
+    // whose hunks come in the right order applies all the same.
     while (i < rawLines.length && rawLines[i].startsWith('@@')) {
       const parsed = parseUnifiedDiffHunk(rawLines, i);
       if (parsed.error) return { error: parsed.error };
-      const begin = Math.max(0, parsed.hunk.oldCount === 0 ? parsed.hunk.oldStart : parsed.hunk.oldStart - 1);
-      if (begin < previousEnd) {
-        return {
-          error:
-            `Hunk ${hunks.length + 1} for "${newPath}" ("${clipPatchLine(parsed.hunk.header)}") starts before ` +
-            `the end of the hunk in front of it — hunks must come in ascending line order and must not overlap.`,
-        };
-      }
-      previousEnd = begin + parsed.hunk.oldCount;
       hunks.push(parsed.hunk);
       totalHunks += 1;
       if (totalHunks > PATCH_MAX_HUNKS) {
@@ -818,7 +808,10 @@ function findNearestMatch(lines, oldLines, start, minIndex, maxIndex) {
   let best = -1;
   let bestDistance = Infinity;
   const end = maxIndex + m;
-  for (let i = minIndex, j = 0; i < end; i += 1) {
+  // Stop once a candidate ending here would start too far past `start` to
+  // be the nearer one — otherwise a found match still scans the rest of the
+  // file, for every displaced hunk (#647).
+  for (let i = minIndex, j = 0; i < end && i - m + 1 - start < bestDistance; i += 1) {
     const id = ids.get(lines[i]);
     if (id === undefined) {
       j = 0;
@@ -842,7 +835,14 @@ function findNearestMatch(lines, oldLines, start, minIndex, maxIndex) {
 /**
  * Sucht die Stelle, an der die alten Zeilen eines Hunks exakt stehen: zuerst an der
  * im Kopf genannten Position, dann in wachsendem Abstand darum herum (Offset-Toleranz
- * wie bei `patch`). Nie vor dem Ende des vorherigen Hunks.
+ * wie bei `patch`).
+ *
+ * The nearest match in the whole file wins, also one before `minIndex`, the
+ * end of the hunk in front: only then does a hunk sent out of order show up
+ * as one, instead of landing on a later match of the same lines (#647). The
+ * caller refuses that case. The part before `minIndex` is searched only as
+ * far as a match there could still be the nearer one — a full scan per hunk
+ * made 200 hunks on a 300k-line file take half a second.
  */
 function findHunkIndex(lines, oldLines, expected, minIndex) {
   if (!oldLines.length) {
@@ -853,18 +853,24 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
           `the file has ${lines.length} lines.`,
       };
     }
-    return { index: Math.min(Math.max(expected, minIndex), lines.length) };
+    return { index: Math.max(expected, 0) };
   }
   const maxIndex = lines.length - oldLines.length;
-  if (maxIndex < minIndex) {
+  if (maxIndex < 0) {
     return {
-      error: `from line ${minIndex + 1} on, the file has fewer lines than the hunk expects (${oldLines.length}).`,
+      error: `the file has fewer lines (${lines.length}) than the hunk expects (${oldLines.length}).`,
     };
   }
   const matches = (index) => oldLines.every((line, k) => lines[index + k] === line);
-  const start = Math.min(Math.max(expected, minIndex), maxIndex);
+  const start = Math.min(Math.max(expected, 0), maxIndex);
   if (matches(start)) return { index: start };
-  const found = findNearestMatch(lines, oldLines, start, minIndex, maxIndex);
+  const after = minIndex <= maxIndex ? findNearestMatch(lines, oldLines, start, minIndex, maxIndex) : -1;
+  const reach = after === -1 ? Infinity : Math.abs(after - start);
+  const low = Math.max(0, start - reach);
+  const high = Math.min(minIndex - 1, maxIndex);
+  // The earlier one wins a tie, as in findNearestMatch.
+  const before = low <= high ? findNearestMatch(lines, oldLines, start, low, high) : -1;
+  const found = before !== -1 && Math.abs(before - start) <= reach ? before : after;
   if (found !== -1) return { index: found };
   return {
     error:
@@ -883,31 +889,54 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
   const result = source.lines.slice();
   const endings = source.endings.slice();
   const offsets = [];
+  // Hunks are located in the original lines, as GNU patch does (#647): the
+  // header numbers refer to them, and a hunk overlapping the one in front
+  // still finds its lines there. `offset` is how far the hunk before stood
+  // from its header, `previousEnd` the original line index it ended at,
+  // `shift` how many lines the hunks so far added (or, negative, removed).
   let offset = 0;
-  let minIndex = 0;
+  let previousEnd = 0;
+  let shift = 0;
 
   for (let h = 0; h < hunks.length; h += 1) {
     const hunk = hunks[h];
     const declared = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
     const expected = declared + offset;
-    const found = findHunkIndex(result, hunk.oldLines, expected, minIndex);
+    const found = findHunkIndex(source.lines, hunk.oldLines, expected, previousEnd);
     if (found.error) {
       return {
         error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${found.error}`,
       };
     }
+    // The order is judged by where a hunk is found, not by its header — a
+    // sloppy header on a hunk in the right place still applies (#647). One
+    // whose nearest match stands before the end of the hunk in front was
+    // sent out of order or overlaps it; GNU patch refuses that as
+    // "misordered hunks", and so do we.
+    if (found.index < previousEnd) {
+      const where = hunk.oldLines.length
+        ? `its lines stand at line ${found.index + 1},`
+        : `its insertion point (after line ${found.index}) lies`;
+      return {
+        error:
+          `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${where} before the end ` +
+          `of the hunk in front of it (line ${previousEnd}) — hunks must come in ascending line order ` +
+          `and must not overlap.`,
+      };
+    }
     const newEndings = [];
     let old = found.index;
     for (const op of hunk.ops) {
-      if (op === ' ') newEndings.push(endings[old]);
+      if (op === ' ') newEndings.push(source.endings[old]);
       else if (op === '+') newEndings.push(eol);
       if (op !== '+') old += 1;
     }
-    result.splice(found.index, hunk.oldLines.length, ...hunk.newLines);
-    endings.splice(found.index, hunk.oldLines.length, ...newEndings);
+    result.splice(found.index + shift, hunk.oldLines.length, ...hunk.newLines);
+    endings.splice(found.index + shift, hunk.oldLines.length, ...newEndings);
     offsets.push(found.index - expected);
-    offset += found.index - expected + (hunk.newLines.length - hunk.oldLines.length);
-    minIndex = found.index + hunk.newLines.length;
+    offset = found.index - declared;
+    previousEnd = found.index + hunk.oldLines.length;
+    shift += hunk.newLines.length - hunk.oldLines.length;
   }
 
   return { lines: result, endings, offsets };
@@ -1939,12 +1968,23 @@ function createFsService({
     return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
   }
 
+  /** Compiled `.gitignore` files by real path (#644), see loadGitignoreMatcher. */
+  const GITIGNORE_CACHE_ENTRIES = 4;
+  const gitignoreCache = new Map();
+
   /**
    * The root's `.gitignore`, read like any other file of the folder (#643):
    * a regular file whose realpath stays inside the root, at most
    * GITIGNORE_MAX_BYTES. A FIFO used to hang every listing, a symlink to
    * `/dev/zero` read half a gigabyte, and one out of the folder was followed.
    * Anything else counts as no `.gitignore`.
+   *
+   * The compiled rules are kept per real path while the file's bytes stay the
+   * same (#644): every `@` list, find, search and tree call used to compile
+   * the file again and spend its whole matching budget again. A file that
+   * used the budget up once stays switched off until it changes. The bytes
+   * are compared rather than size and mtime, which on HFS+ or FAT is only
+   * exact to the second.
    */
   async function loadGitignoreMatcher(root) {
     try {
@@ -1953,7 +1993,20 @@ function createFsService({
       if (!containsPath(realRoot, realTarget)) return null;
       const read = await readRegularFile(fs, realTarget, { maxBytes: GITIGNORE_MAX_BYTES });
       if (!read.buffer) return null;
-      return createGitignoreMatcher(read.buffer.toString('utf8'));
+      let entry = gitignoreCache.get(realTarget);
+      if (!entry || !entry.buffer.equals(read.buffer)) {
+        entry = { buffer: read.buffer, compiled: compileGitignore(read.buffer.toString('utf8')), exhausted: false };
+      }
+      // Most recently used last; the oldest goes once there are too many.
+      gitignoreCache.delete(realTarget);
+      gitignoreCache.set(realTarget, entry);
+      if (gitignoreCache.size > GITIGNORE_CACHE_ENTRIES) gitignoreCache.delete(gitignoreCache.keys().next().value);
+      if (!entry.compiled || entry.exhausted) return null;
+      return entry.compiled.matcher({
+        onExhausted: () => {
+          entry.exhausted = true;
+        },
+      });
     } catch {
       return null; // keine lesbare .gitignore — nichts auszuschließen
     }

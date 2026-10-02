@@ -42,15 +42,44 @@ const GLOBSTAR = Symbol('globstar');
 /**
  * Work one `.gitignore` may cost in one listing, in matching steps. A single
  * match is bounded, but a crafted file multiplies it: 2,000 long rules against
- * 5,000 long names take about eight minutes. A large ordinary `.gitignore`
- * (1,000 rules) over 5,000 paths takes some 30 million steps. Past this
- * budget — one to two seconds of work — the file stops being applied for the
- * rest of the listing instead of stalling the app.
+ * 5,000 long names take about eight minutes, and one deep path against 1,000
+ * rules of the shape `**\/R/**\/R` close to a second. A large ordinary
+ * `.gitignore` (1,000 rules) over 5,000 paths takes some 35 million steps,
+ * with GITIGNORE_RULE_STEPS for every rule tried. Past this budget — 150 to
+ * 200 ms of work — the file stops being applied for the rest of the listing
+ * instead of stalling the app. The budget used to be 500 million steps, one
+ * and a half seconds, and was only checked between two paths (#644).
  */
-const GITIGNORE_MAX_STEPS = 500_000_000;
+const GITIGNORE_MAX_STEPS = 50_000_000;
+
+/** What trying one rule on one path costs, in steps (#644). */
+const GITIGNORE_RULE_STEPS = 2;
+
+/**
+ * Rules of one `.gitignore` that are applied; the ones past it are dropped
+ * (#644). Ten times a large hand-written file. Beyond it the rules no longer
+ * fit the processor cache, and trying one costs several times as much — the
+ * step budget would no longer stand for time.
+ */
+const GITIGNORE_MAX_RULES = 10_000;
 
 /** Loop steps of all matching so far; read as a difference, never reset. */
 let steps = 0;
+
+/**
+ * The value of `steps` at which the running `.gitignore` match gives up —
+ * checked inside the loops, since a single path against all rules of a
+ * crafted file already costs far more than the budget (#644). Infinity
+ * outside a `.gitignore` match: a glob of `find_files` is one pattern, bounded
+ * by itself.
+ */
+let stepLimit = Infinity;
+const OUT_OF_STEPS = new Error('The .gitignore matching budget is used up.');
+
+function step() {
+  steps += 1;
+  if (steps > stepLimit) throw OUT_OF_STEPS;
+}
 
 /** POSIX character classes in the C locale, as git's wildmatch knows them. */
 const POSIX_CLASSES = {
@@ -195,7 +224,7 @@ function matchSegment(segment, chars) {
   let starP = -1;
   let starT = 0;
   while (t < chars.length) {
-    steps += 1;
+    step();
     if (p < tokens.length) {
       const token = tokens[p];
       if (token.type === STAR) {
@@ -226,7 +255,7 @@ function matchSegments(segments, names) {
   let starP = -1;
   let starT = 0;
   while (t < names.length) {
-    steps += 1;
+    step();
     if (p < segments.length) {
       const segment = segments[p];
       if (segment === GLOBSTAR) {
@@ -313,16 +342,19 @@ function trimTrailingBlanks(line) {
 }
 
 /**
- * Builds a matcher `(relPath, isDirectory) → ignored?` from the text of a
- * `.gitignore`: comments, negation with `!`, folder-only patterns, anchoring,
- * the wildcards above. The last matching rule wins. Returns null when the
- * text holds no rule. Once the matcher has spent `maxSteps`, it ignores
- * nothing more (see `GITIGNORE_MAX_STEPS`).
+ * Compiles the text of a `.gitignore`: comments, negation with `!`,
+ * folder-only patterns, anchoring, the wildcards above. Returns null when the
+ * text holds no rule, otherwise an object whose `matcher()` builds a matcher
+ * `(relPath, isDirectory) → ignored?` with a budget of its own — one per
+ * listing, so the compiled rules can be kept between listings (#644). The
+ * last matching rule wins. Once a matcher has spent `maxSteps`, it ignores
+ * nothing more and calls `onExhausted` (see `GITIGNORE_MAX_STEPS`).
  *
  * @param {string} text
- * @param {{ maxSteps?: number }} [options]
+ * @returns {null | { matcher: (options?: { maxSteps?: number, onExhausted?: () => void }) =>
+ *   (relPath: string, isDirectory: boolean) => boolean }}
  */
-function createGitignoreMatcher(text, { maxSteps = GITIGNORE_MAX_STEPS } = {}) {
+function compileGitignore(text) {
   let source = String(text);
   // git skips a UTF-8 byte order mark; without that the first rule never matches.
   if (source.charCodeAt(0) === 0xfeff) source = source.slice(1);
@@ -337,24 +369,57 @@ function createGitignoreMatcher(text, { maxSteps = GITIGNORE_MAX_STEPS } = {}) {
       body = body.slice(1);
     }
     if (!body) continue;
+    // See GITIGNORE_MAX_RULES: the rules past it are dropped.
+    if (rules.length === GITIGNORE_MAX_RULES) break;
     rules.push({ glob: compileGlob(body), negated });
   }
   if (!rules.length) return null;
-  let spent = 0;
-  return (relPath, isDirectory) => {
-    if (spent > maxSteps) return false;
-    const before = steps;
-    const prepared = preparePath(relPath);
-    let ignored = false;
-    for (const rule of rules) {
-      if (rule.glob.dirOnly && !isDirectory) continue;
-      // The last matching rule wins, so a rule that could not change the
-      // answer need not be tried.
-      if (ignored !== !rule.negated && matchPrepared(rule.glob, prepared)) ignored = !rule.negated;
-    }
-    spent += steps - before;
-    return ignored;
+  const matcher = ({ maxSteps = GITIGNORE_MAX_STEPS, onExhausted } = {}) => {
+    let spent = 0;
+    let exhausted = false;
+    return (relPath, isDirectory) => {
+      if (exhausted) return false;
+      const before = steps;
+      stepLimit = before + (maxSteps - spent);
+      try {
+        // Trying a rule costs about two steps even when its length alone
+        // rules it out — 10,000 short rules over 5,000 paths are work as
+        // well (#644). Charged up front: one path's share is small.
+        steps += rules.length * GITIGNORE_RULE_STEPS;
+        if (steps > stepLimit) throw OUT_OF_STEPS;
+        const prepared = preparePath(relPath);
+        let ignored = false;
+        for (const rule of rules) {
+          if (rule.glob.dirOnly && !isDirectory) continue;
+          // The last matching rule wins, so a rule that could not change the
+          // answer need not be tried.
+          if (ignored !== !rule.negated && matchPrepared(rule.glob, prepared)) ignored = !rule.negated;
+        }
+        return ignored;
+      } catch (error) {
+        if (error !== OUT_OF_STEPS) throw error;
+        exhausted = true;
+        if (onExhausted) onExhausted();
+        return false;
+      } finally {
+        stepLimit = Infinity;
+        spent += steps - before;
+      }
+    };
   };
+  return { matcher };
 }
 
-module.exports = { GITIGNORE_MAX_STEPS, compileGlob, createGitignoreMatcher };
+/**
+ * A matcher straight from the text of a `.gitignore` — `compileGitignore`
+ * and `matcher()` in one; null when the text holds no rule.
+ *
+ * @param {string} text
+ * @param {{ maxSteps?: number, onExhausted?: () => void }} [options]
+ */
+function createGitignoreMatcher(text, options) {
+  const compiled = compileGitignore(text);
+  return compiled && compiled.matcher(options);
+}
+
+module.exports = { GITIGNORE_MAX_STEPS, compileGitignore, compileGlob, createGitignoreMatcher };
