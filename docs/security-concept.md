@@ -690,8 +690,9 @@ predates the certifi fallback.
   elsewhere shares nothing. Switching it off is a protection-loosening action:
   main confirms it in a native dialog (section 5) and binds the active root
   itself, never a path from the renderer. Without `safeStorage` it cannot be
-  stored, and a failed signature drops it, like an allow rule. Switching it back
-  on asks nothing. "Workspace-Regeln zurücksetzen" and "Alle Berechtigungen
+  stored, and a failed signature drops it, like an allow rule; as with "Auto"
+  (#419), the switch then does not offer "off" and main refuses it before the
+  dialog (CR-B14-09). Switching it back on asks nothing. "Workspace-Regeln zurücksetzen" and "Alle Berechtigungen
   zurücksetzen" switch it back on as well.
 - **Bound to the approval.** The planner reads the switch and puts it on the
   plan; it is part of the plan key, so flipping it between the card and the run

@@ -173,7 +173,12 @@ adapters, so a change to what the engine passes changes the port as well:
 
   A stored secret appears in the form only as a placeholder; whoever does not
   touch it sends `{ keep: true }` instead of a value the renderer does not even
-  know.
+  know. Focus alone changes nothing, and while the value is kept its name and
+  its "secret" box stay locked — renaming it or storing it in plain text needs
+  the value again. Main checks the same: a `keep` with nothing stored under its
+  name, or one that would flip between secret and plain text, is refused rather
+  than dropped, and an empty secret value counts as "no value" unless it would
+  replace a stored secret (CR-B14-02).
 
   Two read paths, deliberately separate and nailed down in
   `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns
@@ -1687,14 +1692,15 @@ Anything coming from a file, a model answer or a text field still goes through
 The menu bar and the context menu are built **synchronously**; an `await` on
 the preferences would mean a menu opening without labels. `create-application`
 therefore keeps the locale in memory (the same construction as the web search
-key) and hands `getAppLocale()` around. A language change runs like this:
+key) and hands `getAppLocale()` around. The language saves the moment it is
+picked in *Settings › General*, not on Apply (#297). A change runs like this:
 
 ```
-Renderer: Apply
+Renderer: language picked -> setUIPrefs({ appLocale })
   -> settings-handlers writes appLocale
   -> onAppLocaleChanged -> create-application remembers the locale
                         -> main/index.js rebuilds the menu bar
-  -> Renderer: setLocale() redraws the interface
+  -> Renderer: once the stored value comes back, setLocale() redraws the interface
 ```
 
 Electron cannot rename a menu item after the fact — the menu is set anew as a

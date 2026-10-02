@@ -31,11 +31,15 @@ const AGENTS_DIR_AGENTS_MD = '# Projekt\n\nAnweisung-aus-dot-agents.\n';
 // Gedaechtnis (Issue #166): eine Ebene mit Eintraegen, damit die Karte in den
 // Einstellungen etwas zu zeigen hat. Der zweite Eintrag traegt die Markierung
 // „selbst gemerkt" — sie unterscheidet, was Snotra von sich aus notiert hat.
+// The third entry carries markup (CR-B14-09): the file can come from a
+// foreign project, and the panel must show it as text, not build it.
+const MEMORY_MARKUP_ENTRY = '<img src=x onerror="window.__snotraMemoryMarkup = true"> Markup-bleibt-Text.';
 const WORKSPACE_MEMORY_MD = [
   '# Gedächtnis · Projekt',
   '',
   '- 2026-09-21 — Gemerkt-fuer-dieses-Projekt.',
   '- 2026-09-19 (selbst gemerkt) — Von-selbst-gemerkt.',
+  `- 2026-09-18 — ${MEMORY_MARKUP_ENTRY}`,
   '',
 ].join('\n');
 
@@ -1041,6 +1045,10 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       ),
       badges: [...document.querySelectorAll('.memory-item__origin')].map((el) => el.textContent),
       selbstSchalter: document.getElementById('input-memory-self')?.checked,
+      // Anything the markup entry could have built, and whether its handler ran.
+      fremdeElemente: document.querySelectorAll('#settings-memory-scopes .memory-item__text *:not(.memory-item__origin)').length,
+      bilder: document.querySelectorAll('#settings-memory-scopes img').length,
+      markupLief: window.__snotraMemoryMarkup === true,
     }));
     return found.eintraege.length > 0 ? found : null;
   }, { what: 'gerendertes Gedaechtnis' });
@@ -1049,6 +1057,11 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.deepEqual(memory.karten, ['.agents/memory.md', '~/.snotra/memory.md']);
   assert.ok(memory.eintraege.some((t) => t.includes('Gemerkt-fuer-dieses-Projekt.')), memory.eintraege.join(' | '));
   assert.deepEqual(memory.badges, ['selbst gemerkt']);
+  // The markup entry arrives as its literal text, and nothing was built from it.
+  assert.ok(memory.eintraege.includes(MEMORY_MARKUP_ENTRY), memory.eintraege.join(' | '));
+  assert.equal(memory.fremdeElemente, 0, 'no element inside an entry besides the badge');
+  assert.equal(memory.bilder, 0, 'no <img> in the memory panel');
+  assert.equal(memory.markupLief, false, 'the onerror handler never ran');
   // Der Schalter fuer selbststaendiges Merken steht voreingestellt an.
   assert.equal(memory.selbstSchalter, true);
   step('Gedaechtnis-Einstellungen geprueft');

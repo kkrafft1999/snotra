@@ -483,7 +483,7 @@
               <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
               <div class="settings-workspace-mode-row" id="settings-security-mode-row">
                 <span id="settings-security-mode-legend" class="settings-workspace-mode-row__label" data-i18n="security.header.defaultMode">Default mode</span>
-                <div id="settings-security-mode-options" class="settings-segmented" role="radiogroup" aria-labelledby="settings-security-mode-legend heading-security-workspace" aria-describedby="settings-security-mode-note"></div>
+                <div id="settings-security-mode-options" class="settings-segmented" role="radiogroup" aria-labelledby="settings-security-mode-legend heading-security-workspace" aria-describedby="settings-security-mode-state settings-security-mode-note"></div>
                 <span id="status-security-mode" class="settings-instant-status" role="status"></span>
               </div>
               <p id="settings-security-mode-state" class="modal-hint" role="status" hidden></p>
@@ -602,9 +602,10 @@
                 <div class="settings-sandbox-tile__text">
                   <label for="input-workspace-sandbox" class="settings-sandbox-tile__title" id="settings-sandbox-tile-title">Sandbox active</label>
                   <p class="settings-sandbox-tile__body" id="settings-sandbox-tile-body"></p>
+                  <p class="settings-sandbox-tile__note" id="settings-sandbox-tile-note"></p>
                 </div>
                 <span id="status-workspace-sandbox" class="settings-instant-status" role="status"></span>
-                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" data-i18n-attr="aria-label:settings.sandbox.workspace.toggle" aria-label="Sandbox" aria-describedby="settings-sandbox-tile-body settings-sandbox-state" checked>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" data-i18n-attr="aria-label:settings.sandbox.workspace.toggle" aria-label="Sandbox" aria-describedby="settings-sandbox-tile-body settings-sandbox-tile-note settings-sandbox-state" checked>
               </div>
               <p id="settings-sandbox-state" class="modal-hint error" role="status" hidden></p>
             </div>
@@ -1021,7 +1022,7 @@
         <p id="modal-save-error" class="modal-save-error hidden" role="alert"></p>
         <div class="settings-dialog__footer-row">
           <div class="settings-version">
-            <span id="settings-version-label">Version —</span>
+            <span id="settings-version-label" data-i18n="settings.version.unknown">Version —</span>
             <button type="button" id="btn-check-updates" class="settings-version-link" data-i18n="settings.checkUpdates">Check for updates</button>
           </div>
           <div class="modal-actions">
@@ -1078,11 +1079,15 @@
               <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
               <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
               <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
-              <p class="modal-hint" data-i18n-html="mcpDialog.env.hint">
+              <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
                 Values are <strong>secret</strong> by default and are stored encrypted in the system
                 keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
+                To rename it or store it in plain text, enter the value again.
               </p>
             </div>
+            <p id="mcp-test-hint" class="modal-hint hidden" data-i18n="mcpDialog.test.unsaved">
+              Test connection uses the saved configuration &mdash; save your changes first.
+            </p>
             <div id="mcp-test-result" class="mcp-test" aria-live="polite"></div>
           </div>
           <footer class="add-model-dialog__bottom">
@@ -1115,7 +1120,7 @@
             <div class="modal-field-group">
               <label for="mcp-import-input" class="modal-field-label" data-i18n="mcpImport.input.label">Paste configuration</label>
               <textarea id="mcp-import-input" class="modal-input modal-input--mono mcp-import__paste" rows="6"
-                spellcheck="false" autocomplete="off"
+                spellcheck="false" autocomplete="off" aria-describedby="mcp-import-error"
                 placeholder='{ "mcpServers": { "github": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"] } } }'></textarea>
               <p class="modal-hint" data-i18n-html="mcpImport.input.hint">
                 The block from Claude Desktop, Claude Code or Cursor &mdash; with or without the surrounding
@@ -1123,7 +1128,8 @@
                 Only what is here is read; no external configuration file is opened.
               </p>
             </div>
-            <p id="mcp-import-error" class="modal-warning hidden" role="alert"></p>
+            <p id="mcp-import-error" class="modal-warning hidden"></p>
+            <span id="mcp-import-announcer" class="visually-hidden" role="status"></span>
             <p id="mcp-import-count" class="mcp-import__count" aria-live="polite"></p>
             <ul id="mcp-import-list" class="mcp-import__list" aria-label="Detected servers" data-i18n-attr="aria-label:mcpImport.list.label"></ul>
             <div id="mcp-import-skipped" class="mcp-import__skipped hidden"></div>
@@ -1310,7 +1316,7 @@
                     <datalist id="model-name-options"></datalist>
                     <button type="button" id="btn-load-models" class="btn-secondary" data-i18n="addModel.model.load">Load models</button>
                   </div>
-                  <p id="model-status" class="modal-hint"></p>
+                  <p id="model-status" class="modal-hint" role="status"></p>
                   <p id="popup-model-catalog-hint" class="modal-hint"><span data-i18n="addModel.catalogHint.prefix">The model list refers to</span> <strong id="model-load-provider-label">Ollama</strong><span data-i18n="addModel.catalogHint.suffix">.</span></p>
                 </div>
               </div>

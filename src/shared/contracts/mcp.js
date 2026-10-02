@@ -575,13 +575,19 @@ function maskStoredMcpEnv(stored) {
 /**
  * Eingabe eines ganzen Servers beim Speichern. Die Felder ausser `env` sind
  * dieselben wie zur Laufzeit, deshalb prueft sie derselbe Validator.
+ *
+ * `create: true` marks a new server ("Add server"): an identifier that is
+ * already taken is refused instead of replacing that server (CR-B14-03). It
+ * is not part of the stored configuration. Without it a save replaces by
+ * identifier — editing does, and so does the import, which says so.
  */
 function validateMcpServerInput(raw) {
+  const create = raw?.create === true;
   const base = validateMcpServerConfig({ ...(raw && typeof raw === 'object' ? raw : {}), env: {} });
   const { entries, errors: envErrors } = normalizeMcpEnvInput(raw?.env);
   const errors = [...base.errors, ...envErrors];
-  if (errors.length > 0) return { ok: false, value: null, env: [], errors };
-  return { ok: true, value: base.value, env: entries, errors: [] };
+  if (errors.length > 0) return { ok: false, value: null, env: [], create, errors };
+  return { ok: true, value: base.value, env: entries, create, errors: [] };
 }
 
 module.exports = {

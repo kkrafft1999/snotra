@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
 const TOKEN_PLACEHOLDER = '••••••••••••';
 
@@ -67,6 +67,18 @@ async function mount(apiOverrides = {}, daten = null) {
 
 const rows = () => [...document.querySelectorAll('#settings-mcp-list .mcp-row')];
 const dialogOffen = () => !document.getElementById('mcp-server-overlay').classList.contains('hidden');
+const envRows = () => [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+/** The three controls of an environment row. */
+const envFields = (row) => ({
+  key: row.querySelector('.mcp-env-row__key'),
+  value: row.querySelector('.mcp-env-row__value'),
+  secret: row.querySelector('.mcp-env-row__secret input[type="checkbox"]'),
+});
+/** Typing as the browser reports it: the value changes, then `input` fires. */
+function type(input, text) {
+  input.value = text;
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+}
 
 test('die Liste zeigt Server, Kommando und Status', async () => {
   await mount();
@@ -117,7 +129,7 @@ test('der Schalter ist die native Checkbox und behaelt nach dem Neuzeichnen den 
   await flush();
   // The list was redrawn with the new status — a new node, same server.
   const now = rows()[0].querySelector('.ds-switch');
-  assert.equal(document.activeElement, now);
+  assert.equal(document.activeElement === now, true);
 });
 
 test('lehnt der Speicher ab, springt der Schalter zurueck (#336)', async () => {
@@ -141,9 +153,9 @@ test('„Bearbeiten" fuellt den Unterdialog, ohne das Geheimnis zu zeigen', asyn
   assert.equal(document.getElementById('mcp-field-id').disabled, true);
   assert.equal(document.getElementById('mcp-field-args').value, '-y @modelcontextprotocol/server-github');
 
-  const werte = [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+  const werte = envRows();
   assert.equal(werte.length, 2);
-  const [, geheimerWert] = werte[0].querySelectorAll('input[type="text"]');
+  const { value: geheimerWert } = envFields(werte[0]);
   assert.equal(geheimerWert.value, TOKEN_PLACEHOLDER, 'nur ein Platzhalter, nie der Wert');
   assert.equal(geheimerWert.dataset.keep, 'true');
 });
@@ -167,11 +179,11 @@ test('wer in das Feld klickt, ersetzt das Geheimnis wirklich', async () => {
   rows()[0].querySelector('.btn-secondary').click();
   await flush();
 
-  const [, wert] = document.querySelectorAll('#mcp-env-list .mcp-env-row')[0].querySelectorAll('input[type="text"]');
+  const { value: wert } = envFields(envRows()[0]);
   // Der Fokus leert den Platzhalter — sonst schriebe man in „••••" hinein.
-  wert.dispatchEvent(new window.Event('focus'));
+  wert.focus();
   assert.equal(wert.value, '');
-  wert.value = 'ghp_neu';
+  type(wert, 'ghp_neu');
 
   document.getElementById('btn-mcp-server-save').click();
   await flush();
@@ -315,9 +327,9 @@ test('Variablen lassen sich hinzufuegen und entfernen', async () => {
 
   document.getElementById('btn-mcp-env-add').click();
   await flush();
-  const zeilen = [...document.querySelectorAll('#mcp-env-list .mcp-env-row')];
+  const zeilen = envRows();
   assert.equal(zeilen.length, 3);
-  const [name, wert] = zeilen[2].querySelectorAll('input[type="text"]');
+  const { key: name, value: wert } = envFields(zeilen[2]);
   name.value = 'NEU';
   wert.value = 'wert';
 
@@ -341,4 +353,441 @@ test('Escape schliesst nur den Unterdialog', async () => {
   document.getElementById('dialog-mcp-server').dispatchEvent(event);
   await flush();
   assert.equal(dialogOffen(), false);
+});
+
+// --- CR-B14-02: a stored secret survives focus, rename and untick ---
+
+async function editGithub(apiOverrides) {
+  const mounted = await mount(apiOverrides);
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  return mounted;
+}
+
+test('focus and blur on a stored secret leave it stored (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { value } = envFields(envRows()[0]);
+
+  value.focus();
+  assert.equal(value.value, '', 'the field empties for typing');
+  assert.equal(value.placeholder, 'stored — type to replace');
+  value.blur();
+  assert.equal(value.value, TOKEN_PLACEHOLDER, 'nothing typed — the placeholder is back');
+  assert.equal(value.dataset.keep, 'true');
+
+  // Tab through the field to Save, or click into it and save straight away:
+  // both keep the token.
+  value.focus();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env.GITHUB_TOKEN, { secret: true, keep: true });
+});
+
+test('typing and erasing again keeps the stored secret as well (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { key, value } = envFields(envRows()[0]);
+  value.focus();
+  type(value, 'g');
+  assert.equal(value.dataset.keep, undefined);
+  type(value, '');
+  value.blur();
+  assert.equal(value.dataset.keep, 'true');
+  assert.equal(key.value, 'GITHUB_TOKEN');
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env.GITHUB_TOKEN, { secret: true, keep: true });
+});
+
+test('a kept row locks its name and its secret box, and says why (CR-B14-02)', async () => {
+  await editGithub();
+  const { key, value, secret } = envFields(envRows()[0]);
+  assert.equal(key.readOnly, true);
+  assert.equal(secret.disabled, true);
+  assert.equal(secret.checked, true);
+  for (const node of [key, secret]) assert.equal(node.getAttribute('aria-describedby'), 'mcp-env-hint');
+  assert.match(document.getElementById('mcp-env-hint').textContent, /enter the value again/);
+
+  // A new value unlocks both: now there is something to rename or to store
+  // in plain text.
+  value.focus();
+  type(value, 'ghp_neu');
+  assert.equal(key.readOnly, false);
+  assert.equal(secret.disabled, false);
+  assert.equal(key.hasAttribute('aria-describedby'), false);
+});
+
+test('renaming a row with a new value sends the new name with the value (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  const { key, value, secret } = envFields(envRows()[0]);
+  value.focus();
+  type(value, 'ghp_neu');
+  value.blur();
+  key.value = 'GITHUB_PERSONAL_ACCESS_TOKEN';
+  secret.click();
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  const { env } = calls[0][1];
+  assert.deepEqual(env.GITHUB_PERSONAL_ACCESS_TOKEN, { secret: false, value: 'ghp_neu' });
+  assert.equal('GITHUB_TOKEN' in env, false);
+});
+
+test('a stored row whose name was changed behind its back still keeps its own name (CR-B14-02)', async () => {
+  const { calls } = await editGithub();
+  // The field is read-only; a programmatic change must not move the keep
+  // onto a name main has nothing stored under.
+  envFields(envRows()[0]).key.value = 'GITHUB_PAT';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].env, {
+    GITHUB_TOKEN: { secret: true, keep: true },
+    LANG: { secret: false, value: 'de_DE' },
+  });
+});
+
+test('the value is masked while "secret" is ticked, and never spell-checked (CR-B14-02)', async () => {
+  await editGithub();
+  const [stored, plain] = envRows().map(envFields);
+  assert.equal(stored.value.type, 'password');
+  assert.equal(plain.value.type, 'text', 'a plain value stays readable');
+
+  document.getElementById('btn-mcp-env-add').click();
+  const fresh = envFields(envRows()[2]);
+  assert.equal(fresh.secret.checked, true, 'secret is the default');
+  assert.equal(fresh.value.type, 'password');
+  fresh.secret.click();
+  assert.equal(fresh.value.type, 'text');
+  fresh.secret.click();
+  assert.equal(fresh.value.type, 'password');
+
+  for (const field of [stored, plain, fresh]) {
+    for (const input of [field.key, field.value]) {
+      assert.equal(input.spellcheck, false);
+      assert.equal(input.getAttribute('autocomplete'), 'off');
+    }
+  }
+});
+
+// --- CR-B14-03: add does not replace, edit does not reshape the arguments ---
+
+test('"Add server" asks main to refuse a taken id and shows the refusal in the form (CR-B14-03)', async () => {
+  const calls = [];
+  await mount({
+    saveMcpServer: async (payload) => {
+      calls.push(payload);
+      const refusal = { key: 'mcp.error.idExists', params: { id: 'github' } };
+      return payload.create && payload.id === 'github'
+        ? { ok: false, error: refusal, errors: [refusal] }
+        : { ok: true, ...katalog() };
+    },
+  });
+  document.getElementById('btn-add-mcp-server').click();
+  await flush();
+  document.getElementById('mcp-field-id').value = 'GitHub';
+  document.getElementById('mcp-field-command').value = 'npx';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+
+  assert.equal(calls[0].create, true);
+  assert.equal(dialogOffen(), true);
+  assert.equal(document.getElementById('mcp-form-error').textContent,
+    'A server \u201cgithub\u201d already exists. Choose another identifier, or edit that server.');
+});
+
+test('saving an edited server replaces it and sends no create flag (CR-B14-03)', async () => {
+  const { calls } = await editGithub();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.equal('create' in calls[0][1], false);
+});
+
+test('editing only the label leaves the arguments exactly as stored (CR-B14-03)', async () => {
+  const args = ['--json', '{"a": 1}', '--prefix', '', 'C:\\srv\\x'];
+  const daten = katalog();
+  daten.servers[0].args = args;
+  const calls = [];
+  await mount({
+    getMcpCatalog: async () => daten,
+    saveMcpServer: async (payload) => { calls.push(['save', payload]); return { ok: true, ...daten }; },
+  });
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  document.getElementById('mcp-field-label').value = 'GitHub (Arbeit)';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[0][1].args, args);
+
+  // An edited line is read back with the same rules it was written with.
+  rows()[0].querySelector('.btn-secondary').click();
+  await flush();
+  const field = document.getElementById('mcp-field-args');
+  field.value += ' --extra';
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.deepEqual(calls[1][1].args, [...args, '--extra']);
+});
+
+// --- CR-B14-04: busy state, stale answers, rejected calls ---
+
+/** A promise the test settles by hand — a request that is still running. */
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+const openEdit = async (index) => {
+  rows()[index].querySelector('.btn-secondary').click();
+  await flush();
+};
+
+test('a test answer after Cancel does not reach the next dialog (CR-B14-04)', async () => {
+  const pending = deferred();
+  let loads = 0;
+  await mount({
+    testMcpServer: () => pending.promise,
+    getMcpCatalog: async () => { loads += 1; return katalog(); },
+  });
+  await openEdit(0);
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await openEdit(1);
+  assert.equal(document.getElementById('mcp-field-id').value, 'files');
+  assert.equal(document.getElementById('btn-mcp-server-test').hasAttribute('aria-disabled'), false,
+    'the new dialog is not busy with the old test');
+
+  const before = loads;
+  pending.resolve({ ok: true, status: { serverId: 'github', state: 'ready' }, tools: ['a', 'b', 'c'] });
+  await flush();
+  await flush();
+  assert.equal(document.getElementById('mcp-test-result').textContent, '', 'the files dialog shows nothing of it');
+  assert.equal(loads, before + 1, 'the list still learns the new status');
+});
+
+test('a save answer does not close a newer dialog (CR-B14-04)', async () => {
+  const pending = deferred();
+  await mount({ saveMcpServer: () => pending.promise });
+  await openEdit(0);
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await openEdit(1);
+  document.getElementById('mcp-field-label').value = 'Typed meanwhile';
+
+  pending.resolve({ ok: true, ...katalog() });
+  await flush();
+  assert.equal(dialogOffen(), true, 'the newer dialog stays open');
+  assert.equal(document.getElementById('mcp-field-label').value, 'Typed meanwhile');
+});
+
+test('Test, Save and Remove are inert while a request runs (CR-B14-04)', async () => {
+  const pending = deferred();
+  const calls = [];
+  await mount({
+    saveMcpServer: (payload) => { calls.push(['save', payload.id]); return pending.promise; },
+    testMcpServer: async (id) => { calls.push(['test', id]); return { ok: true, status: { state: 'ready' }, tools: [] }; },
+    deleteMcpServer: async (id) => { calls.push(['delete', id]); return { ok: true, ...katalog() }; },
+  });
+  await openEdit(0);
+  const save = document.getElementById('btn-mcp-server-save');
+  save.focus();
+  save.click();
+  await flush();
+  for (const id of ['btn-mcp-server-save', 'btn-mcp-server-test', 'btn-mcp-server-delete']) {
+    const button = document.getElementById(id);
+    assert.equal(button.getAttribute('aria-disabled'), 'true', id);
+    assert.equal(button.disabled, false, `${id} keeps its focusability`);
+    button.click();
+  }
+  await flush();
+  focusFixup(document);
+  assert.equal(document.activeElement === save, true, 'the pressed button keeps the focus');
+  assert.deepEqual(calls, [['save', 'github']], 'no second request while the first runs');
+  assert.equal(document.getElementById('btn-mcp-server-cancel').hasAttribute('aria-disabled'), false,
+    'Cancel stays live');
+
+  pending.resolve({ ok: false, errors: ['nope'] });
+  await flush();
+  assert.equal(save.hasAttribute('aria-disabled'), false, 'live again after the answer');
+});
+
+test('a rejected save, remove or test shows the failure message (CR-B14-04)', async () => {
+  const boom = async () => { throw new Error('EPERM'); };
+  await mount({ saveMcpServer: boom, deleteMcpServer: boom, testMcpServer: boom });
+  await openEdit(0);
+  const formError = document.getElementById('mcp-form-error');
+
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  assert.equal(dialogOffen(), true);
+  assert.equal(formError.textContent, 'The server could not be saved.');
+
+  document.getElementById('btn-mcp-server-delete').click();
+  await flush();
+  assert.equal(formError.textContent, 'The server could not be deleted.');
+
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  const result = document.getElementById('mcp-test-result');
+  assert.equal(result.textContent, 'The test failed.', 'not left on "Testing …"');
+  for (const id of ['btn-mcp-server-save', 'btn-mcp-server-test', 'btn-mcp-server-delete']) {
+    assert.equal(document.getElementById(id).hasAttribute('aria-disabled'), false, id);
+  }
+});
+
+test('a rejected switch goes back and says so (CR-B14-04)', async () => {
+  await mount({ saveMcpServer: async () => { throw new Error('EACCES'); } });
+  const toggle = rows()[0].querySelector('.ds-switch');
+  toggle.click();
+  await flush();
+  assert.equal(rows()[0].querySelector('.ds-switch').checked, true);
+  const error = document.getElementById('settings-mcp-error');
+  assert.equal(error.classList.contains('hidden'), false);
+  assert.equal(error.textContent, 'The server could not be changed.');
+});
+
+// --- CR-B14-07: the focus stays where the user was ---
+
+/**
+ * Chromium drops the focus from a removed control, or one in a dialog that
+ * was hidden; happy-dom does not. (The Settings modal around the panel is
+ * hidden in this fixture as a whole, so only the sub-dialogs count.)
+ */
+const fixFocus = () => focusFixup(document, {
+  isLaidOut: (node) => node.isConnected && !node.closest('#mcp-server-overlay.hidden, #mcp-import-overlay.hidden'),
+});
+const editButton = (index) => rows()[index].querySelector('button[data-mcp-action="edit"]');
+
+async function editByKeyboard(index) {
+  editButton(index).focus();
+  editButton(index).click();
+  await flush();
+}
+
+test('after saving an edited server the focus is back on its Edit button (CR-B14-07)', async () => {
+  await mount();
+  const before = editButton(0);
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-save').focus();
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  fixFocus();
+  assert.equal(editButton(0) !== before, true, 'the list was redrawn');
+  assert.equal(document.activeElement === editButton(0), true);
+});
+
+test('after removing a server the focus lands on "Add server" (CR-B14-07)', async () => {
+  const ohneGithub = () => { const k = katalog(); k.servers = k.servers.slice(1); k.connections = k.connections.slice(1); return k; };
+  await mount({ deleteMcpServer: async () => ({ ok: true, ...ohneGithub() }) });
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-delete').focus();
+  document.getElementById('btn-mcp-server-delete').click();
+  await flush();
+  fixFocus();
+  assert.equal(rows().length, 1);
+  assert.equal(document.activeElement === document.getElementById('btn-add-mcp-server'), true);
+});
+
+test('Cancel after a test returns the focus to the redrawn Edit button (CR-B14-07)', async () => {
+  await mount();
+  const before = editButton(0);
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-server-test').click();
+  await flush();
+  document.getElementById('btn-mcp-server-cancel').focus();
+  document.getElementById('btn-mcp-server-cancel').click();
+  await flush();
+  fixFocus();
+  assert.equal(editButton(0) !== before, true, 'the test reloaded the list');
+  assert.equal(document.activeElement === editButton(0), true);
+});
+
+test('a redraw keeps the focus on the same control of the same server (CR-B14-07)', async () => {
+  await mount();
+  for (const redraw of [
+    () => document.getElementById('btn-reload-mcp').click(),
+    // The answer of a save that comes in while an Edit button has the focus.
+    () => rows()[1].querySelector('.ds-switch').click(),
+  ]) {
+    editButton(1).focus();
+    const before = editButton(1);
+    redraw();
+    await flush();
+    fixFocus();
+    assert.equal(editButton(1) !== before, true, 'the list was redrawn');
+    assert.equal(document.activeElement === editButton(1), true);
+  }
+});
+
+test('removing an environment variable moves the focus to the next, previous or "Add variable" (CR-B14-07)', async () => {
+  await mount();
+  await editByKeyboard(0);
+  document.getElementById('btn-mcp-env-add').click();
+  assert.equal(envRows().length, 3);
+  const removeOf = (index) => envRows()[index].querySelector('.settings-dialog__icon-close');
+
+  removeOf(0).focus();
+  removeOf(0).click();
+  fixFocus();
+  assert.equal(document.activeElement === envFields(envRows()[0]).key, true, 'the next row, now first');
+  assert.equal(envFields(envRows()[0]).key.value, 'LANG');
+
+  removeOf(1).focus();
+  removeOf(1).click();
+  fixFocus();
+  assert.equal(document.activeElement === envFields(envRows()[0]).key, true, 'no next row — the previous one');
+
+  removeOf(0).focus();
+  removeOf(0).click();
+  fixFocus();
+  assert.equal(envRows().length, 0);
+  assert.equal(document.activeElement === document.getElementById('btn-mcp-env-add'), true);
+});
+
+// --- CR-B14-09, item 10 ---
+
+test('a catalogue that cannot be read does not also claim there is no server', async () => {
+  await mount({ getMcpCatalog: async () => { throw new Error('EACCES'); } });
+  assert.equal(document.getElementById('settings-mcp-error').textContent, 'The MCP configuration could not be read.');
+  assert.equal(document.getElementById('settings-mcp-empty').classList.contains('hidden'), true);
+  assert.equal(rows().length, 0);
+});
+
+test('Test connection waits while the form differs from what is saved (CR-B14-09)', async () => {
+  const { calls } = await editGithub();
+  const btnTest = document.getElementById('btn-mcp-server-test');
+  const hint = document.getElementById('mcp-test-hint');
+  const label = document.getElementById('mcp-field-label');
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false);
+  assert.equal(hint.classList.contains('hidden'), true);
+
+  type(label, 'GitHub (Arbeit)');
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
+  assert.equal(btnTest.disabled, false, 'still focusable, so the reason can be read');
+  assert.equal(hint.classList.contains('hidden'), false);
+  assert.equal(btnTest.getAttribute('aria-describedby'), 'mcp-test-hint');
+  assert.match(hint.textContent, /uses the saved configuration/);
+  btnTest.click();
+  await flush();
+  assert.equal(calls.some(([kind]) => kind === 'test'), false, 'nothing is tested against an unsaved form');
+
+  type(label, 'GitHub');
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false, 'back to what is saved');
+  assert.equal(hint.classList.contains('hidden'), true);
+
+  // A stored secret that is only focused is still what is saved; a new
+  // value is not.
+  const { value } = envFields(envRows()[0]);
+  value.focus();
+  assert.equal(btnTest.hasAttribute('aria-disabled'), false);
+  type(value, 'ghp_neu');
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
+  // Removing a variable is a change, too.
+  type(value, '');
+  value.blur();
+  envRows()[1].querySelector('.settings-dialog__icon-close').click();
+  assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
 });
