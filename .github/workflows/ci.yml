@@ -40,6 +40,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Electron 44 fetches its binary on the first require, not on install
+      # (#666): fetched here, a network blip is a retried install step instead
+      # of a failing test.
+      - name: Download the Electron binary
+        run: node scripts/install-electron.js
       # The sandbox of shell_execute/run_python (#329) is tested for real on
       # macOS and Linux. Linux needs its three packages, and Ubuntu 24.04
       # restricts the unprivileged user namespaces bubblewrap relies on.
