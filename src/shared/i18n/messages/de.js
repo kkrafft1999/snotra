@@ -201,6 +201,7 @@ module.exports = {
   'fs.error.tooMuchData': 'Zu viele Daten auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
   'fs.error.copyFailed': 'Kopieren fehlgeschlagen: {error}',
   'fs.error.previewTooLarge': 'Datei zu groß für die Vorschau',
+  'fs.error.previewNotAFile': 'Keine normale Datei – Ordner, Pipes und Geräte haben keine Vorschau',
 
   'import.count.dirs.one': '{count} Ordner',
   'import.count.dirs.other': '{count} Ordner',
@@ -211,6 +212,8 @@ module.exports = {
   'import.skipped.symlinks.other': '{count} Verknüpfungen werden übersprungen.',
   'import.skipped.sensitive.one': '{count} Datei sieht nach Zugangsdaten aus und wird übersprungen.',
   'import.skipped.sensitive.other': '{count} Dateien sehen nach Zugangsdaten aus und werden übersprungen.',
+  'import.skipped.other.one': '{count} Eintrag ist weder Datei noch Ordner (etwa eine Pipe oder ein Socket) und wird übersprungen.',
+  'import.skipped.other.other': '{count} Einträge sind weder Dateien noch Ordner (etwa Pipes oder Sockets) und werden übersprungen.',
   'import.confirm.message': '{summary} nach „{target}“ kopieren?',
   'import.confirm.copy': 'Kopieren',
   'import.confirm.cancel': 'Abbrechen',
@@ -1555,6 +1558,11 @@ module.exports = {
 
   // ── File tree context menu (main process) ──────────────────────────────────
   'contextMenu.open': 'Öffnen',
+  'contextMenu.open.failedTitle': '„{name}“ konnte nicht geöffnet werden',
+  'contextMenu.openProgram.title': 'Das Programm „{name}“ öffnen?',
+  'contextMenu.openProgram.detail': 'Das ist ein Programm oder Skript. Öffnen führt es mit deinen Benutzerrechten aus, außerhalb der Sandbox von Snotra — öffne es nur, wenn du weißt, was es tut.',
+  'contextMenu.openProgram.confirm': 'Öffnen',
+  'contextMenu.openProgram.cancel': 'Abbrechen',
   'contextMenu.reveal.darwin': 'Im Finder anzeigen',
   'contextMenu.reveal.win32': 'Im Explorer anzeigen',
   'contextMenu.reveal.other': 'Im Dateimanager anzeigen',

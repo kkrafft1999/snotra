@@ -606,7 +606,7 @@ export function initFileTree(deps) {
       e.preventDefault();
       // Die Pfade muessen **vor** dem ersten await aus dem DataTransfer
       // geholt werden — danach ist es leer (#101).
-      const sources = externalSourcePathsFrom(e.dataTransfer);
+      const sources = droppedFilesFrom(e.dataTransfer);
       clearDragVisualState();
       await importExternalItems(sources, importDestDirFor(overItem?.dataset, appStore.rootPath));
       return;
@@ -925,7 +925,7 @@ export function initFileTree(deps) {
   // dazu die Information, ob es ein Ordner ist, damit „Öffnen“ entfällt (#120).
   async function openFileContextMenu(item) {
     try {
-      const result = await api.showFileContextMenu(item.path, { isDirectory: Boolean(item.isDirectory) });
+      const result = await api.showFileContextMenu(item.path);
       if (result?.error) console.warn('Context menu refused:', result.error);
     } catch (err) {
       console.warn('Context menu failed:', err?.message ?? err);
@@ -1127,7 +1127,7 @@ export function initFileTree(deps) {
 
     if (isExternalFileDrop(e.dataTransfer?.types, Boolean(dragSourcePath))) {
       // Synchron aus dem DataTransfer lesen, bevor irgendetwas awaitet wird.
-      const sources = externalSourcePathsFrom(e.dataTransfer);
+      const sources = droppedFilesFrom(e.dataTransfer);
       clearDragVisualState();
       await importExternalItems(sources, importDestDirFor(dropRow?.dataset, appStore.rootPath));
       return;
@@ -1156,19 +1156,21 @@ export function initFileTree(deps) {
   }
 
   /**
-   * Uebersetzt die gedroppten Dateien in echte Pfade. Muss synchron laufen:
-   * nach dem ersten await ist das DataTransfer leer. Eintraege ohne Pfad
-   * stammen nicht aus dem Dateisystem (z. B. Drag aus dem Browser).
+   * The dropped File objects. Must run synchronously: after the first await
+   * the DataTransfer is empty, the File objects themselves stay valid. Their
+   * paths are resolved in the preload, not here — the page cannot name a
+   * source (#646); one that is not from the file system (a drag out of a
+   * browser) has no path and is dropped there.
    */
-  function externalSourcePathsFrom(dataTransfer) {
-    const files = Array.from(dataTransfer?.files ?? []);
-    return files.map((file) => api.getPathForFile?.(file) ?? '').filter((p) => typeof p === 'string' && p);
+  function droppedFilesFrom(dataTransfer) {
+    return Array.from(dataTransfer?.files ?? []);
   }
 
   /**
    * Issue #101: Dateien und Ordner von aussen uebernehmen. Der Renderer waehlt
-   * nur den Zielordner — geprueft, bestaetigt und kopiert wird im Main-Prozess,
-   * der Fehler auch selbst nativ meldet.
+   * nur den Zielordner und reicht die gedroppten Dateien durch — geprueft,
+   * bestaetigt und kopiert wird im Main-Prozess, der Fehler auch selbst nativ
+   * meldet.
    */
   async function importExternalItems(sources, destDir) {
     if (!appStore.rootPath || !destDir || sources.length === 0 || importInFlight) return;

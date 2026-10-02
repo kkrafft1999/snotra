@@ -49,11 +49,12 @@ export function formatSize(bytes) {
   const value = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
   if (value === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(Math.max(Math.floor(Math.log(value) / Math.log(1024)), 0), units.length - 1);
-  const scaled = value / Math.pow(1024, i);
-  const text = i === 0
-    ? String(Math.round(scaled))
-    : scaled.toFixed(1).replace('.', t('format.decimal'));
+  let i = Math.min(Math.max(Math.floor(Math.log(value) / Math.log(1024)), 0), units.length - 1);
+  const rounded = (unit) => (unit === 0 ? String(Math.round(value)) : (value / Math.pow(1024, unit)).toFixed(1));
+  // The unit is chosen after rounding (#650): 1,048,575 B is 1023.999 KB,
+  // which one decimal turns into "1024.0 KB" — that reads "1.0 MB".
+  if (i < units.length - 1 && Number(rounded(i)) >= 1024) i += 1;
+  const text = i === 0 ? rounded(0) : rounded(i).replace('.', t('format.decimal'));
   return `${text} ${units[i]}`;
 }
 

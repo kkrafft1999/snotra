@@ -25,6 +25,51 @@ function revealLabelForPlatform(platform, locale) {
   return createTranslator(locale)(REVEAL_KEYS[platform] || 'contextMenu.reveal.other');
 }
 
+/**
+ * Types that "Open" runs instead of showing (#649): shell.openPath hands them
+ * to the operating system, which executes them with the user's full rights —
+ * outside the shell switch (#102) and the sandbox (#329). Files Snotra writes
+ * carry no Mark-of-the-Web and no quarantine attribute, so SmartScreen and
+ * Gatekeeper do not ask either. On Windows PATHEXT is added on top.
+ */
+const LAUNCHABLE_EXTENSIONS = Object.freeze({
+  win32: Object.freeze([
+    '.exe', '.com', '.bat', '.cmd', '.ps1', '.psm1', '.vbs', '.vbe', '.vb', '.js', '.jse', '.wsf',
+    '.wsh', '.ws', '.wsc', '.sct', '.hta', '.msi', '.msp', '.msc', '.lnk', '.url', '.scr', '.pif',
+    '.cpl', '.reg', '.jar', '.application', '.appref-ms', '.chm', '.settingcontent-ms',
+    // The python.org, Strawberry Perl and RubyInstaller setups associate
+    // these with their interpreter, which runs them; run_python writes .py.
+    '.py', '.pyw', '.pyz', '.pl', '.rb',
+  ]),
+  darwin: Object.freeze([
+    '.app', '.command', '.tool', '.sh', '.zsh', '.bash', '.csh', '.ksh', '.tcsh', '.terminal',
+    '.workflow', '.action', '.pkg', '.mpkg', '.scpt', '.scptd', '.applescript', '.jar',
+    '.fileloc', '.inetloc',
+    // Python Launcher, which the python.org installer sets up, runs them.
+    '.py', '.pyw', '.pyz',
+  ]),
+  linux: Object.freeze([
+    '.desktop', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.run', '.appimage', '.jar', '.py',
+  ]),
+});
+
+function launchableExtensions(platform, env) {
+  const listed = LAUNCHABLE_EXTENSIONS[platform] || LAUNCHABLE_EXTENSIONS.linux;
+  const pathExt = platform === 'win32' && typeof env?.PATHEXT === 'string' ? env.PATHEXT.split(';') : [];
+  return new Set([...listed, ...pathExt]
+    .map((ext) => ext.trim().toLowerCase())
+    .filter((ext) => ext.startsWith('.')));
+}
+
+/** Lower-case extension of a path's last segment as the platform reads it. */
+function launchExtension(filePath, platform) {
+  const pathApi = platform === 'win32' ? path.win32 : path.posix;
+  let name = pathApi.basename(filePath);
+  // Windows drops trailing dots and spaces: "setup.bat. " runs as setup.bat.
+  if (platform === 'win32') name = name.replace(/[. ]+$/, '');
+  return pathApi.extname(name).toLowerCase();
+}
+
 function createFileContextMenu({
   Menu,
   shell,
@@ -36,13 +81,74 @@ function createFileContextMenu({
   // The language is read afresh every time the menu opens (epic #277): a
   // context menu lives only until the click, so a rebuild is unnecessary.
   getLocale = () => undefined,
+  // For the look at what "Open" would launch (#649).
+  fs = require('fs').promises,
+  env = process.env,
 }) {
   const info = fileInfo || createFileInfo({ platform, logger });
+  const launchable = launchableExtensions(platform, env);
 
-  async function openWithDefaultApp(filePath) {
+  /**
+   * Whether "Open" would run the path rather than show it (#649): a program
+   * or script by its extension, an `.app` bundle, or — on macOS and Linux — a
+   * regular file without an extension that has an execute bit. A file with
+   * an extension is opened by its type, so `report.pdf` from an exFAT stick,
+   * where everything is 0777, still opens in a viewer and does not ask. A
+   * link counts as what it points to, so `notes` → `tool.app` asks as well.
+   * Unreadable or gone: decided by the name alone, and shell.openPath reports
+   * the rest.
+   */
+  async function opensAsProgram(filePath) {
+    const names = [filePath];
+    let stats = null;
+    try {
+      const realPath = await fs.realpath(filePath);
+      if (realPath !== filePath) names.push(realPath);
+      stats = await fs.stat(realPath);
+    } catch {
+      // Decided by the name below.
+    }
+    if (names.some((name) => launchable.has(launchExtension(name, platform)))) return true;
+    const withoutExtension = names.every((name) => launchExtension(name, platform) === '');
+    return platform !== 'win32' && withoutExtension && Boolean(stats?.isFile()) && (stats.mode & 0o111) !== 0;
+  }
+
+  /**
+   * "Open": a document opens directly, a program or script only after a
+   * native warning with "Cancel" as default and Escape answer (#649). A
+   * failure from shell.openPath — no app for the type, say — is shown, not
+   * only logged. Ergebnis: { opened } | { cancelled } | { error }.
+   */
+  async function openWithDefaultApp(filePath, window = null) {
+    const t = createTranslator(getLocale());
+    if (await opensAsProgram(filePath)) {
+      // Without a dialog nothing can ask, and a program is not run unasked.
+      if (!dialog) return { error: t('contextMenu.noDialog') };
+      const { response } = await showMessageBox(window, {
+        type: 'warning',
+        buttons: [t('contextMenu.openProgram.confirm'), t('contextMenu.openProgram.cancel')],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+        message: t('contextMenu.openProgram.title', { name: path.basename(filePath) }),
+        detail: `${filePath}\n\n${t('contextMenu.openProgram.detail')}`,
+      });
+      if (response !== 0) return { cancelled: true };
+    }
     // shell.openPath löst mit '' auf, wenn es geklappt hat, sonst mit Fehlertext.
     const failure = await shell.openPath(filePath);
-    if (failure) logger.warn('[file-context-menu] The file could not be opened:', failure);
+    if (!failure) return { opened: true };
+    logger.warn('[file-context-menu] The file could not be opened:', failure);
+    if (dialog) {
+      await showMessageBox(window, {
+        type: 'error',
+        buttons: [t('contextMenu.ok')],
+        noLink: true,
+        message: t('contextMenu.open.failedTitle', { name: path.basename(filePath) }),
+        detail: `${filePath}\n\n${failure}`,
+      });
+    }
+    return { error: failure };
   }
 
   function revealInFileManager(filePath) {
@@ -135,30 +241,38 @@ function createFileContextMenu({
     return { shown: true };
   }
 
+  /**
+   * `isDirectory` is main's own lstat of the path (#649), never a renderer
+   * flag: it decides whether "Open" is offered and how the delete
+   * confirmation words it.
+   */
   function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false } = {}) {
     const t = createTranslator(getLocale());
+    // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
+    // das Fenster während des Dialogs zugeht — wäre sonst eine
+    // unbehandelte Rejection und damit ein Absturz des Main-Prozesses.
+    // Every click that opens a dialog is guarded so (#649 for Open and Delete).
+    const guarded = (promise, what) => promise.catch((err) => {
+      logger.warn(`[file-context-menu] ${what}:`, err?.message ?? err);
+    });
     return [
-      ...(isDirectory ? [] : [{ label: t('contextMenu.open'), click: () => openWithDefaultApp(filePath) }]),
+      ...(isDirectory ? [] : [{
+        label: t('contextMenu.open'),
+        click: () => guarded(openWithDefaultApp(filePath, window), 'The file could not be opened'),
+      }]),
       { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
       {
         label: t('contextMenu.info'),
-        // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
-        // das Fenster während des Dialogs zugeht — wäre sonst eine
-        // unbehandelte Rejection und damit ein Absturz des Main-Prozesses.
-        click: () => {
-          showInfo(filePath, window, { isDirectory }).catch((err) => {
-            logger.warn('[file-context-menu] The information could not be shown:', err?.message ?? err);
-          });
-        },
+        click: () => guarded(showInfo(filePath, window, { isDirectory }), 'The information could not be shown'),
       },
       { type: 'separator' },
       {
         label: t('contextMenu.delete'),
-        click: async () => {
+        click: () => guarded((async () => {
           const result = await deleteWithConfirmation(filePath, window, { isDirectory });
           if (result.deleted && typeof onDeleted === 'function') onDeleted(filePath);
           return result;
-        },
+        })(), 'The file could not be deleted'),
       },
     ];
   }
@@ -178,4 +292,4 @@ function createFileContextMenu({
   };
 }
 
-module.exports = { createFileContextMenu, revealLabelForPlatform };
+module.exports = { createFileContextMenu, revealLabelForPlatform, LAUNCHABLE_EXTENSIONS };

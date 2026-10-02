@@ -354,9 +354,10 @@ function createToolCallPlanner({
         return { tool: toolName, error: 'relative_path is required.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...classes], targets: [] };
       }
       // Skill folders are read-only in every mode (concept §5, #548): a write
-      // there — as `skill:` path or as an absolute path into the folder of a
-      // switched-on skill — fails here as a hard limit and names the place a
-      // skill's data belongs to.
+      // there — as `skill:` path, as an absolute path into the folder of a
+      // switched-on skill, or as any path into a global skill folder the open
+      // folder contains (#650) — fails here as a hard limit and names the
+      // place a skill's data belongs to.
       const resolved = await fsService.resolveToolPath(workspaceRoot, rawPath, { skillRoots, access });
       if (resolved.error) {
         // Ausbruch aus der Wurzel oder unbekannter Skill: harte Grenze, kein

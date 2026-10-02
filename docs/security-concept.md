@@ -185,23 +185,48 @@ stored with the history in the encrypted store.
   renderer or the model, no escape through `..`, symlinks or junctions; new
   files are checked against the real existing parent path. Skill targets stay
   read-only in every mode (#429 opened them for a while; the revision for #548
-  in section 9 closed them again). Paths, file state and root are re-checked immediately
+  in section 9 closed them again), a global skill folder also when the open
+  folder contains it (#650). Paths, file state and root are re-checked immediately
   before access; a swap during the approval invalidates it. Plain string prefix
   checks are not enough.
 - **Import from outside (#101):** dropping from Finder or Explorer into the file
   tree is the one place where a path from *outside* the workspace has an effect.
   The check is deliberately asymmetric there: the **target** is realpath-checked
   against the active workspace as everywhere else, the **source** deliberately
-  is not — it has to be absolute, has to exist, and must not match the sensitive
-  patterns from section 4 (`.env*`, `*.pem`, `id_*`, `.ssh/` …); a match rejects
-  rather than warns. Sensitive names and symlinks inside a dragged folder are
-  counted and skipped, not copied along: a symlink inside the workspace pointing
-  outside would be a hole in the boundary. Things are copied, not moved — Snotra
-  deletes nothing outside the workspace. Volume limits (`MAX_IMPORT_ENTRIES`,
-  `MAX_IMPORT_TOTAL_BYTES`) reject the whole drop instead of copying half of it.
-  The dedicated channel (`fs:inspectImport` / `fs:importItems`) exists for
-  exactly this reason: `fs:moveItem` still checks both sides, and a channel that
-  accepts the source unchecked has to be visibly a different one.
+  is not — it has to be absolute, has to exist, and neither its written nor its
+  real path may match the sensitive patterns from section 4 (`.env*`, `*.pem`,
+  `id_*`, `.ssh/` …); a match rejects rather than warns, also when a symlinked
+  folder hides the sensitive part (#646). **The source is bound to the drop:**
+  page script cannot name it. The renderer hands the preload the dropped `File`
+  objects, and the preload resolves each path itself with
+  `webUtils.getPathForFile`; a string or a `File` the page made has no path and
+  never reaches main (#646). The channel from preload to main still carries
+  path strings — a renderer compromised below the page, with native code
+  execution, could send its own — which is why main keeps every check above and
+  the native confirmation. Sensitive names, symlinks and anything that is
+  neither a regular file nor a folder (pipes, sockets, devices) inside a dragged
+  folder are counted and skipped, not copied along: a symlink inside the
+  workspace pointing outside would be a hole in the boundary. Things are copied,
+  not moved — Snotra deletes nothing outside the workspace. Volume limits
+  (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`) reject the whole drop instead
+  of copying half of it, and a copy that fails partway removes what it created
+  (never what was there before). The dedicated channel (`fs:inspectImport` /
+  `fs:importItems`) exists for exactly this reason: `fs:moveItem` still checks
+  both sides, and a channel that accepts the source unchecked has to be visibly
+  a different one.
+- **"Open" in the file tree (#649):** the context menu's "Open" hands a path to
+  the operating system, which runs a program or script instead of showing it —
+  with the user's full rights, outside the shell switch (#102) and the sandbox
+  (#329). A write the user approved (or Auto mode let through) is not an
+  approval to execute, and files Snotra writes carry no Mark-of-the-Web or
+  quarantine attribute, so SmartScreen and Gatekeeper do not step in. So main
+  asks natively before it opens a program or script — recognised by its
+  extension per platform, an `.app` bundle, a link to either, or on macOS and
+  Linux a regular file without an extension that has an execute bit — naming
+  the risk, with "Cancel" as
+  default. Ordinary documents open directly. Whether the path is a folder, which
+  shapes "Open" and the delete confirmation, main determines itself with
+  `lstat`; the renderer sends only the path, and that is used exactly as sent.
 - **Snotra's secrets and controls:** provider keys, the auth store, the Snotra
   configuration, the permission rules and the audit store are hard-blocked for
   model tools, even when the user opens a parent folder. The credential adapter
@@ -282,8 +307,10 @@ stored with the history in the encrypted store.
   these actions. The same
   pattern applies to the import from outside (#101): main counts, confirms
   natively (always for folders, above a threshold for files) and only then
-  copies; the renderer merely picks the target folder, and the numbers in the
-  dialog come from main's own check, not from the IPC message. Binding approval
+  copies. The renderer picks the target folder and hands over the dropped
+  files; their paths are resolved in the preload, so page script cannot choose
+  a source (#646), and the numbers in the dialog come from main's own check,
+  not from the IPC message. Binding approval
   answers to the `requestId`, the plan and the file version (section 6) protects
   against stale cards, double clicks, race conditions and programming errors; it
   alone does not protect against a fully compromised renderer. Stored secrets
@@ -991,10 +1018,16 @@ same however narrow the conditions around it were.
 
 - **Read-only in every mode.** The write tools refuse a `skill:` path and an
   absolute path into the folder of a switched-on skill as a hard limit, before
-  the policy. The engine no longer keeps a set of loaded skills, and the plan
+  the policy. The global folders `~/.snotra/skills` and `~/.agents/skills` are
+  refused by any spelling, also when the open folder contains them — the home
+  folder, say (#650); the workspace winning over a skill folder applies to
+  reading only. Workspace skills under `.agents/skills/` in the open folder are
+  project files and stay writable. The engine no longer keeps a set of loaded skills, and the plan
   carries none.
 - **No skill folder in the sandbox.** `shell_execute` and `run_python` get no
-  skill folder as a write path, and `shell_execute` no longer accepts
+  skill folder as a write path; when the open folder contains a global skill
+  folder, the sandbox denies writing there (#650), unless a program allowance
+  names that folder itself. `shell_execute` no longer accepts
   `cwd: "skill:<name>"` — a run happens in the project. The card lost its
   "Loaded skills" line and the reason "a command in a skill folder cannot be
   remembered".

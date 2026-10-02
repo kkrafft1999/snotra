@@ -193,6 +193,7 @@ module.exports = {
   'fs.error.tooMuchData': 'Too much data at once (limit: {limit}). Please take it over in smaller parts.',
   'fs.error.copyFailed': 'Copying failed: {error}',
   'fs.error.previewTooLarge': 'File too large for preview',
+  'fs.error.previewNotAFile': 'Not a regular file — a folder, pipe or device has no preview',
 
   'import.count.dirs.one': '{count} folder',
   'import.count.dirs.other': '{count} folders',
@@ -203,6 +204,8 @@ module.exports = {
   'import.skipped.symlinks.other': '{count} symlinks will be skipped.',
   'import.skipped.sensitive.one': '{count} file looks like credentials and will be skipped.',
   'import.skipped.sensitive.other': '{count} files look like credentials and will be skipped.',
+  'import.skipped.other.one': '{count} item is neither a file nor a folder (a pipe or a socket, say) and will be skipped.',
+  'import.skipped.other.other': '{count} items are neither files nor folders (pipes or sockets, say) and will be skipped.',
   'import.confirm.message': 'Copy {summary} into “{target}”?',
   'import.confirm.copy': 'Copy',
   'import.confirm.cancel': 'Cancel',
@@ -1547,6 +1550,11 @@ module.exports = {
 
   // ── File tree context menu (main process) ────────────────────────────────
   'contextMenu.open': 'Open',
+  'contextMenu.open.failedTitle': '“{name}” could not be opened',
+  'contextMenu.openProgram.title': 'Open the program “{name}”?',
+  'contextMenu.openProgram.detail': 'This is a program or script. Opening it runs it with your user rights, outside Snotra’s sandbox — only open it if you know what it does.',
+  'contextMenu.openProgram.confirm': 'Open',
+  'contextMenu.openProgram.cancel': 'Cancel',
   'contextMenu.reveal.darwin': 'Reveal in Finder',
   'contextMenu.reveal.win32': 'Show in Explorer',
   'contextMenu.reveal.other': 'Show in file manager',

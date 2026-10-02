@@ -268,10 +268,16 @@ injected via composition:
 
 - Storage: `llm-config-store-port`, `ui-prefs-store-port`,
   `chat-history-store-port`, `workspace-folder-store-port`,
-  `provider-secrets-port`, `web-search-store-port`
+  `provider-secrets-port`
 - Runtime: `provider-runtime-port`, `provider-catalog-port`,
   `provider-model-listing-port`, `credential-port`, `filesystem-port`,
   `speech-port`, `update-port`
+
+The web search key and the MCP stores are narrowed in
+`adapters/persistence-store-adapters.js` (`createWebSearchStorePort`,
+`createMcpConfigStorePort`, `createMcpSecretsPort`) without a typedef of their
+own in `ports/`. A typedef lists every member its adapter provides;
+`test/filesystem-port-typedef.test.js` holds `filesystem-port` to that.
 
 ### Self-update: three steps, three modules
 
@@ -352,11 +358,45 @@ limits for tools. Parsing the front matter lives as a pure function in
 That the app notices what happens **next to** it in the file system is the work
 of a single service: `services/directory-watcher.js`. It encapsulates the
 dearly-paid quirks of `fs.watch` — missing target directories, a disappearing
-watch root (macOS goes silent, Windows fires endlessly), the Linux sham with
-`recursive: true`, event avalanches (debouncing with a maximum window), `error`
-events without listeners, and re-arming after a lost event (issues
+watch root (macOS goes silent, Windows fires endlessly), event avalanches
+(debouncing with a maximum window), `error` events without listeners, and
+re-arming after a lost event (issues
 [#126](https://github.com/kkrafft1999/snotra/issues/126),
-[#155](https://github.com/kkrafft1999/snotra/issues/155)).
+[#155](https://github.com/kkrafft1999/snotra/issues/155)). A folder switch drops
+whatever was still waiting to be reported for the folder just left
+([#650](https://github.com/kkrafft1999/snotra/issues/650)).
+
+What it does on each platform
+([#648](https://github.com/kkrafft1999/snotra/issues/648)):
+
+- **macOS and Windows** — one native `fs.watch(…, { recursive: true })` per
+  target (FSEvents, `ReadDirectoryChangesW`). It costs one handle whatever the
+  size of the folder, and it reports by path, so a file replaced by rename is
+  reported like any other.
+- **Linux** — watched folder by folder. Node's `recursive: true` is an emulation
+  there: it puts an inotify watch on every file and every folder, `node_modules/`
+  included, loses every file once it has been replaced by rename (an atomic
+  write, an editor save, git's `HEAD.lock` → `HEAD`), and returns a partial
+  watcher without a word when the kernel's watch budget runs out. Instead, every
+  folder gets one plain watch — inotify reports a change to a child by its name,
+  whatever happens to the child's inode. A folder that a rename brings in gets a
+  watch, and its content is reported, since it may have filled up before the
+  watch was set; one that goes loses its watch and those below it. The walk is
+  asynchronous and breadth first, follows no symbolic links, keeps out of the
+  folders the consumer names (`folderPolicy`), and stops at
+  `LIMITS.MAX_WATCHED_DIRECTORIES` folders per target. At that cap, or when the
+  kernel has no watch left (`ENOSPC`, `EMFILE`), the service says so through
+  `onError` and reports `complete: false`, so the tree reloads coarsely and
+  shows what is there at that moment. That is as far as it goes: the folders
+  skipped at the limit stay without a watch until the watch is set up afresh,
+  the next time the folder is opened, and what changes in them until then is
+  not reported. A folder that goes frees its watch for the next new one. A
+  folder's own events — a chmod, its removal, its move — arrive at its watch
+  under its own name, as if a child of that name had changed; unless such a
+  child exists, they count as an event on the folder itself.
+
+`onError` always names the folder whose watch failed. The composition writes it
+to the log, at most one line per watcher and minute.
 
 On top of it sit two thin shells that only say *what* is being watched:
 
@@ -371,10 +411,17 @@ On top of it sit two thin shells that only say *what* is being watched:
   chain upwards. It reports the affected **folders**, so that the file tree does
   not have to reload everything on every event (issue
   [#158](https://github.com/kkrafft1999/snotra/issues/158)). An ignore list keeps
-  the contents of `node_modules/` and `.git/` as well as editor temporary files
-  out; `.git/HEAD` and `.git/index` deliberately get through — they are the sign
-  of a branch switch and report as `complete: false`, whereupon the renderer
-  reloads once, more coarsely, instead of a hundred times individually.
+  the events from the contents of `node_modules/` and `.git/` out, whatever the
+  case of the folder name, as the listing hides `.GIT` too — on Linux it
+  also keeps the watches out of those folders, so a `node_modules/` of 20,000
+  files costs none, and `.git` gets one watch of its own without its subfolders.
+  Beyond that it ignores exactly the entries the listing never shows (`.git`,
+  `.DS_Store`, `Thumbs.db`, `desktop.ini`), from the one definition in
+  `shared/runtime/hidden-entries.js`; an editor's `notes.md~` is listed, so it
+  is reported too (#650). `.git/HEAD`, `.git/index` and `.git/ORIG_HEAD`
+  deliberately get through — they are the sign of a branch switch, a merge or a
+  rebase and report as `complete: false`, whereupon the renderer reloads once,
+  more coarsely, instead of a hundred times individually.
 
 The path to the tree: `fs:tree-changed`
 (`shared/contracts/workspace-tree.js`) → `FileTree.js` reloads the reported
@@ -490,28 +537,68 @@ and that is meant to stay:
 - `fs:inspectImport` — counts folders, files and bytes, without writing.
 - `fs:importItems` — confirms natively and copies.
 
+**Where the source comes from** (issue
+[#646](https://github.com/kkrafft1999/snotra/issues/646)): the page cannot name
+one. `FileTree.js` hands the preload the dropped `File` objects, and the preload
+resolves each path itself with `webUtils.getPathForFile` — Electron's documented
+pattern for a sandboxed preload behind `contextBridge`. A string, an object that
+only looks like a `File`, or a `File` the page made has no path there and is
+dropped; a drop with nothing from the file system in it does not reach main at
+all. Between preload and main the channel still carries path strings, so main
+keeps every check below: page script cannot choose those strings, but a
+renderer process compromised below the page could.
+
 In the adapter only the **target** goes through `boundPath()` (realpath-checked).
 The **source** is deliberately not checked against the workspace — that is
-exactly what the channel is for — but it must be absolute and must not match
-`shared/runtime/sensitive-paths.js`; a hit rejects the drop. The rest lives in
-`services/fs-service.js`: `inspectImportSources` counts recursively (symlinks and
-sensitive names are counted and skipped, not followed), `importExternalItems`
-copies with `fs.cp` — copies, not moves, because `fs.rename` only works within one
-file system, and deleting the source outside would not be recoverable. Both
-routes share the collision scheme `name (2).ext` via `findFreeTargetPath`. The
-limits (`MAX_IMPORT_ENTRIES`, `MAX_IMPORT_TOTAL_BYTES`) live in
-`shared/limits.js`; exceeding one rejects the whole drop instead of copying half
-of it. Confirmation happens natively in `ipc/fs-handlers.js` via
-`dialog.showMessageBox` — the renderer only triggers it, see
-`docs/security-concept.md` §5.
+exactly what the channel is for — but it must be absolute, and neither its
+written nor its real path (`fs.realpath`) may match
+`shared/runtime/sensitive-paths.js`; a hit rejects the drop, so `~/k8s → ~/.kube`
+does not pass as `k8s/config`. The rest lives in `services/fs-service.js`:
+`inspectImportSources` counts recursively (symlinks, sensitive names and
+anything that is neither a regular file nor a folder — pipes, sockets, devices —
+are counted and skipped, not followed), `importExternalItems` copies with
+`fs.cp` — copies, not moves, because `fs.rename` only works within one file
+system, and deleting the source outside would not be recoverable. Both routes
+share the collision scheme `name (2).ext` via `findFreeTargetPath`; within one
+drop the names handed out compare case-insensitively on macOS and Windows, where
+`README.md` and `readme.md` are the same file. The copy is all or nothing: a
+folder target is created exclusively before it is filled, files are copied with
+`COPYFILE_EXCL`, and when one target fails, what this import created is removed
+again — never what was there before. The limits (`MAX_IMPORT_ENTRIES`,
+`MAX_IMPORT_TOTAL_BYTES`) live in `shared/limits.js`; exceeding one rejects the
+whole drop instead of copying half of it. Confirmation happens natively in
+`ipc/fs-handlers.js` via `dialog.showMessageBox`, with the skipped entries named
+in it — the renderer only triggers it, see `docs/security-concept.md` §5.
 
 ### Context menu of the file tree
 
 `services/file-context-menu.js` builds the native menu (open, reveal,
-information, delete). The renderer only triggers it via `fs:showFileContextMenu`;
-the path is checked beforehand by `resolveWorkspacePath()` in the handler, so
-only an already-checked absolute path arrives in the menu. `isDirectory` from the
-renderer merely tailors the menu and is therefore uncritical.
+information, delete). The renderer only triggers it via `fs:showFileContextMenu`
+and sends nothing but the path; the handler checks it with the adapter's
+`resolveCheckedWorkspacePath()` (realpath-checked, not fs-service's lexical
+`resolveWorkspacePath`), exactly as sent — a name may end in a space, and only
+paths the model types are trimmed. Whether the path is a folder the handler
+looks up itself with `lstat` (issue
+[#649](https://github.com/kkrafft1999/snotra/issues/649)): it decides whether
+"Open" is offered and how the delete confirmation words it, and that
+confirmation is a safeguard against a compromised renderer. A symlink counts as
+a link — "Open" is offered, and the trash takes the link, not its target.
+
+**"Open"** hands the path to `shell.openPath`. For a document that means "show
+it in its app"; for a program or script it means "run it", with the user's full
+rights and outside the shell switch (#102) and the sandbox (#329). So before
+`openPath` the menu checks the target — by extension per platform
+(`LAUNCHABLE_EXTENSIONS`: `.exe`, `.bat`, `.ps1`, `.lnk`, `.url`, `.py` … on
+Windows, plus `PATHEXT`; `.app`, `.command`, `.sh`, `.pkg`, `.scpt`, `.py` … on
+macOS; `.desktop`, `.sh`, `.AppImage` … on Linux), following a link to what it
+points to, and on macOS and Linux a regular file *without* an extension that has
+an execute bit (a `report.pdf` from an exFAT stick, where everything is 0777,
+opens by its type and does not ask) — and asks natively first,
+"Cancel" as default and Escape answer. Files Snotra writes carry no
+Mark-of-the-Web and no quarantine attribute, so SmartScreen and Gatekeeper would
+not ask. A failed `openPath` (no app for the type) shows an error box. Every
+click that opens a dialog is guarded against a rejection, which would otherwise
+take down the main process when the window closes while the dialog is up.
 
 The information behind it lives in `services/file-info.js` (issue
 [#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns a field

@@ -113,6 +113,9 @@ function setupWorkspace({ missing = [] } = {}) {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    // The native recursive watch. Linux watches folder by folder (#648),
+    // covered in directory-watcher-linux.test.js.
+    platform: 'darwin',
   });
   /** Ein Ereignis am Ziel auslösen, wie `fs.watch` es meldet. */
   const feuern = (filename, eventType = 'rename') => fake.aktiv(WS).handler(eventType, filename);
@@ -151,6 +154,7 @@ test('kann die Plattform nicht rekursiv beobachten, bleibt ein flacher Wächter'
     path,
     onChange: () => {},
     onError: (error) => fehler.push(error.code),
+    platform: 'darwin',
   });
 
   watcher.watchWorkspace(WS);
@@ -181,6 +185,8 @@ test('beobachtet wird der aufgelöste Pfad, gemeldet der angezeigte', () => {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    // As in `setupWorkspace`: the native recursive watch, on every OS.
+    platform: 'darwin',
   });
 
   watcher.watchWorkspace(KURZ);
@@ -200,6 +206,7 @@ test('lässt sich der Pfad nicht auflösen, bleibt es beim angezeigten', () => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     },
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   // Der Watcher scheitert dann sauber am fehlenden Ordner, nicht hier.
@@ -291,14 +298,19 @@ test('der Inhalt von node_modules und .git bleibt draußen, die Ordner selbst ni
   assert.equal(isIgnoredWorkspacePath(path.join('.git', 'objects', 'ab', '123')), true);
   // Entsteht node_modules neu, gehört es in den Baum.
   assert.equal(isIgnoredWorkspacePath('node_modules'), false);
-  assert.equal(isIgnoredWorkspacePath('.git'), false);
+  // `.git` itself is never listed, so it is noise like `.DS_Store` (#650).
+  assert.equal(isIgnoredWorkspacePath('.git'), true);
   // Ein Ordner, der nur so heißt wie eine Datei darin, bleibt unberührt.
   assert.equal(isIgnoredWorkspacePath(path.join('src', 'app.js')), false);
 });
 
 test('Editor- und Systemkram wird nicht gemeldet', () => {
-  for (const noise of ['.DS_Store', path.join('src', '.DS_Store'), '4913', '.app.js.swp', 'app.js~']) {
+  for (const noise of ['.DS_Store', path.join('src', '.DS_Store'), 'Thumbs.db', 'desktop.ini']) {
     assert.equal(isIgnoredWorkspacePath(noise), true, noise);
+  }
+  // An editor's leftovers are listed in the tree, so they are reported (#650).
+  for (const listed of ['4913', '.app.js.swp', 'app.js~']) {
+    assert.equal(isIgnoredWorkspacePath(listed), false, listed);
   }
   assert.equal(isIgnoredWorkspacePath('swap.js'), false, 'kein Fehlalarm bei normalen Namen');
 });
@@ -373,6 +385,7 @@ test('jedes Ziel bekommt seine eigene Aufstiegstiefe', () => {
     resolveTargets: () => [WS, { dir: tief, fallbackLevels: 1 }],
     fallbackLevels: 0,
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   assert.deepEqual(watcher.watchedDirectories(), [
@@ -390,6 +403,7 @@ test('doppelte Ziele werden nur einmal beobachtet', () => {
     resolveTargets: () => [WS, WS, { dir: WS }],
     fallbackLevels: 0,
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   assert.deepEqual(watcher.watchedDirectories(), [{ dir: WS, isTarget: true }]);
@@ -409,6 +423,7 @@ test('ein eigener Zuordner darf den Ordner selbst bestimmen', () => {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   fake.aktiv(WS).handler('rename', 'egal.txt');

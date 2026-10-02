@@ -63,12 +63,16 @@ async function mountTree(overrides = {}, extraDeps = {}) {
       };
     },
     moveItem: async (source, dest) => { calls.moveItem.push([source, dest]); return {}; },
-    inspectImport: async (sources, dest) => {
-      calls.inspectImport.push([sources, dest]);
-      return { ok: true, dirs: 0, files: sources.length };
+    // The tree hands over the dropped File objects, the preload resolves their
+    // paths (#646); the fake records the path behind each one.
+    inspectImport: async (files, dest) => {
+      calls.inspectImport.push([files.map((file) => file.nativePath), dest]);
+      return { ok: true, dirs: 0, files: files.length };
     },
-    importItems: async (sources, dest) => { calls.importItems.push([sources, dest]); return { ok: true }; },
-    getPathForFile: (file) => file.nativePath,
+    importItems: async (files, dest) => {
+      calls.importItems.push([files.map((file) => file.nativePath), dest]);
+      return { ok: true };
+    },
     onFsItemDeleted: () => {},
     showFileContextMenu: async () => ({}),
     ...overrides,
