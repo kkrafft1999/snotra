@@ -58,54 +58,85 @@ export function describeSandboxStatus(sandbox, enabled, { workspaceDisabled = fa
  * disabled. A switch that is on does not claim "active" when the system cannot
  * isolate at all: the tile then says "unavailable" and why.
  *
+ * Without `safeStorage` switching off cannot be stored, so it is not offered
+ * while the switch is on (`offBlocked`, the reason in `note`); switching back
+ * on stays possible (CR-B14-09, like "Auto" in #419). A permission state that
+ * could not be read is not "no folder": it says so, and nothing can be
+ * switched.
+ *
  * @param {object} input
- * @param {object|null} input.permissions  tool permission state from main
+ * @param {object|null} input.permissions  tool permission state from main; null: unreadable
  * @param {boolean} [input.toolsOn]        no longer decides whether it shows (#449)
  * @param {object|undefined} input.sandbox `describe()` of the sandbox service
  * @param {string} input.autoLabel         the name of the "Auto" mode
- * @returns {{visible: boolean, hasWorkspace: boolean, checked: boolean, rootLabel: string,
- *   tone: 'neutral'|'on'|'off'|'unavailable', title: string, body: string}}
+ * @returns {{visible: boolean, hasWorkspace: boolean, checked: boolean, offBlocked: boolean,
+ *   rootLabel: string, tone: 'neutral'|'on'|'off'|'unavailable', title: string, body: string,
+ *   note: string}}
  */
 export function describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLabel }) {
   const known = !!sandbox && typeof sandbox === 'object';
   const visible = !(known && sandbox.reason === 'platform');
-  const root = typeof permissions?.workspaceRoot === 'string' ? permissions.workspaceRoot : '';
+  // Main answers with an object, folder or not; null is a failed read.
+  if (!permissions || typeof permissions !== 'object') {
+    return {
+      visible,
+      hasWorkspace: false,
+      checked: true,
+      offBlocked: false,
+      rootLabel: '',
+      tone: 'neutral',
+      title: t('settings.sandbox.workspace.tile.unknown'),
+      body: t('settings.permissions.unreadable'),
+      note: '',
+    };
+  }
+  const root = typeof permissions.workspaceRoot === 'string' ? permissions.workspaceRoot : '';
   if (!root) {
     return {
       visible,
       hasWorkspace: false,
       checked: true,
+      offBlocked: false,
       rootLabel: t('settings.rules.workspace.none'),
       tone: 'neutral',
       title: t('settings.sandbox.workspace.tile.on'),
       body: t('settings.sandbox.workspace.none'),
+      note: '',
     };
   }
   const base = { visible, hasWorkspace: true, rootLabel: root };
-  if (permissions?.workspaceSandboxDisabled === true) {
+  if (permissions.workspaceSandboxDisabled === true) {
     return {
       ...base,
       checked: false,
+      offBlocked: false,
       tone: 'off',
       title: t('settings.sandbox.workspace.tile.off'),
       body: t('settings.sandbox.workspace.off', { mode: autoLabel }),
+      note: '',
     };
   }
+  // The switch is on from here; off is offered only where it can be stored.
+  const offBlocked = permissions.encryptionAvailable === false;
+  const on = {
+    ...base,
+    checked: true,
+    offBlocked,
+    note: offBlocked ? t('settings.sandbox.workspace.needsEncryption') : '',
+  };
   // Still being checked, or not asked yet: the switch is what decides.
   const unavailable = known && sandbox.isolated === false
     && sandbox.status !== 'unknown' && sandbox.status !== 'testing';
   if (unavailable) {
     return {
-      ...base,
-      checked: true,
+      ...on,
       tone: 'unavailable',
       title: t('settings.sandbox.workspace.tile.unavailable'),
       body: describeSandboxStatus(sandbox, true).text,
     };
   }
   return {
-    ...base,
-    checked: true,
+    ...on,
     tone: 'on',
     title: t('settings.sandbox.workspace.tile.on'),
     // Names "Auto", where no card confirms the domains (CR-B13-04).

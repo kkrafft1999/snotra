@@ -78,10 +78,10 @@ test('Security page: the default cannot be "Auto", and the notice says what stil
   const dom = setupRendererDom();
   try {
     const { initToolPermissionsPanel } = await importRenderer('components', 'ToolPermissionsPanel.js');
-    const { initWorkspaceModeSetting, SECURITY_PAGE_IDS } = await importRenderer('components', 'WorkspaceModeSetting.js');
+    const { initWorkspaceModeSetting } = await importRenderer('components', 'WorkspaceModeSetting.js');
     const toolPermissions = permissions(stateWith({ workspaceRoot: '/work/projekt', workspaceMode: 'smart' }));
     const panel = initToolPermissionsPanel({ toolPermissions });
-    initWorkspaceModeSetting({ toolPermissions, ids: SECURITY_PAGE_IDS });
+    initWorkspaceModeSetting({ toolPermissions });
     await panel.open([]);
     const doc = dom.document;
     const radio = (value) => doc.querySelector(`#settings-security-mode-options input[value="${value}"]`);

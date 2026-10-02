@@ -3732,12 +3732,13 @@ select.modal-input {
   background: var(--bg-primary);
   transition:
     border-color var(--ds-motion-fast),
-    background var(--ds-motion-fast),
-    opacity var(--ds-motion-fast);
+    background var(--ds-motion-fast);
 }
 
+/* Hidden from the model menu: the dashed border, the muted title and the
+ * switch say so. No opacity — the row stays usable, so its text keeps
+ * 4.5:1 (CR-B14-08). */
 .settings-pref-row-inner[data-pref-menu-off='true'] {
-  opacity: 0.78;
   border-style: dashed;
 }
 
@@ -3761,7 +3762,8 @@ select.modal-input {
 .settings-pref-detail {
   display: block;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  /* 12 px: below the 14-px line for --ds-grey-muted (CR-B14-08). */
+  color: var(--text-muted-strong);
   line-height: var(--ds-line-height-prose, 1.5);
 }
 
@@ -3831,7 +3833,7 @@ select.modal-input {
 .settings-empty-hint {
   margin: 0 0 12px;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong); /* 12 px, see .settings-pref-detail */
 }
 
 
@@ -6516,7 +6518,14 @@ select.modal-input {
   color: var(--ds-warning);
 }
 
-.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title {
+.settings-sandbox-tile:has(.ds-switch:disabled) .settings-sandbox-tile__title,
+.settings-sandbox-tile:has(.ds-switch[aria-disabled='true']) .settings-sandbox-tile__title {
+  cursor: not-allowed;
+}
+
+/* Not to be pressed, yet still focusable (CR-B14-07): looks like `:disabled`. */
+.settings-sandbox-tile .ds-switch[aria-disabled='true'] {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -6527,6 +6536,17 @@ select.modal-input {
 }
 
 .settings-sandbox-tile__body:empty {
+  display: none;
+}
+
+/* Why the switch cannot be turned off here (CR-B14-09). */
+.settings-sandbox-tile__note {
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-tile__note:empty {
   display: none;
 }
 
@@ -6679,9 +6699,12 @@ select.modal-input {
   min-width: 0;
 }
 
+/* A name without a break point wraps instead of pushing the status and the
+   switch out of the row (CR-B14-09). */
 .mcp-row__name {
   display: block;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 /* Lange npx-Aufrufe sind der Normalfall — abschneiden statt die Zeile
@@ -6784,14 +6807,21 @@ select.modal-input {
   align-items: center;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(1) {
+.mcp-env-row__key {
   flex: 1 1 150px;
   min-width: 130px;
 }
 
-.mcp-env-row > .modal-input:nth-of-type(2) {
+.mcp-env-row__value {
   flex: 2 1 190px;
   min-width: 150px;
+}
+
+/* A stored secret locks its name until a new value is typed (CR-B14-02) —
+   the field shows it the way the fixed identifier does. */
+.mcp-env-row__key[readonly] {
+  background: var(--ds-grey-card);
+  color: var(--ds-grey-strong);
 }
 
 /* Haekchen und Entfernen gehoeren zusammen — beim Umbruch darf das Kreuz
@@ -6811,6 +6841,10 @@ select.modal-input {
   color: var(--ds-grey-strong);
   white-space: nowrap;
   cursor: pointer;
+}
+
+.mcp-env-row__secret:has(input:disabled) {
+  cursor: not-allowed;
 }
 
 .mcp-test:empty {
@@ -6876,10 +6910,13 @@ select.modal-input {
   line-height: 1.5;
 }
 
+/* Small secondary text in the import takes --text-muted-strong: the rows sit
+   on --ds-grey-card as well, where --ds-grey-muted has 4.4:1 only (#610,
+   CR-B14-08). */
 .mcp-import__count {
   margin: 0;
   font-size: 13px;
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
 }
 
 .mcp-import__count:empty {
@@ -6916,20 +6953,21 @@ select.modal-input {
 .mcp-import__name {
   font-weight: 600;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .mcp-import__id {
   margin-left: 8px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
 }
 
 .mcp-import__cmd {
   margin-top: 3px;
   font-family: var(--ds-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   font-size: 12px;
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
   overflow-wrap: anywhere;
 }
 
@@ -6963,11 +7001,13 @@ select.modal-input {
 }
 
 /* Ein Hinweis, der eine Entscheidung verlangt (Platzhalter, Ueberschreiben),
-   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg. */
+   darf nicht wie die uebrigen aussehen — sonst liest man darueber hinweg.
+   Filled black rather than red: red is reserved for errors, and nothing has
+   gone wrong yet (CR-B14-09, ui-design-tokens.md). */
 .mcp-import__badge--warn {
-  color: var(--ds-error);
-  border-color: var(--ds-error-border);
-  background: var(--ds-error-bg);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+  background: var(--text-primary);
 }
 
 .mcp-import__skipped {
@@ -6988,7 +7028,7 @@ select.modal-input {
   padding-left: 18px;
   font-size: 12.5px;
   line-height: 1.6;
-  /* On --ds-grey-card the secondary grey has 4.4:1 only (#610). */
+  /* On --ds-grey-card the secondary grey has 4.4:1 only (#610, CR-B14-08). */
   color: var(--text-muted-strong);
 }
 
@@ -7001,6 +7041,14 @@ select.modal-input {
   .mcp-row__actions {
     justify-content: flex-end;
   }
+}
+
+/* A request is running (CR-B14-04): the action takes no second press. It is
+   aria-disabled rather than disabled so that it keeps the focus. */
+#dialog-mcp-server .modal-actions button[aria-disabled='true'],
+#btn-mcp-import-apply[aria-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 /* Der Loeschknopf gehoert nicht neben „Speichern" — ein Fehlklick waere hier
@@ -7046,7 +7094,8 @@ select.modal-input {
 .memory-card__path {
   font-family: var(--ds-font-mono);
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  /* Below 14 px: the stronger grey, 6.5:1 light and 9.6:1 dark (CR-B14-08). */
+  color: var(--text-muted-strong);
   word-break: break-all;
 }
 
@@ -7092,7 +7141,7 @@ select.modal-input {
   padding: 1px 7px;
   border-radius: var(--ds-radius-pill);
   border: 1px solid var(--ds-grey-divider);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
   white-space: nowrap;
 }
 
@@ -7113,12 +7162,14 @@ select.modal-input {
   transition: color var(--ds-motion-fast, 120ms) ease, border-color var(--ds-motion-fast, 120ms) ease;
 }
 
-.memory-item__forget:hover:not(:disabled) {
+.memory-item__forget:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--ds-grey-muted);
   color: var(--text-primary);
 }
 
-.memory-item__forget:disabled {
+/* Busy while main forgets: marked, not disabled, so it keeps the focus (CR-B14-07). */
+.memory-item__forget:disabled,
+.memory-item__forget[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }
@@ -7127,10 +7178,26 @@ select.modal-input {
   margin: 10px 0 0;
 }
 
+.memory-card__status {
+  margin: 10px 0 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.memory-card__status:empty {
+  margin: 0;
+}
+
+/* A forget that failed is an error, and stays red (ui-design-tokens.md). */
+.memory-card__status.is-error {
+  color: var(--ds-error);
+}
+
 .memory-meta {
   margin: 10px 0 0;
   font-size: var(--ds-font-size-sm);
-  color: var(--ds-grey-muted);
+  color: var(--text-muted-strong);
   font-variant-numeric: tabular-nums;
 }
 

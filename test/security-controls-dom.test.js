@@ -413,6 +413,46 @@ test('a rule form left open does not survive closing and reopening Settings', as
   }
 });
 
+// CR-B14-09 (#622), item 3.
+test('reopening the page clears a default mode that could not be saved', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    page.toolPermissions.setWorkspaceMode = async () => ({ ok: false });
+    const ask = doc.querySelector('#settings-security-mode-options input[value="ask-all"]');
+    ask.checked = true;
+    ask.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await settle();
+    assert.equal(doc.getElementById('settings-security-mode-state').textContent, 'Not saved');
+    page.panel.close();
+    await page.panel.open();
+    assert.equal(doc.getElementById('settings-security-mode-state').hidden, true);
+    assert.equal(doc.getElementById('status-security-mode').textContent, '');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+// The open sequence of Settings reaches the page late; what the user did on
+// it meanwhile must survive the page being opened (#623, Windows CI).
+test('opening the page does not take back a default mode saved a moment ago', async () => {
+  const dom = setupRendererDom();
+  try {
+    const page = await openPage(overviewWith());
+    const doc = dom.document;
+    const ask = doc.querySelector('#settings-security-mode-options input[value="ask-all"]');
+    ask.checked = true;
+    ask.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    await settle();
+    assert.equal(doc.getElementById('status-security-mode').textContent, 'Saved');
+    await page.panel.open();
+    assert.equal(doc.getElementById('status-security-mode').textContent, 'Saved');
+  } finally {
+    dom.cleanup();
+  }
+});
+
 // CR-B13-04 (#599): in "Auto" no card confirms the domains a run names.
 test('the execute row says who confirms the domains, in the default mode of the workspace', async () => {
   const { describeSecurityRow } = await importRenderer('utils', 'security-overview-view.js');

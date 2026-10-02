@@ -350,7 +350,7 @@ Ob ein Lauf isoliert ist, entscheidet ein kurzer Selbsttest einmal je App-Start 
   Das gilt bis zum nächsten Neustart; damit es bleibt, dieselbe Zeile (ohne `sudo sysctl -w`) in eine Datei unter `/etc/sysctl.d/` schreiben. Ein AppArmor-Profil, das `bwrap` den `userns`-Zugriff erlaubt, geht ebenso. Starte Snotra danach neu.
 - **Windows:** noch keine Sandbox. Jeder Lauf hat deine vollen Rechte, und die Karte zeigt „Nicht isoliert“ in Bernstein.
 
-**Für einen Workspace abschalten.** Verhindert die Sandbox in einem Projekt etwas Legitimes — Schreiben in ein Nachbar-Repository oder nach `~/.config`, `gh` oder `terraform`, die ins Netz müssen, ein älteres `pip` in einem venv —, schaltest du sie unter Einstellungen › Sicherheit › *Ausführen* › *Sandbox für diesen Workspace* für diesen Ordner ab. Das gilt nur für diesen einen Ordner, nie global und nie als Voreinstellung. Du bestätigst es in einem Systemdialog, und die Einstellung liegt bei deinen Berechtigungen statt im Ordner — ein ausgechecktes Repository kann sie also nicht selbst abschalten. Ab dann zeigt die Freigabekarte „Nicht isoliert“ mit dem Grund und einem Link zurück zur Einstellung, und das Modell erfährt, dass der Lauf nicht isoliert war. Im Modus „Auto“ laufen solche Befehle ohne Rückfrage; die Modus-Pille in der Chatleiste zeigt dann „Auto · nicht isoliert“ in Bernstein, sobald „Auto“ `shell_execute` oder `run_python` ohne Sandbox ausführen würde — hier abgeschaltet oder auf dem System nicht verfügbar —, und ihr Menü sagt, warum, mit einem Link zur Einstellung. „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ schalten die Sandbox wieder ein.
+**Für einen Workspace abschalten.** Verhindert die Sandbox in einem Projekt etwas Legitimes — Schreiben in ein Nachbar-Repository oder nach `~/.config`, `gh` oder `terraform`, die ins Netz müssen, ein älteres `pip` in einem venv —, schaltest du sie unter Einstellungen › Sicherheit › *Ausführen* › *Sandbox für diesen Workspace* für diesen Ordner ab. Das gilt nur für diesen einen Ordner, nie global und nie als Voreinstellung. Du bestätigst es in einem Systemdialog, und die Einstellung liegt bei deinen Berechtigungen statt im Ordner — ein ausgechecktes Repository kann sie also nicht selbst abschalten. Das braucht verschlüsselten Speicher (`safeStorage`); wo das System keinen bietet, bleibt der Schalter an, und die Kachel sagt, warum. Ab dann zeigt die Freigabekarte „Nicht isoliert“ mit dem Grund und einem Link zurück zur Einstellung, und das Modell erfährt, dass der Lauf nicht isoliert war. Im Modus „Auto“ laufen solche Befehle ohne Rückfrage; die Modus-Pille in der Chatleiste zeigt dann „Auto · nicht isoliert“ in Bernstein, sobald „Auto“ `shell_execute` oder `run_python` ohne Sandbox ausführen würde — hier abgeschaltet oder auf dem System nicht verfügbar —, und ihr Menü sagt, warum, mit einem Link zur Einstellung. „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ schalten die Sandbox wieder ein.
 
 **Freigaben pro Programm.** Braucht nur ein einzelnes Programm mehr – ein Werkzeug, dessen Anmeldung erneuert werden muss, `gh` oder `terraform` unter macOS –, musst du die Sandbox nicht abschalten. Unter Einstellungen › Sicherheit › *Ausführen* › *Freigaben pro Programm* gibst du diesem Programm die Domains, die es erreichen darf, Ordner, in die es zusätzlich schreiben darf (etwa seinen Token-Cache), und unter macOS die Zertifikatsprüfung über das System, die Programme in Go brauchen, um überhaupt ins Netz zu kommen. Die Freigabe gilt in jedem Workspace, aber nur, wenn ein Befehl das Programm allein startet – ohne Verkettung, Pipe oder Umleitung – und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Jede neue oder erweiterte Freigabe bestätigst du in einem Systemdialog. Die Freigabekarte nennt die Freigabe oder sagt, warum sie nicht gilt, und das Modell erfährt dasselbe.
 
@@ -746,24 +746,26 @@ noch nicht.
 
 | Feld | Bedeutung |
 | ---- | --------- |
-| **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern |
+| **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern; einen Server unter einer schon vergebenen Kennung hinzuzufügen wird abgelehnt |
 | **Anzeigename** | Frei wählbar, nur für die Liste |
 | **Kommando** und **Argumente** | Was gestartet wird, z. B. `npx` mit `-y @modelcontextprotocol/server-github` |
-| **Arbeitsverzeichnis** | Optional; leer heißt Projektordner |
+| **Arbeitsverzeichnis** | Optional; leer heißt dein Home-Ordner, und ein relativer Pfad beginnt dort |
 | **Umgebungsvariablen** | Name/Wert-Paare für den Prozess |
 
 **Umgebungsvariablen sind vorbelegt geheim.** Ein geheimer Wert wird über
 Electrons `safeStorage` verschlüsselt abgelegt und danach nicht mehr angezeigt
-— nur ersetzt oder gelöscht. Wer einen Wert bewusst lesbar halten will (etwa
+— nur ersetzt oder gelöscht. Um so eine Variable umzubenennen oder lesbar
+abzulegen, gibst du den Wert neu ein. Wer einen Wert bewusst lesbar halten will (etwa
 `LANG=de_DE`), nimmt das Häkchen weg; er steht dann im Klartext in der
 Konfiguration. Vergessen soll nicht der teure Fall sein. Lässt sich auf dem
 System nicht verschlüsseln, wird gar nicht erst gespeichert, statt ein Token
 offen abzulegen.
 
-**„Verbindung testen“** startet den Server einmal und zeigt, ob er antwortet
+**„Verbindung testen“** startet den gespeicherten Server einmal und zeigt, ob er antwortet
 und welche Tools er anbietet — oder eine verständliche Fehlermeldung samt
 `stderr`, wenn er nicht startet. Seine Tools schaltest du wie jedes andere Tool
-einzeln unter Einstellungen › Sicherheit › *Externe Dienste*.
+einzeln unter Einstellungen › Sicherheit › *Externe Dienste*. Solange das
+Formular ungespeicherte Änderungen hat, wartet der Knopf — speichere sie zuerst.
 
 ### Server importieren
 
@@ -776,7 +778,8 @@ einfügst, erscheint darunter, was erkannt wurde.
 Die Vorschau nennt zu jedem Eintrag den Namen, die daraus abgeleitete Kennung
 und das Startkommando, dazu die Punkte, die eine Entscheidung verlangen: Werte,
 die als geheim vorgemerkt sind (Schlüsselnamen wie `*_TOKEN` oder bekannte
-Tokenformate), noch nicht ausgefüllte Platzhalter und Kennungen, die einen
+Tokenformate) und solche, die im Klartext abgelegt werden, das
+Arbeitsverzeichnis, noch nicht ausgefüllte Platzhalter und Kennungen, die einen
 vorhandenen Server ersetzen würden. Einträge, die nicht gehen — HTTP-/SSE-
 Transport, fehlendes Kommando — stehen mit Begründung darunter, statt
 stillschweigend zu verschwinden. Jeder Eintrag ist einzeln abwählbar.

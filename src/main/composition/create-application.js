@@ -504,9 +504,14 @@ function createApplication({
 
   const mcpSettings = {
     listServers: () => mcpConfigStore.readMcpServers(),
-    // Synchron, weil die Statusanzeige nicht auf einen haengenden Server
-    // warten darf; maskiert wird beim Testen und beim Katalog-Aufbau.
-    describeConnections: () => mcpService.describeConnections(),
+    // A failed server's status carries its error and a stderr excerpt, and a
+    // server that stumbles at start-up likes to print its environment — so
+    // the catalogue gets the statuses masked, like the test result below
+    // (CR-B14-01). The snapshot itself stays synchronous so the display never
+    // waits for a hanging server; only reading the secrets is awaited.
+    async describeConnections() {
+      return maskMcpStatuses(mcpService.describeConnections(), await ownSecrets.readMcpSecrets());
+    },
     describeSkippedTools: () => mcpAdapter.describeSkippedTools(),
     save: (input) => mcpConfigStore.saveMcpServer(input),
     remove: (id) => mcpConfigStore.deleteMcpServer(id),
@@ -518,10 +523,9 @@ function createApplication({
       const status = await mcpService.connect(id);
       if (!status) return { status: null, error: createMessage('settings.error.mcp.unknownServer', { id }) };
       const [masked] = maskMcpStatuses([status], await ownSecrets.readMcpSecrets());
-      const tools = (await mcpService.listTools())
-        .filter((tool) => tool.serverId === id)
-        .map((tool) => tool.name);
-      return { status: masked, tools };
+      // The tested server's tools come with its status. `listTools()` would
+      // connect every enabled server and wait for the slowest (CR-B16-07).
+      return { status: masked, tools: status.toolNames };
     },
   };
 

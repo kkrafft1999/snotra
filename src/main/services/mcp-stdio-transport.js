@@ -20,11 +20,14 @@
  * (`npx` → `node`), und die sollen beim App-Ende nicht weiterlaufen.
  */
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { MCP_LIMITS, MCP_TIMEOUTS } = require('../../shared/contracts/mcp');
 const { createOutputSink } = require('./child-output-sink');
 const { createMessage } = require('../../shared/contracts/message');
+const { mergeWindowsEnv, windowsLaunch } = require('./windows-command');
 
-/** Fehler mit dem stderr-Auszug daran, damit der Aufrufer ihn nicht sucht. */
 /**
  * A transport error is read on two channels (#338): a failed `tools/call`
  * hands `message` to the model, which reads English, while a failed start or
@@ -54,14 +57,39 @@ function detailOf(error) {
     : { text: 'unknown error', message: createMessage('mcp.transport.unknownError') };
 }
 
+function isFile(file) {
+  try { return fs.statSync(file).isFile(); } catch { return false; }
+}
+
+async function isDirectory(dir) {
+  try { return (await fs.promises.stat(dir)).isDirectory(); } catch { return false; }
+}
+
 /**
  * @param {Object} deps
  * @param {import('../../shared/contracts/mcp').McpServerConfig} deps.config
  * @param {typeof import('child_process').spawn} deps.spawn
  * @param {NodeJS.ProcessEnv} [deps.baseEnv] — Umgebung samt aufgeräumtem PATH
  * @param {string} [deps.platform]
+ * @param {string} [deps.homeDir] where an empty or relative working directory
+ *   starts from (CR-B16-06)
+ * @param {(method: string, params: unknown) => ({ result: unknown } | null)} [deps.onRequest]
+ *   answers a request the server sends; `null` means "not supported" and is
+ *   answered with "method not found" (CR-B16-02). What a method means is the
+ *   service's business, not the transport's.
+ * @param {(request: { id: number, method: string, reason: string }) => void} [deps.onCancel]
+ *   told when a request is given up — aborted or timed out — so the service
+ *   can tell the server (CR-B16-04)
  */
-function createStdioTransport({ config, spawn, baseEnv = process.env, platform = process.platform }) {
+function createStdioTransport({
+  config,
+  spawn,
+  baseEnv = process.env,
+  platform = process.platform,
+  homeDir = os.homedir(),
+  onRequest = () => null,
+  onCancel = () => {},
+}) {
   const stderr = createOutputSink(MCP_LIMITS.STDERR_MAX_BYTES);
   /** @type {Map<number, { resolve: Function, reject: Function, timer: NodeJS.Timeout, cleanup: Function }>} */
   const pending = new Map();
@@ -93,7 +121,7 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
     if (!child || exited) return;
     try {
       if (platform === 'win32') {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
       } else {
         process.kill(-child.pid, 'SIGKILL');
       }
@@ -126,6 +154,30 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
     exitListeners.clear();
   }
 
+  function send(message) {
+    if (!child || exited) return;
+    try {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+    } catch { /* der Exit meldet sich ohnehin */ }
+  }
+
+  /**
+   * A request from the server (CR-B16-02). It always gets an answer — MCP
+   * expects one for `ping` at any time, and anything we do not support is
+   * refused at once instead of leaving the server waiting.
+   */
+  function answerServerRequest(message) {
+    let answer = null;
+    try {
+      answer = onRequest(message.method, message.params);
+    } catch { /* counts as not supported */ }
+    if (answer && Object.prototype.hasOwnProperty.call(answer, 'result')) {
+      send({ id: message.id, result: answer.result });
+    } else {
+      send({ id: message.id, error: { code: -32601, message: `Method not found: ${message.method}` } });
+    }
+  }
+
   /** Eine eingegangene Zeile zuordnen. Unbekanntes wird still verworfen. */
   function handleMessage(line) {
     let message;
@@ -137,9 +189,15 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
       return;
     }
     if (!message || typeof message !== 'object') return;
-    // Benachrichtigungen und Server-Anfragen (z. B. sampling) haben keine
-    // Antwort bei uns; wir bedienen im MVP nur die Client→Server-Richtung.
-    if (message.id === undefined || message.id === null) return;
+    const hasId = message.id !== undefined && message.id !== null;
+    // A message with a method comes from the server's side: a notification,
+    // or a request with an id of its own counting. Its id says nothing about
+    // ours, so it must never resolve one of our requests (CR-B16-02).
+    if (typeof message.method === 'string') {
+      if (hasId) answerServerRequest(message);
+      return;
+    }
+    if (!hasId) return;
     const entry = pending.get(message.id);
     if (!entry) return;
     pending.delete(message.id);
@@ -184,14 +242,39 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
   /** Startet den Prozess. Wirft mit Klartext, wenn das Kommando fehlt. */
   async function start() {
     if (child) return;
-    const env = { ...baseEnv, ...config.env };
+    // On Windows `Path` and `PATH` are one variable; the service's PATH from
+    // the shell profile and one in the server's own env must replace it.
+    const env = platform === 'win32' ? mergeWindowsEnv(baseEnv, config.env) : { ...baseEnv, ...config.env };
+    // Empty means the home folder, and a relative path starts from there
+    // (CR-B16-06) — the main process's own working directory is `/` when the
+    // app is started from the Finder, and nothing a user could predict.
+    const pathApi = platform === 'win32' ? path.win32 : path.posix;
+    const cwd = pathApi.resolve(homeDir, config.cwd || '.');
+    // Node reports a missing working directory as `spawn <command> ENOENT`,
+    // which points at the command field. Say what is actually missing.
+    if (!(await isDirectory(cwd))) {
+      throw transportError(
+        `The working directory “${cwd}” of the MCP server “${config.label}” does not exist.`,
+        '',
+        createMessage('mcp.transport.cwdMissing', { label: config.label, cwd }),
+      );
+    }
+    // On Windows a bare `npx` has to be found over PATHEXT and a `.cmd` has to
+    // go through cmd.exe (CR-B16-01).
+    const launch = platform === 'win32'
+      ? windowsLaunch({ command: config.command, args: config.args, env, cwd, isFile })
+      : { command: config.command, args: config.args, options: {} };
     try {
-      child = spawn(config.command, config.args, {
-        cwd: config.cwd || undefined,
+      child = spawn(launch.command, launch.args, {
+        cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
         env,
         // Eigene Prozessgruppe, damit killTree auch Enkel erwischt.
         detached: platform !== 'win32',
+        // Snotra has no console; without this every server would get a
+        // console window of its own on Windows (CR-B16-01, as in #442).
+        windowsHide: true,
+        ...launch.options,
       });
     } catch (e) {
       child = null;
@@ -225,6 +308,11 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
     }
   }
 
+  /** A request we stopped waiting for; a late answer finds no entry and is dropped. */
+  function giveUp(id, method, reason) {
+    try { onCancel({ id, method, reason }); } catch { /* only a courtesy to the server */ }
+  }
+
   /**
    * Eine Anfrage mit Antwort. Zeitlimit und AbortSignal beenden das Warten,
    * nicht den Server — ein abgebrochener `tools/call` lässt die Verbindung
@@ -249,6 +337,7 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
         if (!entry) return;
         pending.delete(id);
         entry.cleanup();
+        giveUp(id, method, 'The client cancelled the request.');
         reject(transportError('Request cancelled.', '', createMessage('mcp.transport.cancelled')));
       };
       const timer = setTimeout(() => {
@@ -257,6 +346,7 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
         pending.delete(id);
         entry.cleanup();
         const seconds = Math.round(timeoutMs / 1000);
+        giveUp(id, method, `No answer within ${timeoutMs} ms.`);
         reject(transportError(
           `The MCP server “${config.label}” did not answer “${method}” within ${seconds} s.`,
           stderrText(),
@@ -286,10 +376,7 @@ function createStdioTransport({ config, spawn, baseEnv = process.env, platform =
 
   /** Benachrichtigung ohne Antwort (`notifications/initialized`). */
   function notify(method, params) {
-    if (!child || exited) return;
-    try {
-      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
-    } catch { /* der Exit meldet sich ohnehin */ }
+    send({ method, params });
   }
 
   /**

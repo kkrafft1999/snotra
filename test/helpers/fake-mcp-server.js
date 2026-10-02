@@ -22,6 +22,13 @@
  *   die-on-start   — schreibt auf stderr und beendet sich sofort
  *   leak-env       — schreibt seinen Token auf stderr und beendet sich (Leck-Test)
  *   ignore-eof     — reagiert nicht auf das Schließen von stdin
+ *   whoami         — tools/call answers with its working directory and its
+ *                    arguments after the mode (CR-B16-01, CR-B16-06)
+ *   server-request — before answering tools/call it pings the client under
+ *                    the call's own id and asks for sampling; the answer says
+ *                    what came back (CR-B16-02)
+ *   cancel-aware   — tools/call "slow" never answers; tools/call "cancelled"
+ *                    lists the notifications/cancelled received (CR-B16-04)
  */
 
 const mode = process.argv[2] || 'ok';
@@ -79,8 +86,36 @@ function reply(id, result) {
   send({ jsonrpc: '2.0', id, result });
 }
 
+// server-request: the call waiting for the client's answers, and the answers.
+let waitingCall = null;
+const answers = {};
+// cancel-aware: every notifications/cancelled that arrived.
+const cancellations = [];
+
+function finishWaitingCall() {
+  if (waitingCall === null || !('ping' in answers) || !('sampling' in answers)) return;
+  const ping = answers.ping;
+  const sampling = answers.sampling;
+  const text = `ping:${JSON.stringify(ping)} sampling:${sampling}`;
+  reply(waitingCall, { content: [{ type: 'text', text }], isError: false });
+  waitingCall = null;
+}
+
 function handle(message) {
   const { id, method, params } = message;
+
+  // An answer from the client to one of our own requests (server-request).
+  if (method === undefined) {
+    if (id === waitingCall) answers.ping = message.error ? `error ${message.error.code}` : message.result;
+    if (id === 'srv-sampling') answers.sampling = message.error ? message.error.code : 'answered';
+    finishWaitingCall();
+    return;
+  }
+
+  if (method === 'notifications/cancelled') {
+    cancellations.push(params);
+    return;
+  }
 
   if (method === 'initialize') {
     if (mode === 'slow-init') return; // nie antworten
@@ -117,6 +152,24 @@ function handle(message) {
 
   if (method === 'tools/call') {
     if (mode === 'slow-call') return; // nie antworten
+    if (mode === 'whoami') {
+      const text = JSON.stringify({ cwd: process.cwd(), argv: process.argv.slice(3) });
+      reply(id, { content: [{ type: 'text', text }], isError: false });
+      return;
+    }
+    if (mode === 'server-request') {
+      // Our own request counter starts where the client's is — the ping
+      // deliberately carries the id of the call it interrupts.
+      waitingCall = id;
+      send({ jsonrpc: '2.0', id, method: 'ping' });
+      send({ jsonrpc: '2.0', id: 'srv-sampling', method: 'sampling/createMessage', params: {} });
+      return;
+    }
+    if (mode === 'cancel-aware') {
+      if (params && params.name === 'slow') return; // never answers
+      reply(id, { content: [{ type: 'text', text: JSON.stringify(cancellations) }], isError: false });
+      return;
+    }
     if (mode === 'crash-on-call') {
       process.exit(9);
       return;
