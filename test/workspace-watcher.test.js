@@ -185,6 +185,8 @@ test('beobachtet wird der aufgelöste Pfad, gemeldet der angezeigte', () => {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    // As in `setupWorkspace`: the native recursive watch, on every OS.
+    platform: 'darwin',
   });
 
   watcher.watchWorkspace(KURZ);
@@ -204,6 +206,7 @@ test('lässt sich der Pfad nicht auflösen, bleibt es beim angezeigten', () => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     },
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   // Der Watcher scheitert dann sauber am fehlenden Ordner, nicht hier.
@@ -382,6 +385,7 @@ test('jedes Ziel bekommt seine eigene Aufstiegstiefe', () => {
     resolveTargets: () => [WS, { dir: tief, fallbackLevels: 1 }],
     fallbackLevels: 0,
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   assert.deepEqual(watcher.watchedDirectories(), [
@@ -399,6 +403,7 @@ test('doppelte Ziele werden nur einmal beobachtet', () => {
     resolveTargets: () => [WS, WS, { dir: WS }],
     fallbackLevels: 0,
     onChange: () => {},
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   assert.deepEqual(watcher.watchedDirectories(), [{ dir: WS, isTarget: true }]);
@@ -418,6 +423,7 @@ test('ein eigener Zuordner darf den Ordner selbst bestimmen', () => {
     setTimeoutImpl: clock.setTimeoutImpl,
     clearTimeoutImpl: clock.clearTimeoutImpl,
     nowImpl: clock.nowImpl,
+    platform: 'darwin',
   });
   watcher.watchWorkspace(WS);
   fake.aktiv(WS).handler('rename', 'egal.txt');

@@ -369,8 +369,14 @@ What it does on each platform
   folders the consumer names (`folderPolicy`), and stops at
   `LIMITS.MAX_WATCHED_DIRECTORIES` folders per target. At that cap, or when the
   kernel has no watch left (`ENOSPC`, `EMFILE`), the service says so through
-  `onError` and reports `complete: false`, so the tree reloads coarsely instead
-  of missing a subtree in silence.
+  `onError` and reports `complete: false`, so the tree reloads coarsely and
+  shows what is there at that moment. That is as far as it goes: the folders
+  skipped at the limit stay without a watch until the watch is set up afresh,
+  the next time the folder is opened, and what changes in them until then is
+  not reported. A folder that goes frees its watch for the next new one. A
+  folder's own events — a chmod, its removal, its move — arrive at its watch
+  under its own name, as if a child of that name had changed; unless such a
+  child exists, they count as an event on the folder itself.
 
 `onError` always names the folder whose watch failed. The composition writes it
 to the log, at most one line per watcher and minute.
@@ -388,7 +394,8 @@ On top of it sit two thin shells that only say *what* is being watched:
   chain upwards. It reports the affected **folders**, so that the file tree does
   not have to reload everything on every event (issue
   [#158](https://github.com/kkrafft1999/snotra/issues/158)). An ignore list keeps
-  the events from the contents of `node_modules/` and `.git/` out — on Linux it
+  the events from the contents of `node_modules/` and `.git/` out, whatever the
+  case of the folder name, as the listing hides `.GIT` too — on Linux it
   also keeps the watches out of those folders, so a `node_modules/` of 20,000
   files costs none, and `.git` gets one watch of its own without its subfolders.
   Beyond that it ignores exactly the entries the listing never shows (`.git`,

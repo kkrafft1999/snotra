@@ -326,8 +326,12 @@ function createDirectoryWatcher({
    * content nobody wants. The walk runs asynchronously and breadth first, so
    * the top levels — what the tree shows first — are watched before the cap
    * can bite. Reaching the cap, or the kernel's own limit, is said through
-   * `onError` and reported as `complete: false`: the receiver reloads
-   * coarsely instead of quietly missing a subtree.
+   * `onError` and reported as `complete: false`, so the receiver reloads
+   * coarsely and shows what is there at that moment. That is all it does: a
+   * folder skipped at the limit stays without a watch until the target is
+   * watched afresh — the next time the folder is opened —, and what changes in
+   * it until then goes unreported. A folder that goes frees its watch, and the
+   * next new folder gets it again.
    *
    * Returns something shaped like an `fs.watch` watcher: `on('error')` reaches
    * the watch on the target itself, `close()` ends all of them.
@@ -341,7 +345,7 @@ function createDirectoryWatcher({
     let walking = false;
     /** Names being checked after a rename, and whether another one came in meanwhile. */
     const checking = new Map();
-    /** The cap or the kernel's limit was reached — no further folder is watched. */
+    /** The cap or the kernel's limit was reached — no further folder is watched until one goes. */
     let full = false;
     let treeClosed = false;
 
@@ -363,11 +367,18 @@ function createDirectoryWatcher({
     /** Drops the watch on a folder and on everything below it. */
     function dropFolder(absDir) {
       const prefix = absDir.endsWith(path.sep) ? absDir : `${absDir}${path.sep}`;
+      let dropped = false;
       for (const [dir, entry] of folders) {
         if (dir !== absDir && !dir.startsWith(prefix)) continue;
         closeQuietly(entry.watcher);
         folders.delete(dir);
+        dropped = true;
       }
+      // A watch given back is room for the next new folder (#648). Without
+      // this, a tree that once hit the limit never watched a new folder again,
+      // however many went meanwhile. What was skipped at the limit is not
+      // looked for: it stays unwatched until the target is watched afresh.
+      if (dropped && folders.size < maxWatchedDirectories) full = false;
     }
 
     function onFolderEvent(absDir, relDir, entry, eventType, filename) {
@@ -377,6 +388,24 @@ function createDirectoryWatcher({
         handler(eventType, null);
         return;
       }
+      // An event on the watched folder itself — a chmod, its removal, its
+      // move — comes without a name, and libuv puts in the folder's own (#648):
+      // the watch on `app` reports `app`, which joined is a child `app/app`
+      // that is not there. Only a child of that name makes it a child's event.
+      if (name === path.basename(absDir)) {
+        fsApi.lstat(path.join(absDir, name)).then(() => true, () => false).then((isChild) => {
+          if (treeClosed || folders.get(absDir) !== entry) return;
+          if (isChild) onChildEvent(absDir, relDir, entry, eventType, name);
+          // The folder's own event is one on an entry of its parent. The
+          // target's own has no folder in the tree to name.
+          else handler(eventType, relDir || null);
+        }).catch((error) => onError?.(error, absDir));
+        return;
+      }
+      onChildEvent(absDir, relDir, entry, eventType, name);
+    }
+
+    function onChildEvent(absDir, relDir, entry, eventType, name) {
       const relPath = joinRelative(relDir, name);
       handler(eventType, relPath);
       // Only a rename can turn a name into a folder or a folder into nothing;

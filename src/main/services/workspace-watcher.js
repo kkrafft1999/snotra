@@ -44,8 +44,25 @@ const { isAlwaysHiddenEntryName } = require('../../shared/runtime/hidden-entries
 const IGNORED_CONTENT_DIRS = new Set(['node_modules', '.git']);
 
 /**
+ * Folder names compare without case, as in `hidden-entries.js` (#648): the
+ * listing hides `.GIT` as it hides `.git`, so its content has to be noise to
+ * the watcher too, or a tree nobody sees would keep reporting — and on Linux
+ * draw a watch on every folder in it.
+ */
+function isIgnoredContentDir(name) {
+  return IGNORED_CONTENT_DIRS.has(name.toLowerCase());
+}
+
+/** `.git` in whatever case — see `isIgnoredContentDir`. */
+function isGitDir(name) {
+  return name.toLowerCase() === '.git';
+}
+
+/**
  * What gets out of `.git/` all the same: the three files that give away a
- * `git checkout`, `git pull`, `git switch`, `git merge` or `git rebase`.
+ * `git checkout`, `git pull`, `git switch`, `git merge` or `git rebase`. Their
+ * names compare exactly, unlike the folder's: git writes them in this case
+ * and no other.
  */
 const GIT_SIGNAL_FILES = new Set(['HEAD', 'index', 'ORIG_HEAD']);
 
@@ -57,7 +74,7 @@ function segmentsOf(relativePath) {
 /** Ein Git-Signal — `.git/HEAD` und Verwandte, sonst nichts. */
 function isGitSignal(relativePath) {
   const segments = segmentsOf(relativePath);
-  return segments.length === 2 && segments[0] === '.git' && GIT_SIGNAL_FILES.has(segments[1]);
+  return segments.length === 2 && isGitDir(segments[0]) && GIT_SIGNAL_FILES.has(segments[1]);
 }
 
 /**
@@ -76,7 +93,7 @@ function isIgnoredWorkspacePath(relativePath) {
   if (isAlwaysHiddenEntryName(segments.at(-1))) return true;
   // Das letzte Stück ist der Eintrag selbst — erst ein Stück davor macht ihn
   // zum Inhalt eines ignorierten Verzeichnisses.
-  return segments.slice(0, -1).some((segment) => IGNORED_CONTENT_DIRS.has(segment));
+  return segments.slice(0, -1).some(isIgnoredContentDir);
 }
 
 /**
@@ -88,8 +105,8 @@ function isIgnoredWorkspacePath(relativePath) {
  */
 function workspaceFolderPolicy(relativeDir) {
   const segments = segmentsOf(relativeDir);
-  if (segments.length === 1 && segments[0] === '.git') return 'flat';
-  return segments.some((segment) => IGNORED_CONTENT_DIRS.has(segment)) ? 'skip' : 'recursive';
+  if (segments.length === 1 && isGitDir(segments[0])) return 'flat';
+  return segments.some(isIgnoredContentDir) ? 'skip' : 'recursive';
 }
 
 /**
