@@ -41,7 +41,6 @@ const {
   RegexSearchTimeoutError,
   createRegexSearchWorker,
 } = require('./regex-search-worker');
-const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { compileGlob, createGitignoreMatcher } = require('./glob-match');
 
 const READ_LINES_DEFAULT_COUNT = 200;
@@ -2991,8 +2990,13 @@ function createFsService({
     if (!stats.isFile()) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
     if (stats.size > maxBytes) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: stats.size };
 
+    // Read from the handle that is checked again, so a file swapped for a pipe
+    // after the stat above cannot block the read (#643).
     try {
-      return { buffer: await fs.readFile(realTarget), stats };
+      const read = await readRegularFile(fs, realTarget, { maxBytes });
+      if (read.notFile) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+      if (read.tooLarge) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: read.stats.size };
+      return { buffer: read.buffer, stats: read.stats };
     } catch {
       return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
     }

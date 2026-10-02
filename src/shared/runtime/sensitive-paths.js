@@ -36,7 +36,7 @@ const DEFAULT_SENSITIVE_NAME_PATTERNS = Object.freeze([
 const DEFAULT_SENSITIVE_DIRECTORY_NAMES = Object.freeze(['.ssh', '.aws', '.gnupg', '.kube']);
 
 function compileNamePattern(pattern) {
-  return compilePathPattern(pattern, { caseInsensitive: true }).regex;
+  return compilePathPattern(pattern, { caseInsensitive: true });
 }
 
 /**
@@ -59,9 +59,9 @@ function splitSegments(rawPath) {
  * jeweiligen Wurzel; ein Muster wie `personal/**` trifft auch den Ordner selbst.
  */
 function createSensitivePathMatcher({ userPatterns = [] } = {}) {
-  const nameRegexes = DEFAULT_SENSITIVE_NAME_PATTERNS.map((pattern) => ({
+  const nameMatchers = DEFAULT_SENSITIVE_NAME_PATTERNS.map((pattern) => ({
     pattern,
-    regex: compileNamePattern(pattern),
+    matcher: compileNamePattern(pattern),
   }));
   const directoryNames = new Set(DEFAULT_SENSITIVE_DIRECTORY_NAMES.map((name) => name.toLowerCase()));
   const userRegexes = (Array.isArray(userPatterns) ? userPatterns : [])
@@ -79,14 +79,14 @@ function createSensitivePathMatcher({ userPatterns = [] } = {}) {
       if (directoryNames.has(segment.toLowerCase())) {
         return { sensitive: true, pattern: `${segment.toLowerCase()}/**`, source: 'directory' };
       }
-      for (const { pattern, regex } of nameRegexes) {
-        if (regex.test(segment)) return { sensitive: true, pattern, source: 'name' };
+      for (const { pattern, matcher } of nameMatchers) {
+        if (matcher.test(segment)) return { sensitive: true, pattern, source: 'name' };
       }
     }
 
     const joined = segments.join('/');
     for (const { pattern, compiled } of userRegexes) {
-      if (compiled.regex.test(joined)) return { sensitive: true, pattern, source: 'user' };
+      if (compiled.test(joined)) return { sensitive: true, pattern, source: 'user' };
       // `personal/**` soll auch `personal` selbst treffen (Verzeichnis gezielt adressiert).
       if (compiled.matchesSelf) {
         const bare = normalizePathForMatch(pattern).replace(/\/\*\*$/, '');
