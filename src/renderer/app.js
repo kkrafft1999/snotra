@@ -237,9 +237,25 @@ onLocaleChange(() => {
 
 const modelPicker = initChatModelPicker({ api, appStore });
 
+/**
+ * Chat switches still on their way (#564): the start-up, a folder's chat being
+ * loaded, a chat being activated. Until main has applied the chat's stored
+ * mode, a mode chosen in the chat bar waits — otherwise the switch overwrites
+ * it, and the chat on screen silently runs under a mode nobody chose.
+ */
+const pendingChatSwitches = new Set();
+function trackChatSwitch(promise) {
+  pendingChatSwitches.add(promise);
+  // `finally`, so that a failure still reaches whoever awaits the switch.
+  return promise.finally(() => pendingChatSwitches.delete(promise));
+}
+async function chatSwitchesSettled() {
+  while (pendingChatSwitches.size > 0) await Promise.allSettled([...pendingChatSwitches]);
+}
+
 // Tool-Berechtigungen (Issue #67): ein geteilter Stand für Chat-Pille und
 // Einstellungen, Freigabe-Karten melden sich beim Main als Oberfläche an.
-const toolPermissions = initToolPermissionState({ api });
+const toolPermissions = initToolPermissionState({ api, whenChatSettled: chatSwitchesSettled });
 // The way to the sandbox switch — from the card (#357), the mode menu (#396)
 // and the shield next to the folder name (#398). The settings are built
 // further down and only reached on a click.
@@ -271,14 +287,16 @@ const memoryPanel = initMemoryPanel({ api });
  * den ausdruecklichen Wechsel im Verlauf vom automatischen Wiederherstellen
  * beim Start oder Ordnerwechsel — nur der ausdrueckliche holt „Auto“ zurueck.
  */
-async function activateChatSession(chatId, activation = contracts.CHAT_ACTIVATION.EXPLICIT) {
-  try {
-    await api.activateChatSession?.(chatId, activation);
-  } catch {
-    // Bleibt es beim gerade eingestellten Modell und Modus, laeuft der Chat
-    // weiter — die Pillen zeigen dann eben den unveraenderten Stand.
-  }
-  await Promise.all([modelPicker.refreshLLMState(), toolPermissions.refresh()]);
+function activateChatSession(chatId, activation = contracts.CHAT_ACTIVATION.EXPLICIT) {
+  return trackChatSwitch((async () => {
+    try {
+      await api.activateChatSession?.(chatId, activation);
+    } catch {
+      // Bleibt es beim gerade eingestellten Modell und Modus, laeuft der Chat
+      // weiter — die Pillen zeigen dann eben den unveraenderten Stand.
+    }
+    await Promise.all([modelPicker.refreshLLMState(), toolPermissions.refresh()]);
+  })());
 }
 
 const voice = initWhisperRecorder({
@@ -427,7 +445,7 @@ const fileTree = initFileTree({
     skillCatalog.invalidate();
     skillAutocomplete.close();
     skillSuggestion.hide();
-    const loaded = await chatStream.loadChatForWorkspace(folderPath);
+    const loaded = await trackChatSwitch(chatStream.loadChatForWorkspace(folderPath));
     chatRestoredOnLoad = loaded?.restored === true;
     // Der Verlauf ist nach Ordnern gebucht — der neue Ordner bringt eine
     // andere Liste mit. Ohne dieses Nachziehen stuenden dort die Chats des
@@ -496,7 +514,8 @@ modelPicker.refreshLLMState();
 void toolPermissions.refresh();
 void initAppVersionBadge({ api });
 
-(async () => {
+// The start-up counts as a chat switch until its chat is on screen (#564).
+trackChatSwitch((async () => {
   let uiPrefs = {
     // Faellt das Lesen der Prefs aus, bleibt `contentPaneVisible` ungesetzt —
     // genau wie im Contract, wenn nichts gespeichert ist (Issues #255, #258).
@@ -571,4 +590,4 @@ void initAppVersionBadge({ api });
     });
   }
   syncChatInputHeight();
-})();
+})());

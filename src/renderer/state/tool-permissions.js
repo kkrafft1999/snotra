@@ -8,7 +8,13 @@ import { t } from '../i18n.js';
  * Erlaubnisse und das Löschen von Sperren bestätigt der Main selbst in einem
  * nativen Dialog – hier kommt nur das Ergebnis an.
  */
-export function initToolPermissionState({ api }) {
+/**
+ * `whenChatSettled`: resolves once no chat switch is on its way (#564). The
+ * renderer shows the new chat before main has applied that chat's stored
+ * mode; a mode chosen in between belongs to the new chat, and sent right away
+ * it would be overwritten by the switch that is still running.
+ */
+export function initToolPermissionState({ api, whenChatSettled = async () => {} }) {
   let state = null;
   let loading = null;
   // Asked again while a read was running: that read may have been answered
@@ -85,7 +91,10 @@ export function initToolPermissionState({ api }) {
     subscribe,
     get: () => state,
     mode: () => state?.mode || 'smart',
-    setMode: (mode) => call('setToolPermissionMode', mode),
+    setMode: async (mode) => {
+      await whenChatSettled();
+      return call('setToolPermissionMode', mode);
+    },
     addRule: (rule) => call('addToolPermissionRule', rule),
     removeRule: (ruleId) => call('removeToolPermissionRule', ruleId),
     setSensitivePathPatterns: (patterns) => call('setSensitivePathPatterns', patterns),
