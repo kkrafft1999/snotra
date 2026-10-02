@@ -60,10 +60,22 @@ In `tokens.css` these are the channel names (light values in `:root`, dark in
 | `--ds-grey-bg` | `#F9F4ED` | page background, footer background |
 | `--ds-grey-card` | `#F2EDE6` | code background, inline code |
 | `--ds-grey-divider` | `#EFEAE3` | borders, dividing lines |
-| `--ds-grey-muted` | `#6F6D69` | secondary type, metadata (only ≥ 14 px) |
-| `--ds-grey-strong` | `#5E5C59` | smaller secondary type (< 14 px) |
+| `--ds-grey-muted` | `#6F6D69` | secondary type, metadata; below 14 px only on the grounds where it keeps headroom (see below) |
+| `--ds-grey-strong` | `#5E5C59` | small secondary type on every other ground |
 | `--ds-placeholder` | `--ds-grey-muted` | placeholder text of every field, through one `::placeholder` rule; dark has a value of its own for the composer ground |
 | `--ds-btn-primary-*` | see `tokens.css` | primary/save/send: background, foreground, hover, active shadow |
+
+**Small secondary type.** `--ds-grey-muted` reaches 5.0:1 on `--ds-surface`,
+4.9:1 on `--ds-chat-bg` and 4.7:1 on `--ds-grey-bg` — enough for text below
+14 px there, and that is where it is allowed. On `--ds-grey-card` it drops to
+4.4:1, on a hover or active ground (`--bg-hover`, `--bg-tertiary`,
+`--bg-active`) to 4.2:1 and below: small text on those grounds takes
+`--ds-grey-strong` (via `--text-muted-strong`), including in the hover state
+of a row whose ground only changes on hover. Text of 14 px and up may use
+`--ds-grey-muted` wherever it keeps 4.5:1. Decided on 2026-10-02 (#610) instead
+of a flat "only ≥ 14 px", which forty rules did not follow and which would
+have erased the step between a label and its description, in dark almost
+entirely (`--ds-grey-strong` `#C8C4BE` next to body text `#D0CBC6`).
 
 The three greys are **warm-toned** (b\* +4, R–B span 12). Until 2026-09-17 the
 set was slightly cool, so that the grey surfaces would pick up the blue hue of

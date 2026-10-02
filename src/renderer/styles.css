@@ -15,7 +15,7 @@
   --text-primary: var(--ds-text-primary);
   --text-secondary: var(--ds-text-secondary);
   --text-muted: var(--ds-grey-muted);   /* 4.84:1 statt 2.85:1 */
-  --text-muted-strong: var(--ds-grey-strong); /* fuer Text < 14px */
+  --text-muted-strong: var(--ds-grey-strong); /* small text on grey-card and hover grounds (#610) */
   /* Ink of the deck chair drawing that fills the empty area (#315). Muted on
      purpose: it is background, and it must never compete with the panels that
      come back when a toggle is switched on again. */
@@ -395,6 +395,13 @@ summary:focus-visible,
 .folder-history-item:hover,
 .folder-history-item:focus-visible {
   background: var(--bg-hover);
+}
+
+/* On the hover ground the secondary grey drops to 4.2:1; the small path takes
+   the stronger step there (ui-design-tokens.md, #610). */
+.folder-history-item:hover .folder-history-path,
+.folder-history-item:focus-visible .folder-history-path {
+  color: var(--text-muted-strong);
 }
 
 .folder-history-item-main {
@@ -6981,7 +6988,8 @@ select.modal-input {
   padding-left: 18px;
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--ds-grey-muted);
+  /* On --ds-grey-card the secondary grey has 4.4:1 only (#610). */
+  color: var(--text-muted-strong);
 }
 
 @media (max-width: 640px) {

@@ -65,7 +65,7 @@
   --ds-grey-card: #F2EDE6;     /* Karten-Hintergrund, Inline-Code */
   --ds-grey-divider: #EFEAE3;  /* Trenner, Default-Borders */
   --ds-grey-muted: #6F6D69;    /* 5,0:1 auf --ds-surface — Sekundaerschrift, btn-secondary-Hover */
-  --ds-grey-strong: #5E5C59;   /* 6,5:1 auf --ds-surface — fuer Text < 14 px */
+  --ds-grey-strong: #5E5C59;   /* 6.5:1 on --ds-surface — small text where --ds-grey-muted lacks headroom (grey-card, hover grounds) */
   /* Begrenzung von Bedienelementen (Sekundaer-Button, bedienbare Pille,
    * Umschalter). --ds-grey-divider erreicht auf --ds-surface nur 1,2:1 und liegt
    * damit unter der 3:1-Schwelle aus WCAG 1.4.11. Rein dekorative Rahmen
