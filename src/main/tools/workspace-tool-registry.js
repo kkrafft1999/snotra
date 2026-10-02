@@ -986,8 +986,8 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'content'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, recovery }) =>
-        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery }),
+      handler: (args, { workspaceRoot, recovery, onWritten }) =>
+        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery, onWritten }),
     },
     {
       name: 'edit_file',
@@ -1025,8 +1025,8 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'old_string', 'new_string'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot }) =>
-        fsService.runEditFileTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, onWritten }) =>
+        fsService.runEditFileTool(args, workspaceRoot, { onWritten }),
     },
     {
       name: 'apply_patch',
@@ -1098,8 +1098,8 @@ function createWorkspaceToolRegistry({
         },
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot }) =>
-        fsService.runApplyPatchTool(args, workspaceRoot),
+      handler: (args, { workspaceRoot, onWritten }) =>
+        fsService.runApplyPatchTool(args, workspaceRoot, { onWritten }),
     },
     {
       name: 'run_python',

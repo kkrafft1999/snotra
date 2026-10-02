@@ -174,6 +174,8 @@ const REQUEST_CHANNELS = Object.freeze({
   CHAT_TITLE: 'chat:title',
   /** Renderer → Main (ipcRenderer.send), bricht laufenden CHAT_SEND ab. */
   CHAT_ABORT: 'chat:abort',
+  /** What one or more writing calls changed in a file (#348). */
+  CHAT_FILE_CHANGES: 'chat:file-changes',
 
   WHISPER_CANCEL: 'whisper:cancel',
   WHISPER_TRANSCRIBE: 'whisper:transcribe',
@@ -192,6 +194,8 @@ const PUSH_CHANNELS = Object.freeze({
   FS_ITEM_DELETED: 'fs:item-deleted',
   /** "Remove mark" in the tree's context menu (#347); payload { path }, the path the renderer asked for. */
   FS_CLEAR_AGENT_MARK: 'fs:clear-agent-mark',
+  /** "Show changes" in the context menu of a file (#348). */
+  FS_SHOW_CHANGES: 'fs:show-changes',
   /**
    * Im Projektordner hat sich etwas geändert (Issue #158) — von wem auch
    * immer: KI, Terminal, Finder, anderer Editor. Nutzlast ist ein

@@ -1613,6 +1613,7 @@ function createChatEngine({
           return {
             content: execution.output,
             progressEvents: execution.progressEvents,
+            fileChanges: execution.fileChanges,
             sensitiveMarker,
           };
         }
@@ -1749,6 +1750,11 @@ function createChatEngine({
           try {
             outcome = await runToolCall({ entry, callIndex, toolName, args });
             emitProgressPayloads(outcome.progressEvents);
+            // What the call changed (#348): summaries only, the content stays
+            // in main. The done line carries them to the chat's tool row.
+            if (Array.isArray(outcome.fileChanges) && outcome.fileChanges.length) {
+              entry.changes = outcome.fileChanges;
+            }
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);

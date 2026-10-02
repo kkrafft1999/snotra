@@ -239,12 +239,41 @@ function createToolLineEvent(phase, entry) {
   return { phase, ...entry };
 }
 
-/** chat:progress mit type='workspace' nach erfolgreichem Dateischreiben. */
-function createWorkspaceFileWrittenEvent(relativePath) {
-  return {
+/**
+ * chat:progress mit type='workspace' nach erfolgreichem Dateischreiben.
+ * `change` is the recorder's summary of the write (#348), without content:
+ * `{ id, relativePath, status, created, added, removed }`.
+ */
+function createWorkspaceFileWrittenEvent(relativePath, change = null) {
+  const event = {
     type: CHAT_PROGRESS_TYPES.WORKSPACE,
     event: WORKSPACE_PROGRESS_EVENTS.FILE_WRITTEN,
     relativePath: String(relativePath ?? ''),
+  };
+  const summary = normalizeFileChangeSummary(change);
+  if (summary) event.change = summary;
+  return event;
+}
+
+const FILE_CHANGE_ID_PATTERN = /^[0-9a-f]{1,16}-\d{1,12}$/;
+const FILE_CHANGE_STATUSES = new Set(['text', 'unchanged', 'eol-only', 'binary', 'too-large']);
+
+/**
+ * A change summary as it may travel and be stored (#348), or null. Counts are
+ * whole numbers; anything else is dropped rather than shown.
+ */
+function normalizeFileChangeSummary(change) {
+  if (!change || typeof change !== 'object') return null;
+  const id = typeof change.id === 'string' ? change.id : '';
+  if (!FILE_CHANGE_ID_PATTERN.test(id)) return null;
+  const count = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : 0);
+  return {
+    id,
+    relativePath: typeof change.relativePath === 'string' ? change.relativePath.slice(0, 4096) : '',
+    status: FILE_CHANGE_STATUSES.has(change.status) ? change.status : 'text',
+    created: change.created === true,
+    added: count(change.added),
+    removed: count(change.removed),
   };
 }
 
@@ -315,6 +344,7 @@ module.exports = {
   createReasoningEvent,
   createWorkspaceFileWrittenEvent,
   createWorkspaceFileReadEvent,
+  normalizeFileChangeSummary,
   createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,

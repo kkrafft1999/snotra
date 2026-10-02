@@ -352,14 +352,16 @@ const chatStream = initChatStream({
   activeProviderSupportsImages: () => modelPicker.activeProviderSupportsImages(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
   syncChatTitle: () => modelPicker.syncChatTitle(),
-  onWorkspaceFileWritten: (relativePath, chatId) => {
+  onWorkspaceFileWritten: (relativePath, chatId, change) => {
     mentionAutocomplete.invalidate();
-    // Marked before the redraw, so the new row is drawn with its mark (#347).
-    fileTree.recordAgentFile('write', relativePath, chatId);
+    // Marked before the redraw, so the new row is drawn with its mark (#347),
+    // and with what changed, for "Show changes" (#348).
+    fileTree.recordAgentFile('write', relativePath, chatId, change);
     return fileTree.notifyExternalFileWrite(relativePath);
   },
   onWorkspaceFileRead: (relativePath, chatId) => fileTree.recordAgentFile('read', relativePath, chatId),
   onChatSwitched: () => fileTree.syncAgentMarks(),
+  showFileChanges: (request) => fileTree.showFileChanges(request),
   approvalCards,
   // Sprung von einer Skill-Zeile der Token-Aufschlüsselung zu ihrem Schalter
   // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert

@@ -10,6 +10,7 @@ import {
 } from '../utils/helpers.js';
 import { basenameOf, parentDirOf, joinNative, isInsideDir } from '../utils/nativePath.js';
 import { createAgentMarks, markPathFor } from '../tree/agentMarks.js';
+import { createFileChangeIndex } from '../chat/fileChanges.js';
 import {
   TREE_DRAG_MIME,
   encodeTreeDragPayload,
@@ -54,6 +55,7 @@ export function initFileTree(deps) {
     fileViews,
     confirmLeave,
     agentMarks = createAgentMarks(),
+    fileChanges = createFileChangeIndex(),
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -65,6 +67,8 @@ export function initFileTree(deps) {
     confirmLeave,
     openFile: (path) => openFromPreview(path),
     getWorkspaceRoot: () => appStore.rootPath,
+    // What the conversation on screen changed in a file (#348).
+    changesFor: (path) => fileChanges.changesFor(appStore.currentChatId, path).map((change) => change.id),
   });
   const projectName = document.getElementById('project-name');
   const btnFolderHistory = document.getElementById('btn-folder-history');
@@ -98,8 +102,10 @@ export function initFileTree(deps) {
 
   function startTreeGeneration() {
     treeGeneration += 1;
-    // The marks name paths of the folder left (#347).
+    // The marks name paths of the folder left (#347), and so do the changes
+    // the tree knows of (#348); the chat keeps its own.
     agentMarks.clearAll();
+    fileChanges.clearAll();
     leaveGeneration();
     generationLeft = new Promise((resolve) => { leaveGeneration = resolve; });
   }
@@ -940,6 +946,7 @@ export function initFileTree(deps) {
     try {
       const result = await api.showFileContextMenu(item.path, {
         agentMark: Boolean(rowForPath(item.path)?.querySelector(':scope > .tree-mark')),
+        changes: !item.isDirectory && fileChanges.changesFor(appStore.currentChatId, item.path).length > 0,
       });
       if (result?.error) console.warn('Context menu refused:', result.error);
     } catch (err) {
@@ -1073,7 +1080,7 @@ export function initFileTree(deps) {
    * Resolves to `{ ok: true }` or `{ ok: false, reason }` with 'outside' (not
    * in the open folder) or 'not-found'; the view tells the user which.
    */
-  async function openFromPreview(targetPath) {
+  async function openFromPreview(targetPath, openOptions = {}) {
     const root = appStore.rootPath;
     if (!root || typeof targetPath !== 'string' || !isInsideDir(targetPath, root)) {
       return { ok: false, reason: 'outside' };
@@ -1108,24 +1115,27 @@ export function initFileTree(deps) {
     }
     if (row) {
       row.scrollIntoView?.({ block: 'nearest' });
-      row.click();
+      if (openOptions.changes) await selectFile(row, itemForRow(row), openOptions);
+      else row.click();
       return { ok: true };
     }
 
     // Not drawn: either it does not exist, or the listing left it out (#76) —
     // or the link spells the name in another case than the disk. Whatever
     // reads, is shown; the tree then has no row to mark.
-    const probe = await api.readFile(targetPath);
+    // A diff needs no file on disk: the agent may have written one that is
+    // gone by now (#348), and main still holds what it wrote.
+    const probe = openOptions.changes ? null : await api.readFile(targetPath);
     if (stale()) return { ok: false, reason: 'stale' };
-    if (!probe || probe.error) {
+    if (!openOptions.changes && (!probe || probe.error)) {
       return { ok: false, reason: 'not-found' };
     }
     const shown = await contentPane.open({
       path: targetPath,
       name: basenameOf(targetPath),
-      size: probe.size,
-      modified: probe.modified,
-    });
+      size: probe?.size,
+      modified: probe?.modified,
+    }, openOptions);
     if (stale()) return { ok: false, reason: 'stale' };
     if (shown) {
       agentMarks.markSeen(targetPath);
@@ -1328,18 +1338,52 @@ export function initFileTree(deps) {
   function syncAgentMarks() {
     applyAgentMarks(treeContainer.querySelectorAll('.tree-item'));
     if (btnClearMarks) btnClearMarks.hidden = !agentMarks.hasMarks(appStore.currentChatId);
+    // "Content | Changes" follows the conversation on screen (#348).
+    contentPane.syncChanges();
   }
 
   /**
    * A tool of the chat `chatId` read or changed `relativePath`. ChatStream
    * passes only runs in the open folder; the path is the tool's, relative.
    */
-  function recordAgentFile(kind, relativePath, chatId) {
+  function recordAgentFile(kind, relativePath, chatId, change = null) {
     const path = markPathFor(appStore.rootPath, relativePath);
     if (!path || !chatId) return;
-    if (kind === 'write') agentMarks.recordWrite(chatId, path);
-    else agentMarks.recordRead(chatId, path);
+    if (kind === 'write') {
+      if (change) fileChanges.record(chatId, path, change);
+      agentMarks.recordWrite(chatId, path);
+      // The file on show may just have got its first change (#348).
+      if (contentPane.openPath() === path) contentPane.syncChanges();
+    } else {
+      agentMarks.recordRead(chatId, path);
+    }
   }
+
+  /**
+   * Opens the diff of a file in the preview (#348) and selects its row, the
+   * way a click on it would. `ids` defaults to every change the conversation
+   * on screen made to it.
+   */
+  async function openChanges(path, ids) {
+    const list = Array.isArray(ids) && ids.length
+      ? ids
+      : fileChanges.changesFor(appStore.currentChatId, path).map((change) => change.id);
+    if (!path || list.length === 0) return { ok: false, reason: 'not-found' };
+    revealContentPane?.();
+    return openFromPreview(path, { changes: { ids: list } });
+  }
+
+  /** "Show changes" under a message of the chat: `{ relativePath, changes }`. */
+  function showFileChanges({ relativePath, changes } = {}) {
+    const path = markPathFor(appStore.rootPath, relativePath);
+    const ids = (Array.isArray(changes) ? changes : []).map((change) => change?.id).filter(Boolean);
+    if (!path || ids.length === 0) return Promise.resolve({ ok: false, reason: 'outside' });
+    return openChanges(path, ids);
+  }
+
+  api.onFsShowChanges?.(({ path } = {}) => {
+    if (typeof path === 'string' && path) void openChanges(path);
+  });
 
   // One patch marks many files at once: one redraw for all of them.
   let agentMarksQueued = false;
@@ -1677,7 +1721,15 @@ export function initFileTree(deps) {
     return load;
   }
 
-  async function selectFile(row, item) {
+  /**
+   * The item for a row opened by path (#348). Size and date are left out:
+   * the view reads them itself, the diff has its own pill.
+   */
+  function itemForRow(row) {
+    return { path: row.dataset.path, name: basenameOf(row.dataset.path) };
+  }
+
+  async function selectFile(row, item, openOptions) {
     // Die Vorschau lebt in der mittleren Spalte. Ist die zu — beim Start neben
     // einem wiederhergestellten Chat (Issue #208) oder weil sie weggeschaltet
     // wurde —, waere der Klick auf eine Datei sonst folgenlos.
@@ -1686,7 +1738,7 @@ export function initFileTree(deps) {
     // unsaved changes may keep it, and a quicker second click overtakes this
     // one — either way the row must not claim a file that is not on show.
     const generation = treeGeneration;
-    if (!(await contentPane.open(item))) return;
+    if (!(await contentPane.open(item, openOptions))) return;
     // Nor a row of a folder left meanwhile (#633).
     if (generation !== treeGeneration) return;
     agentMarks.markSeen(item.path);
@@ -1747,6 +1799,8 @@ export function initFileTree(deps) {
     recordAgentFile,
     /** The conversation on screen changed: its marks take the tree (#347). */
     syncAgentMarks,
+    /** Opens the diff of a file the chat changed, from under a message (#348). */
+    showFileChanges,
     /** Hidden files on or off (#436); resolves once the tree is redrawn. */
     setShowHiddenFiles,
     toggleHiddenFiles,

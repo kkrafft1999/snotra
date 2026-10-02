@@ -16,6 +16,8 @@
   --text-secondary: var(--ds-text-secondary);
   --text-muted: var(--ds-grey-muted);   /* 4.84:1 statt 2.85:1 */
   --text-muted-strong: var(--ds-grey-strong); /* small text on grey-card and hover grounds (#610) */
+  /* A chip on the chat ground (#348): --ds-grey-divider sinks into it in dark. */
+  --chat-chip-border: var(--ds-chat-composer-border);
   /* Ink of the deck chair drawing that fills the empty area (#315). Muted on
      purpose: it is background, and it must never compete with the panels that
      come back when a toggle is switched on again. */
@@ -1913,6 +1915,76 @@ summary:focus-visible,
 
 /* Zeilen tragen vorne ein Symbol je Tool-Art (Issue #60) — kein linker Balken
    und kein Häkchen mehr, das hält die Liste ruhig. */
+/* ── Changed files under the tool log (#348) ──────────────────────────────────
+ * Outside the folded log, so that a change can be opened without unfolding
+ * it. Each file is a chip with the inviting hover; the counts are the same
+ * "+3 −2" as at the end of a tool row. */
+.chat-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.chat-changes-lead {
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.chat-change-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: var(--ds-touch-min);
+  padding: 0 12px;
+  border: 1px solid var(--chat-chip-border);
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--ds-font-tool);
+  font-size: var(--ds-font-size-sm);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+button.chat-change-file:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-change-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-change-stat {
+  flex-shrink: 0;
+  font-family: var(--ds-font-tool);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+  color: var(--text-muted-strong);
+  white-space: nowrap;
+}
+
+/* After a restart main holds nothing any more: the chip stays as a record. */
+.chat-change-file--gone {
+  cursor: default;
+  color: var(--text-secondary);
+}
+
+.chat-changes-note {
+  flex-basis: 100%;
+}
+
+.chat-tool-line .chat-change-stat {
+  margin-left: auto;
+  padding-left: 8px;
+}
+
 .chat-tool-line {
   display: flex;
   align-items: flex-start;
@@ -4895,6 +4967,192 @@ select.modal-input {
   tab-size: 4;
   white-space: pre;
   user-select: text;
+}
+
+/* ── "Show changes": the diff of a file (#348) ──────────────────────────────
+ * One column of −/+ lines; the sign, the bar on the left and the spoken kind
+ * carry the meaning, the ground colour only adds to it. Text goes in as
+ * textContent, long lines wrap instead of running off. */
+.changes-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.changes-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: var(--ds-touch-min);
+  max-width: 14em;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--ds-grey-control-border);
+  border-radius: var(--ds-radius-md);
+  background-color: var(--ds-surface);
+  /* Chevron in --ds-grey-muted (#6F6D69), as in select.modal-input */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%236F6D69' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+}
+
+.changes-banners:empty {
+  display: none;
+}
+
+.changes-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+}
+
+.changes-banner-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--ds-blue-strong);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.changes-state {
+  max-width: 60ch;
+  padding: 24px 16px;
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-base);
+  line-height: 1.5;
+}
+
+.changes-state-title {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.changes-state-detail {
+  margin: 0;
+}
+
+.changes-loading {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--text-muted);
+  font-size: var(--ds-font-size-md);
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.diff-table td {
+  padding: 0 6px;
+  vertical-align: top;
+}
+
+.diff-col--old,
+.diff-col--new {
+  width: 4.2em;
+}
+
+.diff-col--mark {
+  width: 1.8em;
+}
+
+.diff-num {
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+  user-select: none;
+}
+
+.diff-num--old {
+  border-left: 3px solid transparent;
+}
+
+.diff-mark {
+  text-align: center;
+  font-weight: var(--ds-font-weight-bold);
+  user-select: none;
+}
+
+.diff-table .diff-text {
+  padding-right: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  user-select: text;
+}
+
+.diff-row--insert > td {
+  background: var(--ds-diff-added-bg);
+}
+
+.diff-row--insert > .diff-num--old {
+  border-left-color: var(--ds-diff-added-bar);
+}
+
+.diff-row--insert > .diff-num,
+.diff-row--delete > .diff-num {
+  color: var(--text-muted-strong);
+}
+
+.diff-row--insert > .diff-mark {
+  color: var(--ds-blue-strong);
+}
+
+.diff-row--delete > td {
+  background: var(--ds-diff-removed-bg);
+  color: var(--text-secondary);
+}
+
+.diff-row--delete > .diff-num--old {
+  border-left-color: var(--ds-diff-removed-bar);
+}
+
+.diff-row--delete > .diff-mark {
+  color: var(--text-muted-strong);
+}
+
+.diff-action > td {
+  padding: 2px 16px;
+  background: var(--ds-grey-bg);
+  border-top: 1px solid var(--ds-grey-divider);
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.diff-action-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--ds-blue-strong);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+}
+
+.diff-action-button:hover {
+  background: var(--ds-blue-soft);
 }
 
 /* ── Markdown in the file preview (#344) ──────────────────────────────────

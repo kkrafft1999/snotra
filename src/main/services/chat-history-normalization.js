@@ -12,6 +12,7 @@ const {
   inferChatTitle,
   inferChatTitleText,
   isLegacyFallbackChatTitle,
+  normalizeFileChangeSummary,
 } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -154,14 +155,27 @@ function toolTraceEntryForStore(entry) {
   const permission = permissionAuditForStore(entry?.permission);
   const round = Number.isInteger(entry?.round) && entry.round > 0 ? entry.round : 0;
   const schema = schemaViolationsForStore(entry?.schema);
-  if (!tool && !skill && !permission && !round && !schema) return line;
+  const changes = fileChangesForStore(entry?.changes);
+  if (!tool && !skill && !permission && !round && !schema && !changes) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
   if (permission) out.permission = permission;
   if (round) out.round = round;
   if (schema) out.schema = schema;
+  if (changes) out.changes = changes;
   return out;
+}
+
+/**
+ * The summaries of what a writing call changed (#348): ids and counts, never
+ * content. A patch touches at most 20 files; more than that is not a call.
+ */
+const MAX_STORED_CHANGES = 20;
+function fileChangesForStore(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.slice(0, MAX_STORED_CHANGES).map(normalizeFileChangeSummary).filter(Boolean);
+  return out.length ? out : undefined;
 }
 
 function sanitizeToolTraceForStore(raw) {

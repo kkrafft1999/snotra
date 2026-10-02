@@ -31,7 +31,11 @@ import {
   thinkingElapsedMs,
   toolTraceEntryForStore,
   traceEntryCategory,
+  applyChangesToRow,
+  syncChangesStrip,
 } from '../chat/toolLogView.js';
+// What a writing call changed (#348): summaries from main, diffs on demand.
+import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 import { compactToolLinePayload } from '../utils/tool-log-debug.js';
@@ -130,6 +134,8 @@ export function initChatStream({
   onWorkspaceFileRead,
   // The conversation on screen changed (#347); the tree redraws its marks.
   onChatSwitched,
+  // Opens the diff of `{ relativePath, changes }` in the preview (#348).
+  showFileChanges = () => {},
   approvalCards,
   openSkillSettings,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
@@ -279,6 +285,7 @@ export function initChatStream({
       if (anchor) bubble.insertBefore(log, anchor);
       else bubble.appendChild(log);
     }
+    syncMessageChanges(bubble, message);
 
     appendReasoningDetails(bubble, message.reasoningText);
 
@@ -565,6 +572,7 @@ export function initChatStream({
             syncToolLogSummary(toolLog, { thinking: false, elapsedMs: thinkingElapsedMs(m) });
           }
           li.appendChild(toolLog);
+          syncMessageChanges(li, m);
 
           // Freigabe-Karten (Issue #67) stehen sichtbar zwischen Tool-Log und
           // Antworttext – außerhalb des eingeklappten Logs.
@@ -581,6 +589,7 @@ export function initChatStream({
         } else {
           if (Array.isArray(m.toolTrace) && m.toolTrace.length > 0) {
             li.appendChild(buildToolLog(m.toolTrace, 'done'));
+            syncMessageChanges(li, m);
           }
           if (m.reasoningText && m.reasoningText.trim()) {
             const det = document.createElement('details');
@@ -783,6 +792,17 @@ export function initChatStream({
     return !!run && !run.settled && !run.aborted;
   }
 
+  /**
+   * The line of changed files under a message's tool log (#348). A click
+   * opens the diff of that file — every change this message made to it.
+   */
+  function syncMessageChanges(messageEl, message) {
+    syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
+      isLive: changesAreLive,
+      onOpen: (file) => showFileChanges({ relativePath: file.relativePath, changes: file.changes }),
+    });
+  }
+
   function isOnScreen(run) {
     return !!run && !run.chat && run.chatId === appStore.currentChatId;
   }
@@ -974,7 +994,9 @@ export function initChatStream({
     const skill = typeof payload?.skill === 'string' ? payload.skill : '';
     const permission =
       payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
-    const entry = toolTraceEntryForStore({ line, tool, skill, permission });
+    const changes = phase === 'done' ? normalizeChanges(payload?.changes) : undefined;
+    if (changes) markChangesLive(changes);
+    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
       if (existing) {
@@ -1040,6 +1062,10 @@ export function initChatStream({
       const doneRow = byIndex || runningRows[runningRows.length - 1];
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
+      if (changes) {
+        applyChangesToRow(doneRow, changes);
+        syncMessageChanges(wrap.parentElement, last);
+      }
     } else {
       linesEl.querySelectorAll('.chat-tool-line--running').forEach((row) => {
         setToolLineDone(row);
@@ -1104,7 +1130,7 @@ export function initChatStream({
       clearWorkspaceImageCache();
       // The tree shows the open folder; a run in another one wrote elsewhere.
       if (run.toolRoot === appStore.rootPath && typeof onWorkspaceFileWritten === 'function') {
-        onWorkspaceFileWritten(p.relativePath, run.chatId);
+        onWorkspaceFileWritten(p.relativePath, run.chatId, p.change || null);
       }
     }
   }
