@@ -13,6 +13,7 @@ const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-p
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
 const { createToolCallPlanner } = require('../tools/tool-call-planner');
 const { measureArgumentConformance } = require('../tools/argument-conformance');
+const { readRegularFile } = require('../services/read-regular-file');
 
 /** Tools, deren Ausgabe Dateiinhalte enthalten kann und deshalb geprüft wird. */
 const CONTENT_READ_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file', 'search_in_files']);
@@ -82,15 +83,16 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     if (!CONTENT_READ_TOOLS.has(name)) return { sensitive: false, scannable: true };
     for (const target of plan.targets) {
       if (target.kind !== 'file' || !target.exists || !target.absPath) continue;
-      let buf;
+      let read;
       try {
-        const st = await fs.stat(target.absPath);
-        if (st.size > maxScanBytes) return { sensitive: false, scannable: false };
-        buf = await fs.readFile(target.absPath);
+        // Never opens a pipe or device (#643); the tool itself refuses one.
+        read = await readRegularFile(fs, target.absPath, { maxBytes: maxScanBytes });
       } catch {
         continue;
       }
-      const scan = scanSensitiveContent(buf.toString('utf8'), { maxChars: maxScanBytes * 2 });
+      if (read.tooLarge) return { sensitive: false, scannable: false };
+      if (!read.buffer) continue;
+      const scan = scanSensitiveContent(read.buffer.toString('utf8'), { maxChars: maxScanBytes * 2 });
       if (!scan.scannable) return { sensitive: false, scannable: false };
       if (scan.sensitive) return { sensitive: true, scannable: true, findings: scan.findings };
     }

@@ -41,6 +41,8 @@ const {
   RegexSearchTimeoutError,
   createRegexSearchWorker,
 } = require('./regex-search-worker');
+const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
+const { compileGlob, createGitignoreMatcher } = require('./glob-match');
 
 const READ_LINES_DEFAULT_COUNT = 200;
 const READ_LINES_MAX_COUNT = 1000;
@@ -54,6 +56,16 @@ const SEARCH_MAX_RESULTS = 200;
 const SEARCH_MAX_LINE_CHARS = 400;
 const SEARCH_BINARY_PROBE_BYTES = 8192;
 const SEARCH_DEFAULT_MAX_SCANNED_FILES = 5000;
+// Each hit carries its own context lines; without a budget one call on a
+// minified bundle returned 1.7 million characters (#644). The other read
+// tools stop at 200,000 — this stays well below that.
+const SEARCH_MAX_OUTPUT_CHARS = 64000;
+// The root's .gitignore is read like any workspace file (#643): a regular
+// file inside the root, and no larger than this — otherwise it counts as absent.
+const GITIGNORE_MAX_BYTES = 256 * 1024;
+// Outline patterns see at most this much of a line (#643); an entry's text is
+// cut at OUTLINE_MAX_TEXT_CHARS anyway.
+const OUTLINE_MAX_LINE_CHARS = 500;
 
 const FIND_DEFAULT_MAX_RESULTS = 100;
 const FIND_MAX_RESULTS = 500;
@@ -108,85 +120,6 @@ const READ_DIRECTORY_LSTAT_BATCH = 64;
 
 function escapeRegExpLiteral(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Übersetzt ein Glob-Muster in gitignore-Syntax (`*`, `?`, `**`, führendes `/`
- * verankert, abschließendes `/` = nur Ordner) in eine RegExp über den
- * posix-relativen Pfad. Muster ohne `/` matchen auf jeder Ebene.
- */
-function globToRegExp(pattern) {
-  let p = pattern;
-  let dirOnly = false;
-  if (p.endsWith('/')) {
-    dirOnly = true;
-    p = p.slice(0, -1);
-  }
-  let anchored = false;
-  if (p.startsWith('/')) {
-    anchored = true;
-    p = p.slice(1);
-  } else if (p.includes('/')) {
-    anchored = true;
-  }
-  let source = '';
-  let i = 0;
-  while (i < p.length) {
-    const c = p[i];
-    if (c === '*') {
-      if (p[i + 1] === '*') {
-        if (p[i + 2] === '/') {
-          source += '(?:[^/]+/)*';
-          i += 3;
-        } else {
-          source += '.*';
-          i += 2;
-        }
-      } else {
-        source += '[^/]*';
-        i += 1;
-      }
-    } else if (c === '?') {
-      source += '[^/]';
-      i += 1;
-    } else {
-      source += escapeRegExpLiteral(c);
-      i += 1;
-    }
-  }
-  const prefix = anchored ? '^' : '^(?:.*/)?';
-  return { regex: new RegExp(`${prefix}${source}$`), dirOnly };
-}
-
-/**
- * Baut aus einem .gitignore-Text einen Matcher (relPath, isDirectory) → ignoriert?
- * Unterstützte Teilmenge: Kommentare, Negation (!), Ordner-Muster (…/),
- * verankerte Muster sowie *, ?, **. Die letzte passende Regel gewinnt.
- */
-function createGitignoreMatcher(text) {
-  const rules = [];
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.replace(/\s+$/, '');
-    if (!line || line.startsWith('#')) continue;
-    let body = line;
-    let negated = false;
-    if (body.startsWith('!')) {
-      negated = true;
-      body = body.slice(1);
-    }
-    if (!body) continue;
-    const { regex, dirOnly } = globToRegExp(body);
-    rules.push({ regex, dirOnly, negated });
-  }
-  if (!rules.length) return null;
-  return (relPath, isDirectory) => {
-    let ignored = false;
-    for (const rule of rules) {
-      if (rule.dirOnly && !isDirectory) continue;
-      if (rule.regex.test(relPath)) ignored = !rule.negated;
-    }
-    return ignored;
-  };
 }
 
 function readIntegerArg(args, name) {
@@ -293,8 +226,32 @@ function clipOutlineText(text) {
   return t.length <= OUTLINE_MAX_TEXT_CHARS ? t : `${t.slice(0, OUTLINE_MAX_TEXT_CHARS)}…`;
 }
 
+/**
+ * The part of a line the outline patterns look at (#643). The patterns are
+ * written to run in linear time; the cap keeps a 2 MB one-line file cheap
+ * all the same, and costs nothing visible — an entry's text is shorter.
+ */
+function clipOutlineLine(line) {
+  return line.length <= OUTLINE_MAX_LINE_CHARS ? line : line.slice(0, OUTLINE_MAX_LINE_CHARS);
+}
+
+/**
+ * Drops a closing sequence of `#` behind a heading ("## Title ##"), as
+ * `/[ \t]+#+$/` did — by hand, because that regex is quadratic on a long run
+ * of blanks that does not end in `#` (#643).
+ */
+function stripClosingHashes(text) {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '#') end -= 1;
+  if (end === text.length) return text;
+  let start = end;
+  while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start -= 1;
+  return start < end ? text.slice(0, start) : text;
+}
+
 /** Markdown-Gliederung: ATX- (#) und Setext-Überschriften (===/---), ohne Code-Fences und Front-Matter. */
-function extractMarkdownOutline(lines) {
+function extractMarkdownOutline(rawLines) {
+  const lines = rawLines.map(clipOutlineLine);
   const entries = [];
   let i = 0;
   if (lines.length && /^---\s*$/.test(lines[0])) {
@@ -313,9 +270,11 @@ function extractMarkdownOutline(lines) {
       fenceClose = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}\\s*$`);
       continue;
     }
-    const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$/.exec(line);
+    // The marker alone, followed by a blank or the end; the text is the rest
+    // of the line. `(?:[ \t]+(.*?))?[ \t]*$` was quadratic on long blank runs (#643).
+    const atx = /^ {0,3}(#{1,6})(?=[ \t]|$)/.exec(line);
     if (atx) {
-      const text = (atx[2] || '').replace(/[ \t]+#+$/, '').trim();
+      const text = stripClosingHashes(line.slice(atx[0].length).trim()).trim();
       if (text) {
         entries.push({ line: i + 1, level: atx[1].length, kind: 'heading', text: clipOutlineText(text) });
       }
@@ -352,12 +311,19 @@ const CODE_NON_SIGNATURE_START =
 /** Schlüsselwörter, die als "Name" gefangen wurden, sind keine Signatur (z. B. "go func() {"). */
 const CODE_RESERVED_NAMES = /^(?:function|func|fun|fn|def|lambda|class|struct|enum|interface|type|return|if|else|while|for|switch|catch|do|try)$/;
 
-/** Generische Signatur-Heuristiken; Reihenfolge = Priorität. kind 'keyword' nimmt das Schlüsselwort aus Gruppe 1. */
+/**
+ * Generische Signatur-Heuristiken; Reihenfolge = Priorität. kind 'keyword' nimmt das Schlüsselwort aus Gruppe 1.
+ *
+ * No two quantifiers in a row may match the same characters (#643): `\s*\s*`
+ * splits a run of blanks in quadratically many ways, three of them cubically,
+ * and `:\s*[^=]+?` is the same thing in disguise. Each such spot is written
+ * so that one of the two needs a character the other cannot take.
+ */
 const CODE_SIGNATURE_PATTERNS = [
   // JS/TS/PHP: function foo(  ·  export default async function* foo(
   {
     kind: 'function',
-    re: /^(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)?\s*\(/,
+    re: /^(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*(?:\*\s*)?(?:([A-Za-z_$][\w$]*)\s*)?\(/,
   },
   // Python/Ruby: def foo(  ·  async def foo(  ·  def self.foo
   { kind: 'function', re: /^(?:async\s+)?def\s+(?:self\.)?([A-Za-z_]\w*[?!=]?)/ },
@@ -383,7 +349,7 @@ const CODE_SIGNATURE_PATTERNS = [
   // JS/TS: const foo = (a, b) =>  ·  export const bar = async function
   {
     kind: 'function',
-    re: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=]+?)?=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+?)?=>|[A-Za-z_$][\w$]*\s*=>)/,
+    re: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+?)?=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::[^=]+?)?=>|[A-Za-z_$][\w$]*\s*=>)/,
   },
   // Java/C#/PHP/C mit Modifier: public static void main(  ·  public function foo(  ·  static int helper(
   {
@@ -393,7 +359,7 @@ const CODE_SIGNATURE_PATTERNS = [
   // C/C++/Java ohne Modifier, Block in derselben Zeile: int main(void) {  ·  char *name(int a) {
   {
     kind: 'function',
-    re: /^(?:[A-Za-z_][\w<>\[\],.:*&?]*\s+)+\*?((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\([^()]*\)\s*(?:const\s*)?(?:throws\s+[\w.,\s]+)?\{$/,
+    re: /^(?:[A-Za-z_][\w<>\[\],.:*&?]*\s+)+\*?((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\([^()]*\)\s*(?:const\s*)?(?:throws\s[\w.,\s]+)?\{$/,
   },
   // Shell/JS/C: foo() {
   { kind: 'function', re: /^(?:function\s+)?([A-Za-z_][\w-]*)\s*\(\s*\)\s*\{$/ },
@@ -404,12 +370,12 @@ const JS_SIGNATURE_PATTERNS = [
   // constructor(props) {  ·  static async load(id) {  ·  get value(): number {  ·  #secret() {
   {
     kind: 'function',
-    re: /^(?:(?:static|async|get|set|public|private|protected|readonly|override|abstract)\s+)*\*?(#?[A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\([^()]*\)\s*(?::\s*[^{]+)?\{$/,
+    re: /^(?:(?:static|async|get|set|public|private|protected|readonly|override|abstract)\s+)*\*?(#?[A-Za-z_$][\w$]*)\s*(?:<[^>]*>\s*)?\([^()]*\)\s*(?::[^{]+)?\{$/,
   },
   // onClick: (e) => {  ·  render: function () {
   {
     kind: 'function',
-    re: /^(#?[A-Za-z_$][\w$]*)\s*:\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::\s*[^=]+?)?=>)/,
+    re: /^(#?[A-Za-z_$][\w$]*)\s*:\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*(?::[^=]+?)?=>)/,
   },
 ];
 
@@ -431,7 +397,7 @@ function extractCodeOutline(lines, { isJavaScript = false } = {}) {
   const found = [];
   const indents = new Set();
   for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
+    const raw = clipOutlineLine(lines[i]);
     const trimmed = raw.trim();
     if (!trimmed || CODE_NON_SIGNATURE_START.test(trimmed)) continue;
     for (const { kind, re } of patterns) {
@@ -439,11 +405,14 @@ function extractCodeOutline(lines, { isJavaScript = false } = {}) {
       if (!m) continue;
       const indent = measureIndentColumns(raw);
       indents.add(indent);
+      // The opening brace and the blanks before it go; `/\s*\{$/` was
+      // quadratic on a long blank run that did not end in `{` (#643).
+      const signature = trimmed.endsWith('{') ? trimmed.slice(0, -1).trimEnd() : trimmed;
       const entry = {
         line: i + 1,
         indent,
         kind: kind === 'keyword' ? m[1] : kind,
-        text: clipOutlineText(trimmed.replace(/\s*\{$/, '')),
+        text: clipOutlineText(signature),
       };
       const name = kind === 'keyword' ? m[2] : m[1];
       if (name && CODE_RESERVED_NAMES.test(name)) continue;
@@ -1327,6 +1296,24 @@ function createFsService({
     }
   }
 
+  /**
+   * A file for one of the model's read tools (#643): a regular file only —
+   * a pipe, socket or device is refused instead of blocking a thread-pool
+   * thread — and no more than MAX_READ_FILE_BYTES. Resolves to
+   * `{ buffer, stats }` or `{ error }` in the tools' wording; `open` errors
+   * (ENOENT, EACCES, …) are thrown.
+   */
+  async function readFileForTool(absPath) {
+    const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
+    if (read.notFile) {
+      return { error: read.stats.isDirectory() ? 'Path is a folder, not a file.' : NOT_A_REGULAR_FILE_ERROR };
+    }
+    if (read.tooLarge) {
+      return { error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.` };
+    }
+    return read;
+  }
+
   async function runReadFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
@@ -1337,24 +1324,16 @@ function createFsService({
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
-      const st = await fs.stat(absPath);
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Path is a folder, not a file.' });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
-      const buf = await fs.readFile(absPath);
-      let text = buf.toString('utf8');
+      const read = await readFileForTool(absPath);
+      if (read.error) return JSON.stringify({ error: read.error });
+      let text = read.buffer.toString('utf8');
       const truncated = text.length > maxChars;
       if (truncated) {
         text = `${text.slice(0, maxChars)}\n… [truncated to ${maxChars} characters]`;
       }
       return JSON.stringify({
         relative_path: rel,
-        size_bytes: st.size,
+        size_bytes: read.stats.size,
         truncated,
         content: text,
       });
@@ -1386,7 +1365,10 @@ function createFsService({
     const { absPath, root, error } = await resolveToolPath(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
-      const raw = await fs.readFile(absPath, 'utf8');
+      // The read tools' limit; a SKILL.md is a few kilobytes (#643).
+      const read = await readFileForTool(absPath);
+      if (read.error) return JSON.stringify({ error: read.error });
+      const raw = read.buffer.toString('utf8');
       const parsed = parseSkillDocument(raw);
       if (!parsed) {
         return JSON.stringify({ error: `${SKILL_FILE} of "${name}" has no YAML front matter.` });
@@ -1441,16 +1423,9 @@ function createFsService({
     if (error) return JSON.stringify({ error });
     let buf;
     try {
-      const st = await fs.stat(absPath);
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Path is a folder, not a file.' });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
-      buf = await fs.readFile(absPath);
+      const read = await readFileForTool(absPath);
+      if (read.error) return JSON.stringify({ error: read.error });
+      buf = read.buffer;
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
@@ -1965,10 +1940,21 @@ function createFsService({
     return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
   }
 
+  /**
+   * The root's `.gitignore`, read like any other file of the folder (#643):
+   * a regular file whose realpath stays inside the root, at most
+   * GITIGNORE_MAX_BYTES. A FIFO used to hang every listing, a symlink to
+   * `/dev/zero` read half a gigabyte, and one out of the folder was followed.
+   * Anything else counts as no `.gitignore`.
+   */
   async function loadGitignoreMatcher(root) {
     try {
-      const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
-      return createGitignoreMatcher(gitignore);
+      const realRoot = await fs.realpath(root);
+      const realTarget = await fs.realpath(path.join(root, '.gitignore'));
+      if (!containsPath(realRoot, realTarget)) return null;
+      const read = await readRegularFile(fs, realTarget, { maxBytes: GITIGNORE_MAX_BYTES });
+      if (!read.buffer) return null;
+      return createGitignoreMatcher(read.buffer.toString('utf8'));
     } catch {
       return null; // keine lesbare .gitignore — nichts auszuschließen
     }
@@ -2043,12 +2029,16 @@ function createFsService({
     const includeHidden = args.include_hidden === true;
     const include =
       typeof args.include === 'string' && args.include.trim()
-        ? globToRegExp(args.include.trim())
+        ? compileGlob(args.include.trim())
         : null;
     const exclude =
       typeof args.exclude === 'string' && args.exclude.trim()
-        ? globToRegExp(args.exclude.trim())
+        ? compileGlob(args.exclude.trim())
         : null;
+    // Stop ends the search between two entries, and ends a regex at once by
+    // terminating its worker (#644) — not seconds later.
+    const { abortSignal } = options;
+    const isAborted = () => Boolean(abortSignal && abortSignal.aborted);
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
@@ -2087,34 +2077,39 @@ function createFsService({
 
     const state = {
       matches: [],
+      outputChars: 0,
       filesScanned: 0,
       filesVisited: 0,
       matchLimitReached: false,
+      outputLimitReached: false,
       scanLimitReached: false,
     };
+    const done = () =>
+      state.matchLimitReached || state.outputLimitReached || state.scanLimitReached || isAborted();
     // Erzeugte Pfade tragen die Wurzel mit: aus einem Skill-Ordner kommen sie
     // als "skill:<name>/…" zurück und sind damit direkt wieder aufrufbar.
     const toRelPosix = (abs) => `${prefix}${path.relative(root, abs).split(path.sep).join('/')}`;
     // Trefferzeile samt Kontext, wie sie das Modell sehen würde.
     const matchLineText = (m) => [...(m.before || []), m.text, ...(m.after || [])].join('\n');
 
-    async function scanFile(fileAbs, size) {
+    async function scanFile(fileAbs) {
       if (state.filesVisited >= MAX_SEARCH_SCANNED_FILES) {
         state.scanLimitReached = true;
         return;
       }
       state.filesVisited += 1;
-      if (size > MAX_READ_FILE_BYTES) return;
-      let buf;
+      // Too large, or no regular file (any more): skipped like a binary file.
+      // A pipe is never opened, so it cannot stall the search (#643).
+      let read;
       try {
-        buf = await fs.readFile(fileAbs);
+        read = await readRegularFile(fs, fileAbs, { maxBytes: MAX_READ_FILE_BYTES });
       } catch {
         return;
       }
-      if (isBinaryBuffer(buf)) return;
+      if (!read.buffer || isBinaryBuffer(read.buffer)) return;
       state.filesScanned += 1;
       const relFile = toRelPosix(fileAbs);
-      const found = await matchText(buf.toString('utf8'), maxResults - state.matches.length);
+      const found = await matchText(read.buffer.toString('utf8'), maxResults - state.matches.length);
       for (const m of found) {
         // Trefferzeilen mit erkennbaren Zugangsdaten werden ausgelassen statt
         // pro Treffer erfragt (Konzept §4); die Ausgabe meldet die Auslassung.
@@ -2122,42 +2117,62 @@ function createFsService({
           omitted.count += 1;
           continue;
         }
-        state.matches.push({ file: relFile, ...m });
+        const match = { file: relFile, ...m };
+        // Measured as it will be sent, escapes and separator included (#644).
+        const chars = JSON.stringify(match).length + 1;
+        if (state.matches.length > 0 && state.outputChars + chars > SEARCH_MAX_OUTPUT_CHARS) {
+          state.outputLimitReached = true;
+          return;
+        }
+        state.outputChars += chars;
+        state.matches.push(match);
       }
       if (state.matches.length >= maxResults) state.matchLimitReached = true;
     }
 
     async function walk(dirAbs) {
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
-        if (state.matchLimitReached || state.scanLimitReached) return;
-        if (exclude && exclude.regex.test(entry.relPath)) continue;
+        if (done()) return;
+        if (exclude && exclude.test(entry.relPath)) continue;
         if (entry.isDirectory) {
           await walk(entry.absPath);
           continue;
         }
-        if (include && !include.regex.test(entry.relPath)) continue;
-        let st;
-        try {
-          st = await fs.stat(entry.absPath);
-        } catch {
-          continue;
-        }
-        await scanFile(entry.absPath, st.size);
+        if (include && !include.test(entry.relPath)) continue;
+        await scanFile(entry.absPath);
       }
     }
 
+    const onAbort = () => {
+      if (regexWorker) regexWorker.terminate();
+    };
+    if (abortSignal) abortSignal.addEventListener('abort', onAbort, { once: true });
+    const cancelled = () =>
+      JSON.stringify({
+        error: 'The search was cancelled.',
+        aborted: true,
+        matches: state.matches,
+        files_scanned: state.filesScanned,
+      });
     try {
+      if (isAborted()) return cancelled();
       const st = await fs.stat(absPath);
       if (st.isDirectory()) {
         await walk(absPath);
+      } else if (!st.isFile()) {
+        // A pipe, socket or device as the search target (#643).
+        return JSON.stringify({ error: NOT_A_REGULAR_FILE_ERROR });
       } else if (options.sensitivity && options.sensitivity.isSensitivePath(toRelPosix(absPath))) {
         // Einzelne sensible Datei als Suchziel: gezielter Zugriff, den der Planer
         // bereits als read-sensitive eingestuft hat — hier nur zur Sicherheit.
         omitted.count += 1;
       } else {
-        await scanFile(absPath, st.size);
+        await scanFile(absPath);
       }
+      if (isAborted()) return cancelled();
     } catch (e) {
+      // Terminating the worker on Stop rejects the search in flight.
+      if (isAborted()) return cancelled();
       if (e instanceof RegexSearchTimeoutError) {
         // Bisherige Treffer mitgeben — das Modell kann damit oft schon arbeiten.
         return JSON.stringify({
@@ -2169,6 +2184,7 @@ function createFsService({
       }
       return JSON.stringify({ error: e.message });
     } finally {
+      if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
       if (regexWorker) regexWorker.terminate();
     }
 
@@ -2177,7 +2193,15 @@ function createFsService({
       query,
       matches: state.matches,
       files_scanned: state.filesScanned,
-      truncated: state.matchLimitReached,
+      truncated: state.matchLimitReached || state.outputLimitReached,
+      ...(state.outputLimitReached
+        ? {
+            truncated_reason:
+              `The result reached its size limit of ${SEARCH_MAX_OUTPUT_CHARS} characters after ` +
+              `${state.matches.length} matches. Narrow the search (relative_path, include, a more ` +
+              'specific query) or ask for fewer context_lines.',
+          }
+        : {}),
       scan_limit_reached: state.scanLimitReached,
       ...(omitted.count > 0 ? { omitted_sensitive: omitted.count } : {}),
     });
@@ -2188,12 +2212,15 @@ function createFsService({
     if (!pattern) {
       return JSON.stringify({ error: 'pattern is required.' });
     }
-    const glob = globToRegExp(pattern);
+    const glob = compileGlob(pattern);
     let maxResults = Number.isFinite(args.max_results)
       ? Math.floor(args.max_results)
       : FIND_DEFAULT_MAX_RESULTS;
     maxResults = Math.min(Math.max(1, maxResults), FIND_MAX_RESULTS);
     const includeHidden = args.include_hidden === true;
+    // Stop ends the walk between two entries (#644).
+    const { abortSignal } = options;
+    const isAborted = () => Boolean(abortSignal && abortSignal.aborted);
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
@@ -2217,14 +2244,14 @@ function createFsService({
     };
     function addMatch(relEntry, isDirectory) {
       if (glob.dirOnly && !isDirectory) return;
-      if (!glob.regex.test(relEntry)) return;
+      if (!glob.test(relEntry)) return;
       state.results.push({ path: `${prefix}${relEntry}`, kind: isDirectory ? 'directory' : 'file' });
       if (state.results.length >= maxResults) state.matchLimitReached = true;
     }
 
     async function walk(dirAbs) {
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
-        if (state.matchLimitReached || state.scanLimitReached) return;
+        if (state.matchLimitReached || state.scanLimitReached || isAborted()) return;
         if (state.entriesVisited >= MAX_SEARCH_SCANNED_FILES) {
           state.scanLimitReached = true;
           return;
@@ -2241,9 +2268,12 @@ function createFsService({
       if (!st.isDirectory()) {
         return JSON.stringify({ error: 'Path is not a folder.' });
       }
-      await walk(absPath);
+      if (!isAborted()) await walk(absPath);
     } catch (e) {
       return JSON.stringify({ error: e.message });
+    }
+    if (isAborted()) {
+      return JSON.stringify({ error: 'The search was cancelled.', aborted: true, results: state.results });
     }
 
     return JSON.stringify({
@@ -2312,15 +2342,24 @@ function createFsService({
     if (!isDirectory) result.size_bytes = st.size;
     result.modified = new Date(st.mtimeMs).toISOString();
     if (args.include_line_count === true && !isDirectory) {
-      if (st.size > MAX_READ_FILE_BYTES) {
-        result.line_count_skipped = `File too large to count lines (>${MAX_READ_FILE_BYTES} bytes).`;
+      const tooLarge = `File too large to count lines (>${MAX_READ_FILE_BYTES} bytes).`;
+      // A pipe, socket or device is never opened, so it has no line count (#643).
+      const notFile = 'Not a regular file (a pipe, socket or device) — line count skipped.';
+      if (!st.isFile()) {
+        result.line_count_skipped = notFile;
+      } else if (st.size > MAX_READ_FILE_BYTES) {
+        result.line_count_skipped = tooLarge;
       } else {
         try {
-          const buf = await fs.readFile(absPath);
-          if (isBinaryBuffer(buf)) {
+          const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
+          if (read.notFile) {
+            result.line_count_skipped = notFile;
+          } else if (read.tooLarge) {
+            result.line_count_skipped = tooLarge;
+          } else if (isBinaryBuffer(read.buffer)) {
             result.line_count_skipped = 'Binary file — line count skipped.';
           } else {
-            result.line_count = splitFileLines(buf.toString('utf8')).length;
+            result.line_count = splitFileLines(read.buffer.toString('utf8')).length;
           }
         } catch (e) {
           result.line_count_skipped = e.message;
@@ -2348,16 +2387,9 @@ function createFsService({
     if (error) return JSON.stringify({ error });
     let buf;
     try {
-      const st = await fs.stat(absPath);
-      if (st.isDirectory()) {
-        return JSON.stringify({ error: 'Path is a folder, not a file.' });
-      }
-      if (st.size > MAX_READ_FILE_BYTES) {
-        return JSON.stringify({
-          error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.`,
-        });
-      }
-      buf = await fs.readFile(absPath);
+      const read = await readFileForTool(absPath);
+      if (read.error) return JSON.stringify({ error: read.error });
+      buf = read.buffer;
     } catch (e) {
       return JSON.stringify({ error: e.message });
     }
@@ -2967,13 +2999,15 @@ function createFsService({
   }
 
   async function readFilePreview(filePath) {
-    const stats = await fs.stat(filePath);
     const MAX_SIZE = 1024 * 1024; // 1 MB limit for preview
-    if (stats.size > MAX_SIZE) {
-      return { error: ui()('fs.error.previewTooLarge'), size: stats.size };
+    // A click on a pipe in the tree must not block a thread-pool thread (#643).
+    const read = await readRegularFile(fs, filePath, { maxBytes: MAX_SIZE });
+    if (read.notFile) return { error: ui()('fs.error.previewNotAFile') };
+    if (read.tooLarge) {
+      return { error: ui()('fs.error.previewTooLarge'), size: read.stats.size };
     }
-    const content = await fs.readFile(filePath, 'utf-8');
-    return { content, size: stats.size, modified: stats.mtimeMs };
+    const { buffer, stats } = read;
+    return { content: buffer.toString('utf8'), size: stats.size, modified: stats.mtimeMs };
   }
 
   return {

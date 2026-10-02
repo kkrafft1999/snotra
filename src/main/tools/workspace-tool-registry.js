@@ -797,8 +797,9 @@ function createWorkspaceToolRegistry({
         },
         required: ['query'],
       },
-      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
-        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots, sensitivity }),
+      // The signal lets Stop end a long search at once (#644).
+      handler: (args, { workspaceRoot, skillRoots, sensitivity, abortSignal }) =>
+        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots, sensitivity, abortSignal }),
     },
     {
       name: 'find_files',
@@ -821,8 +822,8 @@ function createWorkspaceToolRegistry({
           pattern: {
             type: 'string',
             description:
-              'Glob pattern in gitignore syntax (*, ?, **), e.g. "*.md", "src/**/*.js" or ' +
-              '"components/" (folders only); patterns containing / are anchored at the project root.',
+              'Glob pattern in gitignore syntax (*, ?, **, [abc], [a-z], [!x]), e.g. "*.md", "src/**/*.js", ' +
+              '"*.[jt]s" or "components/" (folders only); patterns containing / are anchored at the project root.',
           },
           relative_path: {
             type: 'string',
@@ -842,8 +843,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['pattern'],
       },
-      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
-        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots, sensitivity }),
+      handler: (args, { workspaceRoot, skillRoots, sensitivity, abortSignal }) =>
+        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots, sensitivity, abortSignal }),
     },
     {
       name: 'stat_path',
