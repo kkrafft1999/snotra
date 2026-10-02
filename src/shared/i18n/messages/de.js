@@ -183,6 +183,7 @@ module.exports = {
   'fs.error.tooMuchData': 'Zu viele Daten auf einmal (Grenze: {limit}). Bitte in kleineren Teilen übernehmen.',
   'fs.error.copyFailed': 'Kopieren fehlgeschlagen: {error}',
   'fs.error.previewTooLarge': 'Datei zu groß für die Vorschau',
+  'fs.error.previewNotAFile': 'Keine normale Datei – Ordner, Pipes und Geräte haben keine Vorschau',
 
   'import.count.dirs.one': '{count} Ordner',
   'import.count.dirs.other': '{count} Ordner',

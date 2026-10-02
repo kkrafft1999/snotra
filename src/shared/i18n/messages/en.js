@@ -177,6 +177,7 @@ module.exports = {
   'fs.error.tooMuchData': 'Too much data at once (limit: {limit}). Please take it over in smaller parts.',
   'fs.error.copyFailed': 'Copying failed: {error}',
   'fs.error.previewTooLarge': 'File too large for preview',
+  'fs.error.previewNotAFile': 'Not a regular file — a folder, pipe or device has no preview',
 
   'import.count.dirs.one': '{count} folder',
   'import.count.dirs.other': '{count} folders',
