@@ -10,20 +10,29 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { RENDERER_DIR, importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
 const item = (name, extra = {}) => ({ path: `/ws/${name}`, name, size: 4096, modified: 1, ...extra });
 const pdfBytes = (extra = {}) => ({ ok: true, bytes: new Uint8Array([37, 80, 68, 70, 45]), size: 13312, mtimeMs: 1, ...extra });
 
 /** A pdf.js document stand-in: A4 pages that "render" at once. */
-function fakeDocument({ pages = 3, failPage = null, sizes = {} } = {}) {
+function fakeDocument({ pages = 3, failPage = null, unreadablePage = null, sizes = {} } = {}) {
   const renders = [];
+  const cleanups = [];
   return {
     numPages: pages,
     renders,
+    cleanups,
     async getPage(n) {
+      if (n === unreadablePage) throw new Error('Invalid page request.');
       const size = sizes[n] ?? { width: 595, height: 842 };
       return {
+        cleanup: () => {
+          cleanups.push(n);
+          return true;
+        },
         getViewport: ({ scale }) => ({ width: size.width * scale, height: size.height * scale }),
         render: ({ canvas, viewport }) => {
           renders.push({ page: n, width: canvas.width, scale: viewport.width / size.width });
@@ -90,6 +99,65 @@ function message() {
 
 function press(el, key) {
   el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+}
+
+/**
+ * A protected PDF whose password nobody enters: pdf.js asks and then waits,
+ * as it does — its promise only settles in destroy(), and the stand-in's
+ * destroy does not do that, so nothing but the view can end the wait.
+ */
+const askAndWait = (bytes, { onPassword }) => new Promise(() => {
+  queueMicrotask(() => onPassword(() => {}, 'need'));
+});
+
+/** Whether a promise settles within a few turns of the event loop. */
+async function settlesSoon(promise) {
+  let settled = false;
+  promise.then(() => { settled = true; }, () => { settled = true; });
+  await settle();
+  return settled;
+}
+
+/** An IntersectionObserver the test drives: happy-dom has none. */
+function fakeIntersectionObserver(t) {
+  const observers = [];
+  globalThis.IntersectionObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+
+    observe() {}
+
+    disconnect() {
+      this.callback = null;
+    }
+  };
+  t.after(() => { delete globalThis.IntersectionObserver; });
+  return {
+    report(entries) {
+      observers.findLast((o) => o.callback)?.callback(entries.map(([n, isIntersecting]) => ({
+        target: $(`.pdf-page[data-page="${n}"]`),
+        isIntersecting,
+      })));
+    },
+  };
+}
+
+/** A ResizeObserver the test drives, for the fit-width re-layout. */
+function fakeResizeObserver() {
+  const observers = [];
+  globalThis.ResizeObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+
+    observe() {}
+
+    disconnect() {}
+  };
+  return { resize: () => observers.forEach((o) => o.callback([])) };
 }
 
 test('a PDF comes through fs:readWorkspacePdf, never as text, and shows its pages', async (t) => {
@@ -254,6 +322,7 @@ test('a protected PDF asks for its password, says when it is wrong, and opens wi
   assert.deepEqual(tried, ['wrong']);
   assert.equal($('.pdf-view__password-feedback').textContent, 'That password is not right.');
   assert.equal($('.pdf-view__password-input').getAttribute('aria-invalid'), 'true');
+  assert.equal(document.activeElement, $('.pdf-view__password-input'), 'after the own wrong try the field has the focus again');
 
   $('.pdf-view__password-input').value = 'secret';
   $('.pdf-view__password').dispatchEvent(new Event('submit', { cancelable: true }));
@@ -291,6 +360,178 @@ test('leaving the file destroys the document and its worker', async (t) => {
   assert.equal(calls.destroyed, 1);
 });
 
+test('leaving a protected PDF at the password prompt destroys the load that waits for it, once', async (t) => {
+  const { host, calls } = await mountPane(t, { pdfs: { '/ws/nda.pdf': pdfBytes() }, open: askAndWait });
+  await host.open(item('nda.pdf'));
+  await settle();
+  assert.ok($('.pdf-view__password'));
+  assert.equal(calls.destroyed, 0);
+
+  await host.close();
+  assert.equal(calls.destroyed, 1, 'the pending load and its worker are let go of');
+  host.dispose();
+  assert.equal(calls.destroyed, 1, 'and only once');
+});
+
+test('a refresh at the password prompt with unchanged bytes opens nothing; what is typed and the focus stay', async (t) => {
+  const { host, calls } = await mountPane(t, { pdfs: { '/ws/nda.pdf': pdfBytes() }, open: askAndWait });
+  await host.open(item('nda.pdf'));
+  await settle();
+  const input = $('.pdf-view__password-input');
+  input.value = 'half-typ';
+  // The user has moved on to the chat composer meanwhile.
+  const composer = document.getElementById('chat-input');
+  composer.focus();
+
+  assert.equal(await settlesSoon(host.refresh('/ws/nda.pdf')), true, 'the refresh does not wait for the password');
+  assert.equal(calls.pdfs.length, 2, 'read again');
+  assert.equal(calls.opened, 1, 'but not reopened');
+  assert.equal($('.pdf-view__password-input'), input, 'the form is not rebuilt');
+  assert.equal(input.value, 'half-typ');
+  assert.equal(document.activeElement, composer, 'the focus stays where the user is');
+});
+
+test('new bytes at the password prompt reopen without waiting for the user, and without taking the focus', async (t) => {
+  const { host, calls, pdfs } = await mountPane(t, { pdfs: { '/ws/nda.pdf': pdfBytes() }, open: askAndWait });
+  await host.open(item('nda.pdf'));
+  await settle();
+  $('.pdf-view__password-input').value = 'half';
+  const composer = document.getElementById('chat-input');
+  composer.focus();
+
+  pdfs['/ws/nda.pdf'] = pdfBytes({ mtimeMs: 2 });
+  assert.equal(await settlesSoon(host.refresh('/ws/nda.pdf')), true, 'the tree does not wait at the prompt');
+  assert.equal(calls.opened, 2);
+  assert.equal(calls.destroyed, 1, 'the load it supersedes is destroyed');
+  assert.equal($('.pdf-view__password-input').value, 'half', 'what is typed is kept');
+  assert.equal(document.activeElement, composer);
+});
+
+test('a language switch at the password prompt keeps what is typed, and the focus where it is', async (t) => {
+  const { host } = await mountPane(t, { pdfs: { '/ws/nda.pdf': pdfBytes() }, open: askAndWait });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+  await host.open(item('nda.pdf'));
+  await settle();
+  $('.pdf-view__password-input').value = 'half';
+  const composer = document.getElementById('chat-input');
+  composer.focus();
+
+  setLocale('de', { force: true });
+  assert.equal($('.pdf-view__password-submit').textContent, 'Öffnen');
+  assert.equal($('.pdf-view__password-input').value, 'half');
+  assert.equal(document.activeElement, composer);
+
+  $('.pdf-view__password-input').focus();
+  setLocale('en', { force: true });
+  assert.equal(document.activeElement, $('.pdf-view__password-input'), 'a focus in the form stays in it');
+});
+
+test('host.refresh() settles once the view is left, whatever pdf.js does', async (t) => {
+  let opens = 0;
+  const { host, calls, pdfs } = await mountPane(t, {
+    pdfs: { '/ws/nda.pdf': pdfBytes() },
+    // First the prompt; then, for the changed file, a pdf.js that neither
+    // asks nor answers.
+    open: (bytes, options) => {
+      opens += 1;
+      return opens === 1 ? askAndWait(bytes, options) : new Promise(() => {});
+    },
+  });
+  await host.open(item('nda.pdf'));
+  await settle();
+
+  pdfs['/ws/nda.pdf'] = pdfBytes({ mtimeMs: 2 });
+  const refreshing = host.refresh('/ws/nda.pdf');
+  assert.equal(await settlesSoon(refreshing), false, 'still opening');
+  await host.close();
+  assert.equal(await settlesSoon(refreshing), true, 'the tree chain goes on');
+  assert.equal(calls.destroyed, 2, 'both loads are let go of');
+});
+
+test('a page lets go of what pdf.js decoded when it leaves the render window, and on a zoom', async (t) => {
+  const pdf = fakeDocument({ pages: 5 });
+  const { host } = await mountPane(t, { pdfs: { '/ws/spec.pdf': pdfBytes() }, open: () => Promise.resolve(pdf) });
+  const viewport = fakeIntersectionObserver(t);
+  await host.open(item('spec.pdf'));
+  await settle();
+  viewport.report([[1, true], [2, true], [3, true]]);
+  await settle();
+  assert.deepEqual($$('.pdf-page canvas').map((c) => c.closest('.pdf-page').dataset.page), ['1', '2', '3']);
+
+  viewport.report([[1, false]]);
+  assert.deepEqual(pdf.cleanups, [1], 'released with its canvas');
+  assert.equal($('.pdf-page[data-page="1"] canvas'), null);
+
+  $('.pdf-tools__zoom-in').click();
+  assert.deepEqual(pdf.cleanups.sort(), [1, 2, 3], 'a re-layout releases every drawn page');
+});
+
+test('a document whose first page cannot be read is let go of, and the header stays with the reason', async (t) => {
+  const { host, calls } = await mountPane(t, {
+    pdfs: { '/ws/cut.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ unreadablePage: 1 })),
+  });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+  await host.open(item('cut.pdf'));
+  await settle();
+  assert.equal(message()?.title, 'Not a readable PDF');
+  assert.equal(calls.destroyed, 1, 'document and worker are destroyed');
+  assert.equal($('#preview-meta').textContent, '13.0 KB');
+
+  setLocale('de', { force: true });
+  assert.equal(message()?.title, 'Keine lesbare PDF');
+  assert.equal($('#preview-meta').textContent, '13,0 KB', 'no page count next to the reason');
+});
+
+test('a broken PDF is not opened again while its bytes stay the same', async (t) => {
+  const cases = {
+    'pdf.js rejects the file': () => Promise.reject(Object.assign(new Error('Invalid PDF structure.'), { name: 'InvalidPDFException' })),
+    'page 1 cannot be read': () => Promise.resolve(fakeDocument({ unreadablePage: 1 })),
+  };
+  for (const [what, open] of Object.entries(cases)) {
+    const { host, calls, pdfs } = await mountPane(t, { pdfs: { '/ws/cut.pdf': pdfBytes() }, open });
+    await host.open(item('cut.pdf'));
+    await settle();
+    assert.equal(message()?.title, 'Not a readable PDF', what);
+
+    await host.refresh('/ws/cut.pdf');
+    await settle();
+    assert.equal(calls.pdfs.length, 2, `${what}: read again`);
+    assert.equal(calls.opened, 1, `${what}: but no new worker for the same bytes`);
+    assert.equal(message()?.title, 'Not a readable PDF', what);
+
+    pdfs['/ws/cut.pdf'] = pdfBytes({ mtimeMs: 2 });
+    await host.refresh('/ws/cut.pdf');
+    await settle();
+    assert.equal(calls.opened, 2, `${what}: changed bytes are tried`);
+    host.dispose();
+  }
+});
+
+test('the zoom is said when the user zooms, not when the column width moves it', async (t) => {
+  const { host } = await mountPane(t, { pdfs: { '/ws/spec.pdf': pdfBytes() } });
+  const column = fakeResizeObserver();
+  await host.open(item('spec.pdf'));
+  await settle();
+  const announcer = $('.pdf-view__announcer');
+  assert.equal(announcer.getAttribute('role'), 'status');
+  assert.equal($('.pdf-tools__zoom').getAttribute('aria-live'), 'off', 'the visible value is not a live region');
+
+  const view = $('.pdf-view');
+  Object.defineProperty(view, 'clientWidth', { configurable: true, value: 840 });
+  column.resize();
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  assert.equal($('.pdf-tools__zoom').textContent, '101 %', 'Width follows the column');
+  assert.equal(announcer.textContent, '', 'and says nothing');
+
+  $('.pdf-tools__zoom-in').click();
+  assert.equal(announcer.textContent, '110 %');
+  view.dispatchEvent(new KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true }));
+  assert.equal(announcer.textContent, '101 %');
+});
+
 test('a page that fails to draw says so in its own place', async (t) => {
   const { host } = await mountPane(t, {
     pdfs: { '/ws/spec.pdf': pdfBytes() },
@@ -314,6 +555,38 @@ test('the view follows the interface language', async (t) => {
   assert.equal($('.pdf-tools__next').getAttribute('aria-label'), 'Nächste Seite');
   assert.equal($('.pdf-page').getAttribute('aria-label'), 'Seite 1 von 3');
   assert.equal($('#preview-meta').textContent, '13,0 KB · 3 Seiten');
+});
+
+test('the PDF view keeps to the tokens: ink for the paper, no amber, 32 px touch targets (#641)', () => {
+  const read = (file) => fs.readFileSync(path.join(RENDERER_DIR, file), 'utf8')
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const styles = read('styles.css');
+  const tokens = read(path.join('styles', 'tokens.css'));
+  const rule = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const found = styles.match(new RegExp(`(?:^|\\n|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`));
+    assert.ok(found, `${selector} is in styles.css`);
+    return found[1];
+  };
+  const dark = tokens.match(/\[data-theme='dark'\]\s*\{([^}]*)\}/)[1];
+
+  // The page is white in both themes, and so must its ink be.
+  assert.match(rule('.pdf-page__error'), /color:\s*var\(--ds-paper-ink\)/);
+  assert.match(tokens, /--ds-paper-ink:\s*#[0-9A-Fa-f]{6};/);
+  assert.doesNotMatch(dark, /--ds-paper(?:-ink)?:/, 'paper and ink do not follow the theme');
+
+  for (const selector of ['.pdf-view__password-feedback', ".pdf-view__password-input[aria-invalid='true']"]) {
+    assert.doesNotMatch(rule(selector), /--ds-warning/, `${selector}: amber means "not isolated" only`);
+    assert.match(rule(selector), /var\(--ds-error\)/, selector);
+  }
+
+  assert.match(rule('.pdf-tools__button'), /min-width:\s*var\(--ds-touch-min\);/);
+  assert.match(rule('.pdf-tools__button'), /\bheight:\s*var\(--ds-touch-min\);/);
+  assert.match(rule('.pdf-tools__page'), /\bheight:\s*var\(--ds-touch-min\);/);
+  assert.match(rule('.ds-segmented__option'), /min-height:\s*var\(--ds-touch-min\);/);
+  assert.doesNotMatch(rule('.ds-segmented--compact .ds-segmented__option'), /height/,
+    'the header\'s "Preview | Source" keeps the 32 px');
 });
 
 test('nextZoom walks the steps from anywhere; fitWidthZoom has no answer without a column', async () => {

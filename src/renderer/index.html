@@ -100,13 +100,14 @@
               </svg>
             </button>
             <div id="folder-history-wrapper">
-              <button id="btn-folder-history" type="button" title="Recently opened folders" aria-label="Recently opened folders" aria-haspopup="menu" aria-expanded="false" data-i18n-attr="title:sidebar.recentFolders;aria-label:sidebar.recentFolders">
+              <button id="btn-folder-history" type="button" title="Recently opened folders" aria-label="Recently opened folders" aria-haspopup="menu" aria-expanded="false" aria-controls="folder-history-menu" data-i18n-attr="title:sidebar.recentFolders;aria-label:sidebar.recentFolders">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9"/>
                   <polyline points="12 7 12 12 15 14"/>
                 </svg>
               </button>
-              <div id="folder-history-menu" class="hidden" role="menu" aria-hidden="true"></div>
+              <div id="folder-history-menu" class="hidden" role="menu" aria-labelledby="btn-folder-history" aria-hidden="true"></div>
+              <span id="folder-history-hint" hidden data-i18n="sidebar.history.removeHint">Press Delete or Backspace to remove the folder from the history.</span>
             </div>
             <button id="btn-open-folder" title="Open folder" aria-label="Open folder" data-i18n-attr="title:sidebar.openFolder;aria-label:sidebar.openFolder">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -207,6 +208,8 @@
             <tr><td data-i18n="fileInfo.field.modified">Modified</td><td id="info-modified"></td></tr>
             <tr><td data-i18n="fileInfo.field.type">Type</td><td id="info-type"></td></tr>
           </table>
+          <!-- Why a file that has a view is not shown in it (#641). -->
+          <p id="info-note" hidden></p>
         </div>
       </section>
     </div>

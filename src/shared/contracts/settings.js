@@ -46,7 +46,10 @@ const LLM_CONFIG_VERSION = 5;
 
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;
-const SIDEBAR_WIDTH_MIN = 150;
+// The same minimum as `#sidebar { min-width }` in styles.css and SIDEBAR_MIN
+// in SidebarResizer.js — 180 px is what the CSS has always rendered (#637).
+// test/sidebar-resizer-dom.test.js fails if the three drift apart.
+const SIDEBAR_WIDTH_MIN = 180;
 const SIDEBAR_WIDTH_MAX = 600;
 const CHAT_PANEL_WIDTH_MIN = 260;
 const CHAT_PANEL_WIDTH_MAX = 2000;

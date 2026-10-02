@@ -25,6 +25,7 @@ import { t, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
 import { MODES, buildModeSwitch } from './mode-switch.js';
 import { plainTextView } from './plain-text-view.js';
+import { readFailureMessageKey, readFailureOf } from './read-failures.js';
 
 const { MAX_WORKSPACE_IMAGE_BYTES, WORKSPACE_IMAGE_ERRORS, workspaceImageDataUrl } = contracts;
 
@@ -118,6 +119,9 @@ export const imageView = {
     let loadingTimer = null;
     // Every read draws a number; an answer for an older one is dropped.
     let readGeneration = 0;
+    // The same for the source of an SVG (#641), and why it is not shown.
+    let sourceGeneration = 0;
+    let sourceFailure = null;
 
     const viewEl = document.createElement('div');
     viewEl.className = 'img-view';
@@ -137,6 +141,15 @@ export const imageView = {
     sourceEl.className = 'md-source';
     sourceEl.hidden = true;
     let sourceInstance = null;
+    // The text and the reason it is missing take turns; the reason is a
+    // state of its own, never the file's content in the monospace pane.
+    const sourceTextEl = document.createElement('div');
+    sourceTextEl.className = 'img-source__text';
+    const sourceMessageEl = document.createElement('div');
+    sourceMessageEl.className = 'img-view__message img-source__message';
+    sourceMessageEl.setAttribute('role', 'status');
+    sourceMessageEl.hidden = true;
+    sourceEl.append(sourceTextEl, sourceMessageEl);
 
     hostEl.append(viewEl, sourceEl);
 
@@ -342,17 +355,41 @@ export const imageView = {
 
     // ── Source (SVG) ──────────────────────────────────────────────────────
 
+    // An SVG between the text limit (1 MB) and the image limit (10 MB) is
+    // shown as a picture, but its source is not: the reason comes from main
+    // as a code and is said in the interface language (#641). Whichever read
+    // started last wins, so an older answer cannot overwrite a newer one.
     async function readSource() {
+      const generation = ++sourceGeneration;
       let result;
       try {
         result = await api.readFile(file.path);
-      } catch (err) {
-        result = { error: err?.message ?? String(err) };
+      } catch {
+        result = null;
       }
-      if (disposed) return;
-      const text = result && !result.error ? result.content : (result?.error ?? '');
-      if (sourceInstance) sourceInstance.update({ content: text });
-      else sourceInstance = plainTextView.mount(sourceEl, { ...context, content: text });
+      if (disposed || generation !== sourceGeneration) return;
+      if (!result || result.error || typeof result.content !== 'string') {
+        sourceFailure = readFailureOf(result);
+        renderSourceFailure();
+        return;
+      }
+      sourceFailure = null;
+      sourceMessageEl.hidden = true;
+      sourceTextEl.hidden = false;
+      if (sourceInstance) sourceInstance.update({ content: result.content });
+      else sourceInstance = plainTextView.mount(sourceTextEl, { ...context, content: result.content });
+    }
+
+    function renderSourceFailure() {
+      const titleEl = document.createElement('strong');
+      titleEl.className = 'img-view__message-title';
+      titleEl.textContent = t('fileView.source.unavailable');
+      const detailEl = document.createElement('span');
+      detailEl.className = 'img-view__message-detail';
+      detailEl.textContent = t(readFailureMessageKey(sourceFailure));
+      sourceMessageEl.replaceChildren(titleEl, detailEl);
+      sourceMessageEl.hidden = false;
+      sourceTextEl.hidden = true;
     }
 
     function setMode(next) {
@@ -367,6 +404,7 @@ export const imageView = {
 
     const stopFollowingLocale = onLocaleChange(() => {
       modeSwitch?.applyLabels();
+      if (sourceFailure) renderSourceFailure();
       if (shown?.reason) renderError();
       else if (!shown) showLoading();
       else applyToggleLabels();

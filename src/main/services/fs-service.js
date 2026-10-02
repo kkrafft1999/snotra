@@ -923,7 +923,9 @@ function createFsService({
       }
       return { absPath: lexical.absPath };
     } catch (e) {
-      return { error: e.message };
+      // The code lets a caller tell "no right to look" and "a dangling link"
+      // from a path that lies outside (#641).
+      return { error: e.message, code: e.code };
     }
   }
 

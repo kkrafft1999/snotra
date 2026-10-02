@@ -11,8 +11,12 @@
 // for them (`pdf:readAsset`), by kind and name.
 //
 // What is switched off, and why:
-//   * `isEvalSupported: false` — pdf.js would otherwise try `new Function`
-//     for faster glyph drawing; the CSP forbids it anyway.
+//   * No code from strings. pdf.js 6 no longer compiles any and dropped
+//     `isEvalSupported` with it; an option it does not know protects
+//     nothing, so none is passed (#641). In the page
+//     the CSP would refuse it (`script-src 'self'`, no `'unsafe-eval'`). The
+//     worker, loaded from a `file:` URL, gets no CSP at all: there it is the
+//     vendored code that holds, and test/workspace-pdf.test.js checks it.
 //   * `enableXfa: false` — XFA forms are HTML that pdf.js would put into the
 //     page. The view shows the drawn page, nothing else.
 //   * No scripting. PDF JavaScript only runs through pdf.js's scripting
@@ -79,7 +83,6 @@ export async function openPdfDocument(api, bytes, { onPassword } = {}) {
     // imports as a script when WebAssembly is not available.
     wasmUrl: new URL('wasm/', BASE).href,
     useWorkerFetch: false,
-    isEvalSupported: false,
     enableXfa: false,
   });
   if (onPassword) {

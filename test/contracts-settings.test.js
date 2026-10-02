@@ -116,7 +116,8 @@ test('normalizeUiPrefs and patch apply clamps', () => {
   assert.equal('allowWorkspaceWrite' in normalizeUiPrefsPatch({ allowWorkspaceWrite: true }), false);
   const patch = normalizeUiPrefsPatch({ maxToolRounds: 9999, sidebarWidth: 50 });
   assert.equal(patch.maxToolRounds, 500);
-  assert.equal(patch.sidebarWidth, 150);
+  // 180 like `#sidebar { min-width }` — the CSS minimum is the contract's (#637).
+  assert.equal(patch.sidebarWidth, 180);
   assert.equal(clampMaxToolRounds(0), 1);
   assert.equal(clampSidebarWidth(999), 600);
 });

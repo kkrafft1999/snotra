@@ -23,12 +23,15 @@
 // in a Markdown document (#344). It asks through `context.openFile(path)`; the
 // host hands that to `openFile`, which the file tree provides, because only
 // the tree knows the workspace, can select the file and can tell a file that
-// is not there from one it just does not list.
+// is not there from one it just does not list. A `{ fragment }` next to the
+// path stays with the host and reaches the view mounted for that path as
+// `context.fragment` (#641) — the tree only ever opens the file.
 //
 // The interface of a view is documented in the header of `registry.js`.
 
 import { t, onLocaleChange } from '../i18n.js';
 import { formatSize, formatTimestamp, getExtension } from '../utils/helpers.js';
+import { READ_FAILURES, readFailureMessageKey, readFailureOf } from './read-failures.js';
 import { fileViews, readsText } from './registry.js';
 
 const keepEditing = async () => 'cancel';
@@ -53,16 +56,22 @@ export function createFileViewHost({
   const infoSize = document.getElementById('info-size');
   const infoModified = document.getElementById('info-modified');
   const infoType = document.getElementById('info-type');
+  const infoNote = document.getElementById('info-note');
 
   // What the pane shows, or null for the welcome screen:
   //   { item, file, view, instance, content, dirty, error, detail }
   // `view` without `instance` means a text view was chosen but the file could
-  // not be read — the info card stands in, and a refresh tries again.
+  // not be read — the info card stands in, and a refresh tries again. `error`
+  // is then a reason from `read-failures.js`, never a sentence.
   let current = null;
   // Every open() draws a number; a read that returns after a newer open() has
   // started is dropped instead of overwriting it.
   let generation = 0;
   let pendingAsk = null;
+  // The `#section` a view's link asked for along with a file (#641): the
+  // tree opens the file, and the next open() of that path hands it to the
+  // view it mounts. Any other open() drops it.
+  let pendingFragment = null;
 
   function teardown() {
     const shown = current;
@@ -106,11 +115,19 @@ export function createFileViewHost({
   function renderInfo() {
     const { item, error } = current;
     infoFilename.textContent = item.name;
-    // The error text comes from the main process, already in the right
-    // language — which is why a language switch reads the file again.
-    infoSize.textContent = error || formatSize(item.size);
+    infoSize.textContent = formatSize(item.size);
     infoModified.textContent = formatTimestamp(item.modified);
     infoType.textContent = getExtension(item.name) || t('fileInfo.type.unknown');
+    // Why there is no preview, below the facts and in the interface language
+    // (#641): main and a failed mount hand over a reason, not a sentence.
+    infoNote.textContent = error ? t(readFailureMessageKey(error)) : '';
+    infoNote.hidden = !error;
+  }
+
+  /** A read that failed: main's reason, and the size it measured, if any. */
+  function showReadFailure(item, result, view) {
+    const size = Number.isFinite(result?.size) ? result.size : item.size;
+    showInfo({ ...item, size }, readFailureOf(result), view);
   }
 
   function showInfo(item, error, view) {
@@ -128,7 +145,7 @@ export function createFileViewHost({
     renderInfo();
   }
 
-  async function mountView(view, item, result) {
+  async function mountView(view, item, result, fragment = '') {
     teardown();
     const file = {
       path: item.path,
@@ -155,9 +172,12 @@ export function createFileViewHost({
     const context = {
       file: { ...file },
       content: result.content,
+      fragment,
       api,
       workspaceRoot: getWorkspaceRoot() ?? null,
-      openFile: (path) => (current === shown ? openFile(path) : Promise.resolve({ ok: false, reason: 'stale' })),
+      openFile: (path, options) => (current === shown
+        ? openFromView(path, options)
+        : Promise.resolve({ ok: false, reason: 'stale' })),
       setTools: (nodes) => {
         if (current === shown) setTools(nodes);
       },
@@ -176,8 +196,10 @@ export function createFileViewHost({
     try {
       instance = await view.mount(hostEl, context);
     } catch (err) {
+      // The cause is for the console; the card says, in the user's language,
+      // only that the file cannot be shown (#641).
       console.error(`File view "${view.id}" failed to mount:`, err);
-      if (current === shown) showInfo(item, err?.message ?? String(err), view);
+      if (current === shown) showInfo(item, READ_FAILURES.VIEW_FAILED, view);
       return;
     }
     if (current !== shown) {
@@ -235,6 +257,9 @@ export function createFileViewHost({
    * newer open() overtook this one.
    */
   async function open(item) {
+    // Only the open a view's link asked for gets the fragment it named.
+    const fragment = pendingFragment?.path === item.path ? pendingFragment.fragment : '';
+    pendingFragment = null;
     if (current?.file.path === item.path && current.view) {
       // The same file again: read it, but keep the view and whatever state it
       // has — scroll position, and in an editor the buffer. It still counts as
@@ -254,17 +279,26 @@ export function createFileViewHost({
     }
     if (!readsText(view)) {
       // The view reads the file itself (#345); size and date come from the tree.
-      await mountView(view, item, { content: null, size: item.size, modified: item.modified });
+      await mountView(view, item, { content: null, size: item.size, modified: item.modified }, fragment);
       return ticket === generation;
     }
     const result = await api.readFile(item.path);
     if (ticket !== generation) return false;
     if (!result || result.error) {
-      showInfo(item, result?.error, view);
+      showReadFailure(item, result, view);
       return true;
     }
-    await mountView(view, item, result);
+    await mountView(view, item, result, fragment);
     return ticket === generation;
+  }
+
+  /** A view's link to another file, perhaps with a `#section` in it (#641). */
+  async function openFromView(path, { fragment = '' } = {}) {
+    pendingFragment = fragment ? { path, fragment } : null;
+    const result = await openFile(path);
+    // Nothing was opened: the fragment must not wait for a later click.
+    if (!result?.ok && pendingFragment?.path === path) pendingFragment = null;
+    return result;
   }
 
   /**
@@ -286,7 +320,7 @@ export function createFileViewHost({
     if (!result || result.error) {
       // An editor's buffer outlives a file it can no longer read.
       if (shown.dirty) return;
-      showInfo(shown.item, result?.error, shown.view);
+      showReadFailure(shown.item, result, shown.view);
       return;
     }
     if (!shown.instance) {
@@ -297,9 +331,30 @@ export function createFileViewHost({
     }
     shown.file = { ...shown.file, size: result.size, modified: result.modified ?? shown.file.modified };
     renderHeader();
-    if (result.content === shown.content) return;
+    if (result.content === shown.content) {
+      // The same text can point at images that changed (#640); a view that
+      // shows such things checks them itself.
+      await shown.instance.revalidate?.();
+      return;
+    }
     shown.content = result.content;
     await shown.instance.update({ content: result.content, size: result.size, modified: result.modified });
+  }
+
+  /**
+   * Files changed in `directories`, none of them the one on show — the
+   * watcher reported those folders. A view that shows other files, the
+   * images of a Markdown document, checks the ones it has there (#640).
+   * Never throws: it runs inside the tree's queue.
+   */
+  async function revalidate(directories) {
+    const shown = current;
+    if (typeof shown?.instance?.revalidate !== 'function') return;
+    try {
+      await shown.instance.revalidate({ directories: Array.isArray(directories) ? directories : [] });
+    } catch (err) {
+      console.warn(`File view "${shown.view.id}" failed to revalidate:`, err?.message ?? err);
+    }
   }
 
   /**
@@ -337,16 +392,18 @@ export function createFileViewHost({
     }
   }
 
+  // The info card's reason is a catalogue key since #641, so a language
+  // switch only has to draw the card again; it no longer reads the file.
   const stopFollowingLocale = onLocaleChange(() => {
     if (!current) return;
-    if (current.error) void refresh(current.file.path);
-    else if (current.instance) renderHeader();
+    if (current.instance) renderHeader();
     else renderInfo();
   });
 
   return {
     open,
     refresh,
+    revalidate,
     close,
     settleUnsaved,
     /** Back to the welcome screen without asking — for a caller that already settled. */

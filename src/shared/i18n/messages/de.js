@@ -48,10 +48,19 @@ module.exports = {
   'sidebar.history.empty': 'Noch keine zuletzt geöffneten Ordner.',
   'sidebar.history.remove': 'Aus Verlauf entfernen',
   'sidebar.history.remove.label': '{name} aus dem Verlauf entfernen',
+  'sidebar.history.removeHint': 'Mit Entf oder der Rücktaste entfernst du den Ordner aus dem Verlauf.',
   'tree.reference': 'Im Chat referenzieren',
   'tree.reference.label': '{name} im Chat referenzieren',
-  'tree.hiddenEntries.one': '… {count} weiterer Eintrag ausgeblendet',
-  'tree.hiddenEntries.other': '… {count} weitere Einträge ausgeblendet',
+  // "nicht angezeigt", not "ausgeblendet": since #436 that is the verb of the
+  // hidden-files switch, which has nothing to do with the cap (#641).
+  'tree.hiddenEntries.one': '… {count} weiterer Eintrag nicht angezeigt',
+  'tree.hiddenEntries.other': '… {count} weitere Einträge nicht angezeigt',
+  // In place of a folder's entries when it cannot be listed (#639).
+  'tree.unreadable.permission': 'Keine Berechtigung, diesen Ordner zu lesen',
+  'tree.unreadable.missing': 'Diesen Ordner gibt es nicht mehr',
+  'tree.unreadable.other': 'Dieser Ordner ließ sich nicht lesen',
+  // In place of the tree while the project folder takes its time to list (#639).
+  'tree.loading': 'Ordner wird geladen…',
   'fileInfo.type.unknown': 'Unbekannt',
   // Markdown in der Dateivorschau (#344). „Preview“ bleibt auch im Deutschen
   // „Preview“ — so entschieden am 2026-09-26.
@@ -64,6 +73,15 @@ module.exports = {
   'fileView.markdown.link.notFound': '{path} gibt es im geöffneten Ordner nicht.',
   'fileView.markdown.link.outside': '{path} liegt außerhalb des geöffneten Ordners.',
   'fileView.markdown.link.noAnchor': 'In dieser Datei gibt es keine Überschrift {anchor}.',
+  'fileView.markdown.image.broken': 'Bild ist beschädigt',
+  'fileView.source.unavailable': 'Quelltext nicht verfügbar',
+  // Why a file is not shown (#641): main names the reason, these say it.
+  'fileView.notShown.refused': 'Die Datei zeigt über eine Verknüpfung aus dem geöffneten Ordner heraus und wird deshalb nicht gezeigt.',
+  'fileView.notShown.missing': 'Diese Datei gibt es nicht mehr. Sie wurde verschoben, umbenannt oder gelöscht.',
+  'fileView.notShown.permission': 'Snotra darf diese Datei nicht lesen.',
+  'fileView.notShown.tooLarge': 'Diese Datei ist zu groß, um sie als Text zu zeigen.',
+  'fileView.notShown.failed': 'Diese Datei ließ sich nicht lesen.',
+  'fileView.notShown.viewFailed': 'Diese Datei ließ sich nicht anzeigen.',
   // Bilder in der Dateivorschau (#345).
   'fileView.image.loading': 'Bild wird geladen…',
   'fileView.image.toggle': '{name} in Originalgröße zeigen',

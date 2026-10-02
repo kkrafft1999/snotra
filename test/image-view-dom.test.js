@@ -271,6 +271,97 @@ test('an SVG shows as an image with the size it declares, and switches to its so
   assert.equal($('.md-source').hidden, true);
 });
 
+/** Switches an SVG to its source, as the header control does. */
+async function showSource() {
+  const source = $$('#preview-tools input[type="radio"]')[1];
+  source.checked = true;
+  source.dispatchEvent(new Event('change', { bubbles: true }));
+  await settle();
+}
+
+function sourceMessage() {
+  const box = $('.img-source__message');
+  if (!box || box.hidden) return null;
+  return {
+    title: box.querySelector('.img-view__message-title')?.textContent ?? '',
+    detail: box.querySelector('.img-view__message-detail')?.textContent ?? '',
+  };
+}
+
+test('an SVG whose source cannot be read says why instead of showing the error as its text (#641)', async (t) => {
+  const markup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>';
+  const { host } = await mountPane(t, {
+    images: { '/ws/big.svg': svg(markup, { size: 3 * 1024 * 1024 }) },
+    // Between the 1 MB text limit and the 10 MB image limit.
+    files: { '/ws/big.svg': { error: 'File too large for preview', reason: 'too-large', size: 3 * 1024 * 1024 } },
+  });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+  await host.open(item('big.svg'));
+  await settle();
+  await showSource();
+
+  assert.deepEqual(sourceMessage(), {
+    title: 'Source not available',
+    detail: 'This file is too large to show as text.',
+  });
+  assert.equal($('#preview-content'), null, 'no monospace pane with an error in it');
+  assert.equal($('.img-source__message').getAttribute('role'), 'status');
+
+  setLocale('de', { force: true });
+  assert.deepEqual(sourceMessage(), {
+    title: 'Quelltext nicht verfügbar',
+    detail: 'Diese Datei ist zu groß, um sie als Text zu zeigen.',
+  });
+});
+
+test('a deleted SVG says so in its source pane, and the text comes back with the file', async (t) => {
+  const markup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>';
+  const files = { '/ws/flow.svg': { content: markup, size: markup.length, modified: 1 } };
+  const { host } = await mountPane(t, { images: { '/ws/flow.svg': svg(markup) }, files });
+  await host.open(item('flow.svg'));
+  await settle();
+  await showSource();
+  assert.equal($('#preview-content').textContent, markup);
+
+  files['/ws/flow.svg'] = { error: "ENOENT: no such file or directory, open '/ws/flow.svg'", reason: 'missing' };
+  await host.refresh('/ws/flow.svg');
+  await settle();
+  assert.equal(sourceMessage().detail, 'This file is no longer there. It was moved, renamed or deleted.');
+  assert.equal($('.img-source__text').hidden, true);
+
+  files['/ws/flow.svg'] = { content: `${markup}\n`, size: markup.length + 1, modified: 2 };
+  await host.refresh('/ws/flow.svg');
+  await settle();
+  assert.equal(sourceMessage(), null);
+  assert.equal($('.img-source__text').hidden, false);
+  assert.equal($('#preview-content').textContent, `${markup}\n`);
+});
+
+test('of two reads of an SVG source the newer one wins (#641)', async (t) => {
+  const markup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>';
+  const answers = [];
+  const files = {};
+  const { host } = await mountPane(t, { images: { '/ws/flow.svg': svg(markup) }, files });
+  await host.open(item('flow.svg'));
+  await settle();
+  // Every read of the source waits until the test answers it.
+  Object.defineProperty(files, '/ws/flow.svg', {
+    get: () => new Promise((resolve) => answers.push(resolve)),
+  });
+
+  await showSource();
+  const refreshed = host.refresh('/ws/flow.svg');
+  await settle();
+  assert.equal(answers.length, 2, 'one read for the switch, one for the refresh');
+  answers[1]({ content: 'new', size: 3, modified: 2 });
+  await settle();
+  answers[0]({ content: 'old', size: 3, modified: 1 });
+  await refreshed;
+  await settle();
+  assert.equal($('#preview-content').textContent, 'new');
+});
+
 test('svgDimensions reads width and height in pixels, else the viewBox', async () => {
   const dom = setupRendererDom();
   try {

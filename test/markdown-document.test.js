@@ -103,6 +103,18 @@ test('relative paths start at the folder of the file, a leading slash at the wor
   assert.equal(doc.resolveDocumentPath('#only-a-fragment', where), null);
 });
 
+test('query and fragment are split off before the path is decoded (#641)', () => {
+  const where = { fileDir: '/ws/docs', workspaceRoot: '/ws' };
+  // `%23` is a `#` in the name, not the start of a fragment.
+  assert.equal(doc.resolveDocumentPath('plot%231.png', where), '/ws/docs/plot#1.png');
+  assert.equal(doc.resolveDocumentPath('what%3F.md?raw=1#top', where), '/ws/docs/what?.md');
+  // What marked hands over for `grün.md`, and what a notice shows of it.
+  assert.equal(doc.resolveDocumentPath('gr%C3%BCn.md', where), '/ws/docs/grün.md');
+  assert.equal(doc.documentPathOf('notizen/gr%C3%BCn.md#teil'), 'notizen/grün.md');
+  assert.equal(doc.documentPathOf('plot%231.png?x'), 'plot#1.png');
+  assert.equal(doc.documentPathOf('broken%E0.md'), 'broken%E0.md', 'undecodable stays as written');
+});
+
 test('Windows: relative paths keep the backslash, a drive path stays as it is', () => {
   const where = { fileDir: 'C:\\ws\\docs', workspaceRoot: 'C:\\ws' };
   assert.equal(doc.resolveDocumentPath('../img/a.png', where), 'C:\\ws\\img\\a.png');
@@ -164,4 +176,40 @@ test('headings get anchors without ids, duplicates numbered; tables get a scroll
   assert.ok(headings.every((h) => !h.id), 'no id that could collide with the window');
   const table = root.querySelector('table');
   assert.equal(table.parentElement.className, 'md-table-frame');
+});
+
+test('only a heading carries an anchor, whatever the document wrote itself (#635)', () => {
+  const root = doc.renderMarkdownFragment('<div data-md-anchor="steps">decoy</div>\n\n## Steps\n');
+  const anchored = [...root.querySelectorAll('[data-md-anchor]')];
+  assert.deepEqual(anchored.map((el) => el.tagName), ['H2']);
+});
+
+// ── The sanitizer ───────────────────────────────────────────────────────────
+
+test('the sanitizer forbids the attributes that would reach into the app window (#635)', async () => {
+  // Whether DOMPurify honours the list is the smoke test's question; here it
+  // is whether the list is handed over, for the chat and for a file alike.
+  const { markdownToSafeHtml } = await importRenderer('utils', 'helpers.js');
+  const configs = [];
+  const { sanitize } = globalThis.DOMPurify;
+  globalThis.DOMPurify.sanitize = (html, config) => {
+    configs.push(config);
+    return html;
+  };
+  try {
+    markdownToSafeHtml('<div id="chat-panel" role="dialog" tabindex="1">x</div>');
+    markdownToSafeHtml('# Doc', { breaks: false, keepRelativeLinks: true });
+  } finally {
+    globalThis.DOMPurify.sanitize = sanitize;
+  }
+  assert.equal(configs.length, 2);
+  const forbidden = [
+    'id', 'name', 'role', 'tabindex', 'popover', 'popovertarget', 'popovertargetaction',
+    // What points at an element of the app by its id.
+    'for', 'form', 'list', 'headers', 'command', 'commandfor', 'interestfor',
+  ];
+  for (const config of configs) {
+    for (const name of forbidden) assert.ok(config.FORBID_ATTR.includes(name), name);
+    assert.equal(config.ALLOW_ARIA_ATTR, false, 'no aria-owns, aria-labelledby & co.');
+  }
 });

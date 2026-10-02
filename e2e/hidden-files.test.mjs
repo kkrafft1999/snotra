@@ -74,6 +74,21 @@ test('hidden files: shortcut, dimmed rows, text preview, menu and restart', { ti
   assert.equal(await pressed(page), 'false');
   assert.equal(await menuChecked(app), false);
 
+  // Names of one level line up, and a folder's children sit one level in
+  // (#639). Measured here, with the real stylesheet: a file row once lost its
+  // arrow's slot, and `app.js` stood where `src` did.
+  await page.evaluate(() => [...document.querySelectorAll('#tree-container .tree-item')]
+    .find((row) => row.querySelector('.label').textContent === 'src').click());
+  await poll(() => page.evaluate(() => Boolean(document.querySelector('.tree-children.expanded .tree-item'))),
+    { what: 'src opened' });
+  const nameLeft = await page.evaluate(() => Object.fromEntries(
+    [...document.querySelectorAll('#tree-container .tree-item')].map((row) => {
+      const label = row.querySelector('.label');
+      return [label.textContent, label.getBoundingClientRect().left];
+    })));
+  assert.equal(nameLeft['README.md'], nameLeft.src, 'a file and a folder of one level');
+  assert.equal(nameLeft['app.js'] - nameLeft.src, 16, 'a child one level in');
+
   // The shortcut: swallowed by the window, so page and menu never see it.
   assert.equal(await pressShortcut(app), true);
   await waitForLabels(page, ['.github', 'src', '.env', 'README.md'], 'tree with hidden files');

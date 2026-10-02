@@ -149,7 +149,46 @@ test('readDirectory lists workspace entries and denies paths outside', async (t)
   assert.equal(inside.hidden, 0);
 
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, outside);
-  assert.deepEqual(denied, { entries: [], hidden: 0 }, 'directories outside the workspace must not be listed');
+  assert.deepEqual(
+    denied,
+    { entries: [], hidden: 0, unreadable: 'refused' },
+    'directories outside the workspace must not be listed'
+  );
+});
+
+// #639: an empty listing must not be the only answer to a folder that cannot
+// be read — the tree would draw it as an empty folder.
+test('readDirectory says why a folder cannot be read (#639)', async (t) => {
+  const { ipcMain, workspace } = await setup(t);
+
+  const gone = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, path.join(workspace, 'gone'));
+  assert.deepEqual(gone, { entries: [], hidden: 0, unreadable: 'missing' });
+  const aFile = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, path.join(workspace, 'inside.txt'));
+  assert.deepEqual(aFile, { entries: [], hidden: 0, unreadable: 'missing' }, 'ENOTDIR');
+
+  const ok = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace);
+  assert.equal('unreadable' in ok, false, 'a folder that lists carries no reason');
+});
+
+test('readDirectory reports a folder without read permission (#639)', async (t) => {
+  // Windows has no mode bits to take away, and root reads everything anyway.
+  if (process.platform === 'win32' || process.getuid?.() === 0) {
+    t.skip('needs POSIX permissions and a user other than root');
+    return;
+  }
+  const { ipcMain, workspace } = await setup(t);
+  const locked = path.join(workspace, 'locked');
+  await fs.mkdir(locked);
+  await fs.writeFile(path.join(locked, 'secret.txt'), 'x', 'utf8');
+  await fs.chmod(locked, 0o000);
+  let denied;
+  try {
+    denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, locked);
+  } finally {
+    // Back before the clean-up, which could not remove a folder it cannot list.
+    await fs.chmod(locked, 0o700);
+  }
+  assert.deepEqual(denied, { entries: [], hidden: 0, unreadable: 'permission' });
 });
 
 test('readDirectory lists dot entries only with showHidden, system noise never (#436)', async (t) => {
@@ -171,7 +210,7 @@ test('readDirectory lists dot entries only with showHidden, system noise never (
 test('readDirectory with showHidden still denies paths outside the workspace (#436)', async (t) => {
   const { ipcMain, outside } = await setup(t);
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, outside, { showHidden: true });
-  assert.deepEqual(denied, { entries: [], hidden: 0 });
+  assert.deepEqual(denied, { entries: [], hidden: 0, unreadable: 'refused' });
 });
 
 test('listWorkspacePaths follows the tree: dot entries only with showHidden (#436)', async (t) => {
@@ -201,7 +240,7 @@ test('readDirectory denies traversal via .. segments', async (t) => {
   const { ipcMain, workspace } = await setup(t);
   const sneaky = path.join(workspace, '..', 'outside');
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, sneaky);
-  assert.deepEqual(denied, { entries: [], hidden: 0 });
+  assert.deepEqual(denied, { entries: [], hidden: 0, unreadable: 'refused' });
 });
 
 test('readDirectory denies a symlink to a directory outside the workspace', async (t) => {
@@ -216,7 +255,7 @@ test('readDirectory denies a symlink to a directory outside the workspace', asyn
   if (!linked) return;
 
   const denied = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, linkPath);
-  assert.deepEqual(denied, { entries: [], hidden: 0 });
+  assert.deepEqual(denied, { entries: [], hidden: 0, unreadable: 'refused' });
 });
 
 test('readFile denies files outside the workspace and reads files inside', async (t) => {
@@ -246,6 +285,77 @@ test('readFile denies a symlink to a file outside the workspace', async (t) => {
   assert.equal(denied.content, undefined);
 });
 
+test('a failed readFile names its reason as a code next to the message (#641)', async (t) => {
+  const { ipcMain, workspace, outside } = await setup(t);
+
+  const refused = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(outside, 'secret.txt'));
+  assert.equal(refused.reason, 'refused');
+
+  const missing = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'gone.txt'));
+  assert.equal(missing.reason, 'missing');
+  assert.match(missing.error, /ENOENT/, 'the system message stays, for the log');
+
+  const big = path.join(workspace, 'big.txt');
+  await fs.writeFile(big, Buffer.alloc(1024 * 1024 + 1, 0x61));
+  const tooLarge = await ipcMain.invoke(REQ.FS_READ_FILE, big);
+  assert.equal(tooLarge.reason, 'too-large');
+  assert.equal(tooLarge.size, 1024 * 1024 + 1);
+  assert.equal(tooLarge.content, undefined);
+
+  // A folder is no text file — a failure without a more specific reason.
+  await fs.mkdir(path.join(workspace, 'sub'));
+  assert.equal((await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'sub'))).reason, 'failed');
+
+  const ok = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'inside.txt'));
+  assert.equal(ok.reason, undefined);
+});
+
+test('a dangling link is missing, not outside — for the read and the listing (#641)', async (t) => {
+  const { ipcMain, workspace } = await setup(t);
+  const fileLink = path.join(workspace, 'dangling.txt');
+  const dirLink = path.join(workspace, 'dangling-dir');
+  if (!(await createSymlinkOrSkip(t, path.join(workspace, 'nowhere.txt'), fileLink))) return;
+  if (!(await createSymlinkOrSkip(t, path.join(workspace, 'nowhere'), dirLink, 'dir'))) return;
+
+  assert.equal((await ipcMain.invoke(REQ.FS_READ_FILE, fileLink)).reason, 'missing');
+  assert.deepEqual(await ipcMain.invoke(REQ.FS_READ_DIRECTORY, dirLink), { entries: [], hidden: 0, unreadable: 'missing' });
+});
+
+test('a path behind a folder without permission is a permission problem, not outside (#641)', async (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) {
+    t.skip('needs POSIX permissions and a user other than root');
+    return;
+  }
+  const { ipcMain, workspace } = await setup(t);
+  const closed = path.join(workspace, 'closed');
+  await fs.mkdir(path.join(closed, 'sub'), { recursive: true });
+  await fs.writeFile(path.join(closed, 'note.txt'), 'x', 'utf8');
+  await fs.chmod(closed, 0o000);
+  let read;
+  let listed;
+  try {
+    read = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(closed, 'note.txt'));
+    listed = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, path.join(closed, 'sub'));
+  } finally {
+    await fs.chmod(closed, 0o700);
+  }
+  assert.equal(read.reason, 'permission');
+  assert.deepEqual(listed, { entries: [], hidden: 0, unreadable: 'permission' });
+});
+
+test('a readFile without permission says so as its reason', async (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) {
+    t.skip('chmod does not take read permission away here');
+    return;
+  }
+  const { ipcMain, workspace } = await setup(t);
+  const locked = path.join(workspace, 'locked.txt');
+  await fs.writeFile(locked, 'x', 'utf8');
+  // The folder stays writable, so the clean-up removes the file all the same.
+  await fs.chmod(locked, 0o000);
+  assert.equal((await ipcMain.invoke(REQ.FS_READ_FILE, locked)).reason, 'permission');
+});
+
 test('readFile denies prefix-sibling directories (workspace-evil trick)', async (t) => {
   const { ipcMain, workspace } = await setup(t);
   const sibling = `${workspace}-evil`;
@@ -259,8 +369,13 @@ test('all handlers deny access when no workspace is open', async (t) => {
   const { ipcMain, workspace, setWorkspace } = await setup(t);
   setWorkspace(null);
 
-  assert.deepEqual(await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace), { entries: [], hidden: 0 });
+  // Nothing lies outside when there is no folder: a failure, not a refusal (#641).
+  assert.deepEqual(
+    await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace),
+    { entries: [], hidden: 0, unreadable: 'failed' }
+  );
   const read = await ipcMain.invoke(REQ.FS_READ_FILE, path.join(workspace, 'inside.txt'));
+  assert.equal(read.reason, 'failed');
   assert.match(read.error, /No working folder/);
   const move = await ipcMain.invoke(
     REQ.FS_MOVE_ITEM,

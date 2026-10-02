@@ -1,5 +1,12 @@
-const SIDEBAR_MIN = 150;
+// One minimum per column, shared with the settings contract
+// (`SIDEBAR_WIDTH_MIN` …) and with the `min-width` in styles.css. The sidebar
+// said 150 here while the CSS rendered 180 — Home announced a width nobody
+// saw (#637). test/sidebar-resizer-dom.test.js fails if the three drift apart.
+const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 600;
+// The CSS width of `#sidebar`, where the layout starts without a remembered
+// width (#637). Checked against styles.css like the minimum.
+const SIDEBAR_DEFAULT = 280;
 const CHAT_MIN = 260;
 // Ohne gemerkte Breite ist das die Breite aus dem CSS. Sie steht hier, damit
 // currentChatWidth() sie auch dann nennen kann, wenn der Chat gerade die ganze
@@ -9,6 +16,11 @@ const HISTORY_MIN = 180;
 const HISTORY_MAX = 800;
 const HISTORY_DEFAULT = 260;
 const CONTENT_MIN = 200;
+// `.pane-divider { width: 1px }` in styles.css. The dividers stand between
+// the columns and take their pixel from the room as well — uncounted, the
+// content pane kept 197 of its 200 px (#637). Checked against the CSS like
+// the column widths.
+const DIVIDER_PX = 1;
 // Breite, in der der Startschirm aufgeht: `#welcome` ist inhaltlich auf 560 px
 // begrenzt und hat 32 px Polsterung je Seite (styles.css). Mehr Spalte hiesse
 // nur mehr Leerraum um denselben Text — den Platz bekommt beim Erststart
@@ -29,8 +41,19 @@ const KEY_PERSIST_DELAY = 300;
 // hat ein Tastendruck keine sichtbare Rueckmeldung ausser der neuen Breite.
 const KEY_ACTIVE_DURATION = 320;
 
-function clampSidebarWidth(raw) {
-  return Math.max(SIDEBAR_MIN, Math.min(raw, SIDEBAR_MAX));
+// Where each column's remembered width lives in the UI prefs.
+const PREF_KEYS = { sidebar: 'sidebarWidth', chat: 'chatPanelWidth', history: 'chatHistoryWidth' };
+
+/**
+ * The divider on screen for a column (#637). Each counts with the column it
+ * resizes: `#divider` with the sidebar, `#history-divider` with the history,
+ * and `#chat-divider` with the chat — but only while the content pane is
+ * there, styles.css hides it otherwise.
+ */
+function dividerPx(bounds, column) {
+  const hidden = (state) => bounds?.classList.contains(`app--no-${state}`) === true;
+  if (column === 'chat') return hidden('preview') || hidden('chat') ? 0 : DIVIDER_PX;
+  return hidden(column) ? 0 : DIVIDER_PX;
 }
 
 /**
@@ -44,7 +67,8 @@ function workspaceMin(bounds, sidebarPx) {
   // Die Seitenleiste geht mit ihrer eingestellten Breite ein, nicht mit ihrem
   // Minimum: Wer sie breit gezogen hat, will sie breit sehen — dann weicht
   // lieber der Verlauf, als dass die Anzeige auf einen Streifen zusammenfaellt.
-  return (noSidebar ? 0 : sidebarPx) + (noPreview ? 0 : CONTENT_MIN);
+  return (noSidebar ? 0 : sidebarPx) + dividerPx(bounds, 'sidebar')
+    + (noPreview ? 0 : CONTENT_MIN);
 }
 
 // Bezugsflaeche ist seit der Umgruppierung (Epic #223) #app, also das ganze
@@ -55,7 +79,7 @@ function workspaceMin(bounds, sidebarPx) {
 function maxChatWidth(bounds, historyPx, sidebarPx) {
   if (!bounds) return CHAT_MIN;
   const rect = bounds.getBoundingClientRect();
-  const room = rect.width - workspaceMin(bounds, sidebarPx) - historyPx;
+  const room = rect.width - workspaceMin(bounds, sidebarPx) - historyPx - dividerPx(bounds, 'chat');
   return Math.max(CHAT_MIN, Math.min(rect.width * 0.5, room));
 }
 
@@ -102,47 +126,96 @@ export function initSidebarResizer({
   const historyDivider = document.getElementById('history-divider');
   const chatHistory = document.getElementById('chat-history');
 
-  // Massgeblich ist der gesetzte Inline-Wert; nur solange es keinen gibt,
-  // zaehlt die gemessene Breite aus dem CSS-Default.
+  const finite = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+  // The width each column is meant to have (#637): from the prefs, from the
+  // user's last gesture, or what the startup set up. What stands on screen is
+  // derived from it on every pass — clamp(wanted, room) — so a squeeze only
+  // ever touches the inline width, and the column grows back once the room is
+  // there again.
+  const wanted = {
+    sidebar: finite(initialSidebarWidth) ?? SIDEBAR_DEFAULT,
+    chat: finite(initialChatPanelWidth) ?? CHAT_DEFAULT,
+    history: finite(initialChatHistoryWidth) ?? HISTORY_DEFAULT,
+  };
+  // What the prefs hold, as far as this window knows. `null` means nothing is
+  // stored: then a width the startup set up stays unwritten until a gesture
+  // makes it a wish of the user's.
+  const stored = {
+    sidebar: finite(initialSidebarWidth),
+    chat: finite(initialChatPanelWidth),
+    history: finite(initialChatHistoryWidth),
+  };
+  // Columns a gesture has changed since the last write.
+  const unsaved = new Set();
+
+  // Massgeblich ist der gesetzte Inline-Wert — the width on screen. Before
+  // the first pass it is the wish.
   function currentSidebarWidth() {
-    return parsePx(sidebar.style.width) ?? sidebar.getBoundingClientRect().width;
+    return parsePx(sidebar.style.width) ?? wanted.sidebar;
   }
 
   /** Breite der Chat-Spalte — 0, solange sie weggeschaltet ist. */
   function currentChatWidth() {
     if (!chatPanel) return CHAT_MIN;
     if (appRoot?.classList.contains('app--no-chat')) return 0;
-    const inline = parsePx(chatPanel.style.width);
-    if (inline !== null) return inline;
-    // Ohne Anzeige fuellt der Chat die ganze Flaeche; gemessen kaeme hier die
-    // Fensterbreite heraus und wuerde beim naechsten Schreiben festgeschrieben.
-    if (appRoot?.classList.contains('app--no-preview')) return CHAT_DEFAULT;
-    return chatPanel.getBoundingClientRect().width;
+    return parsePx(chatPanel.style.width) ?? wanted.chat;
   }
 
   /** Breite der Verlaufsspalte — 0, solange sie weggeschaltet ist. */
   function currentHistoryWidth() {
     if (!chatHistory || appRoot?.classList.contains('app--no-history')) return 0;
-    return parsePx(chatHistory.style.width) ?? chatHistory.getBoundingClientRect().width;
+    return parsePx(chatHistory.style.width) ?? wanted.history;
+  }
+
+  /**
+   * What the open history claims next to the chat: its wish, not its current
+   * width, and its divider. The chat gives way first, so a squeezed history
+   * gets its room back before the chat does (#637).
+   */
+  function historyClaim() {
+    if (!chatHistory || appRoot?.classList.contains('app--no-history')) return 0;
+    return wanted.history + DIVIDER_PX;
+  }
+
+  /** The chat with its divider — 0 while it is hidden. */
+  function chatTaken(chatPx = currentChatWidth()) {
+    return chatPx === 0 ? 0 : chatPx + dividerPx(appRoot, 'chat');
+  }
+
+  /**
+   * Upper bound of the sidebar: its own maximum and, as a last resort (#637),
+   * never so wide that the content pane loses its minimum beside a chat at
+   * its own minimum — the history has folded away long before that.
+   */
+  function maxSidebarWidth() {
+    const total = appRoot?.getBoundingClientRect().width ?? 0;
+    if (!total) return SIDEBAR_MAX;
+    const contentPx = appRoot.classList.contains('app--no-preview') ? 0 : CONTENT_MIN;
+    const chatPx = appRoot.classList.contains('app--no-chat') ? 0 : chatTaken(CHAT_MIN);
+    const room = total - DIVIDER_PX - contentPx - chatPx;
+    return Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, room));
   }
 
   function maxHistoryWidth() {
     if (!appRoot) return HISTORY_MIN;
     const rect = appRoot.getBoundingClientRect();
-    const room = rect.width - workspaceMin(appRoot, currentSidebarWidth()) - currentChatWidth();
+    const room = rect.width - workspaceMin(appRoot, currentSidebarWidth()) - chatTaken()
+      - DIVIDER_PX;
     return Math.max(HISTORY_MIN, Math.min(HISTORY_MAX, room));
   }
 
   function applySidebarWidth(raw) {
-    const width = clampSidebarWidth(raw);
+    const max = maxSidebarWidth();
+    const width = Math.max(SIDEBAR_MIN, Math.min(raw, max));
     sidebar.style.width = `${width}px`;
-    syncSeparator(divider, width, SIDEBAR_MIN, SIDEBAR_MAX);
+    syncSeparator(divider, width, SIDEBAR_MIN, max);
     return width;
   }
 
   function applyChatWidth(raw) {
     if (!chatPanel) return null;
-    const historyPx = currentHistoryWidth();
+    const historyPx = historyClaim();
     const sidebarPx = currentSidebarWidth();
     const width = clampChatWidth(raw, appRoot, historyPx, sidebarPx);
     chatPanel.style.width = `${width}px`;
@@ -158,60 +231,77 @@ export function initSidebarResizer({
     return width;
   }
 
-  /**
-   * Haelt dem Arbeitsbereich sein Mindestmass frei. Zuerst gibt der Chat nach,
-   * dann der Verlauf; reicht beides nicht, klappt der Verlauf weg — lieber
-   * eine Spalte weniger als drei, die alle zu schmal sind.
-   */
   // Wahr, solange der Verlauf nur wegen Platzmangels zu ist. Wer ihn selbst
   // zugeklappt hat, soll ihn nicht im breiteren Fenster wiederfinden.
   let collapsedForSpace = false;
-  // Die Breite von vor dem Zusammendruecken: Kommt die Spalte im breiteren
-  // Fenster zurueck, soll sie nicht auf ihrem Minimum stehen bleiben.
-  let widthBeforeSqueeze = null;
   // setHistoryVisible() meldet sich zurueck und landet wieder hier — ohne
   // diesen Riegel liefe das im Kreis.
   let adjusting = false;
 
+  /**
+   * Haelt dem Arbeitsbereich sein Mindestmass frei. Zuerst gibt der Chat nach,
+   * dann der Verlauf; reicht beides nicht, klappt der Verlauf weg — lieber
+   * eine Spalte weniger als drei, die alle zu schmal sind. Only then, as a
+   * last resort, the sidebar stops short of its wish (`maxSidebarWidth`).
+   *
+   * Every pass starts again from the wished widths (#637), so the result
+   * depends on the room alone and not on the way there: a squeezed column
+   * grows back as soon as a wider window, a gesture or a hidden neighbour
+   * returns the room, and the history unfolds as soon as it fits beside the
+   * chat's minimum. Nothing here is written to the prefs.
+   */
   function ensureRoomForWorkspace() {
     if (!appRoot || adjusting) return;
     const total = appRoot.getBoundingClientRect().width;
     if (!total) return;
     adjusting = true;
     try {
-      const needed = workspaceMin(appRoot, currentSidebarWidth());
-      // Die weggeschaltete Spalte behaelt ihre gemerkte Breite: Ein
-      // applyChatWidth(0) schriebe sie auf das Minimum fest.
-      if (!appRoot.classList.contains('app--no-chat')) applyChatWidth(currentChatWidth());
-
-      if (collapsedForSpace && currentHistoryWidth() === 0) {
-        const wanted = widthBeforeSqueeze
-          ?? parsePx(chatHistory?.style.width)
-          ?? HISTORY_DEFAULT;
-        if (total - currentChatWidth() - wanted >= needed) {
+      const sidebarPx = applySidebarWidth(wanted.sidebar);
+      const noChat = appRoot.classList.contains('app--no-chat');
+      if (chatHistory) {
+        // What is left for the history once the chat has given way entirely.
+        // Its own divider counts whether it is open or not, so folding away
+        // and unfolding happen at the same width.
+        const room = total - workspaceMin(appRoot, sidebarPx)
+          - (noChat ? 0 : chatTaken(CHAT_MIN)) - DIVIDER_PX;
+        const open = !appRoot.classList.contains('app--no-history');
+        if (open && room < HISTORY_MIN) {
+          collapsedForSpace = true;
+          setHistoryVisible(false);
+        } else if (!open && collapsedForSpace && room >= HISTORY_MIN) {
           collapsedForSpace = false;
-          widthBeforeSqueeze = null;
-          if (chatHistory) chatHistory.style.width = `${wanted}px`;
           setHistoryVisible(true);
         }
-        return;
       }
-
-      let rest = total - currentChatWidth() - currentHistoryWidth();
-      if (rest >= needed || currentHistoryWidth() === 0) {
-        if (rest >= needed) widthBeforeSqueeze = null;
-        return;
+      // A hidden chat takes no room. Its inline width stays at its wish, so it
+      // comes back as wide as it went away.
+      if (noChat) {
+        if (chatPanel) chatPanel.style.width = `${Math.max(CHAT_MIN, wanted.chat)}px`;
+      } else {
+        applyChatWidth(wanted.chat);
       }
-      if (widthBeforeSqueeze === null) widthBeforeSqueeze = currentHistoryWidth();
-      applyHistoryWidth(currentHistoryWidth() - (needed - rest));
-      rest = total - currentChatWidth() - currentHistoryWidth();
-      if (rest < needed) {
-        collapsedForSpace = true;
-        setHistoryVisible(false);
-      }
+      applyHistoryWidth(wanted.history);
     } finally {
       adjusting = false;
     }
+  }
+
+  /**
+   * A gesture on a divider (#637): the width the column ends up with on
+   * screen becomes its wish and is marked for writing — but only if it moved.
+   * A key press at an end position or a click without movement changes
+   * nothing and therefore writes nothing. Then the other columns make room.
+   */
+  function resizeColumn(column, raw) {
+    const before = { sidebar: currentSidebarWidth, chat: currentChatWidth, history: currentHistoryWidth }[column]();
+    const width = { sidebar: applySidebarWidth, chat: applyChatWidth, history: applyHistoryWidth }[column](raw);
+    if (width === null) return null;
+    if (width !== before) {
+      wanted[column] = width;
+      unsaved.add(column);
+    }
+    ensureRoomForWorkspace();
+    return width;
   }
 
   /**
@@ -224,6 +314,10 @@ export function initSidebarResizer({
    * Das Clamping in applyChatWidth bleibt zustaendig — im schmalen Fenster
    * deckelt es den Chat bei der halben Breite, und die Spalte wird dann eben
    * schmaler als der Startschirm gern haette.
+   *
+   * The result becomes the chat's wish for this session, so the next pass
+   * keeps it, but not a stored width (#637): neither a later window resize
+   * nor a gesture on another divider writes it.
    */
   function fitChatToWelcome() {
     if (!appRoot || !chatPanel) return null;
@@ -231,11 +325,23 @@ export function initSidebarResizer({
     if (appRoot.classList.contains('app--no-chat')) return null;
     const total = appRoot.getBoundingClientRect().width;
     if (!total) return null;
+    // Measure in the current state: the content pane has only just opened.
+    ensureRoomForWorkspace();
     // Die weggeschaltete Seitenleiste belegt nichts — wie in workspaceMin.
+    // The dividers count as well, so the column holds the whole 624 px.
     const sidebarPx = appRoot.classList.contains('app--no-sidebar')
       ? 0
       : currentSidebarWidth();
-    return applyChatWidth(total - sidebarPx - currentHistoryWidth() - CONTENT_WELCOME);
+    const dividersPx = dividerPx(appRoot, 'sidebar') + dividerPx(appRoot, 'chat')
+      + dividerPx(appRoot, 'history');
+    wanted.chat = clampChatWidth(
+      total - sidebarPx - currentHistoryWidth() - dividersPx - CONTENT_WELCOME,
+      appRoot,
+      historyClaim(),
+      currentSidebarWidth(),
+    );
+    ensureRoomForWorkspace();
+    return currentChatWidth();
   }
 
   /**
@@ -244,64 +350,40 @@ export function initSidebarResizer({
    * Aufklappen nicht mehr unsere Sache.
    */
   function handleHistoryVisibility({ persisted } = {}) {
-    if (persisted) {
-      collapsedForSpace = false;
-      widthBeforeSqueeze = null;
-    }
+    if (persisted) collapsedForSpace = false;
     ensureRoomForWorkspace();
   }
 
-  if (typeof initialSidebarWidth === 'number' && Number.isFinite(initialSidebarWidth)) {
-    applySidebarWidth(initialSidebarWidth);
-  } else {
-    syncSeparator(divider, currentSidebarWidth(), SIDEBAR_MIN, SIDEBAR_MAX);
-  }
-
-  if (
-    chatPanel
-    && typeof initialChatPanelWidth === 'number'
-    && Number.isFinite(initialChatPanelWidth)
-  ) {
-    applyChatWidth(initialChatPanelWidth);
-  } else {
-    syncSeparator(
-      chatDivider,
-      currentChatWidth(),
-      CHAT_MIN,
-      maxChatWidth(appRoot, currentHistoryWidth(), currentSidebarWidth()),
-    );
-  }
-
-  if (
-    chatHistory
-    && typeof initialChatHistoryWidth === 'number'
-    && Number.isFinite(initialChatHistoryWidth)
-  ) {
-    applyHistoryWidth(initialChatHistoryWidth);
-  } else {
-    syncSeparator(historyDivider, currentHistoryWidth(), HISTORY_MIN, maxHistoryWidth());
-  }
+  // The first pass sets every column from its wish. app.js no longer has to
+  // call it after building the resizer (#637).
+  ensureRoomForWorkspace();
 
   let isResizing = false;
   let isResizingChat = false;
   let isResizingHistory = false;
 
+  /**
+   * Writes what a gesture changed (#637): only those columns, and only when
+   * the wish differs from what is stored. A squeeze or the startup layout
+   * changes no wish and writes nothing.
+   */
   async function persistPanelWidths() {
-    if (!api?.setUIPrefs) return;
-    const patch = {};
-    const sidebarWidth = parsePx(sidebar.style.width);
-    if (sidebarWidth !== null) patch.sidebarWidth = sidebarWidth;
-    if (chatPanel) {
-      const chatPanelWidth = parsePx(chatPanel.style.width);
-      if (chatPanelWidth !== null) patch.chatPanelWidth = chatPanelWidth;
-    }
-    if (chatHistory) {
-      const chatHistoryWidth = parsePx(chatHistory.style.width);
-      if (chatHistoryWidth !== null) patch.chatHistoryWidth = chatHistoryWidth;
-    }
-    if (Object.keys(patch).length === 0) return;
+    // Only the chat's wish can leave its range — the window share moves it
+    // freely, so a round trip lands where it started. The prefs get what the
+    // contract accepts.
+    const changes = [...unsaved]
+      .map((column) => [
+        column,
+        Math.round(column === 'chat' ? Math.max(CHAT_MIN, wanted.chat) : wanted[column]),
+      ])
+      .filter(([column, width]) => width !== stored[column]);
+    unsaved.clear();
+    if (!api?.setUIPrefs || changes.length === 0) return;
     try {
-      await api.setUIPrefs(patch);
+      await api.setUIPrefs(Object.fromEntries(
+        changes.map(([column, width]) => [PREF_KEYS[column], width]),
+      ));
+      for (const [column, width] of changes) stored[column] = width;
     } catch {
       // ignore persistence errors
     }
@@ -322,7 +404,14 @@ export function initSidebarResizer({
    * landen, wo man vorher war.
    *
    * Ohne Anzeige nimmt der Chat ohnehin die ganze Breite ein — dann gibt es
-   * nichts zu teilen.
+   * nichts zu teilen. The room check runs in every state, though (#637): a
+   * window that shrinks while the content pane or the chat is hidden has to
+   * make room just the same.
+   *
+   * The share moves the chat's wish, not just its width: it stays a linear
+   * function of the window width, and a squeezed chat grows back first. Only
+   * a width the user chose travels into the prefs with it — what the startup
+   * set up (`fitChatToWelcome`) stays a layout (#637).
    */
   if (typeof ResizeObserver !== 'undefined' && appRoot && chatPanel) {
     let lastWidth = appRoot.getBoundingClientRect().width;
@@ -342,17 +431,31 @@ export function initSidebarResizer({
         || appRoot.classList.contains('app--no-chat')
       ) {
         carry = 0;
-        return;
-      }
-      const share = growth / 2 + carry;
-      const step = Math.trunc(share);
-      carry = share - step;
-      if (step !== 0) {
-        const before = currentChatWidth();
-        if (applyChatWidth(before + step) !== before) schedulePersist();
+      } else {
+        const share = growth / 2 + carry;
+        const step = Math.trunc(share);
+        carry = share - step;
+        if (step !== 0) {
+          wanted.chat += step;
+          if (stored.chat !== null) {
+            unsaved.add('chat');
+            schedulePersist();
+          }
+        }
       }
       ensureRoomForWorkspace();
     }).observe(appRoot);
+  }
+
+  // Showing or hiding a column changes the room of all the others (#637). The
+  // switches live in app.js and in the history; watching the classes on #app
+  // runs the room check after every one of them, so none can forget it — the
+  // startup included, which opens the content pane only once the folder is
+  // known. A pass that changes nothing is cheap, the animation class may pass
+  // through as well.
+  if (typeof MutationObserver !== 'undefined' && appRoot) {
+    new MutationObserver(() => ensureRoomForWorkspace())
+      .observe(appRoot, { attributes: true, attributeFilter: ['class'] });
   }
 
   /**
@@ -388,18 +491,18 @@ export function initSidebarResizer({
   }
 
   bindKeys(divider, (direction, distance) => (
-    applySidebarWidth(currentSidebarWidth() + direction * distance)
+    resizeColumn('sidebar', currentSidebarWidth() + direction * distance)
   ));
 
   // Der Chat liegt rechts vom Trenner: geht der Trenner nach links, wird der
   // Chat breiter — deshalb das umgekehrte Vorzeichen.
   bindKeys(chatDivider, (direction, distance) => (
-    applyChatWidth(currentChatWidth() - direction * distance)
+    resizeColumn('chat', currentChatWidth() - direction * distance)
   ));
 
   // Der Verlauf liegt ebenfalls rechts von seinem Trenner.
   bindKeys(historyDivider, (direction, distance) => (
-    applyHistoryWidth(currentHistoryWidth() - direction * distance)
+    resizeColumn('history', currentHistoryWidth() - direction * distance)
   ));
 
   divider.addEventListener('mousedown', (e) => {
@@ -411,19 +514,19 @@ export function initSidebarResizer({
 
   document.addEventListener('mousemove', (e) => {
     if (isResizing) {
-      applySidebarWidth(e.clientX);
+      resizeColumn('sidebar', e.clientX);
       return;
     }
     if (isResizingChat && appRoot && chatPanel) {
       const rect = appRoot.getBoundingClientRect();
       // Rechts vom Chat kann die Verlaufsspalte stehen; der Trenner sitzt
       // entsprechend weiter links als der Fensterrand.
-      applyChatWidth(rect.right - currentHistoryWidth() - e.clientX);
+      resizeColumn('chat', rect.right - currentHistoryWidth() - e.clientX);
       return;
     }
     if (isResizingHistory && appRoot && chatHistory) {
       const rect = appRoot.getBoundingClientRect();
-      applyHistoryWidth(rect.right - e.clientX);
+      resizeColumn('history', rect.right - e.clientX);
     }
   });
 
@@ -457,7 +560,6 @@ export function initSidebarResizer({
 
   historyDivider?.addEventListener('mousedown', (e) => {
     isResizingHistory = true;
-    widthBeforeSqueeze = null;
     historyDivider.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
     e.preventDefault();

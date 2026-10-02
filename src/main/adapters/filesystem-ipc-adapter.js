@@ -5,6 +5,18 @@ const { LIMITS } = require('../../shared/limits');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { createTranslator } = require('../../shared/i18n');
 
+/**
+ * Why a folder of the tree could not be listed (#639), as the code the
+ * renderer looks its words up by: no right to read it (a volume of another
+ * user, a folder macOS privacy settings keep closed), gone in the meantime,
+ * or anything else. 'refused' — outside the workspace — comes from boundPath().
+ */
+function unreadableReason(err) {
+  if (err?.code === 'EACCES' || err?.code === 'EPERM') return 'permission';
+  if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return 'missing';
+  return 'failed';
+}
+
 function createFilesystemIpcAdapter({
   fsService,
   getActiveWorkspaceRoot,
@@ -16,9 +28,19 @@ function createFilesystemIpcAdapter({
 }) {
   const ui = () => createTranslator(getLocale());
 
+  // A refusal carries a `reason` in the codes of unreadableReason() (#641):
+  // 'refused' only for a path that really lies outside the workspace,
+  // lexically or through a link. A path component without read permission
+  // or a dangling link is what its error says, and without a workspace
+  // nothing can be read at all.
   async function boundPath(absPath) {
     const workspaceRoot = getActiveWorkspaceRoot();
-    return fsService.assertPathAccessibleInWorkspace(workspaceRoot, absPath);
+    const result = await fsService.assertPathAccessibleInWorkspace(workspaceRoot, absPath);
+    if (!result.error) return result;
+    let reason = 'refused';
+    if (!workspaceRoot) reason = 'failed';
+    else if (result.code) reason = unreadableReason(result);
+    return { error: result.error, reason };
   }
 
   // Import von außen (Issue #101). Die Prüfung ist hier bewusst asymmetrisch:
@@ -66,17 +88,19 @@ function createFilesystemIpcAdapter({
   return {
     // `showHidden` (#436) comes from the renderer: whether hidden files are
     // shown is a view setting, not a boundary — the path check stays as it is.
+    // A folder that cannot be listed says why in `unreadable` (#639), so the
+    // tree can say so in its place instead of drawing it empty.
     async readDirectory(dirPath, options) {
-      const { absPath, error } = await boundPath(dirPath);
+      const { absPath, error, reason } = await boundPath(dirPath);
       if (error) {
         console.error('readDirectory denied:', error);
-        return { entries: [], hidden: 0 };
+        return { entries: [], hidden: 0, unreadable: reason };
       }
       try {
         return await fsService.readDirectory(absPath, { showHidden: options?.showHidden === true });
       } catch (err) {
         console.error('readDirectory error:', err.message);
-        return { entries: [], hidden: 0 };
+        return { entries: [], hidden: 0, unreadable: unreadableReason(err) };
       }
     },
     async moveItem(sourcePath, destDir) {
@@ -138,13 +162,21 @@ function createFilesystemIpcAdapter({
     async readWorkspacePdf(pdfPath) {
       return fsService.readWorkspacePdf(getActiveWorkspaceRoot(), pdfPath);
     },
+    // A failed read carries a `reason` next to its `error` (CR-B18-09, #641):
+    // the message is the system's — English, with the full path in it — and
+    // fit for the log; the renderer says why in the interface language
+    // (`renderer/file-views/read-failures.js`). The codes are the listing's
+    // above, plus 'too-large'.
     async readFilePreview(filePath) {
-      const { absPath, error } = await boundPath(filePath);
-      if (error) return { error };
+      const { absPath, error, reason } = await boundPath(filePath);
+      if (error) return { error, reason };
       try {
-        return await fsService.readFilePreview(absPath);
+        const result = await fsService.readFilePreview(absPath);
+        // The one refusal the service answers instead of throwing: a file
+        // over the preview limit. It brings the size along.
+        return result?.error ? { ...result, reason: 'too-large' } : result;
       } catch (err) {
-        return { error: err.message };
+        return { error: err.message, reason: unreadableReason(err) };
       }
     },
   };

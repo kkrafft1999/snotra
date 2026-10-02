@@ -18,9 +18,10 @@ import contracts from '../generated/contracts.js';
 import { t, onLocaleChange } from '../i18n.js';
 import { openChatLink } from '../chat/openChatLink.js';
 import { placeholderFor } from '../chat/workspaceImages.js';
-import { parentDirOf } from '../utils/nativePath.js';
+import { basenameOf, parentDirOf } from '../utils/nativePath.js';
 import {
   classifyLink,
+  documentPathOf,
   renderMarkdownFragment,
   resolveDocumentPath,
   splitDocument,
@@ -37,6 +38,17 @@ const {
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
 const NOTICE_MS = 5000;
+// Every entry holds a whole image as base64, up to 10 MB each — the same
+// bound as the chat's cache in workspaceImages.js (#640).
+const MAX_CACHED_IMAGES = 24;
+// Image reads at a time, for the same reason: a document with forty images
+// must not put forty of them on the IPC channel at once (#640).
+const MAX_PARALLEL_READS = 4;
+// The renderer's own reason next to main's: the bytes came, but do not decode.
+const BROKEN = 'broken';
+// What the view sets on a link of the document. The sanitizer lets `data-*`
+// through, so whatever the document wrote under these names goes first.
+const LINK_DATA_ATTRIBUTES = ['data-link-kind', 'data-anchor', 'data-target', 'data-fragment'];
 
 function buildFrontMatter(frontMatter) {
   const section = document.createElement('section');
@@ -93,13 +105,22 @@ export const markdownView = {
     let content = context.content;
     let mode = MODES.PREVIEW;
     let disposed = false;
-    // Every render draws a number; an image that arrives for an older render
-    // is dropped instead of being put into the new one.
-    let renderGeneration = 0;
+    // Every check of an image draws a number, kept on its slot: an answer for
+    // an older check is dropped instead of overwriting a newer one, and one
+    // for a render that has been replaced finds its slot gone.
+    let imageCheck = 0;
     let noticeTimer = null;
-    // Images of this file, by path: a render after an external change must
-    // not flash every image through a placeholder. Starts empty per mount.
+    // Images of this file, by path, as `{ dataUrl, size, mtimeMs }`: a render
+    // after an external change must not flash every image through a
+    // placeholder. Starts empty per mount. An overwritten image does not
+    // carry its new content in its path, so every check compares size and
+    // date with the disk before it trusts an entry (#640).
     const imageCache = new Map();
+    // The workspace images of the current render, see resolveImages().
+    let imageSlots = [];
+    // Reads of image bytes in flight, and the ones waiting for a turn.
+    let activeReads = 0;
+    const queuedReads = [];
 
     const previewEl = document.createElement('div');
     previewEl.className = 'md-view';
@@ -145,8 +166,13 @@ export const markdownView = {
       sourceEl.hidden = mode !== MODES.SOURCE;
     }
 
-    function render() {
-      const generation = ++renderGeneration;
+    /**
+     * `keepImages`: a language switch renders the text anew, but what the
+     * images show has not changed — each one takes over its predecessor's
+     * state instead of asking main again (#640).
+     */
+    function render({ keepImages = false } = {}) {
+      const previous = keepImages ? new Map(imageSlots.map((slot) => [slot.target, slot])) : null;
       const { frontMatter, body } = splitDocument(content);
       const nodes = [];
       if (frontMatter) nodes.push(buildFrontMatter(frontMatter));
@@ -166,13 +192,14 @@ export const markdownView = {
       articleEl.replaceChildren(...nodes);
       prepareLinks();
       previewEl.scrollTop = scrollTop;
-      void resolveImages(generation);
+      return resolveImages(previous);
     }
 
     function prepareLinks() {
       for (const anchor of articleEl.querySelectorAll('a')) {
         const link = classifyLink(anchor);
         anchor.removeAttribute('data-workspace-href');
+        for (const name of LINK_DATA_ATTRIBUTES) anchor.removeAttribute(name);
         if (!link) {
           anchor.removeAttribute('href');
           anchor.removeAttribute('target');
@@ -192,60 +219,222 @@ export const markdownView = {
           anchor.dataset.anchor = link.slug;
         } else {
           anchor.dataset.target = link.target;
-          anchor.title = link.target;
+          anchor.dataset.fragment = link.fragment;
+          // The path as it was written, not as marked encoded it (#641).
+          anchor.title = documentPathOf(link.target);
         }
       }
     }
 
-    async function resolveImages(generation) {
-      const images = [...articleEl.querySelectorAll('img[data-md-src]')];
-      await Promise.all(images.map((img) => resolveImage(img, generation)));
-    }
+    /**
+     * Decides every image of a fresh render. The ones that live in the
+     * workspace become slots — `{ img, placeholder, target, alt, shown,
+     * reason, check }` — which `refreshImages()` can check again later
+     * without rendering the document anew, so that a reader's selection and
+     * focus survive it. `previous` holds the slots of the render before, by
+     * path, when their state is to be taken over.
+     */
+    function resolveImages(previous) {
+      imageSlots = [];
+      const unchecked = [];
+      for (const img of articleEl.querySelectorAll('img[data-md-src]')) {
+        const raw = (img.getAttribute('data-md-src') ?? '').trim();
+        const alt = img.getAttribute('alt') || '';
+        img.removeAttribute('data-md-src');
+        const slot = { img, placeholder: null, target: null, alt, shown: null, reason: null, check: 0 };
 
-    async function resolveImage(img, generation) {
-      const raw = img.getAttribute('data-md-src') ?? '';
-      const alt = img.getAttribute('alt') || '';
-      img.removeAttribute('data-md-src');
-
-      if (/^data:image\//i.test(raw.trim())) {
-        // Carries its own bytes; the CSP allows `data:` images.
-        showImage(img, raw.trim());
-        return;
-      }
-      if (!isWorkspaceImageSource(raw)) {
-        const fromWeb = /^https?:/i.test(raw.trim());
-        img.replaceWith(placeholderFor(
-          alt,
-          t(fromWeb ? 'fileView.markdown.image.remote' : 'chat.image.externalSource'),
-          { detail: raw.trim() },
-        ));
-        return;
-      }
-
-      const target = resolveDocumentPath(raw, { fileDir, workspaceRoot });
-      let entry = target ? imageCache.get(target) : null;
-      if (!entry) {
-        let result = null;
-        if (target && typeof api?.readWorkspaceImage === 'function') {
-          try {
-            result = await api.readWorkspaceImage(target);
-          } catch {
-            result = null;
-          }
+        if (/^data:image\//i.test(raw)) {
+          // Carries its own bytes; the CSP allows `data:` images.
+          place(slot, { dataUrl: raw });
+          continue;
         }
-        entry = result?.ok
-          ? { dataUrl: workspaceImageDataUrl(result) }
-          : { reason: result?.reason ?? WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
-        if (target && entry.dataUrl) imageCache.set(target, entry);
+        if (!isWorkspaceImageSource(raw)) {
+          const fromWeb = /^https?:/i.test(raw);
+          img.replaceWith(placeholderFor(
+            alt,
+            t(fromWeb ? 'fileView.markdown.image.remote' : 'chat.image.externalSource'),
+            { detail: raw },
+          ));
+          continue;
+        }
+        slot.target = resolveDocumentPath(raw, { fileDir, workspaceRoot });
+        imageSlots.push(slot);
+        const before = previous?.get(slot.target);
+        if (before?.shown) {
+          place(slot, { dataUrl: before.shown });
+          continue;
+        }
+        if (before?.reason) {
+          showPlaceholder(slot, before.reason);
+          continue;
+        }
+        // What was on show stays on show while it is checked again.
+        const cached = slot.target ? imageCache.get(slot.target) : undefined;
+        if (cached) place(slot, cached);
+        unchecked.push(slot);
       }
-      if (disposed || generation !== renderGeneration || !img.isConnected) return;
-      if (entry.dataUrl) showImage(img, entry.dataUrl);
-      else img.replaceWith(placeholderFor(alt, t(workspaceImageErrorMessageKey(entry.reason))));
+      return refreshImages(unchecked);
     }
 
-    function showImage(img, src) {
+    /**
+     * Checks images against the disk again (#640) — those of a render, or on
+     * a revalidation those in the folders a watcher reported. One listing per
+     * folder and one read per path, however often the document shows them.
+     */
+    function refreshImages(slots) {
+      const check = ++imageCheck;
+      const byTarget = new Map();
+      for (const slot of slots) {
+        slot.check = check;
+        if (!slot.target) {
+          place(slot, { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND });
+          continue;
+        }
+        if (!byTarget.has(slot.target)) byTarget.set(slot.target, []);
+        byTarget.get(slot.target).push(slot);
+      }
+      const listings = new Map();
+      return Promise.all([...byTarget].map(async ([target, group]) => {
+        const entry = await checkImage(target, listings);
+        for (const slot of group) {
+          // A newer check of this slot, or a newer render, has the last word.
+          if (!disposed && slot.check === check && imageSlots.includes(slot)) place(slot, entry);
+        }
+      })).then(() => undefined);
+    }
+
+    /**
+     * The image at `target`. A cached one is first compared by size and
+     * modification time with a listing of its folder — one cheap call
+     * instead of up to 10 MB of base64 — and only read again when it differs.
+     */
+    async function checkImage(target, listings) {
+      const cached = imageCache.get(target);
+      if (cached && await unchangedOnDisk(target, cached, listings)) {
+        remember(target, cached);
+        return cached;
+      }
+      return readImage(target);
+    }
+
+    async function unchangedOnDisk(target, cached, listings) {
+      if (typeof api?.readDirectory !== 'function') return false;
+      const dir = parentDirOf(target);
+      if (!listings.has(dir)) {
+        listings.set(dir, Promise.resolve()
+          .then(() => api.readDirectory(dir, { showHidden: true }))
+          .then((listing) => listing?.entries ?? [], () => []));
+      }
+      const name = basenameOf(target);
+      const entry = (await listings.get(dir)).find((candidate) => candidate?.name === name && !candidate.isDirectory);
+      // A listing carries `lstat`: a symbolic link shows its own size and
+      // date, never matches, and is read every time — slower, but right. So
+      // is a file the listing left out past its limit.
+      return Boolean(entry) && entry.size === cached.size && entry.modified === cached.mtimeMs;
+    }
+
+    /** Reads an image and remembers it. At most a few reads run at once. */
+    async function readImage(target) {
+      await takeReadTurn();
+      let result = null;
+      try {
+        if (!disposed && typeof api?.readWorkspaceImage === 'function') {
+          result = await api.readWorkspaceImage(target);
+        }
+      } catch {
+        result = null;
+      } finally {
+        passReadTurn();
+      }
+      if (!result?.ok) {
+        imageCache.delete(target);
+        return { reason: result?.reason ?? WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
+      }
+      const dataUrl = workspaceImageDataUrl(result);
+      const before = imageCache.get(target);
+      const entry = {
+        dataUrl,
+        size: result.size,
+        mtimeMs: result.mtimeMs,
+        // The same bytes that failed to decode before fail again.
+        broken: before?.dataUrl === dataUrl && before.broken === true,
+      };
+      remember(target, entry);
+      return entry;
+    }
+
+    /** Most recently used last; the oldest goes first. */
+    function remember(target, entry) {
+      imageCache.delete(target);
+      imageCache.set(target, entry);
+      while (imageCache.size > MAX_CACHED_IMAGES) imageCache.delete(imageCache.keys().next().value);
+    }
+
+    function takeReadTurn() {
+      if (activeReads < MAX_PARALLEL_READS) {
+        activeReads += 1;
+        return Promise.resolve();
+      }
+      return new Promise((resolve) => queuedReads.push(resolve));
+    }
+
+    function passReadTurn() {
+      const next = queuedReads.shift();
+      if (next) next();
+      else activeReads -= 1;
+    }
+
+    /**
+     * Puts an image or the reason it is missing where the slot stands. An
+     * unchanged image is never swapped for itself, and an unchanged reason
+     * keeps its node — a selection across it survives a revalidation.
+     */
+    function place(slot, entry) {
+      if (entry.broken) {
+        showPlaceholder(slot, BROKEN);
+        return;
+      }
+      if (!entry.dataUrl) {
+        showPlaceholder(slot, entry.reason);
+        return;
+      }
+      if (slot.placeholder) {
+        slot.placeholder.replaceWith(slot.img);
+        slot.placeholder = null;
+        slot.reason = null;
+      }
+      if (slot.shown === entry.dataUrl) return;
+      slot.shown = entry.dataUrl;
+      showImage(slot, entry.dataUrl);
+    }
+
+    function showPlaceholder(slot, reason) {
+      if (slot.placeholder && slot.reason === reason) return;
+      const message = reason === BROKEN
+        ? t('fileView.markdown.image.broken')
+        : t(workspaceImageErrorMessageKey(reason));
+      const placeholder = placeholderFor(slot.alt, message);
+      (slot.placeholder ?? slot.img).replaceWith(placeholder);
+      slot.placeholder = placeholder;
+      slot.reason = reason;
+      slot.shown = null;
+    }
+
+    function showImage(slot, src) {
+      const { img, target } = slot;
       img.classList.add('md-image');
       img.setAttribute('decoding', 'async');
+      // Main checks the signature, not the whole file: a damaged PNG still
+      // arrives, and ends in the same placeholder as one that cannot be read
+      // instead of Chromium's broken-image icon (#640). The cache remembers,
+      // so that the same bytes are not tried again.
+      img.onerror = () => {
+        if (slot.shown !== src) return;
+        const cached = target ? imageCache.get(target) : undefined;
+        if (cached?.dataUrl === src) cached.broken = true;
+        if (disposed || !img.isConnected) return;
+        showPlaceholder(slot, BROKEN);
+      };
       img.src = src;
     }
 
@@ -257,24 +446,67 @@ export const markdownView = {
         return;
       }
       if (kind === 'anchor') {
-        const slug = anchor.dataset.anchor;
-        const heading = [...articleEl.querySelectorAll('[data-md-anchor]')]
-          .find((el) => el.getAttribute('data-md-anchor') === slug);
-        if (heading) heading.scrollIntoView({ block: 'start' });
-        else showNotice(t('fileView.markdown.link.noAnchor', { anchor: `#${slug}` }));
+        revealHeading(anchor.dataset.anchor);
         return;
       }
       if (kind === 'file') {
         const raw = anchor.dataset.target;
+        const fragment = anchor.dataset.fragment ?? '';
         const target = resolveDocumentPath(raw, { fileDir, workspaceRoot });
+        // `README.md#setup` inside README.md: an anchor with the file name
+        // in front of it.
+        if (target === file.path && fragment) {
+          revealHeading(fragment);
+          return;
+        }
+        // The fragment travels with the path, and the view of the other file
+        // scrolls to it once it is mounted (#641).
         const result = target && typeof context.openFile === 'function'
-          ? await context.openFile(target)
+          ? await context.openFile(target, { fragment })
           : { ok: false, reason: 'not-found' };
         if (disposed || result?.ok) return;
         showNotice(t(result?.reason === 'outside'
           ? 'fileView.markdown.link.outside'
-          : 'fileView.markdown.link.notFound', { path: raw }));
+          : 'fileView.markdown.link.notFound', { path: documentPathOf(raw) }));
       }
+    }
+
+    function headingFor(slug) {
+      return [...articleEl.querySelectorAll('[data-md-anchor]')]
+        .find((el) => el.getAttribute('data-md-anchor') === slug) ?? null;
+    }
+
+    /**
+     * Scrolls to a heading and gives it the focus, so that the next Tab goes
+     * on from there instead of back to the link (WCAG 2.4.3, #641). It only
+     * becomes focusable by script; the ring follows `:focus-visible`, so it
+     * shows after Enter and not after a click. False when there is no such
+     * heading — then a notice says so.
+     */
+    function revealHeading(slug) {
+      const heading = headingFor(slug);
+      if (!heading) {
+        showNotice(t('fileView.markdown.link.noAnchor', { anchor: `#${slug}` }));
+        return false;
+      }
+      heading.scrollIntoView({ block: 'start' });
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+      return true;
+    }
+
+    /**
+     * The fragment of the link this file was opened through. Images above the
+     * heading arrive after it and push it down: once they are in, the heading
+     * is put back on top — unless the reader has scrolled in the meantime.
+     */
+    function revealOnOpen(slug, imagesSettled) {
+      if (!revealHeading(slug)) return;
+      const scrolledTo = previewEl.scrollTop;
+      void imagesSettled.then(() => {
+        if (disposed || previewEl.scrollTop !== scrolledTo) return;
+        headingFor(slug)?.scrollIntoView({ block: 'start' });
+      });
     }
 
     function onClick(event) {
@@ -296,16 +528,30 @@ export const markdownView = {
 
     const stopFollowingLocale = onLocaleChange(() => {
       modeSwitch.applyLabels();
-      render();
+      void render({ keepImages: true });
     });
 
-    render();
+    const firstImages = render();
+    if (context.fragment) revealOnOpen(context.fragment, firstImages);
 
     return {
       update({ content: next }) {
         content = next;
-        render();
+        void render();
         sourceInstance?.update({ content: next });
+      },
+      /**
+       * The text is unchanged, the images it shows may not be (#640): the
+       * host calls this on a refresh that finds the same text, and for a
+       * watcher report of other folders with those folders — then only the
+       * images in them are checked. Only what differs is swapped; the
+       * document is not rendered anew, so selection, focus and scroll stay.
+       */
+      revalidate({ directories } = {}) {
+        const slots = Array.isArray(directories)
+          ? imageSlots.filter((slot) => slot.target && directories.includes(parentDirOf(slot.target)))
+          : imageSlots;
+        return refreshImages(slots);
       },
       unmount() {
         disposed = true;

@@ -43,10 +43,17 @@ module.exports = {
   'sidebar.history.empty': 'No recently opened folders yet.',
   'sidebar.history.remove': 'Remove from history',
   'sidebar.history.remove.label': 'Remove {name} from the history',
+  'sidebar.history.removeHint': 'Press Delete or Backspace to remove the folder from the history.',
   'tree.reference': 'Reference in the chat',
   'tree.reference.label': 'Reference {name} in the chat',
   'tree.hiddenEntries.one': '… {count} more entry not shown',
   'tree.hiddenEntries.other': '… {count} more entries not shown',
+  // In place of a folder's entries when it cannot be listed (#639).
+  'tree.unreadable.permission': 'No permission to read this folder',
+  'tree.unreadable.missing': 'This folder no longer exists',
+  'tree.unreadable.other': 'This folder could not be read',
+  // In place of the tree while the project folder takes its time to list (#639).
+  'tree.loading': 'Loading folder…',
   'fileInfo.type.unknown': 'Unknown',
   // Markdown in the file preview (#344).
   'fileView.mode.label': 'Show as',
@@ -58,6 +65,15 @@ module.exports = {
   'fileView.markdown.link.notFound': '{path} does not exist in the open folder.',
   'fileView.markdown.link.outside': '{path} is outside the open folder.',
   'fileView.markdown.link.noAnchor': 'There is no heading {anchor} in this file.',
+  'fileView.markdown.image.broken': 'Image is damaged',
+  'fileView.source.unavailable': 'Source not available',
+  // Why a file is not shown (#641): main names the reason, these say it.
+  'fileView.notShown.refused': 'This file points out of the open folder through a link, so it is not shown.',
+  'fileView.notShown.missing': 'This file is no longer there. It was moved, renamed or deleted.',
+  'fileView.notShown.permission': 'Snotra is not allowed to read this file.',
+  'fileView.notShown.tooLarge': 'This file is too large to show as text.',
+  'fileView.notShown.failed': 'This file could not be read.',
+  'fileView.notShown.viewFailed': 'This file could not be shown.',
   // Images in the file preview (#345).
   'fileView.image.loading': 'Loading image…',
   'fileView.image.toggle': 'Show {name} at actual size',

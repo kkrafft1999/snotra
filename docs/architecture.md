@@ -365,6 +365,28 @@ folders, but only the currently visible ones, and only if their content has
 actually changed. Selection, keyboard focus and scroll position are saved before
 the redraw and restored afterwards.
 
+Every other rebuild of rows takes the same road
+([#636](https://github.com/kkrafft1999/snotra/issues/636)): an agent's write, a
+delete from the context menu, a move, an import, a folder's first expansion and
+the folder switch itself all run through one queue in `FileTree.js`, the
+redraws through the one that keeps the view. Two rebuilds side by side would
+both clear a container before either appends, and every row would show twice.
+A folder switch that a newer one overtakes stops after its next await and
+draws and reports nothing
+([#633](https://github.com/kkrafft1999/snotra/issues/633)). Main's side of a
+switch runs one step at a time — an activation and the announcement to the
+chat never overlap — and the number that decides who is current is taken in
+the activation's step, so no older call announces a folder main has already
+left. The folder left is cleared at once, and a listing still running for it
+is no longer waited for, so a share that does not answer holds up no folder
+picked after it. A folder whose listing takes longer than 150 ms shows that it is loading —
+a ring in its arrow's slot, or for the project folder a note in the tree's
+place. A folder that cannot
+be listed is not drawn empty: `readDirectory` returns `unreadable` with a reason
+(`permission`, `missing`, `refused`, `failed`), and the tree puts a note from the
+catalogue in its place
+([#639](https://github.com/kkrafft1999/snotra/issues/639)).
+
 ## Workspace images in the chat
 
 An image produced by the model (`![Diagram](diagram.png)`) lives in the project
@@ -855,6 +877,7 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
 | `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, toggle to actual size, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/mode-switch.js` | The "Preview \| Source" control, shared by Markdown and SVG | both view tests |
+| `renderer/file-views/read-failures.js` | Why a file is not shown as text: main's reason codes of `fs:readFile` and their catalogue sentences, for the info card and the SVG source ([#641](https://github.com/kkrafft1999/snotra/issues/641)) | `test/file-view-host-dom.test.js`, `test/image-view-dom.test.js` |
 | `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
 
@@ -863,7 +886,7 @@ FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js
                                                       │ registry.resolve(file)
                                                       ▼
                           first view whose canHandle() says yes ─ none ─▶ info card
-                                                      │ api.readFile — error ─▶ info card, with the error
+                                                      │ api.readFile — error ─▶ info card, with the reason
                                                       ▼
                           mount(fresh element, context) → instance
 ```
@@ -883,10 +906,22 @@ The rules the host guarantees:
   view, including the scroll position.
 - **`update()` only comes when the text on disk changed.** A watcher report for
   a neighbouring file, or the echo of the editor's own save, does not reach the
-  view — a viewer keeps its scroll position and text selection.
+  view — a viewer keeps its scroll position and text selection. A refresh that
+  finds the same text calls the optional `revalidate()` instead: the Markdown
+  view checks its images again there, without rendering anew. A watcher report
+  for other folders than the document's reaches the view as
+  `revalidate({ directories })`, so an image in `docs/img/` follows its file
+  too ([#640](https://github.com/kkrafft1999/snotra/issues/640)).
 - **A read error is shown, not swallowed.** A file over the 1 MB preview limit
-  shows the error on the info card — also when it grows past the limit while it
-  is open, where the old text used to simply stay.
+  goes to the info card — also when it grows past the limit while it is open,
+  where the old text used to simply stay. `fs:readFile` answers a failure with a
+  reason code next to the system's message (`refused`, `missing`, `permission`,
+  `too-large`, `failed` — `refused` only for a path that really lies outside,
+  a dangling link is `missing`, a closed folder on the way `permission`, the
+  same codes the tree's listing uses); the card keeps the size in its Size row and says the
+  reason below it, as a catalogue sentence in the interface language. A view
+  that fails to mount logs the cause and gets a generic sentence
+  ([#641](https://github.com/kkrafft1999/snotra/issues/641)).
 
 **Editors.** An editor reports unsaved changes via `context.setDirty()`. Every
 path that would replace or close it — another file, another folder, the file
@@ -913,7 +948,10 @@ at another file calls `context.openFile(path)`, which the host hands to the file
 only the tree knows the workspace (`'outside'`), can unfold the folders and
 select the row, and can tell a missing file (`'not-found'`) from one its
 listing left out. A view that has been replaced gets `'stale'` and reaches
-nothing.
+nothing. `context.openFile(path, { fragment })` keeps the `#section` in the
+host, and the next open of that path hands it to the view it mounts as
+`context.fragment` — the tree only ever opens the file
+([#641](https://github.com/kkrafft1999/snotra/issues/641)).
 
 #### Markdown ([#344](https://github.com/kkrafft1999/snotra/issues/344))
 
@@ -928,15 +966,25 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
                                  ▼
                           the view ─ images: fs:readWorkspaceImage → data: URI
                                    │         or a placeholder with the reason
-                                   └ links:  external → shell, file → tree,
-                                             #anchor → scroll, else plain text
+                                   └ links:  external → shell, file#section → tree,
+                                             #anchor → scroll and focus,
+                                             else plain text
 ```
 
 - **One sanitizer.** The chat and the preview both go through
   `markdownToSafeHtml()`. A file differs in two options only: `breaks: false`
   (a hard-wrapped paragraph is one paragraph, as on GitHub) and
   `keepRelativeLinks` (a link without a scheme leaves DOMPurify as
-  `data-workspace-href` instead of disappearing).
+  `data-workspace-href` instead of disappearing). Both land in the app window,
+  so nothing may reach beyond its own box: `id`, `name`, `role`, `tabindex`,
+  `popover`, `popovertarget` and `popovertargetaction` are forbidden — a second
+  `#chat-panel`, a `role="dialog"` that claims Escape, a first Tab stop or a
+  box in the top layer would otherwise come from a README. So is everything
+  that points at an element of the app by its id — `for`, `form`, `list`,
+  `headers`, `command`, `commandfor`, `interestfor` — and every `aria-*`
+  attribute (`ALLOW_ARIA_ATTR: false`): a `<label for="input-shell-enabled">`
+  in a README would switch shell commands on with one click on its text
+  ([#635](https://github.com/kkrafft1999/snotra/issues/635)).
 - **Nothing loads on its own.** The HTML is parsed into a `<template>` and every
   `src` moves to `data-md-src` before a node reaches the window. Under the CSP
   `img-src 'self' data:` an `<img>` with an absolute path would otherwise load
@@ -946,9 +994,24 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
   proves the absence with a CSP violation listener.
 - **Paths start at the file.** `![](img/a.png)` in `docs/guide.md` means
   `docs/img/a.png`; a leading `/` means the root of the open folder, as on
-  GitHub. The main process checks every image path again.
-- **Headings get anchors, not ids** (`data-md-anchor`, GitHub's slug): a
-  heading called "Chat input" must not become a second `#chat-input`.
+  GitHub. The main process checks every image path again. Query and fragment
+  are split off before the path is decoded, so `plot%231.png` is
+  `plot#1.png`; tooltips and notices show the decoded path.
+- **Images are checked again.** An overwritten image does not carry its new
+  content in its path, so every render and every refresh checks each image:
+  a cached one against size and date from a listing of its folder
+  (`fs:readDirectory`, one call per folder), and only one that differs is read
+  again — at most four reads at a time, each up to 10 MB of base64. A symbolic
+  link lists its own date and is always read. A language switch renders the
+  text anew and keeps every image as it was. The cache holds 24 images, like
+  the chat's. An image that passes main's signature check but does not decode
+  ends in the same placeholder as one that cannot be read
+  ([#640](https://github.com/kkrafft1999/snotra/issues/640)).
+- **Headings get anchors, not ids** (`data-md-anchor`, GitHub's slug, set after
+  the sanitizer and only on headings): a heading called "Chat input" must not
+  become a second `#chat-input`. Following an anchor scrolls to the heading and
+  moves the focus there (`tabindex="-1"`, the ring only under
+  `:focus-visible`); `guide.md#setup` does the same in the other file.
 - **The mode belongs to the open file.** Every file opens in the preview; the
   source (the plain-text view, mounted on first use) and the preview both
   follow an external change, so switching back shows the current text.
@@ -978,7 +1041,11 @@ image view ─ fs:readWorkspaceImage(path) ─▶ main: lexical + realpath check
 - **SVG stays a document.** It is shown through `<img>` only and never inlined;
   its markup is parsed with `DOMParser`, unattached, for the size it declares —
   Chromium would report 300 × 150 for an SVG with only a `viewBox`. Its source
-  is the plain-text view behind the shared "Preview | Source" switch.
+  is the plain-text view behind the shared "Preview | Source" switch. A source
+  that cannot be read as text — an SVG between the 1 MB text and the 10 MB
+  image limit, a deleted file — is a message of its own in that pane, never the
+  error as the file's content; the newest read wins
+  ([#641](https://github.com/kkrafft1999/snotra/issues/641)).
 - **Transparency shows.** A checkerboard sits behind the image only, in its own
   tokens (`--ds-checker-light`, `--ds-checker-dark`) for light and dark.
 
@@ -1013,20 +1080,53 @@ the disk. They come through `pdf:readAsset` instead
 name, nothing else.
 
 - **Nothing in a PDF acts.** No scripting sandbox is vendored or created, so
-  PDF JavaScript never runs; `enableXfa: false`, `isEvalSupported: false`; no
-  annotation layer, so a link is drawn but there is nothing to click. The
-  smoke test opens a PDF with an OpenAction script and two link annotations
-  and checks that nothing ran, opened or was requested.
-- **Only pages near the viewport are drawn.** Every page gets a placeholder of
-  its size at once; an IntersectionObserver draws pages within one screen of
-  the viewport and releases their canvases further away. A canvas is capped at
-  16 MP and drawn at a lower resolution above that.
+  PDF JavaScript never runs; `enableXfa: false`; no annotation layer, so a
+  link is drawn but there is nothing to click. The smoke test opens a PDF
+  with an OpenAction script and two link annotations and checks that nothing
+  ran, opened or was requested.
+- **No code from strings.** pdf.js 6 has no path that compiles code at run
+  time any more and dropped its `isEvalSupported` option with it, so the
+  option is not passed — an option pdf.js does not know protects nothing
+  ([#641](https://github.com/kkrafft1999/snotra/issues/641)). In the page the
+  CSP would refuse it: `script-src 'self'` without `'unsafe-eval'`. The
+  worker does not get that CSP — it is loaded from a `file:` URL, whose
+  response carries no policy, and a string timer runs there (checked on
+  2026-10-02) — so in the worker what holds is the vendored code itself;
+  `test/workspace-pdf.test.js` fails if a pdf.js update brings `eval` or
+  `new Function` back.
+- **Only pages near the viewport are drawn.** Every page gets a placeholder at
+  once, sized like page 1: reading every page's size up front would load each
+  page, thousands in a long scan
+  ([#634](https://github.com/kkrafft1999/snotra/issues/634)). In a PDF of
+  mixed sizes the scroll bar is therefore approximate until a page of another
+  size comes near the viewport and takes its own. An IntersectionObserver
+  draws pages within one screen of the viewport; further away a page loses
+  its canvas and, through `page.cleanup()`, what pdf.js decoded for it — for
+  the screen pdf.js only cleans up by itself after printing, so a scanned
+  manual would otherwise keep 7–9 MB of every page ever drawn. A zoom change
+  releases every drawn page the same way before it draws them again. A canvas
+  is capped at 16 MP and drawn at a lower resolution above that.
 - **Zoom** is relative to 96 dpi (100 % = one point as 1/72 inch); "Width"
   follows the column through a ResizeObserver. A zoom change keeps the same
-  spot of the same page at the top.
+  spot of the same page at the top. The value in the header is not a live
+  region: a visually hidden status says the new zoom after the user zoomed,
+  and stays silent when "Width" follows a divider drag or a window resize.
 - **Password**: pdf.js asks through `onPassword`; the view shows a field in
   the column. The password lives in the view's closure until it unmounts — it
   is never stored — and is tried once more after a change on disk.
+- **A load is never left behind** ([#634](https://github.com/kkrafft1999/snotra/issues/634)).
+  pdf.js settles a load that waits for a password only in `destroy()`, so
+  the view keeps the load under way and destroys it, with its worker, when
+  the view is left or a newer open for changed bytes takes over. `update()` —
+  the tree's refresh, which runs in the tree's sync chain — settles once the
+  document or a reason is on show, once the form waits for the user, and
+  once the load is stopped, whatever pdf.js does. A refresh at the prompt
+  with unchanged bytes leaves the form alone; a redraw keeps what is typed,
+  and the field takes the focus only when the form first appears or after
+  the user's own wrong password. A document whose first page cannot be read
+  is destroyed too, and the header shows only the size next to the reason. A
+  file pdf.js could not read is not opened again — no new worker — until its
+  size or mtime changes.
 - **The header wraps** in a narrow column: the name keeps at least 10em, page
   and zoom tools and the size move to a second row, right-aligned.
 - Not included: text selection and search (pdf.js's text layer), printing,
@@ -1059,9 +1159,13 @@ Two rules hang on that:
   lives in `SidebarResizer.js` (a `ResizeObserver` on `#app`) and not in the CSS:
   flexbox cannot express "distribute additional width evenly", because it lacks
   the reference point — `flex-grow` distributes the remainder against the basis,
-  not against the previous state. Only the new chat width is written; the
-  workspace fills the rest by itself as `flex: 1`. The calculation works the same
-  way in reverse, which is why maximising and restoring land back where you were.
+  not against the previous state. Only the chat width is set; the workspace fills
+  the rest by itself as `flex: 1`. The calculation works the same way in reverse,
+  which is why maximising and restoring land back where you were: the share moves
+  the chat's remembered width, which stays a linear function of the window width.
+  It reaches the prefs only if the chat has a remembered width of its own — the
+  width the first start fits to the welcome screen is not one
+  ([#637](https://github.com/kkrafft1999/snotra/issues/637)).
 
 Since phase B the right half is a pair as well: `#chat-area` brackets chat and
 history, making the structure symmetric.
@@ -1120,21 +1224,51 @@ applies to chat and history as to tree and content pane:
   buttons inside them; since the gear disappeared, the chat header has none and
   therefore carries the same calculation as a `min-height`.
 
-Three rules hold the four columns together, all in `SidebarResizer.js`:
+The rules that hold the four columns together all live in `SidebarResizer.js`:
 
+- **Each column has a remembered width and a width on screen**
+  ([#637](https://github.com/kkrafft1999/snotra/issues/637)). The remembered one
+  comes from the UI prefs, from the user's last gesture or from what the startup
+  set up; the one on screen is derived from it on every pass —
+  `clamp(remembered, room)`. A squeeze therefore only ever touches the inline
+  width, the result depends on the room alone and not on the way there, and a
+  squeezed column grows back as soon as the room returns.
 - **The workspace keeps its minimum** (`workspaceMin()`): the configured width of
   the sidebar plus `CONTENT_MIN`, and only for what is currently visible. The
   sidebar goes in with its configured width, not with its minimum — whoever
   dragged it wide wants to see it wide; then the history gives way instead.
 - **When it gets too tight, the chat gives way first, then the history, and then
-  the history collapses** (`ensureRoomForWorkspace()`). This happens with
-  `persist: false`: the user's remembered wish stays in place, so that the column
-  returns in a wider window — at the width it had before being squeezed. Whoever
-  collapses it themselves will not find it back on its own.
+  the history collapses** (`ensureRoomForWorkspace()`). Only as a last resort the
+  sidebar stops short of its own width (`maxSidebarWidth()`), so that the content
+  pane keeps `CONTENT_MIN` beside a chat at its minimum — which is why End on the
+  sidebar divider in a 1,000 px window ends at 538 px and not at 600. The 1 px
+  dividers count with the column they resize (`DIVIDER_PX`, `#chat-divider` only
+  while the content pane is shown), so the content pane keeps all of its 200 px
+  instead of 197. The chat
+  yields to the history's remembered width, not to its current one, so the
+  history gets its room back first. A history that collapsed for want of room
+  unfolds again as soon as it fits beside the chat's minimum. Whoever collapses
+  it themselves will not find it back on its own.
+- **The room check runs after every change of a column**: a gesture on a
+  divider, a window resize in every state (also without content pane or chat),
+  the first layout when the resizer is built, and every column shown or hidden.
+  For the last, the resizer watches the classes on `#app` with a
+  `MutationObserver` instead of relying on each switch in `app.js` and
+  `ChatHistoryPanel.js` to call it — that is how the startup, which opens the
+  content pane only once the folder is known, used to leave it 140 px.
+- **Only what a gesture changed is written**, and only when it moved: a key step
+  or a drag writes its own column, a click on a divider without movement, a key
+  press at an end position, a squeeze and the startup layout write nothing.
 - **The upper bound of the chat** is computed against `#app` and subtracts the
   history width. It now lives only in JS, no longer as a `max-width` in the CSS:
   "what has to be left for tree and content pane after chat and history" is not a
   percentage.
+- **One minimum per column.** `SIDEBAR_MIN`, `CHAT_MIN` and `HISTORY_MIN` agree
+  with the `min-width` of `#sidebar`, `#chat-panel` and `#chat-history` and with
+  the limits in the settings contract, and `DIVIDER_PX` with the width of
+  `.pane-divider`; `test/sidebar-resizer-dom.test.js` fails if they drift apart.
+  The sidebar's minimum is 180 px — the value the CSS has always
+  rendered, while JS and the contract said 150 until #637.
 
 The list hangs on `onChatPersisted` from `ChatStream.js` — a column that stands
 beside you permanently must not show the title from earlier.
@@ -1177,7 +1311,9 @@ If the column shows the welcome screen, it gets only that screen's width:
 making 624 px. The rest of the window is given to the chat by `fitChatToWelcome()`
 (`SidebarResizer.js`) — bounded by the same cap at half the window width as when
 dragging the divider. A remembered chat width stays untouched, and nothing is
-written here: what the startup sets up is not a new wish.
+written here: what the startup sets up is not a new wish — neither a later
+window resize nor a gesture on another divider writes it
+([#637](https://github.com/kkrafft1999/snotra/issues/637)).
 `test/startup-layout.test.js` keeps the 624 px together with the CSS.
 
 The preview lives in this column, which is why clicking a file brings it back via

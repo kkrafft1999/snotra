@@ -31,11 +31,14 @@
 //     file: { path, name, ext, size, modified },
 //     content,              // the file as UTF-8 text, read by the host;
 //                           // null for a view with reads: 'none'
+//     fragment,             // the `#section` (without `#`) of the link that
+//                           // opened this file from another view, else ''
 //     api,                  // window.electronAPI, for views that need more
 //     workspaceRoot,        // the open folder, or null
-//     openFile(path) → Promise<{ ok, reason? }>,
+//     openFile(path, { fragment }?) → Promise<{ ok, reason? }>,
 //                           // show another file of the workspace and select
-//                           // it in the tree; reason 'outside' or 'not-found'
+//                           // it in the tree; reason 'outside' or 'not-found'.
+//                           // The fragment reaches the view of that file.
 //     setTools(nodes),      // fill the tool area in the header (right-hand
 //                           // side, next to the size); [] or null clears it
 //     setMeta({ size, detail }),
@@ -60,6 +63,12 @@
 //     command(name) → boolean,              // optional: a command from the
 //                                           // menu, e.g. 'toggle-source';
 //                                           // true when the view handled it
+//     revalidate({ directories }?),         // optional: the text is the
+//                                           // same, what it points to may
+//                                           // not be — a Markdown file's
+//                                           // images (#640). With
+//                                           // `directories`, only what lies
+//                                           // in those folders changed.
 //   }
 //
 // Rules the host relies on:
@@ -67,7 +76,8 @@
 //   * `update` is only called when the text on disk actually differs from what
 //     the view was last given. A save of its own therefore does not come back
 //     as an external change, and a viewer keeps its scroll position and text
-//     selection when a neighbouring file is written.
+//     selection when a neighbouring file is written. A refresh that finds the
+//     same text calls `revalidate` instead, which must keep both as well.
 //   * An **editor with unsaved changes must not drop them in `update`**. It
 //     decides how to show the conflict; the host does not overwrite a buffer.
 //   * `setDirty` is ignored for viewers — a viewer can never keep the user
