@@ -109,6 +109,18 @@ adapters, so a change to what the engine passes changes the port as well:
   dock later without port or core changing. Validation of the server
   configuration in `shared/contracts/mcp.js`.
 
+  The transport stays free of MCP's meaning in both directions (CR-B16-02,
+  -04): a request the server sends goes to an `onRequest` handler of the
+  service, which answers `ping` and refuses everything else with "method not
+  found"; a request we give up on — aborted or timed out — is reported through
+  `onCancel`, and the service tells the server with `notifications/cancelled`
+  (never for `initialize`). A server starts in its configured working
+  directory, relative to the home folder, or in the home folder itself
+  (CR-B16-06). On Windows `main/services/windows-command.js` finds a bare
+  command over `PATH` and `PATHEXT` and starts a `.cmd`/`.bat` through
+  `cmd.exe` with its arguments escaped for both of cmd's reads, so `npx` works
+  (CR-B16-01).
+
   These tools reach the model through `main/adapters/mcp-adapter.js`, which
   translates them into registry definitions (issue #107). Four rules apply:
 

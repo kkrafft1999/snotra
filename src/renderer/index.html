@@ -1052,8 +1052,9 @@
               <label for="mcp-field-id" class="modal-field-label" data-i18n="mcpDialog.id.label">Identifier</label>
               <input type="text" id="mcp-field-id" class="modal-input modal-input--mono" placeholder="github" autocomplete="off" spellcheck="false">
               <p class="modal-hint" data-i18n-html="mcpDialog.id.hint">
-                Lower-case letters, digits, dot, hyphen, underscore. It is part of the tool name
-                (<code lang="en">mcp__github__&hellip;</code>) and cannot be changed later.
+                Lower-case letters, digits, dot, hyphen, underscore — no double underscore, and none at
+                the end. It is part of the tool name (<code lang="en">mcp__github__&hellip;</code>) and
+                cannot be changed later.
               </p>
             </div>
             <div class="modal-field-group">
@@ -1071,7 +1072,7 @@
             </div>
             <div class="modal-field-group">
               <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
-              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(project folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
+              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(your home folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
             </div>
             <div class="modal-field-group">
               <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>

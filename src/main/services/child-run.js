@@ -28,7 +28,7 @@ function createChildRunner({ spawn, platform = process.platform }) {
     if (!child || child.killed) return;
     try {
       if (platform === 'win32') {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
       } else {
         process.kill(-child.pid, 'SIGKILL');
       }
@@ -90,6 +90,9 @@ function createChildRunner({ spawn, platform = process.platform }) {
           stdio: ['pipe', 'pipe', 'pipe'],
           detached: platform !== 'win32',
           env,
+          // Snotra has no console of its own; without this every command
+          // flashes a console window on Windows (CR-B16-01, as in #442).
+          windowsHide: true,
         });
       } catch (e) {
         resolve({ error: e?.message || startError });
