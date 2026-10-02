@@ -34,7 +34,12 @@ There are **two token layers**:
 step …) belong in `renderer/styles/tokens.css`, with the light value in `:root`
 and, where needed, the dark value in `[data-theme='dark']`. `styles.css` may add
 a semantic alias (`--btn-…`, `--accent-…`) that maps onto the token — **never**
-hex values directly in a component.
+hex values directly in a component. That includes the component greys behind
+`--text-primary`, `--bg-hover`, `--border` and their neighbours
+(`--ds-text-*`, `--ds-bg-*`, `--ds-border`) and the backdrops
+(`--ds-backdrop`, `--ds-backdrop-nested`). `test/renderer-style-tokens.test.js`
+fails on a colour value in `styles.css`; the one it cannot see is the select
+chevron, an SVG in a data URI that cannot take a custom property.
 
 ## Tokens
 
@@ -48,15 +53,29 @@ In `tokens.css` these are the channel names (light values in `:root`, dark in
 | `--ds-blue` | `#00759E` | the one accent colour |
 | `--ds-blue-soft` | `rgba(0,117,158,0.05)` | hover wash, active radio states |
 | `--ds-blue-border` | `rgba(0,117,158,0.25)` | active-state borders |
+| `--ds-blue-strong` | `#006A8F` | small blue text on a `--ds-blue-soft` wash over a grey ground, where `--ds-blue` drops below 4.5:1; dark it is `--ds-blue` |
 | `--ds-black` | `#000000` | primary type, destructive action |
 | `--ds-white` | `#FFFFFF` | **ink only**: type on blue, check marks |
 | `--ds-surface` | `#FFFCF5` | primary surface (cards, dialogs, composer) |
 | `--ds-grey-bg` | `#F9F4ED` | page background, footer background |
 | `--ds-grey-card` | `#F2EDE6` | code background, inline code |
 | `--ds-grey-divider` | `#EFEAE3` | borders, dividing lines |
-| `--ds-grey-muted` | `#6F6D69` | secondary type, metadata (only ≥ 14 px) |
-| `--ds-grey-strong` | `#5E5C59` | smaller secondary type (< 14 px) |
+| `--ds-grey-muted` | `#6F6D69` | secondary type, metadata; below 14 px only on the grounds where it keeps headroom (see below) |
+| `--ds-grey-strong` | `#5E5C59` | small secondary type on every other ground |
+| `--ds-placeholder` | `--ds-grey-muted` | placeholder text of every field, through one `::placeholder` rule; dark has a value of its own for the composer ground |
 | `--ds-btn-primary-*` | see `tokens.css` | primary/save/send: background, foreground, hover, active shadow |
+
+**Small secondary type.** `--ds-grey-muted` reaches 5.0:1 on `--ds-surface`,
+4.9:1 on `--ds-chat-bg` and 4.7:1 on `--ds-grey-bg` — enough for text below
+14 px there, and that is where it is allowed. On `--ds-grey-card` it drops to
+4.4:1, on a hover or active ground (`--bg-hover`, `--bg-tertiary`,
+`--bg-active`) to 4.2:1 and below: small text on those grounds takes
+`--ds-grey-strong` (via `--text-muted-strong`), including in the hover state
+of a row whose ground only changes on hover. Text of 14 px and up may use
+`--ds-grey-muted` wherever it keeps 4.5:1. Decided on 2026-10-02 (#610) instead
+of a flat "only ≥ 14 px", which forty rules did not follow and which would
+have erased the step between a label and its description, in dark almost
+entirely (`--ds-grey-strong` `#C8C4BE` next to body text `#D0CBC6`).
 
 The three greys are **warm-toned** (b\* +4, R–B span 12). Until 2026-09-17 the
 set was slightly cool, so that the grey surfaces would pick up the blue hue of
@@ -244,7 +263,8 @@ visible.
 ### The chat ground
 
 Since the same change, the chat has a **ground token of its own**,
-`--ds-chat-bg` (light `#FAFBFC`, dark `#313133`), instead of `--ds-grey-bg`.
+`--ds-chat-bg` (light `#FDF8F1`, dark `#33312F` — warm since the shift of the
+grey scale), instead of `--ds-grey-bg`.
 Because the shadow carries the depth of the composer card, the ground may sit
 lighter than the ΔL\* rule of the grey scale would allow.
 

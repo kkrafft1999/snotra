@@ -75,7 +75,9 @@ export function applyTranslations(root = document) {
 
 /**
  * Switches the language and redraws the interface. The same language means no
- * work: this call also sits in the startup path and should cost nothing there.
+ * work, unless `force` asks for the redraw anyway — the start does, so that
+ * the catalogue rather than the static markup is what an English window shows
+ * (CR-B15-01).
  */
 export function setLocale(raw, { force = false } = {}) {
   const next = normalizeLocale(raw);

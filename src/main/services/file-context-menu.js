@@ -42,7 +42,7 @@ function createFileContextMenu({
   async function openWithDefaultApp(filePath) {
     // shell.openPath löst mit '' auf, wenn es geklappt hat, sonst mit Fehlertext.
     const failure = await shell.openPath(filePath);
-    if (failure) logger.warn('Datei konnte nicht geöffnet werden:', failure);
+    if (failure) logger.warn('[file-context-menu] The file could not be opened:', failure);
   }
 
   function revealInFileManager(filePath) {
@@ -78,7 +78,7 @@ function createFileContextMenu({
       return { deleted: true };
     } catch (err) {
       const message = err?.message ?? String(err);
-      logger.warn('Datei konnte nicht gelöscht werden:', message);
+      logger.warn('[file-context-menu] The file could not be deleted:', message);
       await showMessageBox(window, {
         type: 'error',
         buttons: [t('contextMenu.ok')],
@@ -106,7 +106,7 @@ function createFileContextMenu({
     // Datumsformate der Tabelle entstehen erst in `describe()` (#292).
     const described = await info.describe(filePath, { isDirectory, locale: t.locale });
     if (described.error) {
-      logger.warn('Informationen konnten nicht gelesen werden:', described.error);
+      logger.warn('[file-context-menu] The information could not be read:', described.error);
       await showMessageBox(window, {
         type: 'error',
         buttons: [t('contextMenu.ok')],
@@ -147,7 +147,7 @@ function createFileContextMenu({
         // unbehandelte Rejection und damit ein Absturz des Main-Prozesses.
         click: () => {
           showInfo(filePath, window, { isDirectory }).catch((err) => {
-            logger.warn('Informationen konnten nicht angezeigt werden:', err?.message ?? err);
+            logger.warn('[file-context-menu] The information could not be shown:', err?.message ?? err);
           });
         },
       },
