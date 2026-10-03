@@ -282,9 +282,13 @@ function createFileContextMenu({
     ];
   }
 
-  function popup(filePath, window, { onDeleted = null, isDirectory = false, onClearAgentMark = null } = {}) {
+  /**
+   * `position`: where the keyboard opened it (#74), in window coordinates;
+   * without one the menu opens at the mouse pointer.
+   */
+  function popup(filePath, window, { onDeleted = null, isDirectory = false, onClearAgentMark = null, position = null } = {}) {
     const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted, isDirectory, onClearAgentMark }));
-    menu.popup(window ? { window } : {});
+    menu.popup({ ...(window ? { window } : {}), ...(position ?? {}) });
     return menu;
   }
 

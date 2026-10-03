@@ -43,6 +43,25 @@ function formatSkipNote(inspection, t) {
   return notes.join(' ');
 }
 
+// Window coordinates beyond any screen: what is further out is no position.
+const MAX_MENU_COORDINATE = 100000;
+
+/**
+ * Where a context menu opened from the keyboard goes (#74). The renderer
+ * measures in CSS pixels, the menu takes window coordinates, which differ by
+ * the zoom. Anything that is not two sane numbers is no position: the menu
+ * then opens at the mouse pointer, as before.
+ */
+function contextMenuPosition(position, win) {
+  const x = position?.x;
+  const y = position?.y;
+  const sane = (v) => Number.isFinite(v) && v >= 0 && v <= MAX_MENU_COORDINATE;
+  if (!sane(x) || !sane(y)) return null;
+  const zoom = win && !win.isDestroyed() ? win.webContents.getZoomFactor() : 1;
+  const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return { x: Math.round(x * factor), y: Math.round(y * factor) };
+}
+
 function registerFsHandlers({
   ipcMain,
   filesystem,
@@ -180,6 +199,7 @@ function registerFsHandlers({
     const win = getMainWindow();
     fileContextMenu.popup(absPath, win, {
       isDirectory,
+      position: contextMenuPosition(options?.position, win),
       // Whether to offer "Remove mark" (#347). The renderer's word is enough:
       // the item only sends the path back, it touches nothing on disk.
       onClearAgentMark: options?.agentMark === true
@@ -200,4 +220,4 @@ function registerFsHandlers({
   });
 }
 
-module.exports = { registerFsHandlers, needsImportConfirmation, formatImportSummary };
+module.exports = { registerFsHandlers, needsImportConfirmation, formatImportSummary, contextMenuPosition };

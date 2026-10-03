@@ -695,6 +695,12 @@ summary:focus-visible,
   background: var(--bg-hover);
 }
 
+/* Keyboard focus on a row (#74). Inside the row: rows stack edge to edge and
+ * the tree scrolls, so a ring outside would be cut by the neighbours. */
+.tree-item:focus-visible {
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
 /* Aktiv-Zustand: linker Blue-Streifen ohne box-shadow (Mono-Blue). */
 .tree-item.active {
   background: var(--bg-active);
@@ -837,7 +843,9 @@ summary:focus-visible,
 
 /* @-Knopf in der Zeile (Issue #56): dragfreier Weg zur Chat-Referenz. Wie die
    Entfernen-Aktion im Ordner-Verlauf erst bei Hover bzw. Fokus sichtbar, damit
-   der Baum ruhig bleibt; focus-within deckt die Tastatur ab. */
+   der Baum ruhig bleibt. Since #74 the button is no tab stop (the row takes
+   Shift+Enter); it shows while the row has keyboard focus, not after a click
+   that merely focused the row. */
 .tree-item-reference {
   flex-shrink: 0;
   margin-left: auto;
@@ -862,7 +870,7 @@ summary:focus-visible,
 }
 
 .tree-item:hover .tree-item-reference,
-.tree-item:focus-within .tree-item-reference {
+.tree-item:focus-visible .tree-item-reference {
   opacity: 1;
 }
 

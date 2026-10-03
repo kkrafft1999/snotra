@@ -164,6 +164,40 @@ apply to the owner as well. The ruleset has `target: branch` and therefore
 covers **branches only** — tags can be pushed without a pull request, which is
 what the release path above makes use of.
 
+## Manual checks before tagging
+
+What the tests cannot see is looked at by hand, in the packaged app of the
+release branch.
+
+### Keyboard in the file tree
+
+The DOM tests (`test/file-tree-keyboard-dom.test.js`) cover where the keys
+go. What they cannot cover is the focus ring as drawn, the native context menu
+and a screen reader (#74). With a folder open that has subfolders:
+
+1. Click into the chat input, then press `Shift+Tab` until the focus is in the
+   tree. It lands on **one** row — the selected one, or the first — and that
+   row shows a blue ring inside its edges. Pressing `Tab` again leaves the
+   tree in one step (to the sidebar divider), not row by row.
+2. `↓` / `↑` move the ring over the visible rows, `Home` / `End` jump to the
+   first and the last. Rows inside a closed folder are skipped.
+3. On a closed folder `→` opens it without selecting it (no blue stripe); a
+   second `→` moves into it. `←` on a child goes back to the folder, `←` on the
+   open folder closes it.
+4. `Enter` on a file shows it in the middle column and selects the row;
+   `Enter` on a folder opens or closes it.
+5. The focused row shows its `@` button; `Shift+Enter` puts the reference into
+   the chat input instead of clicking it. The button's tooltip names the key.
+6. `Shift+F10` (and on Windows/Linux the context-menu key) opens the context
+   menu **below the row's name** — not at the mouse pointer. `Esc` closes it,
+   and the focus is back on the row.
+7. With the row focused, have the agent or the terminal delete that file. The
+   row disappears and the focus stays in the tree on another row.
+8. With VoiceOver (`⌘F5`) on macOS: the tree is announced as "Files", a row as
+   its name with level, "collapsed"/"expanded" and "selected"; a row with an
+   agent mark reads the mark as its description, a folder that cannot be read
+   reads the reason.
+
 ## Publishing the release
 
 **Only the tag** is pushed — the state itself is already on `main` through the

@@ -54,9 +54,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listWorkspacePaths: (options) =>
     ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: options?.showHidden === true }),
   // Only the path: whether it is a folder main looks up itself (#649). The
-  // one option says whether the row carries an agent mark (#347).
+  // options say whether the row carries an agent mark (#347) and, from the
+  // keyboard, where the menu opens (#74); main checks the numbers.
   showFileContextMenu: (filePath, options) =>
-    ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, { agentMark: options?.agentMark === true }),
+    ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, {
+      agentMark: options?.agentMark === true,
+      ...(options?.position
+        ? { position: { x: options.position.x, y: options.position.y } }
+        : {}),
+    }),
   onFsClearAgentMark: (callback) => {
     const channel = PUSH.FS_CLEAR_AGENT_MARK;
     const listener = (_event, payload) => callback(payload);
