@@ -108,21 +108,41 @@ setContentPaneVisible(false);
 // geschaltet hat — dann hat seine Hand Vorrang.
 let chatRestoredOnLoad = false;
 let contentPaneToggledByUser = false;
+// The stored choice from the title-bar switch, read once at the start; every
+// folder opened later is decided against it as well (#351).
+let storedContentPanePreference;
+// Until the start has laid out the column, a folder switch leaves it alone:
+// the start decides once it knows its folder and its chat.
+let startupLayoutApplied = false;
 
-function applyStartupContentPane({ preference, hasFolder, chatWidthRemembered }) {
-  if (contentPaneToggledByUser) return;
-  const visible = contentPaneVisibleOnStart({
-    preference,
-    chatRestored: chatRestoredOnLoad,
-    hasFolder,
-  });
-  setContentPaneVisible(visible);
-  // Ohne Ordner steht in der Spalte der Startschirm, und der braucht nicht
-  // mehr als seine 624 px (Issue #258). Den Rest bekommt der Chat — ausser die
-  // Breite ist gemerkt, dann gilt sie.
-  if (visible && hasFolder !== true && !chatWidthRemembered) {
-    panelResizer?.fitChatToWelcome();
+function contentPaneShown() {
+  return !appRoot.classList.contains('app--no-preview');
+}
+
+/**
+ * A folder was opened — at the start or by a switch (#351). The column
+ * follows the rule in startupLayout.js unless the user's hand has shaped it in
+ * this session, and a visible column with nothing in it shows the folder's
+ * README instead of the start screen.
+ */
+async function applyFolderContentPane({ hasFolder, chatWidthRemembered = true }) {
+  const readme = hasFolder ? await fileTree.readableFolderReadme().catch(() => null) : null;
+  if (!contentPaneToggledByUser) {
+    const visible = contentPaneVisibleOnStart({
+      preference: storedContentPanePreference,
+      chatRestored: chatRestoredOnLoad,
+      hasFolder,
+      folderHasReadme: readme !== null,
+    });
+    setContentPaneVisible(visible);
+    // Ohne Ordner steht in der Spalte der Startschirm, und der braucht nicht
+    // mehr als seine 624 px (Issue #258). Den Rest bekommt der Chat — ausser die
+    // Breite ist gemerkt, dann gilt sie.
+    if (visible && hasFolder !== true && !chatWidthRemembered) {
+      panelResizer?.fitChatToWelcome();
+    }
   }
+  if (readme && contentPaneShown()) await fileTree.showFolderReadme(readme).catch(() => {});
 }
 
 btnToggleContentPane.addEventListener('click', async () => {
@@ -130,6 +150,13 @@ btnToggleContentPane.addEventListener('click', async () => {
   const wasVisible = !appRoot.classList.contains('app--no-preview');
   const visibleAfterToggle = !wasVisible;
   setContentPaneVisible(visibleAfterToggle);
+  // Shown with nothing in it, the column has the folder's README rather than
+  // the start screen (#351).
+  if (visibleAfterToggle) {
+    void fileTree.readableFolderReadme()
+      .then((readme) => fileTree.showFolderReadme(readme))
+      .catch(() => {});
+  }
   try {
     await api.setUIPrefs({ contentPaneVisible: visibleAfterToggle });
   } catch {
@@ -464,6 +491,9 @@ const fileTree = initFileTree({
     skillSuggestion.hide();
     const loaded = await trackChatSwitch(chatStream.loadChatForWorkspace(folderPath));
     chatRestoredOnLoad = loaded?.restored === true;
+    // Every folder switch is decided like the start (#351); the start itself
+    // does it once it knows whether it opened a folder at all.
+    if (startupLayoutApplied) await applyFolderContentPane({ hasFolder: true });
     // Der Verlauf ist nach Ordnern gebucht — der neue Ordner bringt eine
     // andere Liste mit. Ohne dieses Nachziehen stuenden dort die Chats des
     // vorigen Ordners, beim Start gar keine.
@@ -576,7 +606,7 @@ trackChatSwitch((async () => {
   }
   // The resizer lays the columns out as it is built and again after every
   // column switch — it watches the classes on #app, so the switches above and
-  // applyStartupContentPane() below need no call of their own (#637).
+  // applyFolderContentPane() below need no call of their own (#637).
   panelResizer = initSidebarResizer({
     api,
     initialSidebarWidth: uiPrefs.sidebarWidth,
@@ -608,11 +638,12 @@ trackChatSwitch((async () => {
     // Erst jetzt steht fest, ob ein Chat zurueckgekommen ist — vorher waere die
     // Spalte nur geraten. Im `finally`, damit sie auch nach einem Fehler beim
     // Laden nicht eingeklappt haengen bleibt.
-    applyStartupContentPane({
-      preference: uiPrefs.contentPaneVisible,
+    storedContentPanePreference = uiPrefs.contentPaneVisible;
+    await applyFolderContentPane({
       hasFolder: folderOpened,
       chatWidthRemembered: typeof uiPrefs.chatPanelWidth === 'number',
     });
+    startupLayoutApplied = true;
   }
   syncChatInputHeight();
 })());

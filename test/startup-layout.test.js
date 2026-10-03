@@ -79,6 +79,45 @@ test('ohne gespeicherten Wunsch entscheidet der Ordner', async () => {
   assert.equal(contentPaneVisibleOnStart({}), true);
 });
 
+test('with a folder, its README opens the column (#351)', async () => {
+  const { contentPaneVisibleOnStart } = await startupLayoutPromise;
+  assert.equal(
+    contentPaneVisibleOnStart({ chatRestored: false, hasFolder: true, folderHasReadme: true }),
+    true,
+    'the folder shows what it is'
+  );
+  assert.equal(
+    contentPaneVisibleOnStart({ chatRestored: false, hasFolder: true, folderHasReadme: false }),
+    false,
+    'without one there is only the start screen to see (#255)'
+  );
+  // The order of rules stays: a restored chat (#208) and the switch (#222)
+  // come first.
+  assert.equal(
+    contentPaneVisibleOnStart({ chatRestored: true, hasFolder: true, folderHasReadme: true }),
+    false
+  );
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: false, chatRestored: false, hasFolder: true, folderHasReadme: true }),
+    false
+  );
+  assert.equal(
+    contentPaneVisibleOnStart({ preference: true, chatRestored: false, hasFolder: true, folderHasReadme: false }),
+    true
+  );
+});
+
+test('the README is README.md of the top level, in any case (#351)', async () => {
+  const { pickFolderReadme } = await startupLayoutPromise;
+  assert.equal(pickFolderReadme(['/ws/AGENTS.md', '/ws/README.md']), '/ws/README.md');
+  assert.equal(pickFolderReadme(['/ws/AGENTS.md']), null, 'not AGENTS.md');
+  assert.equal(pickFolderReadme(['/ws/README.txt', '/ws/README']), null, 'only the Markdown file');
+  assert.equal(pickFolderReadme(['C:\\ws\\readme.md']), 'C:\\ws\\readme.md', 'another case, a Windows path');
+  assert.equal(pickFolderReadme(['/ws/readme.md', '/ws/README.md']), '/ws/README.md', 'the exact name first');
+  assert.equal(pickFolderReadme([]), null);
+  assert.equal(pickFolderReadme(undefined), null);
+});
+
 test('die Breite des Startschirms steht im CSS und im Resizer gleich', () => {
   // Der Resizer rechnet mit 560 + 2 x 32 px, damit die Spalte beim Erststart
   // genau den Startschirm fasst (#258). Waechst `#welcome` im CSS, muss die
