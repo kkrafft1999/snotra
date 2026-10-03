@@ -125,7 +125,9 @@
             </button>
           </div>
         </div>
-        <div id="tree-container"></div>
+        <!-- A WAI-ARIA tree (#74): FileTree gives the rows their roles and the
+             roving tabindex. -->
+        <div id="tree-container" role="tree" aria-label="Files" data-i18n-attr="aria-label:tree.label"></div>
       </aside>
 
       <div id="divider" class="pane-divider" role="separator" aria-orientation="vertical"

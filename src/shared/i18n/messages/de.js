@@ -49,7 +49,10 @@ module.exports = {
   'sidebar.history.remove': 'Aus Verlauf entfernen',
   'sidebar.history.remove.label': '{name} aus dem Verlauf entfernen',
   'sidebar.history.removeHint': 'Mit Entf oder der Rücktaste entfernst du den Ordner aus dem Verlauf.',
+  'tree.label': 'Dateien',
   'tree.reference': 'Im Chat referenzieren',
+  // The key on a focused row (#74); the Mac shows ⇧↩ instead.
+  'tree.reference.shortcut': 'Shift+Enter',
   'tree.reference.label': '{name} im Chat referenzieren',
   // What the agent read or changed (#347): tooltip and aria-label of the mark.
   'tree.mark.unseen': 'Vom Agenten geändert, noch nicht angesehen',

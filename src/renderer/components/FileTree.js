@@ -308,6 +308,7 @@ export function initFileTree(deps) {
     // rows would stay clickable under the new name meanwhile.
     treeContainer.innerHTML = '';
     treeContainer.removeAttribute('aria-busy');
+    describeLevel(treeContainer, null);
 
     // In the queue (#636), so nothing still running for this folder can
     // append its rows twice; a job for the folder before has been let go.
@@ -654,7 +655,10 @@ export function initFileTree(deps) {
     // The folder changed while this listed (#633): the rows belong to the one left.
     if (generation !== treeGeneration) return;
     if (unreadable) {
-      parentEl.appendChild(buildUnreadableNote(unreadable, depth));
+      const note = buildUnreadableNote(unreadable, depth);
+      parentEl.appendChild(note);
+      describeLevel(parentEl, note);
+      syncTabStop();
       return;
     }
 
@@ -669,6 +673,15 @@ export function initFileTree(deps) {
       // Deep in the tree or in a narrow sidebar the name is cut off, down to
       // nothing; the tooltip still reads it in full (#641).
       row.title = item.name;
+      // A WAI-ARIA tree (#74). One row at a time is the tab stop (roving
+      // tabindex, `syncTabStop`); the name is set, not read from the content,
+      // which would add the @ button's label and the mark to it.
+      row.setAttribute('role', 'treeitem');
+      row.setAttribute('aria-level', String(depth + 1));
+      row.setAttribute('aria-label', item.name);
+      row.setAttribute('aria-selected', 'false');
+      if (item.isDirectory) row.setAttribute('aria-expanded', 'false');
+      row.tabIndex = -1;
 
       const indent = document.createElement('span');
       indent.classList.add('indent');
@@ -729,6 +742,7 @@ export function initFileTree(deps) {
       if (item.isDirectory) {
         const childContainer = document.createElement('div');
         childContainer.classList.add('tree-children');
+        childContainer.setAttribute('role', 'group');
         childContainer.dataset.path = item.path;
         childContainer.dataset.loaded = 'false';
         parentEl.appendChild(childContainer);
@@ -760,7 +774,9 @@ export function initFileTree(deps) {
       });
     }
 
-    if (hidden > 0) parentEl.appendChild(buildHiddenEntriesNote(hidden, depth));
+    const note = hidden > 0 ? buildHiddenEntriesNote(hidden, depth) : null;
+    if (note) parentEl.appendChild(note);
+    describeLevel(parentEl, note);
 
     // A complete listing tells which marked entries are gone — deleted,
     // renamed or moved, by whoever (#347). One cut at the cap (#76) does not.
@@ -768,6 +784,172 @@ export function initFileTree(deps) {
       agentMarks.pruneListing(dirPath, items.map((item) => item.path), hiddenByFilter);
     }
     applyAgentMarks(parentEl.querySelectorAll(':scope > .tree-item'));
+    syncTabStop();
+  }
+
+  // ── Keyboard (#74) ────────────────────────────────────────────────────────
+  // The tree is a WAI-ARIA tree with a roving tabindex: Tab enters it once, on
+  // the row last focused — or the selected one, or the first —, and the arrow
+  // keys move within it. The notes under a folder are no rows; the arrows
+  // pass them, and a screen reader hears them as the folder's description.
+
+  let describedSeq = 0;
+
+  /** A fresh id for an element another one points at with aria-describedby. */
+  function describedId(prefix) {
+    describedSeq += 1;
+    return `${prefix}-${describedSeq}`;
+  }
+
+  /**
+   * The note of a level (cut-off count or unreadable folder) describes the
+   * folder row above it, or the tree for the top level; `null` takes an
+   * earlier one back.
+   */
+  function describeLevel(parentEl, note) {
+    const owner = parentEl === treeContainer ? treeContainer : parentEl.previousElementSibling;
+    if (!owner) return;
+    if (note) {
+      note.id = describedId('tree-note');
+      owner.dataset.noteId = note.id;
+    } else {
+      delete owner.dataset.noteId;
+    }
+    updateDescription(owner);
+  }
+
+  /** aria-describedby of a row or the tree: its agent mark and its note. */
+  function updateDescription(el) {
+    const ids = [el.querySelector(':scope > .tree-mark')?.id, el.dataset.noteId].filter(Boolean);
+    if (ids.length > 0) el.setAttribute('aria-describedby', ids.join(' '));
+    else el.removeAttribute('aria-describedby');
+  }
+
+  /** The rows that can be seen: top level and everything in open folders. */
+  function visibleRows(container = treeContainer, rows = []) {
+    for (const el of container.children) {
+      if (el.classList.contains('tree-item')) rows.push(el);
+      else if (el.classList.contains('tree-children') && el.classList.contains('expanded')) {
+        visibleRows(el, rows);
+      }
+    }
+    return rows;
+  }
+
+  function setTabStop(row) {
+    for (const el of treeContainer.querySelectorAll('.tree-item[tabindex="0"]')) {
+      if (el !== row) el.tabIndex = -1;
+    }
+    row.tabIndex = 0;
+  }
+
+  /**
+   * Keeps exactly one visible row in the tab order. The one that has it keeps
+   * it; a row that was redrawn away or folded out of sight hands it to the
+   * selection, else to the first row. Returns the row, or null for an empty tree.
+   */
+  function syncTabStop() {
+    const rows = visibleRows();
+    const current = treeContainer.querySelector('.tree-item[tabindex="0"]');
+    if (current && rows.includes(current)) return current;
+    const selected = appStore.activeTreeItem;
+    const next = selected && rows.includes(selected) ? selected : rows[0] ?? null;
+    if (current) current.tabIndex = -1;
+    if (next) next.tabIndex = 0;
+    return next;
+  }
+
+  function focusRow(row) {
+    if (!row) return;
+    setTabStop(row);
+    row.focus();
+  }
+
+  function childContainerOf(row) {
+    const next = row.nextElementSibling;
+    return next?.classList.contains('tree-children') ? next : null;
+  }
+
+  /** The folder row a row sits in; null on the top level. */
+  function parentRowOf(row) {
+    const container = row.parentElement;
+    return container?.classList.contains('tree-children') ? container.previousElementSibling : null;
+  }
+
+  // A click focuses the row (tabindex -1 takes focus from the mouse), and the
+  // row clicked is where Tab comes back to.
+  treeContainer.addEventListener('focusin', (e) => {
+    const row = e.target.closest?.('.tree-item');
+    if (row) setTabStop(row);
+  });
+
+  treeContainer.addEventListener('keydown', (e) => {
+    const row = e.target.closest?.('.tree-item');
+    if (!row || e.altKey || e.metaKey || e.ctrlKey) return;
+    // The arrows also work from the @ button, once a click put focus there;
+    // what activates is the row's own business — the button has its own Enter.
+    const onRow = e.target === row;
+    const isDirectory = row.dataset.isDirectory === 'true';
+    const childContainer = isDirectory ? childContainerOf(row) : null;
+    const expanded = Boolean(childContainer?.classList.contains('expanded'));
+    const contextMenuKey = e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey);
+    if (e.shiftKey && !contextMenuKey && !(e.key === 'Enter' && onRow)) return;
+
+    const rows = () => visibleRows();
+    let handled = true;
+    switch (e.key) {
+      case 'ArrowDown': {
+        const all = rows();
+        focusRow(all[all.indexOf(row) + 1]);
+        break;
+      }
+      case 'ArrowUp': {
+        const all = rows();
+        const index = all.indexOf(row);
+        if (index > 0) focusRow(all[index - 1]);
+        break;
+      }
+      case 'Home':
+        focusRow(rows()[0]);
+        break;
+      case 'End':
+        focusRow(rows().at(-1));
+        break;
+      case 'ArrowRight':
+        if (!isDirectory) break;
+        if (!expanded) void toggleFolder(row, childContainer, row.dataset.path, { select: false });
+        else focusRow(childContainer.querySelector(':scope > .tree-item'));
+        break;
+      case 'ArrowLeft':
+        if (expanded) void toggleFolder(row, childContainer, row.dataset.path, { select: false });
+        else focusRow(parentRowOf(row));
+        break;
+      case 'Enter':
+        if (!onRow) {
+          handled = false;
+        } else if (e.shiftKey) {
+          // The @ button's job (#56), so the row stays the tree's only stop.
+          if (typeof insertChatReference === 'function') referenceInChat(itemOfRow(row));
+        } else {
+          // The same as a click: a file opens, a folder opens or closes.
+          row.click();
+        }
+        break;
+      default:
+        if (contextMenuKey && onRow) {
+          void openFileContextMenu(itemOfRow(row), { at: row });
+        } else {
+          handled = false;
+        }
+    }
+    if (handled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
+  function itemOfRow(row) {
+    return { path: row.dataset.path, isDirectory: row.dataset.isDirectory === 'true' };
   }
 
   /**
@@ -885,7 +1067,12 @@ export function initFileTree(deps) {
     btn.draggable = false;
     btn.dataset.itemName = item.name;
     btn.setAttribute('aria-label', t('tree.reference.label', { name: item.name }));
-    btn.title = t('tree.reference');
+    btn.title = referenceTitle();
+    // Out of the tab order and out of the accessibility tree (#74): a control
+    // inside a treeitem would make every row two stops, and the row reaches
+    // the same with Shift+Enter. The mouse still clicks it.
+    btn.tabIndex = -1;
+    btn.setAttribute('aria-hidden', 'true');
     btn.innerHTML = svgAt();
     btn.addEventListener('click', (e) => {
       // Ohne stopPropagation würde die Zeile zusätzlich auswählen bzw. aufklappen.
@@ -894,6 +1081,16 @@ export function initFileTree(deps) {
       referenceInChat(item);
     });
     return btn;
+  }
+
+  const REFERENCE_SHORTCUT_MAC = '⇧↩';
+
+  /** "Reference in the chat (Shift+Enter)": the tooltip names the key (#74). */
+  function referenceTitle() {
+    const shortcut = navigator.userAgent.includes('Mac')
+      ? REFERENCE_SHORTCUT_MAC
+      : t('tree.reference.shortcut');
+    return `${t('tree.reference')} (${shortcut})`;
   }
 
   /** Übersetzt einen Baum-Eintrag in eine @-Referenz und reicht sie an den Chat. */
@@ -942,16 +1139,28 @@ export function initFileTree(deps) {
   // Issue #58: natives Kontextmenü (Öffnen / Im Finder bzw. Explorer anzeigen / Löschen).
   // Das Menü selbst baut der Main-Prozess, hier wird nur der Pfad übergeben —
   // dazu die Information, ob es ein Ordner ist, damit „Öffnen“ entfällt (#120).
-  async function openFileContextMenu(item) {
+  /**
+   * `at`: the row the keyboard opened it on (#74). The menu then opens below
+   * the name, not wherever the mouse pointer happens to rest.
+   */
+  async function openFileContextMenu(item, { at = null } = {}) {
     try {
       const result = await api.showFileContextMenu(item.path, {
         agentMark: Boolean(rowForPath(item.path)?.querySelector(':scope > .tree-mark')),
         changes: !item.isDirectory && fileChanges.changesFor(appStore.currentChatId, item.path).length > 0,
+        ...(at ? { position: menuPositionFor(at) } : {}),
       });
       if (result?.error) console.warn('Context menu refused:', result.error);
     } catch (err) {
       console.warn('Context menu failed:', err?.message ?? err);
     }
+  }
+
+  /** Window coordinates in CSS pixels: under the start of the row's name. */
+  function menuPositionFor(row) {
+    const rowBox = row.getBoundingClientRect();
+    const labelBox = row.querySelector('.label')?.getBoundingClientRect() ?? rowBox;
+    return { x: Math.round(labelBox.left), y: Math.round(rowBox.bottom) };
   }
 
   /**
@@ -1043,13 +1252,11 @@ export function initFileTree(deps) {
     if (!childContainer) return;
     const row = childContainer.previousElementSibling;
     if (!row || row.dataset.isDirectory !== 'true') return;
-    const arrow = row.querySelector('.arrow');
     const depth = loadDepthFromTreeRow(row);
     childContainer.innerHTML = '';
     await loadTreeLevel(childContainer, dirPath, depth);
     childContainer.dataset.loaded = 'true';
-    childContainer.classList.add('expanded');
-    if (arrow) arrow.classList.add('expanded');
+    showExpanded(row, childContainer, true);
   }
 
   /**
@@ -1067,8 +1274,7 @@ export function initFileTree(deps) {
       await loadTreeLevel(childContainer, dirPath, loadDepthFromTreeRow(row));
       childContainer.dataset.loaded = 'true';
     }
-    childContainer.classList.add('expanded');
-    row?.querySelector('.arrow')?.classList.add('expanded');
+    showExpanded(row, childContainer, true);
     return true;
   }
 
@@ -1139,7 +1345,7 @@ export function initFileTree(deps) {
     if (stale()) return { ok: false, reason: 'stale' };
     if (shown) {
       agentMarks.markSeen(targetPath);
-      appStore.activeTreeItem?.classList.remove('active');
+      deselectActiveItem();
       appStore.activeTreeItem = null;
       appStore.selectedPath = targetPath;
       appStore.selectedIsDirectory = false;
@@ -1278,11 +1484,7 @@ export function initFileTree(deps) {
       const depthVal = loadDepthFromTreeRow(row);
       await loadTreeLevel(childContainer, dirPath, depthVal);
       childContainer.dataset.loaded = 'true';
-      if (wasExpanded) {
-        childContainer.classList.add('expanded');
-        const arrow = row?.querySelector('.arrow');
-        if (arrow) arrow.classList.add('expanded');
-      }
+      if (wasExpanded) showExpanded(row, childContainer, true);
     }
   }
 
@@ -1311,7 +1513,10 @@ export function initFileTree(deps) {
       : agentMarks.markOf(appStore.currentChatId, row.dataset.path);
     let el = row.querySelector(':scope > .tree-mark');
     if (!mark) {
-      el?.remove();
+      if (el) {
+        el.remove();
+        updateDescription(row);
+      }
       return;
     }
     if (!el) {
@@ -1319,7 +1524,11 @@ export function initFileTree(deps) {
       el.className = 'tree-mark';
       // Not colour alone, nor the letter alone: the label says it in words.
       el.setAttribute('role', 'img');
+      // The row's name is set, so the mark reaches a screen reader as the
+      // row's description (#74).
+      el.id = describedId('tree-mark');
       row.insertBefore(el, row.querySelector(':scope > .tree-item-reference'));
+      updateDescription(row);
     }
     el.dataset.mark = mark;
     el.classList.toggle('tree-mark--folder', isDirectory);
@@ -1495,7 +1704,9 @@ export function initFileTree(deps) {
     if (view.focusPath) {
       const row = rowForPath(view.focusPath);
       const target = view.focusReference ? row?.querySelector('.tree-item-reference') : row;
-      target?.focus?.();
+      // A focused row that went away hands the focus to the tab stop instead
+      // of letting it fall out of the tree (#74).
+      (target ?? syncTabStop())?.focus?.();
     }
     treeContainer.scrollTop = view.scrollTop;
   }
@@ -1686,29 +1897,42 @@ export function initFileTree(deps) {
    * Opens or closes a folder row. Its first load runs in the queue (#636) and
    * is shared with a second click while it lasts. The arrow turns at once, so
    * the click shows it was taken, and a slow listing shows itself (#639).
+   * The arrow keys open and close without selecting (#74): `select: false`.
    */
-  async function toggleFolder(row, childContainer, dirPath) {
-    const arrow = row.querySelector('.arrow');
-    // Selected before the load: a redraw while it runs puts the highlight on
-    // the new row by the path.
-    setActiveItem(row);
-    appStore.selectedPath = dirPath;
-    appStore.selectedIsDirectory = true;
+  async function toggleFolder(row, childContainer, dirPath, { select = true } = {}) {
+    if (select) {
+      // Selected before the load: a redraw while it runs puts the highlight
+      // on the new row by the path.
+      setActiveItem(row);
+      appStore.selectedPath = dirPath;
+      appStore.selectedIsDirectory = true;
+    }
 
     if (childContainer.classList.contains('expanded')) {
-      childContainer.classList.remove('expanded');
-      arrow.classList.remove('expanded');
+      showExpanded(row, childContainer, false);
       return;
     }
     if (childContainer.dataset.loaded === 'true') {
-      childContainer.classList.add('expanded');
-      arrow.classList.add('expanded');
+      showExpanded(row, childContainer, true);
       return;
     }
-    arrow.classList.add('expanded');
+    showExpanded(row, null, true);
     const opened = await withLoadingState(row, loadFolderOnce(dirPath));
     // A load that failed leaves the folder closed; the arrow turns back.
-    if (!opened) arrow.classList.remove('expanded');
+    if (!opened) showExpanded(row, null, false);
+  }
+
+  /**
+   * Open or closed, in all three places that say it: the child container,
+   * the arrow and aria-expanded (#74). Without a container only the row —
+   * the arrow turns ahead of a first load.
+   */
+  function showExpanded(row, childContainer, expanded) {
+    childContainer?.classList.toggle('expanded', expanded);
+    row?.querySelector('.arrow')?.classList.toggle('expanded', expanded);
+    row?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    // A folder closed over the row that was the tab stop hands it on.
+    if (!expanded) syncTabStop();
   }
 
   function loadFolderOnce(dirPath) {
@@ -1748,17 +1972,27 @@ export function initFileTree(deps) {
   }
 
   function clearSelection() {
+    deselectActiveItem();
     appStore.selectedPath = null;
     appStore.selectedIsDirectory = false;
     appStore.activeTreeItem = null;
   }
 
+  function deselectActiveItem() {
+    const row = appStore.activeTreeItem;
+    if (!row) return;
+    row.classList.remove('active');
+    row.setAttribute('aria-selected', 'false');
+  }
+
   function setActiveItem(row) {
-    if (appStore.activeTreeItem) {
-      appStore.activeTreeItem.classList.remove('active');
-    }
+    deselectActiveItem();
     row.classList.add('active');
+    row.setAttribute('aria-selected', 'true');
     appStore.activeTreeItem = row;
+    // Tab comes back to the selection — unless the keyboard is in the tree
+    // already, where the focused row keeps the stop (#74).
+    if (!treeContainer.contains(document.activeElement)) setTabStop(row);
   }
 
   /**
@@ -1774,7 +2008,7 @@ export function initFileTree(deps) {
     for (const btn of treeContainer.querySelectorAll('.tree-item-reference')) {
       const name = btn.dataset.itemName || '';
       btn.setAttribute('aria-label', t('tree.reference.label', { name }));
-      btn.title = t('tree.reference');
+      btn.title = referenceTitle();
     }
     for (const note of treeContainer.querySelectorAll('.tree-hidden-entries')) {
       note.textContent = hiddenEntriesText(Number(note.dataset.hiddenCount) || 0);

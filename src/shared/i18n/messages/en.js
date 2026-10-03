@@ -44,7 +44,10 @@ module.exports = {
   'sidebar.history.remove': 'Remove from history',
   'sidebar.history.remove.label': 'Remove {name} from the history',
   'sidebar.history.removeHint': 'Press Delete or Backspace to remove the folder from the history.',
+  'tree.label': 'Files',
   'tree.reference': 'Reference in the chat',
+  // The key on a focused row (#74); the Mac shows ⇧↩ instead.
+  'tree.reference.shortcut': 'Shift+Enter',
   'tree.reference.label': 'Reference {name} in the chat',
   // What the agent read or changed (#347): tooltip and aria-label of the mark.
   'tree.mark.unseen': 'Changed by the agent, not looked at yet',
