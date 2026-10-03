@@ -464,6 +464,33 @@ test('a check reloads only when the page, a file it loaded or a file it missed c
   assert.equal((await env.service.check(result.id)).reason, 'too-large');
 });
 
+test('the same change reported twice is loaded once, at the old position', async () => {
+  const { env, result, contents } = await openedPage();
+  const base = `snotra-html://${result.id}/ws/site/`;
+  await env.request(`${base}index.html`);
+  await env.request(`${base}style.css`);
+  contents.scroll = [0, 600];
+  env.files['/ws/site/style.css'] = { content: 'p { color: blue }', mtimeMs: 2 };
+
+  // The watcher and the tree, at the same moment.
+  const answers = await Promise.all([env.service.check(result.id), env.service.check(result.id), env.service.check(result.id)]);
+  assert.equal(contents.loaded.length, 2, 'one reload');
+  assert.equal(answers.filter((answer) => answer.reloaded).length, 1);
+  contents.emit('did-finish-load');
+  assert.equal(contents.isolated.at(-1).code, 'window.scrollTo(0, 600)');
+});
+
+test('a reload right behind another keeps the position the first one owes', async () => {
+  const { env, result, contents } = await openedPage();
+  contents.scroll = [0, 600];
+  await env.service.reload(result.id);
+  // The fresh document is at its top and has not finished loading.
+  contents.scroll = [0, 0];
+  await env.service.reload(result.id);
+  contents.emit('did-finish-load');
+  assert.equal(contents.isolated.at(-1).code, 'window.scrollTo(0, 600)');
+});
+
 test('closing takes the view off the window and ends the page', async () => {
   const { env, result, view, contents } = await openedPage();
   assert.deepEqual(env.service.close(result.id), { ok: true });

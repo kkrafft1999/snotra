@@ -486,6 +486,8 @@ function createHtmlPreviewService({
       restoreScroll: null,
       unresponsive: false,
       expectedExits: 0,
+      runningCheck: null,
+      queuedCheck: null,
       closed: false,
     };
     try {
@@ -570,7 +572,10 @@ function createHtmlPreviewService({
   async function reload(id) {
     const page = livePage(id);
     if (!page) return { ok: false };
-    let scroll = page.unresponsive ? 'stuck' : await readScroll(page);
+    // A load that has not finished yet still owes the old position: a second
+    // reload right behind it must not read the fresh document's top instead.
+    const owed = page.restoreScroll;
+    let scroll = page.unresponsive ? 'stuck' : owed ?? await readScroll(page);
     if (scroll === 'stuck') {
       try {
         page.view.webContents.forcefullyCrashRenderer();
@@ -601,9 +606,27 @@ function createHtmlPreviewService({
    * `{ ok: true, reloaded, size, mtimeMs }`, or `{ ok: false, reason, size? }`
    * when the page itself can no longer be shown.
    */
-  async function check(id) {
+  function check(id) {
     const page = livePage(id);
-    if (!page) return { ok: false, reason: ERRORS.UNAVAILABLE };
+    if (!page) return Promise.resolve({ ok: false, reason: ERRORS.UNAVAILABLE });
+    // The watcher and the tree often report the same change twice. One check
+    // at a time per page, and one queued behind it, so the change is seen
+    // once and loaded once.
+    if (page.queuedCheck) return page.queuedCheck;
+    const run = () => compareAndReload(id, page);
+    if (!page.runningCheck) {
+      page.runningCheck = run().finally(() => { page.runningCheck = null; });
+      return page.runningCheck;
+    }
+    page.queuedCheck = page.runningCheck.then(() => {
+      page.queuedCheck = null;
+      page.runningCheck = run().finally(() => { page.runningCheck = null; });
+      return page.runningCheck;
+    });
+    return page.queuedCheck;
+  }
+
+  async function compareAndReload(id, page) {
     const own = await statOrNull(page.filePath);
     if (!own) return { ok: false, reason: ERRORS.NOT_FOUND };
     if (own.size > MAX_HTML_PREVIEW_BYTES) return { ok: false, reason: ERRORS.TOO_LARGE, size: own.size };
