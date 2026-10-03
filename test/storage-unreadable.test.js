@@ -262,3 +262,44 @@ test('folders opened while the history is validated are all kept (#562)', async 
   const { paths } = JSON.parse(await fs.readFile(path.join(dir, 'folder-history.json'), 'utf8'));
   assert.deepEqual(paths.map((p) => path.basename(p)).sort(), ['A', 'B']);
 });
+
+/**
+ * `fs` that behaves like Windows when two renames land on the same target at
+ * once (#672): the second one fails with EPERM while the first still holds it.
+ */
+function fsRejectingConcurrentRenames() {
+  const inFlight = new Set();
+  const wrapped = {
+    ...fs,
+    async rename(from, to) {
+      if (inFlight.has(to)) {
+        throw Object.assign(new Error(`EPERM: operation not permitted, rename '${from}' -> '${to}'`), { code: 'EPERM' });
+      }
+      inFlight.add(to);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return await fs.rename(from, to);
+      } finally {
+        inFlight.delete(to);
+      }
+    },
+  };
+  return wrapped;
+}
+
+test('two folders opened at once never rename onto last-folder.json at the same time (#672)', async (t) => {
+  const dir = await tmpDir(t);
+  const storage = makeStorage(dir, { fsImpl: fsRejectingConcurrentRenames() });
+  const a = path.join(dir, 'A');
+  const b = path.join(dir, 'B');
+  await fs.mkdir(a);
+  await fs.mkdir(b);
+
+  await Promise.all([storage.persistLastFolder(a), storage.persistLastFolder(b)]);
+
+  const { path: last } = JSON.parse(await fs.readFile(path.join(dir, 'last-folder.json'), 'utf8'));
+  assert.ok([a, b].includes(last));
+  const { paths } = JSON.parse(await fs.readFile(path.join(dir, 'folder-history.json'), 'utf8'));
+  assert.deepEqual(paths.map((p) => path.basename(p)).sort(), ['A', 'B']);
+  assert.deepEqual((await fs.readdir(dir)).filter((name) => name.includes('.tmp-')), []);
+});
