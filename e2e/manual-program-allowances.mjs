@@ -18,12 +18,12 @@
 //
 // Result: out/mockup/allowances-<locale>-*.png
 
-import { mkdtemp, mkdir, writeFile, stat } from 'node:fs/promises';
-import { tmpdir, homedir } from 'node:os';
+import { mkdir, writeFile, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const program = process.argv[3] || 'ms-todo-cli';
@@ -34,8 +34,8 @@ const RUN = 'Show my to-do lists please.';
 const PIPED = 'Only the first list please.';
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-allowance-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-allowance-userdata-'));
+const workspace = await makeTempDir('snotra-allowance-');
+const userDataDir = await makeTempDir('snotra-allowance-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });

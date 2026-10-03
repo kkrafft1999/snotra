@@ -14,19 +14,18 @@
 //   out/mockup/i18n-leftovers-breakdown-<locale>.png  context breakdown
 //   out/mockup/i18n-leftovers-update-<locale>.png     update dialog
 
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-i18n-leftovers-ws-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-i18n-leftovers-userdata-'));
+const workspace = await makeTempDir('snotra-i18n-leftovers-ws-');
+const userDataDir = await makeTempDir('snotra-i18n-leftovers-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 // Two broken folder skills, so Settings › Skills has reasons to show, and a

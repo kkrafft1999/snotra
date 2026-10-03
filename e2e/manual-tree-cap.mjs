@@ -6,12 +6,11 @@
 //
 // Result: out/mockup/tree-cap-<locale>-{light,dark}.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -20,8 +19,8 @@ const EXTRA = 12345;
 const CAP = 2000;
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-tree-cap-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-tree-cap-userdata-'));
+const workspace = await makeTempDir('snotra-tree-cap-');
+const userDataDir = await makeTempDir('snotra-tree-cap-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
@@ -70,6 +69,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

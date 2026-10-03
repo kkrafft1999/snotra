@@ -854,7 +854,8 @@ have to be entered once more, because the keychain entry of Electron's
 `safeStorage` is tied to the app name; the settings then show "enter the key
 again". A chat history that can no longer be decrypted as a result is
 preserved as `chat-history.json.undecryptable-<timestamp>` instead of being
-overwritten.
+overwritten. A start with `--user-data-dir` uses the given folder as it is and
+copies nothing into it.
 
 **History trimming (`historyCharLimit`):** so that long sessions do not run into
 the provider's token limit, the history is budgeted per request (heuristic: 1

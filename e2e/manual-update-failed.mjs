@@ -6,19 +6,18 @@
 //
 //   out/mockup/update-failed-<locale>-<theme>.png
 
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-update-failed-ws-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-update-failed-userdata-'));
+const workspace = await makeTempDir('snotra-update-failed-ws-');
+const userDataDir = await makeTempDir('snotra-update-failed-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
 

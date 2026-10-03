@@ -11,13 +11,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 import { HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
@@ -279,7 +278,7 @@ const HTML_PAGE = '<!doctype html><p id="out">statisch</p>'
   + ' + " " + typeof window.electronAPI + " " + (window.top === window);</script>';
 
 async function createWorkspace() {
-  const dir = await mkdtemp(path.join(tmpdir(), 'snotra-smoke-ws-'));
+  const dir = await makeTempDir('snotra-smoke-ws-');
   await writeFile(path.join(dir, 'README.md'), README, 'utf8');
   await mkdir(path.join(dir, 'notizen'));
   await writeFile(path.join(dir, 'notizen', 'liste.md'), '- eins\n', 'utf8');
@@ -306,15 +305,13 @@ async function createWorkspace() {
 test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einstellungen', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
   const workspace = await createWorkspace();
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-smoke-userdata-'));
+  const userDataDir = await makeTempDir('snotra-smoke-userdata-');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 
   const snotra = await launchApp({ userDataDir });
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page, app } = snotra;
   const readOpenedLinks = await snotra.captureExternalLinks();

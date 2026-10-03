@@ -6,12 +6,11 @@
 //
 // Result: out/mockup/cut-off-{de,en}-{light,dark}.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const QUESTION = 'Fasse bitte die Projektdokumentation zusammen.';
@@ -20,8 +19,8 @@ const ANSWER = 'Die Dokumentation beschreibt drei Teile: die Architektur mit ihr
   + 'gehört vor allem die Trennung zwischen';
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-cut-off-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-cut-off-userdata-'));
+const workspace = await makeTempDir('snotra-cut-off-');
+const userDataDir = await makeTempDir('snotra-cut-off-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Beispielprojekt\n', 'utf8');
 
@@ -75,6 +74,4 @@ try {
 } finally {
   await snotra.stop();
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

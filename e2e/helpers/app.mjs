@@ -12,8 +12,12 @@
 //     gedrosselt. Deshalb die Startflags gegen das Throttling **und** selbst
 //     pollen (siehe `poll`).
 //   * Die Preload-Bruecke heisst `window.electronAPI`, nicht `window.api`.
+//   * Temp folders come from `makeTempDir`, which removes them when the process
+//     ends — also when a launch fails or the script dies halfway (#688).
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -21,6 +25,33 @@ import { _electron } from 'playwright-core';
 import electronBinary from 'electron';
 
 const APP_DIR = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
+
+const tempDirs = new Set();
+
+// `exit` also fires after an uncaught error, and node --test runs every file in
+// a process of its own, so this is the end of one test file or one script.
+// Only synchronous work is possible here. A folder an app that is still running
+// keeps busy (Windows) is left behind rather than failing the run.
+process.on('exit', () => {
+  for (const dir of tempDirs) {
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    } catch {
+      // best effort
+    }
+  }
+});
+
+/**
+ * Creates a folder below the system temp folder and removes it when the
+ * process ends. Profiles carry chat history and keys, workspaces whatever the
+ * test wrote — neither should outlive the run, whether it passed or not.
+ */
+export async function makeTempDir(prefix) {
+  const dir = await mkdtemp(path.join(tmpdir(), prefix));
+  tempDirs.add(dir);
+  return dir;
+}
 
 /**
  * Pollt, bis `check` etwas Wahres liefert. Ersatz fuer waitForSelector, das in
@@ -81,10 +112,10 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
  * Startet die App und wartet, bis der Renderer steht. `wrapper` is an optional
  * executable to start instead of Electron — it must start Electron itself and
  * pass all arguments on (Playwright puts its own in front). Used to start the
- * app under a Seatbelt profile (#329).
+ * app under a Seatbelt profile (#329). `env` adds variables for this launch.
  */
-export async function launchApp({ userDataDir, wrapper = null }) {
-  const env = { ...process.env };
+export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {} }) {
+  const env = { ...process.env, ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
   // The start-up update check would ask GitHub for real. Once a release newer
   // than the checkout is out, its dialog lands on top of the window and the

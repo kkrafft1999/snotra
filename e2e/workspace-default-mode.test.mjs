@@ -9,12 +9,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const pillMode = (page) => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode);
 const state = (page) => page.evaluate(() => window.electronAPI.getToolPermissionState());
@@ -32,8 +31,8 @@ async function waitForTree(page) {
 
 test('workspace default mode: remembered from the menu, used by a new chat, kept across a restart', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-ws-mode-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-ws-mode-userdata-'));
+  const workspace = await makeTempDir('snotra-ws-mode-');
+  const userDataDir = await makeTempDir('snotra-ws-mode-userdata-');
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
@@ -42,8 +41,6 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   let { page } = snotra;
   await confirmDialogs(snotra.app);

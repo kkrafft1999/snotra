@@ -11,12 +11,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 /** The shortcut as Electron reports it; true when the window swallowed it. */
 const pressShortcut = (app) => app.evaluate(({ BrowserWindow }, platform) => {
@@ -48,8 +47,8 @@ async function waitForLabels(page, expected, what) {
 
 test('hidden files: shortcut, dimmed rows, text preview, menu and restart', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-hidden-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-hidden-userdata-'));
+  const workspace = await makeTempDir('snotra-hidden-');
+  const userDataDir = await makeTempDir('snotra-hidden-userdata-');
   await mkdir(path.join(workspace, '.github', 'workflows'), { recursive: true });
   await mkdir(path.join(workspace, '.git'), { recursive: true });
   await mkdir(path.join(workspace, 'src'), { recursive: true });
@@ -66,8 +65,6 @@ test('hidden files: shortcut, dimmed rows, text preview, menu and restart', { ti
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   let { page, app } = snotra;
 

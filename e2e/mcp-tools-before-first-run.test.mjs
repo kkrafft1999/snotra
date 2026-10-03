@@ -5,12 +5,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const FAKE_SERVER = path.resolve('test/helpers/fake-mcp-server.js');
 const GROUP = '.settings-security-row[data-risk-class="external"] .settings-security-server[data-mcp-server="github"]';
@@ -33,8 +32,8 @@ const groupText = (page) => page.evaluate((selector) => document.querySelector(s
 
 test('an MCP tool switched off before the first run is not offered in it', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-mcp-first-run-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-mcp-first-run-userdata-'));
+  const workspace = await makeTempDir('snotra-mcp-first-run-');
+  const userDataDir = await makeTempDir('snotra-mcp-first-run-userdata-');
   await writeFile(path.join(workspace, 'README.md'), 'one\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
@@ -50,8 +49,6 @@ test('an MCP tool switched off before the first run is not offered in it', { tim
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { app, page } = snotra;
   await poll(async () =>

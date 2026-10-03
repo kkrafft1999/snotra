@@ -61,6 +61,9 @@ function start() {
     await createUserDataMigration({ fs, path, log: console }).migrateLegacyUserData({
       sourceDir: path.join(app.getPath('appData'), LEGACY_APP_NAME),
       targetDir: app.getPath('userData'),
+      // `appData` stays the real one when --user-data-dir moves userData, so
+      // without this every test profile would be filled from it (#688).
+      explicitUserDataDir: app.commandLine.hasSwitch('user-data-dir'),
       meta: { appVersion: app.getVersion(), platform: process.platform },
     });
 

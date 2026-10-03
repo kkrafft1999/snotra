@@ -6,20 +6,19 @@
 //
 // Ergebnis: out/mockup/empty-canvas-*.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const TOGGLES = ['btn-toggle-sidebar', 'btn-toggle-content-pane',
   'btn-toggle-chat-panel', 'btn-toggle-chat-history'];
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-leer-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-leer-userdata-'));
+const workspace = await makeTempDir('snotra-leer-');
+const userDataDir = await makeTempDir('snotra-leer-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Beispielprojekt\n', 'utf8');
 
@@ -70,6 +69,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

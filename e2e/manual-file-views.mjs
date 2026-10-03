@@ -9,12 +9,11 @@
 // "current". The file dates are pinned, so the info card reads the same on
 // every run.
 
-import { mkdtemp, mkdir, writeFile, rm, utimes } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, utimes } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
@@ -36,8 +35,8 @@ const LONG = Array.from({ length: 80 }, (_, i) =>
 ).join('\n');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-file-views-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-file-views-userdata-'));
+const workspace = await makeTempDir('snotra-file-views-');
+const userDataDir = await makeTempDir('snotra-file-views-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 const files = {
@@ -134,6 +133,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

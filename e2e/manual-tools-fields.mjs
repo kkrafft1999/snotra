@@ -6,19 +6,18 @@
 //
 // Result: out/mockup/tools-fields-<locale>-<theme>-<state>.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-tools-fields-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-tools-fields-userdata-'));
+const workspace = await makeTempDir('snotra-tools-fields-');
+const userDataDir = await makeTempDir('snotra-tools-fields-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
@@ -65,6 +64,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

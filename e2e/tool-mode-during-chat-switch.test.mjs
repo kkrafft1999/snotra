@@ -9,20 +9,19 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const ACTIVATE = 'chatHistory:activate';
 const pillMode = (page) => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode);
 
 test('a mode chosen during a chat switch is the one the chat keeps', { timeout: 120000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-mode-switch-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-mode-switch-userdata-'));
+  const workspace = await makeTempDir('snotra-mode-switch-');
+  const userDataDir = await makeTempDir('snotra-mode-switch-userdata-');
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
@@ -31,8 +30,6 @@ test('a mode chosen during a chat switch is the one the chat keeps', { timeout: 
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page, app } = snotra;
   await poll(async () => (await page.evaluate(() => window.electronAPI.getToolPermissionState()))?.workspaceRoot,

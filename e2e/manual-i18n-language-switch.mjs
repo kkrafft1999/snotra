@@ -7,18 +7,17 @@
 //
 // Ergebnis: out/mockup/i18n-*.png
 
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-i18n-ws-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-i18n-userdata-'));
+const workspace = await makeTempDir('snotra-i18n-ws-');
+const userDataDir = await makeTempDir('snotra-i18n-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 await writeFile(path.join(workspace, 'README.md'), `# Beispielprojekt\n${'x'.repeat(2000)}\n`, 'utf8');

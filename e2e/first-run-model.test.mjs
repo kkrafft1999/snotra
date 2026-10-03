@@ -5,12 +5,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, poll } from './helpers/app.mjs';
+import { launchApp, poll, makeTempDir } from './helpers/app.mjs';
 
 const chrome = (page) => page.evaluate(() => ({
   hint: document.getElementById('chat-hint').classList.contains('hidden')
@@ -24,14 +23,13 @@ const chrome = (page) => page.evaluate(() => ({
 
 test('first run: adding a model makes the chat usable next to the default entry', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-first-run-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-first-run-userdata-'));
+  const workspace = await makeTempDir('snotra-first-run-');
+  const userDataDir = await makeTempDir('snotra-first-run-userdata-');
   const write = (name, data) => writeFile(path.join(userDataDir, name), JSON.stringify(data), 'utf8');
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
-  // No llm-config.json: the app creates its default entry itself. The marker
-  // keeps the one-off migration from an older install on this machine from
-  // filling the profile (#670 was found that way).
-  await write('migrated-from-weyouze.json', {});
+  // No llm-config.json: the app creates its default entry itself. The one-off
+  // migration from an older install leaves a --user-data-dir profile alone
+  // (#688), so the profile really starts empty.
   await write('last-folder.json', { path: workspace });
   await write('folder-history.json', { paths: [workspace] });
   await write('ui-preferences.json', { appLocale: 'en' });
@@ -40,8 +38,6 @@ test('first run: adding a model makes the chat usable next to the default entry'
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page, app } = snotra;
   await poll(async () => (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
