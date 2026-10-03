@@ -373,7 +373,9 @@ module.exports = {
   'chat.live.active': 'Connection active',
   'chat.hint.noEncryption': 'Encrypted storage is not available. An API key cannot be stored safely here.',
   'chat.hint.keyUnreadable': 'The stored API key is no longer readable after the rename to Snotra AI. Please enter it again in the settings.',
-  'chat.hint.noModel': 'Set up a language model through the gear icon to start chatting.',
+  // {path} is the menu path to the settings, {shortcut} their key (#670).
+  'chat.hint.noModel': 'Set up a language model to start chatting: {path} ({shortcut}).',
+  'chat.hint.noModel.shortcut': 'Ctrl+,',
   'chat.hint.noFolder': 'Active model – tip: open a folder so the assistant can read files with its tools.',
   'chat.hint.noFolder.model': 'Active: {model} – tip: open a folder so the assistant can read files with its tools.',
   'chat.toolMode.button.title': 'Tool permissions: {mode}. Click to switch.',

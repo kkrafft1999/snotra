@@ -643,11 +643,100 @@ test('commitSettings treats an undecryptable key as incomplete access', async (t
   const { ipcMain, storage } = await setupHandlers(t);
   await seedUnreadableOpenAiKey(storage);
 
+  // A new entry on the unreadable key is refused like any incomplete one.
   const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
-    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+    presets: [
+      { id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+      { id: 'p2', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true },
+    ],
   });
   assert.equal(res.ok, false);
   assert.match(say(res.error), /unvollständig/);
+});
+
+// #670: a fresh profile comes with an OpenAI entry without a key. Adding a
+// first working model next to it has to save, and the chat has to run on it.
+async function seedFirstRun(storage) {
+  await storage.updateLLMConfig(async (config) => {
+    config.providers = {};
+    config.presets = [{ id: 'default', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true }];
+    config.activePresetId = 'default';
+    config.defaultPresetId = 'default';
+    config.activeProvider = 'openai';
+    return config;
+  });
+}
+
+test('first run: a stored entry without a key does not block adding a working one (#670)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedFirstRun(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [
+      { id: 'default', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true },
+      { id: 'local', providerId: 'ollama', model: 'llama3', menuVisible: true },
+    ],
+    activePresetId: 'default',
+  });
+  assert.deepEqual(res, { ok: true });
+
+  const config = await storage.readLLMConfig();
+  assert.deepEqual(config.presets.map((p) => p.id), ['default', 'local'], 'the default entry stays');
+  assert.equal(config.activePresetId, 'local', 'the usable entry becomes the active one');
+  assert.equal(config.defaultPresetId, 'local');
+  assert.equal(config.activeProvider, 'ollama');
+});
+
+test('first run: an untouched entry without a key saves on its own and stays active (#670)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedFirstRun(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'default', providerId: 'openai', model: 'gpt-4o', menuVisible: true }],
+    activePresetId: 'default',
+    uiPrefs: { baseSystemPrompt: 'Be brief.' },
+  });
+  assert.deepEqual(res, { ok: true });
+  const config = await storage.readLLMConfig();
+  assert.equal(config.activePresetId, 'default');
+  assert.equal(config.presets[0].model, 'gpt-4o');
+  assert.equal((await storage.readUIPrefs()).baseSystemPrompt, 'Be brief.');
+});
+
+test('an entry that was complete still may not lose its access (#670)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedTwoPresets(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [
+      { id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+      { id: 'local', providerId: 'ollama', model: 'llama3', menuVisible: true },
+    ],
+    activePresetId: 'p1',
+    providerPatches: { openai: { removeApiKey: true } },
+  });
+  assert.equal(res.ok, false);
+  assert.match(say(res.error), /unvollständig/);
+  const config = await storage.readLLMConfig();
+  assert.ok(config.providers.openai.apiKeyEnc, 'the key stays');
+  assert.equal(config.activePresetId, 'p1');
+});
+
+test('an unreadable stored key does not block the save; the chat moves to a usable entry (#670)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t);
+  await seedUnreadableOpenAiKey(storage);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [
+      { id: 'p1', providerId: 'openai', model: 'gpt-4o', menuVisible: true },
+      { id: 'local', providerId: 'ollama', model: 'llama3', menuVisible: true },
+    ],
+    activePresetId: 'p1',
+  });
+  assert.deepEqual(res, { ok: true });
+  const config = await storage.readLLMConfig();
+  assert.equal(config.activePresetId, 'local');
+  assert.ok(config.providers.openai.apiKeyEnc, 'the unreadable key is kept, not thrown away');
 });
 
 test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
