@@ -299,9 +299,19 @@ three platforms the same way.
 
 ## File tree
 
-- **Open a project folder:** via the button in the sidebar or the list of
-  recently used folders. Everything that follows always refers to this one
-  folder.
+- **Open a project folder:** the folder's name at the top of the sidebar opens
+  the list of recently used folders, with *Open folder…* at its foot.
+  Everything else always refers to this one folder.
+- **Which folder is open:** its name comes first in the title bar, in every
+  layout — with the sidebar hidden too — and in the window's title, so the
+  Dock, the window menu and the app switcher show it. At the top of the sidebar
+  the name stands with its path underneath (`~/Projects/snotra`). A name too
+  long for the sidebar is cut in the middle, not at the end, so `snotra…motion`
+  and `snotra…ebsite` stay apart. In a narrow sidebar the name gets the first
+  line to itself and the path shares the second with the buttons. Everything
+  else the tree's header offers sits in its `⋯` menu: *Filter files*, *New
+  file*, *New folder* and *Show hidden files*; only the eraser for the agent's
+  marks stays next to it while there are any.
 - **Four columns, four switches:** the window consists of sidebar, content pane,
   chat and history, and each column has its own switch in the title bar — on the
   left the two belonging to the workspace, on the right, mirrored, the two
@@ -329,8 +339,8 @@ three platforms the same way.
 - **Showing the chat history:** the last button places the history as a column
   next to the chat. Clicking a row loads that conversation along with its model
   and its permission mode; the trash icon removes it. The button for a **new
-  chat** sits in the header of that column — just like "Open folder" sits in
-  the header of the tree. If the window becomes too narrow for
+  chat** sits in the header of that column — just like the folder switcher sits
+  in the header of the tree. If the window becomes too narrow for
   all columns, the history gives way by itself and returns in a wider window.
 - **Just as you left it:** at startup Snotra brings back the folder's most
   recent conversation and you land straight in the discussion. The welcome
@@ -343,8 +353,8 @@ three platforms the same way.
   If you have unplugged the second monitor it last sat on, it comes back at the
   same size, centred on the primary display, instead of into the void.
 - **Hidden files:** files and folders whose name starts with a dot — `.github`,
-  `.gitignore`, `.env` — are not in the tree at first. The eye in the header of
-  the tree shows them, and so do `Cmd+Shift+.` on the Mac, `Ctrl+Shift+.` on
+  `.gitignore`, `.env` — are not in the tree at first. *Show hidden files* in the
+  `⋯` menu of the tree's header shows them, and so do `Cmd+Shift+.` on the Mac, `Ctrl+Shift+.` on
   Windows and Linux, and *View › Show Hidden Files*. They then appear dimmed in
   their usual place, along with everything inside a hidden folder, and open in
   the preview like any other text file. The `@` list in the chat follows the
@@ -375,8 +385,8 @@ three platforms the same way.
   file each get a sentence instead of an empty view. The changes are kept in
   memory only: after a restart the line stays, but says they are no longer
   available.
-- **Filtering:** the magnifier in the tree's header opens a field above the
-  tree, and so do `Cmd+P` on the Mac, `Ctrl+P` on Windows and Linux and
+- **Filtering:** *Filter files* in the `⋯` menu of the tree's header opens a
+  field above the tree, and so do `Cmd+P` on the Mac, `Ctrl+P` on Windows and Linux and
   *View › Filter Files…* — from anywhere, the chat input included; a closed
   sidebar opens with it. Typing into the focused tree starts the field with
   that letter. As soon as it holds something, a flat list of the matching
@@ -406,9 +416,9 @@ three platforms the same way.
   with "Cancel" preselected. If no app can open a file, a message says so.
 - **New file, new folder, rename:** "New File…" and "New Folder…" in the
   context menu create inside a folder or next to a file; on the empty space
-  below the rows they create in the open folder itself. The two buttons in the
-  tree's header do the same in the selected folder (or next to the selected
-  file). "Rename…" — or `F2` on a focused row — turns the name into a field
+  below the rows they create in the open folder itself. The same two entries in
+  the `⋯` menu of the tree's header do it in the selected folder (or next to the
+  selected file). "Rename…" — or `F2` on a focused row — turns the name into a field
   with the name up to its extension selected. You type the name right in the
   tree: `Enter` takes it, `Esc` or a click elsewhere leaves everything as it
   was. A name that cannot work says why under the field while you type —

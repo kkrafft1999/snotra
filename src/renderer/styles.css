@@ -189,8 +189,46 @@ summary:focus-visible,
 .titlebar-brand {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
   -webkit-app-region: drag;
+  flex-shrink: 1;
+}
+
+/* The open workspace, first (#676). With it, the brand steps back to a
+ * sender; without a folder it stands alone as before. */
+#titlebar-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--ds-font-ui);
+  font-size: 15px;
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.1px;
+}
+
+#titlebar-workspace[hidden] {
+  display: none;
+}
+
+#titlebar-workspace svg {
   flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+#titlebar-workspace-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar--workspace #app-brand {
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-secondary);
 }
 
 #app-brand {
@@ -215,7 +253,6 @@ summary:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--btn-radius);
   padding: 3px 7px;
-  margin-left: 8px;
   letter-spacing: 0.2px;
   white-space: nowrap;
 }
@@ -224,14 +261,9 @@ summary:focus-visible,
   display: none;
 }
 
-#tree-header #btn-open-folder,
-#tree-header #btn-folder-history,
 #tree-header #btn-tree-sandbox,
-#tree-header #btn-tree-filter,
 #tree-header #btn-tree-clear-marks,
-#tree-header #btn-tree-new-file,
-#tree-header #btn-tree-new-folder,
-#tree-header #btn-toggle-hidden-files {
+#tree-header #btn-tree-actions {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -252,83 +284,39 @@ summary:focus-visible,
   flex-shrink: 0;
 }
 
-#tree-header #btn-open-folder:hover,
-#tree-header #btn-folder-history:hover,
 #tree-header #btn-tree-sandbox:hover,
-#tree-header #btn-tree-filter:hover,
 #tree-header #btn-tree-clear-marks:hover,
-#tree-header #btn-tree-new-file:hover,
-#tree-header #btn-tree-new-folder:hover,
-#tree-header #btn-toggle-hidden-files:hover {
+#tree-header #btn-tree-actions:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-#tree-header #btn-folder-history[aria-expanded="true"],
-#tree-header #btn-tree-filter[aria-expanded="true"] {
+#tree-header #btn-tree-actions[aria-expanded="true"] {
   background: var(--bg-active);
   color: var(--text-primary);
 }
 
-#tree-header #btn-open-folder:active,
-#tree-header #btn-folder-history:active,
 #tree-header #btn-tree-sandbox:active,
-#tree-header #btn-tree-filter:active,
 #tree-header #btn-tree-clear-marks:active,
-#tree-header #btn-tree-new-file:active,
-#tree-header #btn-tree-new-folder:active,
-#tree-header #btn-toggle-hidden-files:active {
+#tree-header #btn-tree-actions:active {
   background: var(--bg-active);
   color: var(--text-primary);
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
-/* Hidden files in the tree (#436). Unlike the sidebar toggle (#221), this one
-   shows when it is on: nothing else on screen says a filter is off, and a file
-   that is "gone" is found faster when the switch admits it. On: the open eye
-   in the accent colour, on its wash, inside an active-state border. Off: the
-   struck-through eye in the secondary colour. Shape and colour change
-   together, so the state never rests on colour alone (WCAG 1.4.1).
-   The border is there in both states, transparent when off, so the button
-   keeps its 32 px either way. */
-#tree-header #btn-toggle-hidden-files {
-  border: 1px solid transparent;
-}
-
-#tree-header #btn-toggle-hidden-files[aria-pressed='true'] {
-  background: var(--ds-blue-soft);
-  border-color: var(--ds-blue-border);
-  color: var(--ds-blue);
-}
-
-#tree-header #btn-toggle-hidden-files[aria-pressed='true']:hover,
-#tree-header #btn-toggle-hidden-files[aria-pressed='true']:active {
-  background: var(--bg-hover);
-  color: var(--ds-blue);
-}
-
-#btn-toggle-hidden-files .icon-hidden-files-on,
-#btn-toggle-hidden-files[aria-pressed='true'] .icon-hidden-files-off {
-  display: none;
-}
-
-#btn-toggle-hidden-files[aria-pressed='true'] .icon-hidden-files-on {
-  display: block;
-}
-
 /* The shield next to the folder name (#398). The icon sits where the name
    starts without it, and the 32 px target reaches into the header padding
    instead of pushing the name further in. */
 #tree-header #btn-tree-sandbox {
-  margin: 0 -8px 0 -9px;
+  grid-area: shield;
+  margin: 0 0 0 -9px;
 }
 
 #tree-header #btn-tree-sandbox[hidden],
-#tree-header #btn-tree-filter[hidden],
 #tree-header #btn-tree-clear-marks[hidden],
-#tree-header #btn-tree-new-file[hidden],
-#tree-header #btn-tree-new-folder[hidden] {
+#tree-header #btn-tree-actions[hidden],
+#tree-header .workspace-path[hidden] {
   display: none;
 }
 
@@ -369,9 +357,10 @@ summary:focus-visible,
 }
 
 #folder-history-wrapper {
-  display: inline-flex;
+  grid-area: name;
+  display: flex;
   align-items: center;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 #folder-history-menu {
@@ -492,6 +481,18 @@ summary:focus-visible,
   text-overflow: ellipsis;
   direction: rtl;
   text-align: left;
+}
+
+.folder-history-heading {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.folder-history-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
 }
 
 .folder-history-empty {
@@ -647,19 +648,21 @@ summary:focus-visible,
   overflow: hidden;
 }
 
-/* Tree-Header: nur der Projektname als Inter 13 px Bold, einzeilig.
- * Das fruehere Mono-Eyebrow "// projekt" darueber ist entfallen. Buttons
- * rechts bleiben 32×32 (Phase 1).
- */
-/* With the buttons for "New" (#349) the row is full: in a narrow sidebar the
- * buttons wrap onto a line of their own, right-aligned, before the folder
- * name shrinks below a few characters. */
+/* The tree header (#676): the shield, the workspace switcher with the
+ * folder's name and its path underneath, and on the right the eraser (only
+ * with marks) and the `⋯` menu. Two buttons instead of seven, so the name has
+ * the room. The two text lines fit the 32 px of a button, which keeps the
+ * header as high as the chat's and the history's next to it. */
+#sidebar {
+  container: sidebar / inline-size;
+}
+
 #tree-header {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'shield name actions';
   align-items: center;
-  gap: 4px 8px;
   padding: 10px 8px 10px 16px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
@@ -667,9 +670,9 @@ summary:focus-visible,
   letter-spacing: 0;
 }
 
-/* Right-aligned on a line of its own once the header wraps (#349). */
 #tree-header > .icon-btn-row {
-  margin-left: auto;
+  grid-area: actions;
+  margin-left: 8px;
 }
 
 /* Zwei Slashes enger (system-ui Monos haben oft breite Solidus-Bearing). */
@@ -677,10 +680,53 @@ summary:focus-visible,
   letter-spacing: -0.14em;
 }
 
-/* Einzeiliger Ordnername; kuerzt mit Ellipse, damit die Icons rechts
- * (Historie, Ordner oeffnen) nie ueberschrieben werden. */
+/* The switcher: a container-like trigger, so 6 px like a select. The text
+ * sits where it would without the button; the hover ground reaches into the
+ * padding. */
+#btn-workspace {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  max-width: calc(100% + 8px);
+  min-height: var(--ds-touch-min);
+  margin-left: -8px;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast);
+}
+
+#btn-workspace:hover {
+  background: var(--bg-hover);
+}
+
+#btn-workspace[aria-expanded='true'] {
+  background: var(--bg-active);
+}
+
+#btn-workspace:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.workspace-name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Cut in the middle by WorkspaceHeader; the ellipsis at the end is only
+ * there until it has measured. */
 #tree-header #project-name {
-  flex: 1 1 56px;
   min-width: 0;
   font-family: var(--ds-font-ui);
   font-size: var(--ds-font-size-md);
@@ -690,6 +736,158 @@ summary:focus-visible,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.workspace-chevron {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+/* The path: small secondary text, the stronger step on a hover or active
+ * ground (ui-design-tokens.md, #610). */
+.workspace-path {
+  display: block;
+  max-width: 100%;
+  font-family: var(--ds-font-ui);
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#btn-workspace:hover .workspace-path,
+#btn-workspace[aria-expanded='true'] .workspace-path {
+  color: var(--text-muted-strong);
+}
+
+#project-path-narrow {
+  grid-area: path;
+  display: none;
+}
+
+/* A narrow sidebar (#676): the name takes the whole first line, the path
+ * shares the second with the buttons. Below the threshold always, not only
+ * once the eraser shows, so the header does not jump when marks appear. */
+@container sidebar (max-width: 239px) {
+  #tree-header {
+    grid-template-areas:
+      'shield name name'
+      'path path actions';
+    padding: 6px 8px 4px 16px;
+  }
+
+  #tree-header #project-path {
+    display: none;
+  }
+
+  #tree-header #project-path-narrow:not([hidden]) {
+    display: block;
+  }
+}
+
+/* The `⋯` menu (#676): an overlay like the folder history's, inside the
+ * sidebar's width, since the sidebar clips. */
+#tree-actions-wrapper {
+  display: inline-flex;
+}
+
+#tree-actions-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 8px;
+  right: 8px;
+  z-index: 50;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: 6px;
+  box-shadow: var(--ds-overlay-shadow);
+  padding: 4px 0;
+}
+
+#tree-actions-menu.hidden {
+  display: none;
+}
+
+.tree-actions-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--ds-touch-min);
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-actions-item svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.tree-actions-item:hover,
+.tree-actions-item:focus-visible {
+  background: var(--bg-hover);
+}
+
+/* Inside the entry, so the menu's edges do not cut the ring off (#638). */
+#tree-actions-menu [role^='menuitem']:focus-visible {
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
+.tree-actions-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.tree-actions-shortcut {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tree-actions-item:hover .tree-actions-shortcut,
+.tree-actions-item:focus-visible .tree-actions-shortcut {
+  color: var(--text-muted-strong);
+}
+
+.tree-actions-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+/* A check box, square with 4 px (ui-design-tokens.md): the state is the
+ * check, not only the colour. */
+.tree-actions-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--ds-grey-control-border);
+  border-radius: 4px;
+  color: transparent;
+}
+
+/* The check takes the box's ink, not the grey of the menu's icons. */
+.tree-actions-item .tree-actions-check svg {
+  color: inherit;
+}
+
+.tree-actions-item[aria-checked='true'] .tree-actions-check {
+  background: var(--ds-blue);
+  border-color: var(--ds-blue);
+  color: var(--ds-btn-primary-fg);
 }
 
 #tree-container {
@@ -3987,12 +4185,9 @@ select.modal-input {
   #btn-toggle-content-pane:active,
   #btn-toggle-chat-panel:active,
   #btn-toggle-chat-history:active,
-  #tree-header #btn-open-folder:active,
-  #tree-header #btn-folder-history:active,
   #tree-header #btn-tree-sandbox:active,
   #tree-header #btn-tree-clear-marks:active,
-  #tree-header #btn-tree-new-file:active,
-  #tree-header #btn-tree-new-folder:active,
+  #tree-header #btn-tree-actions:active,
   .folder-history-item-remove:active,
   #btn-chat-new:active,
   #btn-chat-mic:active:not(:disabled),

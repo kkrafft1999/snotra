@@ -18,7 +18,7 @@ const POSIX = '/Users/k/snotra';
 const WINDOWS = 'C:\\Users\\x\\repo';
 const UNC = '\\\\server\\share\\repo';
 
-async function setup(t, { paths = [POSIX, WINDOWS, UNC] } = {}) {
+async function setup(t, { paths = [POSIX, WINDOWS, UNC], chosenFolder = null } = {}) {
   const dom = setupRendererDom();
   t.after(dom.cleanup);
   const { initFileTree } = await importRenderer('components', 'FileTree.js');
@@ -29,9 +29,14 @@ async function setup(t, { paths = [POSIX, WINDOWS, UNC] } = {}) {
 
   let history = [...paths];
   const removed = [];
+  const dialogs = [];
   const tree = initFileTree({
     api: {
       activateFolder: async () => ({ ok: true }),
+      openFolder: async () => {
+        dialogs.push('openFolder');
+        return chosenFolder;
+      },
       getFolderHistory: async () => ({ paths: [...history] }),
       removeFolderFromHistory: async (p) => {
         removed.push(p);
@@ -52,14 +57,16 @@ async function setup(t, { paths = [POSIX, WINDOWS, UNC] } = {}) {
   await flush();
 
   const { document } = dom;
-  const button = document.getElementById('btn-folder-history');
+  const button = document.getElementById('btn-workspace');
   const menu = document.getElementById('folder-history-menu');
   const items = () => [...menu.querySelectorAll('[role="menuitem"]')];
   return {
     dom,
     document,
     tree,
+    appStore,
     removed,
+    dialogs,
     button,
     menu,
     items,
@@ -90,7 +97,7 @@ function labelledName(document, el) {
 
 test('opening puts the focus on the first entry, and the button names the menu', async (t) => {
   const { button, menu, focusedIndex, open } = await setup(t);
-  assert.equal(menu.getAttribute('aria-labelledby'), 'btn-folder-history');
+  assert.equal(menu.getAttribute('aria-labelledby'), 'btn-workspace');
   assert.equal(button.getAttribute('aria-controls'), 'folder-history-menu');
   await open();
   assert.equal(menu.classList.contains('hidden'), false);
@@ -105,11 +112,12 @@ test('the arrow keys move and wrap, Home and End jump', async (t) => {
   assert.equal(focusedIndex(), 1);
   key(document.activeElement, 'ArrowUp');
   key(document.activeElement, 'ArrowUp');
-  assert.equal(focusedIndex(), 2, 'up from the first wraps to the last');
+  // The last entry is "Open folder…" at the foot (#676).
+  assert.equal(focusedIndex(), 3, 'up from the first wraps to the last');
   key(document.activeElement, 'ArrowDown');
   assert.equal(focusedIndex(), 0, 'down from the last wraps to the first');
   key(document.activeElement, 'End');
-  assert.equal(focusedIndex(), 2);
+  assert.equal(focusedIndex(), 3);
   key(document.activeElement, 'Home');
   assert.equal(focusedIndex(), 0);
 });
@@ -128,7 +136,7 @@ test('Escape closes and gives the focus back to the button', async (t) => {
 test('tabbing out of the menu closes it', async (t) => {
   const { document, button, menu, open } = await setup(t);
   await open();
-  document.getElementById('btn-open-folder').focus();
+  document.getElementById('chat-input').focus();
   await flush();
   assert.equal(menu.classList.contains('hidden'), true);
   assert.equal(button.getAttribute('aria-expanded'), 'false');
@@ -177,9 +185,12 @@ test('Delete removes the focused entry and leaves the focus on its neighbour', a
 test('without a history the menu holds an entry that cannot be chosen, not a bare text', async (t) => {
   const { menu, items, focused, open, key } = await setup(t, { paths: [] });
   await open();
-  assert.equal(menu.children.length, 1);
-  const [empty] = items();
-  assert.equal(menu.children[0] === empty, true, 'the one child is a menu item');
+  const [empty, openFolder] = items();
+  assert.equal(items().length, 2, 'the empty entry and "Open folder…"');
+  assert.equal(openFolder.dataset.action, 'open-folder');
+  // Besides the menu items only a heading nobody reads out and a separator.
+  const others = [...menu.children].filter((el) => el.getAttribute('role') !== 'menuitem');
+  assert.deepEqual(others.map((el) => el.getAttribute('aria-hidden') ?? el.getAttribute('role')), ['true', 'separator']);
   assert.equal(empty.getAttribute('aria-disabled'), 'true');
   assert.equal(empty.textContent, 'No recently opened folders yet.');
   assert.equal(focused(empty), true, 'the focus has somewhere to go');
@@ -265,4 +276,35 @@ test('a recent-folder chip is a button inside a list item, without a role of its
   assert.equal(labelledName(document, first), `snotra ${POSIX}`);
   const path = first.querySelector('.chip-recent-path > bdi[dir="ltr"]');
   assert.equal(path?.textContent, POSIX);
+});
+
+// ── "Open folder…" (#676) ────────────────────────────────────────────────────
+
+test('"Open folder…" at the foot of the menu asks for a folder and opens it', async (t) => {
+  const { document, button, menu, dialogs, appStore, focused, open, key } = await setup(t, { chosenFolder: '/Users/k/other' });
+  await open();
+  key(document.activeElement, 'End');
+  const entry = document.activeElement;
+  assert.equal(entry.dataset.action, 'open-folder');
+  assert.equal(entry.textContent, 'Open folder…');
+  key(entry, 'Enter');
+  await flush();
+  await flush();
+  assert.deepEqual(dialogs, ['openFolder']);
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(appStore.rootPath, '/Users/k/other');
+  assert.equal(focused(button), true, 'the focus went back to the switcher before the dialog');
+});
+
+test('"Open folder…" cannot be removed with Delete, and a cancelled dialog opens nothing', async (t) => {
+  const { document, removed, dialogs, appStore, open, key } = await setup(t);
+  await open();
+  key(document.activeElement, 'End');
+  key(document.activeElement, 'Delete');
+  await flush();
+  assert.deepEqual(removed, []);
+  document.activeElement.click();
+  await flush();
+  assert.deepEqual(dialogs, ['openFolder']);
+  assert.equal(appStore.rootPath, null);
 });

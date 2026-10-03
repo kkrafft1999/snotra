@@ -310,14 +310,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
   step('App gestartet');
 
-  // --- Fenstertitel: Name plus laufende Version -----------------------------
-  // Der Titel kommt aus dem Main-Prozess, nicht aus dem <title> des Renderers
-  // (siehe src/main/window.js) — deshalb hier ueber `app.evaluate` gelesen.
-  const { windowTitle, appVersion } = await snotra.app.evaluate(async ({ app, BrowserWindow }) => ({
-    windowTitle: BrowserWindow.getAllWindows()[0].getTitle(),
-    appVersion: app.getVersion(),
-  }));
-  assert.equal(windowTitle, `Snotra AI ${appVersion}`);
+  // The window title: the open workspace, the name and the running version
+  // (#676). Main puts it together from the renderer's <title> (see
+  // src/main/window.js), so it is read through `app.evaluate`; checked below,
+  // once the remembered folder is open.
+  const appVersion = await snotra.app.evaluate(({ app }) => app.getVersion());
+  const windowTitle = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle());
 
   // --- Start: der vorgemerkte Ordner ist offen und der Baum gezeichnet -------
   const labels = await poll(
@@ -332,8 +330,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // `.agents` ist versteckt und taucht nicht auf; die AGENTS.md der
   // Ordnerwurzel schon (Issue #212).
   assert.deepEqual(labels, ['notizen', 'AGENTS.md', 'README.md']);
-  assert.equal(await page.evaluate(() => document.getElementById('project-name').textContent),
+  // The workspace is named in the title bar and in the native window title
+  // (#676); the header's name may be cut in the middle, the title bar's not.
+  assert.equal(await page.evaluate(() => document.getElementById('titlebar-workspace-name').textContent),
     path.basename(workspace));
+  const expectedTitle = `${path.basename(workspace)} — Snotra AI ${appVersion}`;
+  await poll(async () => (await windowTitle()) === expectedTitle, { what: `window title "${expectedTitle}"` });
 
   // --- Datei oeffnen: die Vorschau zeigt den echten Inhalt ------------------
   await page.evaluate(() => {

@@ -38,6 +38,15 @@
       </button>
     </div>
     <div class="titlebar-brand">
+      <!-- The open workspace, first (#676): it answers "where am I" whether
+           the sidebar is open or not. WorkspaceHeader fills it; the brand
+           steps back while it shows. -->
+      <span id="titlebar-workspace" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span id="titlebar-workspace-name"></span>
+      </span>
       <span id="app-brand">Snotra AI</span>
       <span id="app-version" hidden></span>
     </div>
@@ -79,22 +88,33 @@
               <path class="tree-sandbox-slash" d="M1.8 1.8 14.2 14.2"/>
             </svg>
           </button>
-          <!-- Kein `data-i18n`: Steht ein Ordner offen, traegt dieses Feld seinen
-               Namen, und `applyTranslations` wuerde ihn beim Sprachwechsel durch
-               „Kein Ordner geoeffnet" ersetzen (#292). Den Platzhalter setzt
-               deshalb FileTree selbst. -->
-          <span id="project-name">No folder open</span>
-          <div class="icon-btn-row">
-            <!-- Filters the tree (#350). Only there while a folder is open;
-                 title and label carry the shortcut, so TreeFilter sets them. -->
-            <button id="btn-tree-filter" type="button" hidden aria-expanded="false" aria-controls="tree-filter" title="Filter files" aria-label="Filter files">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
+          <!-- The workspace switcher (#676): the folder's name, its path on a
+               second line, and the recently opened folders behind it. No
+               `data-i18n` on the name: with a folder open it carries the
+               folder's name, and `applyTranslations` would replace it with
+               "No folder open" on a language switch (#292). WorkspaceHeader
+               sets name, path and labels; FileTree runs the menu. -->
+          <div id="folder-history-wrapper">
+            <button id="btn-workspace" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="folder-history-menu">
+              <span class="workspace-name-line">
+                <span id="project-name">No folder open</span>
+                <svg class="workspace-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </span>
+              <span id="project-path" class="workspace-path" aria-hidden="true" hidden></span>
             </button>
+            <div id="folder-history-menu" class="hidden" role="menu" aria-labelledby="btn-workspace" aria-hidden="true"></div>
+            <span id="folder-history-hint" hidden data-i18n="sidebar.history.removeHint">Press Delete or Backspace to remove the folder from the history.</span>
+          </div>
+          <!-- The path again, for a narrow sidebar (#676): there the name takes
+               the whole first line and the path shares the second with the
+               buttons. The stylesheet shows one of the two. -->
+          <span id="project-path-narrow" class="workspace-path" aria-hidden="true" hidden></span>
+          <div class="icon-btn-row">
             <!-- Clears what the agent read or changed (#347). Only there while
-                 the conversation on screen has marks; FileTree shows it. -->
+                 the conversation on screen has marks; FileTree shows it. The
+                 one action that stays out of the menu next to it (#676). -->
             <button id="btn-tree-clear-marks" type="button" hidden title="Clear the agent’s marks" aria-label="Clear the agent’s marks" data-i18n-attr="title:sidebar.clearMarks;aria-label:sidebar.clearMarks">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l10-10a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L11 21"/>
@@ -102,53 +122,53 @@
                 <path d="m5 11 9 9"/>
               </svg>
             </button>
-            <!-- New file and new folder (#349): in the selected folder, next to
-                 the selected file, else in the open folder. Hidden until a
-                 folder is open; FileTree shows them. -->
-            <button id="btn-tree-new-file" type="button" hidden title="New file" aria-label="New file" data-i18n-attr="title:sidebar.newFile;aria-label:sidebar.newFile">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="12" y1="18" x2="12" y2="12"/>
-                <line x1="9" y1="15" x2="15" y2="15"/>
-              </svg>
-            </button>
-            <button id="btn-tree-new-folder" type="button" hidden title="New folder" aria-label="New folder" data-i18n-attr="title:sidebar.newFolder;aria-label:sidebar.newFolder">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                <line x1="12" y1="11" x2="12" y2="17"/>
-                <line x1="9" y1="14" x2="15" y2="14"/>
-              </svg>
-            </button>
-            <!-- Hidden files in the tree (#436). The label stays the same and
-                 aria-pressed says whether it is on; the title names the next
-                 step and the shortcut, so FileTree sets it, not `data-i18n`.
-                 Which eye shows follows aria-pressed in the stylesheet. -->
-            <button id="btn-toggle-hidden-files" type="button" aria-pressed="false" title="Show hidden files" aria-label="Show hidden files" data-i18n-attr="aria-label:sidebar.hiddenFiles.show">
-              <svg class="icon-hidden-files-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
-              <svg class="icon-hidden-files-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-            <div id="folder-history-wrapper">
-              <button id="btn-folder-history" type="button" title="Recently opened folders" aria-label="Recently opened folders" aria-haspopup="menu" aria-expanded="false" aria-controls="folder-history-menu" data-i18n-attr="title:sidebar.recentFolders;aria-label:sidebar.recentFolders">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9"/>
-                  <polyline points="12 7 12 12 15 14"/>
+            <!-- What the header did with four buttons until #676: filter (#350),
+                 new file and new folder (#349), hidden files (#436). Only
+                 there while a folder is open; TreeActionsMenu runs it. -->
+            <div id="tree-actions-wrapper">
+              <button id="btn-tree-actions" type="button" hidden aria-haspopup="menu" aria-expanded="false" aria-controls="tree-actions-menu" title="More actions" aria-label="More actions" data-i18n-attr="title:sidebar.actions;aria-label:sidebar.actions">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
                 </svg>
               </button>
-              <div id="folder-history-menu" class="hidden" role="menu" aria-labelledby="btn-folder-history" aria-hidden="true"></div>
-              <span id="folder-history-hint" hidden data-i18n="sidebar.history.removeHint">Press Delete or Backspace to remove the folder from the history.</span>
+              <div id="tree-actions-menu" class="hidden" role="menu" aria-labelledby="btn-tree-actions" aria-hidden="true">
+                <button type="button" role="menuitem" tabindex="-1" class="tree-actions-item" data-action="filter">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <span class="tree-actions-label" data-i18n="tree.filter.open">Filter files</span>
+                  <span class="tree-actions-shortcut" data-shortcut="filter"></span>
+                </button>
+                <button type="button" role="menuitem" tabindex="-1" class="tree-actions-item" data-action="new-file">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
+                  <span class="tree-actions-label" data-i18n="sidebar.newFile">New file</span>
+                </button>
+                <button type="button" role="menuitem" tabindex="-1" class="tree-actions-item" data-action="new-folder">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/>
+                    <line x1="9" y1="14" x2="15" y2="14"/>
+                  </svg>
+                  <span class="tree-actions-label" data-i18n="sidebar.newFolder">New folder</span>
+                </button>
+                <div class="tree-actions-separator" role="separator"></div>
+                <!-- A check box in the menu (#676) replaces the eye button of
+                     #436: the check and the dimmed rows say it is on. -->
+                <button type="button" role="menuitemcheckbox" aria-checked="false" tabindex="-1" class="tree-actions-item" data-action="hidden-files">
+                  <span class="tree-actions-check" aria-hidden="true">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                  <span class="tree-actions-label" data-i18n="sidebar.hiddenFiles.show">Show hidden files</span>
+                  <span class="tree-actions-shortcut" data-shortcut="hidden-files"></span>
+                </button>
+              </div>
             </div>
-            <button id="btn-open-folder" title="Open folder" aria-label="Open folder" data-i18n-attr="title:sidebar.openFolder;aria-label:sidebar.openFolder">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
           </div>
         </div>
         <!-- A WAI-ARIA tree (#74): FileTree gives the rows their roles and the

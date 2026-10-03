@@ -104,16 +104,20 @@ function type(input, value) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-test('the header shows "New file" and "New folder" once a folder is open', async (t) => {
+/** "New file" or "New folder" from the header's `⋯` menu (#676). */
+function chooseFromActions(action) {
+  document.getElementById('btn-tree-actions').click();
+  document.querySelector(`#tree-actions-menu [data-action="${action}"]`).click();
+}
+
+test('the header\'s `⋯` menu offers "New file" and "New folder" once a folder is open', async (t) => {
   const { dom } = await mountTree();
   t.after(dom.cleanup);
 
-  const newFile = document.getElementById('btn-tree-new-file');
-  const newFolder = document.getElementById('btn-tree-new-folder');
-  assert.equal(newFile.hidden, false);
-  assert.equal(newFolder.hidden, false);
-  assert.equal(newFile.getAttribute('aria-label'), 'New file');
-  assert.equal(newFolder.getAttribute('aria-label'), 'New folder');
+  assert.equal(document.getElementById('btn-tree-actions').hidden, false);
+  const label = (action) => document.querySelector(`#tree-actions-menu [data-action="${action}"]`).textContent.trim();
+  assert.equal(label('new-file'), 'New file');
+  assert.equal(label('new-folder'), 'New folder');
 });
 
 test('F2 puts the name into a field, selected up to the extension; Escape leaves it unchanged', async (t) => {
@@ -214,14 +218,14 @@ test('a refusal from main is shown and the field stays open with the name', asyn
   assert.equal(document.activeElement === input, true);
 });
 
-test('"New file" in the header creates in the selected folder; the new file is selected and shown', async (t) => {
+test('"New file" from the header menu creates in the selected folder; the new file is selected and shown', async (t) => {
   const { dom, container, calls, appStore, settle } = await mountTree();
   t.after(dom.cleanup);
   rowFor(container, '/ws/docs').click();
   await settle();
   assert.equal(appStore.selectedPath, '/ws/docs');
 
-  document.getElementById('btn-tree-new-file').click();
+  chooseFromActions('new-file');
   await settle();
 
   const input = field(container);
@@ -260,7 +264,7 @@ test('"New folder" next to a selected file creates in its folder, and the folder
   rowFor(container, '/ws/README.md').click();
   await settle();
 
-  document.getElementById('btn-tree-new-folder').click();
+  chooseFromActions('new-folder');
   await settle();
   const input = field(container);
   assert.equal(input.parentElement.parentElement === container, true, 'in the open folder');
@@ -281,9 +285,10 @@ test('"New folder" next to a selected file creates in its folder, and the folder
 test('cancelling a new entry gives the focus back to the button that asked', async (t) => {
   const { dom, container, calls, settle } = await mountTree();
   t.after(dom.cleanup);
-  const button = document.getElementById('btn-tree-new-file');
+  // The menu closes before it asks and hands the focus to its button.
+  const button = document.getElementById('btn-tree-actions');
   button.focus();
-  button.click();
+  chooseFromActions('new-file');
   await settle();
 
   press(field(container), 'Escape');

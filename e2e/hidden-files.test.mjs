@@ -1,7 +1,7 @@
 // Hidden files in the running app (#436): the shortcut switches them on, the
 // rows are dimmed, system noise stays out, a dot file opens as text, the View
-// menu ticks along, and the switch is still on after a restart. The eye in
-// the tree header switches them off again.
+// menu ticks along, and the switch is still on after a restart. The entry in
+// the tree header's `⋯` menu (#676) switches them off again.
 //
 // Playwright's keyboard goes through the DevTools protocol and never reaches
 // `before-input-event` — not even a plain letter (checked 2026-09-28). The
@@ -35,8 +35,9 @@ const topLabels = (page) => page.evaluate(() => [...document.getElementById('tre
   .filter((el) => el.classList.contains('tree-item'))
   .map((row) => row.querySelector('.label').textContent));
 
+// Since #676 a check box in the tree header's `⋯` menu.
 const pressed = (page) => page.evaluate(() =>
-  document.getElementById('btn-toggle-hidden-files').getAttribute('aria-pressed'));
+  document.querySelector('#tree-actions-menu [data-action="hidden-files"]').getAttribute('aria-checked'));
 
 const menuChecked = (app) => app.evaluate(({ Menu }) =>
   Menu.getApplicationMenu()?.getMenuItemById('view.showHiddenFiles')?.checked ?? null);
@@ -123,8 +124,10 @@ test('hidden files: shortcut, dimmed rows, text preview, menu and restart', { ti
   assert.equal(await pressed(page), 'true');
   await poll(async () => (await menuChecked(app)) === true, { what: 'ticked View menu item after the restart' });
 
-  // The eye switches them off again, and the menu follows.
-  await page.click('#btn-toggle-hidden-files');
+  // The entry in the header's menu switches them off again, and the View
+  // menu follows.
+  await page.click('#btn-tree-actions');
+  await page.click('#tree-actions-menu [data-action="hidden-files"]');
   await waitForLabels(page, ['src', 'README.md'], 'tree without hidden files again');
   assert.equal(await pressed(page), 'false');
   await poll(async () => (await menuChecked(app)) === false, { what: 'unticked View menu item' });
