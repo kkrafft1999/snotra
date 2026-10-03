@@ -280,15 +280,38 @@ function registerSettingsHandlers({
           pr.connection = merged.connection;
         }
 
+        // An entry that was already stored incomplete and still is does not
+        // block the save: a fresh profile starts with an OpenAI entry without
+        // a key, and adding a first working model next to it has to be
+        // possible (#670). What is new, or was complete before, still has to
+        // be complete.
+        const wasStoredIncomplete = (pr) => {
+          const stored = storedById.get(pr.id);
+          if (!stored || stored.providerId !== pr.providerId) return false;
+          const meta = providerCatalog.getProvider(stored.providerId);
+          if (!meta) return false;
+          const entry = (config.providers && config.providers[stored.providerId]) || {};
+          return !isProviderConfigured({ safeStorage }, meta, entry, stored);
+        };
+        const usableIds = new Set();
         for (const pr of presets) {
           const meta = providerCatalog.getProvider(pr.providerId);
           const entry = (draft.providers && draft.providers[pr.providerId]) || {};
-          if (!isProviderConfigured({ safeStorage }, meta, entry, pr)) {
-            validationError = createSettingsError(
-              createMessage('settings.error.accessIncomplete', { label: presetAccessLabel(meta, pr) })
-            );
-            return config;
+          if (isProviderConfigured({ safeStorage }, meta, entry, pr)) {
+            usableIds.add(pr.id);
+            continue;
           }
+          if (wasStoredIncomplete(pr)) continue;
+          validationError = createSettingsError(
+            createMessage('settings.error.accessIncomplete', { label: presetAccessLabel(meta, pr) })
+          );
+          return config;
+        }
+        // The chat can only run on a usable entry. When the chosen one is
+        // not and another is, the first usable one takes over (#670).
+        if (!usableIds.has(activePresetId)) {
+          const firstUsable = presets.find((pr) => usableIds.has(pr.id));
+          if (firstUsable) activePresetId = firstUsable.id;
         }
 
         const providerIdsInUse = new Set(presets.map((pr) => pr.providerId));

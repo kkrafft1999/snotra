@@ -181,6 +181,19 @@ export function initChatModelPicker({
     chatTitleEl.removeAttribute('lang');
   }
 
+  /**
+   * Points at the way to the settings that exists on this platform: the app
+   * menu on macOS, "View" elsewhere, with the shortcut both share (#670).
+   */
+  function noModelHint() {
+    const mac = navigator.userAgent.includes('Mac');
+    const menu = mac ? 'Snotra AI' : t('menu.view');
+    return t('chat.hint.noModel', {
+      path: `${menu} › ${t('menu.settings')}`,
+      shortcut: mac ? '⌘,' : t('chat.hint.noModel.shortcut'),
+    });
+  }
+
   function updateChatChrome() {
     const target = appStore.llmState.chatTarget;
     const active = target?.providerId ? findProviderView(target.providerId) : null;
@@ -230,7 +243,7 @@ export function initChatModelPicker({
       } else if (active?.keyUnreadable) {
         chatHint.textContent = t('chat.hint.keyUnreadable');
       } else {
-        chatHint.textContent = t('chat.hint.noModel');
+        chatHint.textContent = noModelHint();
       }
       chatHint.classList.remove('hidden');
       if (!appStore.chatInFlight) btnChatSend.disabled = true;

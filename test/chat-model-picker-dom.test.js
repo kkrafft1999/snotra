@@ -23,8 +23,13 @@ function llmState({ presets } = {}) {
   };
 }
 
-async function setup({ locale = 'en', state = llmState() } = {}) {
+async function setup({ locale = 'en', state = llmState(), userAgent = null } = {}) {
   const dom = setupRendererDom();
+  if (userAgent) {
+    // The renderer reads the global `navigator`, which under Node 24 may be
+    // Node's own rather than happy-dom's.
+    Object.defineProperty(globalThis.navigator, 'userAgent', { value: userAgent, configurable: true });
+  }
   const { initChatModelPicker } = await importRenderer('components', 'ChatModelPicker.js');
   const { appStore } = await importRenderer('state', 'store.js');
   const { setLocale } = await importRenderer('i18n.js');
@@ -141,3 +146,30 @@ test('without a preset to switch to, the pill is no menu that opens nothing', as
   pill.click();
   assert.equal(menu.classList.contains('hidden'), true);
 });
+
+// #670: the hint pointed at a gear icon that is gone. It names the menu path
+// and the shortcut of the platform instead.
+const unconfigured = () => ({
+  ...llmState({ presets: [{ id: 'p1', label: 'OpenAI · gpt-4o-mini', configured: false }] }),
+  providers: [{ id: 'openai', name: 'OpenAI', configured: false, model: 'gpt-4o-mini' }],
+  chatTarget: { providerId: 'openai', model: 'gpt-4o-mini' },
+});
+
+for (const [platform, userAgent, locale, expected] of [
+  ['macOS', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'en',
+    'Set up a language model to start chatting: Snotra AI › Settings… (⌘,).'],
+  ['Windows', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'en',
+    'Set up a language model to start chatting: View › Settings… (Ctrl+,).'],
+  ['macOS', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'de',
+    'Richte ein Sprachmodell ein, um zu chatten: Snotra AI › Einstellungen… (⌘,).'],
+  ['Linux', 'Mozilla/5.0 (X11; Linux x86_64)', 'de',
+    'Richte ein Sprachmodell ein, um zu chatten: Ansicht › Einstellungen… (Strg+,).'],
+]) {
+  test(`without a usable model the hint names the way to the settings on ${platform} (${locale})`, async () => {
+    const { document } = await setup({ locale, userAgent, state: unconfigured() });
+    const hint = document.getElementById('chat-hint');
+    assert.equal(hint.classList.contains('hidden'), false);
+    assert.equal(hint.textContent, expected);
+    assert.equal(document.getElementById('btn-chat-send').disabled, true);
+  });
+}
