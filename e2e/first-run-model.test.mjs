@@ -52,9 +52,16 @@ test('first run: adding a model makes the chat usable next to the default entry'
     const c = await chrome(page);
     return c.hint ? c : null;
   }, { what: 'hint without a model' });
-  const expectedHint = process.platform === 'darwin'
+  // Without encrypted storage (a Linux runner without a keyring) that hint
+  // takes precedence; the model added below needs no key, so the rest holds.
+  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  let expectedHint = process.platform === 'darwin'
     ? 'Set up a language model to start chatting: Snotra AI › Settings… (⌘,).'
     : 'Set up a language model to start chatting: View › Settings… (Ctrl+,).';
+  if (!encryptionAvailable) {
+    expectedHint = 'Encrypted storage is not available. An API key cannot be stored safely here.';
+    t.diagnostic('no encrypted storage here: the menu hint is covered by the DOM test');
+  }
   assert.deepEqual(before, { hint: expectedHint, sendDisabled: true, pill: null });
 
   // Settings › Models › Add model — the way the hint describes, via the menu.
