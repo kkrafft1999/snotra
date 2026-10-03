@@ -12,6 +12,12 @@
  *   no permission (EACCES, EPERM), gone (ENOENT, ENOTDIR), outside the workspace, or
  *   anything else. Without it an empty listing is an empty folder.
  * @property {(sourcePath: string, destDir: string) => Promise<object>} moveItem
+ * @property {(parentDir: string, name: string, kind: 'file'|'directory') => Promise<{ok: true, path: string}|{error: string, reason: string, character?: string}>} createItem
+ *   An empty file or folder from the tree (#349). Never over an existing name. `reason`
+ *   is a code of ITEM_NAME_REASONS or ITEM_FAILURE_REASONS (`shared/contracts/item-name.js`).
+ * @property {(itemPath: string, newName: string) => Promise<{ok: true, path: string, unchanged?: boolean}|{error: string, reason: string, character?: string}>} renameItem
+ *   In its own folder; a case-only rename on APFS or NTFS goes through. The workspace
+ *   folder itself is refused with reason 'root'.
  * @property {(sourcePaths: string[], destDir: string) => Promise<object>} inspectImport
  *   Counts an import from outside the workspace without writing (#101). The sources
  *   are what the preload resolved from dropped File objects, never a path the page

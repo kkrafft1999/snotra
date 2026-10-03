@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readWorkspacePdf: (pdfPath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_PDF, pdfPath),
   readPdfAsset: (kind, filename) => ipcRenderer.invoke(REQ.PDF_READ_ASSET, kind, filename),
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
+  // #349: the name as typed; main checks it and the path.
+  createItem: (parentDir, name, kind) => ipcRenderer.invoke(REQ.FS_CREATE_ITEM, parentDir, name, kind),
+  renameItem: (itemPath, newName) => ipcRenderer.invoke(REQ.FS_RENAME_ITEM, itemPath, newName),
   // Both take the dropped File objects, not paths (#646).
   inspectImport: (files, destDir) => invokeImport(REQ.FS_INSPECT_IMPORT, files, destDir),
   importItems: (files, destDir) => invokeImport(REQ.FS_IMPORT_ITEMS, files, destDir),
@@ -67,6 +70,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }),
   onFsShowChanges: (callback) => {
     const channel = PUSH.FS_SHOW_CHANGES;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onFsBeginCreate: (callback) => {
+    const channel = PUSH.FS_BEGIN_CREATE;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onFsBeginRename: (callback) => {
+    const channel = PUSH.FS_BEGIN_RENAME;
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

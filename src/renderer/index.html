@@ -102,6 +102,24 @@
                 <path d="m5 11 9 9"/>
               </svg>
             </button>
+            <!-- New file and new folder (#349): in the selected folder, next to
+                 the selected file, else in the open folder. Hidden until a
+                 folder is open; FileTree shows them. -->
+            <button id="btn-tree-new-file" type="button" hidden title="New file" aria-label="New file" data-i18n-attr="title:sidebar.newFile;aria-label:sidebar.newFile">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+            </button>
+            <button id="btn-tree-new-folder" type="button" hidden title="New folder" aria-label="New folder" data-i18n-attr="title:sidebar.newFolder;aria-label:sidebar.newFolder">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="11" x2="12" y2="17"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+              </svg>
+            </button>
             <!-- Hidden files in the tree (#436). The label stays the same and
                  aria-pressed says whether it is on; the title names the next
                  step and the shortcut, so FileTree sets it, not `data-i18n`.

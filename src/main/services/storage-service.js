@@ -75,8 +75,27 @@ function createStorageService({
   const MCP_CONFIG_VERSION = 1;
 
   const fileLocks = new Map();
+  const pendingWrites = new Map();
 
-  async function writeJsonAtomic(targetPath, data) {
+  /**
+   * Writes to the same file run one after the other (#672). On Windows two
+   * renames onto one target at the same moment fail with EPERM — the target
+   * is held by the other rename, so retrying only shortens the odds. This is
+   * deliberately a queue of its own rather than `withFileLock`: callers that
+   * already hold the file lock for a read-modify-write write from inside it.
+   */
+  function writeJsonAtomic(targetPath, data) {
+    const prev = pendingWrites.get(targetPath) || Promise.resolve();
+    const task = prev.then(() => writeJsonAtomicNow(targetPath, data));
+    const settled = task.catch(() => {});
+    pendingWrites.set(targetPath, settled);
+    settled.then(() => {
+      if (pendingWrites.get(targetPath) === settled) pendingWrites.delete(targetPath);
+    });
+    return task;
+  }
+
+  async function writeJsonAtomicNow(targetPath, data) {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     const tmp = `${targetPath}.tmp-${randomUUID()}`;
     await fs.writeFile(tmp, JSON.stringify(data), 'utf8');

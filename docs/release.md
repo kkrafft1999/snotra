@@ -169,6 +169,31 @@ what the release path above makes use of.
 What the tests cannot see is looked at by hand, in the packaged app of the
 release branch.
 
+### New file, new folder, rename in the tree
+
+The DOM tests (`test/file-tree-create-rename-dom.test.js`) and the disk tests
+(`test/fs-create-rename.test.js`) cover the flow and the boundary. What they
+cannot cover is the native menu, the field as drawn and the file systems of the
+other platforms (#349). `node e2e/manual-tree-create-rename.mjs [en|de]` drives
+most of it on the Mac and photographs it to `out/mockup/`; on Windows and Linux
+by hand:
+
+1. Right-click a file: "New File…" and "New Folder…" follow "Open", "Rename…"
+   (with `F2` shown) sits above "Delete…". Right-click the empty space below the
+   rows: "New" only, no "Rename…" or "Delete…".
+2. "New File…" on a closed folder opens it and shows a field where the file
+   will land. Type `notes.md`, `Enter`: the file is selected and in the preview.
+3. In the field type `a:b`, then the name of a neighbour: each time an amber
+   message under the field says why, and `Enter` does nothing. `Esc` removes the
+   field, nothing is written.
+4. `F2` on `readme.md`, type `README.md`, `Enter`: the tree and the file
+   manager both show `README.md` — the case-only rename, on NTFS in particular.
+5. Rename the folder that holds the file on show: the preview stays, under the
+   new path, and its open subfolders stay open.
+6. A folder without write permission: "New File…" there says so under the field.
+7. Both header buttons in light and dark, and at the narrowest sidebar the
+   buttons move to a line of their own instead of squeezing the folder name.
+
 ### Keyboard in the file tree
 
 The DOM tests (`test/file-tree-keyboard-dom.test.js`) cover where the keys

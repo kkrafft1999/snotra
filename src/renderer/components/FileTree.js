@@ -32,6 +32,7 @@ import {
 import { createFileViewHost } from '../file-views/host.js';
 import { createWorkspacePathSource } from '../tree/workspacePaths.js';
 import { initTreeFilter } from './TreeFilter.js';
+import contracts from '../generated/contracts.js';
 
 // What a quick start chip writes into the chat is the user's own message, so it
 // reads in the language of the interface (#310).
@@ -78,6 +79,8 @@ export function initFileTree(deps) {
   const btnFolderHistory = document.getElementById('btn-folder-history');
   const btnHiddenFiles = document.getElementById('btn-toggle-hidden-files');
   const btnClearMarks = document.getElementById('btn-tree-clear-marks');
+  const btnNewFile = document.getElementById('btn-tree-new-file');
+  const btnNewFolder = document.getElementById('btn-tree-new-folder');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
   const welcomeRecentSection = document.getElementById('welcome-recent');
   const welcomeRecentList = document.getElementById('welcome-recent-list');
@@ -314,6 +317,9 @@ export function initFileTree(deps) {
     const name = basenameOf(folderPath);
     projectName.textContent = name;
     projectName.title = folderPath;
+    // Something to create in now (#349).
+    if (btnNewFile) btnNewFile.hidden = false;
+    if (btnNewFolder) btnNewFolder.hidden = false;
     document.title = 'Snotra AI';
 
     // A selection belongs to the folder it was made in: left standing, the
@@ -911,8 +917,9 @@ export function initFileTree(deps) {
     const expanded = Boolean(childContainer?.classList.contains('expanded'));
     const contextMenuKey = e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey);
     // Typing into the tree starts the filter with that letter (#350). Space
-    // stays out: it neither opens a row nor would make a query.
-    if (e.key.length === 1 && e.key !== ' ' && !e.isComposing) {
+    // stays out: it neither opens a row nor would make a query, and so does
+    // a name field in a row (#674), which keeps its letters.
+    if (e.key.length === 1 && e.key !== ' ' && !e.isComposing && !e.target.matches?.('input, textarea')) {
       if (filter.open(e.key)) {
         e.preventDefault();
         e.stopPropagation();
@@ -950,6 +957,11 @@ export function initFileTree(deps) {
         if (expanded) void toggleFolder(row, childContainer, row.dataset.path, { select: false });
         else focusRow(parentRowOf(row));
         break;
+      case 'F2':
+        // Rename (#349), on every platform: Enter already opens.
+        if (onRow) void beginRename(row.dataset.path);
+        else handled = false;
+        break;
       case 'Enter':
         if (!onRow) {
           handled = false;
@@ -972,6 +984,14 @@ export function initFileTree(deps) {
       e.preventDefault();
       e.stopPropagation();
     }
+  });
+
+  // The empty space below the rows is the open folder itself (#349): its menu
+  // offers "New" there, and nothing that would rename or delete it.
+  treeContainer.addEventListener('contextmenu', (e) => {
+    if (!appStore.rootPath || e.target.closest?.('.tree-item, .tree-edit-row')) return;
+    e.preventDefault();
+    void openFileContextMenu({ path: appStore.rootPath, isDirectory: true });
   });
 
   function itemOfRow(row) {
@@ -1642,6 +1662,349 @@ export function initFileTree(deps) {
 
   api.onFsClearAgentMark?.(({ path } = {}) => {
     if (typeof path === 'string' && path) agentMarks.clear(appStore.currentChatId, path);
+  });
+
+  // ── New file, new folder, rename (#349) ────────────────────────────────
+  // The name is typed into the tree itself: into a fresh row where the new
+  // entry will land, or into the row being renamed. The field holds the
+  // tree's queue while it is open — a watcher report or an agent's write
+  // would redraw the folder, and the field with it; they run once it closes.
+  // Escape or a click elsewhere closes it unchanged; switching to another
+  // window does not. Main checks the name once more and does the work.
+
+  const NAME_FAILURES = new Set([
+    ...Object.values(contracts.ITEM_NAME_REASONS),
+    ...Object.values(contracts.ITEM_FAILURE_REASONS),
+  ]);
+
+  // The field that is open, as the means to close it; null without one.
+  let closeNameField = null;
+
+  function nameFailureText(failure) {
+    const reason = NAME_FAILURES.has(failure?.reason) ? failure.reason : 'failed';
+    return t(`tree.name.error.${reason}`, {
+      name: failure?.name ?? '',
+      character: failure?.character ?? '',
+      detail: failure?.error ?? '',
+    });
+  }
+
+  /**
+   * What is wrong with the name while it is typed — the same rule main
+   * applies, and a name already drawn in the folder. Nothing for an empty
+   * field: that is where everyone starts. Main still has the last word on
+   * the disk, including names that differ only in case.
+   */
+  function typedNameProblem(value, siblings, ownName) {
+    const checked = contracts.validateItemName(value);
+    if (!checked.ok) return checked.reason === contracts.ITEM_NAME_REASONS.EMPTY ? null : checked;
+    if (checked.name !== ownName && siblings.includes(checked.name)) {
+      return { reason: contracts.ITEM_FAILURE_REASONS.EXISTS, name: checked.name };
+    }
+    return null;
+  }
+
+  /**
+   * Runs one name field until it closes. `row` carries the field after
+   * `anchor`; the message about a refused name goes under the row.
+   * `submit(name)` asks main and resolves with its answer. Resolves with
+   * that answer once it is `ok`, or with null when the field was left.
+   */
+  function runNameField({ row, anchor, depth, value, selectionEnd, ariaLabel, siblings, ownName, submit, onTyped }) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tree-name-input';
+    input.value = value;
+    input.spellcheck = false;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', ariaLabel);
+    anchor.after(input);
+
+    const message = document.createElement('div');
+    message.className = 'tree-name-error';
+    message.id = describedId('tree-name-error');
+    message.setAttribute('aria-live', 'polite');
+    message.style.marginLeft = `${treeNameOffset(depth)}px`;
+    message.hidden = true;
+    // A click on the message keeps the field open.
+    message.addEventListener('mousedown', (e) => e.preventDefault());
+    row.after(message);
+
+    const show = (problem) => {
+      message.hidden = !problem;
+      message.textContent = problem ? nameFailureText(problem) : '';
+      if (problem) {
+        input.setAttribute('aria-invalid', 'true');
+        input.setAttribute('aria-describedby', message.id);
+      } else {
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-describedby');
+      }
+    };
+
+    return new Promise((resolve) => {
+      let busy = false;
+      let done = false;
+      const finish = (result) => {
+        if (done) return;
+        done = true;
+        closeNameField = null;
+        input.remove();
+        message.remove();
+        resolve(result);
+      };
+      closeNameField = () => finish(null);
+
+      // The row's own handlers — open, select, drag, its menu, the tree's
+      // arrow keys — are not the field's.
+      for (const type of ['click', 'dblclick', 'mousedown', 'contextmenu', 'dragstart']) {
+        input.addEventListener(type, (e) => e.stopPropagation());
+      }
+      input.addEventListener('input', () => {
+        onTyped?.(input.value);
+        show(typedNameProblem(input.value, siblings, ownName));
+      });
+      input.addEventListener('keydown', async (e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (!busy) finish(null);
+          return;
+        }
+        if (e.key !== 'Enter' || e.isComposing) return;
+        e.preventDefault();
+        if (busy) return;
+        const checked = contracts.validateItemName(input.value);
+        const problem = checked.ok ? typedNameProblem(input.value, siblings, ownName) : checked;
+        if (problem) {
+          show(problem);
+          return;
+        }
+        busy = true;
+        let result;
+        try {
+          result = await submit(checked.name);
+        } catch (err) {
+          result = { reason: 'failed', error: err?.message ?? String(err) };
+        }
+        busy = false;
+        if (done) return;
+        if (result?.ok) {
+          finish(result);
+          return;
+        }
+        show({ ...result, name: checked.name });
+        input.focus();
+      });
+      // Focus that goes elsewhere in the window closes the field; focus that
+      // goes to another window leaves it as it is — the field stays the
+      // document's active element then.
+      input.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (!done && !busy && document.activeElement !== input) finish(null);
+        }, 0);
+      });
+
+      input.focus();
+      input.setSelectionRange(0, selectionEnd ?? input.value.length);
+    });
+  }
+
+  /**
+   * Whether the focus went down with the field — Escape, or Enter on a name
+   * that was no change — rather than to something the user clicked.
+   */
+  function focusWasDropped() {
+    return !document.activeElement || document.activeElement === document.body;
+  }
+
+  /** The folders from below the root down to `dir`, top first. */
+  function foldersDownTo(dir, root) {
+    const folders = [];
+    for (let d = dir; d !== root && isInsideDir(d, root); d = parentDirOf(d)) folders.unshift(d);
+    return folders;
+  }
+
+  /**
+   * Where the header's buttons create (#349): in the selected folder, next to
+   * the selected file, else in the open folder.
+   */
+  function createTargetDir() {
+    const root = appStore.rootPath;
+    const selected = appStore.selectedPath;
+    if (!selected || !isInsideDir(selected, root)) return root;
+    return appStore.selectedIsDirectory ? selected : parentDirOf(selected);
+  }
+
+  /**
+   * Asks for the name of a new file or folder in `parentDir` and creates it.
+   * The new entry is selected afterwards, a file shown in the preview.
+   */
+  async function beginCreate(parentDir, kind) {
+    const root = appStore.rootPath;
+    if (!root || (parentDir !== root && !isInsideDir(parentDir, root))) return;
+    closeNameField?.();
+    const returnFocus = document.activeElement;
+    const generation = treeGeneration;
+    const left = generationLeft;
+    const created = await enqueueTreeWork(async () => {
+      if (generation !== treeGeneration) return null;
+      for (const dir of foldersDownTo(parentDir, root)) {
+        if (!(await ensureFolderExpanded(dir))) return null;
+      }
+      const container = folderContainer(parentDir);
+      if (!container) return null;
+      const rows = rowsOfFolder(parentDir) ?? [];
+      const depth = parentDir === root ? 0 : loadDepthFromTreeRow(container.previousElementSibling);
+
+      const row = document.createElement('div');
+      row.className = 'tree-edit-row';
+      const indent = document.createElement('span');
+      indent.className = 'indent';
+      indent.style.width = `${depth * 16 + 4}px`;
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow arrow--placeholder';
+      const icon = document.createElement('span');
+      icon.className = 'icon';
+      icon.innerHTML = kind === 'directory' ? svgFolder() : svgFile('');
+      row.append(indent, arrow, icon);
+      // Where the entry will land, near enough: folders first, files after.
+      const before = (kind === 'directory' ? rows[0] : rows.find((r) => r.dataset.isDirectory !== 'true'))
+        ?? container.querySelector(':scope > .tree-hidden-entries, :scope > .tree-unreadable');
+      container.insertBefore(row, before ?? null);
+      row.scrollIntoView?.({ block: 'nearest' });
+
+      const field = runNameField({
+        row,
+        anchor: icon,
+        depth,
+        value: '',
+        ariaLabel: t(kind === 'directory' ? 'tree.name.newFolder' : 'tree.name.newFile'),
+        siblings: rows.map((r) => basenameOf(r.dataset.path)),
+        ownName: null,
+        submit: (name) => api.createItem(parentDir, name, kind),
+        onTyped: kind === 'directory' ? null : (typed) => { icon.innerHTML = svgFile(typed.trim()); },
+      });
+      // A folder switch takes the field with it (#633).
+      const result = await Promise.race([field, left.then(() => { closeNameField?.(); return null; })]);
+      row.remove();
+      if (!result?.ok || generation !== treeGeneration) return null;
+
+      await redrawFolders([parentDir]);
+      const newRow = rowForPath(result.path);
+      if (!newRow) {
+        // Not drawn — a dot file while hidden files are off (#436). It was
+        // created all the same; a file at least shows.
+        if (kind === 'file') await contentPane.open({ path: result.path, name: basenameOf(result.path) });
+        return result;
+      }
+      if (kind === 'directory') {
+        setActiveItem(newRow);
+        appStore.selectedPath = result.path;
+        appStore.selectedIsDirectory = true;
+      } else {
+        await selectFile(newRow, itemForRow(newRow));
+      }
+      newRow.scrollIntoView?.({ block: 'nearest' });
+      focusRow(rowForPath(result.path) ?? newRow);
+      return result;
+    }, 'The new entry could not be created');
+    if (!created && returnFocus?.isConnected && focusWasDropped()) returnFocus.focus?.();
+  }
+
+  /**
+   * Asks for a new name in the row itself and renames. Selection, the file on
+   * show and the open folders follow the new name, below a renamed folder too.
+   */
+  async function beginRename(itemPath) {
+    const root = appStore.rootPath;
+    if (!root || !isInsideDir(itemPath, root)) return;
+    closeNameField?.();
+    const generation = treeGeneration;
+    const left = generationLeft;
+    await enqueueTreeWork(async () => {
+      if (generation !== treeGeneration) return;
+      const row = rowForPath(itemPath);
+      const label = row?.querySelector(':scope > .label');
+      if (!label) return;
+      const isDirectory = row.dataset.isDirectory === 'true';
+      const parentDir = parentDirOf(itemPath);
+      const oldName = basenameOf(itemPath);
+      const dot = oldName.lastIndexOf('.');
+
+      row.classList.add('tree-item--editing');
+      row.draggable = false;
+      label.hidden = true;
+      const field = runNameField({
+        row,
+        anchor: label,
+        depth: treeDepthFromIndentWidth(row.querySelector('.indent')?.style.width) - 1,
+        value: oldName,
+        // The name without its extension, as a file manager does.
+        selectionEnd: !isDirectory && dot > 0 ? dot : oldName.length,
+        ariaLabel: t('tree.name.rename', { name: oldName }),
+        siblings: (rowsOfFolder(parentDir) ?? []).map((r) => basenameOf(r.dataset.path)),
+        ownName: oldName,
+        submit: (name) => (name === oldName
+          ? Promise.resolve({ ok: true, path: itemPath, unchanged: true })
+          : api.renameItem(itemPath, name)),
+      });
+      const result = await Promise.race([field, left.then(() => { closeNameField?.(); return null; })]);
+      row.classList.remove('tree-item--editing');
+      row.draggable = true;
+      label.hidden = false;
+      if (generation !== treeGeneration) return;
+      if (!result?.ok || result.unchanged) {
+        if (focusWasDropped()) focusRow(rowForPath(itemPath));
+        return;
+      }
+      await followRename(itemPath, result.path, parentDir);
+    }, 'The entry could not be renamed');
+  }
+
+  async function followRename(oldPath, newPath, parentDir) {
+    const moved = (p) => {
+      if (p === oldPath) return newPath;
+      return p && isInsideDir(p, oldPath) ? newPath + p.slice(oldPath.length) : null;
+    };
+    const expanded = collectExpandedFolderPaths().map(moved).filter(Boolean);
+    const selected = moved(appStore.selectedPath);
+    const selectedIsDirectory = appStore.selectedIsDirectory;
+    const openMoved = moved(contentPane.openPath());
+    agentMarks.forget(oldPath);
+
+    await redrawFolders([parentDir]);
+    await restoreExpandedFolders(expanded);
+    // The file on show reads again under its new name — before a watcher
+    // report would close it as gone.
+    if (openMoved) await contentPane.open({ path: openMoved, name: basenameOf(openMoved) });
+    if (selected) {
+      const selectedRow = rowForPath(selected);
+      if (selectedRow) setActiveItem(selectedRow);
+      appStore.selectedPath = selected;
+      appStore.selectedIsDirectory = selectedIsDirectory;
+    }
+    const newRow = rowForPath(newPath);
+    newRow?.scrollIntoView?.({ block: 'nearest' });
+    focusRow(newRow);
+  }
+
+  btnNewFile?.addEventListener('click', () => {
+    void beginCreate(createTargetDir(), 'file');
+  });
+  btnNewFolder?.addEventListener('click', () => {
+    void beginCreate(createTargetDir(), 'directory');
+  });
+
+  // "New File…", "New Folder…" and "Rename…" from the context menu: main
+  // only says where.
+  api.onFsBeginCreate?.(({ path, kind } = {}) => {
+    if (typeof path === 'string' && path && (kind === 'file' || kind === 'directory')) {
+      void beginCreate(path, kind);
+    }
+  });
+  api.onFsBeginRename?.(({ path } = {}) => {
+    if (typeof path === 'string' && path) void beginRename(path);
   });
 
   // ── Abgleich mit dem Dateisystem (Issue #158) ─────────────────────────────

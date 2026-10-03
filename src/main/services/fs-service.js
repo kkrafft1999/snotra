@@ -18,6 +18,11 @@ const { constants: fsConstants } = require('fs');
 const { randomBytes } = require('crypto');
 const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { renameWithRetry } = require('./rename-with-retry');
+const {
+  ITEM_FAILURE_REASONS,
+  validateItemName,
+  namesFoldEqual,
+} = require('../../shared/contracts/item-name');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
@@ -2722,6 +2727,106 @@ function createFsService({
     return { ok: true, newPath: targetPath };
   }
 
+  // ── New file, new folder, rename from the tree (#349) ───────────────────
+  //
+  // Both take paths the adapter has already bound to the workspace and a name
+  // as the user typed it. A refusal is `{ error, reason }`: `error` for the
+  // log, `reason` (ITEM_NAME_REASONS / ITEM_FAILURE_REASONS) for the renderer,
+  // which words it in the interface language.
+
+  function itemFailure(err) {
+    const reasons = {
+      EEXIST: ITEM_FAILURE_REASONS.EXISTS,
+      ENOTEMPTY: ITEM_FAILURE_REASONS.EXISTS,
+      EACCES: ITEM_FAILURE_REASONS.PERMISSION,
+      EPERM: ITEM_FAILURE_REASONS.PERMISSION,
+      EROFS: ITEM_FAILURE_REASONS.PERMISSION,
+      ENOENT: ITEM_FAILURE_REASONS.MISSING,
+      ENOTDIR: ITEM_FAILURE_REASONS.NOT_FOLDER,
+      ENAMETOOLONG: 'too-long',
+    };
+    return { error: err?.message ?? String(err), reason: reasons[err?.code] ?? ITEM_FAILURE_REASONS.FAILED };
+  }
+
+  /**
+   * Creates an empty file or an empty folder in `parentDir`. Never over an
+   * existing entry: `wx` and a non-recursive mkdir fail with EEXIST instead,
+   * in the same call that creates — no window between a check and the write.
+   */
+  async function createItem(parentDir, rawName, kind) {
+    const checked = validateItemName(rawName);
+    if (!checked.ok) return { error: checked.reason, reason: checked.reason, character: checked.character };
+    if (kind !== 'file' && kind !== 'directory') {
+      return { error: `Unknown kind: ${kind}`, reason: ITEM_FAILURE_REASONS.FAILED };
+    }
+    const target = path.join(parentDir, checked.name);
+    try {
+      if (!(await fs.stat(parentDir)).isDirectory()) {
+        return { error: 'Not a folder', reason: ITEM_FAILURE_REASONS.NOT_FOLDER };
+      }
+      if (kind === 'directory') {
+        await fs.mkdir(target);
+      } else {
+        const handle = await fs.open(target, 'wx');
+        await handle.close();
+      }
+    } catch (err) {
+      return itemFailure(err);
+    }
+    return { ok: true, path: target };
+  }
+
+  /**
+   * Renames an entry in its own folder. An existing name is refused, with one
+   * exception: on a file system that folds case or normalization (APFS,
+   * NTFS), `readme.md` → `README.md` finds "itself" under the new name. Then
+   * it is the same entry — same inode — and the rename goes through a
+   * temporary name, so that every platform shows the new spelling.
+   *
+   * Between the look and the rename another program could create the name;
+   * fs.rename would replace it on POSIX. There is no portable no-replace
+   * rename in Node, and the window is a few microseconds of one user's click.
+   */
+  async function renameItem(sourcePath, rawName) {
+    const checked = validateItemName(rawName);
+    if (!checked.ok) return { error: checked.reason, reason: checked.reason, character: checked.character };
+    const parent = path.dirname(sourcePath);
+    const target = path.join(parent, checked.name);
+    try {
+      const source = await fs.lstat(sourcePath, { bigint: true });
+      if (target === sourcePath) return { ok: true, path: sourcePath, unchanged: true };
+      let existing = null;
+      try {
+        existing = await fs.lstat(target, { bigint: true });
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err;
+      }
+      if (!existing) {
+        await renameWithRetry(fs, sourcePath, target, { platform });
+        return { ok: true, path: target };
+      }
+      // FAT and some network shares report 0 for every inode; there the
+      // folded names alone decide.
+      const sameEntry = namesFoldEqual(path.basename(sourcePath), checked.name)
+        && (source.ino === 0n || (existing.ino === source.ino && existing.dev === source.dev));
+      if (!sameEntry) {
+        return { error: `${checked.name} exists`, reason: ITEM_FAILURE_REASONS.EXISTS };
+      }
+      const detour = path.join(parent, `.snotra-rename-${randomSuffix()}`);
+      await renameWithRetry(fs, sourcePath, detour, { platform });
+      try {
+        await renameWithRetry(fs, detour, target, { platform });
+      } catch (err) {
+        // Back to where it was rather than left under the temporary name.
+        await renameWithRetry(fs, detour, sourcePath, { platform }).catch(() => {});
+        throw err;
+      }
+      return { ok: true, path: target };
+    } catch (err) {
+      return itemFailure(err);
+    }
+  }
+
   // ── Import von außerhalb des Workspace (Issue #101) ──────────────────────
   //
   // Anders als moveItem nimmt dieser Weg eine Quelle **außerhalb** des
@@ -3152,6 +3257,8 @@ function createFsService({
     runListDirectoryTreeTool,
     readDirectory,
     moveItem,
+    createItem,
+    renameItem,
     findFreeTargetPath,
     inspectImportSources,
     importExternalItems,

@@ -576,8 +576,8 @@ in it — the renderer only triggers it, see `docs/security-concept.md` §5.
 
 ### Context menu of the file tree
 
-`services/file-context-menu.js` builds the native menu (open, reveal,
-information, delete). The renderer only triggers it via `fs:showFileContextMenu`
+`services/file-context-menu.js` builds the native menu (open, new file, new
+folder, reveal, information, rename, delete). The renderer only triggers it via `fs:showFileContextMenu`
 and sends nothing but the path; the handler checks it with the adapter's
 `resolveCheckedWorkspacePath()` (realpath-checked, not fs-service's lexical
 `resolveWorkspacePath`), exactly as sent — a name may end in a space, and only
@@ -603,6 +603,26 @@ Mark-of-the-Web and no quarantine attribute, so SmartScreen and Gatekeeper would
 not ask. A failed `openPath` (no app for the type) shows an error box. Every
 click that opens a dialog is guarded against a rejection, which would otherwise
 take down the main process when the window closes while the dialog is up.
+
+**New file, new folder, rename** (issue
+[#349](https://github.com/kkrafft1999/snotra/issues/349)) are split between the
+two sides. The menu entries do nothing on disk: they push `fs:begin-create`
+(`{ path, kind }` — the folder itself, or a file's folder) or `fs:begin-rename`
+(`{ path }`) to the renderer, which opens a name field in the tree. The name
+comes back over `fs:createItem` / `fs:renameItem`; the adapter binds the folder
+or the entry to the workspace like every other path and refuses the workspace
+folder itself (`reason: 'root'`), and fs-service checks the name with
+`shared/contracts/item-name.js` — the same rule the renderer applies while the
+user types, the strictest of the three platforms on all three (no separators,
+no `.`/`..`, nothing Windows refuses, at most 255 bytes). A file is created with
+`wx` and a folder with a non-recursive `mkdir`, so an existing name fails in the
+same call that would create it. A rename refuses an existing name unless it is
+the same inode — a case-only rename on APFS or NTFS —, which goes through a
+temporary name so the new spelling shows on every platform. Failures carry a
+`reason` code for the renderer to word, next to the system's message. While the
+field is open it holds the tree's queue (#636), so a watcher report cannot
+redraw the field away; the open folder's own menu, from the empty space below
+the rows, offers "New" but neither rename nor delete.
 
 The information behind it lives in `services/file-info.js` (issue
 [#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns a field

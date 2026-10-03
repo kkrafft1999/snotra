@@ -5,7 +5,7 @@ const { createFileInfo, formatFields } = require('./file-info');
 const { createTranslator } = require('../../shared/i18n');
 
 /**
- * Kontextmenü für Dateien und Ordner im Dateibaum (Issues #58, #59, #120, #123).
+ * Kontextmenü für Dateien und Ordner im Dateibaum (Issues #58, #59, #120, #123, #349).
  *
  * Baut ein natives Electron-Menü mit Dateioperationen. Die Pfadprüfung gegen
  * den Workspace passiert vorher im IPC-Handler; hier kommt nur noch ein
@@ -248,6 +248,7 @@ function createFileContextMenu({
    */
   function buildTemplate(filePath, {
     window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null,
+    onCreate = null, onRename = null, isRoot = false,
   } = {}) {
     const t = createTranslator(getLocale());
     // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
@@ -257,16 +258,27 @@ function createFileContextMenu({
     const guarded = (promise, what) => promise.catch((err) => {
       logger.warn(`[file-context-menu] ${what}:`, err?.message ?? err);
     });
-    return [
-      ...(isDirectory ? [] : [{
+    // Groups, with a separator between those that have something in them.
+    // "Open" stays first for a file; the new entries follow it (#349) — for a
+    // folder, where there is no "Open", they lead.
+    const opening = isDirectory ? [] : [
+      {
         label: t('contextMenu.open'),
         click: () => guarded(openWithDefaultApp(filePath, window), 'The file could not be opened'),
-      }]),
+      },
       // Only for a file the agent changed in the conversation on screen (#348).
-      ...(!isDirectory && typeof onShowChanges === 'function' ? [{
+      ...(typeof onShowChanges === 'function' ? [{
         label: t('contextMenu.showChanges'),
         click: () => onShowChanges(filePath),
       }] : []),
+    ];
+    // New file and folder (#349): inside a folder, next to a file. The
+    // renderer asks for the name in the tree.
+    const creating = typeof onCreate === 'function' ? [
+      { label: t('contextMenu.newFile'), click: () => onCreate('file') },
+      { label: t('contextMenu.newFolder'), click: () => onCreate('directory') },
+    ] : [];
+    const looking = [
       { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
       {
         label: t('contextMenu.info'),
@@ -277,7 +289,17 @@ function createFileContextMenu({
         label: t(isDirectory ? 'contextMenu.clearAgentMark.folder' : 'contextMenu.clearAgentMark'),
         click: () => onClearAgentMark(filePath),
       }] : []),
-      { type: 'separator' },
+    ];
+    // The open folder itself (#349) is neither renamed nor deleted from here:
+    // the app would be left pointing at a folder that is gone.
+    const changing = isRoot ? [] : [
+      // F2 is only shown here; the tree handles the key itself (#349).
+      ...(typeof onRename === 'function' ? [{
+        label: t('contextMenu.rename'),
+        accelerator: 'F2',
+        registerAccelerator: false,
+        click: () => onRename(filePath),
+      }] : []),
       {
         label: t('contextMenu.delete'),
         click: () => guarded((async () => {
@@ -287,6 +309,13 @@ function createFileContextMenu({
         })(), 'The file could not be deleted'),
       },
     ];
+    // Without the new entries "Open" and the looks share one group, as before.
+    const groups = creating.length > 0
+      ? [opening, creating, looking, changing]
+      : [[...opening, ...looking], changing];
+    return groups
+      .filter((group) => group.length > 0)
+      .flatMap((group, index) => (index === 0 ? group : [{ type: 'separator' }, ...group]));
   }
 
   /**
@@ -295,9 +324,10 @@ function createFileContextMenu({
    */
   function popup(filePath, window, {
     onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null, position = null,
+    onCreate = null, onRename = null, isRoot = false,
   } = {}) {
     const menu = Menu.buildFromTemplate(buildTemplate(filePath, {
-      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges,
+      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges, onCreate, onRename, isRoot,
     }));
     menu.popup({ ...(window ? { window } : {}), ...(position ?? {}) });
     return menu;
