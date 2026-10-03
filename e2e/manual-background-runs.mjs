@@ -6,20 +6,19 @@
 //
 // Result: out/mockup/background-runs-*.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const WORKING = 'Pruefe bitte alle Links im Ordner docs.';
 const WAITING = 'Merk dir bitte eine Notiz.';
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-hintergrund-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-hintergrund-userdata-'));
+const workspace = await makeTempDir('snotra-hintergrund-');
+const userDataDir = await makeTempDir('snotra-hintergrund-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Beispielprojekt\n', 'utf8');
 
@@ -123,6 +122,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

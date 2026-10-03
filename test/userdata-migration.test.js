@@ -120,6 +120,22 @@ test('missing source is a silent no-op without marker', async (t) => {
   assert.deepEqual(log.entries, []);
 });
 
+test('an explicit --user-data-dir is left exactly as it is, even next to a full legacy folder (#688)', async (t) => {
+  const { sourceDir, targetDir } = await makeDirs(t);
+  await seedFullSource(sourceDir);
+  const before = await listing(sourceDir);
+  const log = makeLog();
+
+  const result = await createUserDataMigration({ fs, path, log })
+    .migrateLegacyUserData({ sourceDir, targetDir, explicitUserDataDir: true });
+
+  assert.equal(result.status, 'skipped-explicit-user-data-dir');
+  assert.deepEqual(result.copied, []);
+  assert.equal(await fs.stat(targetDir).catch(() => null), null, 'no folder, no marker, no copy');
+  assert.deepEqual(await listing(sourceDir), before);
+  assert.deepEqual(log.entries, []);
+});
+
 test('identical source and target directories are skipped', async (t) => {
   const { sourceDir } = await makeDirs(t);
   await seedFullSource(sourceDir);

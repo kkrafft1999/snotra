@@ -7,18 +7,17 @@
 //
 // Result: out/mockup/mcp-<dialog>-<locale>-<theme>.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-mcp-dialog-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-mcp-dialog-userdata-'));
+const workspace = await makeTempDir('snotra-mcp-dialog-');
+const userDataDir = await makeTempDir('snotra-mcp-dialog-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example project\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
@@ -102,6 +101,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

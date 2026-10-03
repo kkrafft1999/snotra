@@ -79,12 +79,22 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
   /**
    * @returns {Promise<{status: string, copied: string[], skipped: string[], errors: Array<{file: string|null, message: string}>}>}
    *   status: 'copied' | 'skipped-marker' | 'skipped-target-populated'
-   *         | 'skipped-no-source' | 'skipped-same-dir' | 'failed'
+   *         | 'skipped-no-source' | 'skipped-same-dir'
+   *         | 'skipped-explicit-user-data-dir' | 'failed'
    *   Wirft nie; der App-Start darf an der Migration nicht scheitern.
    */
-  async function migrateLegacyUserData({ sourceDir, targetDir, meta } = {}) {
+  async function migrateLegacyUserData({ sourceDir, targetDir, meta, explicitUserDataDir = false } = {}) {
     const result = { status: 'failed', copied: [], skipped: [], errors: [] };
     try {
+      // The migration repairs the default folder the rename moved. A folder
+      // given with --user-data-dir — a test run, a second profile — was chosen
+      // on purpose and never was that folder; filling it from the real legacy
+      // folder would hand it this machine's chat history and keys (#688).
+      // Nothing is written, not even the marker.
+      if (explicitUserDataDir) {
+        result.status = 'skipped-explicit-user-data-dir';
+        return result;
+      }
       if (!sourceDir || !targetDir) {
         result.status = 'skipped-no-source';
         return result;

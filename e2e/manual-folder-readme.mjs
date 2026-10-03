@@ -9,12 +9,11 @@
 // that scrolls), none (a folder without one), huge (one too large to show),
 // no-folder (first start without a folder).
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
@@ -46,7 +45,7 @@ const LONG = ['# Handbuch', '', ...Array.from({ length: 40 }, (_, i) =>
   `## Abschnitt ${i + 1}\n\nAbsatz ${i + 1}, so umbrochen, wie Dokumente in einem Repository\nmeist umbrochen sind.\n`)].join('\n');
 
 const model = await startFakeModel();
-const base = await mkdtemp(path.join(tmpdir(), 'snotra-folder-readme-'));
+const base = await makeTempDir('snotra-folder-readme-');
 await mkdir(SHOTS, { recursive: true });
 const folders = {
   'aurora-shop': { 'README.md': README, 'AGENTS.md': '# Agents\n', 'package.json': '{}\n', 'src/api/orders.js': '\n', 'docs/architecture.md': '# A\n' },
@@ -81,7 +80,7 @@ const state = (page) => page.evaluate(() => ({
 }));
 
 async function withApp({ workspace }, run) {
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-folder-readme-userdata-'));
+  const userDataDir = await makeTempDir('snotra-folder-readme-userdata-');
   await prepareUserData(userDataDir, { workspace: workspace ?? dirs['aurora-shop'], modelBaseUrl: model.baseUrl });
   if (!workspace) await writeFile(path.join(userDataDir, 'last-folder.json'), JSON.stringify({ path: null }));
   await writeFile(path.join(userDataDir, 'folder-history.json'), JSON.stringify({ paths: Object.values(dirs) }));
@@ -91,7 +90,6 @@ async function withApp({ workspace }, run) {
     await run(snotra.page);
   } finally {
     await snotra.stop?.().catch(() => {});
-    await rm(userDataDir, { recursive: true, force: true });
   }
 }
 
@@ -133,5 +131,4 @@ try {
   });
 } finally {
   await model.close();
-  await rm(base, { recursive: true, force: true });
 }

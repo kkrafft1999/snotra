@@ -8,20 +8,19 @@
 //
 // Result: out/mockup/session-grants-<locale>-{light,dark,revoked,empty}.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
 const PENDING = '#chat-messages .chat-approval-card[data-state="pending"]';
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-grants-look-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-grants-look-userdata-'));
+const workspace = await makeTempDir('snotra-grants-look-');
+const userDataDir = await makeTempDir('snotra-grants-look-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await mkdir(path.join(workspace, 'docs'), { recursive: true });
 await writeFile(path.join(workspace, 'docs', 'release-notes.md'), 'draft\n', 'utf8');
@@ -103,6 +102,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

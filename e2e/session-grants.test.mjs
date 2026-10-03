@@ -5,12 +5,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const PENDING = '#chat-messages .chat-approval-card[data-state="pending"]';
 const state = (page) => page.evaluate(() => window.electronAPI.getToolPermissionState());
@@ -45,8 +44,8 @@ function edit(from, to) {
 
 test('a session approval is listed, used, and revoked one by one', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-grants-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-grants-userdata-'));
+  const workspace = await makeTempDir('snotra-grants-');
+  const userDataDir = await makeTempDir('snotra-grants-userdata-');
   await writeFile(path.join(workspace, 'README.md'), 'one\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
@@ -55,8 +54,6 @@ test('a session approval is listed, used, and revoked one by one', { timeout: 18
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page, app } = snotra;
   await poll(async () => (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,

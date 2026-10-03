@@ -17,12 +17,12 @@
 //
 // Result: out/mockup/sandbox-optout-<locale>-*.png
 
-import { mkdtemp, mkdir, writeFile, rm, stat } from 'node:fs/promises';
-import { tmpdir, homedir } from 'node:os';
+import { mkdir, writeFile, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -31,8 +31,8 @@ const AUTO = 'Write a file outside please.';
 const outsideFile = path.join(homedir(), `snotra-e2e-optout-${process.pid}.txt`);
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-optout-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-optout-userdata-'));
+const workspace = await makeTempDir('snotra-optout-');
+const userDataDir = await makeTempDir('snotra-optout-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
@@ -305,6 +305,4 @@ try {
   await snotra.stop().catch(() => {});
   await model.close();
   await rm(outsideFile, { force: true });
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

@@ -7,12 +7,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const column = (page) => page.evaluate(() => ({
   open: !document.getElementById('app').classList.contains('app--no-preview'),
@@ -26,8 +25,8 @@ const column = (page) => page.evaluate(() => ({
 
 test('the column opens with the folder README and follows every folder switch', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
-  const base = await mkdtemp(path.join(tmpdir(), 'snotra-readme-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-readme-userdata-'));
+  const base = await makeTempDir('snotra-readme-');
+  const userDataDir = await makeTempDir('snotra-readme-userdata-');
   const folders = {
     room: { 'README.md': '# Room\n\nWhat this folder is about.\n', 'main.js': '\n' },
     plain: { 'main.js': '\n', 'AGENTS.md': '# Agents\n' },
@@ -47,8 +46,6 @@ test('the column opens with the folder README and follows every folder switch', 
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
-    await rm(base, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page } = snotra;
 

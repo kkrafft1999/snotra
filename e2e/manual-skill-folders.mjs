@@ -12,12 +12,11 @@
 //
 // Result: out/mockup/skill-folders-<locale>-*.png
 
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -28,9 +27,9 @@ const DATA_FILE = '.agents/data/time-booking-rules.md';
 const BODY_MARK = 'The rules live in assets/rules.md';
 
 const model = await startFakeModel();
-const home = await mkdtemp(path.join(tmpdir(), 'snotra-skill-home-'));
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-skill-ws-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-skill-userdata-'));
+const home = await makeTempDir('snotra-skill-home-');
+const workspace = await makeTempDir('snotra-skill-ws-');
+const userDataDir = await makeTempDir('snotra-skill-userdata-');
 const skillDir = path.join(home, '.snotra', 'skills', 'time-booking');
 const rulesFile = path.join(skillDir, 'assets', 'rules.md');
 await mkdir(SHOTS, { recursive: true });

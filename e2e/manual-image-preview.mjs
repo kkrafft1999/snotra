@@ -8,13 +8,12 @@
 // Result: out/mockup/image-<label>-<state>-<theme>.png, label defaults to
 // "current".
 
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
@@ -171,9 +170,9 @@ const FLOW_SVG = [
 ].join('\n');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-images-'));
-const outside = await mkdtemp(path.join(tmpdir(), 'snotra-images-outside-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-images-userdata-'));
+const workspace = await makeTempDir('snotra-images-');
+const outside = await makeTempDir('snotra-images-outside-');
+const userDataDir = await makeTempDir('snotra-images-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -335,7 +334,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(outside, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

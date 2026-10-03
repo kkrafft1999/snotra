@@ -13,12 +13,11 @@
 // is put together here: the pane from Playwright, the page from
 // `capturePage()`, laid where the view sits.
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
@@ -71,8 +70,8 @@ for (const h of [42, 58, 51, 77, 69, 88, 95]) {
 `;
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-html-shots-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-html-shots-userdata-'));
+const workspace = await makeTempDir('snotra-html-shots-');
+const userDataDir = await makeTempDir('snotra-html-shots-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await mkdir(path.join(workspace, 'reports'), { recursive: true });
 await writeFile(path.join(workspace, 'reports', 'quarterly-report.html'), REPORT);
@@ -170,5 +169,3 @@ await shoot('too-large');
 
 await snotra.stop();
 await model.close();
-await rm(workspace, { recursive: true, force: true });
-await rm(userDataDir, { recursive: true, force: true });

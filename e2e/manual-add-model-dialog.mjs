@@ -9,19 +9,18 @@
 // Result: out/mockup/add-model-<provider>-<theme>.png, plus the end of the long
 // OpenAI-compatible form and two keyboard shots
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const PROVIDERS = ['openai', 'ollama', 'openai-compatible'];
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-add-model-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-add-model-userdata-'));
+const workspace = await makeTempDir('snotra-add-model-');
+const userDataDir = await makeTempDir('snotra-add-model-userdata-');
 await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example project\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
@@ -102,6 +101,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

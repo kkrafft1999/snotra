@@ -9,21 +9,20 @@
 // Result: out/mockup/pdf-<label>-<state>-<theme>.png, label defaults to
 // "current".
 
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 import { BROKEN_PDF, HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const label = process.argv[2] || 'current';
 const SHOTS = path.resolve('out/mockup');
 
 const model = await startFakeModel();
-const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-pdf-'));
-const outside = await mkdtemp(path.join(tmpdir(), 'snotra-pdf-outside-'));
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-pdf-userdata-'));
+const workspace = await makeTempDir('snotra-pdf-');
+const outside = await makeTempDir('snotra-pdf-outside-');
+const userDataDir = await makeTempDir('snotra-pdf-userdata-');
 await mkdir(SHOTS, { recursive: true });
 
 const files = {
@@ -212,7 +211,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(workspace, { recursive: true, force: true });
-  await rm(outside, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }

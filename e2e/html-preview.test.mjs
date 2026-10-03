@@ -16,12 +16,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="12"><rect width="24" height="12" fill="#00759E"/></svg>';
 
@@ -68,8 +67,8 @@ test('HTML preview: isolated, offline, local files only, links, reload, endless 
   const leak = `http://127.0.0.1:${server.address().port}`;
 
   const model = await startFakeModel();
-  const workspace = await mkdtemp(path.join(tmpdir(), 'snotra-html-'));
-  const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-html-userdata-'));
+  const workspace = await makeTempDir('snotra-html-');
+  const userDataDir = await makeTempDir('snotra-html-userdata-');
   const site = path.join(workspace, 'site');
   await mkdir(path.join(site, 'img'), { recursive: true });
   await writeFile(path.join(site, 'probe.html'), hostilePage(leak), 'utf8');
@@ -86,8 +85,6 @@ test('HTML preview: isolated, offline, local files only, links, reload, endless 
     await snotra.stop().catch(() => {});
     await model.close();
     server.close();
-    await rm(workspace, { recursive: true, force: true });
-    await rm(userDataDir, { recursive: true, force: true });
   });
   const { page, app } = snotra;
   const readOpenedLinks = await snotra.captureExternalLinks();

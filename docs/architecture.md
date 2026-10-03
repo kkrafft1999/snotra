@@ -822,8 +822,9 @@ claims the single-instance lock (`claimSingleInstance` in `app-lifecycle.js`,
 #507): a second launch on the same userData folder brings the existing window
 to the front and quits before it has started anything. And it runs the
 one-time userData migration (`services/userdata-migration.js`, taking over from
-the folder of the predecessor identity "Weyouze Anything") — no scattered
-wiring in the handlers. A start-up that throws ends in an error box and
+the folder of the predecessor identity "Weyouze Anything"; skipped when the
+userData folder was given with `--user-data-dir`, #688) — no scattered wiring in
+the handlers. A start-up that throws ends in an error box and
 `app.exit(1)` (`createStartupFailureHandler`, #509) instead of leaving a
 process without a window behind.
 
@@ -1636,8 +1637,14 @@ everything once at startup catches the bulk of it. It takes about three seconds.
 
 - **Driver:** `playwright-core` (`_electron.launch`) as a devDependency. No
   browser download, no second test runner: `node --test` stays.
-- **Isolation:** its own `--user-data-dir` and a working folder created via
-  `mkdtemp`. The settings of the installed app remain untouched.
+- **Isolation:** its own `--user-data-dir` and a working folder, both created
+  via `makeTempDir` in `e2e/helpers/app.mjs`, which removes them when the test
+  process ends — also after a failed launch. The settings of the installed app
+  remain untouched, and an explicit `--user-data-dir` also switches off the
+  one-time migration from the legacy folder; without that, a machine that still
+  has "Weyouze Anything" filled every empty test profile with its real chat
+  history ([#688](https://github.com/kkrafft1999/snotra/issues/688),
+  `e2e/legacy-migration-isolation.test.mjs`).
 - **Model:** `e2e/helpers/fake-model.mjs`, a small OpenAI-compatible SSE server.
   An `openai-compatible` entry points there via its connection's `baseUrl` — no
   API key, no network, and the stream can be slowed down in order to abort it.

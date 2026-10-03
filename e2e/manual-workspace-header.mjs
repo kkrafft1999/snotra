@@ -8,21 +8,20 @@
 //
 // Result: out/mockup/workspace-header-<locale>-<state>-{light,dark}.png
 
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
 const pause = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
 const model = await startFakeModel();
-const parent = await mkdtemp(path.join(tmpdir(), 'snotra-workspace-header-'));
+const parent = await makeTempDir('snotra-workspace-header-');
 const workspace = path.join(parent, 'snotra-promotion');
-const userDataDir = await mkdtemp(path.join(tmpdir(), 'snotra-workspace-header-userdata-'));
+const userDataDir = await makeTempDir('snotra-workspace-header-userdata-');
 await mkdir(SHOTS, { recursive: true });
 for (const dir of ['public', 'scripts', '.github']) await mkdir(path.join(workspace, dir), { recursive: true });
 for (const file of ['index.html', 'firebase.json', 'README.md', '.firebaserc']) {
@@ -125,6 +124,4 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
-  await rm(parent, { recursive: true, force: true });
-  await rm(userDataDir, { recursive: true, force: true });
 }
