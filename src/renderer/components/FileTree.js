@@ -34,6 +34,7 @@ import { createWorkspacePathSource } from '../tree/workspacePaths.js';
 import { initTreeFilter } from './TreeFilter.js';
 import { initTreeActionsMenu } from './TreeActionsMenu.js';
 import { initWorkspaceHeader } from './WorkspaceHeader.js';
+import { pickFolderReadme } from '../utils/startupLayout.js';
 import contracts from '../generated/contracts.js';
 
 // What a quick start chip writes into the chat is the user's own message, so it
@@ -1446,6 +1447,36 @@ export function initFileTree(deps) {
     return { ok: true };
   }
 
+  /**
+   * The open folder's README.md, when it can be shown (#351): a file of the
+   * top level as the tree drew it, read once to make sure. Null when there is
+   * none, or one too large or unreadable — the column does not open for an
+   * error — or when the folder changed while it was read.
+   */
+  async function readableFolderReadme() {
+    if (!appStore.rootPath) return null;
+    const generation = treeGeneration;
+    const files = [...treeContainer.querySelectorAll(':scope > .tree-item')]
+      .filter((row) => row.dataset.isDirectory !== 'true')
+      .map((row) => row.dataset.path);
+    const readmePath = pickFolderReadme(files);
+    if (!readmePath) return null;
+    const probe = await api.readFile(readmePath);
+    if (generation !== treeGeneration || !probe || probe.error) return null;
+    return { path: readmePath, name: basenameOf(readmePath), size: probe.size, modified: probe.modified };
+  }
+
+  /**
+   * Shows the folder's README in the pane (#351) — shown, not selected: the
+   * user did not pick it, so no row is marked and the model is not told about
+   * it as the selected file. A file already on show, or a folder switched
+   * meanwhile, wins.
+   */
+  async function showFolderReadme(readme) {
+    if (!readme || contentPane.openPath() || !isInsideDir(readme.path, appStore.rootPath)) return false;
+    return contentPane.open(readme);
+  }
+
   async function handleDrop(e, destDir, dropRow, depth) {
     e.preventDefault();
     e.stopPropagation();
@@ -2479,6 +2510,9 @@ export function initFileTree(deps) {
     toggleHiddenFiles,
     /** Opens the tree's filter, or takes its field again (#350). */
     openFilter: () => filter.open(),
+    /** The folder's README the column opens with, or null (#351). */
+    readableFolderReadme,
+    showFolderReadme,
     /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
     runPreviewCommand: (name) => contentPane.runCommand(name),
   };
