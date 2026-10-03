@@ -1034,6 +1034,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/read-failures.js` | Why a file is not shown as text: main's reason codes of `fs:readFile` and their catalogue sentences, for the info card and the SVG source ([#641](https://github.com/kkrafft1999/snotra/issues/641)) | `test/file-view-host-dom.test.js`, `test/image-view-dom.test.js` |
 | `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
+| `renderer/file-views/html-view.js` | `html`, `htm`: the page as it runs, in a view the main process lays over the stage; "Preview \| Source", Reload, Open in browser, the notice of what was blocked, a reason instead of an empty column ([#479](https://github.com/kkrafft1999/snotra/issues/479)) | `test/html-view-dom.test.js`, `e2e/html-preview.test.mjs`, `e2e/smoke.test.mjs` |
+| `main/services/html-preview-service.js` | The page's side: its `WebContentsView`, the in-memory session, the `snotra-html:` scheme, what the page may load and where its links lead | `test/html-preview-service.test.js`, `test/html-preview-isolation.test.js` |
 | `renderer/file-views/changes-view.js` | "Show changes": the diff of one or more writes to a file, its states and notes. Not in the registry — no file *is* a diff; the host mounts it on request and adds "Content \| Changes" to any file the conversation on screen changed ([#348](https://github.com/kkrafft1999/snotra/issues/348)) | `test/file-changes-dom.test.js`, `e2e/file-changes.test.mjs` |
 | `renderer/file-views/diff-model.js` | Main's runs to rows: three lines of context, the rest folded into gaps. DOM-free | `test/file-changes-dom.test.js` |
 
@@ -1288,6 +1290,100 @@ name, nothing else.
 - Not included: text selection and search (pdf.js's text layer), printing,
   the ICC profile for CMYK (it would need a synchronous request from the
   worker; colours are converted the simple way).
+
+#### HTML pages ([#479](https://github.com/kkrafft1999/snotra/issues/479))
+
+An `.html` file runs as a page, scripts included — the agent writes
+interactive mockups and reports, and a static rendering would show them
+broken. **It does not run in the app's renderer.** That was decided against
+the obvious candidate, a sandboxed `<iframe>`, because the renderer's CSP
+admits none: `default-src 'none'` with no `frame-src` refuses every frame
+that loads a URL, and an `about:srcdoc` frame inherits `script-src 'self'`
+and runs no inline script. Either would have meant relaxing the app's policy
+for content it does not trust. A `<webview>` would have needed `webviewTag`
+in the window's `webPreferences`. Both stay as they are, pinned by
+`test/html-preview-isolation.test.js`.
+
+```
+html view ─ htmlPreview:open(path) ─▶ main: lexical + realpath check, 1 MB
+    │                                   │ new WebContentsView, laid over the window
+    │ the stage's rect, CSS px          │   own process · in-memory session
+    ├─ htmlPreview:setBounds ─────────▶ │   no preload · sandbox · contextIsolation
+    │  (null while a dialog covers it)  │   disableDialogs · no devTools
+    │                                   ▼
+    │                     loadURL(snotra-html://<host>/<absolute path>)
+    │                                   │ every request
+    │                                   ▼
+    │       snotra-html:  ─▶ protocol handler: readWorkspaceFile (the checks of
+    │                        images and PDFs), 1 MB HTML / 10 MB other, nosniff
+    │       data: blob: about: ─▶ pass
+    │       anything else ─▶ webRequest cancels and lists it
+    │
+    ◀── htmlPreview:event { blocked | open-file | focus-leave | unresponsive | gone }
+```
+
+- **Its own view, process and session.** The page lives in a
+  `WebContentsView` that main adds to the window's `contentView` and places
+  where the renderer says the stage is (`htmlPreview:setBounds`, CSS pixels
+  times the window's zoom). Its session is a partition without `persist:`,
+  so nothing it stores outlives the app, and every page gets a host of its
+  own — no two pages share an origin, and a reopened page starts empty. No
+  preload: the page has no `window.electronAPI`, and `guardIpcMain` (#509)
+  would refuse it anyway.
+- **A scheme of its own.** `snotra-html:` is registered as standard and
+  secure before the app is ready, but handled only in the preview's session.
+  The URL carries the file's **absolute** path, so `../../..` or `/etc/x`
+  resolve to paths outside the folder and are refused by name — a URL rooted
+  at the folder would clamp them to it without a word. Each file goes through
+  `readWorkspaceFile`, the same check as images and PDFs (inside the folder
+  lexically and after `realpath`, a regular file, a size limit), and comes
+  with a content type from a fixed table and `X-Content-Type-Options:
+  nosniff`. A root-relative `/style.css` therefore means the disk's root, not
+  the folder's, and is refused: a page that wants its stylesheet writes it
+  relative.
+- **No network.** `webRequest.onBeforeRequest` cancels every request that is
+  not `snotra-html:`, `data:`, `blob:` or `about:` and records it for the
+  notice — fonts, scripts, images, `fetch`, beacons, WebSockets. What does
+  not pass `webRequest` (WebRTC, a preconnect) meets a proxy that leads
+  nowhere and the `disable_non_proxied_udp` WebRTC policy. The spell checker
+  is off, since it would fetch dictionaries. Every permission is refused, and
+  so is every download.
+- **Links after a click only.** Popups are always denied. A navigation of the
+  main frame never happens inside the view: within a second of a mouse or key
+  input (`input-event`, which page script cannot fake), a link to another
+  HTML file of the folder is reported to the renderer, which opens it through
+  the tree like any other file — the `#fragment` goes along — and a web
+  address goes to `shell.openExternal`. Without that input, both are refused
+  and listed: `location = 'https://…?' + document.body.innerText` must not
+  open a tab. Anchors within the page are the page's own business, and so
+  are frames that show the page's own files.
+- **What covers it.** A native view paints above everything of the window,
+  so the renderer hides it (`setBounds(null)`) while a dialog of the app is
+  open — `.modal` and `.add-model-overlay`, watched by a MutationObserver —
+  while Source is on show, and while the stage has no room. A ResizeObserver
+  and a look every 250 ms follow the stage.
+- **Keyboard.** The stage is a Tab stop; its focus is handed to the page.
+  Tab inside the page stays the page's; **F6** brings the focus back and on
+  to the next element after the stage (Shift+F6: before it). The stage keeps
+  2 px of its edge free of the page, so its focus ring stays visible.
+- **Changes on disk.** The view keeps no bytes. `update()` and `revalidate()`
+  ask main to compare: the page, every file it was served and every file it
+  missed are checked by size and mtime, and the page reloads when any of them
+  differs. The scroll position is read before and restored after, both in an
+  isolated world the page cannot see. A page that does not answer within
+  0.5 s — an endless loop — gets its process ended and a fresh one; the app's
+  renderer is a different process and stays responsive throughout.
+- **States.** An empty file and a file the preview cannot show (too large,
+  gone, outside the folder, no folder, no view) say so in the column; Reload
+  tries again and Open in browser (`shell.openPath`, HTML files of the folder
+  only) still works. A page that hangs or ended says so above the page, with
+  a Reload of its own.
+- **Chat links.** The sanitizer keeps a chat link to an HTML file — relative,
+  absolute, a drive path, a `file:` URL — as `data-workspace-href` with
+  `href="#"`; a click opens it in the preview column and brings the column
+  back. Every other non-web link still loses its `href`.
+- Not included: opening the preview by itself when the agent writes an HTML
+  file, a per-page opt-in to the network, printing.
 
 ### Two halves: workspace and chat ([#223](https://github.com/kkrafft1999/snotra/issues/223))
 

@@ -6306,6 +6306,217 @@ select.modal-input {
   color: var(--ds-error);
 }
 
+/* ── HTML pages in the file preview (#479) ───────────────────────────────
+ * The page is a native view of the main process, laid over the stage;
+ * nothing of the app can paint above it. html-view.js keeps STAGE_INSET_PX
+ * of the stage's edge free of the page, so that the focus ring drawn inside
+ * that edge stays visible while the page has the keyboard. */
+.html-view,
+.html-view__source {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Room under the header, which the page would otherwise touch. */
+.html-view {
+  padding-top: 12px;
+}
+
+.html-view[hidden],
+.html-view__source[hidden],
+.html-view__stage[hidden],
+.html-view__notice[hidden],
+.html-view__notice-row[hidden],
+.html-view__blocked[hidden],
+.html-view__notice-button[hidden],
+.html-view__source-text[hidden] {
+  display: none;
+}
+
+.html-view__stage {
+  flex: 1;
+  min-height: 0;
+  margin: 0 16px 16px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-paper-ground);
+}
+
+.html-view__stage:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
+.html-view__notice {
+  margin: 0 16px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-base);
+}
+
+.html-view__notice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.html-view__notice-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.html-view__notice-text--health {
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.html-view__flash {
+  color: var(--text-muted-strong);
+}
+
+/* Rows below a visible row keep their distance; a hidden one leaves none. */
+.html-view__notice > :not([hidden]) ~ .html-view__notice-row:not([hidden]) {
+  margin-top: 8px;
+}
+
+.html-view__notice-button {
+  min-height: var(--ds-touch-min);
+  padding: 0 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast);
+}
+
+.html-view__notice-button:hover {
+  background: var(--ds-blue-soft);
+}
+
+/* The list of what was blocked: the reason in a fixed column, the address
+ * after it on one line, cut with an ellipsis and whole in the tooltip. Small
+ * secondary type on --ds-grey-card takes --text-muted-strong (#610). */
+.html-view__blocked {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  max-height: 160px;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  overflow: auto;
+  border-top: 1px solid var(--ds-grey-divider);
+  list-style: none;
+}
+
+.html-view__blocked-item {
+  display: contents;
+}
+
+.html-view__blocked-reason {
+  color: var(--text-muted-strong);
+}
+
+.html-view__blocked-url {
+  overflow: hidden;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  line-height: var(--ds-line-height-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.html-view__blocked-more {
+  grid-column: 1 / -1;
+  color: var(--text-muted-strong);
+}
+
+.html-view__message {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-base);
+}
+
+.html-view__message[hidden] {
+  display: none;
+}
+
+.html-view__message-title {
+  max-width: 380px;
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-base);
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.html-view__message-detail {
+  max-width: 380px;
+}
+
+.html-view__source-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Reload and Open in browser: the pill of the PDF tools. */
+.html-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-bg);
+}
+
+.html-tools__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.html-tools__button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.html-tools__button:hover {
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
 /* ── File Info (binary files) ── */
 
 #file-info {

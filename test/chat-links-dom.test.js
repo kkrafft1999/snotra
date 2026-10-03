@@ -18,6 +18,8 @@ const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 let harness = null;
 /** Pro Test austauschbar, damit auch ein Fehlschlag von openExternal pruefbar ist. */
 let openExternalImpl = async () => ({ ok: true });
+/** The same for a link to an HTML file of the workspace (#479). */
+let openWorkspaceImpl = async () => ({ ok: true });
 
 async function getHarness() {
   if (harness) return harness;
@@ -26,6 +28,7 @@ async function getHarness() {
   const { appStore } = await importRenderer('state', 'store.js');
 
   const opened = [];
+  const workspaceOpens = [];
   const api = {
     openExternal: async (href) => { opened.push(href); return openExternalImpl(href); },
     onChatDelta: () => {},
@@ -50,10 +53,15 @@ async function getHarness() {
     syncChatTitle() {},
     onWorkspaceFileWritten() {},
     approvalCards: { mount() {}, beginRun() {}, reset() {} },
+    openWorkspaceFile: async (path, options) => {
+      workspaceOpens.push({ path, options });
+      return openWorkspaceImpl(path);
+    },
   });
 
   harness = {
     opened,
+    workspaceOpens,
     appStore,
     /**
      * Zeigt eine Antwort mit Links an. Das Markup ist das, was DOMPurify in der
@@ -67,7 +75,10 @@ async function getHarness() {
     },
     reset() {
       opened.length = 0;
+      workspaceOpens.length = 0;
       openExternalImpl = async () => ({ ok: true });
+      openWorkspaceImpl = async () => ({ ok: true });
+      appStore.rootPath = '/ws';
       appStore.chatMessages = [];
       appStore.chatTokenUsage = { prompt: 0, completion: 0, total: 0 };
       chat.renderChatMessages();
@@ -178,4 +189,50 @@ test('wirft der Main-Prozess, bleibt der Klick trotzdem beantwortet', async () =
   await flush();
 
   assert.equal(document.getElementById('chat-token-usage-value').textContent, 'IPC weg');
+});
+
+// ── Links to HTML files of the workspace (#479) ───────────────────────────
+// What the sanitizer leaves of `[Bericht](out/report.html)` in a chat answer:
+// the path in `data-workspace-href`, `#` as the address.
+const htmlLink = (target, text) =>
+  `<a href="#" rel="noopener noreferrer" data-workspace-href="${target}">${text}</a>`;
+
+test('a link to an HTML file opens it in the preview, not in the browser', async () => {
+  const chat = await getHarness();
+  chat.showAnswer(`Siehe ${htmlLink('out/report.html#summary', 'Bericht')} und ${htmlLink('/ws/index.htm', 'Start')}.`);
+
+  const event = clickOn(linkIn('Bericht'));
+  clickOn(linkIn('Start'));
+  await flush();
+
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(chat.workspaceOpens, [
+    { path: '/ws/out/report.html', options: { fragment: 'summary' } },
+    { path: '/ws/index.htm', options: { fragment: '' } },
+  ]);
+  assert.deepEqual(chat.opened, [], 'nothing went to the browser');
+});
+
+test('a middle click on it takes the same way', async () => {
+  const chat = await getHarness();
+  chat.showAnswer(htmlLink('report.html', 'Bericht'));
+  const event = new window.MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
+  linkIn('Bericht').dispatchEvent(event);
+  await flush();
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(chat.workspaceOpens.map((entry) => entry.path), ['/ws/report.html']);
+});
+
+test('one outside the folder, or not there, says so in the status line', async () => {
+  const chat = await getHarness();
+  openWorkspaceImpl = async (path) => ({ ok: false, reason: path.startsWith('/ws/') ? 'not-found' : 'outside' });
+  chat.showAnswer(`${htmlLink('../other/x.html', 'Draussen')} ${htmlLink('gone.html', 'Weg')}`);
+
+  clickOn(linkIn('Draussen'));
+  await flush();
+  assert.equal(document.getElementById('chat-token-usage-value').textContent, '../other/x.html is outside the open folder.');
+
+  clickOn(linkIn('Weg'));
+  await flush();
+  assert.equal(document.getElementById('chat-token-usage-value').textContent, 'gone.html does not exist in the open folder.');
 });

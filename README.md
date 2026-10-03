@@ -492,6 +492,17 @@ three platforms the same way.
   asks for its password right there; it is not stored. JavaScript inside a PDF
   never runs and its links do nothing. PDFs up to 50 MB from the open folder are
   shown; for anything else the column says why not.
+- **Viewing HTML pages:** an `.html` file opens in the preview as the page it
+  is — scripts run, so an interactive mockup or report works as it would in a
+  browser. **Preview | Source** switches to the text. The page stays offline
+  and only loads files from the open folder: a stylesheet or a script next to
+  it works, anything from the web or outside the folder is blocked, and a
+  notice above the page lists what was. A link to another HTML file of the
+  folder opens it in the preview, a web link opens in your browser — both only
+  when you click them. The page reloads when it or one of its files changes;
+  **Reload** and **Open in browser** sit in the header, and **F6** takes the
+  keyboard out of the page again. A link to an HTML file in a chat answer
+  opens it in the preview too. HTML files up to 1 MB are shown.
 - **Pasting screenshots:** an image on the clipboard (macOS `Cmd+Ctrl+Shift+4`,
   Windows Snipping Tool) lands as an attachment above the input line with
   `Cmd/Ctrl+V` — with preview, file size and a button to remove it. The typed

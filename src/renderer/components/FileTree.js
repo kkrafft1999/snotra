@@ -1675,6 +1675,19 @@ export function initFileTree(deps) {
     return openFromPreview(path, { changes: { ids: list } });
   }
 
+  /**
+   * A link in the chat to a file of the workspace (#479): opens it in the
+   * preview column — brought back if it is hidden — and selects its row.
+   * The `#fragment` reaches the view as it would from a link in a view.
+   */
+  function openWorkspaceFile(path, { fragment = '' } = {}) {
+    if (!path || !appStore.rootPath || !isInsideDir(path, appStore.rootPath)) {
+      return Promise.resolve({ ok: false, reason: 'outside' });
+    }
+    revealContentPane?.();
+    return contentPane.openFromLink(path, { fragment });
+  }
+
   /** "Show changes" under a message of the chat: `{ relativePath, changes }`. */
   function showFileChanges({ relativePath, changes } = {}) {
     const path = markPathFor(appStore.rootPath, relativePath);
@@ -2474,6 +2487,7 @@ export function initFileTree(deps) {
     syncAgentMarks,
     /** Opens the diff of a file the chat changed, from under a message (#348). */
     showFileChanges,
+    openWorkspaceFile,
     /** Hidden files on or off (#436); resolves once the tree is redrawn. */
     setShowHiddenFiles,
     toggleHiddenFiles,

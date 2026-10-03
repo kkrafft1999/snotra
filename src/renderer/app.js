@@ -368,6 +368,7 @@ const chatStream = initChatStream({
   onWorkspaceFileRead: (relativePath, chatId) => fileTree.recordAgentFile('read', relativePath, chatId),
   onChatSwitched: () => fileTree.syncAgentMarks(),
   showFileChanges: (request) => fileTree.showFileChanges(request),
+  openWorkspaceFile: (path, options) => fileTree.openWorkspaceFile(path, options),
   approvalCards,
   // Sprung von einer Skill-Zeile der Token-Aufschlüsselung zu ihrem Schalter
   // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert

@@ -268,6 +268,16 @@ function ask(page, question) {
   }, question);
 }
 
+/**
+ * An HTML file for the preview (#479): its script writes into the page and
+ * looks for the app's bridge, and an image from the web must stay unloaded.
+ * The thorough walk through every state is e2e/html-preview.test.mjs.
+ */
+const HTML_PAGE = '<!doctype html><p id="out">statisch</p>'
+  + '<img src="https://img.snotra-smoke.invalid/seite.png" alt="">'
+  + '<script>document.getElementById("out").textContent = "gerechnet " + (6 * 7)'
+  + ' + " " + typeof window.electronAPI + " " + (window.top === window);</script>';
+
 async function createWorkspace() {
   const dir = await mkdtemp(path.join(tmpdir(), 'snotra-smoke-ws-'));
   await writeFile(path.join(dir, 'README.md'), README, 'utf8');
@@ -280,6 +290,8 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({ pages: 3, hostile: true }));
   // #634: left at its password prompt, it must not hold up the tree.
   await writeFile(path.join(dir, 'notizen', 'geschuetzt.pdf'), makeEncryptedPdf({ password: 'secret' }));
+  // #479: a page whose script runs, isolated, and whose image from the web is refused.
+  await writeFile(path.join(dir, 'notizen', 'seite.html'), HTML_PAGE, 'utf8');
   // The project source of the AGENTS.md chain (#212) and next to it the bait
   // under `.agents/`, which no longer counts since #432. The global sources
   // live in the real home of whoever runs this and are deliberately not
@@ -547,6 +559,31 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.deepEqual(pdfRequests, []);
   assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'pdf.js stayed inside the CSP');
   step('PDF-Vorschau geprueft');
+
+  // --- HTML as a live page (#479) --------------------------------------------
+  // The page runs in a view of its own, not in this window: its script runs,
+  // it sees no bridge and no parent, the image from the web is refused and
+  // listed, and the app's CSP saw nothing of it.
+  const htmlView = () => app.evaluate(async ({ BrowserWindow }) => {
+    const view = BrowserWindow.getAllWindows()[0].contentView.children
+      .find((v) => v.webContents?.getURL().startsWith('snotra-html:'));
+    if (!view) return null;
+    const text = await view.webContents.executeJavaScript('document.getElementById("out")?.textContent ?? ""');
+    return { visible: view.getVisible(), text };
+  });
+  await openInTree('seite.html');
+  const live = await poll(async () => {
+    const state = await htmlView();
+    return state?.visible && state.text.startsWith('gerechnet') ? state : null;
+  }, { what: 'laufende HTML-Seite in der Vorschau' });
+  assert.equal(live.text, 'gerechnet 42 undefined true');
+  const blockedHtml = await poll(() => page.evaluate(() => {
+    const text = document.querySelector('.html-view__notice-text--blocked')?.textContent ?? '';
+    return /blockiert/.test(text) ? text : null;
+  }), { what: 'Hinweis auf das blockierte Bild' });
+  assert.match(blockedHtml, /^1 Anfrage blockiert\./);
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'the app window loaded nothing of it');
+  step('HTML-Vorschau geprueft');
 
   // A protected PDF left at its password prompt (#634). A write into its
   // folder used to start a second load that waited for a password inside the

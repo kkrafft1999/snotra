@@ -47,6 +47,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // PDF in the file preview (#346): the file's bytes, and the data pdf.js asks for.
   readWorkspacePdf: (pdfPath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_PDF, pdfPath),
   readPdfAsset: (kind, filename) => ipcRenderer.invoke(REQ.PDF_READ_ASSET, kind, filename),
+  // An HTML file as a live page (#479), in a view main lays over the preview.
+  // The renderer names the file and the place; main decides the rest.
+  htmlPreview: {
+    open: (filePath, options) => ipcRenderer.invoke(REQ.HTML_PREVIEW_OPEN, filePath, {
+      fragment: typeof options?.fragment === 'string' ? options.fragment : '',
+    }),
+    setBounds: (id, bounds) => ipcRenderer.invoke(REQ.HTML_PREVIEW_SET_BOUNDS, id, bounds ? {
+      x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+    } : null),
+    reload: (id) => ipcRenderer.invoke(REQ.HTML_PREVIEW_RELOAD, id),
+    check: (id) => ipcRenderer.invoke(REQ.HTML_PREVIEW_CHECK, id),
+    focus: (id) => ipcRenderer.invoke(REQ.HTML_PREVIEW_FOCUS, id),
+    close: (id) => ipcRenderer.invoke(REQ.HTML_PREVIEW_CLOSE, id),
+    openInBrowser: (filePath) => ipcRenderer.invoke(REQ.HTML_PREVIEW_OPEN_IN_BROWSER, filePath),
+    onEvent: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on(PUSH.HTML_PREVIEW_EVENT, listener);
+      return () => ipcRenderer.removeListener(PUSH.HTML_PREVIEW_EVENT, listener);
+    },
+  },
   moveItem: (sourcePath, destDir) => ipcRenderer.invoke(REQ.FS_MOVE_ITEM, sourcePath, destDir),
   // #349: the name as typed; main checks it and the path.
   createItem: (parentDir, name, kind) => ipcRenderer.invoke(REQ.FS_CREATE_ITEM, parentDir, name, kind),

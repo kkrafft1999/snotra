@@ -1044,6 +1044,36 @@ same however narrow the conditions around it were.
 - **What stays from #427/#429.** Reading through an absolute path into a skill
   folder, and the card naming the skill of a read target in `skill:` spelling.
 
+### Revision: HTML pages in the preview (#479)
+
+Decided on 2026-10-03. The preview shows an `.html` file as a live page,
+scripts included. A page in the open folder is untrusted content — the agent
+may have written it under a prompt injection, or it came with a cloned
+repository — so it gets nothing of the app:
+
+- **Not in the renderer.** It runs in a `WebContentsView` of its own: its own
+  process, an in-memory session, no preload, `sandbox`, `contextIsolation`,
+  dialogs disabled. The renderer's CSP and the window's `webPreferences` are
+  unchanged; `test/html-preview-isolation.test.js` pins both. `guardIpcMain`
+  (#509) refuses any IPC from it.
+- **Nothing leaves the machine.** Every request that is not the page's own
+  scheme or inline data is cancelled — this is what keeps a page from sending
+  workspace content anywhere. A proxy that leads nowhere and the WebRTC policy
+  catch what `webRequest` does not see. The page is told nothing; the user
+  is, in a notice that lists every refused request.
+- **Only the open folder.** Every file the page loads goes through the same
+  check as an image in the chat (#244): inside the folder lexically and after
+  `realpath`, so a symlink out of it is refused, with a size limit.
+- **No action without the user.** No permission, no download, no popup. A
+  link leads out of the page only right after a click or a key press in it;
+  a web address then opens in the default browser, like a link in a chat
+  answer.
+
+Not covered: a DNS prefetch the page asks for through `<link rel=dns-prefetch>`
+may still resolve a host name — no content goes with it. "Open in browser"
+hands the file to the system browser on the user's click, where these limits
+no longer apply; that is the point of the button.
+
 ## 10. Comparison with the official references
 
 Retrieved 2026-09-05. What the right-hand column adopts are Snotra decisions,

@@ -139,6 +139,15 @@ function configureDomPurify() {
   // und selbst wenn das ausbliebe, laesst die CSP (`img-src 'self' data:`)
   // kein `d:` zu. Geprueft wird der Pfad ohnehin erst im Main-Prozess.
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    // A chat answer's link to an HTML file (#479) — `file:` or a drive path,
+    // which DOMPurify would drop as unknown schemes — reaches the hook below.
+    // It never stays an `href`: the hook turns it into `data-workspace-href`.
+    if (data.attrName === 'href') {
+      if (node.tagName === 'A' && !keepRelativeLinks && contracts.htmlLinkTargetOf(data.attrValue)) {
+        data.forceKeepAttr = true;
+      }
+      return;
+    }
     if (data.attrName !== 'src') return;
     // `<img>` is the only element whose `src` survives (#423): it is moved
     // aside before anything loads and resolved by the main process (#402).
@@ -163,6 +172,14 @@ function configureDomPurify() {
           node.setAttribute('data-workspace-href', href.trim());
         }
         node.removeAttribute('href');
+        // In the chat only a link to an HTML file of the workspace is kept
+        // (#479): ChatStream opens it in the preview column. `#` keeps it a
+        // link for the keyboard; the click never follows it.
+        if (!keepRelativeLinks && contracts.htmlLinkTargetOf(href)) {
+          node.setAttribute('data-workspace-href', href.trim());
+          node.setAttribute('href', '#');
+          node.removeAttribute('target');
+        }
       }
     }
   });

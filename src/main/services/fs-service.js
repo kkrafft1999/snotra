@@ -3265,6 +3265,8 @@ function createFsService({
     readFilePreview,
     readWorkspaceImage,
     readWorkspacePdf,
+    // The same checks for any file an HTML page loads (#479).
+    readWorkspaceFile: readWorkspaceBytes,
   };
 }
 
