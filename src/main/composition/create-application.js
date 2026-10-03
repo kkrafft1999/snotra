@@ -728,6 +728,7 @@ function createApplication({
   });
   registerFsHandlers({
     ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,
+    getWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({

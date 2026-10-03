@@ -114,6 +114,24 @@ function createFilesystemIpcAdapter({
         return { error: err.message };
       }
     },
+    // New file or folder, and rename (#349). The folder or the entry is bound
+    // like every path here; the name is checked in the service, which also
+    // keeps it from leaving the folder — no separators, no `..`.
+    async createItem(parentDir, name, kind) {
+      const parent = await boundPath(parentDir);
+      if (parent.error) return { error: parent.error, reason: parent.reason };
+      return fsService.createItem(parent.absPath, name, kind);
+    },
+    async renameItem(itemPath, newName) {
+      const source = await boundPath(itemPath);
+      if (source.error) return { error: source.error, reason: source.reason };
+      // The open folder itself has no row to rename, and renaming it from
+      // under the app would leave everything pointing at the old name.
+      if (path.resolve(getActiveWorkspaceRoot()) === source.absPath) {
+        return { error: 'The workspace folder itself', reason: 'root' };
+      }
+      return fsService.renameItem(source.absPath, newName);
+    },
     // Zählt einen Import, ohne etwas zu schreiben (#101).
     async inspectImport(sourcePaths, destDir) {
       const prepared = await prepareImport(sourcePaths, destDir);
