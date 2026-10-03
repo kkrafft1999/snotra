@@ -1,4 +1,6 @@
-const { app, ipcMain, dialog, safeStorage, Menu, shell, clipboard } = require('electron');
+const {
+  app, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView,
+} = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
 // Nur fuer die Datei-Watcher (Issues #126, #158): fs/promises kennt weder
@@ -16,6 +18,7 @@ const { createUserDataMigration } = require('./services/userdata-migration');
 const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
 const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
+const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
 // "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
@@ -26,6 +29,11 @@ const { guardIpcMain } = require('./ipc/trusted-sender');
 // app.setName() weiterhin "Electron" stehen. Das ist ein bekanntes macOS-
 // Limit, kein Bug der App.
 app.setName(APP_NAME);
+
+// The scheme of HTML pages in the preview (#479). Privileges can only be
+// given before the app is ready; the handler lives in the preview's own
+// session alone, so the app's window cannot load anything through it.
+protocol.registerSchemesAsPrivileged([HTML_PREVIEW_SCHEME_PRIVILEGES]);
 
 const DEFAULT_PROVIDER = 'openai';
 
@@ -94,6 +102,8 @@ function start() {
       Menu,
       shell,
       clipboard,
+      session,
+      WebContentsView,
       REQ,
       PUSH,
       LIMITS,

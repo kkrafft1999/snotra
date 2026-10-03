@@ -475,6 +475,8 @@ export function createFileViewHost({
 
   return {
     open,
+    /** Opens a file through the tree, with a `#fragment` for its view (#479). */
+    openFromLink: openFromView,
     refresh,
     revalidate,
     close,

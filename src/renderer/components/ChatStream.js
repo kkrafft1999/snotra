@@ -46,6 +46,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
 // per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
+import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
 const { CHAT_ACTIVATION, coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
@@ -136,6 +137,9 @@ export function initChatStream({
   onChatSwitched,
   // Opens the diff of `{ relativePath, changes }` in the preview (#348).
   showFileChanges = () => {},
+  // Opens a file of the workspace in the preview column (#479):
+  // (absolutePath, { fragment }) → { ok, reason? }.
+  openWorkspaceFile = async () => ({ ok: false, reason: 'not-found' }),
   approvalCards,
   openSkillSettings,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
@@ -1539,6 +1543,14 @@ export function initChatStream({
   function onChatLinkClick(e) {
     const a = e.target.closest('a');
     if (!a) return;
+    // A link to an HTML file of the workspace opens in the preview (#479),
+    // not in the browser; the sanitizer left it as `data-workspace-href`.
+    const workspaceHref = a.getAttribute('data-workspace-href');
+    if (workspaceHref !== null) {
+      e.preventDefault();
+      void openWorkspaceLink(workspaceHref);
+      return;
+    }
     const href = a.getAttribute('href');
     if (!isOpenableChatLink(href)) return;
     e.preventDefault();
@@ -1546,6 +1558,34 @@ export function initChatStream({
       if (!result.ok) flashTokenUsageNote(result.error);
     });
   }
+  /**
+   * Where a chat link to an HTML file points (#479): a relative path lies
+   * under the open folder, an absolute one is taken as written. Whether it is
+   * inside the folder decides the tree, which opens it.
+   */
+  function workspaceLinkPath(target, root) {
+    const raw = target.path;
+    if (/^[A-Za-z]:[\\/]/.test(raw)) return raw.replace(/\//g, '\\');
+    if (raw.startsWith('/')) return raw;
+    return resolveNative(root, raw.replace(/\\/g, '/'));
+  }
+
+  async function openWorkspaceLink(raw) {
+    const target = contracts.htmlLinkTargetOf(raw);
+    const root = appStore.rootPath;
+    let result = { ok: false, reason: 'not-found' };
+    if (target && root) {
+      try {
+        result = await openWorkspaceFile(workspaceLinkPath(target, root), { fragment: target.fragment });
+      } catch {
+        result = { ok: false, reason: 'not-found' };
+      }
+    }
+    if (result?.ok || result?.reason === 'stale') return;
+    const path = target?.path ?? raw;
+    flashTokenUsageNote(t(result?.reason === 'outside' ? 'chat.link.fileOutside' : 'chat.link.fileNotFound', { path }));
+  }
+
   chatMessagesEl.addEventListener('click', onChatLinkClick);
   // A middle click is no `click`: it would go to the window-open handler,
   // where a failure has no way back to the user (#595).

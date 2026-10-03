@@ -57,6 +57,8 @@ const { createUpdateAdapter, createUpdateCheck } = require('../adapters/update-a
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createPdfAssetReader } = require('../services/pdf-assets');
+const { createHtmlPreviewService } = require('../services/html-preview-service');
+const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
 const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
@@ -133,6 +135,13 @@ function createApplication({
    * update dialog over the window it takes screenshots of.
    */
   env = process.env,
+  /**
+   * Electron's `session` and `WebContentsView`, for HTML files as live pages
+   * (#479). Without them the channels stay unregistered and the HTML view
+   * says that the preview could not be started.
+   */
+  session = null,
+  WebContentsView = null,
 }) {
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
@@ -730,6 +739,23 @@ function createApplication({
     ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,
     getWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
+  if (session && WebContentsView && shell) {
+    const htmlPreview = createHtmlPreviewService({
+      session,
+      WebContentsView,
+      shell,
+      getMainWindow,
+      getWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+      readWorkspaceFile: fsService.readWorkspaceFile,
+      resolveCheckedWorkspacePath: filesystem.resolveCheckedWorkspacePath,
+      stat: (absPath) => fs.stat(absPath),
+      push: (payload) => {
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) win.webContents.send(PUSH.HTML_PREVIEW_EVENT, payload);
+      },
+    });
+    registerHtmlPreviewHandlers({ ipcMain, htmlPreview, REQ });
+  }
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({
     ipcMain,

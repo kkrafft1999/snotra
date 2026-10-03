@@ -254,6 +254,32 @@ open:
    arrows read each entry as its name and folder; the count is read when it
    changes.
 
+### HTML pages in the preview
+
+`e2e/html-preview.test.mjs` drives the page through the main process: its
+isolation, the blocked requests, links after a click, a reload on change and
+an endless loop. What it cannot drive is the real keyboard and mouse on a
+native view, which differs per platform (#479); the look script
+`e2e/manual-html-preview.mjs` photographs the states. With a folder that holds
+an HTML file with a stylesheet next to it and a link to the web:
+
+1. Click the file. The page appears inside the column's frame, styled; the
+   notice above it counts what was blocked, **Show** lists it.
+2. Drag the divider between chat and preview, hide and show the sidebar and
+   the preview column (`Cmd+B` and the title bar buttons), resize the
+   window: the page follows the frame without lagging behind or spilling over.
+3. Open *Settings*: the page disappears while the dialog is open and comes
+   back when it closes. Open the image lightbox from a chat answer: the same.
+4. `Tab` from the header tools onto the frame: the blue ring shows around the
+   page, and `Tab` now moves through the page's own links. `F6` brings the
+   focus back to the app; `Shift+F6` to the tool before the frame.
+5. Click the web link: the default browser opens it. Click **Open in
+   browser**: the file opens in the default browser.
+6. Change the stylesheet in an editor: the page reloads where it was scrolled
+   to.
+7. Light and dark: the frame and the notice follow the theme, the page is
+   shown as authored.
+
 ## Publishing the release
 
 **Only the tag** is pushed — the state itself is already on `main` through the

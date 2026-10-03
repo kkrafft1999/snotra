@@ -28,6 +28,19 @@ const REQUEST_CHANNELS = Object.freeze({
    */
   FS_READ_WORKSPACE_PDF: 'fs:readWorkspacePdf',
   PDF_READ_ASSET: 'pdf:readAsset',
+  /**
+   * An HTML file as a live page (#479), in a view of its own that main lays
+   * over the preview column. The renderer names the file and says where the
+   * view goes; what the page may load, and where its links lead, main
+   * decides. `HTML_PREVIEW_OPEN_IN_BROWSER` hands the file to the system.
+   */
+  HTML_PREVIEW_OPEN: 'htmlPreview:open',
+  HTML_PREVIEW_SET_BOUNDS: 'htmlPreview:setBounds',
+  HTML_PREVIEW_RELOAD: 'htmlPreview:reload',
+  HTML_PREVIEW_CHECK: 'htmlPreview:check',
+  HTML_PREVIEW_FOCUS: 'htmlPreview:focus',
+  HTML_PREVIEW_CLOSE: 'htmlPreview:close',
+  HTML_PREVIEW_OPEN_IN_BROWSER: 'htmlPreview:openInBrowser',
   FS_MOVE_ITEM: 'fs:moveItem',
   /** New file or folder, and rename, from the tree (#349); main checks path and name. */
   FS_CREATE_ITEM: 'fs:createItem',
@@ -199,6 +212,13 @@ const PUSH_CHANNELS = Object.freeze({
   FS_CLEAR_AGENT_MARK: 'fs:clear-agent-mark',
   /** "Show changes" in the context menu of a file (#348). */
   FS_SHOW_CHANGES: 'fs:show-changes',
+  /**
+   * What happened in an HTML page (#479): `{ id, type, … }` with type
+   * `blocked` (the refused requests so far), `open-file` (a link to another
+   * file, after a click), `focus-leave` (F6 inside the page), `loaded`,
+   * `unresponsive`, `responsive` and `gone`.
+   */
+  HTML_PREVIEW_EVENT: 'htmlPreview:event',
   /**
    * "New File…" / "New Folder…" / "Rename…" in the context menu (#349): the
    * renderer opens the name field in the tree. Payloads { path, kind } — the
