@@ -421,9 +421,16 @@ test('a reload keeps the scroll position; a page that does not answer gets a fre
   contents.scroll = [0, 480];
   await env.service.reload(result.id);
   assert.equal(contents.loaded.length, 2);
-  contents.emit('did-finish-load');
+  // As soon as the document is parsed, and once more when all is loaded.
+  contents.emit('dom-ready');
   assert.equal(contents.isolated.at(-1).code, 'window.scrollTo(0, 480)');
   assert.notEqual(contents.isolated.at(-1).worldId, 0, 'not in the page\'s own world');
+  contents.isolated.length = 0;
+  contents.emit('did-finish-load');
+  assert.equal(contents.isolated.at(-1).code, 'window.scrollTo(0, 480)');
+  contents.isolated.length = 0;
+  contents.emit('dom-ready');
+  assert.deepEqual(contents.isolated, [], 'a later document of the page is not scrolled');
 
   contents.stuck = true;
   await env.service.reload(result.id);

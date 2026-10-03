@@ -399,14 +399,20 @@ function createHtmlPreviewService({
       if (main && !main.isDestroyed()) main.webContents.focus();
       push({ id: page.host, type: 'focus-leave', reverse: input.shift === true });
     });
+    // The position comes back as soon as the document is parsed, so the page
+    // does not show its top while images and fonts load, and once more when
+    // everything is in, since they may have moved what lies at that spot.
+    const restore = (scroll) => {
+      if (!scroll) return;
+      const [x, y] = scroll;
+      contents.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD_ID, [{ code: `window.scrollTo(${x}, ${y})` }])
+        .catch(() => {});
+    };
+    contents.on('dom-ready', () => restore(page.restoreScroll));
     contents.on('did-finish-load', () => {
       const scroll = page.restoreScroll;
       page.restoreScroll = null;
-      if (scroll) {
-        const [x, y] = scroll;
-        contents.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD_ID, [{ code: `window.scrollTo(${x}, ${y})` }])
-          .catch(() => {});
-      }
+      restore(scroll);
       push({ id: page.host, type: 'loaded' });
     });
     contents.on('unresponsive', () => {

@@ -208,11 +208,23 @@ test('HTML preview: isolated, offline, local files only, links, reload, endless 
   // ── A change on disk reloads, the scroll position stays ──────────────────
   await inPage('window.scrollTo(0, 600)');
   await writeFile(path.join(site, 'style.css'), '#title { color: rgb(4, 5, 6); }', 'utf8');
-  const reloaded = await poll(async () => {
-    const result = await inPage(`[getComputedStyle(document.getElementById('title')).color, window.scrollY]`);
-    return result.value?.[0] === 'rgb(4, 5, 6)' ? result.value : null;
-  }, { what: 'neu geladene Seite nach geaendertem Stylesheet' });
-  assert.ok(Math.abs(reloaded[1] - 600) < 50, `scroll kept: ${reloaded[1]}`);
+  // The new colour shows before the load has finished, and the position comes
+  // back with the load — so wait for both instead of taking the first reading.
+  // What was seen on the way goes into the message, should it never settle.
+  const readings = [];
+  await poll(async () => {
+    await poll(async () => {
+      const result = await inPage(`[getComputedStyle(document.getElementById('title')).color, window.scrollY]`);
+      if (result.value) readings.push(`${result.value[0]}@${Math.round(result.value[1])}`);
+      return result.value?.[0] === 'rgb(4, 5, 6)' ? true : null;
+    }, { what: 'neu geladene Seite nach geaendertem Stylesheet' });
+    const result = await inPage('window.scrollY');
+    readings.push(`scrollY=${Math.round(result.value ?? -1)}`);
+    return Math.abs((result.value ?? 0) - 600) < 50 || null;
+  }, { what: `Scrollposition nach dem Neuladen (gesehen: ${readings.slice(-12).join(', ')})`, timeoutMs: 5000 })
+    .catch((err) => {
+      throw new Error(`scroll not kept — readings: ${readings.join(', ')}`, { cause: err });
+    });
   step('Aenderung auf der Platte laedt neu');
 
   // ── Links: without a click nothing, with a click the right place ─────────
