@@ -72,6 +72,17 @@ module.exports = {
   'tree.unreadable.other': 'Dieser Ordner ließ sich nicht lesen',
   // In place of the tree while the project folder takes its time to list (#639).
   'tree.loading': 'Ordner wird geladen…',
+  'tree.filter.open': 'Dateien filtern',
+  'tree.filter.shortcut': 'Strg+P',
+  'tree.filter.placeholder': 'Dateien filtern',
+  'tree.filter.close': 'Filter schließen',
+  'tree.filter.results': 'Passende Dateien',
+  'tree.filter.loading': 'Suche läuft…',
+  'tree.filter.empty': 'Keine Datei und kein Ordner passt zu „{query}“.',
+  'tree.filter.count.one': '{count} Treffer',
+  'tree.filter.count.other': '{count} Treffer',
+  'tree.filter.countCapped': 'Die ersten {shown} von {count} Treffern — tipp weiter, um sie einzugrenzen.',
+  'tree.filter.truncated': 'Durchsucht werden nur die ersten {count} Einträge dieses Ordners.',
   'fileInfo.type.unknown': 'Unbekannt',
   // Markdown in der Dateivorschau (#344). „Preview“ bleibt auch im Deutschen
   // „Preview“ — so entschieden am 2026-09-26.
@@ -1616,6 +1627,7 @@ module.exports = {
   'menu.view': 'Ansicht',
   'menu.view.toggleSidebar': 'Seitenleiste ein-/ausblenden',
   'menu.view.showHiddenFiles': 'Versteckte Dateien anzeigen',
+  'menu.view.filterFiles': 'Dateien filtern…',
   'menu.view.toggleMarkdownSource': 'Preview oder Quelltext',
   'menu.view.reload': 'Neu laden',
   'menu.view.forceReload': 'Hart neu laden',

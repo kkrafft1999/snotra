@@ -974,6 +974,7 @@ reachable through the whole component:
 | Module | What lives there | Test |
 | ----- | -------------- | ---- |
 | `renderer/tree/treePaths.js` | Path and tree logic of the file tree: sorting folders top to bottom, indentation → tree depth, external drop and its target folder, comparing folder contents, what has to be re-expanded after a redraw | `test/tree-paths.test.js` |
+| `renderer/tree/workspacePaths.js` | The workspace's flat path list for the `@` menu and the tree's filter ([#350](https://github.com/kkrafft1999/snotra/issues/350)): one cache, keyed by folder and hidden files, dropped on a folder switch, an agent write or a watcher report. Ranking and highlighting live in `renderer/chat/mentionAutocomplete.js` (`rankMentionCandidates`, `mentionMatchRanges`), so both find the same files in the same order | `test/file-tree-filter-dom.test.js`, `test/mention-autocomplete.test.js` |
 | `renderer/chat/toolLogView.js` | The tool log in the chat as a DOM layer: lines with state and permission audit, the expandable `<details>` block, the one-liner in the `<summary>`, finishing off an aborted run | `test/tool-log-view-dom.test.js` |
 | `renderer/chat/toolLogDebug.js` | The diagnostic buffer of the tool log ([#87](https://github.com/kkrafft1999/snotra/issues/87)) as one instance per renderer — the view and `ChatStream` share it instead of passing it through every signature | `test/tool-log-debug.test.js` |
 | `renderer/utils/tool-log-summary.js` | What the one-liner *says* — DOM-free, older than the split | `test/tool-log-summary.test.js` |

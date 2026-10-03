@@ -30,6 +30,8 @@ import {
   treeDepthFromIndentWidth,
 } from '../tree/treePaths.js';
 import { createFileViewHost } from '../file-views/host.js';
+import { createWorkspacePathSource } from '../tree/workspacePaths.js';
+import { initTreeFilter } from './TreeFilter.js';
 
 // What a quick start chip writes into the chat is the user's own message, so it
 // reads in the language of the interface (#310).
@@ -56,6 +58,8 @@ export function initFileTree(deps) {
     confirmLeave,
     agentMarks = createAgentMarks(),
     fileChanges = createFileChangeIndex(),
+    // The path list of the `@` menu (#350); app.js hands in the shared one.
+    workspacePaths = createWorkspacePathSource({ api, appStore }),
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -155,6 +159,16 @@ export function initFileTree(deps) {
   // hidden files come back, so switching twice leaves the tree as it was.
   let drawnShowHidden = false;
   let expandedHiddenFolders = [];
+
+  // The filter (#350) searches main's path list and opens through the same
+  // door as a link from the preview: the tree unfolds to what was opened.
+  const filter = initTreeFilter({
+    appStore,
+    paths: workspacePaths,
+    openEntry: (entry) => openFromPreview(joinNative(appStore.rootPath, entry.path)),
+    isHidden: (relPath) => isHiddenTreePath(joinNative(appStore.rootPath, relPath), appStore.rootPath),
+    treeFocusTarget: () => syncTabStop(),
+  });
 
   function resetDragState() {
     clearDragVisualState();
@@ -294,6 +308,9 @@ export function initFileTree(deps) {
     const overtaken = () => ticket !== treeGeneration;
     if (overtaken()) return true;
     appStore.rootPath = folderPath;
+    // A query belongs to the folder it was typed in.
+    filter.close({ restoreFocus: false });
+    filter.setAvailable(true);
     const name = basenameOf(folderPath);
     projectName.textContent = name;
     projectName.title = folderPath;
@@ -893,6 +910,15 @@ export function initFileTree(deps) {
     const childContainer = isDirectory ? childContainerOf(row) : null;
     const expanded = Boolean(childContainer?.classList.contains('expanded'));
     const contextMenuKey = e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey);
+    // Typing into the tree starts the filter with that letter (#350). Space
+    // stays out: it neither opens a row nor would make a query.
+    if (e.key.length === 1 && e.key !== ' ' && !e.isComposing) {
+      if (filter.open(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     if (e.shiftKey && !contextMenuKey && !(e.key === 'Enter' && onRow)) return;
 
     const rows = () => visibleRows();
@@ -1113,6 +1139,9 @@ export function initFileTree(deps) {
   // anderen Editor kommt. Die Meldungen laufen der Reihe nach durch: Zwei
   // gleichzeitig laufende Neuzeichnungen kämen sich am selben DOM in die Quere.
   api.onFsTreeChanged?.((payload) => {
+    // The filter's list covers folders the tree has never drawn, so it hears
+    // of every report, not only of those that redraw something (#350).
+    filter.refresh();
     void enqueueTreeWork(() => syncTreeWithFilesystem(payload), 'Baum-Abgleich fehlgeschlagen');
   });
 
@@ -1730,6 +1759,8 @@ export function initFileTree(deps) {
     }
 
     restoreTreeView(view);
+    // A write, a delete, a move or an import: the filter shows it too (#350).
+    filter.refresh();
   }
 
   /**
@@ -1875,6 +1906,8 @@ export function initFileTree(deps) {
     appStore.showHiddenFiles = next;
     renderHiddenFilesButton();
     if (!changed) return treeSyncChain;
+    // The filter searches what the tree shows (#350).
+    filter.refresh();
     return enqueueTreeWork(async () => {
       await redrawForHiddenFiles();
       // What counts is the state once the queue gets here: after two quick
@@ -2038,6 +2071,8 @@ export function initFileTree(deps) {
     /** Hidden files on or off (#436); resolves once the tree is redrawn. */
     setShowHiddenFiles,
     toggleHiddenFiles,
+    /** Opens the tree's filter, or takes its field again (#350). */
+    openFilter: () => filter.open(),
     /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
     runPreviewCommand: (name) => contentPane.runCommand(name),
   };

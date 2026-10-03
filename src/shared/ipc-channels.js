@@ -221,6 +221,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
   /** Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436). */
   UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
+  /** Menu "View > Filter Files…" or Cmd/Ctrl+P (#350). */
+  UI_FILTER_FILES: 'ui:filter-files',
 });
 
 module.exports = {

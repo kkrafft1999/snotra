@@ -62,10 +62,18 @@ function scoreMention(relPath, query) {
  * gelieferte Reihenfolge erhalten (Breitensuche: Wurzel zuerst).
  */
 export function filterMentionCandidates(entries, query, limit = 8) {
+  return rankMentionCandidates(entries, query).slice(0, Math.max(0, Math.floor(limit)));
+}
+
+/**
+ * Every match in the order of `filterMentionCandidates`, without the cut. The
+ * tree's filter (#350) shows more than the eight of the `@` menu and says how
+ * many there are; both read the same ranking, so both find the same files.
+ */
+export function rankMentionCandidates(entries, query) {
   const list = Array.isArray(entries) ? entries : [];
-  const max = Math.max(0, Math.floor(limit));
   const q = (typeof query === 'string' ? query : '').toLowerCase();
-  if (!q) return list.slice(0, max);
+  if (!q) return list.slice();
 
   const scored = [];
   for (const entry of list) {
@@ -80,7 +88,45 @@ export function filterMentionCandidates(entries, query, limit = 8) {
       a.entry.path.length - b.entry.path.length ||
       a.entry.path.localeCompare(b.entry.path)
   );
-  return scored.slice(0, max).map((item) => item.entry);
+  return scored.map((item) => item.entry);
+}
+
+/**
+ * Which characters of a path the query matched (#350), as `[start, end)`
+ * ranges over the whole path — the same tiers as the ranking, so what lights
+ * up is what put the entry there: the name's prefix or occurrence, the
+ * path's, or the letters one by one. Empty when nothing matches.
+ */
+export function mentionMatchRanges(relPath, query) {
+  if (typeof relPath !== 'string' || typeof query !== 'string' || !query) return [];
+  const q = query.toLowerCase();
+  const lowerPath = relPath.toLowerCase();
+  const nameStart = lowerPath.lastIndexOf('/') + 1;
+  const lowerName = lowerPath.slice(nameStart);
+  if (lowerName.startsWith(q)) return [[nameStart, nameStart + q.length]];
+  if (lowerPath.startsWith(q)) return [[0, q.length]];
+  const inName = lowerName.indexOf(q);
+  if (inName >= 0) return [[nameStart + inName, nameStart + inName + q.length]];
+  const inPath = lowerPath.indexOf(q);
+  if (inPath >= 0) return [[inPath, inPath + q.length]];
+
+  // Letters in order: taken as late as possible, so they gather in the name
+  // where they can rather than in the first folder that happens to have them.
+  const positions = [];
+  let j = lowerPath.length - 1;
+  for (let i = q.length - 1; i >= 0; i -= 1) {
+    while (j >= 0 && lowerPath[j] !== q[i]) j -= 1;
+    if (j < 0) return [];
+    positions.unshift(j);
+    j -= 1;
+  }
+  const ranges = [];
+  for (const pos of positions) {
+    const last = ranges.at(-1);
+    if (last && last[1] === pos) last[1] = pos + 1;
+    else ranges.push([pos, pos + 1]);
+  }
+  return ranges;
 }
 
 /**

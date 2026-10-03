@@ -7,6 +7,7 @@ import { initWhisperRecorder } from './voice/WhisperRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
+import { createWorkspacePathSource } from './tree/workspacePaths.js';
 import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
 import { initSkillSuggestion } from './components/SkillSuggestion.js';
 import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
@@ -306,10 +307,15 @@ const voice = initWhisperRecorder({
 
 // @-Vervollständigung (Issue #52); hängt sich per Capture-Listener ans Eingabefeld,
 // die Reihenfolge zu initChatStream ist daher unkritisch.
+// The workspace's paths, read by the `@` menu and by the tree's filter
+// (#350) alike — so both find the same files.
+const workspacePaths = createWorkspacePathSource({ api, appStore });
+
 const mentionAutocomplete = initMentionAutocomplete({
   api,
   appStore,
   onInputChanged: syncChatInputHeight,
+  paths: workspacePaths,
 });
 
 // Beide Skill-Teile im Chat lesen denselben Katalog (Issue #125).
@@ -475,6 +481,7 @@ const fileTree = initFileTree({
     contentPaneToggledByUser = true;
     setContentPaneVisible(true);
   },
+  workspacePaths,
 });
 
 // Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344). The file view
@@ -487,6 +494,15 @@ api.onToggleMarkdownSource?.(() => {
 // same as the eye in the tree header.
 api.onToggleHiddenFiles?.(() => {
   void fileTree.toggleHiddenFiles();
+});
+
+// Menu "View > Filter Files…" or Cmd/Ctrl+P (#350) — the same as the
+// magnifier in the tree header, from anywhere. A closed sidebar opens first:
+// the filter lives in it.
+api.onFilterFiles?.(() => {
+  if (!appStore.rootPath) return;
+  if (appRoot.classList.contains('app--no-sidebar')) void toggleSidebar();
+  fileTree.openFilter();
 });
 
 async function openFolderViaDialog() {

@@ -9,21 +9,20 @@ import {
   decodeTreeDragPayload,
   workspaceReferenceFor,
 } from '../chat/workspaceReference.js';
+import { createWorkspacePathSource } from '../tree/workspacePaths.js';
 
 const MAX_VISIBLE_OPTIONS = 8;
-// Die Pfadliste wird beim ersten „@“ lazy geladen und kurz vorgehalten. Explizit
-// verworfen wird sie bei Workspace-Wechsel und nach Schreib-Tools (siehe app.js);
-// die kurze Lebensdauer fängt Änderungen ab, die kein Ereignis auslösen (z. B.
-// Verschieben im Baum, Änderungen außerhalb der App).
-const CACHE_MAX_AGE_MS = 30_000;
 
 /**
  * @-Vervollständigung für die Chat-Eingabe (Issue #52): Tippt der Nutzer „@“,
  * erscheint über dem Textfeld eine filterbare Liste der Workspace-Pfade.
  * ↑/↓ navigiert, Enter/Tab übernimmt, Esc schließt. Ohne geöffneten Workspace
  * passiert nichts — „@“ bleibt normaler Text.
+ *
+ * `paths` is the list shared with the tree's filter (#350); without one the
+ * menu keeps its own.
  */
-export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
+export function initMentionAutocomplete({ api, appStore, onInputChanged, paths = null }) {
   const chatInput = document.getElementById('chat-input');
   const menu = document.getElementById('chat-mention-menu');
   const inactive = {
@@ -34,11 +33,7 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   };
   if (!chatInput || !menu || typeof api?.listWorkspacePaths !== 'function') return inactive;
 
-  // Keyed by the folder and by whether hidden files are shown (#436): the list
-  // follows the tree, so switching them over fetches it anew.
-  let cache = null; // { root, showHidden, entries, fetchedAt }
-  let pending = null; // { root, showHidden, promise }
-  let cacheGeneration = 0;
+  const pathSource = paths ?? createWorkspacePathSource({ api, appStore });
   let active = null; // { start, query } der offenen Referenz
   let items = [];
   let selectedIndex = 0;
@@ -62,39 +57,12 @@ export function initMentionAutocomplete({ api, appStore, onInputChanged }) {
   }
 
   function invalidate() {
-    cacheGeneration += 1;
-    cache = null;
-    pending = null;
+    pathSource.invalidate();
     close();
   }
 
   async function loadEntries() {
-    const root = appStore.rootPath;
-    if (!root) return [];
-    const showHidden = appStore.showHiddenFiles === true;
-    const matches = (entry) => entry?.root === root && entry.showHidden === showHidden;
-    if (matches(cache) && Date.now() - cache.fetchedAt < CACHE_MAX_AGE_MS) {
-      return cache.entries;
-    }
-    if (matches(pending)) return pending.promise;
-
-    const generation = cacheGeneration;
-    const promise = (async () => {
-      let entries = [];
-      try {
-        const result = await api.listWorkspacePaths({ showHidden });
-        entries = Array.isArray(result?.entries) ? result.entries : [];
-      } catch {
-        entries = [];
-      }
-      if (generation === cacheGeneration && appStore.rootPath === root) {
-        cache = { root, showHidden, entries, fetchedAt: Date.now() };
-      }
-      if (pending?.promise === promise) pending = null;
-      return entries;
-    })();
-    pending = { root, showHidden, promise };
-    return promise;
+    return (await pathSource.load()).entries;
   }
 
   function markSelected({ scroll = false } = {}) {

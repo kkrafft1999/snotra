@@ -169,3 +169,33 @@ test('insertReferenceAt schreibt mitten im Text und übernimmt ein Leerzeichen',
     caret: 6,
   });
 });
+
+// The tree's filter (#350) reads the same ranking as the `@` menu.
+
+test('rankMentionCandidates is filterMentionCandidates without the cut', async () => {
+  const { rankMentionCandidates, filterMentionCandidates } = await modulePromise;
+  for (const query of ['', 'road', 'md', 'src', 'dmap', 'zzz']) {
+    const all = rankMentionCandidates(ENTRIES, query);
+    assert.deepEqual(filterMentionCandidates(ENTRIES, query, 3), all.slice(0, 3), query);
+    assert.deepEqual(filterMentionCandidates(ENTRIES, query, 100), all, query);
+  }
+  assert.equal(rankMentionCandidates(ENTRIES, 'md').length, 4);
+  assert.deepEqual(rankMentionCandidates(null, 'x'), []);
+});
+
+test('mentionMatchRanges marks what put the entry where it ranks', async () => {
+  const { mentionMatchRanges } = await modulePromise;
+  // The name starts with the query.
+  assert.deepEqual(mentionMatchRanges('docs/roadmap.md', 'Road'), [[5, 9]]);
+  // The path starts with it.
+  assert.deepEqual(mentionMatchRanges('docs/roadmap.md', 'docs/r'), [[0, 6]]);
+  // The name contains it — not the earlier occurrence in a folder.
+  assert.deepEqual(mentionMatchRanges('xmap/roadmap.md', 'map'), [[9, 12]]);
+  // The path contains it, across the slash.
+  assert.deepEqual(mentionMatchRanges('src/main/index.js', 'c/ma'), [[2, 6]]);
+  // Letters in order, gathered towards the name and merged where adjacent.
+  assert.deepEqual(mentionMatchRanges('src/renderer/roadmap-tool.js', 'srtl'), [[0, 1], [13, 14], [21, 22], [24, 25]]);
+  assert.deepEqual(mentionMatchRanges('src/renderer/roadmap-tool.js', 'rtoo'), [[13, 14], [21, 24]]);
+  assert.deepEqual(mentionMatchRanges('docs/task.md', 'xyz'), []);
+  assert.deepEqual(mentionMatchRanges('docs/task.md', ''), []);
+});

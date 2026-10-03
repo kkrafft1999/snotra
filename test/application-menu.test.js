@@ -51,11 +51,13 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
   assert.ok(view, 'das Menue Ansicht existiert weiter');
   assert.ok(!view.submenu.some((item) => item.label === 'Settings\u2026'));
   // Der Rest der Ansicht bleibt unangetastet: Seitenleiste oben, darunter die
-  // versteckten Dateien (#436), dann Markdown (#344), dann Neu laden.
+  // versteckten Dateien (#436), the filter (#350), dann Markdown (#344), dann
+  // Neu laden.
   assert.equal(view.submenu[0].label, 'Toggle Sidebar');
   assert.equal(view.submenu[1].label, 'Show Hidden Files');
-  assert.equal(view.submenu[2].label, 'Preview or Source');
-  assert.equal(view.submenu[4].role, 'reload');
+  assert.equal(view.submenu[2].label, 'Filter Files\u2026');
+  assert.equal(view.submenu[3].label, 'Preview or Source');
+  assert.equal(view.submenu[5].role, 'reload');
 });
 
 for (const platform of ['win32', 'linux']) {
@@ -65,11 +67,20 @@ for (const platform of ['win32', 'linux']) {
 
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
-    assert.deepEqual(labels.slice(0, 7), [
-      'Toggle Sidebar', 'Show Hidden Files', 'Preview or Source', 'separator', 'Settings\u2026', 'separator', 'Reload',
+    assert.deepEqual(labels.slice(0, 8), [
+      'Toggle Sidebar', 'Show Hidden Files', 'Filter Files\u2026', 'Preview or Source', 'separator', 'Settings\u2026',
+      'separator', 'Reload',
     ]);
   });
 }
+
+test('the tree filter hangs on CmdOrCtrl+P and sends UI_FILTER_FILES (#350)', () => {
+  const { template, sent } = buildTemplate('darwin');
+  const item = allItems(template).find((entry) => entry.label === 'Filter Files\u2026');
+  assert.equal(item.accelerator, 'CmdOrCtrl+P');
+  item.click();
+  assert.deepEqual(sent, [PUSH.UI_FILTER_FILES]);
+});
 
 for (const platform of ['darwin', 'win32', 'linux']) {
   test(`${platform}: Einstellungen genau einmal, mit CmdOrCtrl+,`, () => {

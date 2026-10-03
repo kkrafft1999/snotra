@@ -126,6 +126,14 @@ function createApplicationMenuTemplate({
         registerAccelerator: false,
         click: () => send(PUSH.UI_TOGGLE_HIDDEN_FILES),
       },
+      // #350: the tree's filter, from anywhere — the chat input included,
+      // which is why the shortcut hangs on the item. The renderer opens the
+      // sidebar with it if needed, and does nothing without a folder.
+      {
+        label: t('menu.view.filterFiles'),
+        accelerator: 'CmdOrCtrl+P',
+        click: () => send(PUSH.UI_FILTER_FILES),
+      },
       // Issue #344: switches a Markdown file in the preview between the
       // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
       // other editors — on the Mac that is "Paste and Match Style" in every
