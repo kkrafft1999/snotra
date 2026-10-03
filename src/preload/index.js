@@ -225,6 +225,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // The tree's filter (#350): menu "View" or Cmd/Ctrl+P.
+  onFilterFiles: (callback) => {
+    const channel = PUSH.UI_FILTER_FILES;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Markdown preview or source (#344): menu "View" or Cmd/Ctrl+Shift+M. The
   // renderer knows which file is on show and whether it is Markdown.
   onToggleMarkdownSource: (callback) => {

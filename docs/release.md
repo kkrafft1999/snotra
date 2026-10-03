@@ -223,6 +223,37 @@ and a screen reader (#74). With a folder open that has subfolders:
    agent mark reads the mark as its description, a folder that cannot be read
    reads the reason.
 
+### Filtering the file tree
+
+The DOM tests (`test/file-tree-filter-dom.test.js`) cover what the filter
+finds, where the keys go and where the focus returns. What they cannot cover
+is the menu's key equivalent, the drawn list and a screen reader (#350); the
+look script `e2e/manual-tree-filter.mjs` photographs the states. With a folder
+open:
+
+1. Click into the chat input and press `Cmd+P` (`Ctrl+P`). The field opens
+   above the tree with the focus in it; the tree stays visible until you type.
+   With the sidebar hidden (`Cmd+B` first), `Cmd+P` brings it back.
+2. Type a few letters of a file deep in a closed folder. The tree gives way to
+   a list: name, folder underneath, matched letters underlined, the first
+   entry selected, the count at the bottom. Type the same after `@` in the
+   chat input — the first eight entries are the same, in the same order.
+3. `↓` / `↑` move the selection; `Enter` shows the file in the middle column
+   and the list stays. `Esc` brings the tree back, unfolded to that file and
+   with it selected; the focus is back in the chat input.
+4. Focus a row in the tree and type a letter: the field opens with it. `Esc`
+   returns the focus to the row. A folder picked with `Enter` closes the
+   filter and is shown open in the tree, with the focus on it.
+5. Type something that matches nothing: one sentence names the query. Delete
+   the field: the tree is back.
+6. With the filter open on a query, create a matching file in Finder or
+   Explorer: it appears in the list within a second, the selection stays.
+7. Light and dark (*Settings › Appearance*): the selected row shows the blue
+   bar on its left like the tree's selection, the underlines stay visible.
+8. With VoiceOver: the field is announced as a combo box "Filter files"; the
+   arrows read each entry as its name and folder; the count is read when it
+   changes.
+
 ## Publishing the release
 
 **Only the tag** is pushed — the state itself is already on `main` through the

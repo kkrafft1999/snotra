@@ -375,6 +375,20 @@ three platforms the same way.
   file each get a sentence instead of an empty view. The changes are kept in
   memory only: after a restart the line stays, but says they are no longer
   available.
+- **Filtering:** the magnifier in the tree's header opens a field above the
+  tree, and so do `Cmd+P` on the Mac, `Ctrl+P` on Windows and Linux and
+  *View › Filter Files…* — from anywhere, the chat input included; a closed
+  sidebar opens with it. Typing into the focused tree starts the field with
+  that letter. As soon as it holds something, a flat list of the matching
+  files and folders takes the tree's place, each with its folder underneath
+  and the matched letters underlined. It searches like `@` in the chat — the
+  same entries, the same fuzzy matching, the same order — so `rlse` finds
+  `docs/release.md`. `↑`/`↓` selects, `Enter` or a click opens a file in the
+  preview and leaves the list standing for the next one; a folder closes the
+  filter and shows up in the tree, unfolded. `Esc` brings the tree back as it
+  was, unfolded down to what you opened. Files that appear or disappear while
+  the filter is open show up in the list. It searches names and paths, not
+  what is in the files.
 - **Moving:** dragging a file or folder in the tree onto a folder row moves the
   entry there; dropping it on the free area below the tree puts it in the project
   folder. If the name already exists, it becomes `name (2).ext`.
@@ -693,6 +707,7 @@ and full screen behave as in any other app on your platform and sit in the
 | Open the settings | `Cmd+,` | `Ctrl+,` |
 | Show or hide the sidebar | `Cmd+B` | `Ctrl+B` |
 | Show or hide hidden files in the tree | `Cmd+Shift+.` | `Ctrl+Shift+.` |
+| Filter the file tree | `Cmd+P` | `Ctrl+P` |
 | Copy the tool log diagnostics as JSON to the clipboard — useful for a bug report | `Cmd+Shift+D` | `Ctrl+Shift+D` |
 
 **Chat input**
@@ -710,6 +725,8 @@ and full screen behave as in any other app on your platform and sit in the
 | What it does | macOS | Windows / Linux |
 | --- | --- | --- |
 | Open the context menu of a row (instead of a right-click) | `Cmd`-click | `Ctrl`-click |
+| Start the filter with a letter | type it into the focused tree | type it into the focused tree |
+| In the filter: select · open · close | `↑`/`↓` · `Enter` · `Esc` | `↑`/`↓` · `Enter` · `Esc` |
 | Rename the focused row · take the name · leave it unchanged | `F2` · `Enter` · `Esc` | `F2` · `Enter` · `Esc` |
 | Recently used folders: open · remove from the list | `Enter` or `Space` · `Delete` or `Backspace` | `Enter` or `Space` · `Delete` or `Backspace` |
 | Focused column divider: move it · in larger steps · to its end position | `←`/`→` · `Shift+←`/`→` · `Home`/`End` | `←`/`→` · `Shift+←`/`→` · `Home`/`End` |

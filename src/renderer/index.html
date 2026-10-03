@@ -85,6 +85,14 @@
                deshalb FileTree selbst. -->
           <span id="project-name">No folder open</span>
           <div class="icon-btn-row">
+            <!-- Filters the tree (#350). Only there while a folder is open;
+                 title and label carry the shortcut, so TreeFilter sets them. -->
+            <button id="btn-tree-filter" type="button" hidden aria-expanded="false" aria-controls="tree-filter" title="Filter files" aria-label="Filter files">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
             <!-- Clears what the agent read or changed (#347). Only there while
                  the conversation on screen has marks; FileTree shows it. -->
             <button id="btn-tree-clear-marks" type="button" hidden title="Clear the agent’s marks" aria-label="Clear the agent’s marks" data-i18n-attr="title:sidebar.clearMarks;aria-label:sidebar.clearMarks">
@@ -145,6 +153,25 @@
         </div>
         <!-- A WAI-ARIA tree (#74): FileTree gives the rows their roles and the
              roving tabindex. -->
+        <!-- The tree's filter (#350): a combobox over a flat list of matches,
+             which takes the tree's place while the field holds a query. -->
+        <div id="tree-filter" hidden>
+          <div class="tree-filter-field">
+            <svg class="tree-filter-glass" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="tree-filter-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tree-filter-results" autocomplete="off" spellcheck="false" placeholder="Filter files" aria-label="Filter files" data-i18n-attr="placeholder:tree.filter.placeholder;aria-label:tree.filter.placeholder">
+            <button id="btn-tree-filter-close" type="button" title="Close filter (Esc)" aria-label="Close filter" data-i18n-attr="aria-label:tree.filter.close">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="tree-filter-results" role="listbox" aria-label="Matching files" data-i18n-attr="aria-label:tree.filter.results" hidden></div>
+        <div id="tree-filter-status" role="status" hidden></div>
         <div id="tree-container" role="tree" aria-label="Files" data-i18n-attr="aria-label:tree.label"></div>
       </aside>
 

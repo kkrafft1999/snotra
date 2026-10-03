@@ -227,6 +227,7 @@ summary:focus-visible,
 #tree-header #btn-open-folder,
 #tree-header #btn-folder-history,
 #tree-header #btn-tree-sandbox,
+#tree-header #btn-tree-filter,
 #tree-header #btn-tree-clear-marks,
 #tree-header #btn-tree-new-file,
 #tree-header #btn-tree-new-folder,
@@ -254,6 +255,7 @@ summary:focus-visible,
 #tree-header #btn-open-folder:hover,
 #tree-header #btn-folder-history:hover,
 #tree-header #btn-tree-sandbox:hover,
+#tree-header #btn-tree-filter:hover,
 #tree-header #btn-tree-clear-marks:hover,
 #tree-header #btn-tree-new-file:hover,
 #tree-header #btn-tree-new-folder:hover,
@@ -262,7 +264,8 @@ summary:focus-visible,
   color: var(--text-primary);
 }
 
-#tree-header #btn-folder-history[aria-expanded="true"] {
+#tree-header #btn-folder-history[aria-expanded="true"],
+#tree-header #btn-tree-filter[aria-expanded="true"] {
   background: var(--bg-active);
   color: var(--text-primary);
 }
@@ -270,6 +273,7 @@ summary:focus-visible,
 #tree-header #btn-open-folder:active,
 #tree-header #btn-folder-history:active,
 #tree-header #btn-tree-sandbox:active,
+#tree-header #btn-tree-filter:active,
 #tree-header #btn-tree-clear-marks:active,
 #tree-header #btn-tree-new-file:active,
 #tree-header #btn-tree-new-folder:active,
@@ -321,6 +325,7 @@ summary:focus-visible,
 }
 
 #tree-header #btn-tree-sandbox[hidden],
+#tree-header #btn-tree-filter[hidden],
 #tree-header #btn-tree-clear-marks[hidden],
 #tree-header #btn-tree-new-file[hidden],
 #tree-header #btn-tree-new-folder[hidden] {
@@ -692,6 +697,194 @@ summary:focus-visible,
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 8px;
+}
+
+/* ── Tree filter (#350) ──
+ * A field under the tree header, shown on demand, and a flat list of matches
+ * that takes the tree's place while the field holds a query. The field is a
+ * form control (6 px, divider border, blue border on focus); the rows follow
+ * the tree's: the same height rhythm, the same selected state — ground plus
+ * the blue bar on the left — so the list reads as the tree, narrowed. */
+#tree-filter {
+  padding: 8px 8px 0;
+}
+
+#tree-filter[hidden],
+#tree-filter-results[hidden],
+#tree-filter-status[hidden] {
+  display: none;
+}
+
+.tree-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--ds-touch-min);
+  padding: 0 2px 0 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  transition: border-color var(--ds-motion-fast);
+}
+
+.tree-filter-field:focus-within {
+  border-color: var(--ds-blue);
+}
+
+.tree-filter-glass {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+#tree-filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  color: var(--text-primary);
+  user-select: text;
+}
+
+/* The field's border carries the focus, as on every text input. */
+#tree-filter-input:focus-visible {
+  outline: none;
+}
+
+#btn-tree-filter-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: none;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast), transform 0.1s ease;
+}
+
+#btn-tree-filter-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+#btn-tree-filter-close:active {
+  background: var(--bg-active);
+  transform: scale(0.97);
+}
+
+#tree-filter-results {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+}
+
+.tree-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 5px 8px 5px 6px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.tree-filter-option:hover {
+  background: var(--bg-hover);
+}
+
+.tree-filter-option[aria-selected='true'] {
+  background: var(--bg-active);
+  border-left-color: var(--ds-blue);
+}
+
+.tree-filter-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.tree-filter-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tree-filter-name,
+.tree-filter-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-filter-name {
+  font-size: var(--ds-font-size-md);
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+/* Small type on hover and selected grounds: the strong grey (#610). */
+.tree-filter-dir {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-xs);
+  line-height: 1.35;
+  color: var(--text-muted-strong);
+}
+
+/* Matched characters: bolder and underlined in the accent colour. The text
+ * keeps its own colour, so the contrast holds on every ground, and the match
+ * does not rest on colour alone. */
+.tree-filter-option mark {
+  background: transparent;
+  color: inherit;
+  font-weight: var(--ds-font-weight-bold);
+  text-decoration: underline;
+  text-decoration-color: var(--ds-blue);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+/* As in the tree (#436): hidden entries dimmed, a selected one not. */
+.tree-filter-option--hidden:not([aria-selected='true']) .tree-filter-name {
+  color: var(--text-secondary);
+}
+
+.tree-filter-option--hidden .tree-filter-icon {
+  opacity: 0.55;
+}
+
+.tree-filter-message {
+  padding: 6px 8px 6px 10px;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+  overflow-wrap: anywhere;
+}
+
+#tree-filter-results[aria-busy='true'] {
+  cursor: progress;
+}
+
+#tree-filter-status {
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--border);
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
 }
 
 /* ── Tree Items ── */
