@@ -100,6 +100,17 @@
   --ds-warning-bg: rgba(145, 91, 0, 0.10);
   --ds-warning-border: rgba(145, 91, 0, 0.35);
 
+  /* ── Diff (#348) ─────────────────────────────────────────────────────────────
+   * "Show changes": added lines on a blue ground, removed ones on a grey one.
+   * No green, no red — decided with a mockup on 2026-10-02. The `+`/`−` sign
+   * and the bar carry the meaning; the ground only adds to it (WCAG 1.4.1).
+   * Text on the added ground: --ds-text-primary 14:1, line numbers take
+   * --ds-grey-strong (5.6:1), the sign --ds-blue-strong (5.2:1). */
+  --ds-diff-added-bg: rgba(0, 117, 158, 0.10);
+  --ds-diff-added-bar: var(--ds-blue);
+  --ds-diff-removed-bg: var(--ds-bg-tertiary);   /* --ds-text-secondary 5.0:1 on it */
+  --ds-diff-removed-bar: var(--ds-grey-control-border);
+
   --ds-mic-recording: #DC2626;        /* 4,7:1 auf --ds-surface — separater Rotton, damit
                                          Recording-Pulse nicht mit Error-Bubbles
                                          farblich kollidiert */
@@ -316,6 +327,10 @@
   --ds-warning: #F2B45A;       /* 4.8:1 on its tint over the composer, 7.1:1 on --ds-surface */
   --ds-warning-bg: rgba(242, 180, 90, 0.12);
   --ds-warning-border: rgba(242, 180, 90, 0.35);
+
+  /* Diff (#348): --ds-text-primary 8:1 on the added ground, --ds-blue 5.7:1;
+   * --ds-text-secondary 4.6:1 on the removed one. */
+  --ds-diff-added-bg: rgba(63, 184, 229, 0.14);
 
   --ds-mic-recording: #F87171;
   --ds-mic-recording-bg: rgba(248, 113, 113, 0.15);

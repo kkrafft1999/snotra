@@ -16,6 +16,25 @@ let switchCount = 0;
  * mode; `select(mode)` sets it from outside without calling back.
  */
 export function buildModeSwitch(onChange) {
+  const control = buildSegmentedSwitch({
+    labelKey: 'fileView.mode.label',
+    options: [
+      { value: MODES.PREVIEW, labelKey: 'fileView.mode.preview', lang: 'en' },
+      { value: MODES.SOURCE, labelKey: 'fileView.mode.source' },
+    ],
+    selected: MODES.PREVIEW,
+    onChange,
+  });
+  return control;
+}
+
+/**
+ * The same compact `ds-segmented` control for any set of options — also
+ * "Content | Changes" for a file the agent changed (#348). Each option is
+ * `{ value, labelKey, lang? }`; `lang` marks a label that stays in one
+ * language.
+ */
+export function buildSegmentedSwitch({ labelKey, options: choices, selected, onChange }) {
   switchCount += 1;
   const name = `file-view-mode-${switchCount}`;
   const group = document.createElement('div');
@@ -23,29 +42,28 @@ export function buildModeSwitch(onChange) {
   group.setAttribute('role', 'radiogroup');
 
   const options = {};
-  for (const mode of [MODES.PREVIEW, MODES.SOURCE]) {
+  for (const choice of choices) {
     const label = document.createElement('label');
     label.className = 'ds-segmented__option';
     const input = document.createElement('input');
     input.type = 'radio';
     input.className = 'ds-segmented__input';
     input.name = name;
-    input.value = mode;
-    input.checked = mode === MODES.PREVIEW;
+    input.value = choice.value;
+    input.checked = choice.value === selected;
     input.addEventListener('change', () => {
-      if (input.checked) onChange(mode);
+      if (input.checked) onChange(choice.value);
     });
     const text = document.createElement('span');
+    if (choice.lang) text.lang = choice.lang;
     label.append(input, text);
     group.append(label);
-    options[mode] = { input, text };
+    options[choice.value] = { input, text, labelKey: choice.labelKey };
   }
-  options[MODES.PREVIEW].text.lang = 'en';
 
   function applyLabels() {
-    group.setAttribute('aria-label', t('fileView.mode.label'));
-    options[MODES.PREVIEW].text.textContent = t('fileView.mode.preview');
-    options[MODES.SOURCE].text.textContent = t('fileView.mode.source');
+    group.setAttribute('aria-label', t(labelKey));
+    for (const option of Object.values(options)) option.text.textContent = t(option.labelKey);
   }
   applyLabels();
 

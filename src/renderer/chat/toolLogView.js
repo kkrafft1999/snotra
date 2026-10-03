@@ -18,7 +18,8 @@ import {
 } from '../utils/tool-log-summary.js';
 import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
 import { toolLogDebug } from './toolLogDebug.js';
-import { t } from '../i18n.js';
+import { normalizeChanges } from './fileChanges.js';
+import { t, tPlural } from '../i18n.js';
 
 const { toolCategoryForEntry } = contracts;
 
@@ -61,7 +62,7 @@ const TOOL_LINE_STATE_CLASS = {
 // state 'pending': Das Modell streamt den Aufruf noch (Argumente unvollständig),
 // das Tool ist noch nicht gelaufen. Optisch wie 'running', damit z. B. beim
 // Schreiben einer Datei sofort sichtbar ist, dass etwas passiert.
-export function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex, category, permission) {
+export function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, callIndex, category, permission, changes) {
   const row = document.createElement('div');
   row.className = 'chat-tool-line';
   row.classList.add(TOOL_LINE_STATE_CLASS[state] || TOOL_LINE_STATE_CLASS.done);
@@ -84,9 +85,138 @@ export function buildToolLine(text, state /* 'pending' | 'running' | 'done' */, 
   } else {
     row.setAttribute('aria-label', t('toolLog.line.done.label', { text }));
     row.appendChild(buildToolLineStatus());
+    applyChangesToRow(row, changes);
   }
 
   return row;
+}
+
+/** "3 lines added, 2 lines removed" — what "+3 −2" says. */
+export function changeCountsLabel(added, removed) {
+  return [
+    tPlural('changes.added', added, { count: added }),
+    tPlural('changes.removed', removed, { count: removed }),
+  ].join(', ');
+}
+
+const SHORT_STATUS_KEYS = {
+  'eol-only': 'changes.short.eol',
+  binary: 'changes.short.binary',
+  'too-large': 'changes.short.tooLarge',
+  unchanged: 'changes.short.unchanged',
+};
+
+/**
+ * A word in place of "+0 −0" for a change without lines to count: only line
+ * endings, binary, too large, the same as before, or a new empty file.
+ */
+function shortStatusOf(changes) {
+  const last = Array.isArray(changes) ? changes[changes.length - 1] : null;
+  if (!last) return null;
+  if (SHORT_STATUS_KEYS[last.status]) return t(SHORT_STATUS_KEYS[last.status]);
+  return last.created ? t('changes.short.empty') : null;
+}
+
+/**
+ * "+3 −2", with its spoken form for screen readers (#348). Nothing to count
+ * says what happened instead.
+ */
+export function buildChangeStat(added, removed, changes) {
+  const stat = document.createElement('span');
+  stat.className = 'chat-change-stat';
+  const word = added === 0 && removed === 0 ? shortStatusOf(changes) : null;
+  if (word) {
+    stat.textContent = word;
+    return stat;
+  }
+  const shown = document.createElement('span');
+  shown.setAttribute('aria-hidden', 'true');
+  shown.textContent = `+${added} −${removed}`;
+  const spoken = document.createElement('span');
+  spoken.className = 'sr-only';
+  spoken.textContent = changeCountsLabel(added, removed);
+  stat.append(shown, spoken);
+  return stat;
+}
+
+/**
+ * The counts of a writing call at the end of its row (#348). Several files in
+ * one patch are summed; which file got what is in the preview.
+ */
+export function applyChangesToRow(row, changes) {
+  const list = normalizeChanges(changes);
+  if (!row || !list || row.querySelector('.chat-change-stat')) return;
+  const added = list.reduce((sum, change) => sum + change.added, 0);
+  const removed = list.reduce((sum, change) => sum + change.removed, 0);
+  row.insertBefore(buildChangeStat(added, removed, list), row.querySelector('.chat-tool-line-status'));
+}
+
+function baseNameOf(relativePath) {
+  const parts = String(relativePath || '').split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || relativePath;
+}
+
+/**
+ * The line under the tool log: every file the message changed, each a button
+ * that opens its diff in the preview (#348). It stands outside the folded
+ * log, so that a change can be seen without unfolding it — and a log of one
+ * step cannot be unfolded at all. Returns null when nothing was changed.
+ *
+ * `files` comes from `changedFilesOf`; `isLive(changes)` says whether main
+ * still holds them; `onOpen(file)` opens one.
+ */
+export function buildChangesStrip(files, { isLive, onOpen }) {
+  if (!Array.isArray(files) || files.length === 0) return null;
+  const strip = document.createElement('div');
+  strip.className = 'chat-changes';
+  strip.setAttribute('role', 'group');
+  strip.setAttribute('aria-label', t('toolLog.changes.label'));
+  const lead = document.createElement('span');
+  lead.className = 'chat-changes-lead';
+  lead.textContent = t('toolLog.changes.lead');
+  strip.append(lead);
+  let anyGone = false;
+  for (const file of files) {
+    const live = typeof isLive === 'function' && isLive(file.changes);
+    if (!live) anyGone = true;
+    const item = document.createElement(live ? 'button' : 'span');
+    item.className = 'chat-change-file';
+    item.title = file.relativePath;
+    const name = document.createElement('span');
+    name.className = 'chat-change-name';
+    name.textContent = baseNameOf(file.relativePath);
+    const stat = buildChangeStat(file.added, file.removed, file.changes);
+    item.append(name, stat);
+    if (live) {
+      item.type = 'button';
+      item.setAttribute('aria-label', t('toolLog.changes.open', {
+        name: file.relativePath,
+        counts: stat.querySelector('.sr-only')?.textContent || stat.textContent,
+      }));
+      item.addEventListener('click', () => onOpen?.(file));
+    } else {
+      item.classList.add('chat-change-file--gone');
+    }
+    strip.append(item);
+  }
+  if (anyGone) {
+    const note = document.createElement('span');
+    note.className = 'chat-changes-note';
+    note.textContent = t('toolLog.changes.unavailable');
+    strip.append(note);
+  }
+  return strip;
+}
+
+/** Puts the line under the tool log of `messageEl`, or takes it away. */
+export function syncChangesStrip(messageEl, files, options) {
+  if (!messageEl) return;
+  const log = messageEl.querySelector('.chat-tool-log');
+  const old = messageEl.querySelector(':scope > .chat-changes, .chat-tool-log + .chat-changes');
+  const strip = log ? buildChangesStrip(files, options) : null;
+  if (old && strip) old.replaceWith(strip);
+  else if (old) old.remove();
+  else if (strip) log.after(strip);
 }
 
 /**
@@ -286,7 +416,8 @@ export function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {
 /**
  * Trace-Eintrag für Store und Verlauf: nur Anzeige-Zeile und Tool-Name. Die
  * Argumente aus dem Engine-Ergebnis bleiben bewusst draußen (write_file_text
- * trägt dort bis zu 2 MB Dateiinhalt).
+ * trägt dort bis zu 2 MB Dateiinhalt). What a writing call changed comes along
+ * as summaries — ids and line counts, never content (#348).
  */
 export function toolTraceEntryForStore(entry) {
   const line = toolLineText(entry);
@@ -295,11 +426,13 @@ export function toolTraceEntryForStore(entry) {
   // Das Audit ist bereits bereinigt (nur Entscheidung, Klassen, Status,
   // Pfade – keine Inhalte); der Main normalisiert es beim Speichern erneut.
   const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
-  if (!tool && !skill && !permission) return line;
+  const changes = normalizeChanges(entry?.changes);
+  if (!tool && !skill && !permission && !changes) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
   if (permission) out.permission = permission;
+  if (changes) out.changes = changes;
   return out;
 }
 
@@ -394,7 +527,7 @@ export function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines
       const lineState =
         state === 'running' && !thinking && i === trace.length - 1 ? 'running' : 'done';
       lines.appendChild(
-        buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i]), trace[i]?.permission)
+        buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i]), trace[i]?.permission, trace[i]?.changes)
       );
     }
   }

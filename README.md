@@ -362,6 +362,19 @@ three platforms the same way.
   without any, and opening another folder or restarting the app clears them.
   The eraser in the tree's header clears them all, *Remove mark* in the context
   menu one file or folder.
+- **What exactly changed:** under the agent's answer a line lists every file
+  it changed, each with its count of added and removed lines — `format.js
+  +3 −2`. A click shows the change in the preview: one column of `−` and `+`
+  lines, three unchanged lines around each change, the rest folded away until
+  you open it. Several changes to one file are shown together; the picker in
+  the header shows a single one. **Content | Changes** switches between the
+  file and its change, and *Show changes* in the tree's context menu shows
+  everything the conversation changed in a file. A file changed again since —
+  by you or another program — says so; a new file, a file whose every line
+  changed, one where only the line endings changed, a binary or a too large
+  file each get a sentence instead of an empty view. The changes are kept in
+  memory only: after a restart the line stays, but says they are no longer
+  available.
 - **Moving:** dragging a file or folder in the tree onto a folder row moves the
   entry there; dropping it on the free area below the tree puts it in the project
   folder. If the name already exists, it becomes `name (2).ext`.

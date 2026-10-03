@@ -7,6 +7,7 @@ function registerChatHandlers({
   REQ,
   PUSH,
   getActiveWorkspaceRoot = () => null,
+  fileChangeRecorder = null,
 }) {
   const engine = chatEngine;
 
@@ -32,6 +33,14 @@ function registerChatHandlers({
   ipcMain.on(REQ.CHAT_ABORT, (event, payload) => {
     const chatId = payload?.chatId == null ? undefined : sanitizeChatId(payload.chatId);
     engine.abort(event.sender.id, chatId);
+  });
+
+  // The renderer names changes by the ids main gave it; it gets back the
+  // lines, never a path it could choose itself (#348).
+  ipcMain.handle(REQ.CHAT_FILE_CHANGES, async (_event, payload) => {
+    if (!fileChangeRecorder) return { ok: false, reason: 'unknown' };
+    const ids = Array.isArray(payload?.ids) ? payload.ids.filter((id) => typeof id === 'string') : [];
+    return fileChangeRecorder.describe(ids);
   });
 
   ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => {

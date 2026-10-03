@@ -35,6 +35,7 @@ const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'f
  * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]  #408
  * @param {() => Promise<object[]>} [deps.readProgramAllowances]  #408
  * @param {number} [deps.maxScanBytes]
+ * @param {{ record: Function }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
  */
 function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   const {
@@ -50,6 +51,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     matchProgramAllowance = null,
     readProgramAllowances = null,
     refreshDynamicTools = null,
+    fileChangeRecorder = null,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =
@@ -201,8 +203,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         }
       }
       const riskClasses = Array.isArray(context.riskClasses) ? context.riskClasses : plan?.riskClasses || [];
+      // What the writing tools wrote, before and after (#348). Recorded only
+      // once the call has come back without an error.
+      const writes = [];
       const handlerContext = {
         ...context,
+        onWritten: WRITING_TOOLS.has(name) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
         sensitivity: BROAD_LISTING_TOOLS.has(name) ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,
         recovery:
           name === 'write_file_text'
@@ -228,7 +234,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         return { output, progressEvents: [], reclassify: [TOOL_RISK_CLASSES.DELETE] };
       }
 
-      const progressEvents = collectProgressEvents(name, args, output);
+      const fileChanges = recordFileChanges(writes, parsed);
+      const progressEvents = collectProgressEvents(name, args, output, fileChanges);
 
       // Harte Grenze: eigene Provider-Schlüssel dürfen die App nie verlassen,
       // auch nicht über eine vom Nutzer freigegebene Datei (Konzept §5).
@@ -268,10 +275,25 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       }
 
       const result = { output, progressEvents };
+      if (fileChanges.length) result.fileChanges = fileChanges;
       if (sensitive) result.sensitive = true;
       return result;
     },
   };
+
+  /** Hands the writes of a successful call to the recorder; their summaries. */
+  function recordFileChanges(writes, parsed) {
+    if (!writes.length || !fileChangeRecorder || !parsed || parsed.error) return [];
+    const summaries = [];
+    for (const written of writes) {
+      try {
+        summaries.push(fileChangeRecorder.record(written));
+      } catch (err) {
+        console.warn('Recording a file change failed:', err?.message ?? err);
+      }
+    }
+    return summaries;
+  }
 }
 
 /** Tools, die im Workspace schreiben und deren Ergebnis den Baum betrifft. */
@@ -322,7 +344,7 @@ function readRelativePath(args) {
   return rel;
 }
 
-function collectProgressEvents(toolName, args, output) {
+function collectProgressEvents(toolName, args, output, fileChanges = []) {
   const events = [];
   if (!WRITING_TOOLS.has(toolName) && !FILE_READING_TOOLS.has(toolName)) return events;
   let parsed = null;
@@ -338,7 +360,8 @@ function collectProgressEvents(toolName, args, output) {
     return events;
   }
   for (const relativePath of new Set(writtenRelativePaths(toolName, args, parsed))) {
-    events.push(createWorkspaceFileWrittenEvent(relativePath));
+    const change = fileChanges.find((entry) => entry.relativePath === relativePath) || null;
+    events.push(createWorkspaceFileWrittenEvent(relativePath, change));
   }
   return events;
 }

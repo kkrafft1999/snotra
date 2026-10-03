@@ -54,15 +54,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listWorkspacePaths: (options) =>
     ipcRenderer.invoke(REQ.FS_LIST_WORKSPACE_PATHS, { showHidden: options?.showHidden === true }),
   // Only the path: whether it is a folder main looks up itself (#649). The
-  // options say whether the row carries an agent mark (#347) and, from the
+  // options say whether the row carries an agent mark (#347), whether the
+  // agent changed the file in the conversation on screen (#348) and, from the
   // keyboard, where the menu opens (#74); main checks the numbers.
   showFileContextMenu: (filePath, options) =>
     ipcRenderer.invoke(REQ.FS_SHOW_FILE_CONTEXT_MENU, filePath, {
       agentMark: options?.agentMark === true,
+      changes: options?.changes === true,
       ...(options?.position
         ? { position: { x: options.position.x, y: options.position.y } }
         : {}),
     }),
+  onFsShowChanges: (callback) => {
+    const channel = PUSH.FS_SHOW_CHANGES;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   onFsClearAgentMark: (callback) => {
     const channel = PUSH.FS_CLEAR_AGENT_MARK;
     const listener = (_event, payload) => callback(payload);
@@ -119,6 +127,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
+  // The diff of one or more changes to a file, by the ids of their summaries (#348).
+  getFileChanges: (ids) => ipcRenderer.invoke(REQ.CHAT_FILE_CHANGES, { ids: Array.isArray(ids) ? ids : [] }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),
   // Bild eines gespeicherten Anhangs nachladen (Issue #94).
   readChatAttachment: (chatId, file) => ipcRenderer.invoke(REQ.CHAT_ATTACHMENT_READ, chatId, file),

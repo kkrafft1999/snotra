@@ -37,7 +37,8 @@ async function mountTree() {
   appStore.currentChatId = 'chat-a';
 
   const entries = fakeFilesystem();
-  const listeners = { treeChanged: null, clearMark: null, deleted: null };
+  const listeners = { treeChanged: null, clearMark: null, deleted: null, showChanges: null };
+  const changeRequests = [];
   const menuCalls = [];
   const api = {
     activateFolder: async () => ({ ok: true }),
@@ -50,6 +51,11 @@ async function mountTree() {
     onFsTreeChanged: (cb) => { listeners.treeChanged = cb; },
     onFsItemDeleted: (cb) => { listeners.deleted = cb; },
     onFsClearAgentMark: (cb) => { listeners.clearMark = cb; },
+    onFsShowChanges: (cb) => { listeners.showChanges = cb; },
+    getFileChanges: async (ids) => {
+      changeRequests.push(ids);
+      return { ok: true, status: 'unchanged' };
+    },
     showFileContextMenu: async (path, options) => { menuCalls.push([path, options]); return { ok: true }; },
   };
   const tree = initFileTree({
@@ -63,7 +69,9 @@ async function mountTree() {
   });
   await tree.openProject(ROOT);
   const settle = async () => { await flush(); await flush(); };
-  return { dom, tree, appStore, entries, listeners, menuCalls, settle, container: document.getElementById('tree-container') };
+  return {
+    dom, tree, appStore, entries, listeners, menuCalls, changeRequests, settle, container: document.getElementById('tree-container'),
+  };
 }
 
 const rowFor = (container, path) => container.querySelector(`.tree-item[data-path="${path}"]`);
@@ -159,7 +167,7 @@ test('the header button clears all marks of the chat; the context menu clears on
 
   rowFor(container, '/ws/README.md').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true }));
   await flush();
-  assert.deepEqual(menuCalls.at(-1), ['/ws/README.md', { agentMark: true }]);
+  assert.deepEqual(menuCalls.at(-1), ['/ws/README.md', { agentMark: true, changes: false }]);
   listeners.clearMark({ path: '/ws/README.md' });
   await flush();
   assert.equal(markOf(container, '/ws/README.md'), null);
@@ -167,7 +175,7 @@ test('the header button clears all marks of the chat; the context menu clears on
 
   rowFor(container, '/ws/README.md').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true }));
   await flush();
-  assert.deepEqual(menuCalls.at(-1), ['/ws/README.md', { agentMark: false }], 'no mark, no menu item');
+  assert.deepEqual(menuCalls.at(-1), ['/ws/README.md', { agentMark: false, changes: false }], 'no mark, no menu item');
 
   document.getElementById('btn-tree-clear-marks').click();
   await flush();
@@ -223,4 +231,30 @@ test('hundreds of marks draw on every row without trouble', async (t) => {
   await flush();
   assert.equal(container.querySelectorAll('.tree-mark').length, 400);
   assert.equal(container.querySelectorAll('.tree-mark[data-mark="unseen"]').length, 200);
+});
+
+test('a file the chat changed offers "Show changes", which opens every change of the chat (#348)', async (t) => {
+  const { dom, tree, container, listeners, menuCalls, changeRequests, settle } = await mountTree();
+  t.after(dom.cleanup);
+  const change = (id) => ({ id, relativePath: 'README.md', status: 'text', added: 1, removed: 0 });
+  tree.recordAgentFile('write', 'README.md', 'chat-a', change('ab-1'));
+  tree.recordAgentFile('write', 'README.md', 'chat-a', change('ab-2'));
+  tree.recordAgentFile('write', 'README.md', 'chat-b', change('ab-3'));
+  tree.recordAgentFile('read', 'docs/notes.md', 'chat-a');
+  await flush();
+
+  rowFor(container, '/ws/README.md').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true }));
+  await flush();
+  assert.deepEqual(menuCalls.at(-1), ['/ws/README.md', { agentMark: true, changes: true }]);
+
+  listeners.showChanges({ path: '/ws/README.md' });
+  await settle();
+  assert.deepEqual(changeRequests.at(-1), ['ab-1', 'ab-2'], 'the changes of the chat on screen, oldest first');
+  assert.ok(rowFor(container, '/ws/README.md').classList.contains('active'), 'its row is selected');
+  assert.equal(markOf(container, '/ws/README.md').dataset.mark, 'changed', 'looking at the diff counts as seen');
+
+  // From under a message: only that message's changes.
+  await tree.showFileChanges({ relativePath: 'README.md', changes: [change('ab-2')] });
+  await settle();
+  assert.deepEqual(changeRequests.at(-1), ['ab-2']);
 });

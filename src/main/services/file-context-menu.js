@@ -246,7 +246,9 @@ function createFileContextMenu({
    * flag: it decides whether "Open" is offered and how the delete
    * confirmation words it.
    */
-  function buildTemplate(filePath, { window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null } = {}) {
+  function buildTemplate(filePath, {
+    window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null,
+  } = {}) {
     const t = createTranslator(getLocale());
     // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
     // das Fenster während des Dialogs zugeht — wäre sonst eine
@@ -260,6 +262,11 @@ function createFileContextMenu({
         label: t('contextMenu.open'),
         click: () => guarded(openWithDefaultApp(filePath, window), 'The file could not be opened'),
       }]),
+      // Only for a file the agent changed in the conversation on screen (#348).
+      ...(!isDirectory && typeof onShowChanges === 'function' ? [{
+        label: t('contextMenu.showChanges'),
+        click: () => onShowChanges(filePath),
+      }] : []),
       { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
       {
         label: t('contextMenu.info'),
@@ -286,8 +293,12 @@ function createFileContextMenu({
    * `position`: where the keyboard opened it (#74), in window coordinates;
    * without one the menu opens at the mouse pointer.
    */
-  function popup(filePath, window, { onDeleted = null, isDirectory = false, onClearAgentMark = null, position = null } = {}) {
-    const menu = Menu.buildFromTemplate(buildTemplate(filePath, { window, onDeleted, isDirectory, onClearAgentMark }));
+  function popup(filePath, window, {
+    onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null, position = null,
+  } = {}) {
+    const menu = Menu.buildFromTemplate(buildTemplate(filePath, {
+      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges,
+    }));
     menu.popup({ ...(window ? { window } : {}), ...(position ?? {}) });
     return menu;
   }
