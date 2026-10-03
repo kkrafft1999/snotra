@@ -33,6 +33,8 @@ import { t, onLocaleChange } from '../i18n.js';
 import { formatSize, formatTimestamp, getExtension } from '../utils/helpers.js';
 import { READ_FAILURES, readFailureMessageKey, readFailureOf } from './read-failures.js';
 import { fileViews, readsText } from './registry.js';
+import { changesView } from './changes-view.js';
+import { buildSegmentedSwitch } from './mode-switch.js';
 
 const keepEditing = async () => 'cancel';
 
@@ -44,6 +46,9 @@ export function createFileViewHost({
   confirmLeave = keepEditing,
   openFile = noOpener,
   getWorkspaceRoot = () => null,
+  // The ids of what the agent changed in a file, in the conversation on
+  // screen, oldest first (#348). A file with any gets "Content | Changes".
+  changesFor = () => [],
 }) {
   const welcomeEl = document.getElementById('welcome');
   const filePreview = document.getElementById('file-preview');
@@ -88,8 +93,58 @@ export function createFileViewHost({
   }
 
   function setTools(nodes) {
-    previewTools.replaceChildren(...(nodes ?? []));
+    if (current) current.toolNodes = nodes ?? [];
+    const own = current?.changesSwitch ? [current.changesSwitch.element] : [];
+    previewTools.replaceChildren(...(nodes ?? []), ...own);
     previewTools.hidden = previewTools.childElementCount === 0;
+  }
+
+  /**
+   * "Content | Changes" in the header (#348), for a file the agent changed in
+   * the conversation on screen. The view keeps its own tools; this one stands
+   * after them, in the same place for every type.
+   */
+  function syncChangesSwitch(shown, { focus = false } = {}) {
+    if (current !== shown || !shown.view) return;
+    const ids = shown.view === changesView ? shown.changes?.ids || [] : idsFor(shown.file.path);
+    if (ids.length === 0) {
+      if (shown.changesSwitch) {
+        shown.changesSwitch = null;
+        setTools(shown.toolNodes);
+      }
+      return;
+    }
+    const mode = shown.view === changesView ? 'changes' : 'content';
+    if (!shown.changesSwitch) {
+      shown.changesSwitch = buildSegmentedSwitch({
+        labelKey: 'changes.mode.label',
+        options: [
+          { value: 'content', labelKey: 'changes.mode.content' },
+          { value: 'changes', labelKey: 'changes.mode.changes' },
+        ],
+        selected: mode,
+        onChange: (next) => {
+          if (current !== shown) return;
+          const options = next === 'changes'
+            ? { changes: { ids: idsFor(shown.file.path) }, focusSwitch: true }
+            : { content: true, focusSwitch: true };
+          void open(shown.item, options);
+        },
+      });
+      setTools(shown.toolNodes);
+    } else {
+      shown.changesSwitch.select(mode);
+    }
+    if (focus) shown.changesSwitch.element.querySelector(':checked')?.focus();
+  }
+
+  function idsFor(path) {
+    try {
+      const ids = changesFor(path);
+      return Array.isArray(ids) ? ids : [];
+    } catch {
+      return [];
+    }
   }
 
   function showPane(which) {
@@ -108,6 +163,10 @@ export function createFileViewHost({
     previewFilename.textContent = current.file.name;
     // A long name gives way to the tool area and ends in an ellipsis (#344).
     previewFilename.title = current.file.name;
+    if (current.metaText) {
+      previewMeta.textContent = current.metaText;
+      return;
+    }
     const size = formatSize(current.file.size);
     previewMeta.textContent = current.detail ? `${size} · ${current.detail}` : size;
   }
@@ -145,7 +204,7 @@ export function createFileViewHost({
     renderInfo();
   }
 
-  async function mountView(view, item, result, fragment = '') {
+  async function mountView(view, item, result, fragment = '', { changes = null, focusSwitch = false } = {}) {
     teardown();
     const file = {
       path: item.path,
@@ -156,6 +215,7 @@ export function createFileViewHost({
     };
     const shown = {
       item, file, view, instance: null, content: result.content, dirty: false, error: null, detail: null,
+      changes, changesSwitch: null, toolNodes: [], metaText: null,
     };
     current = shown;
     showPane('preview');
@@ -181,12 +241,15 @@ export function createFileViewHost({
       setTools: (nodes) => {
         if (current === shown) setTools(nodes);
       },
-      setMeta: ({ size, detail } = {}) => {
+      setMeta: ({ size, detail, text } = {}) => {
         if (current !== shown) return;
         if (Number.isFinite(size)) shown.file = { ...shown.file, size };
         if (detail !== undefined) shown.detail = detail || null;
+        // The whole pill, for a view that is not about the file's size (#348).
+        if (text !== undefined) shown.metaText = text || null;
         renderHeader();
       },
+      changes,
       setDirty: (dirty) => {
         if (current === shown && view.kind === 'editor') shown.dirty = Boolean(dirty);
       },
@@ -207,6 +270,7 @@ export function createFileViewHost({
       return;
     }
     shown.instance = instance;
+    syncChangesSwitch(shown, { focus: focusSwitch });
   }
 
   /**
@@ -256,11 +320,14 @@ export function createFileViewHost({
    * true when the pane now shows it, false when an editor kept the pane or a
    * newer open() overtook this one.
    */
-  async function open(item) {
+  async function open(item, { changes = null, content = false, focusSwitch = false } = {}) {
     // Only the open a view's link asked for gets the fragment it named.
     const fragment = pendingFragment?.path === item.path ? pendingFragment.fragment : '';
     pendingFragment = null;
-    if (current?.file.path === item.path && current.view) {
+    // The same file again is a refresh — unless the other side of
+    // "Content | Changes" is asked for (#348).
+    const switching = Boolean(changes) || (content && current?.view === changesView);
+    if (current?.file.path === item.path && current.view && !switching) {
       // The same file again: read it, but keep the view and whatever state it
       // has — scroll position, and in an editor the buffer. It still counts as
       // the latest click, so a read for another file must not overtake it.
@@ -272,6 +339,10 @@ export function createFileViewHost({
     if ((await askToLeave('switch-file')) === 'keep') return false;
     if (ticket !== generation) return false;
 
+    if (changes) {
+      await mountView(changesView, item, { content: null, size: item.size, modified: item.modified }, '', { changes, focusSwitch });
+      return ticket === generation;
+    }
     const view = registry.resolve(item);
     if (!view) {
       showInfo(item);
@@ -279,7 +350,7 @@ export function createFileViewHost({
     }
     if (!readsText(view)) {
       // The view reads the file itself (#345); size and date come from the tree.
-      await mountView(view, item, { content: null, size: item.size, modified: item.modified }, fragment);
+      await mountView(view, item, { content: null, size: item.size, modified: item.modified }, fragment, { focusSwitch });
       return ticket === generation;
     }
     const result = await api.readFile(item.path);
@@ -288,7 +359,7 @@ export function createFileViewHost({
       showReadFailure(item, result, view);
       return true;
     }
-    await mountView(view, item, result, fragment);
+    await mountView(view, item, result, fragment, { focusSwitch });
     return ticket === generation;
   }
 
@@ -396,6 +467,8 @@ export function createFileViewHost({
   // switch only has to draw the card again; it no longer reads the file.
   const stopFollowingLocale = onLocaleChange(() => {
     if (!current) return;
+    current.changesSwitch?.applyLabels();
+    if (current.view === changesView) current.instance?.applyLabels?.();
     if (current.instance) renderHeader();
     else renderInfo();
   });
@@ -409,6 +482,12 @@ export function createFileViewHost({
     /** Back to the welcome screen without asking — for a caller that already settled. */
     clear: showWelcome,
     runCommand,
+    /** The agent changed a file (#348): the switch may be due on the one on show. */
+    syncChanges: () => {
+      if (current) syncChangesSwitch(current);
+    },
+    /** Is the diff on show, rather than the file? */
+    showsChanges: () => current?.view === changesView,
     openPath: () => current?.file.path ?? null,
     hasUnsavedChanges: () => Boolean(current?.dirty),
     /** Unmount the view and stop listening — for a pane that goes away. */

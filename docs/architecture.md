@@ -743,6 +743,31 @@ threw a run's result away as soon as another chat was opened.
 - **History:** a running row shows "Working…" or "Needs your approval" in place
   of its time (`ChatHistoryPanel.syncRunMarkers`).
 
+### Recording what the agent changed (#348)
+
+The three writing tools (`write_file_text`, `edit_file`, `apply_patch`) hand
+every finished write to an `onWritten` callback in their options: the content
+before (a Buffer, `null` for a new file) and after. `write_file_text` reads the
+old content for that, within the read limit; `apply_patch` reports only once
+every file of the patch is written, so a rollback leaves nothing behind.
+
+`workspace-tool-adapter.js` collects those writes and, once the call has come
+back without an error, passes them to `services/file-change-recorder.js`. The
+recorder keeps both sides **in memory only** (2 MiB per file, 32 MiB in all,
+oldest first out) and returns a summary without content —
+`{ id, relativePath, status, created, added, removed }`. The summary travels
+on the `fileWritten` progress event (for the tree) and on the done line of the
+call (`entry.changes`, for the chat); the chat history stores it, never the
+content. Ids carry a boot id, so one from before a restart is told apart from
+an unknown one.
+
+The renderer asks for the lines with `chat:file-changes` and the ids it was
+given — never a path. `services/line-diff.js` compares lines without their
+endings (Myers, with a bound on the edit distance), so a CRLF file edited with
+LF lines shows the edit, and a pure line-ending change is reported as such.
+Several ids of one file are combined: before the first against after the last.
+
+
 ## Composition root
 
 `src/main/composition/create-application.js` is the central entry point after the
@@ -988,6 +1013,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/read-failures.js` | Why a file is not shown as text: main's reason codes of `fs:readFile` and their catalogue sentences, for the info card and the SVG source ([#641](https://github.com/kkrafft1999/snotra/issues/641)) | `test/file-view-host-dom.test.js`, `test/image-view-dom.test.js` |
 | `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
+| `renderer/file-views/changes-view.js` | "Show changes": the diff of one or more writes to a file, its states and notes. Not in the registry — no file *is* a diff; the host mounts it on request and adds "Content \| Changes" to any file the conversation on screen changed ([#348](https://github.com/kkrafft1999/snotra/issues/348)) | `test/file-changes-dom.test.js`, `e2e/file-changes.test.mjs` |
+| `renderer/file-views/diff-model.js` | Main's runs to rows: three lines of context, the rest folded into gaps. DOM-free | `test/file-changes-dom.test.js` |
 
 ```
 FileTree.js ──"show X" / "X changed" / "X is gone"──▶ host.js

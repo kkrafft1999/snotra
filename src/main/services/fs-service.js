@@ -1598,8 +1598,23 @@ function createFsService({
   }
 
   /**
+   * Hands a finished write to `options.onWritten` (#348): the path, the
+   * content before (a Buffer, null for a new file) and after. A listener that
+   * throws must not turn a write that happened into a failed call.
+   */
+  function reportWritten(options, written) {
+    if (typeof options?.onWritten !== 'function') return;
+    try {
+      options.onWritten(written);
+    } catch (err) {
+      console.warn('Recording a file change failed:', err?.message ?? err);
+    }
+  }
+
+  /**
    * @param {object} [options]
    * @param {{ trashItem?: Function|null, allowUnrecoverable?: boolean }} [options.recovery]
+   * @param {Function} [options.onWritten] called after the write, see reportWritten
    *   Ohne `trashItem` und ohne `allowUnrecoverable` wird eine bestehende Datei
    *   nicht überschrieben (`code: 'recovery_failed'`); der Aufruf muss dann als
    *   `delete` erneut freigegeben werden.
@@ -1642,6 +1657,16 @@ function createFsService({
       } catch {
         existed = false;
       }
+      // The old content, for "Show changes" (#348) — read before anything
+      // is touched, and only within the read limit; above it, the size says
+      // why there is no diff.
+      let before = null;
+      let beforeBytes = null;
+      if (existed && typeof options.onWritten === 'function') {
+        const previous = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES }).catch(() => null);
+        if (previous?.buffer) before = previous.buffer;
+        else if (previous?.tooLarge) beforeBytes = previous.stats.size;
+      }
       let recoveryCopy = null;
       if (existed && recovery) {
         if (typeof recovery.trashItem === 'function') {
@@ -1666,6 +1691,7 @@ function createFsService({
       if (checked.error) return JSON.stringify({ error: checked.error });
       await fs.mkdir(path.dirname(absPath), { recursive: true });
       await writeFileAtomic(absPath, args.content, root);
+      reportWritten(options, { relativePath: rel, absPath, before, beforeBytes, after: args.content });
       return JSON.stringify({
         relative_path: rel,
         created: !existed,
@@ -1713,7 +1739,7 @@ function createFsService({
     }
   }
 
-  async function runEditFileTool(args, workspaceRoot) {
+  async function runEditFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required.' });
@@ -1746,6 +1772,7 @@ function createFsService({
         });
       }
       await writeFileAtomic(absPath, applied.text, root);
+      reportWritten(options, { relativePath: rel, absPath, before: original.buffer, after: applied.text });
       return JSON.stringify({
         relative_path: rel,
         replacements: applied.replacements,
@@ -1762,7 +1789,7 @@ function createFsService({
    * Schritte durchlaufen, wird einmal geschrieben — schlägt einer fehl, bleibt die
    * Datei unverändert.
    */
-  async function runApplyEditsMode(args, workspaceRoot) {
+  async function runApplyEditsMode(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required.' });
@@ -1790,6 +1817,7 @@ function createFsService({
         });
       }
       await writeFileAtomic(absPath, applied.text, root);
+      reportWritten(options, { relativePath: rel, absPath, before: original.buffer, after: applied.text });
       return JSON.stringify({
         mode: 'edits',
         relative_path: rel,
@@ -1839,7 +1867,7 @@ function createFsService({
    * Datei (writeFileAtomic), nicht der Satz — ein Prozessabbruch zwischen zwei
    * Dateien hinterlässt einen teilweise angewendeten Patch (Issue #75).
    */
-  async function runApplyDiffMode(args, workspaceRoot) {
+  async function runApplyDiffMode(args, workspaceRoot, options = {}) {
     if (typeof args.patch !== 'string' || !args.patch.trim()) {
       return JSON.stringify({ error: 'patch (a unified diff as text) is required.' });
     }
@@ -1938,6 +1966,16 @@ function createFsService({
       }
     }
 
+    // Reported only once every file is written: a rollback leaves nothing
+    // to show.
+    for (const entry of planned) {
+      reportWritten(options, {
+        relativePath: entry.relativePath,
+        absPath: entry.absPath,
+        before: entry.original,
+        after: entry.updated,
+      });
+    }
     return JSON.stringify({
       mode: 'unified_diff',
       files_changed: planned.length,
@@ -1973,7 +2011,7 @@ function createFsService({
     return rel ? [rel] : [];
   }
 
-  async function runApplyPatchTool(args, workspaceRoot) {
+  async function runApplyPatchTool(args, workspaceRoot, options = {}) {
     const hasEdits = args.edits !== undefined && args.edits !== null;
     const hasPatch = args.patch !== undefined && args.patch !== null;
     if (hasEdits && hasPatch) {
@@ -1987,7 +2025,7 @@ function createFsService({
         error: 'Either edits (a list of replacements) or patch (a unified diff as text) is required.',
       });
     }
-    return hasEdits ? runApplyEditsMode(args, workspaceRoot) : runApplyDiffMode(args, workspaceRoot);
+    return hasEdits ? runApplyEditsMode(args, workspaceRoot, options) : runApplyDiffMode(args, workspaceRoot, options);
   }
 
   /** Compiled `.gitignore` files by real path (#644), see loadGitignoreMatcher. */

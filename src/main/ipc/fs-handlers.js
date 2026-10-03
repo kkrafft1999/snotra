@@ -189,6 +189,15 @@ function registerFsHandlers({
             }
           }
         : null,
+      // "Show changes" for a file the agent changed (#348); the same as the
+      // mark, only the path goes back.
+      onShowChanges: options?.changes === true
+        ? () => {
+            if (PUSH && win && !win.isDestroyed()) {
+              win.webContents.send(PUSH.FS_SHOW_CHANGES, { path: filePath });
+            }
+          }
+        : null,
       // Nach dem Löschen (Papierkorb) den Baum im Renderer nachziehen.
       onDeleted: (deletedPath) => {
         if (PUSH && win && !win.isDestroyed()) {

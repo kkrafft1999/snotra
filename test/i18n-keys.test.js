@@ -53,6 +53,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'context.part.agents.user',
   // A message and the network's own cause in brackets — nothing to word (#308).
   'provider.error.withCause',
+  // The name of a line ending is the same in both languages (#348).
+  'changes.eol.crlf',
   // "Server" and "TLS" are the German words too; the rest is placeholders (#310).
   'settings.models.connection',
   // A remembered command in the rule list: placeholders only (#121).

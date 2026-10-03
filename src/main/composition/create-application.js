@@ -7,6 +7,7 @@ const nodeChildProcess = require('child_process');
 const { createStorageService } = require('../services/storage-service');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
+const { createFileChangeRecorder } = require('../services/file-change-recorder');
 const { createWhisperService } = require('../services/whisper-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
@@ -338,6 +339,8 @@ function createApplication({
     // (#292). Was an das Modell zurückgeht, bleibt englisch.
     getLocale: getAppLocale,
   });
+  // Before and after of every write, in memory, for "Show changes" (#348).
+  const fileChangeRecorder = createFileChangeRecorder({ fs, maxBytesPerFile: LIMITS.MAX_READ_FILE_BYTES });
   const filesystem = createFilesystemIpcAdapter({
     fsService,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
@@ -679,6 +682,7 @@ function createApplication({
     onRunSettled: () => pruneChatScopedPermissions(),
     toolAdapterDeps: {
       fsService,
+      fileChangeRecorder,
       fs,
       path,
       // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
@@ -783,6 +787,7 @@ function createApplication({
     REQ,
     PUSH,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    fileChangeRecorder,
   });
   // What Settings › Security and the mode pill read (#357, #447, #448).
   const securityPageData = createSecurityPageData({
