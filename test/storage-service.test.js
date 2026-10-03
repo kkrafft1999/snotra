@@ -1240,3 +1240,28 @@ test('a v2 file that only knows MLX-LM as active provider gets an entry', async 
   assert.equal(config.activePresetId, preset.id);
   assert.equal(config.activeProvider, COMPAT);
 });
+
+test('whenWritesSettled waits for a write under the lock, and for one queued behind it (#679)', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  try {
+    const storage = makeStorage(tmpDir);
+    await storage.whenWritesSettled(); // nothing under way
+
+    const order = [];
+    let release;
+    const first = storage.withChatHistoryLock(async () => {
+      await new Promise((resolve) => { release = resolve; });
+      order.push('first');
+      // Queued while the quit is already waiting.
+      void storage.writeUIPrefs({ appLocale: 'en' }).then(() => order.push('prefs'));
+    });
+    const settled = storage.whenWritesSettled().then(() => order.push('settled'));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(order, [], 'still waiting for the lock');
+    release();
+    await Promise.all([first, settled]);
+    assert.deepEqual(order, ['first', 'prefs', 'settled']);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});

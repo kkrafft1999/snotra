@@ -180,6 +180,19 @@ function createStorageService({
     return task;
   }
 
+  /**
+   * Resolves once no store is reading-to-write or writing any more — the quit
+   * waits for it (#679). Work queued while waiting is waited for as well.
+   */
+  async function whenWritesSettled() {
+    for (;;) {
+      const pending = [...fileLocks.values(), ...pendingWrites.values()];
+      await Promise.all(pending);
+      const now = [...fileLocks.values(), ...pendingWrites.values()];
+      if (now.length === pending.length && now.every((p, i) => p === pending[i])) return;
+    }
+  }
+
   function withChatHistoryLock(fn) {
     return withFileLock(getChatHistoryPath(), fn);
   }
@@ -1383,6 +1396,7 @@ function createStorageService({
 
   return {
     MAX_CHAT_SESSIONS,
+    whenWritesSettled,
     getUIPrefsPath,
     readLLMConfig,
     writeLLMConfig,

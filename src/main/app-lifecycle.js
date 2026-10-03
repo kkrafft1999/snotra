@@ -65,4 +65,40 @@ function createStartupFailureHandler({ app, dialog, log = console, appName = 'Sn
   };
 }
 
-module.exports = { claimSingleInstance, createStartupFailureHandler };
+/**
+ * How long a quit waits for the stores at most. A save takes milliseconds;
+ * the bound is there for a write that hangs, so that the app still ends.
+ */
+const QUIT_WRITE_GRACE_MS = 5000;
+
+/**
+ * A quit waits for the saves already under way (#679). The chat of a run that
+ * has just ended is written after the run shows as finished; quitting in that
+ * moment ended the process in the middle of the write, and the next start
+ * restored the chat without its last turn.
+ *
+ * `before-quit` is held once, the stores are given up to `graceMs`, and the
+ * quit is then started again — that second one goes through.
+ */
+function holdQuitForPendingWrites({ app, whenWritesSettled, graceMs = QUIT_WRITE_GRACE_MS, log = console }) {
+  let released = false;
+  app.on('before-quit', (event) => {
+    if (released) return;
+    released = true;
+    event.preventDefault();
+    let timer;
+    const grace = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        log.warn?.(`[quit] The stores were still writing after ${graceMs} ms; quitting anyway.`);
+        resolve();
+      }, graceMs);
+    });
+    Promise.race([Promise.resolve().then(whenWritesSettled).catch(() => {}), grace])
+      .finally(() => {
+        clearTimeout(timer);
+        app.quit();
+      });
+  });
+}
+
+module.exports = { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites, QUIT_WRITE_GRACE_MS };
