@@ -54,6 +54,8 @@ const SKILL_PORT_KEYS = ['getActiveSkills'];
 const FILESYSTEM_PORT_KEYS = [
   'readDirectory',
   'moveItem',
+  'createItem',
+  'renameItem',
   'inspectImport',
   'importItems',
   'listWorkspacePaths',

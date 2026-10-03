@@ -142,6 +142,13 @@ const {
   createWorkspacePdfError,
 } = require('./workspace-pdf');
 const {
+  ITEM_NAME_REASONS,
+  ITEM_FAILURE_REASONS,
+  MAX_ITEM_NAME_BYTES,
+  validateItemName,
+  namesFoldEqual,
+} = require('./item-name');
+const {
   MAX_VOICE_RECORDING_MS,
   MAX_VOICE_RECORDING_BYTES,
   VOICE_STOP_WARNING_MS,
@@ -368,6 +375,11 @@ module.exports = {
   isPdfAssetName,
   createWorkspacePdfResult,
   createWorkspacePdfError,
+  ITEM_NAME_REASONS,
+  ITEM_FAILURE_REASONS,
+  MAX_ITEM_NAME_BYTES,
+  validateItemName,
+  namesFoldEqual,
   ATTACHMENT_KINDS,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGES_PER_MESSAGE,

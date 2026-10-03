@@ -390,6 +390,20 @@ three platforms the same way.
   `setup.bat`, `run.command`, an `.app`, a file marked executable — would be run
   instead, with your rights and outside Snotra's sandbox, so Snotra asks first,
   with "Cancel" preselected. If no app can open a file, a message says so.
+- **New file, new folder, rename:** "New File…" and "New Folder…" in the
+  context menu create inside a folder or next to a file; on the empty space
+  below the rows they create in the open folder itself. The two buttons in the
+  tree's header do the same in the selected folder (or next to the selected
+  file). "Rename…" — or `F2` on a focused row — turns the name into a field
+  with the name up to its extension selected. You type the name right in the
+  tree: `Enter` takes it, `Esc` or a click elsewhere leaves everything as it
+  was. A name that cannot work says why under the field while you type —
+  one that is already there, `/` or `\`, characters and names Windows does not
+  allow (`:`, `?`, `con`, a trailing dot …) — so a project stays usable on
+  every system. Nothing is ever overwritten. A new file is selected and shown
+  in the preview; a renamed file stays on show under its new name, and so do
+  the open folders and the file on show inside a renamed folder. Changing only
+  the case (`readme.md` → `README.md`) works on macOS and Windows too.
 - **Information:** the "Information" entry shows a file's name, full path, type,
   size (human-readable and to the byte), modification and creation date, plus the
   program "Open" would launch it with. For a folder, the number of its direct
@@ -696,6 +710,7 @@ and full screen behave as in any other app on your platform and sit in the
 | What it does | macOS | Windows / Linux |
 | --- | --- | --- |
 | Open the context menu of a row (instead of a right-click) | `Cmd`-click | `Ctrl`-click |
+| Rename the focused row · take the name · leave it unchanged | `F2` · `Enter` · `Esc` | `F2` · `Enter` · `Esc` |
 | Recently used folders: open · remove from the list | `Enter` or `Space` · `Delete` or `Backspace` | `Enter` or `Space` · `Delete` or `Backspace` |
 | Focused column divider: move it · in larger steps · to its end position | `←`/`→` · `Shift+←`/`→` · `Home`/`End` | `←`/`→` · `Shift+←`/`→` · `Home`/`End` |
 

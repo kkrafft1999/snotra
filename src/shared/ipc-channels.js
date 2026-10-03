@@ -29,6 +29,9 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_READ_WORKSPACE_PDF: 'fs:readWorkspacePdf',
   PDF_READ_ASSET: 'pdf:readAsset',
   FS_MOVE_ITEM: 'fs:moveItem',
+  /** New file or folder, and rename, from the tree (#349); main checks path and name. */
+  FS_CREATE_ITEM: 'fs:createItem',
+  FS_RENAME_ITEM: 'fs:renameItem',
   /** Flache Pfadliste des Workspace für die @-Vervollständigung im Chat. */
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
   /** Natives Kontextmenü für Datei oder Ordner im Dateibaum (Issues #58, #120). */
@@ -196,6 +199,14 @@ const PUSH_CHANNELS = Object.freeze({
   FS_CLEAR_AGENT_MARK: 'fs:clear-agent-mark',
   /** "Show changes" in the context menu of a file (#348). */
   FS_SHOW_CHANGES: 'fs:show-changes',
+  /**
+   * "New File…" / "New Folder…" / "Rename…" in the context menu (#349): the
+   * renderer opens the name field in the tree. Payloads { path, kind } — the
+   * folder to create in — and { path }; nothing is written before the name
+   * comes back over FS_CREATE_ITEM / FS_RENAME_ITEM.
+   */
+  FS_BEGIN_CREATE: 'fs:begin-create',
+  FS_BEGIN_RENAME: 'fs:begin-rename',
   /**
    * Im Projektordner hat sich etwas geändert (Issue #158) — von wem auch
    * immer: KI, Terminal, Finder, anderer Editor. Nutzlast ist ein

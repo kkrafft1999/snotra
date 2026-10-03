@@ -228,6 +228,8 @@ summary:focus-visible,
 #tree-header #btn-folder-history,
 #tree-header #btn-tree-sandbox,
 #tree-header #btn-tree-clear-marks,
+#tree-header #btn-tree-new-file,
+#tree-header #btn-tree-new-folder,
 #tree-header #btn-toggle-hidden-files {
   display: inline-flex;
   align-items: center;
@@ -253,6 +255,8 @@ summary:focus-visible,
 #tree-header #btn-folder-history:hover,
 #tree-header #btn-tree-sandbox:hover,
 #tree-header #btn-tree-clear-marks:hover,
+#tree-header #btn-tree-new-file:hover,
+#tree-header #btn-tree-new-folder:hover,
 #tree-header #btn-toggle-hidden-files:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -267,6 +271,8 @@ summary:focus-visible,
 #tree-header #btn-folder-history:active,
 #tree-header #btn-tree-sandbox:active,
 #tree-header #btn-tree-clear-marks:active,
+#tree-header #btn-tree-new-file:active,
+#tree-header #btn-tree-new-folder:active,
 #tree-header #btn-toggle-hidden-files:active {
   background: var(--bg-active);
   color: var(--text-primary);
@@ -315,7 +321,9 @@ summary:focus-visible,
 }
 
 #tree-header #btn-tree-sandbox[hidden],
-#tree-header #btn-tree-clear-marks[hidden] {
+#tree-header #btn-tree-clear-marks[hidden],
+#tree-header #btn-tree-new-file[hidden],
+#tree-header #btn-tree-new-folder[hidden] {
   display: none;
 }
 
@@ -638,16 +646,25 @@ summary:focus-visible,
  * Das fruehere Mono-Eyebrow "// projekt" darueber ist entfallen. Buttons
  * rechts bleiben 32×32 (Phase 1).
  */
+/* With the buttons for "New" (#349) the row is full: in a narrow sidebar the
+ * buttons wrap onto a line of their own, right-aligned, before the folder
+ * name shrinks below a few characters. */
 #tree-header {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   padding: 10px 8px 10px 16px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
   text-transform: none;
   letter-spacing: 0;
+}
+
+/* Right-aligned on a line of its own once the header wraps (#349). */
+#tree-header > .icon-btn-row {
+  margin-left: auto;
 }
 
 /* Zwei Slashes enger (system-ui Monos haben oft breite Solidus-Bearing). */
@@ -658,7 +675,7 @@ summary:focus-visible,
 /* Einzeiliger Ordnername; kuerzt mit Ellipse, damit die Icons rechts
  * (Historie, Ordner oeffnen) nie ueberschrieben werden. */
 #tree-header #project-name {
-  flex: 1;
+  flex: 1 1 56px;
   min-width: 0;
   font-family: var(--ds-font-ui);
   font-size: var(--ds-font-size-md);
@@ -709,11 +726,13 @@ summary:focus-visible,
   border-left-color: var(--ds-blue);
 }
 
-.tree-item .indent {
+.tree-item .indent,
+.tree-edit-row .indent {
   flex-shrink: 0;
 }
 
-.tree-item .arrow {
+.tree-item .arrow,
+.tree-edit-row .arrow {
   width: 16px;
   height: 16px;
   display: flex;
@@ -732,7 +751,8 @@ summary:focus-visible,
    folders of its level and sits one level in under its own folder (#639).
    A class of its own: the global `.hidden` is `display: none !important` and
    took the slot with it. */
-.tree-item .arrow--placeholder {
+.tree-item .arrow--placeholder,
+.tree-edit-row .arrow--placeholder {
   visibility: hidden;
 }
 
@@ -786,7 +806,8 @@ summary:focus-visible,
   }
 }
 
-.tree-item .icon {
+.tree-item .icon,
+.tree-edit-row .icon {
   width: 16px;
   height: 16px;
   display: flex;
@@ -802,6 +823,83 @@ summary:focus-visible,
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The name field of the tree (#349). A new entry gets a row of its own while
+   its name is typed — drawn like a tree row, but not a `.tree-item`, so the
+   arrow keys, drag and drop and the refresh pass it. A row being renamed
+   keeps its place and swaps its name for the field; the @ button and the
+   agent's mark step aside for that time. */
+.tree-edit-row {
+  display: flex;
+  align-items: center;
+  height: 31px;
+  padding-right: 8px;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.tree-item.tree-item--editing,
+.tree-item.tree-item--editing:hover {
+  background: var(--bg-active);
+  cursor: default;
+}
+
+.tree-item.tree-item--editing .tree-item-reference,
+.tree-item.tree-item--editing .tree-mark {
+  display: none;
+}
+
+/* Two pixels of accent all round — the border and a ring of one more — the
+   weight of the focus ring elsewhere. The field only exists while it has the
+   focus, so this frame is its focus ring, as with .modal-input; the global
+   outline on top would draw a second one. */
+.tree-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-blue);
+  border-radius: var(--ds-radius-sm);
+  box-shadow: 0 0 0 1px var(--ds-blue);
+  outline: none;
+}
+
+.tree-name-input:focus-visible {
+  outline: none;
+}
+
+.tree-name-input::selection {
+  background: var(--ds-blue-border);
+}
+
+/* Amber, not red (#396): a name that does not fit is a hint, not damage. */
+.tree-name-input[aria-invalid='true'] {
+  border-color: var(--ds-warning);
+  box-shadow: 0 0 0 1px var(--ds-warning);
+}
+
+/* Under the row, lined up with the name (margin-left from FileTree). Wraps
+   rather than cuts: the reason is the whole point. */
+.tree-name-error {
+  margin: 2px 8px 6px 0;
+  padding: 6px 8px;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.35;
+  color: var(--ds-warning);
+  background: var(--ds-warning-bg);
+  border: 1px solid var(--ds-warning-border);
+  border-radius: var(--ds-radius-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: default;
+}
+
+.tree-name-error[hidden] {
+  display: none;
 }
 
 /* A hidden entry, or anything below a hidden folder (#436), is dimmed: the
@@ -3700,6 +3798,8 @@ select.modal-input {
   #tree-header #btn-folder-history:active,
   #tree-header #btn-tree-sandbox:active,
   #tree-header #btn-tree-clear-marks:active,
+  #tree-header #btn-tree-new-file:active,
+  #tree-header #btn-tree-new-folder:active,
   .folder-history-item-remove:active,
   #btn-chat-new:active,
   #btn-chat-mic:active:not(:disabled),

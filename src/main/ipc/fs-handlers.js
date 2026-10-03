@@ -79,12 +79,22 @@ function registerFsHandlers({
   pdfAssets = null,
   // For the context menu's own look at the path (#649).
   fs = require('fs').promises,
+  // The open folder (#349): its own menu offers "New" but no rename or delete.
+  getWorkspaceRoot = () => null,
 }) {
   ipcMain.handle(REQ.FS_READ_DIRECTORY, async (_event, dirPath, options) =>
     filesystem.readDirectory(dirPath, options));
 
   ipcMain.handle(REQ.FS_MOVE_ITEM, async (_event, sourcePath, destDir) =>
     filesystem.moveItem(sourcePath, destDir));
+
+  // #349: the renderer sends the name as typed; path and name are checked in
+  // the adapter and the service, not trusted from here.
+  ipcMain.handle(REQ.FS_CREATE_ITEM, async (_event, parentDir, name, kind) =>
+    filesystem.createItem(parentDir, name, kind));
+
+  ipcMain.handle(REQ.FS_RENAME_ITEM, async (_event, itemPath, newName) =>
+    filesystem.renameItem(itemPath, newName));
 
   ipcMain.handle(REQ.FS_READ_FILE, async (_event, filePath) =>
     filesystem.readFilePreview(filePath));
@@ -197,8 +207,22 @@ function registerFsHandlers({
       return { error: err.message };
     }
     const win = getMainWindow();
+    const push = (channel, payload) => {
+      if (PUSH && win && !win.isDestroyed()) win.webContents.send(channel, payload);
+    };
+    const root = getWorkspaceRoot();
+    const isRoot = Boolean(root) && path.resolve(root) === absPath;
     fileContextMenu.popup(absPath, win, {
       isDirectory,
+      isRoot,
+      // "New File…" and "New Folder…" (#349): inside a folder, next to a
+      // file. Only the place goes back; the renderer asks for the name and
+      // sends it over FS_CREATE_ITEM, where it is checked.
+      onCreate: (kind) => push(PUSH.FS_BEGIN_CREATE, {
+        path: isDirectory ? filePath : path.dirname(filePath),
+        kind,
+      }),
+      onRename: isRoot ? null : () => push(PUSH.FS_BEGIN_RENAME, { path: filePath }),
       position: contextMenuPosition(options?.position, win),
       // Whether to offer "Remove mark" (#347). The renderer's word is enough:
       // the item only sends the path back, it touches nothing on disk.

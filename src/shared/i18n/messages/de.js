@@ -62,6 +62,8 @@ module.exports = {
   'tree.mark.folder.changed': 'Enthält Dateien, die der Agent geändert hat',
   'tree.mark.folder.read': 'Enthält Dateien, die der Agent gelesen hat',
   'sidebar.clearMarks': 'Markierungen des Agenten entfernen',
+  'sidebar.newFile': 'Neue Datei',
+  'sidebar.newFolder': 'Neuer Ordner',
   // "nicht angezeigt", not "ausgeblendet": since #436 that is the verb of the
   // hidden-files switch, which has nothing to do with the cap (#641).
   'tree.hiddenEntries.one': '… {count} weiterer Eintrag nicht angezeigt',
@@ -72,6 +74,24 @@ module.exports = {
   'tree.unreadable.other': 'Dieser Ordner ließ sich nicht lesen',
   // In place of the tree while the project folder takes its time to list (#639).
   'tree.loading': 'Ordner wird geladen…',
+  'tree.name.newFile': 'Name der neuen Datei',
+  'tree.name.newFolder': 'Name des neuen Ordners',
+  'tree.name.rename': 'Neuer Name für {name}',
+  'tree.name.error.empty': 'Gib einen Namen ein.',
+  'tree.name.error.dots': '„{name}“ geht nicht als Name.',
+  'tree.name.error.separator': 'Ein Name darf weder / noch \\ enthalten.',
+  'tree.name.error.control': 'Der Name enthält ein Steuerzeichen.',
+  'tree.name.error.character': 'Ein Name darf kein {character} enthalten – Windows lässt das nicht zu.',
+  'tree.name.error.trailing-dot': 'Ein Name darf nicht auf einen Punkt enden – Windows lässt das nicht zu.',
+  'tree.name.error.reserved': '„{name}“ ist unter Windows reserviert. Wähle einen anderen Namen.',
+  'tree.name.error.too-long': 'Der Name ist zu lang.',
+  'tree.name.error.exists': '„{name}“ gibt es hier schon. Wähle einen anderen Namen.',
+  'tree.name.error.permission': 'Du hast keine Schreibrechte in diesem Ordner.',
+  'tree.name.error.missing': 'Das gibt es nicht mehr – inzwischen verschoben oder gelöscht.',
+  'tree.name.error.refused': 'Das liegt außerhalb des geöffneten Ordners.',
+  'tree.name.error.root': 'Den geöffneten Ordner selbst kannst du hier nicht umbenennen.',
+  'tree.name.error.not-folder': 'Das ist kein Ordner.',
+  'tree.name.error.failed': 'Das hat nicht geklappt: {detail}',
   'fileInfo.type.unknown': 'Unbekannt',
   // Markdown in der Dateivorschau (#344). „Preview“ bleibt auch im Deutschen
   // „Preview“ — so entschieden am 2026-09-26.
@@ -1649,6 +1669,9 @@ module.exports = {
   'contextMenu.clearAgentMark': 'Markierung entfernen',
   'contextMenu.clearAgentMark.folder': 'Markierungen in diesem Ordner entfernen',
   'contextMenu.showChanges': 'Änderungen anzeigen',
+  'contextMenu.newFile': 'Neue Datei…',
+  'contextMenu.newFolder': 'Neuer Ordner…',
+  'contextMenu.rename': 'Umbenennen…',
   'contextMenu.ok': 'OK',
   'contextMenu.delete': 'Löschen…',
   'contextMenu.noDialog': 'Kein Dialog verfügbar.',
