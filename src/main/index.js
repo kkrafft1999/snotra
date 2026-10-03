@@ -14,7 +14,7 @@ const { createApplication } = require('./composition/create-application');
 const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
 const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
-const { claimSingleInstance, createStartupFailureHandler } = require('./app-lifecycle');
+const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
 
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
@@ -139,6 +139,9 @@ function start() {
       app.quit();
     }
   });
+
+  // A chat written in the moment of the quit is not cut off (#679).
+  holdQuitForPendingWrites({ app, whenWritesSettled: () => application?.whenWritesSettled() });
 
   app.on('will-quit', () => {
     application?.dispose();

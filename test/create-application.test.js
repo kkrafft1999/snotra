@@ -85,10 +85,11 @@ test('createApplication exposes lifecycle API only', async (t) => {
 
   assert.deepEqual(
     Object.keys(app).sort(),
-    ['dispose', 'getAppLocale', 'getShowHiddenFiles', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck'].sort(),
+    ['dispose', 'getAppLocale', 'getShowHiddenFiles', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck', 'whenWritesSettled'].sort(),
   );
   assert.equal(typeof app.runUpdateCheck, 'function');
   assert.equal(typeof app.dispose, 'function');
+  await app.whenWritesSettled(); // the quit waits for it (#679)
   assert.equal(typeof app.getValidatedLastFolder, 'function');
   // Sucht beim Start den Python-Interpreter und uebernimmt den Stand der
   // Tool-Einstellungen (Issues #63, #86).

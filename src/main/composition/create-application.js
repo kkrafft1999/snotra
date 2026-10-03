@@ -855,6 +855,8 @@ function createApplication({
   return {
     runUpdateCheck,
     dispose,
+    /** The quit waits for this before the process ends (#679). */
+    whenWritesSettled: () => storage.whenWritesSettled(),
     /** Beim Start einmal Interpreter suchen und die Einstellung uebernehmen (Issue #86). */
     initToolRuntimes: () =>
       Promise.all([

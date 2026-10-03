@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { claimSingleInstance, createStartupFailureHandler } = require('../src/main/app-lifecycle');
+const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('../src/main/app-lifecycle');
 
 function makeApp({ locked = true, locale = 'en-US' } = {}) {
   const listeners = new Map();
@@ -131,4 +131,46 @@ test('an English or unknown system language gets the English box', () => {
     log: { error: () => {} },
   })(new Error('x'));
   assert.deepEqual(boxes, ['Snotra AI could not start']);
+});
+
+function quitEvent() {
+  const event = { prevented: false, preventDefault: () => { event.prevented = true; } };
+  return event;
+}
+
+test('a quit waits for the stores, then quits again — and that one goes through (#679)', async () => {
+  const app = makeApp();
+  let finish;
+  holdQuitForPendingWrites({ app, whenWritesSettled: () => new Promise((resolve) => { finish = resolve; }) });
+  const first = quitEvent();
+  app.emit('before-quit', first);
+  assert.equal(first.prevented, true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(app.calls, [], 'no quit while a write is under way');
+  finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(app.calls, ['quit']);
+  const second = quitEvent();
+  app.emit('before-quit', second);
+  assert.equal(second.prevented, false);
+});
+
+test('a write that hangs holds the quit only for the grace period (#679)', async () => {
+  const app = makeApp();
+  const warnings = [];
+  holdQuitForPendingWrites({
+    app, whenWritesSettled: () => new Promise(() => {}), graceMs: 10, log: { warn: (m) => warnings.push(m) },
+  });
+  app.emit('before-quit', quitEvent());
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.deepEqual(app.calls, ['quit']);
+  assert.equal(warnings.length, 1);
+});
+
+test('a failing store does not keep the app from quitting (#679)', async () => {
+  const app = makeApp();
+  holdQuitForPendingWrites({ app, whenWritesSettled: () => Promise.reject(new Error('disk')), graceMs: 1000 });
+  app.emit('before-quit', quitEvent());
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(app.calls, ['quit']);
 });
