@@ -15,6 +15,18 @@ test('the hook is registered as the last step of the packager', () => {
   assert.deepEqual(pkg.config.forge.packagerConfig.afterComplete, ['./scripts/sign-macos.js']);
 });
 
+// Forge 8 imports a hook given as a path and keeps only its default export; a
+// path that does not resolve is dropped silently, and the app ships unsigned.
+// This loads it the way Forge's importSearch does (#88).
+test('Forge can load the hook from its path', async () => {
+  const { pathToFileURL } = require('node:url');
+  const root = path.join(__dirname, '..');
+  for (const hook of pkg.config.forge.packagerConfig.afterComplete) {
+    const loaded = await import(pathToFileURL(path.resolve(root, hook)).href);
+    assert.equal(loaded.default, afterComplete);
+  }
+});
+
 test('signs the whole bundle ad hoc, then verifies it strictly', () => {
   const calls = [];
   signAndVerify('/out/Snotra AI.app', (cmd, args) => calls.push([cmd, ...args]));
@@ -39,18 +51,17 @@ test('finds exactly one bundle in the build directory', () => {
   assert.throws(() => findAppBundle('/out/x', () => ['a.app', 'b.app']), /exactly one \.app/);
 });
 
-test('leaves Windows and Linux builds alone', () => {
+test('leaves Windows and Linux builds alone', async () => {
   for (const platform of ['win32', 'linux']) {
-    let result = 'not called';
-    afterComplete('/does/not/exist', '44.5.1', platform, 'x64', (error) => { result = error; });
-    assert.equal(result, undefined);
+    await afterComplete({ buildPath: '/does/not/exist', electronVersion: '44.5.1', platform, arch: 'x64' });
   }
 });
 
-test('hands a failure to the packager instead of throwing', () => {
-  let result;
-  afterComplete('/does/not/exist', '44.5.1', 'darwin', 'arm64', (error) => { result = error; });
-  assert.ok(result instanceof Error);
+test('hands a failure to the packager as a rejected promise', async () => {
+  await assert.rejects(
+    afterComplete({ buildPath: '/does/not/exist', electronVersion: '44.5.1', platform: 'darwin', arch: 'arm64' }),
+    /ENOENT/,
+  );
 });
 
 test('without an identity in the environment the build stays ad hoc', () => {

@@ -168,7 +168,8 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          dmg="$(ls out/make/*.dmg | head -1)"
+          # Forge 8 writes the DMG per architecture (#88).
+          dmg="$(ls out/make/dmg/arm64/*.dmg | head -1)"
           cp "$dmg" "dist/Snotra-AI-${version}-mac-arm64.dmg"
       # The DMG is the container users download: sign it, notarise it on its
       # own and staple the ticket, so Gatekeeper accepts it even offline.

@@ -72,7 +72,7 @@ uncritical.
 ## Build
 
 ```sh
-npm run make            # macOS arm64  -> out/make/*.dmg + ZIP
+npm run make            # macOS arm64  -> out/make/dmg/arm64/*.dmg
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (to be zipped)
 npm run make:linux      # Linux x64    -> out/make/{deb,AppImage}/x64/* + out/<productName>-linux-x64/
 ```
@@ -283,7 +283,7 @@ uniformly `Snotra-AI-<version>-<mac|win|linux>-<arch>.<extension>`. By hand,
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "What's new …" \
-  "out/make/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
+  "out/make/dmg/arm64/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
 
 The text from `--notes` becomes the release body and is shown as "what has

@@ -5,8 +5,10 @@
 # Since #571 it watches npm as well: Electron, pdfjs-dist, DOMPurify, marked
 # and undici reach every user, and nothing else proposes their updates.
 # Security updates come as soon as an advisory is out; version updates
-# weekly, grouped so that the board does not fill up. The Electron Forge
-# tool chain waits for the move to Forge 8 (#88), which changes its config.
+# weekly, grouped so that the board does not fill up. Major versions of the
+# Electron Forge tool chain stay out: the last one changed the hooks, the
+# output paths and the release pipeline (Forge 8, #88), so the next one is
+# migrated on purpose rather than merged from a bot.
 version: 2
 updates:
   - package-ecosystem: github-actions
