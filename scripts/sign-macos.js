@@ -10,6 +10,10 @@
 // matches. macOS then refuses the keychain without asking, and safeStorage
 // is unavailable for the whole run — that is what shipped in 1.13.3.
 //
+// Since packager 19 (Forge 8, #88) a hook gets one object and returns a
+// promise. Forge loads it with import() and drops a path that does not
+// resolve without a word, so a test loads it the same way.
+//
 // Two ways to sign, chosen by the environment:
 //
 // - SNOTRA_MACOS_SIGN_IDENTITY set (the release job): Developer ID with the
@@ -77,7 +81,7 @@ function developerIdSignOptions(appPath, { identity, keychain }) {
 }
 
 async function signDeveloperId(appPath, config, {
-  sign = require('@electron/osx-sign').signAsync,
+  sign = require('@electron/osx-sign').sign,
   notarize = require('@electron/notarize').notarize,
   run = defaultRun,
 } = {}) {
@@ -98,19 +102,9 @@ async function signBundle(appPath, config = readSigningConfig(), deps = {}) {
   }
 }
 
-function afterComplete(buildPath, _electronVersion, platform, _arch, done) {
-  if (platform !== 'darwin' && platform !== 'mas') {
-    done();
-    return;
-  }
-  let appPath;
-  try {
-    appPath = findAppBundle(buildPath);
-  } catch (error) {
-    done(error);
-    return;
-  }
-  signBundle(appPath).then(() => done(), (error) => done(error));
+async function afterComplete({ buildPath, platform }) {
+  if (platform !== 'darwin' && platform !== 'mas') return;
+  await signBundle(findAppBundle(buildPath));
 }
 
 module.exports = afterComplete;

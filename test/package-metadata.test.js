@@ -53,6 +53,23 @@ test('AppImage maker starts the packaged executable from a verified runtime', ()
   assert.match(pkg.scripts['make:linux'], /node scripts\/fetch-appimage-runtime\.js && electron-forge make/);
 });
 
+// @reforged/maker-appimage 5.3.1 still asks for maker-base 6 or 7. Left alone,
+// it drags the whole Forge 7 chain back in, packager 18 and extract-zip
+// included, which is what the move to Forge 8 removed (#88). The override in
+// package.json hands it Forge 8's maker-base; once the maker allows ^8 itself,
+// the override can go.
+test('the AppImage maker runs on the same maker-base as Forge', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const versionOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
+  const major = (version) => version.split('.')[0];
+  const modules = path.join(__dirname, '..', 'node_modules');
+  const forge = versionOf(path.join(modules, '@electron-forge', 'core'));
+  const nested = path.join(modules, '@reforged', 'maker-appimage', 'node_modules', '@electron-forge', 'maker-base');
+  const makerBase = versionOf(fs.existsSync(nested) ? nested : path.join(modules, '@electron-forge', 'maker-base'));
+  assert.equal(major(makerBase), major(forge));
+});
+
 test('the runtime check accepts only the pinned hash', (t) => {
   const fs = require('node:fs');
   const os = require('node:os');
