@@ -123,7 +123,8 @@ try {
   // New file in the selected folder, from the header.
   await row('docs').click();
   await pause();
-  await page.click('#btn-tree-new-file');
+  await page.click('#btn-tree-actions');
+  await page.click('#tree-actions-menu [data-action="new-file"]');
   await pause();
   await log('new file in docs');
   await shoot('create-field');
@@ -174,8 +175,8 @@ try {
   await shoot('narrow');
   console.log('header fits'.padEnd(18), JSON.stringify(await page.evaluate(() => {
     const header = document.getElementById('tree-header').getBoundingClientRect();
-    const open = document.getElementById('btn-open-folder').getBoundingClientRect();
-    return { header: Math.round(header.right), openFolder: Math.round(open.right) };
+    const actions = document.getElementById('btn-tree-actions').getBoundingClientRect();
+    return { header: Math.round(header.right), actions: Math.round(actions.right) };
   })));
 } finally {
   await chmod(path.join(workspace, 'locked'), 0o755).catch(() => {});

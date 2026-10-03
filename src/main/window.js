@@ -4,6 +4,7 @@ const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
 const { resolveWindowBounds, createWindowStateStore } = require('./window-state');
 const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
+const { windowTitle } = require('./services/window-title');
 const { PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -98,11 +99,11 @@ function createWindow() {
   const showFallback = setTimeout(showWhenPainted, SHOW_FALLBACK_MS);
   window.once('ready-to-show', showWhenPainted);
 
-  // Ohne das setzt das <title> des Renderers den Fenstertitel sofort wieder
-  // auf "Snotra AI" zurueck und die Version waere nur einen Wimpernschlag
-  // lang zu sehen.
-  window.on('page-title-updated', (event) => {
+  // The renderer's <title> names the open workspace (#676); taken over as
+  // it is, the version would go — main keeps it at the end.
+  window.on('page-title-updated', (event, title) => {
     event.preventDefault();
+    window.setTitle(windowTitle(title, app.getVersion()));
   });
 
   let saveTimer = null;

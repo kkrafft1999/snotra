@@ -13,8 +13,8 @@ const REFRESH_DELAY_MS = 250;
 const LOADING_STATE_DELAY_MS = 150;
 
 /**
- * The tree's filter (#350). A field above the tree, opened from the
- * magnifier in its header, with Cmd/Ctrl+P from anywhere, or by typing into
+ * The tree's filter (#350). A field above the tree, opened from the `⋯`
+ * menu in its header (#676), with Cmd/Ctrl+P from anywhere, or by typing into
  * the focused tree. As soon as it holds a query, a flat list of the matches
  * takes the tree's place: the same path list and the same ranking as the `@`
  * menu, so both find the same files in the same order.
@@ -34,15 +34,14 @@ const LOADING_STATE_DELAY_MS = 150;
  * @param {(relPath: string) => boolean} deps.isHidden whether the tree dims the entry (#436)
  * @param {() => HTMLElement | null} deps.treeFocusTarget the row Tab would enter the tree on
  */
-export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => false, treeFocusTarget }) {
+export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => false, treeFocusTarget, fallbackFocus }) {
   const bar = document.getElementById('tree-filter');
   const input = document.getElementById('tree-filter-input');
-  const btnToggle = document.getElementById('btn-tree-filter');
   const btnClose = document.getElementById('btn-tree-filter-close');
   const results = document.getElementById('tree-filter-results');
   const status = document.getElementById('tree-filter-status');
   const treeContainer = document.getElementById('tree-container');
-  const inactive = { open() {}, close() {}, refresh() {}, isOpen: () => false, setAvailable() {} };
+  const inactive = { open() {}, close() {}, refresh() {}, isOpen: () => false, setAvailable() {}, shortcut: () => '' };
   if (!bar || !input || !results || !status || !treeContainer) return inactive;
 
   let shown = []; // the entries drawn, in order
@@ -64,17 +63,11 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
   }
 
   function renderLabels() {
-    const label = t('tree.filter.open');
-    if (btnToggle) {
-      btnToggle.title = `${label} (${shortcut()})`;
-      btnToggle.setAttribute('aria-label', label);
-    }
     if (btnClose) btnClose.title = `${t('tree.filter.close')} (Esc)`;
   }
 
-  /** The magnifier only stands while a folder is open. */
+  /** Only while a folder is open; the menu entry follows it (#676). */
   function setAvailable(available) {
-    if (btnToggle) btnToggle.hidden = !available;
     if (!available) close({ restoreFocus: false });
   }
 
@@ -84,7 +77,6 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
       const active = document.activeElement;
       returnFocus = active && active !== document.body && !bar.contains(active) ? active : null;
       bar.hidden = false;
-      btnToggle?.setAttribute('aria-expanded', 'true');
     }
     if (typeof initial === 'string') {
       input.value = initial;
@@ -110,7 +102,6 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
     input.value = '';
     showResults(false);
     bar.hidden = true;
-    btnToggle?.setAttribute('aria-expanded', 'false');
     const target = returnFocus;
     returnFocus = null;
     if (!restoreFocus || !hadFocus) return;
@@ -124,7 +115,7 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
     } else if (target?.isConnected && target.getClientRects().length > 0) {
       target.focus();
     } else {
-      btnToggle?.focus();
+      fallbackFocus?.()?.focus();
     }
   }
 
@@ -389,10 +380,6 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
     markSelected();
   });
 
-  btnToggle?.addEventListener('click', () => {
-    if (isOpen()) close();
-    else open();
-  });
   btnClose?.addEventListener('click', () => close());
 
   onLocaleChange(() => {
@@ -411,5 +398,7 @@ export function initTreeFilter({ appStore, paths, openEntry, isHidden = () => fa
     refresh,
     isOpen,
     setAvailable,
+    /** The key that opens it, as the menu shows it. */
+    shortcut,
   };
 }

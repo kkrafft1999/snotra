@@ -1,7 +1,7 @@
 // Look instead of trust (#436): starts the real app on a folder with hidden
 // files and photographs the top of the sidebar — hidden files off, on with a
-// hidden folder open and a hidden file selected, the eye under the pointer and
-// with keyboard focus — light and dark. Not a test — a look.
+// hidden folder open and a hidden file selected, and the header's `⋯` menu
+// with its entry checked (#676) — light and dark. Not a test — a look.
 //
 //   node e2e/manual-hidden-files.mjs [en|de]
 //
@@ -59,17 +59,13 @@ async function shoot(state) {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 }
 
+// Since #676 the switch is a check box in the tree header's `⋯` menu.
 const describe = () => page.evaluate(() => {
-  const button = document.getElementById('btn-toggle-hidden-files');
-  const style = getComputedStyle(button);
+  const item = document.querySelector('#tree-actions-menu [data-action="hidden-files"]');
   return {
-    pressed: button.getAttribute('aria-pressed'),
-    label: button.getAttribute('aria-label'),
-    title: button.title,
-    size: `${button.offsetWidth}x${button.offsetHeight}`,
-    colour: style.color,
-    background: style.backgroundColor,
-    border: style.borderColor,
+    checked: item.getAttribute('aria-checked'),
+    label: item.querySelector('.tree-actions-label').textContent,
+    shortcut: item.querySelector('.tree-actions-shortcut').textContent,
     rows: [...document.querySelectorAll('#tree-container .tree-item')].map((row) =>
       `${row.classList.contains('tree-item--hidden') ? '~' : ' '}${row.querySelector('.label').textContent}`),
   };
@@ -81,7 +77,8 @@ try {
   console.log('off', await describe());
   await shoot('off');
 
-  await page.click('#btn-toggle-hidden-files');
+  await page.click('#btn-tree-actions');
+  await page.click('#tree-actions-menu [data-action="hidden-files"]');
   await poll(() => page.evaluate(() => Boolean(document.querySelector('.tree-item--hidden'))),
     { what: 'hidden rows' });
   await page.click(rowSelector('.github'));
@@ -93,15 +90,12 @@ try {
   console.log('on', await describe());
   await shoot('on');
 
-  await page.hover('#btn-toggle-hidden-files');
-  await shoot('on-hover');
-
-  // Keyboard focus: Shift+Tab from the history button lands on the eye.
-  await page.mouse.move(0, 0);
-  await page.focus('#btn-folder-history');
-  await page.keyboard.press('Shift+Tab');
-  console.log('focus on', await page.evaluate(() => document.activeElement?.id));
-  await shoot('on-focus');
+  // The menu, opened from the keyboard, with the entry checked.
+  await page.focus('#btn-tree-actions');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('End');
+  console.log('focus on', await page.evaluate(() => document.activeElement?.dataset.action));
+  await shoot('menu');
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();

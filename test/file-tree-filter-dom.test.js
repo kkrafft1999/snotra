@@ -94,7 +94,8 @@ async function mountTree({ paths = PATHS, truncated = false } = {}) {
     input: document.getElementById('tree-filter-input'),
     results: document.getElementById('tree-filter-results'),
     status: document.getElementById('tree-filter-status'),
-    button: document.getElementById('btn-tree-filter'),
+    button: document.getElementById('btn-tree-actions'),
+    entry: document.querySelector('#tree-actions-menu [data-action="filter"]'),
   };
 }
 
@@ -115,22 +116,29 @@ async function typeQuery(input, text, settle) {
   await settle();
 }
 
-test('the magnifier is there once a folder is open, and opens the field', async (t) => {
-  const { dom, button, bar, input, settle } = await mountTree();
+test('the header\'s `⋯` menu offers the filter once a folder is open, and it opens the field', async (t) => {
+  const { dom, button, entry, bar, input, settle } = await mountTree();
   t.after(dom.cleanup);
 
   assert.equal(button.hidden, false);
-  assert.equal(button.getAttribute('aria-expanded'), 'false');
-  assert.match(button.title, /^Filter files \((⌘P|Ctrl\+P)\)$/);
+  assert.equal(entry.querySelector('.tree-actions-label').textContent, 'Filter files');
+  assert.match(entry.querySelector('.tree-actions-shortcut').textContent, /^(⌘P|Ctrl\+P)$/);
   assert.equal(bar.hidden, true);
 
   button.focus();
   button.click();
+  entry.click();
   await settle();
   assert.equal(bar.hidden, false);
-  assert.equal(button.getAttribute('aria-expanded'), 'true');
-  assert.equal(document.activeElement, input);
+  assert.equal(button.getAttribute('aria-expanded'), 'false', 'the menu closed');
+  assert.equal(document.activeElement === input, true);
   assert.equal(input.getAttribute('role'), 'combobox');
+
+  // Closed again, the focus goes back to the menu's button (#676).
+  press(input, 'Escape');
+  await settle();
+  assert.equal(bar.hidden, true);
+  assert.equal(document.activeElement === button, true);
 });
 
 test('the filter finds the same files as @ for the same query, in the same order', async (t) => {

@@ -32,6 +32,8 @@ import {
 import { createFileViewHost } from '../file-views/host.js';
 import { createWorkspacePathSource } from '../tree/workspacePaths.js';
 import { initTreeFilter } from './TreeFilter.js';
+import { initTreeActionsMenu } from './TreeActionsMenu.js';
+import { initWorkspaceHeader } from './WorkspaceHeader.js';
 import contracts from '../generated/contracts.js';
 
 // What a quick start chip writes into the chat is the user's own message, so it
@@ -61,6 +63,9 @@ export function initFileTree(deps) {
     fileChanges = createFileChangeIndex(),
     // The path list of the `@` menu (#350); app.js hands in the shared one.
     workspacePaths = createWorkspacePathSource({ api, appStore }),
+    // Name and path of the open folder in title bar and header (#676); app.js
+    // hands in one that knows the home folder.
+    workspaceHeader = initWorkspaceHeader(),
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -75,12 +80,9 @@ export function initFileTree(deps) {
     // What the conversation on screen changed in a file (#348).
     changesFor: (path) => fileChanges.changesFor(appStore.currentChatId, path).map((change) => change.id),
   });
-  const projectName = document.getElementById('project-name');
-  const btnFolderHistory = document.getElementById('btn-folder-history');
-  const btnHiddenFiles = document.getElementById('btn-toggle-hidden-files');
+  // The switcher (#676): the folder's name, and the recent folders behind it.
+  const btnWorkspace = document.getElementById('btn-workspace');
   const btnClearMarks = document.getElementById('btn-tree-clear-marks');
-  const btnNewFile = document.getElementById('btn-tree-new-file');
-  const btnNewFolder = document.getElementById('btn-tree-new-folder');
   const folderHistoryMenu = document.getElementById('folder-history-menu');
   const welcomeRecentSection = document.getElementById('welcome-recent');
   const welcomeRecentList = document.getElementById('welcome-recent-list');
@@ -171,6 +173,7 @@ export function initFileTree(deps) {
     openEntry: (entry) => openFromPreview(joinNative(appStore.rootPath, entry.path)),
     isHidden: (relPath) => isHiddenTreePath(joinNative(appStore.rootPath, relPath), appStore.rootPath),
     treeFocusTarget: () => syncTabStop(),
+    fallbackFocus: () => document.getElementById('btn-tree-actions'),
   });
 
   function resetDragState() {
@@ -314,13 +317,9 @@ export function initFileTree(deps) {
     // A query belongs to the folder it was typed in.
     filter.close({ restoreFocus: false });
     filter.setAvailable(true);
-    const name = basenameOf(folderPath);
-    projectName.textContent = name;
-    projectName.title = folderPath;
-    // Something to create in now (#349).
-    if (btnNewFile) btnNewFile.hidden = false;
-    if (btnNewFolder) btnNewFolder.hidden = false;
-    document.title = 'Snotra AI';
+    workspaceHeader.setWorkspace(folderPath);
+    // Something to filter and create in now (#349, #350).
+    actionsMenu.setAvailable(true);
 
     // A selection belongs to the folder it was made in: left standing, the
     // next question would tell the model about a file of the folder just
@@ -394,7 +393,7 @@ export function initFileTree(deps) {
     const focused = folderHistoryMenu.contains(document.activeElement)
       ? document.activeElement.closest('[role="menuitem"]')
       : null;
-    const focusedPath = focused?.dataset.path ?? null;
+    const focusedKey = focused?.dataset.path ?? focused?.dataset.action ?? null;
     folderHistoryRebuilding = true;
     try {
       fillFolderHistory(paths);
@@ -402,13 +401,57 @@ export function initFileTree(deps) {
       folderHistoryRebuilding = false;
     }
     const items = folderHistoryItems();
-    const restored = focused ? items.find((el) => el.dataset.path === focusedPath) : null;
+    const restored = focused
+      ? items.find((el) => (el.dataset.path ?? el.dataset.action) === focusedKey)
+      : null;
     setCurrentFolderHistoryItem(restored || items[0]);
     restored?.focus();
   }
 
   function fillFolderHistory(paths) {
     folderHistoryMenu.innerHTML = '';
+    // Seen, not read out: the menu is named by its button.
+    const heading = document.createElement('div');
+    heading.className = 'folder-history-heading';
+    heading.setAttribute('aria-hidden', 'true');
+    heading.textContent = t('sidebar.recentFolders');
+    folderHistoryMenu.appendChild(heading);
+    fillFolderHistoryEntries(paths);
+    folderHistoryMenu.appendChild(openFolderEntry());
+  }
+
+  /**
+   * "Open folder…" at the foot of the menu (#676): until then a button of its
+   * own next to the history.
+   */
+  function openFolderEntry() {
+    const fragment = document.createDocumentFragment();
+    const separator = document.createElement('div');
+    separator.className = 'folder-history-separator';
+    separator.setAttribute('role', 'separator');
+    fragment.appendChild(separator);
+    const entry = document.createElement('div');
+    entry.className = 'folder-history-item folder-history-action';
+    entry.setAttribute('role', 'menuitem');
+    entry.tabIndex = -1;
+    entry.dataset.action = 'open-folder';
+    entry.textContent = t('sidebar.openFolder');
+    const run = async () => {
+      closeFolderHistoryMenu({ focusButton: true });
+      const folderPath = await api.openFolder?.();
+      if (folderPath) await openProject(folderPath);
+    };
+    entry.addEventListener('click', () => void run());
+    entry.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      void run();
+    });
+    fragment.appendChild(entry);
+    return fragment;
+  }
+
+  function fillFolderHistoryEntries(paths) {
     if (!paths.length) {
       // An entry that cannot be chosen, not a bare text: a menu holds menu
       // items only, and the focus has somewhere to go when it opens (#638).
@@ -498,8 +541,9 @@ export function initFileTree(deps) {
    * nacheinander wegräumen kann; der Fokus wandert auf den Nachbareintrag.
    */
   async function removeFolderFromHistory(folderPath, row) {
-    const neighbour = row?.nextElementSibling || row?.previousElementSibling || null;
-    const neighbourPath = neighbour?.dataset?.path || null;
+    const isEntry = (el) => Boolean(el?.dataset?.path);
+    const neighbour = [row?.nextElementSibling, row?.previousElementSibling].find(isEntry) || null;
+    const neighbourPath = neighbour?.dataset.path || null;
 
     let paths = null;
     try {
@@ -520,14 +564,14 @@ export function initFileTree(deps) {
     // Nachbarn über seinen Pfad wiederfinden, sonst ersten Eintrag bzw. Button.
     // With the last one gone, the first entry is the "nothing here" one (#638).
     const items = folderHistoryItems();
-    const target = items.find((el) => el.dataset.path === neighbourPath) || items[0] || btnFolderHistory;
+    const target = items.find((el) => el.dataset.path === neighbourPath) || items[0] || btnWorkspace;
     target.focus();
   }
 
   function openFolderHistoryMenu() {
     folderHistoryMenu.classList.remove('hidden');
     folderHistoryMenu.setAttribute('aria-hidden', 'false');
-    btnFolderHistory.setAttribute('aria-expanded', 'true');
+    btnWorkspace.setAttribute('aria-expanded', 'true');
     // Into the menu, on its first entry (#638).
     folderHistoryItems()[0]?.focus();
   }
@@ -540,13 +584,13 @@ export function initFileTree(deps) {
   function closeFolderHistoryMenu({ focusButton = false } = {}) {
     folderHistoryMenu.classList.add('hidden');
     folderHistoryMenu.setAttribute('aria-hidden', 'true');
-    btnFolderHistory.setAttribute('aria-expanded', 'false');
-    if (focusButton) btnFolderHistory.focus();
+    btnWorkspace.setAttribute('aria-expanded', 'false');
+    if (focusButton) btnWorkspace.focus();
   }
 
-  btnFolderHistory.addEventListener('click', async (e) => {
+  btnWorkspace.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const isOpen = btnFolderHistory.getAttribute('aria-expanded') === 'true';
+    const isOpen = btnWorkspace.getAttribute('aria-expanded') === 'true';
     if (isOpen) {
       closeFolderHistoryMenu();
       return;
@@ -584,7 +628,7 @@ export function initFileTree(deps) {
 
   dismissOnOutsideClick({
     isOpen: () => !folderHistoryMenu.classList.contains('hidden'),
-    ownsTarget: (t) => folderHistoryMenu.contains(t) || btnFolderHistory.contains(t),
+    ownsTarget: (t) => folderHistoryMenu.contains(t) || btnWorkspace.contains(t),
     onDismiss: closeFolderHistoryMenu,
   });
 
@@ -1657,7 +1701,7 @@ export function initFileTree(deps) {
   btnClearMarks?.addEventListener('click', () => {
     agentMarks.clearChat(appStore.currentChatId);
     // The button hides under the focus; its neighbour in the header takes it.
-    btnHiddenFiles?.focus();
+    document.getElementById('btn-tree-actions')?.focus();
   });
 
   api.onFsClearAgentMark?.(({ path } = {}) => {
@@ -1989,12 +2033,6 @@ export function initFileTree(deps) {
     focusRow(newRow);
   }
 
-  btnNewFile?.addEventListener('click', () => {
-    void beginCreate(createTargetDir(), 'file');
-  });
-  btnNewFolder?.addEventListener('click', () => {
-    void beginCreate(createTargetDir(), 'directory');
-  });
 
   // "New File…", "New Folder…" and "Rename…" from the context menu: main
   // only says where.
@@ -2225,14 +2263,10 @@ export function initFileTree(deps) {
     return appStore.showHiddenFiles !== true && isHiddenTreePath(itemPath, appStore.rootPath);
   }
 
-  // The label stays "Show hidden files" and aria-pressed carries the state;
-  // the title names what a click does next, with the shortcut.
+  // The check in the `⋯` menu carries the state (#676), next to the dimmed
+  // rows; the label stays "Show hidden files".
   function renderHiddenFilesButton() {
-    if (!btnHiddenFiles) return;
-    const on = appStore.showHiddenFiles === true;
-    btnHiddenFiles.setAttribute('aria-pressed', on ? 'true' : 'false');
-    const action = t(on ? 'sidebar.hiddenFiles.hide' : 'sidebar.hiddenFiles.show');
-    btnHiddenFiles.title = `${action} (${hiddenFilesShortcut()})`;
+    actionsMenu.setHiddenFilesChecked(appStore.showHiddenFiles === true);
   }
 
   /**
@@ -2284,8 +2318,18 @@ export function initFileTree(deps) {
     return setShowHiddenFiles(appStore.showHiddenFiles !== true);
   }
 
-  btnHiddenFiles?.addEventListener('click', () => {
-    void toggleHiddenFiles();
+  // What the header's buttons did until #676.
+  const actionsMenu = initTreeActionsMenu({
+    actions: {
+      filter: () => filter.open(),
+      'new-file': () => void beginCreate(createTargetDir(), 'file'),
+      'new-folder': () => void beginCreate(createTargetDir(), 'directory'),
+      'hidden-files': () => void toggleHiddenFiles(),
+    },
+    shortcuts: {
+      filter: () => filter.shortcut(),
+      'hidden-files': hiddenFilesShortcut,
+    },
   });
   renderHiddenFilesButton();
 
@@ -2399,8 +2443,7 @@ export function initFileTree(deps) {
    * `file-views/host.js`.
    */
   onLocaleChange(() => {
-    if (!appStore.rootPath) projectName.textContent = t('sidebar.noFolder');
-    renderHiddenFilesButton();
+    actionsMenu.renderShortcuts();
     for (const btn of treeContainer.querySelectorAll('.tree-item-reference')) {
       const name = btn.dataset.itemName || '';
       btn.setAttribute('aria-label', t('tree.reference.label', { name }));

@@ -23,6 +23,7 @@ import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
 import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
+import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
 import { t, setLocale, onLocaleChange } from './i18n.js';
 
@@ -32,7 +33,6 @@ const DEFAULT_MAX_TOOL_ROUNDS = 14;
 // app.js hält nur noch die Elemente, die es selbst bedient (Input-Höhe,
 // Content-Pane-Toggle, Öffnen-Buttons) — alle anderen Selektoren leben in
 // den jeweiligen Components.
-const btnOpen = document.getElementById('btn-open-folder');
 const appRoot = document.getElementById('app');
 const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
 const btnToggleContentPane = document.getElementById('btn-toggle-content-pane');
@@ -450,6 +450,11 @@ for (const type of ['dragover', 'drop']) {
 const fileTree = initFileTree({
   api,
   appStore,
+  // `~` for the home folder in the header's path (#676).
+  workspaceHeader: initWorkspaceHeader({
+    getHomeDir: () => toolPermissions.get()?.homeDir || '',
+    subscribeHomeDir: (listener) => toolPermissions.subscribe(listener),
+  }),
   onInputChanged: syncChatInputHeight,
   onWorkspaceChanged: async (folderPath) => {
     mentionAutocomplete.invalidate();
@@ -491,13 +496,13 @@ api.onToggleMarkdownSource?.(() => {
 });
 
 // Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436) — the
-// same as the eye in the tree header.
+// same as the entry in the tree header's `⋯` menu (#676).
 api.onToggleHiddenFiles?.(() => {
   void fileTree.toggleHiddenFiles();
 });
 
 // Menu "View > Filter Files…" or Cmd/Ctrl+P (#350) — the same as the
-// magnifier in the tree header, from anywhere. A closed sidebar opens first:
+// entry in the tree header's `⋯` menu, from anywhere. A closed sidebar opens first:
 // the filter lives in it.
 api.onFilterFiles?.(() => {
   if (!appStore.rootPath) return;
@@ -511,8 +516,6 @@ async function openFolderViaDialog() {
     await fileTree.openProject(folderPath);
   }
 }
-
-btnOpen.addEventListener('click', openFolderViaDialog);
 
 const welcomeCta = document.getElementById('welcome-cta');
 if (welcomeCta) {

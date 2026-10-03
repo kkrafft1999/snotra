@@ -30,10 +30,13 @@ module.exports = {
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   'sidebar.noFolder': 'Kein Ordner geöffnet',
+  'sidebar.workspace.label': '{name}, {path}. Ordner wechseln',
+  'sidebar.workspace.labelEmpty': 'Kein Ordner geöffnet. Ordner öffnen',
+  'sidebar.workspace.title': 'Ordner wechseln · {path}',
+  'sidebar.actions': 'Weitere Aktionen',
   'sidebar.recentFolders': 'Zuletzt geöffnete Ordner',
-  'sidebar.openFolder': 'Ordner öffnen',
+  'sidebar.openFolder': 'Ordner öffnen …',
   'sidebar.hiddenFiles.show': 'Versteckte Dateien anzeigen',
-  'sidebar.hiddenFiles.hide': 'Versteckte Dateien ausblenden',
   'sidebar.hiddenFiles.shortcut': 'Strg+Shift+.',
   'sidebar.sandbox.on': 'Isoliert: Läufe von {tools} bleiben in diesem Workspace in der Sandbox.',
   'sidebar.sandbox.pending': 'Die Sandbox für {tools} wird geprüft.',

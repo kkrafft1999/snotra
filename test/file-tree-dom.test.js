@@ -804,37 +804,40 @@ const topLabels = (container) => [...container.children]
   .filter((el) => el.classList.contains('tree-item'))
   .map((row) => row.querySelector('.label').textContent);
 
-const hiddenFilesButton = () => document.getElementById('btn-toggle-hidden-files');
+// Since #676 a check box in the header's `⋯` menu, no eye button of its own.
+const hiddenFilesItem = () => document.querySelector('#tree-actions-menu [data-action="hidden-files"]');
 
 async function until(condition) {
   for (let i = 0; i < 50 && !condition(); i += 1) await flush();
   assert.ok(condition(), 'the condition came true');
 }
 
-test('hidden files are off at first: the eye is struck through and the dot entries stay out', async (t) => {
+test('hidden files are off at first: the menu entry is unchecked and the dot entries stay out', async (t) => {
   const { container, reads } = await mountHiddenTree(t);
 
   assert.deepEqual(topLabels(container), ['docs', 'README.md']);
-  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'false');
-  assert.equal(hiddenFilesButton().getAttribute('aria-label'), 'Show hidden files');
-  assert.match(hiddenFilesButton().title, /^Show hidden files \(.+\)$/, 'the title names the shortcut');
+  assert.equal(hiddenFilesItem().getAttribute('role'), 'menuitemcheckbox');
+  assert.equal(hiddenFilesItem().getAttribute('aria-checked'), 'false');
+  assert.equal(hiddenFilesItem().querySelector('.tree-actions-label').textContent, 'Show hidden files');
+  assert.notEqual(hiddenFilesItem().querySelector('.tree-actions-shortcut').textContent, '', 'the entry names the shortcut');
   assert.ok(reads.every((read) => read.showHidden === false), 'main is asked without hidden files');
 });
 
-test('a click on the eye shows hidden files, dims them, and remembers the switch', async (t) => {
+test('the menu entry shows hidden files, dims them, and remembers the switch', async (t) => {
   const { container, reads, prefWrites } = await mountHiddenTree(t);
 
-  hiddenFilesButton().click();
+  document.getElementById('btn-tree-actions').click();
+  hiddenFilesItem().click();
   await until(() => prefWrites.length === 1);
 
   assert.deepEqual(topLabels(container), ['.github', 'docs', '.env', 'README.md']);
   assert.equal(rowFor(container, '/ws/.github').classList.contains('tree-item--hidden'), true);
   assert.equal(rowFor(container, '/ws/.env').classList.contains('tree-item--hidden'), true);
   assert.equal(rowFor(container, '/ws/docs').classList.contains('tree-item--hidden'), false);
-  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'true');
-  // The label stays; the title says what the next click does.
-  assert.equal(hiddenFilesButton().getAttribute('aria-label'), 'Show hidden files');
-  assert.match(hiddenFilesButton().title, /^Hide hidden files \(/);
+  // The label stays; the check carries the state.
+  assert.equal(hiddenFilesItem().getAttribute('aria-checked'), 'true');
+  assert.equal(hiddenFilesItem().querySelector('.tree-actions-label').textContent, 'Show hidden files');
+  assert.equal(document.getElementById('tree-actions-menu').classList.contains('hidden'), true, 'the choice closed the menu');
   assert.deepEqual(prefWrites, [{ showHiddenFiles: true }]);
   assert.equal(reads.at(-1).showHidden, true);
 });
@@ -907,7 +910,7 @@ test('two quick switches cancel out: no redraw, and the last state is stored', a
   assert.deepEqual(topLabels(container), ['docs', 'README.md']);
   assert.equal(reads.length, readsBefore, 'the tree already matched, nothing was listed again');
   assert.deepEqual(prefWrites, [{ showHiddenFiles: false }, { showHiddenFiles: false }]);
-  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'false');
+  assert.equal(hiddenFilesItem().getAttribute('aria-checked'), 'false');
 });
 
 test('the stored switch at start-up is applied without being written back', async (t) => {
@@ -916,7 +919,7 @@ test('the stored switch at start-up is applied without being written back', asyn
   await tree.setShowHiddenFiles(true, { persist: false });
 
   assert.deepEqual(topLabels(container), ['.github', 'docs', '.env', 'README.md']);
-  assert.equal(hiddenFilesButton().getAttribute('aria-pressed'), 'true');
+  assert.equal(hiddenFilesItem().getAttribute('aria-checked'), 'true');
   assert.deepEqual(prefWrites, []);
 });
 
