@@ -53,8 +53,7 @@ await writeFile(
 );
 
 // The app reads global skills from the home folder; this one is temporary.
-process.env.HOME = home;
-const snotra = await launchApp({ userDataDir });
+const snotra = await launchApp({ userDataDir, home });
 const { page } = snotra;
 const shot = (name) => path.join(SHOTS, `skill-folders-${locale}-${name}.png`);
 const pause = (ms = 350) => new Promise((r) => setTimeout(r, ms));
