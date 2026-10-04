@@ -16,7 +16,7 @@
     "package": "npm run sync-vendor && electron-forge package --arch arm64 --platform darwin",
     "package:win": "npm run sync-vendor && electron-forge package --platform win32 --arch x64",
     "package:linux": "npm run sync-vendor && electron-forge package --platform linux --arch x64",
-    "make": "npm run sync-vendor && electron-forge make --arch arm64 --platform darwin",
+    "make": "npm run package && node scripts/make-dmg.js",
     "make:linux": "npm run sync-vendor && node scripts/fetch-appimage-runtime.js && electron-forge make --platform linux --arch x64",
     "check-package": "node scripts/check-asar-contents.js"
   },
@@ -53,13 +53,6 @@
         }
       ],
       "makers": [
-        {
-          "name": "@electron-forge/maker-dmg",
-          "config": {
-            "format": "ULFO",
-            "name": "Snotra AI"
-          }
-        },
         {
           "name": "@electron-forge/maker-deb",
           "platforms": [
@@ -125,7 +118,6 @@
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
     "@electron-forge/maker-deb": "^8.0.1",
-    "@electron-forge/maker-dmg": "^8.0.1",
     "@electron-forge/plugin-fuses": "^8.0.1",
     "@electron/asar": "^4.3.1",
     "@electron/fuses": "^2.1.3",

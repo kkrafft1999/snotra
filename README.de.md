@@ -183,7 +183,7 @@ Beim ersten Start kannst du in den Einstellungen einen Provider wählen und dein
 ## App bauen / paketieren
 
 ```bash
-# macOS (Apple Silicon) – DMG + ZIP
+# macOS (Apple Silicon) – DMG
 npm run make
 
 # Linux (x64) – DEB + AppImage; braucht dpkg, fakeroot und mksquashfs
