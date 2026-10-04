@@ -72,7 +72,7 @@ uncritical.
 ## Build
 
 ```sh
-npm run make            # macOS arm64  -> out/make/dmg/arm64/*.dmg
+npm run make            # macOS arm64  -> out/make/Snotra-AI-<version>-mac-arm64.dmg
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (to be zipped)
 npm run make:linux      # Linux x64    -> out/make/{deb,AppImage}/x64/* + out/<productName>-linux-x64/
 ```
@@ -95,6 +95,38 @@ together — GitHub lists the digest next to each release asset.
 The artifacts end up under `out/`. The app's comparison uses **the release tag
 only**, not the file names — so the asset names can be chosen freely, but should
 carry the version and the platform, e.g. `Snotra-AI-1.1.0-mac-arm64.dmg`.
+
+### The macOS DMG
+
+Since #685 the DMG is not built by Forge but by
+[`scripts/make-dmg.js`](../scripts/make-dmg.js), which `npm run make` runs after
+packaging. It uses only system tools (`hdiutil`, `ditto`, `xattr`); the former
+chain `maker-dmg` → `electron-installer-dmg` → `appdmg` showed the Electron logo
+as the volume icon, failed now and then on `hdiutil detach`, and kept an
+unmaintained `image-size` in the lock file.
+
+The image holds the signed `Snotra AI.app`, an `/Applications` symlink, Snotra's
+`icon.icns` as the volume icon and the window layout from
+[`assets/macos/dmg-layout.DS_Store`](../assets/macos/dmg-layout.DS_Store): icon
+view without toolbar, status bar or sidebar, the app on the left, Applications
+on the right. There is deliberately **no background picture**. Finder colours
+the icon labels after the system appearance, not after the picture, so any
+picture leaves them unreadable in either light or dark mode; without one Finder
+draws the window in the system colours. The variants were compared on a mockup
+in #685.
+
+The script builds a read-write image, mounts it once with `-nobrowse` to set the
+custom-icon flag on the volume root (`hdiutil create -srcfolder` does not carry
+it over), detaches it and converts it to a compressed `ULFO` image. Signing,
+notarising and stapling the DMG stay in `release.yml`.
+
+**Changing the layout.** The `.DS_Store` is generated once with Finder and
+checked in; CI never scripts Finder. Build a small read-write image with an
+empty folder `Snotra AI.app` and the `/Applications` symlink, give it a volume
+name of its own (if a real *Snotra AI* is mounted, Finder confuses the two),
+mount it, set the view with Finder, unmount it and copy its `.DS_Store` over
+the asset. Keep it without a background picture or colour; a test in
+`test/make-dmg.test.js` reads the file and fails otherwise.
 
 ### The app icon
 
@@ -309,7 +341,7 @@ uniformly `Snotra-AI-<version>-<mac|win|linux>-<arch>.<extension>`. By hand,
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "What's new …" \
-  "out/make/dmg/arm64/Snotra AI.dmg#Snotra AI (macOS, Apple Silicon)"
+  "out/make/Snotra-AI-X.Y.Z-mac-arm64.dmg#Snotra AI (macOS, Apple Silicon)"
 ```
 
 The text from `--notes` becomes the release body and is shown as "what has

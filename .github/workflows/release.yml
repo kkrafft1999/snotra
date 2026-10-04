@@ -132,45 +132,25 @@ jobs:
             echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
           } >> "$GITHUB_ENV"
           echo "Signing as: $identity"
-      # 'npm run make' scheitert gelegentlich beim DMG-Schritt an einem flaky
-      # 'hdiutil detach' (appdmg-Race: Volume ist beim Unmount schon weg ->
-      # "No such file or directory"). Kein Config-Bug (identische Config baute
-      # fruehere Releases erfolgreich), daher hier gegen die Flakiness haerten:
-      # bis zu 3 Versuche, dazwischen Alt-Volumes zwangsweise loesen und
-      # partielle Outputs entfernen.
       # The afterComplete hook (scripts/sign-macos.js) signs the app with the
       # identity from the step above, notarises it and staples the ticket.
-      - name: Build distributables (retry flaky hdiutil detach)
-        shell: bash
+      # scripts/make-dmg.js then builds the DMG with hdiutil (#685); the retry
+      # loop that appdmg's flaky detach needed is gone with it.
+      - name: Build distributables
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: |
-          set -uo pipefail
-          attempts=3
-          for i in $(seq 1 "$attempts"); do
-            echo "::group::npm run make (Versuch $i/$attempts)"
-            if npm run make; then
-              echo "::endgroup::"
-              exit 0
-            fi
-            echo "::endgroup::"
-            echo "make-Versuch $i fehlgeschlagen; raeume vor Retry auf"
-            for vol in "/Volumes/Snotra AI"*; do
-              [ -d "$vol" ] && hdiutil detach "$vol" -force || true
-            done
-            rm -rf out/make || true
-          done
-          echo "npm run make nach $attempts Versuchen fehlgeschlagen" >&2
-          exit 1
+        run: npm run make
       - name: Collect DMG
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          # Forge 8 writes the DMG per architecture (#88).
-          dmg="$(ls out/make/dmg/arm64/*.dmg | head -1)"
-          cp "$dmg" "dist/Snotra-AI-${version}-mac-arm64.dmg"
+          # make-dmg.js names the file after package.json; the asset is named
+          # after the tag, as before.
+          dmgs=(out/make/*.dmg)
+          [ "${#dmgs[@]}" -eq 1 ] || { echo "::error::Expected one DMG in out/make, found ${#dmgs[@]}."; exit 1; }
+          cp "${dmgs[0]}" "dist/Snotra-AI-${version}-mac-arm64.dmg"
       # The DMG is the container users download: sign it, notarise it on its
       # own and staple the ticket, so Gatekeeper accepts it even offline.
       - name: Sign, notarise and staple the DMG

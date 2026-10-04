@@ -187,7 +187,7 @@ The key is stored encrypted in your operating system's user profile — it does
 ## Building / packaging the app
 
 ```bash
-# macOS (Apple Silicon) – DMG + ZIP
+# macOS (Apple Silicon) – DMG
 npm run make
 
 # Linux (x64) – DEB + AppImage; needs dpkg, fakeroot and mksquashfs
