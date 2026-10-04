@@ -142,6 +142,14 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
     env,
   });
 
+  // What main printed, kept for a failing test to show (#689). The CI log
+  // otherwise has nothing of it — not the [storage] or [quit] warnings that
+  // would say why a restart came back without its data.
+  const mainOutput = [];
+  for (const stream of [app.process().stdout, app.process().stderr]) {
+    stream?.on('data', (chunk) => mainOutput.push(String(chunk)));
+  }
+
   const page = await app.firstWindow();
   await poll(() => page.evaluate(() => !!document.getElementById('tree-container')), {
     what: 'geladener Renderer',
@@ -150,6 +158,8 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   return {
     app,
     page,
+    /** Everything main wrote to stdout and stderr so far. */
+    mainOutput: () => mainOutput.join(''),
     /**
      * Ersetzt shell.openExternal im Main-Prozess: Ein Klick auf einen Link soll
      * im Test keinen echten Browser oeffnen. `app.evaluate` geht erst nach
