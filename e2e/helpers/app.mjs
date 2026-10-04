@@ -17,8 +17,8 @@
 
 import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -28,6 +28,30 @@ import electronBinary from 'electron';
 const APP_DIR = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const tempDirs = new Set();
+
+/** One home per profile, so that a restart with the same profile finds the same one. */
+const testHomes = new Map();
+
+async function testHomeFor(userDataDir) {
+  const key = path.resolve(userDataDir);
+  if (!testHomes.has(key)) testHomes.set(key, await makeTempDir('snotra-home-'));
+  return testHomes.get(key);
+}
+
+/**
+ * macOS looks for the login keychain below $HOME. In an empty home the app
+ * would run without safeStorage, and that is a mode of its own (#419, #658),
+ * not the one the tests are about. So the test home reaches the real keychain
+ * folder, and only that: memory, instructions and skills stay its own.
+ */
+async function reachKeychain(home) {
+  if (process.platform !== 'darwin') return;
+  const link = path.join(home, 'Library', 'Keychains');
+  await mkdir(path.dirname(link), { recursive: true });
+  await symlink(path.join(homedir(), 'Library', 'Keychains'), link).catch((error) => {
+    if (error?.code !== 'EEXIST') throw error;
+  });
+}
 
 /**
  * How long a quit may take before the helper reports it. The app holds a quit
@@ -122,9 +146,24 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
  * pass all arguments on (Playwright puts its own in front). Used to start the
  * app under a Seatbelt profile (#329). `env` adds variables for this launch.
  */
-export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {} }) {
+export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {}, home }) {
   const env = { ...process.env, ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
+  // --user-data-dir moves the profile, not the home folder, and main reads
+  // global memory, instructions and skills below the home folder (#702). Every
+  // start gets an empty one of its own unless the caller hands one over; only
+  // a script that has to run a real program with its real login passes
+  // `home: false` and keeps the real one.
+  //
+  // Not on Windows: there the home folder comes from USERPROFILE, and with it
+  // moved Electron does not come up at all — every test hung at launch on the
+  // windows-latest runner. Windows keeps the real home until that is solved.
+  const isolateHome = home !== false && process.platform !== 'win32';
+  const homeDir = isolateHome ? (home ?? await testHomeFor(userDataDir)) : null;
+  if (homeDir) {
+    await reachKeychain(homeDir);
+    env.HOME = homeDir;
+  }
   // The start-up update check would ask GitHub for real. Once a release newer
   // than the checkout is out, its dialog lands on top of the window and the
   // screenshots compare the dialog instead of the app (#407).
@@ -166,6 +205,8 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   return {
     app,
     page,
+    /** The home folder the app sees, or null when it is the real one. */
+    home: homeDir,
     /** Everything main wrote to stdout and stderr so far. */
     mainOutput: () => mainOutput.join(''),
     /**

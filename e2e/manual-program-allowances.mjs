@@ -44,7 +44,9 @@ await writeFile(
   JSON.stringify({ appLocale: locale, shellExecutionEnabled: true }),
   'utf8',
 );
-const snotra = await launchApp({ userDataDir });
+// The program runs for real and needs its real login below the real home
+// folder, so this script keeps it (#702).
+const snotra = await launchApp({ userDataDir, home: false });
 const { app, page } = snotra;
 const shot = (name) => path.join(SHOTS, `allowances-${locale}-${name}.png`);
 const pause = (ms = 350) => new Promise((r) => setTimeout(r, ms));
