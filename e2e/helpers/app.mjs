@@ -15,8 +15,9 @@
 //   * Temp folders come from `makeTempDir`, which removes them when the process
 //     ends — also when a launch fails or the script dies halfway (#688).
 
+import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +28,13 @@ import electronBinary from 'electron';
 const APP_DIR = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const tempDirs = new Set();
+
+/**
+ * How long a quit may take before the helper reports it. The app holds a quit
+ * for at most 5 s of pending writes (#681), so 20 s is far beyond any regular
+ * end.
+ */
+const STALLED_QUIT_MS = 20000;
 
 // `exit` also fires after an uncaught error, and node --test runs every file in
 // a process of its own, so this is the end of one test file or one script.
@@ -256,7 +264,57 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
       return () => app.evaluate(() => globalThis.__chatAbortTrace ?? null);
     },
     async stop() {
-      await app.close();
+      // `app.close()` has no time limit of its own. A quit that never ends
+      // used to surface only as the test's 180 s timeout, with nothing to say
+      // where main was stuck (#689) — this reports it while it still hangs.
+      const startedAt = Date.now();
+      const watchdog = setTimeout(() => {
+        void reportStalledQuit(app, mainOutput, startedAt);
+      }, STALLED_QUIT_MS);
+      try {
+        await app.close();
+      } finally {
+        clearTimeout(watchdog);
+      }
     },
   };
+}
+
+/**
+ * Writes what is known about a quit that does not end to stderr: whether main
+ * is still alive, what it printed, and on macOS a stack sample of main, which
+ * shows a thread blocked in the keychain or in a write at a glance.
+ */
+async function reportStalledQuit(app, mainOutput, startedAt) {
+  const pid = app.process().pid;
+  let alive = false;
+  try {
+    process.kill(pid, 0);
+    alive = true;
+  } catch {
+    // gone
+  }
+  const lines = [
+    `[e2e] The app (pid ${pid}) has not quit after ${Math.round((Date.now() - startedAt) / 1000)} s; main is ${alive ? 'still running' : 'gone'}.`,
+    `[e2e] main output so far:\n${mainOutput.join('') || '(none)'}`,
+  ];
+  if (alive && process.platform === 'darwin') lines.push(`[e2e] stack sample of main:\n${await sampleProcess(pid)}`);
+  console.error(lines.join('\n'));
+}
+
+/** `sample` ships with macOS; two seconds are enough to see where a thread waits. */
+async function sampleProcess(pid) {
+  const file = path.join(await makeTempDir('snotra-sample-'), 'main.txt');
+  try {
+    await new Promise((resolve, reject) => {
+      execFile('sample', [String(pid), '2', '-mayDie', '-file', file], { timeout: 15000 },
+        (error) => (error ? reject(error) : resolve()));
+    });
+    const text = await readFile(file, 'utf8');
+    // The call graph of the main thread comes first; the rest is binary images.
+    const start = text.indexOf('Call graph:');
+    return text.slice(start < 0 ? 0 : start, (start < 0 ? 0 : start) + 12000);
+  } catch (error) {
+    return `(sample failed: ${error.message})`;
+  }
 }
