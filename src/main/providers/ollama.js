@@ -2,6 +2,7 @@ const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { Agent } = require('undici');
+const { fetchVia } = require('../services/dispatcher-fetch');
 const { iterStreamLines, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://localhost:11434';
@@ -60,7 +61,7 @@ async function listModelsRequest(config) {
   const url = `${base}/api/tags`;
   let res;
   try {
-    res = await fetch(url, { dispatcher: dispatcherFor(url, config), signal: config.signal });
+    res = await fetchVia(url, { dispatcher: dispatcherFor(url, config), signal: config.signal });
   } catch (err) {
     return { error: describeFetchErrorMessage(err, base) };
   }
@@ -136,7 +137,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const headers = { 'Content-Type': 'application/json' };
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchVia(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
