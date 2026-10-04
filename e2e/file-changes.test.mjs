@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
@@ -72,11 +72,28 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
     { what: 'content after the switch' });
 
   // A restart forgets the snapshots; the chat keeps the record.
-  await snotra.stop();
+  const firstStart = snotra;
+  await firstStart.stop();
   snotra = await launchApp({ userDataDir });
   page = snotra.page;
-  await poll(() => page.evaluate(() => Boolean(document.querySelector('.chat-changes'))),
-    { what: 'restored chat with its changed files', timeoutMs: 30000 });
+  try {
+    await poll(() => page.evaluate(() => Boolean(document.querySelector('.chat-changes'))),
+      { what: 'restored chat with its changed files', timeoutMs: 30000 });
+  } catch (error) {
+    // Only ever seen on a fresh macOS runner (#679, #689). What the restart
+    // found is the evidence: whether the chat came back at all, whether the
+    // history file was set aside, and what main said on both starts.
+    const shown = await page.evaluate(() => [...document.querySelectorAll('#chat-messages > li')]
+      .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 80)}`)).catch((e) => [String(e)]);
+    error.message += [
+      '',
+      `chat after the restart: ${JSON.stringify(shown, null, 1)}`,
+      `profile: ${(await readdir(userDataDir).catch((e) => [String(e)])).join(', ')}`,
+      `main, first start:\n${firstStart.mainOutput()}`,
+      `main, restart:\n${snotra.mainOutput()}`,
+    ].join('\n');
+    throw error;
+  }
   const after = await page.evaluate(() => ({
     buttons: document.querySelectorAll('.chat-changes button').length,
     note: document.querySelector('.chat-changes-note')?.textContent ?? null,
