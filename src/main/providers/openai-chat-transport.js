@@ -12,6 +12,7 @@
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { fetchVia } = require('../services/dispatcher-fetch');
 const {
   iterSseEvents,
   describeFetchErrorMessage,
@@ -150,7 +151,7 @@ function assistantMessageOf(content, toolCalls) {
 async function listChatModels({ baseUrl, headers = {}, signal, dispatcher, filter, serverName = null }) {
   let res;
   try {
-    res = await fetch(`${baseUrl}/models`, { headers, signal, ...(dispatcher ? { dispatcher } : {}) });
+    res = await fetchVia(`${baseUrl}/models`, { headers, signal, ...(dispatcher ? { dispatcher } : {}) });
   } catch (err) {
     return { error: describeFetchErrorMessage(err, baseUrl) };
   }
@@ -210,7 +211,7 @@ async function streamChatCompletionsRound({
   const url = `${baseUrl}/chat/completions`;
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchVia(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),

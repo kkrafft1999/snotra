@@ -10,6 +10,7 @@
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { fetchVia } = require('../services/dispatcher-fetch');
 const {
   iterSseEvents,
   describeFetchErrorMessage,
@@ -130,7 +131,7 @@ async function streamResponsesRound({
   const url = `${baseUrl}/responses`;
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchVia(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
