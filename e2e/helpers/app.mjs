@@ -153,13 +153,16 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   // global memory, instructions and skills below the home folder (#702). Every
   // start gets an empty one of its own unless the caller hands one over; only
   // a script that has to run a real program with its real login passes
-  // `home: false` and keeps the real one. Windows resolves the home folder
-  // from USERPROFILE, everything else from HOME.
-  const homeDir = home === false ? null : (home ?? await testHomeFor(userDataDir));
+  // `home: false` and keeps the real one.
+  //
+  // Not on Windows: there the home folder comes from USERPROFILE, and with it
+  // moved Electron does not come up at all — every test hung at launch on the
+  // windows-latest runner. Windows keeps the real home until that is solved.
+  const isolateHome = home !== false && process.platform !== 'win32';
+  const homeDir = isolateHome ? (home ?? await testHomeFor(userDataDir)) : null;
   if (homeDir) {
     await reachKeychain(homeDir);
     env.HOME = homeDir;
-    if (process.platform === 'win32') env.USERPROFILE = homeDir;
   }
   // The start-up update check would ask GitHub for real. Once a release newer
   // than the checkout is out, its dialog lands on top of the window and the

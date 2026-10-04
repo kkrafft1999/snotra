@@ -1647,8 +1647,9 @@ everything once at startup catches the bulk of it. It takes about three seconds.
   `e2e/legacy-migration-isolation.test.mjs`).
 - **Home folder:** `--user-data-dir` does not move the home folder, and main
   reads global memory, instructions and skills below it. `launchApp` therefore
-  sets `HOME` (`USERPROFILE` on Windows) to a temp folder of its own, one per
-  profile so that a restart finds the same one. On macOS only
+  sets `HOME` to a temp folder of its own, one per profile so that a restart
+  finds the same one. Not on Windows yet: there the home folder comes from
+  `USERPROFILE`, and with that moved Electron did not start at all. On macOS only
   `Library/Keychains` links to the real folder, since without the login keychain
   the app would run without safeStorage. A caller can hand over a prepared home
   (`home`), and a script that runs a real program with its real login keeps the
