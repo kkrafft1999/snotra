@@ -26,16 +26,24 @@ function sseResponse(chunks, { status = 200 } = {}) {
   };
 }
 
-/** Replaces global.fetch for the duration of one node:test case. */
+/**
+ * Replaces fetch for the duration of one node:test case — the runtime's and the
+ * undici package's, which carries the requests with their own dispatcher (#699).
+ */
 function mockFetch(t, impl) {
+  const undici = require('undici');
   const original = global.fetch;
+  const originalUndici = undici.fetch;
   const calls = [];
-  global.fetch = async (url, options) => {
+  const stub = async (url, options) => {
     calls.push({ url, options });
     return impl(url, options);
   };
+  global.fetch = stub;
+  undici.fetch = stub;
   t.after(() => {
     global.fetch = original;
+    undici.fetch = originalUndici;
   });
   return calls;
 }

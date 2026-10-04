@@ -11,6 +11,7 @@
 
 const dns = require('node:dns').promises;
 const { Agent } = require('undici');
+const { fetchVia } = require('../services/dispatcher-fetch');
 const { withRequestTimeout } = require('../services/request-timeout');
 const { describeFetchError } = require('../../shared/runtime/fetch-errors');
 const { parseHttpUrl, isBlockedHostname, isBlockedAddress } = require('../../shared/runtime/url-safety');
@@ -173,7 +174,7 @@ function blockedAtConnect(error) {
   return null;
 }
 
-function createHttpUrlFetchAdapter({ fetchImpl = fetch, lookup = null, getLocale = () => 'en' } = {}) {
+function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => 'en' } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
   // Built on first use: a connection only to addresses that pass the check.
   let dispatcher = null;
