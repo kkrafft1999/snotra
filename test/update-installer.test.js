@@ -31,8 +31,11 @@ const {
   psQuote,
 } = require('../src/main/services/update-installer');
 
-function makeTempDir(prefix = 'snotra-inst-test-') {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+/** A temp folder that is removed when the test `t` ends, passed or failed. */
+function makeTempDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-inst-test-'));
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  return dir;
 }
 
 /**
@@ -258,8 +261,7 @@ test('fremde Eintraege im App-Ordner ziehen in den neuen Ordner mit', () => {
 });
 
 test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gross-/Kleinschreibung zu achten', async (t) => {
-  const dir = makeTempDir();
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const dir = makeTempDir(t);
   const installDir = path.join(dir, 'app');
   const packageDir = path.join(dir, 'pkg');
   await fsp.mkdir(path.join(installDir, 'resources'), { recursive: true });
@@ -282,8 +284,7 @@ test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gr
  * folder, as electron-forge packs it.
  */
 async function prepareWindowsInstall(t) {
-  const dir = makeTempDir();
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const dir = makeTempDir(t);
   const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
   await fsp.mkdir(installDir, { recursive: true });
   await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
@@ -411,13 +412,13 @@ test('eine PID wird als Zahl eingesetzt, nie als Text', () => {
   assert.doesNotMatch(script, /rm -rf \/\n/);
 });
 
-test('ohne geladene Datei passiert nichts', async () => {
+test('ohne geladene Datei passiert nichts', async (t) => {
   const { installer, runs, launches } = makeInstaller();
   const result = await installer.install({
     filePath: path.join(os.tmpdir(), 'gibt-es-nicht.dmg'),
     version: '1.8.0',
     target: { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath: '/Applications/X.app' },
-    workDir: makeTempDir(),
+    workDir: makeTempDir(t),
   });
   assert.equal(result.ok, false);
   assert.match(de(result.error), /nicht mehr da/);
@@ -425,8 +426,8 @@ test('ohne geladene Datei passiert nichts', async () => {
   assert.deepEqual(launches, []);
 });
 
-test('ein Ziel ohne Selbst-Update nennt seinen Grund und fasst nichts an', async () => {
-  const workDir = makeTempDir();
+test('ein Ziel ohne Selbst-Update nennt seinen Grund und fasst nichts an', async (t) => {
+  const workDir = makeTempDir(t);
   const filePath = path.join(workDir, 'snotra.deb');
   await fsp.writeFile(filePath, 'x');
   const { installer, launches } = makeInstaller();
@@ -444,7 +445,7 @@ test('ein Ziel ohne Selbst-Update nennt seinen Grund und fasst nichts an', async
 test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t) => {
   if (process.platform !== 'darwin') return t.skip('nur auf macOS sinnvoll');
 
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
   const workDir = path.join(root, 'work');
   const appBundlePath = path.join(appsDir, 'Snotra AI.app');
@@ -502,7 +503,7 @@ test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t)
 test('macOS: eine fremde Bundle-Kennung stoppt vor dem Tausch', async (t) => {
   if (process.platform !== 'darwin') return t.skip('nur auf macOS sinnvoll');
 
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
   const workDir = path.join(root, 'work');
   const appBundlePath = path.join(appsDir, 'Snotra AI.app');
@@ -544,7 +545,7 @@ test('macOS: eine fremde Bundle-Kennung stoppt vor dem Tausch', async (t) => {
 test('macOS: die falsche Version im Paket stoppt ebenfalls vor dem Tausch', async (t) => {
   if (process.platform !== 'darwin') return t.skip('nur auf macOS sinnvoll');
 
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const appBundlePath = path.join(root, 'Applications', 'Snotra AI.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   const filePath = path.join(root, 'snotra.dmg');
@@ -577,7 +578,7 @@ test('macOS: die falsche Version im Paket stoppt ebenfalls vor dem Tausch', asyn
 test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async (t) => {
   if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
 
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const installDir = path.join(root, 'apps', 'snotra-ai');
   await fsp.mkdir(installDir, { recursive: true });
   const workDir = path.join(root, 'work');
@@ -609,8 +610,7 @@ test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async
 test('the minimal test archive is a real asar, and the reader reads it (#569)', async (t) => {
   const asar = require('@electron/asar');
   const { writeMinimalAsar } = require('./helpers/asar.js');
-  const dir = makeTempDir();
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const dir = makeTempDir(t);
   const file = path.join(dir, 'app.asar');
   writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra AI","version":"3.0.1"}' });
   // @electron/asar lists with the platform's separator.
@@ -621,8 +621,7 @@ test('the minimal test archive is a real asar, and the reader reads it (#569)', 
 });
 
 test('readAsarPackageJson reads package.json from a packed archive (#569)', async (t) => {
-  const dir = makeTempDir();
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  const dir = makeTempDir(t);
   await writeAppAsar(dir, { productName: 'Snotra AI', version: '2.4.6' });
   const pkg = readAsarPackageJson(path.join(dir, 'resources', 'app.asar'));
   assert.equal(pkg.productName, 'Snotra AI');
@@ -644,8 +643,7 @@ for (const [label, pkg, pattern] of [
 ]) {
   test(`Windows: a package with ${label} stops before the swap`, async (t) => {
     if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
-    const dir = makeTempDir();
-    t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+    const dir = makeTempDir(t);
     const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
     await fsp.mkdir(installDir, { recursive: true });
     await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
@@ -678,8 +676,7 @@ for (const [label, pkg, pattern] of [
 
 test('Linux-Ordner: a package with another version is not swapped in (#569)', async (t) => {
   if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
-  const root = makeTempDir();
-  t.after(() => fsp.rm(root, { recursive: true, force: true }));
+  const root = makeTempDir(t);
   const installDir = path.join(root, 'apps', 'snotra-ai');
   await fsp.mkdir(installDir, { recursive: true });
   const filePath = path.join(root, 'snotra.tar.gz');
@@ -710,7 +707,7 @@ test('Linux-Ordner: a package with another version is not swapped in (#569)', as
 test('Linux-AppImage: die neue Datei wird danebengelegt, nicht sofort getauscht', async (t) => {
   if (process.platform === 'win32') return t.skip('braucht POSIX-Rechte');
 
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const appImagePath = path.join(root, 'Snotra.AppImage');
   await fsp.writeFile(appImagePath, 'alt');
   const workDir = path.join(root, 'work');
@@ -737,22 +734,29 @@ test('fehlende Schreibrechte werden erklaert, nicht durchgereicht', async (t) =>
   if (process.platform === 'win32' || process.getuid?.() === 0) {
     return t.skip('braucht POSIX-Rechte und einen Nicht-root-Nutzer');
   }
-  const root = makeTempDir();
+  const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
   const appBundlePath = path.join(appsDir, 'Snotra AI.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   const filePath = path.join(root, 'snotra.dmg');
   await fsp.writeFile(filePath, 'dmg');
   await fsp.chmod(appsDir, 0o500);
-  t.after(() => fsp.chmod(appsDir, 0o700).catch(() => {}));
 
   const { installer, runs } = makeInstaller();
-  const result = await installer.install({
-    filePath,
-    version: '1.8.0',
-    target: { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath },
-    workDir: path.join(root, 'work'),
-  });
+  let result;
+  try {
+    result = await installer.install({
+      filePath,
+      version: '1.8.0',
+      target: { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath },
+      workDir: path.join(root, 'work'),
+    });
+  } finally {
+    // Writable again here, not in an after hook: those run in the order they
+    // were added, so the removal from makeTempDir would come first and fail
+    // on the read-only folder.
+    await fsp.chmod(appsDir, 0o700);
+  }
 
   assert.equal(result.ok, false);
   assert.match(de(result.error), /Keine Schreibrechte/);

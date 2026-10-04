@@ -26,8 +26,11 @@ const {
 
 const GITHUB_URL = 'https://objects.githubusercontent.com/snotra.dmg';
 
-function makeTempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-dl-test-'));
+/** A temp folder that is removed when the test `t` ends, passed or failed. */
+function makeTempDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-dl-test-'));
+  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  return dir;
 }
 
 /** Antwort, die `chunks` als Web-Stream liefert — so wie fetch es tut. */
@@ -58,8 +61,8 @@ test('safeFileName entfernt Pfadanteile aus dem fremden Namen', () => {
   assert.equal(safeFileName(''), 'snotra-update.bin');
 });
 
-test('ein vollstaendiger Download landet auf der Platte und meldet Fortschritt', async () => {
-  const tempDir = makeTempDir();
+test('ein vollstaendiger Download landet auf der Platte und meldet Fortschritt', async (t) => {
+  const tempDir = makeTempDir(t);
   const chunks = [Buffer.alloc(1024, 1), Buffer.alloc(2048, 2)];
   const downloader = createUpdateDownloader({
     tempDir,
@@ -88,8 +91,8 @@ test('ein vollstaendiger Download landet auf der Platte und meldet Fortschritt',
   await downloader.discard();
 });
 
-test('eine fremde Adresse wird gar nicht erst abgerufen', async () => {
-  const tempDir = makeTempDir();
+test('eine fremde Adresse wird gar nicht erst abgerufen', async (t) => {
+  const tempDir = makeTempDir(t);
   let called = false;
   const downloader = createUpdateDownloader({
     tempDir,
@@ -106,8 +109,8 @@ test('eine fremde Adresse wird gar nicht erst abgerufen', async () => {
   assert.equal(called, false, 'es darf kein Abruf stattgefunden haben');
 });
 
-test('eine abgeschnittene Antwort gilt als Fehler, nicht als fertiger Download', async () => {
-  const tempDir = makeTempDir();
+test('eine abgeschnittene Antwort gilt als Fehler, nicht als fertiger Download', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     // Der Server verspricht 3072 Bytes und liefert 1024.
@@ -125,8 +128,8 @@ test('eine abgeschnittene Antwort gilt als Fehler, nicht als fertiger Download',
   assert.equal(fs.existsSync(downloader.getWorkDir()), false, 'der Torso muss weg sein');
 });
 
-test('HTTP-Fehler werden gemeldet statt geworfen', async () => {
-  const tempDir = makeTempDir();
+test('HTTP-Fehler werden gemeldet statt geworfen', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     fetchImpl: async () => makeResponse([], { ok: false, status: 404 }),
@@ -140,8 +143,8 @@ test('HTTP-Fehler werden gemeldet statt geworfen', async () => {
   assert.match(de(result.error), /HTTP 404/);
 });
 
-test('cancel bricht den laufenden Download ab und raeumt auf', async () => {
-  const tempDir = makeTempDir();
+test('cancel bricht den laufenden Download ab und raeumt auf', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     fetchImpl: async (_url, options) => {
@@ -174,8 +177,8 @@ test('cancel bricht den laufenden Download ab und raeumt auf', async () => {
   assert.equal(downloader.cancel(), false, 'ohne laufenden Download passiert nichts');
 });
 
-test('discard loescht die geladene Datei wieder', async () => {
-  const tempDir = makeTempDir();
+test('discard loescht die geladene Datei wieder', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     fetchImpl: async () => makeResponse([Buffer.alloc(64, 4)]),
@@ -191,8 +194,8 @@ test('discard loescht die geladene Datei wieder', async () => {
   assert.equal(fs.existsSync(downloader.getWorkDir()), false);
 });
 
-test('ein neuer Lauf raeumt Reste des vorigen weg', async () => {
-  const tempDir = makeTempDir();
+test('ein neuer Lauf raeumt Reste des vorigen weg', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     fetchImpl: async () => makeResponse([Buffer.alloc(32, 5)]),
@@ -212,8 +215,8 @@ test('ein neuer Lauf raeumt Reste des vorigen weg', async () => {
 
 // #568: the slot used to be claimed only after the first await, so two calls
 // arriving together both started and wrote the same file.
-test('a second download while one is starting is refused, one request only', async () => {
-  const tempDir = makeTempDir();
+test('a second download while one is starting is refused, one request only', async (t) => {
+  const tempDir = makeTempDir(t);
   let fetches = 0;
   const downloader = createUpdateDownloader({
     tempDir,
@@ -230,8 +233,8 @@ test('a second download while one is starting is refused, one request only', asy
   assert.equal(fetches, 1);
 });
 
-test('a signal aborted before the request starts ends the run without a request (#568)', async () => {
-  const tempDir = makeTempDir();
+test('a signal aborted before the request starts ends the run without a request (#568)', async (t) => {
+  const tempDir = makeTempDir(t);
   let fetches = 0;
   const downloader = createUpdateDownloader({
     tempDir,
@@ -251,8 +254,8 @@ test('a signal aborted before the request starts ends the run without a request 
 
 // #573: the allowlist used to apply to the first address only.
 for (const finalUrl of ['https://evil.example/snotra.dmg', 'http://objects.githubusercontent.com/snotra.dmg']) {
-  test(`a redirect to ${finalUrl} is refused`, async () => {
-    const tempDir = makeTempDir();
+  test(`a redirect to ${finalUrl} is refused`, async (t) => {
+    const tempDir = makeTempDir(t);
     const downloader = createUpdateDownloader({
       tempDir,
       fetchImpl: async () => ({ ...makeResponse([Buffer.alloc(10)]), url: finalUrl }),
@@ -267,8 +270,8 @@ for (const finalUrl of ['https://evil.example/snotra.dmg', 'http://objects.githu
   });
 }
 
-test('a redirect within GitHub is followed as before', async () => {
-  const tempDir = makeTempDir();
+test('a redirect within GitHub is followed as before', async (t) => {
+  const tempDir = makeTempDir(t);
   const downloader = createUpdateDownloader({
     tempDir,
     fetchImpl: async () => ({
@@ -284,11 +287,11 @@ test('a redirect within GitHub is followed as before', async () => {
 });
 
 // #569: the right length with the wrong bytes used to pass.
-test('a file that does not hash to the release digest is discarded', async () => {
+test('a file that does not hash to the release digest is discarded', async (t) => {
   const crypto = require('node:crypto');
   const body = Buffer.from('the real package');
   const digest = `sha256:${crypto.createHash('sha256').update(body).digest('hex')}`;
-  const tempDir = makeTempDir();
+  const tempDir = makeTempDir(t);
   const tampered = Buffer.from('the fake package');
   assert.equal(tampered.length, body.length);
 
