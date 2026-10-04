@@ -120,7 +120,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.78",
-    "undici": "^7.30.0"
+    "undici": "^8.11.2"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
