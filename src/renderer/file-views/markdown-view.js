@@ -142,6 +142,32 @@ export const markdownView = {
 
     hostEl.append(previewEl, sourceEl, noticeEl);
 
+    // Nothing is cut off (#730). Step by step, as far as the column needs:
+    // a short cell keeps its line while the table fits; then every cell wraps
+    // at its spaces and hyphens; and only then within its words.
+    let fittedWidth = -1;
+    const fitObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+        const width = articleEl.clientWidth;
+        if (width !== fittedWidth) fitTables();
+      })
+      : null;
+    fitObserver?.observe(articleEl);
+
+    function fitTables() {
+      fittedWidth = articleEl.clientWidth;
+      const frames = [...articleEl.querySelectorAll('.md-table-frame')];
+      const overflows = (frame) => frame.scrollWidth > frame.clientWidth;
+      for (const frame of frames) {
+        frame.firstElementChild?.classList.remove('md-table--squeezed', 'md-table--tight');
+      }
+      let overflowing = frames.filter(overflows);
+      for (const step of ['md-table--squeezed', 'md-table--tight']) {
+        for (const frame of overflowing) frame.firstElementChild?.classList.add(step);
+        overflowing = overflowing.filter(overflows);
+      }
+    }
+
     const modeSwitch = buildModeSwitch((next) => setMode(next));
     context.setTools([modeSwitch.element]);
 
@@ -191,6 +217,7 @@ export const markdownView = {
       const scrollTop = previewEl.scrollTop;
       articleEl.replaceChildren(...nodes);
       prepareLinks();
+      fitTables();
       previewEl.scrollTop = scrollTop;
       return resolveImages(previous);
     }
@@ -555,6 +582,7 @@ export const markdownView = {
       },
       unmount() {
         disposed = true;
+        fitObserver?.disconnect();
         clearTimeout(noticeTimer);
         stopFollowingLocale();
         previewEl.removeEventListener('click', onClick);

@@ -110,6 +110,11 @@ const PREVIEW_MD = [
   '',
   '[Bitte klicken](javascript:alert(1)) [Anrufen](tel:+4912345)',
   '',
+  // Wider than the measure: it has to give way instead of being cut off (#730).
+  '| Nr. | Aufgabe | Verantwortlich | Deadline | Status | Notiz |',
+  '|---|---|---|---|---|---|',
+  `| A1 | ${'Informationen zum technischen Stand teilen. '.repeat(3)}| Oliver Rausch | 2026-10-31 | 🔴 Offen | \`${'pfad/'.repeat(16)}notiz.md\` |`,
+  '',
   '<iframe src="https://example.com"></iframe>',
   '',
   HIJACK_HTML,
@@ -420,6 +425,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
         iframes: doc.querySelectorAll('iframe').length,
         onerror: doc.querySelectorAll('[onerror]').length,
         hrefs: [...doc.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')),
+        tableOverflow: [...doc.querySelectorAll('.md-table-frame')]
+          .map((frame) => frame.scrollWidth - frame.clientWidth),
       };
     });
     return state && state.workspaceImage && state.unresolved === 0 ? state : null;
@@ -432,6 +439,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(markdown.workspaceImage, 'data:image/png;base64,');
   assert.deepEqual(markdown.remotePlaceholder, [REMOTE_IMAGE]);
   assert.equal(markdown.httpImages, 0);
+  assert.ok(markdown.tableOverflow.length > 0 && markdown.tableOverflow.every((px) => px === 0),
+    `every table fits the column (#730): ${markdown.tableOverflow}`);
   assert.equal(markdown.scripts, 0, 'script must be removed');
   assert.equal(markdown.iframes, 0, 'iframe must be removed');
   assert.equal(markdown.onerror, 0, 'onerror must be removed');

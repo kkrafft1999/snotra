@@ -128,6 +128,24 @@ const WIDE = [
   `const veryLongLine = ${JSON.stringify('x'.repeat(260))};`,
   '```',
   '',
+  '## Action items',
+  '',
+  '| No. | Task | Owner | Deadline | Status |',
+  '|---|---|---|---|---|',
+  '| A1 | Share the technical state and the bot link in the meeting chat. | Oliver Rausch | TBD | 🔴 Open |',
+  '| A2 | Take shared assets and skill drift to the PM round. | Florian Knierim | TBD | 🔴 Open |',
+  '| A3 | Check the proof of concept, see https://github.com/kkrafft1999/snotra/issues/730#issuecomment-1234567890 | Michael Goldschmidt | 2026-10-31 | 🟢 Done |',
+  '',
+  '## A picture wider than the column',
+  '',
+  '![A wide flow](./docs/wide.png)',
+  '',
+  '<img src="./docs/wide.png" width="1800" height="180" alt="With width and height">',
+  '',
+  '| Picture | Note |',
+  '|---|---|',
+  '| ![In a cell](./docs/wide.png) | A picture inside a table cell scales with the column. |',
+  '',
 ].join('\n');
 
 const LONG = ['# A long document', '', ...Array.from({ length: 60 }, (_, i) =>
@@ -152,6 +170,7 @@ await mkdir(SHOTS, { recursive: true });
 const files = {
   'CONTRIBUTING.md': '# Contributing\n\nFork, branch, pull request.\n',
   'docs/flow.png': makeFlowPng(),
+  'docs/wide.png': makeFlowPng(2000, 180),
   'skills/release/SKILL.md': SKILL,
   'empty.md': '',
   'front-matter-only.md': '---\nname: only-a-head\ndescription: Nothing below the head.\n---\n',
@@ -277,6 +296,39 @@ try {
     await new Promise((r) => setTimeout(r, 200));
     await shoot(state);
   }
+  // Wide content gives way to the measure (#730): what still overflows, and by how much.
+  const overflow = () => page.evaluate(() => {
+    const doc = document.querySelector('.md-doc');
+    const measure = doc.getBoundingClientRect().width;
+    return {
+      measure: Math.round(measure),
+      tables: [...doc.querySelectorAll('.md-table-frame')]
+        .map((f) => Math.round(f.scrollWidth - f.clientWidth)),
+      images: [...doc.querySelectorAll('img')]
+        .map((img) => Math.round(img.getBoundingClientRect().width)),
+    };
+  });
+  await expandAndOpen('wide.md');
+  await poll(async () => (await pane()).name === 'wide.md', { what: 'wide.md' });
+  await new Promise((r) => setTimeout(r, 300));
+  console.log('wide, overflow:', await overflow());
+  await page.evaluate(() => { document.querySelector('.md-view').scrollTop = 220; });
+  await new Promise((r) => setTimeout(r, 200));
+  await shoot('wide-fit');
+  await page.evaluate(() => {
+    const content = document.getElementById('content');
+    content.style.flex = '0 0 420px';
+    content.style.maxWidth = '420px';
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  console.log('wide, narrow, overflow:', await overflow());
+  await shoot('wide-fit-narrow');
+  await page.evaluate(() => {
+    const content = document.getElementById('content');
+    content.style.flex = '';
+    content.style.maxWidth = '';
+  });
+
   console.log('pwned:', await page.evaluate(() => globalThis.__pwned ?? null));
   console.log('hostile links:', await page.evaluate(() =>
     [...document.querySelectorAll('.md-doc a')].map((a) => ({ text: a.textContent, href: a.getAttribute('href') }))));
