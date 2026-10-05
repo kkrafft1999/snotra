@@ -99,7 +99,8 @@ test('first run: adding a model makes the chat usable next to the default entry'
     const c = await chrome(page);
     return c.hint === null && !c.sendDisabled ? c : null;
   }, { what: 'usable chat after Apply' });
-  assert.equal(after.pill, 'Local server · fake-model');
+  // The chat names the model alone since #727.
+  assert.equal(after.pill, 'fake-model');
 
   const config = JSON.parse(await readFile(path.join(userDataDir, 'llm-config.json'), 'utf8'));
   assert.deepEqual(config.presets.map((p) => p.providerId), ['openai', 'openai-compatible']);

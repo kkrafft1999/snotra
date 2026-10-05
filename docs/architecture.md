@@ -752,7 +752,11 @@ appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
   on in the background, keeps the level it started with. `reasoningEffortFor`
   reads the history once per chat and keeps the answer, since every round asks.
 - **Shown:** `llmState.reasoning` carries the level of the chat on screen and
-  the levels its model takes; an empty list means no choice.
+  the levels its model takes; an empty list means no choice. The model menu
+  (`ChatModelPicker`, #727) draws them as a radio group below the model list
+  — outside the listbox — and sets one through `SETTINGS_SET_REASONING_EFFORT`
+  without closing. The pill reads `model · level`; entries are named by their
+  model, with the entry's name (`entryName`) only for two with the same model.
 - **New chats:** `CHAT_HISTORY_UPSERT` saves a chat's first row with `medium`
   unless a level was chosen, so a row without a level is always one from
   before #726.

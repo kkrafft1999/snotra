@@ -8,22 +8,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
-function llmState({ presets } = {}) {
+const LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+const entry = (id, model, extra = {}) => ({
+  id, providerId: 'openai', model, entryName: 'OpenAI', label: `OpenAI · ${model}`, configured: true, ...extra,
+});
+
+function llmState({ presets, reasoning } = {}) {
   return {
     activeProvider: 'openai',
     activePresetId: 'p1',
     chatTarget: { providerId: 'openai', model: 'gpt-5' },
     encryptionAvailable: true,
     providers: [{ id: 'openai', name: 'OpenAI', configured: true, model: 'gpt-5' }],
-    presets: presets ?? [
-      { id: 'p1', label: 'OpenAI · gpt-5', configured: true },
-      { id: 'p2', label: 'OpenAI · gpt-5-mini', configured: true },
-      { id: 'p3', label: 'OpenAI · o4', configured: true },
-    ],
+    presets: presets ?? [entry('p1', 'gpt-5'), entry('p2', 'gpt-5-mini'), entry('p3', 'o4')],
+    reasoning: reasoning ?? { level: null, levels: [], defaultLevel: null },
   };
 }
 
-async function setup({ locale = 'en', state = llmState(), userAgent = null } = {}) {
+async function setup({ locale = 'en', state = llmState(), userAgent = null, setReasoningEffort } = {}) {
   const dom = setupRendererDom();
   if (userAgent) {
     // The renderer reads the global `navigator`, which under Node 24 may be
@@ -37,10 +39,18 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null } = {
   appStore.rootPath = '/work';
   appStore.chatMessages = [];
   const chosen = [];
+  const levels = [];
+  // A level that is kept shows up in the next state main sends (#727).
+  let current = state;
   const picker = initChatModelPicker({
     api: {
-      getLLMState: async () => state,
+      getLLMState: async () => current,
       setActivePreset: async (id) => { chosen.push(id); return { ok: true }; },
+      setReasoningEffort: setReasoningEffort || (async (level) => {
+        levels.push(level);
+        current = { ...current, reasoning: { ...current.reasoning, level } };
+        return { ok: true };
+      }),
     },
     appStore,
   });
@@ -50,6 +60,7 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null } = {
     dom,
     document,
     chosen,
+    levels,
     pill: document.getElementById('btn-chat-model-picker'),
     menu: document.getElementById('chat-model-menu'),
     options: () => [...document.querySelectorAll('#chat-model-menu .chat-model-menu-option')],
@@ -63,13 +74,13 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null } = {
 
 test('the accessible name starts with the model the pill shows', async () => {
   const { pill } = await setup();
-  assert.equal(pill.getAttribute('aria-label'), 'Model OpenAI · gpt-5. Switch model');
+  assert.equal(pill.getAttribute('aria-label'), 'Model gpt-5. Switch model');
   assert.ok(pill.getAttribute('aria-label').includes(pill.textContent.trim()));
 });
 
 test('in German the name is not marked as English — only the model name is', async () => {
   const { pill, document } = await setup({ locale: 'de' });
-  assert.equal(pill.getAttribute('aria-label'), 'Modell OpenAI · gpt-5. Modell wechseln');
+  assert.equal(pill.getAttribute('aria-label'), 'Modell gpt-5. Modell wechseln');
   assert.equal(pill.getAttribute('lang'), null);
   assert.equal(document.getElementById('chat-model-pill-label').getAttribute('lang'), 'en');
 });
@@ -130,8 +141,8 @@ test('the active preset stays in the menu even when it is hidden from it', async
   const { pill, options } = await setup({
     state: llmState({
       presets: [
-        { id: 'p1', label: 'OpenAI · gpt-5', configured: true, menuVisible: false },
-        { id: 'p2', label: 'OpenAI · gpt-5-mini', configured: true },
+        entry('p1', 'gpt-5', { menuVisible: false }),
+        entry('p2', 'gpt-5-mini'),
       ],
     }),
   });
@@ -173,3 +184,118 @@ for (const [platform, userAgent, locale, expected] of [
     assert.equal(document.getElementById('btn-chat-send').disabled, true);
   });
 }
+
+// The reasoning level in the model menu (#727).
+const withLevels = (level = 'medium', extra = {}) => llmState({
+  reasoning: { level, levels: LEVELS, defaultLevel: 'medium' },
+  ...extra,
+});
+
+test('the pill names model and level, without the provider (#727)', async () => {
+  const { pill, document } = await setup({ state: withLevels('high') });
+  assert.equal(pill.textContent.trim(), 'gpt-5 · high');
+  assert.equal(document.querySelector('.chat-model-pill-level').textContent, ' · high');
+  assert.equal(pill.getAttribute('aria-label'), 'Model gpt-5 · high. Switch model or reasoning level');
+  assert.ok(pill.getAttribute('aria-label').includes(pill.textContent.trim()));
+});
+
+test('the menu lists models without the provider, and names the entry only for twins (#727)', async () => {
+  const twins = [
+    entry('p1', 'gpt-5'),
+    { id: 'p4', providerId: 'openai-compatible', model: 'qwen3:32b', entryName: 'Mac Studio', configured: true },
+    { id: 'p5', providerId: 'openai-compatible', model: 'qwen3:32b', entryName: 'Ollama', configured: true },
+  ];
+  const { pill, options } = await setup({ state: llmState({ presets: twins }) });
+  pill.click();
+  assert.deepEqual(options().map((o) => o.textContent), ['gpt-5', 'qwen3:32b · Mac Studio', 'qwen3:32b · Ollama']);
+});
+
+test('a model without levels shows no reasoning section (#727)', async () => {
+  const { pill, document } = await setup();
+  pill.click();
+  assert.equal(document.getElementById('chat-reasoning').hidden, true);
+  assert.equal(pill.textContent.trim(), 'gpt-5');
+});
+
+test('the levels are a radio group below the models, with the chat\'s level checked (#727)', async () => {
+  const { pill, document } = await setup({ state: withLevels('low') });
+  pill.click();
+  const section = document.getElementById('chat-reasoning');
+  assert.equal(section.hidden, false);
+  const group = document.getElementById('chat-reasoning-levels');
+  assert.equal(group.getAttribute('role'), 'radiogroup');
+  assert.equal(document.getElementById(group.getAttribute('aria-labelledby')).textContent, 'Reasoning');
+  const radios = [...group.querySelectorAll('input[type="radio"]')];
+  assert.deepEqual(radios.map((r) => r.value), LEVELS);
+  assert.equal(radios.find((r) => r.checked).value, 'low');
+  assert.equal(document.getElementById('chat-reasoning-hint').textContent, 'Applies to this chat. New chats start with medium.');
+  // The levels sit outside the listbox: a listbox owns nothing but options.
+  assert.equal(document.getElementById('chat-model-list').contains(group), false);
+});
+
+test('choosing a level applies it at once and leaves the menu open (#727)', async () => {
+  const { pill, menu, document, levels, chosen } = await setup({ state: withLevels('medium') });
+  pill.click();
+  const high = document.querySelector('#chat-reasoning-levels input[value="high"]');
+  high.click();
+  await flush();
+  assert.deepEqual(levels, ['high']);
+  assert.deepEqual(chosen, []);
+  assert.equal(menu.classList.contains('hidden'), false);
+  assert.equal(pill.textContent.trim(), 'gpt-5 · high');
+});
+
+test('a refused level goes back and says why (#727)', async () => {
+  const { pill, document } = await setup({
+    state: withLevels('medium'),
+    setReasoningEffort: async () => ({ ok: false, error: { key: 'settings.error.reasoningNoChat' } }),
+  });
+  pill.click();
+  document.querySelector('#chat-reasoning-levels input[value="max"]').click();
+  await flush();
+  assert.equal(document.querySelector('#chat-reasoning-levels input:checked').value, 'medium');
+  const status = document.getElementById('chat-reasoning-status');
+  assert.equal(status.hidden, false);
+  assert.equal(status.textContent, 'The reasoning level could not be set: no chat is open.');
+  assert.equal(pill.textContent.trim(), 'gpt-5 · medium');
+});
+
+test('the model list is one tab stop; the levels keep their own arrow keys (#727)', async () => {
+  const { pill, menu, document, options, key } = await setup({ state: withLevels('medium') });
+  pill.click();
+  assert.deepEqual(options().map((o) => o.tabIndex), [0, -1, -1]);
+  key(document.activeElement, 'ArrowDown');
+  assert.deepEqual(options().map((o) => o.tabIndex), [-1, 0, -1]);
+
+  const radio = document.querySelector('#chat-reasoning-levels input:checked');
+  radio.focus();
+  const event = key(radio, 'ArrowDown');
+  assert.equal(event.defaultPrevented, false, 'the list does not take the radio group\'s keys');
+  assert.equal(document.activeElement, radio);
+
+  key(radio, 'Escape');
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(document.activeElement, pill);
+});
+
+test('a single entry with levels still opens: the level can be changed (#727)', async () => {
+  const { pill, menu } = await setup({ state: withLevels('medium', { presets: [entry('p1', 'gpt-5')] }) });
+  assert.equal(pill.disabled, false);
+  pill.click();
+  assert.equal(menu.classList.contains('hidden'), false);
+});
+
+test('a press on a level gives the focus to its radio, so the menu stays open (#727)', async () => {
+  const { pill, menu, document, dom } = await setup({ state: withLevels('medium') });
+  pill.click();
+  const word = document.querySelector('#chat-reasoning-levels input[value="high"]').closest('label').querySelector('span');
+  const press = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  word.dispatchEvent(press);
+  assert.equal(press.defaultPrevented, true);
+  assert.equal(document.activeElement, document.querySelector('#chat-reasoning-levels input[value="high"]'));
+  assert.equal(menu.classList.contains('hidden'), false);
+
+  const hint = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  document.getElementById('chat-reasoning-hint').dispatchEvent(hint);
+  assert.equal(hint.defaultPrevented, true, 'a press on the text keeps the focus where it is');
+});

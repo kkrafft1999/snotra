@@ -339,7 +339,19 @@
                     <path fill="currentColor" d="M0 0l5 6 5-6z"/>
                   </svg>
                 </button>
-                <ul id="chat-model-menu" class="chat-model-menu hidden" role="listbox" tabindex="-1" aria-label="Available models" data-i18n-attr="aria-label:chat.modelPicker.menu"></ul>
+                <!-- The popup holds the models and, below them, the reasoning
+                     level of this chat (#727). The levels stay outside the
+                     listbox: a listbox may own nothing but options. -->
+                <div id="chat-model-menu" class="chat-model-menu chat-model-popup hidden">
+                  <p id="chat-model-list-heading" class="chat-model-menu-head" data-i18n="chat.modelPicker.heading">Model</p>
+                  <ul id="chat-model-list" class="chat-model-list" role="listbox" tabindex="-1" aria-label="Available models" data-i18n-attr="aria-label:chat.modelPicker.menu"></ul>
+                  <div id="chat-reasoning" class="chat-reasoning" hidden>
+                    <p id="chat-reasoning-heading" class="chat-model-menu-head">Reasoning</p>
+                    <div id="chat-reasoning-levels" class="ds-segmented ds-segmented--compact chat-reasoning-levels" role="radiogroup" aria-labelledby="chat-reasoning-heading" aria-describedby="chat-reasoning-hint"></div>
+                    <p id="chat-reasoning-hint" class="chat-reasoning-hint"></p>
+                    <p id="chat-reasoning-status" class="chat-reasoning-hint chat-reasoning-status" role="status" hidden></p>
+                  </div>
+                </div>
               </span>
               <span class="chat-model-picker-wrap chat-tool-mode-wrap" id="chat-tool-mode-wrap" data-mode="smart">
                 <button

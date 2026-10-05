@@ -172,6 +172,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       model: preset.model,
       menuVisible: preset.menuVisible !== false,
       label,
+      // The chat names an entry by its model alone (#727); the name tells two
+      // entries with the same model apart.
+      entryName: name,
       sublabel: sublabel.text,
       sublabelStyle: sublabel.style,
       // Vollstaendig ist ein Eintrag mit eigener Verbindung, sobald er eine

@@ -1855,7 +1855,26 @@ summary:focus-visible,
   cursor: default;
 }
 
-.chat-model-pill--btn:disabled .chat-model-pill-chevron {
+.chat-model-pill--btn:disabled /* Model and level in the pill (#727): a long model name gives way, the level
+ * never does — it is what the pill is looked at for. */
+#chat-model-pill-label {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.chat-model-pill-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-model-pill-level {
+  flex-shrink: 0;
+  white-space: pre;
+}
+
+.chat-model-pill-chevron {
   display: none;
 }
 
@@ -1884,6 +1903,77 @@ summary:focus-visible,
 }
 
 .chat-model-menu.hidden {
+  display: none;
+}
+
+/* The model popup with the chat's reasoning level below the models (#727).
+ * The list scrolls on its own, so the levels stay in view. The popup grows
+ * with the level row; the hint wraps inside that width instead of setting it. */
+.chat-model-menu.chat-model-popup {
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: none;
+  overflow: visible;
+  padding: 6px 0 8px;
+}
+
+.chat-model-list {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-model-menu-head {
+  margin: 0;
+  padding: 4px 12px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.chat-reasoning {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-reasoning[hidden] {
+  display: none;
+}
+
+/* Each level as wide as its word, not all as wide as the longest; in a chat
+ * column too narrow for one row the levels take a second one. */
+.ds-segmented.chat-reasoning-levels {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 2px 12px 0;
+  border-radius: 16px;
+}
+
+.chat-reasoning-levels.ds-segmented--compact .ds-segmented__option {
+  flex: 1 0 auto;
+  padding: 0 8px;
+  font-family: var(--ds-font-mono);
+}
+
+.chat-reasoning-hint {
+  /* Wraps within the width of the level row instead of widening the popup. */
+  contain: inline-size;
+  margin: 8px 12px 0;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.chat-reasoning-status {
+  color: var(--ds-error);
+}
+
+.chat-reasoning-status[hidden] {
   display: none;
 }
 
