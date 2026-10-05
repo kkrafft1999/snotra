@@ -119,16 +119,27 @@ async function readLimitedText(res, maxBytes = MAX_ERROR_BODY_BYTES) {
 }
 
 async function readErrorMessage(res) {
+  return (await readErrorDetails(res)).message;
+}
+
+/**
+ * The error text plus, where the API names it, the request field it objects
+ * to (`error.param`, e.g. `reasoning.effort`). The field lets a provider
+ * recognise its own rejections without matching on wording (#718).
+ */
+async function readErrorDetails(res) {
   const errText = await readLimitedText(res);
   let msg = res.statusText || `HTTP ${res.status}`;
+  let param = '';
   try {
     const j = JSON.parse(errText);
     msg = j.error?.message || j.error?.code || j.error || j.message || msg;
     if (typeof msg !== 'string') msg = String(msg);
+    if (typeof j.error?.param === 'string') param = j.error.param;
   } catch {
     if (errText) msg = errText.slice(0, 300);
   }
-  return msg;
+  return { message: msg, param };
 }
 
 function safeJsonParse(s, fallback = {}) {
@@ -163,6 +174,7 @@ module.exports = {
   describeFetchErrorMessage,
   readLimitedText,
   readErrorMessage,
+  readErrorDetails,
   safeJsonParse,
   isAbortError,
   createChatAbortError,

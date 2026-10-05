@@ -55,4 +55,10 @@ test('openai presetFields declare identity-affecting reasoning options', () => {
   assert.equal(field.detailPrefix, '');
   assert.equal(field.showAsSuffix, true);
   assert.equal(field.formatDetail('high'), 'high');
+  // Every level OpenAI knows, in order of effort; medium stays the default (#718).
+  assert.deepEqual(
+    field.options.map((o) => o.value),
+    ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+  );
+  assert.equal(field.defaultValue, 'medium');
 });

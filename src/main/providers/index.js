@@ -6,7 +6,7 @@
  * @property {string} [baseUrl]       Server-URL (falls fields.baseUrl).
  * @property {boolean} [insecureTls]  TLS-Prüfung deaktivieren (falls fields.insecureTls).
  * @property {string} [model]         Zuletzt gespeichertes Modell.
- * @property {string} [reasoningEffort] Nur OpenAI: minimal|low|medium|high.
+ * @property {string} [reasoningEffort] Nur OpenAI: none|minimal|low|medium|high|xhigh|max.
  *
  * @typedef {Object} StreamCallbacks
  * @property {() => void} [onMarkGenerating]        Erster sichtbarer Output dieser Runde.

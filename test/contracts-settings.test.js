@@ -373,7 +373,8 @@ test('a preset field only gets the control its options allow (#414)', () => {
       presetFields: [
         { key: 'level', type: 'select', control: 'segmented', options: ['a', 'b', 'c'].map(option) },
         { key: 'onOff', type: 'select', control: 'switch', toggleLabel: 'Show it', options: ['off', 'on'].map(option) },
-        { key: 'wide', type: 'select', control: 'segmented', options: ['1', '2', '3', '4', '5'].map(option) },
+        { key: 'seven', type: 'select', control: 'segmented', options: ['1', '2', '3', '4', '5', '6', '7'].map(option) },
+        { key: 'wide', type: 'select', control: 'segmented', options: ['1', '2', '3', '4', '5', '6', '7', '8'].map(option) },
         { key: 'three', type: 'select', control: 'switch', options: ['x', 'y', 'z'].map(option) },
         { key: 'plain', type: 'select', options: ['p', 'q'].map(option) },
       ],
@@ -383,6 +384,8 @@ test('a preset field only gets the control its options allow (#414)', () => {
   const control = (key) => views.find((v) => v.key === key).control;
 
   assert.equal(control('level'), 'segmented');
+  // OpenAI's seven reasoning levels still fit in one row (#718).
+  assert.equal(control('seven'), 'segmented');
   assert.equal(control('onOff'), 'switch');
   assert.equal(views.find((v) => v.key === 'onOff').toggleLabel, 'Show it');
   // Too many segments, or a switch with three positions: the dropdown holds any number.

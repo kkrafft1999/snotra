@@ -314,6 +314,95 @@ test('streamChatRound sendet reasoning.summary nur mit reasoningSummary=auto (Is
   assert.equal(JSON.parse(calls[2].options.body).reasoning, undefined);
 });
 
+// All seven reasoning levels, and what the chat says when a model lacks one (#718).
+const rejection = (error) => () => ({
+  ok: false,
+  status: 400,
+  statusText: 'Bad Request',
+  text: async () => JSON.stringify({ error }),
+});
+
+test('streamChatRound sends every reasoning level as it is (#718)', async (t) => {
+  const calls = mockFetch(t, () =>
+    sseResponse([
+      sse('response.completed', { response: {} }),
+      'data: [DONE]\n\n',
+    ]));
+  for (const effort of ['none', 'minimal', 'xhigh', 'max']) {
+    await openai.streamChatRound({
+      config: { ...CONFIG, reasoningEffort: effort },
+      model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'Hi' }],
+      callbacks: collectCallbacks().callbacks,
+    });
+  }
+  assert.deepEqual(
+    calls.map((c) => JSON.parse(c.options.body).reasoning),
+    [{ effort: 'none' }, { effort: 'minimal' }, { effort: 'xhigh' }, { effort: 'max' }],
+  );
+});
+
+test('a level the model lacks becomes a message with the levels OpenAI lists (#718)', async (t) => {
+  mockFetch(t, rejection({
+    message: "Unsupported value: 'reasoning.effort' does not support 'none' with this model. "
+      + "Supported values are: 'minimal', 'low', 'medium', and 'high'.",
+    type: 'invalid_request_error',
+    param: 'reasoning.effort',
+    code: 'unsupported_value',
+  }));
+  const res = await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'none' },
+    model: 'gpt-5',
+    messages: [],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(res.code, '400');
+  assert.deepEqual(res.error, {
+    key: 'provider.openai.error.effortUnsupported.withList',
+    params: { model: 'gpt-5', effort: 'none', supported: 'minimal, low, medium, high' },
+  });
+});
+
+test('a rejected level without a list still gets the message, found by param alone (#718)', async (t) => {
+  mockFetch(t, rejection({ message: "Invalid value: 'max'.", param: 'reasoning.effort' }));
+  const res = await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'max' },
+    model: 'o4-mini',
+    messages: [],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.deepEqual(res.error, {
+    key: 'provider.openai.error.effortUnsupported',
+    params: { model: 'o4-mini', effort: 'max' },
+  });
+});
+
+test('other 400s keep OpenAI\'s text (#718)', async (t) => {
+  // A model without reasoning: no other level would help, so no advice to change it.
+  mockFetch(t, rejection({
+    message: "Unsupported parameter: 'reasoning.effort' is not supported with this model.",
+    param: 'reasoning.effort',
+    code: 'unsupported_parameter',
+  }));
+  const noReasoning = await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'medium' },
+    model: 'gpt-4o',
+    messages: [],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(noReasoning.error, "Unsupported parameter: 'reasoning.effort' is not supported with this model.");
+
+  mockFetch(t, rejection({ message: 'Invalid input.', param: 'input' }));
+  const other = await openai.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'medium' },
+    model: 'gpt-5',
+    messages: [],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(other.error, 'Invalid input.');
+  assert.equal(other.param, 'input');
+});
+
 // Bild-Anhaenge (Issue #84). Mit Bild verlangt die Responses-API getypte Teile
 // statt eines Strings; ohne Bild bleibt die bisherige Form erhalten.
 const PNG_1PX =
