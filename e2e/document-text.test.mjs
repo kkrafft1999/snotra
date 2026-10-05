@@ -94,14 +94,37 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
   assert.equal(budget.sheet, 'Plan');
   assert.equal(budget.content, 'row\tA\tB\n1\tItem\tAmount\n2\tLicence\t900\n3\tHosting\t120');
 
-  // The log names what was read. Start or done wording depends on the order in
-  // which the four parallel calls report back; the wording itself is a unit
-  // test (test/document-text-tool.test.js).
-  const toolLines = () => page.evaluate(() =>
-    [...document.querySelectorAll('.chat-tool-lines .chat-tool-line')].map((line) => line.textContent.trim()));
-  await poll(async () => (await toolLines()).some((line) => line.includes('docs/budget.xlsx')), {
-    what: 'tool line for the workbook',
+  // Every call ends with its own done line. The engine runs the calls one after
+  // another, so start and done never overlap (#721). Once, on the macOS
+  // runner, the workbook's done line did not come within 15 s, and the test of
+  // that time showed nothing of what stood there — so a failure now brings the
+  // log, the run state and what the model was asked.
+  const toolLog = () => page.evaluate(() => ({
+    lines: [...document.querySelectorAll('.chat-tool-lines .chat-tool-line')]
+      .map((line) => `${line.className}: ${line.querySelector('.chat-tool-line-text')?.textContent ?? line.textContent}`),
+    summary: document.querySelector('.chat-tool-summary')?.textContent ?? null,
+    busy: document.getElementById('chat-messages')?.getAttribute('aria-busy') ?? null,
+    sendButton: document.getElementById('btn-chat-send')?.className ?? null,
+    messages: [...document.querySelectorAll('#chat-messages > li')]
+      .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 160)}`),
+  }));
+  const expected = [
+    'Document docs/manual.pdf read',
+    'Document docs/manual.pdf read',
+    'Document docs/locked.pdf read',
+    'Document docs/budget.xlsx read',
+  ];
+  const doneTexts = async () => (await toolLog()).lines
+    .filter((line) => line.includes('chat-tool-line--done'))
+    .map((line) => line.slice(line.indexOf(': ') + 2));
+  await poll(async () => JSON.stringify(await doneTexts()) === JSON.stringify(expected), {
+    what: 'four done lines in the chat',
     timeoutMs: 30000,
-    explain: async () => `tool lines: ${JSON.stringify(await toolLines().catch((e) => String(e)))}`,
+    explain: async () => [
+      `tool log: ${JSON.stringify(await toolLog().catch((e) => String(e)), null, 1)}`,
+      `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
+      `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
+      `main:\n${snotra.mainOutput()}`,
+    ].join('\n'),
   });
 });
