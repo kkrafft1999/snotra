@@ -489,8 +489,9 @@ test('commitSettings persists presets, encrypts keys, prunes unused providers an
   assert.deepEqual(res, { ok: true });
 
   const config = await storage.readLLMConfig();
-  // v4 seit Issue #202: Verbindung im Eintrag statt am Anbieter; v5 since #194.
-  assert.equal(config.version, 5);
+  // v4 seit Issue #202: Verbindung im Eintrag statt am Anbieter; v5 since #194,
+  // v6 since #726.
+  assert.equal(config.version, 6);
   assert.deepEqual(config.presets.map((p) => p.id), ['p1', 'p2']);
   assert.equal(config.activePresetId, 'p2');
   assert.equal(config.activeProvider, 'openai');
@@ -1174,10 +1175,11 @@ test('the LLM state carries the chat\'s level and the levels its model takes (#7
   });
 });
 
-test('without a level of its own the chat shows the entry\'s; an older model shows none (#725)', async (t) => {
+test('without a level of its own the chat shows the default; an older model shows none (#726)', async (t) => {
   const fallback = await setupHandlers(t, { chatSessionSettings: fakeLevelSettings(null) });
   await seedReasoningPresets(fallback.llmConfigStore);
-  assert.equal((await fallback.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE)).reasoning.level, 'low');
+  // The entry's leftover `low` counts for nothing since #726.
+  assert.equal((await fallback.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE)).reasoning.level, 'medium');
 
   await seedReasoningPresets(fallback.llmConfigStore, 'p4');
   assert.deepEqual((await fallback.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE)).reasoning, {

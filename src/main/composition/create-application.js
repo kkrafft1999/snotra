@@ -256,6 +256,7 @@ function createApplication({
       return config.defaultPresetId || config.activePresetId || null;
     },
     isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
+    getPresetAlias: async (presetId) => (await llmConfigStore.readLLMConfig()).presetAliases?.[presetId] || null,
     getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
     getActiveMode: async () => (await toolPolicyStore.read()).mode,
     getWorkspaceMode: () => toolPolicyStore.readWorkspaceMode(workspaceState.getActiveWorkspaceRoot()),

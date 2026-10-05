@@ -45,7 +45,6 @@ const {
   formatConnectionDetail,
   formatPresetSublabel,
   formatPresetSublabelFromView,
-  formatPresetOptionSuffixFromView,
   buildPresetFieldViews,
   buildProviderFormView,
 } = require('./settings');
@@ -308,7 +307,6 @@ module.exports = {
   formatConnectionDetail,
   formatPresetSublabel,
   formatPresetSublabelFromView,
-  formatPresetOptionSuffixFromView,
   buildPresetFieldViews,
   buildProviderFormView,
   SKILL_SOURCES,

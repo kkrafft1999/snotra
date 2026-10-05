@@ -10,7 +10,6 @@ const {
   clampSidebarWidth,
   formatConnectionDetail,
   formatPresetSublabelFromView,
-  formatPresetOptionSuffixFromView,
   formatPresetSublabel,
   isModelOffered,
   createListModelsResult,
@@ -50,17 +49,17 @@ test('presetIdentityKey tells servers apart for the renderer view as well (CR-B1
   );
 });
 
-test('normalizePresetWire accepts legacy reasoningEffort for OpenAI', () => {
+test('normalizePresetWire drops an OpenAI entry\'s level and keeps its summary (#726)', () => {
   const preset = normalizePresetWire(
-    { id: 'p1', providerId: 'openai', model: 'gpt-4o', reasoningEffort: 'high' },
+    { id: 'p1', providerId: 'openai', model: 'gpt-5', reasoningEffort: 'high', reasoningSummary: 'auto' },
     (id) => (id === 'openai' ? openai : null)
   );
   assert.deepEqual(preset, {
     id: 'p1',
     providerId: 'openai',
-    model: 'gpt-4o',
+    model: 'gpt-5',
     menuVisible: true,
-    reasoningEffort: 'high',
+    reasoningSummary: 'auto',
   });
 });
 
@@ -77,15 +76,13 @@ test('normalizePresetWire strips reasoningEffort for providers without preset fi
   });
 });
 
-test('presetIdentityKey distinguishes OpenAI presets by reasoning effort', () => {
+test('presetIdentityKey no longer tells OpenAI entries apart by level (#726)', () => {
   const providerView = { presetFields: openai.presentation.presetFields };
-  const a = { providerId: 'openai', model: 'gpt-4o', reasoningEffort: 'low' };
-  const b = { providerId: 'openai', model: 'gpt-4o', reasoningEffort: 'high' };
-  assert.notEqual(presetIdentityKey(a, providerView), presetIdentityKey(b, providerView));
-  assert.equal(
-    presetIdentityKey(a, providerView),
-    presetIdentityKey({ ...a }, openai)
-  );
+  const a = { providerId: 'openai', model: 'gpt-5', reasoningEffort: 'low' };
+  const b = { providerId: 'openai', model: 'gpt-5', reasoningEffort: 'high', reasoningSummary: 'auto' };
+  assert.equal(presetIdentityKey(a, providerView), presetIdentityKey(b, providerView));
+  assert.equal(presetIdentityKey(a, providerView), presetIdentityKey({ ...a }, openai));
+  assert.notEqual(presetIdentityKey(a, openai), presetIdentityKey({ ...a, model: 'gpt-5-mini' }, openai));
 });
 
 test('formatConnectionDetail renders host and TLS state', () => {
@@ -158,11 +155,10 @@ test('an older model keeps its fields but shows none of them (#724)', () => {
   const view = {
     defaultModel: openai.defaultModel,
     apiBase: 'https://api.openai.com/v1',
-    presetFields: [{ key: 'reasoningEffort', detailPrefix: '', detailStyle: 'mono', showAsSuffix: true }],
+    presetFields: [{ key: 'reasoningSummary', detailPrefix: 'reasoning_summary: ', detailStyle: 'mono' }],
     form: { offeredModels: openai.presentation.offeredModels },
   };
-  const old = { providerId: 'openai', model: 'gpt-4o-mini', reasoningEffort: 'high' };
-  assert.equal(formatPresetOptionSuffixFromView(old, view), '');
+  const old = { providerId: 'openai', model: 'gpt-4o-mini', reasoningSummary: 'auto' };
   assert.deepEqual(formatPresetSublabelFromView(old, view, undefined, de), {
     text: 'Älteres Modell, wird nicht mehr angeboten',
     style: 'default',
@@ -173,8 +169,7 @@ test('an older model keeps its fields but shows none of them (#724)', () => {
   });
 
   const current = { ...old, model: 'gpt-5-mini' };
-  assert.equal(formatPresetOptionSuffixFromView(current, view), 'high');
-  assert.equal(formatPresetSublabelFromView(current, view, undefined, de).text, 'high');
+  assert.equal(formatPresetSublabelFromView(current, view, undefined, de).text, 'reasoning_summary: auto');
 });
 
 test('normalizeUiPrefs and patch apply clamps', () => {

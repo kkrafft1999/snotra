@@ -744,8 +744,8 @@ appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
   on screen, and `CHAT_HISTORY_UPSERT` drops whatever the renderer sends along.
   Unlike the mode, nothing is applied when a chat comes on screen.
 - **Read:** a round asks for it. `resolveChatTarget({ chatId })` in the LLM
-  adapter takes the chat's own level, else the entry's, else the provider's
-  default (`medium`) — the first the model takes — and puts it into the target
+  adapter takes the chat's own level, else the provider's default (`medium`)
+  — the first the model takes — and puts it into the target
   as `reasoningEffort`, outside `providerOptions`. A model that takes no level
   gets none, also not one left in the stored configuration. The engine
   resolves the target once per send, so every round of a run, also one going
@@ -753,8 +753,16 @@ appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
   reads the history once per chat and keeps the answer, since every round asks.
 - **Shown:** `llmState.reasoning` carries the level of the chat on screen and
   the levels its model takes; an empty list means no choice.
-- **Transition:** until #726 an entry may still carry a level of its own; it
-  only applies to a chat that has none.
+- **New chats:** `CHAT_HISTORY_UPSERT` saves a chat's first row with `medium`
+  unless a level was chosen, so a row without a level is always one from
+  before #726.
+- **Entries carry none** since #726 (`llm-config.json` version 6). The
+  migration merged entries that differed only in their level — the first in
+  the list survives and takes over the default and active role — and wrote
+  `presetAliases`: for every old entry with a level, the entry it stands for
+  now and the level it had. The history is not rewritten. When a chat from
+  before comes on screen, `chat-session-settings` points it at that entry and
+  writes the old level into its row, unless it has one of its own.
 
 ### Runs per chat ([#320](https://github.com/kkrafft1999/snotra/issues/320))
 

@@ -1110,8 +1110,7 @@ export function initSettingsModal(deps) {
         : (draftProviderName(pr.providerId) || pv.name);
       // The buttons below are named after what the row shows, not after the
       // label stored with the draft: that one keeps the language it was made in.
-      const rowTitle = `${zeilenName} · ${pr.model || pv.defaultModel}`
-        + (pr.optionSuffix ? ` · ${pr.optionSuffix}` : '');
+      const rowTitle = `${zeilenName} · ${pr.model || pv.defaultModel}`;
       title.textContent = rowTitle;
       const detail = document.createElement('span');
       detail.className = presetDetailClassForDraft(pr);

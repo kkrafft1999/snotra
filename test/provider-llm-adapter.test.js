@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { createProviderLlmAdapter } = require('../src/main/adapters/provider-llm-adapter');
 
+// The level is the chat's since #726; the summary stays an entry option.
 const OPENAI_PRESET_FIELDS = [
   {
-    key: 'reasoningEffort',
+    key: 'reasoningSummary',
     type: 'select',
     options: [
-      { value: 'low', label: 'low' },
-      { value: 'medium', label: 'medium' },
-      { value: 'high', label: 'high' },
+      { value: 'off', label: 'off' },
+      { value: 'auto', label: 'auto' },
     ],
   },
 ];
@@ -137,6 +137,7 @@ test('adapter merges only declared preset option keys into provider config', asy
         model: 'gpt-4o',
         providerOptions: {
           reasoningEffort: 'high',
+          reasoningSummary: 'auto',
           secretBackdoor: 'nope',
         },
         reasoningEffort: 'high',
@@ -148,9 +149,9 @@ test('adapter merges only declared preset option keys into provider config', asy
   }));
 
   const target = await llm.resolveChatTarget();
-  // The level is the target's own field since #725, no longer an entry option.
-  assert.equal(target.reasoningEffort, 'high');
-  assert.equal(target.providerOptions, undefined);
+  // The level is the chat's (#725), an entry's leftover one counts for nothing (#726).
+  assert.equal(target.reasoningEffort, 'medium');
+  assert.deepEqual(target.providerOptions, { reasoningSummary: 'auto' });
 
   const bundle = await llm.prepareSendBundle(target);
   await llm.streamRound({
@@ -161,7 +162,8 @@ test('adapter merges only declared preset option keys into provider config', asy
     abortSignal: new AbortController().signal,
   });
 
-  assert.equal(capturedConfig.reasoningEffort, 'high');
+  assert.equal(capturedConfig.reasoningEffort, 'medium');
+  assert.equal(capturedConfig.reasoningSummary, 'auto');
   assert.equal(capturedConfig.secretBackdoor, undefined);
 });
 
@@ -282,7 +284,7 @@ test('adapter falls back to stored model and base URL when target omits them', a
   assert.equal(captured.config.baseUrl, 'http://127.0.0.1:11434');
 });
 
-test('adapter resolves legacy reasoningEffort wire field via declared preset keys', async () => {
+test('an entry\'s leftover level is no longer passed on (#726)', async () => {
   const llm = createProviderLlmAdapter(makeAdapterDeps({
     llmConfigStore: {
       resolveChatModelTarget: () => ({
@@ -294,7 +296,7 @@ test('adapter resolves legacy reasoningEffort wire field via declared preset key
   }));
 
   const target = await llm.resolveChatTarget();
-  assert.equal(target.reasoningEffort, 'low');
+  assert.equal(target.reasoningEffort, 'medium');
   assert.equal(target.providerOptions, undefined);
 });
 
@@ -362,11 +364,12 @@ test('the chat\'s own level wins over the entry\'s, for the chat the round is fo
   assert.deepEqual(asked, ['chat-1', undefined]);
 });
 
-test('a chat without a level of its own runs with the entry\'s, then with the default (#725)', async () => {
-  assert.equal((await levelAdapter({ entryLevel: 'low', own: null }).llm.resolveChatTarget()).reasoningEffort, 'low');
+test('a chat without a level of its own runs with the default (#726)', async () => {
+  // An entry's leftover level does not count any more.
+  assert.equal((await levelAdapter({ entryLevel: 'low', own: null }).llm.resolveChatTarget()).reasoningEffort, 'medium');
   assert.equal((await levelAdapter({ own: null }).llm.resolveChatTarget()).reasoningEffort, 'medium');
   // A stored level the model does not take falls through as well.
-  assert.equal((await levelAdapter({ entryLevel: 'low', own: 'max' }).llm.resolveChatTarget()).reasoningEffort, 'low');
+  assert.equal((await levelAdapter({ entryLevel: 'low', own: 'max' }).llm.resolveChatTarget()).reasoningEffort, 'medium');
   // A history that cannot be read costs the level, not the round.
   assert.equal((await levelAdapter({ own: new Error('unreadable') }).llm.resolveChatTarget()).reasoningEffort, 'medium');
 });

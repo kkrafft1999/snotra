@@ -29,14 +29,13 @@ function reasoningLevelsFor(provider, model) {
 }
 
 /**
- * The level a round runs with: the chat's own, else the entry's, else the
- * provider's default — the first that the model takes. The entry's level only
- * bridges the time until entries carry none (#726). `undefined` when the model
- * takes no level.
+ * The level a round runs with: the chat's own, else the provider's default —
+ * the first that the model takes. Entries carry none since #726. `undefined`
+ * when the model takes no level.
  */
-function resolveReasoningLevel({ levels, own, fromEntry, defaultLevel }) {
+function resolveReasoningLevel({ levels, own, defaultLevel }) {
   if (!Array.isArray(levels) || levels.length === 0) return undefined;
-  return [own, fromEntry, defaultLevel, DEFAULT_REASONING_LEVEL]
+  return [own, defaultLevel, DEFAULT_REASONING_LEVEL]
     .find((level) => typeof level === 'string' && levels.includes(level))
     ?? levels[0];
 }

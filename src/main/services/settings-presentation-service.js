@@ -2,7 +2,6 @@
 
 const {
   formatPresetSublabelFromView,
-  formatPresetOptionSuffixFromView,
   buildPresetFieldViews,
   buildProviderFormView,
   hasPresetConnection,
@@ -162,14 +161,10 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       : null;
     const connection = presetConnection || connectionOverrides?.[preset.providerId];
     const sublabel = formatPresetSublabelFromView(preset, providerView, connection, say);
-    // Zusatz wie das Reasoning-Level haengt hinter dem Modell, damit Chat-Menue
-    // und Pille einzeilig bleiben: „OpenAI · gpt-5 · high“.
-    const optionSuffix = formatPresetOptionSuffixFromView(preset, providerView);
     const name = presetConnection?.displayName?.trim()
       || providerView.builtInName
       || providerView.name;
-    const base = `${name} · ${preset.model || providerView.defaultModel}`;
-    const label = optionSuffix ? `${base} · ${optionSuffix}` : base;
+    const label = `${name} · ${preset.model || providerView.defaultModel}`;
 
     return {
       id: preset.id,
@@ -177,8 +172,6 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       model: preset.model,
       menuVisible: preset.menuVisible !== false,
       label,
-      labelBase: base,
-      optionSuffix,
       sublabel: sublabel.text,
       sublabelStyle: sublabel.style,
       // Vollstaendig ist ein Eintrag mit eigener Verbindung, sobald er eine

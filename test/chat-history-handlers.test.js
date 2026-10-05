@@ -678,7 +678,9 @@ test('the reasoning level comes from main, the payload\'s is dropped (#725)', as
   stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'a');
   assert.equal(stored.reasoningEffort, 'high');
 
+  // A chat saved for the first time without a choice gets the default (#726):
+  // only a row from before has none.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('b'), reasoningEffort: 'max' });
   stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'b');
-  assert.equal('reasoningEffort' in stored, false);
+  assert.equal(stored.reasoningEffort, 'medium');
 });

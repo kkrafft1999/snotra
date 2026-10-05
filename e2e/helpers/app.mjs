@@ -128,14 +128,13 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
   await write('last-folder.json', { path: workspace });
   await write('folder-history.json', { paths: [workspace] });
   await write('llm-config.json', {
-    version: 5,
+    version: 6,
     activeProvider: 'openai-compatible',
     activePresetId: presetId,
     presets: [{
       id: presetId,
       providerId: 'openai-compatible',
       model: 'fake-model',
-      reasoningEffort: null,
       menuVisible: true,
       connection: {
         displayName: 'Fake model',

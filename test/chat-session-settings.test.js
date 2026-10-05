@@ -30,6 +30,7 @@ function setup({
   usablePresets = ['preset-a', 'preset-b'],
   defaultPresetId = 'preset-a',
   workspaceMode = null,
+  aliases = {},
 } = {}) {
   const history = createFakeChatHistoryStore(sessions);
   const applied = { presets: [], modes: [] };
@@ -44,6 +45,7 @@ function setup({
       applied.modes.push(mode);
     },
     getWorkspaceMode: async () => (typeof workspaceMode === 'function' ? workspaceMode() : workspaceMode),
+    getPresetAlias: async (presetId) => aliases[presetId] || null,
     log: { warn() {} },
   });
   return { settings, applied, history };
@@ -463,4 +465,62 @@ test('the stored level is read from the history once, not for every round (#725)
   settings.forget('chat-a');
   assert.equal(await settings.reasoningEffortFor('chat-a'), 'minimal');
   assert.equal(reads, 4);
+});
+
+// A chat from before #726 points at an entry the migration may have merged.
+const ALIASES = {
+  'preset-alt-hoch': { presetId: 'preset-a', reasoningEffort: 'high' },
+  'preset-b': { presetId: 'preset-b', reasoningEffort: 'low' },
+};
+
+test('a chat from before #726 is pointed at the surviving entry and given its old level', async () => {
+  const { settings, applied, history } = setup({
+    sessions: [{ id: 'chat-alt', modelPresetId: 'preset-alt-hoch' }],
+    aliases: ALIASES,
+  });
+
+  const result = await settings.activate('chat-alt');
+  assert.equal(result.modelPresetId, 'preset-a');
+  assert.equal(result.reasoningEffort, 'high');
+  assert.deepEqual(applied.presets, ['preset-a']);
+  assert.equal(history.store.sessions[0].modelPresetId, 'preset-a');
+  assert.equal(history.store.sessions[0].reasoningEffort, 'high');
+  assert.equal(await settings.reasoningEffortFor(), 'high');
+});
+
+test('an entry that stayed brings its old level, a level of the chat\'s own wins (#726)', async () => {
+  const { settings, history } = setup({
+    sessions: [
+      { id: 'chat-b', modelPresetId: 'preset-b' },
+      { id: 'chat-eigen', modelPresetId: 'preset-alt-hoch', reasoningEffort: 'minimal' },
+    ],
+    aliases: ALIASES,
+  });
+
+  assert.equal((await settings.activate('chat-b')).reasoningEffort, 'low');
+  assert.equal(history.store.sessions[0].reasoningEffort, 'low');
+
+  const own = await settings.activate('chat-eigen');
+  assert.equal(own.modelPresetId, 'preset-a');
+  assert.equal(own.reasoningEffort, 'minimal');
+  assert.equal(history.store.sessions[1].reasoningEffort, 'minimal');
+});
+
+test('a chat from before that was not on screen yet still answers with its old level (#726)', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-alt', modelPresetId: 'preset-alt-hoch' }],
+    aliases: ALIASES,
+  });
+  assert.equal(await settings.reasoningEffortFor('chat-alt'), 'high');
+});
+
+test('a chat without an alias is left alone (#726)', async () => {
+  const { settings, history } = setup({
+    sessions: [{ id: 'chat-x', modelPresetId: 'preset-a' }],
+    aliases: ALIASES,
+  });
+  const result = await settings.activate('chat-x');
+  assert.equal(result.modelPresetId, 'preset-a');
+  assert.equal(result.reasoningEffort, null);
+  assert.equal('reasoningEffort' in history.store.sessions[0], false);
 });

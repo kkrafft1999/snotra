@@ -153,26 +153,6 @@ module.exports = {
     offeredModelsHint: createMessage('provider.openai.model.noLongerOffered'),
     presetFields: [
       {
-        key: 'reasoningEffort',
-        type: 'select',
-        control: 'segmented',
-        label: 'Reasoning',
-        hint: createMessage('provider.openai.reasoning.hint'),
-        defaultValue: 'medium',
-        affectsPresetIdentity: true,
-        detailStyle: 'mono',
-        // Ohne Praefix: Der nackte Wert steht im Chat hinter dem Modellnamen
-        // („OpenAI · gpt-5 · high“), der API-Parametername gehoert in den Hint.
-        detailPrefix: '',
-        showAsSuffix: true,
-        // All the levels OpenAI knows (#718). Which of them a model takes is
-        // not in `/v1/models`, and a table of our own would be out of date
-        // with the next release — so all seven are offered, and a rejected
-        // one is explained in the chat (withEffortRejectionExplained).
-        options: REASONING_EFFORTS.map((value) => ({ value, label: value })),
-        formatDetail: (value) => `${value}`,
-      },
-      {
         key: 'reasoningSummary',
         type: 'select',
         // Off and on: the first option is the switch's off position (#414).

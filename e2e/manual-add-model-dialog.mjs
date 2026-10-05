@@ -1,13 +1,14 @@
 // Look instead of trust: starts the real app, opens "Add model" and
 // photographs the form for three providers, light and dark, at the window's
-// minimum width (#414). For OpenAI it also moves the reasoning effort with the
-// arrow keys, so the keyboard focus on the segmented control is in the picture.
+// minimum width (#414). For OpenAI it also switches the reasoning summary on by
+// keyboard, so the focus on the switch is in the picture. The reasoning level
+// is chosen in the chat since #726, not here.
 // Not a test — a look.
 //
 //   node e2e/manual-add-model-dialog.mjs
 //
 // Result: out/mockup/add-model-<provider>-<theme>.png, plus the end of the long
-// OpenAI-compatible form and two keyboard shots
+// OpenAI-compatible form and a keyboard shot
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -82,15 +83,9 @@ try {
     await shoot(`openai-compatible-${theme}-end`);
   }
 
-  // Keyboard: focus the chosen level, one step to the right, switch on by Space.
+  // Keyboard: switch the summary on by Space.
   await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, 'light');
   await chooseProvider('openai');
-  await page.focus('#preset-field-reasoningEffort input[value="medium"]');
-  await page.keyboard.press('ArrowRight');
-  const effort = await page.evaluate(() =>
-    [...document.querySelectorAll('#preset-field-reasoningEffort input')].find((i) => i.checked)?.value);
-  console.log('effort after ArrowRight:', effort);
-  await shoot('openai-keyboard');
   await page.focus('#preset-field-reasoningSummary');
   await page.keyboard.press('Space');
   console.log('summary after Space:', await page.evaluate(() =>

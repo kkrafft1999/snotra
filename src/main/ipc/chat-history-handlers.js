@@ -9,6 +9,7 @@
 // geoeffneter Ordner ist (`isKnownWorkspaceRoot`). Alles andere faellt auf den
 // aktiven Root zurueck, die Vertrauensgrenze aus #68 bleibt unberuehrt.
 
+const { DEFAULT_REASONING_LEVEL } = require('../../shared/contracts/reasoning');
 const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 
@@ -121,8 +122,11 @@ function registerChatHistoryHandlers({
       const sessionSettings = {
         modelPresetId: existing?.modelPresetId,
         toolPermissionMode: existing?.toolPermissionMode,
-        // The reasoning level likewise (#725): main's word, never the renderer's.
-        reasoningEffort: existing?.reasoningEffort,
+        // The reasoning level likewise (#725): main's word, never the
+        // renderer's. A chat saved for the first time gets the default if
+        // nothing was chosen: a row without a level is one from before #726,
+        // which takes the level of its old entry when it comes on screen.
+        reasoningEffort: existing ? existing.reasoningEffort : DEFAULT_REASONING_LEVEL,
         ...chatSessionSettings.valuesFor(sessionId),
       };
       const normalized = chatHistoryStore.normalizeSessionForStore(

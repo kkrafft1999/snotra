@@ -41,8 +41,11 @@ function sayText(say, value, fallback) {
  *    (Issue #202). Wer die Zahl erhoeht, schreibt die Migration dazu.
  * 5: The dedicated `mlx-lm` provider is gone; its entries became entries of
  *    `openai-compatible` (issue #194).
+ * 6: Entries carry no reasoning level (#726). Entries that differed only in it
+ *    became one; `presetAliases` says which entry and which level each old
+ *    entry stands for, so a chat from before keeps the level it ran with.
  */
-const LLM_CONFIG_VERSION = 5;
+const LLM_CONFIG_VERSION = 6;
 
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;
@@ -648,10 +651,7 @@ function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = pla
 
 /**
  * Erstes gesetztes Preset-Feld als Detailtext. `detailPrefix` ist optional:
- * Ohne Praefix steht der nackte Wert da (z. B. „high“) — so laesst er sich
- * hinter das Modell haengen, ohne den API-Parameternamen mitzuschleppen.
- * `showAsSuffix: true` markiert Felder, die im Chat-Menue und in der Pille
- * hinter dem Modellnamen erscheinen sollen.
+ * Ohne Praefix steht der nackte Wert da.
  */
 function formatPresetOptionDetailFromView(preset, providerView) {
   const fields = providerView?.presetFields;
@@ -672,24 +672,6 @@ function formatPresetOptionDetailFromView(preset, providerView) {
     };
   }
   return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
-}
-
-/**
- * Nackter Wert des ersten als `showAsSuffix` markierten Preset-Felds — der
- * Zusatz, der im Chat hinter dem Modellnamen steht (z. B. „high“). Leerer
- * String, wenn der Provider kein solches Feld hat.
- */
-function formatPresetOptionSuffixFromView(preset, providerView) {
-  const fields = providerView?.presetFields;
-  if (!Array.isArray(fields) || !isModelOffered(providerView, preset?.model)) return '';
-  for (const field of fields) {
-    const key = field?.key;
-    if (!key || field.showAsSuffix !== true) continue;
-    const value = preset?.[key] ?? preset?.options?.[key];
-    if (!value) continue;
-    return String(value);
-  }
-  return '';
 }
 
 /**
@@ -835,7 +817,6 @@ function buildPresetFieldViews(provider, say = plainText) {
         : options[0].value,
       affectsPresetIdentity: field.affectsPresetIdentity === true,
       detailPrefix: typeof field.detailPrefix === 'string' ? field.detailPrefix : '',
-      showAsSuffix: field.showAsSuffix === true,
       detailStyle: field.detailStyle === PRESET_DETAIL_STYLES.MONO
         ? PRESET_DETAIL_STYLES.MONO
         : PRESET_DETAIL_STYLES.DEFAULT,
@@ -951,7 +932,6 @@ module.exports = {
   normalizeListModelsRequest,
   formatConnectionDetail,
   formatPresetSublabel,
-  formatPresetOptionSuffixFromView,
   formatPresetSublabelFromView,
   buildPresetFieldViews,
   buildProviderFormView,

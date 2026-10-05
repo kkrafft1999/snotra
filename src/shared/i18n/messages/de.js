@@ -1317,7 +1317,6 @@ module.exports = {
   'provider.name.ollama': 'Ollama (lokal)',
   'provider.name.openaiCompatible': 'OpenAI-kompatibel',
   'provider.openai.model.noLongerOffered': 'Snotra bietet GPT-5 und neuer an. Dieses ältere Modell läuft weiter, aber ohne Reasoning-Level.',
-  'provider.openai.reasoning.hint': 'Wie gründlich das Modell nachdenkt, bevor es antwortet (`reasoning_effort`). Welche Stufen gehen, hängt vom Modell ab, die übrigen lehnt OpenAI ab.',
   'provider.openai.error.effortUnsupported': '{model} kann die Reasoning-Stufe „{effort}“ nicht. Ändere sie unter Einstellungen › Modelle.',
   'provider.openai.error.effortUnsupported.withList': '{model} kann die Reasoning-Stufe „{effort}“ nicht, nur {supported}. Ändere sie unter Einstellungen › Modelle.',
   'provider.openai.reasoningSummary.label': 'Zusammenfassung',

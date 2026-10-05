@@ -26,8 +26,8 @@ await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 const configPath = path.join(userDataDir, 'llm-config.json');
 const config = JSON.parse(await readFile(configPath, 'utf8'));
 config.presets.push(
-  { id: 'current', providerId: 'openai', model: 'gpt-5-mini', reasoningEffort: 'high', menuVisible: true },
-  { id: 'older', providerId: 'openai', model: 'gpt-4o-mini', reasoningEffort: 'medium', menuVisible: true },
+  { id: 'current', providerId: 'openai', model: 'gpt-5-mini', menuVisible: true },
+  { id: 'older', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true },
 );
 await writeFile(configPath, JSON.stringify(config), 'utf8');
 
