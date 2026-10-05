@@ -322,12 +322,24 @@ export function dismissOnOutsideClick({ isOpen, ownsTarget, onDismiss }) {
  * item, say. Leaving the window is not "elsewhere": the popup is still there
  * when the user comes back. `isPaused()` covers a popup that rebuilds itself
  * and drops the focus for a moment.
+ *
+ * Focus that goes nowhere is judged a moment later: a node that moves in the
+ * DOM drops the focus on the way and gets it straight back — the composer bar
+ * moves its pills, open menu included, when it crosses 400 px (#400, #741).
+ * Only focus that has not come back by then has really left.
  */
 export function dismissOnFocusLeave({ container, isOpen, onDismiss, isPaused = () => false }) {
   container?.addEventListener('focusout', (e) => {
     if (!isOpen() || isPaused()) return;
     if (e.relatedTarget && container.contains(e.relatedTarget)) return;
-    if (!e.relatedTarget && !document.hasFocus()) return;
-    onDismiss();
+    if (e.relatedTarget) {
+      onDismiss();
+      return;
+    }
+    if (!document.hasFocus()) return;
+    queueMicrotask(() => {
+      if (!isOpen() || container.contains(document.activeElement)) return;
+      onDismiss();
+    });
   });
 }

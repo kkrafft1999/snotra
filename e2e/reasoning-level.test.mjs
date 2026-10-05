@@ -43,7 +43,11 @@ async function recordMenuEvents(page) {
     window.addEventListener('blur', () => log.push({ at: at(), type: 'window-blur' }));
     window.addEventListener('focus', () => log.push({ at: at(), type: 'window-focus' }));
     const menu = document.getElementById('chat-model-menu');
-    new MutationObserver(() => log.push({ at: at(), type: 'menu', hidden: menu.classList.contains('hidden'), active: name(document.activeElement) }))
+    const bar = document.querySelector('.chat-composer-bar');
+    new MutationObserver(() => log.push({
+      at: at(), type: 'menu', hidden: menu.classList.contains('hidden'), active: name(document.activeElement),
+      bar: Math.round(bar.getBoundingClientRect().width), stacked: bar.dataset.stacked === 'true',
+    }))
       .observe(menu, { attributes: true, attributeFilter: ['class'] });
   });
 }
@@ -135,6 +139,28 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
   });
   assert.equal(await page.evaluate(() => document.getElementById('chat-model-menu').classList.contains('hidden')), true,
     'the menu closes after a level (#737)');
+
+  // The composer bar crossing 400 px moves the pills, open menu included, and
+  // Chromium drops the focus on the way: the menu stays open all the same
+  // (#741). Docked next to the README the bar is narrow here, so the test
+  // sets the width both ways rather than relying on the layout.
+  const setBar = async (width) => {
+    await page.evaluate((w) => { document.querySelector('.chat-composer-bar').style.width = w; }, width);
+    const stacked = parseInt(width, 10) < 400;
+    await poll(() => page.evaluate((st) => (document.querySelector('.chat-composer-bar').dataset.stacked === 'true') === st, stacked),
+      { what: `bar at ${width}` });
+  };
+  await setBar('600px');
+  await openMenu(page);
+  for (const width of ['360px', '600px']) {
+    await setBar(width);
+    assert.deepEqual(await page.evaluate(() => ({
+      open: !document.getElementById('chat-model-menu').classList.contains('hidden'),
+      focusInMenu: document.getElementById('chat-model-menu').contains(document.activeElement),
+    })), { open: true, focusInMenu: true }, `menu after the bar went to ${width}`);
+  }
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { document.querySelector('.chat-composer-bar').style.width = ''; });
 
   // A new chat runs with the same entry, but at medium.
   await page.evaluate(() => document.getElementById('btn-chat-new').click());
