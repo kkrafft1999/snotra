@@ -19,7 +19,7 @@
 
 import contracts from '../generated/contracts.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
-import { formatMegabytes, formatSize } from '../utils/helpers.js';
+import { formatMegabytes, formatSize, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 
 // Messages stay keys until the dialog draws them (#353), so an error on screen
 // follows a language change like the rest of the dialog. Main's own reasons
@@ -31,13 +31,13 @@ const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tab
 
 
 /**
- * Macht aus den Release-Notizen von GitHub eine schlichte Aufzaehlung.
+ * Trims GitHub's release notes down to what changed — still as Markdown.
  *
- * GitHub setzt seine Notizen automatisch zusammen: eine Ueberschrift
- * „What's Changed", je Aenderung eine Zeile „… by @name in <PR-Link>" und
- * zum Schluss einen Vergleichs-Link. Im Dialog interessiert davon nur, *was*
- * sich geaendert hat — wer es gemacht hat und unter welcher Nummer, steht auf
- * der Release-Seite. Also bleibt hier die nackte Aufzaehlung stehen.
+ * GitHub generates part of the notes itself: a heading "What's Changed", one
+ * line "… by @name in <PR link>" per change and a compare link at the end.
+ * The dialog only cares *what* changed — who did it and under which number is
+ * on the release page. Everything written by hand (highlights in bold, inline
+ * code, a quoted warning) stays Markdown and is rendered by showNotes() (#736).
  */
 function formatReleaseNotes(notes) {
   const lines = String(notes || '').replace(/\r\n?/g, '\n').split('\n');
@@ -54,15 +54,15 @@ function formatReleaseNotes(notes) {
       const text = heading[1];
       skipping = /^new contributors$/i.test(text);
       if (skipping || /^what'?s changed$/i.test(text)) continue;
-      out.push(text);
+      out.push(line);
       continue;
     }
     if (skipping) continue;
 
-    const bullet = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    const bullet = line.match(/^(\s*)([-*+])\s+(.*)$/);
     if (bullet) {
-      const text = stripAuthorAndLink(bullet[2]);
-      if (text) out.push(`${bullet[1]}• ${text}`);
+      const text = stripAuthorAndLink(bullet[3]);
+      if (text) out.push(`${bullet[1]}${bullet[2]} ${text}`);
       continue;
     }
     out.push(line);
@@ -106,6 +106,8 @@ export function initUpdateDialog({ api }) {
   let info = null;
   /** Aufbereitete Aenderungsliste; leer heisst: es gibt nichts zu zeigen. */
   let notesText = '';
+  /** Notes replaced since the box was last opened — see the toggle listener. */
+  let notesFresh = false;
   /** 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'info' */
   let state = 'available';
   let lastMessage = '';
@@ -357,9 +359,27 @@ export function initUpdateDialog({ api }) {
 
   function showNotes(notes) {
     notesText = formatReleaseNotes(notes);
-    notesBodyEl.textContent = notesText;
+    // `breaks: false` as for a Markdown file: GitHub's notes are written like
+    // one, and a single line break inside a paragraph is a space there.
+    const fragment = inertHtmlFragment(markdownToSafeHtml(notesText, { breaks: false }));
+    // The dialog has nothing that would fill an image in, and the CSP would
+    // refuse a remote one anyway — its alt text says more than a broken box.
+    for (const img of fragment.querySelectorAll('img')) {
+      img.replaceWith(document.createTextNode(img.getAttribute('alt') || ''));
+    }
+    notesBodyEl.replaceChildren(fragment);
     notesEl.open = false;
+    notesFresh = true;
   }
+
+  // New notes start at the top, not where the last ones were left. The reset
+  // waits for the box to open: while closed it has no layout, and Chromium
+  // brings the old scroll position back on opening.
+  notesEl.addEventListener('toggle', () => {
+    if (!notesEl.open || !notesFresh) return;
+    notesFresh = false;
+    notesBodyEl.scrollTop = 0;
+  });
 
   function handlePayload(payload) {
     if (!payload || typeof payload !== 'object') return;
