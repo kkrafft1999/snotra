@@ -4,6 +4,7 @@ const { describeFetchErrorMessage, readErrorMessage } = require('./stream-helper
 const { streamResponsesRound } = require('./openai-responses-transport');
 
 const DEFAULT_BASE = 'https://api.openai.com/v1';
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 function baseUrlOf(config) {
   const raw = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
@@ -60,9 +61,8 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (typeof cacheKey === 'string' && cacheKey.trim()) {
     extraBody.prompt_cache_key = cacheKey.trim();
   }
-  if (typeof config?.reasoningEffort === 'string' && config.reasoningEffort.trim()) {
-    extraBody.reasoning = { effort: config.reasoningEffort.trim() };
-  }
+  const effort = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  if (effort) extraBody.reasoning = { effort };
   // Zusammenfassung des Nachdenkens mitstreamen (Issue #87): macht Minuten
   // lange Denkpausen als Zwischenschritte sichtbar. Standard aus, weil OpenAI
   // dafür je nach Organisation eine Verifizierung verlangt.
@@ -70,7 +70,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     extraBody.reasoning = { ...(extraBody.reasoning || {}), summary: 'auto' };
   }
 
-  return streamResponsesRound({
+  const result = await streamResponsesRound({
     baseUrl: baseUrlOf(config),
     headers: {
       'Content-Type': 'application/json',
@@ -83,6 +83,31 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     abortSignal,
     extraBody,
   });
+  return withEffortRejectionExplained(result, model, effort);
+}
+
+/**
+ * OpenAI knows seven reasoning levels, but every model only a few of them, and
+ * a level the model lacks comes back as HTTP 400 (#718). That answer is put
+ * into the app's own words — model, level, and the levels OpenAI lists as
+ * possible — with the way to change it. A model that takes no level at all is
+ * left to OpenAI's text: no other level would help there.
+ */
+function withEffortRejectionExplained(result, model, effort) {
+  if (!effort || result?.code !== '400' || typeof result.error !== 'string') return result;
+  const text = result.error;
+  const aboutEffort = result.param === 'reasoning.effort' || /reasoning\.effort/.test(text);
+  if (!aboutEffort || /unsupported parameter/i.test(text)) return result;
+  const listed = /supported values are:?([^.]*)/i.exec(text)?.[1] || '';
+  const supported = [...listed.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  return {
+    ...result,
+    error: supported.length > 0
+      ? createMessage('provider.openai.error.effortUnsupported.withList', {
+        model, effort, supported: supported.join(', '),
+      })
+      : createMessage('provider.openai.error.effortUnsupported', { model, effort }),
+  };
 }
 
 module.exports = {
@@ -110,11 +135,11 @@ module.exports = {
         // („OpenAI · gpt-5 · high“), der API-Parametername gehoert in den Hint.
         detailPrefix: '',
         showAsSuffix: true,
-        options: [
-          { value: 'low', label: 'low' },
-          { value: 'medium', label: 'medium' },
-          { value: 'high', label: 'high' },
-        ],
+        // All the levels OpenAI knows (#718). Which of them a model takes is
+        // not in `/v1/models`, and a table of our own would be out of date
+        // with the next release — so all seven are offered, and a rejected
+        // one is explained in the chat (withEffortRejectionExplained).
+        options: REASONING_EFFORTS.map((value) => ({ value, label: value })),
         formatDetail: (value) => `${value}`,
       },
       {

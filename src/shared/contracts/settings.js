@@ -746,14 +746,16 @@ function formatPresetSublabel(preset, provider, connection, say = plainText) {
 
 /**
  * The control a select field asks for, if its options allow it (#414): a
- * switch needs exactly two options, a segmented control at most four. Anything
- * else falls back to the dropdown, which can hold any number.
+ * switch needs exactly two options, a segmented control at most seven. Anything
+ * else falls back to the dropdown, which can hold any number. Seven is what
+ * OpenAI's reasoning levels need (#718) and what fills the field column at the
+ * narrowest window, 900 px — an eighth segment would no longer fit.
  */
 function presetFieldControl(field, options) {
   if (field.control === PRESET_FIELD_CONTROLS.SWITCH && options.length === 2) {
     return PRESET_FIELD_CONTROLS.SWITCH;
   }
-  if (field.control === PRESET_FIELD_CONTROLS.SEGMENTED && options.length <= 4) {
+  if (field.control === PRESET_FIELD_CONTROLS.SEGMENTED && options.length <= 7) {
     return PRESET_FIELD_CONTROLS.SEGMENTED;
   }
   return PRESET_FIELD_CONTROLS.DROPDOWN;

@@ -14,7 +14,7 @@ const { fetchVia } = require('../services/dispatcher-fetch');
 const {
   iterSseEvents,
   describeFetchErrorMessage,
-  readErrorMessage,
+  readErrorDetails,
   abortIfRequested,
   cancelledChatRound,
   isAbortError,
@@ -144,9 +144,13 @@ async function streamResponsesRound({
   }
 
   if (!res.ok) {
+    const { message, param } = await readErrorDetails(res);
     return {
-      error: await readErrorMessage(res),
+      error: message,
       code: String(res.status),
+      // The request field the API objects to, so a provider can put its own
+      // rejections into words (#718).
+      ...(param ? { param } : {}),
       ...(includeStatus ? { status: res.status } : {}),
     };
   }
