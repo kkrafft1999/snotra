@@ -5851,7 +5851,9 @@ select.modal-input {
   margin: 1.5em 0;
 }
 
-/* A wide table scrolls in its own frame instead of widening the pane. */
+/* A table fits the measure: its columns give way and the cells wrap rather
+ * than the table running out of the column (#730). `markdown-view.js` decides
+ * how far they have to give way; the frame only scrolls while that runs. */
 .md-table-frame {
   max-width: 100%;
   overflow-x: auto;
@@ -5859,9 +5861,7 @@ select.modal-input {
 }
 
 .md-doc table {
-  /* As wide as its content wants, so the frame scrolls instead of every cell
-   * breaking at each hyphen; a prose cell still wraps at its own limit. */
-  width: max-content;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: var(--ds-font-size-md);
   font-variant-numeric: tabular-nums;
@@ -5869,8 +5869,7 @@ select.modal-input {
 
 .md-doc th,
 .md-doc td {
-  max-width: 40ch;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   border: 1px solid var(--ds-grey-divider);
   padding: 5px 10px;
   text-align: left;
@@ -5880,6 +5879,23 @@ select.modal-input {
 .md-doc th {
   background: var(--ds-grey-bg);
   font-weight: var(--ds-font-weight-bold);
+}
+
+.md-doc table:not(.md-table--squeezed) .md-cell--short {
+  white-space: nowrap;
+}
+
+.md-doc .md-table--tight th,
+.md-doc .md-table--tight td {
+  overflow-wrap: anywhere;
+  padding: 4px 6px;
+}
+
+/* A URL or a path has no spaces to wrap at; inside a cell it breaks anywhere
+ * instead of holding the whole column open. */
+.md-doc td a,
+.md-doc td code {
+  overflow-wrap: anywhere;
 }
 
 .md-doc .md-image {

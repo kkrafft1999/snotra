@@ -178,6 +178,14 @@ test('headings get anchors without ids, duplicates numbered; tables get a scroll
   assert.equal(table.parentElement.className, 'md-table-frame');
 });
 
+test('a short table cell is marked as a value, a long one stays prose (#730)', () => {
+  const root = doc.renderMarkdownFragment(
+    '| No. | Task | Due |\n|---|---|---|\n| A1 | Share the technical state in the chat. | 2026-10-31 |\n'
+  );
+  const short = [...root.querySelectorAll('th, td')].map((cell) => cell.classList.contains('md-cell--short'));
+  assert.deepEqual(short, [true, true, true, true, false, true]);
+});
+
 test('only a heading carries an anchor, whatever the document wrote itself (#635)', () => {
   const root = doc.renderMarkdownFragment('<div data-md-anchor="steps">decoy</div>\n\n## Steps\n');
   const anchored = [...root.querySelectorAll('[data-md-anchor]')];

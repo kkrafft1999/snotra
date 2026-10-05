@@ -145,6 +145,9 @@ function decodeFragment(fragment) {
 
 // ── From Markdown to a tree ─────────────────────────────────────────────────
 
+/** Characters up to which a table cell is a value rather than prose. */
+const SHORT_CELL = 12;
+
 /**
  * Renders the Markdown body into an inert fragment.
  *
@@ -181,8 +184,14 @@ export function renderMarkdownFragment(body) {
     heading.setAttribute('data-md-anchor', count === 0 ? base : `${base}-${count}`);
   }
 
-  // A wide table scrolls inside its own frame instead of widening the pane.
+  // A table fits the column by wrapping its cells (#730). A short value — a
+  // date, an ID, "🔴 Open" — keeps its line, so that the prose columns give way
+  // instead of a date breaking at its hyphens. The frame scrolls only when even
+  // that is not enough.
   for (const table of root.querySelectorAll('table')) {
+    for (const cell of table.querySelectorAll('th, td')) {
+      if ([...cell.textContent.trim()].length <= SHORT_CELL) cell.classList.add('md-cell--short');
+    }
     const frame = document.createElement('div');
     frame.className = 'md-table-frame';
     table.replaceWith(frame);
