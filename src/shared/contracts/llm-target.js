@@ -18,18 +18,22 @@
  */
 
 /**
+ * `reasoningEffort` is the level the round runs with (#725). It belongs to the
+ * chat, not to the entry, and is set only when the model takes one.
+ *
  * @typedef {Object} ChatModelTarget
  * @property {string} providerId
  * @property {string} model
  * @property {string} [presetId]
  * @property {ProviderOptions} [providerOptions]
+ * @property {string} [reasoningEffort]
  */
 
 /**
- * @param {{ providerId: string, model: string, presetId?: string, providerOptions?: ProviderOptions }} params
+ * @param {{ providerId: string, model: string, presetId?: string, providerOptions?: ProviderOptions, reasoningEffort?: string }} params
  * @returns {ChatModelTarget}
  */
-function createChatModelTarget({ providerId, model, presetId, providerOptions }) {
+function createChatModelTarget({ providerId, model, presetId, providerOptions, reasoningEffort }) {
   const out = {
     providerId: String(providerId ?? ''),
     model: String(model ?? ''),
@@ -39,6 +43,9 @@ function createChatModelTarget({ providerId, model, presetId, providerOptions })
   }
   if (providerOptions && typeof providerOptions === 'object' && Object.keys(providerOptions).length > 0) {
     out.providerOptions = { ...providerOptions };
+  }
+  if (typeof reasoningEffort === 'string' && reasoningEffort.trim()) {
+    out.reasoningEffort = reasoningEffort.trim();
   }
   return out;
 }

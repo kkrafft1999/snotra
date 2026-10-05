@@ -8,8 +8,18 @@ const {
   extractPresetOptions,
   filterDeclaredPresetOptions,
 } = require('../../shared/contracts/settings');
+const { reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
 
-function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSecrets }) {
+/**
+ * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
+ * nothing (#725); without `chatId` it asks for the chat on screen.
+ */
+function createProviderLlmAdapter({
+  providerRuntime,
+  llmConfigStore,
+  providerSecrets,
+  reasoningLevelFor = async () => null,
+}) {
   function resolveProviderOptions(raw, provider) {
     if (raw.providerOptions && typeof raw.providerOptions === 'object') {
       return filterDeclaredPresetOptions(raw.providerOptions, provider);
@@ -17,17 +27,28 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     return filterDeclaredPresetOptions(extractPresetOptions(raw, provider), provider);
   }
 
-  function toTarget(raw) {
+  /**
+   * The level belongs to the chat (#725): it leaves the entry's options and
+   * becomes a field of the target, set only when the model takes a level.
+   */
+  function toTarget(raw, ownLevel) {
     const provider = providerRuntime.getProvider(raw.providerId);
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
-    const providerOptions = resolveProviderOptions(raw, provider);
+    const { reasoningEffort: fromEntry, ...entryOptions } = resolveProviderOptions(raw, provider) || {};
+    const reasoningEffort = resolveReasoningLevel({
+      levels: reasoningLevelsFor(provider, model || provider?.defaultModel),
+      own: ownLevel,
+      fromEntry,
+      defaultLevel: provider?.reasoning?.defaultLevel,
+    });
     return createChatModelTarget({
       providerId: raw.providerId,
       // Bei `connectionPerPreset` haengt die Verbindung am Eintrag; ohne die
       // Kennung koennte sie hier niemand mehr aufloesen (Issue #202).
       presetId: raw.presetId,
       model,
-      providerOptions,
+      providerOptions: entryOptions,
+      reasoningEffort,
     });
   }
 
@@ -37,12 +58,15 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
   }
 
   function mergeProviderConfig(baseConfig, target, provider) {
-    const opts = filterDeclaredPresetOptions(target.providerOptions, provider);
-    if (!opts) return { ...(baseConfig || {}) };
     const merged = { ...(baseConfig || {}) };
-    for (const [key, value] of Object.entries(opts)) {
+    const opts = filterDeclaredPresetOptions(target.providerOptions, provider);
+    for (const [key, value] of Object.entries(opts || {})) {
+      if (key === 'reasoningEffort') continue;
       merged[key] = value;
     }
+    // Only the target's level counts (#725) — never one left in the options.
+    delete merged.reasoningEffort;
+    if (target.reasoningEffort) merged.reasoningEffort = target.reasoningEffort;
     return merged;
   }
 
@@ -55,7 +79,8 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
     return custom || provider.name;
   }
 
-  async function resolveChatTarget() {
+  /** `chatId`: the chat the round is for; without it, the chat on screen. */
+  async function resolveChatTarget({ chatId } = {}) {
     const config = await llmConfigStore.readLLMConfig();
     const raw = llmConfigStore.resolveChatModelTarget(config);
     const provider = providerRuntime.getProvider(raw.providerId);
@@ -65,7 +90,16 @@ function createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSec
         code: CHAT_ERROR_CODES.INVALID,
       });
     }
-    return toTarget(raw);
+    return toTarget(raw, await readOwnLevel(chatId));
+  }
+
+  async function readOwnLevel(chatId) {
+    try {
+      return (await reasoningLevelFor(chatId)) || null;
+    } catch {
+      // A history that cannot be read costs the chat its level, not the round.
+      return null;
+    }
   }
 
   async function validateTarget(target, { forSend = false } = {}) {

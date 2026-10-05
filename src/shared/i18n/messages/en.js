@@ -1223,6 +1223,8 @@ module.exports = {
   'settings.error.encryptionUnavailable': 'Encrypted storage is not available on this system.',
   'settings.error.accessIncomplete': 'The access for “{label}” is incomplete (an API key or the server URL, for instance).',
   'settings.error.modelsNotSaved': 'Providers and model entries could not be saved. The interface settings were not changed.',
+  'settings.error.reasoningLevel': 'The current model does not take the reasoning level “{level}”.',
+  'settings.error.reasoningNoChat': 'The reasoning level could not be set: no chat is open.',
   'settings.error.uiNotSaved.rollbackFailed': 'The interface settings could not be saved. Providers and model entries had already been saved; undoing that failed or was skipped because something changed in the meantime. Open the settings again and check them.',
   'settings.error.uiNotSaved.rolledBack': 'The interface settings could not be saved. The changes to providers and model entries have been undone.',
   'settings.error.folderNotOpened': 'The folder could not be opened.',

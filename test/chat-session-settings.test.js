@@ -58,6 +58,7 @@ test('ein neuer Chat bekommt den Standard-Eintrag und „Intelligent“', async 
     chatId: 'chat-neu',
     modelPresetId: 'preset-a',
     toolPermissionMode: 'smart',
+    reasoningEffort: null,
   });
   assert.deepEqual(applied.presets, ['preset-a']);
   assert.deepEqual(applied.modes, ['smart']);
@@ -392,4 +393,74 @@ test('a failed model switch still applies the new chat\'s mode', async () => {
   // The queue goes on after a failure.
   const again = await settings.activate('chat-x');
   assert.equal(again.toolPermissionMode, 'auto');
+});
+
+// The reasoning level is the chat's third value (#725).
+
+test('a new chat has no level of its own, a stored chat brings its own back (#725)', async () => {
+  const { settings } = setup({
+    sessions: [{ id: 'chat-alt', modelPresetId: 'preset-b', reasoningEffort: 'high' }],
+  });
+
+  assert.equal((await settings.activate('chat-neu')).reasoningEffort, null);
+  assert.equal(await settings.reasoningEffortFor(), null);
+
+  assert.equal((await settings.activate('chat-alt')).reasoningEffort, 'high');
+  assert.equal(await settings.reasoningEffortFor(), 'high');
+  assert.equal(await settings.reasoningEffortFor('chat-alt'), 'high');
+});
+
+test('a chosen level is kept for the chat on screen and written into its row (#725)', async () => {
+  const { settings, history } = setup({ sessions: [{ id: 'chat-alt', modelPresetId: 'preset-b' }] });
+  await settings.activate('chat-alt');
+
+  assert.equal(await settings.rememberReasoningEffort('low'), true);
+  assert.equal(await settings.reasoningEffortFor(), 'low');
+  assert.equal(history.store.sessions[0].reasoningEffort, 'low');
+  assert.equal(settings.valuesFor('chat-alt').reasoningEffort, 'low');
+});
+
+test('a level without a chat on screen, or not a level at all, is not kept (#725)', async () => {
+  const { settings, history } = setup({ sessions: [{ id: 'chat-alt' }] });
+  assert.equal(await settings.rememberReasoningEffort('low'), false);
+
+  await settings.activate('chat-alt');
+  for (const bad of ['', 'HIGH', 'low; drop', 42, null]) {
+    assert.equal(await settings.rememberReasoningEffort(bad), false, String(bad));
+  }
+  assert.equal('reasoningEffort' in history.store.sessions[0], false);
+});
+
+test('a chat in the background answers with its own level (#725)', async () => {
+  const { settings } = setup({
+    sessions: [
+      { id: 'chat-a', reasoningEffort: 'high' },
+      { id: 'chat-b' },
+    ],
+  });
+  await settings.activate('chat-a');
+  await settings.activate('chat-b');
+  assert.equal(await settings.reasoningEffortFor('chat-a'), 'high');
+  assert.equal(await settings.reasoningEffortFor(), null);
+});
+
+test('the stored level is read from the history once, not for every round (#725)', async () => {
+  const { settings, history } = setup({ sessions: [{ id: 'chat-a', reasoningEffort: 'minimal' }] });
+  let reads = 0;
+  const read = history.readChatHistoryStore;
+  history.readChatHistoryStore = async (...args) => {
+    reads += 1;
+    return read(...args);
+  };
+  for (let i = 0; i < 3; i += 1) assert.equal(await settings.reasoningEffortFor('chat-a'), 'minimal');
+  assert.equal(reads, 1);
+
+  // A chat not saved yet is asked again: its first save may bring a level.
+  await settings.reasoningEffortFor('chat-neu');
+  await settings.reasoningEffortFor('chat-neu');
+  assert.equal(reads, 3);
+
+  settings.forget('chat-a');
+  assert.equal(await settings.reasoningEffortFor('chat-a'), 'minimal');
+  assert.equal(reads, 4);
 });

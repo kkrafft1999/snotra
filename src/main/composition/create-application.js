@@ -706,6 +706,7 @@ function createApplication({
     sessionGrants,
     // A run in the background keeps the mode of its own chat (#320).
     resolveChatMode: (chatId) => chatSessionSettings.modeFor(chatId),
+    resolveReasoningLevel: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
     // A run that ended off screen takes its approvals with it.
     onRunSettled: () => pruneChatScopedPermissions(),
     toolAdapterDeps: {

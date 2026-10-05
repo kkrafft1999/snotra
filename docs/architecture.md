@@ -731,6 +731,31 @@ another, and the mode is applied before the model, so the chat on screen never
 runs under the mode of the one before it — not after two quick clicks, not
 after a failed model switch (#559).
 
+### The reasoning level belongs to the chat ([#725](https://github.com/kkrafft1999/snotra/issues/725))
+
+The third value per chat, part of epic #723. A provider declares the levels it
+knows and which of its models take one — `reasoning: { levels, defaultLevel,
+appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
+`shared/contracts/reasoning.js` holds the rules both sides use.
+
+- **Stored:** `chat-session-settings` keeps `reasoningEffort` next to model and
+  mode, in memory and in the chat's history row. Only main writes it:
+  `SETTINGS_SET_REASONING_EFFORT` checks the level against the model of the chat
+  on screen, and `CHAT_HISTORY_UPSERT` drops whatever the renderer sends along.
+  Unlike the mode, nothing is applied when a chat comes on screen.
+- **Read:** a round asks for it. `resolveChatTarget({ chatId })` in the LLM
+  adapter takes the chat's own level, else the entry's, else the provider's
+  default (`medium`) — the first the model takes — and puts it into the target
+  as `reasoningEffort`, outside `providerOptions`. A model that takes no level
+  gets none, also not one left in the stored configuration. The engine
+  resolves the target once per send, so every round of a run, also one going
+  on in the background, keeps the level it started with. `reasoningEffortFor`
+  reads the history once per chat and keeps the answer, since every round asks.
+- **Shown:** `llmState.reasoning` carries the level of the chat on screen and
+  the levels its model takes; an empty list means no choice.
+- **Transition:** until #726 an entry may still carry a level of its own; it
+  only applies to a chat that has none.
+
 ### Runs per chat ([#320](https://github.com/kkrafft1999/snotra/issues/320))
 
 A run belongs to the chat it was started in, not to the screen. Until 1.8.1 the

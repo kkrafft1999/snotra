@@ -138,6 +138,14 @@ module.exports = {
   // Modell sie versteht (Issue #93).
   capabilities: { images: true },
   defaultModel: 'gpt-5-mini',
+  // The levels a chat can choose (#725): all seven, for the models Snotra
+  // offers. Which of them a model really takes is not in `/v1/models`; a
+  // rejected one is explained in the chat (withEffortRejectionExplained).
+  reasoning: {
+    levels: REASONING_EFFORTS,
+    defaultLevel: 'medium',
+    appliesTo: isOfferedModel,
+  },
   apiBase: DEFAULT_BASE,
   presentation: {
     apiKeyPlaceholder: 'sk-…',

@@ -16,6 +16,7 @@ const {
 } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
+const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 
 const TOOL_PERMISSION_MODE_VALUES = Object.freeze(Object.values(TOOL_PERMISSION_MODES));
 
@@ -39,6 +40,14 @@ function chatModelPresetIdForStore(raw) {
 function chatToolPermissionModeForStore(raw) {
   if (typeof raw !== 'string') return undefined;
   return TOOL_PERMISSION_MODE_VALUES.includes(raw) ? raw : undefined;
+}
+
+/**
+ * The chat's reasoning level (#725), optional like the two above. Whether the
+ * model takes it is decided when a round starts, not here.
+ */
+function chatReasoningEffortForStore(raw) {
+  return normalizeReasoningLevel(raw);
 }
 
 /**
@@ -357,6 +366,8 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
   if (modelPresetId) out.modelPresetId = modelPresetId;
   const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
   if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
+  const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
+  if (reasoningEffort) out.reasoningEffort = reasoningEffort;
   return out;
 }
 
@@ -374,6 +385,8 @@ function normalizeSessionForLoad(sessionRow) {
   if (modelPresetId) out.modelPresetId = modelPresetId;
   const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
   if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
+  const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
+  if (reasoningEffort) out.reasoningEffort = reasoningEffort;
   return out;
 }
 
@@ -381,6 +394,7 @@ module.exports = {
   inferChatTitle,
   chatModelPresetIdForStore,
   chatToolPermissionModeForStore,
+  chatReasoningEffortForStore,
   toolTraceEntryToString,
   toolTraceEntryForStore,
   sanitizeChatMessagesForStore,

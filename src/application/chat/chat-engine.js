@@ -812,8 +812,13 @@ function createChatEngine({
     };
   }
 
-  async function resolveTarget(forSend) {
-    const target = await llm.resolveChatTarget();
+  /**
+   * `chatId` names the chat the run is for, so it runs with that chat's
+   * reasoning level (#725). The target is resolved once per send and every
+   * round reuses it: a level changed meanwhile applies to the next send.
+   */
+  async function resolveTarget(forSend, chatId) {
+    const target = await llm.resolveChatTarget(chatId ? { chatId } : undefined);
     if (target.error) return { error: target };
     const validation = await llm.validateTarget(target, { forSend });
     if (validation) return { error: validation };
@@ -923,7 +928,7 @@ function createChatEngine({
         return createChatErrorResult({ error: createMessage('chat.error.noMessages'), code: CHAT_ERROR_CODES.INVALID });
       }
 
-      const resolved = await resolveTarget(true);
+      const resolved = await resolveTarget(true, chatId);
       if (resolved.error) return resolved.error;
       const { target } = resolved;
       awaitingProvider = true;
