@@ -38,10 +38,17 @@ function createChatApplication({
   // had while it was on screen. `null` means "the store's mode applies" —
   // always the case for the visible chat.
   resolveChatMode = () => null,
+  // The chat's own reasoning level (#725); `null` when it has none.
+  resolveReasoningLevel = async () => null,
   // Called when a run ends, so that main can drop what only lived for it.
   onRunSettled = () => {},
 }) {
-  const llm = createProviderLlmAdapter({ providerRuntime, llmConfigStore, providerSecrets });
+  const llm = createProviderLlmAdapter({
+    providerRuntime,
+    llmConfigStore,
+    providerSecrets,
+    reasoningLevelFor: resolveReasoningLevel,
+  });
   const tools = createWorkspaceToolAdapter(toolRegistry, toolAdapterDeps);
   const preferences = createChatPreferencesAdapter({ uiPrefsStore });
   const workspacePaths = createNodeWorkspacePathAdapter({ path });

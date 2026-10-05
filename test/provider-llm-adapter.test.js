@@ -15,6 +15,9 @@ const OPENAI_PRESET_FIELDS = [
   },
 ];
 
+// The levels a chat can choose (#725); without `appliesTo` every model takes them.
+const OPENAI_REASONING = { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' };
+
 function makeProviders(overrides = {}) {
   const base = {
     test: {
@@ -32,6 +35,8 @@ function makeProviders(overrides = {}) {
       defaultModel: 'gpt-4o',
       fields: { apiKey: true },
       presentation: { presetFields: OPENAI_PRESET_FIELDS },
+    reasoning: OPENAI_REASONING,
+      reasoning: OPENAI_REASONING,
       async streamChatRound() {
         return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
       },
@@ -88,6 +93,7 @@ function makeAdapterDeps(overrides = {}) {
     providerRuntime: overrides.providerRuntime || makeProviders(),
     llmConfigStore: makeLlmConfigStore(llmOverrides),
     providerSecrets: makeProviderSecrets(secretsOverrides),
+    ...(overrides.reasoningLevelFor ? { reasoningLevelFor: overrides.reasoningLevelFor } : {}),
   };
 }
 
@@ -114,6 +120,8 @@ test('adapter merges only declared preset option keys into provider config', asy
       defaultModel: 'gpt-4o',
       fields: { apiKey: true },
       presentation: { presetFields: OPENAI_PRESET_FIELDS },
+    reasoning: OPENAI_REASONING,
+      reasoning: OPENAI_REASONING,
       async streamChatRound({ config }) {
         capturedConfig = config;
         return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
@@ -140,7 +148,9 @@ test('adapter merges only declared preset option keys into provider config', asy
   }));
 
   const target = await llm.resolveChatTarget();
-  assert.deepEqual(target.providerOptions, { reasoningEffort: 'high' });
+  // The level is the target's own field since #725, no longer an entry option.
+  assert.equal(target.reasoningEffort, 'high');
+  assert.equal(target.providerOptions, undefined);
 
   const bundle = await llm.prepareSendBundle(target);
   await llm.streamRound({
@@ -176,6 +186,7 @@ test('adapter prepareSendBundle snapshots config and model for multi-round reuse
     defaultModel: 'gpt-4o',
     fields: { apiKey: true },
     presentation: { presetFields: OPENAI_PRESET_FIELDS },
+    reasoning: OPENAI_REASONING,
     async streamChatRound({ config, model }) {
       captured.push({ config, model });
       round += 1;
@@ -283,7 +294,102 @@ test('adapter resolves legacy reasoningEffort wire field via declared preset key
   }));
 
   const target = await llm.resolveChatTarget();
-  assert.deepEqual(target.providerOptions, { reasoningEffort: 'low' });
+  assert.equal(target.reasoningEffort, 'low');
+  assert.equal(target.providerOptions, undefined);
+});
+
+// The level belongs to the chat (#725).
+function levelAdapter({ entryLevel, own, model = 'gpt-5', appliesTo, storedConfig = {} } = {}) {
+  const asked = [];
+  let sent = null;
+  const providers = makeProviders({
+    openai: {
+      id: 'openai',
+      name: 'OpenAI',
+      defaultModel: 'gpt-5',
+      fields: { apiKey: true },
+      presentation: { presetFields: OPENAI_PRESET_FIELDS },
+      reasoning: { ...OPENAI_REASONING, ...(appliesTo ? { appliesTo } : {}) },
+      async streamChatRound({ config }) {
+        sent = config;
+        return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
+      },
+    },
+  });
+  const llm = createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: providers,
+    llmConfigStore: {
+      resolveChatModelTarget: () => ({
+        providerId: 'openai',
+        model,
+        ...(entryLevel ? { providerOptions: { reasoningEffort: entryLevel } } : {}),
+      }),
+    },
+    providerSecrets: {
+      getEffectiveProviderConfig: async () => ({ apiKey: 'sk-test', ...storedConfig }),
+    },
+    reasoningLevelFor: async (chatId) => {
+      asked.push(chatId);
+      if (own instanceof Error) throw own;
+      return own;
+    },
+  }));
+  return {
+    llm,
+    asked,
+    async send(target) {
+      await llm.streamRound({
+        target,
+        sendBundle: await llm.prepareSendBundle(target),
+        messages: [{ role: 'user', content: 'Hi' }],
+        callbacks: {},
+        abortSignal: new AbortController().signal,
+      });
+      return sent;
+    },
+  };
+}
+
+test('the chat\'s own level wins over the entry\'s, for the chat the round is for (#725)', async () => {
+  const { llm, asked, send } = levelAdapter({ entryLevel: 'low', own: 'high' });
+  const target = await llm.resolveChatTarget({ chatId: 'chat-1' });
+  assert.deepEqual(asked, ['chat-1']);
+  assert.equal(target.reasoningEffort, 'high');
+  assert.equal((await send(target)).reasoningEffort, 'high');
+
+  // Without a chat id the adapter asks for the chat on screen.
+  await llm.resolveChatTarget();
+  assert.deepEqual(asked, ['chat-1', undefined]);
+});
+
+test('a chat without a level of its own runs with the entry\'s, then with the default (#725)', async () => {
+  assert.equal((await levelAdapter({ entryLevel: 'low', own: null }).llm.resolveChatTarget()).reasoningEffort, 'low');
+  assert.equal((await levelAdapter({ own: null }).llm.resolveChatTarget()).reasoningEffort, 'medium');
+  // A stored level the model does not take falls through as well.
+  assert.equal((await levelAdapter({ entryLevel: 'low', own: 'max' }).llm.resolveChatTarget()).reasoningEffort, 'low');
+  // A history that cannot be read costs the level, not the round.
+  assert.equal((await levelAdapter({ own: new Error('unreadable') }).llm.resolveChatTarget()).reasoningEffort, 'medium');
+});
+
+test('a model that takes no level gets none, not even one left in the stored config (#725)', async () => {
+  const { llm, send } = levelAdapter({
+    entryLevel: 'high',
+    own: 'high',
+    model: 'gpt-4o-mini',
+    appliesTo: (model) => model.startsWith('gpt-5'),
+    storedConfig: { reasoningEffort: 'high' },
+  });
+  const target = await llm.resolveChatTarget({ chatId: 'chat-1' });
+  assert.equal(target.reasoningEffort, undefined);
+  assert.equal('reasoningEffort' in (await send(target)), false);
+});
+
+test('a provider without levels gets none (#725)', async () => {
+  const llm = createProviderLlmAdapter(makeAdapterDeps({
+    llmConfigStore: { resolveChatModelTarget: () => ({ providerId: 'ollama', model: 'llama3' }) },
+    reasoningLevelFor: async () => 'high',
+  }));
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-1' })).reasoningEffort, undefined);
 });
 
 test('adapter validateTarget returns NO_API_KEY with send-specific suffix', async () => {

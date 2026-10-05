@@ -45,7 +45,9 @@
 
 /**
  * @typedef {Object} LlmPort
- * @property {() => Promise<ChatModelTarget|ChatErrorResult>} resolveChatTarget
+ * @property {(params?: { chatId?: string }) => Promise<ChatModelTarget|ChatErrorResult>} resolveChatTarget
+ *   With `chatId`, the target carries that chat's reasoning level (#725);
+ *   without, the level of the chat on screen.
  * @property {(target: ChatModelTarget, options?: LlmValidateOptions) => Promise<ChatErrorResult|null>} validateTarget
  * @property {(target: ChatModelTarget) => Promise<LlmSendBundle>} prepareSendBundle
  * @property {(params: {

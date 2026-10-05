@@ -1905,3 +1905,32 @@ test('a cut-off round runs no tool call and keeps its text (#538)', async () => 
     assert.ok(errorText(res, 'de').length > 0, `${finishReason}: German sentence`);
   }
 });
+
+test('a send resolves the target once, for its own chat (#725)', async () => {
+  const llm = makeLlmPort([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+    assistantText('Fertig.'),
+  ]);
+  const asked = [];
+  llm.resolveChatTarget = async (params) => {
+    asked.push(params);
+    return { providerId: 'test', model: 'test-model', reasoningEffort: 'high' };
+  };
+  const { engine, calls } = makeEngine(null, {
+    llm,
+    tools: makeToolPort(() => '{}', { toolDefs: [{ name: 'read_file_text', requiresWorkspace: true }] }),
+  });
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      chatId: 'chat-42',
+      messages: [{ role: 'user', content: 'Lies a.js' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+  });
+
+  // Both rounds run with the level the send started with.
+  assert.deepEqual(asked, [{ chatId: 'chat-42' }]);
+  assert.deepEqual(calls.map((call) => call.target.reasoningEffort), ['high', 'high']);
+});

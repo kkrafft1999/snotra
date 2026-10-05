@@ -61,6 +61,7 @@ const REQUEST_CHANNELS = Object.freeze({
 
   SETTINGS_GET_LLM_STATE: 'settings:getLLMState',
   SETTINGS_SET_ACTIVE_PRESET: 'settings:setActivePreset',
+  SETTINGS_SET_REASONING_EFFORT: 'settings:setReasoningEffort',
   SETTINGS_COMMIT_SETTINGS: 'settings:commitSettings',
   SETTINGS_CANCEL_MODELS: 'settings:cancelModels',
   SETTINGS_LIST_MODELS: 'settings:listModels',

@@ -16,6 +16,12 @@ const {
 } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
 const {
+  DEFAULT_REASONING_LEVEL,
+  normalizeReasoningLevel,
+  reasoningLevelsFor,
+  resolveReasoningLevel,
+} = require('../../shared/contracts/reasoning');
+const {
   MEMORY_SCOPES,
   MEMORY_SCOPE_ORDER,
   MEMORY_SCOPE_SHORT_PATHS,
@@ -98,12 +104,62 @@ function registerSettingsHandlers({
       chatTarget,
       apiKeyDecryptable,
       locale: prefs.appLocale,
+      reasoning: await chatReasoningState(chatTarget),
     });
   });
 
   function mergeProviderPatchIntoConfig(config, providerId, patch) {
     return mergeProviderPatchIntoConfigImpl({ safeStorage, providerCatalog }, config, providerId, patch);
   }
+
+  /**
+   * The levels the chat's model takes and the one it runs with (#725) — the
+   * same resolution a round makes in the LLM adapter.
+   */
+  function reasoningLevelsOf(target) {
+    const provider = providerCatalog.getProvider(target?.providerId);
+    return {
+      provider,
+      levels: reasoningLevelsFor(provider, target?.model || provider?.defaultModel),
+    };
+  }
+
+  async function chatReasoningState(target) {
+    const { provider, levels } = reasoningLevelsOf(target);
+    if (levels.length === 0) return { level: null, levels: [], defaultLevel: null };
+    let own = null;
+    try {
+      own = (await chatSessionSettings?.reasoningEffortFor()) || null;
+    } catch {
+      own = null;
+    }
+    const defaultLevel = provider.reasoning.defaultLevel || DEFAULT_REASONING_LEVEL;
+    return {
+      level: resolveReasoningLevel({
+        levels,
+        own,
+        fromEntry: target.providerOptions?.reasoningEffort,
+        defaultLevel,
+      }),
+      levels,
+      defaultLevel,
+    };
+  }
+
+  // The level chosen for the chat on screen (#725). Only a level its model
+  // takes is kept; the renderer offers no other, so anything else is refused.
+  ipcMain.handle(REQ.SETTINGS_SET_REASONING_EFFORT, async (_event, rawLevel) => {
+    const level = normalizeReasoningLevel(rawLevel);
+    const config = await llmConfigStore.readLLMConfig();
+    const { levels } = reasoningLevelsOf(llmConfigStore.resolveChatModelTarget(config));
+    if (!level || !levels.includes(level)) {
+      return createSettingsError(createMessage('settings.error.reasoningLevel', { level: String(rawLevel ?? '').slice(0, 32) }));
+    }
+    if (!(await chatSessionSettings?.rememberReasoningEffort(level))) {
+      return createSettingsError(createMessage('settings.error.reasoningNoChat'));
+    }
+    return createSettingsOk();
+  });
 
   ipcMain.handle(REQ.SETTINGS_SET_ACTIVE_PRESET, async (_event, presetId) => {
     // Ausdrueckliche Wahl in der Chat-Leiste: gilt fuer den laufenden Chat und

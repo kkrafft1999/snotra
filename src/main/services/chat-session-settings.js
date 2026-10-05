@@ -29,6 +29,11 @@
  * restored automatically from `auto` falls back to it — so a workspace whose
  * default is `auto` keeps `auto` across a restart. The default can only be
  * `auto` after main's own native confirmation for that workspace.
+ *
+ * The reasoning level is the chat's third value (#725), with a rule of its
+ * own: a new chat has none and runs with the provider's default, `medium`. It
+ * is not applied anywhere when a chat comes on screen — a round asks for it
+ * (`reasoningEffortFor`) when it starts.
  */
 
 const {
@@ -38,6 +43,7 @@ const {
 const {
   chatModelPresetIdForStore,
   chatToolPermissionModeForStore,
+  chatReasoningEffortForStore,
 } = require('./chat-history-normalization');
 const { CHAT_ACTIVATION } = require('../../shared/contracts/chat');
 
@@ -64,7 +70,7 @@ function createChatSessionSettings({
   log = console,
 }) {
   let currentChatId = null;
-  /** @type {Map<string, {modelPresetId?: string, toolPermissionMode?: string}>} */
+  /** @type {Map<string, {modelPresetId?: string, toolPermissionMode?: string, reasoningEffort?: string}>} */
   const remembered = new Map();
   /**
    * The mode a chat had when it left the screen (#320). The store only ever
@@ -73,6 +79,13 @@ function createChatSessionSettings({
    * @type {Map<string, string>}
    */
   const backgroundModes = new Map();
+  /**
+   * The level each chat has in the history, as far as it was read (#725).
+   * Every round asks for it; without this each one would read the whole
+   * history file. Only this service writes the level, so the copy stays true.
+   * @type {Map<string, string|null>}
+   */
+  const storedLevels = new Map();
   /** The switch still in progress; the next one waits for it (#559). */
   let activationQueue = Promise.resolve();
 
@@ -131,7 +144,7 @@ function createChatSessionSettings({
    */
   async function storedValuesFor(chatId) {
     const local = remembered.get(chatId) || {};
-    if (local.modelPresetId && local.toolPermissionMode) return { ...local };
+    if (local.modelPresetId && local.toolPermissionMode && local.reasoningEffort) return { ...local };
     return { ...(await readStoredValues(chatId)), ...local };
   }
 
@@ -145,6 +158,8 @@ function createChatSessionSettings({
       if (presetId) out.modelPresetId = presetId;
       const mode = chatToolPermissionModeForStore(session.toolPermissionMode);
       if (mode) out.toolPermissionMode = mode;
+      const level = chatReasoningEffortForStore(session.reasoningEffort);
+      if (level) out.reasoningEffort = level;
       return out;
     } catch {
       return {};
@@ -217,7 +232,12 @@ function createChatSessionSettings({
     // chat restored from "auto" to "smart", say (concept §7).
     if (chatId && modeBefore && modeBefore !== mode) notify(onChatModeChanged, chatId);
     notify(onActivated, chatId);
-    return { chatId, modelPresetId: presetId, toolPermissionMode: mode };
+    return {
+      chatId,
+      modelPresetId: presetId,
+      toolPermissionMode: mode,
+      reasoningEffort: values.reasoningEffort ?? null,
+    };
   }
 
   function notify(hook, chatId) {
@@ -251,6 +271,50 @@ function createChatSessionSettings({
     await persist(currentChatId, { modelPresetId: presetId });
   }
 
+  /**
+   * The level chosen for the chat on screen (#725). Main has checked it
+   * against the model before; here it is only kept.
+   */
+  async function rememberReasoningEffort(rawLevel) {
+    const level = chatReasoningEffortForStore(rawLevel);
+    if (!currentChatId || !level) return false;
+    rememberLocal(currentChatId, { reasoningEffort: level });
+    rememberStoredLevel(currentChatId, level);
+    await persist(currentChatId, { reasoningEffort: level });
+    return true;
+  }
+
+  function rememberStoredLevel(chatId, level) {
+    storedLevels.delete(chatId);
+    storedLevels.set(chatId, level);
+    while (storedLevels.size > MAX_REMEMBERED_CHATS) {
+      storedLevels.delete(storedLevels.keys().next().value);
+    }
+  }
+
+  /**
+   * The chat's own level, or `null` when it has none; without `chatId`, the
+   * chat on screen's. A chat in the background answers with its own as well.
+   */
+  async function reasoningEffortFor(rawChatId) {
+    const chatId = normalizeChatId(rawChatId) || currentChatId;
+    if (!chatId) return null;
+    const local = remembered.get(chatId)?.reasoningEffort;
+    if (local) return local;
+    if (storedLevels.has(chatId)) return storedLevels.get(chatId);
+    try {
+      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
+      const session = store.sessions.find((s) => s && s.id === chatId);
+      // Not saved yet: nothing to remember, the first save may bring a level.
+      if (!session) return null;
+      const level = chatReasoningEffortForStore(session.reasoningEffort) ?? null;
+      rememberStoredLevel(chatId, level);
+      return level;
+    } catch {
+      return null;
+    }
+  }
+
   async function rememberMode(rawMode) {
     const mode = chatToolPermissionModeForStore(rawMode);
     if (!currentChatId || !mode) return;
@@ -273,6 +337,7 @@ function createChatSessionSettings({
     if (!chatId) return;
     remembered.delete(chatId);
     backgroundModes.delete(chatId);
+    storedLevels.delete(chatId);
     if (currentChatId === chatId) currentChatId = null;
   }
 
@@ -280,6 +345,8 @@ function createChatSessionSettings({
     activate,
     rememberPreset,
     rememberMode,
+    rememberReasoningEffort,
+    reasoningEffortFor,
     valuesFor,
     forget,
     modeFor,

@@ -121,6 +121,8 @@ function registerChatHistoryHandlers({
       const sessionSettings = {
         modelPresetId: existing?.modelPresetId,
         toolPermissionMode: existing?.toolPermissionMode,
+        // The reasoning level likewise (#725): main's word, never the renderer's.
+        reasoningEffort: existing?.reasoningEffort,
         ...chatSessionSettings.valuesFor(sessionId),
       };
       const normalized = chatHistoryStore.normalizeSessionForStore(

@@ -1231,6 +1231,8 @@ module.exports = {
   'settings.error.encryptionUnavailable': 'Verschlüsselter Speicher ist auf diesem System nicht verfügbar.',
   'settings.error.accessIncomplete': 'Der Zugang für „{label}“ ist unvollständig (z. B. API-Schlüssel oder Server-URL).',
   'settings.error.modelsNotSaved': 'Anbieter und Modell-Einträge konnten nicht gespeichert werden. Die UI-Einstellungen wurden nicht geändert.',
+  'settings.error.reasoningLevel': 'Das aktuelle Modell nimmt das Reasoning-Level „{level}“ nicht.',
+  'settings.error.reasoningNoChat': 'Das Reasoning-Level ließ sich nicht setzen: Es ist kein Chat offen.',
   'settings.error.uiNotSaved.rollbackFailed': 'Die UI-Einstellungen konnten nicht gespeichert werden. Anbieter und Modell-Einträge waren bereits gespeichert; ihre Rücknahme ist fehlgeschlagen oder wurde wegen zwischenzeitlicher Änderungen ausgelassen. Öffne die Einstellungen erneut und prüfe sie.',
   'settings.error.uiNotSaved.rolledBack': 'Die UI-Einstellungen konnten nicht gespeichert werden. Die Änderungen an Anbietern und Modell-Einträgen wurden zurückgenommen.',
   'settings.error.folderNotOpened': 'Der Ordner konnte nicht geöffnet werden.',

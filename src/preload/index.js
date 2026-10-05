@@ -129,6 +129,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM provider settings (multi-provider)
   getLLMState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_LLM_STATE),
   setActivePreset: (presetId) => ipcRenderer.invoke(REQ.SETTINGS_SET_ACTIVE_PRESET, presetId),
+  // The reasoning level of the chat on screen (#725); main checks it.
+  setReasoningEffort: (level) => ipcRenderer.invoke(REQ.SETTINGS_SET_REASONING_EFFORT, level),
   commitSettings: (payload) => ipcRenderer.invoke(REQ.SETTINGS_COMMIT_SETTINGS, payload),
   cancelModelListing: () => ipcRenderer.invoke(REQ.SETTINGS_CANCEL_MODELS),
   listModels: (payload) => ipcRenderer.invoke(REQ.SETTINGS_LIST_MODELS, payload),

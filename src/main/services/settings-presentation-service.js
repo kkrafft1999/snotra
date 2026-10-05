@@ -212,6 +212,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     connectionOverrides,
     apiKeyDecryptable,
     locale,
+    reasoning,
   }) {
     const say = createTranslator(locale).message;
     const active = config.activeProvider || defaultProviderId;
@@ -236,6 +237,13 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       activeProvider: active,
       activePresetId: config.activePresetId || null,
       chatTarget,
+      // The chat on screen's level and the levels its model takes (#725);
+      // no levels, no choice.
+      reasoning: {
+        level: reasoning?.level || null,
+        levels: Array.isArray(reasoning?.levels) ? [...reasoning.levels] : [],
+        defaultLevel: reasoning?.defaultLevel || null,
+      },
       presets,
       providers: providerViews,
     };

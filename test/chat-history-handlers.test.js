@@ -663,3 +663,22 @@ test('#473: with an unreadable history file a save is skipped, not written over 
   const back = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
   assert.deepEqual(back.sessions.map((s) => s.id), ['a'], 'chat a is still there');
 });
+
+test('the reasoning level comes from main, the payload\'s is dropped (#725)', async (t) => {
+  const chatSessionSettings = fakeChatSessionSettings({ a: { reasoningEffort: 'high' } });
+  const { ipcMain, storage } = await setup(t, { chatSessionSettings });
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max' });
+  let stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'a');
+  assert.equal(stored.reasoningEffort, 'high');
+
+  // Without a remembered value the stored one stays; the payload still counts for nothing.
+  chatSessionSettings.valuesFor = () => ({});
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max', updatedAt: 2000 });
+  stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'a');
+  assert.equal(stored.reasoningEffort, 'high');
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('b'), reasoningEffort: 'max' });
+  stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'b');
+  assert.equal('reasoningEffort' in stored, false);
+});

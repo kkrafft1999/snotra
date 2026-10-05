@@ -141,6 +141,8 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
       name: 'OpenAI',
       fields: { apiKey: true },
       defaultModel: 'gpt-4o',
+      // The real levels and rule (#725): GPT-5 and newer take the seven.
+      reasoning: require('../src/main/providers/openai').reasoning,
       presentation: {
         apiKeyPlaceholder: 'sk-…',
         presetFields: [{
@@ -1097,4 +1099,90 @@ test('isPresetUsable erkennt geloeschte und unvollstaendige Eintraege', async (t
   assert.equal(await isPresetUsable(deps, 'p1'), true);
   assert.equal(await isPresetUsable(deps, 'gibt-es-nicht'), false);
   assert.equal(await isPresetUsable(deps, ''), false);
+});
+
+// The reasoning level of the chat on screen (#725).
+async function seedReasoningPresets(llmConfigStore, activePresetId = 'p5') {
+  await llmConfigStore.updateLLMConfig(async (config) => {
+    config.providers = { openai: { apiKeyEnc: Buffer.from('enc:sk-test', 'utf8').toString('base64') } };
+    config.presets = [
+      { id: 'p5', providerId: 'openai', model: 'gpt-5-mini', reasoningEffort: 'low', menuVisible: true },
+      { id: 'p4', providerId: 'openai', model: 'gpt-4o-mini', menuVisible: true },
+    ];
+    config.activePresetId = activePresetId;
+    config.defaultPresetId = activePresetId;
+    config.activeProvider = 'openai';
+    return config;
+  });
+}
+
+function fakeLevelSettings(own = null) {
+  const kept = [];
+  return {
+    kept,
+    rememberPreset: async () => {},
+    reasoningEffortFor: async () => own,
+    rememberReasoningEffort: async (level) => {
+      kept.push(level);
+      return true;
+    },
+  };
+}
+
+test('setReasoningEffort keeps a level the model takes and refuses any other (#725)', async (t) => {
+  const chatSessionSettings = fakeLevelSettings();
+  const { ipcMain, llmConfigStore } = await setupHandlers(t, { chatSessionSettings });
+  await seedReasoningPresets(llmConfigStore);
+
+  assert.equal((await ipcMain.invoke(REQ.SETTINGS_SET_REASONING_EFFORT, 'xhigh')).ok, true);
+  for (const bad of ['HIGH', 'ultra', '', null, 7]) {
+    const res = await ipcMain.invoke(REQ.SETTINGS_SET_REASONING_EFFORT, bad);
+    assert.equal(res.ok, false, String(bad));
+    assert.equal(res.error.key, 'settings.error.reasoningLevel');
+  }
+  assert.deepEqual(chatSessionSettings.kept, ['xhigh']);
+});
+
+test('setReasoningEffort refuses a level for a model that takes none (#725)', async (t) => {
+  const chatSessionSettings = fakeLevelSettings();
+  const { ipcMain, llmConfigStore } = await setupHandlers(t, { chatSessionSettings });
+  await seedReasoningPresets(llmConfigStore, 'p4');
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_SET_REASONING_EFFORT, 'high');
+  assert.equal(res.ok, false);
+  assert.deepEqual(chatSessionSettings.kept, []);
+});
+
+test('setReasoningEffort says so when no chat is on screen (#725)', async (t) => {
+  const chatSessionSettings = { ...fakeLevelSettings(), rememberReasoningEffort: async () => false };
+  const { ipcMain, llmConfigStore } = await setupHandlers(t, { chatSessionSettings });
+  await seedReasoningPresets(llmConfigStore);
+
+  const res = await ipcMain.invoke(REQ.SETTINGS_SET_REASONING_EFFORT, 'high');
+  assert.equal(res.ok, false);
+  assert.equal(res.error.key, 'settings.error.reasoningNoChat');
+});
+
+test('the LLM state carries the chat\'s level and the levels its model takes (#725)', async (t) => {
+  const own = await setupHandlers(t, { chatSessionSettings: fakeLevelSettings('high') });
+  await seedReasoningPresets(own.llmConfigStore);
+  const state = await own.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE);
+  assert.deepEqual(state.reasoning, {
+    level: 'high',
+    levels: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+    defaultLevel: 'medium',
+  });
+});
+
+test('without a level of its own the chat shows the entry\'s; an older model shows none (#725)', async (t) => {
+  const fallback = await setupHandlers(t, { chatSessionSettings: fakeLevelSettings(null) });
+  await seedReasoningPresets(fallback.llmConfigStore);
+  assert.equal((await fallback.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE)).reasoning.level, 'low');
+
+  await seedReasoningPresets(fallback.llmConfigStore, 'p4');
+  assert.deepEqual((await fallback.ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE)).reasoning, {
+    level: null,
+    levels: [],
+    defaultLevel: null,
+  });
 });
