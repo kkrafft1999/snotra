@@ -72,6 +72,8 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   const openaiPreset = dto.presets.find((p) => p.id === 'p1');
   // The entry carries no level since #726; the chat does.
   assert.equal(openaiPreset.label, 'OpenAI · gpt-5-mini');
+  // The chat names the entry by its model; the name tells twins apart (#727).
+  assert.equal(openaiPreset.entryName, 'OpenAI');
   assert.equal('optionSuffix' in openaiPreset, false);
   assert.equal(openaiPreset.reasoningEffort, undefined);
   assert.equal(openaiPreset.sublabel, 'https://api.openai.com/v1');

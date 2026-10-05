@@ -414,7 +414,11 @@ Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rüc
 
 ## Anbieter
 
-Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten. Fünf Anbieter stehen zur Wahl:
+Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Die Pille nennt nur das Modell — `gpt-5-mini`, nicht `OpenAI · gpt-5-mini`; nur bei zwei Einträgen mit demselben Modell steht der Name des Eintrags dahinter. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten.
+
+**Das Reasoning-Level gehört zum Chat, nicht zum Eintrag.** Bei einem Modell, das eines kennt (OpenAI ab GPT-5), zeigt dasselbe Menü unter den Modellen die Level von `none` bis `max`; die Pille heißt dann `gpt-5-mini · high`. Ein Level gilt für diesen Chat und bleibt bei ihm, auch im Verlauf und nach einem Neustart. Ein neuer Chat startet immer mit `medium`. Welche Level ein Modell wirklich nimmt, entscheidet OpenAI: Ein abgelehntes Level wird im Chat erklärt, zusammen mit den Leveln, die das Modell nimmt, sofern OpenAI sie nennt.
+
+Fünf Anbieter stehen zur Wahl:
 
 | Anbieter | Zugang | Bemerkung |
 | -------- | ------ | --------- |

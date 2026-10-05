@@ -17,7 +17,14 @@ export function initChatModelPicker({
   const chatModelPickerWrap = document.getElementById('chat-model-picker-wrap');
   const btnChatModelPicker = document.getElementById('btn-chat-model-picker');
   const chatModelPillLabel = document.getElementById('chat-model-pill-label');
+  // The popup: the models (a listbox) and, below them, the chat's reasoning
+  // level (a radio group) — variant C of #723, built in #727.
   const chatModelMenu = document.getElementById('chat-model-menu');
+  const chatModelList = document.getElementById('chat-model-list');
+  const chatReasoning = document.getElementById('chat-reasoning');
+  const chatReasoningLevels = document.getElementById('chat-reasoning-levels');
+  const chatReasoningHint = document.getElementById('chat-reasoning-hint');
+  const chatReasoningStatus = document.getElementById('chat-reasoning-status');
   const chatLiveDot = document.getElementById('chat-live-dot');
 
   let chatModelMenuOpen = false;
@@ -71,12 +78,55 @@ export function initChatModelPicker({
     return presets.filter((pr) => pr.configured && (pr.menuVisible !== false || pr.id === activeId));
   }
 
+  /** The model an entry runs; an entry from an older state only has its label. */
+  function modelOf(preset) {
+    return preset?.model || findProviderView(preset?.providerId)?.defaultModel || preset?.label || '';
+  }
+
+  /**
+   * How the chat names an entry (#727): by its model alone — the provider is
+   * left out, the model ID says enough. Only when another entry in the menu
+   * carries the same model (one model on two servers, #202) does the entry's
+   * name follow: "qwen3:32b · Mac Studio".
+   */
+  function entryTitle(preset, presets = menuPresets()) {
+    const model = modelOf(preset);
+    const twin = presets.some((other) => other.id !== preset?.id && modelOf(other) === model);
+    return twin && preset?.entryName ? `${model} · ${preset.entryName}` : model;
+  }
+
+  function renderPillLabel(title, level) {
+    chatModelPillLabel.textContent = '';
+    const model = document.createElement('span');
+    model.className = 'chat-model-pill-model';
+    model.textContent = title;
+    chatModelPillLabel.appendChild(model);
+    if (!level) return;
+    const suffix = document.createElement('span');
+    suffix.className = 'chat-model-pill-level';
+    suffix.textContent = ` · ${level}`;
+    chatModelPillLabel.appendChild(suffix);
+  }
+
+  /** The chat's level and the levels its model takes; no levels, no choice. */
+  function reasoningState() {
+    const reasoning = appStore.llmState.reasoning;
+    const levels = Array.isArray(reasoning?.levels) ? reasoning.levels : [];
+    return {
+      levels,
+      level: levels.includes(reasoning?.level) ? reasoning.level : null,
+      defaultLevel: reasoning?.defaultLevel || 'medium',
+    };
+  }
+
   function rebuildChatModelMenu() {
-    if (!chatModelMenu) return 0;
-    chatModelMenu.innerHTML = '';
+    if (!chatModelList) return 0;
+    chatModelList.innerHTML = '';
     const activeId = appStore.llmState.activePresetId;
+    const presets = menuPresets();
+    const focusable = presets.some((pr) => pr.id === activeId) ? activeId : presets[0]?.id;
     let count = 0;
-    for (const pr of menuPresets()) {
+    for (const pr of presets) {
       count += 1;
       const li = document.createElement('li');
       li.setAttribute('role', 'none');
@@ -85,25 +135,86 @@ export function initChatModelPicker({
       btn.className = 'chat-model-menu-option';
       btn.setAttribute('role', 'option');
       btn.setAttribute('aria-selected', pr.id === activeId ? 'true' : 'false');
+      // One stop for the whole list (#727): Tab goes on to the levels, the
+      // arrow keys move within the list.
+      btn.tabIndex = pr.id === focusable ? 0 : -1;
       btn.dataset.presetId = pr.id;
 
       const main = document.createElement('span');
       main.className = 'chat-model-menu-opt-main';
 
-      // Einzeilig: Anbieter und Modell. Weitere Preset-Details wie die
-      // Serveradresse stehen im Einstellungsdialog, nicht in diesem
-      // Schnellwechsel-Menue.
+      // One line: the model. Further details such as the server address are
+      // in the settings dialog, not in this quick switch.
       const title = document.createElement('span');
       title.className = 'chat-model-menu-opt-title';
       title.lang = 'en';
-      title.textContent = pr.label || '';
+      title.textContent = entryTitle(pr, presets);
       main.appendChild(title);
 
       btn.appendChild(main);
       li.appendChild(btn);
-      chatModelMenu.appendChild(li);
+      chatModelList.appendChild(li);
     }
     return count;
+  }
+
+  /** The levels of the active model as a radio group; absent without levels. */
+  function rebuildReasoning() {
+    if (!chatReasoning || !chatReasoningLevels) return;
+    const { levels, level, defaultLevel } = reasoningState();
+    chatReasoningLevels.innerHTML = '';
+    setReasoningStatus('');
+    chatReasoning.hidden = levels.length === 0;
+    if (levels.length === 0) return;
+    for (const value of levels) {
+      const option = document.createElement('label');
+      option.className = 'ds-segmented__option';
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.className = 'ds-segmented__input';
+      input.name = 'chat-reasoning-level';
+      input.value = value;
+      input.checked = value === level;
+      const text = document.createElement('span');
+      text.lang = 'en';
+      text.textContent = value;
+      option.append(input, text);
+      chatReasoningLevels.appendChild(option);
+    }
+    if (chatReasoningHint) chatReasoningHint.textContent = t('chat.reasoning.hint', { level: defaultLevel });
+  }
+
+  function setReasoningStatus(text) {
+    if (!chatReasoningStatus) return;
+    chatReasoningStatus.textContent = text;
+    chatReasoningStatus.hidden = !text;
+  }
+
+  function checkLevel(level) {
+    for (const input of chatReasoningLevels?.querySelectorAll('input') || []) {
+      input.checked = input.value === level;
+    }
+  }
+
+  /**
+   * A level applies at once and the menu stays open (#727): the pill shows it
+   * a moment later. Refused, the group goes back to the level that holds and
+   * says why — no choice without an answer.
+   */
+  async function chooseReasoningLevel(level) {
+    setReasoningStatus('');
+    let res;
+    try {
+      res = await api.setReasoningEffort(level);
+    } catch {
+      res = null;
+    }
+    if (!res?.ok) {
+      checkLevel(reasoningState().level);
+      setReasoningStatus(res?.error ? tMessage(res.error) : t('chat.reasoning.failed'));
+      return;
+    }
+    await refreshLLMState();
   }
 
   async function persistActivePreset(presetId) {
@@ -195,15 +306,21 @@ export function initChatModelPicker({
 
     syncChatTitle();
 
+    // Model and level, no provider (#727): "gpt-6-luna · medium".
+    const title = activePreset ? entryTitle(activePreset) : (target?.model || '');
+    const { level } = reasoningState();
+    const shown = level ? `${title} · ${level}` : title;
+
     if (chatModelPickerWrap && btnChatModelPicker && chatModelPillLabel) {
       if (active && target?.model && isConfigured) {
         chatModelPickerWrap.classList.remove('hidden');
         btnChatModelPicker.classList.remove('hidden');
-        const model = activePreset?.label || `${active.name} · ${target.model}`;
-        chatModelPillLabel.textContent = model;
+        renderPillLabel(title, level);
         // The name starts with what the pill shows (WCAG 2.5.3, #583); the
         // model name alone is marked as English, in the markup.
-        const name = t('chat.modelPicker.button.label', { model });
+        const name = level
+          ? t('chat.modelPicker.button.labelWithLevel', { model: title, level })
+          : t('chat.modelPicker.button.label', { model: title });
         btnChatModelPicker.setAttribute('aria-label', name);
         btnChatModelPicker.title = name;
         // Without a preset to switch to, the pill is a label, not a menu.
@@ -216,14 +333,12 @@ export function initChatModelPicker({
     }
     if (!chatModelMenuOpen) {
       closeChatModelMenu();
-      if (chatModelMenu) chatModelMenu.innerHTML = '';
+      if (chatModelList) chatModelList.innerHTML = '';
     }
 
     let modelHint = '';
-    if (activePreset?.label) {
-      modelHint = activePreset.label;
-    } else if (active && target?.model) {
-      modelHint = `${active.name} · ${target.model}`;
+    if (title) {
+      modelHint = shown;
     } else if (active) {
       modelHint = `${active.name}`;
     }
@@ -260,8 +375,10 @@ export function initChatModelPicker({
     }
     const n = rebuildChatModelMenu();
     if (n === 0) return;
+    rebuildReasoning();
     chatModelMenuOpen = true;
     chatModelMenu.classList.remove('hidden');
+    keepMenuInWindow();
     btnChatModelPicker.setAttribute('aria-expanded', 'true');
     // Into the list, on the option that is selected (#583).
     const options = menuOptions();
@@ -269,7 +386,27 @@ export function initChatModelPicker({
   }
 
   function menuOptions() {
-    return chatModelMenu ? [...chatModelMenu.querySelectorAll('.chat-model-menu-option')] : [];
+    return chatModelList ? [...chatModelList.querySelectorAll('.chat-model-menu-option')] : [];
+  }
+
+  /**
+   * The popup opens from the pill's left edge, inside the chat column, which
+   * cuts off whatever reaches past it. With the levels it can be wider than
+   * the space to the right of the pill: it moves left as far as the column
+   * allows, and in a column narrower than itself it takes the column's width
+   * and lets the levels wrap.
+   */
+  function keepMenuInWindow() {
+    chatModelMenu.style.left = '';
+    chatModelMenu.style.maxWidth = '';
+    const column = chatModelPickerWrap?.closest('#chat-panel')?.getBoundingClientRect()
+      || { left: 0, right: window.innerWidth };
+    const left = column.left + 8;
+    const right = column.right - 8;
+    chatModelMenu.style.maxWidth = `${Math.max(0, right - left)}px`;
+    const box = chatModelMenu.getBoundingClientRect();
+    const overflow = box.right - right;
+    if (overflow > 0) chatModelMenu.style.left = `${-Math.min(overflow, box.left - left)}px`;
   }
 
   dismissOnOutsideClick({
@@ -296,6 +433,7 @@ export function initChatModelPicker({
     });
 
     // The keyboard model of a listbox, the same as the mode menu's (#583).
+    // The levels below are a radio group and keep the arrow keys of their own.
     chatModelMenu.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -304,8 +442,8 @@ export function initChatModelPicker({
         return;
       }
       const options = menuOptions();
-      if (options.length === 0) return;
       const index = options.indexOf(document.activeElement);
+      if (index < 0) return;
       let next = null;
       if (e.key === 'ArrowDown') next = options[(index + 1) % options.length];
       else if (e.key === 'ArrowUp') next = options[(index - 1 + options.length) % options.length];
@@ -313,7 +451,31 @@ export function initChatModelPicker({
       else if (e.key === 'End') next = options[options.length - 1];
       if (!next) return;
       e.preventDefault();
+      for (const option of options) option.tabIndex = option === next ? 0 : -1;
       next.focus();
+    });
+  }
+
+  if (chatModelMenu) {
+    // A press on a level would move the focus to nowhere — a label takes none
+    // — and the menu closes on a focus that leaves it, before the click
+    // arrives (#727). The level's radio takes the focus instead; a press on
+    // the popup's text leaves the focus where it is.
+    chatModelMenu.addEventListener('mousedown', (e) => {
+      const input = e.target.closest?.('#chat-reasoning-levels label')?.querySelector('input');
+      if (input) {
+        e.preventDefault();
+        input.focus();
+        return;
+      }
+      if (!e.target.closest?.('button, input')) e.preventDefault();
+    });
+  }
+
+  if (chatReasoningLevels) {
+    chatReasoningLevels.addEventListener('change', (e) => {
+      const input = e.target;
+      if (input?.type === 'radio' && input.checked) void chooseReasoningLevel(input.value);
     });
   }
 

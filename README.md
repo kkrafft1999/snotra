@@ -774,9 +774,20 @@ and full screen behave as in any other app on your platform and sit in the
 
 An **entry in the preference list** (Settings › Models › *Add model*)
 connects a provider with a model; in the chat you switch between entries via the
-pill next to the input. The chosen model stays with the conversation — a chat
-from the history comes back with its own, a new chat starts with the one last
-chosen. Five providers are available:
+pill next to the input. The pill names the model alone — `gpt-5-mini`, not
+`OpenAI · gpt-5-mini`; only two entries with the same model also show the
+entry's name. The chosen model stays with the conversation — a chat from the
+history comes back with its own, a new chat starts with the one last chosen.
+
+**The reasoning level belongs to the chat, not to the entry.** For a model that
+has one (OpenAI from GPT-5 on), the same menu shows the levels below the models,
+from `none` to `max`; the pill then reads `gpt-5-mini · high`. A level applies
+to this chat and stays with it, also in the history and after a restart. A new
+chat always starts with `medium`. Which levels a model really takes, OpenAI
+decides: a level it turns down is explained in the chat, together with the
+levels it takes where OpenAI names them.
+
+Five providers are available:
 
 | Provider | Access | Note |
 | -------- | ------ | ---- |
