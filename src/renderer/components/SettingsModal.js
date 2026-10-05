@@ -39,6 +39,7 @@ const CHEVRON_ICON_HTML =
 const {
   formatPresetSublabelFromView,
   presetIdentityKey,
+  isModelOffered,
   normalizeBaseUrl,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_CONTROLS,
@@ -145,6 +146,7 @@ export function initSettingsModal(deps) {
   const presetFieldsPopup = document.getElementById('preset-fields-popup');
   const selectModel = document.getElementById('select-model');
   const inputModel = document.getElementById('input-model');
+  const modelOfferHint = document.getElementById('model-offer-hint');
   const modelNameOptions = document.getElementById('model-name-options');
   const btnLoadModels = document.getElementById('btn-load-models');
   const modelLoadProviderLabel = document.getElementById('model-load-provider-label');
@@ -502,6 +504,7 @@ export function initSettingsModal(deps) {
     const fields = providerView?.presetFields || [];
     if (fields.length === 0) {
       presetFieldsPopup.classList.add('hidden');
+      syncModelOffer();
       return;
     }
     presetFieldsPopup.classList.remove('hidden');
@@ -546,6 +549,35 @@ export function initSettingsModal(deps) {
 
       row.append(label, cell);
       presetFieldsPopup.appendChild(row);
+    }
+    syncModelOffer();
+  }
+
+  /**
+   * An entry whose model the provider no longer offers (#724) keeps working,
+   * but its preset fields no longer apply: they are hidden, and the provider's
+   * hint says why. Only an edited entry gets here — the list offers nothing
+   * else, and choosing a model from it brings the fields back.
+   */
+  function syncModelOffer() {
+    const pv = findProviderView(popupProviderId);
+    const model = pv ? currentModelValue(pv) : '';
+    const offered = !pv || !model || isModelOffered(pv, model);
+    if (presetFieldsPopup && (pv?.presetFields || []).length > 0) {
+      presetFieldsPopup.classList.toggle('hidden', !offered);
+    }
+    const hint = offered ? '' : (pv?.form?.offeredModelsHint || '');
+    if (!modelOfferHint) return;
+    modelOfferHint.textContent = hint;
+    modelOfferHint.classList.toggle('hidden', !hint);
+    // Described by the hint only while it is there; a hidden element that is
+    // referenced would still be read out.
+    for (const el of [selectModel, inputModel]) {
+      const ids = (el.getAttribute('aria-describedby') || '')
+        .split(/\s+/)
+        .filter((id) => id && id !== modelOfferHint.id);
+      if (hint) ids.splice(1, 0, modelOfferHint.id);
+      el.setAttribute('aria-describedby', ids.join(' '));
     }
   }
 
@@ -696,6 +728,7 @@ export function initSettingsModal(deps) {
         if (m.label !== m.id) opt.label = m.label;
         modelNameOptions.appendChild(opt);
       }
+      syncModelOffer();
       return;
     }
 
@@ -721,6 +754,7 @@ export function initSettingsModal(deps) {
     } else if (currentValue) {
       selectModel.value = currentValue;
     }
+    syncModelOffer();
   }
 
   /**
@@ -2318,6 +2352,9 @@ export function initSettingsModal(deps) {
   addModelOverlay?.addEventListener('click', (e) => {
     if (e.target === addModelOverlay) closeAddModelOverlay();
   });
+
+  selectModel.addEventListener('change', syncModelOffer);
+  inputModel.addEventListener('input', syncModelOffer);
 
   selectProvider.addEventListener('change', () => {
     cancelModelListing();

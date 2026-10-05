@@ -418,7 +418,7 @@ Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hi
 
 | Anbieter | Zugang | Bemerkung |
 | -------- | ------ | --------- |
-| **OpenAI** | API-Key | Spricht die Responses-API; kann Bilder und Reasoning-Level |
+| **OpenAI** | API-Key | Spricht die Responses-API; bietet GPT-5 und neuer an, mit Bildern und Reasoning-Level. Ein Eintrag mit einem älteren Modell läuft weiter, aber ohne Reasoning-Level |
 | **Anthropic** | API-Key | |
 | **Google** | API-Key | |
 | **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |

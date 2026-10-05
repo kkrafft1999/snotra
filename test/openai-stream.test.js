@@ -367,18 +367,20 @@ test('a rejected level without a list still gets the message, found by param alo
   mockFetch(t, rejection({ message: "Invalid value: 'max'.", param: 'reasoning.effort' }));
   const res = await openai.streamChatRound({
     config: { ...CONFIG, reasoningEffort: 'max' },
-    model: 'o4-mini',
+    model: 'gpt-5-mini',
     messages: [],
     callbacks: collectCallbacks().callbacks,
   });
   assert.deepEqual(res.error, {
     key: 'provider.openai.error.effortUnsupported',
-    params: { model: 'o4-mini', effort: 'max' },
+    params: { model: 'gpt-5-mini', effort: 'max' },
   });
 });
 
 test('other 400s keep OpenAI\'s text (#718)', async (t) => {
-  // A model without reasoning: no other level would help, so no advice to change it.
+  // A model that takes no level at all: no other level would help, so no
+  // advice to change it. Older models get none since #724; this is for one
+  // that is offered and still turns it down.
   mockFetch(t, rejection({
     message: "Unsupported parameter: 'reasoning.effort' is not supported with this model.",
     param: 'reasoning.effort',
@@ -386,7 +388,7 @@ test('other 400s keep OpenAI\'s text (#718)', async (t) => {
   }));
   const noReasoning = await openai.streamChatRound({
     config: { ...CONFIG, reasoningEffort: 'medium' },
-    model: 'gpt-4o',
+    model: 'gpt-6-luna',
     messages: [],
     callbacks: collectCallbacks().callbacks,
   });
@@ -401,6 +403,52 @@ test('other 400s keep OpenAI\'s text (#718)', async (t) => {
   });
   assert.equal(other.error, 'Invalid input.');
   assert.equal(other.param, 'input');
+});
+
+// GPT-5 and newer only (#724): what the dialog lists, and what an entry with
+// an older model sends.
+const MODEL_IDS = [
+  'gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-3.5-turbo', 'o3', 'o4-mini', 'chatgpt-4o-latest',
+  'gpt-5', 'gpt-5-mini', 'gpt-5.1', 'gpt-5.1-codex', 'gpt-6-luna', 'ft:gpt-5-mini:acme::abc',
+  'gpt-5-chat-latest', 'gpt-5-search-api', 'gpt-realtime', 'gpt-audio', 'gpt-image-1',
+  'gpt-4o-mini-transcribe', 'text-embedding-3-small', 'whisper-1', 'dall-e-3', 'omni-moderation-latest',
+];
+
+test('listModels offers GPT-5 and newer only, without the variants that do not chat (#724)', async (t) => {
+  mockFetch(t, async () => ({
+    ok: true,
+    json: async () => ({ data: MODEL_IDS.map((id) => ({ id })) }),
+  }));
+  const res = await openai.listModels({ apiKey: 'sk-test' });
+  assert.deepEqual(res.models.map((m) => m.id), [
+    'ft:gpt-5-mini:acme::abc', 'gpt-5', 'gpt-5-mini', 'gpt-5.1', 'gpt-5.1-codex', 'gpt-6-luna',
+  ]);
+});
+
+test('the default model is one the list offers (#724)', () => {
+  assert.match(openai.defaultModel, new RegExp(openai.presentation.offeredModels, 'i'));
+});
+
+test('an older model gets no reasoning, a GPT-5 model does (#724)', async (t) => {
+  const calls = mockFetch(t, () =>
+    sseResponse([
+      sse('response.completed', { response: {} }),
+      'data: [DONE]\n\n',
+    ]));
+  const config = { ...CONFIG, reasoningEffort: 'high', reasoningSummary: 'auto' };
+  for (const model of ['gpt-4o-mini', 'o3', 'gpt-5-chat-latest', 'gpt-5-mini']) {
+    const res = await openai.streamChatRound({
+      config,
+      model,
+      messages: [{ role: 'user', content: 'Hi' }],
+      callbacks: collectCallbacks().callbacks,
+    });
+    assert.equal(res.error, undefined, model);
+  }
+  assert.deepEqual(
+    calls.map((c) => JSON.parse(c.options.body).reasoning),
+    [undefined, undefined, undefined, { effort: 'high', summary: 'auto' }],
+  );
 });
 
 // Bild-Anhaenge (Issue #84). Mit Bild verlangt die Responses-API getypte Teile

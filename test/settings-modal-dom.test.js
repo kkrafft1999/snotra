@@ -690,6 +690,82 @@ test('the switch turned off again yields the first option (#414)', async (t) => 
   assert.equal(row.reasoningSummary, 'off');
 });
 
+/** OpenAI with the rule main sends along since #724: GPT-5 and newer. */
+const OFFERING_OPENAI_VIEW = {
+  ...OPENAI_VIEW,
+  defaultModel: 'gpt-5-mini',
+  form: {
+    ...OPENAI_VIEW.form,
+    offeredModels: require('../src/main/providers/openai').presentation.offeredModels,
+    offeredModelsHint: 'Snotra bietet GPT-5 und neuer an. Dieses \u00e4ltere Modell l\u00e4uft weiter, aber ohne Reasoning-Level.',
+  },
+};
+
+test('an entry with an older model keeps it, without the reasoning fields (#724)', async (t) => {
+  const { dom, appStore } = await mountSettings({
+    providers: [OFFERING_OPENAI_VIEW],
+    listModels: async () => ({ models: [{ id: 'gpt-5' }, { id: 'gpt-5-mini' }] }),
+  });
+  t.after(dom.cleanup);
+  appStore.llmState.presets = [{
+    id: 'old',
+    providerId: 'openai',
+    model: 'gpt-4o-mini',
+    reasoningEffort: 'high',
+    menuVisible: true,
+    configured: true,
+    label: 'OpenAI \u00b7 gpt-4o-mini',
+  }];
+  appStore.llmState.activePresetId = 'old';
+  await dom.reopenSettings();
+
+  // The list says so, in place of the level.
+  assert.equal(document.querySelector('.settings-pref-main strong').textContent, 'OpenAI \u00b7 gpt-4o-mini');
+  assert.equal(
+    document.querySelector('.settings-pref-detail').textContent,
+    '\u00c4lteres Modell, wird nicht mehr angeboten',
+  );
+
+  document.querySelector('.settings-icon-edit').click();
+  await flush();
+  const select = document.getElementById('select-model');
+  const fields = document.getElementById('preset-fields-popup');
+  const hint = document.getElementById('model-offer-hint');
+  assert.equal(select.value, 'gpt-4o-mini');
+  assert.equal(fields.classList.contains('hidden'), true);
+  assert.equal(hint.classList.contains('hidden'), false);
+  assert.equal(hint.textContent, OFFERING_OPENAI_VIEW.form.offeredModelsHint);
+  assert.deepEqual(select.getAttribute('aria-describedby').split(' '), [
+    'model-status', 'model-offer-hint', 'popup-model-catalog-hint',
+  ]);
+
+  // The loaded list keeps the entry's own model; a current one brings the
+  // fields back and the hint goes.
+  document.getElementById('btn-load-models').click();
+  await flush();
+  assert.deepEqual([...select.options].map((o) => o.value), ['gpt-5', 'gpt-5-mini', 'gpt-4o-mini']);
+  assert.equal(select.value, 'gpt-4o-mini');
+  assert.equal(fields.classList.contains('hidden'), true);
+
+  select.value = 'gpt-5';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  assert.equal(fields.classList.contains('hidden'), false);
+  assert.equal(hint.classList.contains('hidden'), true);
+  assert.equal(select.getAttribute('aria-describedby'), 'model-status popup-model-catalog-hint');
+});
+
+test('adding a current OpenAI model shows the reasoning fields and no hint (#724)', async (t) => {
+  const { dom } = await mountSettings({ providers: [OFFERING_OPENAI_VIEW] });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  assert.equal(document.getElementById('select-model').value, 'gpt-5-mini');
+  assert.equal(document.getElementById('preset-fields-popup').classList.contains('hidden'), false);
+  assert.equal(document.getElementById('model-offer-hint').classList.contains('hidden'), true);
+});
+
 const tabFor = (key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`);
 const panelFor = (key) => document.getElementById(`panel-settings-${key}`);
 
