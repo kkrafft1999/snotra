@@ -81,6 +81,25 @@ function run(ctx, command, extra = {}) {
   return ctx.shellRunner.run({ command, cwd: ctx.workspace, workspaceRoot: ctx.workspace, ...extra });
 }
 
+/**
+ * A run whose command goes through the sandbox's network proxy. Seen on
+ * macOS CI (#368, #714): curl did not reach the proxy at all — on the blocked
+ * call once, later on the allowed one. Nothing got out, and the run says so
+ * itself. Whether the proxy was listening at that moment tells a dead proxy
+ * from a refused connect, so the test records it — and tries once more. A
+ * proxy that stays out of reach still fails the caller's assertions.
+ */
+async function runThroughProxy(t, ctx, label, command, extra = {}) {
+  const result = await run(ctx, command, extra);
+  const unreachable = result.stderr.match(/<sandbox_network>[^]*?localhost:(\d+)/);
+  if (!unreachable) return result;
+  assert.notEqual(result.exitCode, 0);
+  const listening = await reachable(Number(unreachable[1]));
+  t.diagnostic(`${label}: proxy not reached, listening from outside the sandbox: ${listening}; `
+    + `stderr: ${result.stderr}`);
+  return run(ctx, command, extra);
+}
+
 test.after(async () => {
   if (!setup) return;
   const ctx = await setup;
@@ -151,20 +170,10 @@ test('no network unless a domain is allowed — an allowed domain works', async 
   if (!ctx) return;
   const curl = 'curl -sS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
 
-  let blocked = await run(ctx, curl, { timeoutMs: 30_000 });
-  // Seen once in ~240 macOS CI jobs (#368): curl did not reach the proxy at
-  // all. Nothing got out, and the run now says so itself. Whether the proxy
-  // was listening at that moment tells a dead proxy from a refused connect,
-  // so the test records it — and tries once more. A proxy that stays out of
-  // reach still fails the assertion below.
-  const unreachable = blocked.stderr.match(/<sandbox_network>[^]*?localhost:(\d+)/);
-  if (unreachable) {
-    assert.notEqual(blocked.exitCode, 0);
-    const listening = await reachable(Number(unreachable[1]));
-    t.diagnostic(`proxy not reached, listening from outside the sandbox: ${listening}; stderr: ${blocked.stderr}`);
-    blocked = await run(ctx, curl, { timeoutMs: 30_000 });
-  }
-  const allowed = await run(ctx, curl, { networkDomains: ['example.com'], timeoutMs: 30_000 });
+  const blocked = await runThroughProxy(t, ctx, 'blocked', curl, { timeoutMs: 30_000 });
+  const allowed = await runThroughProxy(t, ctx, 'allowed', curl, {
+    networkDomains: ['example.com'], timeoutMs: 30_000,
+  });
 
   assert.notEqual(blocked.exitCode, 0);
   // The model learns what was refused, not just that curl failed.
