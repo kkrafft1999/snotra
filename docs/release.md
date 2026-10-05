@@ -106,27 +106,48 @@ as the volume icon, failed now and then on `hdiutil detach`, and kept an
 unmaintained `image-size` in the lock file.
 
 The image holds the signed `Snotra AI.app`, an `/Applications` symlink, Snotra's
-`icon.icns` as the volume icon and the window layout from
+`icon.icns` as the volume icon, the window background
+[`assets/macos/dmg-background.tiff`](../assets/macos/dmg-background.tiff) in
+`.background/` and the window layout from
 [`assets/macos/dmg-layout.DS_Store`](../assets/macos/dmg-layout.DS_Store): icon
 view without toolbar, status bar or sidebar, the app on the left, Applications
-on the right. There is deliberately **no background picture**. Finder colours
-the icon labels after the system appearance, not after the picture, so any
-picture leaves them unreadable in either light or dark mode; without one Finder
-draws the window in the system colours. The variants were compared on a mockup
-in #685.
+on the right and a grey arrow between them.
+
+The background is **transparent apart from the arrow**. #685 started without
+any picture, because Finder colours the labels after the system appearance and
+a coloured picture leaves them unreadable in one of the modes. Trying it out
+showed the other side: as soon as a picture is set, Finder draws the whole
+window light, in dark mode too, with dark labels. So the window does not follow
+dark mode, but it stays readable in both. The hidden files (`.VolumeIcon.icns`,
+`.background`) are placed below the visible area, so they stay out of sight
+even when Finder shows hidden files.
 
 The script builds a read-write image, mounts it once with `-nobrowse` to set the
 custom-icon flag on the volume root (`hdiutil create -srcfolder` does not carry
 it over), detaches it and converts it to a compressed `ULFO` image. Signing,
 notarising and stapling the DMG stay in `release.yml`.
 
-**Changing the layout.** The `.DS_Store` is generated once with Finder and
-checked in; CI never scripts Finder. Build a small read-write image with an
-empty folder `Snotra AI.app` and the `/Applications` symlink, give it a volume
-name of its own (if a real *Snotra AI* is mounted, Finder confuses the two),
-mount it, set the view with Finder, unmount it and copy its `.DS_Store` over
-the asset. Keep it without a background picture or colour; a test in
-`test/make-dmg.test.js` reads the file and fails otherwise.
+**Changing the layout.** The `.DS_Store` is generated with Finder and checked
+in; CI never scripts Finder. The arrow's source is
+[`assets/macos/dmg-background.svg`](../assets/macos/dmg-background.svg), drawn in
+Finder points on the icons' line. After changing it, rebuild the TIFF with both
+resolutions (needs `rsvg-convert`, see below):
+
+```sh
+rsvg-convert -w 540 -h 360 assets/macos/dmg-background.svg -o /tmp/bg.png
+rsvg-convert -w 1080 -h 720 assets/macos/dmg-background.svg -o /tmp/bg@2x.png
+sips -s dpiWidth 144 -s dpiHeight 144 /tmp/bg@2x.png
+tiffutil -cathidpicheck /tmp/bg.png /tmp/bg@2x.png -out assets/macos/dmg-background.tiff
+```
+
+Then run `sh scripts/make-dmg-layout.sh`. It builds a small read-write image
+with the real volume name, lets Finder set the view and copies the resulting
+`.DS_Store` over the asset. Eject every mounted *Snotra AI* first — Finder
+confuses volumes of the same name, and the alias to the background picture is
+resolved by that name. The script works under `/tmp/snotra-dmg-layout` because
+Finder writes the image's path into the alias. Positions, window size and
+icon size live in the script, the arrow in the SVG; `test/make-dmg.test.js`
+checks that both still agree and that no local path slipped into the file.
 
 ### The app icon
 
