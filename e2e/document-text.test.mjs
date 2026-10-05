@@ -75,7 +75,9 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
   });
 
   const [tail, head, locked, budget] = toolResults();
-  assert.equal(tail.format, 'pdf');
+  // The whole result on failure: on Windows an error came back where a PDF should.
+  assert.equal(tail.format, 'pdf', JSON.stringify(tail));
+  assert.equal(head.format, 'pdf', JSON.stringify(head));
   assert.equal(tail.page_count, 40);
   assert.equal(tail.pages, '39-40');
   assert.equal(tail.truncated, false);

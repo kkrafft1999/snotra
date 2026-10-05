@@ -29,6 +29,16 @@ require(workerData.entry).runInWorker(parentPort, workerData);
 `;
 
 /**
+ * A data folder of pdf.js as its Node factories want it: a plain path (they
+ * hand `url + name` to `fs.readFile`, which takes a string as a path, never as
+ * a URL) that ends in `/` — pdf.js refuses anything else, `\` included. Windows
+ * reads `C:\app\cmaps/name.bcmap` without complaint.
+ */
+function pdfjsDataUrl(pdfjsDir, folder, pathImpl = path) {
+  return `${pathImpl.join(pdfjsDir, folder)}/`;
+}
+
+/**
  * The part that runs inside the worker. Loads pdf.js only when a PDF comes —
  * a DOCX never pays for it.
  */
@@ -60,8 +70,8 @@ function runInWorker(port, { pdfjsDir }) {
       const result = await extractDocumentText(buffer, request, {
         openPdf: async (data) => openPdf(data, {
           pdfjs: await loadPdfjs(),
-          cMapUrl: `${path.join(pdfjsDir, 'cmaps')}${path.sep}`,
-          standardFontDataUrl: `${path.join(pdfjsDir, 'standard_fonts')}${path.sep}`,
+          cMapUrl: pdfjsDataUrl(pdfjsDir, 'cmaps'),
+          standardFontDataUrl: pdfjsDataUrl(pdfjsDir, 'standard_fonts'),
         }),
       });
       port.postMessage({ result });
@@ -119,4 +129,4 @@ function createDocumentTextExtractor({ pdfjsDir, timeBudgetMs = DOCUMENT_TEXT_TI
   return { extract };
 }
 
-module.exports = { createDocumentTextExtractor, runInWorker, DOCUMENT_TEXT_TIME_BUDGET_MS };
+module.exports = { createDocumentTextExtractor, runInWorker, pdfjsDataUrl, DOCUMENT_TEXT_TIME_BUDGET_MS };

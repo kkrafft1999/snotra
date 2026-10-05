@@ -14,7 +14,7 @@ const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createDocumentTextService } = require('../src/main/services/document-text-service');
-const { createDocumentTextExtractor } = require('../src/main/services/document-text-worker');
+const { createDocumentTextExtractor, pdfjsDataUrl } = require('../src/main/services/document-text-worker');
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { toolCategory } = require('../src/shared/contracts/tool-categories');
 const { makeDocx, makeXlsx, p } = require('./helpers/ooxml-fixtures');
@@ -134,4 +134,11 @@ test('the line in the chat log names the document', () => {
   assert.equal(summarizeToolCall('extract_document_text', { relative_path: 'docs/a.pdf' }, 'start', 'en'), 'Reading document docs/a.pdf …');
   assert.equal(summarizeToolCall('extract_document_text', { relative_path: 'docs/a.pdf' }, 'done', 'de'), 'Dokument docs/a.pdf gelesen');
   assert.equal(summarizeToolCall('extract_document_text', {}, 'start', 'de'), 'Dokument wird gelesen …');
+});
+
+// pdf.js refuses a data folder that does not end in "/" — on Windows a
+// trailing backslash failed every PDF in CI (#42).
+test('the pdf.js data folders end in a slash on every platform', () => {
+  assert.equal(pdfjsDataUrl('C:\\Snotra\\vendor\\pdfjs', 'cmaps', path.win32), 'C:\\Snotra\\vendor\\pdfjs\\cmaps/');
+  assert.equal(pdfjsDataUrl('/app/vendor/pdfjs', 'standard_fonts', path.posix), '/app/vendor/pdfjs/standard_fonts/');
 });
