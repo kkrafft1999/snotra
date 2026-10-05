@@ -28,17 +28,16 @@ function createProviderLlmAdapter({
   }
 
   /**
-   * The level belongs to the chat (#725): it leaves the entry's options and
-   * becomes a field of the target, set only when the model takes a level.
+   * The level belongs to the chat (#725): a field of the target, set only
+   * when the model takes a level. Entries carry none since #726.
    */
   function toTarget(raw, ownLevel) {
     const provider = providerRuntime.getProvider(raw.providerId);
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
-    const { reasoningEffort: fromEntry, ...entryOptions } = resolveProviderOptions(raw, provider) || {};
+    const providerOptions = resolveProviderOptions(raw, provider);
     const reasoningEffort = resolveReasoningLevel({
       levels: reasoningLevelsFor(provider, model || provider?.defaultModel),
       own: ownLevel,
-      fromEntry,
       defaultLevel: provider?.reasoning?.defaultLevel,
     });
     return createChatModelTarget({
@@ -47,7 +46,7 @@ function createProviderLlmAdapter({
       // Kennung koennte sie hier niemand mehr aufloesen (Issue #202).
       presetId: raw.presetId,
       model,
-      providerOptions: entryOptions,
+      providerOptions,
       reasoningEffort,
     });
   }

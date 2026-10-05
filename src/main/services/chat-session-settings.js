@@ -34,6 +34,12 @@
  * own: a new chat has none and runs with the provider's default, `medium`. It
  * is not applied anywhere when a chat comes on screen — a round asks for it
  * (`reasoningEffortFor`) when it starts.
+ *
+ * Entries carry no level since #726. A chat from before points at an entry
+ * the migration may have merged into another; `getPresetAlias` says which
+ * entry it stands for now and which level it ran with. The first time such a
+ * chat comes on screen it is pointed at that entry and given that level,
+ * unless it has one of its own — a new chat is always saved with one.
  */
 
 const {
@@ -62,6 +68,8 @@ function createChatSessionSettings({
   getActiveMode = async () => null,
   // The default mode of the workspace on screen (#413); `null` means `smart`.
   getWorkspaceMode = async () => null,
+  // What an entry from before #726 stands for: `{ presetId, reasoningEffort }`.
+  getPresetAlias = async () => null,
   // A chat's own mode changed while it was being activated — its open cards
   // and session approvals were given under the old one (concept §7, #320).
   onChatModeChanged = () => {},
@@ -219,6 +227,7 @@ function createChatSessionSettings({
     if (chatId) backgroundModes.delete(chatId);
     currentChatId = chatId;
     const values = chatId ? await storedValuesFor(chatId) : {};
+    if (chatId) await adoptAlias(chatId, values);
     const presetId = await resolvePresetFor(values);
     const mode = resolveModeFor(values, activation, await readWorkspaceMode());
     // Nur anfassen, was sich wirklich ändert — dasselbe gilt für die
@@ -238,6 +247,35 @@ function createChatSessionSettings({
       toolPermissionMode: mode,
       reasoningEffort: values.reasoningEffort ?? null,
     };
+  }
+
+  /**
+   * A chat from before #726: point it at the entry its old one became, and
+   * give it the level that entry had — once, written into its row (#726).
+   */
+  async function adoptAlias(chatId, values) {
+    const alias = await readAlias(values.modelPresetId);
+    if (!alias) return;
+    const patch = {};
+    const presetId = chatModelPresetIdForStore(alias.presetId);
+    if (presetId && presetId !== values.modelPresetId) patch.modelPresetId = presetId;
+    const level = chatReasoningEffortForStore(alias.reasoningEffort);
+    if (level && !values.reasoningEffort) patch.reasoningEffort = level;
+    if (Object.keys(patch).length === 0) return;
+    Object.assign(values, patch);
+    rememberLocal(chatId, patch);
+    if (patch.reasoningEffort) rememberStoredLevel(chatId, patch.reasoningEffort);
+    await persist(chatId, patch);
+  }
+
+  async function readAlias(presetId) {
+    if (!presetId) return null;
+    try {
+      const alias = await getPresetAlias(presetId);
+      return alias && typeof alias === 'object' ? alias : null;
+    } catch {
+      return null;
+    }
   }
 
   function notify(hook, chatId) {
@@ -307,7 +345,11 @@ function createChatSessionSettings({
       const session = store.sessions.find((s) => s && s.id === chatId);
       // Not saved yet: nothing to remember, the first save may bring a level.
       if (!session) return null;
-      const level = chatReasoningEffortForStore(session.reasoningEffort) ?? null;
+      // A chat from before #726 that has not been on screen since: the level
+      // its entry had.
+      const level = chatReasoningEffortForStore(session.reasoningEffort)
+        ?? chatReasoningEffortForStore((await readAlias(chatModelPresetIdForStore(session.modelPresetId)))?.reasoningEffort)
+        ?? null;
       rememberStoredLevel(chatId, level);
       return level;
     } catch {

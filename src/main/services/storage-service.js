@@ -9,7 +9,9 @@ const {
   hasPresetConnection,
   normalizeStoredPresetConnection,
   LLM_CONFIG_VERSION,
+  presetIdentityKey,
 } = require('../../shared/contracts/settings');
+const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { APP_LOCALES } = require('../../shared/contracts/enums');
 const {
   maskStoredMcpEnv,
@@ -71,7 +73,7 @@ function createStorageService({
   const RETIRED_MLX_LM_ID = 'mlx-lm';
   const MLX_LM_DEFAULT_BASE_URL = 'http://127.0.0.1:8080/v1';
   const OPENAI_COMPATIBLE_ID = 'openai-compatible';
-  const KNOWN_LLM_CONFIG_VERSIONS = Object.freeze([2, 3, 4, LLM_CONFIG_VERSION]);
+  const KNOWN_LLM_CONFIG_VERSIONS = Object.freeze([2, 3, 4, 5, LLM_CONFIG_VERSION]);
   const MCP_CONFIG_VERSION = 1;
 
   const fileLocks = new Map();
@@ -227,15 +229,6 @@ function createStorageService({
     return Object.keys(opts).length > 0 ? opts : undefined;
   }
 
-  function withLegacyReasoningEffort(target, providerOptions) {
-    if (providerOptions?.reasoningEffort) {
-      target.reasoningEffort = providerOptions.reasoningEffort;
-    } else {
-      target.reasoningEffort = null;
-    }
-    return target;
-  }
-
   /** Chat-Ziel aus LLM-Konfiguration (Preset-first, Fallback aktiv/Provider-Modell). */
   function resolveChatModelTarget(llmConfig) {
     const list = Array.isArray(llmConfig.presets) ? llmConfig.presets : [];
@@ -253,18 +246,18 @@ function createStorageService({
           : pMeta.defaultModel,
       };
       if (providerOptions) target.providerOptions = providerOptions;
-      return withLegacyReasoningEffort(target, providerOptions);
+      return target;
     }
     const ap = llmConfig.activeProvider || DEFAULT_PROVIDER;
     const pMeta = providerCatalog.getProvider(ap);
     const entry = (llmConfig.providers && llmConfig.providers[ap]) || {};
-    return withLegacyReasoningEffort({
+    return {
       providerId: ap,
       model:
         typeof entry.model === 'string' && entry.model.trim()
           ? entry.model.trim()
           : (pMeta && pMeta.defaultModel) || '',
-    }, undefined);
+    };
   }
 
   async function migrateLLMConfigToV3(existing, { persist = true } = {}) {
@@ -426,10 +419,77 @@ function createStorageService({
     return out;
   }
 
+  /**
+   * v5 -> v6 (#726): the reasoning level belongs to the chat now (#725), so an
+   * entry carries none. Entries that differed only in their level become one:
+   * the first in the preference list stays, takes over the default and the
+   * active role of the others, and is visible in the menu if any of them was.
+   *
+   * `presetAliases` keeps, for every entry that had a level, which entry it
+   * stands for now and which level it ran with. A chat from before is pointed
+   * at the surviving entry and given that level the first time it comes on
+   * screen (chat-session-settings) — the history itself is not rewritten here.
+   *
+   * Only entries of providers that declare reasoning levels are merged; for
+   * the others nothing changes. Idempotent: a second run finds nothing to do.
+   */
+  async function migrateLLMConfigToV6(existing, { persist = true } = {}) {
+    const out = { ...existing };
+    const aliases = isJsonObject(out.presetAliases) ? { ...out.presetAliases } : {};
+    const survivors = new Map();
+    const presets = [];
+    let changed = false;
+
+    for (const raw of Array.isArray(out.presets) ? out.presets : []) {
+      const provider = raw ? providerCatalog.getProvider(raw.providerId) : null;
+      if (!provider?.reasoning) {
+        presets.push(raw);
+        continue;
+      }
+      const level = normalizeReasoningLevel(raw.reasoningEffort ?? raw.options?.reasoningEffort);
+      const preset = { ...raw };
+      if ('reasoningEffort' in preset) {
+        delete preset.reasoningEffort;
+        changed = true;
+      }
+      if (preset.options && typeof preset.options === 'object' && 'reasoningEffort' in preset.options) {
+        const { reasoningEffort: _dropped, ...rest } = preset.options;
+        preset.options = rest;
+        changed = true;
+      }
+      const key = presetIdentityKey(preset, provider);
+      const survivor = survivors.get(key);
+      if (survivor) {
+        if (preset.menuVisible !== false) survivor.menuVisible = true;
+        if (out.activePresetId === preset.id) out.activePresetId = survivor.id;
+        if (out.defaultPresetId === preset.id) out.defaultPresetId = survivor.id;
+        aliases[preset.id] = { presetId: survivor.id, ...(level ? { reasoningEffort: level } : {}) };
+        changed = true;
+        continue;
+      }
+      survivors.set(key, preset);
+      presets.push(preset);
+      if (level && preset.id) aliases[preset.id] = { presetId: preset.id, reasoningEffort: level };
+    }
+
+    out.presets = presets;
+    if (Object.keys(aliases).length > 0) out.presetAliases = aliases;
+    out.version = 6;
+    if (persist && (changed || existing.version !== 6)) {
+      await writeLLMConfig(out);
+    }
+    return out;
+  }
+
   /** v3 file -> current version, persisting only at the end. */
   async function migrateFromV3(existing, { persist }) {
     const v4 = await migrateLLMConfigToV4(existing, { persist: false });
-    return migrateLLMConfigToV5(v4, { persist });
+    return migrateFromV4(v4, { persist });
+  }
+
+  async function migrateFromV4(existing, { persist }) {
+    const v5 = await migrateLLMConfigToV5(existing, { persist: false });
+    return migrateLLMConfigToV6(v5, { persist });
   }
 
   /**
@@ -493,10 +553,16 @@ function createStorageService({
       if (!Array.isArray(existing.presets)) existing.presets = [];
       return withDefaultPresetId(existing);
     }
+    if (existing && existing.version === 5 && existing.providers) {
+      if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
+      if (!Array.isArray(existing.presets)) existing.presets = [];
+      // The default must be known before entries merge into another (#726).
+      return await migrateLLMConfigToV6(withDefaultPresetId(existing), { persist });
+    }
     if (existing && existing.version === 4 && existing.providers) {
       if (!existing.activeProvider) existing.activeProvider = DEFAULT_PROVIDER;
       if (!Array.isArray(existing.presets)) existing.presets = [];
-      return withDefaultPresetId(await migrateLLMConfigToV5(existing, { persist }));
+      return withDefaultPresetId(await migrateFromV4(existing, { persist }));
     }
     if (existing && existing.version === 3 && existing.providers) {
       if (!existing.providers || typeof existing.providers !== 'object') {

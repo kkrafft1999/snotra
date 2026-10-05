@@ -90,22 +90,14 @@ export function initChatModelPicker({
       const main = document.createElement('span');
       main.className = 'chat-model-menu-opt-main';
 
-      // Einzeilig: Anbieter und Modell, dahinter gedaempft der Zusatz
-      // (z. B. das Reasoning-Level). Weitere Preset-Details wie Serveradresse
-      // stehen im Einstellungsdialog, nicht in diesem Schnellwechsel-Menue.
+      // Einzeilig: Anbieter und Modell. Weitere Preset-Details wie die
+      // Serveradresse stehen im Einstellungsdialog, nicht in diesem
+      // Schnellwechsel-Menue.
       const title = document.createElement('span');
       title.className = 'chat-model-menu-opt-title';
       title.lang = 'en';
-      title.textContent = pr.labelBase || pr.label || '';
+      title.textContent = pr.label || '';
       main.appendChild(title);
-
-      if (pr.optionSuffix) {
-        const suffix = document.createElement('span');
-        suffix.className = 'chat-model-menu-opt-suffix';
-        suffix.lang = 'en';
-        suffix.textContent = pr.optionSuffix;
-        main.appendChild(suffix);
-      }
 
       btn.appendChild(main);
       li.appendChild(btn);
@@ -135,7 +127,6 @@ export function initChatModelPicker({
       appStore.llmState.chatTarget = {
         providerId: ap,
         model: m?.model || '',
-        reasoningEffort: null,
       };
     }
     updateChatChrome();

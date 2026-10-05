@@ -241,7 +241,7 @@ test('ein gespeichertes Geheimnis bleibt beim Bearbeiten stehen (#202)', async (
     model: 'qwen2.5',
     menuVisible: true,
     configured: true,
-    labelBase: 'LM Studio \u00b7 qwen2.5',
+    label: 'LM Studio \u00b7 qwen2.5',
     connection: {
       displayName: 'LM Studio',
       baseUrl: 'http://localhost:1234/v1',

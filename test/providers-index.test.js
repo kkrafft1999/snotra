@@ -46,19 +46,10 @@ test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   }
 });
 
-test('openai presetFields declare identity-affecting reasoning options', () => {
+test('openai offers its levels to the chat, not as a preset field (#726)', () => {
   const openai = providers.getProvider('openai');
-  const field = openai.presentation.presetFields[0];
-  assert.equal(field.key, 'reasoningEffort');
-  assert.equal(field.affectsPresetIdentity, true);
-  // Ohne Praefix: Der nackte Wert haengt im Chat hinter dem Modellnamen.
-  assert.equal(field.detailPrefix, '');
-  assert.equal(field.showAsSuffix, true);
-  assert.equal(field.formatDetail('high'), 'high');
+  assert.deepEqual(openai.presentation.presetFields.map((f) => f.key), ['reasoningSummary']);
   // Every level OpenAI knows, in order of effort; medium stays the default (#718).
-  assert.deepEqual(
-    field.options.map((o) => o.value),
-    ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-  );
-  assert.equal(field.defaultValue, 'medium');
+  assert.deepEqual(openai.reasoning.levels, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(openai.reasoning.defaultLevel, 'medium');
 });

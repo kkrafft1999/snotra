@@ -31,11 +31,11 @@ test('OpenAI offers its levels for GPT-5 and newer only; other providers offer n
   assert.equal(openai.reasoning.defaultLevel, DEFAULT_REASONING_LEVEL);
 });
 
-test('the round runs with the chat\'s level, else the entry\'s, else the default', () => {
+test('the round runs with the chat\'s level, else the default (#726)', () => {
   const levels = ['low', 'medium', 'high'];
-  assert.equal(resolveReasoningLevel({ levels, own: 'high', fromEntry: 'low', defaultLevel: 'medium' }), 'high');
-  assert.equal(resolveReasoningLevel({ levels, own: null, fromEntry: 'low', defaultLevel: 'medium' }), 'low');
-  assert.equal(resolveReasoningLevel({ levels, own: 'max', fromEntry: 'ultra', defaultLevel: 'medium' }), 'medium');
+  assert.equal(resolveReasoningLevel({ levels, own: 'high', defaultLevel: 'medium' }), 'high');
+  assert.equal(resolveReasoningLevel({ levels, own: null, defaultLevel: 'low' }), 'low');
+  assert.equal(resolveReasoningLevel({ levels, own: 'max', defaultLevel: 'medium' }), 'medium');
   assert.equal(resolveReasoningLevel({ levels: ['high'], own: null }), 'high');
   assert.equal(resolveReasoningLevel({ levels: [], own: 'high' }), undefined);
 });

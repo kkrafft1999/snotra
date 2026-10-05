@@ -135,12 +135,7 @@ function registerSettingsHandlers({
     }
     const defaultLevel = provider.reasoning.defaultLevel || DEFAULT_REASONING_LEVEL;
     return {
-      level: resolveReasoningLevel({
-        levels,
-        own,
-        fromEntry: target.providerOptions?.reasoningEffort,
-        defaultLevel,
-      }),
+      level: resolveReasoningLevel({ levels, own, defaultLevel }),
       levels,
       defaultLevel,
     };

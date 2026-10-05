@@ -15,10 +15,12 @@ const mockProviders = {
         name: 'OpenAI',
         defaultModel: 'gpt-4o',
         fields: { apiKey: true },
+        // Since #726 the level is the chat's, not a preset field (#725).
+        reasoning: { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' },
         presentation: {
           presetFields: [{
-            key: 'reasoningEffort',
-            options: [{ value: 'low' }, { value: 'medium' }, { value: 'high' }],
+            key: 'reasoningSummary',
+            options: [{ value: 'off' }, { value: 'auto' }],
           }],
         },
       };
@@ -113,11 +115,11 @@ test('normalizePresetEntry validates provider and model', () => {
     model: 'gpt-4o-mini',
     reasoningEffort: 'high',
   });
+  // An entry carries no level since #726.
   assert.deepEqual(preset, {
     id: 'p1',
     providerId: 'openai',
     model: 'gpt-4o-mini',
-    reasoningEffort: 'high',
     menuVisible: true,
   });
 });
@@ -138,7 +140,6 @@ test('resolveChatModelTarget prefers active preset', () => {
     // Verbindung aufloesen laesst (Issue #202).
     presetId: 'p1',
     model: 'claude-custom',
-    reasoningEffort: null,
   });
 });
 
@@ -147,8 +148,9 @@ test('resolveChatModelTarget emits providerOptions from declared preset fields',
   const openai = storage.normalizePresetEntry({
     id: 'p1',
     providerId: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     reasoningEffort: 'high',
+    reasoningSummary: 'auto',
   });
   const target = storage.resolveChatModelTarget({
     activePresetId: 'p1',
@@ -156,8 +158,9 @@ test('resolveChatModelTarget emits providerOptions from declared preset fields',
     providers: { openai: { apiKeyEnc: 'x' } },
   });
   assert.equal(target.providerId, 'openai');
-  assert.deepEqual(target.providerOptions, { reasoningEffort: 'high' });
-  assert.equal(target.reasoningEffort, 'high');
+  // An entry carries no level since #726: a leftover one is not passed on.
+  assert.deepEqual(target.providerOptions, { reasoningSummary: 'auto' });
+  assert.equal('reasoningEffort' in target, false);
 });
 
 test('normalizeSessionForStore infers title from first user message when title omitted', () => {
@@ -1122,7 +1125,7 @@ test('migration v4 -> v5 turns MLX-LM entries into OpenAI-compatible ones', asyn
   await storage.writeLLMConfig(v4ConfigWithMlx());
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 5);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   for (const [id, model, menuVisible] of [
     ['m1', 'mlx-community/Qwen3-8B-4bit', true],
     ['m2', 'mlx-community/gemma-3-4b', false],
@@ -1152,7 +1155,7 @@ test('migration v4 -> v5 turns MLX-LM entries into OpenAI-compatible ones', asyn
   assert.ok(config.providers.openai.apiKeyEnc);
 
   const onDisk = JSON.parse(await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8'));
-  assert.equal(onDisk.version, 5, 'the migration is written back');
+  assert.equal(onDisk.version, LLM_CONFIG_VERSION, 'the migration is written back');
   assert.equal(JSON.stringify(onDisk).includes(MLX), false);
 
   // The chat resolves to the same model and server as before.
@@ -1201,7 +1204,7 @@ test('migration v4 -> v5 leaves a config without MLX-LM unchanged', async (t) =>
   await storage.writeLLMConfig(before);
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 5);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   assert.equal(config.activeProvider, 'openai');
   assert.equal(config.activePresetId, 'p1');
   assert.deepEqual(config.providers, before.providers);
@@ -1216,7 +1219,7 @@ test('a v3 file with MLX-LM goes through v4 and v5 in one read', async (t) => {
   await storage.writeLLMConfig(v3);
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 5);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   assert.equal(config.presets.find((p) => p.id === 'm1').connection.baseUrl, 'http://127.0.0.1:8090/v1');
   assert.equal(config.activeProvider, COMPAT);
   assert.equal(MLX in config.providers, false);
@@ -1231,7 +1234,7 @@ test('a v2 file that only knows MLX-LM as active provider gets an entry', async 
   });
 
   const config = await storage.readLLMConfig();
-  assert.equal(config.version, 5);
+  assert.equal(config.version, LLM_CONFIG_VERSION);
   assert.equal(config.presets.length, 1);
   const [preset] = config.presets;
   assert.equal(preset.providerId, COMPAT);
@@ -1264,4 +1267,83 @@ test('whenWritesSettled waits for a write under the lock, and for one queued beh
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
+});
+
+// v5 -> v6 (#726): entries carry no level; entries that differed only in it
+// become one, and `presetAliases` remembers what each old entry stood for.
+function v5ConfigWithLevels() {
+  return {
+    version: 5,
+    activeProvider: 'openai',
+    activePresetId: 'b',
+    defaultPresetId: 'b',
+    presets: [
+      { id: 'a', providerId: 'openai', model: 'gpt-5', reasoningEffort: 'high', reasoningSummary: 'auto', menuVisible: false },
+      { id: 'b', providerId: 'openai', model: 'gpt-5', reasoningEffort: 'low', reasoningSummary: 'off', menuVisible: true },
+      { id: 'c', providerId: 'openai', model: 'gpt-5-mini', options: { reasoningEffort: 'medium' }, menuVisible: true },
+      { id: 'e', providerId: 'openai', model: 'gpt-5', menuVisible: false },
+      {
+        id: 'q',
+        providerId: COMPAT,
+        model: 'qwen2.5',
+        reasoningEffort: null,
+        menuVisible: true,
+        connection: { baseUrl: 'http://localhost:1234/v1', displayName: 'LM Studio', apiStyle: 'chat' },
+      },
+    ],
+    providers: { openai: { apiKeyEnc: Buffer.from('enc:sk-oai', 'utf8').toString('base64') } },
+  };
+}
+
+test('migration v5 -> v6 merges entries that differed only in their level (#726)', async (t) => {
+  const { tmp, storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v5ConfigWithLevels());
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, 6);
+  assert.deepEqual(config.presets.map((p) => p.id), ['a', 'c', 'q']);
+  const a = config.presets.find((p) => p.id === 'a');
+  // The first in the list survives with its own fields, visible because
+  // one of the merged was, and takes over the default and the active role.
+  assert.equal(a.menuVisible, true);
+  assert.equal(a.reasoningSummary, 'auto');
+  assert.equal('reasoningEffort' in a, false);
+  assert.deepEqual(config.presets.find((p) => p.id === 'c').options, {});
+  assert.equal(config.activePresetId, 'a');
+  assert.equal(config.defaultPresetId, 'a');
+  // Other providers' entries stay as they were.
+  assert.equal(config.presets.find((p) => p.id === 'q').connection.displayName, 'LM Studio');
+
+  assert.deepEqual(config.presetAliases, {
+    a: { presetId: 'a', reasoningEffort: 'high' },
+    b: { presetId: 'a', reasoningEffort: 'low' },
+    c: { presetId: 'c', reasoningEffort: 'medium' },
+    e: { presetId: 'a' },
+  });
+
+  const onDisk = JSON.parse(await fs.readFile(path.join(tmp, 'llm-config.json'), 'utf8'));
+  assert.equal(onDisk.version, 6, 'the migration is written');
+  assert.deepEqual(onDisk.presetAliases, config.presetAliases);
+});
+
+test('migration v5 -> v6 runs once and changes nothing the second time (#726)', async (t) => {
+  const { storage } = await tmpStore(t);
+  await storage.writeLLMConfig(v5ConfigWithLevels());
+  const first = await storage.readLLMConfig();
+  const second = await storage.readLLMConfig();
+  assert.deepEqual(second, first);
+});
+
+test('a v4 file goes through v5 and v6 in one read and loses its levels (#726)', async (t) => {
+  const { storage } = await tmpStore(t);
+  const v4 = v5ConfigWithLevels();
+  v4.version = 4;
+  delete v4.defaultPresetId;
+  await storage.writeLLMConfig(v4);
+
+  const config = await storage.readLLMConfig();
+  assert.equal(config.version, LLM_CONFIG_VERSION);
+  assert.deepEqual(config.presets.map((p) => p.id), ['a', 'c', 'q']);
+  assert.equal(config.activePresetId, 'a');
+  assert.equal(config.defaultPresetId, 'a');
 });

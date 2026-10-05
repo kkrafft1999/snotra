@@ -70,31 +70,25 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   assert.equal(dto.presets.length, 2);
 
   const openaiPreset = dto.presets.find((p) => p.id === 'p1');
-  // Das Reasoning-Level haengt hinter dem Modell, damit Chat-Pille und
-  // Chat-Menue einzeilig bleiben; labelBase/optionSuffix trennen die Teile.
-  assert.equal(openaiPreset.label, 'OpenAI · gpt-5-mini · medium');
-  assert.equal(openaiPreset.labelBase, 'OpenAI · gpt-5-mini');
-  assert.equal(openaiPreset.optionSuffix, 'medium');
-  assert.equal(openaiPreset.sublabel, 'medium');
-  assert.equal(openaiPreset.sublabelStyle, 'mono');
+  // The entry carries no level since #726; the chat does.
+  assert.equal(openaiPreset.label, 'OpenAI · gpt-5-mini');
+  assert.equal('optionSuffix' in openaiPreset, false);
+  assert.equal(openaiPreset.reasoningEffort, undefined);
+  assert.equal(openaiPreset.sublabel, 'https://api.openai.com/v1');
+  assert.equal(openaiPreset.sublabelStyle, 'default');
   assert.equal(openaiPreset.configured, true);
 
   const ollamaPreset = dto.presets.find((p) => p.id === 'p2');
   // Provider ohne Suffix-Feld: Label bleibt unveraendert, kein Zusatz.
-  assert.equal(ollamaPreset.optionSuffix, '');
-  assert.equal(ollamaPreset.label, ollamaPreset.labelBase);
   assert.match(ollamaPreset.sublabel, /Server: 127\.0\.0\.1:11434/);
   assert.match(ollamaPreset.sublabel, /TLS geprüft/);
 
   const openaiProvider = dto.providers.find((p) => p.id === 'openai');
   assert.equal(openaiProvider.form.showApiKey, true);
   assert.equal(openaiProvider.form.apiKeyPlaceholder, 'sk-…');
-  assert.equal(openaiProvider.presetFields.length, 2);
-  assert.equal(openaiProvider.presetFields[0].key, 'reasoningEffort');
-  assert.equal(openaiProvider.presetFields[1].key, 'reasoningSummary');
-  // Three levels as segments, off/on as a switch (#414).
-  assert.equal(openaiProvider.presetFields[0].control, 'segmented');
-  assert.equal(openaiProvider.presetFields[1].control, 'switch');
+  // The level left the entry (#726); the summary stays, off/on as a switch (#414).
+  assert.deepEqual(openaiProvider.presetFields.map((f) => f.key), ['reasoningSummary']);
+  assert.equal(openaiProvider.presetFields[0].control, 'switch');
   assert.equal(openaiProvider.isActiveChatProvider, true);
   assert.equal(openaiProvider.fields, undefined);
 
@@ -189,13 +183,13 @@ function compatPresetView(connection, { model = 'qwen2.5', apiKeyDecryptable } =
 
 test('der Anzeigename der Zeile ersetzt den Anbieternamen in den Beschriftungen', () => {
   const preset = compatPresetView({ displayName: 'LM Studio', baseUrl: 'http://localhost:1234/v1' });
-  assert.equal(preset.labelBase, 'LM Studio \u00b7 qwen2.5');
+  assert.equal(preset.label, 'LM Studio \u00b7 qwen2.5');
   assert.match(preset.sublabel, /localhost:1234/);
 });
 
 test('ohne Anzeigename bleibt es beim eingebauten Namen', () => {
   const preset = compatPresetView({ displayName: '   ', baseUrl: 'http://localhost:1234/v1' });
-  assert.equal(preset.labelBase, 'OpenAI-compatible \u00b7 qwen2.5');
+  assert.equal(preset.label, 'OpenAI-compatible \u00b7 qwen2.5');
 });
 
 test('zwei Zeilen fuehren zwei verschiedene Ziele nebeneinander', () => {
@@ -207,8 +201,8 @@ test('zwei Zeilen fuehren zwei verschiedene Ziele nebeneinander', () => {
     { displayName: 'LM Studio', baseUrl: 'http://localhost:1234/v1' },
     { model: 'qwen2.5-coder' }
   );
-  assert.equal(gateway.labelBase, 'Firmen-Gateway \u00b7 gpt-4o-mini');
-  assert.equal(lokal.labelBase, 'LM Studio \u00b7 qwen2.5-coder');
+  assert.equal(gateway.label, 'Firmen-Gateway \u00b7 gpt-4o-mini');
+  assert.equal(lokal.label, 'LM Studio \u00b7 qwen2.5-coder');
   assert.notEqual(gateway.sublabel, lokal.sublabel);
   assert.match(gateway.sublabel, /gateway\.firma\.example/);
 });
@@ -262,7 +256,7 @@ test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {
     { ollama: providerView }
   );
   assert.equal('connection' in preset, false);
-  assert.equal(preset.labelBase, 'Ollama (local) \u00b7 llama3.2');
+  assert.equal(preset.label, 'Ollama (local) \u00b7 llama3.2');
 });
 
 // #310: what a provider definition says reaches the renderer in the stored
@@ -284,8 +278,8 @@ test('buildLlmStateDto speaks the stored language', () => {
   const de = build('de');
   const view = (dto, id) => dto.providers.find((p) => p.id === id);
 
-  assert.equal(en.presets[0].labelBase, 'Ollama (local) · llama3.2');
-  assert.equal(de.presets[0].labelBase, 'Ollama (lokal) · llama3.2');
+  assert.equal(en.presets[0].label, 'Ollama (local) · llama3.2');
+  assert.equal(de.presets[0].label, 'Ollama (lokal) · llama3.2');
   assert.match(en.presets[0].sublabel, /TLS verified/);
   assert.match(de.presets[0].sublabel, /TLS geprüft/);
   assert.equal(view(en, 'ollama').name, 'Ollama (local)');
@@ -377,7 +371,6 @@ test('an entry with an older OpenAI model shows no level and says it is no longe
 
   const preset = dto.presets.find((p) => p.id === 'old');
   assert.equal(preset.label, 'OpenAI · gpt-4o-mini');
-  assert.equal(preset.optionSuffix, '');
   assert.equal(preset.sublabel, 'Older model, no longer offered');
   assert.equal(preset.sublabelStyle, 'default');
 
