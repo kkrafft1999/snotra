@@ -10,6 +10,15 @@ import http from 'node:http';
 
 const sse = (payload) => `data: ${JSON.stringify(payload)}\n\n`;
 
+/**
+ * How a title request is told apart: the opening of the system prompt in
+ * src/application/chat/chat-engine.js. When #279 turned that prompt English,
+ * the German marker matched nothing any more and every title request took a
+ * queued answer again — so test/chat-engine.test.js now checks that the prompt
+ * still carries this.
+ */
+export const TITLE_PROMPT_MARKER = 'You name conversations.';
+
 const contentChunk = (text) => sse({
   id: 'fake', object: 'chat.completion.chunk', model: 'fake-model',
   choices: [{ index: 0, delta: { content: text }, finish_reason: null }],
@@ -79,7 +88,7 @@ export async function startFakeModel() {
       // Die Titel-Anfrage bekommt nie eine hinterlegte Antwort. Sie traegt die
       // ganze bisherige Konversation im Body und wuerde sonst die Antwort des
       // naechsten Schritts abraeumen — der Grund fuer einen zaehen Flake.
-      record.isTitleRequest = raw.includes('Du benennst Konversationen');
+      record.isTitleRequest = raw.includes(TITLE_PROMPT_MARKER);
       const index = record.isTitleRequest
         ? -1
         : answers.findIndex((a) => !a.match || raw.includes(a.match));
@@ -164,6 +173,24 @@ export async function startFakeModel() {
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {
       return requests.find((r) => !r.isTitleRequest && JSON.stringify(r.body).includes(match)) ?? null;
+    },
+    /**
+     * One line per request, for a failing wait to show what the app asked
+     * and what it got (#689).
+     */
+    describeRequests() {
+      return requests.map((r, i) => {
+        const kind = r.isTitleRequest ? 'title' : 'chat';
+        const answer = r.answer?.toolCalls?.length
+          ? `tools ${r.answer.toolCalls.map((c) => c.name).join(',')}`
+          : `text ${JSON.stringify(r.answer?.text ?? null)}`;
+        const state = r.aborted ? 'aborted' : r.finished ? 'finished' : 'open';
+        return `#${i + 1} ${kind}, ${r.body?.messages?.length ?? 0} messages → ${answer}, ${state}`;
+      });
+    },
+    /** Answers no request has taken yet. */
+    pendingAnswers() {
+      return answers.map((a) => a.match ?? (a.toolCalls ? 'tools' : a.text));
     },
     async close() {
       await new Promise((resolve) => server.close(resolve));

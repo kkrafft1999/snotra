@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdir, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
@@ -25,6 +25,32 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
     await model.close();
   });
   let { page } = snotra;
+
+  // What the app shows and what the model was asked, for a wait that runs
+  // out. Only ever seen failing on a fresh macOS runner (#679, #689), never
+  // locally — so the failure has to bring its own evidence.
+  const evidence = async (target) => {
+    const shown = await target.page.evaluate(() => ({
+      messages: [...document.querySelectorAll('#chat-messages > li')]
+        .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 120)}`),
+      cards: [...document.querySelectorAll('.chat-approval-card')].map((card) => ({
+        state: card.dataset.state ?? null,
+        buttons: [...card.querySelectorAll('button[data-response]')]
+          .map((b) => `${b.dataset.response}${b.disabled ? ' (disabled)' : ''}${b.closest('[hidden]') ? ' (hidden)' : ''}`),
+      })),
+      sendButton: document.getElementById('btn-chat-send')?.className ?? null,
+      changes: [...document.querySelectorAll('.chat-changes > *')]
+        .map((el) => `${el.tagName.toLowerCase()}.${el.className}`),
+    })).catch((e) => ({ error: String(e) }));
+    return [
+      `app: ${JSON.stringify(shown, null, 1)}`,
+      `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
+      `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
+      `profile: ${(await readdir(userDataDir).catch((e) => [String(e)])).join(', ')}`,
+      `notes.txt: ${JSON.stringify(await readFile(path.join(workspace, 'notes.txt'), 'utf8').catch((e) => String(e)))}`,
+      `main:\n${target.mainOutput()}`,
+    ].join('\n');
+  };
 
   await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
     { what: 'drawn tree' });
@@ -46,7 +72,7 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
     return page.evaluate(() =>
       !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')
       && Boolean(document.querySelector('.chat-changes button.chat-change-file')));
-  }, { what: 'run through with a chip', timeoutMs: 60000 });
+  }, { what: 'run through with a chip', timeoutMs: 60000, explain: () => evidence(snotra) });
 
   const chip = await page.evaluate(() => {
     const button = document.querySelector('.chat-changes button.chat-change-file');
@@ -76,24 +102,13 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
   await firstStart.stop();
   snotra = await launchApp({ userDataDir });
   page = snotra.page;
-  try {
-    await poll(() => page.evaluate(() => Boolean(document.querySelector('.chat-changes'))),
-      { what: 'restored chat with its changed files', timeoutMs: 30000 });
-  } catch (error) {
-    // Only ever seen on a fresh macOS runner (#679, #689). What the restart
-    // found is the evidence: whether the chat came back at all, whether the
-    // history file was set aside, and what main said on both starts.
-    const shown = await page.evaluate(() => [...document.querySelectorAll('#chat-messages > li')]
-      .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 80)}`)).catch((e) => [String(e)]);
-    error.message += [
-      '',
-      `chat after the restart: ${JSON.stringify(shown, null, 1)}`,
-      `profile: ${(await readdir(userDataDir).catch((e) => [String(e)])).join(', ')}`,
-      `main, first start:\n${firstStart.mainOutput()}`,
-      `main, restart:\n${snotra.mainOutput()}`,
-    ].join('\n');
-    throw error;
-  }
+  await poll(() => page.evaluate(() => Boolean(document.querySelector('.chat-changes'))), {
+    what: 'restored chat with its changed files',
+    timeoutMs: 30000,
+    // What the restart found, next to main's output of the first start: did
+    // the chat come back at all, was the history file set aside?
+    explain: async () => `${await evidence(snotra)}\nmain, first start:\n${firstStart.mainOutput()}`,
+  });
   const after = await page.evaluate(() => ({
     buttons: document.querySelectorAll('.chat-changes button').length,
     note: document.querySelector('.chat-changes-note')?.textContent ?? null,

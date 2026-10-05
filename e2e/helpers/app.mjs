@@ -88,15 +88,26 @@ export async function makeTempDir(prefix) {
 /**
  * Pollt, bis `check` etwas Wahres liefert. Ersatz fuer waitForSelector, das in
  * dieser Umgebung in den Timeout laeuft, obwohl das Element laengst da ist.
+ *
+ * `explain` is asked once the time is up, and what it returns goes into the
+ * error. A check that only answers `false` or `null` cannot say which part of
+ * its condition was missing — and a flake seen once in sixty CI runs leaves
+ * nothing else to go on (#689, #703).
  */
-export async function poll(check, { timeoutMs = 15000, intervalMs = 150, what = 'Bedingung' } = {}) {
+export async function poll(check, { timeoutMs = 15000, intervalMs = 150, what = 'Bedingung', explain = null } = {}) {
   const deadline = Date.now() + timeoutMs;
   let last;
   for (;;) {
     last = await check();
     if (last) return last;
     if (Date.now() > deadline) {
-      throw new Error(`Zeitlimit beim Warten auf: ${what} (zuletzt: ${JSON.stringify(last)})`);
+      let message = `Zeitlimit beim Warten auf: ${what} (zuletzt: ${JSON.stringify(last)})`;
+      if (explain) {
+        const found = await Promise.resolve().then(explain)
+          .catch((error) => `explain failed: ${error?.message ?? error}`);
+        message += `\n${typeof found === 'string' ? found : JSON.stringify(found, null, 1)}`;
+      }
+      throw new Error(message);
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }

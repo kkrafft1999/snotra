@@ -827,6 +827,20 @@ test('generateTitle asks the model once, without tools, and cleans up the answer
   assert.equal(calls[0].messages[1].content.includes('Hallo!'), false);
 });
 
+test('the title prompt carries the marker the e2e fake model tells title requests by', async () => {
+  const { TITLE_PROMPT_MARKER } = await import('../e2e/helpers/fake-model.mjs');
+  const { engine, calls } = makeEngine([assistantText('Lesespalte begrenzen')]);
+  await engine.generateTitle({
+    messages: [
+      { role: 'user', content: 'Wie begrenze ich die Lesespalte?' },
+      { role: 'assistant', content: 'Mit einer max-width.' },
+    ],
+  });
+  // Without it, every title request in the e2e tests takes an answer queued
+  // for the next step of the test (#689).
+  assert.ok(calls[0].messages[0].content.includes(TITLE_PROMPT_MARKER));
+});
+
 test('generateTitle works before the first answer and reports failures instead of throwing', async () => {
   const onlyQuestion = makeEngine([assistantText('Offene Frage zum Composer')]);
   const withoutAnswer = await onlyQuestion.engine.generateTitle({
