@@ -60,6 +60,7 @@ const { createPdfAssetReader } = require('../services/pdf-assets');
 const { createHtmlPreviewService } = require('../services/html-preview-service');
 const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
+const { createMoveToTrash } = require('../services/move-to-trash');
 const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const {
@@ -670,6 +671,12 @@ function createApplication({
   // geaenderte AGENTS.md wirkt damit ab der naechsten Nachricht.
   const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
 
+  // One trash for the tree's Delete… and the tools' recovery copies: on macOS
+  // it moves into ~/.Trash itself where the trash API refuses (#712).
+  const moveToTrash = shell && typeof shell.trashItem === 'function'
+    ? createMoveToTrash({ trashItem: (target) => shell.trashItem(target) })
+    : null;
+
   const { engine: chatEngine, llm: chatLlm } = createChatApplication({
     llmConfigStore,
     providerRuntime,
@@ -696,7 +703,7 @@ function createApplication({
       path,
       // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
       protectedRoots: [app.getPath('userData')],
-      trashItem: shell && typeof shell.trashItem === 'function' ? (target) => shell.trashItem(target) : null,
+      trashItem: moveToTrash,
       readOwnSecrets: ownSecrets.readOwnSecrets,
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).
       describeShell: () => shellRunnerService.describe(),
@@ -726,7 +733,7 @@ function createApplication({
   });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
-    ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale })
+    ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale, trashItem: moveToTrash })
     : null;
   // dialog: der Import von außen (#101) wird nativ bestätigt, nicht im Renderer.
   // #346: pdf.js data files, next to the renderer code they belong to.

@@ -340,3 +340,15 @@ test('"Remove mark" appears only for a marked row and hands the path back (#347)
     ['Reveal in Finder', 'Information', 'Remove marks in this folder', 'separator', 'Delete…'],
   );
 });
+
+test('Delete: the injected trash replaces shell.trashItem (#712)', async () => {
+  const { shell, Menu, calls, makeDialog } = createFakes();
+  const trashed = [];
+  const menu = createFileContextMenu({
+    Menu, shell, dialog: makeDialog(0), platform: 'darwin', trashItem: async (p) => trashed.push(p),
+  });
+  const result = await menu.deleteWithConfirmation('/ws/OneDrive/ziel.svg', null);
+  assert.deepEqual(result, { deleted: true });
+  assert.deepEqual(trashed, ['/ws/OneDrive/ziel.svg']);
+  assert.deepEqual(calls.trashItem, [], 'shell.trashItem is reached only through the injected trash');
+});
