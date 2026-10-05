@@ -27,6 +27,29 @@ async function openMenu(page) {
     { what: 'open model menu' });
 }
 
+// What closed the menu (#741): every event that can close it, and every
+// change of its class, in the page's own clock. Read back on a failure.
+async function recordMenuEvents(page) {
+  await page.evaluate(() => {
+    const log = [];
+    window.__menuLog = log;
+    const name = (el) => (el?.id ? `#${el.id}` : el?.className ? `.${String(el.className).split(' ')[0]}` : el?.nodeName || null);
+    const at = () => Math.round(performance.now());
+    for (const type of ['pointerdown', 'mousedown', 'click', 'keydown', 'focusin', 'focusout']) {
+      document.addEventListener(type, (e) => {
+        log.push({ at: at(), type, target: name(e.target), related: name(e.relatedTarget), key: e.key, hasFocus: document.hasFocus() });
+      }, true);
+    }
+    window.addEventListener('blur', () => log.push({ at: at(), type: 'window-blur' }));
+    window.addEventListener('focus', () => log.push({ at: at(), type: 'window-focus' }));
+    const menu = document.getElementById('chat-model-menu');
+    new MutationObserver(() => log.push({ at: at(), type: 'menu', hidden: menu.classList.contains('hidden'), active: name(document.activeElement) }))
+      .observe(menu, { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+const menuLog = (page) => page.evaluate(() => JSON.stringify(window.__menuLog || []));
+
 async function waitForApp(page) {
   await poll(async () =>
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
@@ -92,8 +115,11 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
   assert.equal(await pill(page), 'fake-model', 'no levels for the fake model');
 
   // Switch this chat to the OpenAI entry and choose "high" in the menu.
+  await recordMenuEvents(page);
   await openMenu(page);
-  await page.click('.chat-model-menu-option[data-preset-id="gpt5"]');
+  await page.click('.chat-model-menu-option[data-preset-id="gpt5"]', { timeout: 10000 }).catch(async (error) => {
+    throw new Error(`${error.message.split('\n')[0]} — ${await menuLog(page)}`);
+  });
   await poll(async () => (await pill(page)) === 'gpt-5-mini · medium', { what: 'pill at medium' });
   await openMenu(page);
   // With the mouse, on the word — a press there once closed the menu first.
