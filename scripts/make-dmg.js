@@ -42,9 +42,10 @@ const ROOT = path.join(__dirname, '..');
 const VOLUME_NAME = 'Snotra AI';
 const LAYOUT = path.join(ROOT, 'assets', 'macos', 'dmg-layout.DS_Store');
 const VOLUME_ICON = path.join(ROOT, 'icon.icns');
-// The layout's alias points at exactly this path inside the volume.
+// The layout's alias points at exactly this path inside the volume, so it is
+// spelt the macOS way on every platform the tests run on.
 const BACKGROUND = path.join(ROOT, 'assets', 'macos', 'dmg-background.tiff');
-const BACKGROUND_IN_VOLUME = path.join('.background', 'dmg-background.tiff');
+const BACKGROUND_IN_VOLUME = path.posix.join('.background', 'dmg-background.tiff');
 
 // Byte 8 of a folder's FinderInfo holds the high byte of its Finder flags;
 // 0x04 there is kHasCustomIcon (0x0400).
