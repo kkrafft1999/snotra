@@ -354,26 +354,27 @@ test('der Fokus landet auf der Hauptaktion und bleibt im Dialog', async (t) => {
 test('die Aenderungsliste nennt nur, was sich geaendert hat', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);
+  const { formatReleaseNotes } = await importRenderer('components', 'UpdateDialog.js');
   // So liefert GitHub seine automatisch gesetzten Notizen aus.
-  await ui.push({
-    ...AVAILABLE,
-    notes: [
-      "## What's Changed",
-      '* Gedaechtnis: Snotra merkt sich Gesagtes by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/265',
-      '* Release v1.7.6 by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/270',
-      '',
-      '## New Contributors',
-      '* @someone made their first contribution in https://github.com/kkrafft1999/snotra/pull/1',
-      '',
-      '**Full Changelog**: https://github.com/kkrafft1999/snotra/compare/v1.7.5...v1.7.6',
-    ].join('\n'),
-  });
+  const notes = [
+    "## What's Changed",
+    '* Gedaechtnis: Snotra merkt sich Gesagtes by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/265',
+    '* Release v1.7.6 by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/270',
+    '',
+    '## New Contributors',
+    '* @someone made their first contribution in https://github.com/kkrafft1999/snotra/pull/1',
+    '',
+    '**Full Changelog**: https://github.com/kkrafft1999/snotra/compare/v1.7.5...v1.7.6',
+  ].join('\n');
 
-  const text = ui.$('modal-update-notes-body').textContent;
-  assert.equal(text, [
-    '• Gedaechtnis: Snotra merkt sich Gesagtes',
-    '• Release v1.7.6',
+  assert.equal(formatReleaseNotes(notes), [
+    '* Gedaechtnis: Snotra merkt sich Gesagtes',
+    '* Release v1.7.6',
   ].join('\n'));
+
+  await ui.push({ ...AVAILABLE, notes });
+  const text = ui.$('modal-update-notes-body').textContent;
+  assert.match(text, /Gedaechtnis: Snotra merkt sich Gesagtes/);
   assert.equal(/@|github\.com|pull\//.test(text), false, 'kein Autor, kein Link');
   assert.equal(ui.$('modal-update-notes').classList.contains('hidden'), false);
 });
@@ -388,19 +389,31 @@ test('bleibt von den Notizen nichts uebrig, wird die Liste nicht angeboten', asy
   assert.equal(ui.$('modal-update-notes').classList.contains('hidden'), true);
 });
 
-test('handgeschriebene Notizen behalten ihre Gliederung', async (t) => {
-  const ui = await mount();
-  t.after(ui.dom.cleanup);
-  await ui.push({
-    ...AVAILABLE,
-    notes: '### Behoben\r\n- Absturz beim Start\r\n  - auch unter Windows\r\n\r\nDanke fuers Melden.',
-  });
-  assert.equal(ui.$('modal-update-notes-body').textContent, [
-    'Behoben',
-    '• Absturz beim Start',
-    '  • auch unter Windows',
+test('handgeschriebene Notizen bleiben Markdown (#736)', async () => {
+  const { formatReleaseNotes } = await importRenderer('components', 'UpdateDialog.js');
+  // Headings, nesting, emphasis, code and a quoted warning are left for the
+  // Markdown renderer — only GitHub's generated parts are taken out. Whether
+  // they really render is a question for the running app (no DOMPurify under
+  // happy-dom, see test/helpers/dom.js): e2e/manual-update-notes.mjs.
+  assert.equal(formatReleaseNotes([
+    '## Highlights',
     '',
-    'Danke fuers Melden.',
+    '- **Reasoning is chosen in the chat now.** Pill shows `gpt-6-luna · medium` (#723).',
+    '  - nested',
+    '',
+    '> **Going back to 1.14.x is not supported.**',
+    '',
+    "## What's Changed",
+    '* Keep the level per chat by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/729',
+  ].join('\r\n')), [
+    '## Highlights',
+    '',
+    '- **Reasoning is chosen in the chat now.** Pill shows `gpt-6-luna · medium` (#723).',
+    '  - nested',
+    '',
+    '> **Going back to 1.14.x is not supported.**',
+    '',
+    '* Keep the level per chat',
   ].join('\n'));
 });
 
