@@ -10,6 +10,9 @@ const {
   clampSidebarWidth,
   formatConnectionDetail,
   formatPresetSublabelFromView,
+  formatPresetOptionSuffixFromView,
+  formatPresetSublabel,
+  isModelOffered,
   createListModelsResult,
   createSettingsOk,
   createSettingsError,
@@ -130,6 +133,48 @@ test('formatPresetSublabelFromView uses view DTO presetFields and connectionDeta
   );
   assert.match(conn.text, /draft\.local/);
   assert.match(conn.text, /TLS insecure/);
+});
+
+test('isModelOffered follows the provider\'s pattern, for the definition and the view (#724)', () => {
+  const view = { defaultModel: openai.defaultModel, form: { offeredModels: openai.presentation.offeredModels } };
+  for (const subject of [openai, view]) {
+    assert.equal(isModelOffered(subject, 'gpt-5-mini'), true);
+    assert.equal(isModelOffered(subject, 'GPT-6-Luna'), true);
+    assert.equal(isModelOffered(subject, 'gpt-4o-mini'), false);
+    assert.equal(isModelOffered(subject, 'o3'), false);
+    // No model of its own: the provider's default stands in.
+    assert.equal(isModelOffered(subject, ''), true);
+  }
+  // No pattern, no limit — every other provider.
+  assert.equal(isModelOffered(ollama, 'llama3.2'), true);
+  assert.equal(isModelOffered({ form: { offeredModels: '' } }, 'anything'), true);
+  // A broken pattern limits nothing either.
+  assert.equal(isModelOffered({ form: { offeredModels: '(' } }, 'anything'), true);
+});
+
+test('an older model keeps its fields but shows none of them (#724)', () => {
+  const { createTranslator } = require('../src/shared/i18n');
+  const de = createTranslator('de').message;
+  const view = {
+    defaultModel: openai.defaultModel,
+    apiBase: 'https://api.openai.com/v1',
+    presetFields: [{ key: 'reasoningEffort', detailPrefix: '', detailStyle: 'mono', showAsSuffix: true }],
+    form: { offeredModels: openai.presentation.offeredModels },
+  };
+  const old = { providerId: 'openai', model: 'gpt-4o-mini', reasoningEffort: 'high' };
+  assert.equal(formatPresetOptionSuffixFromView(old, view), '');
+  assert.deepEqual(formatPresetSublabelFromView(old, view, undefined, de), {
+    text: 'Älteres Modell, wird nicht mehr angeboten',
+    style: 'default',
+  });
+  assert.deepEqual(formatPresetSublabel(old, openai, undefined, de), {
+    text: 'Älteres Modell, wird nicht mehr angeboten',
+    style: 'default',
+  });
+
+  const current = { ...old, model: 'gpt-5-mini' };
+  assert.equal(formatPresetOptionSuffixFromView(current, view), 'high');
+  assert.equal(formatPresetSublabelFromView(current, view, undefined, de).text, 'high');
 });
 
 test('normalizeUiPrefs and patch apply clamps', () => {

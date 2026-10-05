@@ -780,7 +780,7 @@ chosen. Five providers are available:
 
 | Provider | Access | Note |
 | -------- | ------ | ---- |
-| **OpenAI** | API key | Speaks the Responses API; supports images and reasoning levels |
+| **OpenAI** | API key | Speaks the Responses API; offers GPT-5 and newer, with images and reasoning levels. An entry with an older model keeps working, without a reasoning level |
 | **Anthropic** | API key | |
 | **Google** | API key | |
 | **Ollama** | Server URL | Native Ollama API (`/api/tags`, `/api/chat`), not the `/v1` layer |

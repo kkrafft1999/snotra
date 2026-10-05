@@ -6,6 +6,21 @@ const { streamResponsesRound } = require('./openai-responses-transport');
 const DEFAULT_BASE = 'https://api.openai.com/v1';
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
+/**
+ * The models Snotra offers: GPT-5 and newer (#724), fine-tuned ones included,
+ * but not the `-chat` snapshots, which take no reasoning level. The same rule
+ * decides whether a request carries `reasoning` — an entry with an older model
+ * keeps working, it just gets no level it would reject (#720). The settings
+ * read the rule through `presentation.offeredModels`, matched without case.
+ */
+const OFFERED_MODELS = /^(?:ft:)?gpt-(?:[5-9]|[1-9]\d+)(?!\d)(?!.*-chat(?:-|$))/i;
+// GPT-5 and newer also come as variants that do not chat.
+const NOT_FOR_CHAT = /realtime|audio|transcribe|tts|image|search|embedding/i;
+
+function isOfferedModel(model) {
+  return OFFERED_MODELS.test(String(model ?? '').trim());
+}
+
 function baseUrlOf(config) {
   const raw = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
   return (raw || DEFAULT_BASE).replace(/\/$/, '');
@@ -43,7 +58,7 @@ async function listModelsRequest(config) {
   const models = json.data
     .map((m) => m && typeof m.id === 'string' ? { id: m.id, label: m.id } : null)
     .filter(Boolean)
-    .filter((m) => !/whisper|tts|embedding|dall-e|moderation|davinci|babbage|curie|^ada/i.test(m.id))
+    .filter((m) => isOfferedModel(m.id) && !NOT_FOR_CHAT.test(m.id))
     .sort((a, b) => a.id.localeCompare(b.id));
   return { models };
 }
@@ -61,12 +76,17 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   if (typeof cacheKey === 'string' && cacheKey.trim()) {
     extraBody.prompt_cache_key = cacheKey.trim();
   }
-  const effort = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  // An older model gets no `reasoning` at all (#724): it would turn the
+  // parameter down, whatever its value.
+  const takesReasoning = isOfferedModel(model);
+  const effort = takesReasoning && typeof config?.reasoningEffort === 'string'
+    ? config.reasoningEffort.trim()
+    : '';
   if (effort) extraBody.reasoning = { effort };
   // Zusammenfassung des Nachdenkens mitstreamen (Issue #87): macht Minuten
   // lange Denkpausen als Zwischenschritte sichtbar. Standard aus, weil OpenAI
   // dafür je nach Organisation eine Verifizierung verlangt.
-  if (config?.reasoningSummary === 'auto') {
+  if (takesReasoning && config?.reasoningSummary === 'auto') {
     extraBody.reasoning = { ...(extraBody.reasoning || {}), summary: 'auto' };
   }
 
@@ -117,10 +137,12 @@ module.exports = {
   // Sagt, ob *dieser Adapter* Bilder weiterreicht — nicht, ob das gewaehlte
   // Modell sie versteht (Issue #93).
   capabilities: { images: true },
-  defaultModel: 'gpt-4o-mini',
+  defaultModel: 'gpt-5-mini',
   apiBase: DEFAULT_BASE,
   presentation: {
     apiKeyPlaceholder: 'sk-…',
+    offeredModels: OFFERED_MODELS.source,
+    offeredModelsHint: createMessage('provider.openai.model.noLongerOffered'),
     presetFields: [
       {
         key: 'reasoningEffort',

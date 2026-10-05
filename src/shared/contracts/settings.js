@@ -655,7 +655,9 @@ function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = pla
  */
 function formatPresetOptionDetailFromView(preset, providerView) {
   const fields = providerView?.presetFields;
-  if (!Array.isArray(fields)) return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
+  if (!Array.isArray(fields) || !isModelOffered(providerView, preset?.model)) {
+    return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
+  }
   for (const field of fields) {
     const key = field?.key;
     if (!key) continue;
@@ -679,7 +681,7 @@ function formatPresetOptionDetailFromView(preset, providerView) {
  */
 function formatPresetOptionSuffixFromView(preset, providerView) {
   const fields = providerView?.presetFields;
-  if (!Array.isArray(fields)) return '';
+  if (!Array.isArray(fields) || !isModelOffered(providerView, preset?.model)) return '';
   for (const field of fields) {
     const key = field?.key;
     if (!key || field.showAsSuffix !== true) continue;
@@ -695,6 +697,7 @@ function formatPresetOptionSuffixFromView(preset, providerView) {
  * Optional connectionOverride für Credential-Drafts (baseUrl/insecureTls).
  */
 function formatPresetSublabelFromView(preset, providerView, connectionOverride, say = plainText) {
+  if (!isModelOffered(providerView, preset?.model)) return noLongerOfferedDetail(say);
   const optionDetail = formatPresetOptionDetailFromView(preset, providerView);
   if (optionDetail.text) return optionDetail;
 
@@ -711,9 +714,43 @@ function formatPresetSublabelFromView(preset, providerView, connectionOverride, 
   return { text: apiBase, style: PRESET_DETAIL_STYLES.DEFAULT };
 }
 
+/**
+ * Whether the provider still offers the entry's model (#724). A provider may
+ * declare `presentation.offeredModels`, a pattern matched without case; the
+ * renderer finds it under `form.offeredModels`. An entry outside the pattern
+ * keeps working, but its preset fields no longer apply: they are not shown,
+ * and the provider leaves them out of the request. No pattern, no limit.
+ */
+const offeredModelPatterns = new Map();
+
+function isModelOffered(providerOrView, model) {
+  const source = providerOrView?.presentation?.offeredModels ?? providerOrView?.form?.offeredModels;
+  if (typeof source !== 'string' || !source) return true;
+  let pattern = offeredModelPatterns.get(source);
+  if (!pattern) {
+    try {
+      pattern = new RegExp(source, 'i');
+    } catch {
+      return true;
+    }
+    offeredModelPatterns.set(source, pattern);
+  }
+  const name = String(model || providerOrView?.defaultModel || '').trim();
+  return pattern.test(name);
+}
+
+function noLongerOfferedDetail(say) {
+  return {
+    text: say(createMessage('settings.models.noLongerOffered')),
+    style: PRESET_DETAIL_STYLES.DEFAULT,
+  };
+}
+
 function formatPresetOptionDetail(preset, provider) {
   const fields = provider?.presentation?.presetFields;
-  if (!Array.isArray(fields)) return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
+  if (!Array.isArray(fields) || !isModelOffered(provider, preset?.model)) {
+    return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
+  }
   for (const field of fields) {
     const key = field?.key;
     if (!key || typeof field.formatDetail !== 'function') continue;
@@ -732,6 +769,7 @@ function formatPresetOptionDetail(preset, provider) {
 }
 
 function formatPresetSublabel(preset, provider, connection, say = plainText) {
+  if (!isModelOffered(provider, preset?.model)) return noLongerOfferedDetail(say);
   const optionDetail = formatPresetOptionDetail(preset, provider);
   if (optionDetail.text) return optionDetail;
 
@@ -861,6 +899,10 @@ function buildProviderFormView(provider, say = plainText) {
     showSendTools: !!provider?.fields?.sendTools,
     // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
     allowManualModel: presentation.manualModel === true,
+    // The models still offered, and what the dialog says about one that is
+    // not (#724) — see isModelOffered.
+    offeredModels: typeof presentation.offeredModels === 'string' ? presentation.offeredModels : '',
+    offeredModelsHint: sayText(say, presentation.offeredModelsHint, ''),
     // Verbindung je Eintrag (Issue #202): Das Formular bearbeitet dann die
     // Zeile, nicht den Anbieter.
     connectionPerPreset: provider?.connectionPerPreset === true,
@@ -896,6 +938,7 @@ module.exports = {
   createListModelsResult,
   normalizePresetWire,
   presetIdentityKey,
+  isModelOffered,
   hasPresetConnection,
   normalizeBaseUrl,
   normalizeStoredPresetConnection,

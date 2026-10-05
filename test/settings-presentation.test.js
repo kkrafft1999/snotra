@@ -41,7 +41,7 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
         {
           id: 'p1',
           providerId: 'openai',
-          model: 'gpt-4o-mini',
+          model: 'gpt-5-mini',
           reasoningEffort: 'medium',
           menuVisible: true,
         },
@@ -53,13 +53,13 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
         },
       ],
       providers: {
-        openai: { apiKeyEnc: 'abc', model: 'gpt-4o-mini' },
+        openai: { apiKeyEnc: 'abc', model: 'gpt-5-mini' },
         ollama: { baseUrl: 'http://127.0.0.1:11434' },
       },
     },
     chatTarget: {
       providerId: 'openai',
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       reasoningEffort: 'medium',
     },
     locale: 'de',
@@ -72,8 +72,8 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   const openaiPreset = dto.presets.find((p) => p.id === 'p1');
   // Das Reasoning-Level haengt hinter dem Modell, damit Chat-Pille und
   // Chat-Menue einzeilig bleiben; labelBase/optionSuffix trennen die Teile.
-  assert.equal(openaiPreset.label, 'OpenAI · gpt-4o-mini · medium');
-  assert.equal(openaiPreset.labelBase, 'OpenAI · gpt-4o-mini');
+  assert.equal(openaiPreset.label, 'OpenAI · gpt-5-mini · medium');
+  assert.equal(openaiPreset.labelBase, 'OpenAI · gpt-5-mini');
   assert.equal(openaiPreset.optionSuffix, 'medium');
   assert.equal(openaiPreset.sublabel, 'medium');
   assert.equal(openaiPreset.sublabelStyle, 'mono');
@@ -358,4 +358,34 @@ test('die bestehenden Anbieter zeigen keines der neuen Felder', () => {
     assert.deepEqual(view.form.templates, [], id);
     assert.equal(view.optionalApiKey, false, id);
   }
+});
+
+test('an entry with an older OpenAI model shows no level and says it is no longer offered (#724)', () => {
+  const dto = presentation.buildLlmStateDto({
+    encryptionAvailable: true,
+    config: {
+      activeProvider: 'openai',
+      activePresetId: 'old',
+      presets: [
+        { id: 'old', providerId: 'openai', model: 'gpt-4o-mini', reasoningEffort: 'high', menuVisible: true },
+      ],
+      providers: { openai: { apiKeyEnc: 'abc' } },
+    },
+    chatTarget: { providerId: 'openai', model: 'gpt-4o-mini' },
+    locale: 'en',
+  });
+
+  const preset = dto.presets.find((p) => p.id === 'old');
+  assert.equal(preset.label, 'OpenAI · gpt-4o-mini');
+  assert.equal(preset.optionSuffix, '');
+  assert.equal(preset.sublabel, 'Older model, no longer offered');
+  assert.equal(preset.sublabelStyle, 'default');
+
+  const provider = dto.providers.find((p) => p.id === 'openai');
+  assert.equal(typeof provider.form.offeredModels, 'string');
+  assert.ok(provider.form.offeredModels.length > 0);
+  assert.equal(
+    provider.form.offeredModelsHint,
+    'Snotra offers GPT-5 and newer. This older model keeps working, without a reasoning level.',
+  );
 });
