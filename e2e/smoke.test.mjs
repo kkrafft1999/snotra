@@ -538,7 +538,26 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       };
     });
     return state && state.ink > 0 ? state : null;
-  }, { what: 'gezeichnete PDF-Seite' });
+  }, {
+    what: 'gezeichnete PDF-Seite',
+    // `null` alone stood for three different failures (#703): the preview
+    // never switched, the document never got its pages, or no page got drawn.
+    explain: () => page.evaluate(() => {
+      const view = document.querySelector('.pdf-view');
+      const message = document.querySelector('.pdf-view__message');
+      return {
+        filename: document.getElementById('preview-filename').textContent,
+        view: document.querySelector('#preview-body > .file-view')?.dataset.view ?? null,
+        meta: document.getElementById('preview-meta').textContent,
+        pdfViewHidden: view?.hidden ?? null,
+        message: message && !message.hidden ? message.textContent.replace(/\s+/g, ' ').trim() : null,
+        pages: [...document.querySelectorAll('.pdf-page')].map((el) => `${el.dataset.page}: ${el.className}`
+          + ` ${el.style.width}×${el.style.height} [${[...el.children].map((c) => c.className).join(',')}]`),
+        viewSize: view ? `${view.clientWidth}×${view.clientHeight}, scrollTop ${view.scrollTop}` : null,
+        visibility: document.visibilityState,
+      };
+    }),
+  });
   assert.equal(pdf.view, 'pdf');
   assert.equal(pdf.pages, 3);
   assert.equal(pdf.total, '/ 3');
