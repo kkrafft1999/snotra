@@ -25,7 +25,7 @@ see on screen.
 
 | Class | Tools |
 | --- | --- |
-| `read` | `list_directory`, `list_directory_tree`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `load_skill` |
+| `read` | `list_directory`, `list_directory_tree`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `load_skill` |
 | `write` | `write_file_text`, `edit_file`, `apply_patch` — max. 2 MB per file; `remember` does not write to the project but to memory |
 | `execute` | `run_python`, `shell_execute` |
 | `external` | `web_search` (list of hits only, not whole pages), `fetch_url` (exactly one http(s) address, rejects private addresses and non-text) |

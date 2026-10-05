@@ -544,6 +544,17 @@ three platforms the same way.
   prompt explains the `@path` convention; the model reads the file itself when
   needed via the read tools, and contents are not embedded automatically (a token
   budget decision).
+- **Reading documents:** PDF, Word (DOCX), Excel (XLSX) and PowerPoint (PPTX)
+  files the model reads with the `extract_document_text` tool. It runs locally,
+  with nothing to install or set up. Never the whole document at once: a window of
+  text at a time, so a 300-page manual costs the pages that are asked for, not all
+  of them. PDF pages and slides come marked with their numbers and can be picked
+  ("pages 12 to 15"). A workbook comes as rows with row numbers and column letters,
+  a sheet and a cell range at a time, dates as dates. Word headings stay
+  recognisable, and a presentation's speaker notes come along. Files up to 50 MB
+  from the open folder can be read. Scanned PDFs without a text layer,
+  password-protected files and the old formats (.doc, .xls, .ppt) cannot be
+  read; the model is told why.
 
 - **Running Python (off by default):** after switching it on under Settings ›
   Security › *Execute* › "Allow Python execution", the model gets the

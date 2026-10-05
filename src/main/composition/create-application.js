@@ -57,6 +57,8 @@ const { createUpdateAdapter, createUpdateCheck } = require('../adapters/update-a
 const { registerDialogHandlers } = require('../ipc/dialog-handlers');
 const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createPdfAssetReader } = require('../services/pdf-assets');
+const { createDocumentTextExtractor } = require('../services/document-text-worker');
+const { createDocumentTextService } = require('../services/document-text-service');
 const { createHtmlPreviewService } = require('../services/html-preview-service');
 const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
@@ -477,6 +479,15 @@ function createApplication({
     getLocale: getAppLocale,
   });
 
+  // The vendored pdf.js (#346), read by the preview and by extract_document_text (#42).
+  const PDFJS_VENDOR_DIR = path.join(__dirname, '..', '..', 'renderer', 'vendor', 'pdfjs');
+  // Text out of PDF and Office files (#42), in a worker. PDFs go through the
+  // pdf.js the preview ships (#346); Office files need no library at all.
+  const documentText = createDocumentTextService({
+    fs,
+    fsService,
+    extractor: createDocumentTextExtractor({ pdfjsDir: PDFJS_VENDOR_DIR }),
+  });
   const toolRegistry = createWorkspaceToolRegistry({
     fsService,
     webSearch,
@@ -484,6 +495,7 @@ function createApplication({
     urlFetch,
     shellRunner,
     memory,
+    documentText,
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
@@ -740,7 +752,7 @@ function createApplication({
   const pdfAssets = createPdfAssetReader({
     fs,
     path,
-    rootDir: path.join(__dirname, '..', '..', 'renderer', 'vendor', 'pdfjs'),
+    rootDir: PDFJS_VENDOR_DIR,
   });
   registerFsHandlers({
     ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,

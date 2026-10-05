@@ -65,7 +65,7 @@ blocked; there is no implicit `read` default.
 
 | Class | Meaning | Assignment / example |
 | --- | --- | --- |
-| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `list_directory_tree`, `load_skill` |
+| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill` |
 | `read-sensitive` | Sensitive content, or targeted access to a sensitive path | A dynamic escalation of the read tools, including under `skill:` |
 | `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch` |
 | `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` on an existing file when the recovery copy cannot be created; a future delete tool |

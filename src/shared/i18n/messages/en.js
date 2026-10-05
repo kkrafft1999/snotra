@@ -1149,6 +1149,8 @@ module.exports = {
 
   'tools.short.outline_file': 'Returns the outline of a file (Markdown headings or function/class signatures) with line numbers, without the full text.',
   'tools.desc.outline_file': 'Returns the outline of a file in the project folder with line numbers, without reading the content: for Markdown the headings (level 1–6), for code the function, method, class and type signatures (level taken from the indentation, generic heuristic). A cheap map, to then read only the matching section with read_file_lines. max_depth hides the deeper levels.',
+  'tools.short.extract_document_text': 'Reads the text of a PDF, Word, Excel or PowerPoint file, page by page or sheet by sheet.',
+  'tools.desc.extract_document_text': 'Extracts the text of a PDF, DOCX, XLSX or PPTX file in the project folder — never the whole document at once, but a window of at most max_characters, with the way to the next one. PDF pages and slides come marked with their numbers and can be picked with pages; a workbook comes as tab-separated rows with row numbers and column letters, chosen by sheet and range, with dates as dates. Word headings are marked the Markdown way. Runs locally, without any extra program; scanned PDFs without a text layer and password-protected files cannot be read.',
 
   'tools.short.list_directory_tree': 'Returns a compact recursive folder tree of the project folder (depth and extent can be limited) in a single call.',
   'tools.desc.list_directory_tree': 'Returns a compact recursive folder tree of the project folder in a single call instead of many list_directory rounds. A text tree with indentation; folders end in "/". "[+N]" behind a folder means: N direct entries are not shown (max_depth or max_entries reached). Breadth first, so that with a tight budget the upper levels are complete first. Skips hidden entries, patterns from the .gitignore of the project root, and .git; does not follow symlinks.',
@@ -1617,6 +1619,10 @@ module.exports = {
   'tools.line.outlineFile.done': 'Outline of {path} worked out',
   'tools.line.outlineFile.start.plain': 'Working out the outline …',
   'tools.line.outlineFile.done.plain': 'Outline worked out',
+  'tools.line.extractDocumentText.start': 'Reading document {path} …',
+  'tools.line.extractDocumentText.done': 'Document {path} read',
+  'tools.line.extractDocumentText.start.plain': 'Reading document …',
+  'tools.line.extractDocumentText.done.plain': 'Document read',
 
   'tools.line.listDirectoryTree.start': 'Reading folder tree {path} …',
   'tools.line.listDirectoryTree.done': 'Folder tree {path} read',

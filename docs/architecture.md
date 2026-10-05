@@ -1819,6 +1819,58 @@ The block deliberately does *not* mention a **scratch directory**: the write too
 know only the working folder as their root, and a path beside it would be a hint
 at something that does not work.
 
+### Reading documents ([#42](https://github.com/kkrafft1999/snotra/issues/42))
+
+`extract_document_text` reads the text of PDF, DOCX, XLSX and PPTX files.
+**It adds no dependency.** The format is told by the first bytes, not by the
+name: `%PDF-`, a ZIP, or the compound file of the old binary Office formats,
+which every password-protected Office file is as well.
+
+- **PDF** goes through the pdf.js the preview already ships
+  (`src/renderer/vendor/pdfjs/`, #346). The modern build needs
+  `Uint8Array.prototype.toHex`, which Electron's V8 has and plain Node 24
+  lacks. The real path is therefore tested in `e2e/document-text.test.mjs`,
+  which runs under Electron's Node, and not in `npm test`.
+- **DOCX, XLSX, PPTX** are ZIP archives of XML: `zip-reader.js` reads the
+  central directory with `zlib.inflateRawSync`, and `office-text.js` scans the
+  parts with one tokenizer. The usual libraries would have brought megabytes of
+  transitive dependencies for the 2 % of them a text needs, and SheetJS on npm
+  is stuck on an old version. There is no ZIP64, no encrypted entries, and no
+  method other than stored and deflate. Each part may unpack to at most
+  100 MB, and all parts together to at most 200 MB, so a small archive cannot
+  unpack into something enormous.
+
+```
+tool call ─▶ document-text-service: resolveToolPath, readRegularFile (≤ 50 MB)
+                 │
+                 ▼
+   document-text-worker: one worker_thread per call, 30 s, 1 GB heap
+                 │  terminate() on time-out or when the run is stopped
+                 ▼
+   document-text: format → pdf-text (pdf.js) | office-text (zip-reader)
+                  → selection (pages | sheet + range) → window
+```
+
+**The token goal is in the shape of the answer.** Nothing ever comes back
+whole: the answer is a window of at most `max_characters` (16 000 by default)
+plus `next_start_character`. It also carries the size of the whole, `page_count`,
+`slide_count` or the list of sheets, so the next call can aim. Pages are read
+one at a time until the window is full, which means the first window of a
+300-page manual parses five pages, not 300. A workbook comes as tab-separated
+rows with row numbers and column letters, dates as ISO dates (the date styles
+come from `styles.xml`, and both the 1900 and the 1904 date systems are
+handled). Word headings are marked with `#`, recognised by the built-in style
+*name* (`heading 1`), because the style id is localised (a German Word writes
+`berschrift1`).
+
+**Checking for sensitive content** runs on the extracted text only. A scan of
+a PDF's or a DOCX's bytes would look at compressed data and find nothing, so
+`DECODED_CONTENT_TOOLS` in `workspace-tool-adapter.js` skips the whole-file
+scan that the text tools get. The window of `extract_document_text` is
+therefore what gets checked. A secret that falls on the boundary between two
+windows can pass unmarked, which is the price of not unpacking a document
+twice per call.
+
 ## Interface language
 
 The interface speaks English **or** German. It is switched in Settings >
