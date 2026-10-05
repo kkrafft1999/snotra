@@ -296,7 +296,7 @@ try {
     await new Promise((r) => setTimeout(r, 200));
     await shoot(state);
   }
-  // Wide content gives way to the measure (#730): what still overflows, and by how much.
+  // Wide content gives way to the column (#730): what still overflows, and by how much.
   const overflow = () => page.evaluate(() => {
     const doc = document.querySelector('.md-doc');
     const measure = doc.getBoundingClientRect().width;
@@ -323,6 +323,18 @@ try {
   await new Promise((r) => setTimeout(r, 300));
   console.log('wide, narrow, overflow:', await overflow());
   await shoot('wide-fit-narrow');
+  // Below the minimum width (#740): the text stops narrowing, the view scrolls sideways.
+  await page.evaluate(() => {
+    const content = document.getElementById('content');
+    content.style.flex = '0 0 240px';
+    content.style.maxWidth = '240px';
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  console.log('wide, below minimum:', await overflow(), await page.evaluate(() => {
+    const view = document.querySelector('.md-view');
+    return { viewScroll: view.scrollWidth - view.clientWidth };
+  }));
+  await shoot('wide-below-minimum');
   await page.evaluate(() => {
     const content = document.getElementById('content');
     content.style.flex = '';
