@@ -2,7 +2,8 @@
 // Starts the real app with an OpenAI entry (a key that is never used — no
 // message is sent), an older OpenAI model and the same local model on two
 // servers. Photographs the open menu light and dark, with a level chosen by
-// keyboard, for a model without levels, and in a narrow chat column.
+// keyboard, the closed menu after a click on a level, for a model without
+// levels, and in a narrow chat column.
 // Not a test — a look.
 //
 //   node e2e/manual-reasoning-menu.mjs [de|en]
@@ -135,6 +136,18 @@ try {
   console.log('after ArrowRight:', await describe());
   await shoot('dark-keyboard');
   await closeMenu();
+
+  // The mouse: a click on a level takes it and closes the menu (#737).
+  await theme('light');
+  await openMenu();
+  await page.click('#chat-reasoning-levels label:has(input[value="low"])');
+  await poll(() => page.evaluate(() =>
+    document.getElementById('chat-model-pill-label').textContent.endsWith('low')
+    && document.getElementById('chat-model-menu').classList.contains('hidden')),
+  { what: 'pill shows low, menu closed' });
+  console.log('after a click on low:', await describe(),
+    'focus on pill:', await page.evaluate(() => document.activeElement?.id === 'btn-chat-model-picker'));
+  await shoot('light-after-click');
 
   await theme('light');
   await choose('older');

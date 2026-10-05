@@ -107,9 +107,8 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
     }));
     throw new Error(`${error.message} — ${JSON.stringify(seen)}`);
   });
-  assert.equal(await page.evaluate(() => !document.getElementById('chat-model-menu').classList.contains('hidden')), true,
-    'the menu stays open after a level');
-  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => document.getElementById('chat-model-menu').classList.contains('hidden')), true,
+    'the menu closes after a level (#737)');
 
   // A new chat runs with the same entry, but at medium.
   await page.evaluate(() => document.getElementById('btn-chat-new').click());

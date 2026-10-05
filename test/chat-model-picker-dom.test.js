@@ -64,6 +64,14 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null, setR
     pill: document.getElementById('btn-chat-model-picker'),
     menu: document.getElementById('chat-model-menu'),
     options: () => [...document.querySelectorAll('#chat-model-menu .chat-model-menu-option')],
+    // A pick with the mouse: the press first, then the click (#737).
+    pick: (value) => {
+      const input = document.querySelector(`#chat-reasoning-levels input[value="${value}"]`);
+      const label = input.closest('label');
+      label.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      input.click();
+      return input;
+    },
     key: (target, key) => {
       const event = new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
       target.dispatchEvent(event);
@@ -233,26 +241,73 @@ test('the levels are a radio group below the models, with the chat\'s level chec
   assert.equal(document.getElementById('chat-model-list').contains(group), false);
 });
 
-test('choosing a level applies it at once and leaves the menu open (#727)', async () => {
-  const { pill, menu, document, levels, chosen } = await setup({ state: withLevels('medium') });
+test('a click on a level applies it and closes the menu (#727, #737)', async () => {
+  const { pill, menu, document, levels, chosen, pick } = await setup({ state: withLevels('medium') });
   pill.click();
-  const high = document.querySelector('#chat-reasoning-levels input[value="high"]');
-  high.click();
+  pick('high');
   await flush();
   assert.deepEqual(levels, ['high']);
   assert.deepEqual(chosen, []);
-  assert.equal(menu.classList.contains('hidden'), false);
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(pill.getAttribute('aria-expanded'), 'false');
+  assert.equal(document.activeElement, pill);
   assert.equal(pill.textContent.trim(), 'gpt-5 · high');
 });
 
-test('a refused level goes back and says why (#727)', async () => {
-  const { pill, document } = await setup({
+test('a click on the level that holds closes the menu without a request (#737)', async () => {
+  const { pill, menu, document, levels, pick } = await setup({ state: withLevels('medium') });
+  pill.click();
+  pick('medium');
+  await flush();
+  assert.deepEqual(levels, []);
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(document.activeElement, pill);
+});
+
+test('the arrow keys apply a level and keep the menu open; Enter closes it (#737)', async () => {
+  const { pill, menu, document, levels, key } = await setup({ state: withLevels('medium') });
+  pill.click();
+  const medium = document.querySelector('#chat-reasoning-levels input[value="medium"]');
+  medium.focus();
+  key(medium, 'ArrowRight');
+  // happy-dom does not walk a radio group; this is what a browser does next.
+  const high = document.querySelector('#chat-reasoning-levels input[value="high"]');
+  high.checked = true;
+  high.focus();
+  high.dispatchEvent(new document.defaultView.Event('change', { bubbles: true }));
+  await flush();
+  assert.deepEqual(levels, ['high']);
+  assert.equal(menu.classList.contains('hidden'), false);
+
+  const enter = key(high, 'Enter');
+  assert.equal(enter.defaultPrevented, true);
+  await flush();
+  assert.deepEqual(levels, ['high'], 'the level that holds is not sent again');
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(document.activeElement, pill);
+});
+
+test('Enter on a level that is not set yet applies it and closes the menu (#737)', async () => {
+  const { pill, menu, document, levels, key } = await setup({ state: withLevels('medium') });
+  pill.click();
+  const low = document.querySelector('#chat-reasoning-levels input[value="low"]');
+  low.focus();
+  key(low, 'Enter');
+  await flush();
+  assert.deepEqual(levels, ['low']);
+  assert.equal(menu.classList.contains('hidden'), true);
+  assert.equal(pill.textContent.trim(), 'gpt-5 · low');
+});
+
+test('a refused level goes back, says why and keeps the menu open (#727, #737)', async () => {
+  const { pill, menu, document, pick } = await setup({
     state: withLevels('medium'),
     setReasoningEffort: async () => ({ ok: false, error: { key: 'settings.error.reasoningNoChat' } }),
   });
   pill.click();
-  document.querySelector('#chat-reasoning-levels input[value="max"]').click();
+  pick('max');
   await flush();
+  assert.equal(menu.classList.contains('hidden'), false);
   assert.equal(document.querySelector('#chat-reasoning-levels input:checked').value, 'medium');
   const status = document.getElementById('chat-reasoning-status');
   assert.equal(status.hidden, false);

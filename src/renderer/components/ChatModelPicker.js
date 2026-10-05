@@ -28,6 +28,10 @@ export function initChatModelPicker({
   const chatLiveDot = document.getElementById('chat-live-dot');
 
   let chatModelMenuOpen = false;
+  // Set by a press or by Space on a level: the choice that follows closes the
+  // menu (#737). The arrow keys leave it unset — they walk the group, and
+  // closing on the first step would put the levels behind it out of reach.
+  let closeAfterLevel = false;
 
   function findProviderView(providerId) {
     return (appStore.llmState.providers || []).find((p) => p.id === providerId) || null;
@@ -60,6 +64,7 @@ export function initChatModelPicker({
    */
   function closeChatModelMenu({ focusPill = false } = {}) {
     chatModelMenuOpen = false;
+    closeAfterLevel = false;
     if (chatModelMenu) chatModelMenu.classList.add('hidden');
     if (btnChatModelPicker) {
       btnChatModelPicker.setAttribute('aria-expanded', 'false');
@@ -197,11 +202,12 @@ export function initChatModelPicker({
   }
 
   /**
-   * A level applies at once and the menu stays open (#727): the pill shows it
-   * a moment later. Refused, the group goes back to the level that holds and
+   * A level applies at once (#727); chosen with `close`, the menu closes
+   * behind it and the pill shows the level a moment later (#737). Refused,
+   * the menu stays open, and the group goes back to the level that holds and
    * says why — no choice without an answer.
    */
-  async function chooseReasoningLevel(level) {
+  async function chooseReasoningLevel(level, { close = false } = {}) {
     setReasoningStatus('');
     let res;
     try {
@@ -214,6 +220,7 @@ export function initChatModelPicker({
       setReasoningStatus(res?.error ? tMessage(res.error) : t('chat.reasoning.failed'));
       return;
     }
+    if (close && chatModelMenuOpen) closeChatModelMenu({ focusPill: true });
     await refreshLLMState();
   }
 
@@ -466,6 +473,7 @@ export function initChatModelPicker({
       if (input) {
         e.preventDefault();
         input.focus();
+        closeAfterLevel = true;
         return;
       }
       if (!e.target.closest?.('button, input')) e.preventDefault();
@@ -475,7 +483,40 @@ export function initChatModelPicker({
   if (chatReasoningLevels) {
     chatReasoningLevels.addEventListener('change', (e) => {
       const input = e.target;
-      if (input?.type === 'radio' && input.checked) void chooseReasoningLevel(input.value);
+      if (input?.type !== 'radio' || !input.checked) return;
+      const close = closeAfterLevel;
+      closeAfterLevel = false;
+      void chooseReasoningLevel(input.value, { close });
+    });
+
+    // The level that already holds sends no `change`: nothing to apply, only
+    // the menu to close. A new level is checked by the time the click
+    // arrives, but the state still holds the old one.
+    chatReasoningLevels.addEventListener('click', (e) => {
+      const input = e.target;
+      if (input?.type !== 'radio' || !closeAfterLevel) return;
+      if (input.value !== reasoningState().level) return;
+      closeChatModelMenu({ focusPill: true });
+    });
+
+    // Space checks the level and closes, like a click. Enter does the same —
+    // a radio would otherwise ignore it. The arrow keys only walk.
+    chatReasoningLevels.addEventListener('keydown', (e) => {
+      const input = e.target;
+      if (input?.type !== 'radio') return;
+      if (e.key === ' ') {
+        closeAfterLevel = true;
+        return;
+      }
+      closeAfterLevel = false;
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (input.value === reasoningState().level) {
+        closeChatModelMenu({ focusPill: true });
+        return;
+      }
+      input.checked = true;
+      void chooseReasoningLevel(input.value, { close: true });
     });
   }
 
