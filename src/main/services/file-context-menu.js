@@ -84,8 +84,11 @@ function createFileContextMenu({
   // For the look at what "Open" would launch (#649).
   fs = require('fs').promises,
   env = process.env,
+  // shell.trashItem with the macOS way out of #712 (move-to-trash.js).
+  trashItem = null,
 }) {
   const info = fileInfo || createFileInfo({ platform, logger });
+  const moveToTrash = trashItem || ((target) => shell.trashItem(target));
   const launchable = launchableExtensions(platform, env);
 
   /**
@@ -180,7 +183,7 @@ function createFileContextMenu({
     if (response !== 0) return { cancelled: true };
 
     try {
-      await shell.trashItem(filePath);
+      await moveToTrash(filePath);
       return { deleted: true };
     } catch (err) {
       const message = err?.message ?? String(err);
