@@ -16,9 +16,20 @@ const { measureArgumentConformance } = require('../tools/argument-conformance');
 const { readRegularFile } = require('../services/read-regular-file');
 
 /** Tools, deren Ausgabe Dateiinhalte enthalten kann und deshalb geprüft wird. */
-const CONTENT_READ_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file', 'search_in_files']);
+const CONTENT_READ_TOOLS = new Set([
+  'read_file_text',
+  'read_file_lines',
+  'outline_file',
+  'search_in_files',
+  'extract_document_text',
+]);
 /** Tools mit breiter Auflistung: sensible Einträge werden ausgelassen statt erfragt. */
 const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'find_files', 'search_in_files']);
+/**
+ * Tools whose source file is compressed or binary (#42): a PDF or a DOCX says
+ * nothing to a scan of its bytes, so only the extracted text is checked.
+ */
+const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
 
 /**
  * @param {object} toolRegistry
@@ -260,7 +271,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       if (CONTENT_READ_TOOLS.has(name) && !(parsed && parsed.error)) {
         const outputScan = scanSensitiveContent(output, { maxChars: maxScanBytes * 2 });
         if (outputScan.sensitive) sensitive = true;
-        if (!sensitive && !BROAD_LISTING_TOOLS.has(name)) {
+        // The JSON escapes the quotes a key pattern looks for; the extracted
+        // text is all there is to check for these tools, so check it unescaped.
+        if (!sensitive && DECODED_CONTENT_TOOLS.has(name) && typeof parsed?.content === 'string') {
+          if (scanSensitiveContent(parsed.content, { maxChars: maxScanBytes * 2 }).sensitive) sensitive = true;
+        }
+        if (!sensitive && !BROAD_LISTING_TOOLS.has(name) && !DECODED_CONTENT_TOOLS.has(name)) {
           const fileScan = await scanTargetsForSensitiveContent(name, plan);
           if (!fileScan.scannable) {
             return {
@@ -332,7 +348,7 @@ function writtenRelativePaths(toolName, args, parsed) {
  * `search_in_files` is left out on purpose: a search is not a read, and what
  * the agent opens after it is marked by these anyway.
  */
-const FILE_READING_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file']);
+const FILE_READING_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file', 'extract_document_text']);
 
 /**
  * The workspace path a reading tool read, or null. A `skill:` path lies

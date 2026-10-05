@@ -548,6 +548,7 @@ function createWorkspaceToolRegistry({
   urlFetch = null,
   shellRunner = null,
   memory = null,
+  documentText = null,
 }) {
   return createToolRegistry([
     {
@@ -913,6 +914,62 @@ function createWorkspaceToolRegistry({
       },
       handler: (args, { workspaceRoot, skillRoots }) =>
         fsService.runOutlineFileTool(args, workspaceRoot, { skillRoots }),
+    },
+    {
+      name: 'extract_document_text',
+      // Reaches skill folders too, and so works without an open folder (#429).
+      skillPaths: true,
+      riskClass: TOOL_RISK_CLASSES.READ,
+      targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'read' }],
+      // Without the extractor there is nothing to read with (#42).
+      isAvailable: () => documentText !== null,
+      descriptionKey: 'tools.desc.extract_document_text',
+      // The window is the token goal (#42): the answer carries page count and
+      // sheet list, so the description only has to name the knobs.
+      modelDescription:
+        'Extracts the text of a PDF, DOCX, XLSX or PPTX file, a window of max_characters at a ' +
+        'time; continue with next_start_character. PDF pages and PPTX slides come marked, XLSX ' +
+        'rows tab-separated with row numbers and column letters.',
+      shortDescriptionKey: 'tools.short.extract_document_text',
+      parameters: {
+        type: 'object',
+        properties: {
+          relative_path: {
+            type: 'string',
+            description: 'File path, e.g. "contracts/offer.pdf".',
+          },
+          pages: {
+            type: 'string',
+            description: 'PDF pages or PPTX slides, e.g. "3", "2-5", "1-3,8", "10-". Default: from the start.',
+          },
+          sheet: {
+            type: 'string',
+            description: 'XLSX sheet name. Default: the first visible sheet.',
+          },
+          range: {
+            type: 'string',
+            description: 'XLSX cells, e.g. "A1:F200", "B:D", "5:40".',
+          },
+          start_character: {
+            type: 'integer',
+            default: 0,
+            description: 'Offset into the selected text.',
+          },
+          max_characters: {
+            type: 'integer',
+            default: 16000,
+            maximum: 100000,
+            description: 'Maximum number of characters in the returned text.',
+          },
+        },
+        required: ['relative_path'],
+      },
+      handler: (args, { workspaceRoot, skillRoots, abortSignal }) => {
+        if (!documentText) {
+          return JSON.stringify({ error: 'Reading documents is not available in this installation.' });
+        }
+        return documentText.runExtractDocumentTextTool(args, workspaceRoot, { skillRoots, abortSignal });
+      },
     },
     {
       name: 'list_directory_tree',

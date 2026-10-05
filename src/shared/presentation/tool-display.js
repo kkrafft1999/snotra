@@ -57,6 +57,7 @@ const TOOL_LINE_KEYS = Object.freeze({
   find_files: 'tools.line.findFiles',
   stat_path: 'tools.line.statPath',
   outline_file: 'tools.line.outlineFile',
+  extract_document_text: 'tools.line.extractDocumentText',
   list_directory_tree: 'tools.line.listDirectoryTree',
   run_python: 'tools.line.runPython',
   shell_execute: 'tools.line.shellExecute',
@@ -119,6 +120,7 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   }
   if (toolName === 'stat_path') return lineFor(t, 'stat_path', isDone, { path: pathOf() });
   if (toolName === 'outline_file') return lineFor(t, 'outline_file', isDone, { path: pathOf() });
+  if (toolName === 'extract_document_text') return lineFor(t, 'extract_document_text', isDone, { path: pathOf() });
   if (toolName === 'list_directory_tree') return lineFor(t, 'list_directory_tree', isDone, { path: pathOf() });
   if (toolName === 'run_python') {
     const count = String(args?.code ?? '').split('\n').filter((line) => line.trim()).length;

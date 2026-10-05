@@ -396,9 +396,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(classes.shell_execute, 'execute');
-  // 17 registrierte Tools minus die beiden essenziellen list_directory und
+  // Without its extractor the model does not see it, the catalogue does (#42).
+  assert.equal(names.includes('extract_document_text'), false);
+  assert.equal(classes.extract_document_text, 'read');
+  // 18 registrierte Tools minus die beiden essenziellen list_directory und
   // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 15);
+  assert.equal(Object.keys(classes).length, 16);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });

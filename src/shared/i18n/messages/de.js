@@ -1157,6 +1157,8 @@ module.exports = {
 
   'tools.short.outline_file': 'Liefert die Gliederung einer Datei (Markdown-Überschriften bzw. Funktions-/Klassensignaturen) mit Zeilennummern, ohne den Volltext.',
   'tools.desc.outline_file': 'Liefert die Gliederung einer Datei im Projektordner mit Zeilennummern, ohne den Inhalt zu lesen: bei Markdown die Überschriften (Ebene 1–6), bei Code Funktions-, Methoden-, Klassen- und Typ-Signaturen (Ebene aus der Einrückung, generische Heuristik). Token-sparsame Landkarte, um danach mit read_file_lines gezielt nur den passenden Abschnitt zu lesen. Mit max_depth lassen sich tiefe Ebenen ausblenden.',
+  'tools.short.extract_document_text': 'Liest den Text einer PDF-, Word-, Excel- oder PowerPoint-Datei, seiten- bzw. blattweise.',
+  'tools.desc.extract_document_text': 'Extrahiert den Text einer PDF-, DOCX-, XLSX- oder PPTX-Datei im Projektordner – nie das ganze Dokument auf einmal, sondern ein Fenster von höchstens max_characters Zeichen, mit dem Weg zum nächsten. PDF-Seiten und Folien kommen mit ihrer Nummer markiert und lassen sich mit pages auswählen; eine Arbeitsmappe kommt als tabulatorgetrennte Zeilen mit Zeilennummern und Spaltenbuchstaben, gewählt über sheet und range, Datumswerte als Datum. Überschriften in Word sind wie in Markdown markiert. Läuft lokal, ohne zusätzliches Programm; gescannte PDFs ohne Textebene und passwortgeschützte Dateien lassen sich nicht lesen.',
 
   'tools.short.list_directory_tree': 'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners (Tiefe und Umfang begrenzbar) in einem Aufruf.',
   'tools.desc.list_directory_tree': 'Liefert einen kompakten rekursiven Ordnerbaum des Projektordners in einem Aufruf statt vieler list_directory-Runden. Text-Baum mit Einrückung; Ordner enden auf "/". "[+N]" hinter einem Ordner heißt: N direkte Einträge sind nicht angezeigt (max_depth oder max_entries erreicht). Breitensuche, damit bei knappem Budget zuerst die oberen Ebenen vollständig sind. Überspringt versteckte Einträge, Muster aus der .gitignore des Projektroots sowie .git; folgt keinen Symlinks.',
@@ -1627,6 +1629,10 @@ module.exports = {
   'tools.line.outlineFile.done': 'Gliederung von {path} ermittelt',
   'tools.line.outlineFile.start.plain': 'Gliederung wird ermittelt …',
   'tools.line.outlineFile.done.plain': 'Gliederung ermittelt',
+  'tools.line.extractDocumentText.start': 'Dokument {path} wird gelesen …',
+  'tools.line.extractDocumentText.done': 'Dokument {path} gelesen',
+  'tools.line.extractDocumentText.start.plain': 'Dokument wird gelesen …',
+  'tools.line.extractDocumentText.done.plain': 'Dokument gelesen',
 
   'tools.line.listDirectoryTree.start': 'Ordnerbaum {path} wird gelesen …',
   'tools.line.listDirectoryTree.done': 'Ordnerbaum {path} gelesen',

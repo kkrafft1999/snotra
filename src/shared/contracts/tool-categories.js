@@ -32,6 +32,7 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   read_file_text: TOOL_CATEGORIES.READ,
   read_file_lines: TOOL_CATEGORIES.READ,
   outline_file: TOOL_CATEGORIES.READ,
+  extract_document_text: TOOL_CATEGORIES.READ,
   search_in_files: TOOL_CATEGORIES.SEARCH,
   find_files: TOOL_CATEGORIES.SEARCH,
   list_directory: TOOL_CATEGORIES.LIST,
