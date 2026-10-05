@@ -5,7 +5,8 @@ const os = require('os');
 const path = require('path');
 const pkg = require('../package.json');
 const {
-  makeDmg, detach, withCustomIconFlag, dmgFileName, VOLUME_NAME, LAYOUT, VOLUME_ICON,
+  makeDmg, detach, withCustomIconFlag, dmgFileName, VOLUME_NAME, LAYOUT, VOLUME_ICON, BACKGROUND,
+  BACKGROUND_IN_VOLUME,
 } = require('../scripts/make-dmg');
 
 // #685: the DMG is built with hdiutil instead of maker-dmg/appdmg. These tests
@@ -35,6 +36,7 @@ function fakeTools({ failDetach = 0 } = {}) {
       const src = args[args.indexOf('-srcfolder') + 1];
       staged = Object.fromEntries(fs.readdirSync(src).map((name) => [name, fs.lstatSync(path.join(src, name))]));
       staged.applicationsTarget = fs.readlinkSync(path.join(src, 'Applications'));
+      staged.background = fs.statSync(path.join(src, BACKGROUND_IN_VOLUME));
     }
     if (cmd.endsWith('hdiutil') && args[0] === 'detach' && detachFailures > 0) {
       detachFailures -= 1;
@@ -72,7 +74,7 @@ test('sets only the custom-icon flag and keeps the rest of the FinderInfo', () =
   assert.equal(flagged[9], 0x10);
 });
 
-test('stages the bundle, Applications, the volume icon and the layout, then flags, detaches and converts', posixOnly, async (t) => {
+test('stages the bundle, Applications, the volume icon, the background and the layout, then flags, detaches and converts', posixOnly, async (t) => {
   const dir = tmpDir(t);
   const appPath = path.join(dir, 'Snotra AI.app');
   const outPath = path.join(dir, 'out', 'make', dmgFileName('1.0.0'));
@@ -90,6 +92,7 @@ test('stages the bundle, Applications, the volume icon and the layout, then flag
   assert.equal(staged.applicationsTarget, '/Applications');
   assert.equal(staged['.VolumeIcon.icns'].size, fs.statSync(VOLUME_ICON).size);
   assert.equal(staged['.DS_Store'].size, fs.statSync(LAYOUT).size);
+  assert.equal(staged.background.size, fs.statSync(BACKGROUND).size);
 
   assert.deepEqual(tools.calls.map((c) => c.slice(0, 2)), [
     ['ditto', appPath],
@@ -190,6 +193,7 @@ function readBinaryPlist(buf) {
       count = uint(at + 1, size);
       at += 1 + size;
     }
+    if (type === 0x4) return Buffer.from(buf.subarray(at, at + count));
     if (type === 0x5) return buf.subarray(at, at + count).toString('latin1');
     if (type === 0x6) return Buffer.from(buf.subarray(at, at + 2 * count)).swap16().toString('utf16le');
     if (type === 0xd) {
@@ -202,10 +206,10 @@ function readBinaryPlist(buf) {
 }
 
 // The layout was decided on a mockup (#685): icon view without bars, the app
-// left, Applications right, and no background picture, so Finder keeps the
-// system colours and the labels stay readable in light and dark mode.
+// left, Applications right. Since then an arrow sits between them, painted on a
+// transparent background picture that the layout refers to by an alias.
 test('the checked-in window layout keeps the decided look', () => {
-  const ds = fs.readFileSync(path.join(ROOT, 'assets', 'macos', 'dmg-layout.DS_Store'));
+  const ds = fs.readFileSync(LAYOUT);
   const plist = (code) => {
     const at = ds.indexOf(Buffer.from(`${code}blob`, 'latin1'));
     assert.ok(at > 0, `${code} record present`);
@@ -225,14 +229,31 @@ test('the checked-in window layout keeps the decided look', () => {
   assert.ok(app[0] < applications[0], 'app left of Applications');
   assert.equal(app[1], applications[1], 'both on one line');
 
-  const view = plist('icvp');
-  assert.equal(view.backgroundType, 0, 'system window colour, no picture and no fixed colour');
-  assert.equal(view.backgroundImageAlias, undefined);
-  assert.equal(view.iconSize, 128);
-  assert.equal(view.arrangeBy, 'none');
   const win = plist('bwsp');
   assert.equal(win.ShowToolbar, false);
   assert.equal(win.ShowSidebar, false);
   assert.equal(win.ShowStatusBar, false);
+  const [, , width, height] = win.WindowBounds.match(/\d+/g).map(Number);
+  for (const hidden of ['.VolumeIcon.icns', '.background']) {
+    assert.ok(position(hidden)[1] > height, `${hidden} below the visible area`);
+  }
+
+  const view = plist('icvp');
+  assert.equal(view.backgroundType, 2, 'background picture');
+  assert.equal(view.iconSize, 128);
+  assert.equal(view.arrangeBy, 'none');
+  assert.ok(Buffer.isBuffer(view.backgroundImageAlias), 'alias to the background picture');
+  const alias = view.backgroundImageAlias.toString('latin1');
+  assert.ok(alias.includes(`/${BACKGROUND_IN_VOLUME}`), 'alias points at the staged background');
+  assert.ok(alias.includes(`/Volumes/${VOLUME_NAME}`), 'alias names the real volume');
   assert.equal(ds.includes(Buffer.from('/Users/', 'latin1')), false, 'no local paths');
+  assert.equal(ds.includes(Buffer.from('claude', 'latin1')), false, 'no paths of an agent session');
+
+  // The arrow in the SVG source is drawn at the icons' height and between them.
+  const svg = fs.readFileSync(path.join(ROOT, 'assets', 'macos', 'dmg-background.svg'), 'utf8');
+  const [, svgWidth, svgHeight] = svg.match(/width="(\d+)" height="(\d+)"/).map(Number);
+  assert.deepEqual([svgWidth, svgHeight], [width, height], 'background as large as the window');
+  const [, x1, y1, x2] = svg.match(/M(\d+) (\d+) H(\d+)/).map(Number);
+  assert.equal(y1, app[1], 'arrow on the icons\' line');
+  assert.ok(app[0] + 64 < x1 && x2 < applications[0] - 64, 'arrow between the icons');
 });

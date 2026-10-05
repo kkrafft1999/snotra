@@ -1,0 +1,10 @@
+<!-- Background of the DMG window (scripts/make-dmg.js). Only the arrow is
+     painted; the rest stays transparent. Coordinates are Finder points: the
+     icons sit at (140, 160) and (400, 160), 128 pt wide. Rebuild the TIFF with
+     the commands in docs/release.md after changing this file. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="360" viewBox="0 0 540 360">
+  <g fill="none" stroke="#8E8E93" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M232 160 H306"/>
+    <path d="M290 144 L308 160 L290 176"/>
+  </g>
+</svg>

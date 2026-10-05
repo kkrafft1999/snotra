@@ -9,13 +9,14 @@
 // ditto and xattr.
 //
 // The image holds the signed bundle, an /Applications symlink, Snotra's icon
-// as .VolumeIcon.icns and a checked-in .DS_Store (assets/macos/dmg-layout.DS_Store)
-// that opens the window in icon view, without toolbar or sidebar, with the app
-// on the left and Applications on the right. It has no background picture, so
-// Finder draws the window in the system colours and the labels stay readable
-// in light and dark mode. The layout was decided on a mockup in #685; to change
-// it, regenerate the file with Finder on a mounted read-write image and keep
-// `backgroundType` at 0.
+// as .VolumeIcon.icns, the window background in .background/ and a checked-in
+// .DS_Store (assets/macos/dmg-layout.DS_Store) that opens the window in icon
+// view, without toolbar or sidebar, with the app on the left, Applications on
+// the right and an arrow between them. The background is transparent apart
+// from the arrow; with a picture set, Finder draws the window light in dark
+// mode too, so the dark labels stay readable. The hidden files sit below the
+// visible area for users who let Finder show them. To change the layout, edit
+// assets/macos/dmg-background.svg and run scripts/make-dmg-layout.sh.
 //
 // One step cannot be done from a source folder: Finder shows .VolumeIcon.icns
 // only when the volume root carries the custom-icon flag, and `hdiutil create
@@ -41,6 +42,9 @@ const ROOT = path.join(__dirname, '..');
 const VOLUME_NAME = 'Snotra AI';
 const LAYOUT = path.join(ROOT, 'assets', 'macos', 'dmg-layout.DS_Store');
 const VOLUME_ICON = path.join(ROOT, 'icon.icns');
+// The layout's alias points at exactly this path inside the volume.
+const BACKGROUND = path.join(ROOT, 'assets', 'macos', 'dmg-background.tiff');
+const BACKGROUND_IN_VOLUME = path.join('.background', 'dmg-background.tiff');
 
 // Byte 8 of a folder's FinderInfo holds the high byte of its Finder flags;
 // 0x04 there is kHasCustomIcon (0x0400).
@@ -57,13 +61,17 @@ function dmgFileName(version, arch = 'arm64') {
   return `Snotra-AI-${version}-mac-${arch}.dmg`;
 }
 
-function stage(dir, { appPath, layoutPath = LAYOUT, iconPath = VOLUME_ICON, run = defaultRun }) {
+function stage(dir, {
+  appPath, layoutPath = LAYOUT, iconPath = VOLUME_ICON, backgroundPath = BACKGROUND, run = defaultRun,
+}) {
   fs.mkdirSync(dir, { recursive: true });
   // `ditto` keeps the bundle's symlinks, modes and extended attributes intact,
   // which the signature depends on.
   run('/usr/bin/ditto', [appPath, path.join(dir, path.basename(appPath))]);
   fs.symlinkSync('/Applications', path.join(dir, 'Applications'));
   fs.copyFileSync(iconPath, path.join(dir, '.VolumeIcon.icns'));
+  fs.mkdirSync(path.join(dir, path.dirname(BACKGROUND_IN_VOLUME)));
+  fs.copyFileSync(backgroundPath, path.join(dir, BACKGROUND_IN_VOLUME));
   fs.copyFileSync(layoutPath, path.join(dir, '.DS_Store'));
 }
 
@@ -113,7 +121,7 @@ async function detach(mountPoint, {
 }
 
 async function makeDmg({
-  appPath, outPath, layoutPath = LAYOUT, iconPath = VOLUME_ICON,
+  appPath, outPath, layoutPath = LAYOUT, iconPath = VOLUME_ICON, backgroundPath = BACKGROUND,
   run = defaultRun, sleep = defaultSleep, mounted = isMounted, tmpRoot = os.tmpdir(),
 }) {
   const work = fs.mkdtempSync(path.join(tmpRoot, 'snotra-dmg-'));
@@ -121,7 +129,7 @@ async function makeDmg({
     const source = path.join(work, 'stage');
     const rwImage = path.join(work, 'rw.dmg');
     const mountPoint = path.join(work, 'mnt');
-    stage(source, { appPath, layoutPath, iconPath, run });
+    stage(source, { appPath, layoutPath, iconPath, backgroundPath, run });
 
     run('/usr/bin/hdiutil', [
       'create', '-quiet', '-srcfolder', source, '-volname', VOLUME_NAME,
@@ -171,5 +179,5 @@ if (require.main === module) {
 
 module.exports = {
   makeDmg, stage, detach, setCustomIcon, withCustomIconFlag, isMounted, dmgFileName,
-  VOLUME_NAME, LAYOUT, VOLUME_ICON,
+  VOLUME_NAME, LAYOUT, VOLUME_ICON, BACKGROUND, BACKGROUND_IN_VOLUME,
 };
