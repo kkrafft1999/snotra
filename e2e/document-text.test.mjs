@@ -94,7 +94,14 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
   assert.equal(budget.sheet, 'Plan');
   assert.equal(budget.content, 'row\tA\tB\n1\tItem\tAmount\n2\tLicence\t900\n3\tHosting\t120');
 
-  // The log line names what was read.
-  await poll(() => page.evaluate(() => document.body.textContent.includes('Document docs/budget.xlsx read')),
-    { what: 'tool line in the chat' });
+  // The log names what was read. Start or done wording depends on the order in
+  // which the four parallel calls report back; the wording itself is a unit
+  // test (test/document-text-tool.test.js).
+  const toolLines = () => page.evaluate(() =>
+    [...document.querySelectorAll('.chat-tool-lines .chat-tool-line')].map((line) => line.textContent.trim()));
+  await poll(async () => (await toolLines()).some((line) => line.includes('docs/budget.xlsx')), {
+    what: 'tool line for the workbook',
+    timeoutMs: 30000,
+    explain: async () => `tool lines: ${JSON.stringify(await toolLines().catch((e) => String(e)))}`,
+  });
 });
