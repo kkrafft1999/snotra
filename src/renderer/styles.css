@@ -5726,7 +5726,7 @@ select.modal-input {
 }
 
 /* ── Markdown in the file preview (#344) ──────────────────────────────────
- * Reading, not chatting: a wider measure and more air than `.chat-md`, but the
+ * Reading, not chatting: the width of the pane and more air than `.chat-md`, but the
  * same tokens, so code, tables and quotes look alike in both places. */
 
 /* The segmented control of the settings, sized for a header row. */
@@ -5760,8 +5760,12 @@ select.modal-input {
   min-height: 0;
 }
 
+/* The text grows with the pane (#740): no upper limit, so that a wide table
+ * gets the whole column to fit into (#730). Below the minimum it stops
+ * narrowing and `.md-view` scrolls sideways instead of wrapping into a column
+ * of a few words. */
 .md-doc {
-  max-width: 72ch;
+  min-width: 40ch;
   font-size: var(--ds-font-size-base);
   line-height: 1.6;
   color: var(--text-primary);
@@ -5925,7 +5929,7 @@ select.modal-input {
   margin: 1.5em 0;
 }
 
-/* A table fits the measure: its columns give way and the cells wrap rather
+/* A table fits the column: its columns give way and the cells wrap rather
  * than the table running out of the column (#730). `markdown-view.js` decides
  * how far they have to give way; the frame only scrolls while that runs. */
 .md-table-frame {
@@ -5978,7 +5982,7 @@ select.modal-input {
   vertical-align: middle;
 }
 
-/* An image alone in its paragraph: a figure across the measure. */
+/* An image alone in its paragraph: a figure across the column. */
 .md-doc p.md-figure {
   margin: 0.4em 0 1em;
 }
