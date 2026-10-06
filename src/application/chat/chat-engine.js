@@ -58,6 +58,10 @@ const {
   resolveHistoryCharLimit,
   trimHistoryMessages,
   truncateStaleToolOutputs,
+  estimateMessagesChars,
+  estimateToolDefsChars,
+  toolOutputRoom,
+  capToolOutput,
 } = require('./chat-history-trim');
 const { decideToolPolicy } = require('../permissions/tool-policy');
 const { createSessionGrants } = require('../permissions/session-grants');
@@ -1170,7 +1174,14 @@ function createChatEngine({
           if (attachments.length > 0) row.attachments = attachments;
           return row;
         });
-      const { messages: windowedHistory } = trimHistoryMessages(historyRows, historyCharLimit);
+      // The budget describes what actually goes out (#169): the system prompt
+      // and the tool schemas come off the top before the history is windowed.
+      const toolDefsChars = estimateToolDefsChars(availableToolDefs);
+      const messageCharLimit = historyCharLimit - toolDefsChars;
+      const { messages: windowedHistory } = trimHistoryMessages(
+        historyRows,
+        Math.max(0, messageCharLimit - estimateMessagesChars(apiMessages))
+      );
       // Die App-Begrüßung steht als Assistant-Nachricht am Chat-Anfang; einige
       // Provider (Anthropic, Google) verlangen, dass die Konversation mit einer
       // User-Nachricht beginnt. Checked after the trim, which cuts from the
@@ -1633,7 +1644,7 @@ function createChatEngine({
 
         emitPhase(onEvent, CHAT_PHASES.WAITING);
         callbacks.reset();
-        truncateStaleToolOutputs(apiMessages, historyCharLimit);
+        truncateStaleToolOutputs(apiMessages, messageCharLimit);
         // Provider-Bindung sensibler Tool-Nachrichten (Konzept §4): fremder
         // Endpunkt → Inhalt zurückhalten und den Nutzer darauf hinweisen.
         const redactedCount = redactSensitiveToolMessages(apiMessages, providerKey);
@@ -1766,11 +1777,19 @@ function createChatEngine({
             }
             throw error;
           }
+          let content = localizeSystemSkillResult(toolName, args, outcome.content);
+          // Cut to the room left in the budget now, not once the total has
+          // overflowed (#169); the tool line says so.
+          const capped = capToolOutput(content, toolOutputRoom(apiMessages, messageCharLimit));
+          if (capped) {
+            content = capped.content;
+            entry.shortened = { originalChars: capped.originalChars, keptChars: capped.keptChars };
+          }
           emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
           const toolMessage = {
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: localizeSystemSkillResult(toolName, args, outcome.content),
+            content,
           };
           if (outcome.sensitiveMarker) toolMessage.sensitiveMarker = outcome.sensitiveMarker;
           apiMessages.push(toolMessage);

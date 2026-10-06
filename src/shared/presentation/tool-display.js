@@ -208,6 +208,8 @@ function formatToolDisplayLine(entry, phase = 'start', locale = DEFAULT_LOCALE) 
   const suffix = permissionSuffix(entry, phase, t);
   if (suffix) parts.push(suffix);
   if (entry?.noWorkspace) parts.push(t('tools.line.suffix.noWorkspace'));
+  // The output was cut to fit the context budget (#169).
+  if (phase === 'done' && entry?.shortened) parts.push(t('tools.line.suffix.shortened'));
   return parts.join(' · ');
 }
 

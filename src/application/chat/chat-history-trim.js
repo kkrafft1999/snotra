@@ -120,13 +120,7 @@ function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_
   let total = estimateMessagesChars(apiMessages);
   if (total <= charLimit) return 0;
 
-  let lastAssistantIdx = -1;
-  for (let i = apiMessages.length - 1; i >= 0; i -= 1) {
-    if (apiMessages[i]?.role === 'assistant') {
-      lastAssistantIdx = i;
-      break;
-    }
-  }
+  const lastAssistantIdx = lastAssistantIndex(apiMessages);
 
   let truncated = 0;
   for (let i = 0; i < apiMessages.length && total > charLimit; i += 1) {
@@ -142,7 +136,83 @@ function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_
   return truncated;
 }
 
+/**
+ * What goes out besides the messages (#169): the tool schemas travel in their
+ * own field, and the budget has to see them — the 15 built-ins alone are
+ * about 15,000 characters before a single message is written.
+ */
+function estimateToolDefsChars(toolDefs) {
+  if (!Array.isArray(toolDefs) || toolDefs.length === 0) return 0;
+  try {
+    return JSON.stringify(toolDefs).length;
+  } catch {
+    return 0;
+  }
+}
+
+// A tool output never shrinks below this, even when the baseline alone fills
+// the budget: an empty result would only make the model call the tool again.
+const MIN_TOOL_OUTPUT_CHARS = 2000;
+const TOOL_MESSAGE_OVERHEAD = estimateMessageChars({ role: 'tool', content: '' });
+
+function lastAssistantIndex(apiMessages) {
+  for (let i = apiMessages.length - 1; i >= 0; i -= 1) {
+    if (apiMessages[i]?.role === 'assistant') return i;
+  }
+  return -1;
+}
+
+/**
+ * Room left for the next tool output (#169). Tool outputs of earlier rounds
+ * count with the size of the placeholder they are shortened to before the next
+ * request — the newest output takes precedence over older ones, the way
+ * `truncateStaleToolOutputs` has always treated them.
+ */
+function toolOutputRoom(apiMessages, charLimit) {
+  if (!Array.isArray(apiMessages)) return charLimit - TOOL_MESSAGE_OVERHEAD;
+  const lastAssistantIdx = lastAssistantIndex(apiMessages);
+  let fixed = 0;
+  for (let i = 0; i < apiMessages.length; i += 1) {
+    const m = apiMessages[i];
+    if (m?.role === 'tool' && i < lastAssistantIdx && typeof m.content === 'string') {
+      fixed += TOOL_MESSAGE_OVERHEAD + Math.min(m.content.length, TOOL_OUTPUT_PLACEHOLDER.length);
+    } else {
+      fixed += estimateMessageChars(m);
+    }
+  }
+  return charLimit - fixed - TOOL_MESSAGE_OVERHEAD;
+}
+
+function shortenedToolOutput(content, keep) {
+  // Model channel, so English (#276).
+  return JSON.stringify({
+    note: `This tool output was cut to fit the context budget: the first ${keep} of `
+      + `${content.length} characters are shown. Ask for a smaller part if you need the rest.`,
+    partialOutput: content.slice(0, keep),
+  });
+}
+
+/**
+ * Cuts a tool output down to the room left in the budget while it is being
+ * appended (#169), instead of waiting for the total to overflow. Returns
+ * `null` when the output fits as it is.
+ */
+function capToolOutput(content, room) {
+  if (typeof content !== 'string') return null;
+  const target = Math.max(Math.floor(room), MIN_TOOL_OUTPUT_CHARS);
+  if (content.length <= target) return null;
+  // Escaping makes the wrapped text longer than the slice; shrink until it fits.
+  let keep = Math.max(0, target - shortenedToolOutput('', 0).length - 16);
+  let out = shortenedToolOutput(content, keep);
+  while (out.length > target && keep > 0) {
+    keep = Math.max(0, keep - (out.length - target));
+    out = shortenedToolOutput(content, keep);
+  }
+  return { content: out, originalChars: content.length, keptChars: keep };
+}
+
 module.exports = {
+  MIN_TOOL_OUTPUT_CHARS,
   CHARS_PER_TOKEN,
   DEFAULT_HISTORY_CHAR_LIMIT,
   DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
@@ -159,4 +229,7 @@ module.exports = {
   estimateTokens,
   trimHistoryMessages,
   truncateStaleToolOutputs,
+  estimateToolDefsChars,
+  toolOutputRoom,
+  capToolOutput,
 };

@@ -184,3 +184,56 @@ test('estimateMessageChars rechnet Bild-Anhaenge mit ein', () => {
 
   assert.equal(estimateMessageChars(mit) - estimateMessageChars(ohne), IMAGE_ATTACHMENT_CHAR_COST);
 });
+
+// #169: the budget covers what actually goes out, and tool outputs are cut
+// while they are appended rather than once the total has overflowed.
+const {
+  MIN_TOOL_OUTPUT_CHARS,
+  estimateToolDefsChars,
+  toolOutputRoom,
+  capToolOutput,
+} = require('../src/application/chat/chat-history-trim');
+
+test('estimateToolDefsChars measures the serialized schemas', () => {
+  const defs = [{ type: 'function', function: { name: 'x', description: 'd'.repeat(500) } }];
+  assert.equal(estimateToolDefsChars(defs), JSON.stringify(defs).length);
+  assert.equal(estimateToolDefsChars(undefined), 0);
+  assert.equal(estimateToolDefsChars([]), 0);
+});
+
+test('capToolOutput leaves an output alone that fits', () => {
+  assert.equal(capToolOutput('short', 10_000), null);
+  assert.equal(capToolOutput(undefined, 10), null);
+});
+
+test('capToolOutput cuts an output larger than the room and says so', () => {
+  const content = 'line\n"quoted"\n'.repeat(2000);
+  const capped = capToolOutput(content, 5000);
+  assert.ok(capped.content.length <= 5000, `${capped.content.length} > 5000`);
+  const parsed = JSON.parse(capped.content);
+  assert.match(parsed.note, /cut to fit the context budget/);
+  assert.equal(parsed.partialOutput, content.slice(0, capped.keptChars));
+  assert.equal(capped.originalChars, content.length);
+  assert.ok(capped.keptChars > 3000, 'most of the room carries output, not the note');
+});
+
+test('capToolOutput keeps a minimum even when no room is left', () => {
+  const capped = capToolOutput('x'.repeat(50_000), -20_000);
+  assert.ok(capped.content.length <= MIN_TOOL_OUTPUT_CHARS);
+  assert.ok(capped.keptChars > 0);
+});
+
+test('toolOutputRoom counts older tool outputs at placeholder size', () => {
+  const big = 'o'.repeat(30_000);
+  const messages = [
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'a', function: { name: 'r', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'a', content: big },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'b', function: { name: 'r', arguments: '{}' } }] },
+  ];
+  const room = toolOutputRoom(messages, 40_000);
+  assert.ok(room > 35_000, `the older output must not eat the room, got ${room}`);
+  // An output of the current round counts in full.
+  messages.push({ role: 'tool', tool_call_id: 'b', content: big });
+  assert.ok(toolOutputRoom(messages, 40_000) < 10_000);
+});
