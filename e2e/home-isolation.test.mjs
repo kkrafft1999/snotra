@@ -12,18 +12,23 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SENTINEL = 'home-sentinel-702-only-in-the-test-home';
 
-// launchApp leaves the home folder alone on Windows (see there).
-const skip = process.platform === 'win32' ? 'the home folder is not isolated on Windows yet' : false;
 
-const appHome = (snotra) => snotra.app.evaluate(() => process.getBuiltinModule('node:os').homedir());
+// The home folder as main resolves it (#707): on Windows os.homedir() stays
+// the real one, the app reads SNOTRA_HOME_DIR first.
+const HOME_DIR_MODULE = fileURLToPath(new URL('../src/main/services/home-dir.js', import.meta.url));
+const appHome = (snotra) => snotra.app.evaluate(
+  (_electron, modulePath) => process.mainModule.require(modulePath).resolveHomeDir(),
+  HOME_DIR_MODULE
+);
 
-test('the app reads global memory from the test home, never from the real one', { timeout: 120000, skip }, async (t) => {
+test('the app reads global memory from the test home, never from the real one', { timeout: 120000 }, async (t) => {
   const model = await startFakeModel();
   const workspace = await makeTempDir('snotra-home-ws-');
   const userDataDir = await makeTempDir('snotra-home-userdata-');
@@ -58,7 +63,7 @@ test('the app reads global memory from the test home, never from the real one', 
   assert.ok(body.includes(SENTINEL), 'the global memory of the test home reached the prompt');
 });
 
-test('a start without a home of its own still gets an empty one, not the real one', { timeout: 60000, skip }, async (t) => {
+test('a start without a home of its own still gets an empty one, not the real one', { timeout: 60000 }, async (t) => {
   const userDataDir = await makeTempDir('snotra-home-default-userdata-');
   const snotra = await launchApp({ userDataDir });
   t.after(() => snotra.stop().catch(() => {}));

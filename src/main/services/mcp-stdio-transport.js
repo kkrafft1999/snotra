@@ -21,7 +21,7 @@
  */
 
 const fs = require('fs');
-const os = require('os');
+const { resolveHomeDir } = require('./home-dir');
 const path = require('path');
 const { MCP_LIMITS, MCP_TIMEOUTS } = require('../../shared/contracts/mcp');
 const { createOutputSink } = require('./child-output-sink');
@@ -86,7 +86,7 @@ function createStdioTransport({
   spawn,
   baseEnv = process.env,
   platform = process.platform,
-  homeDir = os.homedir(),
+  homeDir = resolveHomeDir(),
   onRequest = () => null,
   onCancel = () => {},
 }) {
