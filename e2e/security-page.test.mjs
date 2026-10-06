@@ -117,9 +117,34 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
   await openSecurityPage(app, page);
   // The grant reaches the page through main's change event, which under the
   // load of the parallel e2e files can land after the first draw (#460).
+  //
+  // A grant belongs to the chat its run started in, and main drops it once
+  // that chat is neither running nor on screen. Twice the row never showed it
+  // (#733): the question above went out right after the tree was drawn,
+  // before the folder's chat was loaded, so the run and its grant belonged to
+  // a chat that was swapped out at once (#721). A send now waits for the
+  // folder's chat. Should the row still come up empty, the report says which
+  // chat the grant was given in and whether main still holds it.
   await poll(async () => /Runs/.test(await rowText(page, 'read')), { what: 'read row runs' });
-  await poll(async () => /1 session allowance/.test(await rowText(page, 'write')),
-    { what: 'write row with the session allowance' });
+  await poll(async () => /1 session allowance/.test(await rowText(page, 'write')), {
+    what: 'write row with the session allowance',
+    explain: async () => {
+      const seen = await page.evaluate(async () => {
+        const state = await window.electronAPI.getToolPermissionState();
+        const overview = await window.electronAPI.getSecurityOverview();
+        return {
+          rows: [...document.querySelectorAll('.settings-security-row__toggle')]
+            .map((row) => `${row.dataset.riskClass}: ${row.textContent.replace(/\s+/g, ' ').trim()}`),
+          grantsInMain: (state?.sessionGrants ?? [])
+            .map((g) => ({ tool: g.tool, classes: g.classes, chatId: g.chatId, current: g.current })),
+          grantsOnPage: overview?.classes?.find((c) => c.riskClass === 'write')?.sessionGrants?.length ?? null,
+          messages: [...document.querySelectorAll('#chat-messages > li')]
+            .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 120)}`),
+        };
+      }).catch((e) => ({ error: String(e) }));
+      return `${JSON.stringify(seen, null, 1)}\nmodel requests: ${JSON.stringify(model.describeRequests(), null, 1)}\nmain:\n${snotra.mainOutput()}`;
+    },
+  });
   assert.match(await rowText(page, 'write'), /Asks/);
   const overview = await page.evaluate(() => window.electronAPI.getSecurityOverview());
   assert.equal(overview.workspace.root.endsWith(path.basename(workspace)), true);
