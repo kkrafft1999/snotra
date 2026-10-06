@@ -1934,3 +1934,114 @@ test('a send resolves the target once, for its own chat (#725)', async () => {
   assert.deepEqual(asked, [{ chatId: 'chat-42' }]);
   assert.deepEqual(calls.map((call) => call.target.reasoningEffort), ['high', 'high']);
 });
+
+// #169: the budget covers the system prompt and the tool schemas, and tool
+// outputs are cut while they are appended.
+const {
+  DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
+  MIN_TOOL_OUTPUT_CHARS,
+  estimateMessagesChars,
+  estimateToolDefsChars,
+} = require('../src/application/chat/chat-history-trim');
+
+function readFileToolPort(output, { description = '' } = {}) {
+  const tools = makeToolPort(() => output, { toolDefs: [{ name: 'read_file_text', requiresWorkspace: true }] });
+  if (description) {
+    tools.getTools = () => [{ type: 'function', function: { name: 'read_file_text', description } }];
+  }
+  return tools;
+}
+
+function outgoingChars(call) {
+  return estimateMessagesChars(call.messages) + estimateToolDefsChars(call.tools);
+}
+
+test('a local run stays inside the budget over several tool rounds (#169)', async () => {
+  const rounds = 4;
+  const results = [];
+  for (let i = 0; i < rounds; i += 1) {
+    results.push(assistantToolCall(`c${i}`, 'read_file_text', { relative_path: `f${i}.js` }));
+  }
+  results.push(assistantText('Done.'));
+  const llm = makeLlmPort(results, { resolveResult: { providerId: 'ollama', model: 'qwen' } });
+  const { engine, calls } = makeEngine(null, {
+    llm,
+    tools: readFileToolPort(JSON.stringify({ text: 'C'.repeat(45_000) }), { description: 'd'.repeat(6000) }),
+    maxToolRounds: rounds + 1,
+  });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        { role: 'user', content: 'u'.repeat(20_000) },
+        { role: 'assistant', content: 'a'.repeat(20_000) },
+        { role: 'user', content: 'Read the files.' },
+      ],
+      workspaceRoot: '/tmp/snotra-169',
+    },
+  });
+
+  assert.equal(result.content, 'Done.');
+  assert.equal(calls.length, rounds + 1);
+  for (const [i, call] of calls.entries()) {
+    const chars = outgoingChars(call);
+    assert.ok(chars <= DEFAULT_LOCAL_HISTORY_CHAR_LIMIT, `round ${i + 1} sent ${chars} characters`);
+  }
+  // The old history went, the schemas took their share of the budget.
+  assert.equal(calls[0].messages.at(-1).content, 'Read the files.');
+  assert.equal(calls[0].messages.some((m) => m.content === 'u'.repeat(20_000)), false);
+  // Every read was cut, and the tool line says so.
+  assert.equal(result.toolTrace.length, rounds);
+  for (const entry of result.toolTrace) {
+    assert.match(entry.line, /shortened to fit the context/);
+  }
+  const lastTool = calls.at(-1).messages.at(-1);
+  assert.equal(lastTool.role, 'tool');
+  assert.match(JSON.parse(lastTool.content).note, /cut to fit the context budget/);
+});
+
+test('a baseline larger than the budget still leaves the question and a minimum of output (#169)', async () => {
+  const { engine, calls } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+    assistantText('Done.'),
+  ], {
+    tools: readFileToolPort('x'.repeat(20_000), { description: 'd'.repeat(8000) }),
+    preferences: { async read() { return { historyCharLimit: 4000 }; } },
+  });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [
+        { role: 'user', content: 'earlier' },
+        { role: 'assistant', content: 'answer' },
+        { role: 'user', content: 'Read a.js' },
+      ],
+      workspaceRoot: '/tmp/snotra-169',
+    },
+  });
+
+  assert.equal(result.content, 'Done.');
+  const history = calls[0].messages.filter((m) => m.role !== 'system');
+  assert.deepEqual(history.map((m) => m.content), ['Read a.js']);
+  const toolMessage = calls[1].messages.at(-1);
+  assert.ok(toolMessage.content.length <= MIN_TOOL_OUTPUT_CHARS);
+  assert.ok(JSON.parse(toolMessage.content).partialOutput.length > 0);
+});
+
+test('an output that fits is passed on untouched (#169)', async () => {
+  const output = JSON.stringify({ text: 'small' });
+  const { engine, calls } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+    assistantText('Done.'),
+  ], { tools: readFileToolPort(output) });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Read a.js' }], workspaceRoot: '/tmp/snotra-169' },
+  });
+
+  assert.equal(calls[1].messages.at(-1).content, output);
+  assert.doesNotMatch(result.toolTrace[0].line, /shortened/);
+});

@@ -1670,6 +1670,7 @@ module.exports = {
   'tools.line.suffix.blocked': 'blocked',
   'tools.line.suffix.awaiting': 'waiting for approval',
   'tools.line.suffix.noWorkspace': 'no folder open',
+  'tools.line.suffix.shortened': 'shortened to fit the context',
   'tools.line.suffix.expired': 'expired',
 
   // ── Application menu (main process) ──────────────────────────────────────
