@@ -5736,11 +5736,14 @@ select.modal-input {
   font-size: var(--ds-font-size-sm);
 }
 
+/* The side margins grow with the pane: a percentage of its width, held
+ * between the 24px a narrow column can spare and the 64px a wide one looks
+ * right with. A fixed 24px left the text pressed against the edges. */
 .md-view {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 24px 32px;
+  padding: 24px clamp(24px, 6%, 64px) 40px;
 }
 
 .md-view:focus-visible {
