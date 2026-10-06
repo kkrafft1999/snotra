@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents } from './helpers/app.mjs';
 import { makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
@@ -129,15 +129,7 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
       // Every tool event the renderer received, and every error its handlers
       // swallowed (tool-log-debug.js): whether an event never came, or came
       // and was not drawn.
-      `renderer tool events: ${await page.evaluate(() => {
-        const debug = window.__snotraToolLogDebug;
-        if (!debug) return 'no debug buffer';
-        const { errorCount, entries } = JSON.parse(debug.serialize());
-        const t0 = entries[0]?.t ?? 0;
-        const lines = entries.filter((e) => e.kind !== 'summary')
-          .map((e) => `${e.seq} +${e.t - t0}ms ${e.kind} ${JSON.stringify(e.data)}`);
-        return `${errorCount} handler errors\n${lines.join('\n')}`;
-      }).catch((e) => String(e))}`,
+      `renderer tool events: ${await rendererToolEvents(page)}`,
       `main:\n${snotra.mainOutput()}`,
     ].join('\n'),
   });
