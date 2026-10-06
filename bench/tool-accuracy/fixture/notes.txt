@@ -1,0 +1,3 @@
+TODO: make the tax rate configurable
+TODO: add a --dry-run flag
+Remember to update the changelog before releasing.

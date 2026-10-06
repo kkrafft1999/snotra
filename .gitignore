@@ -52,3 +52,9 @@ Thumbs.db
 
 # The negations above take Finder files back in; drop them again
 .claude/**/.DS_Store
+
+# Benchmark fixture (#186): the tasks need these files, ignored names included.
+# Its own .gitignore is stored as dot-gitignore and renamed when it is copied.
+!bench/tool-accuracy/fixture/dist/
+!bench/tool-accuracy/fixture/logs/*.log
+!bench/tool-accuracy/fixture/.env.example
