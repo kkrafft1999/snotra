@@ -834,6 +834,27 @@
               </div>
               <p id="settings-web-search-status" class="modal-hint" role="status"></p>
             </div>
+
+            <div class="settings-tools-card" id="settings-image-generation-card">
+              <h3 class="settings-subsection-title" id="heading-image-generation" data-i18n="settings.imageGeneration.heading">Image generation</h3>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n-html="settings.imageGeneration.note.summary"><code>generate_image</code> draws with your <strong>OpenAI</strong> key &mdash; without one the tool is not offered to the model at all.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.imageGeneration.note.body">
+                  <p>
+                    The image description leaves your machine, and OpenAI bills every image &mdash; which is why
+                    Snotra asks before every image in &ldquo;Smart&rdquo; mode, and one turn makes at most four.
+                    The image is saved in the open project folder.
+                  </p>
+                </div>
+              </details>
+              <div class="modal-field-group">
+                <label for="select-image-model" class="modal-field-label eyebrow-row" data-i18n="settings.imageGeneration.model.label">Image model</label>
+                <select id="select-image-model" class="modal-input" aria-describedby="settings-image-generation-status"></select>
+              </div>
+              <p id="settings-image-generation-status" class="modal-hint" role="status"></p>
+            </div>
           </section>
 
           <section class="settings-panel" id="panel-settings-skills" role="tabpanel" aria-labelledby="tab-settings-skills" hidden>

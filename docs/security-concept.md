@@ -67,10 +67,10 @@ blocked; there is no implicit `read` default.
 | --- | --- | --- |
 | `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill` |
 | `read-sensitive` | Sensitive content, or targeted access to a sensitive path | A dynamic escalation of the read tools, including under `skill:` |
-| `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch` |
-| `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` on an existing file when the recovery copy cannot be created; a future delete tool |
+| `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch`; `generate_image` (#85), always together with `external` |
+| `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` or `generate_image` on an existing file when the recovery copy cannot be created; a future delete tool |
 | `execute` | Running a program or a script; possibly further side effects | `run_python` (#86). Executed code bypasses the workspace boundary by its nature: it is not Snotra that touches the files, it is the interpreter. The protection lies in the approval before every run (with the source visible on the card), in the explicit setting, which is off by default, and — on macOS and Linux since #329 — in an operating system sandbox (section 9). On Windows there is none yet. |
-| `external` | Sending data to an additional service, or triggering actions there | `web_search` (#63) — the query itself leaves the machine. Every MCP tool (#62), always together with `execute` |
+| `external` | Sending data to an additional service, or triggering actions there | `web_search` (#63) — the query itself leaves the machine. Every MCP tool (#62), always together with `execute`. `generate_image` (#85) — the prompt goes to OpenAI, which bills every image; at most four per turn |
 
 Classes are not a simple numeric ranking: a write tool can touch sensitive data
 as well, an external tool can delete as well. Such calls carry every attribute

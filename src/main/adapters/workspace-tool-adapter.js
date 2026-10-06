@@ -222,7 +222,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         onWritten: WRITING_TOOLS.has(name) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
         sensitivity: BROAD_LISTING_TOOLS.has(name) ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,
         recovery:
-          name === 'write_file_text'
+          OVERWRITING_TOOLS.has(name)
             ? {
                 trashItem: typeof trashItem === 'function' ? trashItem : null,
                 // Ohne Papierkorb wurde der Aufruf als `delete` freigegeben —
@@ -313,7 +313,13 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
 }
 
 /** Tools, die im Workspace schreiben und deren Ergebnis den Baum betrifft. */
-const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
+const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch', 'generate_image']);
+
+/**
+ * Tools that replace a whole file and keep a recovery copy of the old one in
+ * the trash. The image tool joined `write_file_text` with #85.
+ */
+const OVERWRITING_TOOLS = new Set(['write_file_text', 'generate_image']);
 
 /**
  * Welche Dateien hat der Aufruf geschrieben? Bis Issue #158 wurde nur

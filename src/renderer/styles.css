@@ -2551,6 +2551,101 @@ button.chat-change-file:hover {
   flex-basis: 100%;
 }
 
+/* ── Generated images under the line of changed files (#85) ──────────────
+ * One image up to 320 px, several as two columns — large enough to judge the
+ * result without leaving the chat, small enough to keep the answer in view.
+ * Frame and hover as for an attached image (#94); a click opens the file. */
+.chat-images {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  max-width: 320px;
+  margin: 2px 0 12px;
+}
+
+.chat-images--grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 400px;
+}
+
+.chat-image {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.chat-image-open,
+.chat-image-missing {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  line-height: 0;
+  overflow: hidden;
+}
+
+.chat-image-open {
+  cursor: zoom-in;
+  transition: border-color var(--ds-motion-fast) ease, background-color var(--ds-motion-fast) ease;
+}
+
+button.chat-image-open:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+/* Until the bytes are there: a calm area of the usual shape, so the answer
+ * below does not jump when the image arrives. */
+.chat-image-open--loading {
+  aspect-ratio: 3 / 2;
+  background: var(--ds-grey-card);
+}
+
+.chat-image-open .chat-md-image-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The file is gone or belongs to another folder: the placeholder says why. */
+.chat-image-missing {
+  line-height: normal;
+  border-style: dashed;
+}
+
+.chat-image-missing .chat-md-image {
+  display: flex;
+  margin: 0;
+  border: 0;
+}
+
+.chat-image-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+  font-family: var(--ds-font-tool);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.chat-image-path {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-image-meta {
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+  white-space: nowrap;
+}
+
 .chat-tool-line .chat-change-stat {
   margin-left: auto;
   padding-left: 8px;

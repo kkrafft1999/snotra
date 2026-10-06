@@ -25,6 +25,7 @@ const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registr
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
+const { createImageGenerationSettings } = require('../services/image-generation-settings');
 const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapter');
 const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createShellRunnerService } = require('../services/shell-runner-service');
@@ -336,6 +337,13 @@ function createApplication({
   const credentials = createCredentialAdapter({ providerSecrets });
   const providerModels = createProviderModelListingAdapter({ providerRuntime, providerSecrets });
 
+  // Image generation (#85) draws with the OpenAI key voice input borrows as
+  // well; the image model is a preference of its own.
+  const imageGenerationSettings = createImageGenerationSettings({
+    readApiKey: () => credentials.getApiKey('openai'),
+    readUIPrefs: () => uiPrefsStore.readUIPrefs(),
+  });
+
   // The global skill folders stay read-only for every tool, also when the
   // open folder contains them (#548, #650): fs-service refuses the write
   // tools, the sandbox denies the commands.
@@ -497,6 +505,7 @@ function createApplication({
     shellRunner,
     memory,
     documentText,
+    imageGeneration: imageGenerationSettings.adapter,
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
@@ -794,6 +803,7 @@ function createApplication({
     skillCatalog: skillsService,
     memory,
     webSearchSettings,
+    imageGenerationSettings,
     // A language change takes effect at once: the remembered value follows and
     // the application menu is rebuilt — Electron cannot rename an item.
     onAppLocaleChanged: (next) => {
@@ -910,6 +920,7 @@ function createApplication({
         pythonSettings.refresh(),
         shellSettings.refresh(),
         webSearchSettings.refresh(),
+        imageGenerationSettings.refresh(),
         // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
         // keinen Prozess — der Dienst verbindet traege. Before that, a tool
         // deselected per server moves to the one switch it has since #449.

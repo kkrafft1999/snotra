@@ -374,6 +374,7 @@ function describeExternalReach(row) {
     if (tool.mcpServer) facts.push(t('security.a.where.external.mcp', { server: tool.mcpServer, tool: tool.name }));
     else if (tool.name === 'web_search') facts.push(t('security.a.where.external.webSearch'));
     else if (tool.name === 'fetch_url') facts.push(t('security.a.where.external.fetchUrl'));
+    else if (tool.name === 'generate_image') facts.push(t('security.a.where.external.generateImage'));
     else facts.push(t('security.a.where.external.other', { tool: tool.name }));
   }
   return [...new Set(facts)];

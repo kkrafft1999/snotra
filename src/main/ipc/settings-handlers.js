@@ -46,6 +46,7 @@ function registerSettingsHandlers({
   skillCatalog = null,
   memory = null,
   webSearchSettings = null,
+  imageGenerationSettings = null,
   mcpSettings = null,
   pythonSettings = null,
   shellSettings = null,
@@ -216,6 +217,9 @@ function registerSettingsHandlers({
     }
     if ('shellExecutionEnabled' in patch) {
       await shellSettings?.refresh();
+    }
+    if ('imageModel' in patch) {
+      await imageGenerationSettings?.refresh();
     }
   }
 
@@ -416,6 +420,8 @@ function registerSettingsHandlers({
     // Auch der Dialog waehlt ausdruecklich: Der laufende Chat uebernimmt den
     // Eintrag, nicht nur der naechste neue (Issue #211).
     await chatSessionSettings?.rememberPreset(activePresetId);
+    // The OpenAI key may have come or gone; the image tool follows it (#85).
+    await imageGenerationSettings?.refresh().catch(() => {});
     return createSettingsOk();
   });
 
@@ -563,6 +569,19 @@ function registerSettingsHandlers({
     hasApiKey: webSearchSettings ? await webSearchSettings.refresh() : false,
     encryptionAvailable: safeStorage.isEncryptionAvailable(),
   }));
+
+  // Image generation (#85). The key never leaves main — the renderer learns
+  // whether there is one, which model draws, and what else the key reaches.
+  ipcMain.handle(REQ.SETTINGS_GET_IMAGE_GENERATION_STATE, async () => {
+    if (!imageGenerationSettings) return { available: false, hasApiKey: false, model: '', chosenModel: '', defaultModel: '' };
+    return { available: true, ...(await imageGenerationSettings.refresh()) };
+  });
+  const imageModelRequests = createRequestLifecycle();
+  ipcMain.handle(REQ.SETTINGS_CANCEL_IMAGE_MODELS, (event) => imageModelRequests.cancel(event.sender));
+  ipcMain.handle(REQ.SETTINGS_LIST_IMAGE_MODELS, async (event) => {
+    if (!imageGenerationSettings) return { error: createMessage('settings.imageGeneration.error.noKey') };
+    return imageModelRequests.run(event.sender, (signal) => imageGenerationSettings.listModels({ signal }));
+  });
 
   // MCP-Server (Issue #108).
   //

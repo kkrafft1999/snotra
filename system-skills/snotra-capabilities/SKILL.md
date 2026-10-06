@@ -14,7 +14,8 @@ from assumptions about AI assistants.
 
 The tool list of this conversation is what counts. Every tool can be switched
 off (`{menu:settings.security}`); `web_search` needs a search service (its key
-under `{menu:settings.tools}`), `run_python` a Python 3 interpreter. Not in the
+under `{menu:settings.tools}`), `generate_image` an OpenAI key
+(`{menu:settings.models}`), `run_python` a Python 3 interpreter. Not in the
 list = not possible.
 
 Menu paths and mode names below are quoted verbatim in the language of the
@@ -29,6 +30,7 @@ see on screen.
 | `write` | `write_file_text`, `edit_file`, `apply_patch` — max. 2 MB per file; `remember` does not write to the project but to memory |
 | `execute` | `run_python`, `shell_execute` |
 | `external` | `web_search` (list of hits only, not whole pages), `fetch_url` (exactly one http(s) address, rejects private addresses and non-text) |
+| `write` + `external` | `generate_image` — an image from a prompt via OpenAI, saved as PNG/JPEG/WebP in the project; billed per image, at most 4 per turn, asked for every time in Smart mode |
 
 `run_python`/`shell_execute`: one program or command per call, no state between
 calls, not interactive, no background processes. `run_python` has the standard
@@ -70,7 +72,8 @@ chat carries on.
   tools.
   Executed code does not know that boundary (it starts in the project folder,
   but the interpreter or shell does the access) — hence a prompt every time.
-- No image, audio or video generation. **Receiving** images works: the user
+- Images can be generated (`generate_image`, needs an open folder and an
+  OpenAI key); no audio or video generation. **Receiving** images works: the user
   attaches PNG/JPEG/GIF/WebP to a message (clipboard), visible provided the
   selected model understands images.
 - No sending of mail or messages, no calendar or ticket integration except via
@@ -168,7 +171,7 @@ menu. Update notices come from GitHub releases.
 | --- | --- |
 | Model, provider, API keys | `{menu:settings.models}` |
 | What Snotra may do in the open folder, per risk class: tools on/off, the folder's default mode, deny and allow rules, remembered commands, sensitive path patterns, sandbox and program allowances, session approvals, resetting permissions | `{menu:settings.security}` — the chat's own mode is the pill in the chat bar |
-| Python interpreter, search key | `{menu:settings.tools}` |
+| Python interpreter, search key, image model | `{menu:settings.tools}` |
 | Skills on/off, reload, suggestions in the chat | `{menu:settings.skills}` |
 | View, delete, switch off what is remembered | `{menu:settings.memory}` |
 | Creating, importing and testing MCP servers | `{menu:settings.mcp}` |

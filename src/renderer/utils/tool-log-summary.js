@@ -49,6 +49,7 @@ const GROUP_KEYS = {
   list: 'toolLog.group.list',
   check: 'toolLog.group.check',
   write: 'toolLog.group.write',
+  image: 'toolLog.group.image',
   // Since #102 no longer only Python: the category covers every execution.
   exec: 'toolLog.group.exec',
   other: 'toolLog.group.other',
@@ -65,12 +66,14 @@ const CATEGORY_RANK = {
   // gelaufen ist, ist die wichtigste Auskunft eines Zuges (#86/#102).
   exec: 1,
   skill: 2,
-  write: 3,
-  search: 4,
-  read: 5,
-  list: 6,
-  check: 7,
-  other: 8,
+  // An image was paid for and is there to be looked at (#85).
+  image: 3,
+  write: 4,
+  search: 5,
+  read: 6,
+  list: 7,
+  check: 8,
+  other: 9,
 };
 
 function categoryRank(category) {

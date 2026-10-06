@@ -64,6 +64,7 @@ const TOOL_LINE_KEYS = Object.freeze({
   web_search: 'tools.line.webSearch',
   fetch_url: 'tools.line.fetchUrl',
   remember: 'tools.line.remember',
+  generate_image: 'tools.line.generateImage',
 });
 
 /** The four suffixes every entry of TOOL_LINE_KEYS carries. */
@@ -110,6 +111,7 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   if (toolName === 'write_file_text') return lineFor(t, 'write_file_text', isDone, { path: pathOf() });
   if (toolName === 'edit_file') return lineFor(t, 'edit_file', isDone, { path: pathOf() });
   if (toolName === 'apply_patch') return lineFor(t, 'apply_patch', isDone, { path: pathOf() });
+  if (toolName === 'generate_image') return lineFor(t, 'generate_image', isDone, { path: pathOf() });
   if (toolName === 'search_in_files') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     return lineFor(t, 'search_in_files', isDone, { query: raw ? truncateToolLabel(raw, 32) : '' });

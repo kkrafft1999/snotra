@@ -1066,7 +1066,7 @@ test('die Fussleiste sagt je Bereich, ob Aenderungen sofort wirken', async (t) =
 
   tabFor('tools').click();
   await flush();
-  assert.match(hint(), /Schlüssel wird mit seinem Knopf gespeichert, der Interpreter mit Übernehmen/);
+  assert.match(hint(), /Schlüssel wird mit seinem Knopf gespeichert, Interpreter und Bildmodell mit Übernehmen/);
 
   tabFor('general').click();
   await flush();

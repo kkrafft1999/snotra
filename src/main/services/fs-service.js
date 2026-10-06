@@ -1638,10 +1638,35 @@ function createFsService({
         error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes). Split it into smaller parts.`,
       });
     }
+    return JSON.stringify(await writeFileForTool(rel, args.content, byteLength, workspaceRoot, options));
+  }
+
+  /**
+   * Writes a file a tool produced elsewhere — an image from `generate_image`
+   * (#85) — the same way `write_file_text` writes text: inside the workspace,
+   * atomically, with a recovery copy of a file it replaces, reported to the
+   * change recorder. The caller checks size and type; here only the bytes
+   * count.
+   *
+   * @param {string} relativePath
+   * @param {Buffer} bytes
+   * @param {string} workspaceRoot
+   * @param {object} [options]  as for runWriteFileTextTool
+   * @returns {Promise<object>} the result fields, or `{ error, code? }`
+   */
+  async function writeBinaryFileForTool(relativePath, bytes, workspaceRoot, options = {}) {
+    const rel = typeof relativePath === 'string' ? relativePath.trim() : '';
+    if (!rel) return { error: 'relative_path is required.' };
+    if (!Buffer.isBuffer(bytes)) return { error: 'No content to write.' };
+    return writeFileForTool(rel, bytes, bytes.length, workspaceRoot, options);
+  }
+
+  /** The part of a write both tools share; returns the result as an object. */
+  async function writeFileForTool(rel, content, byteLength, workspaceRoot, options = {}) {
     const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
-    if (error) return JSON.stringify({ error });
+    if (error) return { error };
     if (path.resolve(absPath) === path.resolve(root)) {
-      return JSON.stringify({ error: 'The project folder itself cannot be written as a file.' });
+      return { error: 'The project folder itself cannot be written as a file.' };
     }
     const recovery = options.recovery || null;
     try {
@@ -1649,14 +1674,14 @@ function createFsService({
       try {
         const st = await fs.stat(absPath);
         if (st.isDirectory()) {
-          return JSON.stringify({ error: 'Path is a folder, not a file.' });
+          return { error: 'Path is a folder, not a file.' };
         }
         // Copying a pipe for the recovery copy would block until a writer
         // comes (#643), so only a regular file is overwritten.
         if (!st.isFile()) {
-          return JSON.stringify({
+          return {
             error: 'Not a regular file (a pipe, socket or device). Only regular files can be overwritten.',
-          });
+          };
         }
         existed = true;
       } catch {
@@ -1678,34 +1703,34 @@ function createFsService({
           const copy = await createRecoveryCopy(absPath, root, recovery.trashItem);
           if (copy.error) {
             if (recovery.allowUnrecoverable !== true) {
-              return JSON.stringify({ error: copy.error, code: 'recovery_failed' });
+              return { error: copy.error, code: 'recovery_failed' };
             }
           } else {
             recoveryCopy = copy.copyName;
           }
         } else if (recovery.allowUnrecoverable !== true) {
-          return JSON.stringify({
+          return {
             error: 'No trash is available; overwriting without a recovery copy needs its own approval.',
             code: 'recovery_failed',
-          });
+          };
         }
       }
       // Checked again right before the folders are created: `mkdir -p`
       // follows a link a run may have put in the way since the plan (#642).
       const checked = await assertPathAccessibleInWorkspace(root, absPath);
-      if (checked.error) return JSON.stringify({ error: checked.error });
+      if (checked.error) return { error: checked.error };
       await fs.mkdir(path.dirname(absPath), { recursive: true });
-      await writeFileAtomic(absPath, args.content, root);
-      reportWritten(options, { relativePath: rel, absPath, before, beforeBytes, after: args.content });
-      return JSON.stringify({
+      await writeFileAtomic(absPath, content, root);
+      reportWritten(options, { relativePath: rel, absPath, before, beforeBytes, after: content });
+      return {
         relative_path: rel,
         created: !existed,
         overwritten: existed,
         bytes_written: byteLength,
         ...(recoveryCopy ? { recovery_copy_in_trash: recoveryCopy } : {}),
-      });
+      };
     } catch (e) {
-      return JSON.stringify({ error: e.message });
+      return { error: e.message };
     }
   }
 
@@ -3247,6 +3272,7 @@ function createFsService({
     runReadFileTextTool,
     runReadFileLinesTool,
     runWriteFileTextTool,
+    writeBinaryFileForTool,
     runEditFileTool,
     runApplyPatchTool,
     runSearchInFilesTool,

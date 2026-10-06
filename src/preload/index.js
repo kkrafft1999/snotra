@@ -288,6 +288,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWebSearchState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_WEB_SEARCH_STATE),
   setWebSearchApiKey: (apiKey) =>
     ipcRenderer.invoke(REQ.SETTINGS_SET_WEB_SEARCH_API_KEY, String(apiKey ?? '')),
+  // Image generation (#85): the OpenAI key stays in main as well; the
+  // renderer learns whether there is one and which image models it reaches.
+  getImageGenerationState: () => ipcRenderer.invoke(REQ.SETTINGS_GET_IMAGE_GENERATION_STATE),
+  listImageModels: () => ipcRenderer.invoke(REQ.SETTINGS_LIST_IMAGE_MODELS),
+  cancelImageModelListing: () => ipcRenderer.invoke(REQ.SETTINGS_CANCEL_IMAGE_MODELS),
   // MCP-Server (Issue #108). Der Katalog ist bereits maskiert — ein als geheim
   // abgelegter env-Wert kommt nur als „vorhanden" zurueck, nie als Wert. Beim
   // Speichern schickt die Oberflaeche fuer unveraenderte Geheimnisse
