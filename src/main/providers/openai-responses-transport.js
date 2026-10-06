@@ -37,6 +37,12 @@ function translateToolsToResponses(tools) {
       name: fn.name,
       description: fn.description || '',
       parameters: fn.parameters || { type: 'object', properties: {} },
+      // Without it the Responses API treats the function as strict, and in
+      // strict mode every property is required: the model fills in every
+      // optional parameter, and tools with exclusive modes — read_file_lines
+      // (lines or bytes), apply_patch (edits or patch) — refuse the call
+      // (#766). The schemas are written for optional parameters.
+      strict: false,
     });
   }
   return out.length ? out : undefined;
