@@ -95,10 +95,12 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
   assert.equal(budget.content, 'row\tA\tB\n1\tItem\tAmount\n2\tLicence\t900\n3\tHosting\t120');
 
   // Every call ends with its own done line. The engine runs the calls one after
-  // another, so start and done never overlap (#721). Once, on the macOS
-  // runner, the workbook's done line did not come within 15 s, and the test of
-  // that time showed nothing of what stood there — so a failure now brings the
-  // log, the run state and what the model was asked.
+  // another, so start and done never overlap. On the macOS runner the lines
+  // were missing twice (#721): the question above is sent as soon as the tree
+  // is drawn, which is before the folder's chat is loaded, and the run went
+  // into a chat that was then swapped for the greeting. A send now waits for
+  // the folder's chat. A failure still brings the log, the run state and what
+  // the model was asked.
   const toolLog = () => page.evaluate(() => ({
     lines: [...document.querySelectorAll('.chat-tool-lines .chat-tool-line')]
       .map((line) => `${line.className}: ${line.querySelector('.chat-tool-line-text')?.textContent ?? line.textContent}`),
