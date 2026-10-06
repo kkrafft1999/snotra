@@ -1,0 +1,6 @@
+{
+  "currency": "EUR",
+  "invoicePrefix": "INV",
+  "paymentTermDays": 14,
+  "taxRate": 0.19
+}

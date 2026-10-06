@@ -112,6 +112,14 @@ Coverage is a local ratchet, not a merge condition — the thresholds in
 `scripts/coverage.js` sit just below the measured state so that a regression
 stands out. If you lower one, say why in the commit.
 
+### Tool-accuracy benchmark
+
+When you change what the model sees of a tool — a description, a parameter, the
+conventions block in the system prompt — `bench/tool-accuracy/` measures whether
+the model still picks the right tool with the right arguments. It runs against a
+real OpenAI model, costs tokens and is never part of CI; how to run it and the
+results so far are in [its README](./bench/tool-accuracy/README.md).
+
 ## Where tasks live
 
 Everything that is due — bugs, individual features and larger topics — is a

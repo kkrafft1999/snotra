@@ -1,0 +1,121 @@
+date,region,product,quantity,unit_price
+2026-01-01,West,Stapler,18,8.9
+2026-02-02,North,Folder,16,2.4
+2026-03-03,North,Notebook,7,3.5
+2026-04-04,North,Stapler,15,8.9
+2026-05-05,North,Stapler,15,8.9
+2026-06-06,West,Folder,15,2.4
+2026-07-07,North,Pen,17,1.2
+2026-08-08,North,Stapler,10,8.9
+2026-09-09,North,Notebook,4,3.5
+2026-01-10,South,Desk lamp,8,24.0
+2026-02-11,North,Desk lamp,1,24.0
+2026-03-12,East,Desk lamp,2,24.0
+2026-04-13,North,Pen,5,1.2
+2026-05-14,East,Folder,3,2.4
+2026-06-15,East,Folder,8,2.4
+2026-07-16,West,Folder,17,2.4
+2026-08-17,South,Stapler,4,8.9
+2026-09-18,North,Folder,13,2.4
+2026-01-19,South,Desk lamp,6,24.0
+2026-02-20,West,Stapler,6,8.9
+2026-03-21,East,Notebook,9,3.5
+2026-04-22,East,Desk lamp,16,24.0
+2026-05-23,South,Desk lamp,17,24.0
+2026-06-24,North,Notebook,14,3.5
+2026-07-25,West,Stapler,11,8.9
+2026-08-26,North,Notebook,6,3.5
+2026-09-27,East,Stapler,15,8.9
+2026-01-01,North,Folder,18,2.4
+2026-02-02,North,Notebook,5,3.5
+2026-03-03,South,Pen,4,1.2
+2026-04-04,East,Notebook,5,3.5
+2026-05-05,North,Notebook,2,3.5
+2026-06-06,West,Desk lamp,17,24.0
+2026-07-07,South,Pen,20,1.2
+2026-08-08,East,Desk lamp,3,24.0
+2026-09-09,South,Notebook,20,3.5
+2026-01-10,East,Folder,17,2.4
+2026-02-11,South,Folder,17,2.4
+2026-03-12,North,Notebook,13,3.5
+2026-04-13,West,Desk lamp,15,24.0
+2026-05-14,East,Notebook,18,3.5
+2026-06-15,South,Pen,14,1.2
+2026-07-16,North,Stapler,2,8.9
+2026-08-17,West,Folder,1,2.4
+2026-09-18,North,Desk lamp,13,24.0
+2026-01-19,North,Pen,5,1.2
+2026-02-20,East,Notebook,9,3.5
+2026-03-21,West,Notebook,2,3.5
+2026-04-22,West,Pen,17,1.2
+2026-05-23,East,Desk lamp,19,24.0
+2026-06-24,West,Stapler,16,8.9
+2026-07-25,North,Pen,4,1.2
+2026-08-26,South,Stapler,3,8.9
+2026-09-27,East,Folder,1,2.4
+2026-01-01,East,Stapler,4,8.9
+2026-02-02,North,Notebook,11,3.5
+2026-03-03,West,Pen,3,1.2
+2026-04-04,South,Pen,9,1.2
+2026-05-05,North,Pen,7,1.2
+2026-06-06,South,Stapler,3,8.9
+2026-07-07,South,Folder,2,2.4
+2026-08-08,South,Pen,9,1.2
+2026-09-09,East,Desk lamp,8,24.0
+2026-01-10,North,Pen,6,1.2
+2026-02-11,West,Desk lamp,3,24.0
+2026-03-12,South,Stapler,19,8.9
+2026-04-13,East,Pen,12,1.2
+2026-05-14,South,Folder,6,2.4
+2026-06-15,South,Desk lamp,14,24.0
+2026-07-16,West,Stapler,6,8.9
+2026-08-17,East,Notebook,14,3.5
+2026-09-18,West,Notebook,12,3.5
+2026-01-19,West,Folder,5,2.4
+2026-02-20,East,Pen,19,1.2
+2026-03-21,North,Folder,17,2.4
+2026-04-22,West,Notebook,7,3.5
+2026-05-23,West,Stapler,5,8.9
+2026-06-24,West,Folder,2,2.4
+2026-07-25,East,Desk lamp,8,24.0
+2026-08-26,North,Notebook,17,3.5
+2026-09-27,North,Folder,12,2.4
+2026-01-01,East,Pen,2,1.2
+2026-02-02,West,Notebook,4,3.5
+2026-03-03,East,Desk lamp,9,24.0
+2026-04-04,East,Folder,8,2.4
+2026-05-05,North,Stapler,4,8.9
+2026-06-06,West,Notebook,6,3.5
+2026-07-07,South,Folder,1,2.4
+2026-08-08,East,Desk lamp,20,24.0
+2026-09-09,West,Notebook,13,3.5
+2026-01-10,West,Notebook,14,3.5
+2026-02-11,East,Desk lamp,1,24.0
+2026-03-12,West,Stapler,4,8.9
+2026-04-13,North,Notebook,4,3.5
+2026-05-14,East,Desk lamp,9,24.0
+2026-06-15,South,Folder,5,2.4
+2026-07-16,West,Desk lamp,19,24.0
+2026-08-17,South,Desk lamp,6,24.0
+2026-09-18,North,Notebook,8,3.5
+2026-01-19,South,Notebook,19,3.5
+2026-02-20,East,Pen,18,1.2
+2026-03-21,West,Desk lamp,10,24.0
+2026-04-22,North,Stapler,10,8.9
+2026-05-23,East,Desk lamp,10,24.0
+2026-06-24,East,Notebook,17,3.5
+2026-07-25,East,Desk lamp,13,24.0
+2026-08-26,East,Pen,12,1.2
+2026-09-27,East,Desk lamp,3,24.0
+2026-01-01,South,Pen,1,1.2
+2026-02-02,South,Folder,9,2.4
+2026-03-03,West,Notebook,2,3.5
+2026-04-04,West,Notebook,18,3.5
+2026-05-05,West,Stapler,3,8.9
+2026-06-06,North,Pen,15,1.2
+2026-07-07,West,Stapler,4,8.9
+2026-08-08,North,Stapler,11,8.9
+2026-09-09,North,Notebook,19,3.5
+2026-01-10,West,Desk lamp,9,24.0
+2026-02-11,West,Desk lamp,14,24.0
+2026-03-12,North,Pen,16,1.2
