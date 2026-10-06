@@ -124,6 +124,25 @@ test('generate_image draws through the Images API into the workspace', { timeout
     [...document.querySelectorAll('#tree-container .tree-item')].some((item) => item.textContent.includes('assets'))),
   { what: 'assets folder in the tree' });
 
+  // The image stands under the line of changed files, and again after a reload:
+  // the card comes from the stored tool trace, the bytes from the workspace.
+  const card = () => page.evaluate(() => {
+    const img = document.querySelector('.chat-images button.chat-image-open img.chat-md-image-img');
+    return img ? {
+      src: img.getAttribute('src').slice(0, 22),
+      caption: document.querySelector('.chat-image-caption')?.textContent ?? '',
+      afterChanges: document.querySelector('.chat-images')?.previousElementSibling?.className ?? '',
+    } : null;
+  });
+  await poll(card, { what: 'generated image in the chat', explain: evidence });
+  assert.deepEqual(await card(), {
+    src: 'data:image/png;base64,',
+    caption: 'assets/header.png·96 × 64 · PNG',
+    afterChanges: 'chat-changes',
+  });
+  await page.reload();
+  await poll(card, { what: 'generated image after a reload', explain: evidence });
+
   // A refused prompt is an error for the model, and nothing is written.
   await images.update({ status: 400, error: { error: { message: 'Rejected by the safety system.', code: 'moderation_blocked' } } });
   model.queueAnswer({

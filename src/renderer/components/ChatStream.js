@@ -46,6 +46,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
 // per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
+import { generatedImagesOf, syncGeneratedImages } from '../chat/generatedImages.js';
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
@@ -866,6 +867,12 @@ export function initChatStream({
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
       isLive: changesAreLive,
       onOpen: (file) => showFileChanges({ relativePath: file.relativePath, changes: file.changes }),
+    });
+    // The images it generated stand right under that line (#85).
+    void syncGeneratedImages(messageEl, generatedImagesOf(message?.toolTrace), {
+      api,
+      workspaceRoot: appStore.rootPath,
+      onOpen: (relativePath) => openWorkspaceLink(relativePath),
     });
   }
 

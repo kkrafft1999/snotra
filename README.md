@@ -653,10 +653,21 @@ three platforms the same way.
   does not fetch PDFs, images or downloads. **The text that is read comes from a
   stranger**: for the model it is material, not an instruction, and every tool
   call after it goes through the approval again.
+- **Generating images:** with an OpenAI key stored under Settings › Models the
+  model gets the `generate_image` tool — it draws an image from a description
+  and saves it as a PNG, JPEG or WebP file in the open project folder; the file
+  extension decides the format. The image appears in the chat under the line of
+  changed files, with its path and size; a click opens it in the preview. Which
+  OpenAI image model draws is chosen under Settings › Tools › Image generation.
+  The description leaves your machine and OpenAI bills every image, which is
+  why the tool counts as a change **and** an external service: in *Smart* mode
+  Snotra asks before every image, and one turn makes at most four. An image that
+  is replaced keeps a copy in the trash. The model gets the path and the size
+  back, never the image itself.
 
 **Network timeouts:** model listings abort after 15 seconds (cloud) or 30
 seconds (local) with an understandable error message, speech transcriptions
-after 120 seconds. Ollama always counts as local; for the
+after 120 seconds, image generation after 180 seconds. Ollama always counts as local; for the
 "OpenAI-compatible" provider the host of the server URL decides — `localhost`,
 `127.0.0.x`, `::1` and `*.local` count as local. The timeouts cover reading the
 response as well. Closing the model or settings dialog, as well as switching

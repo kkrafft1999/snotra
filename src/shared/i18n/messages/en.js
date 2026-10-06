@@ -450,6 +450,8 @@ module.exports = {
   'chat.image.error.unreadable': 'The image could not be read.',
   'chat.image.externalSource': 'Only images from the working folder are shown',
   'chat.image.pending': 'Image appears after the answer',
+  'chat.images.label': 'Generated images',
+  'chat.images.open': 'Open {path} in the preview',
   'chat.link.error.notOpenable': 'This link cannot be opened.',
   'chat.link.error.noEnvironment': 'Links cannot be opened in this environment.',
   'chat.link.error.failed': 'The link could not be opened.',

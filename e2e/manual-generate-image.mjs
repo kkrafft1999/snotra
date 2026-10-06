@@ -80,14 +80,6 @@ try {
   // ── The card under Settings › Tools ──────────────────────────────────────
   await openSettings();
   await page.evaluate(() => document.querySelector('[data-settings-panel="tools"]').click());
-  await pause(1500);
-  console.log('card', JSON.stringify(await page.evaluate(async () => ({
-    status: document.getElementById('settings-image-generation-status').textContent,
-    options: [...document.getElementById('select-image-model').options].map((o) => o.textContent),
-    disabled: document.getElementById('select-image-model').disabled,
-    state: await window.electronAPI.getImageGenerationState(),
-    listed: await window.electronAPI.listImageModels(),
-  }))));
   await poll(() => page.evaluate(() =>
     document.getElementById('select-image-model').options.length > 2), { what: 'listed image models' });
   await page.evaluate(() => document.getElementById('settings-image-generation-card').scrollIntoView({ block: 'center' }));
@@ -139,90 +131,26 @@ try {
   await page.mouse.move(0, 0);
   await pause(800);
   console.log('requests', JSON.stringify((await images.requests()).map((r) => r.body)));
-  console.log('message', JSON.stringify(await page.evaluate(() => {
-    const log = document.querySelector('.chat-tool-log');
-    const li = log.closest('li');
-    return {
-      summary: log.querySelector('.chat-tool-summary')?.textContent,
-      lines: [...log.querySelectorAll('.chat-tool-line')].map((n) => n.textContent),
-      liClass: li?.className,
-      children: [...(li?.children || [])].map((n) => `${n.tagName}.${n.className}`),
-    };
-  })));
-  await shootClip('chat', () => {
-    const log = document.querySelector('.chat-tool-log');
-    const message = log.closest('li') || log.parentElement;
-    const box = message.getBoundingClientRect();
-    return { x: box.x - 12, y: box.y - 12, width: box.width + 24, height: Math.min(box.height + 24, 900) };
+  await poll(() => page.evaluate(() => !!document.querySelector('.chat-images img.chat-md-image-img')),
+    { what: 'generated image in the chat' });
+  console.log('caption', await page.evaluate(() => document.querySelector('.chat-image-caption').textContent));
+  // Without the approval card, as in Auto mode: the image right under the line.
+  await page.evaluate(() => document.querySelectorAll('.chat-approval-cards').forEach((el) => { el.style.display = 'none'; }));
+  await shootClip('chat-auto', () => {
+    const li = document.querySelector('.chat-images').closest('li');
+    const user = li.previousElementSibling;
+    (user || li).scrollIntoView({ block: 'center' });
+    const first = (user || li).getBoundingClientRect();
+    const box = li.getBoundingClientRect();
+    return { x: box.x - 12, y: first.y - 12, width: box.width + 24, height: box.bottom - first.y + 24 };
   });
+  await page.evaluate(() => document.querySelectorAll('.chat-approval-cards').forEach((el) => { el.style.display = ''; }));
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
     await pause(300);
     await page.screenshot({ path: path.join(SHOTS, `generate-image-${locale}-window-${theme}.png`) });
   }
 
-  if (process.argv.includes('--variants')) {
-    // Design variants for the decision (#85), drawn into the real message.
-    const png = (await readFile(path.join(workspace, 'assets/header.png'))).toString('base64');
-    const caption = locale === 'de' ? 'assets/header.png · 1536 × 1024 · PNG' : 'assets/header.png · 1536 × 1024 · PNG';
-    const variants = {
-      A: (data, text) => {
-        const li = document.querySelector('.chat-tool-log').closest('li');
-        const figure = document.createElement('figure');
-        figure.className = 'mock-variant';
-        figure.style.cssText = 'margin:2px 0 12px;display:flex;flex-direction:column;gap:6px;max-width:320px';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.style.cssText = 'display:block;padding:0;border:1px solid var(--ds-grey-divider);border-radius:var(--ds-radius-md);background:var(--ds-grey-card);overflow:hidden;cursor:zoom-in';
-        const img = document.createElement('img');
-        img.src = `data:image/png;base64,${data}`;
-        img.style.cssText = 'display:block;width:100%;height:auto';
-        button.append(img);
-        const cap = document.createElement('figcaption');
-        cap.textContent = text;
-        cap.style.cssText = 'font-size:var(--ds-font-size-sm);color:var(--text-muted);font-family:var(--ds-font-tool)';
-        figure.append(button, cap);
-        li.querySelector('.chat-changes').after(figure);
-      },
-      B: (data) => {
-        const chip = document.querySelector('.chat-changes .chat-change-file');
-        const stat = chip.querySelector('.chat-change-stat');
-        if (stat) stat.textContent = '1536 × 1024';
-        const thumb = document.createElement('img');
-        thumb.className = 'mock-variant';
-        thumb.src = `data:image/png;base64,${data}`;
-        thumb.style.cssText = 'width:28px;height:28px;object-fit:cover;border-radius:6px;border:1px solid var(--ds-grey-divider);margin-left:-6px';
-        chip.prepend(thumb);
-      },
-      C: (data) => {
-        const md = document.querySelector('.chat-tool-log').closest('li').querySelector('.chat-md');
-        const img = document.createElement('img');
-        img.className = 'chat-md-image-img mock-variant';
-        img.src = `data:image/png;base64,${data}`;
-        md.appendChild(img);
-      },
-    };
-    // The card above the answer stays in Smart mode; Auto has none. It is
-    // hidden here so the three shots show what differs.
-    const hideCards = () => page.evaluate(() => {
-      document.querySelectorAll('.chat-approval-cards').forEach((el) => { el.style.display = 'none'; });
-    });
-    for (const [name, apply] of Object.entries(variants)) {
-      const before = await page.evaluate(() => document.querySelector('.chat-tool-log').closest('li').innerHTML);
-      await page.evaluate(`(${apply})(${JSON.stringify(png)}, ${JSON.stringify(caption)})`);
-      await hideCards();
-      await pause(300);
-      await shootClip(`variant-${name}`, () => {
-        const li = document.querySelector('.chat-tool-log').closest('li');
-        const user = li.previousElementSibling;
-        (user || li).scrollIntoView({ block: 'center' });
-        const first = (user || li).getBoundingClientRect();
-        const box = li.getBoundingClientRect();
-        return { x: box.x - 12, y: first.y - 12, width: box.width + 24, height: box.bottom - first.y + 24 };
-      });
-      await page.evaluate((html) => { document.querySelector('.chat-tool-log').closest('li').innerHTML = html; }, before);
-    }
-  }
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
