@@ -176,6 +176,19 @@ export function initSettingsModal(deps) {
   // whether the state could be read at all (CR-B14-09).
   let webSearchEncryption = true;
   let webSearchStateUnknown = false;
+  // Image generation (#85): borrows the OpenAI key from Models; the image
+  // model is part of the draft that Apply saves.
+  const selectImageModel = document.getElementById('select-image-model');
+  const imageGenerationStatusEl = document.getElementById('settings-image-generation-status');
+  /** What main last reported, or null while unknown. */
+  let imageGenerationState = null;
+  let imageGenerationStateUnknown = false;
+  /** The model in the draft: '' for the default. */
+  let imageModelDraft = '';
+  /** The models the key reaches, once listed in this opening of the dialog. */
+  let listedImageModels = null;
+  let imageModelListError = null;
+  let imageModelListing = null;
   // Python execution (issue #86). The switch saves at once (issue #297); the
   // interpreter path is still part of the draft that Apply saves. The
   // interpreter that was found comes straight from main.
@@ -1388,6 +1401,89 @@ export function initSettingsModal(deps) {
     );
   }
 
+  function setImageGenerationStatus(text, isError = false) {
+    if (!imageGenerationStatusEl) return;
+    imageGenerationStatusEl.textContent = text || '';
+    imageGenerationStatusEl.classList.toggle('error', !!isError);
+  }
+
+  /** Draws the image generation card from the state, the draft and the list. */
+  function syncImageGenerationUI() {
+    if (!selectImageModel) return;
+    const state = imageGenerationState;
+    const hasKey = state?.hasApiKey === true;
+    const defaultModel = state?.defaultModel || '';
+    const ids = new Set(listedImageModels || []);
+    // The stored choice stays selectable even when the list does not name it
+    // (not loaded yet, or the key lost access): dropping it silently would
+    // change the model on the next Apply.
+    if (imageModelDraft) ids.add(imageModelDraft);
+    ids.delete(defaultModel);
+    const options = [{ value: '', label: defaultModel ? t('settings.imageGeneration.model.default', { model: defaultModel }) : '—' }];
+    for (const id of [...ids].sort((a, b) => a.localeCompare(b))) options.push({ value: id, label: id });
+    selectImageModel.replaceChildren(...options.map(({ value, label }) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }));
+    selectImageModel.value = imageModelDraft;
+    selectImageModel.disabled = !hasKey;
+    const place = t('settings.nav.models');
+    if (imageGenerationStateUnknown) {
+      setImageGenerationStatus(t('settings.imageGeneration.status.loadFailed'), true);
+    } else if (!hasKey) {
+      setImageGenerationStatus(t('settings.imageGeneration.status.missing', { place }));
+    } else if (imageModelListing) {
+      setImageGenerationStatus(t('settings.imageGeneration.status.loading'));
+    } else if (imageModelListError) {
+      setImageGenerationStatus(
+        t('settings.imageGeneration.status.listFailed', { reason: tMessage(imageModelListError) || '' }),
+        true,
+      );
+    } else {
+      setImageGenerationStatus(t('settings.imageGeneration.status.present', { place }));
+    }
+  }
+
+  async function loadImageGenerationState() {
+    let state = null;
+    try {
+      state = typeof api.getImageGenerationState === 'function' ? await api.getImageGenerationState() : null;
+    } catch {
+      state = null;
+    }
+    imageGenerationStateUnknown = !state || typeof state !== 'object' || state.available === false;
+    imageGenerationState = imageGenerationStateUnknown ? null : state;
+    syncImageGenerationUI();
+  }
+
+  /**
+   * Asks OpenAI which image models the key reaches — once per opening of the
+   * dialog, and only when the Tools section is shown: the request carries the
+   * key, so nobody who never looks at the card pays for it.
+   */
+  function listImageModelsOnce() {
+    if (listedImageModels || imageModelListing || imageModelListError) return;
+    if (imageGenerationState?.hasApiKey !== true || typeof api.listImageModels !== 'function') return;
+    const generation = openGeneration;
+    imageModelListing = Promise.resolve()
+      .then(() => api.listImageModels())
+      .catch((err) => ({ error: err?.message || '' }))
+      .then((result) => {
+        if (generation !== openGeneration) return;
+        imageModelListing = null;
+        if (Array.isArray(result?.models)) listedImageModels = result.models;
+        else imageModelListError = result?.error || '';
+        syncImageGenerationUI();
+      });
+    syncImageGenerationUI();
+  }
+
+  selectImageModel?.addEventListener('change', () => {
+    imageModelDraft = selectImageModel.value || '';
+  });
+
   function describePythonState(state) {
     if (!state || state.available === false) {
       return { text: t('settings.python.status.unavailable'), isError: true };
@@ -1576,6 +1672,7 @@ export function initSettingsModal(deps) {
     // A tool switched in Tools a moment ago changes the page: read it again
     // whenever it comes into view.
     if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();
+    if (activePanelKey === 'tools' && !modalSettings.classList.contains('hidden')) listImageModelsOnce();
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
       let hintKey = APPLY_HINT_KEYS.deferred;
@@ -1765,6 +1862,11 @@ export function initSettingsModal(deps) {
     const jump =
       request && typeof request === 'object' && typeof request.panel === 'string' ? request : null;
     const generation = ++openGeneration;
+    // The list belongs to one opening: a key changed in the meantime may
+    // reach other models.
+    listedImageModels = null;
+    imageModelListError = null;
+    imageModelListing = null;
     // Every step below waits; a close or the next open in the meantime ends
     // this opening, and it touches nothing more (CR-B14-06).
     const stale = () => generation !== openGeneration;
@@ -1855,6 +1957,7 @@ export function initSettingsModal(deps) {
         inputPythonInterpreter.value =
           typeof up.pythonInterpreterPath === 'string' ? up.pythonInterpreterPath : '';
       }
+      imageModelDraft = typeof up.imageModel === 'string' ? up.imageModel : '';
       shellSwitch.set(up.shellExecutionEnabled === true);
       environmentSwitch.set(up.environmentInfoEnabled !== false);
       projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
@@ -1873,6 +1976,7 @@ export function initSettingsModal(deps) {
       settingsDisabledToolsDraft = new Set();
       pythonSwitch.set(false);
       if (inputPythonInterpreter) inputPythonInterpreter.value = '';
+      imageModelDraft = '';
       shellSwitch.set(false);
       // On a read error show the default, not "off": the switch should not
       // claim a state nobody chose.
@@ -1885,6 +1989,9 @@ export function initSettingsModal(deps) {
     if (stale()) return;
     await loadWebSearchState();
     if (stale()) return;
+    await loadImageGenerationState();
+    if (stale()) return;
+    if (activePanelKey === 'tools') listImageModelsOnce();
     await loadToolCatalog();
     if (stale()) return;
     // Berechtigungen (Issue #67) lesen ihren Stand direkt vom Main und wirken
@@ -1954,6 +2061,8 @@ export function initSettingsModal(deps) {
   function closeSettingsModal() {
     // Ends an open sequence that is still loading (CR-B14-06).
     openGeneration += 1;
+    if (imageModelListing) void api.cancelImageModelListing?.().catch(() => {});
+    imageModelListing = null;
     settingsReady = false;
     toolPermissionsPanel?.close?.();
     securityPanel.close();
@@ -2248,6 +2357,9 @@ export function initSettingsModal(deps) {
             // list would switch every skill off (CR-B14-06).
             ...(settingsSkillCatalogLoaded ? { activeSkills: [...settingsActiveSkillsDraft] } : {}),
             pythonInterpreterPath: inputPythonInterpreter?.value || '',
+            // Only what was read can be written back: with the state unknown
+            // the stored choice stays as it is.
+            ...(imageGenerationState ? { imageModel: imageModelDraft } : {}),
           },
         });
       } catch {
@@ -2678,6 +2790,7 @@ export function initSettingsModal(deps) {
     // panel's rule form reads it, by tool name, which no language changes.
     renderSkillList();
     syncWebSearchUI({ keepInput: true });
+    syncImageGenerationUI();
     void loadPythonState();
     void loadShellState();
     // The open popup keeps its mode by itself: `setDialogMode` puts the key

@@ -411,6 +411,22 @@ function normalizeInterpreterPath(raw) {
   return value.slice(0, MAX_INTERPRETER_PATH_CHARS);
 }
 
+/**
+ * The image model chosen for `generate_image` (#85): an id of OpenAI's image
+ * family, or '' for the default. Anything else — a chat model, a typo, a path
+ * — is dropped, so the request never carries a model the Images API refuses
+ * for a reason the user cannot see.
+ */
+const IMAGE_MODEL_PATTERN = /^(?:gpt-image|chatgpt-image)-[a-z0-9.-]+$/i;
+const MAX_IMAGE_MODEL_CHARS = 80;
+
+function normalizeImageModel(raw) {
+  if (typeof raw !== 'string') return '';
+  const value = raw.trim();
+  if (value.length > MAX_IMAGE_MODEL_CHARS || !IMAGE_MODEL_PATTERN.test(value)) return '';
+  return value;
+}
+
 function normalizeUiPrefs(raw) {
   const data = raw && typeof raw === 'object' ? raw : {};
   let baseSystemPrompt = '';
@@ -439,6 +455,7 @@ function normalizeUiPrefs(raw) {
   // fuehrt fremden Code aus und umgeht damit die Workspace-Grenze.
   const pythonExecutionEnabled = data.pythonExecutionEnabled === true;
   const pythonInterpreterPath = normalizeInterpreterPath(data.pythonInterpreterPath);
+  const imageModel = normalizeImageModel(data.imageModel);
   // Shell-Ausfuehrung (Issue #102) ebenso: ein Befehl kann alles, was der
   // angemeldete Nutzer kann — das wird bewusst eingeschaltet.
   const shellExecutionEnabled = data.shellExecutionEnabled === true;
@@ -509,6 +526,7 @@ function normalizeUiPrefs(raw) {
     ...(typeof ignoredUpdateVersion === 'string' ? { ignoredUpdateVersion } : {}),
     pythonExecutionEnabled,
     ...(pythonInterpreterPath ? { pythonInterpreterPath } : {}),
+    ...(imageModel ? { imageModel } : {}),
     shellExecutionEnabled,
     environmentInfoEnabled,
     projectInstructionsEnabled,
@@ -584,6 +602,10 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.shellExecutionEnabled === 'boolean') {
     out.shellExecutionEnabled = patch.shellExecutionEnabled;
+  }
+  // '' goes through: it means "back to the default model".
+  if (typeof patch.imageModel === 'string') {
+    out.imageModel = normalizeImageModel(patch.imageModel);
   }
   if (typeof patch.environmentInfoEnabled === 'boolean') {
     out.environmentInfoEnabled = patch.environmentInfoEnabled;
@@ -892,6 +914,7 @@ function buildProviderFormView(provider, say = plainText) {
 }
 
 module.exports = {
+  normalizeImageModel,
   LLM_CONFIG_VERSION,
   API_STYLES,
   isApiStyle,

@@ -41,6 +41,9 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   write_file_text: TOOL_CATEGORIES.WRITE,
   edit_file: TOOL_CATEGORIES.WRITE,
   apply_patch: TOOL_CATEGORIES.WRITE,
+  // The image ends up as a file in the project (#85); in the log it stands
+  // with the other writes.
+  generate_image: TOOL_CATEGORIES.WRITE,
   run_python: TOOL_CATEGORIES.EXEC,
   shell_execute: TOOL_CATEGORIES.EXEC,
   // Merken ist ein Schreibvorgang wie jeder andere (Issue #166) — eine Datei

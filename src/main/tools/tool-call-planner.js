@@ -95,6 +95,9 @@ function buildPreview(toolName, args, options = {}) {
       cwd: typeof options.cwd === 'string' ? options.cwd : '',
       ...(options.isolation ? { isolation: options.isolation } : {}),
     };
+  } else if (toolName === 'generate_image') {
+    // What goes out is the prompt, and the prompt is what is paid for (#85).
+    text = typeof args?.prompt === 'string' ? args.prompt : '';
   } else if (toolName === 'remember') {
     // Der Nutzer entscheidet hier ueber einen Satz, der ab jetzt in *jeder*
     // Anfrage steht (Issue #166). Ohne den Satz und die Reichweite waere die

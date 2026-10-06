@@ -367,6 +367,9 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(names.includes('shell_execute'), false);
   // remember ebenso: ohne Memory-Port gibt es nichts zu merken (Issue #166).
   assert.equal(names.includes('remember'), false);
+  // generate_image likewise: without an image service and its key there is
+  // nothing to draw with (#85).
+  assert.equal(names.includes('generate_image'), false);
 
   // Konzept §2: neun Lesetools → read, drei Schreibtools → write,
   // web_search und fetch_url → external.
@@ -396,12 +399,19 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   assert.equal(classes.fetch_url, 'external');
   assert.equal(classes.run_python, 'execute');
   assert.equal(classes.shell_execute, 'execute');
+  // Writes a file, and the prompt leaves the machine (#85): `write` as its
+  // class, `external` among the classes the approval asks about.
+  assert.equal(classes.generate_image, 'write');
+  assert.deepEqual(
+    registry.listRiskCatalog().find((entry) => entry.name === 'generate_image')?.riskClasses,
+    ['write', 'external'],
+  );
   // Without its extractor the model does not see it, the catalogue does (#42).
   assert.equal(names.includes('extract_document_text'), false);
   assert.equal(classes.extract_document_text, 'read');
-  // 18 registrierte Tools minus die beiden essenziellen list_directory und
+  // 19 registrierte Tools minus die beiden essenziellen list_directory und
   // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 16);
+  assert.equal(Object.keys(classes).length, 17);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });
@@ -723,6 +733,7 @@ test('jedes Tool im Katalog traegt beide Texte in beiden Sprachen (#291)', () =>
     pythonRunner: { isAvailable: () => true, run: async () => ({}) },
     shellRunner: { isAvailable: () => true, run: async () => ({}) },
     memory: { remember: async () => ({}) },
+    imageGeneration: { isConfigured: () => true, getModel: () => 'gpt-image-2.5-flare', generate: async () => ({ ok: false }) },
   });
   for (const locale of ['de', 'en']) {
     for (const eintrag of registry.listCatalog({ locale })) {

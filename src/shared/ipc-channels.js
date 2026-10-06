@@ -100,6 +100,14 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_WEB_SEARCH_STATE: 'settings:getWebSearchState',
   SETTINGS_SET_WEB_SEARCH_API_KEY: 'settings:setWebSearchApiKey',
   /**
+   * Image generation (#85): whether an OpenAI key is there and which model
+   * draws, and the image models the key can reach. The model is chosen
+   * through the UI prefs (`imageModel`).
+   */
+  SETTINGS_GET_IMAGE_GENERATION_STATE: 'settings:getImageGenerationState',
+  SETTINGS_LIST_IMAGE_MODELS: 'settings:listImageModels',
+  SETTINGS_CANCEL_IMAGE_MODELS: 'settings:cancelImageModels',
+  /**
    * Python-Ausfuehrung (Issue #86): gefundener Interpreter, dessen Version und
    * ob die Einstellung eingeschaltet ist. Nur Auskunft — geschaltet wird ueber
    * die UI-Prefs.

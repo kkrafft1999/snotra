@@ -534,7 +534,7 @@ module.exports = {
 
   'settings.applyHint.deferred': 'Changes take effect on <strong>Apply</strong>.',
   'settings.applyHint.immediate': 'Changes in this section take effect <strong>immediately</strong>.',
-  'settings.applyHint.tools': 'The key is saved with its button, the interpreter on <strong>Apply</strong>.',
+  'settings.applyHint.tools': 'The key is saved with its button, the interpreter and the image model on <strong>Apply</strong>.',
   'settings.applyHint.general': 'Switches, appearance and language take effect <strong>immediately</strong>; everything else on <strong>Apply</strong>.',
   'settings.applyHint.body': '<p>API keys are stored encrypted on this device and leave the app only in requests to the provider. That holds for every settings section.</p>',
 
@@ -689,6 +689,17 @@ module.exports = {
   'settings.webSearch.status.loadFailed': 'The web search state could not be read — whether a key is stored is unknown.',
   'settings.webSearch.saveFailed': 'The key could not be saved.',
   'settings.webSearch.needKey': 'Please enter a key first.',
+  'settings.imageGeneration.heading': 'Image generation',
+  'settings.imageGeneration.note.summary': '<code>generate_image</code> draws with your <strong>OpenAI</strong> key — without one the tool is not offered to the model at all.',
+  'settings.imageGeneration.note.body': '<p>The image description leaves your machine, and OpenAI bills every image — which is why Snotra asks before every image in “Smart” mode, and one turn makes at most four. The image is saved in the open project folder.</p>',
+  'settings.imageGeneration.model.label': 'Image model',
+  'settings.imageGeneration.model.default': 'Default ({model})',
+  'settings.imageGeneration.status.present': 'Uses the OpenAI key stored under “{place}”; generate_image is offered to the model.',
+  'settings.imageGeneration.status.missing': 'No OpenAI key stored under “{place}” — generate_image is not offered to the model.',
+  'settings.imageGeneration.status.loadFailed': 'The image generation state could not be read — whether an OpenAI key is stored is unknown.',
+  'settings.imageGeneration.status.loading': 'Loading the image models your key can use …',
+  'settings.imageGeneration.status.listFailed': 'The list of image models could not be loaded: {reason}',
+  'settings.imageGeneration.error.noKey': 'No OpenAI key is stored.',
 
   // ── Settings: permissions ────────────────────────────────────────────────
   'settings.permissions.loadFailed': 'Permissions could not be loaded.',
@@ -1179,6 +1190,8 @@ module.exports = {
   'tools.desc.web_search': 'Searches the internet and returns a compact list of hits (title, URL, short excerpt, a date where available) — not whole pages. Use the tool for anything more recent than your knowledge, or anything you are asked to back up: versions, prices, news, error messages, standards. The query leaves the machine and goes to an external search service.',
 
   'tools.short.fetch_url': 'Reads a web page as text. For content that goes beyond the short excerpt from web_search.',
+  'tools.short.generate_image': 'Generates an image from a description and saves it in the project folder.',
+  'tools.desc.generate_image': 'Generates an image from a text description with the image model chosen under Settings › Tools and saves it as a PNG, JPEG or WebP file in the open project folder. The description goes to OpenAI and every image is billed by OpenAI. At most four images per turn; an existing image is replaced only with a copy in the trash.',
   'tools.desc.fetch_url': 'Fetches exactly one http(s) address and returns the readable text of the page as Markdown-like running text, cut to the requested length. Meant as a companion to web_search: find the address there, read the page in one piece here. Local and private addresses are rejected, as is anything that is not text (PDF, images, downloads). The fetch leaves the machine.',
 
   'tools.short.remember': 'Remembers a sentence permanently — at the user’s request (“remember …”) or for something lasting that you notice. The rules for it are in the “snotra-memory” skill.',
@@ -1659,6 +1672,10 @@ module.exports = {
   'tools.line.fetchUrl.done': 'Page {host} read',
   'tools.line.fetchUrl.start.plain': 'Reading page …',
   'tools.line.fetchUrl.done.plain': 'Page read',
+  'tools.line.generateImage.start': 'Generating image {path} …',
+  'tools.line.generateImage.done': 'Image {path} generated',
+  'tools.line.generateImage.start.plain': 'Generating image …',
+  'tools.line.generateImage.done.plain': 'Image generated',
 
   'tools.line.mcp.start': 'Running {server} · {name} …',
   'tools.line.mcp.done': '{server} · {name} run',
@@ -1950,6 +1967,7 @@ module.exports = {
   'security.a.where.external.none': 'Nothing, while no tool of this kind is on.',
   'security.a.where.external.webSearch': 'Web search sends the search query to Tavily',
   'security.a.where.external.fetchUrl': 'Fetching a web page loads the address the model names',
+  'security.a.where.external.generateImage': 'Image generation sends the image description to OpenAI, which bills every image',
   'security.a.where.external.mcp': '{tool} sends its arguments to the MCP server {server}',
   'security.a.where.external.other': '{tool} contacts a service outside',
   'security.a.where.external.provider': 'The conversation itself goes to your model provider in every mode; this row is about the tools.',

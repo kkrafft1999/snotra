@@ -7,12 +7,16 @@ const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const { createTranslator } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
+const { createGenerateImageTool } = require('./generate-image-tool');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
   isToolRiskClass,
   createPermissionDeniedToolResult,
 } = require('../../shared/contracts/tool-permissions');
+
+/** Tools whose setup lives under Settings › Tools rather than Security. */
+const CONFIGURED_UNDER_TOOLS = new Set(['web_search', 'generate_image']);
 
 function toAllowedNameSet(allowedNames) {
   if (allowedNames == null) return null;
@@ -426,11 +430,11 @@ function createToolRegistry(initialDefinitions = []) {
     }
     if (definition.isAvailable() !== true) {
       return JSON.stringify({
-        // The search key is set up under Tools; the execution tools are
-        // switched on under Security (#449).
+        // The search key and the image model are set up under Tools; the
+        // execution tools are switched on under Security (#449).
         error: fillUiQuotes(
           context.locale,
-          `Tool is not configured: ${name}. See "{menu:${name === 'web_search' ? 'settings.tools' : 'settings.security'}}".`
+          `Tool is not configured: ${name}. See "{menu:${CONFIGURED_UNDER_TOOLS.has(name) ? 'settings.tools' : 'settings.security'}}".`
         ),
       });
     }
@@ -549,6 +553,7 @@ function createWorkspaceToolRegistry({
   shellRunner = null,
   memory = null,
   documentText = null,
+  imageGeneration = null,
 }) {
   return createToolRegistry([
     {
@@ -1472,6 +1477,7 @@ function createWorkspaceToolRegistry({
         return JSON.stringify(out);
       },
     },
+    createGenerateImageTool({ fsService, imageGeneration }),
     {
       name: 'remember',
       // Schreibt eine Datei, also `write` — trotz kleiner Datenmenge. Die
