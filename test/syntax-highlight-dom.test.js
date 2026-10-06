@@ -6,7 +6,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
 
-const afterPaint = () => new Promise((resolve) => setTimeout(resolve, 120));
+// Queued behind the view's own step — a frame, then a timer — so it runs
+// after the colours were applied, however slow the machine. A fixed wait was
+// too short on the Windows runner.
+const afterPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
 async function mountView(t, name, content) {
   const dom = setupRendererDom();
