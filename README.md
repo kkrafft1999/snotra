@@ -1037,9 +1037,10 @@ the instructions as Markdown. Enabled skills go to the model as part of the
 system prompt.
 
 **System skills** live under `system-skills/` in the app bundle, are part of the
-product and are enabled by default. Shipped with it is `snotra-capabilities` —
+product and are enabled by default. Shipped with it are `snotra-capabilities` —
 with it the app can give information about itself (what works, what does not,
-where something is configured) instead of guessing.
+where something is configured) instead of guessing — as well as `snotra-memory`
+and `snotra-skill-authoring` for remembering and for writing skills.
 
 **Folder skills** are read by Snotra when a folder is opened, from three sources,
 in this order:
@@ -1177,6 +1178,30 @@ ordinary write in the project and is approved like any other.
 Without an open folder the read tools stay available as long as a skill is
 switched on, and then reach the skill folders only; the write and execution
 tools need a folder, so there is nowhere to keep a skill's data either.
+
+### Letting Snotra write a skill
+
+Ask for it — "make a skill for this", "add X to the review skill" — and Snotra
+writes the skill into **`.agents/skills/<name>/`** of the open folder, with the
+ordinary file tools and the usual approval. The system skill
+`snotra-skill-authoring` tells the model where a skill goes, how its front
+matter and description have to look and what belongs in `references/`; switch
+it off under Settings › Skills if you do not want it.
+
+Every `SKILL.md` it writes is checked right away the way the catalog checks it
+— front matter, `name` and `description`, name equal to the folder. A broken
+one goes back to the model to be fixed instead of ending up as a greyed-out row
+in the settings. In the tool log the write reads as part of the skill —
+"1 skill file written", and expanded "File SKILL.md (skill review) written". The new skill shows up under
+Settings › Skills by itself and, like every folder skill, stays off until you
+tick it.
+
+Snotra writes **only into the open folder**. Your global skills in
+`~/.snotra/skills` and `~/.agents/skills` and the system skills are read-only
+for every tool. To use a skill everywhere, move its folder to
+`~/.snotra/skills/` yourself — that step stays yours, so no prompt in some
+project can plant a skill that then sits in every other one. Without an open
+folder, Snotra offers the `SKILL.md` in the chat instead.
 
 ## Project instructions: `AGENTS.md`
 

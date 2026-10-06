@@ -8,7 +8,10 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { formatToolDisplayLine } = require('../../shared/presentation/tool-display');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
-const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
+const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
+const { translate } = require('../../shared/i18n');
+const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
 const { createToolCallPlanner } = require('../tools/tool-call-planner');
@@ -165,6 +168,10 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       } else {
         const skill = parseSkillPath(args?.relative_path);
         if (skill) entry.skill = skill.name;
+        // A write into a skill of the open folder is a skill step too (#160);
+        // the category turns it into "skill file written".
+        const written = SKILL_FILE_TOOLS.has(toolName) ? workspaceSkillOfPath(args?.relative_path) : null;
+        if (written) entry.skill = written.name;
       }
       return entry;
     },
@@ -231,7 +238,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
               }
             : undefined,
       };
-      const output = await toolRegistry.execute(name, args, handlerContext);
+      let output = await toolRegistry.execute(name, args, handlerContext);
 
       let parsed = null;
       try {
@@ -243,6 +250,15 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         // Wiederherstellungskopie fehlgeschlagen: nicht geschrieben, Aufruf ist
         // jetzt `delete` und läuft erneut durch die Policy (Konzept §9).
         return { output, progressEvents: [], reclassify: [TOOL_RISK_CLASSES.DELETE] };
+      }
+
+      // A SKILL.md written into the open folder is checked the way the
+      // catalog will check it, so the model learns about a broken skill now
+      // and not the user, later, as a greyed-out row (#160).
+      const skillChecks = await checkWrittenSkills(name, args, parsed, context);
+      if (skillChecks.length) {
+        parsed = { ...parsed, skill_check: skillChecks.length === 1 ? skillChecks[0] : skillChecks };
+        output = JSON.stringify(parsed);
       }
 
       const fileChanges = recordFileChanges(writes, parsed);
@@ -297,6 +313,38 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     },
   };
 
+  /**
+   * The verdict on every `SKILL.md` a successful write left in the open
+   * folder's skill source (`.agents/skills/<name>/SKILL.md`), in the words the
+   * model reads: English, with the menu path in the user's language because
+   * the model passes it on.
+   */
+  async function checkWrittenSkills(toolName, args, parsed, context) {
+    if (!WRITING_TOOLS.has(toolName) || !fs || !path || !parsed || parsed.error) return [];
+    const root = typeof context.workspaceRoot === 'string' && context.workspaceRoot.trim()
+      ? path.resolve(context.workspaceRoot)
+      : null;
+    if (!root) return [];
+    const checks = [];
+    for (const written of writtenRelativePaths(toolName, args, parsed)) {
+      if (parseSkillPath(written)) continue;
+      const absPath = path.resolve(root, written);
+      const rel = path.relative(root, absPath);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+      const skill = workspaceSkillOfPath(rel);
+      if (!skill || skill.file !== SKILL_FILE) continue;
+      let read;
+      try {
+        read = await readRegularFile(fs, absPath, { maxBytes: maxScanBytes });
+      } catch {
+        continue;
+      }
+      if (!read.buffer) continue;
+      checks.push(describeSkillCheck(skill.name, checkSkillDocument(read.buffer.toString('utf8'), skill.name), context.locale));
+    }
+    return checks;
+  }
+
   /** Hands the writes of a successful call to the recorder; their summaries. */
   function recordFileChanges(writes, parsed) {
     if (!writes.length || !fileChangeRecorder || !parsed || parsed.error) return [];
@@ -312,6 +360,31 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   }
 }
 
+/** The file that makes a folder a skill — mirrored from `skills-service.js`. */
+const SKILL_FILE = 'SKILL.md';
+
+/**
+ * What the model is told about a skill it has just written (#160). A valid
+ * one still has to be switched on by the user — folder skills start off — so
+ * the note says where; an invalid one is skipped by the catalog until fixed.
+ */
+function describeSkillCheck(name, checked, locale) {
+  if (checked.ok) {
+    return {
+      skill: name,
+      valid: true,
+      note: `Valid skill of this folder. Folder skills start switched off: the user turns it on under `
+        + `"${menuPath(locale, 'settings.skills')}" — tell them, unless it is on already.`,
+    };
+  }
+  return {
+    skill: name,
+    valid: false,
+    problem: translate('en', checked.key, checked.params),
+    note: 'Not a usable skill yet: the catalog skips it until SKILL.md is fixed. Fix it now.',
+  };
+}
+
 /** Tools, die im Workspace schreiben und deren Ergebnis den Baum betrifft. */
 const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch', 'generate_image']);
 
@@ -319,6 +392,9 @@ const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch', 'g
  * Tools that replace a whole file and keep a recovery copy of the old one in
  * the trash. The image tool joined `write_file_text` with #85.
  */
+/** The file tools a skill is written with (#160); an image stays an image. */
+const SKILL_FILE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
+
 const OVERWRITING_TOOLS = new Set(['write_file_text', 'generate_image']);
 
 /**

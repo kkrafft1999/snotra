@@ -44,6 +44,7 @@ const MAX_SUMMARY_GROUPS = 3;
  */
 const GROUP_KEYS = {
   skill: 'toolLog.group.skill',
+  'skill-write': 'toolLog.group.skillWrite',
   read: 'toolLog.group.read',
   search: 'toolLog.group.search',
   list: 'toolLog.group.list',
@@ -66,6 +67,7 @@ const CATEGORY_RANK = {
   // gelaufen ist, ist die wichtigste Auskunft eines Zuges (#86/#102).
   exec: 1,
   skill: 2,
+  'skill-write': 2,
   // An image was paid for and is there to be looked at (#85).
   image: 3,
   write: 4,

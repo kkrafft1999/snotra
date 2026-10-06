@@ -38,9 +38,44 @@ const LOAD_SKILL_TOOL = 'load_skill';
  */
 const SKILL_DATA_DIR = '.agents/data';
 
-/** The refusal of a write into a skill folder — it names the place to use instead. */
+/**
+ * Where Snotra writes skills itself (#160): the skill source inside the open
+ * folder. The global sources stay out of reach of every tool — a skill becomes
+ * global when the user moves it there.
+ */
+const WORKSPACE_SKILLS_DIR = '.agents/skills';
+
+/** The system skill that tells the model how to write one (#160). */
+const SKILL_AUTHORING_SKILL = 'snotra-skill-authoring';
+
+/**
+ * The refusal of a write into a skill folder — it names the places to use
+ * instead: the data folder for what a skill produces (#548), the workspace
+ * source for writing a skill (#160).
+ */
 const SKILL_FOLDER_READ_ONLY =
-  `Skill folders are read-only. Keep what a skill produces in "${SKILL_DATA_DIR}/" in the open folder.`;
+  `Skill folders are read-only. Keep what a skill produces in "${SKILL_DATA_DIR}/" in the open folder. `
+  + `To create or change a skill, write it under "${WORKSPACE_SKILLS_DIR}/<name>/" in the open folder `
+  + `(skill "${SKILL_AUTHORING_SKILL}").`;
+
+/**
+ * The workspace skill a path relative to the open folder belongs to:
+ * `.agents/skills/<name>/<file>` gives `{ name, file }`, anything else null.
+ * Backslashes count as separators, so a Windows spelling matches as well.
+ * Whether the name is a valid skill name is not checked here.
+ *
+ * @param {string} relativePath
+ * @returns {{ name: string, file: string } | null}
+ */
+function workspaceSkillOfPath(relativePath) {
+  if (typeof relativePath !== 'string') return null;
+  const parts = relativePath.trim().replace(/\\/g, '/').split('/').filter((part) => part && part !== '.');
+  const prefix = WORKSPACE_SKILLS_DIR.split('/');
+  if (parts.length <= prefix.length + 1) return null;
+  if (prefix.some((part, index) => parts[index] !== part)) return null;
+  if (parts.includes('..')) return null;
+  return { name: parts[prefix.length], file: parts.slice(prefix.length + 1).join('/') };
+}
 
 /** Quellen in Prioritätsreihenfolge: der erste Treffer eines Namens gewinnt. */
 const SKILL_SOURCES = Object.freeze({
@@ -193,6 +228,9 @@ module.exports = {
   LOAD_SKILL_TOOL,
   SKILL_DATA_DIR,
   SKILL_FOLDER_READ_ONLY,
+  WORKSPACE_SKILLS_DIR,
+  SKILL_AUTHORING_SKILL,
+  workspaceSkillOfPath,
   SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABEL_KEYS,

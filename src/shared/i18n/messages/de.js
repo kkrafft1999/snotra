@@ -488,6 +488,8 @@ module.exports = {
   'toolLog.moreSteps.other': '{count} weitere Schritte',
   'toolLog.group.skill.one': '{count} Skill-Zugriff',
   'toolLog.group.skill.other': '{count} Skill-Zugriffe',
+  'toolLog.group.skillWrite.one': '{count} Skill-Datei geschrieben',
+  'toolLog.group.skillWrite.other': '{count} Skill-Dateien geschrieben',
   'toolLog.group.read.one': '{count} Datei gelesen',
   'toolLog.group.read.other': '{count} Dateien gelesen',
   'toolLog.group.search.one': '{count} Suche',

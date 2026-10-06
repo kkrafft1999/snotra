@@ -130,7 +130,11 @@ A skill is a directory with a `SKILL.md` (YAML front matter `name`,
 description of the skills that are switched on — if one fits, fetch its
 instructions with `load_skill` before starting work; neighbouring files via
 `skill:<name>/<path>`, or by an absolute path inside the folder `load_skill`
-reports. Skill folders are read-only for every tool. What a skill produces and
+reports. Skill folders are read-only for every tool, with one exception: you
+can write a skill into `.agents/skills/<name>/` of the open folder — how is in
+the skill `snotra-skill-authoring`. Global and built-in skills you cannot
+write; a skill becomes global when the user moves it to `~/.snotra/skills/`.
+What a skill produces and
 wants to keep — learned rules, contacts, state for the next run — goes into
 `.agents/data/` in the open folder (a skill may spell it
 `<workspace>/.agents/data/…`); without an open folder there is nowhere to keep
@@ -145,8 +149,8 @@ switched on individually. A skill in the open folder is switched on for that
 folder only; a global skill of the same name is shadowed there and does not
 pass its switch on to it. `~/.snotra/` is Snotra's own user directory; the app
 does not create it by itself and does not move anything there. No skill
-manager, no marketplace: create a directory, then reload under
-`{menu:settings.skills}`.
+manager, no marketplace: a new skill directory shows up under
+`{menu:settings.skills}` by itself (or after "{label:settings.skills.reload}").
 
 The user can also invoke a skill once via `/name` in their message — that
 applies to the rest of the chat without changing the selection in the settings.

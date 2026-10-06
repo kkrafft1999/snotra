@@ -511,9 +511,11 @@ die Anweisungen als Markdown. Eingeschaltete Skills gehen als Teil des
 System-Prompts ans Modell.
 
 **System-Skills** liegen unter `system-skills/` im App-Bundle, gehören zum
-Produkt und sind voreingestellt aktiv. Mitgeliefert wird
+Produkt und sind voreingestellt aktiv. Mitgeliefert werden
 `snotra-capabilities` — damit kann die App Auskunft über sich selbst geben
-(was geht, was nicht, wo etwas eingestellt wird), statt zu raten.
+(was geht, was nicht, wo etwas eingestellt wird), statt zu raten — sowie
+`snotra-memory` und `snotra-skill-authoring` fürs Merken und fürs Schreiben von
+Skills.
 
 **Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus drei Quellen, in
 dieser Reihenfolge:
@@ -662,6 +664,32 @@ Ohne geöffneten Ordner bleiben die Lese-Tools verfügbar, solange ein Skill
 eingeschaltet ist, und erreichen dann nur die Skill-Ordner; Schreib- und
 Ausführungs-Tools brauchen einen Ordner, und damit gibt es auch keinen Ort für
 die Daten eines Skills.
+
+### Snotra einen Skill schreiben lassen
+
+Bitte darum — „bau mir dafür einen Skill“, „ergänz den Review-Skill um X“ —,
+und Snotra schreibt den Skill nach **`.agents/skills/<name>/`** im geöffneten
+Ordner, mit den gewöhnlichen Datei-Tools und der üblichen Freigabe. Der
+System-Skill `snotra-skill-authoring` sagt dem Modell, wohin ein Skill gehört,
+wie Frontmatter und Beschreibung aussehen müssen und was nach `references/`
+gehört; wer das nicht will, schaltet ihn unter Einstellungen › Skills ab.
+
+Jede `SKILL.md`, die dabei entsteht, wird sofort so geprüft, wie der Katalog sie
+prüft — Frontmatter, `name` und `description`, Name gleich Ordnername. Eine
+kaputte geht zum Reparieren ans Modell zurück, statt als ausgegraute Zeile in
+den Einstellungen zu landen. Im Tool-Log liest sich der Schreibzugriff als Teil
+des Skills — „1 Skill-Datei geschrieben“, aufgeklappt „Datei SKILL.md (Skill
+review) geschrieben“. Der neue Skill
+erscheint von selbst unter Einstellungen › Skills und bleibt, wie jeder
+Ordner-Skill, aus, bis du ihn anhakst.
+
+Snotra schreibt **nur in den geöffneten Ordner**. Deine globalen Skills in
+`~/.snotra/skills` und `~/.agents/skills` und die System-Skills sind für jedes
+Tool schreibgeschützt. Soll ein Skill überall gelten, verschiebst du seinen
+Ordner selbst nach `~/.snotra/skills/` — dieser Schritt bleibt bei dir, damit
+kein Prompt in irgendeinem Projekt einen Skill unterbringen kann, der dann in
+allen anderen mitläuft. Ohne geöffneten Ordner bietet Snotra die `SKILL.md`
+stattdessen im Chat an.
 
 ## Projektanweisungen: `AGENTS.md`
 

@@ -15,6 +15,8 @@
  * nur `name` und `description`.
  */
 
+const { isValidSkillName } = require('../contracts/skills');
+
 const FRONTMATTER_FENCE = /^---[ \t]*\r?$|^---[ \t]*$/;
 /** `>`/`|`, optional mit Einrückungs- (`2`) und Chomping-Indikator (`-`/`+`). */
 const BLOCK_SCALAR_HEADER = /^([|>])(\d*)([-+]?)$/;
@@ -254,8 +256,36 @@ function parseSkillDocument(text) {
   };
 }
 
+/**
+ * Is this the `SKILL.md` of a usable skill in a folder called `dirName`? The
+ * one check the catalog applies when it scans (skills-service.js) and a write
+ * applies right after it lands (#160), so the two cannot disagree about what
+ * counts as a skill.
+ *
+ * The problem comes back as a message key from `skills.invalid.*` with its
+ * parameters; the caller decides on the language.
+ *
+ * @param {string} text  raw content of the `SKILL.md`
+ * @param {string} dirName  name of the folder it sits in
+ * @returns {{ ok: true, name: string, description: string, body: string }
+ *   | { ok: false, key: string, params?: Record<string, string> }}
+ */
+function checkSkillDocument(text, dirName) {
+  const parsed = parseSkillDocument(text);
+  if (!parsed) return { ok: false, key: 'skills.invalid.noFrontmatter' };
+  const name = typeof parsed.frontmatter.name === 'string' ? parsed.frontmatter.name.trim() : '';
+  const description =
+    typeof parsed.frontmatter.description === 'string' ? parsed.frontmatter.description.trim() : '';
+  if (!name) return { ok: false, key: 'skills.invalid.noName' };
+  if (!description) return { ok: false, key: 'skills.invalid.noDescription' };
+  if (!isValidSkillName(name)) return { ok: false, key: 'skills.invalid.badName', params: { name } };
+  if (name !== dirName) return { ok: false, key: 'skills.invalid.nameMismatch', params: { name, dir: dirName } };
+  return { ok: true, name, description, body: parsed.body };
+}
+
 module.exports = {
   parseSkillDocument,
+  checkSkillDocument,
   // The Markdown viewer in the file preview (#344) shows the front matter of
   // any `.md` file, not only of a skill, and needs the two steps separately:
   // it parses the head entry by entry and falls back to the raw lines.
