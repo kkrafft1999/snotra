@@ -29,6 +29,38 @@ const APP_DIR = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const tempDirs = new Set();
 
+// How long a start may take before it counts as stalled (#707). Generous: a
+// cold start on a CI runner takes a few seconds, never a minute.
+const STARTUP_DEADLINE_MS = 90_000;
+
+function withDeadline(promise, what, ms = STARTUP_DEADLINE_MS) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * What a stalled start leaves to go on: main's output, the windows it has, and
+ * Node's diagnostic report of the main process — its handles show what the
+ * event loop is waiting on. If main does not even answer, that is the finding.
+ */
+async function describeStalledStart(app, mainOutput) {
+  const lines = [`main output:\n${mainOutput.join('') || '(none)'}`];
+  const state = await withDeadline(app.evaluate(({ BrowserWindow }) => {
+    const report = process.report.getReport();
+    return {
+      windows: BrowserWindow.getAllWindows().map((w) => w.webContents.getURL()),
+      homedir: process.getBuiltinModule('node:os').homedir(),
+      handles: report.libuv.filter((h) => h.is_active).map((h) => `${h.type}${h.filename ? ` ${h.filename}` : ''}${h.pid ? ` pid ${h.pid}` : ''}`),
+      javascriptStack: report.javascriptStack?.message,
+    };
+  }), 'main process state', 10_000).catch((error) => `main did not answer: ${error.message}`);
+  lines.push(`main state: ${typeof state === 'string' ? state : JSON.stringify(state, null, 1)}`);
+  return lines.join('\n');
+}
+
 /** One home per profile, so that a restart with the same profile finds the same one. */
 const testHomes = new Map();
 
@@ -204,21 +236,22 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   // a script that has to run a real program with its real login passes
   // `home: false` and keeps the real one.
   //
-  // Not on Windows: there the home folder comes from USERPROFILE, and with it
-  // moved Electron does not come up at all — every test hung at launch on the
-  // windows-latest runner. Windows keeps the real home until that is solved.
-  const isolateHome = home !== false && process.platform !== 'win32';
+  // On Windows `os.homedir()` reads USERPROFILE, not HOME (#707). APPDATA and
+  // LOCALAPPDATA keep pointing at the real folders.
+  const isolateHome = home !== false;
   const homeDir = isolateHome ? (home ?? await testHomeFor(userDataDir)) : null;
   if (homeDir) {
     await reachKeychain(homeDir);
     env.HOME = homeDir;
+    if (process.platform === 'win32') env.USERPROFILE = homeDir;
   }
   // The start-up update check would ask GitHub for real. Once a release newer
   // than the checkout is out, its dialog lands on top of the window and the
   // screenshots compare the dialog instead of the app (#407).
   env.SNOTRA_NO_UPDATE_CHECK = '1';
 
-  const app = await _electron.launch({
+  const app = await withDeadline(_electron.launch({
+    timeout: STARTUP_DEADLINE_MS,
     executablePath: wrapper || electronBinary,
     args: [
       APP_DIR,
@@ -236,7 +269,7 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
       ...(process.platform === 'linux' ? ['--disable-gpu'] : []),
     ],
     env,
-  });
+  }), 'Electron launch');
 
   // What main printed, kept for a failing test to show (#689). The CI log
   // otherwise has nothing of it — not the [storage] or [quit] warnings that
@@ -246,10 +279,24 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
     stream?.on('data', (chunk) => mainOutput.push(String(chunk)));
   }
 
-  const page = await app.firstWindow();
-  await poll(() => page.evaluate(() => !!document.getElementById('tree-container')), {
-    what: 'geladener Renderer',
-  });
+  // A start that stalls used to sit out the whole test timeout without a word
+  // (#707): `page.evaluate` has no deadline of its own. Now it fails here and
+  // says what main printed and what it was waiting on.
+  let page;
+  try {
+    page = await withDeadline((async () => {
+      const first = await app.firstWindow({ timeout: STARTUP_DEADLINE_MS });
+      await poll(() => first.evaluate(() => !!document.getElementById('tree-container')), {
+        what: 'geladener Renderer',
+      });
+      return first;
+    })(), 'first window with a loaded renderer');
+  } catch (error) {
+    const report = await describeStalledStart(app, mainOutput);
+    app.process()?.kill();
+    error.message += `\n${report}`;
+    throw error;
+  }
 
   return {
     app,
