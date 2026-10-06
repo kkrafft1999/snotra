@@ -131,7 +131,8 @@
     "happy-dom": "^20.14.5",
     "marked": "^18.0.14",
     "pdfjs-dist": "^6.3.289",
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.63.0",
+    "prismjs": "^1.30.0"
   },
   "overrides": {
     "@reforged/maker-appimage": {

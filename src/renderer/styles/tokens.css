@@ -111,6 +111,24 @@
   --ds-diff-removed-bg: var(--ds-bg-tertiary);   /* --ds-text-secondary 5.0:1 on it */
   --ds-diff-removed-bar: var(--ds-grey-control-border);
 
+  /* ── Syntax highlighting (#745) ──────────────────────────────────────────────
+   * Source text in the file preview, on --ds-surface. Palette "C" from the
+   * mockup of 2026-10-06: the usual editor roles, toned down for the warm
+   * ground. Amber and red stay out — they mean "not isolated" and "error".
+   * Contrast on --ds-surface, light / dark: keyword 5.1 / 7.3, string
+   * 6.1 / 9.5, comment 5.0 / 6.5, number 7.0 / 7.6, function 6.3 / 7.8,
+   * type 5.5 / 9.2, property 7.0 / 10.1, punctuation 6.0 / 5.7. Whoever
+   * changes a value checks it against both surfaces again. */
+  --ds-syntax-keyword: var(--ds-blue);
+  --ds-syntax-tag: var(--ds-blue);
+  --ds-syntax-string: #3E6B2F;
+  --ds-syntax-comment: var(--ds-grey-muted);
+  --ds-syntax-number: #8A3B6F;
+  --ds-syntax-function: #6B4FA0;
+  --ds-syntax-type: #2F6F86;
+  --ds-syntax-property: #005F80;
+  --ds-syntax-punctuation: var(--ds-text-secondary);
+
   --ds-mic-recording: #DC2626;        /* 4,7:1 auf --ds-surface — separater Rotton, damit
                                          Recording-Pulse nicht mit Error-Bubbles
                                          farblich kollidiert */
@@ -331,6 +349,14 @@
   /* Diff (#348): --ds-text-primary 8:1 on the added ground, --ds-blue 5.7:1;
    * --ds-text-secondary 4.6:1 on the removed one. */
   --ds-diff-added-bg: rgba(63, 184, 229, 0.14);
+
+  /* Syntax (#745): keyword, tag, comment and punctuation follow the tokens
+   * they point to; these are the dark values of the rest. */
+  --ds-syntax-string: #A6CF8E;
+  --ds-syntax-number: #E09AC8;
+  --ds-syntax-function: #BBA6EC;
+  --ds-syntax-type: #7FCBE8;
+  --ds-syntax-property: #8FD3EE;
 
   --ds-mic-recording: #F87171;
   --ds-mic-recording-bg: rgba(248, 113, 113, 0.15);

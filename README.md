@@ -474,6 +474,13 @@ three platforms the same way.
   button that appears on the right of a row as soon as you hover over it or reach
   the button with Tab. A plain click on a row remains what it was: select and
   show the preview; so does moving things in the tree by drag and drop.
+- **Reading source code:** code and configuration files open in the preview
+  with syntax highlighting — JavaScript and TypeScript, JSON, YAML, Python,
+  shell scripts, HTML and CSS, Markdown source and many more, picked by the
+  file name. The colours follow the light and dark theme. Selecting and
+  copying gives you the file exactly as it is. Plain text and logs stay plain,
+  and a file larger than 512 KB is shown without colours so that it opens
+  right away.
 - **Reading Markdown:** a `.md` file opens formatted in the preview — headings,
   lists, tables, code, and the front matter of a `SKILL.md` as a compact block
   above the text. **Preview | Source** in the header, or `Cmd/Ctrl+Shift+M`,
