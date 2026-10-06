@@ -2311,11 +2311,8 @@ test('apply_patch rejects malformed patches with an explanatory error', async (t
   );
   assert.match(await errorFor(diff('--- a.txt', '@@ -1,1 +1,1 @@', '-eins', '+x')), /is not followed by its "\+\+\+ " line/);
   assert.match(await errorFor(diff('--- a.txt', '+++ a.txt')), /The patch has no hunk/);
-  assert.match(await errorFor(diff('--- a.txt', '+++ a.txt', '@@ kaputt @@', ' eins')), /Invalid hunk header on line 3/);
-  assert.match(
-    await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,5 +1,5 @@', ' eins', '-zwei', '+ZWEI')),
-    /is incomplete: expected 5 old and 5 new lines, found 2 and 2/
-  );
+  // A header without numbers and one with wrong counts are read since #771 —
+  // see the tests below.
   assert.match(
     await errorFor(diff('--- a.txt', '+++ a.txt', '@@ -1,2 +1,2 @@', ' eins', '?zwei')),
     /Unexpected line 5 in hunk/
@@ -2352,6 +2349,110 @@ test('apply_patch rejects malformed patches with an explanatory error', async (t
   );
 
   assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\nzwei\ndrei\n');
+});
+
+// #771: what models send instead of a strict unified diff. The four inputs are
+// the ones gpt-6-luna sent in the tool-accuracy benchmark (#186).
+const PACKAGE_JSON =
+  '{\n  "name": "invoice-tool",\n  "version": "1.4.2",\n  "description": "Turns CSV sales data into invoices",\n' +
+  '  "main": "src/index.js"\n}\n';
+const PACKAGE_JSON_AFTER = PACKAGE_JSON.replace('1.4.2', '2.0.0').replace('Turns CSV sales data into invoices', 'Invoice CLI');
+const PACKAGE_JSON_BODY = [
+  '-  "version": "1.4.2",',
+  '-  "description": "Turns CSV sales data into invoices",',
+  '+  "version": "2.0.0",',
+  '+  "description": "Invoice CLI",',
+];
+
+for (const [name, patch] of [
+  ['a bare "@@" header', diff('--- a/package.json', '+++ b/package.json', '@@', ...PACKAGE_JSON_BODY)],
+  [
+    'a "diff --git" line and a bare "@@"',
+    diff('diff --git a/package.json b/package.json', '--- a/package.json', '+++ b/package.json', '@@', ...PACKAGE_JSON_BODY),
+  ],
+  [
+    'counts in the header that do not match the body',
+    diff('--- package.json', '+++ package.json', '@@ -2,8 +2,8 @@', '   "name": "invoice-tool",', ...PACKAGE_JSON_BODY, '   "main": "src/index.js"'),
+  ],
+  [
+    "OpenAI's *** Begin Patch format",
+    diff('*** Begin Patch', '*** Update File: package.json', '@@', ...PACKAGE_JSON_BODY, '*** End Patch'),
+  ],
+]) {
+  test(`apply_patch reads ${name} (#771)`, async (t) => {
+    const tmpRoot = await makePatchFixture(t, { 'package.json': PACKAGE_JSON });
+    const out = await makePatchRunner(tmpRoot)({ patch });
+    assert.equal(out.error, undefined, out.error);
+    assert.equal(await fs.readFile(path.join(tmpRoot, 'package.json'), 'utf8'), PACKAGE_JSON_AFTER);
+  });
+}
+
+test('apply_patch places a hunk with too few counted lines by its whole body (#771)', async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'eins\nzwei\ndrei\nvier\n' });
+  const out = await makePatchRunner(tmpRoot)({
+    patch: diff('--- a.txt', '+++ a.txt', '@@ -2,1 +2,1 @@', '-zwei', '-drei', '+ZWEI', '+DREI'),
+  });
+  assert.equal(out.error, undefined, out.error);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\nZWEI\nDREI\nvier\n');
+});
+
+test('apply_patch places an unnumbered hunk below the line its @@ names (#771)', async (t) => {
+  const source = 'function a() {\n  return 1;\n}\n\nfunction b() {\n  return 1;\n}\n';
+  const tmpRoot = await makePatchFixture(t, { 'a.js': source });
+  const out = await makePatchRunner(tmpRoot)({
+    patch: diff(
+      '*** Begin Patch',
+      '*** Update File: a.js',
+      '@@ function b() {',
+      '-  return 1;',
+      '+  return 2;',
+      '*** End of File',
+      '*** End Patch'
+    ),
+  });
+  assert.equal(out.error, undefined, out.error);
+  assert.equal(
+    await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'),
+    'function a() {\n  return 1;\n}\n\nfunction b() {\n  return 2;\n}\n'
+  );
+});
+
+test('apply_patch refuses an unnumbered hunk whose lines occur more than once (#771)', async (t) => {
+  const source = 'function a() {\n  return 1;\n}\n\nfunction b() {\n  return 1;\n}\n';
+  const tmpRoot = await makePatchFixture(t, { 'a.js': source });
+  const run = makePatchRunner(tmpRoot);
+  const ambiguous = await run({ patch: diff('--- a.js', '+++ a.js', '@@', '-  return 1;', '+  return 2;') });
+  assert.match(ambiguous.error, /occur more than once \(at line 2 and line 6\)/);
+  const openAi = await run({ patch: diff('*** Begin Patch', '*** Update File: a.js', '@@', '-  return 1;', '+  return 2;', '*** End Patch') });
+  assert.match(openAi.error, /occur more than once/);
+  const missing = await run({ patch: diff('--- a.js', '+++ a.js', '@@', '-  return 3;', '+  return 2;') });
+  assert.match(missing.error, /context does not match/);
+  const anchorMissing = await run({
+    patch: diff('*** Begin Patch', '*** Update File: a.js', '@@ function c() {', '-  return 1;', '+  return 2;', '*** End Patch'),
+  });
+  assert.match(anchorMissing.error, /"function c\(\) \{"\) does not occur/);
+  const insertOnly = await run({ patch: diff('--- a.js', '+++ a.js', '@@', '+// header') });
+  assert.match(insertOnly.error, /needs at least one unchanged or removed line/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.js'), 'utf8'), source);
+});
+
+test("apply_patch refuses what OpenAI's patch format would add, delete or move (#771)", async (t) => {
+  const tmpRoot = await makePatchFixture(t, { 'a.txt': 'eins\n' });
+  const run = makePatchRunner(tmpRoot);
+  assert.match(
+    (await run({ patch: diff('*** Begin Patch', '*** Add File: neu.txt', '+hallo', '*** End Patch') })).error,
+    /creates "neu\.txt" .* write_file_text/
+  );
+  assert.match(
+    (await run({ patch: diff('*** Begin Patch', '*** Delete File: a.txt', '*** End Patch') })).error,
+    /deletes "a\.txt"/
+  );
+  assert.match(
+    (await run({ patch: diff('*** Begin Patch', '*** Update File: a.txt', '*** Move to: b.txt', '@@', '-eins', '+x', '*** End Patch') })).error,
+    /renames "a\.txt" to "b\.txt"/
+  );
+  assert.match((await run({ patch: diff('*** Begin Patch', 'Hallo', '*** End Patch') })).error, /Unexpected line 2/);
+  assert.equal(await fs.readFile(path.join(tmpRoot, 'a.txt'), 'utf8'), 'eins\n');
 });
 
 test('apply_patch reports a relative_path that the patch does not touch', async (t) => {

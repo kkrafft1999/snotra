@@ -80,3 +80,25 @@ what this set can resolve.
 
 Once #766 is fixed, a second A/A + A/B run gives a cleaner comparison: the
 strict-mode retries currently add noise to rounds, failed calls and aborts.
+
+## 2026-10-06 — apply_patch tolerance (#771)
+
+Same model, after #766 (`strict: false`). The five `patch-*` tasks, three
+repetitions each, three versions run at the same time:
+
+| | before | tolerant parser | tolerant parser + hunk grammar in the description |
+|---|---|---|---|
+| correct | 73.3 % | 86.7 % | 86.7 % |
+| failed calls per task | 0.53 | 0 | 0 |
+| rounds per task | 4.00 | 3.47 | 3.13 |
+| prompt tokens per task | 16,610 | 14,444 | 12,590 |
+| `*** Begin Patch` / bare `@@` / unified | 6 / 1 / 3 | 7 / 3 / 0 | 4 / 0 / 3 |
+
+The parser now reads a bare `@@`, hunk counts that do not match the body and
+OpenAI's `*** Begin Patch` format, and every patch call went through. The
+remaining misses are the model choosing two `edit_file` calls over one
+`apply_patch` — the file ends up right.
+
+The hunk grammar sentence saved rounds almost only on one task
+(`patch-cross-file`, 5.0 → 3.0) in three repetitions, and would cost about 26
+tokens on every request. Left out.
