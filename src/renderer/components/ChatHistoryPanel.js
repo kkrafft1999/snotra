@@ -26,6 +26,7 @@ const NO_RUNS = Object.freeze({
   syncComposer: () => {},
   discard: () => {},
   stateOf: () => null,
+  holdSwitch: () => () => {},
 });
 
 // Which run state a row shows, and the words for it. The words are part of the
@@ -285,6 +286,16 @@ export function initChatHistoryPanel({
 
   async function openChatSession(id) {
     if (!id || id === appStore.currentChatId) return;
+    // A send while the history is read waits for this chat (#721).
+    const release = runs.holdSwitch();
+    try {
+      await showChatSession(id);
+    } finally {
+      release();
+    }
+  }
+
+  async function showChatSession(id) {
     // Erst die Spalte, dann der Inhalt: Sonst liefe das Rendern in eine
     // weggeschaltete Flaeche und die Eingabezeile kaeme ohne Hoehe zurueck.
     revealChatPanel();

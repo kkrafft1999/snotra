@@ -174,6 +174,50 @@ export function initChatStream({
   // after that belongs to no draft any more (#588).
   let composerGeneration = 0;
 
+  // The screen is changing chats (#721): at start-up there is no chat yet, on
+  // a folder switch the new tree is drawn while the old folder's chat still
+  // stands there, and opening a chat waits for the history first. A run
+  // started in that window went into the chat about to be swapped out and
+  // carried on unseen — at start-up into one that was never saved. So a send
+  // takes its draft at once and starts the run once the chat is in place.
+  let chatSwitchHolds = 0;
+  let chatSwitchWaiters = [];
+  let draftWaitingForChat = false;
+
+  function chatOnScreenSettled() {
+    return chatSwitchHolds === 0 && !!appStore.currentChatId;
+  }
+
+  /** Marks a chat switch as under way; the returned function ends it. */
+  function holdChatSwitch() {
+    chatSwitchHolds += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      chatSwitchHolds -= 1;
+      if (!chatOnScreenSettled()) return;
+      const waiters = chatSwitchWaiters;
+      chatSwitchWaiters = [];
+      for (const wake of waiters) wake();
+    };
+  }
+
+  function whenChatOnScreen() {
+    if (chatOnScreenSettled()) return Promise.resolve();
+    return new Promise((resolve) => chatSwitchWaiters.push(resolve));
+  }
+
+  /** A draft that found its chat busy goes back into the composer. */
+  function returnDraft(userMessage) {
+    if (!chatInput.value.trim()) chatInput.value = userMessage.content;
+    if (Array.isArray(userMessage.attachments) && userMessage.attachments.length > 0) {
+      pendingAttachments = [...userMessage.attachments, ...pendingAttachments];
+      renderAttachmentChips();
+    }
+    onInputChanged();
+  }
+
   // A thumbnail rebuilt while the lightbox was open is gone; focus then goes
   // back to where the user writes (#595).
   const imageLightbox = initImageLightbox({ fallbackFocus: () => chatInput });
@@ -677,6 +721,15 @@ export function initChatStream({
    * der Start richtet die mittlere Spalte danach aus (Issue #208).
    */
   async function loadChatForWorkspace(workspaceRoot) {
+    const release = holdChatSwitch();
+    try {
+      return await showChatForWorkspace(workspaceRoot);
+    } finally {
+      release();
+    }
+  }
+
+  async function showChatForWorkspace(workspaceRoot) {
     stopChatVoiceListening();
     await persistCurrentChat();
     appStore.chatSessionId += 1;
@@ -727,6 +780,15 @@ export function initChatStream({
   }
 
   async function startNewChat() {
+    const release = holdChatSwitch();
+    try {
+      await showNewChat();
+    } finally {
+      release();
+    }
+  }
+
+  async function showNewChat() {
     stopChatVoiceListening();
     await persistCurrentChat();
     // A run in the chat just left goes on in the background (#320).
@@ -1165,7 +1227,7 @@ export function initChatStream({
   }
 
   async function sendChatMessage() {
-    if (appStore.chatInFlight) return;
+    if (appStore.chatInFlight || draftWaitingForChat) return;
     // An image pasted a moment ago is still being scaled. The send waits for
     // it rather than leaving without it (#589).
     if (preparingImages > 0) {
@@ -1183,6 +1245,19 @@ export function initChatStream({
       userMessage.attachments = pendingAttachments;
       pendingAttachments = [];
       renderAttachmentChips();
+    }
+    if (!chatOnScreenSettled()) {
+      draftWaitingForChat = true;
+      try {
+        await whenChatOnScreen();
+      } finally {
+        draftWaitingForChat = false;
+      }
+      // The chat that came up may have its own run still going (#320).
+      if (appStore.chatInFlight) {
+        returnDraft(userMessage);
+        return;
+      }
     }
     appStore.chatMessages.push(userMessage);
     renderChatMessages();
@@ -1688,6 +1763,8 @@ export function initChatStream({
       syncComposer: syncChatInFlight,
       discard: discardChatRun,
       stateOf: runStateOf,
+      // A switch under way: a send waits for the chat it belongs to (#721).
+      holdSwitch: holdChatSwitch,
     },
   };
 }

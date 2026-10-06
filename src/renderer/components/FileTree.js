@@ -67,6 +67,8 @@ export function initFileTree(deps) {
     // Name and path of the open folder in title bar and header (#676); app.js
     // hands in one that knows the home folder.
     workspaceHeader = initWorkspaceHeader(),
+    // Marks a chat switch as under way and returns its end (#721).
+    holdChatSwitch = () => () => {},
   } = deps;
 
   const treeContainer = document.getElementById('tree-container');
@@ -312,6 +314,18 @@ export function initFileTree(deps) {
       await refreshWelcomeRecent();
       return false;
     }
+    // From here the tree shows the new folder while the chat on screen is
+    // still the old folder's, until onWorkspaceChanged has brought this
+    // folder's chat up. A send meanwhile waits for that chat (#721).
+    const releaseChat = holdChatSwitch();
+    try {
+      return await showActivatedProject(folderPath, ticket);
+    } finally {
+      releaseChat();
+    }
+  }
+
+  async function showActivatedProject(folderPath, ticket) {
     const overtaken = () => ticket !== treeGeneration;
     if (overtaken()) return true;
     appStore.rootPath = folderPath;

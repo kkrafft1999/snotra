@@ -429,3 +429,108 @@ test('an error without partial keeps removing the half answer, as before', async
 
   assert.deepEqual(appStore.chatMessages.map((m) => m.content), ['Write the summary.', 'rate limited']);
 });
+
+// A send while the screen changes chats (#721). The tree is drawn before the
+// folder's chat is loaded, so a question could be sent into the chat about to
+// be swapped out — at start-up into one with no id that was never saved. The
+// run went on there unseen, and the screen showed only the greeting.
+
+const composerText = () => document.getElementById('chat-input').value;
+
+test('a question sent before the first chat is loaded goes into that chat (#721)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, appStore, sends, upserts, ask, screenText } = env;
+  // As at start-up: the tree is there, no chat is yet.
+  appStore.currentChatId = '';
+  appStore.currentChatWorkspace = null;
+
+  ask('Summarise the documents.');
+  await flush();
+  assert.equal(sends.length, 0, 'no run without the chat it belongs to');
+  assert.equal(composerText(), '', 'the draft is taken all the same');
+
+  await chat.loadChatForWorkspace('/ws');
+  await flush();
+
+  assert.equal(sends.length, 1);
+  assert.ok(appStore.currentChatId, 'the folder\'s chat is on screen');
+  assert.equal(sends[0].options.chatId, appStore.currentChatId, 'the run belongs to the chat on screen');
+  assert.match(screenText(), /Summarise the documents\./);
+  assert.ok(upserts.some((row) => row.id === appStore.currentChatId
+    && row.messages.some((m) => m.content === 'Summarise the documents.')), 'the question is saved with its chat');
+  assert.equal(chat.runs.stateOf(''), null, 'nothing runs in a chat without an id');
+});
+
+test('a question sent during a folder switch waits for the new folder\'s chat (#721)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, appStore, sends, upserts, ask, screenText } = env;
+
+  // As FileTree does once main has switched: the new tree is drawn, the old
+  // folder's chat is still on screen.
+  const release = chat.runs.holdSwitch();
+  appStore.rootPath = '/other';
+  ask('List the files.');
+  await flush();
+  assert.equal(sends.length, 0);
+
+  await chat.loadChatForWorkspace('/other');
+  await flush();
+  assert.equal(sends.length, 0, 'still held until the folder switch is through');
+  release();
+  await flush();
+
+  assert.equal(sends.length, 1);
+  assert.notEqual(sends[0].options.chatId, 'chat-a', 'not in the old folder\'s chat');
+  assert.equal(sends[0].options.chatId, appStore.currentChatId);
+  assert.equal(appStore.currentChatWorkspace, '/other');
+  assert.match(screenText(), /List the files\./);
+  assert.ok(!upserts.some((row) => row.id === 'chat-a'
+    && row.messages.some((m) => m.content === 'List the files.')), 'chat A never got the question');
+});
+
+test('a waiting draft goes back to the composer when the chat that comes up is running (#721)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, appStore, sends, ask } = env;
+  const history = await mountHistoryPanel(env, { setActiveChatId: async () => {} });
+
+  ask('Draft the release notes.');
+  await flush();
+  await chat.startNewChat();
+  assert.equal(sends.length, 1);
+
+  // Chat A is opened from the history while the question waits.
+  const release = chat.runs.holdSwitch();
+  ask('And the changelog?');
+  await flush();
+  assert.equal(composerText(), '');
+  await history.openChatSession('chat-a');
+  release();
+  await flush();
+
+  assert.equal(appStore.currentChatId, 'chat-a');
+  assert.equal(appStore.chatInFlight, true, 'chat A is still running');
+  assert.equal(sends.length, 1, 'no second run in a running chat');
+  assert.equal(composerText(), 'And the changelog?', 'the draft is back in the composer');
+});
+
+test('a second send while a draft waits for its chat is not taken (#721)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, sends, ask, screenText } = env;
+
+  const release = chat.runs.holdSwitch();
+  ask('First question');
+  await flush();
+  ask('Second question');
+  await flush();
+  assert.equal(composerText(), 'Second question', 'the second draft stays where it is');
+
+  release();
+  await flush();
+  assert.equal(sends.length, 1);
+  assert.match(screenText(), /First question/);
+  assert.doesNotMatch(screenText(), /Second question/);
+});

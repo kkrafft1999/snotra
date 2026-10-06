@@ -507,6 +507,7 @@ const fileTree = initFileTree({
     void toolPermissions.refresh();
   },
   sendChatMessage: () => chatStream.sendChatMessage(),
+  holdChatSwitch: () => chatStream.runs.holdSwitch(),
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   // @-Referenz aus dem Baum in die Chat-Eingabe (Issue #56); die Einfüge-Logik
   // bleibt beim Textfeld, der Baum liefert nur den Pfad.
