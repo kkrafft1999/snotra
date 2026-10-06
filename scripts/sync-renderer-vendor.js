@@ -68,6 +68,49 @@ fs.copyFileSync(
   path.join(vendor, 'purify.min.js')
 );
 
+// ── Prism for syntax highlighting in the file preview (#745) ───────────────
+// One ESM file with the core and the grammars `syntax-language.js` names; the
+// view imports it as `vendor/prism/prism.js`. The order below is Prism's
+// dependency order: a grammar extends the ones before it.
+//
+// Two things the library does on its own are switched off. `manual` keeps it
+// from colouring every `code.language-*` in the document once it loads — the
+// Markdown preview has those, from marked, and they are not ours to touch.
+// The banner has to set it before the core runs, since the core reads it at
+// load time. `global` is mapped to `globalThis`, so that the core leaves
+// itself where the grammar files look for it.
+const PRISM_LANGUAGES = [
+  'markup', 'css', 'clike', 'javascript', 'typescript', 'jsx', 'tsx', 'json',
+  'scss', 'less', 'yaml', 'toml', 'ini', 'bash', 'python', 'ruby', 'java', 'c',
+  'cpp', 'csharp', 'go', 'rust', 'swift', 'kotlin', 'scala', 'markup-templating',
+  'php', 'sql', 'r', 'docker', 'makefile', 'cmake', 'groovy', 'properties',
+  'markdown', 'ignore',
+];
+const prismTarget = path.join(vendor, 'prism');
+fs.rmSync(prismTarget, { recursive: true, force: true });
+fs.mkdirSync(prismTarget, { recursive: true });
+esbuild.buildSync({
+  stdin: {
+    contents: [
+      "import Prism from 'prismjs/components/prism-core';",
+      ...PRISM_LANGUAGES.map((lang) => `import 'prismjs/components/prism-${lang}';`),
+      'export default Prism;',
+    ].join('\n'),
+    resolveDir: root,
+    sourcefile: 'prism-entry.js',
+  },
+  bundle: true,
+  minify: true,
+  format: 'esm',
+  platform: 'browser',
+  define: { global: 'globalThis' },
+  banner: {
+    js: "(typeof window !== 'undefined' ? window : globalThis).Prism = { manual: true, disableWorkerMessageHandler: true };",
+  },
+  outfile: path.join(prismTarget, 'prism.js'),
+});
+fs.copyFileSync(path.join(root, 'node_modules', 'prismjs', 'LICENSE'), path.join(prismTarget, 'LICENSE'));
+
 // ── pdf.js for the PDF view in the file preview (#346) ─────────────────────
 // Only what the view uses: the library, its worker, and the data it asks for
 // through its BinaryDataFactory — CMaps (CJK text), the standard fonts (PDFs

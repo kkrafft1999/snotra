@@ -5539,6 +5539,20 @@ select.modal-input {
   user-select: text;
 }
 
+/* Syntax highlighting (#745): colour only — no padding, no background, no
+ * font change but the weight of Markdown bold, so that the text keeps its
+ * place and copies as it stands in the file. */
+#preview-content .syntax-keyword { color: var(--ds-syntax-keyword); }
+#preview-content .syntax-tag { color: var(--ds-syntax-tag); }
+#preview-content .syntax-string { color: var(--ds-syntax-string); }
+#preview-content .syntax-comment { color: var(--ds-syntax-comment); }
+#preview-content .syntax-number { color: var(--ds-syntax-number); }
+#preview-content .syntax-function { color: var(--ds-syntax-function); }
+#preview-content .syntax-type { color: var(--ds-syntax-type); }
+#preview-content .syntax-property { color: var(--ds-syntax-property); }
+#preview-content .syntax-punctuation { color: var(--ds-syntax-punctuation); }
+#preview-content .syntax-bold { font-weight: 600; }
+
 /* ── "Show changes": the diff of a file (#348) ──────────────────────────────
  * One column of −/+ lines; the sign, the bar on the left and the spoken kind
  * carry the meaning, the ground colour only adds to it. Text goes in as

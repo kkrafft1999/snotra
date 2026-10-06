@@ -1064,7 +1064,9 @@ type: a new view is one module and one line in the registry.
 | ----- | -------------- | ---- |
 | `renderer/file-views/registry.js` | The descriptor, context and instance interface (documented in the module header), the registry and its order. DOM-free. | `test/file-view-registry.test.js` |
 | `renderer/file-views/host.js` | The pane as host: reading the file, choosing the view, the header (name, size, tool area), the file info card as the last fallback, mount/update/unmount, and the one gate for unsaved changes | `test/file-view-host-dom.test.js` |
-| `renderer/file-views/plain-text-view.js` | The default view: the text as it is, in `<pre id="preview-content">` | both of the above |
+| `renderer/file-views/plain-text-view.js` | The default view: the text as it is, in `<pre id="preview-content">`, coloured by its file name ([#745](https://github.com/kkrafft1999/snotra/issues/745)) | both of the above, `test/syntax-highlight-dom.test.js` |
+| `renderer/file-views/syntax-language.js` | File name → Prism grammar, or plain text. DOM-free, never by content | `test/syntax-language.test.js` |
+| `renderer/file-views/syntax-highlight.js` | Prism's tokens → text nodes and `<span class="syntax-…">` in nine roles; code blocks in Markdown in their own language | `test/syntax-highlight-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-view.js` | `md`, `markdown`, `mdx`: rendered, with a "Preview \| Source" switch; images, links, notices ([#344](https://github.com/kkrafft1999/snotra/issues/344)) | `test/markdown-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
 | `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, toggle to actual size, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
@@ -1244,6 +1246,45 @@ image view ─ fs:readWorkspaceImage(path) ─▶ main: lexical + realpath check
   ([#641](https://github.com/kkrafft1999/snotra/issues/641)).
 - **Transparency shows.** A checkerboard sits behind the image only, in its own
   tokens (`--ds-checker-light`, `--ds-checker-dark`) for light and dark.
+
+#### Syntax highlighting ([#745](https://github.com/kkrafft1999/snotra/issues/745))
+
+Source text in the plain-text view — the default view and the Source mode of
+Markdown, HTML and SVG — is coloured by **Prism** 1.30 (MIT), vendored from
+`prismjs` (a devDependency). `scripts/sync-renderer-vendor.js` bundles the core
+and the grammars `syntax-language.js` can name into one ESM file under
+`src/renderer/vendor/prism/`, with Prism's licence next to it.
+
+Chosen on 2026-10-06 over highlight.js, Lezer and Shiki, measured with the
+grammars `TEXT_EXTENSIONS` needs. Prism was the smallest (92 KB minified) and
+the fastest (1 MB of JavaScript in about 140 ms); its token list turns into
+text nodes without going through an HTML string. Shiki recognised more —
+TypeScript types, code embedded in Markdown or Vue, grammars for Vue, Svelte
+and Astro — but took 20–40 times as long and would have needed a worker; speed
+came first.
+
+- **The language comes from the name**, never from the content
+  (`syntax-language.js`). Text, logs, `lock`, `csv`, `conf` and unknown types
+  stay plain.
+- **Nothing of the file becomes markup.** `Prism.highlight` and its HTML
+  output are not used. `syntax-highlight.js` runs Prism's tokenize steps —
+  including the hooks some grammars depend on, such as PHP inside HTML — and
+  builds text nodes and `<span class="syntax-<role>">`. The text content of the
+  `<pre>` is the file, character for character, so selecting and copying are
+  unchanged. A fenced code block in Markdown is tokenised in its own language
+  the same way.
+- **Prism runs in manual mode.** The bundle sets `Prism.manual` before the core
+  loads; otherwise Prism would colour every `code.language-*` in the document,
+  including the code blocks marked writes into the Markdown preview.
+- **Colours are tokens.** `--ds-syntax-*` in `tokens.css`, palette "C" from the
+  mockup, each with at least 5:1 on `--ds-surface` in both themes. Amber and
+  red stay out; they mean "not isolated" and "error".
+- **Size limits**, from a measurement in Electron (tokens and fragment, then
+  insert and layout): 64 KB take about 12 ms, 512 KB about 110 ms, 1 MB about
+  245 ms. Up to 64 KB a file is shown coloured at once; up to 512 KB it is
+  shown as plain text first and coloured after the first paint; beyond that it
+  stays plain. Colours still due are dropped when the view goes or newer text
+  arrives.
 
 #### PDFs ([#346](https://github.com/kkrafft1999/snotra/issues/346))
 

@@ -384,6 +384,29 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     { what: 'Quelltext der README' }
   );
   assert.equal(source, README);
+  // Coloured in the real renderer (#745): the vendored Prism bundle loads
+  // under the CSP, and the colour of a heading is the token's, not black.
+  const colours = await poll(() => page.evaluate(() => {
+    const pre = document.getElementById('preview-content');
+    const keyword = pre?.querySelector('.syntax-keyword');
+    if (pre?.dataset.highlighted !== 'true' || !keyword) return null;
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--ds-syntax-keyword)';
+    pre.append(probe);
+    const expected = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      language: pre.dataset.language,
+      keyword: getComputedStyle(keyword).color,
+      expected,
+      text: getComputedStyle(pre).color,
+      foreign: [...pre.querySelectorAll('*')].filter((el) => el.tagName !== 'SPAN').length,
+    };
+  }), { what: 'farbiger Quelltext der README' });
+  assert.equal(colours.language, 'markdown');
+  assert.equal(colours.keyword, colours.expected);
+  assert.notEqual(colours.keyword, colours.text, 'the heading stands out from the body text');
+  assert.equal(colours.foreign, 0);
   step('Vorschau geprueft');
 
   // --- Markdown in the preview (#344): sanitized, nothing from the web -------
