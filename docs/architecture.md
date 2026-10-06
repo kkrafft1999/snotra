@@ -782,6 +782,12 @@ threw a run's result away as soon as another chat was opened.
   every `chat:delta`, `chat:tool-line` and `chat:progress`. The renderer
   registers its listeners once and routes each event to its run; a late event
   of an earlier turn finds nothing.
+- **End of a run (#721):** the result travels back as the reply to the
+  `chat:send` invoke, the events as pushes, and the two have no order between
+  them — under load the reply can arrive first. So `chat-handlers.js` sends a
+  `chat:progress` of type `run-end` behind the last event, also when the run
+  throws, and the renderer settles a run only once it has the reply *and* that
+  marker (or after a grace of 10 s, should the marker never come).
 - **Renderer:** `appStore.chatRuns` holds the runs. While its chat is on screen
   the chat's data lives in `appStore` as before; when another chat takes the
   screen, the run takes its chat along (`run.chat`) and keeps writing into those

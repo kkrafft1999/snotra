@@ -49,7 +49,7 @@ import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspac
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
-const { CHAT_ACTIVATION, coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -973,6 +973,44 @@ export function initChatStream({
     notifyRunsChanged();
   }
 
+  // How long a run waits for its end marker once its result is in (#721).
+  // The marker follows the events; this only matters if it never comes.
+  const RUN_END_GRACE_MS = 10000;
+  // runId → run, from the send until its end marker or its grace ran out.
+  const runsAwaitingEnd = new Map();
+
+  function expectRunEnd(run) {
+    run.ended = new Promise((resolve) => {
+      run.markEnded = resolve;
+    });
+    runsAwaitingEnd.set(run.runId, run);
+  }
+
+  function onRunEnd(payload) {
+    const run = runsAwaitingEnd.get(payload?.runId);
+    toolLogDebug.record('run-end', { runId: payload?.runId ?? null, known: !!run });
+    if (run && run.chatId === payload?.chatId) run.markEnded();
+  }
+
+  /**
+   * The result of a run comes back as the reply to its invoke, its events as
+   * pushes — and the reply can overtake them (#721). Settling on the reply
+   * alone turned every event still on its way into a late one: dropped as
+   * "settled", the tool line kept its start wording and a changed file lost
+   * its diff. So the run settles once its end marker is in as well, which
+   * main sends behind the last event.
+   */
+  async function whenRunEnded(run) {
+    let timer;
+    const grace = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), RUN_END_GRACE_MS);
+    });
+    const ended = await Promise.race([run.ended.then(() => true), grace]);
+    clearTimeout(timer);
+    runsAwaitingEnd.delete(run.runId);
+    if (!ended) toolLogDebug.record('run-end missing', { runId: run.runId, chatId: run.chatId });
+  }
+
   /**
    * The run an event belongs to (#320). Events name their chat and their run;
    * a late event of an earlier turn, or of a run that has ended, finds nothing.
@@ -1154,6 +1192,12 @@ export function initChatStream({
   }
 
   function onChatProgress(p) {
+    // Before runForEvent: an aborted run is no longer streaming, but its end
+    // still has to come in (#721).
+    if (p?.type === CHAT_PROGRESS_TYPES.RUN_END) {
+      onRunEnd(p);
+      return;
+    }
     const run = runForEvent(p);
     if (!run) return;
     const last = run.assistantMessage;
@@ -1301,6 +1345,7 @@ export function initChatStream({
       chat: null,
     };
     appStore.chatRuns.set(chatId, run);
+    expectRunEnd(run);
     syncChatInFlight();
     approvalCards?.beginRun(chatId, assistantMessage);
     renderChatMessages();
@@ -1319,8 +1364,11 @@ export function initChatStream({
         chatId,
         runId: run.runId,
       });
+      // Events still on their way belong to this run (#721).
+      await whenRunEnded(run);
     } catch {
       // A run that never answers would leave its chat marked as running.
+      runsAwaitingEnd.delete(run.runId);
       result = { error: t('chat.error.runLost') };
     }
     await settleRun(run, result);

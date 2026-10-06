@@ -55,6 +55,13 @@ const CHAT_PROGRESS_TYPES = Object.freeze({
   WORKSPACE: 'workspace',
   /** Berechtigungsereignis (Issue #66): Freigabe ausstehend, entschieden, Inhalt redigiert. */
   PERMISSION: 'permission',
+  /**
+   * The last event of a run (#721). The result comes back as the reply to the
+   * invoke, which may reach the renderer before the events sent ahead of it;
+   * this marker travels the same way as the events, so once it is in, every
+   * event of the run is in.
+   */
+  RUN_END: 'run-end',
 });
 
 /** Untertyp eines chat:progress-Events mit type='permission'. */

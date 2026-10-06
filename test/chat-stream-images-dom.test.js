@@ -27,6 +27,7 @@ let dom = null;
 let chat = null;
 let clearWorkspaceImageCache = () => {};
 let deltaCallback = null;
+let progressCallback = null;
 let chatImpl = async () => ({ ok: true });
 let appStore = null;
 const asked = [];
@@ -64,7 +65,7 @@ test.before(async () => {
     },
     // Die Abmelder muessen Funktionen sein — der Lauf ruft sie im `finally`.
     onChatDelta: (cb) => { deltaCallback = cb; return () => {}; },
-    onChatProgress: () => () => {},
+    onChatProgress: (cb) => { progressCallback = cb; return () => {}; },
     onChatToolLine: () => () => {},
     getChatHistory: async () => ({ sessions: [] }),
     setActiveChatId: async () => {},
@@ -72,7 +73,12 @@ test.before(async () => {
     generateChatTitle: async () => ({ title: '' }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: async () => ({ ok: true }),
-    chat: (...args) => chatImpl(...args),
+    // Main ends every run with a marker behind its events (#721).
+    chat: async (messages, options) => {
+      const result = await chatImpl(messages, options);
+      progressCallback?.({ type: 'run-end', chatId: options?.chatId, runId: options?.runId });
+      return result;
+    },
   };
 
   chat = initChatStream({

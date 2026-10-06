@@ -135,6 +135,24 @@ export async function poll(check, { timeoutMs = 15000, intervalMs = 150, what = 
 }
 
 /**
+ * Every chat event the renderer received, one line each, and how many errors
+ * its guarded handlers swallowed (src/renderer/utils/tool-log-debug.js). For a
+ * tool log that stopped being drawn mid-run (#721): it tells an event that
+ * never came from one that came and was turned away, with the reason why.
+ */
+export async function rendererToolEvents(page) {
+  return page.evaluate(() => {
+    const debug = window.__snotraToolLogDebug;
+    if (!debug) return 'no debug buffer';
+    const { errorCount, entries } = JSON.parse(debug.serialize());
+    const t0 = entries[0]?.t ?? 0;
+    const lines = entries.filter((e) => e.kind !== 'summary')
+      .map((e) => `${e.seq} +${e.t - t0}ms ${e.kind} ${JSON.stringify(e.data)}`);
+    return `${errorCount} handler errors\n${lines.join('\n')}`;
+  }).catch((e) => String(e));
+}
+
+/**
  * Legt ein frisches userData-Verzeichnis an: geoeffneter Ordner, ein Preset auf
  * den Fake-Modellserver, Standardeinstellungen. Damit startet die App fertig
  * eingerichtet — der native Ordnerdialog und der Einstellungsdialog muessen im

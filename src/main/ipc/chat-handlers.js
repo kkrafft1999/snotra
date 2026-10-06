@@ -1,5 +1,5 @@
 const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
-const { sanitizeChatId } = require('../../shared/contracts/chat');
+const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/chat');
 
 function registerChatHandlers({
   ipcMain,
@@ -58,17 +58,26 @@ function registerChatHandlers({
     const chatId = sanitizeChatId(payload?.chatId);
     // The renderer's own label for this turn; it only ever comes back to it.
     const runId = sanitizeRouteId(payload?.runId, 64);
-    return engine.send({
-      sessionId: event.sender.id,
-      payload: {
-        messages: payload?.messages,
-        workspaceRoot: getActiveWorkspaceRoot(),
-        selectedPath: payload?.selectedPath ?? null,
-        selectedIsDirectory: payload?.selectedIsDirectory === true,
-        chatId,
-      },
-      onEvent: (engineEvent) => forwardEvent(event.sender, engineEvent, { chatId, runId }),
-    });
+    const route = { chatId, runId };
+    try {
+      return await engine.send({
+        sessionId: event.sender.id,
+        payload: {
+          messages: payload?.messages,
+          workspaceRoot: getActiveWorkspaceRoot(),
+          selectedPath: payload?.selectedPath ?? null,
+          selectedIsDirectory: payload?.selectedIsDirectory === true,
+          chatId,
+        },
+        onEvent: (engineEvent) => forwardEvent(event.sender, engineEvent, route),
+      });
+    } finally {
+      // The reply to this invoke and the events above take different paths
+      // to the renderer, and the reply can arrive first (#721). The end
+      // marker takes the events' path: behind it, nothing of this run is
+      // still on its way.
+      forwardEvent(event.sender, { type: CHAT_ENGINE_EVENTS.PROGRESS, payload: createRunEndEvent() }, route);
+    }
   });
 }
 

@@ -670,6 +670,40 @@ test('CHAT_SEND tags every event with its chat and run', async () => {
   }
 });
 
+test('CHAT_SEND ends every run with a run-end marker behind its last event (#721)', async () => {
+  const provider = {
+    defaultModel: 'test-model',
+    fields: {},
+    async streamChatRound(args) {
+      args.callbacks?.onTextDelta('hi');
+      return assistantText('hi');
+    },
+  };
+  const { sendHandler } = setupChatHandlers({ provider });
+  const { event, sent } = makeFakeEvent(7);
+
+  await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' });
+
+  const ends = sent.filter((entry) => entry.payload.type === 'run-end');
+  assert.equal(ends.length, 1, 'one marker per run');
+  assert.equal(sent.at(-1), ends[0], 'nothing of the run follows it');
+  assert.deepEqual(ends[0], { channel: PUSH.CHAT_PROGRESS, payload: { type: 'run-end', chatId: 'chat-a', runId: 'run-1' } });
+});
+
+test('CHAT_SEND sends the run-end marker also when the run throws (#721)', async () => {
+  const ipcMain = makeIpcMain();
+  const chatEngine = { send: async () => { throw new Error('kaputt'); } };
+  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  const { event, sent } = makeFakeEvent(7);
+
+  await assert.rejects(
+    ipcMain.handlers.get(REQ.CHAT_SEND)(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' }),
+    /kaputt/,
+  );
+
+  assert.deepEqual(sent, [{ channel: PUSH.CHAT_PROGRESS, payload: { type: 'run-end', chatId: 'chat-a', runId: 'run-1' } }]);
+});
+
 test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes on', async () => {
   const releases = [];
   const provider = {
