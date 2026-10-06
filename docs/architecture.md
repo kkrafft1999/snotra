@@ -1755,6 +1755,12 @@ ratchet, not a merge condition.
 
 ## System prompt
 
+[`agent-text-sources.svg`](./agent-text-sources.svg) maps every source of text
+that reaches the model — the system message below, the messages, and what the
+tools pull in during a run ([#747](https://github.com/kkrafft1999/snotra/issues/747)):
+
+![Where the agent's text comes from: system message, messages and tool results](agent-text-sources.svg)
+
 The system prompt is assembled per request from seven building blocks
 (`application/chat/chat-engine.js`), in this order:
 
