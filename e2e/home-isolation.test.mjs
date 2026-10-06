@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
@@ -19,7 +20,13 @@ import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs
 const SENTINEL = 'home-sentinel-702-only-in-the-test-home';
 
 
-const appHome = (snotra) => snotra.app.evaluate(() => process.getBuiltinModule('node:os').homedir());
+// The home folder as main resolves it (#707): on Windows os.homedir() stays
+// the real one, the app reads SNOTRA_HOME_DIR first.
+const HOME_DIR_MODULE = fileURLToPath(new URL('../src/main/services/home-dir.js', import.meta.url));
+const appHome = (snotra) => snotra.app.evaluate(
+  (_electron, modulePath) => process.mainModule.require(modulePath).resolveHomeDir(),
+  HOME_DIR_MODULE
+);
 
 test('the app reads global memory from the test home, never from the real one', { timeout: 120000 }, async (t) => {
   const model = await startFakeModel();

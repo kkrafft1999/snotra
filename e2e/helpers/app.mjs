@@ -52,7 +52,7 @@ async function describeStalledStart(app, mainOutput) {
     const report = process.report.getReport();
     return {
       windows: BrowserWindow.getAllWindows().map((w) => w.webContents.getURL()),
-      homedir: process.getBuiltinModule('node:os').homedir(),
+      homedir: process.env.SNOTRA_HOME_DIR || process.getBuiltinModule('node:os').homedir(),
       handles: report.libuv.filter((h) => h.is_active).map((h) => `${h.type}${h.filename ? ` ${h.filename}` : ''}${h.pid ? ` pid ${h.pid}` : ''}`),
       javascriptStack: report.javascriptStack?.message,
     };
@@ -236,14 +236,16 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   // a script that has to run a real program with its real login passes
   // `home: false` and keeps the real one.
   //
-  // On Windows `os.homedir()` reads USERPROFILE, not HOME (#707). APPDATA and
-  // LOCALAPPDATA keep pointing at the real folders.
+  // Main asks SNOTRA_HOME_DIR first (src/main/services/home-dir.js). HOME moves
+  // as well on macOS and Linux, so that programs the app starts see the test
+  // home too. Not on Windows: there os.homedir() reads USERPROFILE, and with
+  // that moved Electron never came up — every launch stalled (#707).
   const isolateHome = home !== false;
   const homeDir = isolateHome ? (home ?? await testHomeFor(userDataDir)) : null;
   if (homeDir) {
     await reachKeychain(homeDir);
-    env.HOME = homeDir;
-    if (process.platform === 'win32') env.USERPROFILE = homeDir;
+    env.SNOTRA_HOME_DIR = homeDir;
+    if (process.platform !== 'win32') env.HOME = homeDir;
   }
   // The start-up update check would ask GitHub for real. Once a release newer
   // than the checkout is out, its dialog lands on top of the window and the

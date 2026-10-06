@@ -63,6 +63,7 @@ const { createHtmlPreviewService } = require('../services/html-preview-service')
 const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
 const { createMoveToTrash } = require('../services/move-to-trash');
+const { withHomeDir } = require('../services/home-dir');
 const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const {
@@ -92,7 +93,7 @@ function createApplication({
   safeStorage,
   fs,
   path,
-  os = nodeOs,
+  os: baseOs = nodeOs,
   crypto = nodeCrypto,
   childProcess = nodeChildProcess,
   fetchImpl,
@@ -146,6 +147,8 @@ function createApplication({
   session = null,
   WebContentsView = null,
 }) {
+  // Every adapter below asks this `os` for the home folder (#707).
+  const os = withHomeDir(baseOs);
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
 
@@ -687,7 +690,7 @@ function createApplication({
   // One trash for the tree's Delete… and the tools' recovery copies: on macOS
   // it moves into ~/.Trash itself where the trash API refuses (#712).
   const moveToTrash = shell && typeof shell.trashItem === 'function'
-    ? createMoveToTrash({ trashItem: (target) => shell.trashItem(target) })
+    ? createMoveToTrash({ trashItem: (target) => shell.trashItem(target), homedir: () => os.homedir() })
     : null;
 
   const { engine: chatEngine, llm: chatLlm } = createChatApplication({
