@@ -191,7 +191,7 @@ test('the native dialogs speak the interface language and name the page the rule
   assert.equal(
     dialogCalls[1].detail,
     'From now on, the tool edit_file may access “docs/**” without asking (workspace /work/projekt). '
-      + 'The rule applies in “Smart” mode until you delete it under Settings › Security.',
+      + 'The rule applies in “Smart” mode until you delete it under Settings › Tools & security.',
   );
 
   await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', riskClass: 'write', pathPattern: '*.md' });
@@ -202,10 +202,10 @@ test('the native dialogs speak the interface language and name the page the rule
   assert.deepEqual(dialogCalls[2].buttons, ['Delete block', 'Cancel']);
 });
 
-test('the German allowance dialog points to Einstellungen › Sicherheit, where the rules live (#353, #449)', async (t) => {
+test('the German allowance dialog points to Einstellungen › Tools & Sicherheit, where the rules live (#353, #449)', async (t) => {
   const { invoke, dialogCalls } = await setup(t, { dialogResponse: 1 });
   await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, makeSender(), { effect: 'allow', riskClass: 'read' });
-  assert.match(dialogCalls[0].detail, /Modus „Intelligent“, bis du sie unter Einstellungen › Sicherheit löschst\.$/);
+  assert.match(dialogCalls[0].detail, /Modus „Intelligent“, bis du sie unter Einstellungen › Tools & Sicherheit löschst\.$/);
 });
 
 test('sensible Pfadmuster, Reset-Reichweiten und Sitzungsfreigaben löschen', async (t) => {
@@ -314,7 +314,7 @@ test('sandbox off needs the native confirmation; cancelling stores nothing', asy
   assert.equal(dialogCalls[0].message, 'Run without sandbox in this workspace?');
   assert.match(dialogCalls[0].detail, /In \/work\/projekt, shell_execute and run_python will run with your full rights/);
   assert.match(dialogCalls[0].detail, /In “Auto” mode they run without asking/);
-  assert.match(dialogCalls[0].detail, /under Settings › Security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Run without sandbox', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled('/work/projekt'), false);
@@ -441,7 +441,7 @@ test('a new allowance needs the native confirmation, which names every right; ca
   assert.match(dialogCalls[0].detail, /• it may reach graph\.microsoft\.com, login\.microsoftonline\.com/);
   assert.match(dialogCalls[0].detail, /• it may write in ~\/Library\/Application Support\/ms-todo/);
   assert.match(dialogCalls[0].detail, /• it may check certificates through macOS\. That opens a system service outside the sandbox/);
-  assert.match(dialogCalls[0].detail, /under Settings › Security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Allow', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.deepEqual(await toolPolicyStore.readProgramAllowances(), []);
@@ -533,7 +533,7 @@ test('workspace default "auto" needs the native confirmation naming the folder; 
   assert.match(dialogCalls[0].detail, /Every new chat in \/work\/projekt will run in “Auto” mode/);
   assert.match(dialogCalls[0].detail, /also after an app restart/);
   assert.match(dialogCalls[0].detail, /switched to “Smart”/);
-  assert.match(dialogCalls[0].detail, /under Settings › Security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Make “Auto” the default', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'smart');

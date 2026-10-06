@@ -174,9 +174,9 @@ test('what is set up elsewhere is linked: the interpreter, the search key, MCP s
     const doc = dom.document;
     row(doc, 'external').querySelector('.settings-security-row__toggle').click();
     const labels = [...row(doc, 'external').querySelectorAll('[data-security-link]')].map((b) => b.textContent);
-    assert.deepEqual(labels, ['Set up the search key under Tools', 'Set up MCP servers under MCP']);
+    assert.deepEqual(labels, ['Add the search key under Tool setup', 'Manage MCP servers under Tool setup']);
     row(doc, 'external').querySelector('[data-security-link="mcp"]').click();
-    assert.deepEqual(navigations.at(-1), ['mcp', 'heading-mcp-servers', null]);
+    assert.deepEqual(navigations.at(-1), ['tools', 'heading-mcp-servers', null]);
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
     row(doc, 'execute').querySelector('[data-security-link="python"]').click();
     assert.deepEqual(navigations.at(-1), ['tools', 'heading-python', null]);

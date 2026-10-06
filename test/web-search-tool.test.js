@@ -111,10 +111,10 @@ test('web_search: englischer Satz, zitierte Seite in der Oberflaechensprache', a
   });
 
   const english = JSON.parse(await run(registry, { query: 'x' }, { locale: 'en' }));
-  assert.equal(english.error, 'The Tavily key was rejected. Ask the user to check it under "Settings › Tools".');
+  assert.equal(english.error, 'The Tavily key was rejected. Ask the user to check it under "Settings › Tool setup".');
 
   const german = JSON.parse(await run(registry, { query: 'x' }, { locale: 'de' }));
-  assert.equal(german.error, 'The Tavily key was rejected. Ask the user to check it under "Einstellungen › Tools".');
+  assert.equal(german.error, 'The Tavily key was rejected. Ask the user to check it under "Einstellungen › Tool-Einrichtung".');
 });
 
 test('web_search bleibt ohne Freigabe der Policy stehen', async () => {

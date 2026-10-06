@@ -867,7 +867,7 @@ data lives next to its topic and is tested there:
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
-| What Settings › Security and the mode pill read | `services/security-page-data.js` |
+| What Settings › Tools & security and the mode pill read | `services/security-page-data.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
 
 What stays in the module are the small state holders the wiring needs — the
@@ -1906,7 +1906,7 @@ is the switch, not the placement.
 ### Baseline equipment of the tools
 
 Principle since [#180](https://github.com/kkrafft1999/snotra/issues/180): what is
-switched on in Settings › Security goes to the model — and vice versa. Otherwise a schema costs
+switched on in Settings › Tools & security goes to the model — and vice versa. Otherwise a schema costs
 tokens in every round that nobody can deselect, because it does not appear in the
 list.
 
@@ -2160,7 +2160,7 @@ that does not exist once the interface was switchable, so since
 
 | Placeholder | Yields |
 | --- | --- |
-| `{menu:settings.tools}` | `Settings › Tools` / `Einstellungen › Tools` — assembled from the navigation's own keys |
+| `{menu:settings.tools}` | `Settings › Tool setup` / `Einstellungen › Tool-Einrichtung` — assembled from the navigation's own keys |
 | `{label:permissions.mode.smart}` | `Smart` / `Intelligent` — one entry, quoted as it stands |
 
 A path is never written out as its own string. `test/ui-quotes.test.js` checks

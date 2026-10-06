@@ -15,7 +15,7 @@ import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
-const PANELS = ['models', 'security', 'mcp'];
+const PANELS = ['models', 'security', 'tools'];
 
 const model = await startFakeModel();
 const workspace = await makeTempDir('snotra-switches-');
@@ -106,7 +106,8 @@ const measure = (selector) => page.evaluate((selector) => {
 const SWITCH_OF = {
   models: '#pref-model-list .ds-switch',
   security: '#panel-settings-security .ds-switch',
-  mcp: '#settings-mcp-list .ds-switch',
+  // The MCP servers sit on Tool setup since #767.
+  tools: '#settings-mcp-list .ds-switch',
 };
 
 const openPanel = async (panel) => {

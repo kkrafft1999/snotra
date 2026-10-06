@@ -44,8 +44,8 @@ test('every path reads in both languages, and the two differ', () => {
       assert.equal(value.includes('.'), false, `${name} (${locale}) still carries a raw key: ${value}`);
     }
   }
-  assert.equal(menuPath('en', 'settings.tools'), 'Settings › Tools');
-  assert.equal(menuPath('de', 'settings.tools'), 'Einstellungen › Tools');
+  assert.equal(menuPath('en', 'settings.tools'), 'Settings › Tool setup');
+  assert.equal(menuPath('de', 'settings.tools'), 'Einstellungen › Tool-Einrichtung');
   assert.equal(menuPath('en', 'settings.memory'), 'Settings › Memory');
   assert.equal(menuPath('de', 'settings.memory'), 'Einstellungen › Gedächtnis');
   // Three levels deep, and the last step is a control rather than a page.
@@ -57,11 +57,11 @@ test('the sentence stays English, only the quotation follows the language', () =
   assert.match(raw, /\{menu:settings\.security\}/, 'the table carries the placeholder, not a fixed language');
   assert.equal(
     fillUiQuotes('en', raw),
-    'Tool is switched off. The user can enable it under "Settings › Security".'
+    'Tool is switched off. The user can enable it under "Settings › Tools & security".'
   );
   assert.equal(
     fillUiQuotes('de', raw),
-    'Tool is switched off. The user can enable it under "Einstellungen › Sicherheit".'
+    'Tool is switched off. The user can enable it under "Einstellungen › Tools & Sicherheit".'
   );
 });
 

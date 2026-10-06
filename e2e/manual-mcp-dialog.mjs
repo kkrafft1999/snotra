@@ -75,7 +75,7 @@ try {
       const input = document.querySelector(`#choice-app-locale input[value="${value}"]`);
       input.checked = true;
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      document.querySelector('.settings-nav-item[data-settings-panel="mcp"]').click();
+      document.querySelector('.settings-nav-item[data-settings-panel="tools"]').click();
     }, locale);
     await poll(() => page.evaluate(() =>
       document.querySelectorAll('#settings-mcp-list .mcp-row').length > 0),
