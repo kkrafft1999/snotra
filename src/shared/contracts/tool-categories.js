@@ -19,6 +19,11 @@ const TOOL_CATEGORIES = Object.freeze({
   LIST: 'list',
   CHECK: 'check',
   WRITE: 'write',
+  /**
+   * A generated image (#85). It is a write as well, but "1 file written" would
+   * hide the one thing that cost money and is worth looking at.
+   */
+  IMAGE: 'image',
   /** Ausgefuehrter Code und Shell-Befehle (#86/#102) — eigene Kategorie, weil beides die Workspace-Grenze umgeht. */
   EXEC: 'exec',
   /** Unbekannt — z. B. Einträge aus Sessions, die vor #60 gespeichert wurden. */
@@ -41,9 +46,7 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   write_file_text: TOOL_CATEGORIES.WRITE,
   edit_file: TOOL_CATEGORIES.WRITE,
   apply_patch: TOOL_CATEGORIES.WRITE,
-  // The image ends up as a file in the project (#85); in the log it stands
-  // with the other writes.
-  generate_image: TOOL_CATEGORIES.WRITE,
+  generate_image: TOOL_CATEGORIES.IMAGE,
   run_python: TOOL_CATEGORIES.EXEC,
   shell_execute: TOOL_CATEGORIES.EXEC,
   // Merken ist ein Schreibvorgang wie jeder andere (Issue #166) — eine Datei

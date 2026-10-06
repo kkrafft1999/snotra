@@ -112,6 +112,7 @@ const PREVIEW_KIND_KEYS = Object.freeze({
   code: 'approval.previewKind.code',
   shell: 'approval.previewKind.shell',
   memory: 'approval.previewKind.memory',
+  prompt: 'approval.previewKind.prompt',
 });
 
 /** Reach of a memory entry, in words (issue #166). */
@@ -197,7 +198,14 @@ export function approvalHeadline(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
   let verb = t('approval.verb.read');
-  if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = t('approval.verb.external');
+  // The image tool sends a prompt and writes a file; "send to an external
+  // service assets/header.png" would read as if the file left (#85). What it
+  // does to the file says it better — unless replacing it has no way back.
+  if (dto?.tool === 'generate_image' && !hasClass(classes, TOOL_RISK_CLASSES.DELETE)) {
+    verb = targets.some((entry) => entry.exists === true)
+      ? t('approval.verb.generateImage.replace')
+      : t('approval.verb.generateImage');
+  } else if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = t('approval.verb.external');
   else if (dto?.tool === 'shell_execute') verb = shellVerb(dto);
   else if (hasClass(classes, TOOL_RISK_CLASSES.EXECUTE)) verb = t('approval.verb.execute');
   else if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) verb = t('approval.verb.delete');

@@ -97,6 +97,7 @@ function buildPreview(toolName, args, options = {}) {
     };
   } else if (toolName === 'generate_image') {
     // What goes out is the prompt, and the prompt is what is paid for (#85).
+    kind = 'prompt';
     text = typeof args?.prompt === 'string' ? args.prompt : '';
   } else if (toolName === 'remember') {
     // Der Nutzer entscheidet hier ueber einen Satz, der ab jetzt in *jeder*
