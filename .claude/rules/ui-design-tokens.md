@@ -313,7 +313,7 @@ The same state carries the same colour everywhere:
   menu,
 - the "Not isolated" badge on the approval card,
 - the shield next to the folder name (#398),
-- the "Not isolated" lines in Settings › Tools.
+- the "Not isolated" lines in Settings › Tools & security.
 
 Rules:
 

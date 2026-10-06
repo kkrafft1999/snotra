@@ -58,15 +58,15 @@ test('Menüpfade im System-Skill folgen der Sprache, im Ordner-Skill nicht', asy
   const german = await service.getActiveSkills({ locale: 'de', activeSkills: ['snotra-capabilities', 'fremd'] });
   const bodyOf = (list, name) => list.find((skill) => skill.name === name).body;
 
-  assert.match(bodyOf(english, 'snotra-capabilities'), /`Settings › Tools`/);
-  assert.match(bodyOf(german, 'snotra-capabilities'), /`Einstellungen › Tools`/);
+  assert.match(bodyOf(english, 'snotra-capabilities'), /`Settings › Tool setup`/);
+  assert.match(bodyOf(german, 'snotra-capabilities'), /`Einstellungen › Tool-Einrichtung`/);
   // Der Ordner-Skill bleibt Wort für Wort, wie er auf der Platte liegt.
   assert.match(bodyOf(german, 'fremd'), /\{menu:settings\.tools\}/);
 
   // Auch die Kurzbeschreibung im Katalog spricht die Sprache der Oberfläche.
   const catalog = await service.listCatalog({ locale: 'de' });
   const entry = catalog.skills.find((skill) => skill.name === 'snotra-capabilities');
-  assert.equal(entry.description, 'Switched off under Einstellungen › Tools');
+  assert.equal(entry.description, 'Switched off under Einstellungen › Tool-Einrichtung');
 });
 
 test('findet System-Skills auch ohne geöffneten Ordner', async (t) => {

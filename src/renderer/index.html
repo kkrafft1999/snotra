@@ -402,7 +402,7 @@
                   </div>
                   <!-- The way to everything else Snotra may do here (#449). -->
                   <div class="chat-tool-mode-more">
-                    <button type="button" id="chat-tool-mode-security-link" class="chat-tool-mode-notice-link" data-i18n="chat.toolMode.securityLink">All permissions in Settings › Security</button>
+                    <button type="button" id="chat-tool-mode-security-link" class="chat-tool-mode-notice-link" data-i18n="chat.toolMode.securityLink">All permissions in Settings › Tools &amp; security</button>
                   </div>
                 </div>
               </span>
@@ -499,12 +499,12 @@
             <span class="settings-nav-item__desc" data-i18n="settings.nav.models.desc">API, connection, preferences</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security">
-            <span data-i18n="settings.nav.security">Security</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">What Snotra may do</span>
+            <span data-i18n="settings.nav.security">Tools &amp; security</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">What Snotra can and may do</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools">
-            <span data-i18n="settings.nav.tools">Tools</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">Interpreter and API keys</span>
+            <span data-i18n="settings.nav.tools">Tool setup</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">Interpreter, keys, MCP servers</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
             <span data-i18n="settings.nav.skills">Skills</span>
@@ -513,10 +513,6 @@
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-memory" id="tab-settings-memory" data-settings-panel="memory">
             <span data-i18n="settings.nav.memory">Memory</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">What Snotra keeps across chats</span>
-          </button>
-          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-mcp" id="tab-settings-mcp" data-settings-panel="mcp">
-            <span data-i18n="settings.nav.mcp">MCP</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.mcp.desc">External tool servers</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
             <span data-i18n="settings.nav.general">General</span>
@@ -554,7 +550,7 @@
           </section>
 
           <section class="settings-panel" id="panel-settings-security" role="tabpanel" aria-labelledby="tab-settings-security" hidden>
-            <p class="settings-security-intro" data-i18n="security.intro">What Snotra may do in this workspace, and why.</p>
+            <p class="settings-security-intro" data-i18n="security.intro">What Snotra can and may do in this workspace, and why.</p>
             <details class="settings-note">
               <summary class="settings-note__summary"><span data-i18n="security.note.summary">Everything here takes effect immediately. Loosening is confirmed in the system dialog.</span></summary>
               <div class="settings-note__body" data-i18n-html="security.note.body">
@@ -787,10 +783,10 @@
           </section>
 
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
-            <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them. Which tools the model may use, and when Snotra asks first, is on the <strong>Security</strong> page.</p>
+            <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them, and the MCP servers that bring more. Which tools the model may use, and when Snotra asks first, is on the <strong>Tools &amp; security</strong> page.</p>
             <div class="settings-tools-card" id="settings-python-interpreter-card">
               <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
-              <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Security.</p>
+              <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Tools &amp; security.</p>
               <div class="modal-field-group">
                 <label for="input-python-interpreter" class="modal-field-label eyebrow-row" data-i18n="settings.python.interpreter.label">
                   Your own interpreter (optional)
@@ -854,6 +850,34 @@
                 <select id="select-image-model" class="modal-input" aria-describedby="settings-image-generation-status"></select>
               </div>
               <p id="settings-image-generation-status" class="modal-hint" role="status"></p>
+            </div>
+
+            <div class="settings-tools-mcp">
+              <div class="settings-panel-models__head">
+                <h3 class="settings-subsection-title" id="heading-mcp-servers" data-i18n="settings.mcp.heading">MCP servers</h3>
+                <div class="settings-mcp-head__actions">
+                  <button type="button" id="btn-reload-mcp" class="btn-secondary" data-i18n="settings.mcp.reload">Reload</button>
+                  <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import" data-i18n="settings.mcp.import">
+                    Import
+                  </button>
+                  <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server" data-i18n="settings.mcp.add">
+                    Add server
+                  </button>
+                </div>
+              </div>
+              <div class="settings-mcp-warning">
+                <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
+                <p data-i18n-html="settings.mcp.warning">
+                  <strong>An MCP server is somebody else&rsquo;s code, started on your machine.</strong>
+                  It runs with your rights and can do anything you could. Out of the box none is entered
+                  &mdash; nothing runs by itself. Only enter servers whose origin you know.
+                </p>
+              </div>
+              <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
+              <ul id="settings-mcp-list" class="settings-mcp-list" aria-labelledby="heading-mcp-servers"></ul>
+              <p id="settings-mcp-empty" class="settings-empty-hint hidden" data-i18n="settings.mcp.empty">
+                No server configured yet &mdash; open &ldquo;Add server&rdquo;.
+              </p>
             </div>
           </section>
 
@@ -938,34 +962,6 @@
               </p>
             </div>
             <div id="settings-memory-scopes"></div>
-          </section>
-
-          <section class="settings-panel" id="panel-settings-mcp" role="tabpanel" aria-labelledby="tab-settings-mcp" hidden>
-            <div class="settings-mcp-warning">
-              <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
-              <p data-i18n-html="settings.mcp.warning">
-                <strong>An MCP server is somebody else&rsquo;s code, started on your machine.</strong>
-                It runs with your rights and can do anything you could. Out of the box none is entered
-                &mdash; nothing runs by itself. Only enter servers whose origin you know.
-              </p>
-            </div>
-            <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
-            <div class="settings-panel-models__head">
-              <h3 class="settings-subsection-title" id="heading-mcp-servers" data-i18n="settings.mcp.heading">Configured servers</h3>
-              <div class="settings-mcp-head__actions">
-                <button type="button" id="btn-reload-mcp" class="btn-secondary" data-i18n="settings.mcp.reload">Reload</button>
-                <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import" data-i18n="settings.mcp.import">
-                  Import
-                </button>
-                <button type="button" id="btn-add-mcp-server" class="btn-primary" aria-haspopup="dialog" aria-controls="dialog-mcp-server" data-i18n="settings.mcp.add">
-                  Add server
-                </button>
-              </div>
-            </div>
-            <ul id="settings-mcp-list" class="settings-mcp-list" aria-labelledby="heading-mcp-servers"></ul>
-            <p id="settings-mcp-empty" class="settings-empty-hint hidden" data-i18n="settings.mcp.empty">
-              No server configured yet &mdash; open &ldquo;Add server&rdquo;.
-            </p>
           </section>
 
           <section class="settings-panel" id="panel-settings-general" role="tabpanel" aria-labelledby="tab-settings-general" hidden>

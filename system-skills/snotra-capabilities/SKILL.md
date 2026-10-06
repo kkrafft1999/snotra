@@ -175,10 +175,9 @@ menu. Update notices come from GitHub releases.
 | --- | --- |
 | Model, provider, API keys | `{menu:settings.models}` |
 | What Snotra may do in the open folder, per risk class: tools on/off, the folder's default mode, deny and allow rules, remembered commands, sensitive path patterns, sandbox and program allowances, session approvals, resetting permissions | `{menu:settings.security}` — the chat's own mode is the pill in the chat bar |
-| Python interpreter, search key, image model | `{menu:settings.tools}` |
+| Python interpreter, search key, image model; creating, importing and testing MCP servers | `{menu:settings.tools}` |
 | Skills on/off, reload, suggestions in the chat | `{menu:settings.skills}` |
 | View, delete, switch off what is remembered | `{menu:settings.memory}` |
-| Creating, importing and testing MCP servers | `{menu:settings.mcp}` |
 | Own system prompt, interface language, appearance, tool rounds | `{menu:settings.general}` |
 
 ## How to answer

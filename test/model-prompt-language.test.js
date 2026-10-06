@@ -30,10 +30,10 @@ const { hasKey, translate } = require('../src/shared/i18n');
 // Bildschirm stehen — sonst schickt das Modell den Nutzer zu einem Menuepunkt,
 // den es nicht gibt. Diese Stellen duerfen deutsch sein, alles andere nicht.
 const ERLAUBTE_UI_ZITATE = [
-  'Einstellungen › Tools',
+  'Einstellungen › Tool-Einrichtung',
+  'Einstellungen › Tools & Sicherheit',
   'Einstellungen › Gedächtnis',
   'Einstellungen › Skills',
-  'Einstellungen › MCP',
 ];
 
 function ohneUiZitate(text) {

@@ -6,7 +6,7 @@
  * The model names a settings page so the user can find it — "the user can
  * enable it under …". The sentence around that goes to the model and stays
  * English (#276); only the quotation follows the interface language, because
- * an English interface has no page called "Einstellungen › Tools".
+ * an English interface has no page called "Einstellungen › Tool-Einrichtung".
  *
  * A path is assembled from the **same catalogue entries as the navigation
  * itself**, never from a second list of its own. Rename a settings page and
@@ -30,12 +30,13 @@ const MENU_PATHS = Object.freeze({
   'settings.skills': ['settings.title', 'settings.nav.skills'],
   'settings.skills.suggestions': ['settings.title', 'settings.nav.skills', 'settings.skills.suggestion.label'],
   'settings.memory': ['settings.title', 'settings.nav.memory'],
-  'settings.mcp': ['settings.title', 'settings.nav.mcp'],
+  // Since #767 the servers are part of Tool setup; the name stays for the texts that quote it.
+  'settings.mcp': ['settings.title', 'settings.nav.tools'],
   'settings.general': ['settings.title', 'settings.nav.general'],
   'settings.models': ['settings.title', 'settings.nav.models'],
 });
 
-/** One path in one language, e.g. `Settings › Tools` / `Einstellungen › Tools`. */
+/** One path in one language, e.g. `Settings › Tool setup` / `Einstellungen › Tool-Einrichtung`. */
 function menuPath(locale, name) {
   const keys = MENU_PATHS[name];
   if (!keys) return name;

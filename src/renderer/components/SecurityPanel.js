@@ -127,12 +127,16 @@ export function initSecurityPanel({
 
   function linksRow(keys) {
     const wrap = el('p', 'settings-security-links');
-    // Two links to the same section would read as the same link twice.
+    // Two links to the same place would read as the same link twice. The
+    // search key and the MCP servers share a section since #767 but not a
+    // heading, so both stay.
     const seen = new Set();
     for (const key of keys) {
-      const panelKey = SECURITY_LINK_TARGETS[key]?.panel;
-      if (!panelKey || seen.has(panelKey)) continue;
-      seen.add(panelKey);
+      const target = SECURITY_LINK_TARGETS[key];
+      if (!target?.panel) continue;
+      const place = `${target.panel}#${target.target}`;
+      if (seen.has(place)) continue;
+      seen.add(place);
       wrap.appendChild(linkButton(key));
     }
     return wrap;

@@ -437,7 +437,7 @@ test('a command card has "always" where other cards have "for this session"', as
   assert.equal(view.actions.always.response, 'allow-always');
   assert.equal(view.actions.always.label, 'Always allow this command');
   assert.match(view.actions.always.hint, /exactly this command line/);
-  assert.match(view.actions.always.hint, /“Security”/);
+  assert.match(view.actions.always.hint, /“Tools & security”/);
 
   const blocked = buildApprovalCardView(cardDto({ alwaysAllowed: undefined, alwaysUnavailableReason: 'not-simple' }));
   assert.equal(blocked.actions.always.enabled, false);

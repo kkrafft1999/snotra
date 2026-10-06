@@ -489,7 +489,7 @@ rule beats them, they need `safeStorage`, a failed signature drops them, and
 "reset workspace rules" removes them. Adding one discards no open card and no
 session approval, because it can only turn a question into an allowance. Deny rules can block every class. "Sensitive paths" is a separate
 classification setting, not an allow rule. Rules can be created, reviewed and
-deleted individually in Settings › Security, each in the row of its class; the
+deleted individually in Settings › Tools & security, each in the row of its class; the
 chat card creates no permanent rule unnoticed.
 
 Session approvals live exclusively in memory and apply to the same chat,
@@ -523,7 +523,7 @@ also resets the mode to `smart`.
 ## 8. Where it lives in the UI, and migration
 
 The chat bar shows the active mode next to the model selection, and that is
-where a chat's mode is changed. Settings › Security offers the workspace default
+where a chat's mode is changed. Settings › Tools & security offers the workspace default
 (#413), the rule management and every other control of this concept, sorted by
 risk class (revision #437 below). A change applies to
 subsequent calls; actions already started cannot be prevented retroactively by
@@ -710,7 +710,7 @@ being switched off entirely — writing to a sibling repository or to
 predates the certifi fallback.
 
 - **Scope and storage.** One switch for both execution tools, per workspace,
-  off by default, in Settings › Security › *Execute*. It lives in the policy
+  off by default, in Settings › Tools & security › *Execute*. It lives in the policy
   file (section 7)
   as a list of canonical workspace roots — not in the folder, so a checked-out
   repository cannot switch it off for itself, and a folder of the same name
@@ -760,7 +760,7 @@ card, the refreshed token could not be written back, and Go's TLS check was
 refused. A program allowance grants exactly those three things, to one
 program.
 
-- **Scope and storage.** Global, in Settings › Security › *Execute* › *Program
+- **Scope and storage.** Global, in Settings › Tools & security › *Execute* › *Program
   allowances*,
   none by default. An entry names the program by its absolute path and adds
   host names, writable folders and — macOS only — the trust service. It lives
@@ -838,7 +838,7 @@ workspace can now carry a default mode of its own.
   approval: it changes nothing for a chat that is open.
 - **Where it is set.** A checkbox under the modes in the mode pill's menu makes
   the chat's current mode the default ("“Auto” for new chats in ‹folder›
-  too"), unticking it goes back to `smart`; Settings › Security shows the
+  too"), unticking it goes back to `smart`; Settings › Tools & security shows the
   same value as a choice of three at the top of the page. The option that is the
   default carries the tag "Default in ‹folder›", and the pill's tooltip says
   when the chat runs at the default. "Workspace-Regeln zurücksetzen" puts the
@@ -947,7 +947,8 @@ is where a user sees it and what they can take back.
   configuration without a security effect (the interpreter path, API keys), MCP
   keeps the server connections. Where sections 7 and 8 and the revisions for
   #357, #408 and #413 named Settings › Tools or Settings › Permissions, they now
-  name this page (#449).
+  name this page (#449). Since #767 the page is called Settings › Tools &
+  security, and Tools and MCP are one page, Settings › Tool setup.
 - **One switch per tool.** A tool is switched in the row of its own class and
   applies at once, like every other permission; there is no *Apply* for it any
   more. The execution tools are switched by their execution switch, which also

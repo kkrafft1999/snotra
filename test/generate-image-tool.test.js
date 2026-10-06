@@ -61,10 +61,10 @@ test('generate_image is offered only with an image service that has a key', () =
   assert.deepEqual(tool.function.parameters.properties.size.enum, ['1024x1024', '1536x1024', '1024x1536']);
 });
 
-test('a call without a configured service points to Settings › Tools', async () => {
+test('a call without a configured service points to Settings › Tool setup', async () => {
   const registry = createWorkspaceToolRegistry({ fsService: {}, imageGeneration: makeImageService({ configured: false }) });
   const output = await registry.execute('generate_image', { prompt: 'x', relative_path: 'a.png' }, { approved: true, locale: 'en' });
-  assert.match(JSON.parse(output).error, /Settings › Tools/);
+  assert.match(JSON.parse(output).error, /Settings › Tool setup/);
 });
 
 test('the image lands in the workspace; the model gets path and size, never the bytes', async (t) => {

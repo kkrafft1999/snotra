@@ -30,7 +30,7 @@ const SUMMARY_CLASSES = Object.freeze(['read', 'write', 'execute', 'external']);
 export const SECURITY_LINK_TARGETS = Object.freeze({
   python: { panel: 'tools', target: 'heading-python' },
   webSearch: { panel: 'tools', target: 'heading-web-search' },
-  mcp: { panel: 'mcp', target: 'heading-mcp-servers' },
+  mcp: { panel: 'tools', target: 'heading-mcp-servers' },
 });
 
 /** The only classes a rule can allow for good (concept §7). */

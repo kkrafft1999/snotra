@@ -8077,7 +8077,16 @@ select.modal-input {
  * Variante C: Das Panel traegt nur die Liste, bearbeitet wird im
  * Unterdialog. Der Sicherheitshinweis steht bewusst offen und nicht in einem
  * <details> — er ist der Grund, warum man hier zweimal hinschaut.
+ *
+ * Since #767 the servers are the last section of Settings › Tool setup,
+ * below the cards of the built-in tools. Their rows are cards themselves, so
+ * the section gets no card of its own — a heading and a section's distance
+ * set it apart, as on the Models page.
  */
+
+.settings-tools-mcp {
+  margin-top: 28px;
+}
 
 .settings-mcp-warning {
   display: grid;

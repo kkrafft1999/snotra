@@ -13,8 +13,9 @@ import { initSecurityPanel } from './SecurityPanel.js';
  * promises a safety net that is not there.
  */
 // Security (#448) shows the state and carries one instant control, the
-// workspace default mode.
-const IMMEDIATE_PANELS = new Set(['security', 'mcp', 'memory']);
+// workspace default mode. MCP is no section of its own since #767: its
+// servers sit on Tool setup, whose hint names them.
+const IMMEDIATE_PANELS = new Set(['security', 'memory']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -30,7 +31,9 @@ const APPLY_HINT_KEYS = {
   general: 'settings.applyHint.general',
 };
 
-const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'skills', 'memory', 'mcp', 'general'];
+// `security` is "Tools & security", `tools` is "Tool setup" with the MCP
+// servers (#767); the keys stayed so that links and ids did not move.
+const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'skills', 'memory', 'general'];
 
 /** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
