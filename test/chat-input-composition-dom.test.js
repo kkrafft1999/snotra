@@ -16,9 +16,10 @@ async function mountChatStream() {
   const { appStore } = await importRenderer('state', 'store.js');
 
   const sends = [];
+  let progress = null;
   const api = {
     onChatDelta: () => () => {},
-    onChatProgress: () => () => {},
+    onChatProgress: (cb) => { progress = cb; return () => {}; },
     onChatToolLine: () => () => {},
     getChatHistory: async () => ({ sessions: [], activeChatId: null }),
     setActiveChatId: async () => {},
@@ -28,7 +29,15 @@ async function mountChatStream() {
     abortChat: () => {},
     chat: (messages, options) =>
       new Promise((resolve) => {
-        sends.push({ messages, options, resolve });
+        sends.push({
+          messages,
+          options,
+          // Main ends every run with a marker behind its events (#721).
+          resolve: (result) => {
+            progress?.({ type: 'run-end', chatId: options?.chatId, runId: options?.runId });
+            resolve(result);
+          },
+        });
       }),
   };
 

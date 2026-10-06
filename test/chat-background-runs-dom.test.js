@@ -38,7 +38,13 @@ async function mount() {
     chat: (messages, options) =>
       new Promise((resolve) => {
         const send = { messages, options, settled: false };
-        send.resolve = (result) => { send.settled = true; resolve(result); };
+        // Main's end marker comes after the reply here: the order the
+        // renderer has to cope with when the reply overtakes the events (#721).
+        send.resolve = (result) => {
+          send.settled = true;
+          resolve(result);
+          listeners.progress?.({ type: 'run-end', chatId: options?.chatId, runId: options?.runId });
+        };
         sends.push(send);
       }),
   };

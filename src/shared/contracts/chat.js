@@ -310,6 +310,11 @@ function createReasoningEvent(text) {
   return { type: CHAT_PROGRESS_TYPES.REASONING, text };
 }
 
+/** chat:progress with type='run-end': nothing of this run follows (#721). */
+function createRunEndEvent() {
+  return { type: CHAT_PROGRESS_TYPES.RUN_END };
+}
+
 // --- Validatoren ------------------------------------------------------------
 
 function isChatErrorCode(code) {
@@ -342,6 +347,7 @@ module.exports = {
   createToolLineEvent,
   createPhaseEvent,
   createReasoningEvent,
+  createRunEndEvent,
   createWorkspaceFileWrittenEvent,
   createWorkspaceFileReadEvent,
   normalizeFileChangeSummary,

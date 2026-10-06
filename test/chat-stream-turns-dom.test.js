@@ -68,7 +68,11 @@ async function mount({ history = { sessions: [], activeChatId: null }, activateC
     chat: (messages, options) =>
       new Promise((resolve) => {
         const send = { messages, options, settled: false };
-        send.resolve = (result) => { send.settled = true; resolve(result); };
+        // The reply and main's end marker, apart or together: the reply can
+        // overtake the events, the marker comes behind the last one (#721).
+        send.reply = (result) => { send.settled = true; resolve(result); };
+        send.end = () => listeners.progress?.({ type: 'run-end', chatId: options?.chatId, runId: options?.runId });
+        send.resolve = (result) => { send.reply(result); send.end(); };
         sends.push(send);
       }),
   };
@@ -456,4 +460,35 @@ test('a folder name with Markdown in it is greeted as it is written (#595)', asy
   const greeting = list.querySelector('.chat-msg.assistant .chat-md');
   assert.equal(greeting.querySelector('em, a'), null);
   assert.match(greeting.textContent, /a\*b\*c \[x\]\(mailto:a@example\.com\)/);
+});
+
+// --- #721 ---------------------------------------------------------------------
+
+test('events that arrive after the reply still reach their run (#721)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { appStore, sends, list, ask, emit } = env;
+
+  ask('Fix the second line.');
+  await flush();
+  emit('toolLine', sends[0], { phase: 'start', line: 'Changing file notes.txt …', tool: 'edit_file', callIndex: 0 });
+  const done = {
+    line: 'Changed file notes.txt',
+    tool: 'edit_file',
+    changes: [{ id: 'a1-1', relativePath: 'notes.txt', status: 'text', added: 1, removed: 1 }],
+  };
+  // The reply overtakes the done event, as it did on the macOS runner.
+  sends[0].reply({ content: 'Done.', toolTrace: [done] });
+  await flush();
+  await flush();
+  assert.equal(appStore.chatInFlight, true, 'the run waits for its end marker');
+
+  emit('toolLine', sends[0], { phase: 'done', callIndex: 0, ...done });
+  sends[0].end();
+  await until(() => !appStore.chatInFlight, 'the settled run');
+
+  const row = list.querySelector('.chat-msg.assistant:last-of-type .chat-tool-lines .chat-tool-line');
+  assert.ok(row.classList.contains('chat-tool-line--done'));
+  assert.equal(row.querySelector('.chat-tool-line-text').textContent, 'Changed file notes.txt');
+  assert.ok(list.querySelector('.chat-changes button.chat-change-file'), 'the diff can be opened');
 });
