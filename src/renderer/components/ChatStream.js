@@ -980,10 +980,16 @@ export function initChatStream({
   function runForEvent(payload) {
     const chatId = typeof payload?.chatId === 'string' ? payload.chatId : null;
     const run = chatId ? appStore.chatRuns.get(chatId) : null;
-    if (!run || run.settled || run.runId !== payload?.runId) return null;
-    const last = run.assistantMessage;
-    if (!last || last.role !== 'assistant' || !last.streaming) return null;
-    return run;
+    const last = run?.assistantMessage;
+    let dropped = null;
+    if (!run) dropped = 'no run';
+    else if (run.settled) dropped = 'settled';
+    else if (run.runId !== payload?.runId) dropped = 'other run';
+    else if (!last || last.role !== 'assistant' || !last.streaming) dropped = 'not streaming';
+    if (!dropped) return run;
+    // Why an event found nothing, for a tool log that stopped mid-run (#721).
+    toolLogDebug.record('dropped', { reason: dropped, chatId, runId: payload?.runId ?? null, current: run?.runId ?? null });
+    return null;
   }
 
   /** What a permission event says about the running step: waiting, denied, expired — or nothing. */
