@@ -53,6 +53,27 @@ async function reachKeychain(home) {
   });
 }
 
+/** Where safeStorage keeps its key: Chromium names the item "<app name> Safe Storage". */
+export const KEYCHAIN_SERVICE = 'Snotra AI Safe Storage';
+
+/**
+ * How many keychain items hold the app's safeStorage key — on a CI runner
+ * only, where the keychain belongs to the run; a developer's keychain is not
+ * listed (#689). The item is created by the first start that finds none, so
+ * more than one means two starts created it at once, and a later start may
+ * read the other key than the one its data was written with.
+ */
+export async function keychainItemCount() {
+  if (process.platform !== 'darwin' || !process.env.CI) return null;
+  const listing = await new Promise((resolve) => {
+    execFile('security', ['dump-keychain'], { maxBuffer: 64 * 1024 * 1024, timeout: 15000 },
+      (error, stdout) => resolve(error ? null : stdout));
+  });
+  if (listing === null) return null;
+  const marker = `"svce"<blob>="${KEYCHAIN_SERVICE}"`;
+  return listing.split('\n').filter((line) => line.includes(marker)).length;
+}
+
 /**
  * How long a quit may take before the helper reports it. The app holds a quit
  * for at most 5 s of pending writes (#681), so 20 s is far beyond any regular

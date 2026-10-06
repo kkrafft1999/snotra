@@ -1688,7 +1688,12 @@ everything once at startup catches the bulk of it. It takes about three seconds.
   finds the same one. Not on Windows yet: there the home folder comes from
   `USERPROFILE`, and with that moved Electron did not start at all. On macOS only
   `Library/Keychains` links to the real folder, since without the login keychain
-  the app would run without safeStorage. A caller can hand over a prepared home
+  the app would run without safeStorage. On a fresh runner that keychain has no
+  "Snotra AI Safe Storage" item yet, and test files starting side by side each
+  created one — a restart then read another key than its first start had
+  written with. `pretest:e2e` therefore starts the app once beforehand
+  (`e2e/helpers/warm-keychain.mjs`) so that the item exists before any test
+  runs ([#689](https://github.com/kkrafft1999/snotra/issues/689)). A caller can hand over a prepared home
   (`home`), and a script that runs a real program with its real login keeps the
   real one (`home: false`)
   ([#702](https://github.com/kkrafft1999/snotra/issues/702),

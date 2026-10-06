@@ -8,7 +8,7 @@
     "postinstall": "node scripts/sync-renderer-vendor.js",
     "pretest": "node scripts/sync-renderer-vendor.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "pretest:e2e": "node scripts/sync-renderer-vendor.js",
+    "pretest:e2e": "node scripts/sync-renderer-vendor.js && node e2e/helpers/warm-keychain.mjs",
     "test:e2e": "node --test e2e/*.test.mjs",
     "precoverage": "node scripts/sync-renderer-vendor.js",
     "coverage": "node scripts/coverage.js",
