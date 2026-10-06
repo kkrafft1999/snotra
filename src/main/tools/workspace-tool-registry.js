@@ -1152,6 +1152,10 @@ function createWorkspaceToolRegistry({
             // Rumpfzeilen (:588), Dateikopf (:638/:696). Die Toleranz bei den
             // Zeilennummern bleibt, weil sie kein Fehler meldet: ohne sie
             // liest das Modell Dateien neu, die es nicht neu lesen muss (#184).
+            // Since #771 the parser also reads a bare "@@", wrong hunk counts
+            // and OpenAI's "*** Begin Patch" format, so the hunk grammar was
+            // measured again and still left out: with the tolerance no patch
+            // call failed either way (bench/tool-accuracy, 2026-10-06).
             description:
               'Unified diff as text: per file "--- old"/"+++ new", followed by "@@ …" hunks. The line ' +
               'numbers may be slightly off, the context must match exactly. Cannot be combined ' +

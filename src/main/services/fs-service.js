@@ -599,21 +599,105 @@ function normalizeDiffPath(raw) {
   return value.replace(/^[ab]\//, '').replace(/^\.\//, '');
 }
 
+const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+/** A "--- " line followed by its "+++ " line: the next file of a unified diff. */
+function isFileHeaderAt(rawLines, index) {
+  return rawLines[index]?.startsWith('--- ') === true && rawLines[index + 1]?.startsWith('+++ ') === true;
+}
+
+/**
+ * Reads a hunk body up to the next hunk, the next file or the end (#771),
+ * instead of by the counts in its header. For a header without line numbers
+ * — a bare "@@", or OpenAI's own patch format — and for one whose counts do
+ * not match its body: models send both often, and the unchanged and removed
+ * lines still say where the hunk belongs. `oldStart` is null when the header
+ * names no line; such a hunk is placed by its lines alone (see
+ * locateUnnumberedHunk).
+ */
+function readDelimitedHunk(rawLines, startIndex, { header, headerLine, oldStart, anchor = null, isEnd }) {
+  const hunk = {
+    header,
+    oldStart,
+    oldCount: 0,
+    oldLines: [],
+    newLines: [],
+    ops: [],
+    noNewlineOld: false,
+    noNewlineNew: false,
+    anchor,
+  };
+  let end = startIndex;
+  while (end < rawLines.length && !isEnd(rawLines, end)) end += 1;
+  // Blank lines at the very end separate the hunk from what follows; with no
+  // count to say otherwise, they are not unchanged empty lines of the file.
+  let last = end;
+  while (last > startIndex && rawLines[last - 1] === '') last -= 1;
+
+  let lastSide = null;
+  for (let i = startIndex; i < last; i += 1) {
+    const body = rawLines[i];
+    const marker = body === '' ? ' ' : body[0];
+    const content = body === '' ? '' : body.slice(1);
+    if (marker === '\\') {
+      if (lastSide === 'old' || lastSide === 'both') hunk.noNewlineOld = true;
+      if (lastSide === 'new' || lastSide === 'both') hunk.noNewlineNew = true;
+      continue;
+    }
+    if (marker !== ' ' && marker !== '-' && marker !== '+') {
+      return {
+        error:
+          `Unexpected line ${i + 1} in hunk "${clipPatchLine(header)}": "${clipPatchLine(body)}". ` +
+          `Hunk lines start with " " (unchanged), "-" (removed), "+" (added) or "\\".`,
+      };
+    }
+    if (marker !== '+') hunk.oldLines.push(content);
+    if (marker !== '-') hunk.newLines.push(content);
+    hunk.ops.push(marker);
+    lastSide = marker === ' ' ? 'both' : marker === '-' ? 'old' : 'new';
+  }
+  if (!hunk.ops.length) {
+    return { error: `Hunk "${clipPatchLine(header)}" on line ${headerLine} has no lines.` };
+  }
+  hunk.oldCount = hunk.oldLines.length;
+  return { hunk, nextIndex: end };
+}
+
+const endsUnifiedHunk = (rawLines, index) => rawLines[index].startsWith('@@') || isFileHeaderAt(rawLines, index);
+
 /**
  * Liest einen Hunk ab dem Kopf `@@ -alt,anzahl +neu,anzahl @@`. Die Zeilenzahlen im
  * Kopf bestimmen, wie viele Rumpfzeilen gelesen werden — nur so ist eine entfernte
  * Zeile, die selbst mit "---" beginnt, nicht vom nächsten Dateikopf zu unterscheiden.
+ *
+ * Only when that fails — the header has no numbers, or its counts do not match
+ * the body — is the body read up to the next hunk or file instead (#771).
  */
 function parseUnifiedDiffHunk(rawLines, headerIndex) {
   const header = rawLines[headerIndex];
-  const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(header);
-  if (!match) {
-    return {
-      error:
-        `Invalid hunk header on line ${headerIndex + 1}: "${clipPatchLine(header)}". ` +
-        `Expected "@@ -oldLine,count +newLine,count @@".`,
-    };
+  const match = HUNK_HEADER.exec(header);
+  const delimited = (oldStart) => readDelimitedHunk(rawLines, headerIndex + 1, {
+    header,
+    headerLine: headerIndex + 1,
+    oldStart,
+    isEnd: endsUnifiedHunk,
+  });
+  if (!match) return delimited(null);
+
+  const counted = parseCountedHunk(rawLines, headerIndex, match);
+  if (!counted.error) {
+    // Counts too low: the body goes on past what the header announced.
+    const next = rawLines[counted.nextIndex];
+    const bodyGoesOn = next !== undefined && /^[ +-]/.test(next) && !isFileHeaderAt(rawLines, counted.nextIndex);
+    if (!bodyGoesOn) return counted;
   }
+  // The header's line stays as the place to look; its counts are dropped.
+  const fallback = delimited(Number(match[1]));
+  return fallback.error ? (counted.error ? counted : fallback) : fallback;
+}
+
+function parseCountedHunk(rawLines, headerIndex, match) {
+  const header = rawLines[headerIndex];
   const oldStart = Number(match[1]);
   const oldCount = match[2] === undefined ? 1 : Number(match[2]);
   const newCount = match[4] === undefined ? 1 : Number(match[4]);
@@ -687,6 +771,118 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
   return { hunk, nextIndex: i };
 }
 
+const OPENAI_PATCH = {
+  BEGIN: '*** Begin Patch',
+  END: '*** End Patch',
+  UPDATE: '*** Update File: ',
+  ADD: '*** Add File: ',
+  DELETE: '*** Delete File: ',
+  MOVE: '*** Move to: ',
+  END_OF_FILE: '*** End of File',
+};
+
+const endsOpenAiHunk = (rawLines, index) => rawLines[index].startsWith('@@') || rawLines[index].startsWith('*** ');
+
+/**
+ * OpenAI's own patch format (#771), which its models send out of habit even
+ * when asked for a unified diff:
+ *
+ *   *** Begin Patch
+ *   *** Update File: src/app.js
+ *   @@ function main() {
+ *   -  old
+ *   +  new
+ *   *** End Patch
+ *
+ * Only "Update File" is read, into the same file sections as a unified diff.
+ * Its hunks carry no line numbers: the text after "@@", if any, names a line
+ * the hunk follows, and the hunk is placed by its own lines (see
+ * locateUnnumberedHunk). Adding, deleting and moving files are refused as in
+ * a unified diff.
+ */
+function parseOpenAiPatch(rawLines, startIndex) {
+  const files = [];
+  let totalHunks = 0;
+  let i = rawLines[startIndex].startsWith(OPENAI_PATCH.BEGIN) ? startIndex + 1 : startIndex;
+
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    if (line.trim() === '' || line.startsWith(OPENAI_PATCH.END_OF_FILE)) {
+      i += 1;
+      continue;
+    }
+    if (line.startsWith(OPENAI_PATCH.END)) break;
+    if (line.startsWith(OPENAI_PATCH.ADD)) {
+      const path = normalizeDiffPath(line.slice(OPENAI_PATCH.ADD.length));
+      return {
+        error: `The patch creates "${path}" — apply_patch only changes existing files. Create new files with write_file_text.`,
+      };
+    }
+    if (line.startsWith(OPENAI_PATCH.DELETE)) {
+      const path = normalizeDiffPath(line.slice(OPENAI_PATCH.DELETE.length));
+      return { error: `The patch deletes "${path}" — apply_patch cannot delete files.` };
+    }
+    if (!line.startsWith(OPENAI_PATCH.UPDATE)) {
+      return {
+        error:
+          `Unexpected line ${i + 1} in the patch: "${clipPatchLine(line)}". ` +
+          `Expected "${OPENAI_PATCH.UPDATE}<path>" or "${OPENAI_PATCH.END}".`,
+      };
+    }
+    const relativePath = normalizeDiffPath(line.slice(OPENAI_PATCH.UPDATE.length));
+    i += 1;
+    if (rawLines[i]?.startsWith(OPENAI_PATCH.MOVE)) {
+      const target = normalizeDiffPath(rawLines[i].slice(OPENAI_PATCH.MOVE.length));
+      return {
+        error: `The patch renames "${relativePath}" to "${target}" — apply_patch does not support renames.`,
+      };
+    }
+    if (files.some((file) => file.relativePath === relativePath)) {
+      return {
+        error: `"${relativePath}" appears more than once in the patch — put all hunks for one file into a single file section.`,
+      };
+    }
+
+    const hunks = [];
+    while (i < rawLines.length && !rawLines[i].startsWith('*** ')) {
+      // A hunk may start without "@@" right below the file line; several
+      // "@@" lines in a row narrow down to the last one.
+      let anchor = null;
+      let header = '@@';
+      const headerLine = i + 1;
+      while (i < rawLines.length && rawLines[i].startsWith('@@')) {
+        header = rawLines[i];
+        anchor = rawLines[i].slice(2).trim() || anchor;
+        i += 1;
+      }
+      const parsed = readDelimitedHunk(rawLines, i, { header, headerLine, oldStart: null, anchor, isEnd: endsOpenAiHunk });
+      if (parsed.error) return { error: parsed.error };
+      hunks.push(parsed.hunk);
+      totalHunks += 1;
+      if (totalHunks > PATCH_MAX_HUNKS) {
+        return {
+          error: `Too many hunks in the patch (more than ${PATCH_MAX_HUNKS}). Split it across several calls.`,
+        };
+      }
+      i = parsed.nextIndex;
+    }
+    if (!hunks.length) {
+      return { error: `The patch has no change for "${relativePath}".` };
+    }
+    files.push({ relativePath, hunks });
+    if (files.length > PATCH_MAX_FILES) {
+      return {
+        error: `Too many files in the patch (more than ${PATCH_MAX_FILES}). Split it across several calls.`,
+      };
+    }
+  }
+
+  if (!files.length) {
+    return { error: `The patch has no "${OPENAI_PATCH.UPDATE}<path>" section.` };
+  }
+  return { files };
+}
+
 /**
  * Zerlegt einen unified diff in Dateiabschnitte mit Hunks. Unterstützt werden
  * Änderungen an bestehenden Textdateien; Anlegen, Löschen, Umbenennen und
@@ -695,6 +891,11 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
 function parseUnifiedDiff(text) {
   const rawLines = text.split(/\r?\n/).map((line) => line.replace(/\r$/, ''));
   if (rawLines.length && rawLines[rawLines.length - 1] === '') rawLines.pop();
+
+  const first = rawLines.findIndex((line) => line.trim() !== '');
+  if (first !== -1 && /^\*\*\* (Begin Patch|Update File: |Add File: |Delete File: )/.test(rawLines[first])) {
+    return parseOpenAiPatch(rawLines, first);
+  }
 
   const files = [];
   let totalHunks = 0;
@@ -884,6 +1085,50 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
 }
 
 /**
+ * Where a hunk without line numbers goes (#771): at the one place at or after
+ * `minIndex` — the end of the hunk in front — where its unchanged and removed
+ * lines stand, below its anchor line if it names one. Without a number there
+ * is no "nearest" to prefer, so a passage that occurs twice is refused
+ * rather than guessed.
+ */
+function locateUnnumberedHunk(lines, hunk, minIndex) {
+  let from = minIndex;
+  if (hunk.anchor) {
+    const wanted = hunk.anchor.trim();
+    const at = lines.findIndex((line, index) => index >= minIndex && line.trim() === wanted);
+    if (at === -1) {
+      return { error: `the line it names after "@@" ("${clipPatchLine(wanted)}") does not occur after line ${minIndex}.` };
+    }
+    from = at;
+  }
+  if (!hunk.oldLines.length) {
+    return {
+      error:
+        'a hunk without line numbers needs at least one unchanged or removed line to find its place — ' +
+        'add context lines or give "@@ -line,count +line,count @@".',
+    };
+  }
+  const maxIndex = lines.length - hunk.oldLines.length;
+  const first = from <= maxIndex ? findNearestMatch(lines, hunk.oldLines, from, from, maxIndex) : -1;
+  if (first === -1) {
+    return {
+      error:
+        `the context does not match (looked for "${clipPatchLine(hunk.oldLines[0])}" after line ${from}). ` +
+        `Read the file again and build the patch against its current content.`,
+    };
+  }
+  const second = first < maxIndex ? findNearestMatch(lines, hunk.oldLines, first + 1, first + 1, maxIndex) : -1;
+  if (second !== -1) {
+    return {
+      error:
+        `its lines occur more than once (at line ${first + 1} and line ${second + 1}) and the header gives no ` +
+        'line number — add context lines until the passage is unique, or give "@@ -line,count +line,count @@".',
+    };
+  }
+  return { index: first };
+}
+
+/**
  * Wendet alle Hunks einer Datei auf ihre Zeilen an — der erste Fehlschlag bricht ab.
  *
  * `source` comes from `splitTextForPatch`: a kept line keeps its own ending,
@@ -904,6 +1149,26 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
 
   for (let h = 0; h < hunks.length; h += 1) {
     const hunk = hunks[h];
+    if (hunk.oldStart === null) {
+      const placed = locateUnnumberedHunk(source.lines, hunk, previousEnd);
+      if (placed.error) {
+        return { error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${placed.error}` };
+      }
+      const newEndings = [];
+      let old = placed.index;
+      for (const op of hunk.ops) {
+        if (op === ' ') newEndings.push(source.endings[old]);
+        else if (op === '+') newEndings.push(eol);
+        if (op !== '+') old += 1;
+      }
+      result.splice(placed.index + shift, hunk.oldLines.length, ...hunk.newLines);
+      endings.splice(placed.index + shift, hunk.oldLines.length, ...newEndings);
+      // No header line to be off from; the next numbered hunk keeps the offset it had.
+      offsets.push(null);
+      previousEnd = placed.index + hunk.oldLines.length;
+      shift += hunk.newLines.length - hunk.oldLines.length;
+      continue;
+    }
     const declared = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
     const expected = declared + offset;
     const found = findHunkIndex(source.lines, hunk.oldLines, expected, previousEnd);
@@ -2014,7 +2279,7 @@ function createFsService({
         relative_path: entry.relativePath,
         hunks_applied: entry.hunks,
         // Nur melden, wenn ein Hunk versetzt zur Kopfzeile gegriffen hat.
-        ...(entry.offsets.some((value) => value !== 0) ? { line_offsets: entry.offsets } : {}),
+        ...(entry.offsets.some((value) => value !== 0 && value !== null) ? { line_offsets: entry.offsets } : {}),
         bytes_written: entry.byteLength,
       })),
     });
