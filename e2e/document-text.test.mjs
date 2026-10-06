@@ -126,6 +126,18 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
       `tool log: ${JSON.stringify(await toolLog().catch((e) => String(e)), null, 1)}`,
       `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
       `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
+      // Every tool event the renderer received, and every error its handlers
+      // swallowed (tool-log-debug.js): whether an event never came, or came
+      // and was not drawn.
+      `renderer tool events: ${await page.evaluate(() => {
+        const debug = window.__snotraToolLogDebug;
+        if (!debug) return 'no debug buffer';
+        const { errorCount, entries } = JSON.parse(debug.serialize());
+        const t0 = entries[0]?.t ?? 0;
+        const lines = entries.filter((e) => e.kind !== 'summary')
+          .map((e) => `${e.seq} +${e.t - t0}ms ${e.kind} ${JSON.stringify(e.data)}`);
+        return `${errorCount} handler errors\n${lines.join('\n')}`;
+      }).catch((e) => String(e))}`,
       `main:\n${snotra.mainOutput()}`,
     ].join('\n'),
   });
