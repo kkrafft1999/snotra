@@ -118,8 +118,9 @@ test('streamChatRound translates history with tool calls into Responses input it
     { type: 'function_call', call_id: 'call_1', name: 'list_directory', arguments: '{}' },
     { type: 'function_call_output', call_id: 'call_1', output: '{"items":[]}' },
   ]);
+  // strict: false keeps optional parameters optional (#766).
   assert.deepEqual(body.tools, [
-    { type: 'function', name: 'list_directory', description: 'ls', parameters: { type: 'object' } },
+    { type: 'function', name: 'list_directory', description: 'ls', parameters: { type: 'object' }, strict: false },
   ]);
   assert.equal(body.tool_choice, 'auto');
 });
