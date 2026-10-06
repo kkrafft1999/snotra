@@ -357,6 +357,23 @@ limits for tools. Parsing the front matter lives as a pure function in
 `shared/runtime/skill-frontmatter.js`, the enums and DTOs in
 `shared/contracts/skills.js`.
 
+**Snotra writes skills into the open folder only** (#160). No tool gets a new
+root for it: `.agents/skills/<name>/` lies inside the workspace, so the
+ordinary write tools reach it under the ordinary approval, while `skill:` paths
+and the global skill folders stay refused for every write (#548). A skill
+becomes global when the user moves it to `~/.snotra/skills/` — a step outside
+the model's reach on purpose, because a global skill sits in the prompt of every
+folder. Two pieces make this usable rather than merely possible:
+`checkSkillDocument` in `skill-frontmatter.js` is the one validity check, used
+by the catalogue scan and by `workspace-tool-adapter.js`, which re-reads every
+`.agents/skills/<name>/SKILL.md` a successful write touched and adds a
+`skill_check` to the tool result; and the system skill `snotra-skill-authoring`
+tells the model where and how to write. The log labels such a write as part of
+the skill (`shared/presentation/tool-display.js`) and counts it in a category
+of its own, `skill-write` (`shared/contracts/tool-categories.js`), so the
+collapsed summary reads "1 skill file written" rather than hiding the skill
+behind "1 file written".
+
 ### One watcher, two consumers
 
 That the app notices what happens **next to** it in the file system is the work

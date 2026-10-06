@@ -38,6 +38,8 @@ const CHAT_TOOL_CHEVRON_HTML =
 // hat, und ersetzt den früheren linken Balken samt Häkchen.
 const TOOL_CATEGORY_ICON_PATHS = {
   skill: '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
+  // The same bookmark: a skill file written (#160) is still about the skill.
+  'skill-write': '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
   read: '<path d="M4 1.8h4.6L12 5.2v9H4z"/><path d="M8.4 1.9v3.4h3.4"/><path d="M6 9h4M6 11.4h4"/>',
   search: '<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/>',
   list: '<path d="M2.2 4h3.9l1.2 1.6h6.5v7.4H2.2z"/>',
@@ -255,12 +257,26 @@ export function setToolLineText(row, text) {
   row.setAttribute('aria-label', t('toolLog.line.running.label', { text }));
 }
 
+/**
+ * Brings a row's category and symbol up to date. A pending row is drawn while
+ * the arguments are still streaming in, so its category can be the plain tool
+ * kind until the path arrives — a `skill:` read, or a write into a skill of
+ * the open folder (#160), only shows as such once it does.
+ */
+export function setToolLineCategory(row, category) {
+  if (!row || !category || row.dataset.category === category) return;
+  row.dataset.category = category;
+  row.querySelector('.chat-tool-line-icon')?.remove();
+  row.insertAdjacentHTML('afterbegin', toolCategoryIconHtml(category));
+}
+
 /** Vorläufige Zeile (Aufruf gestreamt) wird zur laufenden Zeile (Tool wird ausgeführt). */
-export function promoteToolLineToRunning(row, text) {
+export function promoteToolLineToRunning(row, text, category) {
   if (!row) return;
   row.classList.remove('chat-tool-line--pending');
   row.classList.add('chat-tool-line--running');
   setToolLineText(row, text);
+  setToolLineCategory(row, category);
 }
 
 export function findPendingToolLine(linesEl, callIndex, fallbackToFirst = false) {

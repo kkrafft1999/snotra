@@ -17,14 +17,13 @@
  * beide nicht und weiss nur, wie er alles wegwirft.
  */
 
-const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
+const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createMessage } = require('../../shared/contracts/message');
 const {
   SKILL_SOURCES,
   SKILL_STATUS,
   MAX_SKILL_BODY_CHARS,
-  isValidSkillName,
 } = require('../../shared/contracts/skills');
 
 const SKILL_FILE = 'SKILL.md';
@@ -132,23 +131,11 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.missingFile', { file: SKILL_FILE }));
     }
 
-    const parsed = parseSkillDocument(raw);
-    if (!parsed) {
-      return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noFrontmatter'));
-    }
+    const checked = checkSkillDocument(raw, dirName);
+    if (!checked.ok) return invalidSkill(source, dirName, skillDir, createMessage(checked.key, checked.params));
+    const { name, description } = checked;
 
-    const name = typeof parsed.frontmatter.name === 'string' ? parsed.frontmatter.name.trim() : '';
-    const description =
-      typeof parsed.frontmatter.description === 'string' ? parsed.frontmatter.description.trim() : '';
-
-    if (!name) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noName'));
-    if (!description) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.noDescription'));
-    if (!isValidSkillName(name)) return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.badName', { name }));
-    if (name !== dirName) {
-      return invalidSkill(source, dirName, skillDir, createMessage('skills.invalid.nameMismatch', { name, dir: dirName }));
-    }
-
-    const body = parsed.body.length > maxSkillBodyChars ? parsed.body.slice(0, maxSkillBodyChars) : parsed.body;
+    const body = checked.body.length > maxSkillBodyChars ? checked.body.slice(0, maxSkillBodyChars) : checked.body;
     return {
       name,
       description,
@@ -157,7 +144,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       path: skillDir,
       detail: '',
       body,
-      truncated: parsed.body.length > maxSkillBodyChars,
+      truncated: checked.body.length > maxSkillBodyChars,
     };
   }
 

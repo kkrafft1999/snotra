@@ -14,6 +14,12 @@ const { LOAD_SKILL_TOOL } = require('./skills');
 const TOOL_CATEGORIES = Object.freeze({
   /** Zugriff auf Dateien eines eingeschalteten Skills („skill:<name>/…“, #61). */
   SKILL: 'skill',
+  /**
+   * A file of a skill in the open folder written by a file tool (#160). Its
+   * own category so that the collapsed log says "skill file written" — as
+   * one more "file written" the skill would disappear from the summary.
+   */
+  SKILL_WRITE: 'skill-write',
   READ: 'read',
   SEARCH: 'search',
   LIST: 'list',
@@ -67,8 +73,11 @@ function toolCategory(toolName) {
  * Frage, mit welchem Lese-Tool sie geholt wurde.
  */
 function toolCategoryForEntry(entry) {
-  if (typeof entry?.skill === 'string' && entry.skill) return TOOL_CATEGORIES.SKILL;
-  return toolCategory(entry?.tool);
+  const category = toolCategory(entry?.tool);
+  if (typeof entry?.skill === 'string' && entry.skill) {
+    return category === TOOL_CATEGORIES.WRITE ? TOOL_CATEGORIES.SKILL_WRITE : TOOL_CATEGORIES.SKILL;
+  }
+  return category;
 }
 
 module.exports = {

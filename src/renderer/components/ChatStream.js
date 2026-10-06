@@ -25,6 +25,7 @@ import {
   promoteToolLineToRunning,
   setToolLineDone,
   setToolLineText,
+  setToolLineCategory,
   syncPhaseLine,
   syncToolListOverflow,
   syncToolLogSummary,
@@ -1169,8 +1170,10 @@ export function initChatStream({
     if (phase === 'pending') {
       // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
       const row = findPendingToolLine(linesEl, callIndex);
-      if (row) setToolLineText(row, line);
-      else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
+      if (row) {
+        setToolLineText(row, line);
+        setToolLineCategory(row, category);
+      } else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
     } else if (phase === 'done') {
       const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
       const byIndex = Number.isInteger(callIndex)
@@ -1189,7 +1192,7 @@ export function initChatStream({
       });
       // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
       const pendingRow = findPendingToolLine(linesEl, callIndex, true);
-      if (pendingRow) promoteToolLineToRunning(pendingRow, line);
+      if (pendingRow) promoteToolLineToRunning(pendingRow, line, category);
       else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
     }
 

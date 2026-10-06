@@ -13,7 +13,7 @@
 
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { parseSkillPath } = require('../runtime/skill-path');
-const { LOAD_SKILL_TOOL } = require('../contracts/skills');
+const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../contracts/skills');
 const { DEFAULT_LOCALE, createTranslator } = require('../i18n');
 
 function truncateToolLabel(value, max = 48) {
@@ -37,6 +37,19 @@ function formatRelativePathForLabel(relativePath, t) {
     return t('tools.path.skillFile', { path: truncateToolLabel(skill.rest), name });
   }
   return truncateToolLabel(raw);
+}
+
+/**
+ * Path label of a writing tool. A file of a skill in the open folder
+ * (`.agents/skills/<name>/…`) reads as part of that skill, so writing a skill
+ * shows up as such in the log rather than as one more file (#160).
+ */
+function formatWrittenPathForLabel(relativePath, t) {
+  const skill = workspaceSkillOfPath(relativePath);
+  if (skill) {
+    return t('tools.path.skillFile', { path: truncateToolLabel(skill.file), name: truncateToolLabel(skill.name, 24) });
+  }
+  return formatRelativePathForLabel(relativePath, t);
 }
 
 /**
@@ -87,6 +100,7 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   const t = createTranslator(locale);
   const isDone = phase === 'done';
   const pathOf = () => formatRelativePathForLabel(args?.relative_path, t);
+  const writtenPathOf = () => formatWrittenPathForLabel(args?.relative_path, t);
   // Ahead of the file tools: loading an instruction should read as a skill step
   // in the log, not as "file read" (issue #173).
   if (toolName === LOAD_SKILL_TOOL) {
@@ -108,9 +122,9 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
     const target = [pathOf(), range].filter(Boolean).join(' ');
     return lineFor(t, 'read_file_lines', isDone, { target });
   }
-  if (toolName === 'write_file_text') return lineFor(t, 'write_file_text', isDone, { path: pathOf() });
-  if (toolName === 'edit_file') return lineFor(t, 'edit_file', isDone, { path: pathOf() });
-  if (toolName === 'apply_patch') return lineFor(t, 'apply_patch', isDone, { path: pathOf() });
+  if (toolName === 'write_file_text') return lineFor(t, 'write_file_text', isDone, { path: writtenPathOf() });
+  if (toolName === 'edit_file') return lineFor(t, 'edit_file', isDone, { path: writtenPathOf() });
+  if (toolName === 'apply_patch') return lineFor(t, 'apply_patch', isDone, { path: writtenPathOf() });
   if (toolName === 'generate_image') return lineFor(t, 'generate_image', isDone, { path: pathOf() });
   if (toolName === 'search_in_files') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
