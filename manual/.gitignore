@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.astro/
+# Copied from ../assets/icon/ by scripts/sync-icon.mjs
+public/favicon.svg

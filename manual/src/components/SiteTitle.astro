@@ -1,0 +1,59 @@
+---
+// Starlight's site title plus the Snotra version the manual describes.
+// The web manual only ever shows the current release (#777), so the version
+// comes from the app's package.json, which the release tag has just bumped.
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import appPackage from '../../../package.json';
+
+const version = appPackage.version.split('.').slice(0, 2).join('.');
+const label = Astro.locals.t('snotra.version.label').replace('{version}', version);
+const title = Astro.locals.t('snotra.version.title').replace('{version}', appPackage.version);
+---
+
+<div class="snotra-site-title">
+  <Default />
+  <span class="snotra-version" title={title}>
+    <span class="sr-only">{title}</span>
+    <span aria-hidden="true">{label}</span>
+  </span>
+</div>
+
+<style>
+  .snotra-site-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .snotra-version {
+    flex: none;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--ds-blue-border);
+    border-radius: 999px;
+    background: var(--ds-blue-soft);
+    color: var(--ds-blue-strong);
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /*
+   * Where the header has room for the logo and the version but not for the
+   * full title as well (phones, and the narrow end of the desktop layout), the
+   * title is hidden visually rather than cut off. It stays for screen readers,
+   * and every page names itself in its <h1>. The two ranges are measured for
+   * the longer, German title: below 30rem the phone header is too narrow, and
+   * between 50rem and 54rem Starlight's desktop header has just switched on
+   * and gives the search most of the row.
+   */
+  @media (max-width: 30rem), (min-width: 50rem) and (max-width: 54rem) {
+    .snotra-site-title :global(.site-title > span) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+</style>
