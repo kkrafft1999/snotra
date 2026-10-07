@@ -9,6 +9,7 @@
 
 const path = require('path');
 const { createMessage } = require('../../shared/contracts/message');
+const { PRODUCT_NAMES } = require('../app-identity');
 
 /** Verzeichnisse, in die nur root schreibt — dort liegt eine Paketinstallation. */
 const LINUX_SYSTEM_PREFIXES = ['/opt/', '/usr/', '/snap/'];
@@ -29,7 +30,10 @@ const REASONS = Object.freeze({
  * quarantined app from (App Translocation). Both are told up front instead of
  * after a download that cannot be installed.
  */
-const MAC_READ_ONLY_BUNDLE = /^\/Volumes\/Snotra AI(?: \d+)?\/[^/]+\.app$|\/AppTranslocation\//;
+// The disk image is named after the app, before and after the rename (#794).
+const MAC_READ_ONLY_BUNDLE = new RegExp(
+  `^/Volumes/(?:${PRODUCT_NAMES.join('|')})(?: \\d+)?/[^/]+\\.app$|/AppTranslocation/`,
+);
 
 /** A release asset's SHA-256 as GitHub lists it (`sha256:<hex>`), or ''. */
 function assetDigest(digest) {

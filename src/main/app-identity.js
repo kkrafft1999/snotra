@@ -15,4 +15,9 @@ const LEGACY_APP_NAME = 'Weyouze Anything';
 // wirklich diese App steckt, bevor es die installierte ersetzt.
 const APP_BUNDLE_ID = 'dev.snotra-ai.app';
 
-module.exports = { APP_NAME, LEGACY_APP_NAME, APP_BUNDLE_ID };
+// Every name a package of this app may carry (#794). The app is renamed from
+// Snotra AI to Snotra Agent (#795); the updater accepts both, so the release
+// that renames it installs over one that does not, and the other way round.
+const PRODUCT_NAMES = Object.freeze(['Snotra AI', 'Snotra Agent']);
+
+module.exports = { APP_NAME, LEGACY_APP_NAME, APP_BUNDLE_ID, PRODUCT_NAMES };

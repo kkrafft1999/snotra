@@ -164,6 +164,7 @@ test('Assets ohne Download-Adresse werden verworfen', () => {
 for (const [label, execPath] of [
   ['the mounted disk image', '/Volumes/Snotra AI/Snotra AI.app/Contents/MacOS/Snotra AI'],
   ['the disk image mounted a second time', '/Volumes/Snotra AI 1/Snotra AI.app/Contents/MacOS/Snotra AI'],
+  ['the disk image of the renamed app (#794)', '/Volumes/Snotra Agent/Snotra Agent.app/Contents/MacOS/Snotra Agent'],
   ['App Translocation', '/private/var/folders/xy/T/AppTranslocation/0B1C2D3E/d/Snotra AI.app/Contents/MacOS/Snotra AI'],
 ]) {
   test(`macOS: running from ${label} gives a reason instead of a self-update`, () => {
