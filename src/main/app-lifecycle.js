@@ -47,7 +47,7 @@ function claimSingleInstance({ app, getMainWindow, createWindow, canCreateWindow
  * (#509): on macOS a dock icon that does nothing, on Windows and Linux an
  * invisible process. The error is logged, shown, and the app ends.
  */
-function createStartupFailureHandler({ app, dialog, log = console, appName = 'Snotra AI' }) {
+function createStartupFailureHandler({ app, dialog, log = console, appName = 'Snotra Agent' }) {
   return (error) => {
     log.error?.('Start-up failed:', error);
     try {

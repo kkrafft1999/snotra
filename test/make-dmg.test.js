@@ -50,7 +50,7 @@ function fakeTools({ failDetach = 0 } = {}) {
 }
 
 test('the DMG name matches what release.yml and the self-updater expect', () => {
-  assert.equal(dmgFileName('1.15.0'), 'Snotra-AI-1.15.0-mac-arm64.dmg');
+  assert.equal(dmgFileName('1.15.0'), 'Snotra-Agent-1.15.0-mac-arm64.dmg');
   assert.ok(dmgFileName('1.15.0').endsWith('.dmg'), 'update-targets picks the macOS asset by its .dmg suffix');
   assert.equal(VOLUME_NAME, pkg.productName);
 });
@@ -76,7 +76,7 @@ test('sets only the custom-icon flag and keeps the rest of the FinderInfo', () =
 
 test('stages the bundle, Applications, the volume icon, the background and the layout, then flags, detaches and converts', posixOnly, async (t) => {
   const dir = tmpDir(t);
-  const appPath = path.join(dir, 'Snotra AI.app');
+  const appPath = path.join(dir, 'Snotra Agent.app');
   const outPath = path.join(dir, 'out', 'make', dmgFileName('1.0.0'));
   const tools = fakeTools();
   let mountedChecks = 0;
@@ -87,7 +87,7 @@ test('stages the bundle, Applications, the volume icon, the background and the l
   });
 
   const staged = tools.staged();
-  assert.ok(staged['Snotra AI.app'].isDirectory());
+  assert.ok(staged['Snotra Agent.app'].isDirectory());
   assert.ok(staged.Applications.isSymbolicLink());
   assert.equal(staged.applicationsTarget, '/Applications');
   assert.equal(staged['.VolumeIcon.icns'].size, fs.statSync(VOLUME_ICON).size);
@@ -104,7 +104,7 @@ test('stages the bundle, Applications, the volume icon, the background and the l
     ['hdiutil', 'convert'],
   ]);
   const create = tools.calls[1];
-  assert.equal(create[create.indexOf('-volname') + 1], 'Snotra AI');
+  assert.equal(create[create.indexOf('-volname') + 1], 'Snotra Agent');
   assert.equal(create[create.indexOf('-format') + 1], 'UDRW');
   // The mount stays hidden from Finder: no window, no Spotlight, no surprise.
   assert.ok(tools.calls[2].includes('-nobrowse'));
@@ -133,7 +133,7 @@ test('still detaches and cleans up when flagging the volume fails', posixOnly, a
   let mountedChecks = 0;
 
   await assert.rejects(makeDmg({
-    appPath: path.join(dir, 'Snotra AI.app'), outPath: path.join(dir, 'x.dmg'), run, tmpRoot: dir,
+    appPath: path.join(dir, 'Snotra Agent.app'), outPath: path.join(dir, 'x.dmg'), run, tmpRoot: dir,
     sleep: async () => {}, mounted: () => (mountedChecks += 1) === 1,
   }), /Operation not permitted/);
 
@@ -225,7 +225,7 @@ test('the checked-in window layout keeps the decided look', () => {
     return [ds.readUInt32BE(data), ds.readUInt32BE(data + 4)];
   };
 
-  const [app, applications] = [position('Snotra AI.app'), position('Applications')];
+  const [app, applications] = [position('Snotra Agent.app'), position('Applications')];
   assert.ok(app[0] < applications[0], 'app left of Applications');
   assert.equal(app[1], applications[1], 'both on one line');
 

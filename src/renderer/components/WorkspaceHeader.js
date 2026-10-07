@@ -61,7 +61,7 @@ export function initWorkspaceHeader({ getHomeDir = () => '', subscribeHomeDir } 
     }
     // The window's title follows it, and with it Dock, window menu and the
     // app switcher (main/services/window-title.js).
-    document.title = open ? `${name} — Snotra AI` : 'Snotra AI';
+    document.title = open ? `${name} — Snotra Agent` : 'Snotra Agent';
     fit();
   }
 

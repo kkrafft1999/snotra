@@ -11,7 +11,7 @@ export default defineConfig({
   },
   integrations: [
     starlight({
-      title: { en: 'Snotra AI Manual', de: 'Snotra AI Handbuch' },
+      title: { en: 'Snotra Agent Manual', de: 'Snotra Agent Handbuch' },
       logo: { src: '../assets/icon/icon-windows.svg' },
       favicon: '/favicon.svg',
       defaultLocale: 'root',

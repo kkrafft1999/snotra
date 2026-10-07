@@ -34,7 +34,7 @@ const EMBEDDED_TEXT_GUARDS = Object.freeze({
  * that the model neither guesses the content nor claims to have followed it.
  */
 const WITHHELD_EMBEDDED_TEXT =
-  '[Left out by Snotra AI: this text contains a key the app keeps for itself, '
+  '[Left out by Snotra Agent: this text contains a key the app keeps for itself, '
   + 'or it could not be checked for one. Do not guess what it says.]';
 
 /**

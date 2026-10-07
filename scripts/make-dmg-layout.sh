@@ -6,14 +6,14 @@
 # The view holds an alias to .background/dmg-background.tiff. Finder writes the
 # volume name and the path of the disk image into that alias, so the image is
 # built under a neutral path and with the real volume name. Eject every other
-# "Snotra AI" volume first, or Finder mixes them up.
+# "Snotra Agent" volume first, or Finder mixes them up.
 #
 # Usage: sh scripts/make-dmg-layout.sh   (asks Finder for automation access once)
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=/tmp/snotra-dmg-layout
-VOLUME="Snotra AI"
+VOLUME="Snotra Agent"
 
 if [ -d "/Volumes/$VOLUME" ]; then
   echo "Eject /Volumes/$VOLUME first." >&2

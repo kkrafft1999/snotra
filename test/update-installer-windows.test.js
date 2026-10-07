@@ -5,7 +5,7 @@
 // broke in the field: the app was started from its own folder, so that folder
 // is a process's working directory, which Windows will not let anyone rename.
 //
-// A copy of hostname.exe stands in for "Snotra AI.exe" — it starts, prints and
+// A copy of hostname.exe stands in for the app's .exe — it starts, prints and
 // exits, so the relaunch at the end of the helper leaves nothing running.
 
 const test = require('node:test');
@@ -23,10 +23,12 @@ const {
   helperOutputFile,
 } = require('../src/main/services/update-installer');
 const { writeMinimalAsar } = require('./helpers/asar.js');
+// The running app's own name: a rollback restarts it under that name (#794).
+const { APP_NAME } = require('../src/main/app-identity');
 
 const onWindows = process.platform === 'win32';
-const EXE = 'Snotra AI.exe';
-const FOLDER = 'Snotra AI-win32-x64';
+const EXE = `${APP_NAME}.exe`;
+const FOLDER = `${APP_NAME}-win32-x64`;
 
 /** A process that sits in `cwd` for `ms` milliseconds, like the app did. */
 function holdFolder(cwd, ms) {
@@ -78,7 +80,7 @@ async function makeFixture(t) {
   // The installer reads name and version from the package before the swap (#569).
   await fsp.mkdir(path.join(packageDir, 'resources'));
   writeMinimalAsar(path.join(packageDir, 'resources', 'app.asar'), {
-    'package.json': JSON.stringify({ productName: 'Snotra AI', version: '1.13.0' }),
+    'package.json': JSON.stringify({ productName: APP_NAME, version: '1.13.0' }),
   });
   const zip = path.join(dir, `${FOLDER}-1.13.0.zip`);
   execFileSync('powershell.exe', [
@@ -187,7 +189,7 @@ function parseErrors(script) {
 test('Windows: the swap script parses', { skip: !onWindows }, () => {
   const script = buildWindowsSwapScript({
     pid: 1,
-    installDir: 'C:\\a\\Snotra AI',
+    installDir: `C:\\a\\${APP_NAME}`,
     stagedDir: 'C:\\a\\.snotra-new-1\\x',
     stageRoot: 'C:\\a\\.snotra-new-1',
     backupDir: 'C:\\a\\.snotra-old-1',

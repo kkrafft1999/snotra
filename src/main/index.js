@@ -13,22 +13,26 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-ch
 const workspaceState = require('./workspace-state');
 const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
-const { APP_NAME, LEGACY_APP_NAME } = require('./app-identity');
+const { APP_NAME, STORAGE_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
 const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
 const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
 
+// The storage identity first (#795): userData and the safeStorage key are
+// derived from the name the app has at this point, and stay with it. The app
+// takes its own name, APP_NAME, as soon as it is ready — see app-identity.js.
+//
 // macOS: damit in der Menue-Bar ueber dem Bildschirm der App-Name statt
-// "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra AI",
-// "Snotra AI beenden" usw.). Im Packaged-Build kommt der Name aus dem
+// "Electron" erscheint (zumindest in den Submenus: "Ueber Snotra Agent",
+// "Snotra Agent beenden" usw.). Im Packaged-Build kommt der Name aus dem
 // productName in package.json -> Info.plist; im Dev-Mode liest macOS den
 // FETTEN App-Title links neben dem Apfel allerdings aus dem Bundle der
 // laufenden node_modules/electron/dist/Electron.app, daher kann dort trotz
 // app.setName() weiterhin "Electron" stehen. Das ist ein bekanntes macOS-
 // Limit, kein Bug der App.
-app.setName(APP_NAME);
+app.setName(STORAGE_NAME);
 
 // The scheme of HTML pages in the preview (#479). Privileges can only be
 // given before the app is ready; the handler lives in the preview's own
@@ -52,6 +56,7 @@ if (isPrimaryInstance) start();
 
 function start() {
   app.whenReady().then(async () => {
+    app.setName(APP_NAME);
     registerMediaCapturePermissions();
 
     // Einmalige Uebernahme der Daten aus dem userData-Ordner des alten
@@ -72,7 +77,7 @@ function start() {
     // createApplication because it is handed to it as a callback.
     function applyApplicationMenu() {
       Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
-        appName: app.getName(),
+        appName: APP_NAME,
         getMainWindow,
         shell,
         PUSH,

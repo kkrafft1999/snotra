@@ -1,12 +1,15 @@
 ---
 name: snotra-capabilities
-description: What Snotra AI itself can do and how it is built — tools, MCP, folder access, approvals, skills, settings. Use when the user asks what you or the app can do, why something does not work, or where a setting lives — including questions about your own equipment: what a skill is, which ones are switched on, what is in your system prompt. Do not guess about any of this, load first.
+description: What Snotra Agent itself can do and how it is built — tools, MCP, folder access, approvals, skills, settings. Use when the user asks what you or the app can do, why something does not work, or where a setting lives — including questions about your own equipment: what a skill is, which ones are switched on, what is in your system prompt. Do not guess about any of this, load first.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
 ---
 
-# Snotra AI
+# Snotra Agent
+
+Snotra Agent is the desktop app of the Snotra AI platform. Its data folder and
+the key that encrypts it still carry the platform's name, "Snotra AI".
 
 Runtime: desktop app (Electron, macOS/Windows/Linux), file tree plus chat. No web
 interface, no terminal session. Answer capability questions from this skill, not

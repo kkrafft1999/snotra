@@ -165,7 +165,7 @@ summary:focus-visible,
 }
 
 /* ── Titlebar / Header ──
- * 44 px Hoehe, einzeilige Wordmark "Snotra AI" in Inter Bold (bis v1.0.4
+ * 44 px Hoehe, einzeilige Wordmark "Snotra Agent" in Inter Bold (bis v1.0.4
  * zweizeilig mit Mono-Eyebrow). Layout bleibt Drag-Region kompatibel — der
  * Brand-Container ist selbst Drag, die Buttons rechts sind
  * -webkit-app-region: no-drag.

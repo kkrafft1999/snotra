@@ -82,7 +82,7 @@ test('without a folder the title bar shows the brand alone, and the switcher say
   const { document, byId } = await setup(t);
   assert.equal(byId('titlebar-workspace').hidden, true);
   assert.equal(byId('titlebar').classList.contains('titlebar--workspace'), false);
-  assert.equal(document.title, 'Snotra AI');
+  assert.equal(document.title, 'Snotra Agent');
   assert.equal(byId('project-name').textContent, 'No folder open');
   assert.equal(byId('project-path').hidden, true);
   assert.equal(byId('btn-workspace').getAttribute('aria-label'), 'No folder open. Open a folder');
@@ -96,7 +96,7 @@ test('an open folder is named first in the title bar, with the brand after it, a
   assert.equal(byId('titlebar-workspace-name').textContent, 'snotra-promotion');
   assert.equal(byId('titlebar-workspace').title, ROOT);
   assert.equal(byId('titlebar').classList.contains('titlebar--workspace'), true, 'the brand steps back');
-  assert.equal(document.title, 'snotra-promotion — Snotra AI');
+  assert.equal(document.title, 'snotra-promotion — Snotra Agent');
 });
 
 // ── The switcher ─────────────────────────────────────────────────────────────

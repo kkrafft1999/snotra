@@ -86,6 +86,7 @@ async function reachKeychain(home) {
 }
 
 /** Where safeStorage keeps its key: Chromium names the item "<app name> Safe Storage". */
+// The key belongs to the platform and kept its name through the rename (#795).
 export const KEYCHAIN_SERVICE = 'Snotra AI Safe Storage';
 
 /**

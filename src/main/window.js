@@ -68,7 +68,7 @@ function createWindow() {
   const store = windowStateStore();
   const { maximized, fullScreen, ...bounds } = startupWindowState(store);
   const window = new BrowserWindow({
-    title: `Snotra AI ${app.getVersion()}`,
+    title: `Snotra Agent ${app.getVersion()}`,
     ...bounds,
     minWidth: 900,
     minHeight: 420,

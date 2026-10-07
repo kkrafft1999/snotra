@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1740 1280" width="1740" height="1280" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Snotra AI — hexagonal architecture (ports &amp; adapters)</title>
+  <title id="title">Snotra Agent — hexagonal architecture (ports &amp; adapters)</title>
   <desc id="desc">A hexagonal architecture diagram: the application core (src/application/chat) in the middle, the driving adapter on the left, driven core and infrastructure adapters on the right, application ports on the edge of the hexagon, infrastructure ports behind them, external systems outside. As of: roadmap stages 1–5 completed.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -41,7 +41,7 @@
 
   <rect x="0" y="0" width="1740" height="1280" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Snotra AI — hexagonal architecture (ports &amp; adapters)</text>
+  <text class="t-title" x="30" y="44">Snotra Agent — hexagonal architecture (ports &amp; adapters)</text>
   <text class="t-sub" x="31" y="70">Core src/application/chat · application ports on the hexagon · core adapters + infrastructure ports/adapters on the right · contracts/presentation/runtime kept apart (no ports)</text>
 
   <!-- Legend -->

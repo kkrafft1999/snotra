@@ -97,7 +97,7 @@ test('a failed start-up is logged, shown in the system language and ends the app
     app,
     dialog: { showErrorBox: (title, body) => boxes.push({ title, body }) },
     log: { error: (...args) => logged.push(args) },
-    appName: 'Snotra AI',
+    appName: 'Snotra Agent',
   });
   const error = new Error('store unreadable');
   fail(error);
@@ -105,7 +105,7 @@ test('a failed start-up is logged, shown in the system language and ends the app
   assert.equal(logged.length, 1);
   assert.equal(logged[0][1], error);
   assert.equal(boxes.length, 1);
-  assert.equal(boxes[0].title, 'Snotra AI konnte nicht starten');
+  assert.equal(boxes[0].title, 'Snotra Agent konnte nicht starten');
   assert.match(boxes[0].body, /store unreadable/);
   assert.doesNotMatch(boxes[0].body, /at .*\.js/, 'the stack stays in the log');
   assert.deepEqual(app.calls, [['exit', 1]]);
@@ -130,7 +130,7 @@ test('an English or unknown system language gets the English box', () => {
     dialog: { showErrorBox: (title) => boxes.push(title) },
     log: { error: () => {} },
   })(new Error('x'));
-  assert.deepEqual(boxes, ['Snotra AI could not start']);
+  assert.deepEqual(boxes, ['Snotra Agent could not start']);
 });
 
 function quitEvent() {

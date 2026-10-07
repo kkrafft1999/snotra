@@ -82,7 +82,7 @@ function pageContent(number, total, title) {
     '0 0.459 0.620 rg',
     `BT /F2 72 Tf 250 440 Td (${number}) Tj ET`,
     '0.37 0.36 0.35 rg',
-    'BT /F1 11 Tf 56 60 Td (Snotra AI - PDF preview fixture) Tj ET',
+    'BT /F1 11 Tf 56 60 Td (Snotra Agent - PDF preview fixture) Tj ET',
   ].join('\n');
 }
 

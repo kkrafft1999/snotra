@@ -1,8 +1,8 @@
 ---
 name: install
 description: >-
-  Builds Snotra AI locally (electron-forge package, macOS/arm64) and replaces
-  the installed app at /Applications/Snotra AI.app with the fresh build.
+  Builds Snotra Agent locally (electron-forge package, macOS/arm64) and replaces
+  the installed app at /Applications/Snotra Agent.app with the fresh build.
   Triggers on sentences like "bau die App und kopier sie nach Programme",
   "installier die App lokal", "App neu bauen und installieren", "lokalen Build
   nach Applications", "build the app and copy it to Applications", "install the
@@ -26,9 +26,9 @@ it. Nothing is committed, pushed or published.
    newest v24.) Experience says a wrong version comes from an absolute
    `export PATH=...` line in `~/.zshrc` that some tool wrote there. Mention that
    to the user briefly.
-2. Is the app running right now? `pgrep -x "Snotra AI"`. If it is, don't ask the
+2. Is the app running right now? `pgrep -x "Snotra Agent"`. If it is, don't ask the
    user — point out after copying that they have to restart the old instance.
-   Only quit it (`osascript -e 'quit app "Snotra AI"'`) if the user explicitly
+   Only quit it (`osascript -e 'quit app "Snotra Agent"'`) if the user explicitly
    wants that.
 3. Uncommitted changes are **allowed**. That is exactly what the local build is
    for: trying out a state before committing it. Mention briefly that the build
@@ -44,7 +44,7 @@ npm run package
 then calls `electron-forge package --arch arm64 --platform darwin`. The result:
 
 ```
-out/Snotra AI-darwin-arm64/Snotra AI.app
+out/Snotra Agent-darwin-arm64/Snotra Agent.app
 ```
 
 On errors, stop and show the relevant output. Don't delete `node_modules` or run
@@ -54,23 +54,29 @@ points clearly at missing dependencies.
 ## Step 3 — install
 
 ```sh
-rm -rf "/Applications/Snotra AI.app" && cp -R "out/Snotra AI-darwin-arm64/Snotra AI.app" /Applications/
+rm -rf "/Applications/Snotra Agent.app" && cp -R "out/Snotra Agent-darwin-arm64/Snotra Agent.app" /Applications/
 ```
 
 The deletion only affects the copy of the app bundle in `/Applications`, no user
 data (the settings live in `~/Library/Application Support/`). No confirmation
 needed, therefore.
 
+Until #795 the app was called Snotra AI. If `/Applications/Snotra AI.app` is
+still there, it is the same app under its old name: remove it as well
+(`rm -rf "/Applications/Snotra AI.app"`), otherwise two copies sit side by
+side. Its data is not in the bundle and stays — the folder is
+`~/Library/Application Support/Snotra AI`, named after the platform.
+
 ## Step 4 — verify and report
 
 ```sh
-/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Snotra AI.app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "/Applications/Snotra Agent.app/Contents/Info.plist"
 ```
 
 Report briefly: the installed version, the git commit of the build
 (`git rev-parse --short HEAD`, plus a note "with uncommitted changes" when
 `git status --porcelain` isn't empty), and whether a running instance has to be
-restarted. Only start the app (`open -a "Snotra AI"`) when the user asked for
+restarted. Only start the app (`open -a "Snotra Agent"`) when the user asked for
 that.
 
 ## Notes

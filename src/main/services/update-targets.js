@@ -44,7 +44,7 @@ function assetDigest(digest) {
 
 /**
  * Pfad des .app-Bundles aus dem Pfad der ausfuehrbaren Datei.
- * `/Applications/Snotra AI.app/Contents/MacOS/Snotra AI` → `/Applications/Snotra AI.app`
+ * `/Applications/Snotra Agent.app/Contents/MacOS/Snotra Agent` → `/Applications/Snotra Agent.app`
  * Liefert '' , wenn der Pfad nicht so aufgebaut ist (z. B. `npm start`).
  */
 function macAppBundlePath(execPath) {

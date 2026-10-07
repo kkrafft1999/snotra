@@ -150,7 +150,7 @@ jobs:
           # after the tag, as before.
           dmgs=(out/make/*.dmg)
           [ "${#dmgs[@]}" -eq 1 ] || { echo "::error::Expected one DMG in out/make, found ${#dmgs[@]}."; exit 1; }
-          cp "${dmgs[0]}" "dist/Snotra-AI-${version}-mac-arm64.dmg"
+          cp "${dmgs[0]}" "dist/Snotra-Agent-${version}-mac-arm64.dmg"
       # The DMG is the container users download: sign it, notarise it on its
       # own and staple the ticket, so Gatekeeper accepts it even offline.
       - name: Sign, notarise and staple the DMG
@@ -251,7 +251,7 @@ jobs:
           $dir = (Get-ChildItem -Path out -Directory -Filter '*-win32-x64' | Select-Object -First 1).FullName
           if (-not $dir) { throw 'Kein *-win32-x64 Package-Verzeichnis gefunden.' }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path "$dir/*" -DestinationPath "dist/Snotra-AI-$version-win-x64.zip"
+          Compress-Archive -Path "$dir/*" -DestinationPath "dist/Snotra-Agent-$version-win-x64.zip"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows
@@ -298,16 +298,16 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
           deb="$(ls out/make/deb/x64/*.deb | head -1)"
-          cp "$deb" "dist/Snotra-AI-${version}-linux-x64.deb"
+          cp "$deb" "dist/Snotra-Agent-${version}-linux-x64.deb"
           appimage="$(ls out/make/AppImage/x64/*.AppImage | head -1)"
-          cp "$appimage" "dist/Snotra-AI-${version}-linux-x64.AppImage"
+          cp "$appimage" "dist/Snotra-Agent-${version}-linux-x64.AppImage"
           # Bewusst tar.gz statt zip: ZIP erhaelt das Executable-Bit nicht.
           # Das Verzeichnis wird vorher umbenannt, damit im Archiv kein
           # Ordnername mit Leerzeichen landet.
           dir="$(ls -d out/*-linux-x64 | head -1)"
-          stage="snotra-ai-${version}-linux-x64"
+          stage="snotra-agent-${version}-linux-x64"
           mv "$dir" "out/${stage}"
-          tar -czf "dist/Snotra-AI-${version}-linux-x64.tar.gz" -C out "${stage}"
+          tar -czf "dist/Snotra-Agent-${version}-linux-x64.tar.gz" -C out "${stage}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux

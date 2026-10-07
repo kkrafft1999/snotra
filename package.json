@@ -2,7 +2,7 @@
   "name": "snotra",
   "version": "1.16.1",
   "main": "src/main/index.js",
-  "productName": "Snotra AI",
+  "productName": "Snotra Agent",
   "scripts": {
     "sync-vendor": "node scripts/sync-renderer-vendor.js",
     "postinstall": "node scripts/sync-renderer-vendor.js",
@@ -23,8 +23,8 @@
   "config": {
     "forge": {
       "packagerConfig": {
-        "name": "Snotra AI",
-        "executableName": "Snotra AI",
+        "name": "Snotra Agent",
+        "executableName": "Snotra Agent",
         "appBundleId": "dev.snotra-ai.app",
         "appCategoryType": "public.app-category.productivity",
         "icon": "./icon",
@@ -60,7 +60,7 @@
           ],
           "config": {
             "options": {
-              "bin": "Snotra AI",
+              "bin": "Snotra Agent",
               "maintainer": "Konrad Krafft <konrad.krafft@gmail.com>",
               "homepage": "https://github.com/kkrafft1999/snotra",
               "description": "Workspace-bewusster KI-Assistent mit Datei-Explorer",
@@ -88,8 +88,8 @@
           ],
           "config": {
             "options": {
-              "bin": "Snotra AI",
-              "productName": "Snotra AI",
+              "bin": "Snotra Agent",
+              "productName": "Snotra Agent",
               "genericName": "KI-Assistent",
               "categories": [
                 "Utility",
@@ -107,7 +107,7 @@
   "keywords": [],
   "author": "Konrad Krafft",
   "license": "Apache-2.0",
-  "description": "Snotra AI – workspace-aware AI assistant on top of a file explorer, extensible with skills and tools.",
+  "description": "Snotra Agent – workspace-aware AI assistant on top of a file explorer, extensible with skills and tools.",
   "engines": {
     "node": ">=24"
   },

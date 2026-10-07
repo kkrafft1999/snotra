@@ -1,4 +1,4 @@
-<!-- Snotra AI - the deck chair that shows up when every panel is hidden (#315).
+<!-- Snotra Agent - the deck chair that shows up when every panel is hidden (#315).
      Traced from a sketch made for this project; it carries no third-party licence.
      Used as a CSS mask, so the black fill only supplies the alpha channel - the
      visible colour comes from the token in styles.css. -->

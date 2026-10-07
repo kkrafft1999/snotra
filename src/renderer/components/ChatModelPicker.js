@@ -296,7 +296,7 @@ export function initChatModelPicker({
    */
   function noModelHint() {
     const mac = navigator.userAgent.includes('Mac');
-    const menu = mac ? 'Snotra AI' : t('menu.view');
+    const menu = mac ? 'Snotra Agent' : t('menu.view');
     return t('chat.hint.noModel', {
       path: `${menu} › ${t('menu.settings')}`,
       shortcut: mac ? '⌘,' : t('chat.hint.noModel.shortcut'),

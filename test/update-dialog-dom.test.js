@@ -19,7 +19,7 @@ const AVAILABLE = Object.freeze({
   canSelfUpdate: true,
   selfUpdateBlockedReason: '',
   installKind: 'macos-bundle',
-  asset: { name: 'Snotra-AI-1.8.0-mac-arm64.dmg', size: 92 * 1024 * 1024 },
+  asset: { name: 'Snotra-Agent-1.8.0-mac-arm64.dmg', size: 92 * 1024 * 1024 },
 });
 
 /** Mountet den Dialog gegen die echte index.html und liefert Zugriff + Spione. */
@@ -277,11 +277,11 @@ test('ohne moegliches Selbst-Update erklaert der Dialog den Grund und verlinkt',
     ...AVAILABLE,
     canSelfUpdate: false,
     installKind: 'linux-package',
-    selfUpdateBlockedReason: 'Snotra AI wurde als Systempaket installiert.',
+    selfUpdateBlockedReason: 'Snotra Agent wurde als Systempaket installiert.',
     asset: null,
   });
 
-  assert.equal(ui.hint().textContent, 'Snotra AI wurde als Systempaket installiert.');
+  assert.equal(ui.hint().textContent, 'Snotra Agent wurde als Systempaket installiert.');
   assert.deepEqual(ui.labels(), ['Open release page', 'Remind me later', 'Skip this version']);
 
   await ui.click('Open release page');
@@ -436,10 +436,10 @@ test('reasons and errors from main are worded in the interface language and foll
     selfUpdateBlockedReason: { key: 'update.reason.package' },
     asset: null,
   });
-  assert.match(ui.hint().textContent, /^Snotra AI was installed as a system package\./);
+  assert.match(ui.hint().textContent, /^Snotra Agent was installed as a system package\./);
   setLocale('de');
   await flush();
-  assert.match(ui.hint().textContent, /^Snotra AI wurde als Systempaket installiert\./);
+  assert.match(ui.hint().textContent, /^Snotra Agent wurde als Systempaket installiert\./);
 
   setLocale('en');
   await ui.push({ ...AVAILABLE });
@@ -485,7 +485,7 @@ test('ein beim letzten Mal gescheiterter Tausch steht als Warnung im Dialog', as
   const { setLocale } = await importRenderer('i18n.js');
   const ui = await mount();
   t.after(() => { setLocale('en', { force: true }); ui.dom.cleanup(); });
-  const log = 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log';
+  const log = 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log';
 
   await ui.push({
     ...AVAILABLE,
@@ -497,7 +497,7 @@ test('ein beim letzten Mal gescheiterter Tausch steht als Warnung im Dialog', as
   assert.equal(ui.hint().classList.contains('warning'), true);
   assert.equal(ui.hint().classList.contains('error'), false);
   assert.equal(ui.hint().textContent, 'Last time, version 1.8.0 could not be put in place (The folder is in use), '
-    + 'so version 1.7.1 is still running. Close any window that shows the Snotra AI folder, then try again. '
+    + 'so version 1.7.1 is still running. Close any window that shows the Snotra Agent folder, then try again. '
     + `The log is at ${log}.`);
   assert.deepEqual(ui.labels(), ['Download', 'Remind me later', 'Skip this version']);
 
