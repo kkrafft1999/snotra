@@ -5,6 +5,8 @@ description: So arbeitest du mit Snotra AI, dem Open-Source-Desktop-Agenten rund
 
 Snotra AI ist ein Open-Source-Desktop-Agent rund um deinen Ordner. Du öffnest einen Ordner, der Dateibaum bleibt im Blick, und der Chat arbeitet darin. Nichts in diesem Ordner ändert sich, ohne dass Snotra dich vorher fragt. Snotra arbeitet mit Cloud- und lokalen Modellen, braucht kein Konto und sendet keine Telemetrie.
 
+![Das Snotra-Fenster: links der Dateibaum eines Projekts, in der Mitte seine README, rechts ein Chat, in dem Snotra die README gelesen und das Projekt zusammengefasst hat.](screenshots/overview.webp)
+
 Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit Dateien und Chats umgehst, wie Snotra entscheidet, was es selbstständig tun darf, und wie du es an deine Bedürfnisse anpasst. Welche Version es beschreibt, steht oben auf jeder Seite neben dem Titel.
 
 ## Wo du anfängst

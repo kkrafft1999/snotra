@@ -1,12 +1,13 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import remarkScreenshots from './src/plugins/remark-screenshots.mjs';
 import remarkSinceMarker from './src/plugins/remark-since-marker.mjs';
 
 export default defineConfig({
   site: 'https://docs.snotra-ai.dev',
   markdown: {
-    remarkPlugins: [remarkSinceMarker],
+    remarkPlugins: [remarkScreenshots, remarkSinceMarker],
   },
   integrations: [
     starlight({

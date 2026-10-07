@@ -225,9 +225,10 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
  * Startet die App und wartet, bis der Renderer steht. `wrapper` is an optional
  * executable to start instead of Electron — it must start Electron itself and
  * pass all arguments on (Playwright puts its own in front). Used to start the
- * app under a Seatbelt profile (#329). `env` adds variables for this launch.
+ * app under a Seatbelt profile (#329). `env` adds variables for this launch,
+ * `args` adds Chromium switches (the manual's screenshots fix the scale factor).
  */
-export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {}, home }) {
+export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {}, home, args: extraArgs = [] }) {
   const env = { ...process.env, ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
   // --user-data-dir moves the profile, not the home folder, and main reads
@@ -269,6 +270,7 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
       // text only reaches the DOM in a frame. Going to software from the start
       // skips the attempt. macOS and Windows keep their GPU path.
       ...(process.platform === 'linux' ? ['--disable-gpu'] : []),
+      ...extraArgs,
     ],
     env,
   }), 'Electron launch');

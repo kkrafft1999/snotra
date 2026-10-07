@@ -76,3 +76,26 @@
 starlight-theme-select label {
   --sl-select-width: 7em !important;
 }
+
+/*
+ * App screenshots (`![Alt](screenshots/<motif>.webp)`, see
+ * src/plugins/remark-screenshots.mjs). A hairline and a small radius set the
+ * window off from the page, which has the same surface colour as the app.
+ */
+.sl-markdown-content img.screenshot {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+}
+/* Starlight always resolves the theme onto <html>, "auto" included. */
+.sl-markdown-content .screenshot-link {
+  display: block;
+  border-radius: 8px;
+}
+/* Starlight always resolves the theme onto <html>, "auto" included. */
+:root[data-theme='light'] .screenshot--dark,
+:root[data-theme='dark'] .screenshot--light {
+  display: none;
+}
