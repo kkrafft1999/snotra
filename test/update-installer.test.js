@@ -26,6 +26,7 @@ const {
   buildWindowsLaunchCommand,
   encodePowerShell,
   listForeignEntries,
+  macTargetBundlePath,
   readAsarPackageJson,
   shQuote,
   psQuote,
@@ -233,7 +234,7 @@ test('ein gescheiterter Tausch wird protokolliert, gemeldet und startet die alte
   assert.match(failure, /Write-Log \('update failed: ' \+ \$reason\)/);
   assert.match(failure, /ConvertTo-Json \| Set-Content -LiteralPath \$status -Encoding UTF8/);
   assert.match(failure, /Remove-Item -LiteralPath \$stage -Recurse/);
-  assert.match(failure, /if \(Test-Path -LiteralPath \$exe\) \{[\s\S]*Start-Process -FilePath \$exe/);
+  assert.match(failure, /if \(Test-Path -LiteralPath \$oldExe\) \{[\s\S]*Start-Process -FilePath \$oldExe/);
   // The rollback leaves the backup alone: it is the old version again.
   assert.doesNotMatch(failure, /Remove-Item -LiteralPath \$backup/);
 });
@@ -761,4 +762,128 @@ test('fehlende Schreibrechte werden erklaert, nicht durchgereicht', async (t) =>
   assert.equal(result.ok, false);
   assert.match(de(result.error), /Keine Schreibrechte/);
   assert.deepEqual(runs, [], 'ohne Schreibrecht wird gar nicht erst gemountet');
+});
+
+// #794: the app is renamed to Snotra Agent (#795). Every released updater has
+// to take the renamed package, and the bundle on a Mac takes its new name.
+
+test('macTargetBundlePath gives a bundle of ours the name it has in the disk image (#794)', () => {
+  const none = () => false;
+  assert.equal(macTargetBundlePath('/Applications/Snotra AI.app', 'Snotra Agent.app', none), '/Applications/Snotra Agent.app');
+  assert.equal(macTargetBundlePath('/Applications/Snotra Agent.app', 'Snotra Agent.app', none), '/Applications/Snotra Agent.app');
+  // Going back keeps working the same way.
+  assert.equal(macTargetBundlePath('/Applications/Snotra Agent.app', 'Snotra AI.app', none), '/Applications/Snotra AI.app');
+});
+
+test('macTargetBundlePath keeps the path of a bundle the user named, or when the new name is taken (#794)', () => {
+  const none = () => false;
+  assert.equal(macTargetBundlePath('/Applications/Snotra Test.app', 'Snotra Agent.app', none), '/Applications/Snotra Test.app');
+  assert.equal(macTargetBundlePath('/Applications/Snotra AI.app', 'Something.app', none), '/Applications/Snotra AI.app');
+  const taken = (p) => p === '/Applications/Snotra Agent.app';
+  assert.equal(macTargetBundlePath('/Applications/Snotra AI.app', 'Snotra Agent.app', taken), '/Applications/Snotra AI.app');
+});
+
+test('macOS: the renamed bundle replaces Snotra AI.app under its new name (#794)', async (t) => {
+  if (process.platform !== 'darwin') return t.skip('only meaningful on macOS');
+  const root = makeTempDir(t);
+  const appsDir = path.join(root, 'Applications');
+  const appBundlePath = path.join(appsDir, 'Snotra AI.app');
+  await fsp.mkdir(appBundlePath, { recursive: true });
+  await fsp.writeFile(path.join(appBundlePath, 'old.txt'), 'old');
+  const filePath = path.join(root, 'snotra.dmg');
+  await fsp.writeFile(filePath, 'dmg');
+
+  const { installer, launches } = makeInstaller({
+    onRun: async (cmd, args) => {
+      if (cmd.endsWith('hdiutil') && args[0] === 'attach') {
+        const mount = args[args.indexOf('-mountpoint') + 1];
+        await fsp.mkdir(path.join(mount, 'Snotra Agent.app'), { recursive: true });
+        await fsp.writeFile(path.join(mount, 'Snotra Agent.app', 'new.txt'), 'new');
+      }
+      if (cmd.endsWith('ditto')) await fsp.cp(args[0], args[1], { recursive: true });
+      if (cmd.endsWith('plutil')) {
+        return JSON.stringify({ CFBundleIdentifier: 'dev.snotra-ai.app', CFBundleShortVersionString: '1.17.0' });
+      }
+      return '';
+    },
+  });
+  const result = await installer.install({
+    filePath,
+    version: '1.17.0',
+    target: { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath },
+    workDir: path.join(root, 'work'),
+  });
+
+  assert.deepEqual(result, { ok: true, relaunching: true });
+  const entries = (await fsp.readdir(appsDir)).sort();
+  assert.equal(entries.length, 2);
+  assert.equal(entries[1], 'Snotra Agent.app');
+  assert.match(entries[0], /^\.snotra-old-\d+\.app$/, 'the old bundle waits as the backup the helper removes');
+  assert.equal(await fsp.readFile(path.join(appsDir, 'Snotra Agent.app', 'new.txt'), 'utf8'), 'new');
+  const script = await fsp.readFile(launches[0].args[0], 'utf8');
+  assert.ok(script.includes(`open ${shQuote(path.join(appsDir, 'Snotra Agent.app'))}`));
+  assert.ok(script.includes(`rm -rf ${shQuote(path.join(appsDir, entries[0]))}`));
+});
+
+test('Windows: the renamed package is installed and started under its own name (#794)', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const dir = makeTempDir(t);
+  const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+  await fsp.mkdir(installDir, { recursive: true });
+  await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
+  const zip = path.join(dir, 'new.zip');
+  await fsp.writeFile(zip, 'zip');
+  const { installer, quiets } = makeInstaller({
+    onRun: async (cmd, args) => {
+      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+      await fsp.mkdir(path.join(dest, 'Snotra Agent-win32-x64'), { recursive: true });
+      await fsp.writeFile(path.join(dest, 'Snotra Agent-win32-x64', 'Snotra Agent.exe'), 'new');
+      await writeAppAsar(path.join(dest, 'Snotra Agent-win32-x64'), { productName: 'Snotra Agent', version: '1.17.0' });
+      return '';
+    },
+  });
+  const workDir = path.join(dir, 'work');
+  const res = await installer.install({
+    filePath: zip,
+    version: '1.17.0',
+    target: { kind: 'windows-dir', canSelfUpdate: true, installDir },
+    workDir,
+  });
+
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(quiets.length, 1);
+  const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
+  assert.ok(script.includes("$exe     = Join-Path $install 'Snotra Agent.exe'"));
+  assert.ok(script.includes("$oldExe  = Join-Path $install 'Snotra AI.exe'"), 'a rollback starts the old name');
+  assert.match(script, /if \(Test-Path -LiteralPath \$oldExe\) \{\n {4}Write-Log 'starting the previous version again'\n {4}Start-Process -FilePath \$oldExe/);
+  assert.match(script, /Write-Log \('updated to ' \+ \$version\)\nStart-Process -FilePath \$exe\n/);
+});
+
+test('Linux-Ordner: the renamed package is swapped in and started under its own name (#794)', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const root = makeTempDir(t);
+  const installDir = path.join(root, 'apps', 'snotra-ai');
+  await fsp.mkdir(installDir, { recursive: true });
+  const filePath = path.join(root, 'snotra.tar.gz');
+  await fsp.writeFile(filePath, 'tar');
+  const { installer, launches } = makeInstaller({
+    onRun: async (cmd, args) => {
+      if (cmd !== 'tar') return '';
+      const pkgDir = path.join(args[args.indexOf('-C') + 1], 'snotra-agent-1.17.0');
+      await fsp.mkdir(pkgDir, { recursive: true });
+      await fsp.writeFile(path.join(pkgDir, 'Snotra Agent'), 'bin');
+      await writeAppAsar(pkgDir, { productName: 'Snotra Agent', version: '1.17.0' });
+      return '';
+    },
+  });
+  const result = await installer.install({
+    filePath,
+    version: '1.17.0',
+    target: { kind: 'linux-dir', canSelfUpdate: true, installDir },
+    workDir: path.join(root, 'work'),
+  });
+
+  assert.deepEqual(result, { ok: true, relaunching: true });
+  const script = await fsp.readFile(launches[0].args[0], 'utf8');
+  assert.ok(script.endsWith(`exec ${shQuote(path.join(installDir, 'Snotra Agent'))}\n`));
 });

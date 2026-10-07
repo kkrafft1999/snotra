@@ -30,7 +30,7 @@ const rawFs = (() => {
 const path = require('path');
 const { execFile, spawn } = require('child_process');
 
-const { APP_NAME, APP_BUNDLE_ID } = require('../app-identity');
+const { APP_NAME, APP_BUNDLE_ID, PRODUCT_NAMES } = require('../app-identity');
 const { createMessage } = require('../../shared/contracts/message');
 const { translateMessage } = require('../../shared/i18n');
 
@@ -48,6 +48,32 @@ function installError(key, params) {
 const MAC_BUNDLE_NAME = `${APP_NAME}.app`;
 const WINDOWS_EXE_NAME = `${APP_NAME}.exe`;
 const LINUX_BINARY_NAME = APP_NAME;
+
+// What a package of this app may be called, before and after the rename to
+// Snotra Agent (#794).
+const MAC_BUNDLE_NAMES = PRODUCT_NAMES.map((name) => `${name}.app`);
+const WINDOWS_EXE_NAMES = PRODUCT_NAMES.map((name) => `${name}.exe`);
+const LINUX_BINARY_NAMES = PRODUCT_NAMES;
+
+/** The first of `names` that exists in `dir`, or ''. */
+function findExecutable(dir, names) {
+  return names.find((name) => fs.existsSync(path.join(dir, name))) || '';
+}
+
+/**
+ * Where the new Mac bundle goes (#794). A bundle under one of the app's own
+ * names takes the name the disk image gives it, so `Snotra AI.app` becomes
+ * `Snotra Agent.app` with the update that brings the rename. A bundle the user
+ * named differently keeps its path, and so does one whose new name is taken
+ * already — by a copy installed by hand, say.
+ */
+function macTargetBundlePath(appBundlePath, imageBundleName, exists = fs.existsSync) {
+  const current = path.basename(appBundlePath);
+  if (!MAC_BUNDLE_NAMES.includes(current) || !MAC_BUNDLE_NAMES.includes(imageBundleName)) return appBundlePath;
+  if (imageBundleName === current) return appBundlePath;
+  const renamed = path.join(path.dirname(appBundlePath), imageBundleName);
+  return exists(renamed) ? appBundlePath : renamed;
+}
 
 /** Pfad fuer ein POSIX-Shell-Skript einbetten. */
 function shQuote(value) {
@@ -134,6 +160,7 @@ function buildLinuxDirScript({ pid, installDir, stagedDir, backupDir, workDir, b
 function buildWindowsSwapScript({
   pid, installDir, stagedDir, stageRoot = stagedDir, backupDir, workDir,
   logFile, statusFile, startedFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
+  previousExeName = exeName,
 }) {
   const carry = carryOver.length > 0 ? `@(${carryOver.map(psQuote).join(', ')})` : '@()';
   return [
@@ -150,6 +177,8 @@ function buildWindowsSwapScript({
     `$version = ${psQuote(version)}`,
     `$carry   = ${carry}`,
     `$exe     = Join-Path $install ${psQuote(exeName)}`,
+    // After a rollback the old folder is back, and with it the old name (#794).
+    `$oldExe  = Join-Path $install ${psQuote(previousExeName)}`,
     '',
     'function Write-Log([string]$text) {',
     "  try { Add-Content -LiteralPath $log -Value ((Get-Date -Format o) + ' ' + $text) -Encoding UTF8 } catch { }",
@@ -194,9 +223,9 @@ function buildWindowsSwapScript({
     '      ConvertTo-Json | Set-Content -LiteralPath $status -Encoding UTF8',
     '  } catch { }',
     '  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
-    '  if (Test-Path -LiteralPath $exe) {',
+    '  if (Test-Path -LiteralPath $oldExe) {',
     "    Write-Log 'starting the previous version again'",
-    '    Start-Process -FilePath $exe',
+    '    Start-Process -FilePath $oldExe',
     '  } else {',
     "    Write-Log ('the previous version is in ' + $backup)",
     '  }',
@@ -465,7 +494,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     }
     const name = typeof pkg?.productName === 'string' ? pkg.productName : '';
     const found = typeof pkg?.version === 'string' ? pkg.version : '';
-    if (name !== APP_NAME) {
+    if (!PRODUCT_NAMES.includes(name)) {
       throw installError('update.error.wrongApp', name ? { id: name } : { idKey: 'update.unknownValue' });
     }
     if (expectedVersion && found !== expectedVersion) {
@@ -482,6 +511,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     await assertWritable(parentDir, 'update.place.appFolder');
 
     const stamp = Date.now();
+    let targetPath = appBundlePath;
     const mountPoint = path.join(workDir, `mnt-${stamp}`);
     const stagedPath = path.join(parentDir, `.snotra-new-${stamp}.app`);
     const backupPath = path.join(parentDir, `.snotra-old-${stamp}.app`);
@@ -495,6 +525,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     try {
       const entries = await fsp.readdir(mountPoint);
       const bundleName = entries.find((name) => name.endsWith('.app')) || MAC_BUNDLE_NAME;
+      targetPath = macTargetBundlePath(appBundlePath, bundleName);
       // `ditto` statt `cp`: es erhaelt Symlinks, Rechte und erweiterte
       // Attribute des Bundles — `cp -R` tut das nicht zuverlaessig.
       await exec('/usr/bin/ditto', [path.join(mountPoint, bundleName), stagedPath]);
@@ -515,7 +546,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
 
     await fsp.rename(appBundlePath, backupPath);
     try {
-      await fsp.rename(stagedPath, appBundlePath);
+      await fsp.rename(stagedPath, targetPath);
     } catch (err) {
       await fsp.rename(backupPath, appBundlePath).catch(() => {});
       await fsp.rm(stagedPath, { recursive: true, force: true }).catch(() => {});
@@ -524,7 +555,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
 
     const script = path.join(workDir, 'relaunch.sh');
     await fsp.writeFile(script, buildMacRelaunchScript({
-      pid: pidOf(), appBundlePath, backupPath, workDir,
+      pid: pidOf(), appBundlePath: targetPath, backupPath, workDir,
     }), { mode: 0o700 });
     launch('/bin/sh', [script]);
     return { ok: true, relaunching: true };
@@ -548,10 +579,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     // Wenn ein Release das mal anders packt, eine Ebene tiefer nachsehen,
     // statt ein Verzeichnis ohne .exe einzuspielen.
     let rootDir = stagedDir;
-    if (!fs.existsSync(path.join(rootDir, WINDOWS_EXE_NAME))) {
+    let exeName = findExecutable(rootDir, WINDOWS_EXE_NAMES);
+    if (!exeName) {
       const entries = await fsp.readdir(stagedDir, { withFileTypes: true });
       const single = entries.length === 1 && entries[0].isDirectory() ? entries[0].name : '';
-      if (single && fs.existsSync(path.join(stagedDir, single, WINDOWS_EXE_NAME))) {
+      exeName = single ? findExecutable(path.join(stagedDir, single), WINDOWS_EXE_NAMES) : '';
+      if (exeName) {
         rootDir = path.join(stagedDir, single);
       } else {
         await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
@@ -584,6 +617,8 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       startedFile,
       version,
       carryOver,
+      exeName,
+      previousExeName: WINDOWS_EXE_NAME,
     }), 'utf8');
 
     // Not from the app's own folder: Windows keeps a process's working
@@ -636,7 +671,8 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const entries = await fsp.readdir(extractDir, { withFileTypes: true });
     const rootName = entries.find((entry) => entry.isDirectory())?.name || '';
     const extracted = rootName ? path.join(extractDir, rootName) : extractDir;
-    if (!fs.existsSync(path.join(extracted, LINUX_BINARY_NAME))) {
+    const binaryName = findExecutable(extracted, LINUX_BINARY_NAMES);
+    if (!binaryName) {
       await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
       throw installError('update.error.archiveMissing', { file: LINUX_BINARY_NAME });
     }
@@ -660,6 +696,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       stagedDir,
       backupDir: path.join(parentDir, `.snotra-old-${stamp}`),
       workDir,
+      binaryName,
     }), { mode: 0o700 });
     launch('/bin/sh', [script]);
     return { ok: true, relaunching: true };
@@ -709,6 +746,7 @@ module.exports = {
   buildWindowsLaunchCommand,
   encodePowerShell,
   listForeignEntries,
+  macTargetBundlePath,
   helperOutputFile,
   readAsarPackageJson,
   shQuote,
