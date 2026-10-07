@@ -217,7 +217,7 @@ function environmentHarness({ uiPrefs = {}, environment, projectInstructions, me
 const FIXED_ENVIRONMENT = {
   async describe({ workspaceRoot }) {
     return {
-      appName: 'Snotra AI',
+      appName: 'Snotra Agent',
       appVersion: '1.5.3',
       workspaceRoot,
       isGitRepository: true,
@@ -244,7 +244,7 @@ test('Umgebungsangaben stehen im Systemprompt und kennen den offenen Ordner', as
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.deepEqual(seen, [{ workspaceRoot: path.resolve('/tmp/snotra-project') }]);
-  assert.match(system(), /The environment you are running in \(Snotra AI 1\.5\.3\):/);
+  assert.match(system(), /The environment you are running in \(Snotra Agent 1\.5\.3\):/);
   assert.match(system(), /- Working directory: /);
   assert.match(system(), /- Platform: darwin \(macOS\)/);
   assert.match(system(), /- Today's date: Tuesday, 2026-09-15/);
@@ -542,7 +542,7 @@ test('the own secrets of the tool adapter also guard the embedded AGENTS.md (#52
     payload: { messages: [{ role: 'user', content: 'hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   assert.equal(system().includes(key), false);
-  assert.match(system(), /Left out by Snotra AI/);
+  assert.match(system(), /Left out by Snotra Agent/);
 });
 
 test('the folder memory stands with the AGENTS.md, not with the user\'s memory (#529)', async () => {

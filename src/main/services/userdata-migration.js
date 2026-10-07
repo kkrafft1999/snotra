@@ -1,7 +1,8 @@
 'use strict';
 
 // Einmalige Uebernahme des userData-Ordners der Vorgaenger-Identitaet
-// ("Weyouze Anything") in den Ordner der aktuellen App ("Snotra AI").
+// ("Weyouze Anything") in den Ordner der aktuellen App ("Snotra AI", seit #795 der Name der
+// Plattform, unter dem die App ihre Daten ablegt — siehe app-identity.js).
 //
 // Electron leitet app.getPath('userData') aus dem App-Namen ab; nach der
 // Umbenennung startet die App sonst leer. Kopiert wird eine Allowlist

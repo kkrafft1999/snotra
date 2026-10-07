@@ -52,7 +52,7 @@ test('first run: adding a model makes the chat usable next to the default entry'
   // takes precedence; the model added below needs no key, so the rest holds.
   const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
   let expectedHint = process.platform === 'darwin'
-    ? 'Set up a language model to start chatting: Snotra AI › Settings… (⌘,).'
+    ? 'Set up a language model to start chatting: Snotra Agent › Settings… (⌘,).'
     : 'Set up a language model to start chatting: View › Settings… (Ctrl+,).';
   if (!encryptionAvailable) {
     expectedHint = 'Encrypted storage is not available. An API key cannot be stored safely here.';

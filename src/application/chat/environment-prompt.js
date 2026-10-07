@@ -83,7 +83,7 @@ function buildEnvironmentSystemPrompt(facts) {
 
   if (lines.length === 0) return '';
 
-  const appName = cleanString(data.appName) || 'Snotra AI';
+  const appName = cleanString(data.appName) || 'Snotra Agent';
   const appVersion = cleanString(data.appVersion);
   const intro = `The environment you are running in (${appName}${appVersion ? ` ${appVersion}` : ''}):`;
 

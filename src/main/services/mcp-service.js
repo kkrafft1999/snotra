@@ -71,7 +71,7 @@ function createMcpService({
   spawn,
   createTransport = createStdioTransport,
   readShellPath = async () => '',
-  clientInfo = { name: 'Snotra AI', version: '0.0.0' },
+  clientInfo = { name: 'Snotra Agent', version: '0.0.0' },
   timeouts = MCP_TIMEOUTS,
   /**
    * Wird nach jeder geglueckten Verbindung mit dem Tool-Katalog gerufen, damit

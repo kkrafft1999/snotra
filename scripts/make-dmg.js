@@ -31,7 +31,7 @@
 // Signing, notarising and stapling the DMG stay in release.yml (#662).
 //
 // Usage: node scripts/make-dmg.js   (after `npm run package`; `npm run make`
-// does both). Writes out/make/Snotra-AI-<version>-mac-arm64.dmg.
+// does both). Writes out/make/Snotra-Agent-<version>-mac-arm64.dmg.
 
 const fs = require('fs');
 const os = require('os');
@@ -39,7 +39,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const VOLUME_NAME = 'Snotra AI';
+const VOLUME_NAME = 'Snotra Agent';
 const LAYOUT = path.join(ROOT, 'assets', 'macos', 'dmg-layout.DS_Store');
 const VOLUME_ICON = path.join(ROOT, 'icon.icns');
 // The layout's alias points at exactly this path inside the volume, so it is
@@ -59,7 +59,7 @@ const defaultRun = (cmd, args) => execFileSync(cmd, args, { stdio: 'pipe' });
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function dmgFileName(version, arch = 'arm64') {
-  return `Snotra-AI-${version}-mac-${arch}.dmg`;
+  return `Snotra-Agent-${version}-mac-${arch}.dmg`;
 }
 
 function stage(dir, {

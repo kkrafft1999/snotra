@@ -9,7 +9,7 @@
 
 /**
  * @typedef {Object} EnvironmentFacts
- * @property {string} [appName] — Name der App, z. B. „Snotra AI"
+ * @property {string} [appName] — Name der App, z. B. „Snotra Agent"
  * @property {string} [appVersion] — Version der App, z. B. „1.5.0"
  * @property {string|null} [workspaceRoot] — absoluter Pfad des offenen Ordners
  * @property {boolean|null} [isGitRepository] — `null`, wenn nicht ermittelbar

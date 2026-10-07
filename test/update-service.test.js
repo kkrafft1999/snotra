@@ -146,7 +146,7 @@ test('checkForUpdate targets the Snotra repo with a Snotra User-Agent by default
   await svc.checkForUpdate();
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.github.com/repos/kkrafft1999/snotra/releases/latest');
-  assert.match(calls[0].opts.headers['User-Agent'], /^Snotra-AI-/);
+  assert.match(calls[0].opts.headers['User-Agent'], /^Snotra-Agent-/);
 });
 
 // ── Selbst-Update (Issue #232) ──────────────────────────────────────────────
@@ -154,7 +154,7 @@ test('checkForUpdate targets the Snotra repo with a Snotra User-Agent by default
 const MAC_RUNTIME = {
   platform: 'darwin',
   arch: 'arm64',
-  execPath: '/Applications/Snotra AI.app/Contents/MacOS/Snotra AI',
+  execPath: '/Applications/Snotra Agent.app/Contents/MacOS/Snotra Agent',
   isPackaged: true,
 };
 
@@ -165,8 +165,8 @@ function releaseWithAssets(extra = {}) {
     published_at: '2026-06-01T00:00:00Z',
     body: 'Neue Sachen',
     assets: [
-      { name: 'Snotra-AI-1.4.0-mac-arm64.dmg', size: 4096, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-mac-arm64.dmg' },
-      { name: 'Snotra-AI-1.4.0-win-x64.zip', size: 5120, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-win-x64.zip' },
+      { name: 'Snotra-Agent-1.4.0-mac-arm64.dmg', size: 4096, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-Agent-1.4.0-mac-arm64.dmg' },
+      { name: 'Snotra-Agent-1.4.0-win-x64.zip', size: 5120, browser_download_url: 'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-Agent-1.4.0-win-x64.zip' },
     ],
     ...extra,
   };
@@ -201,7 +201,7 @@ test('checkForUpdate meldet das passende Paket und dass ein Selbst-Update geht',
   assert.equal(res.canSelfUpdate, true);
   assert.equal(res.installKind, 'macos-bundle');
   // Nur Name und Groesse — die Adresse bleibt im Main-Prozess.
-  assert.deepEqual(res.asset, { name: 'Snotra-AI-1.4.0-mac-arm64.dmg', size: 4096 });
+  assert.deepEqual(res.asset, { name: 'Snotra-Agent-1.4.0-mac-arm64.dmg', size: 4096 });
   assert.equal(res.selfUpdateBlockedReason, '');
 });
 
@@ -223,7 +223,7 @@ test('eine Paketinstallation nennt ihren Grund statt eines Downloads', async () 
   const svc = createUpdateService({
     app,
     storage: makeStorage(),
-    runtime: { platform: 'linux', arch: 'x64', execPath: '/opt/Snotra AI/Snotra AI', isPackaged: true },
+    runtime: { platform: 'linux', arch: 'x64', execPath: '/opt/Snotra Agent/Snotra Agent', isPackaged: true },
     fetchImpl: async () => jsonResponse(releaseWithAssets()),
   });
   const res = await svc.checkForUpdate();
@@ -253,7 +253,7 @@ test('downloadUpdate prueft frisch nach und laedt die Adresse aus dem Release', 
   assert.equal(downloader.calls.length, 1);
   assert.equal(
     downloader.calls[0].asset.url,
-    'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-AI-1.4.0-mac-arm64.dmg'
+    'https://github.com/kkrafft1999/snotra/releases/download/v1.4.0/Snotra-Agent-1.4.0-mac-arm64.dmg'
   );
   assert.equal(downloader.calls[0].version, '1.4.0');
 });
@@ -391,14 +391,14 @@ test('readInstallFailure reports a failed swap until it is cleared (#573)', asyn
   fs.writeFileSync(statusFile, `\uFEFF${JSON.stringify({
     version: '1.13.0',
     error: ' The process cannot access the file because it is being used by another process. ',
-    log: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
+    log: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
   })}`);
   const svc = createUpdateService({ app: userApp, storage: makeStorage() });
 
   const expected = {
     version: '1.13.0',
     error: 'The process cannot access the file because it is being used by another process.',
-    logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
+    logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
   };
   assert.deepEqual(await svc.readInstallFailure(), expected);
   // Reading alone does not forget it: the check that follows may still fail.

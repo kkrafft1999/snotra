@@ -73,7 +73,7 @@ const SKILL = [
   '---',
   'name: release',
   'description: >',
-  '  Publishes a new release of Snotra AI: bumps the version through a pull',
+  '  Publishes a new release of Snotra Agent: bumps the version through a pull',
   '  request, then tags it and lets the pipeline build the artifacts.',
   'license: MIT',
   'metadata:',

@@ -40,7 +40,7 @@ test('meldet ein Git-Repository, wenn .git existiert', async () => {
   assert.equal(facts.isGitRepository, true);
   assert.equal(facts.workspaceRoot, root);
   assert.equal(facts.osVersion, 'Darwin 27.0.0');
-  assert.equal(facts.appName, 'Snotra AI');
+  assert.equal(facts.appName, 'Snotra Agent');
   assert.equal(facts.appVersion, '1.5.3');
 });
 

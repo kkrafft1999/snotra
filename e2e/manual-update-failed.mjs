@@ -69,11 +69,11 @@ try {
           notes: '- Windows self-update no longer leaves the old version in place',
           canSelfUpdate: true,
           installKind: 'windows-dir',
-          asset: { name: 'Snotra AI-win32-x64-1.13.0.zip', size: 131_000_000 },
+          asset: { name: 'Snotra Agent-win32-x64-1.13.0.zip', size: 131_000_000 },
           lastInstallFailure: {
             version: '1.13.0',
             error: 'The process cannot access the file because it is being used by another process.',
-            logFile: 'C:\\Users\\konrad\\AppData\\Roaming\\Snotra AI\\update-install.log',
+            logFile: 'C:\\Users\\konrad\\AppData\\Roaming\\Snotra Agent\\update-install.log',
           },
         });
       });

@@ -108,7 +108,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
         redirect: 'follow',
         headers: {
           Accept: 'application/octet-stream',
-          'User-Agent': 'Snotra-AI-Updater',
+          'User-Agent': 'Snotra-Agent-Updater',
         },
       });
       // GitHub answers with a redirect to its storage. Where it ends up has to

@@ -101,7 +101,7 @@ function extensionOf(absPath) {
  *
  * Die naheliegende Variante `tell application "Finder" to …` schickt ein
  * Apple Event und braucht deshalb die Automatisierungs-Freigabe: Beim ersten
- * Aufruf poppt „Snotra AI möchte Finder steuern“, und bis geantwortet wird,
+ * Aufruf poppt „Snotra Agent möchte Finder steuern“, und bis geantwortet wird,
  * hängt der Aufruf im Timeout — gemessen am 2026-09-21, dauerhaft
  * „unbekannt“, wenn niemand zustimmt. Für eine Info-Zeile ist das zu teuer.
  * `URLForApplicationToOpenURL:` fragt dieselbe Launch-Services-Datenbank

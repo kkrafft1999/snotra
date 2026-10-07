@@ -43,7 +43,7 @@ function makeTempDir(t) {
  * A real `resources/app.asar` in a package folder, packed by @electron/asar
  * the way the release build packs it (#569).
  */
-async function writeAppAsar(packageDir, pkg = { productName: 'Snotra AI', version: '1.13.0' }) {
+async function writeAppAsar(packageDir, pkg = { productName: 'Snotra Agent', version: '1.13.0' }) {
   const asar = require('@electron/asar');
   const src = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-asar-src-'));
   try {
@@ -98,7 +98,7 @@ test('Pfade werden fuer beide Skriptsprachen sicher eingebettet', () => {
 test('das macOS-Helferskript wartet, raeumt auf und startet neu', () => {
   const script = buildMacRelaunchScript({
     pid: 99,
-    appBundlePath: '/Applications/Snotra AI.app',
+    appBundlePath: '/Applications/Snotra Agent.app',
     backupPath: '/Applications/.snotra-old-1.app',
     workDir: '/tmp/snotra-update',
   });
@@ -106,7 +106,7 @@ test('das macOS-Helferskript wartet, raeumt auf und startet neu', () => {
   assert.match(script, /pid=99/);
   assert.match(script, /while kill -0 "\$pid"/);
   assert.match(script, /rm -rf '\/Applications\/\.snotra-old-1\.app'/);
-  assert.match(script, /open '\/Applications\/Snotra AI\.app'/);
+  assert.match(script, /open '\/Applications\/Snotra Agent\.app'/);
   // Die Reihenfolge ist der Punkt: erst warten, dann anfassen.
   assert.ok(script.indexOf('kill -0') < script.indexOf('rm -rf'));
   assert.ok(script.indexOf('rm -rf') < script.indexOf('open '));
@@ -136,18 +136,18 @@ test('das Linux-Ordner-Skript stellt bei einem Fehlschlag die alte Version zurue
   assert.match(script, /if ! mv '\/home\/k\/apps\/\.snotra-new-1' '\/home\/k\/apps\/snotra-ai'; then/);
   // Der Rueckweg muss im Fehlerzweig stehen, sonst steht der Nutzer ohne App da.
   assert.match(script, /\n {2}mv '\/home\/k\/apps\/\.snotra-old-1' '\/home\/k\/apps\/snotra-ai'\n {2}exit 1/);
-  assert.match(script, /exec '\/home\/k\/apps\/snotra-ai\/Snotra AI'/);
+  assert.match(script, /exec '\/home\/k\/apps\/snotra-ai\/Snotra Agent'/);
 });
 
 const WINDOWS_SCRIPT_ARGS = Object.freeze({
   pid: 1234,
-  installDir: 'C:\\Users\\k\\Snotra AI',
-  stagedDir: 'C:\\Users\\k\\.snotra-new-1\\Snotra AI-win32-x64',
+  installDir: 'C:\\Users\\k\\Snotra Agent',
+  stagedDir: 'C:\\Users\\k\\.snotra-new-1\\Snotra Agent-win32-x64',
   stageRoot: 'C:\\Users\\k\\.snotra-new-1',
   backupDir: 'C:\\Users\\k\\.snotra-old-1',
   workDir: 'C:\\Temp\\snotra-update',
-  logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install.log',
-  statusFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-failed.json',
+  logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
+  statusFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-failed.json',
   startedFile: 'C:\\Temp\\snotra-update\\helper-started',
   version: '1.13.0',
 });
@@ -158,7 +158,7 @@ test('das Windows-Skript wartet auf den Prozess und macht den Tausch rueckgaengi
   assert.match(script, /Get-Process -Id \$procId/);
   assert.match(script, /Move-WithRetry \$install \$backup/);
   assert.match(script, /} catch \{\n {4}Move-WithRetry \$backup \$install\n {4}throw/);
-  assert.match(script, /\$exe {5}= Join-Path \$install 'Snotra AI\.exe'/);
+  assert.match(script, /\$exe {5}= Join-Path \$install 'Snotra Agent\.exe'/);
   assert.match(script, /\nStart-Process -FilePath \$exe\n$/);
 });
 
@@ -192,7 +192,7 @@ test('the Windows script reports that it runs before it waits for the app', () =
 const LAUNCH_ARGS = Object.freeze({
   script: 'C:\\Users\\Kon Rad\\AppData\\Local\\Temp\\snotra-update\\swap.ps1',
   cwd: "C:\\Users\\k\\Kon's tools",
-  outputFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-output.log',
+  outputFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-output.log',
   startedFile: 'C:\\Temp\\snotra-update\\helper-started',
   resultFile: 'C:\\Temp\\snotra-update\\helper-launch.json',
 });
@@ -227,8 +227,8 @@ test('a PowerShell script for -EncodedCommand is UTF-16LE in base64', () => {
 
 test('ein gescheiterter Tausch wird protokolliert, gemeldet und startet die alte Version', () => {
   const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
-  assert.match(script, /\$log {5}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install\.log'/);
-  assert.match(script, /\$status {2}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra AI\\update-install-failed\.json'/);
+  assert.match(script, /\$log {5}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install\.log'/);
+  assert.match(script, /\$status {2}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-failed\.json'/);
   assert.match(script, /\$version = '1\.13\.0'/);
   const failure = script.slice(script.indexOf('} catch {\n  $reason'), script.indexOf('  exit 1'));
   assert.match(failure, /Write-Log \('update failed: ' \+ \$reason\)/);
@@ -253,9 +253,9 @@ test('fremde Eintraege im App-Ordner ziehen in den neuen Ordner mit', () => {
   assert.match(none, /\$carry {3}= @\(\)/);
   const some = buildWindowsSwapScript({
     ...WINDOWS_SCRIPT_ARGS,
-    carryOver: ['Snotra AI-win32-x64-1.12.0.zip', "Kon's notes.txt"],
+    carryOver: ['Snotra Agent-win32-x64-1.12.0.zip', "Kon's notes.txt"],
   });
-  assert.match(some, /\$carry {3}= @\('Snotra AI-win32-x64-1\.12\.0\.zip', 'Kon''s notes\.txt'\)/);
+  assert.match(some, /\$carry {3}= @\('Snotra Agent-win32-x64-1\.12\.0\.zip', 'Kon''s notes\.txt'\)/);
   assert.match(some, /Move-WithRetry \(Join-Path \$backup \$name\) \(Join-Path \$install \$name\)/);
   // What cannot be carried over keeps the backup instead of vanishing with it.
   assert.match(some, /catch \{ \$keepBackup = \$true;/);
@@ -267,15 +267,15 @@ test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gr
   const packageDir = path.join(dir, 'pkg');
   await fsp.mkdir(path.join(installDir, 'resources'), { recursive: true });
   await fsp.mkdir(path.join(packageDir, 'Resources'), { recursive: true });
-  for (const name of ['Snotra AI.exe', 'ffmpeg.dll', 'Snotra AI-win32-x64-1.12.0.zip', 'notes.txt']) {
+  for (const name of ['Snotra Agent.exe', 'ffmpeg.dll', 'Snotra Agent-win32-x64-1.12.0.zip', 'notes.txt']) {
     await fsp.writeFile(path.join(installDir, name), '');
   }
-  for (const name of ['snotra ai.exe', 'FFMPEG.dll', 'vulkan-1.dll']) {
+  for (const name of ['snotra agent.exe', 'FFMPEG.dll', 'vulkan-1.dll']) {
     await fsp.writeFile(path.join(packageDir, name), '');
   }
   assert.deepEqual(
     (await listForeignEntries(installDir, packageDir)).sort(),
-    ['Snotra AI-win32-x64-1.12.0.zip', 'notes.txt'],
+    ['Snotra Agent-win32-x64-1.12.0.zip', 'notes.txt'],
   );
 });
 
@@ -286,17 +286,17 @@ test('listForeignEntries findet, was das neue Paket nicht mitbringt, ohne auf Gr
  */
 async function prepareWindowsInstall(t) {
   const dir = makeTempDir(t);
-  const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+  const installDir = path.join(dir, 'tools', 'Snotra Agent-win32-x64');
   await fsp.mkdir(installDir, { recursive: true });
-  await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
-  await fsp.writeFile(path.join(installDir, 'Snotra AI-win32-x64-1.12.0.zip'), 'zip');
+  await fsp.writeFile(path.join(installDir, 'Snotra Agent.exe'), 'old');
+  await fsp.writeFile(path.join(installDir, 'Snotra Agent-win32-x64-1.12.0.zip'), 'zip');
   const zip = path.join(dir, 'new.zip');
   await fsp.writeFile(zip, 'zip');
   const onRun = async (cmd, args) => {
     const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
-    await fsp.mkdir(path.join(dest, 'Snotra AI-win32-x64'), { recursive: true });
-    await fsp.writeFile(path.join(dest, 'Snotra AI-win32-x64', 'Snotra AI.exe'), 'new');
-    await writeAppAsar(path.join(dest, 'Snotra AI-win32-x64'));
+    await fsp.mkdir(path.join(dest, 'Snotra Agent-win32-x64'), { recursive: true });
+    await fsp.writeFile(path.join(dest, 'Snotra Agent-win32-x64', 'Snotra Agent.exe'), 'new');
+    await writeAppAsar(path.join(dest, 'Snotra Agent-win32-x64'));
     return '';
   };
   const options = {
@@ -333,15 +333,15 @@ test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokol
   assert.ok(script.includes(`$status  = ${psQuote(statusFile)}`));
   assert.ok(script.includes(`$started = ${psQuote(path.join(workDir, 'helper-started'))}`));
   assert.ok(script.includes("$version = '1.13.0'"));
-  assert.ok(script.includes("$carry   = @('Snotra AI-win32-x64-1.12.0.zip')"));
-  assert.match(script, /\$staged {2}= '[^']*\.snotra-new-\d+\/Snotra AI-win32-x64'/);
+  assert.ok(script.includes("$carry   = @('Snotra Agent-win32-x64-1.12.0.zip')"));
+  assert.match(script, /\$staged {2}= '[^']*\.snotra-new-\d+\/Snotra Agent-win32-x64'/);
   assert.match(script, /\$stage {3}= '[^']*\.snotra-new-\d+'/);
 });
 
 /** After a failed helper start nothing may be left beside the app folder. */
 async function assertUntouched(dir, installDir) {
-  assert.deepEqual(await fsp.readdir(path.join(dir, 'tools')), ['Snotra AI-win32-x64'], 'the staged folder is gone');
-  assert.equal(await fsp.readFile(path.join(installDir, 'Snotra AI.exe'), 'utf8'), 'old');
+  assert.deepEqual(await fsp.readdir(path.join(dir, 'tools')), ['Snotra Agent-win32-x64'], 'the staged folder is gone');
+  assert.equal(await fsp.readFile(path.join(installDir, 'Snotra Agent.exe'), 'utf8'), 'old');
 }
 
 // #654: as long as the app is still running, a helper that did not start can
@@ -449,7 +449,7 @@ test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t)
   const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
   const workDir = path.join(root, 'work');
-  const appBundlePath = path.join(appsDir, 'Snotra AI.app');
+  const appBundlePath = path.join(appsDir, 'Snotra Agent.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   await fsp.writeFile(path.join(appBundlePath, 'alt.txt'), 'alte Version');
   const filePath = path.join(root, 'snotra.dmg');
@@ -461,7 +461,7 @@ test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t)
     onRun: async (cmd, args) => {
       if (cmd.endsWith('hdiutil') && args[0] === 'attach') {
         const mount = args[args.indexOf('-mountpoint') + 1];
-        await fsp.mkdir(path.join(mount, 'Snotra AI.app'), { recursive: true });
+        await fsp.mkdir(path.join(mount, 'Snotra Agent.app'), { recursive: true });
         return '';
       }
       if (cmd.endsWith('ditto')) {
@@ -507,7 +507,7 @@ test('macOS: eine fremde Bundle-Kennung stoppt vor dem Tausch', async (t) => {
   const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
   const workDir = path.join(root, 'work');
-  const appBundlePath = path.join(appsDir, 'Snotra AI.app');
+  const appBundlePath = path.join(appsDir, 'Snotra Agent.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   await fsp.writeFile(path.join(appBundlePath, 'alt.txt'), 'alte Version');
   const filePath = path.join(root, 'snotra.dmg');
@@ -533,13 +533,13 @@ test('macOS: eine fremde Bundle-Kennung stoppt vor dem Tausch', async (t) => {
   });
 
   assert.equal(result.ok, false);
-  assert.match(de(result.error), /nicht Snotra AI/);
+  assert.match(de(result.error), /nicht Snotra Agent/);
   // A key for the dialog (#353), worded in English when English is on.
   assert.deepEqual(result.error, { key: 'update.error.wrongApp', params: { id: 'com.fremd.app' } });
-  assert.equal(translateMessage('en', result.error), 'The downloaded program is not Snotra AI (identifier com.fremd.app).');
+  assert.equal(translateMessage('en', result.error), 'The downloaded program is not Snotra Agent (identifier com.fremd.app).');
   // Entscheidend: die laufende Installation steht unveraendert da.
   assert.equal(fs.existsSync(path.join(appBundlePath, 'alt.txt')), true);
-  assert.deepEqual((await fsp.readdir(appsDir)).sort(), ['Snotra AI.app']);
+  assert.deepEqual((await fsp.readdir(appsDir)).sort(), ['Snotra Agent.app']);
   assert.deepEqual(launches, []);
 });
 
@@ -547,7 +547,7 @@ test('macOS: die falsche Version im Paket stoppt ebenfalls vor dem Tausch', asyn
   if (process.platform !== 'darwin') return t.skip('nur auf macOS sinnvoll');
 
   const root = makeTempDir(t);
-  const appBundlePath = path.join(root, 'Applications', 'Snotra AI.app');
+  const appBundlePath = path.join(root, 'Applications', 'Snotra Agent.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   const filePath = path.join(root, 'snotra.dmg');
   await fsp.writeFile(filePath, 'dmg');
@@ -555,7 +555,7 @@ test('macOS: die falsche Version im Paket stoppt ebenfalls vor dem Tausch', asyn
   const { installer } = makeInstaller({
     onRun: async (cmd, args) => {
       if (cmd.endsWith('hdiutil') && args[0] === 'attach') {
-        await fsp.mkdir(path.join(args[args.indexOf('-mountpoint') + 1], 'Snotra AI.app'), { recursive: true });
+        await fsp.mkdir(path.join(args[args.indexOf('-mountpoint') + 1], 'Snotra Agent.app'), { recursive: true });
         return '';
       }
       if (cmd.endsWith('ditto')) { await fsp.cp(args[0], args[1], { recursive: true }); return ''; }
@@ -604,7 +604,7 @@ test('Linux-Ordner: ein Archiv ohne Programmdatei wird nicht eingespielt', async
     workDir,
   });
   assert.equal(result.ok, false);
-  assert.match(de(result.error), /fehlt „Snotra AI“/);
+  assert.match(de(result.error), /fehlt „Snotra Agent“/);
   assert.deepEqual(launches, [], 'ohne gepruefte Dateien wird kein Helfer gestartet');
 });
 
@@ -613,19 +613,19 @@ test('the minimal test archive is a real asar, and the reader reads it (#569)', 
   const { writeMinimalAsar } = require('./helpers/asar.js');
   const dir = makeTempDir(t);
   const file = path.join(dir, 'app.asar');
-  writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra AI","version":"3.0.1"}' });
+  writeMinimalAsar(file, { 'LICENSE': 'Apache-2.0', 'package.json': '{"productName":"Snotra Agent","version":"3.0.1"}' });
   // @electron/asar lists with the platform's separator.
   const listed = asar.listPackage(file, { isPack: false }).map((entry) => entry.replace(/\\/g, '/')).sort();
   assert.deepEqual(listed, ['/LICENSE', '/package.json']);
-  assert.equal(asar.extractFile(file, 'package.json').toString(), '{"productName":"Snotra AI","version":"3.0.1"}');
+  assert.equal(asar.extractFile(file, 'package.json').toString(), '{"productName":"Snotra Agent","version":"3.0.1"}');
   assert.equal(readAsarPackageJson(file).version, '3.0.1');
 });
 
 test('readAsarPackageJson reads package.json from a packed archive (#569)', async (t) => {
   const dir = makeTempDir(t);
-  await writeAppAsar(dir, { productName: 'Snotra AI', version: '2.4.6' });
+  await writeAppAsar(dir, { productName: 'Snotra Agent', version: '2.4.6' });
   const pkg = readAsarPackageJson(path.join(dir, 'resources', 'app.asar'));
-  assert.equal(pkg.productName, 'Snotra AI');
+  assert.equal(pkg.productName, 'Snotra Agent');
   assert.equal(pkg.version, '2.4.6');
 
   const garbage = path.join(dir, 'garbage.asar');
@@ -639,15 +639,15 @@ test('readAsarPackageJson reads package.json from a packed archive (#569)', asyn
 // #569: a package that is not the announced version would be installed, found
 // "newer" again after the restart and offered for ever.
 for (const [label, pkg, pattern] of [
-  ['another version', { productName: 'Snotra AI', version: '1.12.9' }, /meldet Version 1\.12\.9, erwartet war 1\.13\.0/],
-  ['another app', { productName: 'Something Else', version: '1.13.0' }, /nicht Snotra AI \(Kennung Something Else\)/],
+  ['another version', { productName: 'Snotra Agent', version: '1.12.9' }, /meldet Version 1\.12\.9, erwartet war 1\.13\.0/],
+  ['another app', { productName: 'Something Else', version: '1.13.0' }, /nicht Snotra Agent \(Kennung Something Else\)/],
 ]) {
   test(`Windows: a package with ${label} stops before the swap`, async (t) => {
     if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
     const dir = makeTempDir(t);
-    const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+    const installDir = path.join(dir, 'tools', 'Snotra Agent-win32-x64');
     await fsp.mkdir(installDir, { recursive: true });
-    await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
+    await fsp.writeFile(path.join(installDir, 'Snotra Agent.exe'), 'old');
     const zip = path.join(dir, 'new.zip');
     await fsp.writeFile(zip, 'zip');
 
@@ -655,7 +655,7 @@ for (const [label, pkg, pattern] of [
       onRun: async (cmd, args) => {
         const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
         await fsp.mkdir(dest, { recursive: true });
-        await fsp.writeFile(path.join(dest, 'Snotra AI.exe'), 'new');
+        await fsp.writeFile(path.join(dest, 'Snotra Agent.exe'), 'new');
         await writeAppAsar(dest, pkg);
         return '';
       },
@@ -688,8 +688,8 @@ test('Linux-Ordner: a package with another version is not swapped in (#569)', as
       if (cmd !== 'tar') return '';
       const pkgDir = path.join(args[args.indexOf('-C') + 1], 'snotra-ai-1.8.0');
       await fsp.mkdir(pkgDir, { recursive: true });
-      await fsp.writeFile(path.join(pkgDir, 'Snotra AI'), 'bin');
-      await writeAppAsar(pkgDir, { productName: 'Snotra AI', version: '1.7.9' });
+      await fsp.writeFile(path.join(pkgDir, 'Snotra Agent'), 'bin');
+      await writeAppAsar(pkgDir, { productName: 'Snotra Agent', version: '1.7.9' });
       return '';
     },
   });
@@ -737,7 +737,7 @@ test('fehlende Schreibrechte werden erklaert, nicht durchgereicht', async (t) =>
   }
   const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
-  const appBundlePath = path.join(appsDir, 'Snotra AI.app');
+  const appBundlePath = path.join(appsDir, 'Snotra Agent.app');
   await fsp.mkdir(appBundlePath, { recursive: true });
   const filePath = path.join(root, 'snotra.dmg');
   await fsp.writeFile(filePath, 'dmg');
@@ -764,8 +764,11 @@ test('fehlende Schreibrechte werden erklaert, nicht durchgereicht', async (t) =>
   assert.deepEqual(runs, [], 'ohne Schreibrecht wird gar nicht erst gemountet');
 });
 
-// #794: the app is renamed to Snotra Agent (#795). Every released updater has
-// to take the renamed package, and the bundle on a Mac takes its new name.
+// #794: the app was renamed from Snotra AI to Snotra Agent (#795). The updater
+// takes a package under either name, and a bundle on a Mac takes the name it
+// has in the disk image. The tests run from the app's own name to the other.
+const { APP_NAME, PRODUCT_NAMES } = require('../src/main/app-identity');
+const OTHER_NAME = PRODUCT_NAMES.find((name) => name !== APP_NAME);
 
 test('macTargetBundlePath gives a bundle of ours the name it has in the disk image (#794)', () => {
   const none = () => false;
@@ -783,11 +786,11 @@ test('macTargetBundlePath keeps the path of a bundle the user named, or when the
   assert.equal(macTargetBundlePath('/Applications/Snotra AI.app', 'Snotra Agent.app', taken), '/Applications/Snotra AI.app');
 });
 
-test('macOS: the renamed bundle replaces Snotra AI.app under its new name (#794)', async (t) => {
+test('macOS: a bundle under the other name replaces ours and takes that name (#794)', async (t) => {
   if (process.platform !== 'darwin') return t.skip('only meaningful on macOS');
   const root = makeTempDir(t);
   const appsDir = path.join(root, 'Applications');
-  const appBundlePath = path.join(appsDir, 'Snotra AI.app');
+  const appBundlePath = path.join(appsDir, `${APP_NAME}.app`);
   await fsp.mkdir(appBundlePath, { recursive: true });
   await fsp.writeFile(path.join(appBundlePath, 'old.txt'), 'old');
   const filePath = path.join(root, 'snotra.dmg');
@@ -797,8 +800,8 @@ test('macOS: the renamed bundle replaces Snotra AI.app under its new name (#794)
     onRun: async (cmd, args) => {
       if (cmd.endsWith('hdiutil') && args[0] === 'attach') {
         const mount = args[args.indexOf('-mountpoint') + 1];
-        await fsp.mkdir(path.join(mount, 'Snotra Agent.app'), { recursive: true });
-        await fsp.writeFile(path.join(mount, 'Snotra Agent.app', 'new.txt'), 'new');
+        await fsp.mkdir(path.join(mount, `${OTHER_NAME}.app`), { recursive: true });
+        await fsp.writeFile(path.join(mount, `${OTHER_NAME}.app`, 'new.txt'), 'new');
       }
       if (cmd.endsWith('ditto')) await fsp.cp(args[0], args[1], { recursive: true });
       if (cmd.endsWith('plutil')) {
@@ -816,29 +819,30 @@ test('macOS: the renamed bundle replaces Snotra AI.app under its new name (#794)
 
   assert.deepEqual(result, { ok: true, relaunching: true });
   const entries = (await fsp.readdir(appsDir)).sort();
-  assert.equal(entries.length, 2);
-  assert.equal(entries[1], 'Snotra Agent.app');
-  assert.match(entries[0], /^\.snotra-old-\d+\.app$/, 'the old bundle waits as the backup the helper removes');
-  assert.equal(await fsp.readFile(path.join(appsDir, 'Snotra Agent.app', 'new.txt'), 'utf8'), 'new');
+  const backup = entries.find((name) => name.startsWith('.snotra-old-'));
+  assert.deepEqual(entries, [backup, `${OTHER_NAME}.app`].sort());
+  assert.match(backup, /^\.snotra-old-\d+\.app$/, 'the old bundle waits as the backup the helper removes');
+  assert.equal(await fsp.readFile(path.join(appsDir, `${OTHER_NAME}.app`, 'new.txt'), 'utf8'), 'new');
   const script = await fsp.readFile(launches[0].args[0], 'utf8');
-  assert.ok(script.includes(`open ${shQuote(path.join(appsDir, 'Snotra Agent.app'))}`));
-  assert.ok(script.includes(`rm -rf ${shQuote(path.join(appsDir, entries[0]))}`));
+  assert.ok(script.includes(`open ${shQuote(path.join(appsDir, `${OTHER_NAME}.app`))}`));
+  assert.ok(script.includes(`rm -rf ${shQuote(path.join(appsDir, backup))}`));
 });
 
-test('Windows: the renamed package is installed and started under its own name (#794)', async (t) => {
+test('Windows: a package under the other name is installed and started under that name (#794)', async (t) => {
   if (process.platform === 'win32') return t.skip('needs POSIX paths');
   const dir = makeTempDir(t);
-  const installDir = path.join(dir, 'tools', 'Snotra AI-win32-x64');
+  const installDir = path.join(dir, 'tools', `${APP_NAME}-win32-x64`);
   await fsp.mkdir(installDir, { recursive: true });
-  await fsp.writeFile(path.join(installDir, 'Snotra AI.exe'), 'old');
+  await fsp.writeFile(path.join(installDir, `${APP_NAME}.exe`), 'old');
   const zip = path.join(dir, 'new.zip');
   await fsp.writeFile(zip, 'zip');
   const { installer, quiets } = makeInstaller({
     onRun: async (cmd, args) => {
       const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
-      await fsp.mkdir(path.join(dest, 'Snotra Agent-win32-x64'), { recursive: true });
-      await fsp.writeFile(path.join(dest, 'Snotra Agent-win32-x64', 'Snotra Agent.exe'), 'new');
-      await writeAppAsar(path.join(dest, 'Snotra Agent-win32-x64'), { productName: 'Snotra Agent', version: '1.17.0' });
+      const pkgDir = path.join(dest, `${OTHER_NAME}-win32-x64`);
+      await fsp.mkdir(pkgDir, { recursive: true });
+      await fsp.writeFile(path.join(pkgDir, `${OTHER_NAME}.exe`), 'new');
+      await writeAppAsar(pkgDir, { productName: OTHER_NAME, version: '1.17.0' });
       return '';
     },
   });
@@ -853,13 +857,13 @@ test('Windows: the renamed package is installed and started under its own name (
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.equal(quiets.length, 1);
   const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
-  assert.ok(script.includes("$exe     = Join-Path $install 'Snotra Agent.exe'"));
-  assert.ok(script.includes("$oldExe  = Join-Path $install 'Snotra AI.exe'"), 'a rollback starts the old name');
+  assert.ok(script.includes(`$exe     = Join-Path $install '${OTHER_NAME}.exe'`));
+  assert.ok(script.includes(`$oldExe  = Join-Path $install '${APP_NAME}.exe'`), 'a rollback starts the old name');
   assert.match(script, /if \(Test-Path -LiteralPath \$oldExe\) \{\n {4}Write-Log 'starting the previous version again'\n {4}Start-Process -FilePath \$oldExe/);
   assert.match(script, /Write-Log \('updated to ' \+ \$version\)\nStart-Process -FilePath \$exe\n/);
 });
 
-test('Linux-Ordner: the renamed package is swapped in and started under its own name (#794)', async (t) => {
+test('Linux-Ordner: a package under the other name is swapped in and started under that name (#794)', async (t) => {
   if (process.platform === 'win32') return t.skip('needs POSIX paths');
   const root = makeTempDir(t);
   const installDir = path.join(root, 'apps', 'snotra-ai');
@@ -869,10 +873,10 @@ test('Linux-Ordner: the renamed package is swapped in and started under its own 
   const { installer, launches } = makeInstaller({
     onRun: async (cmd, args) => {
       if (cmd !== 'tar') return '';
-      const pkgDir = path.join(args[args.indexOf('-C') + 1], 'snotra-agent-1.17.0');
+      const pkgDir = path.join(args[args.indexOf('-C') + 1], 'snotra-1.17.0');
       await fsp.mkdir(pkgDir, { recursive: true });
-      await fsp.writeFile(path.join(pkgDir, 'Snotra Agent'), 'bin');
-      await writeAppAsar(pkgDir, { productName: 'Snotra Agent', version: '1.17.0' });
+      await fsp.writeFile(path.join(pkgDir, OTHER_NAME), 'bin');
+      await writeAppAsar(pkgDir, { productName: OTHER_NAME, version: '1.17.0' });
       return '';
     },
   });
@@ -885,5 +889,5 @@ test('Linux-Ordner: the renamed package is swapped in and started under its own 
 
   assert.deepEqual(result, { ok: true, relaunching: true });
   const script = await fsp.readFile(launches[0].args[0], 'utf8');
-  assert.ok(script.endsWith(`exec ${shQuote(path.join(installDir, 'Snotra Agent'))}\n`));
+  assert.ok(script.endsWith(`exec ${shQuote(path.join(installDir, OTHER_NAME))}\n`));
 });

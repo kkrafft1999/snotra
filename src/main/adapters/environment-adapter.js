@@ -25,7 +25,7 @@ function createEnvironmentAdapter({
   fs,
   path,
   os,
-  appName = 'Snotra AI',
+  appName = 'Snotra Agent',
   getAppVersion = null,
   describeShell = null,
   platform = process.platform,

@@ -4,9 +4,9 @@ const pkg = require('../package.json');
 
 // Schutz gegen ein halbes Rename: Paketname, Produktname, Forge-Konfiguration
 // und Bundle-ID muessen zusammenpassen (Issue #54).
-test('package metadata carries the Snotra AI identity consistently', () => {
+test('package metadata carries the Snotra Agent identity consistently', () => {
   assert.equal(pkg.name, 'snotra');
-  assert.equal(pkg.productName, 'Snotra AI');
+  assert.equal(pkg.productName, 'Snotra Agent');
 
   const packager = pkg.config.forge.packagerConfig;
   assert.equal(packager.name, pkg.productName);

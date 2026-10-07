@@ -88,7 +88,7 @@ try {
           notes,
           canSelfUpdate: true,
           installKind: 'macos-bundle',
-          asset: { name: 'Snotra AI-darwin-arm64-1.15.0.dmg', size: 133_800_000 },
+          asset: { name: 'Snotra Agent-darwin-arm64-1.15.0.dmg', size: 133_800_000 },
         });
       }, NOTES);
       await poll(() => page.evaluate(() =>

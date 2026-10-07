@@ -187,7 +187,7 @@ function createUpdateService({
         signal: controller.signal,
         headers: {
           Accept: 'application/vnd.github+json',
-          'User-Agent': 'Snotra-AI-Updater',
+          'User-Agent': 'Snotra-Agent-Updater',
           'X-GitHub-Api-Version': '2022-11-28',
         },
       });

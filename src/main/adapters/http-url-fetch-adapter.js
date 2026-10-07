@@ -22,7 +22,7 @@ const {
   URL_FETCH_ALLOWED_CONTENT_TYPES,
 } = require('../../application/ports/url-fetch-port');
 
-const USER_AGENT = 'SnotraAI/1.0 (+https://github.com/kkrafft1999/snotra)';
+const USER_AGENT = 'SnotraAgent/1.0 (+https://github.com/kkrafft1999/snotra)';
 
 function fail(code, error) {
   return { ok: false, code, error };

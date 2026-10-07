@@ -9,7 +9,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, keychainItemCount, rendererToolEvents } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, keychainItemCount, KEYCHAIN_SERVICE, rendererToolEvents } from './helpers/app.mjs';
 
 test('an edit can be opened as a diff from the chat, and is gone after a restart', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
@@ -48,7 +48,7 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
       `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
       `profile: ${(await readdir(userDataDir).catch((e) => [String(e)])).join(', ')}`,
       `notes.txt: ${JSON.stringify(await readFile(path.join(workspace, 'notes.txt'), 'utf8').catch((e) => String(e)))}`,
-      `keychain items "Snotra AI Safe Storage" (CI only): ${await keychainItemCount()}`,
+      `keychain items "${KEYCHAIN_SERVICE}" (CI only): ${await keychainItemCount()}`,
       // The run went through but its tool line stayed at "waiting for
       // approval" (#721): which events reached the renderer, and which it dropped.
       `renderer tool events: ${await rendererToolEvents(target.page)}`,

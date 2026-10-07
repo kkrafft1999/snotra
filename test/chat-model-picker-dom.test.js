@@ -176,11 +176,11 @@ const unconfigured = () => ({
 
 for (const [platform, userAgent, locale, expected] of [
   ['macOS', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'en',
-    'Set up a language model to start chatting: Snotra AI › Settings… (⌘,).'],
+    'Set up a language model to start chatting: Snotra Agent › Settings… (⌘,).'],
   ['Windows', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'en',
     'Set up a language model to start chatting: View › Settings… (Ctrl+,).'],
   ['macOS', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'de',
-    'Richte ein Sprachmodell ein, um zu chatten: Snotra AI › Einstellungen… (⌘,).'],
+    'Richte ein Sprachmodell ein, um zu chatten: Snotra Agent › Einstellungen… (⌘,).'],
   ['Linux', 'Mozilla/5.0 (X11; Linux x86_64)', 'de',
     'Richte ein Sprachmodell ein, um zu chatten: Ansicht › Einstellungen… (Strg+,).'],
 ]) {

@@ -348,7 +348,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // (#676); the header's name may be cut in the middle, the title bar's not.
   assert.equal(await page.evaluate(() => document.getElementById('titlebar-workspace-name').textContent),
     path.basename(workspace));
-  const expectedTitle = `${path.basename(workspace)} — Snotra AI ${appVersion}`;
+  const expectedTitle = `${path.basename(workspace)} — Snotra Agent ${appVersion}`;
   await poll(async () => (await windowTitle()) === expectedTitle, { what: `window title "${expectedTitle}"` });
 
   // --- Datei oeffnen: die Vorschau zeigt den echten Inhalt ------------------
@@ -863,7 +863,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Main-Prozess. Geprueft wird, was wirklich beim Modell ankommt.
   const systemMessage = model.requestFor(LINK_QUESTION).body.messages
     .find((m) => m.role === 'system')?.content || '';
-  assert.match(systemMessage, /The environment you are running in \(Snotra AI/);
+  assert.match(systemMessage, /The environment you are running in \(Snotra Agent/);
   assert.ok(
     systemMessage.includes(`- Working directory: ${workspace}`),
     'der Block nennt den wirklich geoeffneten Ordner'
@@ -881,7 +881,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // Der Systemprompt nennt die System-Skills nur mit ihrer Kurzbeschreibung;
   // der Text selbst kommt erst auf `load_skill` (Issue #173).
-  assert.match(systemMessage, /- snotra-capabilities: What Snotra AI itself can do/);
+  assert.match(systemMessage, /- snotra-capabilities: What Snotra Agent itself can do/);
   assert.equal(systemMessage.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
 
   // --- Projektanweisungen aus AGENTS.md (Issue #212, #432) -----------------
