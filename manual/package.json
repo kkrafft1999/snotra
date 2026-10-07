@@ -8,9 +8,10 @@
     "predev": "npm run sync:icon",
     "dev": "astro dev",
     "prebuild": "npm run sync:icon",
-    "build": "npm run check:translations && astro build",
+    "build": "npm run check:content && astro build",
     "preview": "astro preview",
-    "check:translations": "node scripts/check-translations.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "check:content": "node scripts/check-content.mjs"
   },
   "engines": {
     "node": ">=24"

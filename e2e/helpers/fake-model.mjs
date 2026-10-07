@@ -39,6 +39,8 @@ const contentChunk = (text) => sse({
  */
 export async function startFakeModel() {
   const answers = [];
+  // What a title request gets; the manual's screenshots set a real title.
+  let titleText = 'Kurz.';
   const requests = [];
   // Numbers the TCP connections, so a trace shows whether a request rode on a
   // kept-alive socket and whether that socket went away with the abort (#327).
@@ -92,7 +94,9 @@ export async function startFakeModel() {
       const index = record.isTitleRequest
         ? -1
         : answers.findIndex((a) => !a.match || raw.includes(a.match));
-      const answer = index >= 0 ? answers.splice(index, 1)[0] : { text: 'Kurz.', chunkDelayMs: 0 };
+      const answer = index >= 0
+        ? answers.splice(index, 1)[0]
+        : { text: record.isTitleRequest ? titleText : 'Kurz.', chunkDelayMs: 0 };
       record.answer = answer;
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -170,6 +174,8 @@ export async function startFakeModel() {
     requests,
     /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
+    /** The title the app gets for the next conversations. */
+    setTitle(text) { titleText = text; },
     /** Die Anfrage, die diesen Text enthielt — fuer Zusicherungen zum Abbruch. */
     requestFor(match) {
       return requests.find((r) => !r.isTitleRequest && JSON.stringify(r.body).includes(match)) ?? null;
