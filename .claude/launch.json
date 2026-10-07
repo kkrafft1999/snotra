@@ -4,8 +4,26 @@
     {
       "name": "mockup",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "5056"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5056"
+      ],
       "port": 5056
+    },
+    {
+      "name": "manual",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "manual",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "4321"
+      ],
+      "port": 4321
     }
   ]
 }

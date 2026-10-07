@@ -1,0 +1,78 @@
+/*
+ * Snotra's design tokens on top of Starlight.
+ *
+ * The values themselves come from the app (src/renderer/styles/tokens.css,
+ * the single source of truth), so the manual follows every token change
+ * without a copy. Starlight and the app both mark the dark scheme with
+ * data-theme="dark" on <html>, which is what lets the app's dark tokens apply
+ * here unchanged. This file only maps Starlight's colour roles onto them.
+ *
+ * Starlight inverts its grey ramp between the schemes: --sl-color-white is
+ * always the strongest text, --sl-color-black always the page background, and
+ * gray-1 … gray-7 run from text towards the background in both. The mapping
+ * below therefore holds for light and dark alike.
+ */
+@import '../../../src/renderer/styles/tokens.css';
+
+:root,
+:root[data-theme='light'],
+::backdrop {
+  --sl-font: var(--ds-font-ui);
+  --sl-font-mono: var(--ds-font-mono);
+
+  --sl-color-white: var(--ds-text-primary);
+  --sl-color-gray-1: var(--ds-text-primary);
+  --sl-color-gray-2: var(--ds-text-primary);
+  --sl-color-gray-3: var(--ds-text-secondary);
+  --sl-color-gray-4: var(--ds-text-secondary);
+  --sl-color-gray-5: var(--ds-border);
+  --sl-color-gray-6: var(--ds-bg-tertiary);
+  --sl-color-gray-7: var(--ds-bg-secondary);
+  --sl-color-black: var(--ds-surface);
+
+  --sl-color-accent-low: var(--ds-blue-soft);
+  --sl-color-accent: var(--ds-blue);
+  --sl-color-accent-high: var(--ds-blue-strong);
+
+  /* "note" asides use the blue triple; keep them in the one accent colour. */
+  --sl-color-blue-low: var(--ds-blue-soft);
+  --sl-color-blue: var(--ds-blue);
+  --sl-color-blue-high: var(--ds-blue-strong);
+
+  --sl-color-text: var(--ds-text-primary);
+  --sl-color-text-accent: var(--ds-blue);
+  --sl-color-text-invert: var(--ds-surface);
+  --sl-color-bg: var(--ds-surface);
+  --sl-color-bg-nav: var(--ds-grey-bg);
+  --sl-color-bg-sidebar: var(--ds-grey-bg);
+  --sl-color-bg-inline-code: var(--ds-bg-tertiary);
+  --sl-color-bg-accent: var(--ds-blue);
+  --sl-color-hairline-light: var(--ds-border);
+  --sl-color-hairline: var(--ds-border);
+  --sl-color-hairline-shade: var(--ds-border);
+}
+
+/* Marker for features newer than the last few releases: `[since 1.16]`. */
+.since-marker {
+  display: inline-block;
+  margin-inline: 0.125rem;
+  padding: 0 0.4375rem;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: 999px;
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+  font-size: 0.8125em;
+  font-weight: 600;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  vertical-align: 0.0625em;
+}
+
+/*
+ * Starlight sizes the theme select for English (6.25em, set inline); the
+ * German "System" is cut off at that width. Same width as the language select.
+ */
+starlight-theme-select label {
+  --sl-select-width: 7em !important;
+}
