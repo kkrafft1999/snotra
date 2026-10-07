@@ -46,3 +46,17 @@ updates:
       - dependency-name: "@electron-forge/*"
         update-types:
           - version-update:semver-major
+  # The user manual (#778) is a package of its own. Nothing in it reaches an
+  # app user, so its updates come monthly and in one pull request.
+  - package-ecosystem: npm
+    directory: /manual
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - documentation
+    groups:
+      manual:
+        patterns:
+          - "*"

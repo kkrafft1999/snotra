@@ -57,6 +57,22 @@ Run these in order and stop with a clear message when something doesn't fit:
 4. Tests green? — `npm test` **and** `npm run test:e2e`. On a red test, stop and
    show the output.
 
+## Step 2a — user manual report (reports, does not stop)
+
+```sh
+node scripts/manual-upkeep-report.js
+```
+
+It lists the pull requests since the last release tag that changed
+user-visible code (`src/`, `system-skills/`) without touching `manual/` and
+without ticking *User manual not affected* in their description, and the ones
+that changed the UI. Show both lists to the user together with the version
+question in step 3 — a missing manual page is fixed in a pull request of its
+own before the tag, or consciously left for later; a UI change means
+`cd manual && npm run screenshots` for the motifs it touches. Neither stops
+the release. The rule behind it:
+[`user-manual.md`](../../rules/user-manual.md).
+
 ## Step 3 — compute the target version and confirm it
 
 Read the current version from `package.json`

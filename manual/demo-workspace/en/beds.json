@@ -1,0 +1,5 @@
+[
+  { "name": "North bed", "width_cm": 120, "length_cm": 300, "sun_hours": 5 },
+  { "name": "South bed", "width_cm": 120, "length_cm": 400, "sun_hours": 8 },
+  { "name": "Herb spiral", "width_cm": 150, "length_cm": 150, "sun_hours": 7 }
+]

@@ -1,0 +1,5 @@
+[
+  { "name": "Nordbeet", "breite_cm": 120, "laenge_cm": 300, "sonnenstunden": 5 },
+  { "name": "Südbeet", "breite_cm": 120, "laenge_cm": 400, "sonnenstunden": 8 },
+  { "name": "Kräuterspirale", "breite_cm": 150, "laenge_cm": 150, "sonnenstunden": 7 }
+]

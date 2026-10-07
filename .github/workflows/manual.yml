@@ -1,0 +1,70 @@
+# Builds the user manual (manual/, Starlight) and publishes it to GitHub Pages
+# at https://docs.snotra-ai.dev (#777, #778).
+#
+# - Pull requests that touch the manual: build plus translation check. This is
+#   deliberately not a required check in ruleset 23177645.
+# - Release tags vX.Y.Z: build and deploy. The web manual only ever shows the
+#   current release, so every tag replaces the site. Release candidates
+#   (vX.Y.Z-rc.N) do not match and are not published.
+# - workflow_dispatch: redeploy by hand, e.g. after a fix to the manual itself.
+name: Manual
+
+on:
+  pull_request:
+    paths:
+      - 'manual/**'
+      - 'assets/icon/**'
+      - 'src/renderer/styles/tokens.css'
+      - '.github/workflows/manual.yml'
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ASTRO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build:
+    name: Build manual
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: manual
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: manual/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: manual/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

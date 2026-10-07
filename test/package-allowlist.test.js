@@ -52,6 +52,8 @@ test('allowlist drops development, documentation and local files', () => {
     '/icon.ico',
     '/icon.png',
     '/assets/icon/icon-macos.svg',
+    '/manual/src/content/docs/index.md',
+    '/manual/node_modules/astro/package.json',
     '/.DS_Store',
     '/src/.DS_Store',
     '/src/renderer/.DS_Store',

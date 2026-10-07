@@ -32,7 +32,9 @@ proven on the same day.
    matching issue (see [`task-management.md`](./task-management.md)) — in
    English, a German "Schließt #N" closes nothing. **Commit messages, pull
    request titles and pull request bodies are English** — see
-   [`language.md`](./language.md).
+   [`language.md`](./language.md). A change a user can see carries its
+   manual page along, or ticks *User manual not affected* in the template —
+   see [`user-manual.md`](./user-manual.md).
 2. **Merge as soon as the pipeline is green** and the review below finds
    nothing. By **squash**: `main` carries one commit per pull request, with the
    pull request number in the title. Delete the branch afterwards, the
