@@ -1,9 +1,11 @@
 ---
-title: Snotra AI Manual
-description: How to use Snotra AI, the open-source desktop agent built around your folder.
+title: Snotra Agent Manual
+description: How to use Snotra Agent, the open-source desktop agent built around your folder.
 ---
 
-Snotra AI is an open-source desktop agent built around your folder. You open one folder, the file tree stays in view, and the chat works inside it. Nothing changes in that folder without asking you first. It works with cloud and local models, needs no account and sends no telemetry.
+Snotra Agent is an open-source desktop agent built around your folder. You open one folder, the file tree stays in view, and the chat works inside it. Nothing changes in that folder without asking you first. It works with cloud and local models, needs no account and sends no telemetry.
+
+Snotra Agent is the desktop app of the Snotra AI platform. [since 1.17] Up to version 1.16 the app itself was called Snotra AI; its settings and chats carried over unchanged.
 
 ![The Snotra window: the file tree of a project on the left, its README in the middle, and a chat on the right in which Snotra has read the README and summarised the project.](screenshots/overview.webp)
 

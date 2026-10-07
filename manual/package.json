@@ -2,7 +2,7 @@
   "name": "snotra-manual",
   "private": true,
   "type": "module",
-  "description": "User manual for Snotra AI, published at https://docs.snotra-ai.dev",
+  "description": "User manual for Snotra Agent, published at https://docs.snotra-ai.dev",
   "scripts": {
     "sync:icon": "node scripts/sync-icon.mjs",
     "predev": "npm run sync:icon",

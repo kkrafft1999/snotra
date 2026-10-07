@@ -1,6 +1,6 @@
-# Snotra AI user manual
+# Snotra Agent user manual
 
-The user manual for Snotra AI, built with [Starlight](https://starlight.astro.build/)
+The user manual for Snotra Agent, built with [Starlight](https://starlight.astro.build/)
 and published at **https://docs.snotra-ai.dev** on every release tag
 (`.github/workflows/manual.yml`). Background and decisions: #777.
 
