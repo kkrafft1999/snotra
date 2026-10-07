@@ -1,6 +1,6 @@
 # Architecture
 
-A short overview of the layered and port/adapter structure of Snotra AI after
+A short overview of the layered and port/adapter structure of Snotra Agent after
 the five roadmap stages were completed (as of 2026-07-12). Diagrams:
 [`architecture-layers.svg`](./architecture-layers.svg),
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
@@ -1564,7 +1564,7 @@ applies to chat and history as to tree and content pane:
   was gone with its column; since then only the menu bar leads into it
   (`CmdOrCtrl+,`) — a push on `UI_OPEN_SETTINGS`, exactly like `UI_TOGGLE_SIDEBAR`
   for the `Cmd/Ctrl+B` shortcut. Where the entry sits is decided by the platform
-  (issue #266): on macOS in the app menu under *Snotra AI → Einstellungen…*,
+  (issue #266): on macOS in the app menu under *Snotra Agent → Einstellungen…*,
   right below "Über" (About), as Mac users expect; on Windows and Linux, where
   there is no app menu, under *Ansicht → Einstellungen…*. Never in both places,
   because `CmdOrCtrl+,` would otherwise be assigned twice.
@@ -1753,7 +1753,7 @@ everything once at startup catches the bulk of it. It takes about three seconds.
   `USERPROFILE`, and with that moved Electron did not start at all. On macOS only
   `Library/Keychains` links to the real folder, since without the login keychain
   the app would run without safeStorage. On a fresh runner that keychain has no
-  "Snotra AI Safe Storage" item yet, and test files starting side by side each
+  "Snotra Agent Safe Storage" item yet, and test files starting side by side each
   created one — a restart then read another key than its first start had
   written with. `pretest:e2e` therefore starts the app once beforehand
   (`e2e/helpers/warm-keychain.mjs`) so that the item exists before any test

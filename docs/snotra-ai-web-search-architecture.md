@@ -1,8 +1,8 @@
-# Snotra AI: web search as a core tool
+# Snotra Agent: web search as a core tool
 
 ## The goal
 
-Snotra AI is an open-source desktop agent in the spirit of Claude Code Desktop
+Snotra Agent is an open-source desktop agent in the spirit of Claude Code Desktop
 or ChatGPT Desktop. A dependable web search belongs among its basic tools.
 
 The central architectural decision should be:

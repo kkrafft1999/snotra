@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1330" width="1440" height="1330" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Snotra AI — where the agent's text comes from</title>
+  <title id="title">Snotra Agent — where the agent's text comes from</title>
   <desc id="desc">Map of every source of text that reaches the model request. Left: what is read from disk at every send and becomes the system message — base prompt from the settings, global memory, skills, environment, AGENTS.md project instructions, project memory, the workspace and tool block — and what each message brings: the windowed chat history and the composer input. Middle: the request to the model provider with the system message in its fixed order, the tool schemas and the messages. Right: tools the model calls on demand during a run — local reads, documents, load_skill, shell and Python, web search and URL fetch, MCP servers, and writes whose results are only confirmations. Below: guards on the way in, the provider endpoint, and two separate smaller model calls for titles and skill suggestions.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -55,7 +55,7 @@
   <rect width="1440" height="1330" fill="#ffffff"/>
 
   <!-- Header -->
-  <text class="t-title" x="30" y="48">Snotra AI — where the agent's text comes from</text>
+  <text class="t-title" x="30" y="48">Snotra Agent — where the agent's text comes from</text>
   <text class="t-sub" x="30" y="74">Everything the model reads arrives through one request: a system message rebuilt on every send, the tool schemas, and the messages.</text>
   <text class="t-sub" x="30" y="93">Assembled in src/application/chat/chat-engine.js (send). Limits are characters unless marked otherwise.</text>
 

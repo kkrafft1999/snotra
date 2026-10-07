@@ -1,7 +1,7 @@
 ---
 name: release
 description: >-
-  Publishes a new release of Snotra AI: bumps the version in package.json
+  Publishes a new release of Snotra Agent: bumps the version in package.json
   through a pull request, then creates the git tag vX.Y.Z and pushes it, which
   makes the GitHub Actions pipeline (.github/workflows/release.yml) build the
   macOS, Windows and Linux artifacts and publish the release. Triggers on

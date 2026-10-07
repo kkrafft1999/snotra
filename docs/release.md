@@ -72,7 +72,7 @@ uncritical.
 ## Build
 
 ```sh
-npm run make            # macOS arm64  -> out/make/Snotra-AI-<version>-mac-arm64.dmg
+npm run make            # macOS arm64  -> out/make/Snotra-Agent-<version>-mac-arm64.dmg
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (to be zipped)
 npm run make:linux      # Linux x64    -> out/make/{deb,AppImage}/x64/* + out/<productName>-linux-x64/
 ```
@@ -94,7 +94,7 @@ together — GitHub lists the digest next to each release asset.
 
 The artifacts end up under `out/`. The app's comparison uses **the release tag
 only**, not the file names — so the asset names can be chosen freely, but should
-carry the version and the platform, e.g. `Snotra-AI-1.1.0-mac-arm64.dmg`.
+carry the version and the platform, e.g. `Snotra-Agent-1.1.0-mac-arm64.dmg`.
 
 ### The macOS DMG
 
@@ -105,7 +105,7 @@ chain `maker-dmg` → `electron-installer-dmg` → `appdmg` showed the Electron 
 as the volume icon, failed now and then on `hdiutil detach`, and kept an
 unmaintained `image-size` in the lock file.
 
-The image holds the signed `Snotra AI.app`, an `/Applications` symlink, Snotra's
+The image holds the signed `Snotra Agent.app`, an `/Applications` symlink, Snotra's
 `icon.icns` as the volume icon, the window background
 [`assets/macos/dmg-background.tiff`](../assets/macos/dmg-background.tiff) in
 `.background/` and the window layout from
@@ -142,7 +142,7 @@ tiffutil -cathidpicheck /tmp/bg.png /tmp/bg@2x.png -out assets/macos/dmg-backgro
 
 Then run `sh scripts/make-dmg-layout.sh`. It builds a small read-write image
 with the real volume name, lets Finder set the view and copies the resulting
-`.DS_Store` over the asset. Eject every mounted *Snotra AI* first — Finder
+`.DS_Store` over the asset. Eject every mounted *Snotra Agent* first — Finder
 confuses volumes of the same name, and the alias to the background picture is
 resolved by that name. The script works under `/tmp/snotra-dmg-layout` because
 Finder writes the image's path into the alias. Positions, window size and
@@ -355,14 +355,14 @@ gh release view vX.Y.Z --json url,assets -q '.url, (.assets[].name)'
 ```
 
 The pipeline creates the release and the assets itself; the artifacts are named
-uniformly `Snotra-AI-<version>-<mac|win|linux>-<arch>.<extension>`. By hand,
+uniformly `Snotra-Agent-<version>-<mac|win|linux>-<arch>.<extension>`. By hand,
 `gh release create` is only needed if the pipeline fails:
 
 ```sh
 gh release create vX.Y.Z \
   --title "vX.Y.Z" \
   --notes "What's new …" \
-  "out/make/Snotra-AI-X.Y.Z-mac-arm64.dmg#Snotra AI (macOS, Apple Silicon)"
+  "out/make/Snotra-Agent-X.Y.Z-mac-arm64.dmg#Snotra Agent (macOS, Apple Silicon)"
 ```
 
 The text from `--notes` becomes the release body and is shown as "what has

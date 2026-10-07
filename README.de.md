@@ -1,4 +1,4 @@
-# Snotra AI
+# Snotra Agent
 
 **Ein quelloffener Desktop-Agent, der um deinen Ordner gebaut ist: immer im
 Blick, und nichts passiert darin, ohne dass er fragt. Cloud- oder lokale
@@ -9,6 +9,10 @@ Modelle, kein Konto, keine Telemetrie.**
 [Warum Snotra?](#warum-snotra) ·
 [Aus dem Quellcode bauen](#aus-dem-quellcode-bauen) ·
 [English](./README.md)
+
+Snotra Agent ist die Desktop-App der Plattform Snotra AI. Bis Oktober 2026 hieß
+die App selbst Snotra AI — siehe
+[Umbenannt von Snotra AI](#umbenannt-von-snotra-ai).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/demo-dark.gif">
@@ -53,8 +57,8 @@ Die neueste Version liegt auf der
 
 | System | Datei |
 | --- | --- |
-| macOS (Apple Silicon) | `Snotra-AI-<version>-mac-arm64.dmg` |
-| Windows (x64) | `Snotra-AI-<version>-win-x64.zip` |
+| macOS (Apple Silicon) | `Snotra-Agent-<version>-mac-arm64.dmg` |
+| Windows (x64) | `Snotra-Agent-<version>-win-x64.zip` |
 | Linux (x64) | `.deb` (empfohlen), `.AppImage` oder `.tar.gz` — siehe [Linux installieren](#linux-installieren) |
 
 - **macOS:** Die App ist mit einer Developer ID signiert und von Apple
@@ -63,7 +67,7 @@ Die neueste Version liegt auf der
   eine aus dem Internet geladene App öffnen willst.
 - **Windows:** Der Build ist noch nicht signiert
   ([#19](https://github.com/kkrafft1999/snotra/issues/19)), deshalb warnt
-  SmartScreen beim ersten Start. ZIP entpacken, `Snotra AI.exe` starten, dann
+  SmartScreen beim ersten Start. ZIP entpacken, `Snotra Agent.exe` starten, dann
   *SmartScreen › Weitere Informationen › Trotzdem ausführen*.
 
 ## Warum Snotra?
@@ -204,16 +208,16 @@ Linux drei Dateien:
 
 ```bash
 # Empfohlen (Debian, Ubuntu, Mint, Pop!_OS …): legt Menüeintrag und Icon an
-sudo apt install ./Snotra-AI-<version>-linux-x64.deb
+sudo apt install ./Snotra-Agent-<version>-linux-x64.deb
 
 # Distributionsunabhängig: eine Datei, kein root nötig
-chmod +x Snotra-AI-<version>-linux-x64.AppImage
-./Snotra-AI-<version>-linux-x64.AppImage
+chmod +x Snotra-Agent-<version>-linux-x64.AppImage
+./Snotra-Agent-<version>-linux-x64.AppImage
 
 # Fallback, wenn beides nicht passt
-tar -xzf Snotra-AI-<version>-linux-x64.tar.gz
-cd snotra-ai-<version>-linux-x64
-./"Snotra AI"
+tar -xzf Snotra-Agent-<version>-linux-x64.tar.gz
+cd snotra-agent-<version>-linux-x64
+./"Snotra Agent"
 ```
 
 Das `.deb` ist der empfohlene Weg: Es ist die einzige Variante, in der die
@@ -229,7 +233,7 @@ User-Namespaces. Auf Distributionen, die diese einschränken — u. a. Ubuntu ab
 dort hilft es, im entpackten Ordner einmal nachzuziehen:
 
 ```bash
-cd snotra-ai-<version>-linux-x64
+cd snotra-agent-<version>-linux-x64
 sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
 ```
 
@@ -244,7 +248,7 @@ Tarball installierst du sie selbst: `sudo apt install bubblewrap socat ripgrep`.
 
 ## Aktualisierung
 
-Snotra AI sucht beim Start still nach einer neueren Version und meldet sich nur,
+Snotra Agent sucht beim Start still nach einer neueren Version und meldet sich nur,
 wenn es eine gibt; *Hilfe › Nach Updates suchen…* — oder *Nach Updates suchen*
 neben der Versionsnummer unten in den Einstellungen — fragt jederzeit von Hand
 nach. Ab dann führt ein Dialog durch den ganzen Weg — **jeder Schritt einzeln
@@ -303,7 +307,7 @@ bedient alle drei Plattformen auf dieselbe Weise.
 - **Vier Spalten, vier Schalter:** Das Fenster besteht aus Seitenleiste, Anzeige, Chat und Verlauf, und jede Spalte hat ihren eigenen Schalter in der Titelzeile — links die beiden des Arbeitsbereichs, rechts spiegelverkehrt die beiden der Chat-Seite, jeweils in der Reihenfolge ihrer Spalten. Alle vier tragen dasselbe Bild: ein Fenster mit einer schmalen und einer breiten Fläche, gefüllt ist die, die der Knopf schaltet. Jeder Zustand bleibt bis zum nächsten Start erhalten.
 - **Seitenleiste wegschalten:** Der erste Knopf blendet die Seitenleiste samt Trenner aus, der Arbeitsbereich rückt nach. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht › Seitenleiste ein-/ausblenden* (alle Kürzel unter [Tastenkürzel](#tastenkürzel)).
 - **Mittlere Anzeige ein- und ausblenden:** Der zweite Knopf schaltet die mittlere Spalte — die, in der die Dateivorschau und der Startschirm stehen. Solange du nichts eingestellt hast, entscheidet der Ordner: Mit geöffnetem Ordner bleibt die Spalte **zu**, der Chat bekommt die Breite. Ist kein Ordner offen, steht dort der Startschirm, und zwar genau so breit, wie er ihn braucht — der Rest des Fensters gehört dem Chat. Klickst du eine Datei im Baum an, kommt die Spalte von selbst zurück, sonst ginge der Klick ins Leere. Schaltest du sie über den Knopf ein oder aus, gilt deine Entscheidung ab dann auch beim Start.
-- **Chat wegschalten:** Der vorletzte Knopf nimmt die Chat-Spalte weg; übrig bleibt rechts der Verlauf, falls er offen ist. Klickst du dort einen Chat an, kommt die Spalte von selbst zurück — spiegelbildlich zum Klick auf eine Datei im Baum. Die **Einstellungen** erreichst du unabhängig davon über die Menüleiste bzw. `Cmd/Strg+,` — auf dem Mac unter *Snotra AI › Einstellungen…*, unter Windows und Linux unter *Ansicht › Einstellungen…*.
+- **Chat wegschalten:** Der vorletzte Knopf nimmt die Chat-Spalte weg; übrig bleibt rechts der Verlauf, falls er offen ist. Klickst du dort einen Chat an, kommt die Spalte von selbst zurück — spiegelbildlich zum Klick auf eine Datei im Baum. Die **Einstellungen** erreichst du unabhängig davon über die Menüleiste bzw. `Cmd/Strg+,` — auf dem Mac unter *Snotra Agent › Einstellungen…*, unter Windows und Linux unter *Ansicht › Einstellungen…*.
 - **Chat-Verlauf einblenden:** Der letzte Knopf stellt den Verlauf als Spalte neben den Chat. Ein Klick auf eine Zeile lädt diese Konversation samt ihrem Modell und ihrem Freigabemodus, das Papierkorb-Symbol entfernt sie. Der Knopf für einen **neuen Chat** steht in der Kopfzeile dieser Spalte — so wie der Ordner-Umschalter in der Kopfzeile des Baums. Wird das Fenster zu schmal für alle Spalten, weicht der Verlauf von selbst und kommt im breiteren Fenster zurück.
 - **So, wie du die App verlassen hast:** Beim Start holt Snotra die zuletzt geführte Konversation des Ordners zurück und du landest direkt im Gespräch. Der Startschirm („Womit fangen wir an?“) gehört zum kalten Start: Er steht in der mittleren Spalte und erscheint, wenn kein Ordner offen ist und es nichts fortzusetzen gibt — beim allerersten Start also von selbst. Auch das Fenster kommt zurück, wie du es zuletzt eingestellt hast: Größe, Position und ob es maximiert oder im Vollbild lief. Beim allerersten Start geht es mit 1536 × 960 Punkten auf, auf kleineren Bildschirmen so groß, wie die Arbeitsfläche hergibt. Hast du den Zweitbildschirm abgezogen, auf dem es zuletzt stand, kommt es in derselben Größe zentriert auf dem Hauptbildschirm zurück statt im Nichts.
 - **Versteckte Dateien:** Dateien und Ordner, deren Name mit einem Punkt beginnt — `.github`, `.gitignore`, `.env` —, zeigt der Baum zunächst nicht. *Versteckte Dateien anzeigen* im `⋯`-Menü der Kopfzeile des Baums holt sie herein, ebenso `Cmd+Shift+.` auf dem Mac, `Strg+Shift+.` unter Windows und Linux und *Ansicht › Versteckte Dateien anzeigen*. Sie stehen dann gedimmt an ihrem gewohnten Platz, samt allem, was in einem versteckten Ordner liegt, und öffnen in der Vorschau wie jede andere Textdatei. Die `@`-Liste im Chat folgt dem Baum. `.git`, `.DS_Store`, `Thumbs.db` und `desktop.ini` bleiben in jedem Fall draußen. Der Schalter gilt für alle Ordner und bleibt auch nach einem Neustart gesetzt.
@@ -459,14 +463,21 @@ Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil v
 
 ## Konfiguration
 
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra AI › Einstellungen…* auf dem Mac, *Ansicht › Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,` (siehe [Tastenkürzel](#tastenkürzel)). Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
+Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra Agent › Einstellungen…* auf dem Mac, *Ansicht › Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,` (siehe [Tastenkürzel](#tastenkürzel)). Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI` — nach der Plattform benannt, siehe unten) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
 
 | Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
 | ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
 | `maxToolRounds`    | Maximale Tool-Runden pro Chat-Anfrage (auch in der App einstellbar)         | 14        | 1 – 500          |
 | `historyCharLimit` | Zeichen-Budget für den an den Provider gesendeten Chat-Verlauf (siehe unten)| 200 000   | 4 000 – 2 000 000 |
 
-**Umstieg von „Weyouze Anything“ (bis v1.0.4):** Beim ersten Start kopiert Snotra AI Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben. Ein Start mit `--user-data-dir` nimmt den angegebenen Ordner, wie er ist, und kopiert nichts hinein.
+<a id="umbenannt-von-snotra-ai"></a>
+**Umbenannt von Snotra AI:** Snotra AI ist jetzt der Name der Plattform, die App heißt Snotra Agent. Was die App ablegt, trägt weiter den Namen der Plattform: der `userData`-Ordner oben und der Schlüssel, mit dem API-Keys und Chat-Verlauf verschlüsselt sind (unter macOS der Schlüsselbund-Eintrag „Snotra AI Safe Storage“). Nichts wird verschoben, und jeder gespeicherte Key bleibt lesbar. Was sich beim Umstieg ändert:
+
+- **macOS:** Das Selbst-Update ersetzt `Snotra AI.app` durch `Snotra Agent.app`. Einen Dock-Eintrag der alten App musst du neu anlegen. Installierst du die neue Version von Hand, lösch danach die alte `Snotra AI.app`.
+- **Windows und das Linux-tar.gz:** Snotra AI 1.16.0 und älter kann das umbenannte Paket nicht selbst einspielen. Installier die neue Version einmal von Hand, wie oben für Windows beschrieben; Einstellungen und Chats bleiben erhalten. Verknüpfungen auf `Snotra AI.exe` musst du neu anlegen.
+- **AppImage und `.deb`-Paket** laufen weiter wie bisher.
+
+**Umstieg von „Weyouze Anything“ (bis v1.0.4):** Beim ersten Start kopiert die App Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben. Ein Start mit `--user-data-dir` nimmt den angegebenen Ordner, wie er ist, und kopiert nichts hinein.
 
 **Verlaufs-Trimming (`historyCharLimit`):** Damit lange Sessions nicht ins Token-Limit des Providers laufen, wird der Verlauf pro Anfrage budgetiert (Heuristik: 1 Token ≈ 4 Zeichen). Ältere Nachrichten jenseits des Budgets werden weggelassen, und große Tool-Ausgaben früherer Tool-Runden (z. B. gelesene Dateien) werden auf einen Platzhalter gekürzt. Die aktuelle Frage, alle User-Nachrichten im Fenster und die Tool-Ausgaben der jüngsten Runde bleiben immer vollständig erhalten.
 

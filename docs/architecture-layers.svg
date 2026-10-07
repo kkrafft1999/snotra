@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1540" width="1440" height="1540" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Snotra AI — architecture: layers (UI · application core · infrastructure)</title>
+  <title id="title">Snotra Agent — architecture: layers (UI · application core · infrastructure)</title>
   <desc id="desc">A layered architecture diagram: pure presentation (the renderer) with normalised view data, an application core free of UI, Electron and Node (src/application/chat) with application ports, infrastructure (src/main) with infrastructure ports, adapters and the composition root. Connected through the preload bridge, with separate shared layers (contracts, presentation, runtime).</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -47,7 +47,7 @@
 
   <rect x="0" y="0" width="1440" height="1540" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Snotra AI — architecture overview</text>
+  <text class="t-title" x="30" y="44">Snotra Agent — architecture overview</text>
   <text class="t-sub" x="31" y="70">Pure presentation (renderer) · application core (src/application/chat) · infrastructure (src/main/ports + adapters) · separate shared layers (contracts · presentation · runtime)</text>
 
   <g>

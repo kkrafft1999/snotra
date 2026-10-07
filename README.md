@@ -1,4 +1,4 @@
-# Snotra AI
+# Snotra Agent
 
 **An open-source desktop agent built around your folder: always in view, and
 nothing happens in it without asking. Cloud or local models, no account, no
@@ -9,6 +9,10 @@ telemetry.**
 [Why Snotra?](#why-snotra) ·
 [Build from source](#build-from-source) ·
 [Deutsch](./README.de.md)
+
+Snotra Agent is the desktop app of the Snotra AI platform. Until October 2026
+the app itself was called Snotra AI — see
+[Renamed from Snotra AI](#renamed-from-snotra-ai).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/demo-dark.gif">
@@ -53,8 +57,8 @@ Get the latest release from the
 
 | System | File |
 | --- | --- |
-| macOS (Apple Silicon) | `Snotra-AI-<version>-mac-arm64.dmg` |
-| Windows (x64) | `Snotra-AI-<version>-win-x64.zip` |
+| macOS (Apple Silicon) | `Snotra-Agent-<version>-mac-arm64.dmg` |
+| Windows (x64) | `Snotra-Agent-<version>-win-x64.zip` |
 | Linux (x64) | `.deb` (recommended), `.AppImage` or `.tar.gz` — see [Installing on Linux](#installing-on-linux) |
 
 - **macOS:** the app is signed with a Developer ID and notarised by Apple
@@ -63,7 +67,7 @@ Get the latest release from the
   you want to open an app downloaded from the internet.
 - **Windows:** the build is not signed yet
   ([#19](https://github.com/kkrafft1999/snotra/issues/19)), so SmartScreen
-  warns on first launch. Unzip, start `Snotra AI.exe`, then *SmartScreen › More
+  warns on first launch. Unzip, start `Snotra Agent.exe`, then *SmartScreen › More
   info › Run anyway*.
 
 ## Why Snotra?
@@ -208,16 +212,16 @@ files for Linux:
 
 ```bash
 # Recommended (Debian, Ubuntu, Mint, Pop!_OS …): creates a menu entry and icon
-sudo apt install ./Snotra-AI-<version>-linux-x64.deb
+sudo apt install ./Snotra-Agent-<version>-linux-x64.deb
 
 # Distribution-independent: one file, no root needed
-chmod +x Snotra-AI-<version>-linux-x64.AppImage
-./Snotra-AI-<version>-linux-x64.AppImage
+chmod +x Snotra-Agent-<version>-linux-x64.AppImage
+./Snotra-Agent-<version>-linux-x64.AppImage
 
 # Fallback if neither fits
-tar -xzf Snotra-AI-<version>-linux-x64.tar.gz
-cd snotra-ai-<version>-linux-x64
-./"Snotra AI"
+tar -xzf Snotra-Agent-<version>-linux-x64.tar.gz
+cd snotra-agent-<version>-linux-x64
+./"Snotra Agent"
 ```
 
 The `.deb` is the recommended route: it is the only variant in which the
@@ -233,7 +237,7 @@ was found, but is not configured correctly"*; there it helps to fix things up
 once inside the extracted folder:
 
 ```bash
-cd snotra-ai-<version>-linux-x64
+cd snotra-agent-<version>-linux-x64
 sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
 ```
 
@@ -248,7 +252,7 @@ install them yourself: `sudo apt install bubblewrap socat ripgrep`.
 
 ## Updating
 
-Snotra AI quietly checks for a newer version at startup and only speaks up if
+Snotra Agent quietly checks for a newer version at startup and only speaks up if
 there is one; *Help › Check for Updates…* — or *Check for updates* next to the
 version number at the bottom of the settings — asks manually at any time. From
 there a dialog walks through the whole path — **each step confirmed
@@ -334,7 +338,7 @@ three platforms the same way.
   what remains on the right is the history, if it is open. Clicking a chat there
   brings the column back by itself — the mirror image of clicking a file in the
   tree. The **settings** are reachable independently through the menu bar or
-  `Cmd/Ctrl+,` — on macOS under *Snotra AI › Settings…*, on Windows and Linux
+  `Cmd/Ctrl+,` — on macOS under *Snotra Agent › Settings…*, on Windows and Linux
   under *View › Settings…*.
 - **Showing the chat history:** the last button places the history as a column
   next to the chat. Clicking a row loads that conversation along with its model
@@ -873,13 +877,14 @@ for model listing, but the tighter history budget (see `historyCharLimit` below)
 
 Most settings (provider, models, system prompt, language) are maintained
 directly in the app under **Settings** — opened via the menu bar
-(*Snotra AI › Settings…* on macOS, *View › Settings…* on Windows and Linux) or
+(*Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux) or
 `Cmd/Ctrl+,` (see [Keyboard shortcuts](#keyboard-shortcuts)). There is
 deliberately no button for it: it used to
 sit in the chat header and was therefore gone as soon as you hid the chat column.
 Beyond that, a few JSON files live in the user profile (Electron's `userData`
 folder: macOS `~/Library/Application Support/Snotra AI`, Windows
-`%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI`), among them
+`%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI` — named after the platform,
+see below), among them
 `ui-preferences.json` with the following options:
 
 | Key                | Meaning                                                                   | Default   | Range            |
@@ -887,7 +892,23 @@ folder: macOS `~/Library/Application Support/Snotra AI`, Windows
 | `maxToolRounds`    | Maximum tool rounds per chat request (also settable in the app)            | 14        | 1 – 500          |
 | `historyCharLimit` | Character budget for the chat history sent to the provider (see below)     | 200,000   | 4,000 – 2,000,000 |
 
-**Migrating from "Weyouze Anything" (up to v1.0.4):** on first start Snotra AI
+<a id="renamed-from-snotra-ai"></a>
+**Renamed from Snotra AI:** Snotra AI is now the name of the platform, and the
+app is Snotra Agent. What the app stores still carries the platform's name: the
+`userData` folder above and the key that encrypts API keys and the chat history
+(the keychain item "Snotra AI Safe Storage" on macOS). Nothing is moved, and
+every stored key stays readable. What changes on the way:
+
+- **macOS:** the self-update replaces `Snotra AI.app` with `Snotra Agent.app`.
+  A Dock entry for the old app has to be added again. After installing the new
+  version by hand, delete the old `Snotra AI.app`.
+- **Windows and the Linux tar.gz:** Snotra AI 1.16.0 and older cannot install
+  the renamed package by themselves. Install the new version by hand once, as
+  described for Windows above; settings and chats are kept. Shortcuts to
+  `Snotra AI.exe` have to be created again.
+- **The AppImage and the `.deb` package** carry on as before.
+
+**Migrating from "Weyouze Anything" (up to v1.0.4):** on first start the app
 copies settings, presets, folder history and chat history from the old `userData`
 folder; the old folder stays behind unchanged as a backup. On macOS the API keys
 have to be entered once more, because the keychain entry of Electron's

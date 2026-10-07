@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1690" width="1280" height="1690" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
-  <title id="title">Snotra AI — release flow: the version commit goes through a pull request, the tag push starts the pipeline</title>
+  <title id="title">Snotra Agent — release flow: the version commit goes through a pull request, the tag push starts the pipeline</title>
   <desc id="desc">Activity diagram with three lanes. Local: determine the bump type, run the pre-flight checks, have the target version confirmed, create the branch release/vX.Y.Z, bump the version without a tag, commit, push, open a pull request. GitHub: the pull request is open under ruleset 23177645, three required checks, squash merge into main, delete the branch. Local: update main, set the tag vX.Y.Z and push it as a tag ref — without pushing to main. GitHub Actions: release.yml starts on the tag, a test gate on three platforms, parallel builds for macOS, Windows and Linux, publishing of the artifacts. A red abort path collects failed checks; a red gate in the pipeline means no build and no release.</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
@@ -47,7 +47,7 @@
 
   <rect x="0" y="0" width="1280" height="1690" fill="#f7f9fb"/>
 
-  <text class="t-title" x="30" y="44">Snotra AI — release flow</text>
+  <text class="t-title" x="30" y="44">Snotra Agent — release flow</text>
   <text class="t-sub" x="31" y="68">The version commit goes through a pull request; only then is it tagged.</text>
   <text class="t-sub" x="31" y="85">The tag push starts the pipeline — <tspan font-weight="700">main</tspan> is never written to directly.</text>
 

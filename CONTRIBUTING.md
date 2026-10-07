@@ -1,6 +1,6 @@
-# Contributing to Snotra AI
+# Contributing to Snotra Agent
 
-Thanks for looking. Snotra AI is a personal hobby and experimentation project,
+Thanks for looking. Snotra Agent is a personal hobby and experimentation project,
 so interfaces, UI and configuration can change at any time — but issues, pull
 requests and questions are welcome.
 
@@ -146,7 +146,7 @@ I built with it" belong in
 - **Q&A** — how do I …, why does it …, is this a bug or am I holding it wrong.
 - **Ideas** — something that might become a feature, before it is concrete
   enough for a feature request.
-- **Show and tell** — skills, tools and setups you use Snotra AI with.
+- **Show and tell** — skills, tools and setups you use Snotra Agent with.
 
 Once an idea is concrete, it moves into an issue; a discussion that turns out
 to be a bug is converted into one.
