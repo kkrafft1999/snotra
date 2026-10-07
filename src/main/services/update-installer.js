@@ -68,10 +68,11 @@ function findExecutable(dir, names) {
  * already — by a copy installed by hand, say.
  */
 function macTargetBundlePath(appBundlePath, imageBundleName, exists = fs.existsSync) {
-  const current = path.basename(appBundlePath);
+  // A Mac path, on whatever machine the tests run (#796).
+  const current = path.posix.basename(appBundlePath);
   if (!MAC_BUNDLE_NAMES.includes(current) || !MAC_BUNDLE_NAMES.includes(imageBundleName)) return appBundlePath;
   if (imageBundleName === current) return appBundlePath;
-  const renamed = path.join(path.dirname(appBundlePath), imageBundleName);
+  const renamed = path.posix.join(path.posix.dirname(appBundlePath), imageBundleName);
   return exists(renamed) ? appBundlePath : renamed;
 }
 
