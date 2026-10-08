@@ -382,6 +382,78 @@ ${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`
 `;
 }
 
+/** Opens the settings on one of their sections: models, security, tools, skills, memory, general. */
+async function openSettingsPanel(app, page, panel) {
+  await openSettings(app, page);
+  await page.click(`.settings-nav-item[data-settings-panel="${panel}"]`);
+  await poll(() => page.evaluate((key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`)
+    ?.getAttribute('aria-selected') === 'true', panel), { what: `settings section ${panel}` });
+}
+
+/** The page of a settings section, next to the navigation. */
+const SETTINGS_PANEL = '#modal-settings .settings-dialog__panel-wrap';
+
+/** A model list for the motifs about models: two OpenAI models and a local one. */
+function threeModels(config) {
+  const local = config.presets[0];
+  local.model = 'qwen3-coder';
+  local.connection.displayName = 'LM Studio';
+  config.presets.unshift(
+    { id: 'gpt-5-mini', providerId: 'openai', model: 'gpt-5-mini', menuVisible: true },
+    { id: 'gpt-5', providerId: 'openai', model: 'gpt-5', menuVisible: true },
+  );
+  config.activePresetId = 'gpt-5-mini';
+  config.activeProvider = 'openai';
+}
+
+/** A skill of the demo project, per language. */
+const DEMO_SKILL = {
+  en: {
+    name: 'sowing-advice',
+    file: `---
+name: sowing-advice
+description: Advice on what to sow next and in which bed, from plants.csv and beds.json. Use it when the user asks what to sow, or where a plant should go.
+---
+
+# Sowing advice
+
+1. Read \`plants.csv\` for the sowing window and the sun a plant needs.
+2. Read \`beds.json\` for the hours of sun per bed.
+3. Suggest the plants whose window is open now, each with the bed that suits it.
+`,
+  },
+  de: {
+    name: 'aussaat-tipps',
+    file: `---
+name: aussaat-tipps
+description: Rat, was als Nächstes gesät wird und in welches Beet, aus pflanzen.csv und beete.json. Nutze ihn, wenn gefragt wird, was zu säen ist oder wohin eine Pflanze gehört.
+---
+
+# Aussaat-Tipps
+
+1. Lies \`pflanzen.csv\` für den Saatzeitraum und die Sonne, die eine Pflanze braucht.
+2. Lies \`beete.json\` für die Sonnenstunden pro Beet.
+3. Schlag die Pflanzen vor, deren Zeitraum gerade offen ist, jeweils mit dem passenden Beet.
+`,
+  },
+};
+
+/** The project memory of the demo project, per language. */
+const DEMO_MEMORY = {
+  en: `# Memory · project
+
+- 2026-09-28 — The beds are measured in centimetres, not in metres.
+- 2026-10-02 — Sowing dates in plants.csv are month-day, without a year.
+- 2026-10-05 (remembered on its own) — Tomatoes always go into the south bed.
+`,
+  de: `# Gedächtnis · Projekt
+
+- 2026-09-28 — Die Beete sind in Zentimetern gemessen, nicht in Metern.
+- 2026-10-02 — Die Saattermine in pflanzen.csv sind Monat-Tag, ohne Jahr.
+- 2026-10-05 (selbst gemerkt) — Tomaten kommen immer ins Südbeet.
+`,
+};
+
 /**
  * The motifs. Each one brings the app into the state it shows and returns the
  * area to shoot (`null` for the whole window). Texts come per language from
@@ -770,6 +842,130 @@ const MOTIFS = {
     },
   },
 
+  /** Settings › Models with three entries. */
+  'models-list': {
+    configure: threeModels,
+    async setUp({ app, page, config }) {
+      await storeOpenAiKey(page, config);
+      await openSettings(app, page);
+      await poll(() => page.evaluate(() => document.querySelectorAll('[data-edit-preset-id]').length === 3),
+        { what: 'three entries' });
+      await page.mouse.move(0, 0);
+      return page.evaluate((selector) => {
+        const panel = document.querySelector(selector).getBoundingClientRect();
+        const rows = [...document.querySelectorAll('[data-edit-preset-id]')]
+          .map((button) => (button.closest('li') ?? button.parentElement.parentElement).getBoundingClientRect().bottom);
+        return { x: panel.left, y: panel.top, width: panel.width, height: Math.min(panel.bottom, Math.max(...rows) + 24) - panel.top };
+      }, SETTINGS_PANEL);
+    },
+  },
+
+  /** "Add model" for an OpenAI-compatible server, filled in from the LM Studio template. */
+  'add-compatible': {
+    async setUp({ app, page }) {
+      await openSettings(app, page);
+      await page.click('#btn-open-add-model');
+      await poll(() => shown(page, 'add-model-overlay'), { what: 'open add-model dialog' });
+      await page.selectOption('#select-provider', 'openai-compatible');
+      await poll(() => page.evaluate(() => !document.getElementById('provider-template-row')?.classList.contains('hidden')),
+        { what: 'template row' });
+      await page.selectOption('#select-provider-template', 'lm-studio');
+      await page.fill('#input-display-name', 'LM Studio');
+      await page.fill('#input-model', 'qwen3-coder');
+      await page.evaluate(() => {
+        document.activeElement?.blur();
+        for (const node of document.querySelectorAll('#dialog-add-model *')) {
+          if (node.scrollHeight > node.clientHeight + 1) node.scrollTop = 0;
+        }
+      });
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return page.evaluate(() => {
+        const box = document.getElementById('dialog-add-model').getBoundingClientRect();
+        const margin = 24;
+        const top = Math.max(0, box.top - margin);
+        return {
+          x: Math.max(0, box.left - margin),
+          y: top,
+          width: box.width + 2 * margin,
+          height: Math.min(window.innerHeight, box.bottom + margin) - top,
+        };
+      });
+    },
+  },
+
+  /** Settings › General. */
+  'settings-general': {
+    async setUp({ app, page }) {
+      await openSettingsPanel(app, page, 'general');
+      await page.mouse.move(0, 0);
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** Settings › Skills: the system skills and a skill of the folder, not yet ticked. */
+  'skills-settings': {
+    async prepare({ workspace, locale }) {
+      const skill = DEMO_SKILL[locale];
+      await mkdir(path.join(workspace, '.agents', 'skills', skill.name), { recursive: true });
+      await writeFile(path.join(workspace, '.agents', 'skills', skill.name, 'SKILL.md'), skill.file, 'utf8');
+    },
+    async setUp({ app, page, locale }) {
+      await openSettingsPanel(app, page, 'skills');
+      await poll(() => page.evaluate((name) => document.getElementById('panel-settings-skills')?.textContent.includes(name),
+        DEMO_SKILL[locale].name), { what: 'the folder skill in the list' });
+      await page.evaluate(() => {
+        const heading = [...document.querySelectorAll('#panel-settings-skills h3, #panel-settings-skills h4, #panel-settings-skills [class*="heading"]')]
+          .find((node) => /Available skills|Verfügbare Skills/.test(node.textContent));
+        heading?.scrollIntoView({ block: 'start' });
+      });
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** Settings › Memory with three entries in the project memory. */
+  'memory-settings': {
+    async prepare({ workspace, locale }) {
+      await mkdir(path.join(workspace, '.agents'), { recursive: true });
+      await writeFile(path.join(workspace, '.agents', 'memory.md'), DEMO_MEMORY[locale], 'utf8');
+    },
+    async setUp({ app, page, locale }) {
+      await openSettingsPanel(app, page, 'memory');
+      await poll(() => page.evaluate((text) => document.getElementById('panel-settings-memory')?.textContent.includes(text),
+        locale === 'de' ? 'Südbeet' : 'south bed'), { what: 'the entries of the project memory' });
+      await page.mouse.move(0, 0);
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** The dialog of an MCP server, opened from Settings › Tool setup. */
+  'mcp-server': {
+    async prepare({ userDataDir }) {
+      // Never started: the dialog is drawn from the configuration alone.
+      await writeFile(path.join(userDataDir, 'mcp-servers.json'), JSON.stringify({
+        servers: [{
+          id: 'github',
+          label: 'GitHub',
+          command: 'npx',
+          args: ['-y', '@modelcontextprotocol/server-github'],
+          enabled: false,
+        }],
+      }), 'utf8');
+    },
+    async setUp({ app, page }) {
+      await openSettingsPanel(app, page, 'tools');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#settings-mcp-list .mcp-row').length > 0),
+        { what: 'MCP server row' });
+      await page.evaluate(() => document.querySelector('#settings-mcp-list .mcp-row .btn-compact').click());
+      await poll(() => shown(page, 'mcp-server-overlay'), { what: 'MCP server dialog' });
+      await pause(200);
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#dialog-mcp-server', 24);
+    },
+  },
+
   /** The history column next to the chat, with three chats of the folder. */
   history: {
     text: {
@@ -880,6 +1076,7 @@ async function shootMotif(name, motif, locale, model) {
   const fresh = motif.profile === 'fresh';
   const userDataDir = await makeTempDir('snotra-manual-userdata-');
   const { config, workspace } = fresh ? {} : await demoProfile(userDataDir, locale, model, motif.configure);
+  await motif.prepare?.({ userDataDir, workspace, locale });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'),
     JSON.stringify({ ...motif.prefs, appLocale: locale }), 'utf8');
 
