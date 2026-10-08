@@ -21,7 +21,7 @@ import { toolLogDebug } from './toolLogDebug.js';
 import { normalizeChanges } from './fileChanges.js';
 import { t, tPlural } from '../i18n.js';
 
-const { toolCategoryForEntry } = contracts;
+const { toolCategoryForEntry, normalizeSandboxBlocked } = contracts;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
 export function buildToolLineStatus() {
@@ -220,7 +220,8 @@ export function syncChangesStrip(messageEl, files, options) {
   const strip = log ? buildChangesStrip(files, options) : null;
   if (old && strip) old.replaceWith(strip);
   else if (old) old.remove();
-  else if (strip) log.after(strip);
+  // Under the sandbox box when there is one (#792): that explains the steps.
+  else if (strip) (messageEl.querySelector(':scope > .chat-sandbox-blocked') || log).after(strip);
 }
 
 /**
@@ -435,7 +436,8 @@ export function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {
  * Trace-Eintrag für Store und Verlauf: nur Anzeige-Zeile und Tool-Name. Die
  * Argumente aus dem Engine-Ergebnis bleiben bewusst draußen (write_file_text
  * trägt dort bis zu 2 MB Dateiinhalt). What a writing call changed comes along
- * as summaries — ids and line counts, never content (#348).
+ * as summaries — ids and line counts, never content (#348) — and what the
+ * sandbox refused, as kinds, paths and hosts (#792).
  */
 export function toolTraceEntryForStore(entry) {
   const line = toolLineText(entry);
@@ -445,12 +447,14 @@ export function toolTraceEntryForStore(entry) {
   // Pfade – keine Inhalte); der Main normalisiert es beim Speichern erneut.
   const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
   const changes = normalizeChanges(entry?.changes);
-  if (!tool && !skill && !permission && !changes) return line;
+  const sandboxBlocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
+  if (!tool && !skill && !permission && !changes && !sandboxBlocked) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
   if (permission) out.permission = permission;
   if (changes) out.changes = changes;
+  if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
   return out;
 }
 

@@ -13,6 +13,7 @@ const {
   inferChatTitleText,
   isLegacyFallbackChatTitle,
   normalizeFileChangeSummary,
+  normalizeSandboxBlocked,
 } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -165,7 +166,9 @@ function toolTraceEntryForStore(entry) {
   const round = Number.isInteger(entry?.round) && entry.round > 0 ? entry.round : 0;
   const schema = schemaViolationsForStore(entry?.schema);
   const changes = fileChangesForStore(entry?.changes);
-  if (!tool && !skill && !permission && !round && !schema && !changes) return line;
+  // What the sandbox refused (#792): kinds, paths and hosts, never output.
+  const sandboxBlocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
+  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
@@ -173,6 +176,7 @@ function toolTraceEntryForStore(entry) {
   if (round) out.round = round;
   if (schema) out.schema = schema;
   if (changes) out.changes = changes;
+  if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
   return out;
 }
 

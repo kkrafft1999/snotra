@@ -29,6 +29,7 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { summarizeViolations, describeForModel } = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -297,6 +298,7 @@ function createMutex() {
  * @param {() => Promise<string>} [deps.readShellPath]   PATH from the profile (#111)
  * @param {() => Promise<string>} [deps.readPythonCommand]  interpreter for the pip check
  * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {number} [deps.violationSettleMs]  how long a finished run waits for late violations
  */
 function createSandboxService({
   platform = process.platform,
@@ -310,6 +312,10 @@ function createSandboxService({
   readShellPath = async () => '',
   readPythonCommand = async () => 'python3',
   env = process.env,
+  // The Seatbelt monitor reads `log stream` in a child process, so a refusal
+  // can still be on its way when the run's process has closed (#792). In
+  // practice it is there already; the wait is a margin, not a measurement.
+  violationSettleMs = platform === 'darwin' ? 100 : 0,
   /**
    * Folders a run may never write, even when the open folder contains them:
    * the global skill folders (#548, #650). Opened as `~`, the workspace would
@@ -507,7 +513,10 @@ function createSandboxService({
       return describe();
     }
     try {
-      await manager.initialize(buildConfig({}));
+      // With the monitor, refused writes and reads are recorded per run, not
+      // only refused connections (#792): Seatbelt's log on macOS, the seccomp
+      // observer on Linux.
+      await manager.initialize(buildConfig({}), undefined, true);
     } catch (e) {
       state = { status: 'unavailable', reason: SANDBOX_REASONS.START, platform, detail: firstLine(e?.message) };
       return describe();
@@ -602,6 +611,11 @@ function createSandboxService({
     }
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
+    const collector = collectViolations(manager, commandId || inner);
+    const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
+    /** undefined until `blocked()` has looked; then the summary or null. */
+    let summary;
+    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir(), isPermittedWrite });
     let released = false;
     return {
       command: '/bin/sh',
@@ -614,20 +628,68 @@ function createSandboxService({
       release() {
         if (released) return;
         released = true;
+        collector?.stop();
         try { manager.cleanupAfterCommand?.(); } catch { /* best effort */ }
         release();
       },
+      /**
+       * What the sandbox refused during this run (#792), or null. Called once
+       * the process has closed, before `annotate()`. A run that failed is the
+       * likely victim of a refusal and waits longer for late lines.
+       */
+      async blocked({ failed = false } = {}) {
+        if (summary !== undefined) return summary;
+        if (!collector) {
+          summary = null;
+          return summary;
+        }
+        await settleViolations(collector, { settleMs: violationSettleMs, failed });
+        summary = summarize();
+        return summary;
+      },
       annotate(stderr) {
-        let text;
-        try {
-          text = manager.annotateStderrWithSandboxFailures(commandId || inner, String(stderr ?? ''));
-        } catch {
-          text = String(stderr ?? '');
+        let text = String(stderr ?? '');
+        if (collector) {
+          // In place of the runtime's raw lines, which with the monitor on
+          // also carry the system queries every run makes.
+          const note = describeForModel(summary === undefined ? summarize() : summary);
+          if (note) text = `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n${note}\n`;
+        } else {
+          try {
+            text = manager.annotateStderrWithSandboxFailures(commandId || inner, text);
+          } catch { /* keep stderr as it is */ }
         }
         text = annotateUnreachableProxy(text, proxyPort);
         return platform === 'darwin' && !trustd ? annotateBlockedTrustd(text) : text;
       },
     };
+  }
+
+  /**
+   * Whether this run was allowed to write to a path: inside one of its
+   * writable folders and not inside a protected one (#792). Each folder in
+   * both spellings, as given and resolved — the Linux observer reports the
+   * path the kernel saw.
+   */
+  async function writeRules({ allowWrite = [], denyWrite = [] }) {
+    const home = os.homedir();
+    const spellings = async (list) => {
+      const out = [];
+      for (const raw of list) {
+        if (typeof raw !== 'string' || !raw || /[*?[]/.test(raw)) continue;
+        const p = raw === '~' ? home : raw.startsWith('~/') ? path.join(home, raw.slice(2)) : raw;
+        out.push(p);
+        const real = await fs.realpath(p).catch(() => p);
+        if (real !== p) out.push(real);
+      }
+      return out;
+    };
+    // bubblewrap mounts its own /dev and /proc, writable, and the observer
+    // still reports writes there.
+    const writable = [...(await spellings(allowWrite)), '/dev', '/proc'];
+    const protectedDirs = await spellings(denyWrite);
+    return (target) => writable.some((dir) => isPathInside(path, dir, target))
+      && !protectedDirs.some((dir) => isPathInside(path, dir, target));
   }
 
   async function shutdown() {
@@ -644,6 +706,81 @@ function createSandboxService({
     shutdown,
     buildConfig,
   };
+}
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A failed run waits up to this many times the settle time for late lines. */
+const FAILED_RUN_SETTLE_FACTOR = 6;
+/** Lines that have stopped arriving for this long are taken as complete. */
+const VIOLATIONS_QUIET_MS = 50;
+
+/**
+ * Waits for refusals still on their way (#792). Seatbelt's lines come
+ * through `log stream`, a child process; under load they arrive a few hundred
+ * milliseconds after the run's process has closed. Every run waits the
+ * settle time. A failed run waits longer: until lines have come and gone
+ * quiet, or six times the settle time when none come at all.
+ */
+async function settleViolations(collector, { settleMs, failed }) {
+  if (!(settleMs > 0)) return;
+  const started = Date.now();
+  await pause(settleMs);
+  if (!failed) return;
+  const longest = settleMs * FAILED_RUN_SETTLE_FACTOR;
+  while (Date.now() - started < longest) {
+    if (collector.lines.length > 0 && Date.now() - collector.lastAt() >= VIOLATIONS_QUIET_MS) return;
+    await pause(VIOLATIONS_QUIET_MS / 2);
+  }
+}
+
+/** The runtime's SANDBOXED_COMMAND_KEY_LENGTH: how much of a command key a violation carries. */
+const COMMAND_KEY_LENGTH = 100;
+/** Lines one run keeps; past that, a run is not going to be read line by line. */
+const MAX_COLLECTED_VIOLATIONS = 1000;
+
+/**
+ * Collects one run's violations as they arrive (#792). The runtime keeps the
+ * last 100 of all runs together, which a single pip install fills with cache
+ * writes, so the run keeps its own. Null when the runtime has no store to
+ * listen to; the run then falls back to the runtime's own annotation.
+ */
+function collectViolations(manager, key) {
+  let store = null;
+  try {
+    store = manager.getSandboxViolationStore?.() || null;
+  } catch {
+    store = null;
+  }
+  if (!store || typeof store.subscribe !== 'function' || typeof store.getTotalCount !== 'function') return null;
+  const wanted = String(key).slice(0, COMMAND_KEY_LENGTH);
+  const lines = [];
+  let lastAt = 0;
+  let seen = store.getTotalCount();
+  // The store calls back after every single addition, with its whole tail.
+  const unsubscribe = store.subscribe((list) => {
+    const total = store.getTotalCount();
+    const fresh = Math.min(total - seen, Array.isArray(list) ? list.length : 0);
+    seen = total;
+    if (fresh <= 0) return;
+    for (const violation of list.slice(-fresh)) {
+      if (lines.length < MAX_COLLECTED_VIOLATIONS && decodeCommandKey(violation?.encodedCommand) === wanted) {
+        lines.push(String(violation.line ?? ''));
+        lastAt = Date.now();
+      }
+    }
+  });
+  return {
+    lines,
+    lastAt: () => lastAt,
+    stop() {
+      try { unsubscribe(); } catch { /* already gone */ }
+    },
+  };
+}
+
+function decodeCommandKey(encoded) {
+  if (typeof encoded !== 'string' || !encoded) return '';
+  return Buffer.from(encoded, 'base64').toString('utf8');
 }
 
 function firstLine(text) {

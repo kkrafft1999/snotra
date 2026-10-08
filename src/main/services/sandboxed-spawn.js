@@ -18,6 +18,7 @@ const { quoteArgv, SANDBOX_REASONS } = require('./sandbox-service');
 const PASSTHROUGH = Object.freeze({
   env: Object.freeze({}),
   annotate: (stderr) => stderr,
+  blocked: async () => null,
   release: () => {},
 });
 
@@ -36,7 +37,8 @@ const PASSTHROUGH = Object.freeze({
  * @returns {Promise<{command: string, args: string[], env: object,
  *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
  *     reason?: string, missing?: string[]},
- *   annotate: (s: string) => string, release: () => void}>}
+ *   annotate: (s: string) => string, blocked: (o?: {failed?: boolean}) => Promise<object|null>,
+ *   release: () => void}>}
  *   Rejects with an AbortError when "Stop" comes while waiting for the gate.
  */
 async function planSpawn({
@@ -98,6 +100,8 @@ async function planSpawn({
       ...(prepared.trustd === true ? { trustd: true } : {}),
     },
     annotate: prepared.annotate,
+    // What the sandbox refused (#792); a stand-in without it refuses nothing.
+    blocked: typeof prepared.blocked === 'function' ? prepared.blocked : PASSTHROUGH.blocked,
     release: prepared.release,
   };
 }

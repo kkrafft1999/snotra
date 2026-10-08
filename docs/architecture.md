@@ -227,6 +227,28 @@ for card and run alike. The service decides availability by a self-test on
 first need and serialises runs whose domain sets differ, because the proxy's
 allowlist is process-wide.
 
+**What the sandbox refused** ([#792](https://github.com/kkrafft1999/snotra/issues/792))
+travels the other way. The runtime is started with its violation monitor
+(Seatbelt's log on macOS, the seccomp observer on Linux; the proxy records
+refused connections in either case), and each prepared run listens to the
+runtime's violation store for its own `commandId` — the store keeps only the
+last hundred of all runs. `main/services/sandbox-violations.js` parses the
+three line dialects, drops the system queries every Seatbelt run makes, and
+folds a cache's many writes into their folder. Linux reports write *attempts*,
+checked against the rules the runtime had at start — before any workspace — so
+each run checks them again against its own writable and protected folders.
+Seatbelt's lines come through `log stream` and can trail the process by a few
+hundred milliseconds under load; a failed run waits up to 600 ms for them, a
+successful one 100 ms. The runner puts the summary on
+the result as `sandboxBlocked` and `annotate()` replaces the runtime's raw
+`<sandbox_violations>` block in stderr with a short `<sandbox_blocked>` list for
+the model. From there it takes the same road as the file changes of #348: the
+handler reports it through `onSandboxBlocked`, the adapter returns it, the
+engine sets it on the trace entry before the done line, and
+`normalizeSandboxBlocked` in `shared/contracts/chat.js` cuts it to size wherever
+it is stored. The renderer draws it as a box under the tool log
+(`renderer/chat/sandboxBlocked.js`).
+
 The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
 is policy, not isolation, and lives in the signed policy file next to the rules
 (`main/services/tool-policy-store.js`, a list of canonical roots). The planner

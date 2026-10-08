@@ -37,6 +37,7 @@ import {
 } from '../chat/toolLogView.js';
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
+import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 import { compactToolLinePayload } from '../utils/tool-log-debug.js';
@@ -139,6 +140,8 @@ export function initChatStream({
   onChatSwitched,
   // Opens the diff of `{ relativePath, changes }` in the preview (#348).
   showFileChanges = () => {},
+  // The user's home folder, for `~/…` in what the sandbox blocked (#792).
+  getHomeDir = () => '',
   // Opens a file of the workspace in the preview column (#479):
   // (absolutePath, { fragment }) → { ok, reason? }.
   openWorkspaceFile = async () => ({ ok: false, reason: 'not-found' }),
@@ -865,6 +868,8 @@ export function initChatStream({
    * opens the diff of that file — every change this message made to it.
    */
   function syncMessageChanges(messageEl, message) {
+    // What the sandbox refused (#792) stands first, right under the log.
+    syncSandboxBlocked(messageEl, message?.toolTrace, { homeDir: getHomeDir() });
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
       isLive: changesAreLive,
       onOpen: (file) => showFileChanges({ relativePath: file.relativePath, changes: file.changes }),
@@ -1114,7 +1119,9 @@ export function initChatStream({
       payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
     const changes = phase === 'done' ? normalizeChanges(payload?.changes) : undefined;
     if (changes) markChangesLive(changes);
-    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes });
+    // What the sandbox refused (#792) comes with the done line, like changes.
+    const sandboxBlocked = phase === 'done' ? payload?.sandboxBlocked : undefined;
+    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes, sandboxBlocked });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
       if (existing) {
@@ -1182,8 +1189,8 @@ export function initChatStream({
       const doneRow = byIndex || runningRows[runningRows.length - 1];
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
-      if (changes) {
-        applyChangesToRow(doneRow, changes);
+      if (changes) applyChangesToRow(doneRow, changes);
+      if (changes || (entry && typeof entry === 'object' && entry.sandboxBlocked)) {
         syncMessageChanges(wrap.parentElement, last);
       }
     } else {

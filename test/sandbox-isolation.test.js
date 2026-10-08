@@ -120,6 +120,12 @@ test('a run writes inside the workspace, and nowhere outside it', async (t) => {
   assert.deepEqual(inside.isolation, { isolated: true, domains: [] });
   assert.notEqual(outside.exitCode, 0);
   assert.equal(existsSync(outsideFile), false);
+  // What was refused is listed for the chat and named to the model (#792).
+  assert.equal(inside.sandboxBlocked, undefined);
+  const write = outside.sandboxBlocked?.entries.find((e) => e.kind === 'write');
+  assert.ok(write, `no write listed: ${JSON.stringify(outside.sandboxBlocked)}`);
+  assert.equal(write.target, await fs.realpath(ctx.outside).then((dir) => path.join(dir, 'escaped.txt')));
+  assert.match(outside.stderr, /<sandbox_blocked>[^]*write outside the workspace[^]*<\/sandbox_blocked>/);
 });
 
 test('the run’s own temp dir is writable and redirected caches point there', async (t) => {
@@ -149,6 +155,14 @@ test('denied locations cannot be read — ordinary files can', async (t) => {
   assert.doesNotMatch(secret.stdout, /top secret/);
   assert.equal(readable.exitCode, 0, readable.stderr);
   assert.equal(readable.stdout.trim(), 'fine');
+  assert.equal(readable.sandboxBlocked, undefined);
+  // Seatbelt reports the refused read (#792); on Linux the location is an
+  // empty mount, and the observer only sees writes.
+  if (process.platform === 'darwin') {
+    const read = secret.sandboxBlocked?.entries.find((e) => e.kind === 'read');
+    assert.ok(read, `no read listed: ${JSON.stringify(secret.sandboxBlocked)}`);
+    assert.match(read.target, /secret\.txt$/);
+  }
 });
 
 test('a shell history cannot be read (CR-B03-04)', async (t) => {
@@ -177,7 +191,12 @@ test('no network unless a domain is allowed — an allowed domain works', async 
 
   assert.notEqual(blocked.exitCode, 0);
   // The model learns what was refused, not just that curl failed.
-  assert.match(blocked.stderr, /sandbox_violations|403|denied|not permitted/i);
+  assert.match(blocked.stderr, /<sandbox_blocked>[^]*example\.com:443/);
+  assert.deepEqual(
+    blocked.sandboxBlocked?.entries.map((e) => [e.kind, e.target]),
+    [['network', 'example.com:443']],
+  );
+  assert.equal(allowed.sandboxBlocked, undefined);
   assert.equal(allowed.exitCode, 0, allowed.stderr);
   assert.match(allowed.stdout, /^[23]\d\d$/);
   assert.deepEqual(allowed.isolation, { isolated: true, domains: ['example.com'] });

@@ -131,7 +131,7 @@ export function syncGeneratedImages(messageEl, images, { api, workspaceRoot, onO
   }
   if (old && old.dataset.key === key) {
     // Still in its place: the line of changed files may have been redrawn.
-    const anchor = messageEl.querySelector(':scope > .chat-changes') || log;
+    const anchor = messageEl.querySelector(':scope > .chat-changes') || messageEl.querySelector(':scope > .chat-sandbox-blocked') || log;
     if (anchor.nextElementSibling !== old) anchor.after(old);
     return Promise.resolve();
   }
@@ -144,7 +144,7 @@ export function syncGeneratedImages(messageEl, images, { api, workspaceRoot, onO
   box.setAttribute('aria-label', t('chat.images.label'));
   for (const image of list) box.append(buildFigure(image, onOpen));
   if (old) old.replaceWith(box);
-  else (messageEl.querySelector(':scope > .chat-changes') || log).after(box);
+  else (messageEl.querySelector(':scope > .chat-changes') || messageEl.querySelector(':scope > .chat-sandbox-blocked') || log).after(box);
 
   return applyWorkspaceImages(box, { api, workspaceRoot }).then(() => {
     box.querySelectorAll('.chat-image').forEach(settleFigure);
