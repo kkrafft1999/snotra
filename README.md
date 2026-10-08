@@ -709,6 +709,15 @@ approval card shows it on every run.
 - **Windows:** no sandbox yet. Every run has your full rights, and the card
   says "Not isolated" in amber.
 
+**Seeing what was blocked.** When the sandbox refuses something during a run
+— a write outside the project folder, a read of a protected location such as
+`~/.ssh`, a connection to a host the call did not name — a box right under the
+tool steps of the answer lists it: what kind, which path or host, and why. A
+program that fills a cache shows up once, with the folder and how many paths it
+tried. The raw lines of the sandbox are folded away underneath. The model gets
+the same list and is told to tell you instead of working around it, and the box
+stays with the chat when you open it again later.
+
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —

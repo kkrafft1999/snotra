@@ -261,13 +261,16 @@ function createPythonRunnerService({
         startError: 'Python could not be started.',
       });
       if (outcome.error) return outcome;
+      // What the sandbox refused (#792): as a list for the chat's tool row,
+      // and in stderr for the model (#329). Looked up before annotating.
+      const blocked = await target.blocked?.();
       const result = {
         ...outcome,
-        // What the sandbox refused goes to the model with the output (#329).
         stderr: target.annotate(outcome.stderr),
         durationMs: Date.now() - startedAt,
       };
       if (target.isolation) result.isolation = target.isolation;
+      if (blocked) result.sandboxBlocked = blocked;
       return result;
     } finally {
       target.release();

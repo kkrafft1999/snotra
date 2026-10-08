@@ -29,6 +29,7 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { summarizeViolations, describeForModel } = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -297,6 +298,7 @@ function createMutex() {
  * @param {() => Promise<string>} [deps.readShellPath]   PATH from the profile (#111)
  * @param {() => Promise<string>} [deps.readPythonCommand]  interpreter for the pip check
  * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {number} [deps.violationSettleMs]  how long a finished run waits for late violations
  */
 function createSandboxService({
   platform = process.platform,
@@ -310,6 +312,10 @@ function createSandboxService({
   readShellPath = async () => '',
   readPythonCommand = async () => 'python3',
   env = process.env,
+  // The Seatbelt monitor reads `log stream` in a child process, so a refusal
+  // can still be on its way when the run's process has closed (#792). In
+  // practice it is there already; the wait is a margin, not a measurement.
+  violationSettleMs = platform === 'darwin' ? 100 : 0,
   /**
    * Folders a run may never write, even when the open folder contains them:
    * the global skill folders (#548, #650). Opened as `~`, the workspace would
@@ -507,7 +513,10 @@ function createSandboxService({
       return describe();
     }
     try {
-      await manager.initialize(buildConfig({}));
+      // With the monitor, refused writes and reads are recorded per run, not
+      // only refused connections (#792): Seatbelt's log on macOS, the seccomp
+      // observer on Linux.
+      await manager.initialize(buildConfig({}), undefined, true);
     } catch (e) {
       state = { status: 'unavailable', reason: SANDBOX_REASONS.START, platform, detail: firstLine(e?.message) };
       return describe();
@@ -602,6 +611,10 @@ function createSandboxService({
     }
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
+    const collector = collectViolations(manager, commandId || inner);
+    /** undefined until `blocked()` has looked; then the summary or null. */
+    let summary;
+    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir() });
     let released = false;
     return {
       command: '/bin/sh',
@@ -614,15 +627,35 @@ function createSandboxService({
       release() {
         if (released) return;
         released = true;
+        collector?.stop();
         try { manager.cleanupAfterCommand?.(); } catch { /* best effort */ }
         release();
       },
+      /**
+       * What the sandbox refused during this run (#792), or null. Called once
+       * the process has closed, before `annotate()`.
+       */
+      async blocked() {
+        if (summary !== undefined) return summary;
+        if (!collector) {
+          summary = null;
+          return summary;
+        }
+        if (violationSettleMs > 0) await new Promise((resolve) => setTimeout(resolve, violationSettleMs));
+        summary = summarize();
+        return summary;
+      },
       annotate(stderr) {
-        let text;
-        try {
-          text = manager.annotateStderrWithSandboxFailures(commandId || inner, String(stderr ?? ''));
-        } catch {
-          text = String(stderr ?? '');
+        let text = String(stderr ?? '');
+        if (collector) {
+          // In place of the runtime's raw lines, which with the monitor on
+          // also carry the system queries every run makes.
+          const note = describeForModel(summary === undefined ? summarize() : summary);
+          if (note) text = `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n${note}\n`;
+        } else {
+          try {
+            text = manager.annotateStderrWithSandboxFailures(commandId || inner, text);
+          } catch { /* keep stderr as it is */ }
         }
         text = annotateUnreachableProxy(text, proxyPort);
         return platform === 'darwin' && !trustd ? annotateBlockedTrustd(text) : text;
@@ -644,6 +677,53 @@ function createSandboxService({
     shutdown,
     buildConfig,
   };
+}
+
+/** The runtime's SANDBOXED_COMMAND_KEY_LENGTH: how much of a command key a violation carries. */
+const COMMAND_KEY_LENGTH = 100;
+/** Lines one run keeps; past that, a run is not going to be read line by line. */
+const MAX_COLLECTED_VIOLATIONS = 1000;
+
+/**
+ * Collects one run's violations as they arrive (#792). The runtime keeps the
+ * last 100 of all runs together, which a single pip install fills with cache
+ * writes, so the run keeps its own. Null when the runtime has no store to
+ * listen to; the run then falls back to the runtime's own annotation.
+ */
+function collectViolations(manager, key) {
+  let store = null;
+  try {
+    store = manager.getSandboxViolationStore?.() || null;
+  } catch {
+    store = null;
+  }
+  if (!store || typeof store.subscribe !== 'function' || typeof store.getTotalCount !== 'function') return null;
+  const wanted = String(key).slice(0, COMMAND_KEY_LENGTH);
+  const lines = [];
+  let seen = store.getTotalCount();
+  // The store calls back after every single addition, with its whole tail.
+  const unsubscribe = store.subscribe((list) => {
+    const total = store.getTotalCount();
+    const fresh = Math.min(total - seen, Array.isArray(list) ? list.length : 0);
+    seen = total;
+    if (fresh <= 0) return;
+    for (const violation of list.slice(-fresh)) {
+      if (lines.length < MAX_COLLECTED_VIOLATIONS && decodeCommandKey(violation?.encodedCommand) === wanted) {
+        lines.push(String(violation.line ?? ''));
+      }
+    }
+  });
+  return {
+    lines,
+    stop() {
+      try { unsubscribe(); } catch { /* already gone */ }
+    },
+  };
+}
+
+function decodeCommandKey(encoded) {
+  if (typeof encoded !== 'string' || !encoded) return '';
+  return Buffer.from(encoded, 'base64').toString('utf8');
 }
 
 function firstLine(text) {

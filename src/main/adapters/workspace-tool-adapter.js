@@ -224,9 +224,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       // What the writing tools wrote, before and after (#348). Recorded only
       // once the call has come back without an error.
       const writes = [];
+      // What the sandbox refused during a shell or Python run (#792).
+      let sandboxBlocked = null;
       const handlerContext = {
         ...context,
         onWritten: WRITING_TOOLS.has(name) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
+        onSandboxBlocked: (summary) => { sandboxBlocked = summary; },
         sensitivity: BROAD_LISTING_TOOLS.has(name) ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,
         recovery:
           OVERWRITING_TOOLS.has(name)
@@ -308,6 +311,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
 
       const result = { output, progressEvents };
       if (fileChanges.length) result.fileChanges = fileChanges;
+      if (sandboxBlocked) result.sandboxBlocked = sandboxBlocked;
       if (sensitive) result.sensitive = true;
       return result;
     },

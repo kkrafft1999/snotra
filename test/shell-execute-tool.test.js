@@ -307,6 +307,38 @@ test('shell_execute tells the model whether the run was isolated (#329)', async 
   assert.equal('sandbox' in JSON.parse(await exec(legacy.registry, { command: 'ls' })), false);
 });
 
+test('shell_execute hands what the sandbox refused to the tool row, through the adapter (#792)', async () => {
+  const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
+  const sandboxBlocked = {
+    entries: [{ kind: 'network', target: 'example.com:443', count: 1 }], moreEntries: 0, total: 1, raw: [],
+  };
+  const blocked = makeRegistry({
+    run: () => ({
+      stdout: '', stderr: 'curl: (56) CONNECT tunnel failed\n\n<sandbox_blocked>\n…\n</sandbox_blocked>\n', exitCode: 56,
+      timedOut: false, aborted: false, truncated: false, durationMs: 1, shell: 'zsh',
+      isolation: { isolated: true, domains: [] }, sandboxBlocked,
+    }),
+  });
+
+  const reported = [];
+  const output = JSON.parse(await exec(blocked.registry, { command: 'curl https://example.com' }, {
+    onSandboxBlocked: (summary) => reported.push(summary),
+  }));
+  assert.deepEqual(reported, [sandboxBlocked]);
+  assert.equal('sandboxBlocked' in output, false, 'the model reads it in stderr, not twice');
+  assert.match(output.stderr, /<sandbox_blocked>/);
+
+  const adapter = createWorkspaceToolAdapter(blocked.registry, {});
+  const result = await adapter.execute('shell_execute', { command: 'curl https://example.com' }, {
+    workspaceRoot: WORKSPACE, approved: true, ownSecretsCheck: false,
+  });
+  assert.deepEqual(result.sandboxBlocked, sandboxBlocked);
+
+  const clean = await createWorkspaceToolAdapter(makeRegistry().registry, {})
+    .execute('shell_execute', { command: 'ls' }, { workspaceRoot: WORKSPACE, approved: true, ownSecretsCheck: false });
+  assert.equal('sandboxBlocked' in clean, false);
+});
+
 test('the card names isolation and domains when a sandbox is wired (#329)', async () => {
   const isolatedPlanner = createToolCallPlanner({
     fsService: makeFsServiceStub(),

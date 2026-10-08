@@ -1186,8 +1186,9 @@ function createWorkspaceToolRegistry({
         + 'no state between two calls, and only the standard library is guaranteed to be present. '
         + 'No pip install. On macOS and Linux the program usually runs isolated: it can write only '
         + 'inside the project folder and a temporary directory, cannot read credential stores, and '
-        + 'has no network unless you list the domains it needs in network_domains. The result says '
-        + 'whether the run was isolated.',
+        + 'has no network unless you list the domains it needs in network_domains. What the sandbox '
+        + 'refused is listed in stderr under <sandbox_blocked>, and the user sees the same list; tell '
+        + 'the user instead of working around it. The result says whether the run was isolated.',
       shortDescriptionKey: 'tools.short.run_python',
       parameters: {
         type: 'object',
@@ -1217,7 +1218,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['code'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked } = {}) => {
         if (!pythonRunner) {
           return JSON.stringify({ error: 'Running Python is not available in this installation.' });
         }
@@ -1241,6 +1242,8 @@ function createWorkspaceToolRegistry({
         };
         const sandbox = describeIsolationForModel(result.isolation);
         if (sandbox) out.sandbox = sandbox;
+        // The model reads the refusals in stderr; the tool row gets the list (#792).
+        if (result.sandboxBlocked) onSandboxBlocked?.(result.sandboxBlocked);
         if (result.timedOut) {
           out.timed_out = true;
           out.note = 'The program was stopped when the time limit ran out.';
@@ -1282,8 +1285,10 @@ function createWorkspaceToolRegistry({
         + 'get their registry automatically. Programs the user has given an allowance in Settings '
         + '(Program allowances) get its domains and folders by themselves, but only when the command '
         + 'runs the program on its own: no chaining, pipes, redirections or $ — so call such a program '
-        + 'alone and filter its output afterwards. A refused write or connection shows up in stderr under '
-        + '<sandbox_violations>; report it instead of working around it. The result says whether the '
+        + 'alone and filter its output afterwards. What the sandbox refused — a write, a read of a protected '
+        + 'location, a connection — is listed in stderr under <sandbox_blocked>, and the user sees the same list. '
+        + 'Do not work around it with another location, tool, environment variable or setting: tell the user '
+        + 'what was blocked. A host the task needs may go into network_domains of a new call. The result says whether the '
         + 'run was isolated and whether an allowance applied. Every run needs the user\'s approval, '
         + 'unless the user has allowed exactly this command line for the project folder.',
       shortDescriptionKey: 'tools.short.shell_execute',
@@ -1316,7 +1321,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['command'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked } = {}) => {
         if (!shellRunner) {
           return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
@@ -1357,6 +1362,8 @@ function createWorkspaceToolRegistry({
         };
         const sandbox = describeIsolationForModel(result.isolation, plan?.sandbox);
         if (sandbox) out.sandbox = sandbox;
+        // The model reads the refusals in stderr; the tool row gets the list (#792).
+        if (result.sandboxBlocked) onSandboxBlocked?.(result.sandboxBlocked);
         if (result.timedOut) {
           out.timed_out = true;
           out.note = 'The command was stopped when the time limit ran out.';

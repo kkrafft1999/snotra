@@ -46,7 +46,7 @@ const {
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
-const { sanitizeChatId } = require('../../shared/contracts/chat');
+const { sanitizeChatId, normalizeSandboxBlocked } = require('../../shared/contracts/chat');
 const { FINISH_REASONS, isCutOff } = require('../../shared/contracts/finish-reason');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
@@ -1630,6 +1630,7 @@ function createChatEngine({
             content: execution.output,
             progressEvents: execution.progressEvents,
             fileChanges: execution.fileChanges,
+            sandboxBlocked: execution.sandboxBlocked,
             sensitiveMarker,
           };
         }
@@ -1771,6 +1772,9 @@ function createChatEngine({
             if (Array.isArray(outcome.fileChanges) && outcome.fileChanges.length) {
               entry.changes = outcome.fileChanges;
             }
+            // What the sandbox refused (#792) travels the same way.
+            const blocked = normalizeSandboxBlocked(outcome.sandboxBlocked);
+            if (blocked) entry.sandboxBlocked = blocked;
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);

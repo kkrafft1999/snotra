@@ -650,6 +650,36 @@ test('engine records the round and the schema violations of each call', async ()
   assert.equal(tools.calls.length, 2, 'a violation is counted, the call still runs');
 });
 
+// #792: what the sandbox refused comes back from the adapter like the file
+// changes do, and reaches the done line and the trace — cut to the contract.
+test('engine puts what the sandbox refused on the trace and the done line', async () => {
+  const tools = makeToolPort();
+  const sandboxBlocked = {
+    entries: [{ kind: 'write', target: '/home/u/.cache/x', count: 1 }, { kind: 'other', target: 'sysctl' }],
+    moreEntries: 0, total: 2, raw: ['deny openat /home/u/.cache/x'],
+  };
+  tools.execute = async () => ({ output: JSON.stringify({ exit_code: 1 }), progressEvents: [], sandboxBlocked });
+  const { engine } = makeEngine([
+    assistantToolCall('call_1', 'list_directory', { relative_path: '.' }),
+    assistantText('Fertig.'),
+  ], { tools });
+  const events = [];
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'Liste' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: (event) => events.push(event),
+  });
+
+  const expected = {
+    entries: [{ kind: 'write', target: '/home/u/.cache/x', count: 1 }],
+    moreEntries: 0, total: 2, raw: ['deny openat /home/u/.cache/x'],
+  };
+  assert.deepEqual(result.toolTrace[0].sandboxBlocked, expected);
+  const done = events.find((e) => e.type === CHAT_ENGINE_EVENTS.TOOL_LINE && e.payload.phase === 'done');
+  assert.deepEqual(done.payload.sandboxBlocked, expected);
+});
+
 test('engine stops at its configured tool-round limit', async () => {
   const { engine } = makeEngine(() =>
     assistantToolCall('call_1', 'list_directory', { relative_path: '.' })

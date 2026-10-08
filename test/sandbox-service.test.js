@@ -30,15 +30,17 @@ const posixOnly = { skip: process.platform === 'win32' ? 'needs /bin/sh' : false
  * default the "sandbox" lets the allowed write through and refuses the one
  * outside, like the real thing.
  */
-function fakeRuntime({ errors = [], wrap, initialize, proxyPort } = {}) {
-  const calls = { updateConfig: [], wrap: [], cleanup: 0, reset: 0, initialize: 0 };
+function fakeRuntime({ errors = [], wrap, initialize, proxyPort, store } = {}) {
+  const calls = { updateConfig: [], wrap: [], cleanup: 0, reset: 0, initialize: 0, monitor: [] };
   const runtime = {
     SandboxManager: {
       checkDependencies: () => ({ errors, warnings: [] }),
-      async initialize(config) {
+      async initialize(config, ask, enableLogMonitor) {
         calls.initialize += 1;
+        calls.monitor.push(enableLogMonitor);
         if (initialize) await initialize(config);
       },
+      ...(store ? { getSandboxViolationStore: () => store } : {}),
       updateConfig(config) { calls.updateConfig.push(config); },
       async wrapWithSandbox(command, shell, custom, signal, options) {
         calls.wrap.push({ command, shell, options });
@@ -471,4 +473,92 @@ test('a program allowance that names a skill folder keeps it writable', posixOnl
   const denied = calls.updateConfig.at(-1).filesystem.denyWrite;
   assert.equal(denied.includes('/home/u/.agents/skills'), false);
   assert.equal(denied.includes('/home/u/.snotra/skills'), true);
+});
+
+// ── What the sandbox refused (#792) ─────────────────────────────────────────
+
+/** The runtime's violation store as far as the service uses it. */
+function fakeViolationStore() {
+  let violations = [];
+  let total = 0;
+  const listeners = new Set();
+  return {
+    add(command, line) {
+      violations.push({ line, encodedCommand: Buffer.from(command).toString('base64'), timestamp: new Date() });
+      total += 1;
+      if (violations.length > 100) violations = violations.slice(-100);
+      listeners.forEach((l) => l([...violations]));
+    },
+    getTotalCount: () => total,
+    subscribe(listener) {
+      listeners.add(listener);
+      listener([...violations]);
+      return () => listeners.delete(listener);
+    },
+    listeners: () => listeners.size,
+  };
+}
+
+async function preparedWithStore(commandId = 'shell-9') {
+  const store = fakeViolationStore();
+  const { service, calls } = makeService({ fake: { store }, deps: { violationSettleMs: 0, os: { ...os, homedir: () => '/home/u' } } });
+  await service.detect();
+  const prepared = await service.prepare({
+    command: 'pip install x', workspaceRoot: '/home/u/project', runTmp: '/tmp/snotra-sh-9', commandId,
+  });
+  return { store, prepared, calls };
+}
+
+test('the runtime is started with its violation monitor (#792)', async () => {
+  const { service, calls } = makeService();
+  await service.detect();
+  assert.deepEqual(calls.monitor, [true]);
+});
+
+test('a run collects its own refusals, not those of other runs (#792)', async () => {
+  const { store, prepared } = await preparedWithStore();
+  store.add('shell-other', 'deny network-outbound elsewhere.example:443 (host is not on the allow list)');
+  store.add('shell-9', 'deny openat /home/u/.cache/pip/http/a');
+  store.add('shell-9', 'deny openat /home/u/.cache/pip/http/b');
+  store.add('shell-9', 'deny network-outbound download.pytorch.org:443 (host is not on the allow list)');
+
+  const blocked = await prepared.blocked();
+
+  assert.deepEqual(blocked.entries.map((e) => [e.kind, e.target, e.count]), [
+    ['write', '/home/u/.cache/pip/http', 2],
+    ['network', 'download.pytorch.org:443', 1],
+  ]);
+  assert.equal(await prepared.blocked(), blocked, 'looked up once');
+});
+
+test('a run keeps refusals past the runtime\'s hundred (#792)', async () => {
+  const { store, prepared } = await preparedWithStore();
+  for (let i = 0; i < 150; i += 1) store.add('shell-9', `deny openat /home/u/.cache/pip/http/${i}`);
+  const blocked = await prepared.blocked();
+  assert.equal(blocked.entries[0].count, 150);
+  assert.equal(blocked.total, 150);
+});
+
+test('the model reads the summary instead of the runtime\'s raw lines (#792)', async () => {
+  const { store, prepared } = await preparedWithStore();
+  store.add('shell-9', 'deny network-outbound download.pytorch.org:443 (host is not on the allow list)');
+  await prepared.blocked();
+  const text = prepared.annotate('ERROR: could not fetch');
+  assert.match(text, /^ERROR: could not fetch\n\n<sandbox_blocked>\n/);
+  assert.match(text, /download\.pytorch\.org:443/);
+  assert.doesNotMatch(text, /\[annotated:/, 'not the runtime\'s own block');
+});
+
+test('a run without refusals has nothing to show and stderr stays as it was (#792)', async () => {
+  const { store, prepared } = await preparedWithStore();
+  store.add('shell-9', 'sh(1) deny(1) sysctl-read kern.iossupportversion');
+  assert.equal(await prepared.blocked(), null);
+  assert.equal(prepared.annotate('fine'), 'fine');
+});
+
+test('releasing a run stops listening to the store (#792)', async () => {
+  const { store, prepared } = await preparedWithStore();
+  assert.equal(store.listeners(), 1);
+  prepared.release();
+  assert.equal(store.listeners(), 0);
 });

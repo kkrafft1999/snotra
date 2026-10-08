@@ -277,6 +277,48 @@ function normalizeFileChangeSummary(change) {
   };
 }
 
+/** What the sandbox can refuse, as the tool row shows it (#792). */
+const SANDBOX_BLOCKED_KINDS = Object.freeze(['write', 'read', 'network', 'direct']);
+const SANDBOX_BLOCKED_LIMITS = Object.freeze({ ENTRIES: 20, OPERATIONS: 8, RAW_LINES: 100, CHARS: 1024 });
+
+/**
+ * What the sandbox refused during one run (#792), as it may travel to the
+ * renderer and be stored with the tool row, or null. Paths, hosts and the
+ * raw lines are cut to a fixed size; an entry of an unknown kind is dropped
+ * rather than shown.
+ */
+function normalizeSandboxBlocked(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.entries)) return null;
+  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  const entries = [];
+  for (const raw of value.entries) {
+    if (entries.length >= SANDBOX_BLOCKED_LIMITS.ENTRIES) break;
+    if (!raw || typeof raw !== 'object' || !SANDBOX_BLOCKED_KINDS.includes(raw.kind)) continue;
+    const target = text(raw.target);
+    if (!target) continue;
+    const entry = { kind: raw.kind, target, count: Math.max(1, count(raw.count)) };
+    if (raw.folder === true) entry.folder = true;
+    const operations = Array.isArray(raw.operations)
+      ? raw.operations.map(text).filter(Boolean).slice(0, SANDBOX_BLOCKED_LIMITS.OPERATIONS)
+      : [];
+    if (operations.length) entry.operations = operations;
+    const reason = text(raw.reason);
+    if (reason) entry.reason = reason;
+    entries.push(entry);
+  }
+  if (entries.length === 0) return null;
+  const raw = Array.isArray(value.raw)
+    ? value.raw.map(text).filter(Boolean).slice(-SANDBOX_BLOCKED_LIMITS.RAW_LINES)
+    : [];
+  return {
+    entries,
+    moreEntries: count(value.moreEntries),
+    total: Math.max(count(value.total), entries.length),
+    raw,
+  };
+}
+
 /** chat:progress with type='workspace': a reading tool read the file (#347). */
 function createWorkspaceFileReadEvent(relativePath) {
   return {
@@ -351,6 +393,9 @@ module.exports = {
   createWorkspaceFileWrittenEvent,
   createWorkspaceFileReadEvent,
   normalizeFileChangeSummary,
+  normalizeSandboxBlocked,
+  SANDBOX_BLOCKED_KINDS,
+  SANDBOX_BLOCKED_LIMITS,
   createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,

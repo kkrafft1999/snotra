@@ -2551,6 +2551,119 @@ button.chat-change-file:hover {
   flex-basis: 100%;
 }
 
+/* ── What the sandbox blocked, right under the tool log (#792) ──────────────
+ * A box rather than a line: chosen on 2026-10-08 from three variants, because
+ * a refusal is the reason a run failed and should be read without unfolding
+ * anything. Neutral on purpose — amber means "runs without isolation", red a
+ * real error, and a refusal of the sandbox is neither. The raw lines stay
+ * folded. */
+.chat-sandbox-blocked {
+  margin: 2px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-primary);
+}
+
+.chat-sandbox-blocked-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin: 0 0 6px;
+}
+
+.chat-sandbox-blocked-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-sandbox-blocked-heading {
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.chat-sandbox-blocked-context,
+.chat-sandbox-blocked-run {
+  min-width: 0;
+  font-family: var(--ds-font-tool);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.chat-sandbox-blocked-run {
+  margin: 8px 0 2px;
+}
+
+.chat-sandbox-blocked-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-sandbox-blocked-entry {
+  display: grid;
+  grid-template-columns: 10em minmax(0, 1fr);
+  gap: 2px 10px;
+  padding: 4px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-sandbox-blocked-entry:first-child {
+  border-top: none;
+}
+
+.chat-sandbox-blocked-kind {
+  color: var(--text-muted);
+}
+
+.chat-sandbox-blocked-target {
+  font-family: var(--ds-font-tool);
+  overflow-wrap: anywhere;
+}
+
+.chat-sandbox-blocked-reason {
+  grid-column: 2;
+  color: var(--text-muted);
+}
+
+.chat-sandbox-blocked-more {
+  padding: 4px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  color: var(--text-muted);
+}
+
+.chat-sandbox-blocked-raw {
+  margin-top: 6px;
+}
+
+.chat-sandbox-blocked-raw > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.chat-sandbox-blocked-raw > pre {
+  max-height: 12em;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  color: var(--text-primary);
+  font-family: var(--ds-font-tool);
+  font-size: var(--ds-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ── Generated images under the line of changed files (#85) ──────────────
  * One image up to 320 px, several as two columns — large enough to judge the
  * result without leaving the chat, small enough to keep the answer in view.

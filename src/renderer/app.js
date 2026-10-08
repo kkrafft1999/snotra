@@ -396,6 +396,7 @@ const chatStream = initChatStream({
   onChatSwitched: () => fileTree.syncAgentMarks(),
   showFileChanges: (request) => fileTree.showFileChanges(request),
   openWorkspaceFile: (path, options) => fileTree.openWorkspaceFile(path, options),
+  getHomeDir: () => toolPermissions.get()?.homeDir || '',
   approvalCards,
   // Sprung von einer Skill-Zeile der Token-Aufschlüsselung zu ihrem Schalter
   // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert
