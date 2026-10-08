@@ -64,6 +64,7 @@ The allowance applies in every folder, but only when a command runs that program
 
 ## If it doesn't work
 
+- **A command fails, and its output does not say why.** Look under the tool log of the answer: *Blocked by the sandbox* lists what the run tried to reach and was refused — see [Follow what Snotra does](../../chatting/follow-the-work/). A program allowance or, for this one folder, switching the sandbox off gives it the room.
 - **Linux: the card says the sandbox needs packages.** Install `bubblewrap`, `socat` and `ripgrep` and restart Snotra.
 - **Linux: *the sandbox does not start on this system*.** Ubuntu 24.04 and later restrict unprivileged user namespaces, which the sandbox needs. Lifting that is a system-wide decision and yours to make:
 

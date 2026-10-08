@@ -64,6 +64,7 @@ Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für s
 
 ## Wenn es nicht klappt
 
+- **Ein Befehl scheitert, und seine Ausgabe sagt nicht, warum.** Schau unter das Tool-Protokoll der Antwort: *Von der Sandbox blockiert* listet, was der Lauf erreichen wollte und nicht durfte — siehe [Verfolgen, was Snotra tut](../../chatting/follow-the-work/). Eine Freigabe pro Programm oder, für diesen einen Ordner, das Abschalten der Sandbox gibt ihm den Raum.
 - **Linux: Die Karte sagt, die Sandbox brauche Pakete.** Installier `bubblewrap`, `socat` und `ripgrep` und starte Snotra neu.
 - **Linux: *Die Sandbox startet auf diesem System nicht*.** Ubuntu ab 24.04 schränkt unprivilegierte User-Namespaces ein, die die Sandbox braucht. Das aufzuheben, ist eine systemweite Entscheidung, und sie liegt bei dir:
 
