@@ -80,6 +80,38 @@ const shown = (page, id) => page.evaluate((elementId) => {
 }, id);
 
 /**
+ * The area around the elements matched by `selectors`, with a margin, kept
+ * inside the window: a dialog, a menu or a card at a size a page can show
+ * legibly.
+ */
+function clipAround(page, selectors, margin = 24) {
+  return page.evaluate(({ list, pad, width, height }) => {
+    const boxes = list.map((selector) => document.querySelector(selector).getBoundingClientRect());
+    const left = Math.max(0, Math.min(...boxes.map((b) => b.left)) - pad);
+    const top = Math.max(0, Math.min(...boxes.map((b) => b.top)) - pad);
+    const right = Math.min(width, Math.max(...boxes.map((b) => b.right)) + pad);
+    const bottom = Math.min(height, Math.max(...boxes.map((b) => b.bottom)) + pad);
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  }, { list: [selectors].flat(), pad: margin, width: WINDOW.width, height: WINDOW.height });
+}
+
+/**
+ * The chat column for motifs that show a card or a menu in it. At the default
+ * width a card is taller than the window, and the mode menu runs off its right
+ * edge (#812); a reader can drag the column this wide as well.
+ */
+const WIDE_CHAT = 560;
+
+const PENDING_CARD = '#chat-messages .chat-approval-card[data-state="pending"]';
+
+/** Waits for the approval card the run is waiting on, and scrolls it into view. */
+async function waitForCard(page) {
+  await poll(() => page.evaluate((selector) => Boolean(document.querySelector(selector)), PENDING_CARD),
+    { timeoutMs: 30000, what: 'approval card' });
+  await page.evaluate((selector) => document.querySelector(selector).scrollIntoView({ block: 'end' }), PENDING_CARD);
+}
+
+/**
  * Opens the settings the way a reader does: through the application menu. Right
  * after the start the renderer may not listen yet and the click goes nowhere,
  * so it is repeated until the dialog is there.
@@ -106,7 +138,8 @@ async function openSettings(app, page) {
  *
  * `profile: 'fresh'` starts the app the way it is after installing: no folder,
  * no model of its own, only the language set. Every other motif starts on the
- * demo project with the fake model.
+ * demo project with the fake model. `prefs` go into ui-preferences.json, for a
+ * motif that needs a tool switched on.
  */
 const MOTIFS = {
   /** The first start: no folder, no usable model, the hint above the composer. */
@@ -153,6 +186,106 @@ const MOTIFS = {
       await poll(() => shown(page, 'folder-history-menu'), { what: 'open folder menu' });
       // The top left of the window: the menu at a size where it can be read.
       return { x: 0, y: 0, width: 640, height: 360 };
+    },
+  },
+
+  /** An approval card in "Smart": Snotra wants to change a note. */
+  'approval-card': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    text: {
+      en: {
+        title: 'Tomatoes in the spring notes',
+        question: 'Note in my spring notes that the tomatoes go into the south bed in mid-May.',
+        path: 'notes/spring-2026.md',
+        old: '- Open: plan summer sowings',
+        new: '- Tomatoes go into the south bed in mid-May.\n- Open: plan summer sowings',
+      },
+      de: {
+        title: 'Tomaten in den Frühjahrsnotizen',
+        question: 'Notier in meinen Frühjahrsnotizen, dass die Tomaten Mitte Mai ins Südbeet kommen.',
+        path: 'notizen/fruehjahr-2026.md',
+        old: '- Offen: Sommeraussaat planen',
+        new: '- Tomaten kommen Mitte Mai ins Südbeet.\n- Offen: Sommeraussaat planen',
+      },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({
+        match: text.question,
+        toolCalls: [{
+          name: 'edit_file',
+          arguments: { relative_path: text.path, old_string: text.old, new_string: text.new },
+        }],
+      });
+      await send(page, text.question);
+      await waitForCard(page);
+      return clipAround(page, PENDING_CARD, 16);
+    },
+  },
+
+  /** An approval card for a shell command, run in the sandbox. */
+  'shell-approval': {
+    prefs: { shellExecutionEnabled: true, chatPanelWidth: WIDE_CHAT },
+    text: {
+      en: { title: 'Sowing calendar', question: 'Show me the sowing calendar for this year.', command: 'node src/calendar.js' },
+      de: { title: 'Aussaatkalender', question: 'Zeig mir den Aussaatkalender für dieses Jahr.', command: 'node src/kalender.js' },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({
+        match: text.question,
+        toolCalls: [{ name: 'shell_execute', arguments: { command: text.command } }],
+      });
+      await send(page, text.question);
+      await waitForCard(page);
+      return clipAround(page, PENDING_CARD, 16);
+    },
+  },
+
+  /**
+   * The mode menu, opened from the pill in the composer. The chat is switched
+   * to "Always ask" first — no system dialog on that way — so that the menu
+   * also offers it as the folder's default for new chats.
+   */
+  'mode-menu': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    async setUp({ page }) {
+      await page.click('#btn-chat-tool-mode');
+      await poll(() => shown(page, 'chat-tool-mode-menu'), { what: 'open mode menu' });
+      await page.click('#chat-tool-mode-list [data-mode="ask-all"]');
+      await poll(() => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode === 'ask-all'),
+        { what: 'chat on "Always ask"' });
+      if (!(await shown(page, 'chat-tool-mode-menu'))) await page.click('#btn-chat-tool-mode');
+      await poll(() => page.evaluate(() => !document.getElementById('chat-tool-mode-footer').hidden),
+        { what: 'default for new chats offered' });
+      return clipAround(page, ['#chat-tool-mode-menu', '#btn-chat-tool-mode'], 16);
+    },
+  },
+
+  /** Settings › Tools & security for the demo project, shell commands on. */
+  'tools-and-security': {
+    prefs: { shellExecutionEnabled: true },
+    async setUp({ app, page }) {
+      await openSettings(app, page);
+      await page.click('#tab-settings-security');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#settings-security-rows .settings-security-row').length === 6),
+        { what: 'six rows' });
+      // The shell is found after the start; the page follows once main says so.
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.settings-security-row[data-risk-class="execute"] .settings-security-pill--asks'))),
+        { what: 'shell detected', timeoutMs: 30000 });
+      // The page itself, next to the navigation: the whole dialog would shrink
+      // its text below what a page shows legibly.
+      return clipAround(page, '#modal-settings .settings-dialog__panel-wrap', 0);
+    },
+  },
+
+  /** The shield next to the folder name while shell commands are on. */
+  'sandbox-shield': {
+    prefs: { shellExecutionEnabled: true },
+    async setUp({ page }) {
+      await poll(() => page.evaluate(() => {
+        const shield = document.getElementById('btn-tree-sandbox');
+        return Boolean(shield) && !shield.hidden && !shield.classList.contains('hidden');
+      }), { what: 'sandbox shield', timeoutMs: 30000 });
+      return { x: 0, y: 0, width: 480, height: 200 };
     },
   },
 
@@ -226,7 +359,8 @@ async function shootMotif(name, motif, locale, model) {
   const fresh = motif.profile === 'fresh';
   const userDataDir = await makeTempDir('snotra-manual-userdata-');
   if (!fresh) await demoProfile(userDataDir, locale, model);
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'),
+    JSON.stringify({ ...motif.prefs, appLocale: locale }), 'utf8');
 
   const snotra = await launchApp({
     userDataDir,
