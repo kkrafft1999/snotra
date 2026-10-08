@@ -78,6 +78,19 @@ test('parseViolationLine: the Linux observer reports write intents', () => {
   assert.equal(p.operation, 'openat');
 });
 
+test('summarizeViolations: an observed Linux write the run was allowed is no refusal', () => {
+  const lines = [
+    'deny openat /tmp/ws/inside.txt',
+    'deny openat /home/me/outside.txt',
+    'x(1) deny(1) file-write-create /tmp/ws/seatbelt-denied',
+  ];
+  const s = summarizeViolations(lines, { homeDir: HOME, isPermittedWrite: (p) => p.startsWith('/tmp/ws/') });
+  assert.deepEqual(s.entries.map((e) => e.target), ['/home/me/outside.txt', '/tmp/ws/seatbelt-denied'],
+    'Seatbelt reports refusals, not attempts: it is never filtered');
+  assert.deepEqual(s.raw, [lines[1], lines[2]]);
+  assert.equal(summarizeViolations([lines[0]], { isPermittedWrite: () => true }), null);
+});
+
 test('parseViolationLine: empty input is nothing, unknown text is kept as other', () => {
   assert.equal(parseViolationLine(''), null);
   assert.equal(parseViolationLine('   '), null);

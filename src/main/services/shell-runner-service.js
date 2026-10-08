@@ -376,7 +376,7 @@ function createShellRunnerService({
       if (outcome.error) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
-      const blocked = await target.blocked?.();
+      const blocked = await target.blocked?.({ failed: outcome.exitCode !== 0 && !outcome.aborted });
       const result = {
         ...outcome,
         stderr: target.annotate(outcome.stderr),

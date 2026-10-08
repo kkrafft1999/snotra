@@ -71,8 +71,10 @@ function parseViolationLine(line) {
     return { ...base, kind: KINDS.OTHER };
   }
 
+  // The kernel reports write *attempts*; the runtime filters them against the
+  // lists it had at start, before any run had a workspace (`observed`).
   m = LINUX_LINE.exec(text);
-  if (m) return { kind: KINDS.WRITE, target: m[2], operation: m[1] };
+  if (m) return { kind: KINDS.WRITE, target: m[2], operation: m[1], observed: true };
 
   return { kind: KINDS.OTHER, target: '', operation: text };
 }
@@ -144,8 +146,13 @@ function groupWrites(paths, homeDir) {
  * needs to succeed; those are left out, and a run that only had those has
  * nothing to show.
  *
+ * On Linux the observer reports what the kernel saw a program *try*, checked
+ * against the write rules the runtime had when it started — without the
+ * workspace of any run. `isPermittedWrite` checks such an attempt against the
+ * run's own rules, and an attempt the run was allowed is no refusal.
+ *
  * @param {string[]} lines  the run's violation lines, oldest first
- * @param {{homeDir?: string}} [options]
+ * @param {{homeDir?: string, isPermittedWrite?: (path: string) => boolean}} [options]
  * @returns {null | {
  *   entries: Array<{kind: string, target: string, count: number, folder?: boolean, operations: string[], reason?: string}>,
  *   moreEntries: number,
@@ -153,10 +160,11 @@ function groupWrites(paths, homeDir) {
  *   raw: string[],
  * }}
  */
-function summarizeViolations(lines, { homeDir = '' } = {}) {
+function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   const list = (Array.isArray(lines) ? lines : []).map((l) => String(l ?? '').trim()).filter(Boolean);
   if (list.length === 0) return null;
-  const parsed = list.map(parseViolationLine);
+  const permitted = typeof isPermittedWrite === 'function' ? isPermittedWrite : () => false;
+  const parsed = list.map(parseViolationLine).map((p) => (p?.observed && permitted(p.target) ? null : p));
 
   const entries = [];
   const byKey = new Map();

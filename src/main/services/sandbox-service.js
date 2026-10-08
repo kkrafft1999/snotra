@@ -612,9 +612,10 @@ function createSandboxService({
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
     const collector = collectViolations(manager, commandId || inner);
+    const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
     /** undefined until `blocked()` has looked; then the summary or null. */
     let summary;
-    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir() });
+    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir(), isPermittedWrite });
     let released = false;
     return {
       command: '/bin/sh',
@@ -633,15 +634,16 @@ function createSandboxService({
       },
       /**
        * What the sandbox refused during this run (#792), or null. Called once
-       * the process has closed, before `annotate()`.
+       * the process has closed, before `annotate()`. A run that failed is the
+       * likely victim of a refusal and waits longer for late lines.
        */
-      async blocked() {
+      async blocked({ failed = false } = {}) {
         if (summary !== undefined) return summary;
         if (!collector) {
           summary = null;
           return summary;
         }
-        if (violationSettleMs > 0) await new Promise((resolve) => setTimeout(resolve, violationSettleMs));
+        await settleViolations(collector, { settleMs: violationSettleMs, failed });
         summary = summarize();
         return summary;
       },
@@ -663,6 +665,33 @@ function createSandboxService({
     };
   }
 
+  /**
+   * Whether this run was allowed to write to a path: inside one of its
+   * writable folders and not inside a protected one (#792). Each folder in
+   * both spellings, as given and resolved — the Linux observer reports the
+   * path the kernel saw.
+   */
+  async function writeRules({ allowWrite = [], denyWrite = [] }) {
+    const home = os.homedir();
+    const spellings = async (list) => {
+      const out = [];
+      for (const raw of list) {
+        if (typeof raw !== 'string' || !raw || /[*?[]/.test(raw)) continue;
+        const p = raw === '~' ? home : raw.startsWith('~/') ? path.join(home, raw.slice(2)) : raw;
+        out.push(p);
+        const real = await fs.realpath(p).catch(() => p);
+        if (real !== p) out.push(real);
+      }
+      return out;
+    };
+    // bubblewrap mounts its own /dev and /proc, writable, and the observer
+    // still reports writes there.
+    const writable = [...(await spellings(allowWrite)), '/dev', '/proc'];
+    const protectedDirs = await spellings(denyWrite);
+    return (target) => writable.some((dir) => isPathInside(path, dir, target))
+      && !protectedDirs.some((dir) => isPathInside(path, dir, target));
+  }
+
   async function shutdown() {
     if (runtime?.SandboxManager?.reset) {
       await runtime.SandboxManager.reset().catch(() => {});
@@ -677,6 +706,31 @@ function createSandboxService({
     shutdown,
     buildConfig,
   };
+}
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A failed run waits up to this many times the settle time for late lines. */
+const FAILED_RUN_SETTLE_FACTOR = 6;
+/** Lines that have stopped arriving for this long are taken as complete. */
+const VIOLATIONS_QUIET_MS = 50;
+
+/**
+ * Waits for refusals still on their way (#792). Seatbelt's lines come
+ * through `log stream`, a child process; under load they arrive a few hundred
+ * milliseconds after the run's process has closed. Every run waits the
+ * settle time. A failed run waits longer: until lines have come and gone
+ * quiet, or six times the settle time when none come at all.
+ */
+async function settleViolations(collector, { settleMs, failed }) {
+  if (!(settleMs > 0)) return;
+  const started = Date.now();
+  await pause(settleMs);
+  if (!failed) return;
+  const longest = settleMs * FAILED_RUN_SETTLE_FACTOR;
+  while (Date.now() - started < longest) {
+    if (collector.lines.length > 0 && Date.now() - collector.lastAt() >= VIOLATIONS_QUIET_MS) return;
+    await pause(VIOLATIONS_QUIET_MS / 2);
+  }
 }
 
 /** The runtime's SANDBOXED_COMMAND_KEY_LENGTH: how much of a command key a violation carries. */
@@ -700,6 +754,7 @@ function collectViolations(manager, key) {
   if (!store || typeof store.subscribe !== 'function' || typeof store.getTotalCount !== 'function') return null;
   const wanted = String(key).slice(0, COMMAND_KEY_LENGTH);
   const lines = [];
+  let lastAt = 0;
   let seen = store.getTotalCount();
   // The store calls back after every single addition, with its whole tail.
   const unsubscribe = store.subscribe((list) => {
@@ -710,11 +765,13 @@ function collectViolations(manager, key) {
     for (const violation of list.slice(-fresh)) {
       if (lines.length < MAX_COLLECTED_VIOLATIONS && decodeCommandKey(violation?.encodedCommand) === wanted) {
         lines.push(String(violation.line ?? ''));
+        lastAt = Date.now();
       }
     }
   });
   return {
     lines,
+    lastAt: () => lastAt,
     stop() {
       try { unsubscribe(); } catch { /* already gone */ }
     },

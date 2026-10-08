@@ -234,7 +234,12 @@ refused connections in either case), and each prepared run listens to the
 runtime's violation store for its own `commandId` — the store keeps only the
 last hundred of all runs. `main/services/sandbox-violations.js` parses the
 three line dialects, drops the system queries every Seatbelt run makes, and
-folds a cache's many writes into their folder. The runner puts the summary on
+folds a cache's many writes into their folder. Linux reports write *attempts*,
+checked against the rules the runtime had at start — before any workspace — so
+each run checks them again against its own writable and protected folders.
+Seatbelt's lines come through `log stream` and can trail the process by a few
+hundred milliseconds under load; a failed run waits up to 600 ms for them, a
+successful one 100 ms. The runner puts the summary on
 the result as `sandboxBlocked` and `annotate()` replaces the runtime's raw
 `<sandbox_violations>` block in stderr with a short `<sandbox_blocked>` list for
 the model. From there it takes the same road as the file changes of #348: the

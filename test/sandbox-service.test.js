@@ -499,9 +499,12 @@ function fakeViolationStore() {
   };
 }
 
-async function preparedWithStore(commandId = 'shell-9') {
+async function preparedWithStore(commandId = 'shell-9', deps = {}) {
   const store = fakeViolationStore();
-  const { service, calls } = makeService({ fake: { store }, deps: { violationSettleMs: 0, os: { ...os, homedir: () => '/home/u' } } });
+  const { service, calls } = makeService({
+    fake: { store },
+    deps: { violationSettleMs: 0, os: { ...os, homedir: () => '/home/u' }, ...deps },
+  });
   await service.detect();
   const prepared = await service.prepare({
     command: 'pip install x', workspaceRoot: '/home/u/project', runTmp: '/tmp/snotra-sh-9', commandId,
@@ -515,7 +518,7 @@ test('the runtime is started with its violation monitor (#792)', async () => {
   assert.deepEqual(calls.monitor, [true]);
 });
 
-test('a run collects its own refusals, not those of other runs (#792)', async () => {
+test('a run collects its own refusals, not those of other runs (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore();
   store.add('shell-other', 'deny network-outbound elsewhere.example:443 (host is not on the allow list)');
   store.add('shell-9', 'deny openat /home/u/.cache/pip/http/a');
@@ -531,7 +534,7 @@ test('a run collects its own refusals, not those of other runs (#792)', async ()
   assert.equal(await prepared.blocked(), blocked, 'looked up once');
 });
 
-test('a run keeps refusals past the runtime\'s hundred (#792)', async () => {
+test('a run keeps refusals past the runtime\'s hundred (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore();
   for (let i = 0; i < 150; i += 1) store.add('shell-9', `deny openat /home/u/.cache/pip/http/${i}`);
   const blocked = await prepared.blocked();
@@ -539,7 +542,7 @@ test('a run keeps refusals past the runtime\'s hundred (#792)', async () => {
   assert.equal(blocked.total, 150);
 });
 
-test('the model reads the summary instead of the runtime\'s raw lines (#792)', async () => {
+test('the model reads the summary instead of the runtime\'s raw lines (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore();
   store.add('shell-9', 'deny network-outbound download.pytorch.org:443 (host is not on the allow list)');
   await prepared.blocked();
@@ -549,14 +552,48 @@ test('the model reads the summary instead of the runtime\'s raw lines (#792)', a
   assert.doesNotMatch(text, /\[annotated:/, 'not the runtime\'s own block');
 });
 
-test('a run without refusals has nothing to show and stderr stays as it was (#792)', async () => {
+test('a run without refusals has nothing to show and stderr stays as it was (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore();
   store.add('shell-9', 'sh(1) deny(1) sysctl-read kern.iossupportversion');
   assert.equal(await prepared.blocked(), null);
   assert.equal(prepared.annotate('fine'), 'fine');
 });
 
-test('releasing a run stops listening to the store (#792)', async () => {
+test('an observed Linux write inside the run\'s workspace is no refusal (#792)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore();
+  store.add('shell-9', 'deny openat /home/u/project/inside.txt');
+  store.add('shell-9', 'deny openat /tmp/snotra-sh-9/cache/x');
+  store.add('shell-9', 'deny openat /dev/tty');
+  assert.equal(await prepared.blocked(), null);
+});
+
+test('an observed Linux write outside it, or into a protected folder, is one (#792)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore('shell-9', { protectedWritePaths: ['/home/u/project/.agents/skills'] });
+  store.add('shell-9', 'deny openat /home/u/elsewhere.txt');
+  store.add('shell-9', 'deny openat /home/u/project/.agents/skills/x/SKILL.md');
+  const blocked = await prepared.blocked();
+  assert.deepEqual(blocked.entries.map((e) => e.target), ['/home/u/elsewhere.txt', '/home/u/project/.agents/skills/x/SKILL.md']);
+});
+
+test('a failed run waits for a refusal still on its way, a successful one does not (#792)', posixOnly, async () => {
+  const late = async (failed) => {
+    const { store, prepared } = await preparedWithStore('shell-9', { violationSettleMs: 40 });
+    setTimeout(() => store.add('shell-9', 'x(1) deny(1) file-read-data /home/u/.ssh/config'), 120);
+    return prepared.blocked({ failed });
+  };
+  assert.equal(await late(false), null);
+  assert.equal((await late(true))?.entries[0].target, '/home/u/.ssh/config');
+});
+
+test('a failed run without refusals gives up after six settle times (#792)', posixOnly, async () => {
+  const { prepared } = await preparedWithStore('shell-9', { violationSettleMs: 20 });
+  const started = Date.now();
+  assert.equal(await prepared.blocked({ failed: true }), null);
+  const waited = Date.now() - started;
+  assert.ok(waited >= 115 && waited < 1000, `waited ${waited} ms`);
+});
+
+test('releasing a run stops listening to the store (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore();
   assert.equal(store.listeners(), 1);
   prepared.release();
