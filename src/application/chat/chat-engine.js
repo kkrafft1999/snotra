@@ -46,7 +46,7 @@ const {
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
-const { sanitizeChatId, normalizeSandboxBlocked } = require('../../shared/contracts/chat');
+const { sanitizeChatId, normalizeSandboxBlocked, normalizeSandboxDecision } = require('../../shared/contracts/chat');
 const { FINISH_REASONS, isCutOff } = require('../../shared/contracts/finish-reason');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
@@ -692,6 +692,50 @@ function defaultPolicySnapshot() {
   };
 }
 
+/** Resources one sandbox card asks about (#792); the contract shows no more. */
+const SANDBOX_CARD_ENTRIES = 10;
+
+/** A tool's JSON result as an object, or null. */
+function parseToolOutput(output) {
+  if (typeof output !== 'string') return null;
+  try {
+    const parsed = JSON.parse(output);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A sentence for the model about a sandbox card's outcome (#792), added to the tool result. */
+function withSandboxNote(output, note) {
+  const parsed = parseToolOutput(output);
+  if (!parsed) return `${typeof output === 'string' ? output : ''}\n\n${note}`;
+  return JSON.stringify({ ...parsed, sandbox_decision: note });
+}
+
+/** "writing to /a, reading /b" — for the notes to the model. */
+function describeSandboxEntries(entries) {
+  const parts = entries.map((e) => (e.kind === 'read' ? `reading ${e.target}` : `writing to ${e.target}`));
+  return parts.length ? parts.join(', ') : 'access';
+}
+
+/** What a command reported, for the sandbox card: its stderr without the sandbox's own block. */
+const COMMAND_REPORT_CHARS = 2000;
+function commandReport(result) {
+  const stderr = typeof result?.stderr === 'string' ? result.stderr : '';
+  const own = stderr.replace(/\n*<sandbox_blocked>[\s\S]*?<\/sandbox_blocked>\n*/g, '\n').trim();
+  const text = own || (typeof result?.stdout === 'string' ? result.stdout.trim() : '');
+  return text.length > COMMAND_REPORT_CHARS ? `…${text.slice(-COMMAND_REPORT_CHARS)}` : text;
+}
+
+/** Session grants plus what one card allowed, as the runner takes them. */
+function mergeSandboxGrants(session, chosen) {
+  const writePaths = [...(session?.writePaths || [])];
+  const readPaths = [...(session?.readPaths || [])];
+  for (const grant of chosen) (grant.kind === 'read' ? readPaths : writePaths).push(grant.path);
+  return { writePaths: [...new Set(writePaths)], readPaths: [...new Set(readPaths)] };
+}
+
 function createChatEngine({
   llm,
   tools,
@@ -1292,7 +1336,7 @@ function createChatEngine({
        * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
        * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
        */
-      async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint }) {
+      async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint, sandbox = null }) {
         if (deniedPlanKeys.has(plan.planKey)) {
           return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
         }
@@ -1312,6 +1356,8 @@ function createChatEngine({
           workspaceRoot,
           encryptionAvailable: policy.encryptionAvailable,
         });
+        // What the sandbox refused and what the card may offer (#792).
+        if (sandbox) request.sandbox = sandbox;
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.ASK,
           riskClasses: plan.riskClasses,
@@ -1349,6 +1395,19 @@ function createChatEngine({
         if (outcome.response === APPROVAL_RESPONSES.DENY) {
           deniedPlanKeys.add(plan.planKey);
           return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.USER_DENIED };
+        }
+        // A sandbox card (#792) grants paths, not the call: what it allowed,
+        // and for how long, is decided by the caller from the card's choice.
+        if (checkpoint === 'sandbox') {
+          if (outcome.response !== APPROVAL_RESPONSES.ALLOW_ONCE && outcome.response !== APPROVAL_RESPONSES.ALLOW_SESSION) {
+            return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+          }
+          return {
+            response: outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION && request.sessionAllowed
+              ? APPROVAL_RESPONSES.ALLOW_SESSION
+              : APPROVAL_RESPONSES.ALLOW_ONCE,
+            sandboxPaths: Array.isArray(outcome.sandboxPaths) ? outcome.sandboxPaths : [],
+          };
         }
         if (outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION && request.sessionAllowed) {
           sessionGrants.grant({
@@ -1409,6 +1468,130 @@ function createChatEngine({
       /** The key a withheld output is remembered under — the plan's, at the output checkpoint. */
       function outputPlanKey(plan) {
         return `${plan.planKey}#sensitive`;
+      }
+
+      /** The key a sandbox card's denial is remembered under (#792). */
+      function sandboxPlanKey(plan) {
+        return `${plan.planKey}#sandbox`;
+      }
+
+      /** What sandbox cards allowed for the rest of this chat (#792), or null. */
+      function sessionSandboxGrants(scopeKey) {
+        const granted = sessionGrants.sandboxPaths?.(scopeKey);
+        return granted && (granted.writePaths.length || granted.readPaths.length) ? granted : null;
+      }
+
+      /**
+       * After a shell or Python run the sandbox refused a write or a protected
+       * read in (#792): the card asks, in every mode, whether to open exactly
+       * that and run the command again. Returns the execution the call ends
+       * with — the retry's, or the first one with a note for the model — or a
+       * refusal that ends the run when the model repeats a command the user
+       * has already denied.
+       */
+      async function reviewSandboxRefusal({ entry, callIndex, toolName, plan, policy, scopeKey, execution, executeWith }) {
+        const blocked = execution?.sandboxBlocked;
+        if (!blocked || execution.invalidated || execution.hardLimit || execution.reclassify?.length) return { execution };
+        // As many as the card shows: a resource it did not show is not opened.
+        const offered = (Array.isArray(blocked.entries) ? blocked.entries : [])
+          .filter((e) => (e.kind === 'write' || e.kind === 'read') && Array.isArray(e.allow) && e.allow.length > 0)
+          .slice(0, SANDBOX_CARD_ENTRIES);
+        if (offered.length === 0) return { execution };
+
+        const first = parseToolOutput(execution.output);
+        const classes = normalizeRiskClasses(offered.map((e) => (e.kind === 'read' ? TOOL_RISK_CLASSES.READ_SENSITIVE : TOOL_RISK_CLASSES.WRITE)));
+        const sandboxPlan = {
+          ...plan,
+          planKey: sandboxPlanKey(plan),
+          riskClasses: classes,
+          targets: offered.map((e) => ({ path: e.target, kind: 'file', exists: false })),
+        };
+        const executed = entry.permission;
+        entry.sandboxBlocked = blocked;
+        const answer = await askUser({
+          entry,
+          callIndex,
+          toolName,
+          plan: sandboxPlan,
+          verdict: { askClasses: classes },
+          policy,
+          checkpoint: 'sandbox',
+          sandbox: {
+            command: typeof plan.preview?.text === 'string' ? plan.preview.text : '',
+            run: {
+              exitCode: Number.isInteger(first?.exit_code) ? first.exit_code : null,
+              durationMs: Number.isFinite(first?.duration_ms) ? first.duration_ms : null,
+              timedOut: first?.timed_out === true,
+            },
+            output: commandReport(first),
+            entries: offered.map((e) => ({ kind: e.kind, target: e.target, count: e.count, folder: e.folder === true, allow: e.allow })),
+            others: blocked.entries.filter((e) => !offered.includes(e)).map((e) => ({ kind: e.kind, target: e.target })),
+            raw: Array.isArray(blocked.raw) ? blocked.raw.slice(-20) : [],
+          },
+        });
+        entry.permission = executed;
+        const what = describeSandboxEntries(offered);
+
+        if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+          // The model ran a command again whose sandbox card the user denied.
+          return {
+            refusal: endRunDenied(entry, { reason: answer.reason, riskClasses: classes, mode: policy.mode, targets: sandboxPlan.targets }, answer.reason),
+          };
+        }
+        if (answer.invalidated || answer.response === APPROVAL_RESPONSES.DENY) {
+          const denied = answer.response === APPROVAL_RESPONSES.DENY;
+          entry.sandboxDecision = { outcome: denied ? 'denied' : 'unanswered' };
+          const note = denied
+            ? `The user denied ${what}. The command was not run again.`
+            : `The user did not answer the sandbox card, so ${what} stayed blocked and the command was not run again.`;
+          return {
+            execution: {
+              ...execution,
+              output: withSandboxNote(execution.output, `${note} Do not work around it — no other location, tool, `
+                + 'environment variable or setting. Tell the user what was blocked and why the task needs it.'),
+            },
+          };
+        }
+
+        // The card may only choose among what it offered; anything else is the first option.
+        const chosen = offered.map((e, i) => {
+          const pick = answer.sandboxPaths[i];
+          return { kind: e.kind, path: e.allow.includes(pick) ? pick : e.allow[0] };
+        });
+        const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
+        if (session) {
+          for (const grant of chosen) {
+            sessionGrants.grant({
+              scopeKey,
+              tool: toolName,
+              targets: [{ path: grant.path }],
+              riskClasses: [grant.kind === 'read' ? TOOL_RISK_CLASSES.READ_SENSITIVE : TOOL_RISK_CLASSES.WRITE],
+              providerKey,
+              chatId,
+              scope: createMessage(`approval.sandbox.sessionScope.${grant.kind}`, { path: grant.path }),
+              sandbox: grant,
+            });
+          }
+        }
+        const grants = mergeSandboxGrants(sessionSandboxGrants(scopeKey), chosen);
+        const retry = await executeWith(grants);
+        const retried = parseToolOutput(retry?.output);
+        const retryBlocked = normalizeSandboxBlocked(retry?.sandboxBlocked);
+        entry.sandboxDecision = {
+          outcome: 'allowed',
+          duration: session ? 'session' : 'run',
+          paths: chosen,
+          retry: {
+            exitCode: Number.isInteger(retried?.exit_code) ? retried.exit_code : null,
+            ...(retryBlocked ? { blocked: retryBlocked } : {}),
+          },
+        };
+        const allowedWhat = describeSandboxEntries(chosen.map((c) => ({ kind: c.kind, target: c.path })));
+        const note = `The user allowed ${allowedWhat} ${session ? 'for the rest of this chat' : 'for this run'}, `
+          + 'and the command ran a second time. This is the result of that second run'
+          + (retryBlocked ? '; the sandbox refused something again, see <sandbox_blocked>.' : '.');
+        // The first refusal is on the entry; the retry's goes with the decision.
+        return { execution: { ...retry, sandboxBlocked: null, output: withSandboxNote(retry?.output, note) } };
       }
 
       /**
@@ -1542,7 +1725,7 @@ function createChatEngine({
             targets: plan.targets,
           });
 
-          const execution = await tools.execute(toolName, args, {
+          const executeWith = (sandboxGrants) => tools.execute(toolName, args, {
             workspaceRoot,
             skillRoots,
             // The broad tools leave out hits under these patterns (#525); a
@@ -1557,7 +1740,21 @@ function createChatEngine({
             plan,
             riskClasses,
             ownSecretsCheck: true,
+            // Folders and paths a sandbox card opened for this chat (#792).
+            sandboxGrants,
           });
+          const reviewed = await reviewSandboxRefusal({
+            entry,
+            callIndex,
+            toolName,
+            plan,
+            policy,
+            scopeKey,
+            execution: await executeWith(sessionSandboxGrants(scopeKey)),
+            executeWith,
+          });
+          if (reviewed.refusal) return reviewed.refusal;
+          const execution = reviewed.execution;
 
           if (execution?.invalidated) {
             return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
@@ -1772,9 +1969,14 @@ function createChatEngine({
             if (Array.isArray(outcome.fileChanges) && outcome.fileChanges.length) {
               entry.changes = outcome.fileChanges;
             }
-            // What the sandbox refused (#792) travels the same way.
-            const blocked = normalizeSandboxBlocked(outcome.sandboxBlocked);
+            // What the sandbox refused (#792) travels the same way, and what
+            // the user decided on its card.
+            const blocked = normalizeSandboxBlocked(outcome.sandboxBlocked ?? entry.sandboxBlocked);
             if (blocked) entry.sandboxBlocked = blocked;
+            else delete entry.sandboxBlocked;
+            const decision = normalizeSandboxDecision(entry.sandboxDecision);
+            if (decision) entry.sandboxDecision = decision;
+            else delete entry.sandboxDecision;
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);

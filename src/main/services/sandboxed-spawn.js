@@ -37,7 +37,7 @@ const PASSTHROUGH = Object.freeze({
  * @returns {Promise<{command: string, args: string[], env: object,
  *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
  *     reason?: string, missing?: string[]},
- *   annotate: (s: string) => string, blocked: (o?: {failed?: boolean}) => Promise<object|null>,
+ *   annotate: (s: string) => string, blocked: (o?: {failed?: boolean, output?: string}) => Promise<object|null>,
  *   release: () => void}>}
  *   Rejects with an AbortError when "Stop" comes while waiting for the gate.
  */
@@ -49,6 +49,9 @@ async function planSpawn({
   runTmp,
   domains,
   allowance = null,
+  // What the user allowed on a sandbox card (#792): writable folders and
+  // protected paths opened for this run.
+  grants = null,
   commandId,
   commandText,
   abortSignal,
@@ -72,6 +75,7 @@ async function planSpawn({
     allowedDomains: domains,
     extraWritePaths: Array.isArray(allowance?.writePaths) ? allowance.writePaths : [],
     weakerNetworkIsolation: allowance?.trustd === true,
+    grants,
     commandId,
     commandText,
     abortSignal,

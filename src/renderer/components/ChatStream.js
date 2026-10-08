@@ -1121,7 +1121,8 @@ export function initChatStream({
     if (changes) markChangesLive(changes);
     // What the sandbox refused (#792) comes with the done line, like changes.
     const sandboxBlocked = phase === 'done' ? payload?.sandboxBlocked : undefined;
-    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes, sandboxBlocked });
+    const sandboxDecision = phase === 'done' ? payload?.sandboxDecision : undefined;
+    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes, sandboxBlocked, sandboxDecision });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
       if (existing) {

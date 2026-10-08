@@ -1,7 +1,11 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
+import { buildSandboxCardView, describeSandboxOutcome } from '../utils/sandbox-approval-view.js';
+import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
+
+const { APPROVAL_RESPONSES } = contracts;
 
 /**
  * Bestätigungskarte im Chat (Issue #67, Konzept §4/§6).
@@ -250,7 +254,149 @@ export function initToolApprovalCards({
     }
   }
 
+  /** The view of a card: the sandbox card (#792), or the card before a call or for its output. */
+  function viewOf(dto) {
+    const homeDir = readHomeDir();
+    return buildSandboxCardView(dto, { homeDir }) || buildApprovalCardView(dto, { homeDir });
+  }
+
+  /** One group of radio rows; the first option is chosen. */
+  function radioGroup(requestId, name, legend, options) {
+    const fieldset = el('fieldset', 'chat-approval-card__choice');
+    fieldset.appendChild(el('legend', 'chat-approval-card__choice-legend', legend));
+    options.forEach((option, i) => {
+      const label = el('label', 'chat-approval-card__option');
+      const input = el('input');
+      input.type = 'radio';
+      input.name = domId(requestId, name);
+      input.value = option.value;
+      input.checked = i === 0;
+      label.appendChild(input);
+      const text = el('span', 'chat-approval-card__option-text');
+      if (option.code) text.appendChild(code(option.label));
+      else text.append(option.label);
+      if (option.hint) text.appendChild(el('span', 'chat-approval-card__option-hint', option.hint));
+      label.appendChild(text);
+      fieldset.appendChild(label);
+    });
+    return fieldset;
+  }
+
+  /**
+   * The sandbox card (#792): what the run was refused, how it went, what it
+   * reported; which path to open — exactly the blocked one or one folder up
+   * — and for how long. "Allow and run again" answers once or for the
+   * session, as the duration says; Esc denies, like on every card.
+   */
+  function buildSandboxCard(entry, view) {
+    const requestId = entry.dto.requestId;
+    const card = el('section', 'chat-approval-card chat-approval-card--sandbox');
+    card.dataset.requestId = requestId;
+    card.dataset.state = 'pending';
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-labelledby', domId(requestId, 'title'));
+    card.setAttribute('aria-describedby', `${domId(requestId, 'badge')} ${domId(requestId, 'headline')}`);
+    card.tabIndex = -1;
+
+    const row = el('div', 'chat-approval-card__title-row');
+    const title = el('h3', 'chat-approval-card__title', view.title);
+    title.id = domId(requestId, 'title');
+    const badge = el('span', 'chat-approval-card__badge', view.badge);
+    badge.id = domId(requestId, 'badge');
+    row.append(title, badge);
+    card.appendChild(row);
+
+    const headline = el('p', 'chat-approval-card__headline');
+    headline.id = domId(requestId, 'headline');
+    for (const part of view.headline.template.split(/(\{command\})/)) {
+      if (part === '{command}') headline.appendChild(code(view.headline.command));
+      else if (part) headline.append(part);
+    }
+    card.appendChild(headline);
+
+    const facts = el('dl', 'chat-approval-card__facts');
+    const blocked = el('ul', 'chat-approval-card__blocked');
+    for (const item of view.entries) {
+      const li = el('li');
+      li.appendChild(el('span', 'chat-approval-card__blocked-kind', item.kindLabel));
+      const target = code(item.target);
+      if (item.title !== item.target) target.title = item.title;
+      li.appendChild(target);
+      if (item.detail) li.appendChild(el('span', 'chat-approval-card__blocked-detail', item.detail));
+      blocked.appendChild(li);
+    }
+    fact(facts, t('approval.sandbox.fact.blocked'), blocked);
+    if (view.others.length) {
+      const others = el('ul', 'chat-approval-card__blocked');
+      for (const other of view.others) {
+        const li = el('li');
+        li.appendChild(el('span', 'chat-approval-card__blocked-kind', other.kindLabel));
+        li.appendChild(code(other.target));
+        li.appendChild(el('span', 'chat-approval-card__blocked-detail', t('approval.sandbox.others.note')));
+        others.appendChild(li);
+      }
+      fact(facts, t('approval.sandbox.fact.others'), others);
+    }
+    if (view.command) fact(facts, t('approval.sandbox.fact.command'), code(view.command));
+    fact(facts, t('approval.sandbox.fact.run'), view.run);
+    fact(facts, t('approval.fact.reason'), view.reason);
+    card.appendChild(facts);
+
+    const output = el('details', 'chat-approval-card__preview chat-approval-card__report');
+    output.open = true;
+    output.appendChild(el('summary', null, t('approval.sandbox.output')));
+    // A report that scrolls takes the keyboard too.
+    const scrolling = (text) => {
+      const pre = el('pre', 'chat-approval-card__preview-text', text);
+      pre.tabIndex = 0;
+      return pre;
+    };
+    output.appendChild(view.output
+      ? scrolling(view.output)
+      : el('p', 'chat-approval-card__report-empty', t('approval.sandbox.output.empty')));
+    card.appendChild(output);
+    if (view.raw) {
+      const raw = el('details', 'chat-approval-card__preview chat-approval-card__report');
+      raw.appendChild(el('summary', null, t('toolLog.sandbox.raw')));
+      raw.appendChild(scrolling(view.raw));
+      card.appendChild(raw);
+    }
+
+    view.entries.forEach((item, i) => {
+      if (item.options.length < 2) return;
+      // The path in the legend only tells several resources apart; for one,
+      // it stands right below as the first option.
+      const legend = view.entries.length > 1 ? `${item.legend} ${item.target}` : item.legend;
+      card.appendChild(radioGroup(requestId, `scope-${i}`, legend, item.options.map((option) => ({ ...option, code: true }))));
+    });
+    if (view.durations.length) card.appendChild(radioGroup(requestId, 'duration', t('approval.sandbox.duration.legend'), view.durations));
+
+    card.appendChild(el('p', 'chat-approval-card__warning', view.warning));
+
+    const { actions } = buildActions(view, requestId);
+    card.appendChild(actions);
+    const status = el('p', 'chat-approval-card__status', t('approval.status.waiting'));
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    card.appendChild(status);
+
+    actions.addEventListener('click', (e) => {
+      const button = e.target.closest('button[data-response]');
+      if (!button || button.disabled) return;
+      if (button.dataset.response === APPROVAL_RESPONSES.DENY) {
+        void respond(requestId, APPROVAL_RESPONSES.DENY);
+        return;
+      }
+      const chosen = (name) => card.querySelector(`input[name="${domId(requestId, name)}"]:checked`)?.value;
+      const sandboxPaths = view.entries.map((item, i) => chosen(`scope-${i}`) || item.options[0].value);
+      const session = chosen('duration') === 'session';
+      void respond(requestId, session ? APPROVAL_RESPONSES.ALLOW_SESSION : button.dataset.response, { sandboxPaths });
+    });
+    return card;
+  }
+
   function buildCard(entry, view) {
+    if (view.kind === 'sandbox') return buildSandboxCard(entry, view);
     const requestId = entry.dto.requestId;
     const card = el('section', 'chat-approval-card');
     card.dataset.requestId = requestId;
@@ -393,7 +539,10 @@ export function initToolApprovalCards({
 
   /** Auflösung anzeigen: keine aktive Aktion bleibt zurück (Konzept §6). */
   function applyOutcome(card, entry) {
-    const outcome = describeApprovalOutcome({ ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true });
+    const resolved = { ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true };
+    const outcome = (entry.dto?.checkpoint === 'sandbox' && describeSandboxOutcome(resolved)) || describeApprovalOutcome(resolved);
+    // What the sandbox card offered to choose stays visible, but fixed.
+    for (const fieldset of card.querySelectorAll('.chat-approval-card__choice')) fieldset.disabled = true;
     card.dataset.state = outcome.status;
     const actions = card.querySelector('.chat-approval-card__actions');
     if (actions) {
@@ -410,7 +559,7 @@ export function initToolApprovalCards({
     setStatus(card, t('approval.status.resolved', { label: outcome.label }));
   }
 
-  async function respond(requestId, response) {
+  async function respond(requestId, response, extra) {
     if (!queue.beginResponse(requestId, response)) return;
     const card = cards.get(requestId);
     const entry = queue.get(requestId);
@@ -428,7 +577,7 @@ export function initToolApprovalCards({
     let result;
     try {
       result = typeof api.respondToolApproval === 'function'
-        ? await api.respondToolApproval(requestId, response)
+        ? await api.respondToolApproval(requestId, response, extra)
         : { ok: false, error: t('approval.error.unavailable') };
     } catch (error) {
       result = { ok: false, error: error?.message || t('approval.error.unknown') };
@@ -459,7 +608,7 @@ export function initToolApprovalCards({
     // A request without a chat comes from a main that predates #320; it can
     // only mean the chat on screen.
     entry.chatId = dto.chatId || appStore.currentChatId || null;
-    const view = buildApprovalCardView(dto, { homeDir: readHomeDir() });
+    const view = viewOf(dto);
     if (!view) return;
     const card = buildCard(entry, view);
     card.__approvalView = view;
@@ -494,7 +643,7 @@ export function initToolApprovalCards({
     for (const [requestId, card] of [...cards]) {
       const entry = queue.get(requestId);
       if (!entry) continue;
-      const view = buildApprovalCardView(entry.dto, { homeDir: readHomeDir() });
+      const view = viewOf(entry.dto);
       if (!view) continue;
       // The focus follows into the new card: the same button, or the card.
       const focused = card.contains(document.activeElement) ? document.activeElement.dataset?.response || '' : null;

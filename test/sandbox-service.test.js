@@ -585,6 +585,13 @@ test('a failed run waits for a refusal still on its way, a successful one does n
   assert.equal((await late(true))?.entries[0].target, '/home/u/.ssh/config');
 });
 
+test('a run that reports a refused permission waits longer for its line (#792)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore('shell-9', { violationSettleMs: 20 });
+  setTimeout(() => store.add('shell-9', 'x(1) deny(1) file-read-data /home/u/.ssh/config'), 250);
+  const blocked = await prepared.blocked({ failed: true, output: 'cat: /home/u/.ssh/config: Operation not permitted' });
+  assert.equal(blocked?.entries[0].target, '/home/u/.ssh/config', 'past six settle times, within twenty');
+});
+
 test('a failed run without refusals gives up after six settle times (#792)', posixOnly, async () => {
   const { prepared } = await preparedWithStore('shell-9', { violationSettleMs: 20 });
   const started = Date.now();

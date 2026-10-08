@@ -718,6 +718,17 @@ tried. The raw lines of the sandbox are folded away underneath. The model gets
 the same list and is told to tell you instead of working around it, and the box
 stays with the chat when you open it again later.
 
+**Allowing exactly what was blocked.** For a write outside the project folder
+or a read of a protected location, a card asks right after the run — in every
+mode, *Auto* included — whether to open exactly that path, or the folder one
+level up, for this run or for the session, and run the command again. The
+sandbox stays on for everything else; Snotra's own storage, your home folder as
+a whole and the files the sandbox always protects (`.bashrc`, `.git/hooks` …)
+are never offered. A session approval is listed under Settings › Tools &
+security and can be revoked there. Denied, the command does not run again, and
+the model is told not to work around it. A connection a program makes directly
+instead of through the sandbox's proxy can only be shown, not allowed.
+
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —

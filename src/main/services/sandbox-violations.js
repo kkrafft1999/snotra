@@ -101,6 +101,20 @@ function broadFolders(homeDir) {
   return new Set([...shared, ...inHome.map((p) => `${home}${p}`)]);
 }
 
+/**
+ * The folder one level above a blocked path, for "allow a little wider"
+ * (#792): the program's cache folder instead of one version's subfolder.
+ * Null where that would be a folder many programs share, the home folder or
+ * something above it.
+ */
+function widerFolder(target, homeDir = '') {
+  const parent = parentOf(trimSlash(target));
+  const home = trimSlash(homeDir);
+  if (broadFolders(homeDir).has(parent)) return null;
+  if (home && (parent === home || home.startsWith(`${parent}/`))) return null;
+  return parent;
+}
+
 function trimSlash(p) {
   const s = String(p || '');
   return s.length > 1 ? s.replace(/\/+$/, '') : s;
@@ -254,4 +268,5 @@ module.exports = {
   summarizeViolations,
   describeForModel,
   groupWrites,
+  widerFolder,
 };
