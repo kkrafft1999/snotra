@@ -35,6 +35,11 @@ export default defineConfig({
           items: [{ autogenerate: { directory: 'getting-started' } }],
         },
         {
+          label: 'Chatting',
+          translations: { de: 'Chatten' },
+          items: [{ autogenerate: { directory: 'chatting' } }],
+        },
+        {
           label: 'Modes, permissions and safety',
           translations: { de: 'Modi, Freigaben und Sicherheit' },
           items: [{ autogenerate: { directory: 'safety' } }],
