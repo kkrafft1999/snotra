@@ -35,7 +35,7 @@ Type a question into the input field and press `Enter`; `Shift+Enter` starts a n
 
 While the welcome page is in the middle, its quick-start suggestions are another way in: *Explain the repo structure*, *Start a code review*, *Suggest tests* and *Summarise the docs* each write a prompt into the chat and send it, as soon as a folder is open and a model is connected.
 
-To answer, Snotra reads files in the folder by itself. Before it changes, creates or deletes anything there, it asks you first. That is the default mode, *Smart*, shown in the pill below the input field.
+To answer, Snotra reads files in the folder by itself. Before it changes, creates or deletes anything there, it asks you first. That is the default mode, *Smart*, shown in the pill below the input field; [Choose a mode](../../safety/choose-a-mode/) explains the others.
 
 ## If it doesn't work
 

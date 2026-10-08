@@ -35,7 +35,7 @@ Tipp eine Frage ins Eingabefeld und drück `Enter`; mit `Shift+Enter` beginnst d
 
 Solange die Willkommensseite in der Mitte steht, sind ihre Schnellstart-Vorschläge ein weiterer Einstieg: *Repo-Struktur erklären*, *Code-Review starten*, *Tests vorschlagen* und *Doku zusammenfassen* schreiben je eine Anfrage in den Chat und schicken sie ab, sobald ein Ordner offen und ein Modell angebunden ist.
 
-Um zu antworten, liest Snotra Dateien im Ordner von selbst. Bevor es dort etwas ändert, anlegt oder löscht, fragt es dich. So arbeitet der Standardmodus *Intelligent*, den die Pille unter dem Eingabefeld anzeigt.
+Um zu antworten, liest Snotra Dateien im Ordner von selbst. Bevor es dort etwas ändert, anlegt oder löscht, fragt es dich. So arbeitet der Standardmodus *Intelligent*, den die Pille unter dem Eingabefeld anzeigt; die anderen erklärt [Einen Modus wählen](../../safety/choose-a-mode/).
 
 ## Wenn es nicht klappt
 

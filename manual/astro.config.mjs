@@ -34,6 +34,11 @@ export default defineConfig({
           translations: { de: 'Erste Schritte' },
           items: [{ autogenerate: { directory: 'getting-started' } }],
         },
+        {
+          label: 'Modes, permissions and safety',
+          translations: { de: 'Modi, Freigaben und Sicherheit' },
+          items: [{ autogenerate: { directory: 'safety' } }],
+        },
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {
