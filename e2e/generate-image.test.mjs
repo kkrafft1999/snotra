@@ -23,12 +23,18 @@ async function send(page, text) {
   }, text);
 }
 
-/** Approves every card as it asks, until the run is through. */
-async function approveUntilDone(page, what, evidence) {
+/**
+ * Approves every card as it asks, until the run is through. An idle send button
+ * alone does not prove that: right after send() the run may not have started
+ * yet (#801), so the run only counts as through once the model has received
+ * the request of its last turn.
+ */
+async function approveUntilDone(page, what, evidence, lastTurn) {
   await poll(async () => {
     await page.evaluate(() => {
       document.querySelector('.chat-approval-card button[data-response="allow-once"]:not([disabled])')?.click();
     });
+    if (!lastTurn()) return false;
     return page.evaluate(() => !document.getElementById('btn-chat-send').classList.contains('chat-send--stop'));
   }, { what, timeoutMs: 45000, explain: evidence });
 }
@@ -96,7 +102,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
   });
   model.queueAnswer({ match: 'bytes_written', text: 'The image is at assets/header.png.' });
   await send(page, 'Draw a header image.');
-  await approveUntilDone(page, 'image run through', evidence);
+  await approveUntilDone(page, 'image run through', evidence, () => model.requestFor('bytes_written'));
 
   assert.ok(toolNamesOf(model.requestFor('Draw a header')).includes('generate_image'), 'offered with a key');
   const sent = await images.requests();
@@ -151,7 +157,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
   });
   model.queueAnswer({ match: 'refused to draw', text: 'OpenAI refused that one.' });
   await send(page, 'Draw something refused.');
-  await approveUntilDone(page, 'refused run through', evidence);
+  await approveUntilDone(page, 'refused run through', evidence, () => model.requestFor('refused to draw'));
   assert.equal((await images.requests()).length, 2);
   assert.match(JSON.stringify(model.requestFor('refused to draw')?.body ?? {}), /Rejected by the safety system/,
     'the refusal reached the model in its own words');

@@ -36,9 +36,13 @@ function holdFolder(cwd, ms) {
   return child;
 }
 
-/** `what` is a function, so the message shows the state at the timeout. */
-async function waitFor(check, { timeoutMs, what }) {
-  const deadline = Date.now() + timeoutMs;
+/**
+ * `what` is a function, so the message shows the state at the timeout. With a
+ * `fixture`, the wait also ends in time to report before the test's own timeout
+ * cuts it off without a word (#742).
+ */
+async function waitFor(check, { timeoutMs, what, fixture }) {
+  const deadline = Math.min(Date.now() + timeoutMs, fixture ? fixture.deadline : Infinity);
   for (;;) {
     const value = await check();
     if (value) return value;
@@ -55,7 +59,16 @@ function readIfThere(file) {
   }
 }
 
-async function makeFixture(t) {
+/** Leaves this much of the test's timeout for waitFor to report in. */
+const REPORT_MARGIN_MS = 5_000;
+
+/** Notes how far into the test a step got, for describe(). */
+function mark(fixture, step) {
+  fixture.steps.push(`${step} after ${Date.now() - fixture.startedAt} ms`);
+}
+
+async function makeFixture(t, timeoutMs) {
+  const startedAt = Date.now();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-swap-'));
   const holders = [];
   t.after(async () => {
@@ -90,7 +103,10 @@ async function makeFixture(t) {
 
   const userData = path.join(dir, 'userData');
   await fsp.mkdir(userData);
-  return {
+  const fixture = {
+    startedAt,
+    deadline: startedAt + timeoutMs - REPORT_MARGIN_MS,
+    steps: [],
     dir,
     parentDir,
     installDir,
@@ -99,6 +115,8 @@ async function makeFixture(t) {
     logFile: path.join(userData, 'update-install.log'),
     statusFile: path.join(userData, 'update-install-failed.json'),
   };
+  mark(fixture, 'fixture ready');
+  return fixture;
 }
 
 /**
@@ -167,6 +185,7 @@ function describe(fixture) {
     `status: ${readIfThere(fixture.statusFile) || '(none)'}`,
     `launcher: ${readIfThere(path.join(fixture.dir, 'work', 'helper-launch.json')) || '(none)'}`,
     `next to the app: ${fs.readdirSync(fixture.parentDir).join(', ')}`,
+    `steps: ${fixture.steps.join('; ')}; waited until ${Date.now() - fixture.startedAt} ms`,
   ].join('\n');
 }
 
@@ -217,16 +236,18 @@ test('Windows: the helper launcher parses', { skip: !onWindows }, () => {
 });
 
 test('Windows: the swap goes through although the app ran from its own folder', { skip: !onWindows, timeout: 90_000 }, async (t) => {
-  const fixture = await makeFixture(t);
+  const fixture = await makeFixture(t, 90_000);
   const app = holdFolder(fixture.installDir, 2000);
   fixture.holders.push(app);
 
   const res = await installFromInsideTheFolder(fixture, app.pid);
+  mark(fixture, 'install() returned');
   assert.equal(res.ok, true, JSON.stringify(res));
 
   const log = await waitFor(() => /updated to 1\.13\.0/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
     timeoutMs: 60_000,
     what: () => describe(fixture),
+    fixture,
   });
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'new', log);
   assert.equal(readIfThere(path.join(fixture.installDir, `${FOLDER}-1.12.0.zip`)), 'the old download');
@@ -238,32 +259,36 @@ test('Windows: the swap goes through although the app ran from its own folder', 
 // #654: what broke in the field from v1.12.2 on. The process that started the
 // helper quits, and the helper went down with it before it had moved anything.
 test('Windows: the helper outlives the app that started it', { skip: !onWindows, timeout: 90_000 }, async (t) => {
-  const fixture = await makeFixture(t);
+  const fixture = await makeFixture(t, 90_000);
 
   const res = await installFromAProcessThatQuits(fixture);
+  mark(fixture, 'install() returned');
   assert.equal(res.ok, true, JSON.stringify(res));
 
   const log = await waitFor(() => /updated to 1\.13\.0/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
     timeoutMs: 60_000,
     what: () => describe(fixture),
+    fixture,
   });
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'new', log);
   assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'no staging or backup folder is left behind');
 });
 
 test('Windows: a folder that stays locked rolls back, reports and keeps the old version', { skip: !onWindows, timeout: 120_000 }, async (t) => {
-  const fixture = await makeFixture(t);
+  const fixture = await makeFixture(t, 120_000);
   const app = holdFolder(fixture.installDir, 1000);
   // Something else keeps the folder for longer than the helper retries.
   const lock = holdFolder(fixture.installDir, 60_000);
   fixture.holders.push(app, lock);
 
   const res = await installFromInsideTheFolder(fixture, app.pid);
+  mark(fixture, 'install() returned');
   assert.equal(res.ok, true, JSON.stringify(res));
 
   const status = await waitFor(() => readIfThere(fixture.statusFile), {
     timeoutMs: 90_000,
     what: () => describe(fixture),
+    fixture,
   });
   const record = JSON.parse(status.replace(/^\uFEFF/, ''));
   assert.equal(record.version, '1.13.0');
@@ -273,6 +298,7 @@ test('Windows: a folder that stays locked rolls back, reports and keeps the old 
   const log = await waitFor(() => /starting the previous version again/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
     timeoutMs: 10_000,
     what: () => describe(fixture),
+    fixture,
   });
   assert.match(log, /update failed: /);
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'old');
