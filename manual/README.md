@@ -68,7 +68,9 @@ adds entries to `ui-preferences.json`, to switch a tool on or widen the chat
 column; `configure(config)` changes `llm-config.json` before the start, to
 add model entries. `setUp` also gets the path of the demo copy as
 `workspace`, to put a file in it for one motif without adding it to
-`demo-workspace/`. An HTML file is shown in a view of its own over the
+`demo-workspace/`; `prepare({ userDataDir, workspace, locale })` does the same
+before the app starts, for files the app reads only then — a skill, a
+`memory.md`, `mcp-servers.json` in the profile. An HTML file is shown in a view of its own over the
 window, which a screenshot of the window does not contain; `htmlView: true`
 takes its picture separately and lays it in.
 Running the script needs the app's dependencies (`npm ci` at the repository

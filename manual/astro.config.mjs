@@ -49,6 +49,11 @@ export default defineConfig({
           translations: { de: 'Modi, Freigaben und Sicherheit' },
           items: [{ autogenerate: { directory: 'safety' } }],
         },
+        {
+          label: 'Customising',
+          translations: { de: 'Anpassen' },
+          items: [{ autogenerate: { directory: 'customising' } }],
+        },
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {
