@@ -13,6 +13,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 
 ## Wo du anfängst
 
+- **Neu bei Snotra:** [Installier es](getting-started/install/), [bind ein Modell an](getting-started/connect-a-model/) und [öffne einen Ordner](getting-started/open-a-folder/). Das Kapitel *Erste Schritte* führt dich vom Download bis zum ersten Chat.
 - **Download:** Die aktuelle Version für macOS, Windows und Linux findest du auf der [Release-Seite](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Alle Funktionen im Überblick:** Bis jedes Kapitel dieses Handbuchs geschrieben ist, beschreibt die [README auf GitHub](https://github.com/kkrafft1999/snotra/blob/main/README.de.md) alle Funktionen an einer Stelle.
 - **Probleme und Ideen:** Melde sie als [Issue auf GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
