@@ -60,6 +60,10 @@ both themes; the one that does not match the reader's theme is hidden.
 
 To add a motif, add an entry to `MOTIFS` in `scripts/screenshots.mjs`: the
 texts per language and a `setUp` that brings the app into the state to shoot.
+`setUp` returns the area to shoot, or `null` for the whole window; crop to a
+dialog or a menu when the whole window would shrink its text below what a page
+shows legibly. `profile: 'fresh'` starts the app as it is right after
+installing — no folder, no model — instead of on the demo project.
 Running the script needs the app's dependencies (`npm ci` at the repository
 root). The demo project must stay free of anything personal.
 

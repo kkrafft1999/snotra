@@ -73,12 +73,89 @@ async function waitForRunEnd(page) {
   }), { timeoutMs: 30000, what: 'end of the run' });
 }
 
+/** Whether the element with this id is on screen (not carrying `hidden`). */
+const shown = (page, id) => page.evaluate((elementId) => {
+  const element = document.getElementById(elementId);
+  return Boolean(element) && !element.classList.contains('hidden');
+}, id);
+
+/**
+ * Opens the settings the way a reader does: through the application menu. Right
+ * after the start the renderer may not listen yet and the click goes nowhere,
+ * so it is repeated until the dialog is there.
+ */
+async function openSettings(app, page) {
+  await poll(async () => {
+    if (await shown(page, 'modal-settings')) return true;
+    await app.evaluate(({ Menu }) => {
+      for (const top of Menu.getApplicationMenu().items) {
+        const item = top.submenu?.items.find((entry) => /^(Settings|Einstellungen)…$/.test(entry.label ?? ''));
+        if (item) { item.click(); return; }
+      }
+    });
+    await pause(500);
+    return shown(page, 'modal-settings');
+  }, { what: 'open settings' });
+  await poll(() => page.evaluate(() => !document.getElementById('btn-settings-save').disabled), { what: 'settings loaded' });
+}
+
 /**
  * The motifs. Each one brings the app into the state it shows and returns the
  * area to shoot (`null` for the whole window). Texts come per language from
  * `text[locale]`, so the German shot shows a German conversation.
+ *
+ * `profile: 'fresh'` starts the app the way it is after installing: no folder,
+ * no model of its own, only the language set. Every other motif starts on the
+ * demo project with the fake model.
  */
 const MOTIFS = {
+  /** The first start: no folder, no usable model, the hint above the composer. */
+  'first-run': {
+    profile: 'fresh',
+    async setUp({ page }) {
+      await poll(() => shown(page, 'chat-hint'), { what: 'hint without a model' });
+      return null;
+    },
+  },
+
+  /**
+   * Settings › Models on the first start: the OpenAI entry the app comes with,
+   * opened with its pencil and given a key. Editing it rather than adding the
+   * same model again is the path that works today (#807).
+   */
+  'connect-model': {
+    profile: 'fresh',
+    async setUp({ app, page }) {
+      await openSettings(app, page);
+      await page.click('[data-edit-preset-id]');
+      await poll(() => shown(page, 'add-model-overlay'), { what: 'open edit-model dialog' });
+      // A placeholder, shown as dots: the field is a password field.
+      await page.fill('#input-api-key', 'sk-example-placeholder-key');
+      // The dialog and a strip of the settings around it: the whole window
+      // would shrink the dialog's text below what a page can show legibly.
+      return page.evaluate(() => {
+        const box = document.getElementById('dialog-add-model').getBoundingClientRect();
+        const margin = 24;
+        return {
+          x: Math.max(0, box.left - margin),
+          y: Math.max(0, box.top - margin),
+          width: box.width + 2 * margin,
+          height: box.height + 2 * margin,
+        };
+      });
+    },
+  },
+
+  /** The folder switcher in the title of the sidebar, opened. */
+  'switch-folder': {
+    async setUp({ page }) {
+      await page.click('#btn-workspace');
+      await poll(() => shown(page, 'folder-history-menu'), { what: 'open folder menu' });
+      // The top left of the window: the menu at a size where it can be read.
+      return { x: 0, y: 0, width: 640, height: 360 };
+    },
+  },
+
   /** The main window: tree, README in the preview, a short answer in the chat. */
   overview: {
     text: {
@@ -134,16 +211,22 @@ async function demoWorkspace(locale) {
   return folder;
 }
 
-async function shootMotif(name, motif, locale, model) {
+/** A profile on the demo project, with the fake model shown as MODEL. */
+async function demoProfile(userDataDir, locale, model) {
   const workspace = await demoWorkspace(locale);
-  const userDataDir = await makeTempDir('snotra-manual-userdata-');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
   const configPath = path.join(userDataDir, 'llm-config.json');
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   config.presets[0].model = MODEL.id;
   config.presets[0].connection.displayName = MODEL.name;
   await writeFile(configPath, JSON.stringify(config), 'utf8');
+}
+
+async function shootMotif(name, motif, locale, model) {
+  const fresh = motif.profile === 'fresh';
+  const userDataDir = await makeTempDir('snotra-manual-userdata-');
+  if (!fresh) await demoProfile(userDataDir, locale, model);
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
 
   const snotra = await launchApp({
     userDataDir,
@@ -158,12 +241,16 @@ async function shootMotif(name, motif, locale, model) {
     }, WINDOW);
     await poll(() => page.evaluate(({ width, height }) => window.innerWidth === width && window.innerHeight === height, WINDOW),
       { what: `window at ${WINDOW.width}×${WINDOW.height}` });
-    await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
-      { what: 'drawn tree' });
+    if (fresh) {
+      await poll(() => shown(page, 'welcome'), { what: 'welcome page' });
+    } else {
+      await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
+        { what: 'drawn tree' });
+    }
 
     const text = motif.text?.[locale] ?? {};
     if (text.title) model.setTitle(text.title);
-    const clip = await motif.setUp({ page, model, text, locale });
+    const clip = await motif.setUp({ app, page, model, text, locale });
 
     for (const theme of THEMES) {
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);

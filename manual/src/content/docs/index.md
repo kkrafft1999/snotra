@@ -13,6 +13,7 @@ This manual explains how to use it: how to get started, how to work with files a
 
 ## Where to start
 
+- **New to Snotra:** [install it](getting-started/install/), [connect a model](getting-started/connect-a-model/) and [open a folder](getting-started/open-a-folder/). The chapter *Getting started* takes you from the download to the first chat.
 - **Download:** the latest release for macOS, Windows and Linux is on the [releases page](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Full feature description:** until every chapter of this manual is written, the [README on GitHub](https://github.com/kkrafft1999/snotra#readme) describes every feature in one place.
 - **Problems and ideas:** report them as an [issue on GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).

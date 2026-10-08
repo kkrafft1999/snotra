@@ -25,6 +25,16 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/kkrafft1999/snotra/edit/main/manual/',
       },
+      // One group per chapter of #777; the pages inside are ordered by their
+      // `sidebar.order`. Starlight finds the German page at the same path.
+      sidebar: [
+        { slug: 'index', label: 'Overview', translations: { de: 'Überblick' } },
+        {
+          label: 'Getting started',
+          translations: { de: 'Erste Schritte' },
+          items: [{ autogenerate: { directory: 'getting-started' } }],
+        },
+      ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {
         SiteTitle: './src/components/SiteTitle.astro',
