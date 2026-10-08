@@ -38,7 +38,7 @@ Jeder Tool-Aufruf gehört zu einer Risikoklasse. Die Klasse entscheidet zusammen
 
 Auch in *Auto*, dem Modus ohne Rückfragen:
 
-- Kein Tool reicht über den geöffneten Ordner hinaus. Lesen geht auch in den Ordnern von Skills, die du eingeschaltet hast; außerhalb lässt sich nichts erlauben.
+- Kein Tool reicht ungefragt über den geöffneten Ordner hinaus. Lesen geht auch in den Ordnern von Skills, die du eingeschaltet hast. [seit 1.18] Will ein Datei-Tool eine Datei oder einen Ordner außerhalb, fragt vorher eine Karte, in jedem Modus, auch in *Auto* — siehe [Eine Freigabe beantworten](../approve-a-request/#eine-datei-außerhalb-des-geöffneten-ordners). Dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks und Snotras eigener Speicher werden nie angeboten.
 - Skill-Ordner bleiben schreibgeschützt.
 - Snotras eigene Einstellungen, Schlüssel und Berechtigungen sind für jedes Tool unerreichbar.
 - Eine Tool-Ausgabe, die einen deiner Anbieter-Schlüssel enthält, wird zurückgehalten.

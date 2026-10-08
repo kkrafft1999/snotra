@@ -66,6 +66,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     readProgramAllowances = null,
     refreshDynamicTools = null,
     fileChangeRecorder = null,
+    // What a card may open outside the open folder (#792, step 4).
+    outsideAccess = null,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =
@@ -81,6 +83,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
           isSandboxDisabled,
           matchProgramAllowance,
           readProgramAllowances,
+          outsideAccess,
         })
       : null;
 
@@ -228,6 +231,9 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       let sandboxBlocked = null;
       const handlerContext = {
         ...context,
+        // What a card opened outside the open folder (#792, step 4), checked
+        // again and turned into the roots fs-service resolves against.
+        outsideRoots: planner ? await planner.outsideRoots(context.outsideGrants) : [],
         onWritten: WRITING_TOOLS.has(name) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
         onSandboxBlocked: (summary) => { sandboxBlocked = summary; },
         sensitivity: BROAD_LISTING_TOOLS.has(name) ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,

@@ -30,6 +30,7 @@ const { createHttpUrlFetchAdapter } = require('../adapters/http-url-fetch-adapte
 const { createPythonRunnerService } = require('../services/python-runner-service');
 const { createShellRunnerService } = require('../services/shell-runner-service');
 const { createSandboxService, sensitiveReadPaths } = require('../services/sandbox-service');
+const { createOutsideAccess } = require('../services/outside-access');
 const { createProgramAllowances } = require('../services/program-allowances-service');
 const { existsSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
@@ -362,6 +363,17 @@ function createApplication({
     // Nur für die Wege, die beim Nutzer enden — Baum, Vorschau, Drag & Drop
     // (#292). Was an das Modell zurückgeht, bleibt englisch.
     getLocale: getAppLocale,
+    // A tool path like `~/notes/todo.md` (#792, step 4).
+    homeDir: os.homedir(),
+  });
+  // What a card may open for the file tools outside the open folder (#792,
+  // step 4): the lines the sandbox cards keep, by realpath as well.
+  const outsideAccess = createOutsideAccess({
+    path,
+    homeDir: os.homedir(),
+    userDataPath: app.getPath('userData'),
+    globalSkillRoots,
+    realPath: (p) => fsService.resolveExistingRealPath(p),
   });
   // Before and after of every write, in memory, for "Show changes" (#348).
   const fileChangeRecorder = createFileChangeRecorder({ fs, maxBytesPerFile: LIMITS.MAX_READ_FILE_BYTES });
@@ -729,6 +741,7 @@ function createApplication({
       path,
       // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
       protectedRoots: [app.getPath('userData')],
+      outsideAccess,
       trashItem: moveToTrash,
       readOwnSecrets: ownSecrets.readOwnSecrets,
       // Die Freigabekarte nennt die Shell, mit der ein Befehl laufen wuerde (#102).

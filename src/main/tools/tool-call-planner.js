@@ -30,6 +30,7 @@ const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 const { createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-access');
 
 /**
  * How much of a preview reaches the card (#551). "Show in full" on the card
@@ -211,6 +212,7 @@ function stableStringify(value) {
  *   the program allowance a shell command gets, or why it does not (#408)
  * @param {() => Promise<object[]>} [deps.readProgramAllowances]
  *   the stored allowances, to notice a change between plan and run (#408)
+ * @param {object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
  */
 function createToolCallPlanner({
   fsService,
@@ -223,6 +225,7 @@ function createToolCallPlanner({
   isSandboxDisabled = null,
   matchProgramAllowance = null,
   readProgramAllowances = null,
+  outsideAccess = null,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
@@ -268,6 +271,60 @@ function createToolCallPlanner({
   }
 
   /**
+   * The grants outside the open folder a call may use (#792, step 4): those
+   * the engine passed — from a card for this call or for the session — that
+   * may still be opened, as the roots fs-service resolves against.
+   */
+  async function usableOutsideRoots(grants) {
+    if (!outsideAccess || !Array.isArray(grants) || grants.length === 0) return [];
+    const usable = [];
+    for (const grant of grants) {
+      if (await outsideAccess.isAllowed(grant, { exact: true })) usable.push(grant);
+    }
+    return outsideRootsFrom(usable, path);
+  }
+
+  /**
+   * A target outside the open folder no card has opened yet (#792, step 4),
+   * with what a card may offer for it — or null when nothing may be offered.
+   */
+  async function outsideTarget({ rawPath, absPath, access, descriptor, matcher }) {
+    if (!outsideAccess) return null;
+    let stat;
+    try {
+      stat = await statTarget(absPath);
+    } catch {
+      return null;
+    }
+    const isDirectory = stat.exists ? stat.isDirectory : descriptor.kind === 'tree';
+    const offers = await outsideAccess.offer({ absPath, isDirectory, access });
+    if (offers.length === 0) return null;
+    let realAbs = absPath;
+    try {
+      realAbs = await fsService.resolveExistingRealPath(absPath);
+    } catch {
+      /* the lexical path, then */
+    }
+    if (isProtected(absPath) || isProtected(realAbs)) return null;
+    const hit = [rawPath, absPath, realAbs].map((p) => matcher.classifyPath(p)).find((h) => h.sensitive);
+    return {
+      path: rawPath.trim(),
+      // Absolute, so that no rule of the open folder reads it as one of its paths.
+      rulePaths: [...new Set([absPath, realAbs].map((p) => p.split(path.sep).join('/')))],
+      kind: descriptor.kind === 'tree' ? 'tree' : isDirectory ? 'directory' : 'file',
+      access,
+      exists: stat.exists,
+      version: stat.version,
+      sensitive: !!hit,
+      ...(hit ? { sensitiveReason: hit.pattern } : {}),
+      absPath,
+      root: null,
+      skillName: null,
+      outside: { offers },
+    };
+  }
+
+  /**
    * @returns {Promise<import('../../application/ports/tool-port').ToolPlan>}
    */
   async function plan(definition, args, context = {}) {
@@ -288,6 +345,7 @@ function createToolCallPlanner({
 
     const workspaceRoot = typeof context.workspaceRoot === 'string' ? context.workspaceRoot : '';
     const skillRoots = Array.isArray(context.skillRoots) ? context.skillRoots : [];
+    const outsideRoots = await usableOutsideRoots(context.outsideGrants);
     const matcher = createSensitivePathMatcher({ userPatterns: context.sensitivePathPatterns });
     await resolveProtectedRoots();
 
@@ -351,6 +409,19 @@ function createToolCallPlanner({
     let hardLimit = null;
     let recovery;
 
+    function applyOverwrite(target, descriptor) {
+      if (descriptor.overwrite !== true || !target.exists || target.kind !== 'file') return;
+      // Vollständiges Überschreiben: nur mit Wiederherstellungskopie
+      // gewöhnliches `write`, sonst `delete` (Konzept §9).
+      if (canTrash && !(context.forcedClasses || []).includes(TOOL_RISK_CLASSES.DELETE)) {
+        target.recovery = RECOVERY_TRASH;
+        recovery = RECOVERY_TRASH;
+      } else {
+        classes.delete(TOOL_RISK_CLASSES.WRITE);
+        classes.add(TOOL_RISK_CLASSES.DELETE);
+      }
+    }
+
     for (const descriptor of descriptors) {
       const rawPath = typeof descriptor.path === 'string' ? descriptor.path : '';
       const access = descriptor.access === 'write' ? 'write' : 'read';
@@ -362,7 +433,30 @@ function createToolCallPlanner({
       // switched-on skill, or as any path into a global skill folder the open
       // folder contains (#650) — fails here as a hard limit and names the
       // place a skill's data belongs to.
-      const resolved = await fsService.resolveToolPath(workspaceRoot, rawPath, { skillRoots, access });
+      const resolved = await fsService.resolveToolPath(workspaceRoot, rawPath, { skillRoots, outsideRoots, access });
+      if (resolved.error && resolved.code === OUTSIDE_WORKSPACE && resolved.absPath) {
+        // Outside the open folder (#792, step 4): a card may offer it, in
+        // every mode. What it may not offer stays a hard limit, and says so.
+        const outside = await outsideTarget({ rawPath, absPath: resolved.absPath, access, descriptor, matcher });
+        if (!outside && !outsideAccess) {
+          return { tool: toolName, error: resolved.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
+        }
+        if (!outside) {
+          return {
+            tool: toolName,
+            error: `${resolved.error} This location cannot be opened for the file tools: the home folder as a whole, `
+              + 'the root of a disk, Snotra\'s own storage, the global skill folders, and for writing places that hold '
+              + 'credentials or shell start-up files stay closed.',
+            reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT,
+            riskClasses: [...classes],
+            targets: [],
+          };
+        }
+        if (outside.sensitive) classes.add(TOOL_RISK_CLASSES.READ_SENSITIVE);
+        applyOverwrite(outside, descriptor);
+        targets.push(outside);
+        continue;
+      }
       if (resolved.error) {
         // Ausbruch aus der Wurzel oder unbekannter Skill: harte Grenze, kein
         // „ask“. Fehlender Arbeitsordner ebenso.
@@ -417,6 +511,8 @@ function createToolCallPlanner({
         absPath: resolved.absPath,
         root: resolved.root,
         skillName: resolved.skillName || null,
+        // Opened on a card (#792): the log and the card say "outside".
+        ...(resolved.outside ? { outsideGranted: true } : {}),
       };
       // The target in the skill's own spelling (#427): an absolute path into
       // a skill folder shows up in the log like a `skill:` path.
@@ -428,17 +524,7 @@ function createToolCallPlanner({
         target.sensitiveReason = (logicalHit.sensitive ? logicalHit : realHit).pattern;
         classes.add(TOOL_RISK_CLASSES.READ_SENSITIVE);
       }
-      if (descriptor.overwrite === true && stat.exists && !stat.isDirectory) {
-        // Vollständiges Überschreiben: nur mit Wiederherstellungskopie
-        // gewöhnliches `write`, sonst `delete` (Konzept §9).
-        if (canTrash && !(context.forcedClasses || []).includes(TOOL_RISK_CLASSES.DELETE)) {
-          target.recovery = RECOVERY_TRASH;
-          recovery = RECOVERY_TRASH;
-        } else {
-          classes.delete(TOOL_RISK_CLASSES.WRITE);
-          classes.add(TOOL_RISK_CLASSES.DELETE);
-        }
-      }
+      applyOverwrite(target, descriptor);
       targets.push(target);
     }
 
@@ -465,6 +551,8 @@ function createToolCallPlanner({
     });
 
     const result = { tool: toolName, riskClasses, targets, planKey };
+    // Targets outside the open folder no card has opened yet (#792, step 4).
+    if (targets.some((target) => target.outside)) result.outside = true;
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
     if (EXECUTION_TOOLS.has(toolName)) {
@@ -616,7 +704,7 @@ function createToolCallPlanner({
     return !!entry && stableStringify(entry) === granted.entryKey;
   }
 
-  return { plan, verifyTargets, validateArguments, buildPreview };
+  return { plan, verifyTargets, validateArguments, buildPreview, outsideRoots: usableOutsideRoots };
 }
 
 

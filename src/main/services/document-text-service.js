@@ -22,7 +22,10 @@ function createDocumentTextService({ fs, fsService, extractor, maxBytes = MAX_DO
       return JSON.stringify({ error: 'start_character must be a whole number from 0.' });
     }
 
-    const { absPath, error } = await fsService.resolveToolPath(workspaceRoot, rel, { skillRoots: options.skillRoots });
+    const { absPath, error } = await fsService.resolveToolPath(workspaceRoot, rel, {
+      skillRoots: options.skillRoots,
+      outsideRoots: options.outsideRoots,
+    });
     if (error) return JSON.stringify({ error });
     let read;
     try {

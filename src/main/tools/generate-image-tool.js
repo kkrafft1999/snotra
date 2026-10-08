@@ -99,7 +99,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
     if (signal) imagesPerRun.set(signal, Math.max(0, countedImages(signal) - 1));
   }
 
-  async function handler(args, { workspaceRoot, abortSignal, recovery, onWritten } = {}) {
+  async function handler(args, { workspaceRoot, outsideRoots, abortSignal, recovery, onWritten } = {}) {
     if (!imageGeneration) {
       return JSON.stringify({ error: 'Image generation is not available in this installation.' });
     }
@@ -149,7 +149,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
       }
     }
 
-    const written = await fsService.writeBinaryFileForTool(rel, image.bytes, workspaceRoot, { recovery, onWritten });
+    const written = await fsService.writeBinaryFileForTool(rel, image.bytes, workspaceRoot, { outsideRoots, recovery, onWritten });
     if (written.error) {
       if (written.code === 'recovery_failed') holdImage(key, image);
       return JSON.stringify(written);

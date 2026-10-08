@@ -7812,6 +7812,10 @@ select.modal-input {
   margin-left: 6px;
   font-size: var(--ds-font-size-sm);
   color: var(--text-muted-strong);
+  /* The path before it may break anywhere; words of the hint only at spaces —
+     `.chat-msg` sets `word-break: break-word`, which would split them too. */
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 /* Decided: the choice stays readable, but nothing invites a click. */

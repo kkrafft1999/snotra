@@ -9,7 +9,7 @@ import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
 import { t, tPlural } from '../i18n.js';
 
-const { normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive } = contracts;
+const { normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside } = contracts;
 
 const SHIELD_OFF_ICON_HTML =
   '<svg class="chat-sandbox-blocked-icon" viewBox="0 0 16 16" aria-hidden="true">'
@@ -21,8 +21,9 @@ const USER_DENIED_REASON = 'user denied';
 const NO_ENTRIES = Object.freeze({ entries: [], moreEntries: 0, total: 0, raw: [] });
 
 /**
- * The runs of a trace that the sandbox refused something in, or held a
- * connection of until the user decided (#792), in order.
+ * The runs of a trace that the sandbox refused something in, held a
+ * connection of until the user decided, or asked about before a file tool
+ * reached outside the open folder (#792), in order.
  */
 export function blockedRunsOf(trace) {
   if (!Array.isArray(trace)) return [];
@@ -32,15 +33,42 @@ export function blockedRunsOf(trace) {
     const live = normalizeSandboxLive(entry?.sandboxLive) || [];
     // A denied connection is among the refusals already; the allowed ones are not.
     const allowed = live.filter((d) => d.outcome === 'allowed');
-    if (!blocked && allowed.length === 0) continue;
+    const outside = normalizeSandboxOutside(entry?.sandboxOutside) || [];
+    if (!blocked && allowed.length === 0 && outside.length === 0) continue;
     runs.push({
       line: toolLineText(entry),
       blocked: blocked || NO_ENTRIES,
       decision: blocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null,
       allowed,
+      outside,
     });
   }
   return runs;
+}
+
+/** A path outside the open folder the user was asked about before the call (#792, step 4), as one line. */
+function buildOutsideEntry(decision, homeDir) {
+  const item = document.createElement('li');
+  item.className = 'chat-sandbox-blocked-entry';
+  item.dataset.kind = decision.kind;
+  item.dataset.outcome = decision.outcome;
+  const kind = document.createElement('span');
+  kind.className = 'chat-sandbox-blocked-kind';
+  kind.textContent = t(`toolLog.sandbox.kind.${decision.kind}`);
+  const target = document.createElement('span');
+  target.className = 'chat-sandbox-blocked-target';
+  const shown = sandboxPath(decision.target, homeDir);
+  target.textContent = decision.outcome === 'allowed' && decision.pattern !== decision.target
+    ? `${shown} · ${sandboxPath(decision.pattern, homeDir)}`
+    : shown;
+  if (target.textContent !== decision.target) target.title = decision.target;
+  const reason = document.createElement('span');
+  reason.className = 'chat-sandbox-blocked-reason';
+  reason.textContent = t(decision.outcome === 'allowed'
+    ? `toolLog.sandbox.outside.${decision.duration}`
+    : 'toolLog.sandbox.outside.denied');
+  item.append(kind, target, reason);
+  return item;
 }
 
 function reasonOf(entry) {
@@ -122,6 +150,7 @@ function buildRun(run, homeDir, { withLine }) {
     list.append(more);
   }
   for (const decision of run.allowed || []) list.append(buildAllowedEntry(decision));
+  for (const decision of run.outside || []) list.append(buildOutsideEntry(decision, homeDir));
   part.append(list);
   if (run.decision) {
     const decision = document.createElement('p');
@@ -171,6 +200,7 @@ export function buildSandboxBlockedBox(runs, { homeDir = '' } = {}) {
 
   const resources = runs.reduce((sum, run) => sum + run.blocked.entries.length + run.blocked.moreEntries, 0);
   const asked = runs.reduce((sum, run) => sum + (run.allowed?.length || 0), 0);
+  const outside = runs.reduce((sum, run) => sum + (run.outside?.length || 0), 0);
   const title = document.createElement('p');
   title.className = 'chat-sandbox-blocked-title';
   title.id = titleId;
@@ -180,7 +210,9 @@ export function buildSandboxBlockedBox(runs, { homeDir = '' } = {}) {
   // Nothing refused, only connections let through on the card (#792).
   heading.textContent = resources > 0
     ? tPlural('toolLog.sandbox.title', resources, { count: resources })
-    : tPlural('toolLog.sandbox.titleAllowed', asked, { count: asked });
+    : asked > 0
+      ? tPlural('toolLog.sandbox.titleAllowed', asked, { count: asked })
+      : tPlural('toolLog.sandbox.titleOutside', outside, { count: outside });
   title.append(heading);
   const context = document.createElement('span');
   context.className = 'chat-sandbox-blocked-context';

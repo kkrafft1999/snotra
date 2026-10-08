@@ -359,9 +359,10 @@ export function initToolApprovalCards({
 
     const headline = el('p', 'chat-approval-card__headline');
     headline.id = domId(requestId, 'headline');
-    for (const part of view.headline.template.split(/(\{command\}|\{host\})/)) {
+    for (const part of view.headline.template.split(/(\{command\}|\{host\}|\{tool\})/)) {
       if (part === '{command}') headline.appendChild(code(view.headline.command));
       else if (part === '{host}') headline.appendChild(code(view.headline.host, 'en'));
+      else if (part === '{tool}') headline.appendChild(code(view.headline.tool, 'en'));
       else if (part) headline.append(part);
     }
     card.appendChild(headline);
@@ -377,7 +378,8 @@ export function initToolApprovalCards({
       if (item.detail) li.appendChild(el('span', 'chat-approval-card__blocked-detail', item.detail));
       blocked.appendChild(li);
     }
-    fact(facts, t('approval.sandbox.fact.blocked'), blocked);
+    // Before a call (#792, step 4) nothing was blocked yet: it is the call's target.
+    fact(facts, t(view.before ? 'approval.sandbox.fact.target' : 'approval.sandbox.fact.blocked'), blocked);
     if (view.others.length) {
       const others = el('ul', 'chat-approval-card__blocked');
       for (const other of view.others) {
@@ -390,17 +392,44 @@ export function initToolApprovalCards({
       fact(facts, t('approval.sandbox.fact.others'), others);
     }
     if (view.command) fact(facts, t('approval.sandbox.fact.command'), code(view.command));
-    const run = el('span', 'chat-approval-card__run', view.run);
-    fact(facts, t('approval.sandbox.fact.run'), run);
-    if (view.live) tickWaiting(card, entry, view, run);
+    if (!view.before) {
+      const run = el('span', 'chat-approval-card__run', view.run);
+      fact(facts, t('approval.sandbox.fact.run'), run);
+      if (view.live) tickWaiting(card, entry, view, run);
+    }
     if (view.domains.length) {
       const open = el('span', 'chat-approval-card__domains');
       for (const domain of view.domains) open.appendChild(code(domain, 'en'));
       fact(facts, t('approval.sandbox.fact.open'), open);
     }
     fact(facts, t('approval.fact.reason'), view.reason);
+    if (view.note) fact(facts, t('approval.sandbox.fact.note'), view.note);
     card.appendChild(facts);
 
+    // Before a call nothing has run: the preview of what a write would do,
+    // as on the card it stands in for, and no output or sandbox line.
+    if (view.before) {
+      const accessView = buildApprovalCardView(entry.dto, { homeDir: readHomeDir() });
+      const preview = accessView?.preview ? buildPreview(accessView) : null;
+      if (preview) card.appendChild(preview);
+    } else {
+      appendReports(card, view);
+    }
+
+    appendChoices(card, requestId, view);
+    if (view.warning) card.appendChild(el('p', 'chat-approval-card__warning', view.warning));
+
+    const { actions } = buildActions(view, requestId);
+    card.appendChild(actions);
+    const status = el('p', 'chat-approval-card__status', t('approval.status.waiting'));
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    card.appendChild(status);
+    return finishSandboxCard(card, requestId, view, actions);
+  }
+
+  /** What the command reported, and the raw sandbox lines, folded. */
+  function appendReports(card, view) {
     const output = el('details', 'chat-approval-card__preview chat-approval-card__report');
     output.open = true;
     output.appendChild(el('summary', null, view.outputLabel));
@@ -420,7 +449,10 @@ export function initToolApprovalCards({
       raw.appendChild(scrolling(view.raw));
       card.appendChild(raw);
     }
+  }
 
+  /** Which path or host to open per resource, and for how long. */
+  function appendChoices(card, requestId, view) {
     view.entries.forEach((item, i) => {
       if (item.options.length < 2) return;
       // The path in the legend only tells several resources apart; for one,
@@ -429,16 +461,10 @@ export function initToolApprovalCards({
       card.appendChild(radioGroup(requestId, `scope-${i}`, legend, item.options.map((option) => ({ ...option, code: true }))));
     });
     if (view.durations.length) card.appendChild(radioGroup(requestId, 'duration', t('approval.sandbox.duration.legend'), view.durations));
+  }
 
-    card.appendChild(el('p', 'chat-approval-card__warning', view.warning));
-
-    const { actions } = buildActions(view, requestId);
-    card.appendChild(actions);
-    const status = el('p', 'chat-approval-card__status', t('approval.status.waiting'));
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    card.appendChild(status);
-
+  /** The answer: the chosen path per resource, once or for the session. */
+  function finishSandboxCard(card, requestId, view, actions) {
     actions.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-response]');
       if (!button || button.disabled) return;
@@ -600,7 +626,7 @@ export function initToolApprovalCards({
   function applyOutcome(card, entry) {
     const resolved = { ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true };
     const outcome = (entry.dto?.checkpoint === 'sandbox'
-      && describeSandboxOutcome(resolved, { live: entry.dto.sandbox?.live === true }))
+      && describeSandboxOutcome(resolved, { live: entry.dto.sandbox?.live === true, before: entry.dto.sandbox?.before === true }))
       || describeApprovalOutcome(resolved);
     // A decided card about a waiting connection (#792) says how long it
     // waited, not that the command is still running. Taken once, so that a
