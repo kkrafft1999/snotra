@@ -23,7 +23,7 @@ Später wechselst du, indem du oben in der Seitenleiste auf den Namen des Ordner
 ## Was dann passiert
 
 - Links erscheint der **Dateibaum** des Ordners. Versteckte Dateien wie `.gitignore` bleiben ausgeblendet, bis du sie mit `Cmd+Shift+.` / `Strg+Shift+.` einblendest.
-- Hat der Ordner eine `README.md`, öffnet sie sich in der **mittleren Spalte**. Sonst bleibt dort die Willkommensseite.
+- Hat der Ordner eine `README.md`, öffnet sie sich in der **mittleren Spalte**. Sonst bleibt die mittlere Spalte zu, und der Chat bekommt den Platz — siehe [Dich im Fenster zurechtfinden](../../workspace/the-window/).
 - Der **Chat** rechts begrüßt dich mit dem Namen des Ordners. Ab jetzt arbeitet er in diesem Ordner.
 - Snotra merkt sich den Ordner und öffnet ihn beim nächsten Start wieder.
 

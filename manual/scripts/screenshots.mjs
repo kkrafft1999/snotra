@@ -274,6 +274,114 @@ function gardenPlan() {
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+/** Clicks the row of the file tree whose name is `name`. */
+async function clickTreeRow(page, name) {
+  await poll(() => page.evaluate((label) => {
+    const row = [...document.querySelectorAll('#tree-container .tree-item')]
+      .find((item) => item.getAttribute('aria-label') === label);
+    if (!row) return false;
+    row.click();
+    return true;
+  }, name), { what: `tree row ${name}` });
+}
+
+/**
+ * The middle column, down to the end of what it shows: a short file leaves no
+ * empty column below it in the picture.
+ */
+function clipPreview(page, height = null) {
+  return page.evaluate((fixed) => {
+    const column = document.getElementById('file-preview').getBoundingClientRect();
+    if (fixed) return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, fixed) };
+    // The text and the pictures in it, not the boxes: a view fills the column.
+    const body = document.getElementById('preview-body');
+    let bottom = 0;
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const box = range.getBoundingClientRect();
+      if (box.height > 0) bottom = Math.max(bottom, box.bottom);
+    }
+    for (const picture of body.querySelectorAll('img, canvas, svg')) {
+      bottom = Math.max(bottom, picture.getBoundingClientRect().bottom);
+    }
+    return { x: column.left, y: column.top, width: column.width, height: Math.min(column.bottom, bottom + 24) - column.top };
+  }, height);
+}
+
+/**
+ * An HTML file is shown in a view of its own, laid over the window, which a
+ * screenshot of the window does not see. Its picture is taken separately and
+ * put where the view sits.
+ */
+async function withHtmlView(app, png, clip) {
+  const view = await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    const v = win.contentView.children.find((child) => child.webContents?.getURL().startsWith('snotra-html:'));
+    if (!v || !v.getVisible()) return null;
+    const image = await v.webContents.capturePage();
+    return { data: image.toPNG().toString('base64'), bounds: v.getBounds() };
+  });
+  if (!view) throw new Error('the HTML preview is not on screen');
+  const origin = clip ?? { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height };
+  const scale = WINDOW.scale;
+  const left = Math.max(view.bounds.x, origin.x);
+  const top = Math.max(view.bounds.y, origin.y);
+  const right = Math.min(view.bounds.x + view.bounds.width, origin.x + origin.width);
+  const bottom = Math.min(view.bounds.y + view.bounds.height, origin.y + origin.height);
+  const overlay = await sharp(Buffer.from(view.data, 'base64'))
+    .resize(Math.round(view.bounds.width * scale), Math.round(view.bounds.height * scale))
+    .extract({
+      left: Math.round((left - view.bounds.x) * scale),
+      top: Math.round((top - view.bounds.y) * scale),
+      width: Math.round((right - left) * scale),
+      height: Math.round((bottom - top) * scale),
+    })
+    .png().toBuffer();
+  return sharp(png).composite([{
+    input: overlay,
+    left: Math.round((left - origin.x) * scale),
+    top: Math.round((top - origin.y) * scale),
+  }]).png().toBuffer();
+}
+
+/** A small page for the HTML preview: the sowing calendar as a table. */
+function sowingCalendarPage(locale) {
+  const de = locale === 'de';
+  const rows = de
+    ? [['Möhre', 'März – Juli', 'Südbeet'], ['Salat', 'März – August', 'Nordbeet'], ['Radieschen', 'März – September', 'Nordbeet'], ['Bohne', 'Mai – Juli', 'Südbeet']]
+    : [['Carrot', 'March – July', 'South bed'], ['Lettuce', 'March – August', 'North bed'], ['Radish', 'March – September', 'North bed'], ['Bean', 'May – July', 'South bed']];
+  const head = de ? ['Pflanze', 'Aussaat', 'Beet'] : ['Plant', 'Sowing', 'Bed'];
+  return `<!doctype html>
+<html lang="${locale}">
+<head>
+<meta charset="utf-8">
+<title>${de ? 'Aussaatkalender 2026' : 'Sowing calendar 2026'}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces">
+<style>
+  body { margin: 0; padding: 32px 36px; font: 15px/1.5 Georgia, serif; background: #f6efe2; color: #3b2f22; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  p { margin: 0 0 20px; color: #6b5a45; }
+  table { border-collapse: collapse; width: 100%; background: #fffaf0; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e3d6bf; }
+  th { background: #7a5638; color: #fffaf0; font-weight: normal; }
+  tr:nth-child(even) td { background: #f9f1e3; }
+</style>
+</head>
+<body>
+<h1>${de ? 'Aussaatkalender 2026' : 'Sowing calendar 2026'}</h1>
+<p>${de ? 'Erstellt aus pflanzen.csv und beete.json.' : 'Built from plants.csv and beds.json.'}</p>
+<table>
+<tr>${head.map((cell) => `<th>${cell}</th>`).join('')}</tr>
+${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('\n')}
+</table>
+</body>
+</html>
+`;
+}
+
 /**
  * The motifs. Each one brings the app into the state it shows and returns the
  * area to shoot (`null` for the whole window). Texts come per language from
@@ -577,6 +685,91 @@ const MOTIFS = {
     },
   },
 
+  /** The filter above the tree, with what matches the typed letters. */
+  'tree-filter': {
+    text: { en: { typed: 'cal' }, de: { typed: 'kal' } },
+    async setUp({ app, page, text }) {
+      await app.evaluate(({ Menu, BrowserWindow }) => {
+        const find = (items) => {
+          for (const item of items) {
+            if (item.accelerator === 'CmdOrCtrl+P') return item;
+            const inner = item.submenu && find(item.submenu.items);
+            if (inner) return inner;
+          }
+          return null;
+        };
+        find(Menu.getApplicationMenu().items).click(undefined, BrowserWindow.getAllWindows()[0]);
+      });
+      await poll(() => page.evaluate(() => !document.getElementById('tree-filter').hidden), { what: 'filter field' });
+      // The folder's paths load after the start: type again until it matches.
+      await poll(async () => {
+        await page.fill('#tree-filter-input', '');
+        await page.click('#tree-filter-input');
+        await page.keyboard.type(text.typed);
+        await pause(400);
+        return page.evaluate(() => document.querySelectorAll('.tree-filter-option').length > 0);
+      }, { what: 'matches in the filter' });
+      await pause(300);
+      return { x: 0, y: 0, width: 640, height: 360 };
+    },
+  },
+
+  /** The ⋯ menu in the header of the tree. */
+  'tree-actions': {
+    async setUp({ page }) {
+      await page.click('#btn-tree-actions');
+      await poll(() => page.evaluate(() => {
+        const menu = document.getElementById('tree-actions-menu');
+        return Boolean(menu) && !menu.hidden && !menu.classList.contains('hidden');
+      }), { what: 'tree actions menu' });
+      return { x: 0, y: 0, width: 640, height: 360 };
+    },
+  },
+
+  /** A source file in the preview, with syntax highlighting. */
+  'code-preview': {
+    text: { en: { folder: 'src', file: 'calendar.js' }, de: { folder: 'src', file: 'kalender.js' } },
+    async setUp({ page, text }) {
+      await clickTreeRow(page, text.folder);
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate((name) => (document.getElementById('preview-filename')?.textContent ?? '').includes(name)
+        && Boolean(document.querySelector('#preview-body .syntax-keyword')), text.file), { what: 'highlighted source' });
+      await page.mouse.move(0, 0);
+      return clipPreview(page);
+    },
+  },
+
+  /** An image in the preview, with the zoom in its header. */
+  'image-preview': {
+    text: { en: { file: 'garden-plan.png' }, de: { file: 'gartenplan.png' } },
+    async setUp({ page, text, workspace }) {
+      await writeFile(path.join(workspace, text.file), await gardenPlan());
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => {
+        const img = document.querySelector('#preview-body img');
+        return Boolean(img && img.complete && img.naturalWidth > 0);
+      }), { what: 'image in the preview' });
+      await page.mouse.move(0, 0);
+      return clipPreview(page);
+    },
+  },
+
+  /** An HTML page in the preview, offline, with the notice of what it blocked. */
+  'html-preview': {
+    htmlView: true,
+    text: { en: { file: 'sowing-calendar.html' }, de: { file: 'aussaatkalender.html' } },
+    async setUp({ page, text, locale, workspace }) {
+      await writeFile(path.join(workspace, text.file), sowingCalendarPage(locale), 'utf8');
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => /1/.test(document.querySelector('#preview-body')?.textContent ?? '')
+        && Boolean(document.querySelector('#preview-body [class*="blocked"]'))), { what: 'page with its blocked request', timeoutMs: 20000 });
+      await pause(800);
+      await page.mouse.move(0, 0);
+      // The page fills the column; the picture ends below its table.
+      return clipPreview(page, 520);
+    },
+  },
+
   /** The history column next to the chat, with three chats of the folder. */
   history: {
     text: {
@@ -680,13 +873,13 @@ async function demoProfile(userDataDir, locale, model, configure) {
   config.presets[0].connection.displayName = MODEL.name;
   configure?.(config);
   await writeFile(configPath, JSON.stringify(config), 'utf8');
-  return config;
+  return { config, workspace };
 }
 
 async function shootMotif(name, motif, locale, model) {
   const fresh = motif.profile === 'fresh';
   const userDataDir = await makeTempDir('snotra-manual-userdata-');
-  const config = fresh ? null : await demoProfile(userDataDir, locale, model, motif.configure);
+  const { config, workspace } = fresh ? {} : await demoProfile(userDataDir, locale, model, motif.configure);
   await writeFile(path.join(userDataDir, 'ui-preferences.json'),
     JSON.stringify({ ...motif.prefs, appLocale: locale }), 'utf8');
 
@@ -712,13 +905,14 @@ async function shootMotif(name, motif, locale, model) {
 
     const text = motif.text?.[locale] ?? {};
     if (text.title) model.setTitle(text.title);
-    const clip = await motif.setUp({ app, page, model, text, locale, config });
+    const clip = await motif.setUp({ app, page, model, text, locale, config, workspace });
 
     for (const theme of THEMES) {
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
       // Two frames for the theme's transitions to settle before the shot.
       await pause(400);
-      const png = await page.screenshot(clip ? { clip } : {});
+      let png = await page.screenshot(clip ? { clip } : {});
+      if (motif.htmlView) png = await withHtmlView(app, png, clip);
       const target = path.join(OUT_DIR, `${name}.${locale}.${theme}.webp`);
       const { width, height, size } = await sharp(png).webp(WEBP).toFile(target);
       console.log(`  ${path.relative(MANUAL_DIR, target)}  ${width}×${height}  ${Math.round(size / 1024)} KB`);
