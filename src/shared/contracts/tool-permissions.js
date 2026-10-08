@@ -546,6 +546,8 @@ function createToolApprovalRequestDto({
   chatId,
   alwaysAllowed,
   alwaysUnavailableReason,
+  checkpoint,
+  sandbox,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   const dto = {
@@ -570,6 +572,11 @@ function createToolApprovalRequestDto({
   // that is not on screen, and the renderer holds it until that chat is open.
   if (typeof chatId === 'string' && chatId) dto.chatId = chatId.slice(0, 128);
   if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
+  // Which question the card asks (#792): before a call, about its output, or
+  // after a run the sandbox refused something in.
+  if (APPROVAL_CHECKPOINTS.includes(checkpoint)) dto.checkpoint = checkpoint;
+  const sandboxView = checkpoint === 'sandbox' ? sanitizeSandboxApproval(sandbox) : null;
+  if (sandboxView) dto.sandbox = sandboxView;
   // "Always allow this command in this workspace" (#121): whether the card
   // offers it, and if not, why. The rule itself stays in main.
   if (alwaysAllowed === true) dto.alwaysAllowed = true;
@@ -618,6 +625,53 @@ function createToolApprovalRequestDto({
     if (isolation) dto.preview.isolation = isolation;
   }
   return dto;
+}
+
+const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox']);
+const SANDBOX_CARD_LIMITS = Object.freeze({ ENTRIES: 10, OPTIONS: 2, OTHERS: 10, RAW: 20, PATH: 1024, COMMAND: 4000, OUTPUT: 4000 });
+
+/**
+ * What a sandbox card shows (#792): the command, how its run went, what it
+ * reported, the resources the card may open — each with the paths it may
+ * choose among — and what was refused that cannot be opened. Cut to size;
+ * an entry without a usable option is dropped.
+ */
+function sanitizeSandboxApproval(sandbox) {
+  if (!sandbox || typeof sandbox !== 'object' || !Array.isArray(sandbox.entries)) return null;
+  const L = SANDBOX_CARD_LIMITS;
+  const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  const entries = [];
+  for (const raw of sandbox.entries) {
+    if (entries.length >= L.ENTRIES) break;
+    if (!raw || (raw.kind !== 'write' && raw.kind !== 'read')) continue;
+    const allow = stringList(raw.allow, L.OPTIONS, L.PATH);
+    const target = text(raw.target, L.PATH);
+    if (!target || allow.length === 0) continue;
+    entries.push({
+      kind: raw.kind,
+      target,
+      count: Number.isSafeInteger(raw.count) && raw.count > 0 ? raw.count : 1,
+      folder: raw.folder === true,
+      allow,
+    });
+  }
+  if (entries.length === 0) return null;
+  const run = sandbox.run && typeof sandbox.run === 'object' ? sandbox.run : {};
+  return {
+    command: text(sandbox.command, L.COMMAND),
+    run: {
+      exitCode: Number.isInteger(run.exitCode) ? run.exitCode : null,
+      durationMs: Number.isFinite(run.durationMs) && run.durationMs >= 0 ? Math.round(run.durationMs) : null,
+      timedOut: run.timedOut === true,
+    },
+    output: text(sandbox.output, L.OUTPUT),
+    entries,
+    others: (Array.isArray(sandbox.others) ? sandbox.others : [])
+      .filter((o) => o && ['write', 'read', 'network', 'direct'].includes(o.kind) && typeof o.target === 'string' && o.target)
+      .slice(0, L.OTHERS)
+      .map((o) => ({ kind: o.kind, target: o.target.slice(0, L.PATH) })),
+    raw: stringList(sandbox.raw, L.RAW, L.PATH),
+  };
 }
 
 function stringList(value, maxItems, maxChars) {
@@ -670,13 +724,23 @@ function isToolApprovalRequestDto(value) {
   );
 }
 
-/** Antwort des Renderers auf eine Anfrage: nur ID und Entscheidung, nie Argumente. */
+/**
+ * Antwort des Renderers auf eine Anfrage: nur ID und Entscheidung, nie
+ * Argumente — and on a sandbox card (#792), which of the offered paths each
+ * resource is opened at. Main checks them against what the card offered.
+ */
 function normalizeToolApprovalResponse(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const requestId = typeof raw.requestId === 'string' ? raw.requestId.trim() : '';
   const response = normalizeApprovalResponse(raw.response);
   if (!requestId || requestId.length > 128 || !response) return null;
-  return { requestId, response };
+  const out = { requestId, response };
+  if (Array.isArray(raw.sandboxPaths)) {
+    out.sandboxPaths = raw.sandboxPaths
+      .slice(0, SANDBOX_CARD_LIMITS.ENTRIES)
+      .map((p) => (typeof p === 'string' ? p.slice(0, SANDBOX_CARD_LIMITS.PATH) : ''));
+  }
+  return out;
 }
 
 /**
@@ -749,5 +813,7 @@ module.exports = {
   createToolApprovalRequestDto,
   isToolApprovalRequestDto,
   normalizeToolApprovalResponse,
+  sanitizeSandboxApproval,
+  APPROVAL_CHECKPOINTS,
   createPermissionAuditEntry,
 };

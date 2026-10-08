@@ -69,9 +69,15 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
    * Legt eine Freigabe an. Liefert null, wenn die Klassen nicht sitzungsweise
    * freigebbar sind (delete/execute/external nur einmalig, Konzept §6).
    */
-  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null, scope = null } = {}) {
+  function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null, scope = null, sandbox = null } = {}) {
     const classes = sessionGrantableClasses(riskClasses);
     if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
+    // A folder or path a sandbox card opened for the session (#792). It does
+    // not allow a tool call; the shell and Python runs of the chat get it.
+    const sandboxGrant = sandbox && (sandbox.kind === 'write' || sandbox.kind === 'read')
+      && typeof sandbox.path === 'string' && sandbox.path
+      ? { kind: sandbox.kind, path: sandbox.path }
+      : null;
     const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
     const entry = {
       id: nextId(),
@@ -86,6 +92,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
       providerKey: sensitive ? providerKey ?? null : null,
       // For display only (#447): the card's sentence, a message object.
       scope: isMessage(scope) ? scope : null,
+      ...(sandboxGrant ? { sandbox: sandboxGrant } : {}),
       grantedAt: now(),
     };
     grants.push(entry);
@@ -100,6 +107,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     const targetKey = pathsKey(targets);
     const wantsSensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
     for (const entry of grants) {
+      if (entry.sandbox) continue;
       if (entry.scopeKey !== scopeKey || entry.tool !== tool || entry.targetKey !== targetKey) continue;
       if (!classes.every((cls) => entry.classes.includes(cls))) continue;
       if (wantsSensitive) {
@@ -163,6 +171,21 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     return grants.length;
   }
 
+  /**
+   * What sandbox cards opened for the rest of a session (#792): the folders
+   * a run may write in and the protected paths it may read, for every shell
+   * and Python run under this scope.
+   */
+  function sandboxPaths(scopeKey) {
+    const writePaths = new Set();
+    const readPaths = new Set();
+    for (const entry of grants) {
+      if (!entry.sandbox || entry.scopeKey !== scopeKey) continue;
+      (entry.sandbox.kind === 'read' ? readPaths : writePaths).add(entry.sandbox.path);
+    }
+    return { writePaths: [...writePaths], readPaths: [...readPaths] };
+  }
+
   /** Called whenever the set of approvals changes; returns the unsubscribe. */
   function onChange(listener) {
     if (typeof listener !== 'function') return () => {};
@@ -170,7 +193,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     return () => listeners.delete(listener);
   }
 
-  return { grant, find, clear, clearScope, clearChat, retainChats, revoke, list, count, onChange };
+  return { grant, find, clear, clearScope, clearChat, retainChats, revoke, list, count, onChange, sandboxPaths };
 }
 
 function defaultIdFactory() {

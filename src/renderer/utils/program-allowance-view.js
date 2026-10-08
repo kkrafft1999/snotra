@@ -14,6 +14,17 @@ export function tildePath(value, homeDir = '') {
   return value.startsWith(`${homeDir}/`) ? `~${value.slice(homeDir.length)}` : value;
 }
 
+/**
+ * `~/…` for a path the sandbox reported (#792). Seatbelt reports the
+ * resolved path, so a home under `/var` or `/tmp` (macOS links them into
+ * `/private`) comes back as `/private/var/…`.
+ */
+export function sandboxPath(target, homeDir = '') {
+  const shown = tildePath(target, homeDir);
+  if (shown !== target || !/^\/(var|tmp)\//.test(homeDir)) return shown;
+  return tildePath(target, `/private${homeDir}`);
+}
+
 /** File name of a program path. */
 export function programLabel(programPath) {
   return typeof programPath === 'string' ? programPath.split('/').pop() || programPath : '';

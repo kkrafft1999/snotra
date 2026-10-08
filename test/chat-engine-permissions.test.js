@@ -766,3 +766,163 @@ test('a wider answer than the card offered still counts as once (#532)', async (
   assert.equal(result.toolTrace[0].permission.source, 'allow-once');
   assert.equal(grants.count(), 0);
 });
+
+// ── The sandbox card after a run (#792) ─────────────────────────────────────
+
+const CACHE = '/home/u/.cache/prisma/engines';
+function blockedRun({ exitCode = 1, allow = [CACHE, '/home/u/.cache/prisma'], kind = 'write', target = CACHE } = {}) {
+  return {
+    output: JSON.stringify({ stdout: '', stderr: 'EPERM\n\n<sandbox_blocked>\n…\n</sandbox_blocked>\n', exit_code: exitCode, duration_ms: 2400 }),
+    progressEvents: [],
+    sandboxBlocked: {
+      entries: [{ kind, target, count: 1, operations: ['file-write-create'], ...(allow ? { allow } : {}) }],
+      moreEntries: 0,
+      total: 1,
+      raw: [`node(1) deny(1) file-write-create ${target}`],
+    },
+  };
+}
+const okRun = () => ({ output: JSON.stringify({ stdout: 'done', stderr: '', exit_code: 0, duration_ms: 900 }), progressEvents: [] });
+const sandboxRequests = (approvals) => approvals.requests.filter((r) => r.checkpoint === 'sandbox');
+const toolMessageOf = (llm) => llm.calls.at(-1).messages.find((m) => m.role === 'tool');
+
+test('sandbox card: asks even in Auto, then runs the command again with the folder it opened', async () => {
+  const approvals = makeApprovals((request) => {
+    assert.equal(request.checkpoint, 'sandbox');
+    assert.equal(request.mode, 'auto');
+    assert.deepEqual(request.riskClasses, ['write']);
+    assert.equal(request.sessionAllowed, true);
+    assert.deepEqual(request.sandbox.entries, [{ kind: 'write', target: CACHE, count: 1, folder: false, allow: [CACHE, '/home/u/.cache/prisma'] }]);
+    assert.deepEqual(request.sandbox.run, { exitCode: 1, durationMs: 2400, timedOut: false });
+    assert.equal(request.sandbox.output, 'EPERM', 'the sandbox block itself is not the command\'s report');
+    return { response: 'allow-once', sandboxPaths: ['/home/u/.cache/prisma'] };
+  });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? blockedRun() : okRun()) });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'npx prisma generate' }), assistantText('fertig')]);
+  const { engine } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy({ mode: 'auto' }) });
+
+  const result = await send(engine);
+
+  assert.equal(result.content, 'fertig');
+  assert.equal(sandboxRequests(approvals).length, 1);
+  assert.equal(tools.calls.length, 2, 'once, and once again after the card');
+  assert.equal(tools.calls[0].context.sandboxGrants, null);
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: ['/home/u/.cache/prisma'], readPaths: [] });
+  const entry = result.toolTrace[0];
+  assert.equal(entry.sandboxBlocked.entries[0].target, CACHE, 'the row keeps what the card asked about');
+  assert.deepEqual(entry.sandboxDecision, {
+    outcome: 'allowed', duration: 'run', paths: [{ kind: 'write', path: '/home/u/.cache/prisma' }], retry: { exitCode: 0 },
+  });
+  assert.equal(entry.permission.status, 'executed', 'the card did not leave the row waiting');
+  const output = JSON.parse(toolMessageOf(llm).content);
+  assert.equal(output.stdout, 'done', 'the model reads the second run');
+  assert.match(output.sandbox_decision, /allowed writing to \/home\/u\/\.cache\/prisma for this run, and the command ran a second time/);
+});
+
+test('sandbox card: a path the card did not offer opens the first offer instead', async () => {
+  const approvals = makeApprovals({ response: 'allow-once', sandboxPaths: ['/'] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? blockedRun() : okRun()) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
+    { tools, approvals });
+  await send(engine);
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [CACHE], readPaths: [] });
+});
+
+test('sandbox card: "for this session" carries the folder to the next run of the chat, without a card', async () => {
+  const approvals = makeApprovals({ response: 'allow-session', sandboxPaths: [CACHE] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? blockedRun() : okRun()) });
+  const { engine, grants } = makeEngine([
+    assistantToolCall('c1', 'shell_execute', { command: 'npx prisma generate' }),
+    assistantToolCall('c2', 'shell_execute', { command: 'npx prisma generate --watch' }),
+    assistantText('ok'),
+  ], { tools, approvals });
+
+  const result = await send(engine, { chatId: 'chat-1' });
+
+  assert.equal(sandboxRequests(approvals).length, 1);
+  assert.deepEqual(tools.calls[2].context.sandboxGrants, { writePaths: [CACHE], readPaths: [] }, 'the second call starts with it');
+  assert.equal(result.toolTrace[0].sandboxDecision.duration, 'session');
+  const listed = grants.list();
+  assert.equal(listed.length, 1);
+  assert.deepEqual(listed[0].classes, ['write']);
+  assert.equal(listed[0].scope.key, 'approval.sandbox.sessionScope.write');
+  assert.deepEqual(listed[0].scope.params, { path: CACHE });
+});
+
+test('sandbox card: a protected read is opened as a read, not as a folder', async () => {
+  const approvals = makeApprovals({ response: 'allow-once', sandboxPaths: ['/home/u/.ssh/known_hosts'] });
+  const tools = makeToolPort({
+    execute: (name, args, ctx, n) => (n === 1
+      ? blockedRun({ kind: 'read', target: '/home/u/.ssh/known_hosts', allow: ['/home/u/.ssh/known_hosts'] })
+      : okRun()),
+  });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'git fetch' }), assistantText('ok')],
+    { tools, approvals });
+  await send(engine);
+  assert.deepEqual(sandboxRequests(approvals)[0].riskClasses, ['read-sensitive']);
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [], readPaths: ['/home/u/.ssh/known_hosts'] });
+});
+
+test('sandbox card: denied, the command does not run again and the model is told not to work around it', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort({ execute: () => blockedRun() });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('Ich sag es dir')]);
+  const { engine } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy({ mode: 'auto' }) });
+
+  const result = await send(engine);
+
+  assert.equal(result.content, 'Ich sag es dir', 'the run goes on: the model tells the user');
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(result.toolTrace[0].sandboxDecision, { outcome: 'denied' });
+  const decision = JSON.parse(toolMessageOf(llm).content).sandbox_decision;
+  assert.match(decision, /The user denied writing to \/home\/u\/\.cache\/prisma\/engines\. The command was not run again\./);
+  assert.match(decision, /Do not work around it/);
+});
+
+test('sandbox card: no answer counts as no — nothing opened, nothing run again', async () => {
+  const approvals = makeApprovals({ invalidated: true, reason: 'request_invalidated' });
+  const tools = makeToolPort({ execute: () => blockedRun() });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
+    { tools, approvals });
+  const result = await send(engine);
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(result.toolTrace[0].sandboxDecision, { outcome: 'unanswered' });
+});
+
+test('sandbox card: the same command again after a denial ends the run', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort({ execute: () => blockedRun() });
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'shell_execute', { command: 'x' }),
+    assistantToolCall('c2', 'shell_execute', { command: 'x' }),
+    assistantText('never'),
+  ], { tools, approvals, toolPolicy: policy({ mode: 'auto' }) });
+  const result = await send(engine);
+  assert.equal(sandboxRequests(approvals).length, 1, 'asked once');
+  assert.notEqual(result.content, 'never');
+  assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
+});
+
+test('sandbox card: only what can be opened is asked about; a refused connection alone asks nothing', async () => {
+  const approvals = makeApprovals('allow-once');
+  const tools = makeToolPort({ execute: () => blockedRun({ kind: 'network', target: 'example.com:443', allow: null }) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'curl x' }), assistantText('ok')],
+    { tools, approvals });
+  const result = await send(engine);
+  assert.equal(sandboxRequests(approvals).length, 0);
+  assert.equal(result.toolTrace[0].sandboxBlocked.entries[0].kind, 'network');
+  assert.equal(result.toolTrace[0].sandboxDecision, undefined);
+});
+
+test('sandbox card: the retry\'s own refusals go with the decision, not a second card', async () => {
+  const approvals = makeApprovals({ response: 'allow-once', sandboxPaths: [CACHE] });
+  const again = blockedRun({ target: '/home/u/.cache/other', allow: ['/home/u/.cache/other'] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? blockedRun() : again) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
+    { tools, approvals });
+  const result = await send(engine);
+  assert.equal(sandboxRequests(approvals).length, 1);
+  assert.equal(result.toolTrace[0].sandboxBlocked.entries[0].target, CACHE);
+  assert.equal(result.toolTrace[0].sandboxDecision.retry.blocked.entries[0].target, '/home/u/.cache/other');
+  assert.equal(result.toolTrace[0].sandboxDecision.retry.exitCode, 1);
+});

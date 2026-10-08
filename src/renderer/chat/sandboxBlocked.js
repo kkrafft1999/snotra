@@ -6,10 +6,10 @@
 // "runs without isolation" and red a real error, and this is neither.
 import contracts from '../generated/contracts.js';
 import { toolLineText } from '../utils/tool-log-summary.js';
-import { tildePath } from '../utils/program-allowance-view.js';
+import { sandboxPath } from '../utils/program-allowance-view.js';
 import { t, tPlural } from '../i18n.js';
 
-const { normalizeSandboxBlocked } = contracts;
+const { normalizeSandboxBlocked, normalizeSandboxDecision } = contracts;
 
 const SHIELD_OFF_ICON_HTML =
   '<svg class="chat-sandbox-blocked-icon" viewBox="0 0 16 16" aria-hidden="true">'
@@ -24,7 +24,7 @@ export function blockedRunsOf(trace) {
   const runs = [];
   for (const entry of trace) {
     const blocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
-    if (blocked) runs.push({ line: toolLineText(entry), blocked });
+    if (blocked) runs.push({ line: toolLineText(entry), blocked, decision: normalizeSandboxDecision(entry?.sandboxDecision) });
   }
   return runs;
 }
@@ -34,21 +34,10 @@ function reasonOf(entry) {
   return t(`toolLog.sandbox.reason.${entry.kind}`);
 }
 
-/**
- * `~/…` for a path in the home folder. Seatbelt reports the resolved path,
- * so a home under `/var` or `/tmp` (macOS links them into `/private`) comes
- * back as `/private/var/…`.
- */
-function homePath(target, homeDir) {
-  const shown = tildePath(target, homeDir);
-  if (shown !== target || !/^\/(var|tmp)\//.test(homeDir)) return shown;
-  return tildePath(target, `/private${homeDir}`);
-}
-
 /** "~/Library/Caches/pip/ · 37 paths", "example.com:443 · 3 times". */
 function targetText(entry, homeDir) {
   const isPath = entry.kind === 'write' || entry.kind === 'read';
-  const shown = isPath ? homePath(entry.target, homeDir) : entry.target;
+  const shown = isPath ? sandboxPath(entry.target, homeDir) : entry.target;
   if (entry.folder) return `${shown}/ · ${tPlural('toolLog.sandbox.paths', entry.count, { count: entry.count })}`;
   if (!isPath && entry.count > 1) return `${shown} · ${tPlural('toolLog.sandbox.times', entry.count, { count: entry.count })}`;
   return shown;
@@ -72,6 +61,15 @@ function buildEntry(entry, homeDir) {
   return item;
 }
 
+/** What the user decided on the run's sandbox card (#792), as one line. */
+function decisionText(decision) {
+  if (decision.outcome !== 'allowed') return t(`toolLog.sandbox.decision.${decision.outcome}`);
+  const code = decision.retry?.exitCode;
+  return Number.isInteger(code)
+    ? t(`toolLog.sandbox.decision.${decision.duration}`, { code })
+    : t(`toolLog.sandbox.decision.${decision.duration}NoCode`);
+}
+
 function buildRun(run, homeDir, { withLine }) {
   const part = document.createDocumentFragment();
   if (withLine) {
@@ -90,6 +88,23 @@ function buildRun(run, homeDir, { withLine }) {
     list.append(more);
   }
   part.append(list);
+  if (run.decision) {
+    const decision = document.createElement('p');
+    decision.className = 'chat-sandbox-blocked-decision';
+    decision.dataset.outcome = run.decision.outcome;
+    decision.textContent = decisionText(run.decision);
+    part.append(decision);
+    const again = run.decision.retry?.blocked;
+    if (again) {
+      const lead = document.createElement('p');
+      lead.className = 'chat-sandbox-blocked-run';
+      lead.textContent = t('toolLog.sandbox.decision.retryBlocked');
+      const second = document.createElement('ul');
+      second.className = 'chat-sandbox-blocked-list';
+      for (const entry of again.entries) second.append(buildEntry(entry, homeDir));
+      part.append(lead, second);
+    }
+  }
   if (run.blocked.raw.length) {
     const raw = document.createElement('details');
     raw.className = 'chat-sandbox-blocked-raw';

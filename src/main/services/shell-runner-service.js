@@ -301,6 +301,8 @@ function createShellRunnerService({
     workspaceRoot,
     networkDomains,
     programAllowance = null,
+    // Allowed on a sandbox card (#792): `{ writePaths, readPaths }`.
+    sandboxGrants = null,
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
@@ -345,6 +347,7 @@ function createShellRunnerService({
         // A program allowance's folders and trustd (#408); its domains are
         // already part of networkDomains.
         allowance: programAllowance,
+        grants: sandboxGrants,
         commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         commandText: line,
         abortSignal,
@@ -376,7 +379,10 @@ function createShellRunnerService({
       if (outcome.error) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
-      const blocked = await target.blocked?.({ failed: outcome.exitCode !== 0 && !outcome.aborted });
+      const blocked = await target.blocked?.({
+        failed: outcome.exitCode !== 0 && !outcome.aborted,
+        output: outcome.stderr,
+      });
       const result = {
         ...outcome,
         stderr: target.annotate(outcome.stderr),

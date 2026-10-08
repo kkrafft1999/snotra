@@ -150,23 +150,29 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
      * Antwort aus dem Renderer. Akzeptiert nur eine Entscheidung auf eine
      * eigene, offene Anfrage; alles andere ist ein Fehler ohne Wirkung.
      */
-    respond(sessionId, { requestId, response, ruleId } = {}) {
+    respond(sessionId, { requestId, response, ruleId, sandboxPaths } = {}) {
       const entry = pending.get(requestId);
       if (!entry) return { ok: false, error: createMessage('approval.error.noPending') };
       if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
       if (!Object.values(APPROVAL_RESPONSES).includes(response)) {
         return { ok: false, error: createMessage('approval.error.invalidResponse') };
       }
+      // A sandbox card (#792) opens paths: only those it offered, one per
+      // resource; anything else is the first offer of that resource.
+      const offered = entry.request?.sandbox?.entries;
+      const paths = Array.isArray(offered) && response !== APPROVAL_RESPONSES.DENY
+        ? { sandboxPaths: offered.map((e, i) => (e.allow.includes(sandboxPaths?.[i]) ? sandboxPaths[i] : e.allow[0])) }
+        : {};
       if (
         (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) ||
         (response === APPROVAL_RESPONSES.ALLOW_ALWAYS && (entry.request?.alwaysAllowed !== true || !ruleId))
       ) {
         // Die Karte bot die Option nicht an; als Einzelfreigabe behandeln.
         // "Always" without a stored rule is not "always" either (#121).
-        settle(requestId, { response: APPROVAL_RESPONSES.ALLOW_ONCE });
+        settle(requestId, { response: APPROVAL_RESPONSES.ALLOW_ONCE, ...paths });
         return { ok: true, response: APPROVAL_RESPONSES.ALLOW_ONCE };
       }
-      settle(requestId, response === APPROVAL_RESPONSES.ALLOW_ALWAYS ? { response, ruleId } : { response });
+      settle(requestId, response === APPROVAL_RESPONSES.ALLOW_ALWAYS ? { response, ruleId } : { response, ...paths });
       return { ok: true, response };
     },
     /**

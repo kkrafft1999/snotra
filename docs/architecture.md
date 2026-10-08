@@ -238,8 +238,8 @@ folds a cache's many writes into their folder. Linux reports write *attempts*,
 checked against the rules the runtime had at start — before any workspace — so
 each run checks them again against its own writable and protected folders.
 Seatbelt's lines come through `log stream` and can trail the process by a few
-hundred milliseconds under load; a failed run waits up to 600 ms for them, a
-successful one 100 ms. The runner puts the summary on
+hundred milliseconds under load; a failed run waits up to 600 ms for them — 2 s
+when the program itself reported a refused permission — a successful one 100 ms. The runner puts the summary on
 the result as `sandboxBlocked` and `annotate()` replaces the runtime's raw
 `<sandbox_violations>` block in stderr with a short `<sandbox_blocked>` list for
 the model. From there it takes the same road as the file changes of #348: the
@@ -248,6 +248,24 @@ engine sets it on the trace entry before the done line, and
 `normalizeSandboxBlocked` in `shared/contracts/chat.js` cuts it to size wherever
 it is stored. The renderer draws it as a box under the tool log
 (`renderer/chat/sandboxBlocked.js`).
+
+For a refused write or protected read the service also says what a card may
+open (`allow` on each entry: the path itself and one folder up, never the home
+folder, Snotra's storage, the protected or global-skill folders, or what the
+runtime keeps unwritable anyway). The engine then asks after the run, at the
+checkpoint `sandbox` of the ordinary approval port — `askUser` has no mode
+check, so the card comes in *Auto* too — and on "allow" calls `tools.execute`
+a second time with `sandboxGrants: { writePaths, readPaths }`, which the
+handler, the runner and `planSpawn` hand to `prepare()` as extra `allowWrite`
+and `allowRead` entries; `buildConfig` checks them once more. On Linux a
+granted folder that does not exist yet is made first, because bubblewrap skips
+missing paths. "For this session" is a session grant with a `sandbox` path:
+`sessionGrants.sandboxPaths(scopeKey)` feeds every later run of the chat, the
+Security page lists and revokes it like any other, and `find()` never matches
+it, so it allows no tool call. The answer carries the chosen path per
+resource; the adapter and the engine accept only what the card offered. What
+was decided goes on the trace as `sandboxDecision` and into the box. A denial
+is remembered under `${planKey}#sandbox`: the same command again ends the run.
 
 The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
 is policy, not isolation, and lives in the signed policy file next to the rules

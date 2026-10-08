@@ -29,7 +29,7 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
-const { summarizeViolations, describeForModel } = require('./sandbox-violations');
+const { summarizeViolations, describeForModel, widerFolder, parseViolationLine } = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -349,6 +349,91 @@ function createSandboxService({
     return out;
   }
 
+  const expandHome = (p) => (p === '~' ? os.homedir() : p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
+  const around = (a, b) => isPathInside(path, a, b) || isPathInside(path, b, a);
+
+  /**
+   * Whether a write the sandbox refused may be allowed on its card (#792).
+   * Never the root, the home folder or anything above it, nothing in or
+   * around Snotra's own storage, the protected locations or the global skill
+   * folders — the same lines a program allowance may not cross (#408), and
+   * ones a model must not get a user to cross by a convincing error message.
+   */
+  function isGrantableWritePath(target) {
+    if (typeof target !== 'string' || !path.isAbsolute(target)) return false;
+    const p = path.resolve(target);
+    if (p === path.parse(p).root || isPathInside(path, p, os.homedir()) || isAlwaysUnwritable(p)) return false;
+    const guarded = [userDataPath, ...sensitiveReadPaths({ platform, userDataPath }), ...protectedWritePaths]
+      .filter((entry) => typeof entry === 'string' && entry)
+      .map((entry) => path.resolve(expandHome(entry)));
+    return !guarded.some((guard) => around(guard, p) || around(guard, privateAlias(p)));
+  }
+
+  /**
+   * Whether a refused read may be allowed: a protected location may be
+   * opened for a run, Snotra's own storage never — the keys of its providers
+   * stay in the app, whatever the user is asked.
+   */
+  function isGrantableReadPath(target) {
+    if (typeof target !== 'string' || !path.isAbsolute(target)) return false;
+    const p = path.resolve(target);
+    if (p === path.parse(p).root || isPathInside(path, p, os.homedir())) return false;
+    if (!userDataPath) return true;
+    const own = path.resolve(userDataPath);
+    return !around(own, p) && !around(own, privateAlias(p));
+  }
+
+  const exists = (p) => fs.stat(p).then(() => true, () => false);
+
+  /** The targets of observed `mkdir` attempts that are folders already (#792). */
+  async function foldersThatExist(lines) {
+    const targets = new Set();
+    for (const line of lines) {
+      const parsed = parseViolationLine(line);
+      if (parsed?.observed && /^mkdir/.test(parsed.operation)) targets.add(parsed.target);
+      if (targets.size >= 200) break;
+    }
+    const out = new Set();
+    for (const target of targets) {
+      const stat = await fs.stat(target).catch(() => null);
+      if (stat && (typeof stat.isDirectory !== 'function' || stat.isDirectory())) out.add(target);
+    }
+    return out;
+  }
+
+  /**
+   * What the card may offer for each blocked resource (#792): the path
+   * itself and, for a write, the folder one level up. An entry without
+   * options can only be shown, not allowed.
+   *
+   * bubblewrap can only open a path that exists. On Linux a missing path is
+   * therefore offered only when the program was making it a folder — Snotra
+   * creates it before the retry — and a file that does not exist yet is
+   * offered as the folder it was to go into.
+   */
+  async function grantOptions(entry) {
+    if (entry.kind === 'write') {
+      // No folder around it would help: the runtime refuses it inside any.
+      if (isAlwaysUnwritable(entry.target)) return [];
+      let target = entry.target;
+      const makesFolder = entry.folder === true
+        || (Array.isArray(entry.operations) && entry.operations.some((op) => /^mkdir/.test(op)));
+      if (platform === 'linux' && !makesFolder && !(await exists(target))) target = path.dirname(target);
+      const wider = widerFolder(target, os.homedir());
+      return [target, wider].filter((p, i, all) => p && isGrantableWritePath(p) && all.indexOf(p) === i);
+    }
+    if (entry.kind === 'read') return isGrantableReadPath(entry.target) ? [entry.target] : [];
+    return [];
+  }
+
+  /** On Linux, the granted folders that do not exist yet are made before the run (see grantOptions). */
+  async function makeGrantedFolders(grants) {
+    if (platform !== 'linux' || !Array.isArray(grants?.writePaths)) return;
+    for (const folder of grants.writePaths.filter(isGrantableWritePath)) {
+      if (!(await exists(folder))) await fs.mkdir(folder, { recursive: true }).catch(() => {});
+    }
+  }
+
   /**
    * The complete runtime configuration for one run. A program allowance
    * (#408) adds its folders to the writable ones and, on macOS only, opens
@@ -360,8 +445,13 @@ function createSandboxService({
     allowedDomains = [],
     extraWritePaths = [],
     weakerNetworkIsolation = false,
+    grants = null,
   } = {}) {
-    const allowWrite = [workspaceRoot, runTmp, ...(Array.isArray(extraWritePaths) ? extraWritePaths : [])]
+    // What the user allowed on a sandbox card (#792), checked again here: the
+    // card offered only grantable paths, and nothing else gets through.
+    const grantedWrites = (Array.isArray(grants?.writePaths) ? grants.writePaths : []).filter(isGrantableWritePath);
+    const grantedReads = (Array.isArray(grants?.readPaths) ? grants.readPaths : []).filter(isGrantableReadPath);
+    const allowWrite = [workspaceRoot, runTmp, ...(Array.isArray(extraWritePaths) ? extraWritePaths : []), ...grantedWrites]
       .filter((p, index, all) => typeof p === 'string' && p && all.indexOf(p) === index);
     // A protected folder is denied only where a writable folder contains it —
     // elsewhere it is not writable anyway, and on Linux the runtime would
@@ -378,6 +468,7 @@ function createSandboxService({
       network: { allowedDomains: normalizeDomains(allowedDomains), deniedDomains: [] },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
+        ...(grantedReads.length ? { allowRead: [...new Set(grantedReads)] } : {}),
         allowWrite,
         denyWrite: [...DENY_WRITE_DEFAULTS, ...protectedPaths],
       },
@@ -564,6 +655,7 @@ function createSandboxService({
    * @param {string[]} [request.allowedDomains]
    * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
    * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
+   * @param {{writePaths?: string[], readPaths?: string[]}} [request.grants]  allowed on a sandbox card (#792)
    * @param {string} [request.commandId]
    * @param {string} [request.commandText]  what the user sees, for violations
    * @param {AbortSignal} [request.abortSignal]
@@ -575,6 +667,7 @@ function createSandboxService({
     allowedDomains = [],
     extraWritePaths = [],
     weakerNetworkIsolation = false,
+    grants = null,
     commandId,
     commandText,
     abortSignal,
@@ -588,7 +681,8 @@ function createSandboxService({
     const key = [...domains].sort().join(',');
     const release = await gate.acquire(key, abortSignal);
     const manager = runtime.SandboxManager;
-    const config = buildConfig({ workspaceRoot, runTmp, allowedDomains: domains, extraWritePaths, weakerNetworkIsolation });
+    await makeGrantedFolders(grants);
+    const config = buildConfig({ workspaceRoot, runTmp, allowedDomains: domains, extraWritePaths, weakerNetworkIsolation, grants });
     const trustd = config.enableWeakerNetworkIsolation === true;
     // The runtime sets TMPDIR to its own /tmp/claude, a directory every run
     // (and Claude Code) shares and Snotra keeps closed. The run's temp dir
@@ -615,7 +709,14 @@ function createSandboxService({
     const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
     /** undefined until `blocked()` has looked; then the summary or null. */
     let summary;
-    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir(), isPermittedWrite });
+    // Folders that already existed when `mkdir` was tried on them (Linux, see
+    // summarizeViolations): looked up once, in `blocked()`.
+    let existingFolders = new Set();
+    const summarize = () => summarizeViolations(collector.lines, {
+      homeDir: os.homedir(),
+      isPermittedWrite: (target, operation) => isPermittedWrite(target)
+        || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
+    });
     let released = false;
     return {
       command: '/bin/sh',
@@ -637,14 +738,19 @@ function createSandboxService({
        * the process has closed, before `annotate()`. A run that failed is the
        * likely victim of a refusal and waits longer for late lines.
        */
-      async blocked({ failed = false } = {}) {
+      async blocked({ failed = false, output = '' } = {}) {
         if (summary !== undefined) return summary;
         if (!collector) {
           summary = null;
           return summary;
         }
-        await settleViolations(collector, { settleMs: violationSettleMs, failed });
+        const refused = failed && PERMISSION_ERROR.test(String(output || ''));
+        await settleViolations(collector, { settleMs: violationSettleMs, failed, refused });
+        existingFolders = await foldersThatExist(collector.lines);
         summary = summarize();
+        if (summary) {
+          for (const entry of summary.entries) entry.allow = await grantOptions(entry);
+        }
         return summary;
       },
       annotate(stderr) {
@@ -705,12 +811,42 @@ function createSandboxService({
     prepare,
     shutdown,
     buildConfig,
+    isGrantableWritePath,
+    isGrantableReadPath,
   };
+}
+
+/**
+ * Files and folders the runtime keeps unwritable inside every writable folder
+ * (its DANGEROUS_FILES and dangerous directories, not exported): a card that
+ * opened one would only see the retry refused again (#792). Compared in lower
+ * case, as the runtime does.
+ */
+const ALWAYS_UNWRITABLE_FILES = new Set([
+  '.gitconfig', '.gitmodules', '.bashrc', '.bash_profile', '.zshrc', '.zprofile', '.profile', '.ripgreprc', '.mcp.json',
+]);
+const ALWAYS_UNWRITABLE_DIRS = ['.vscode', '.idea', '.claude/commands', '.claude/agents', '.git/hooks', '.git/config'];
+
+function isAlwaysUnwritable(p) {
+  const lower = p.toLowerCase();
+  if (ALWAYS_UNWRITABLE_FILES.has(lower.split('/').pop())) return true;
+  return ALWAYS_UNWRITABLE_DIRS.some((dir) => lower.endsWith(`/${dir}`) || lower.includes(`/${dir}/`));
+}
+
+/** `/private/var/x` for `/var/x` and back: macOS links /var, /tmp and /etc into /private. */
+function privateAlias(p) {
+  const m = /^\/private(\/(?:var|tmp|etc)(?:\/.*)?)$/.exec(p);
+  if (m) return m[1];
+  return /^\/(?:var|tmp|etc)(?:\/|$)/.test(p) ? `/private${p}` : p;
 }
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** A failed run waits up to this many times the settle time for late lines. */
 const FAILED_RUN_SETTLE_FACTOR = 6;
+/** One whose own output says it was not permitted something waits up to this many. */
+const REFUSED_RUN_SETTLE_FACTOR = 20;
+/** What a program prints when the system refused it something. */
+const PERMISSION_ERROR = /operation not permitted|permission denied|\bEPERM\b|\bEACCES\b/i;
 /** Lines that have stopped arriving for this long are taken as complete. */
 const VIOLATIONS_QUIET_MS = 50;
 
@@ -719,14 +855,16 @@ const VIOLATIONS_QUIET_MS = 50;
  * through `log stream`, a child process; under load they arrive a few hundred
  * milliseconds after the run's process has closed. Every run waits the
  * settle time. A failed run waits longer: until lines have come and gone
- * quiet, or six times the settle time when none come at all.
+ * quiet, or six times the settle time when none come at all — twenty when
+ * the program itself reported a refused permission, where a line is all but
+ * certain to come.
  */
-async function settleViolations(collector, { settleMs, failed }) {
+async function settleViolations(collector, { settleMs, failed, refused = false }) {
   if (!(settleMs > 0)) return;
   const started = Date.now();
   await pause(settleMs);
   if (!failed) return;
-  const longest = settleMs * FAILED_RUN_SETTLE_FACTOR;
+  const longest = settleMs * (refused ? REFUSED_RUN_SETTLE_FACTOR : FAILED_RUN_SETTLE_FACTOR);
   while (Date.now() - started < longest) {
     if (collector.lines.length > 0 && Date.now() - collector.lastAt() >= VIOLATIONS_QUIET_MS) return;
     await pause(VIOLATIONS_QUIET_MS / 2);

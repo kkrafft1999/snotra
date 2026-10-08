@@ -62,7 +62,7 @@ function parseViolationLine(line) {
   m = SEATBELT_LINE.exec(text);
   if (m) {
     const [, process, , operation, rest = ''] = m;
-    const target = rest.trim();
+    const target = operation.startsWith('file-') ? withoutTrailingSlash(rest.trim()) : rest.trim();
     const base = { operation, process: process.trim(), target };
     if (operation.startsWith('file-write')) return { ...base, kind: KINDS.WRITE };
     if (operation.startsWith('file-read')) return { ...base, kind: KINDS.READ };
@@ -74,9 +74,14 @@ function parseViolationLine(line) {
   // The kernel reports write *attempts*; the runtime filters them against the
   // lists it had at start, before any run had a workspace (`observed`).
   m = LINUX_LINE.exec(text);
-  if (m) return { kind: KINDS.WRITE, target: m[2], operation: m[1], observed: true };
+  if (m) return { kind: KINDS.WRITE, target: withoutTrailingSlash(m[2]), operation: m[1], observed: true };
 
   return { kind: KINDS.OTHER, target: '', operation: text };
+}
+
+/** `mkdir -p` names the folders it makes with a slash at the end; the path is the same. */
+function withoutTrailingSlash(p) {
+  return p.length > 1 ? p.replace(/\/+$/, '') || '/' : p;
 }
 
 function hostOfUrl(url) {
@@ -99,6 +104,20 @@ function broadFolders(homeDir) {
     '/Library/Containers', '/Library/Group Containers', '/Library/Logs', '/.cache', '/.config', '/.local',
     '/.local/share', '/.local/state', '/Documents', '/Desktop', '/Downloads'];
   return new Set([...shared, ...inHome.map((p) => `${home}${p}`)]);
+}
+
+/**
+ * The folder one level above a blocked path, for "allow a little wider"
+ * (#792): the program's cache folder instead of one version's subfolder.
+ * Null where that would be a folder many programs share, the home folder or
+ * something above it.
+ */
+function widerFolder(target, homeDir = '') {
+  const parent = parentOf(trimSlash(target));
+  const home = trimSlash(homeDir);
+  if (broadFolders(homeDir).has(parent)) return null;
+  if (home && (parent === home || home.startsWith(`${parent}/`))) return null;
+  return parent;
 }
 
 function trimSlash(p) {
@@ -149,10 +168,12 @@ function groupWrites(paths, homeDir) {
  * On Linux the observer reports what the kernel saw a program *try*, checked
  * against the write rules the runtime had when it started — without the
  * workspace of any run. `isPermittedWrite` checks such an attempt against the
- * run's own rules, and an attempt the run was allowed is no refusal.
+ * run's own rules, and an attempt the run was allowed is no refusal. It gets
+ * the operation as well: `mkdir -p` tries every folder on its way, the ones
+ * that exist already too, and those attempts wrote nothing.
  *
  * @param {string[]} lines  the run's violation lines, oldest first
- * @param {{homeDir?: string, isPermittedWrite?: (path: string) => boolean}} [options]
+ * @param {{homeDir?: string, isPermittedWrite?: (path: string, operation: string) => boolean}} [options]
  * @returns {null | {
  *   entries: Array<{kind: string, target: string, count: number, folder?: boolean, operations: string[], reason?: string}>,
  *   moreEntries: number,
@@ -164,7 +185,7 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   const list = (Array.isArray(lines) ? lines : []).map((l) => String(l ?? '').trim()).filter(Boolean);
   if (list.length === 0) return null;
   const permitted = typeof isPermittedWrite === 'function' ? isPermittedWrite : () => false;
-  const parsed = list.map(parseViolationLine).map((p) => (p?.observed && permitted(p.target) ? null : p));
+  const parsed = list.map(parseViolationLine).map((p) => (p?.observed && permitted(p.target, p.operation) ? null : p));
 
   const entries = [];
   const byKey = new Map();
@@ -254,4 +275,5 @@ module.exports = {
   summarizeViolations,
   describeForModel,
   groupWrites,
+  widerFolder,
 };

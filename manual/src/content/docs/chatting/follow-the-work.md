@@ -25,7 +25,7 @@ Once the answer is complete, the steps fold into one line that counts them, such
 
 ## When the sandbox stopped something
 
-If a command or a Python run on macOS or Linux tried to reach something the sandbox keeps closed — a folder outside the project, a host it was not allowed — a section *Blocked by the sandbox* appears under the tool log. It lists what was blocked, how often, and why. That is usually the reason a command failed in a way its own output does not explain. What to do about it is on [Run commands in the sandbox](../../safety/sandbox/).
+If a command or a Python run on macOS or Linux tried to reach something the sandbox keeps closed — a folder outside the project, a host it was not allowed — a box *The sandbox blocked …* appears under the tool log. It lists what was blocked, how often, and why. That is usually the reason a command failed in a way its own output does not explain. [since 1.18] For a write or a read of a protected location, a card asks right after the run whether to allow it and run the command again; the box then also says what you decided. More on [Run commands in the sandbox](../../safety/sandbox/).
 
 ## What happens
 

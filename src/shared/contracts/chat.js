@@ -319,6 +319,29 @@ function normalizeSandboxBlocked(value) {
   };
 }
 
+const SANDBOX_DECISION_OUTCOMES = Object.freeze(['allowed', 'denied', 'unanswered']);
+
+/**
+ * What the user decided on a sandbox card (#792), as the tool row keeps it:
+ * allowed — for this run or the session, which paths, and how the retry
+ * went — denied, or not answered. Null for anything else.
+ */
+function normalizeSandboxDecision(value) {
+  if (!value || typeof value !== 'object' || !SANDBOX_DECISION_OUTCOMES.includes(value.outcome)) return null;
+  if (value.outcome !== 'allowed') return { outcome: value.outcome };
+  const paths = (Array.isArray(value.paths) ? value.paths : [])
+    .filter((p) => p && (p.kind === 'write' || p.kind === 'read') && typeof p.path === 'string' && p.path)
+    .slice(0, SANDBOX_BLOCKED_LIMITS.ENTRIES)
+    .map((p) => ({ kind: p.kind, path: p.path.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) }));
+  const out = { outcome: 'allowed', duration: value.duration === 'session' ? 'session' : 'run', paths };
+  if (value.retry && typeof value.retry === 'object') {
+    out.retry = { exitCode: Number.isInteger(value.retry.exitCode) ? value.retry.exitCode : null };
+    const blocked = normalizeSandboxBlocked(value.retry.blocked);
+    if (blocked) out.retry.blocked = blocked;
+  }
+  return out;
+}
+
 /** chat:progress with type='workspace': a reading tool read the file (#347). */
 function createWorkspaceFileReadEvent(relativePath) {
   return {
@@ -394,6 +417,7 @@ module.exports = {
   createWorkspaceFileReadEvent,
   normalizeFileChangeSummary,
   normalizeSandboxBlocked,
+  normalizeSandboxDecision,
   SANDBOX_BLOCKED_KINDS,
   SANDBOX_BLOCKED_LIMITS,
   createPermissionProgressEvent,

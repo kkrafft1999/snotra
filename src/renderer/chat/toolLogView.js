@@ -21,7 +21,7 @@ import { toolLogDebug } from './toolLogDebug.js';
 import { normalizeChanges } from './fileChanges.js';
 import { t, tPlural } from '../i18n.js';
 
-const { toolCategoryForEntry, normalizeSandboxBlocked } = contracts;
+const { toolCategoryForEntry, normalizeSandboxBlocked, normalizeSandboxDecision } = contracts;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
 export function buildToolLineStatus() {
@@ -448,6 +448,7 @@ export function toolTraceEntryForStore(entry) {
   const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
   const changes = normalizeChanges(entry?.changes);
   const sandboxBlocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
+  const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null;
   if (!tool && !skill && !permission && !changes && !sandboxBlocked) return line;
   const out = { line };
   if (tool) out.tool = tool;
@@ -455,6 +456,7 @@ export function toolTraceEntryForStore(entry) {
   if (permission) out.permission = permission;
   if (changes) out.changes = changes;
   if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
+  if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   return out;
 }
 

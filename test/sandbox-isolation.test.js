@@ -179,6 +179,33 @@ test('a shell history cannot be read (CR-B03-04)', async (t) => {
   assert.notEqual(result.exitCode, 0, `read ${result.stdout.trim()} bytes of ${present}`);
 });
 
+test('a folder allowed on the sandbox card is writable on the second run; Snotra\'s storage stays closed (#792)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  const deep = path.join(ctx.outside, 'granted', 'deeper');
+  const command = `mkdir -p '${deep}' && echo ok > '${deep}/f.txt' && cat '${deep}/f.txt'`;
+
+  const first = await run(ctx, command);
+  assert.notEqual(first.exitCode, 0);
+  const write = first.sandboxBlocked?.entries.find((e) => e.kind === 'write');
+  assert.ok(write, `no write listed: ${JSON.stringify(first.sandboxBlocked)}`);
+  const granted = path.join(await fs.realpath(ctx.outside), 'granted');
+  // Only the folder that could not be made — not the ones mkdir -p passed on its way.
+  assert.deepEqual(first.sandboxBlocked.entries.map((e) => [e.kind, e.target]), [['write', granted]],
+    JSON.stringify(first.sandboxBlocked));
+  assert.equal(write.allow[0], granted, 'the folder that was to be made, offered as itself');
+
+  const second = await run(ctx, command, { sandboxGrants: { writePaths: [write.allow[0]] } });
+  assert.equal(second.exitCode, 0, second.stderr);
+  assert.equal(second.stdout.trim(), 'ok');
+  assert.equal(second.sandboxBlocked, undefined);
+
+  const secret = path.join(ctx.userData, 'secret.txt');
+  const own = await run(ctx, `cat '${secret}'`, { sandboxGrants: { readPaths: [secret, await fs.realpath(secret)] } });
+  assert.notEqual(own.exitCode, 0);
+  assert.doesNotMatch(own.stdout, /top secret/);
+});
+
 test('no network unless a domain is allowed — an allowed domain works', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;

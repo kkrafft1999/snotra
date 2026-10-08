@@ -14,6 +14,7 @@ const {
   isLegacyFallbackChatTitle,
   normalizeFileChangeSummary,
   normalizeSandboxBlocked,
+  normalizeSandboxDecision,
 } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -168,6 +169,7 @@ function toolTraceEntryForStore(entry) {
   const changes = fileChangesForStore(entry?.changes);
   // What the sandbox refused (#792): kinds, paths and hosts, never output.
   const sandboxBlocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
+  const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null;
   if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked) return line;
   const out = { line };
   if (tool) out.tool = tool;
@@ -177,6 +179,7 @@ function toolTraceEntryForStore(entry) {
   if (schema) out.schema = schema;
   if (changes) out.changes = changes;
   if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
+  if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   return out;
 }
 

@@ -2640,6 +2640,13 @@ button.chat-change-file:hover {
   color: var(--text-muted);
 }
 
+.chat-sandbox-blocked-decision {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-weight: var(--ds-font-weight-medium);
+}
+
 .chat-sandbox-blocked-raw {
   margin-top: 6px;
 }
@@ -7692,6 +7699,138 @@ select.modal-input {
 
 .chat-approval-card__preview-text--clamped {
   max-height: 220px;
+}
+
+/* ── The sandbox card (#792) ──────────────────────────────────────────────
+ * After a run the sandbox refused a write or a protected read in: what was
+ * blocked, what the command reported, which path to open and for how long.
+ * The radio rows follow the token rule for radios: a 16 px ring, the row
+ * takes the blue edge and wash when chosen. */
+.chat-approval-card__blocked {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-approval-card__blocked li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+
+.chat-approval-card__blocked-kind,
+.chat-approval-card__blocked-detail {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__report > .chat-approval-card__preview-text {
+  max-height: 12em;
+}
+
+.chat-approval-card__report-empty {
+  margin: 0;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__choice {
+  margin: 10px 0 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.chat-approval-card__choice-legend {
+  margin: 0 0 4px;
+  padding: 0;
+  font-size: var(--ds-font-size-md);
+  font-weight: 500;
+  color: var(--text-muted-strong);
+  overflow-wrap: anywhere;
+}
+
+.chat-approval-card__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.chat-approval-card__option:hover {
+  border-color: var(--ds-blue);
+}
+
+.chat-approval-card__option:has(input:checked) {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-approval-card__option input {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  padding: 3px;
+  border: 1.5px solid var(--ds-grey-muted);
+  border-radius: 50%;
+  background: transparent;
+  background-clip: content-box;
+  appearance: none;
+  cursor: inherit;
+}
+
+.chat-approval-card__option input:checked {
+  border-color: var(--ds-blue);
+  background-color: var(--ds-blue);
+}
+
+.chat-approval-card__option input:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-approval-card__option-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-approval-card__option-hint {
+  margin-left: 6px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+/* Decided: the choice stays readable, but nothing invites a click. */
+.chat-approval-card__choice:disabled .chat-approval-card__option {
+  cursor: default;
+}
+
+.chat-approval-card__choice:disabled .chat-approval-card__option:hover {
+  border-color: var(--ds-grey-divider);
+}
+
+.chat-approval-card__choice:disabled .chat-approval-card__option:has(input:checked) {
+  border-color: var(--ds-grey-divider);
+  background: var(--ds-grey-card);
+}
+
+.chat-approval-card__choice:disabled input:checked {
+  border-color: var(--text-muted-strong);
+  background-color: var(--text-muted-strong);
 }
 
 /* Standard input and arguments below the source (#551). */

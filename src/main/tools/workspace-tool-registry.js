@@ -1187,8 +1187,10 @@ function createWorkspaceToolRegistry({
         + 'No pip install. On macOS and Linux the program usually runs isolated: it can write only '
         + 'inside the project folder and a temporary directory, cannot read credential stores, and '
         + 'has no network unless you list the domains it needs in network_domains. What the sandbox '
-        + 'refused is listed in stderr under <sandbox_blocked>, and the user sees the same list; tell '
-        + 'the user instead of working around it. The result says whether the run was isolated.',
+        + 'refused is listed in stderr under <sandbox_blocked>, and the user sees the same list; a '
+        + 'refused write or read is put to the user, and if they allow it the program runs a second time '
+        + '(sandbox_decision in the result). Tell the user instead of working around a refusal. The result '
+        + 'says whether the run was isolated.',
       shortDescriptionKey: 'tools.short.run_python',
       parameters: {
         type: 'object',
@@ -1218,7 +1220,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['code'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants } = {}) => {
         if (!pythonRunner) {
           return JSON.stringify({ error: 'Running Python is not available in this installation.' });
         }
@@ -1231,6 +1233,7 @@ function createWorkspaceToolRegistry({
           workspaceRoot: workspaceRoot || undefined,
           networkDomains: resolveNetworkDomains('run_python', args),
           sandboxDisabled: sandboxDisabledByPlan(plan),
+          sandboxGrants: sandboxGrants || null,
           abortSignal,
         });
         if (result?.error) return JSON.stringify({ error: result.error });
@@ -1287,8 +1290,10 @@ function createWorkspaceToolRegistry({
         + 'runs the program on its own: no chaining, pipes, redirections or $ — so call such a program '
         + 'alone and filter its output afterwards. What the sandbox refused — a write, a read of a protected '
         + 'location, a connection — is listed in stderr under <sandbox_blocked>, and the user sees the same list. '
-        + 'Do not work around it with another location, tool, environment variable or setting: tell the user '
-        + 'what was blocked. A host the task needs may go into network_domains of a new call. The result says whether the '
+        + 'For a refused write or read the user is asked right away; if they allow it, the command runs a second '
+        + 'time and sandbox_decision in the result says so. Do not work around a refusal with another location, '
+        + 'tool, environment variable or setting: tell the user what was blocked. A host the task needs may go '
+        + 'into network_domains of a new call. The result says whether the '
         + 'run was isolated and whether an allowance applied. Every run needs the user\'s approval, '
         + 'unless the user has allowed exactly this command line for the project folder.',
       shortDescriptionKey: 'tools.short.shell_execute',
@@ -1321,7 +1326,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['command'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants } = {}) => {
         if (!shellRunner) {
           return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
@@ -1345,6 +1350,7 @@ function createWorkspaceToolRegistry({
           networkDomains: resolveRunDomains('shell_execute', args, allowance),
           programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
+          sandboxGrants: sandboxGrants || null,
           abortSignal,
         });
         if (result?.error) {
