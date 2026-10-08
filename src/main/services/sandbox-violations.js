@@ -44,6 +44,22 @@ const PROXY_REQUEST = /^deny http-request (\S+) (\S+) \((.*)\)$/;
 const LINUX_LINE = /^deny (\S+) (\/.*)$/;
 
 /**
+ * Why the proxy refused a connection, as far as Snotra acts on it (#792).
+ * With a live prompt in place the runtime no longer says "not on the allow
+ * list": a connection nobody could be asked about — no single run to put it
+ * to, or the command gave up before the user decided — comes back as "permission prompt
+ * failed". For the user and the model that is the same thing, a host outside
+ * the run's network domains, and it is the one a card after the run may
+ * offer. "user denied" is a decision already taken and is not offered again.
+ */
+const NETWORK_REASONS = Object.freeze({
+  NOT_ALLOWED: 'host is not on the allow list',
+  USER_DENIED: 'user denied',
+  DENY_LIST: 'host is on the deny list',
+});
+const UNASKED_REASON = 'permission prompt failed';
+
+/**
  * @param {string} line  one violation line as the runtime stored it
  * @returns {{kind: string, target: string, operation: string, process?: string, reason?: string}|null}
  */
@@ -52,7 +68,10 @@ function parseViolationLine(line) {
   if (!text) return null;
 
   let m = PROXY_OUTBOUND.exec(text);
-  if (m) return { kind: KINDS.NETWORK, target: m[1], operation: 'network-outbound', reason: m[2] };
+  if (m) {
+    const reason = m[2] === UNASKED_REASON ? NETWORK_REASONS.NOT_ALLOWED : m[2];
+    return { kind: KINDS.NETWORK, target: m[1], operation: 'network-outbound', reason };
+  }
 
   m = PROXY_REQUEST.exec(text);
   if (m) {
@@ -118,6 +137,41 @@ function widerFolder(target, homeDir = '') {
   if (broadFolders(homeDir).has(parent)) return null;
   if (home && (parent === home || home.startsWith(`${parent}/`))) return null;
   return parent;
+}
+
+/**
+ * Domains under which unrelated parties get their own host names: a
+ * country's second level, and hosting and storage platforms. "Every host of
+ * this domain" would mean every customer of the platform there, not one
+ * program's servers (#792).
+ */
+const SHARED_DOMAINS = new Set([
+  'amazonaws.com', 'cloudfront.net', 'azurewebsites.net', 'azureedge.net', 'azurestaticapps.net', 'cloudapp.net',
+  'windows.net', 'appspot.com', 'googleusercontent.com', 'googleapis.com', 'firebaseapp.com', 'web.app',
+  'github.io', 'githubusercontent.com', 'gitlab.io', 'herokuapp.com', 'vercel.app', 'netlify.app', 'pages.dev',
+  'workers.dev', 'r2.dev', 'fly.dev', 'onrender.com', 'ngrok.io', 'ngrok-free.app', 'digitaloceanspaces.com',
+  'blogspot.com', 'readthedocs.io', 'surge.sh', 'glitch.me',
+]);
+const COUNTRY_SECOND_LEVEL = /^(?:co|com|net|org|gov|edu|ac|or|ne|go|gv|nic|ltd|plc)\.[a-z]{2}$/;
+const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+/**
+ * Every host of the domain one level above a blocked host, for "allow a
+ * little wider" (#792): `*.pytorch.org` for `download.pytorch.org`. Null for
+ * an address, a host directly under a top-level domain (`*.org` is not a
+ * program's domain) and the shared domains above.
+ */
+function widerHost(host) {
+  const h = String(host || '').toLowerCase();
+  if (!h || IPV4.test(h) || h.includes(':')) return null;
+  const labels = h.split('.');
+  if (labels.length < 3) return null;
+  const parent = labels.slice(1).join('.');
+  if (COUNTRY_SECOND_LEVEL.test(parent)) return null;
+  for (const shared of SHARED_DOMAINS) {
+    if (parent === shared || parent.endsWith(`.${shared}`)) return null;
+  }
+  return `*.${parent}`;
 }
 
 function trimSlash(p) {
@@ -255,7 +309,8 @@ function describeForModel(summary) {
     return `- ${label[e.kind]}: ${what}${e.reason ? ` (${e.reason})` : ''}`;
   });
   if (summary.moreEntries > 0) lines.push(`- and ${summary.moreEntries} more`);
-  const hasNetwork = summary.entries.some((e) => e.kind === KINDS.NETWORK);
+  // A host the user turned down while the command ran is not one to declare again.
+  const hasNetwork = summary.entries.some((e) => e.kind === KINDS.NETWORK && e.reason !== NETWORK_REASONS.USER_DENIED);
   return [
     '<sandbox_blocked>',
     'The sandbox refused the following during this run. The user sees the same list in the chat.',
@@ -269,6 +324,8 @@ function describeForModel(summary) {
 
 module.exports = {
   KINDS,
+  NETWORK_REASONS,
+  widerHost,
   MAX_ENTRIES,
   MAX_RAW_LINES,
   parseViolationLine,

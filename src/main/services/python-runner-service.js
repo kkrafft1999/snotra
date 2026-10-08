@@ -194,8 +194,10 @@ function createPythonRunnerService({
 
   async function run({
     code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains,
-    // Allowed on a sandbox card (#792): `{ writePaths, readPaths }`.
+    // Allowed on a sandbox card (#792): `{ writePaths, readPaths, hosts }`.
     sandboxGrants = null,
+    // Asks the user about a connection while the script waits (#792).
+    onSandboxNetworkAsk = null,
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
@@ -226,6 +228,8 @@ function createPythonRunnerService({
 
     // Isolation (#329): the script's temp directory doubles as the run's own
     // writable place next to the workspace.
+    // What the script printed so far, for the card about a waiting connection.
+    let readOutput = null;
     let target;
     try {
       target = await planSpawn({
@@ -241,6 +245,8 @@ function createPythonRunnerService({
         domains: networkDomains,
         commandId: `python-${randomId()}`,
         commandText: `python ${path.basename(scriptPath)}`,
+        onNetworkAsk: onSandboxNetworkAsk,
+        readOutput: () => readOutput?.() || null,
         abortSignal,
       });
     } catch (e) {
@@ -265,6 +271,7 @@ function createPythonRunnerService({
         maxOutputBytes: PYTHON_EXECUTION_LIMITS.MAX_OUTPUT_BYTES,
         timeoutMs: limit,
         abortSignal,
+        exposeOutput: (read) => { readOutput = read; },
         startError: 'Python could not be started.',
       });
       if (outcome.error) return outcome;

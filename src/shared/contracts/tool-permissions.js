@@ -100,6 +100,9 @@ const PERMISSION_DENIAL_REASONS = Object.freeze({
   REPEATED_DENIAL: 'repeated_denial',
   NO_WORKSPACE: 'no_workspace',
   NOT_APPROVED: 'not_approved',
+  // A sandbox card about a waiting connection whose command gave up before
+  // the user decided (#792); the card after the run takes the question up.
+  SANDBOX_RUN_ENDED: 'sandbox_run_ended',
 });
 
 /** Ausführungsstatus eines Tool-Aufrufs im Audit (Konzept §9). */
@@ -197,6 +200,7 @@ const PERMISSION_DENIED_MESSAGE_KEYS = Object.freeze({
   [PERMISSION_DENIAL_REASONS.REPEATED_DENIAL]: 'toolPermission.denied.repeatedDenial',
   [PERMISSION_DENIAL_REASONS.NO_WORKSPACE]: 'toolPermission.denied.noWorkspace',
   [PERMISSION_DENIAL_REASONS.NOT_APPROVED]: 'toolPermission.denied.notApproved',
+  [PERMISSION_DENIAL_REASONS.SANDBOX_RUN_ENDED]: 'toolPermission.denied.sandboxRunEnded',
 });
 
 /**
@@ -223,6 +227,8 @@ const PERMISSION_DENIED_TOOL_RESULT_MESSAGES = Object.freeze({
     'The same call was already denied in this run; the run has ended.',
   [PERMISSION_DENIAL_REASONS.NO_WORKSPACE]: 'No workspace folder open; tools unavailable.',
   [PERMISSION_DENIAL_REASONS.NOT_APPROVED]: 'Tool call without approval; not executed.',
+  [PERMISSION_DENIAL_REASONS.SANDBOX_RUN_ENDED]:
+    'The command stopped waiting for the connection before the user decided.',
 });
 
 function isToolRiskClass(value) {
@@ -628,13 +634,21 @@ function createToolApprovalRequestDto({
 }
 
 const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox']);
-const SANDBOX_CARD_LIMITS = Object.freeze({ ENTRIES: 10, OPTIONS: 2, OTHERS: 10, RAW: 20, PATH: 1024, COMMAND: 4000, OUTPUT: 4000 });
+const SANDBOX_CARD_LIMITS = Object.freeze({
+  ENTRIES: 10, OPTIONS: 2, OTHERS: 10, RAW: 20, PATH: 1024, COMMAND: 4000, OUTPUT: 4000, DOMAINS: 40, DOMAIN: 253,
+});
+/** What a sandbox card may open: a folder to write in, a path to read, a host to connect to (#792). */
+const SANDBOX_CARD_KINDS = Object.freeze(['write', 'read', 'network']);
 
 /**
  * What a sandbox card shows (#792): the command, how its run went, what it
- * reported, the resources the card may open — each with the paths it may
- * choose among — and what was refused that cannot be opened. Cut to size;
- * an entry without a usable option is dropped.
+ * reported, the resources the card may open — each with the paths or hosts
+ * it may choose among — and what was refused that cannot be opened. Cut to
+ * size; an entry without a usable option is dropped.
+ *
+ * `live` marks the card about a connection that waits while the command
+ * runs: it carries how long the connection has waited and which hosts the
+ * run may already reach, and its run has no exit code yet.
  */
 function sanitizeSandboxApproval(sandbox) {
   if (!sandbox || typeof sandbox !== 'object' || !Array.isArray(sandbox.entries)) return null;
@@ -643,7 +657,7 @@ function sanitizeSandboxApproval(sandbox) {
   const entries = [];
   for (const raw of sandbox.entries) {
     if (entries.length >= L.ENTRIES) break;
-    if (!raw || (raw.kind !== 'write' && raw.kind !== 'read')) continue;
+    if (!raw || !SANDBOX_CARD_KINDS.includes(raw.kind)) continue;
     const allow = stringList(raw.allow, L.OPTIONS, L.PATH);
     const target = text(raw.target, L.PATH);
     if (!target || allow.length === 0) continue;
@@ -657,7 +671,15 @@ function sanitizeSandboxApproval(sandbox) {
   }
   if (entries.length === 0) return null;
   const run = sandbox.run && typeof sandbox.run === 'object' ? sandbox.run : {};
+  const live = sandbox.live === true
+    ? {
+        live: true,
+        waitedMs: Number.isFinite(sandbox.waitedMs) && sandbox.waitedMs >= 0 ? Math.round(sandbox.waitedMs) : 0,
+        domains: stringList(sandbox.domains, L.DOMAINS, L.DOMAIN),
+      }
+    : {};
   return {
+    ...live,
     command: text(sandbox.command, L.COMMAND),
     run: {
       exitCode: Number.isInteger(run.exitCode) ? run.exitCode : null,

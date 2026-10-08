@@ -26,7 +26,7 @@ Ein Befehl oder Python-Lauf in der Sandbox
 
 - schreibt nur im Projektordner und in einem temporären Ordner,
 - kann deine Schlüssel, Cloud-Zugangsdaten, Shell-Verläufe und Browserdaten nicht lesen,
-- erreicht das Netz nur für die Domains, die der Aufruf nennt. Du gibst sie auf der Karte frei; in *Auto* wird nicht gefragt. `pip install` und `npm install` bekommen ihre Paketquelle automatisch.
+- erreicht das Netz nur für die Domains, die der Aufruf nennt. Du gibst sie auf der Karte frei; in *Auto* wird nicht gefragt. `pip install` und `npm install` bekommen ihre Paketquelle automatisch. [seit 1.18] Eine Verbindung zu jedem anderen Host wartet, bis du sie erlaubst oder ablehnst.
 
 Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu *lesen*, und was er gelesen hat, kann eine Domain erreichen, die du erlaubt hast. Außerdem sperrt Snotra rekursives erzwungenes Löschen wie `rm -rf`, Datenträger-Operationen und das Umschreiben der Git-Historie — eine zusätzliche Absicherung, kein vollständiger Schutz, weil ein Skript dazwischen jede Musterliste umgeht.
 
@@ -55,7 +55,16 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 **Was passiert.** Freigegeben läuft der Befehl ein zweites Mal von vorn, mit genau diesem Pfad offen; für alles andere bleibt die Sandbox an. Was der Befehl beim ersten Mal schon erledigt hat, passiert erneut. Der Kasten sagt danach, wie der zweite Lauf ausging. Für *diese Sitzung* freigegeben bekommen spätere Befehle und Python-Läufe im selben Chat den Pfad ohne Rückfrage; die Freigabe steht unter *Einstellungen › Tools & Sicherheit* bei den Sitzungsfreigaben, wo du sie widerrufen kannst, und sie endet mit dem Chat, einem Moduswechsel oder einem Neustart. Abgelehnt oder unbeantwortet läuft der Befehl nicht noch einmal, und das Modell hat die Ansage, dir zu sagen, was blockiert war, statt auszuweichen.
 
-**Was sich nicht freigeben lässt.** Eine Verbindung, die ein Programm direkt statt über den Proxy der Sandbox aufbaut — `psql`, `ssh` —, lässt sich nur anzeigen: Die Sandbox kann dafür keinen einzelnen Host öffnen. Snotras eigener Speicher, dein Home-Ordner als Ganzes und die Dateien, die die Sandbox immer verschlossen hält, etwa `.bashrc` oder `.git/hooks`, werden nie angeboten. Für einen verweigerten Host gibt es noch keine Karte; das Modell kann ihn in den Netzwerk-Domains eines neuen Aufrufs nennen, die du freigibst.
+**Eine Verbindung erlauben.** [seit 1.18] Verbindet sich ein Befehl mit einem Host außerhalb der Netzwerk-Domains seines Aufrufs, wartet die Verbindung, und eine Karte *Sandbox · Verbindung wartet* erscheint, während der Befehl noch läuft — in jedem Modus, auch in *Auto*:
+
+1. Sieh nach, um welchen Host es geht, wie lange die Verbindung schon wartet, welche Hosts schon frei sind und was der Befehl bisher gemeldet hat.
+2. Wähle unter *Verbindungen erlauben zu* genau diesen Host oder alle Hosts seiner Domain — `*.pytorch.org` statt `download.pytorch.org:443`. Eine Domain, die sich viele fremde Seiten teilen, etwa `amazonaws.com` oder `github.io`, wird nur Host für Host angeboten.
+3. Wähle unter *Wie lange* *Nur dieser Lauf* oder *Für diese Sitzung*.
+4. Klick auf *Verbindung erlauben* oder auf *Ablehnen*. *Esc* lehnt ebenfalls ab.
+
+**Was dann passiert.** Erlaubt geht die Verbindung durch, und der Befehl läuft einfach weiter; nichts läuft zweimal. Für *diese Sitzung* erlaubt erreichen spätere Befehle im selben Chat den Host ohne Rückfrage; die Freigabe steht wie ein Pfad bei den Sitzungsfreigaben. Abgelehnt bleibt die Verbindung zu, und der Befehl scheitert von selbst; nach weiteren Hosts wird für ihn nicht mehr gefragt, und das Modell hat die Ansage, nicht auszuweichen. Gibt der Befehl auf, bevor du entscheidest — `pip` zum Beispiel nach 15 Sekunden —, sagt die Karte *Nicht mehr gewartet*, und eine zweite Karte nach dem Lauf bietet den Host mit *Freigeben und wiederholen* an.
+
+**Was sich nicht freigeben lässt.** Eine Verbindung, die ein Programm direkt statt über den Proxy der Sandbox aufbaut — `psql`, `ssh` —, lässt sich nur anzeigen: Die Sandbox kann dafür keinen einzelnen Host öffnen. Snotras eigener Speicher, dein Home-Ordner als Ganzes und die Dateien, die die Sandbox immer verschlossen hält, etwa `.bashrc` oder `.git/hooks`, werden nie angeboten.
 
 ## Die Sandbox für einen Ordner abschalten
 
@@ -81,8 +90,8 @@ Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für s
 
 ## Wenn es nicht klappt
 
-- **Ein Befehl scheitert, und seine Ausgabe sagt nicht, warum.** Schau unter das Tool-Protokoll der Antwort: Der Kasten *Die Sandbox hat … blockiert* listet, was der Lauf erreichen wollte und nicht durfte — siehe [Verfolgen, was Snotra tut](../../chatting/follow-the-work/). Schreiben oder Lesen an einem geschützten Ort lässt sich auf der Karte nach dem Lauf freigeben; für alles andere gibt eine Freigabe pro Programm oder, für diesen einen Ordner, das Abschalten der Sandbox ihm den Raum.
-- **Es gibt einen Kasten, aber keine Karte.** Was blockiert wurde, lässt sich auf einer Karte nicht freigeben: eine direkte Verbindung, ein Host, Snotras Speicher oder eine Datei, die die Sandbox immer verschlossen hält. Braucht ein Programm das regelmäßig, gib ihm eine Programm-Freigabe oder schalte die Sandbox für den Ordner ab.
+- **Ein Befehl scheitert, und seine Ausgabe sagt nicht, warum.** Schau unter das Tool-Protokoll der Antwort: Der Kasten *Die Sandbox hat … blockiert* listet, was der Lauf erreichen wollte und nicht durfte — siehe [Verfolgen, was Snotra tut](../../chatting/follow-the-work/). Schreiben, Lesen an einem geschützten Ort oder eine Verbindung über den Proxy lässt sich auf einer Karte freigeben; für alles andere gibt eine Freigabe pro Programm oder, für diesen einen Ordner, das Abschalten der Sandbox ihm den Raum.
+- **Es gibt einen Kasten, aber keine Karte.** Was blockiert wurde, lässt sich auf einer Karte nicht freigeben: eine direkte Verbindung, Snotras Speicher oder eine Datei, die die Sandbox immer verschlossen hält — oder du hast eine Verbindung desselben Befehls abgelehnt, während er lief. Braucht ein Programm das regelmäßig, gib ihm eine Programm-Freigabe oder schalte die Sandbox für den Ordner ab.
 - **Der zweite Lauf wird wieder blockiert.** Der Kasten zeigt, woran der zweite Lauf gescheitert ist; oft braucht ein Programm einen zweiten Ort, etwa eine Konfigurationsdatei neben seinem Cache. Gib den beim nächsten Lauf frei.
 - **Linux: Die Karte sagt, die Sandbox brauche Pakete.** Installier `bubblewrap`, `socat` und `ripgrep` und starte Snotra neu.
 - **Linux: *Die Sandbox startet auf diesem System nicht*.** Ubuntu ab 24.04 schränkt unprivilegierte User-Namespaces ein, die die Sandbox braucht. Das aufzuheben, ist eine systemweite Entscheidung, und sie liegt bei dir:

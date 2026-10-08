@@ -178,8 +178,8 @@ test('session grants keep a sandbox path per scope, and it allows no tool call',
   grants.grant({ scopeKey: 's1', tool: 'shell_execute', targets: [{ path: '/opt/c' }], riskClasses: ['write'], sandbox: { kind: 'write', path: '/opt/c' } });
   grants.grant({ scopeKey: 's1', tool: 'run_python', targets: [{ path: '/k' }], riskClasses: ['read-sensitive'], sandbox: { kind: 'read', path: '/k' } });
   grants.grant({ scopeKey: 's2', tool: 'shell_execute', targets: [{ path: '/opt/d' }], riskClasses: ['write'], sandbox: { kind: 'write', path: '/opt/d' } });
-  assert.deepEqual(grants.sandboxPaths('s1'), { writePaths: ['/opt/c'], readPaths: ['/k'] });
-  assert.deepEqual(grants.sandboxPaths('other'), { writePaths: [], readPaths: [] });
+  assert.deepEqual(grants.sandboxPaths('s1'), { writePaths: ['/opt/c'], readPaths: ['/k'], hosts: [] });
+  assert.deepEqual(grants.sandboxPaths('other'), { writePaths: [], readPaths: [], hosts: [] });
   assert.equal(grants.find({ scopeKey: 's1', tool: 'shell_execute', targets: [{ path: '/opt/c' }], riskClasses: ['write'] }), null);
   assert.equal(grants.list().length, 3, 'listed and revocable like any other');
 });
@@ -194,6 +194,7 @@ const SANDBOX = {
     { kind: 'write', target: '/opt/c/v1', count: 1, folder: false, allow: ['/opt/c/v1', '/opt/c'] },
     { kind: 'write', target: '/x', count: 1, allow: [] },
     { kind: 'network', target: 'example.com:443', allow: ['example.com:443'] },
+    { kind: 'direct', target: '10.0.0.1:5432', allow: ['10.0.0.1:5432'] },
   ],
   others: [{ kind: 'network', target: 'example.com:443' }, { kind: 'other', target: 'sysctl' }],
   raw: ['line'],
@@ -206,7 +207,11 @@ test('the card\'s DTO names the checkpoint and carries only what may be opened',
     command: 'npx prisma generate',
     run: { exitCode: 1, durationMs: 2400, timedOut: false },
     output: 'EPERM',
-    entries: [{ kind: 'write', target: '/opt/c/v1', count: 1, folder: false, allow: ['/opt/c/v1', '/opt/c'] }],
+    entries: [
+      { kind: 'write', target: '/opt/c/v1', count: 1, folder: false, allow: ['/opt/c/v1', '/opt/c'] },
+      // A host since #792; a direct connection never.
+      { kind: 'network', target: 'example.com:443', count: 1, folder: false, allow: ['example.com:443'] },
+    ],
     others: [{ kind: 'network', target: 'example.com:443' }],
     raw: ['line'],
   });

@@ -29,7 +29,9 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
-const { summarizeViolations, describeForModel, widerFolder, parseViolationLine } = require('./sandbox-violations');
+const {
+  summarizeViolations, describeForModel, widerFolder, widerHost, parseViolationLine, NETWORK_REASONS,
+} = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -286,6 +288,157 @@ function createMutex() {
 }
 
 /**
+ * A host a sandbox card may open the proxy for (#792): a name, `*.` plus a
+ * domain, or an IPv4 address — each with or without a port. The card shows
+ * the address itself, so unlike a domain the model declares, an address is
+ * no way around what the user sees.
+ */
+const GRANT_HOST = /^(?:(?:\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?$/;
+const MAX_GRANTED_HOSTS = 20;
+
+/**
+ * What of a list of hosts a run may be given (#792). A wildcard only as the
+ * card offers it: one level above a host, never a shared domain.
+ */
+function grantedHosts(list) {
+  const out = [];
+  for (const raw of Array.isArray(list) ? list : []) {
+    if (typeof raw !== 'string') continue;
+    const value = raw.trim().toLowerCase();
+    if (!GRANT_HOST.test(value) || out.includes(value)) continue;
+    if (value.startsWith('*.') && widerHost(`x.${value.slice(2)}`) !== value) continue;
+    out.push(value);
+    if (out.length >= MAX_GRANTED_HOSTS) break;
+  }
+  return out;
+}
+
+/** The domains a run may reach: what its card named, and what sandbox cards opened. */
+function runDomains(allowedDomains, grants) {
+  return [...new Set([...normalizeDomains(allowedDomains), ...grantedHosts(grants?.hosts)])];
+}
+
+/** `pypi.org:443`, `*.pytorch.org` or `pypi.org` against one destination. */
+function matchesHostPattern(pattern, host, port) {
+  const m = /^(.*?)(?::(\d+))?$/.exec(pattern);
+  if (m[2] !== undefined && Number(m[2]) !== port) return false;
+  return m[1].startsWith('*.') ? host.endsWith(m[1].slice(1)) : host === m[1];
+}
+
+/**
+ * What a card may offer for a connection (#792): exactly the host and port,
+ * and every host of the domain above it where that is one program's domain.
+ * Nothing for a destination that is not a host Snotra can name.
+ */
+function networkGrantOptions(host, port) {
+  const h = String(host || '').toLowerCase();
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return [];
+  const exact = `${h}:${port}`;
+  if (grantedHosts([exact]).length === 0) return [];
+  const wider = widerHost(h);
+  return wider ? [exact, wider] : [exact];
+}
+
+/**
+ * One run as the network prompt sees it (#792): what the user allowed for it
+ * while it ran, whether they turned one of its connections down, and the
+ * connections waiting for an answer. One question at a time per run: a
+ * second host waits until the first is answered, and is not asked about at
+ * all when that answer covers it. After a denial nothing more is asked —
+ * the user said no to this command's network.
+ *
+ * `onNetworkAsk(request, { signal })` puts the question to the user and
+ * resolves to `{ outcome: 'allowed', pattern }`, `{ outcome: 'denied' }` or
+ * anything else for "not answered". `signal` aborts once the command's
+ * process has ended; a question still open then goes back unanswered, and
+ * the card after the run takes it up.
+ */
+function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = null } = {}) {
+  const allowed = [];
+  let denied = false;
+  let closed = false;
+  const waiting = new Map();
+  const ended = new AbortController();
+  const endedPromise = new Promise((_, reject) => {
+    ended.signal.addEventListener('abort', () => reject(new Error('The command has ended.')), { once: true });
+  });
+  endedPromise.catch(() => {});
+  let queue = Promise.resolve();
+
+  const decided = (host, port) => {
+    if (allowed.some((pattern) => matchesHostPattern(pattern, host, port))) return true;
+    return denied ? false : undefined;
+  };
+
+  async function put(host, port, since) {
+    const known = decided(host, port);
+    if (known !== undefined) return known;
+    if (ended.signal.aborted) throw new Error('The command has ended.');
+    const options = networkGrantOptions(host, port);
+    if (options.length === 0) throw new Error('This destination cannot be allowed.');
+    let output = null;
+    try { output = readOutput?.() || null; } catch { output = null; }
+    const request = {
+      host,
+      port,
+      target: `${host}:${port}`,
+      allow: options,
+      domains: [...domains, ...allowed],
+      waitedMs: Date.now() - since,
+      stdout: String(output?.stdout || ''),
+      stderr: String(output?.stderr || ''),
+    };
+    // A handler that does not listen for the end must not hold the run.
+    const answer = await Promise.race([onNetworkAsk(request, { signal: ended.signal }), endedPromise]);
+    if (answer?.outcome === 'allowed') {
+      allowed.push(options.includes(answer.pattern) ? answer.pattern : options[0]);
+      return true;
+    }
+    if (answer?.outcome === 'denied') {
+      denied = true;
+      return false;
+    }
+    throw new Error('The connection was not answered.');
+  }
+
+  return {
+    key,
+    get closed() { return closed; },
+    ask(host, port) {
+      const known = decided(host, port);
+      if (known !== undefined) return Promise.resolve(known);
+      if (closed || typeof onNetworkAsk !== 'function') return Promise.reject(new Error('Nobody to ask.'));
+      const id = `${host}:${port}`;
+      const open = waiting.get(id);
+      if (open) return open;
+      const since = Date.now();
+      const asked = queue.then(() => put(host, port, since));
+      queue = asked.then(() => {}, () => {});
+      waiting.set(id, asked);
+      const forget = () => { if (waiting.get(id) === asked) waiting.delete(id); };
+      asked.then(forget, forget);
+      return asked;
+    },
+    /**
+     * The command's process has ended: what still waits goes back
+     * unanswered, and the runtime records it as refused — under this run's
+     * command key, before its violations are read.
+     */
+    async close() {
+      closed = true;
+      if (waiting.size === 0) return;
+      ended.abort();
+      await Promise.allSettled([...waiting.values()]);
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+    end() {
+      closed = true;
+      ended.abort();
+    },
+  };
+}
+
+/**
  * @param {object} deps
  * @param {string} [deps.platform]
  * @param {typeof import('os')} deps.os
@@ -329,6 +482,24 @@ function createSandboxService({
   let detection = null;
   const gate = createDomainGate();
   const exclusive = createMutex();
+  /** Runs between `prepare()` and `release()`, by command key (#792). */
+  const liveRuns = new Map();
+
+  /**
+   * The runtime's question about a connection that matches no rule (#792).
+   * The proxy holds the connection until this resolves. Which command opened
+   * it comes as `encodedCommand` — passed on by a one-line patch of the
+   * runtime (scripts/patch-sandbox-runtime.js). Without that key, or for a
+   * command no longer running, nobody is asked and the connection is refused
+   * — the runtime records it under the command it came from, and the card
+   * after that command's run offers it with a retry. Guessing from the runs
+   * in flight could put one chat's connection on another chat's card.
+   */
+  async function askNetwork({ host, port, encodedCommand } = {}) {
+    const run = liveRuns.get(decodeCommandKey(encodedCommand));
+    if (!run || run.closed) throw new Error('This connection belongs to no running command.');
+    return run.ask(String(host || '').toLowerCase(), Number(port));
+  }
 
   function vendorPaths() {
     const out = {};
@@ -423,6 +594,12 @@ function createSandboxService({
       return [target, wider].filter((p, i, all) => p && isGrantableWritePath(p) && all.indexOf(p) === i);
     }
     if (entry.kind === 'read') return isGrantableReadPath(entry.target) ? [entry.target] : [];
+    // A connection nobody could be asked about while it waited (#792); one
+    // the user turned down is not offered again.
+    if (entry.kind === 'network' && entry.reason === NETWORK_REASONS.NOT_ALLOWED) {
+      const m = /^(.+):(\d{1,5})$/.exec(entry.target);
+      return m ? networkGrantOptions(m[1], Number(m[2])) : [];
+    }
     return [];
   }
 
@@ -465,7 +642,8 @@ function createSandboxService({
       .filter((p) => allowWrite.some((dir) => isPathInside(path, dir, p)))
       .filter((p) => !extras.some((extra) => isPathInside(path, p, extra)));
     return {
-      network: { allowedDomains: normalizeDomains(allowedDomains), deniedDomains: [] },
+      // Hosts a sandbox card opened (#792) join the domains the call named.
+      network: { allowedDomains: runDomains(allowedDomains, grants), deniedDomains: [] },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
         ...(grantedReads.length ? { allowRead: [...new Set(grantedReads)] } : {}),
@@ -606,8 +784,9 @@ function createSandboxService({
     try {
       // With the monitor, refused writes and reads are recorded per run, not
       // only refused connections (#792): Seatbelt's log on macOS, the seccomp
-      // observer on Linux.
-      await manager.initialize(buildConfig({}), undefined, true);
+      // observer on Linux. With the callback, a connection to a host outside
+      // the run's domains waits for the user instead of failing at once.
+      await manager.initialize(buildConfig({}), askNetwork, true);
     } catch (e) {
       state = { status: 'unavailable', reason: SANDBOX_REASONS.START, platform, detail: firstLine(e?.message) };
       return describe();
@@ -655,9 +834,12 @@ function createSandboxService({
    * @param {string[]} [request.allowedDomains]
    * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
    * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
-   * @param {{writePaths?: string[], readPaths?: string[]}} [request.grants]  allowed on a sandbox card (#792)
+   * @param {{writePaths?: string[], readPaths?: string[], hosts?: string[]}} [request.grants]  allowed on a sandbox card (#792)
    * @param {string} [request.commandId]
    * @param {string} [request.commandText]  what the user sees, for violations
+   * @param {(request: object, options: {signal: AbortSignal}) => Promise<object>} [request.onNetworkAsk]
+   *   asks the user about a connection while the command waits (#792); without it nobody is asked
+   * @param {() => {stdout: string, stderr: string}} [request.readOutput]  what the command printed so far
    * @param {AbortSignal} [request.abortSignal]
    */
   async function prepare({
@@ -670,6 +852,8 @@ function createSandboxService({
     grants = null,
     commandId,
     commandText,
+    onNetworkAsk = null,
+    readOutput = null,
     abortSignal,
     skipDetect = false,
   } = {}) {
@@ -677,7 +861,7 @@ function createSandboxService({
       await detect();
       if (state.status !== 'isolated') return null;
     }
-    const domains = normalizeDomains(allowedDomains);
+    const domains = runDomains(allowedDomains, grants);
     const key = [...domains].sort().join(',');
     const release = await gate.acquire(key, abortSignal);
     const manager = runtime.SandboxManager;
@@ -705,6 +889,9 @@ function createSandboxService({
     }
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
+    const commandKey = String(commandId || inner).slice(0, COMMAND_KEY_LENGTH);
+    const live = createLiveRun({ key: commandKey, domains, onNetworkAsk, readOutput });
+    liveRuns.set(commandKey, live);
     const collector = collectViolations(manager, commandId || inner);
     const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
     /** undefined until `blocked()` has looked; then the summary or null. */
@@ -729,6 +916,8 @@ function createSandboxService({
       release() {
         if (released) return;
         released = true;
+        live.end();
+        if (liveRuns.get(commandKey) === live) liveRuns.delete(commandKey);
         collector?.stop();
         try { manager.cleanupAfterCommand?.(); } catch { /* best effort */ }
         release();
@@ -740,6 +929,9 @@ function createSandboxService({
        */
       async blocked({ failed = false, output = '' } = {}) {
         if (summary !== undefined) return summary;
+        // A connection still waiting for the user is refused now that the
+        // command has given up on it, and lands among this run's refusals.
+        await live.close();
         if (!collector) {
           summary = null;
           return summary;
@@ -970,6 +1162,10 @@ module.exports = {
   createSandboxService,
   annotateBlockedTrustd,
   createDomainGate,
+  createLiveRun,
+  networkGrantOptions,
+  grantedHosts,
+  matchesHostPattern,
   normalizeDomains,
   quoteArgv,
   parsePipVersion,

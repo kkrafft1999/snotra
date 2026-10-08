@@ -33,6 +33,8 @@ const PASSTHROUGH = Object.freeze({
  * @param {{writePaths?: string[], trustd?: boolean}|null} [request.allowance]  a program allowance (#408)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
+ * @param {Function} [request.onNetworkAsk]  asks about a waiting connection (#792)
+ * @param {Function} [request.readOutput]    what the command printed so far, for that question
  * @param {AbortSignal} [request.abortSignal]
  * @returns {Promise<{command: string, args: string[], env: object,
  *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
@@ -54,6 +56,8 @@ async function planSpawn({
   grants = null,
   commandId,
   commandText,
+  onNetworkAsk = null,
+  readOutput = null,
   abortSignal,
 }) {
   const [program, ...rest] = argv;
@@ -78,6 +82,8 @@ async function planSpawn({
     grants,
     commandId,
     commandText,
+    onNetworkAsk,
+    readOutput,
     abortSignal,
   });
   if (!prepared) {

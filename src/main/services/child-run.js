@@ -64,6 +64,8 @@ function createChildRunner({ spawn, platform = process.platform }) {
    * @param {number} request.maxOutputBytes   per stream
    * @param {number} request.timeoutMs
    * @param {AbortSignal} [request.abortSignal]
+   * @param {(read: () => {stdout: string, stderr: string}) => void} [request.exposeOutput]
+   *   gets a way to read what the process printed so far, once it has started (#792)
    * @param {string} request.startError       the sentence when the spawn fails without a message
    * @returns {Promise<{error: string} | {stdout: string, stderr: string, exitCode: number|null,
    *   timedOut: boolean, aborted: boolean, truncated: boolean}>}
@@ -78,10 +80,12 @@ function createChildRunner({ spawn, platform = process.platform }) {
     maxOutputBytes,
     timeoutMs,
     abortSignal,
+    exposeOutput,
     startError,
   }) {
     const stdout = createOutputSink(maxOutputBytes);
     const stderr = createOutputSink(maxOutputBytes);
+    exposeOutput?.(() => ({ stdout: stdout.text(), stderr: stderr.text() }));
     return new Promise((resolve) => {
       let child;
       try {
