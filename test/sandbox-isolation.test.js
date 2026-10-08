@@ -190,6 +190,9 @@ test('a folder allowed on the sandbox card is writable on the second run; Snotra
   const write = first.sandboxBlocked?.entries.find((e) => e.kind === 'write');
   assert.ok(write, `no write listed: ${JSON.stringify(first.sandboxBlocked)}`);
   const granted = path.join(await fs.realpath(ctx.outside), 'granted');
+  // Only the folder that could not be made — not the ones mkdir -p passed on its way.
+  assert.deepEqual(first.sandboxBlocked.entries.map((e) => [e.kind, e.target]), [['write', granted]],
+    JSON.stringify(first.sandboxBlocked));
   assert.equal(write.allow[0], granted, 'the folder that was to be made, offered as itself');
 
   const second = await run(ctx, command, { sandboxGrants: { writePaths: [write.allow[0]] } });

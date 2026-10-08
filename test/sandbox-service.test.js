@@ -567,6 +567,15 @@ test('an observed Linux write inside the run\'s workspace is no refusal (#792)',
   assert.equal(await prepared.blocked(), null);
 });
 
+test('an observed mkdir on a folder that exists already is no refusal (#792)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore();
+  const existing = os.tmpdir();
+  store.add('shell-9', `deny mkdirat ${existing}`);
+  store.add('shell-9', 'deny mkdirat /no/such/folder/anywhere');
+  const blocked = await prepared.blocked();
+  assert.deepEqual(blocked.entries.map((e) => e.target), ['/no/such/folder/anywhere']);
+});
+
 test('an observed Linux write outside it, or into a protected folder, is one (#792)', posixOnly, async () => {
   const { store, prepared } = await preparedWithStore('shell-9', { protectedWritePaths: ['/home/u/project/.agents/skills'] });
   store.add('shell-9', 'deny openat /home/u/elsewhere.txt');

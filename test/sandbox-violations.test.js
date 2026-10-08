@@ -91,6 +91,12 @@ test('summarizeViolations: an observed Linux write the run was allowed is no ref
   assert.equal(summarizeViolations([lines[0]], { isPermittedWrite: () => true }), null);
 });
 
+test('parseViolationLine: a folder named with a slash at the end is the same folder', () => {
+  assert.equal(parseViolationLine('deny mkdirat /tmp/x/granted/').target, '/tmp/x/granted');
+  assert.equal(parseViolationLine('mkdir(1) deny(1) file-write-create /Users/me/x/').target, '/Users/me/x');
+  assert.equal(parseViolationLine('deny mkdirat /').target, '/');
+});
+
 test('parseViolationLine: empty input is nothing, unknown text is kept as other', () => {
   assert.equal(parseViolationLine(''), null);
   assert.equal(parseViolationLine('   '), null);

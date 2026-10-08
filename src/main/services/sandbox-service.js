@@ -29,7 +29,7 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
-const { summarizeViolations, describeForModel, widerFolder } = require('./sandbox-violations');
+const { summarizeViolations, describeForModel, widerFolder, parseViolationLine } = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
   /** Windows (and anything that is neither macOS nor Linux). */
@@ -385,6 +385,22 @@ function createSandboxService({
 
   const exists = (p) => fs.stat(p).then(() => true, () => false);
 
+  /** The targets of observed `mkdir` attempts that are folders already (#792). */
+  async function foldersThatExist(lines) {
+    const targets = new Set();
+    for (const line of lines) {
+      const parsed = parseViolationLine(line);
+      if (parsed?.observed && /^mkdir/.test(parsed.operation)) targets.add(parsed.target);
+      if (targets.size >= 200) break;
+    }
+    const out = new Set();
+    for (const target of targets) {
+      const stat = await fs.stat(target).catch(() => null);
+      if (stat && (typeof stat.isDirectory !== 'function' || stat.isDirectory())) out.add(target);
+    }
+    return out;
+  }
+
   /**
    * What the card may offer for each blocked resource (#792): the path
    * itself and, for a write, the folder one level up. An entry without
@@ -693,7 +709,14 @@ function createSandboxService({
     const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
     /** undefined until `blocked()` has looked; then the summary or null. */
     let summary;
-    const summarize = () => summarizeViolations(collector.lines, { homeDir: os.homedir(), isPermittedWrite });
+    // Folders that already existed when `mkdir` was tried on them (Linux, see
+    // summarizeViolations): looked up once, in `blocked()`.
+    let existingFolders = new Set();
+    const summarize = () => summarizeViolations(collector.lines, {
+      homeDir: os.homedir(),
+      isPermittedWrite: (target, operation) => isPermittedWrite(target)
+        || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
+    });
     let released = false;
     return {
       command: '/bin/sh',
@@ -723,6 +746,7 @@ function createSandboxService({
         }
         const refused = failed && PERMISSION_ERROR.test(String(output || ''));
         await settleViolations(collector, { settleMs: violationSettleMs, failed, refused });
+        existingFolders = await foldersThatExist(collector.lines);
         summary = summarize();
         if (summary) {
           for (const entry of summary.entries) entry.allow = await grantOptions(entry);
