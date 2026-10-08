@@ -40,6 +40,11 @@ export default defineConfig({
           items: [{ autogenerate: { directory: 'chatting' } }],
         },
         {
+          label: 'The workspace',
+          translations: { de: 'Der Arbeitsbereich' },
+          items: [{ autogenerate: { directory: 'workspace' } }],
+        },
+        {
           label: 'Modes, permissions and safety',
           translations: { de: 'Modi, Freigaben und Sicherheit' },
           items: [{ autogenerate: { directory: 'safety' } }],

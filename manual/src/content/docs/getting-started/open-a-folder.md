@@ -23,7 +23,7 @@ To switch later, click the name of the folder at the top of the sidebar. The men
 ## What happens
 
 - The **file tree** of the folder appears on the left. Hidden files, such as `.gitignore`, stay out of sight until you show them with `Cmd+Shift+.` / `Ctrl+Shift+.`.
-- If the folder has a `README.md`, it opens in the **middle column**. Otherwise the welcome page stays there.
+- If the folder has a `README.md`, it opens in the **middle column**. Otherwise the middle column stays closed and the chat gets the room — see [Find your way around the window](../../workspace/the-window/).
 - The **chat** on the right greets you with the name of the folder. From now on it works inside this folder.
 - Snotra remembers the folder and opens it again on the next start.
 

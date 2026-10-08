@@ -15,6 +15,7 @@ This manual explains how to use it: how to get started, how to work with files a
 
 - **New to Snotra:** [install it](getting-started/install/), [connect a model](getting-started/connect-a-model/) and [open a folder](getting-started/open-a-folder/). The chapter *Getting started* takes you from the download to the first chat.
 - **Chatting:** [write a message](chatting/write-a-message/), [see what Snotra changed](chatting/review-changes/) and [continue an earlier chat](chatting/chat-history/).
+- **The workspace:** [find your way around the window](workspace/the-window/), [find a file](workspace/find-a-file/) and [look at it](workspace/preview/).
 - **Safety:** [why Snotra asks before it acts](safety/why-snotra-asks/), and how to [choose a mode](safety/choose-a-mode/) for a chat or a folder.
 - **Download:** the latest release for macOS, Windows and Linux is on the [releases page](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Full feature description:** until every chapter of this manual is written, the [README on GitHub](https://github.com/kkrafft1999/snotra#readme) describes every feature in one place.

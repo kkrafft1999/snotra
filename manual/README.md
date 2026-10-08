@@ -66,7 +66,11 @@ shows legibly. `profile: 'fresh'` starts the app as it is right after
 installing — no folder, no model — instead of on the demo project; `prefs`
 adds entries to `ui-preferences.json`, to switch a tool on or widen the chat
 column; `configure(config)` changes `llm-config.json` before the start, to
-add model entries.
+add model entries. `setUp` also gets the path of the demo copy as
+`workspace`, to put a file in it for one motif without adding it to
+`demo-workspace/`. An HTML file is shown in a view of its own over the
+window, which a screenshot of the window does not contain; `htmlView: true`
+takes its picture separately and lays it in.
 Running the script needs the app's dependencies (`npm ci` at the repository
 root). The demo project must stay free of anything personal.
 
