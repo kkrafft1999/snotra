@@ -9,7 +9,7 @@ import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
 import { t, tPlural } from '../i18n.js';
 
-const { normalizeSandboxBlocked, normalizeSandboxDecision } = contracts;
+const { normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive } = contracts;
 
 const SHIELD_OFF_ICON_HTML =
   '<svg class="chat-sandbox-blocked-icon" viewBox="0 0 16 16" aria-hidden="true">'
@@ -17,21 +17,55 @@ const SHIELD_OFF_ICON_HTML =
   + '<path d="M2.6 2.6l10.8 10.8"/></svg>';
 
 const DENY_LIST_REASON = 'host is on the deny list';
+const USER_DENIED_REASON = 'user denied';
+const NO_ENTRIES = Object.freeze({ entries: [], moreEntries: 0, total: 0, raw: [] });
 
-/** The runs of a trace that the sandbox refused something in, in order. */
+/**
+ * The runs of a trace that the sandbox refused something in, or held a
+ * connection of until the user decided (#792), in order.
+ */
 export function blockedRunsOf(trace) {
   if (!Array.isArray(trace)) return [];
   const runs = [];
   for (const entry of trace) {
     const blocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
-    if (blocked) runs.push({ line: toolLineText(entry), blocked, decision: normalizeSandboxDecision(entry?.sandboxDecision) });
+    const live = normalizeSandboxLive(entry?.sandboxLive) || [];
+    // A denied connection is among the refusals already; the allowed ones are not.
+    const allowed = live.filter((d) => d.outcome === 'allowed');
+    if (!blocked && allowed.length === 0) continue;
+    runs.push({
+      line: toolLineText(entry),
+      blocked: blocked || NO_ENTRIES,
+      decision: blocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null,
+      allowed,
+    });
   }
   return runs;
 }
 
 function reasonOf(entry) {
   if (entry.kind === 'network' && entry.reason === DENY_LIST_REASON) return t('toolLog.sandbox.reason.networkDenied');
+  if (entry.kind === 'network' && entry.reason === USER_DENIED_REASON) return t('toolLog.sandbox.reason.networkUserDenied');
   return t(`toolLog.sandbox.reason.${entry.kind}`);
+}
+
+/** A connection the user let through while the command waited (#792), as one line. */
+function buildAllowedEntry(decision) {
+  const item = document.createElement('li');
+  item.className = 'chat-sandbox-blocked-entry';
+  item.dataset.kind = 'network';
+  item.dataset.outcome = 'allowed';
+  const kind = document.createElement('span');
+  kind.className = 'chat-sandbox-blocked-kind';
+  kind.textContent = t('toolLog.sandbox.kind.network');
+  const target = document.createElement('span');
+  target.className = 'chat-sandbox-blocked-target';
+  target.textContent = decision.pattern !== decision.target ? `${decision.target} · ${decision.pattern}` : decision.target;
+  const reason = document.createElement('span');
+  reason.className = 'chat-sandbox-blocked-reason';
+  reason.textContent = t(`toolLog.sandbox.live.${decision.duration}`);
+  item.append(kind, target, reason);
+  return item;
 }
 
 /** "~/Library/Caches/pip/ · 37 paths", "example.com:443 · 3 times". */
@@ -87,6 +121,7 @@ function buildRun(run, homeDir, { withLine }) {
     more.textContent = t('toolLog.sandbox.more', { count: run.blocked.moreEntries });
     list.append(more);
   }
+  for (const decision of run.allowed || []) list.append(buildAllowedEntry(decision));
   part.append(list);
   if (run.decision) {
     const decision = document.createElement('p');
@@ -135,13 +170,17 @@ export function buildSandboxBlockedBox(runs, { homeDir = '' } = {}) {
   box.setAttribute('aria-labelledby', titleId);
 
   const resources = runs.reduce((sum, run) => sum + run.blocked.entries.length + run.blocked.moreEntries, 0);
+  const asked = runs.reduce((sum, run) => sum + (run.allowed?.length || 0), 0);
   const title = document.createElement('p');
   title.className = 'chat-sandbox-blocked-title';
   title.id = titleId;
   title.insertAdjacentHTML('afterbegin', SHIELD_OFF_ICON_HTML);
   const heading = document.createElement('span');
   heading.className = 'chat-sandbox-blocked-heading';
-  heading.textContent = tPlural('toolLog.sandbox.title', resources, { count: resources });
+  // Nothing refused, only connections let through on the card (#792).
+  heading.textContent = resources > 0
+    ? tPlural('toolLog.sandbox.title', resources, { count: resources })
+    : tPlural('toolLog.sandbox.titleAllowed', asked, { count: asked });
   title.append(heading);
   const context = document.createElement('span');
   context.className = 'chat-sandbox-blocked-context';

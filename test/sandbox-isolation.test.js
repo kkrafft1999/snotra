@@ -229,6 +229,53 @@ test('no network unless a domain is allowed — an allowed domain works', async 
   assert.deepEqual(allowed.isolation, { isolated: true, domains: ['example.com'] });
 });
 
+test('a connection outside the run\'s domains waits for the user: allowed it goes through, denied it is refused (#792)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  const curl = 'curl -sS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
+  const asked = [];
+  const answering = (answer) => async (request) => { asked.push(request); return answer(request); };
+
+  const allowed = await runThroughProxy(t, ctx, 'allowed live', curl, {
+    timeoutMs: 30_000,
+    onSandboxNetworkAsk: answering((r) => ({ outcome: 'allowed', pattern: r.allow[0] })),
+  });
+  assert.equal(allowed.exitCode, 0, allowed.stderr);
+  assert.match(allowed.stdout, /^[23]\d\d$/);
+  assert.equal(allowed.sandboxBlocked, undefined);
+  assert.equal(asked[0].target, 'example.com:443', 'the proxy named the command that waited');
+  assert.deepEqual(asked[0].allow, ['example.com:443']);
+
+  const denied = await runThroughProxy(t, ctx, 'denied live', curl, {
+    timeoutMs: 30_000,
+    onSandboxNetworkAsk: answering(() => ({ outcome: 'denied' })),
+  });
+  assert.notEqual(denied.exitCode, 0);
+  assert.deepEqual(
+    denied.sandboxBlocked?.entries.map((e) => [e.kind, e.target, e.reason, e.allow]),
+    [['network', 'example.com:443', 'user denied', []]],
+  );
+});
+
+test('a connection still waiting when the command gives up is offered with a retry (#792)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  let ended = null;
+  const result = await runThroughProxy(t, ctx, 'gave up', 'curl -sS -m 3 -o /dev/null https://example.com', {
+    timeoutMs: 30_000,
+    // Nobody answers; the command's own time limit ends the wait.
+    onSandboxNetworkAsk: (request, { signal }) => new Promise((resolve) => {
+      signal.addEventListener('abort', () => { ended = Date.now(); resolve({ outcome: 'unanswered' }); }, { once: true });
+    }),
+  });
+  assert.notEqual(result.exitCode, 0);
+  assert.ok(ended, 'the question ended with the command');
+  assert.deepEqual(
+    result.sandboxBlocked?.entries.map((e) => [e.kind, e.target, e.reason, e.allow]),
+    [['network', 'example.com:443', 'host is not on the allow list', ['example.com:443']]],
+  );
+});
+
 test('a background process ends with its run and never reaches a later run\'s domains (CR-B03-01)', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;

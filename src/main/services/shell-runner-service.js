@@ -301,8 +301,10 @@ function createShellRunnerService({
     workspaceRoot,
     networkDomains,
     programAllowance = null,
-    // Allowed on a sandbox card (#792): `{ writePaths, readPaths }`.
+    // Allowed on a sandbox card (#792): `{ writePaths, readPaths, hosts }`.
     sandboxGrants = null,
+    // Asks the user about a connection while the command waits (#792).
+    onSandboxNetworkAsk = null,
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
@@ -335,6 +337,8 @@ function createShellRunnerService({
       }
     }
     const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
+    // What the command printed so far, for the card about a waiting connection.
+    let readOutput = null;
     let target;
     try {
       target = await planSpawn({
@@ -350,6 +354,8 @@ function createShellRunnerService({
         grants: sandboxGrants,
         commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         commandText: line,
+        onNetworkAsk: onSandboxNetworkAsk,
+        readOutput: () => readOutput?.() || null,
         abortSignal,
       });
     } catch (e) {
@@ -374,6 +380,7 @@ function createShellRunnerService({
         maxOutputBytes: SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES,
         timeoutMs: limit,
         abortSignal,
+        exposeOutput: (read) => { readOutput = read; },
         startError: 'The shell could not be started.',
       });
       if (outcome.error) return outcome;

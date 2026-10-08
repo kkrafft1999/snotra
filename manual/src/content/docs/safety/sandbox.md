@@ -26,7 +26,7 @@ A command or a Python run in the sandbox
 
 - writes only in the project folder and a temporary folder,
 - cannot read your keys, cloud credentials, shell histories or browser data,
-- reaches the network only for the domains the call names. You approve them on the card; in *Auto* they are not asked about. `pip install` and `npm install` get their package registry automatically.
+- reaches the network only for the domains the call names. You approve them on the card; in *Auto* they are not asked about. `pip install` and `npm install` get their package registry automatically. [since 1.18] A connection to any other host waits until you allow or deny it.
 
 What it does not do: it does not stop a run from *reading* your other files, and what it read can reach a domain you allowed. Snotra also blocks recursive forced deletion such as `rm -rf`, disk operations and rewriting Git history — an extra safeguard, not complete protection, since a script in between gets around any list of patterns.
 
@@ -55,7 +55,16 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 **What happens.** Allowed, the command runs a second time, from the start, with exactly that path opened; the sandbox stays on for everything else. Whatever the command already did the first time happens again. The box then says how the second run went. Allowed *for this session*, later commands and Python runs in the same chat get the path without asking; it is listed under *Settings › Tools & security* among the session allowances, where you can revoke it, and it ends with the chat, a change of mode or a restart. Denied or not answered, the command does not run again, and the model is told to tell you what was blocked instead of working around it.
 
-**What cannot be allowed.** A connection a program makes directly instead of through the sandbox's proxy — `psql`, `ssh` — can only be shown: the sandbox cannot open a single host for it. Snotra's own storage, your home folder as a whole and the files the sandbox always keeps closed, such as `.bashrc` or `.git/hooks`, are never offered. For a host that was refused, there is no card yet; the model can name it in the network domains of a new call, which you approve.
+**Allow a connection.** [since 1.18] When a command connects to a host outside the network domains of its call, the connection waits, and a card *Sandbox · connection waiting* appears while the command is still running — in every mode, *Auto* included:
+
+1. Check the host, how long the connection has been waiting, which hosts are open already and what the command has printed so far.
+2. Under *Allow connections to*, choose exactly this host or every host of its domain — `*.pytorch.org` instead of `download.pytorch.org:443`. A domain that many unrelated sites share, such as `amazonaws.com` or `github.io`, is offered host by host only.
+3. Under *How long*, choose *Only this run* or *For this session*.
+4. Click *Allow connection*, or *Deny*. *Esc* denies as well.
+
+**What happens then.** Allowed, the connection goes through and the command simply carries on; nothing runs twice. Allowed *for this session*, later commands in the same chat reach the host without asking, listed among the session allowances like a path. Denied, the connection stays closed and the command fails on its own; it is not asked about any further host, and the model is told not to work around it. If the command gives up before you decide — `pip` does after 15 seconds — the card says *Stopped waiting*, and a second card after the run offers the host with *Allow and run again*.
+
+**What cannot be allowed.** A connection a program makes directly instead of through the sandbox's proxy — `psql`, `ssh` — can only be shown: the sandbox cannot open a single host for it. Snotra's own storage, your home folder as a whole and the files the sandbox always keeps closed, such as `.bashrc` or `.git/hooks`, are never offered.
 
 ## Switch the sandbox off for one folder
 
@@ -81,8 +90,8 @@ The allowance applies in every folder, but only when a command runs that program
 
 ## If it doesn't work
 
-- **A command fails, and its output does not say why.** Look under the tool log of the answer: the box *The sandbox blocked …* lists what the run tried to reach and was refused — see [Follow what Snotra does](../../chatting/follow-the-work/). A write or a protected read can be allowed on the card that follows the run; for anything else, a program allowance or, for this one folder, switching the sandbox off gives it the room.
-- **There is a box, but no card.** What was blocked cannot be allowed on a card: a direct connection, a host, Snotra's storage or a file the sandbox always keeps closed. When a program needs it regularly, give it a program allowance, or switch the sandbox off for the folder.
+- **A command fails, and its output does not say why.** Look under the tool log of the answer: the box *The sandbox blocked …* lists what the run tried to reach and was refused — see [Follow what Snotra does](../../chatting/follow-the-work/). A write, a protected read or a connection through the proxy can be allowed on a card; for anything else, a program allowance or, for this one folder, switching the sandbox off gives it the room.
+- **There is a box, but no card.** What was blocked cannot be allowed on a card: a direct connection, Snotra's storage or a file the sandbox always keeps closed — or you denied a connection of the same command while it ran. When a program needs it regularly, give it a program allowance, or switch the sandbox off for the folder.
 - **The second run is blocked again.** The box shows what the second run ran into; a program often needs a second place, such as a config file next to its cache. Allow that one on the next run.
 - **Linux: the card says the sandbox needs packages.** Install `bubblewrap`, `socat` and `ripgrep` and restart Snotra.
 - **Linux: *the sandbox does not start on this system*.** Ubuntu 24.04 and later restrict unprivileged user namespaces, which the sandbox needs. Lifting that is a system-wide decision and yours to make:

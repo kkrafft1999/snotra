@@ -91,6 +91,7 @@ test('run_python reicht Code, stdin, argv, Zeitlimit und Arbeitsordner durch', a
     networkDomains: [],
     sandboxDisabled: false,
     sandboxGrants: null,
+    onSandboxNetworkAsk: null,
     abortSignal: signal,
   });
 });

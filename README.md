@@ -729,6 +729,16 @@ security and can be revoked there. Denied, the command does not run again, and
 the model is told not to work around it. A connection a program makes directly
 instead of through the sandbox's proxy can only be shown, not allowed.
 
+**Allowing a connection while the command waits.** A connection to a host the
+call did not name is held while the command runs, and a card asks — in every
+mode, *Auto* included — whether to let exactly that host through, or every host
+of its domain, for this run or for the session. The card says how long the
+connection has waited, which hosts are open already and what the command has
+printed so far. Allowed, the command simply carries on; nothing runs twice.
+Denied, the connection stays closed and the model is told not to work around
+it. If the command gives up before you decide, a card after the run offers the
+host with a retry.
+
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —

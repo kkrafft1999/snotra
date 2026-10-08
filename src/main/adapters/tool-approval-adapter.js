@@ -19,11 +19,21 @@ const {
   APPROVAL_RESPONSES,
   PERMISSION_DENIAL_REASONS,
   createToolApprovalRequestDto,
+  isPermissionDenialReason,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
 
 function chatKey(chatId) {
   return typeof chatId === 'string' && chatId ? chatId : null;
+}
+
+/**
+ * Why an aborted request expired: the abort's own reason when it names one
+ * (#792 — the command behind a sandbox card gave up waiting), otherwise the
+ * general one.
+ */
+function abortReason(signal) {
+  return isPermissionDenialReason(signal?.reason) ? signal.reason : PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED;
 }
 
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
@@ -127,11 +137,11 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
         return Promise.resolve({ invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI, requestId: '' });
       }
       if (abortSignal?.aborted) {
-        return Promise.resolve({ invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, requestId: '' });
+        return Promise.resolve({ invalidated: true, reason: abortReason(abortSignal), requestId: '' });
       }
       const requestId = randomUUID();
       return new Promise((resolve) => {
-        const onAbort = () => settle(requestId, { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED });
+        const onAbort = () => settle(requestId, { invalidated: true, reason: abortReason(abortSignal) });
         abortSignal?.addEventListener?.('abort', onAbort, { once: true });
         pending.set(requestId, {
           sessionId,

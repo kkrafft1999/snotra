@@ -267,6 +267,32 @@ resource; the adapter and the engine accept only what the card offered. What
 was decided goes on the trace as `sandboxDecision` and into the box. A denial
 is remembered under `${planKey}#sandbox`: the same command again ends the run.
 
+A **connection** to a host outside the run's domains is asked about while the
+command waits for it (#792, step 3). The service passes `askNetwork` to
+`SandboxManager.initialize()` as the runtime's ask callback; the proxy holds
+the connection until it resolves. Which command opened the connection is known
+inside the runtime (`encodedCommand`, from the proxy credentials) but was not
+handed to the callback — `scripts/patch-sandbox-runtime.js` adds it after every
+install, and a test in `test/sandbox-live-network.test.js`
+fails when an update moves the line. `askNetwork` looks the key up among the
+runs between `prepare()` and `release()`; a connection without a key, or of a
+command that has ended, is refused without asking. Each run has a small state
+of its own (`createLiveRun`): one question at a time, the same host asked once,
+an allowed `*.domain` covering the hosts queued behind it, nothing asked after a
+denial. The question goes to the handler the runner got as
+`onSandboxNetworkAsk` — the engine's `askLiveConnection`, which shows the card
+at the same `sandbox` checkpoint with `live: true` (how long it waited, the
+hosts open already, what the command printed so far through child-run's
+`exposeOutput`). "For this session" is a session grant of kind `network`, and
+`sandboxPaths()` hands its hosts on as `grants.hosts`, which `runDomains()`
+adds to the run's `allowedDomains` — and so to the gate key. When the process
+ends while a question is open, `blocked()` aborts it first: the card expires
+with `sandbox_run_ended`, the runtime records the refusal under the command
+key (as "permission prompt failed", read as "not on the allow list"), and the
+card after the run offers the host with a retry like a write. What was decided
+while the command ran goes on the trace as `sandboxLive` and to the model as
+`sandbox_connections`; after a denial there is no card after the run.
+
 The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
 is policy, not isolation, and lives in the signed policy file next to the rules
 (`main/services/tool-policy-store.js`, a list of canonical roots). The planner

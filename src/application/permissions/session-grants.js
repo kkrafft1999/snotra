@@ -21,6 +21,9 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { isMessage } = require('../../shared/contracts/message');
 
+/** What a sandbox card can open for a session (#792). */
+const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network']);
+
 function pathsKey(targets) {
   const paths = (Array.isArray(targets) ? targets : [])
     .map((target) => (typeof target === 'string' ? target : target?.path))
@@ -70,14 +73,16 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
    * freigebbar sind (delete/execute/external nur einmalig, Konzept §6).
    */
   function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null, scope = null, sandbox = null } = {}) {
-    const classes = sessionGrantableClasses(riskClasses);
-    if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
-    // A folder or path a sandbox card opened for the session (#792). It does
-    // not allow a tool call; the shell and Python runs of the chat get it.
-    const sandboxGrant = sandbox && (sandbox.kind === 'write' || sandbox.kind === 'read')
+    // A folder, path or host a sandbox card opened for the session (#792). It
+    // does not allow a tool call; the shell and Python runs of the chat get
+    // it. That is why a connection may be kept for the session here although
+    // `external` never is for a call.
+    const sandboxGrant = sandbox && SANDBOX_GRANT_KINDS.includes(sandbox.kind)
       && typeof sandbox.path === 'string' && sandbox.path
       ? { kind: sandbox.kind, path: sandbox.path }
       : null;
+    const classes = sandboxGrant ? normalizeRiskClasses(riskClasses) : sessionGrantableClasses(riskClasses);
+    if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
     const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
     const entry = {
       id: nextId(),
@@ -173,17 +178,16 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
 
   /**
    * What sandbox cards opened for the rest of a session (#792): the folders
-   * a run may write in and the protected paths it may read, for every shell
-   * and Python run under this scope.
+   * a run may write in, the protected paths it may read and the hosts it may
+   * connect to, for every shell and Python run under this scope.
    */
   function sandboxPaths(scopeKey) {
-    const writePaths = new Set();
-    const readPaths = new Set();
+    const sets = { write: new Set(), read: new Set(), network: new Set() };
     for (const entry of grants) {
       if (!entry.sandbox || entry.scopeKey !== scopeKey) continue;
-      (entry.sandbox.kind === 'read' ? readPaths : writePaths).add(entry.sandbox.path);
+      sets[entry.sandbox.kind]?.add(entry.sandbox.path);
     }
-    return { writePaths: [...writePaths], readPaths: [...readPaths] };
+    return { writePaths: [...sets.write], readPaths: [...sets.read], hosts: [...sets.network] };
   }
 
   /** Called whenever the set of approvals changes; returns the unsubscribe. */

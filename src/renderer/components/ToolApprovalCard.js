@@ -1,5 +1,7 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
-import { buildSandboxCardView, describeSandboxOutcome } from '../utils/sandbox-approval-view.js';
+import {
+  buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited,
+} from '../utils/sandbox-approval-view.js';
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
@@ -283,10 +285,59 @@ export function initToolApprovalCards({
   }
 
   /**
+   * Live sandbox cards (#792) whose waiting time is kept current: card →
+   * redraw. One clock for all of them, running only while one of them is
+   * open — a card leaves when it is decided, replaced (a language change) or
+   * forgotten with its chat.
+   */
+  const ticking = new Map();
+  let ticker = null;
+
+  function syncTicker() {
+    const current = new Set(cards.values());
+    for (const card of [...ticking.keys()]) {
+      if (card.dataset.state !== 'pending' || !current.has(card)) ticking.delete(card);
+    }
+    if (ticking.size === 0) {
+      clearInterval(ticker);
+      ticker = null;
+      return;
+    }
+    if (ticker) return;
+    ticker = setInterval(() => {
+      for (const redraw of ticking.values()) redraw();
+      syncTicker();
+    }, 1000);
+    // In the app the window owns it; under Node (the tests) it must not hold the process.
+    ticker?.unref?.();
+  }
+
+  /**
+   * How long the connection of a live sandbox card has waited (#792). The
+   * time counts from when main asked, not from when the card was drawn — a
+   * card for a chat in the background, or one rebuilt for a language change,
+   * shows the same time.
+   */
+  function tickWaiting(card, entry, view, node) {
+    const since = Number.isFinite(entry.receivedAt) ? entry.receivedAt : Date.now();
+    const redraw = () => {
+      if (card.dataset.state !== 'pending') return;
+      const text = describeLiveRun(view.waitedMs + (Date.now() - since));
+      if (node.textContent !== text) node.textContent = text;
+    };
+    redraw();
+    ticking.set(card, redraw);
+  }
+
+  /**
    * The sandbox card (#792): what the run was refused, how it went, what it
-   * reported; which path to open — exactly the blocked one or one folder up
-   * — and for how long. "Allow and run again" answers once or for the
-   * session, as the duration says; Esc denies, like on every card.
+   * reported; which path or host to open — exactly the blocked one, one
+   * folder up, every host of the domain — and for how long. "Allow and run
+   * again" answers once or for the session, as the duration says; Esc
+   * denies, like on every card. The card about a connection that waits while
+   * the command runs (`view.live`) says how long it has waited and which
+   * hosts are open already, and its "Allow connection" lets the command
+   * carry on instead of running it again.
    */
   function buildSandboxCard(entry, view) {
     const requestId = entry.dto.requestId;
@@ -308,8 +359,9 @@ export function initToolApprovalCards({
 
     const headline = el('p', 'chat-approval-card__headline');
     headline.id = domId(requestId, 'headline');
-    for (const part of view.headline.template.split(/(\{command\})/)) {
+    for (const part of view.headline.template.split(/(\{command\}|\{host\})/)) {
       if (part === '{command}') headline.appendChild(code(view.headline.command));
+      else if (part === '{host}') headline.appendChild(code(view.headline.host, 'en'));
       else if (part) headline.append(part);
     }
     card.appendChild(headline);
@@ -338,13 +390,20 @@ export function initToolApprovalCards({
       fact(facts, t('approval.sandbox.fact.others'), others);
     }
     if (view.command) fact(facts, t('approval.sandbox.fact.command'), code(view.command));
-    fact(facts, t('approval.sandbox.fact.run'), view.run);
+    const run = el('span', 'chat-approval-card__run', view.run);
+    fact(facts, t('approval.sandbox.fact.run'), run);
+    if (view.live) tickWaiting(card, entry, view, run);
+    if (view.domains.length) {
+      const open = el('span', 'chat-approval-card__domains');
+      for (const domain of view.domains) open.appendChild(code(domain, 'en'));
+      fact(facts, t('approval.sandbox.fact.open'), open);
+    }
     fact(facts, t('approval.fact.reason'), view.reason);
     card.appendChild(facts);
 
     const output = el('details', 'chat-approval-card__preview chat-approval-card__report');
     output.open = true;
-    output.appendChild(el('summary', null, t('approval.sandbox.output')));
+    output.appendChild(el('summary', null, view.outputLabel));
     // A report that scrolls takes the keyboard too.
     const scrolling = (text) => {
       const pre = el('pre', 'chat-approval-card__preview-text', text);
@@ -353,7 +412,7 @@ export function initToolApprovalCards({
     };
     output.appendChild(view.output
       ? scrolling(view.output)
-      : el('p', 'chat-approval-card__report-empty', t('approval.sandbox.output.empty')));
+      : el('p', 'chat-approval-card__report-empty', view.outputEmpty));
     card.appendChild(output);
     if (view.raw) {
       const raw = el('details', 'chat-approval-card__preview chat-approval-card__report');
@@ -540,7 +599,23 @@ export function initToolApprovalCards({
   /** Auflösung anzeigen: keine aktive Aktion bleibt zurück (Konzept §6). */
   function applyOutcome(card, entry) {
     const resolved = { ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true };
-    const outcome = (entry.dto?.checkpoint === 'sandbox' && describeSandboxOutcome(resolved)) || describeApprovalOutcome(resolved);
+    const outcome = (entry.dto?.checkpoint === 'sandbox'
+      && describeSandboxOutcome(resolved, { live: entry.dto.sandbox?.live === true }))
+      || describeApprovalOutcome(resolved);
+    // A decided card about a waiting connection (#792) says how long it
+    // waited, not that the command is still running. Taken once, so that a
+    // card rebuilt for a language change says the same.
+    const run = entry.dto?.sandbox?.live === true ? card.querySelector('.chat-approval-card__run') : null;
+    if (run) {
+      if (!Number.isFinite(entry.waitedFinalMs)) {
+        const since = Number.isFinite(entry.receivedAt) ? entry.receivedAt : Date.now();
+        entry.waitedFinalMs = (entry.dto.sandbox.waitedMs || 0) + (Date.now() - since);
+      }
+      run.textContent = describeLiveWaited(entry.waitedFinalMs);
+      // "Nothing yet, it is waiting" no longer holds either.
+      const empty = card.querySelector('.chat-approval-card__report-empty');
+      if (empty) empty.textContent = t('approval.sandbox.output.empty');
+    }
     // What the sandbox card offered to choose stays visible, but fixed.
     for (const fieldset of card.querySelectorAll('.chat-approval-card__choice')) fieldset.disabled = true;
     card.dataset.state = outcome.status;
@@ -605,6 +680,8 @@ export function initToolApprovalCards({
   function onRequest(dto) {
     const entry = queue.add(dto);
     if (!entry) return;
+    // A waiting connection's time counts on from here (#792).
+    entry.receivedAt = Date.now();
     // A request without a chat comes from a main that predates #320; it can
     // only mean the chat on screen.
     entry.chatId = dto.chatId || appStore.currentChatId || null;
@@ -613,6 +690,7 @@ export function initToolApprovalCards({
     const card = buildCard(entry, view);
     card.__approvalView = view;
     cards.set(dto.requestId, card);
+    syncTicker();
     // A card for a chat in the background waits here until that chat is
     // opened; `mount` puts it in place then (#320).
     const box = isOnScreen(entry) ? currentContainer() : null;
@@ -630,6 +708,7 @@ export function initToolApprovalCards({
     entry.aborted = runAborted(entry);
     const card = cards.get(entry.dto.requestId);
     if (card) applyOutcome(card, entry);
+    syncTicker();
     notifyPendingChanged();
   }
 
@@ -651,6 +730,7 @@ export function initToolApprovalCards({
       fresh.__approvalView = view;
       card.replaceWith(fresh);
       cards.set(requestId, fresh);
+      syncTicker();
       if (entry.state === APPROVAL_ENTRY_STATES.RESOLVED) applyOutcome(fresh, entry);
       // A decision already on its way keeps its buttons locked; the answer
       // arrives for the request, not for the DOM node it was clicked in.
@@ -749,6 +829,7 @@ export function initToolApprovalCards({
       for (const entry of queue.forgetWhere((e) => chatOf(e) === key && e.state === APPROVAL_ENTRY_STATES.RESOLVED)) {
         cards.delete(entry.dto.requestId);
       }
+      syncTicker();
       owners.set(key, message || null);
     },
     /**
@@ -762,6 +843,7 @@ export function initToolApprovalCards({
         cards.get(entry.dto.requestId)?.remove();
         cards.delete(entry.dto.requestId);
       }
+      syncTicker();
       for (const chatId of [...owners.keys()]) {
         if (!keep.has(chatId)) owners.delete(chatId);
       }

@@ -1220,7 +1220,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['code'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants, onSandboxNetworkAsk } = {}) => {
         if (!pythonRunner) {
           return JSON.stringify({ error: 'Running Python is not available in this installation.' });
         }
@@ -1234,6 +1234,7 @@ function createWorkspaceToolRegistry({
           networkDomains: resolveNetworkDomains('run_python', args),
           sandboxDisabled: sandboxDisabledByPlan(plan),
           sandboxGrants: sandboxGrants || null,
+          onSandboxNetworkAsk: onSandboxNetworkAsk || null,
           abortSignal,
         });
         if (result?.error) return JSON.stringify({ error: result.error });
@@ -1326,7 +1327,7 @@ function createWorkspaceToolRegistry({
         },
         required: ['command'],
       },
-      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants } = {}) => {
+      handler: async (args, { workspaceRoot, abortSignal, plan, onSandboxBlocked, sandboxGrants, onSandboxNetworkAsk } = {}) => {
         if (!shellRunner) {
           return JSON.stringify({ error: 'Running shell commands is not available in this installation.' });
         }
@@ -1351,6 +1352,7 @@ function createWorkspaceToolRegistry({
           programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
           sandboxGrants: sandboxGrants || null,
+          onSandboxNetworkAsk: onSandboxNetworkAsk || null,
           abortSignal,
         });
         if (result?.error) {

@@ -25,7 +25,7 @@ Ist die Antwort fertig, klappen die Schritte zu einer Zeile zusammen, die sie z�
 
 ## Wenn die Sandbox etwas gestoppt hat
 
-Wollte ein Befehl oder ein Python-Lauf unter macOS oder Linux an etwas, das die Sandbox verschlossen hält — einen Ordner außerhalb des Projekts, einen Host, der nicht erlaubt war —, erscheint unter dem Tool-Protokoll ein Kasten *Die Sandbox hat … blockiert*. Er listet, was blockiert wurde, wie oft und warum. Meist ist das der Grund, warum ein Befehl auf eine Weise scheiterte, die seine eigene Ausgabe nicht erklärt. [seit 1.18] Bei Schreiben oder Lesen an einem geschützten Ort fragt direkt nach dem Lauf eine Karte, ob du es freigeben und den Befehl wiederholen willst; der Kasten sagt danach auch, wie du entschieden hast. Mehr unter [Befehle in der Sandbox ausführen](../../safety/sandbox/).
+Wollte ein Befehl oder ein Python-Lauf unter macOS oder Linux an etwas, das die Sandbox verschlossen hält — einen Ordner außerhalb des Projekts, einen Host, der nicht erlaubt war —, erscheint unter dem Tool-Protokoll ein Kasten *Die Sandbox hat … blockiert*. Er listet, was blockiert wurde, wie oft und warum. Meist ist das der Grund, warum ein Befehl auf eine Weise scheiterte, die seine eigene Ausgabe nicht erklärt. [seit 1.18] Bei Schreiben oder Lesen an einem geschützten Ort fragt direkt nach dem Lauf eine Karte, ob du es freigeben und den Befehl wiederholen willst; eine Verbindung zu einem Host, den der Aufruf nicht genannt hat, wartet auf einer Karte auf dich, während der Befehl läuft. Der Kasten sagt danach auch, wie du entschieden hast. Mehr unter [Befehle in der Sandbox ausführen](../../safety/sandbox/).
 
 ## Was dann passiert
 

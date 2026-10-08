@@ -38,6 +38,7 @@ const {
   TOOL_EXECUTION_STATUSES,
   TOOL_RESULTS_ARE_DATA_RULE,
   DEFAULT_TOOL_PERMISSION_MODE,
+  TOOL_PERMISSION_MODES,
   normalizeToolPermissionMode,
   normalizeRiskClasses,
   createPermissionDeniedToolResult,
@@ -46,7 +47,9 @@ const {
 const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
-const { sanitizeChatId, normalizeSandboxBlocked, normalizeSandboxDecision } = require('../../shared/contracts/chat');
+const {
+  sanitizeChatId, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive,
+} = require('../../shared/contracts/chat');
 const { FINISH_REASONS, isCutOff } = require('../../shared/contracts/finish-reason');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
@@ -707,16 +710,46 @@ function parseToolOutput(output) {
 }
 
 /** A sentence for the model about a sandbox card's outcome (#792), added to the tool result. */
-function withSandboxNote(output, note) {
+function withSandboxNote(output, note, key = 'sandbox_decision') {
   const parsed = parseToolOutput(output);
   if (!parsed) return `${typeof output === 'string' ? output : ''}\n\n${note}`;
-  return JSON.stringify({ ...parsed, sandbox_decision: note });
+  return JSON.stringify({ ...parsed, [key]: note });
 }
 
-/** "writing to /a, reading /b" — for the notes to the model. */
+/** "writing to /a, reading /b, connecting to c:443" — for the notes to the model. */
 function describeSandboxEntries(entries) {
-  const parts = entries.map((e) => (e.kind === 'read' ? `reading ${e.target}` : `writing to ${e.target}`));
+  const verb = { read: 'reading', write: 'writing to', network: 'connecting to' };
+  const parts = entries.map((e) => `${verb[e.kind] || 'writing to'} ${e.target}`);
   return parts.length ? parts.join(', ') : 'access';
+}
+
+/** The risk a sandbox card opens, per resource (#792). */
+const SANDBOX_KIND_CLASSES = Object.freeze({
+  read: TOOL_RISK_CLASSES.READ_SENSITIVE,
+  write: TOOL_RISK_CLASSES.WRITE,
+  network: TOOL_RISK_CLASSES.EXTERNAL,
+});
+
+/**
+ * What the user decided about connections while the command waited (#792),
+ * as one sentence for the model — added to the tool result next to what a
+ * card after the run decided.
+ */
+function describeLiveDecisions(decisions) {
+  const allowed = decisions.filter((d) => d.outcome === 'allowed');
+  const denied = decisions.filter((d) => d.outcome === 'denied');
+  const parts = [];
+  if (allowed.length) {
+    const what = allowed.map((d) => `${d.target}${d.pattern !== d.target ? ` (as ${d.pattern})` : ''}`
+      + ` ${d.duration === 'session' ? 'for the rest of this chat' : 'for this run'}`).join(', ');
+    parts.push(`While the command ran, the sandbox asked the user about connections it waited for, and the user allowed ${what}.`);
+  }
+  if (denied.length) {
+    parts.push(`The user denied the connection to ${denied.map((d) => d.target).join(', ')} while the command ran, `
+      + 'so the command could not reach it. Do not work around it — no other host, tool, proxy, environment '
+      + 'variable or setting. Tell the user what was blocked and why the task needs it.');
+  }
+  return parts.join(' ');
 }
 
 /** What a command reported, for the sandbox card: its stderr without the sandbox's own block. */
@@ -730,10 +763,17 @@ function commandReport(result) {
 
 /** Session grants plus what one card allowed, as the runner takes them. */
 function mergeSandboxGrants(session, chosen) {
-  const writePaths = [...(session?.writePaths || [])];
-  const readPaths = [...(session?.readPaths || [])];
-  for (const grant of chosen) (grant.kind === 'read' ? readPaths : writePaths).push(grant.path);
-  return { writePaths: [...new Set(writePaths)], readPaths: [...new Set(readPaths)] };
+  const lists = {
+    write: [...(session?.writePaths || [])],
+    read: [...(session?.readPaths || [])],
+    network: [...(session?.hosts || [])],
+  };
+  for (const grant of chosen) lists[grant.kind]?.push(grant.path);
+  return {
+    writePaths: [...new Set(lists.write)],
+    readPaths: [...new Set(lists.read)],
+    hosts: [...new Set(lists.network)],
+  };
 }
 
 function createChatEngine({
@@ -1336,7 +1376,7 @@ function createChatEngine({
        * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
        * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
        */
-      async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint, sandbox = null }) {
+      async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint, sandbox = null, signal = null }) {
         if (deniedPlanKeys.has(plan.planKey)) {
           return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
         }
@@ -1356,8 +1396,14 @@ function createChatEngine({
           workspaceRoot,
           encryptionAvailable: policy.encryptionAvailable,
         });
-        // What the sandbox refused and what the card may offer (#792).
-        if (sandbox) request.sandbox = sandbox;
+        // What the sandbox refused and what the card may offer (#792). Its
+        // "for this session" opens a resource for the chat's runs, not a tool
+        // call, so the call's risk classes do not decide whether it is offered
+        // — only whether the mode keeps approvals at all.
+        if (sandbox) {
+          request.sandbox = sandbox;
+          request.sessionAllowed = policy.mode !== TOOL_PERMISSION_MODES.ASK_ALL;
+        }
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.ASK,
           riskClasses: plan.riskClasses,
@@ -1372,7 +1418,8 @@ function createChatEngine({
         );
         let outcome;
         try {
-          outcome = await approvals.requestApproval({ sessionId, request, abortSignal });
+          // A card about a waiting connection (#792) also ends when its command does.
+          outcome = await approvals.requestApproval({ sessionId, request, abortSignal: signal || abortSignal });
         } catch (error) {
           if (isAbortError(error)) throw error;
           outcome = { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
@@ -1475,36 +1522,124 @@ function createChatEngine({
         return `${plan.planKey}#sandbox`;
       }
 
-      /** What sandbox cards allowed for the rest of this chat (#792), or null. */
-      function sessionSandboxGrants(scopeKey) {
-        const granted = sessionGrants.sandboxPaths?.(scopeKey);
-        return granted && (granted.writePaths.length || granted.readPaths.length) ? granted : null;
+      /** A folder, path or host a sandbox card opened for the rest of the chat (#792). */
+      function grantSandboxForSession({ scopeKey, toolName, grant }) {
+        sessionGrants.grant({
+          scopeKey,
+          tool: toolName,
+          targets: grant.kind === 'network' ? [] : [{ path: grant.path }],
+          riskClasses: [SANDBOX_KIND_CLASSES[grant.kind]],
+          providerKey,
+          chatId,
+          scope: createMessage(`approval.sandbox.sessionScope.${grant.kind}`, { path: grant.path }),
+          sandbox: grant,
+        });
       }
 
       /**
-       * After a shell or Python run the sandbox refused a write or a protected
-       * read in (#792): the card asks, in every mode, whether to open exactly
-       * that and run the command again. Returns the execution the call ends
-       * with — the retry's, or the first one with a note for the model — or a
-       * refusal that ends the run when the model repeats a command the user
-       * has already denied.
+       * A connection the sandbox holds while the command waits (#792): the
+       * card asks, in every mode, whether to let it through. Called by the
+       * sandbox, one question at a time per run, while the tool call is still
+       * running; `signal` aborts when the command has stopped waiting. Never
+       * throws — what is not an answer is "not answered".
        */
-      async function reviewSandboxRefusal({ entry, callIndex, toolName, plan, policy, scopeKey, execution, executeWith }) {
+      async function askLiveConnection({ entry, callIndex, toolName, plan, policy, scopeKey, live, request, signal }) {
+        const target = typeof request?.target === 'string' ? request.target : '';
+        const allow = Array.isArray(request?.allow) ? request.allow.filter((p) => typeof p === 'string' && p) : [];
+        if (!target || allow.length === 0) return { outcome: 'unanswered' };
+        // The card's own reason when the command gives up: "stopped waiting".
+        const ended = new AbortController();
+        const onEnd = () => ended.abort(PERMISSION_DENIAL_REASONS.SANDBOX_RUN_ENDED);
+        if (signal?.aborted) onEnd();
+        else signal?.addEventListener?.('abort', onEnd, { once: true });
+        const cardSignal = AbortSignal.any([abortSignal, ended.signal]);
+        const classes = [TOOL_RISK_CLASSES.EXTERNAL];
+        const executed = entry.permission;
+        let answer;
+        try {
+          answer = await askUser({
+            entry,
+            callIndex,
+            toolName,
+            plan: { ...plan, planKey: sandboxPlanKey(plan), riskClasses: classes, targets: [] },
+            verdict: { askClasses: classes },
+            policy,
+            checkpoint: 'sandbox',
+            signal: cardSignal,
+            sandbox: {
+              live: true,
+              waitedMs: Number.isFinite(request.waitedMs) ? request.waitedMs : 0,
+              domains: Array.isArray(request.domains) ? request.domains : [],
+              command: typeof plan.preview?.text === 'string' ? plan.preview.text : '',
+              run: { exitCode: null, durationMs: null, timedOut: false },
+              output: commandReport(request),
+              entries: [{ kind: 'network', target, count: 1, allow }],
+              others: [],
+              // What the runtime itself logs at this point; there is no refusal yet.
+              raw: [`No matching config rule, asking user: ${target}`],
+            },
+          });
+        } catch {
+          return { outcome: 'unanswered' };
+        } finally {
+          signal?.removeEventListener?.('abort', onEnd);
+          entry.permission = executed;
+        }
+        if (answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+          // The model ran a command again whose sandbox card the user denied:
+          // the connection stays closed, and the run ends after the call.
+          live.repeated = true;
+          return { outcome: 'denied' };
+        }
+        if (answer.response === APPROVAL_RESPONSES.DENY) {
+          live.decisions.push({ target, outcome: 'denied' });
+          return { outcome: 'denied' };
+        }
+        if (answer.invalidated) return { outcome: 'unanswered' };
+        const pick = answer.sandboxPaths?.[0];
+        const pattern = allow.includes(pick) ? pick : allow[0];
+        const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
+        if (session) grantSandboxForSession({ scopeKey, toolName, grant: { kind: 'network', path: pattern } });
+        live.decisions.push({ target, outcome: 'allowed', duration: session ? 'session' : 'run', pattern });
+        return { outcome: 'allowed', pattern };
+      }
+
+      /** What sandbox cards allowed for the rest of this chat (#792), or null. */
+      function sessionSandboxGrants(scopeKey) {
+        const granted = sessionGrants.sandboxPaths?.(scopeKey);
+        return granted && (granted.writePaths.length || granted.readPaths.length || granted.hosts?.length) ? granted : null;
+      }
+
+      /**
+       * After a shell or Python run the sandbox refused a write, a protected
+       * read or a connection nobody could be asked about while it waited in
+       * (#792): the card asks, in every mode, whether to open exactly that and
+       * run the command again. Returns the execution the call ends with — the
+       * retry's, or the first one with a note for the model — or a refusal
+       * that ends the run when the model repeats a command the user has
+       * already denied.
+       *
+       * After the user turned down a connection while the command ran, there
+       * is no card: they said no to this command, and a retry would only ask
+       * them again.
+       */
+      async function reviewSandboxRefusal({ entry, callIndex, toolName, plan, policy, scopeKey, execution, executeWith, live }) {
         const blocked = execution?.sandboxBlocked;
         if (!blocked || execution.invalidated || execution.hardLimit || execution.reclassify?.length) return { execution };
+        if (live?.decisions.some((d) => d.outcome === 'denied')) return { execution };
         // As many as the card shows: a resource it did not show is not opened.
         const offered = (Array.isArray(blocked.entries) ? blocked.entries : [])
-          .filter((e) => (e.kind === 'write' || e.kind === 'read') && Array.isArray(e.allow) && e.allow.length > 0)
+          .filter((e) => SANDBOX_KIND_CLASSES[e.kind] && Array.isArray(e.allow) && e.allow.length > 0)
           .slice(0, SANDBOX_CARD_ENTRIES);
         if (offered.length === 0) return { execution };
 
         const first = parseToolOutput(execution.output);
-        const classes = normalizeRiskClasses(offered.map((e) => (e.kind === 'read' ? TOOL_RISK_CLASSES.READ_SENSITIVE : TOOL_RISK_CLASSES.WRITE)));
+        const classes = normalizeRiskClasses(offered.map((e) => SANDBOX_KIND_CLASSES[e.kind]));
         const sandboxPlan = {
           ...plan,
           planKey: sandboxPlanKey(plan),
           riskClasses: classes,
-          targets: offered.map((e) => ({ path: e.target, kind: 'file', exists: false })),
+          targets: offered.filter((e) => e.kind !== 'network').map((e) => ({ path: e.target, kind: 'file', exists: false })),
         };
         const executed = entry.permission;
         entry.sandboxBlocked = blocked;
@@ -1560,18 +1695,7 @@ function createChatEngine({
         });
         const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
         if (session) {
-          for (const grant of chosen) {
-            sessionGrants.grant({
-              scopeKey,
-              tool: toolName,
-              targets: [{ path: grant.path }],
-              riskClasses: [grant.kind === 'read' ? TOOL_RISK_CLASSES.READ_SENSITIVE : TOOL_RISK_CLASSES.WRITE],
-              providerKey,
-              chatId,
-              scope: createMessage(`approval.sandbox.sessionScope.${grant.kind}`, { path: grant.path }),
-              sandbox: grant,
-            });
-          }
+          for (const grant of chosen) grantSandboxForSession({ scopeKey, toolName, grant });
         }
         const grants = mergeSandboxGrants(sessionSandboxGrants(scopeKey), chosen);
         const retry = await executeWith(grants);
@@ -1725,6 +1849,12 @@ function createChatEngine({
             targets: plan.targets,
           });
 
+          // Connections the sandbox held while the command ran, and what the
+          // user said about them (#792) — for the first run and a retry alike.
+          const live = { decisions: [], repeated: false };
+          const onSandboxNetworkAsk = (request, { signal } = {}) => askLiveConnection({
+            entry, callIndex, toolName, plan, policy, scopeKey, live, request, signal,
+          });
           const executeWith = (sandboxGrants) => tools.execute(toolName, args, {
             workspaceRoot,
             skillRoots,
@@ -1740,9 +1870,22 @@ function createChatEngine({
             plan,
             riskClasses,
             ownSecretsCheck: true,
-            // Folders and paths a sandbox card opened for this chat (#792).
+            // Folders, paths and hosts a sandbox card opened for this chat,
+            // and the question about a connection while it waits (#792).
             sandboxGrants,
+            onSandboxNetworkAsk,
           });
+          const firstRun = await executeWith(sessionSandboxGrants(scopeKey));
+          if (live.repeated) {
+            // A connection of a command whose sandbox card the user denied.
+            entry.sandboxBlocked = normalizeSandboxBlocked(firstRun?.sandboxBlocked);
+            return endRunDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL,
+              riskClasses: [TOOL_RISK_CLASSES.EXTERNAL],
+              mode: policy.mode,
+              targets: [],
+            }, PERMISSION_DENIAL_REASONS.REPEATED_DENIAL);
+          }
           const reviewed = await reviewSandboxRefusal({
             entry,
             callIndex,
@@ -1750,11 +1893,17 @@ function createChatEngine({
             plan,
             policy,
             scopeKey,
-            execution: await executeWith(sessionSandboxGrants(scopeKey)),
+            execution: firstRun,
             executeWith,
+            live,
           });
           if (reviewed.refusal) return reviewed.refusal;
-          const execution = reviewed.execution;
+          let execution = reviewed.execution;
+          const liveDecisions = normalizeSandboxLive(live.decisions);
+          if (liveDecisions) {
+            entry.sandboxLive = liveDecisions;
+            execution = { ...execution, output: withSandboxNote(execution?.output, describeLiveDecisions(liveDecisions), 'sandbox_connections') };
+          }
 
           if (execution?.invalidated) {
             return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
@@ -1977,6 +2126,9 @@ function createChatEngine({
             const decision = normalizeSandboxDecision(entry.sandboxDecision);
             if (decision) entry.sandboxDecision = decision;
             else delete entry.sandboxDecision;
+            const liveDecisions = normalizeSandboxLive(entry.sandboxLive);
+            if (liveDecisions) entry.sandboxLive = liveDecisions;
+            else delete entry.sandboxLive;
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);

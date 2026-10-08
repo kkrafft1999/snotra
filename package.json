@@ -5,7 +5,7 @@
   "productName": "Snotra Agent",
   "scripts": {
     "sync-vendor": "node scripts/sync-renderer-vendor.js",
-    "postinstall": "node scripts/sync-renderer-vendor.js",
+    "postinstall": "node scripts/sync-renderer-vendor.js && node scripts/patch-sandbox-runtime.js",
     "pretest": "node scripts/sync-renderer-vendor.js",
     "test": "node --test \"test/**/*.test.js\"",
     "pretest:e2e": "node scripts/sync-renderer-vendor.js && node e2e/helpers/warm-keychain.mjs",

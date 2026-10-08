@@ -320,6 +320,8 @@ function normalizeSandboxBlocked(value) {
 }
 
 const SANDBOX_DECISION_OUTCOMES = Object.freeze(['allowed', 'denied', 'unanswered']);
+/** What a sandbox card opens (#792): a folder to write in, a path to read, a host to connect to. */
+const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network']);
 
 /**
  * What the user decided on a sandbox card (#792), as the tool row keeps it:
@@ -330,7 +332,7 @@ function normalizeSandboxDecision(value) {
   if (!value || typeof value !== 'object' || !SANDBOX_DECISION_OUTCOMES.includes(value.outcome)) return null;
   if (value.outcome !== 'allowed') return { outcome: value.outcome };
   const paths = (Array.isArray(value.paths) ? value.paths : [])
-    .filter((p) => p && (p.kind === 'write' || p.kind === 'read') && typeof p.path === 'string' && p.path)
+    .filter((p) => p && SANDBOX_GRANT_KINDS.includes(p.kind) && typeof p.path === 'string' && p.path)
     .slice(0, SANDBOX_BLOCKED_LIMITS.ENTRIES)
     .map((p) => ({ kind: p.kind, path: p.path.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) }));
   const out = { outcome: 'allowed', duration: value.duration === 'session' ? 'session' : 'run', paths };
@@ -340,6 +342,38 @@ function normalizeSandboxDecision(value) {
     if (blocked) out.retry.blocked = blocked;
   }
   return out;
+}
+
+/** Connections one tool row keeps the live decisions of (#792). */
+const SANDBOX_LIVE_LIMIT = 10;
+
+/**
+ * What the user decided about connections while a command waited for them
+ * (#792), as the tool row keeps it: the host and port, allowed — for the run
+ * or the session, and as which pattern — or denied. Empty entries and
+ * anything else are dropped; null when nothing is left.
+ */
+function normalizeSandboxLive(value) {
+  if (!Array.isArray(value)) return null;
+  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const out = [];
+  for (const raw of value) {
+    if (out.length >= SANDBOX_LIVE_LIMIT) break;
+    if (!raw || typeof raw !== 'object' || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
+    const target = text(raw.target);
+    if (!target) continue;
+    if (raw.outcome === 'denied') {
+      out.push({ target, outcome: 'denied' });
+      continue;
+    }
+    out.push({
+      target,
+      outcome: 'allowed',
+      duration: raw.duration === 'session' ? 'session' : 'run',
+      pattern: text(raw.pattern) || target,
+    });
+  }
+  return out.length ? out : null;
 }
 
 /** chat:progress with type='workspace': a reading tool read the file (#347). */
@@ -418,6 +452,7 @@ module.exports = {
   normalizeFileChangeSummary,
   normalizeSandboxBlocked,
   normalizeSandboxDecision,
+  normalizeSandboxLive,
   SANDBOX_BLOCKED_KINDS,
   SANDBOX_BLOCKED_LIMITS,
   createPermissionProgressEvent,

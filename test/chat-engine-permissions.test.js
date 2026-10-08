@@ -807,7 +807,7 @@ test('sandbox card: asks even in Auto, then runs the command again with the fold
   assert.equal(sandboxRequests(approvals).length, 1);
   assert.equal(tools.calls.length, 2, 'once, and once again after the card');
   assert.equal(tools.calls[0].context.sandboxGrants, null);
-  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: ['/home/u/.cache/prisma'], readPaths: [] });
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: ['/home/u/.cache/prisma'], readPaths: [], hosts: [] });
   const entry = result.toolTrace[0];
   assert.equal(entry.sandboxBlocked.entries[0].target, CACHE, 'the row keeps what the card asked about');
   assert.deepEqual(entry.sandboxDecision, {
@@ -825,7 +825,7 @@ test('sandbox card: a path the card did not offer opens the first offer instead'
   const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
     { tools, approvals });
   await send(engine);
-  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [CACHE], readPaths: [] });
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [CACHE], readPaths: [], hosts: [] });
 });
 
 test('sandbox card: "for this session" carries the folder to the next run of the chat, without a card', async () => {
@@ -840,7 +840,7 @@ test('sandbox card: "for this session" carries the folder to the next run of the
   const result = await send(engine, { chatId: 'chat-1' });
 
   assert.equal(sandboxRequests(approvals).length, 1);
-  assert.deepEqual(tools.calls[2].context.sandboxGrants, { writePaths: [CACHE], readPaths: [] }, 'the second call starts with it');
+  assert.deepEqual(tools.calls[2].context.sandboxGrants, { writePaths: [CACHE], readPaths: [], hosts: [] }, 'the second call starts with it');
   assert.equal(result.toolTrace[0].sandboxDecision.duration, 'session');
   const listed = grants.list();
   assert.equal(listed.length, 1);
@@ -860,7 +860,7 @@ test('sandbox card: a protected read is opened as a read, not as a folder', asyn
     { tools, approvals });
   await send(engine);
   assert.deepEqual(sandboxRequests(approvals)[0].riskClasses, ['read-sensitive']);
-  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [], readPaths: ['/home/u/.ssh/known_hosts'] });
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [], readPaths: ['/home/u/.ssh/known_hosts'], hosts: [] });
 });
 
 test('sandbox card: denied, the command does not run again and the model is told not to work around it', async () => {
@@ -925,4 +925,164 @@ test('sandbox card: the retry\'s own refusals go with the decision, not a second
   assert.equal(result.toolTrace[0].sandboxBlocked.entries[0].target, CACHE);
   assert.equal(result.toolTrace[0].sandboxDecision.retry.blocked.entries[0].target, '/home/u/.cache/other');
   assert.equal(result.toolTrace[0].sandboxDecision.retry.exitCode, 1);
+});
+
+// ── A connection that waits while the command runs (#792, step 3) ───────────
+
+const HOST = 'download.pytorch.org:443';
+const HOST_OFFER = [HOST, '*.pytorch.org'];
+
+/** What the sandbox asks about a waiting connection, as the runner hands it to the engine. */
+function connectionRequest(target = HOST, allow = HOST_OFFER) {
+  return { host: target.split(':')[0], port: 443, target, allow, domains: ['pypi.org'], waitedMs: 1200, stdout: 'Collecting torch', stderr: '' };
+}
+
+/**
+ * A command that opens a connection while it runs: the runner puts the
+ * question to the engine and carries on with the answer. `then` is what the
+ * command comes back with afterwards.
+ */
+function connectingRun({ then = okRun, signal = new AbortController().signal, answers = [] } = {}) {
+  return async (name, args, ctx) => {
+    answers.push(await ctx.onSandboxNetworkAsk(connectionRequest(), { signal }));
+    return then(answers);
+  };
+}
+
+test('live connection: asks even in Auto while the command runs, and the command carries on', async () => {
+  const approvals = makeApprovals((request) => {
+    assert.equal(request.checkpoint, 'sandbox');
+    assert.equal(request.mode, 'auto');
+    assert.deepEqual(request.riskClasses, ['external']);
+    assert.equal(request.sessionAllowed, true, 'a connection may be kept for the session on this card');
+    assert.equal(request.sandbox.live, true);
+    assert.equal(request.sandbox.waitedMs, 1200);
+    assert.deepEqual(request.sandbox.domains, ['pypi.org']);
+    assert.deepEqual(request.sandbox.entries, [{ kind: 'network', target: HOST, count: 1, allow: HOST_OFFER }]);
+    assert.equal(request.sandbox.output, 'Collecting torch', 'what it printed so far');
+    assert.deepEqual(request.sandbox.run, { exitCode: null, durationMs: null, timedOut: false });
+    return { response: 'allow-once', sandboxPaths: ['*.pytorch.org'] };
+  });
+  const answers = [];
+  const tools = makeToolPort({ execute: connectingRun({ answers }) });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }), assistantText('fertig')]);
+  const { engine } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy({ mode: 'auto' }) });
+
+  const result = await send(engine);
+
+  assert.equal(result.content, 'fertig');
+  assert.deepEqual(answers, [{ outcome: 'allowed', pattern: '*.pytorch.org' }]);
+  assert.equal(tools.calls.length, 1, 'nothing runs twice');
+  const entry = result.toolTrace[0];
+  assert.deepEqual(entry.sandboxLive, [{ target: HOST, outcome: 'allowed', duration: 'run', pattern: '*.pytorch.org' }]);
+  assert.equal(entry.permission.status, 'executed', 'the card did not leave the row waiting');
+  const output = JSON.parse(toolMessageOf(llm).content);
+  assert.match(output.sandbox_connections, /the user allowed download\.pytorch\.org:443 \(as \*\.pytorch\.org\) for this run\./);
+  assert.equal(output.sandbox_decision, undefined, 'no card after the run');
+});
+
+test('live connection: "for this session" opens the host for the chat\'s next runs, without a card', async () => {
+  const approvals = makeApprovals({ response: 'allow-session', sandboxPaths: [HOST] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? connectingRun()(name, args, ctx) : okRun()) });
+  const { engine, grants } = makeEngine([
+    assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }),
+    assistantToolCall('c2', 'shell_execute', { command: 'pip install torchvision' }),
+    assistantText('ok'),
+  ], { tools, approvals });
+
+  const result = await send(engine, { chatId: 'chat-1' });
+
+  assert.equal(sandboxRequests(approvals).length, 1);
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [], readPaths: [], hosts: [HOST] });
+  assert.equal(result.toolTrace[0].sandboxLive[0].duration, 'session');
+  const listed = grants.list();
+  assert.equal(listed.length, 1);
+  assert.deepEqual(listed[0].classes, ['external'], 'kept for the session although a call never is');
+  assert.equal(listed[0].scope.key, 'approval.sandbox.sessionScope.network');
+  assert.deepEqual(listed[0].scope.params, { path: HOST });
+});
+
+test('live connection: denied — it stays closed, no card after the run, and the model is told not to work around it', async () => {
+  const approvals = makeApprovals('deny');
+  const answers = [];
+  // The run also had a write refused that a card could offer; after the no, it does not.
+  const tools = makeToolPort({ execute: connectingRun({ answers, then: () => blockedRun() }) });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }), assistantText('Ich sag es dir')]);
+  const { engine } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy({ mode: 'auto' }) });
+
+  const result = await send(engine);
+
+  assert.deepEqual(answers, [{ outcome: 'denied' }]);
+  assert.equal(sandboxRequests(approvals).length, 1, 'the live card only');
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(result.toolTrace[0].sandboxLive, [{ target: HOST, outcome: 'denied' }]);
+  assert.equal(result.toolTrace[0].sandboxDecision, undefined);
+  const output = JSON.parse(toolMessageOf(llm).content);
+  assert.match(output.sandbox_connections, /The user denied the connection to download\.pytorch\.org:443 while the command ran/);
+  assert.match(output.sandbox_connections, /Do not work around it/);
+});
+
+test('live connection: the same command again after a denial ends the run, without another card', async () => {
+  const approvals = makeApprovals('deny');
+  const answers = [];
+  const tools = makeToolPort({ execute: connectingRun({ answers }) });
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }),
+    assistantToolCall('c2', 'shell_execute', { command: 'pip install torch' }),
+    assistantText('never'),
+  ], { tools, approvals, toolPolicy: policy({ mode: 'auto' }) });
+
+  const result = await send(engine);
+
+  assert.equal(sandboxRequests(approvals).length, 1, 'asked once');
+  assert.deepEqual(answers, [{ outcome: 'denied' }, { outcome: 'denied' }], 'the second time closed without asking');
+  assert.notEqual(result.content, 'never');
+  assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
+});
+
+test('live connection: the command gave up — the card expires saying so, and the card after the run offers it with a retry', async () => {
+  const live = [];
+  const approvals = {
+    requests: [],
+    isAvailable: () => true,
+    requestApproval({ request, abortSignal }) {
+      this.requests.push(request);
+      if (!request.sandbox?.live) return Promise.resolve({ response: 'allow-once', sandboxPaths: [HOST] });
+      // The live card waits for the user — until the command stops waiting.
+      return new Promise((resolve) => {
+        abortSignal.addEventListener('abort', () => {
+          const outcome = { invalidated: true, reason: abortSignal.reason };
+          live.push(outcome);
+          resolve(outcome);
+        }, { once: true });
+      });
+    },
+  };
+  const tools = makeToolPort({
+    execute: async (name, args, ctx, n) => {
+      if (n > 1) return okRun();
+      const ended = new AbortController();
+      const answer = ctx.onSandboxNetworkAsk(connectionRequest(), { signal: ended.signal });
+      await new Promise((resolve) => setImmediate(resolve));
+      ended.abort();
+      assert.deepEqual(await answer, { outcome: 'unanswered' });
+      return blockedRun({ kind: 'network', target: HOST, allow: HOST_OFFER });
+    },
+  });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }), assistantText('ok')]);
+  const { engine } = makeEngine(null, { tools, approvals, llm });
+
+  const result = await send(engine);
+
+  assert.deepEqual(live, [{ invalidated: true, reason: 'sandbox_run_ended' }]);
+  const after = approvals.requests.filter((r) => r.checkpoint === 'sandbox' && !r.sandbox.live);
+  assert.equal(after.length, 1);
+  assert.deepEqual(after[0].sandbox.entries, [{ kind: 'network', target: HOST, count: 1, folder: false, allow: HOST_OFFER }]);
+  assert.deepEqual(after[0].riskClasses, ['external']);
+  assert.deepEqual(tools.calls[1].context.sandboxGrants, { writePaths: [], readPaths: [], hosts: [HOST] });
+  assert.deepEqual(result.toolTrace[0].sandboxDecision, {
+    outcome: 'allowed', duration: 'run', paths: [{ kind: 'network', path: HOST }], retry: { exitCode: 0 },
+  });
+  assert.equal(result.toolTrace[0].sandboxLive, undefined, 'nothing was decided while it waited');
+  assert.match(JSON.parse(toolMessageOf(llm).content).sandbox_decision, /allowed connecting to download\.pytorch\.org:443 for this run/);
 });
