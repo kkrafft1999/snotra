@@ -81,6 +81,7 @@ The allowance applies in every folder, but only when a command runs that program
 
 ## If it doesn't work
 
+- **A command fails, and its output does not say why.** Look under the tool log of the answer: the box *The sandbox blocked …* lists what the run tried to reach and was refused — see [Follow what Snotra does](../../chatting/follow-the-work/). A write or a protected read can be allowed on the card that follows the run; for anything else, a program allowance or, for this one folder, switching the sandbox off gives it the room.
 - **There is a box, but no card.** What was blocked cannot be allowed on a card: a direct connection, a host, Snotra's storage or a file the sandbox always keeps closed. When a program needs it regularly, give it a program allowance, or switch the sandbox off for the folder.
 - **The second run is blocked again.** The box shows what the second run ran into; a program often needs a second place, such as a config file next to its cache. Allow that one on the next run.
 - **Linux: the card says the sandbox needs packages.** Install `bubblewrap`, `socat` and `ripgrep` and restart Snotra.

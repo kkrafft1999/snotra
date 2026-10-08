@@ -65,7 +65,8 @@ dialog or a menu when the whole window would shrink its text below what a page
 shows legibly. `profile: 'fresh'` starts the app as it is right after
 installing — no folder, no model — instead of on the demo project; `prefs`
 adds entries to `ui-preferences.json`, to switch a tool on or widen the chat
-column.
+column; `configure(config)` changes `llm-config.json` before the start, to
+add model entries.
 Running the script needs the app's dependencies (`npm ci` at the repository
 root). The demo project must stay free of anything personal.
 

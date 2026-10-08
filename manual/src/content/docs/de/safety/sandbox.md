@@ -81,6 +81,7 @@ Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für s
 
 ## Wenn es nicht klappt
 
+- **Ein Befehl scheitert, und seine Ausgabe sagt nicht, warum.** Schau unter das Tool-Protokoll der Antwort: Der Kasten *Die Sandbox hat … blockiert* listet, was der Lauf erreichen wollte und nicht durfte — siehe [Verfolgen, was Snotra tut](../../chatting/follow-the-work/). Schreiben oder Lesen an einem geschützten Ort lässt sich auf der Karte nach dem Lauf freigeben; für alles andere gibt eine Freigabe pro Programm oder, für diesen einen Ordner, das Abschalten der Sandbox ihm den Raum.
 - **Es gibt einen Kasten, aber keine Karte.** Was blockiert wurde, lässt sich auf einer Karte nicht freigeben: eine direkte Verbindung, ein Host, Snotras Speicher oder eine Datei, die die Sandbox immer verschlossen hält. Braucht ein Programm das regelmäßig, gib ihm eine Programm-Freigabe oder schalte die Sandbox für den Ordner ab.
 - **Der zweite Lauf wird wieder blockiert.** Der Kasten zeigt, woran der zweite Lauf gescheitert ist; oft braucht ein Programm einen zweiten Ort, etwa eine Konfigurationsdatei neben seinem Cache. Gib den beim nächsten Lauf frei.
 - **Linux: Die Karte sagt, die Sandbox brauche Pakete.** Installier `bubblewrap`, `socat` und `ripgrep` und starte Snotra neu.
