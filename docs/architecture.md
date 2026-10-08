@@ -1092,10 +1092,11 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/syntax-highlight.js` | Prism's tokens → text nodes and `<span class="syntax-…">` in nine roles; code blocks in Markdown in their own language | `test/syntax-highlight-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-view.js` | `md`, `markdown`, `mdx`: rendered, with a "Preview \| Source" switch; images, links, notices ([#344](https://github.com/kkrafft1999/snotra/issues/344)) | `test/markdown-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
-| `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, toggle to actual size, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, zoom in the header, drag to pan, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/mode-switch.js` | The "Preview \| Source" control, shared by Markdown and SVG | both view tests |
 | `renderer/file-views/read-failures.js` | Why a file is not shown as text: main's reason codes of `fs:readFile` and their catalogue sentences, for the info card and the SVG source ([#641](https://github.com/kkrafft1999/snotra/issues/641)) | `test/file-view-host-dom.test.js`, `test/image-view-dom.test.js` |
 | `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/zoom-tools.js` | Zoom steps and header icon buttons shared by the PDF and the image view ([#803](https://github.com/kkrafft1999/snotra/issues/803)) | both view tests |
 | `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
 | `renderer/file-views/html-view.js` | `html`, `htm`: the page as it runs, in a view the main process lays over the stage; "Preview \| Source", Reload, Open in browser, the notice of what was blocked, a reason instead of an empty column ([#479](https://github.com/kkrafft1999/snotra/issues/479)) | `test/html-view-dom.test.js`, `e2e/html-preview.test.mjs`, `e2e/smoke.test.mjs` |
 | `main/services/html-preview-service.js` | The page's side: its `WebContentsView`, the in-memory session, the `snotra-html:` scheme, what the page may load and where its links lead | `test/html-preview-service.test.js`, `test/html-preview-isolation.test.js` |
@@ -1256,9 +1257,13 @@ image view ─ fs:readWorkspaceImage(path) ─▶ main: lexical + realpath check
 - **The same channel as the chat.** No `file://` URL, no CSP change; the main
   process stays the trust boundary. A symlink out of the workspace ends as
   "outside the open folder".
-- **Fitted, never upscaled.** A click, or Enter/Space on the focused image,
-  toggles to the actual size and scrolls to where the click landed. No zoom
-  beyond that (decided with a mockup on 2026-09-27).
+- **Opens fitted, never upscaled.** Zoom lives in the header only, the same
+  "− % + Fit" group and steps as the PDF view (`file-views/zoom-tools.js`),
+  plus `Cmd/Ctrl` `+`/`−`/`0` on the focused image; the middle of the column
+  stays in place. A click does not zoom: an image larger than the column is
+  dragged with the left button under a hand cursor, or scrolled with the arrow
+  keys ([#803](https://github.com/kkrafft1999/snotra/issues/803); until then a
+  click toggled between fit and actual size).
 - **SVG stays a document.** It is shown through `<img>` only and never inlined;
   its markup is parsed with `DOMParser`, unattached, for the size it declares —
   Chromium would report 300 × 150 for an SVG with only a `viewBox`. Its source

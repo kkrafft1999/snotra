@@ -6198,10 +6198,11 @@ select.modal-input {
   display: none;
 }
 
-/* ── Images in the file preview (#345) ────────────────────────────────────
- * Fitted to the column and never upscaled; `image-view.js` sets the size in
- * pixels, because a fit has to know the natural size and the toggle to the
- * actual size has to keep the column scrollable in both directions. The
+/* ── Images in the file preview (#345, #803) ──────────────────────────────
+ * Opened fitted to the column and never upscaled; `image-view.js` sets the
+ * size in pixels, because a fit has to know the natural size and a zoom has
+ * to keep the column scrollable in both directions. The zoom sits in the
+ * header (`.pdf-tools`), a drag moves an image larger than the column. The
  * padding here is VIEW_PADDING_PX there. */
 .img-view {
   flex: 1;
@@ -6244,12 +6245,15 @@ select.modal-input {
   display: none;
 }
 
-.img-view--toggleable .img-view__image {
-  cursor: zoom-in;
+/* Larger than the column: the hand says it can be moved, and the drag must
+ * not select anything on its way. */
+.img-view--pannable {
+  cursor: grab;
+  user-select: none;
 }
 
-.img-view--toggleable.img-view--actual .img-view__image {
-  cursor: zoom-out;
+.img-view--pannable.img-view--dragging {
+  cursor: grabbing;
 }
 
 /* Loading, and every reason an image is not shown: centred in the column,

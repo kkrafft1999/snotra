@@ -514,6 +514,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       checker: img ? getComputedStyle(img).backgroundImage.startsWith('conic-gradient') : false,
       inlineSvg: document.querySelectorAll('#preview-body svg').length,
       switch: document.querySelectorAll('#preview-tools input[type="radio"]').length,
+      zoom: document.querySelector('#preview-tools .pdf-tools__zoom')?.textContent ?? null,
     };
   });
 
@@ -528,6 +529,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.match(raster.meta, / · 40 × 20$/);
   assert.equal(raster.checker, true, 'the checkerboard sits behind the image');
   assert.equal(raster.switch, 0);
+  assert.equal(raster.zoom, '100\u00a0%', 'the zoom sits in the header (#803)');
 
   await openInTree('fluss.svg');
   const vector = await poll(async () => {

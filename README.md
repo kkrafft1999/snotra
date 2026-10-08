@@ -492,8 +492,9 @@ three platforms the same way.
   images from the web are never loaded — a placeholder says where they point. A
   link to another file of the folder opens it and selects it in the tree.
 - **Looking at images:** PNG, JPEG, GIF, WebP and SVG open as images in the
-  preview, fitted to the column; a click (or Enter) shows the actual size and
-  back. The header gives the pixel dimensions next to the size, and a
+  preview, fitted to the column. The header zooms (`−`, `+`, **Fit**, or
+  `Cmd/Ctrl` with `+`, `−`, `0`); an image larger than the column is moved by
+  dragging it with the hand cursor, or with the arrow keys. The header gives the pixel dimensions next to the size, and a
   checkerboard behind the image shows where it is transparent. An SVG has
   **Preview | Source** like a Markdown file. Images up to 10 MB from the open
   folder are shown; for anything else the column says why not.

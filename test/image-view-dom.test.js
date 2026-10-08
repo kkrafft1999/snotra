@@ -93,7 +93,7 @@ test('a PNG comes through fs:readWorkspaceImage as a data: URI, never as text', 
   const img = $('.img-view__image');
   assert.equal(img.getAttribute('src'), `data:image/png;base64,${PNG_1PX}`);
   assert.equal(img.alt, 'shot.png', 'the file name is the text alternative');
-  assert.equal($('#preview-tools').hidden, true, 'no switch for a raster image');
+  assert.equal($('#preview-tools input[type="radio"]'), null, 'no Preview | Source switch for a raster image');
   assert.equal($('#preview-filename').textContent, 'shot.png');
 });
 
@@ -175,7 +175,23 @@ test('a slow read shows a loading line, and only a slow one', async (t) => {
   assert.equal($('.img-view__image').hidden, false);
 });
 
-test('a large image is fitted; click and Enter toggle the actual size and back', async (t) => {
+/** The zoom group in the header, once a picture is on show (#803). */
+function zoomTools() {
+  return {
+    out: $('#preview-tools .pdf-tools__zoom-out'),
+    value: $('#preview-tools .pdf-tools__zoom'),
+    in: $('#preview-tools .pdf-tools__zoom-in'),
+    fit: $('#preview-tools .pdf-tools__fit'),
+  };
+}
+
+function pointer(type, { x = 0, y = 0, button = 0 } = {}) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button });
+  Object.defineProperty(event, 'pointerId', { value: 1 });
+  return event;
+}
+
+test('a large image is fitted; the header zooms it, a click does not (#803)', async (t) => {
   const { host } = await mountPane(t, { images: { '/ws/shot.png': png() } });
   await host.open(item('shot.png'));
   await settle();
@@ -186,26 +202,67 @@ test('a large image is fitted; click and Enter toggle the actual size and back',
   const img = $('.img-view__image');
   // 400 × 300 minus 24 px padding on each side: 352 × 252 → scale 0.22.
   assert.deepEqual([img.style.width, img.style.height], ['352px', '220px']);
-  assert.equal(view.getAttribute('role'), 'button');
-  assert.equal(view.tabIndex, 0);
-  assert.equal(view.getAttribute('aria-pressed'), 'false');
-  assert.equal(view.getAttribute('aria-label'), 'Show shot.png at actual size');
-  assert.equal(view.title, 'Click to show at actual size');
+  const tools = zoomTools();
+  assert.equal($('#preview-tools').hidden, false);
+  assert.equal(tools.value.textContent, '22\u00a0%');
+  assert.equal(tools.fit.textContent, 'Fit');
+  assert.equal(tools.fit.getAttribute('aria-pressed'), 'true');
+  assert.equal(tools.out.getAttribute('aria-label'), 'Zoom out');
+  assert.equal(view.classList.contains('img-view--pannable'), false, 'fitted, there is nothing to move');
 
   img.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  assert.deepEqual([img.style.width, img.style.height], ['1600px', '1000px']);
-  assert.equal(view.getAttribute('aria-pressed'), 'true');
-  assert.equal(view.title, 'Click to fit into the column');
-  assert.ok(view.classList.contains('img-view--actual'));
+  assert.equal(img.style.width, '352px', 'a click no longer zooms');
 
-  view.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  assert.equal(img.style.width, '352px');
-  view.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-  assert.equal(img.style.width, '1600px');
+  tools.in.click();
+  assert.deepEqual([img.style.width, img.style.height], ['400px', '250px'], 'the next step above 22 %: 25 %');
+  assert.equal(tools.fit.getAttribute('aria-pressed'), 'false');
+  assert.equal($('.img-view__announcer').textContent, '25\u00a0%');
+  assert.ok(view.classList.contains('img-view--pannable'));
+  assert.equal(view.tabIndex, 0);
+  assert.equal(view.getAttribute('aria-label'), 'shot.png, move with the arrow keys');
+  assert.equal(view.title, 'Drag to move');
+
+  view.dispatchEvent(new KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true }));
+  assert.equal(img.style.width, '352px', 'Cmd+0 fits again');
+  assert.equal(view.tabIndex, 0, 'still focusable for the zoom keys');
+  assert.equal(view.getAttribute('aria-label'), 'shot.png', 'nothing to move, so no arrow keys named');
+  assert.equal(view.hasAttribute('title'), false);
+  view.dispatchEvent(new KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true }));
+  view.dispatchEvent(new KeyboardEvent('keydown', { key: '+', metaKey: true, bubbles: true }));
+  assert.equal(img.style.width, '528px', '25 %, then 33 %');
+  view.dispatchEvent(new KeyboardEvent('keydown', { key: '-', metaKey: true, bubbles: true }));
+  assert.equal(img.style.width, '400px');
+  assert.equal(zoomTools().out.disabled, true, '25 % is the smallest step');
   assert.equal(host.runCommand('toggle-source'), false, 'a PNG has no source to switch to');
 });
 
-test('an image that fits is never upscaled and has nothing to toggle', async (t) => {
+test('a zoomed image is moved by dragging with the left button', async (t) => {
+  const { host } = await mountPane(t, { images: { '/ws/map.png': png() } });
+  await host.open(item('map.png'));
+  await settle();
+  sized(400, 300);
+  load(1600, 1000);
+  for (let i = 0; i < 20; i += 1) zoomTools().in.click();
+  const view = $('.img-view');
+  assert.equal(zoomTools().value.textContent, '400\u00a0%');
+  assert.equal(zoomTools().in.disabled, true);
+  view.scrollLeft = 100;
+  view.scrollTop = 50;
+
+  view.dispatchEvent(pointer('pointerdown', { x: 200, y: 200, button: 2 }));
+  assert.equal(view.classList.contains('img-view--dragging'), false, 'only the left button grabs');
+
+  view.dispatchEvent(pointer('pointerdown', { x: 200, y: 200 }));
+  assert.ok(view.classList.contains('img-view--dragging'));
+  view.dispatchEvent(pointer('pointermove', { x: 170, y: 180 }));
+  assert.deepEqual([view.scrollLeft, view.scrollTop], [130, 70], 'the image follows the hand');
+  view.dispatchEvent(pointer('pointerup', { x: 170, y: 180 }));
+  assert.equal(view.classList.contains('img-view--dragging'), false);
+  view.dispatchEvent(pointer('pointermove', { x: 0, y: 0 }));
+  assert.deepEqual([view.scrollLeft, view.scrollTop], [130, 70], 'released, it stays');
+});
+
+test('an image that fits is never upscaled and cannot be dragged', async (t) => {
   const { host } = await mountPane(t, { images: { '/ws/favicon.png': png() } });
   await host.open(item('favicon.png'));
   await settle();
@@ -215,10 +272,13 @@ test('an image that fits is never upscaled and has nothing to toggle', async (t)
   const view = $('.img-view');
   const img = $('.img-view__image');
   assert.deepEqual([img.style.width, img.style.height], ['16px', '16px']);
-  assert.equal(view.hasAttribute('role'), false);
-  assert.equal(view.hasAttribute('tabindex'), false);
-  img.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  assert.equal(img.style.width, '16px');
+  assert.equal(zoomTools().value.textContent, '100\u00a0%');
+  assert.equal(view.classList.contains('img-view--pannable'), false);
+  assert.equal(view.hasAttribute('title'), false);
+  view.dispatchEvent(pointer('pointerdown', { x: 10, y: 10 }));
+  assert.equal(view.classList.contains('img-view--dragging'), false);
+  zoomTools().in.click();
+  assert.equal(img.style.width, '18px', 'upscaled only when asked for, from the header');
 });
 
 test('a refresh with unchanged bytes keeps the image; a changed file replaces it', async (t) => {
@@ -227,12 +287,12 @@ test('a refresh with unchanged bytes keeps the image; a changed file replaces it
   await settle();
   sized(400, 300);
   load(1600, 1000);
-  $('.img-view__image').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  zoomTools().in.click();
 
   await host.refresh('/ws/plot.png');
   await settle();
   assert.equal(calls.images.length, 2);
-  assert.equal($('.img-view__image').style.width, '1600px', 'still at actual size');
+  assert.equal($('.img-view__image').style.width, '400px', 'still at the chosen zoom');
 
   images['/ws/plot.png'] = png({ base64: 'AAAA', mtimeMs: 2 });
   await host.refresh('/ws/plot.png');
@@ -265,8 +325,10 @@ test('an SVG shows as an image with the size it declares, and switches to its so
   assert.deepEqual(calls.files, ['/ws/flow.svg']);
   assert.equal($('#preview-content').textContent, markup);
   assert.equal($('.img-view').hidden, true);
+  assert.equal(zoomTools().fit, null, 'no zoom while the source is on show');
 
   assert.equal(host.runCommand('toggle-source'), true, 'the menu shortcut works for SVG too');
+  assert.ok(zoomTools().fit, 'the zoom is back next to the switch');
   assert.equal($('.img-view').hidden, false);
   assert.equal($('.md-source').hidden, true);
 });

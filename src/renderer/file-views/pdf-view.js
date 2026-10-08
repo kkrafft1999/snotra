@@ -27,13 +27,15 @@ import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
 import { openPdfDocument } from './pdf-engine.js';
+import { ZOOM_STEPS, nextZoom, iconButton, ZOOM_IN_ICON, ZOOM_OUT_ICON } from './zoom-tools.js';
+
+export { ZOOM_STEPS, nextZoom };
 
 const { MAX_WORKSPACE_PDF_BYTES, WORKSPACE_PDF_ERRORS } = contracts;
 
 // 100 % means one PDF point as 1/72 inch on a 96 dpi screen, as in every
 // other PDF viewer.
 const CSS_PX_PER_PT = 96 / 72;
-export const ZOOM_STEPS = Object.freeze([0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]);
 // Must match the padding of `.pdf-view__pages` in styles.css.
 const PAGES_PADDING_PX = 20;
 // Above this a canvas is drawn at a lower resolution rather than not at all
@@ -54,12 +56,6 @@ const ERROR_KEYS = Object.freeze({
   broken: 'broken',
 });
 
-/** The next zoom step in a direction, from wherever the zoom stands now. */
-export function nextZoom(current, direction) {
-  if (direction > 0) return ZOOM_STEPS.find((step) => step > current + 0.001) ?? ZOOM_STEPS.at(-1);
-  return [...ZOOM_STEPS].reverse().find((step) => step < current - 0.001) ?? ZOOM_STEPS[0];
-}
-
 /**
  * The zoom at which a page of `pageWidthPt` fills `availablePx`. Null while
  * the column has no width yet.
@@ -71,25 +67,6 @@ export function fitWidthZoom(pageWidthPt, availablePx) {
 
 function nbsp(text) {
   return text.replace(' ', ' ');
-}
-
-function icon(path) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  shape.setAttribute('d', path);
-  svg.append(shape);
-  return svg;
-}
-
-function iconButton(className, path) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = `pdf-tools__button ${className}`;
-  button.append(icon(path));
-  return button;
 }
 
 /**
@@ -184,14 +161,14 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       const zoomEl = document.createElement('div');
       zoomEl.className = 'pdf-tools';
       zoomEl.setAttribute('role', 'group');
-      const zoomOutButton = iconButton('pdf-tools__zoom-out', 'M3.5 8h9');
+      const zoomOutButton = iconButton('pdf-tools__zoom-out', ZOOM_OUT_ICON);
       const zoomValue = document.createElement('output');
       zoomValue.className = 'pdf-tools__zoom';
       // Not live: "Width" redraws on every step of a divider drag or a window
       // resize, and each new percentage would be read out (#641). What the
       // user zoomed to is said once, through the announcer below.
       zoomValue.setAttribute('aria-live', 'off');
-      const zoomInButton = iconButton('pdf-tools__zoom-in', 'M3.5 8h9M8 3.5v9');
+      const zoomInButton = iconButton('pdf-tools__zoom-in', ZOOM_IN_ICON);
       const fitButton = document.createElement('button');
       fitButton.type = 'button';
       fitButton.className = 'pdf-tools__button pdf-tools__fit';
