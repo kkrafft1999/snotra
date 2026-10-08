@@ -13,10 +13,15 @@
 // it declares. Next to the picture it keeps its source, behind the same
 // "Preview | Source" switch as Markdown.
 //
-// Decided with a mockup on 2026-09-27: the image is fitted to the column and
-// never upscaled; a click, or Enter/Space on the focused image, toggles to the
-// actual size and back. No zoom beyond that. A checkerboard sits behind the
-// image only, so that transparency shows in light and dark alike.
+// Decided with a mockup on 2026-09-27: the image opens fitted to the column
+// and never upscaled. A checkerboard sits behind the image only, so that
+// transparency shows in light and dark alike.
+//
+// Since #803 the zoom lives in the header only — the same "− 100 % + Fit"
+// group as in the PDF preview, plus Cmd/Ctrl +, − and 0 while the image has
+// focus. A click no longer zooms: when the image is larger than the column, a
+// drag with the left button moves it under a hand cursor, and the arrow keys
+// scroll it. When it fits, there is nothing to move.
 //
 // The interface it implements is documented in the header of `registry.js`.
 
@@ -26,6 +31,7 @@ import { formatSize } from '../utils/helpers.js';
 import { MODES, buildModeSwitch } from './mode-switch.js';
 import { plainTextView } from './plain-text-view.js';
 import { readFailureMessageKey, readFailureOf } from './read-failures.js';
+import { ZOOM_IN_ICON, ZOOM_OUT_ICON, ZOOM_STEPS, iconButton, nextZoom } from './zoom-tools.js';
 
 const { MAX_WORKSPACE_IMAGE_BYTES, WORKSPACE_IMAGE_ERRORS, workspaceImageDataUrl } = contracts;
 
@@ -115,7 +121,11 @@ export const imageView = {
     // What is on show: { dataUrl, mime, size, mtimeMs, natural } or
     // { reason, size }. Null before the first read has answered.
     let shown = null;
-    let actual = false;
+    // 'fit' follows the column; otherwise `zoom` is a fixed factor.
+    let zoomMode = 'fit';
+    let zoom = 1;
+    // A drag that moves the image: where it started, and the scroll then.
+    let drag = null;
     let loadingTimer = null;
     // Every read draws a number; an answer for an older one is dropped.
     let readGeneration = 0;
@@ -151,12 +161,63 @@ export const imageView = {
     sourceMessageEl.hidden = true;
     sourceEl.append(sourceTextEl, sourceMessageEl);
 
-    hostEl.append(viewEl, sourceEl);
+    // Says the zoom after the user changed it — and only then, as in the PDF
+    // preview (#641): a re-fit for a resized column stays silent.
+    const announcerEl = document.createElement('p');
+    announcerEl.className = 'sr-only img-view__announcer';
+    announcerEl.setAttribute('role', 'status');
+
+    hostEl.append(viewEl, sourceEl, announcerEl);
 
     const modeSwitch = isSvg ? buildModeSwitch((next) => setMode(next)) : null;
-    if (modeSwitch) context.setTools([modeSwitch.element]);
 
-    // ── Layout: fit or actual size ────────────────────────────────────────
+    // ── Header tools: zoom ────────────────────────────────────────────────
+
+    const zoomEl = document.createElement('div');
+    zoomEl.className = 'pdf-tools img-zoom';
+    zoomEl.setAttribute('role', 'group');
+    const zoomOutButton = iconButton('pdf-tools__zoom-out', ZOOM_OUT_ICON);
+    const zoomValue = document.createElement('output');
+    zoomValue.className = 'pdf-tools__zoom';
+    zoomValue.setAttribute('aria-live', 'off');
+    const zoomInButton = iconButton('pdf-tools__zoom-in', ZOOM_IN_ICON);
+    const fitButton = document.createElement('button');
+    fitButton.type = 'button';
+    fitButton.className = 'pdf-tools__button pdf-tools__fit';
+    zoomEl.append(zoomOutButton, zoomValue, zoomInButton, fitButton);
+
+    function applyToolLabels() {
+      zoomEl.setAttribute('aria-label', t('fileView.image.zoom.label'));
+      zoomOutButton.setAttribute('aria-label', t('fileView.image.zoom.out'));
+      zoomOutButton.title = zoomOutButton.getAttribute('aria-label');
+      zoomInButton.setAttribute('aria-label', t('fileView.image.zoom.in'));
+      zoomInButton.title = zoomInButton.getAttribute('aria-label');
+      fitButton.textContent = t('fileView.image.zoom.fit');
+      fitButton.title = t('fileView.image.zoom.fitTitle');
+    }
+
+    function renderZoomTools() {
+      zoomValue.textContent = `${Math.round(zoom * 100)}\u00a0%`;
+      zoomOutButton.disabled = zoom <= ZOOM_STEPS[0] + 0.001;
+      zoomInButton.disabled = zoom >= ZOOM_STEPS.at(-1) - 0.001;
+      fitButton.setAttribute('aria-pressed', String(zoomMode === 'fit'));
+    }
+
+    /** The header: the mode switch of an SVG, and the zoom while a picture is on show. */
+    function showTools() {
+      const zoomable = mode === MODES.PREVIEW && Boolean(shown?.natural);
+      const nodes = [modeSwitch?.element, zoomable ? zoomEl : null].filter(Boolean);
+      context.setTools(nodes.length ? nodes : null);
+    }
+
+    applyToolLabels();
+    showTools();
+
+    zoomOutButton.addEventListener('click', () => setZoom(nextZoom(zoom, -1)));
+    zoomInButton.addEventListener('click', () => setZoom(nextZoom(zoom, 1)));
+    fitButton.addEventListener('click', () => setZoom('fit'));
+
+    // ── Layout: zoom and panning ──────────────────────────────────────────
 
     function availableSize() {
       return {
@@ -165,75 +226,114 @@ export const imageView = {
       };
     }
 
-    function canToggle() {
-      const scale = fitScale(shown?.natural, availableSize());
-      return scale !== null && scale < 1;
-    }
-
     function layout() {
       const natural = shown?.natural;
       if (!natural) return;
-      const fit = fitScale(natural, availableSize());
+      const available = availableSize();
+      const fit = fitScale(natural, available);
       // Without a laid-out column there is nothing to fit into; the size is
       // set as soon as the column has one (ResizeObserver).
       if (fit === null) return;
-      const toggleable = fit < 1;
-      if (!toggleable) actual = false;
-      const scale = actual ? 1 : fit;
-      imgEl.style.width = `${Math.max(1, Math.round(natural.width * scale))}px`;
-      imgEl.style.height = `${Math.max(1, Math.round(natural.height * scale))}px`;
-      viewEl.classList.toggle('img-view--toggleable', toggleable);
-      viewEl.classList.toggle('img-view--actual', actual);
-      applyToggleLabels(toggleable);
-    }
-
-    function applyToggleLabels(toggleable = canToggle()) {
-      if (toggleable) {
-        viewEl.tabIndex = 0;
-        viewEl.setAttribute('role', 'button');
-        viewEl.setAttribute('aria-pressed', String(actual));
-        viewEl.setAttribute('aria-label', t('fileView.image.toggle', { name: file.name }));
-        viewEl.title = t(actual ? 'fileView.image.hint.toFit' : 'fileView.image.hint.toActual');
-      } else {
-        viewEl.removeAttribute('tabindex');
-        viewEl.removeAttribute('role');
-        viewEl.removeAttribute('aria-pressed');
-        viewEl.removeAttribute('aria-label');
-        viewEl.removeAttribute('title');
-      }
+      if (zoomMode === 'fit') zoom = fit;
+      const width = Math.max(1, Math.round(natural.width * zoom));
+      const height = Math.max(1, Math.round(natural.height * zoom));
+      imgEl.style.width = `${width}px`;
+      imgEl.style.height = `${height}px`;
+      applyPannable(width > available.width + 0.5 || height > available.height + 0.5);
+      renderZoomTools();
     }
 
     /**
-     * Fit ↔ actual size. `point` is where the image was clicked, as a
-     * fraction of its width and height: at actual size that spot lands in the
-     * middle of the column, so the click zooms into what was pointed at.
+     * Larger than the column: a hand cursor and a drag that moves it. The view
+     * takes focus while a picture is on show, for the zoom keys, and names the
+     * arrow keys once there is something to scroll. A focused view keeps its
+     * focus across a zoom back to the fit.
      */
-    function toggle(point = { x: 0.5, y: 0.5 }) {
-      if (!canToggle()) return;
-      actual = !actual;
-      layout();
-      if (actual) {
-        viewEl.scrollLeft = point.x * viewEl.scrollWidth - viewEl.clientWidth / 2;
-        viewEl.scrollTop = point.y * viewEl.scrollHeight - viewEl.clientHeight / 2;
+    function applyPannable(pannable) {
+      viewEl.classList.toggle('img-view--pannable', pannable);
+      if (!pannable) endDrag();
+      if (shown?.natural) {
+        viewEl.tabIndex = 0;
+        viewEl.setAttribute('role', 'group');
+        viewEl.setAttribute('aria-label', pannable ? t('fileView.image.pan.label', { name: file.name }) : file.name);
+      } else {
+        viewEl.removeAttribute('tabindex');
+        viewEl.removeAttribute('role');
+        viewEl.removeAttribute('aria-label');
       }
+      if (pannable) viewEl.title = t('fileView.image.pan.hint');
+      else viewEl.removeAttribute('title');
     }
 
-    function onImageClick(event) {
-      const rect = imgEl.getBoundingClientRect();
-      const point = rect.width > 0 && rect.height > 0
-        ? { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height }
-        : undefined;
-      toggle(point);
+    /**
+     * A fixed factor, or back to 'fit'. The point in the middle of the column
+     * stays where it is, so that zooming does not lose the place.
+     */
+    function setZoom(next) {
+      if (!shown?.natural) return;
+      const before = { width: imgEl.offsetWidth, height: imgEl.offsetHeight };
+      const centre = before.width > 0 && before.height > 0
+        ? {
+          x: (viewEl.scrollLeft + viewEl.clientWidth / 2 - imgEl.offsetLeft) / before.width,
+          y: (viewEl.scrollTop + viewEl.clientHeight / 2 - imgEl.offsetTop) / before.height,
+        }
+        : { x: 0.5, y: 0.5 };
+      if (next === 'fit') {
+        zoomMode = 'fit';
+      } else {
+        zoomMode = 'fixed';
+        zoom = next;
+      }
+      layout();
+      viewEl.scrollLeft = imgEl.offsetLeft + centre.x * imgEl.offsetWidth - viewEl.clientWidth / 2;
+      viewEl.scrollTop = imgEl.offsetTop + centre.y * imgEl.offsetHeight - viewEl.clientHeight / 2;
+      announcerEl.textContent = zoomValue.textContent;
+    }
+
+    function onPointerDown(event) {
+      if (event.button !== 0 || !viewEl.classList.contains('img-view--pannable')) return;
+      event.preventDefault();
+      viewEl.focus({ preventScroll: true });
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        left: viewEl.scrollLeft,
+        top: viewEl.scrollTop,
+      };
+      viewEl.setPointerCapture?.(event.pointerId);
+      viewEl.classList.add('img-view--dragging');
+    }
+
+    function onPointerMove(event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      viewEl.scrollLeft = drag.left - (event.clientX - drag.x);
+      viewEl.scrollTop = drag.top - (event.clientY - drag.y);
+    }
+
+    function endDrag(event) {
+      if (!drag || (event && event.pointerId !== drag.id)) return;
+      if (viewEl.hasPointerCapture?.(drag.id)) viewEl.releasePointerCapture(drag.id);
+      drag = null;
+      viewEl.classList.remove('img-view--dragging');
     }
 
     function onKeyDown(event) {
-      if (event.target !== viewEl || (event.key !== 'Enter' && event.key !== ' ')) return;
-      if (!canToggle()) return;
+      if (event.altKey || !shown?.natural) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod) return;
+      if (event.key === '+' || event.key === '=') setZoom(nextZoom(zoom, 1));
+      else if (event.key === '-') setZoom(nextZoom(zoom, -1));
+      else if (event.key === '0') setZoom('fit');
+      else return;
       event.preventDefault();
-      toggle();
     }
 
-    imgEl.addEventListener('click', onImageClick);
+    viewEl.addEventListener('pointerdown', onPointerDown);
+    viewEl.addEventListener('pointermove', onPointerMove);
+    viewEl.addEventListener('pointerup', endDrag);
+    viewEl.addEventListener('pointercancel', endDrag);
+    viewEl.addEventListener('lostpointercapture', endDrag);
     viewEl.addEventListener('keydown', onKeyDown);
 
     const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => layout()) : null;
@@ -244,8 +344,8 @@ export const imageView = {
     function showMessage(title, detail) {
       imgEl.hidden = true;
       imgEl.removeAttribute('src');
-      viewEl.classList.remove('img-view--toggleable', 'img-view--actual');
-      applyToggleLabels(false);
+      applyPannable(false);
+      showTools();
       const titleEl = document.createElement('strong');
       titleEl.className = 'img-view__message-title';
       titleEl.textContent = title;
@@ -309,6 +409,7 @@ export const imageView = {
         messageEl.hidden = true;
         imgEl.hidden = false;
         layout();
+        showTools();
         renderDimensions();
       };
       imgEl.onerror = () => {
@@ -333,7 +434,7 @@ export const imageView = {
         display({ reason: result?.reason ?? WORKSPACE_IMAGE_ERRORS.NOT_FOUND, size: result?.size });
         return;
       }
-      // Unchanged on disk: keep what is on show, including fit or actual size
+      // Unchanged on disk: keep what is on show, including the zoom
       // and the scroll position — a click on the open file must not flash.
       if (shown?.dataUrl && shown.mtimeMs === result.mtimeMs && shown.size === result.size) return;
       const entry = {
@@ -400,14 +501,16 @@ export const imageView = {
       sourceEl.hidden = mode !== MODES.SOURCE;
       if (mode === MODES.SOURCE) void readSource();
       else layout();
+      showTools();
     }
 
     const stopFollowingLocale = onLocaleChange(() => {
       modeSwitch?.applyLabels();
+      applyToolLabels();
       if (sourceFailure) renderSourceFailure();
       if (shown?.reason) renderError();
       else if (!shown) showLoading();
-      else applyToggleLabels();
+      else applyPannable(viewEl.classList.contains('img-view--pannable'));
     });
 
     void read();
@@ -422,7 +525,12 @@ export const imageView = {
         clearTimeout(loadingTimer);
         resizeObserver?.disconnect();
         stopFollowingLocale();
-        imgEl.removeEventListener('click', onImageClick);
+        endDrag();
+        viewEl.removeEventListener('pointerdown', onPointerDown);
+        viewEl.removeEventListener('pointermove', onPointerMove);
+        viewEl.removeEventListener('pointerup', endDrag);
+        viewEl.removeEventListener('pointercancel', endDrag);
+        viewEl.removeEventListener('lostpointercapture', endDrag);
         viewEl.removeEventListener('keydown', onKeyDown);
         imgEl.onload = null;
         imgEl.onerror = null;
@@ -438,8 +546,8 @@ export const imageView = {
       get mode() {
         return mode;
       },
-      get actualSize() {
-        return actual;
+      get zoom() {
+        return { zoom, zoomMode };
       },
     };
   },

@@ -261,32 +261,45 @@ try {
   console.log('screenshot, fitted:', shot);
   await shoot('screenshot-fit');
 
-  // Keyboard: focus the image, Enter toggles to the actual size.
-  await page.focus('.img-view');
-  await page.keyboard.press('Enter');
+  // The header zooms (#803): two steps up, then the image is larger than the
+  // column and shows the hand.
+  await page.click('#preview-tools .pdf-tools__zoom-in');
+  await page.click('#preview-tools .pdf-tools__zoom-in');
   await new Promise((r) => setTimeout(r, 150));
-  console.log('screenshot, actual:', await pane(), await page.evaluate(() => {
+  const viewState = () => page.evaluate(() => {
     const view = document.querySelector('.img-view');
     return {
-      pressed: view.getAttribute('aria-pressed'),
+      zoom: document.querySelector('#preview-tools .pdf-tools__zoom')?.textContent,
+      fitPressed: document.querySelector('#preview-tools .pdf-tools__fit')?.getAttribute('aria-pressed'),
+      pannable: view.classList.contains('img-view--pannable'),
+      cursor: getComputedStyle(view).cursor,
       label: view.getAttribute('aria-label'),
-      scroll: [view.scrollLeft, view.scrollTop],
+      scroll: [view.scrollLeft, view.scrollTop, view.scrollWidth, view.scrollHeight],
       focus: document.activeElement === view,
-      outline: getComputedStyle(view).outlineStyle,
     };
-  }));
-  await shoot('screenshot-actual-focus');
+  });
+  console.log('screenshot, zoomed:', await pane(), await viewState());
+  await shoot('screenshot-zoomed');
 
-  // A click in the lower right corner zooms into that spot.
-  await page.keyboard.press('Enter');
-  const box = await page.locator('.img-view__image').boundingBox();
-  await page.mouse.click(box.x + box.width * 0.85, box.y + box.height * 0.85);
+  // A left-button drag moves it; the cursor closes into a fist meanwhile.
+  const box = await page.locator('.img-view').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 200, box.y + box.height / 2 - 120, { steps: 8 });
+  console.log('while dragging:', await viewState());
+  await shoot('screenshot-dragging');
+  await page.mouse.up();
+  console.log('after the drag:', await viewState());
+
+  // Keyboard: the arrow keys scroll the focused view, Cmd+0 fits again.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
   await new Promise((r) => setTimeout(r, 150));
-  console.log('click into the corner scrolls to:', await page.evaluate(() => {
-    const view = document.querySelector('.img-view');
-    return [view.scrollLeft, view.scrollTop, view.scrollWidth, view.scrollHeight];
-  }));
-  await shoot('screenshot-actual-click');
+  console.log('after arrows:', await viewState());
+  await shoot('screenshot-zoomed-focus');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+0' : 'Control+0');
+  await new Promise((r) => setTimeout(r, 150));
+  console.log('after Cmd+0:', await viewState());
 
   await openPath('assets');
   console.log('logo:', await openAndWait('logo.png', (s) => s.visible));
@@ -299,6 +312,11 @@ try {
   await openPath('docs');
   console.log('svg:', await openAndWait('ipc-flow.svg', (s) => s.visible));
   await shoot('svg');
+  for (let i = 0; i < 4; i += 1) await page.click('#preview-tools .pdf-tools__zoom-in');
+  await new Promise((r) => setTimeout(r, 150));
+  console.log('svg zoomed:', await viewState());
+  await shoot('svg-zoomed');
+  await page.click('#preview-tools .pdf-tools__fit');
   await page.focus('.file-view-mode-switch input:checked');
   await page.keyboard.press('ArrowRight');
   await poll(async () => page.evaluate(() => {
