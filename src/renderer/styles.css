@@ -5062,6 +5062,13 @@ select.modal-input {
   margin-bottom: 4px;
 }
 
+/* A heading that starts a second block inside a card (Settings › Skills: the
+   catalog below the suggestion mode) needs a group's distance from the hint
+   above it; otherwise it reads as that hint's last line (#817). */
+.settings-tools-card > :not(.settings-panel-models__head) + .settings-panel-models__head {
+  margin-top: 20px;
+}
+
 /* The card's own padding is the bottom edge — a trailing note's margin
    would double it. */
 .settings-tools-card > :last-child {
