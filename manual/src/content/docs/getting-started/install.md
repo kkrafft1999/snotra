@@ -76,7 +76,7 @@ With the AppImage or the tarball, install the sandbox packages yourself: `sudo a
 
 Snotra Agent opens an empty window: no folder, no model yet. [The first start](../first-start/) shows what you see there and what to do next.
 
-Settings and chats are kept in a profile folder of their own, outside the app: `~/Library/Application Support/Snotra AI` on macOS, `%APPDATA%\Snotra AI` on Windows and `~/.config/Snotra AI` on Linux. It carries the name of the platform, Snotra AI, and stays in place when you update or reinstall the app.
+Settings and chats are kept in a profile folder of their own, outside the app: `~/Library/Application Support/Snotra AI` on macOS, `%APPDATA%\Snotra AI` on Windows and `~/.config/Snotra AI` on Linux. It carries the name of the platform, Snotra AI, and stays in place when you update or reinstall the app. Later versions install themselves after you confirm; [Update Snotra Agent](../../updating/update-snotra/) shows how.
 
 ## If it doesn't work
 

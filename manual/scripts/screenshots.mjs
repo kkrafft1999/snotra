@@ -455,6 +455,45 @@ const DEMO_MEMORY = {
 };
 
 /**
+ * What the update dialog is told when a newer version exists: the notes of a
+ * release as GitHub delivers them, a hand-written highlight and the generated
+ * list. They stay English in both languages — that is what GitHub holds.
+ */
+const UPDATE_NOTES = [
+  '## Highlights',
+  '',
+  '- **Back and forward in the preview.** Two arrows in the preview header step through the files it showed.',
+  '- **Snotra tells you when an approval waits out of sight.** A system notification names the chat and what waits.',
+  '',
+  "## What's Changed",
+  '* Go back and forward through the files the preview showed (#822) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/824',
+  '* Notify when an approval card waits out of sight (#792, step 5) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/823',
+  '',
+  '**Full Changelog**: https://github.com/kkrafft1999/snotra/compare/v1.17.1...v1.18.0',
+].join('\n');
+
+/** Pushes "a newer version exists" into the window, as the start check does. */
+async function offerUpdate(app, page, overrides = {}) {
+  await app.evaluate(({ BrowserWindow }, payload) => {
+    BrowserWindow.getAllWindows()[0].webContents.send('update:available', payload);
+  }, {
+    updateAvailable: true,
+    manual: false,
+    currentVersion: '1.17.1',
+    latestVersion: '1.18.0',
+    isPrerelease: false,
+    releaseUrl: 'https://github.com/kkrafft1999/snotra/releases/tag/v1.18.0',
+    notes: UPDATE_NOTES,
+    canSelfUpdate: true,
+    installKind: 'macos-bundle',
+    asset: { name: 'Snotra-Agent-1.18.0-mac-arm64.dmg', size: 133_800_000 },
+    ...overrides,
+  });
+  await poll(() => shown(page, 'modal-update'), { what: 'update dialog' });
+  await pause(300);
+}
+
+/**
  * The motifs. Each one brings the app into the state it shows and returns the
  * area to shoot (`null` for the whole window). Texts come per language from
  * `text[locale]`, so the German shot shows a German conversation.
@@ -963,6 +1002,61 @@ const MOTIFS = {
       await pause(200);
       await page.mouse.move(0, 0);
       return clipAround(page, '#dialog-mcp-server', 24);
+    },
+  },
+
+  /** The settings with the version at the foot of the list and the button that checks for updates. */
+  'update-check': {
+    async setUp({ app, page }) {
+      await openSettingsPanel(app, page, 'general');
+      await poll(() => page.evaluate(() => /\d+\.\d+\.\d+/.test(document.getElementById('settings-version-label')?.textContent ?? '')),
+        { what: 'the version in the settings' });
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#modal-settings .settings-dialog', 0);
+    },
+  },
+
+  /** The update dialog at the first step: the new version, the notes opened, three ways on. */
+  'update-found': {
+    async setUp({ app, page }) {
+      await offerUpdate(app, page);
+      await page.evaluate(() => { document.getElementById('modal-update-notes').open = true; });
+      await pause(300);
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#modal-update .update-dialog', 24);
+    },
+  },
+
+  /** The update dialog once the download is done: the one question before the restart. */
+  'update-ready': {
+    async setUp({ app, page }) {
+      // The download would go to GitHub; the screenshot only needs it to succeed.
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler('update:download');
+        ipcMain.handle('update:download', async () => ({ ok: true }));
+      });
+      await offerUpdate(app, page);
+      await page.click('#modal-update-actions .btn-primary');
+      // "Found" has three buttons, "downloading" one, "ready" two.
+      await poll(() => page.evaluate(() => document.querySelectorAll('#modal-update-actions button').length === 2),
+        { what: 'the ready step' });
+      await page.mouse.move(0, 0);
+      await pause(300);
+      return clipAround(page, '#modal-update .update-dialog', 24);
+    },
+  },
+
+  /** The update dialog for an installation that cannot replace itself: the reason and the release page. */
+  'update-manual': {
+    async setUp({ app, page }) {
+      await offerUpdate(app, page, {
+        canSelfUpdate: false,
+        installKind: 'linux-package',
+        selfUpdateBlockedReason: { key: 'update.reason.package' },
+        asset: null,
+      });
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#modal-update .update-dialog', 24);
     },
   },
 
