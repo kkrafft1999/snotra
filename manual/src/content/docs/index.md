@@ -19,8 +19,8 @@ This manual explains how to use it: how to get started, how to work with files a
 - **Safety:** [why Snotra asks before it acts](safety/why-snotra-asks/), and how to [choose a mode](safety/choose-a-mode/) for a chat or a folder.
 - **Customising:** [manage your models](customising/models/), give a project [its instructions](customising/project-instructions/), and add [skills](customising/skills/) or [MCP servers](customising/mcp-servers/).
 - **When something goes wrong:** what to do about [an error from the model](troubleshooting/provider-errors/) or [a keychain question](troubleshooting/keychain-and-storage/), and [how to report a problem](troubleshooting/logs-and-reports/).
+- **Reference:** every [keyboard shortcut](reference/keyboard-shortcuts/), [where Snotra keeps its files](reference/files-and-folders/) and a [glossary](reference/glossary/).
 - **Download:** the latest release for macOS, Windows and Linux is on the [releases page](https://github.com/kkrafft1999/snotra/releases/latest).
-- **Keyboard shortcuts:** until the reference chapter is written, the full list is in the [README on GitHub](https://github.com/kkrafft1999/snotra#keyboard-shortcuts).
 - **Problems and ideas:** report them as an [issue on GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
 
 ## Help improve this manual

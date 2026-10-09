@@ -64,6 +64,11 @@ export default defineConfig({
           translations: { de: 'Hilfe bei Problemen' },
           items: [{ autogenerate: { directory: 'troubleshooting' } }],
         },
+        {
+          label: 'Reference',
+          translations: { de: 'Referenz' },
+          items: [{ autogenerate: { directory: 'reference' } }],
+        },
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {
