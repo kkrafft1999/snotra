@@ -16,7 +16,7 @@ import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, composerState, sendChat } from './helpers/app.mjs';
 import { HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
@@ -1318,7 +1318,14 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }],
   });
   model.queueAnswer({ match: 'remember', text: 'Hab ich mir gemerkt.' });
-  await ask(page, MEMORY_QUESTION);
+  const rememberEvidence = async () => [
+    `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
+    `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
+    `composer: ${JSON.stringify(await composerState(page))}`,
+    `renderer tool events: ${await rendererToolEvents(page)}`,
+    `main:\n${snotra.mainOutput()}`,
+  ].join('\n');
+  await sendChat(page, MEMORY_QUESTION, { explain: rememberEvidence });
 
   const approval = await poll(() => page.evaluate(() => {
     const card = document.querySelector('.chat-approval-card');
@@ -1327,7 +1334,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       text: card.textContent.replace(/\s+/g, ' '),
       antworten: [...card.querySelectorAll('button[data-response]')].map((b) => b.dataset.response),
     };
-  }), { what: 'Freigabekarte fuer remember' });
+  }), {
+    what: 'Freigabekarte fuer remember',
+    // `null` alone does not say whether the model never got the request, got it
+    // and answered without the tool call, or the card was never drawn (#819).
+    explain: rememberEvidence,
+  });
   // Die Karte nennt die Reichweite und den Merksatz — einen Pfad gibt es
   // nicht, weil das Tool keinen bildet.
   assert.match(approval.text, /Reichweite/);

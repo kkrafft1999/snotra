@@ -186,6 +186,52 @@ export async function rendererToolEvents(page) {
 }
 
 /**
+ * What the composer shows right now: the text still in the input, whether the
+ * send button is disabled or turned into a stop button, and the hint line.
+ * `sendChatMessage` returns without a trace when a guard turns the send away
+ * (a run in flight, a provider not configured yet, a disabled button), and the
+ * input keeping its text is the only outward sign of that (#809).
+ */
+export function composerState(page) {
+  return page.evaluate(() => ({
+    input: document.getElementById('chat-input')?.value ?? null,
+    sendDisabled: document.getElementById('btn-chat-send')?.disabled ?? null,
+    running: document.getElementById('btn-chat-send')?.classList.contains('chat-send--stop') ?? null,
+    hint: document.getElementById('chat-hint')?.classList.contains('hidden')
+      ? null
+      : document.getElementById('chat-hint')?.textContent ?? null,
+  })).catch((error) => `composer state failed: ${error?.message ?? error}`);
+}
+
+/**
+ * Types `text` into the composer and sends it, and checks that the send took.
+ * The input is emptied only once the message has passed every guard of
+ * `sendChatMessage`, so text that is still there afterwards names a send that
+ * was lost — instead of the test waiting a minute for a run that never started.
+ * The two ways to fail say which part went missing: the button never became
+ * enabled, or it was enabled and the click was dropped anyway.
+ */
+export async function sendChat(page, text, { explain = null } = {}) {
+  const state = async () => JSON.stringify({ composer: await composerState(page) });
+  const withEvidence = async (error) => {
+    const extra = explain ? await Promise.resolve().then(explain).catch((e) => `explain failed: ${e?.message ?? e}`) : '';
+    throw new Error(`${error.message}\n${await state()}${extra ? `\n${extra}` : ''}`);
+  };
+  await poll(() => page.evaluate(() => {
+    const button = document.getElementById('btn-chat-send');
+    return Boolean(button) && !button.disabled && !button.classList.contains('chat-send--stop');
+  }), { what: `send button ready for "${text}"`, timeoutMs: 10000 }).catch(withEvidence);
+  await page.evaluate((value) => {
+    const input = document.getElementById('chat-input');
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('btn-chat-send').click();
+  }, text);
+  await poll(() => page.evaluate(() => document.getElementById('chat-input').value === ''),
+    { what: `send taken ("${text}": the input is emptied)`, timeoutMs: 10000 }).catch(withEvidence);
+}
+
+/**
  * Legt ein frisches userData-Verzeichnis an: geoeffneter Ordner, ein Preset auf
  * den Fake-Modellserver, Standardeinstellungen. Damit startet die App fertig
  * eingerichtet — der native Ordnerdialog und der Einstellungsdialog muessen im
