@@ -74,11 +74,18 @@ function lookAtChat(page) {
   });
 }
 
-/** Clicks the open sandbox card's "Allow"; `option` picks among the first entry's choices. */
+/**
+ * Clicks the open sandbox card's "Allow" for this run. `option` picks among
+ * the first entry's paths — where it has a choice: on Linux a file that does
+ * not exist yet is offered only as its folder, and the card shows no group
+ * for a single path. The duration stays at its first option, this run.
+ */
 function allowSandboxCard(page, { option = 0 } = {}) {
   return page.evaluate((index) => {
     const card = document.querySelector('#chat-messages .chat-approval-card--sandbox[data-state="pending"]');
-    const choices = card.querySelectorAll('.chat-approval-card__choice')[0]?.querySelectorAll('input') ?? [];
+    const groups = [...card.querySelectorAll('.chat-approval-card__choice')];
+    const paths = groups.find((group) => ![...group.querySelectorAll('input')].some((i) => i.value === 'session'));
+    const choices = paths?.querySelectorAll('input') ?? [];
     choices[Math.min(index, choices.length - 1)]?.click();
     card.querySelector('button[data-response="allow-once"]').click();
   }, option);
@@ -195,7 +202,8 @@ test('the sandbox asks after the run and while the command waits, also in Auto',
     `echo engine > "${engine}" && echo generated`, 'card after the run');
   assert.equal(afterRun.live, false, `expected the card after the run: ${afterRun.text}`);
   assert.match(afterRun.text, /query-engine/, 'the card names the refused file');
-  // The second choice is the folder around the file — it exists, the file does not yet.
+  // The folder around the file: it exists, the file does not yet. On macOS
+  // it is the second choice, on Linux the only one.
   await allowSandboxCard(page, { option: 1 });
   await finished();
   assert.equal(await readFile(engine, 'utf8'), 'engine\n', 'the second run wrote the file');
