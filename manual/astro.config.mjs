@@ -55,6 +55,11 @@ export default defineConfig({
           items: [{ autogenerate: { directory: 'customising' } }],
         },
         {
+          label: 'Updating',
+          translations: { de: 'Aktualisieren' },
+          items: [{ autogenerate: { directory: 'updating' } }],
+        },
+        {
           label: 'Reference',
           translations: { de: 'Referenz' },
           items: [{ autogenerate: { directory: 'reference' } }],
