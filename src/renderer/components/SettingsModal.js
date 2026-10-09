@@ -225,6 +225,7 @@ export function initSettingsModal(deps) {
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
+  const inputApprovalNotifications = document.getElementById('input-approval-notifications');
   const inputProjectInstructions = document.getElementById('input-project-instructions');
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
@@ -1964,6 +1965,7 @@ export function initSettingsModal(deps) {
       shellSwitch.set(up.shellExecutionEnabled === true);
       environmentSwitch.set(up.environmentInfoEnabled !== false);
       projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
+      approvalNotificationsSwitch.set(up.approvalNotificationsEnabled !== false);
     } catch (err) {
       if (stale()) return;
       // The fields below show defaults, not what is stored; Apply would write
@@ -2698,6 +2700,10 @@ export function initSettingsModal(deps) {
   );
   const projectInstructionsSwitch = bindPrefSwitch(
     inputProjectInstructions, 'status-project-instructions', 'projectInstructionsEnabled'
+  );
+  // A card waiting out of sight (#792, step 5).
+  const approvalNotificationsSwitch = bindPrefSwitch(
+    inputApprovalNotifications, 'status-approval-notifications', 'approvalNotificationsEnabled'
   );
   // Both decide whether run_python / shell_execute are offered; the status
   // line and the tool list follow what main now reports.

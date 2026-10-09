@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Braucht ein Tool-Aufruf deine Freigabe, hält Snotra an und zeigt eine Karte im Chat. Der Lauf wartet, bis du entscheidest; es gibt kein Zeitlimit, und kein Knopf ist vorausgewählt.
+Braucht ein Tool-Aufruf deine Freigabe, hält Snotra an und zeigt eine Karte im Chat. Der Lauf wartet, bis du entscheidest; es gibt kein Zeitlimit, und kein Knopf ist vorausgewählt. [seit 1.18] Bist du in einer anderen App oder einem anderen Chat, wenn die Karte erscheint, sagt es dir eine Systembenachrichtigung, und ein Klick darauf öffnet den Chat — der Schalter steht unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein).
 
 ## Was du brauchst
 

@@ -565,6 +565,7 @@ module.exports = {
   'history.loadFailed': 'Der Verlauf ließ sich nicht lesen.',
   'history.entry.running': 'Arbeitet…',
   'history.entry.awaiting': 'Wartet auf deine Freigabe',
+  'notify.approval.body': 'Wartet auf deine Freigabe: {what}',
 
   // ── Settings: frame ────────────────────────────────────────────────────────
   'settings.title': 'Einstellungen',
@@ -947,6 +948,10 @@ module.exports = {
   'settings.general.projectInstructions.toggle': '<code lang="en">AGENTS.md</code> mitschicken',
   'settings.general.projectInstructions.note.summary': 'Legt die Projektanweisungen aus <code lang="en">AGENTS.md</code> in den System-Prompt.',
   'settings.general.projectInstructions.note.body': '<p>Gelesen werden bis zu drei Dateien: <code>&lt;Ordner&gt;/AGENTS.md</code> aus dem geöffneten Projekt, <code>~/.snotra/AGENTS.md</code> (gilt überall) und <code>~/.agents/AGENTS.md</code> (gilt überall, älterer Ort, wird weiter gelesen). Alle vorhandenen <strong>ergänzen einander</strong> und gelten gemeinsam — keine ersetzt eine andere. Je Datei gehen höchstens 20.000 Zeichen mit, Längeres wird sichtbar gekürzt.</p><p>Im Projekt liegt die Datei direkt in der Ordnerwurzel, dort, wo die meisten Repositorys sie ablegen. Eine <code lang="en">AGENTS.md</code> unter <code>.agents/</code> liest Snotra <strong>nicht</strong> — der Ordner hält nur <code>memory.md</code> und die Skills.</p><p>Der Inhalt ist <strong>Anweisung, keine Daten</strong> — anders als Tool-Ergebnisse verändert er das Verhalten des Modells. Wer einen fremden Ordner öffnet, übernimmt damit auch dessen Anweisungen; dieser Schalter ist die Notbremse dafür.</p>',
+  'settings.general.notifications.label': 'Benachrichtigungen',
+  'settings.general.notifications.toggle': 'Benachrichtigen, wenn Snotra auf deine Freigabe wartet',
+  'settings.general.notifications.note.summary': 'Eine Systembenachrichtigung, wenn eine Freigabekarte wartet, während Snotra im Hintergrund ist oder du in einem anderen Chat bist.',
+  'settings.general.notifications.note.body': '<p>Ein Lauf steht still, bis du seine Karte beantwortest. Bist du in einer anderen App oder wartet die Karte in einem Chat, den du gerade nicht ansiehst, sagt es dir das System; ein Klick auf die Benachrichtigung holt Snotra mit diesem Chat nach vorn. Die Zeile des Chats im Verlauf zeigt „Wartet auf deine Freigabe“ ohnehin. Ob Benachrichtigungen überhaupt erscheinen, entscheiden die Mitteilungseinstellungen des Systems für Snotra Agent.</p>',
   'settings.general.theme.label': 'Erscheinungsbild',
   'settings.general.theme.light': 'Hell',
   'settings.general.theme.dark': 'Dunkel',

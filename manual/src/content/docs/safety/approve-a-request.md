@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-When a tool call needs your approval, Snotra pauses and shows a card in the chat. The run waits until you decide; there is no time limit, and no button is preselected.
+When a tool call needs your approval, Snotra pauses and shows a card in the chat. The run waits until you decide; there is no time limit, and no button is preselected. [since 1.18] If you are in another app or another chat when the card appears, a system notification says so, and a click on it opens the chat — the switch is under [*Settings › General*](../../customising/settings/#the-section-general).
 
 ## What you need
 

@@ -163,6 +163,12 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_APPROVAL_RESPOND: 'toolApproval:respond',
   /** Offene Anfragen dieses Fensters (z. B. nach Reload). */
   TOOL_APPROVAL_LIST_PENDING: 'toolApproval:listPending',
+  /**
+   * A card waits while Snotra is in the background or in another chat
+   * (#792, step 5): a system notification, and closing it once decided.
+   */
+  APPROVAL_NOTIFICATION_SHOW: 'approvalNotification:show',
+  APPROVAL_NOTIFICATION_CLOSE: 'approvalNotification:close',
 
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
@@ -247,6 +253,8 @@ const PUSH_CHANNELS = Object.freeze({
   TOOL_APPROVAL_REQUEST: 'toolApproval:request',
   /** Anfrage beantwortet oder verfallen; Karte schliessen. */
   TOOL_APPROVAL_RESOLVED: 'toolApproval:resolved',
+  /** The notification about a waiting card was clicked (#792, step 5): open its chat. */
+  APPROVAL_NOTIFICATION_OPEN: 'approvalNotification:open',
   /** Modus, Regeln oder Muster haben sich geaendert; Anzeige aktualisieren. */
   TOOL_PERMISSIONS_CHANGED: 'toolPermissions:changed',
   /** Ein Skill-Verzeichnis hat sich geaendert (Issue #126); Katalog neu holen. */

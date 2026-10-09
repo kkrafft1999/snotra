@@ -1,5 +1,5 @@
 const {
-  app, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView,
+  app, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView, Notification,
 } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
@@ -112,6 +112,8 @@ function start() {
       clipboard,
       session,
       WebContentsView,
+      // A card waiting out of sight (#792, step 5).
+      Notification,
       REQ,
       PUSH,
       LIMITS,

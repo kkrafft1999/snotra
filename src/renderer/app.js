@@ -304,6 +304,14 @@ const approvalCards = initToolApprovalCards({
   onOpenSandboxSettings: openSandboxSettings,
   getHomeDir: () => toolPermissions.get()?.homeDir || '',
   onOpenAllowanceSettings: openAllowanceSettings,
+  // A chat without a title yet goes by its first message, as in the history.
+  getChatTitle: (chatId) => {
+    const onScreen = chatId && chatId === appStore.currentChatId;
+    const chat = onScreen
+      ? { title: appStore.currentChatTitle, messages: appStore.chatMessages }
+      : appStore.chatRuns.get(chatId)?.chat;
+    return chat?.title || contracts.inferChatTitleText(chat?.messages) || '';
+  },
 });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
@@ -440,6 +448,12 @@ const chatHistory = initChatHistoryPanel({
   runs: chatStream.runs,
 });
 syncRunMarkers = () => chatHistory.syncRunMarkers();
+// A click on the notification about a waiting card (#792, step 5): main has
+// brought the window up; the chat the card waits in comes on screen.
+api.onApprovalNotificationOpen?.((payload) => {
+  const chatId = typeof payload?.chatId === 'string' ? payload.chatId : '';
+  if (chatId && chatId !== appStore.currentChatId) void chatHistory.openChatSession(chatId);
+});
 
 const updateDialog = initUpdateDialog({ api });
 

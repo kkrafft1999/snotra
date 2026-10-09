@@ -318,6 +318,20 @@ folder matches them (`rulePaths` stay absolute). The decision goes on the
 trace as `sandboxOutside` and into the box under the tool log; a denial is
 remembered under `${planKey}#sandbox` like the other sandbox cards.
 
+Any approval card that arrives **out of sight** (#792, step 5) — Snotra not
+focused (`document.hasFocus()`), or the card's chat not the one on screen —
+makes `ToolApprovalCard` ask main for a system notification
+(`approvalNotification:show`): the chat as title (its stored title, or the
+first message as the history shows it), the card's headline as text, in the
+interface language. `main/services/approval-notifier.js` shows it with
+Electron's `Notification` unless *Notify me when Snotra waits for my approval*
+(`approvalNotificationsEnabled`, on by default) is off, keeps one per card and
+at most 50, and on a click restores and focuses the window and sends
+`approvalNotification:open` with the chat, which `app.js` opens through the
+history panel. A card that is decided or expires closes its notification. The
+history row's *Needs your approval* mark (#320) is unchanged and stays the
+signal inside the window.
+
 The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
 is policy, not isolation, and lives in the signed policy file next to the rules
 (`main/services/tool-policy-store.js`, a list of canonical roots). The planner

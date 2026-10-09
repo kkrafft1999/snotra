@@ -557,6 +557,7 @@ module.exports = {
   'history.loadFailed': 'The history could not be read.',
   'history.entry.running': 'Working…',
   'history.entry.awaiting': 'Needs your approval',
+  'notify.approval.body': 'Needs your approval: {what}',
 
   // ── Settings: frame ──────────────────────────────────────────────────────
   'settings.title': 'Settings',
@@ -938,6 +939,10 @@ module.exports = {
   'settings.general.projectInstructions.toggle': 'Send <code lang="en">AGENTS.md</code>',
   'settings.general.projectInstructions.note.summary': 'Puts the project instructions from <code lang="en">AGENTS.md</code> into the system prompt.',
   'settings.general.projectInstructions.note.body': '<p>Up to three files are read: <code>&lt;folder&gt;/AGENTS.md</code> from the open project, <code>~/.snotra/AGENTS.md</code> (applies everywhere) and <code>~/.agents/AGENTS.md</code> (applies everywhere, the older place, still read). All that exist <strong>add to each other</strong> and apply together — none replaces another. Each file contributes at most 20,000 characters; anything longer is visibly truncated.</p><p>Inside the project the file sits directly in the folder root, where most repositories keep it. An <code lang="en">AGENTS.md</code> under <code>.agents/</code> is <strong>not</strong> read — that folder only holds <code>memory.md</code> and the skills.</p><p>The content is <strong>instruction, not data</strong> — unlike tool results it changes how the model behaves. Open somebody else’s folder and you take on their instructions too; this switch is the emergency brake for that.</p>',
+  'settings.general.notifications.label': 'Notifications',
+  'settings.general.notifications.toggle': 'Notify me when Snotra waits for my approval',
+  'settings.general.notifications.note.summary': 'A system notification when an approval card waits while Snotra is in the background or in another chat.',
+  'settings.general.notifications.note.body': '<p>A run stands still until you answer its card. When you are in another app, or the card waits in a chat you are not looking at, the system says so; a click on the notification brings Snotra up with that chat. The chat’s row in the history shows “Needs your approval” either way. Whether notifications appear at all is decided by the system’s own notification settings for Snotra Agent.</p>',
   'settings.general.theme.label': 'Appearance',
   'settings.general.theme.light': 'Light',
   'settings.general.theme.dark': 'Dark',

@@ -40,6 +40,7 @@ The line at the bottom of each section says it, because it differs:
 - ***Send AGENTS.md*** — the project instructions; see [Give a project its instructions](../project-instructions/). On by default.
 - ***Appearance*** — light or dark. This choice stays on this computer.
 - ***Interface language*** — English or German, switching at once. It covers the window and the menu bar; what goes to the model stays English.
+- ***Notify me when Snotra waits for my approval*** — [since 1.18] a system notification when an approval card waits while Snotra is in the background or the card is in another chat. It names the chat and what waits; a click brings Snotra up with that chat. On by default.
 - ***Max. tool rounds*** — how often the model may call tools in a row before the chat stops. A guard against endless loops; 14 by default, at most 500.
 
 ## Where settings are kept
@@ -50,3 +51,4 @@ In your profile folder, outside the app and outside your projects: `~/Library/Ap
 
 - **A change has no effect.** In *Models*, *Skills* and the text fields of *General*, click *Apply*.
 - ***Settings could not be loaded.*** Close the settings and open them again. If it stays, the message names the file that could not be read.
+- **No notification appears.** Check the switch above, and the system's own notification settings for Snotra Agent (on macOS *System Settings › Notifications*). The chat's row in the history says *Needs your approval* either way.
